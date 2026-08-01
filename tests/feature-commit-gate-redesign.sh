@@ -88,13 +88,15 @@ read_state_step() {
     local sid="$1" step="$2"
     local f="$WORKFLOW_DIR/${sid}.json"
     [ -f "$f" ] || { echo "MISSING"; return; }
-    node -e "
+    # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
+    # on-disk event stream, not a persisted top-level key.
+    (cd "$AGENTS_DIR" && node -e "
       try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-        const st = s.steps && s.steps['$step'];
+        const s = require('./hooks/workflow-state').readState(process.argv[1]);
+        const st = s && s.steps && s.steps['$step'];
         console.log(st && st.status ? st.status : 'MISSING');
       } catch(e){ console.log('MISSING'); }
-    " "$f" 2>/dev/null || echo "MISSING"
+    " "$sid" 2>/dev/null) || echo "MISSING"
 }
 
 read_state_field() {

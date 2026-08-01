@@ -216,18 +216,18 @@ report(bad);
     assert_eq "EV8/annotation-keys" "OK" "$NODE_OUT"
 fi
 
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the eleven documented keys =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twelve documented keys =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     nodejs "$SID" "$PRE"'
 const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["closes_issues", "created_at", "current", "events", "last_pushed_sha",
-  "session_id", "session_start_context", "session_worktree", "verbose_prompt",
+  "merge_base_baseline", "session_id", "session_start_context", "session_worktree", "verbose_prompt",
   "version", "workflow_type"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
 console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GOT:" + got.join(",")));
 '
-    assert_eq "EV9/persisted-keys-set-equality" "11 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "12 MATCH" "$NODE_OUT"
 fi
 
 echo "== EV10: every PERSISTED_TOP_LEVEL_KEYS member survives a write/read round trip =="

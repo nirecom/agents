@@ -155,6 +155,15 @@ else
     printf "${C_GREEN}Symlinks created in ~/.claude/${C_RESET}\n"
 fi
 
+# /wf-init alias for /workflow-init (#1743): intra-repo symlink so autocomplete
+# picks up a short name — /workflow-launch-exec (an unowned built-in) otherwise
+# wins the `/wor` completion. Not a native Skill alias field (none exists);
+# this is a second directory name resolving to the same SKILL.md. Placed
+# outside the ~/.claude/.git guard above since this link stays within
+# $AGENTS_ROOT and is unrelated to the ~/.claude destination tree.
+_link_one "$AGENTS_ROOT/skills/workflow-init" "$AGENTS_ROOT/skills/wf-init" \
+    || printf "${C_YELLOW}Symlink failure: skills/wf-init${C_RESET}\n" >&2
+
 # Test affordance — see tests/feature-697-dotfileslink-link-one.sh
 [ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
 

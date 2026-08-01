@@ -189,11 +189,13 @@ setup_fake_acd() {
     # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
     mkdir -p "$d/hooks"
     touch "$d/hooks/enforce-worktree.js"
+    # Only entries that are still SANCTIONED. #1673 removed issue-close-gate.sh,
+    # github-issues/issue-close-stage-triage.sh and github-issues/parent-body-update.sh
+    # from the list (subprocess-only; no Bash-tool call site), so staging them here
+    # would model a state the guard no longer recognizes.
     touch "$d/bin/check-unstaged-tracked.sh"
     touch "$d/bin/probe-remote-bootstrap.sh"
-    touch "$d/bin/issue-close-gate.sh"
-    touch "$d/bin/github-issues/issue-close-stage-triage.sh"
-    touch "$d/bin/github-issues/parent-body-update.sh"
+    touch "$d/bin/github-issues/issue-create-dispatch.sh"
     if command -v cygpath >/dev/null 2>&1; then
         cygpath -m "$d"
     else

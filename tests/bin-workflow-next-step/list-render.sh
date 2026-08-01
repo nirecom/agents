@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, scope:common
 #
 # Case group: --list renderer + schema/idempotency/security boundary (cases 14–23).

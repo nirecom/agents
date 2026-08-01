@@ -48,31 +48,27 @@ CP-1. **Stage changes with `git add`** — explicitly add each file you intend t
    rc=1 → list of unstaged tracked files is printed; either `git add` them, `git stash push -u -- <file>`, or pass `--wip` to skip this gate (`git -c workflow.wip=1 commit`).
    rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step CP-2 worker JSON to propagate the bypass to the worker's Gate 3 staging-verification step.
 
-After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automatically opens the PR URL in your browser — no explicit `open`/`xdg-open` call is needed.
-
-CP-2. **Delegate commit/push/PR to commit-push-worker.**
+CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/worker-dispatch.md`.
    Sibling pre-check (non-blocking): `bash "$AGENTS_CONFIG_DIR/bin/check-sibling-uncommitted.sh" "$(git rev-parse --show-toplevel)/WORKTREE_NOTES.md"` — warns when a sibling worktree in `## SiblingWorktrees` has uncommitted/unpushed work.
-   Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
-   ```
-   Agent({ subagent_type: "commit-push-worker", prompt: JSON.stringify({
-     commit_message: COMMIT_MESSAGE,
-     branch: BRANCH,
-     closes_issues: CLOSES_ISSUES,
-     pr_body_template: PR_BODY,
-     wip_mode: WIP_MODE,
-     enforce_worktree: ENFORCE_WORKTREE,
-     agents_config_dir: AGENTS_CONFIG_DIR,
-     artifact_dir: PLANS_DIR
-   }) })
-   ```
+   Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template`, `wip_mode`, `enforce_worktree`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
+   Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
+   Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before dispatching.
+   Staging verification (Step CP-2) is skipped only when `wip_mode: true` — i.e. `--wip`, or a WORKFLOW_OFF / WORKTREE_OFF session marker (parity with the workflow-gate.js bypass).
+   On `branch_mismatch`: the `branch` payload key is not the branch checked out at `worktree_path` — nothing was committed. Re-derive `branch` from `git rev-parse --abbrev-ref HEAD` in that worktree and re-run; never re-dispatch with the same value.
    On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path and stop.
+   On `gate_blocked`: workflow-gate refused the commit or the push (or could not be trusted — a gate crash fails closed). Surface the summary verbatim, complete the named workflow step, and re-run `/commit-push`. Never retry by another route.
    On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
-   On `pr_created` or `pr_reused`: extract PR URL from summary for step CP-3.
+   On `pushed` (no PR — `ENFORCE_WORKTREE=off` or non-GitHub remote): report the branch and skip step CP-2b.
+   On `pr_created` or `pr_reused`: extract PR URL from summary for steps CP-2b and CP-3.
    On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step CP-3 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step WE-4b owns that sentinel. Stop.
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
-CP-2a. **Append PR number to session title:** `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "$(pwd)" "<PR_NUMBER>"` where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when outcome is `bootstrap_pending`, `staging_incomplete`, `staging_check_failed`, `push_failed`, or `conflict`. Fail-open.
+CP-2a. **Append PR number to session title:** `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "$(pwd)" "<PR_NUMBER>"` where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when outcome is `bootstrap_pending`, `branch_mismatch`, `gate_blocked`, `staging_incomplete`, `staging_check_failed`, `push_failed`, or `conflict`. Fail-open.
+
+CP-2b. **Open the PR URL:** run `node "$AGENTS_CONFIG_DIR/bin/open-pr-url.js" "<pr_url>"` when the status is `pr_created` only — `pr_reused` did not create anything, so it must not re-open a tab (parity with the retired `pr-created-open.js`, which fired on `gh pr create` alone).
+   The PR URL MUST also appear in this turn's final response text — the dispatcher path has no tool-permission dialog to display it.
+   Fail-open: a non-zero exit or missing browser never blocks the flow.
 
 CP-3. **Merge prompt:**
 
@@ -104,7 +100,7 @@ When invoked with `--wip` (for fixup / intermediate commits between substantive 
 - Do NOT set `workflow.wip` in git config globally — the signal must be scoped to the
   single commit invocation to avoid leakage across commits.
 - Works with `--amend`: `git -c workflow.wip=1 commit --amend ...`.
-- `--wip` mode also skips Gate 3 (Step CP-1 unstaged-tracked verification + commit-push-worker staging-verification step) and Gate 1 (workflow-gate.js unstaged-tracked check), since `workflow.wip=1` signals intentional partial staging.
+- `--wip` mode also skips Gate 3 (Step CP-1 unstaged-tracked verification + the `commit-push` worker's staging-verification step) and Gate 1 (workflow-gate.js unstaged-tracked check), since `workflow.wip=1` signals intentional partial staging.
 
 See `docs/architecture/claude-code/workflow.md` for the signal contract.
 

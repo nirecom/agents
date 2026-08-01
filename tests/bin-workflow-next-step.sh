@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # L2 test of the workflow next-step's state-transition resolver and --list renderer.

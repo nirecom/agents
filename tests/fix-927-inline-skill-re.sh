@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/enforce-issue-close.js, hooks/lib/block-predicates.js, rules/github-issues.md, bin/github-issues/close-completed.sh, agents/issue-close-finalize-worker.md
+# Tests: hooks/enforce-issue-close.js, hooks/lib/block-predicates.js, rules/github-issues.md, bin/github-issues/close-completed.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh
 # Tags: enforce-issue-close, block-predicates, inline-skill-re, close-completed, icf-worker, scope:issue-specific
 # Tests for issue #927 — INLINE_SKILL_RE removal. After the change, the ONLY
 # bypass for a direct Bash-tool `gh issue close` is the env-export form
@@ -27,7 +27,10 @@ PREDICATES="$AGENTS_DIR/hooks/lib/block-predicates.js"
 PREDICATES_NODE="$_AGENTS_DIR_NODE/hooks/lib/block-predicates.js"
 RULES="$AGENTS_DIR/rules/github-issues.md"
 CLOSE_COMPLETED="$AGENTS_DIR/bin/github-issues/close-completed.sh"
-ICF_WORKER="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
+# #1673: the ICF worker moved from a subagent prompt to a dispatcher module.
+# Step ICF-H itself (the close call + ISSUE_CLOSE_SKILL bypass) lives in the
+# terminal-pass shell script, not in the JS dispatcher module.
+ICF_TERMINAL="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
 
 PASS=0
 FAIL=0
@@ -252,24 +255,26 @@ else
 fi
 
 # ============================================================================
-# F17: issue-close-finalize-worker.md ICF-H calls close-completed.sh with --repo
-# TDD red phase — will FAIL until ICF-H is updated to use close-completed.sh.
+# F17: Step ICF-H calls close-completed.sh with --repo
+# The ICF-H close call lives in the terminal-pass script (run-finalize-terminal.sh),
+# not in the JS dispatcher module — assert against the file that owns the behavior.
 # ============================================================================
-if [ ! -f "$ICF_WORKER" ]; then
-    skip "F17: agents/issue-close-finalize-worker.md not present"
-elif grep -q "close-completed.sh" "$ICF_WORKER" 2>/dev/null && grep -q "\-\-repo" "$ICF_WORKER" 2>/dev/null; then
+if [ ! -f "$ICF_TERMINAL" ]; then
+    skip "F17: $ICF_TERMINAL not present"
+elif grep -q "close-completed.sh" "$ICF_TERMINAL" 2>/dev/null && grep -q "\-\-repo" "$ICF_TERMINAL" 2>/dev/null; then
     pass "F17: ICF-H calls close-completed.sh with --repo argument"
 else
     fail "F17: ICF-H does not call close-completed.sh with --repo (file may still use ISSUE_CLOSE_SKILL=1 gh issue close)"
 fi
 
 # ============================================================================
-# F18: issue-close-finalize-worker.md ICF-H does NOT contain ISSUE_CLOSE_SKILL=1 gh issue close
-# TDD red phase — will FAIL until ICF-H is updated.
+# F18: Step ICF-H does NOT contain the inline 'ISSUE_CLOSE_SKILL=1 gh issue close' form
+# Checked against the same terminal-pass script that owns the close call, so the
+# assertion is meaningful rather than vacuous.
 # ============================================================================
-if [ ! -f "$ICF_WORKER" ]; then
-    skip "F18: agents/issue-close-finalize-worker.md not present"
-elif grep -q "ISSUE_CLOSE_SKILL=1 gh issue close" "$ICF_WORKER" 2>/dev/null; then
+if [ ! -f "$ICF_TERMINAL" ]; then
+    skip "F18: $ICF_TERMINAL not present"
+elif grep -q "ISSUE_CLOSE_SKILL=1 gh issue close" "$ICF_TERMINAL" 2>/dev/null; then
     fail "F18: ICF-H still contains 'ISSUE_CLOSE_SKILL=1 gh issue close'"
 else
     pass "F18: ICF-H does NOT contain 'ISSUE_CLOSE_SKILL=1 gh issue close'"

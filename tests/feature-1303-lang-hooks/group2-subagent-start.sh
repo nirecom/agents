@@ -78,14 +78,16 @@ else
         fail "G2-T4: detail-reviewer should get PLAN_LANG. ctx='$_ctx_s4'"
     fi
 
-    # G2-T5: commit-push-worker (not in whitelist) → PLAN_LANG absent, CONV_LANG present
-    _raw_s5=$(invoke_subagent '{"agent_type":"commit-push-worker"}' "japanese" "english")
+    # G2-T5: a non-planner agent (not in whitelist) → PLAN_LANG absent, CONV_LANG present.
+    # #1673 retired the commit-push-worker subagent; issue-create-survey-worker is
+    # the surviving non-planner agent used as the negative case.
+    _raw_s5=$(invoke_subagent '{"agent_type":"issue-create-survey-worker"}' "japanese" "english")
     _ctx_s5=$(extract_subagent_ctx "$_raw_s5")
     _ok_s5=1
     echo "$_ctx_s5" | grep -qF "$PLAN_INJECT_PREFIX" && _ok_s5=0
     echo "$_ctx_s5" | grep -qF "$CONV_INJECT_PREFIX" || _ok_s5=0
     if [ "$_ok_s5" -eq 1 ]; then
-        pass "G2-T5: commit-push-worker → PLAN_LANG absent, CONV_LANG present"
+        pass "G2-T5: issue-create-survey-worker → PLAN_LANG absent, CONV_LANG present"
     else
         fail "G2-T5: unexpected content. ctx='$_ctx_s5'"
     fi

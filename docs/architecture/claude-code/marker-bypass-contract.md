@@ -1,9 +1,9 @@
 # Marker Bypass Contract
 
-Session-scoped markers grant bypass across all enforcement hooks that guard worktree
-isolation. This document defines the cross-hook honoring contract, the session-ID
-resolution chain used in the git hook context, and the exit-code semantics for the
-pre-commit inline Node snippet.
+Session-scoped markers grant bypass only to the enforcement hooks explicitly listed in
+the Honoring-hooks table below. This document defines the cross-hook honoring contract,
+the session-ID resolution chain used in the git hook context, and the exit-code
+semantics for the pre-commit inline Node snippet.
 
 ## Markers
 
@@ -12,21 +12,48 @@ otherwise `~/.claude/projects/workflow/`):
 
 | Marker file | Created by | Scope |
 |---|---|---|
-| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except enforce-system-ops.js |
-| `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | Bypasses worktree-isolation enforcement only |
+| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | See Honoring hooks — bypasses only the hooks marked Yes there |
+| `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | See Honoring hooks — bypasses only the hooks marked Yes there |
 
 `WORKFLOW_OFF` subsumes `WORKTREE_OFF`: when `.workflow-off` is present, all hooks that
 check `.worktree-off` treat it as also active.
 
 ## Honoring hooks
 
+Inclusion criterion: every hook that calls `isWorkflowOff` / `isWorktreeOff` from
+`hooks/lib/session-markers.js`, plus `hooks/pre-commit` (which reimplements the same
+check inline for the git context — see Session-ID resolution below). This is a
+grep-derivable criterion (`grep -rl "isWorkflowOff\|isWorktreeOff" hooks/`), not an
+enumerated guess: a hook absent from this table does not call either function and is
+never bypassed. This table is the SSOT (CPR-2); no other document enumerates
+exceptions independently.
+
 | Hook | Layer | Honors `.workflow-off` | Honors `.worktree-off` |
 |---|---|---|---|
 | `hooks/enforce-worktree.js` | PreToolUse | Yes | Yes |
 | `hooks/block-dotenv.js` | PreToolUse | Yes | No |
-| `hooks/scan-outbound.js` | PreToolUse | Yes | No |
-| `hooks/workflow-gate.js` | PreToolUse | Yes | No |
+| `hooks/block-history-direct.js` | PreToolUse | Yes | No |
+| `hooks/block-memory-direct.js` | PreToolUse | Yes | No |
+| `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
+| `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
+| `hooks/block-shell-config.js` | PreToolUse | **No** | **No** |
+| `hooks/block-off-clearance-write.js` | PreToolUse | **No** | **No** |
+| `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
+| `hooks/gate-plan-skip-sentinel.js` | PreToolUse | **No** | **No** |
+| `hooks/check-cross-platform.js` | PreToolUse | **No** | **No** |
+| `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
+| `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
+| `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/show-diff.js` | PreToolUse | **No** | **No** |
+| `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
+| `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
+| `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check AND makes the Tier 3 worktree-entry early gate return `verdict: "dormant"`) |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
+| `hooks/stop-premature-stop-guard.js` | Stop | Yes | No |
+| `hooks/stop-final-report-guard.js` | Stop | Yes | No |
+| `hooks/stop-l2-findings-display.js` | Stop | Yes | No |
+| `hooks/supervisor-guard.js` | Stop | Yes | No |
+| `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 
@@ -36,6 +63,13 @@ private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **
 bypassed by markers — secret leakage protection is unconditional on the git side.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
+
+`hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
+scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-5). Users
+who need to bypass a specific match must use `.private-info-allowlist` instead.
+
+`hooks/block-history-direct.js`'s marker check runs only after a protected-path hit is
+detected, so non-protected paths never pay the session-ID resolution cost.
 
 `hooks/lib/session-markers.js` is the SSOT for marker **reads** and notice strings only
 (`isWorkflowOff(sid)` / `isWorktreeOff(sid)` / `workflowOffNoticeText` /

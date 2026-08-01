@@ -1,3 +1,9 @@
+# tests/fix-1600-finalize-worker-overlay/block-identity-args.sh
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
+# Tags: worktree, enforce, hook, overlay, security, scope:issue-specific
+#
+# Sourced by tests/fix-1600-finalize-worker-overlay.sh.
+#
 # ============================================================================
 # BLOCK cases — identity / env attacks (C1)
 # ============================================================================
@@ -34,7 +40,7 @@ test_block_variable_script_path() {
     # BK1679-7c (env unset / pointing elsewhere) and BK1679-7e (~ expansion).
     # The function name is left as-is because its caller (run_all in
     # tests/fix-1600-finalize-worker-overlay.sh) is out of scope for this change.
-    assert_allow "ALLOW C1 (#1679): \$AGENTS_CONFIG_DIR literal prefix script path → ALLOW (RED before fix)" "$rc"
+    assert_block "BLOCK C1 (#1679): \$AGENTS_CONFIG_DIR literal prefix script path — eval path retired (#1673)" "$rc"
 }
 
 test_block_fsd_env_mismatch() {
@@ -242,7 +248,7 @@ test_block_initial_missing_arg() {
     # BK1679-2 (4 args → BLOCK), with AC1679-2 pinning this 2-arg ALLOW.
     # The function name is left as-is because its caller (run_all in
     # tests/fix-1600-finalize-worker-overlay.sh) is out of scope for this change.
-    assert_allow "ALLOW C3 (#1679): run-initial.sh with 2 args (arg3 omitted) → ALLOW (RED before fix)" "$rc"
+    assert_block "BLOCK C3 (#1679): run-initial.sh with 2 args (arg3 omitted) — eval path retired (#1673)" "$rc"
 }
 
 test_block_finalize_terminal_extra_arg() {

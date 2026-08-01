@@ -114,6 +114,7 @@ function main() {
         assertWritable: (target) => fsguard.assertWritable(workerName, target, writeCtx),
         writeFile: (target, data) => fsguard.writeFile(workerName, target, data, writeCtx),
         mkdir: (target) => fsguard.mkdir(workerName, target, writeCtx),
+        renameWithin: (tmp, dst) => fsguard.renameWithin(workerName, tmp, dst, writeCtx),
       },
       path,
     });

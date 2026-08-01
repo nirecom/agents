@@ -48,6 +48,15 @@ const TERMINAL_STEPS = ["final_report"];
 const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
+// "settled" = the step needs no further action: it is either done ("complete")
+// or deliberately opted out of ("skipped"). "pending" and "in_progress" are NOT
+// settled — "in_progress" is deliberately excluded because the step is still
+// running and further action is expected.
+const SETTLED_STATUSES = Object.freeze(["complete", "skipped"]);
+function isSettledStatus(status) {
+  return SETTLED_STATUSES.indexOf(status) !== -1;
+}
+
 function getWorkflowDir() {
   if (process.env.CLAUDE_WORKFLOW_DIR) return process.env.CLAUDE_WORKFLOW_DIR;
   return path.join(os.homedir(), ".claude", "projects", "workflow");
@@ -160,6 +169,44 @@ function normalizeStateVersion(rawState) {
 // pre-#1733 callers: as `state.current`, spliced onto the top level under each
 // PROJECTION_KEYS name, and as a non-enumerable `__projectionSnapshot` used by
 // writeState to detect a caller that tried to write to the derived view.
+// --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
+// A v1 state file predating a step's introduction simply has NO entry for it, and
+// pre-#1733 readers backfilled a status for exactly three of those steps. That
+// backfill is a READ-TIME default, not history: the event stream records what a
+// session actually did, so the v1→v2 conversion must not fabricate step_status
+// events for steps the session never touched (see K-f in
+// tests/feature-1733-state-event-stream/migration-annotations.sh). The default is
+// therefore applied to the PROJECTION of a record that was v1 on disk, keyed on
+// the absence of the key in the v1 `steps` map.
+//
+// Mutates `projection.steps` in place; must run BEFORE guardProjection.
+function applyLegacyV1ReadDefaults(rawState, projection) {
+  if (!rawState || rawState.version === 2) return projection;
+  const legacy = rawState.steps;
+  if (!legacy || typeof legacy !== "object" || Array.isArray(legacy)) return projection;
+  const steps = projection && projection.steps;
+  if (!steps) return projection;
+
+  const setStatus = (step, status) => {
+    if (!steps[step]) steps[step] = { status: "pending", updated_at: null };
+    steps[step].status = status;
+  };
+
+  const ci = legacy.clarify_intent;
+  const ciDone = ci && (ci.status === "complete" || ci.status === "skipped");
+  // Sessions predating workflow_init (#1039) were already past routing unless
+  // clarify_intent was still in flight at upgrade time.
+  if (!legacy.workflow_init) setStatus("workflow_init", (!ci || ciDone) ? "complete" : "pending");
+  // Sessions predating clarify_intent / branching_complete never had the step to
+  // run, so it cannot be pending against them.
+  if (!ci) setStatus("clarify_intent", "complete");
+  if (!legacy.branching_complete && !legacy.branching_decision) {
+    setStatus("branching_complete", "complete");
+  }
+  return projection;
+}
+// --- END temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
+
 function readState(sessionId) {
   let rawState;
   try {
@@ -181,7 +228,7 @@ function readState(sessionId) {
   let projection;
   try {
     assertStreamIntegrity(state.events);
-    projection = guardProjection(projectState(state));
+    projection = guardProjection(applyLegacyV1ReadDefaults(rawState, projectState(state)));
   } catch (e) {
     return null;
   }
@@ -407,6 +454,7 @@ module.exports = {
   MAX_KNOWN_STATE_VERSION,
   CorruptStateFileError,
   FutureSchemaVersionError,
+  isSettledStatus,
   getWorkflowDir,
   SESSION_ID_VALID_RE,
   assertValidSessionId,

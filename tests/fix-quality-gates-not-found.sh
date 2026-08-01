@@ -84,12 +84,23 @@ trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
 
 # ---- derivation: which gates does the runner invoke? ------------------------
 #
-# The set is the intersection of "files directly under bin/" with "names the runner
-# mentions", computed on a comment-stripped copy. Word boundaries exclude `-` and `.` so a
+# The set is the intersection of "files directly under bin/" with "names the runner invokes
+# AS A GATE", computed on a comment-stripped copy. Word boundaries exclude `-` and `.` so a
 # name can never match inside a longer sibling name. Conservative in the safe direction: a
 # gate the parse misses simply is not asserted about, so a false accusation is impossible.
+#
+# The search is narrowed to the `_run_gate` lines rather than the whole script, and that
+# narrowing is a STRENGTHENING, not a convenience. The runner also calls helpers out of
+# bin/ that are not gates — merge-base resolution is one — and a whole-file search cannot
+# tell a helper call from a gate call. Every such helper would be derived as a gate, stubbed
+# into the fixture config dir by make_full_cfg, and counted in GATE_COUNT; the run would then
+# print one fewer `## STUB` line than GATE_COUNT and the count rows would fail for a reason
+# that has nothing to do with the contract. `_run_gate` is the runner's own name for "this is
+# a gate", so it is the right thing to key on.
 STRIPPED="$TMPROOT/runner.stripped"
 sed 's/^[[:space:]]*#.*//' "$RUNNER" > "$STRIPPED"
+GATELINES="$TMPROOT/runner.gatelines"
+grep -E '^[[:space:]]*_run_gate[[:space:]]' "$STRIPPED" > "$GATELINES" || true
 
 bin_basenames() { find "$AGENTS_DIR/bin" -maxdepth 1 -type f 2>/dev/null | sed 's#.*/##' | sort; }
 
@@ -97,7 +108,7 @@ derive_gates() {
   local b
   while IFS= read -r b; do
     [ -n "$b" ] || continue
-    if grep -qE "(^|[^A-Za-z0-9._-])${b}([^A-Za-z0-9._-]|\$)" "$STRIPPED"; then
+    if grep -qE "(^|[^A-Za-z0-9._-])${b}([^A-Za-z0-9._-]|\$)" "$GATELINES"; then
       printf '%s\n' "$b"
     fi
   done <<< "$(bin_basenames)"
@@ -175,32 +186,54 @@ make_repo_on_branch() { # <branch> ; prints the repo path
   printf '%s' "$r"
 }
 
-# PATH stripped down to the system directories that hold git and the shell. ~/.local/bin is
-# deliberately absent: under this PATH a bare-name invocation CANNOT resolve, which is what
-# makes the pre-fix behaviour observable and what keeps the billed review-code-codex
-# unreachable even if a fixture forgot to stub it.
+# PATH stripped down to the system directories that hold git, node, and the shell.
+# ~/.local/bin is deliberately absent: under this PATH a bare-name invocation CANNOT
+# resolve, which is what makes the pre-fix behaviour observable and what keeps the
+# billed review-code-codex unreachable even if a fixture forgot to stub it. node's
+# directory is included (not broad) because some fixtures install `#!/usr/bin/env node`
+# bridge scripts that must remain executable under this restricted PATH.
 system_path() {
-  printf '%s:/usr/bin:/bin' "$(dirname "$(command -v git)")"
+  local git_dir node_dir=""
+  git_dir="$(dirname "$(command -v git)")"
+  if command -v node >/dev/null 2>&1; then
+    node_dir="$(dirname "$(command -v node)")"
+    if [ "$node_dir" = "$git_dir" ]; then
+      node_dir=""
+    fi
+  fi
+  if [ -n "$node_dir" ]; then
+    printf '%s:%s:/usr/bin:/bin' "$git_dir" "$node_dir"
+  else
+    printf '%s:/usr/bin:/bin' "$git_dir"
+  fi
 }
 
 # Runs the real script against a fake config dir. Sets RQG_RC / RQG_OUT (stdout only —
 # `command not found` goes to stderr, and the whole point is what reaches the REPORT).
-run_runner() { # <config-dir> <repo>
-  run_runner_cfg "set" "$1" "$2"
+run_runner() { # <config-dir> <repo> [VAR=VAL...]
+  local cfg="$1" repo="$2"
+  shift 2
+  run_runner_cfg "set" "$cfg" "$repo" "$@"
 }
 
 # The same invocation with control over HOW $AGENTS_CONFIG_DIR reaches the script: `set`
 # exports the given value, `unset` removes the variable entirely. The script runs under
 # `set -u`, so the two are genuinely different inputs and only one of them is reachable
 # through run_runner.
-run_runner_cfg() { # <set|unset> <config-dir> <repo>
+#
+# Trailing VAR=VAL arguments are added to the child environment. The merge-base rows need
+# them: the anomaly thresholds are read from the environment, and injecting a small one is
+# the only way to drive a fixture into SUSPECT without building a repository with a genuinely
+# enormous diff in it.
+run_runner_cfg() { # <set|unset> <config-dir> <repo> [VAR=VAL...]
   local mode="$1" cfg="$2" repo="$3"
+  shift 3
   RQG_RC=0
   if [ "$mode" = "unset" ]; then
-    RQG_OUT="$(cd "$repo" && env -u AGENTS_CONFIG_DIR "PATH=$(system_path)" \
+    RQG_OUT="$(cd "$repo" && env -u AGENTS_CONFIG_DIR "PATH=$(system_path)" ${1+"$@"} \
       "$AGENTS_DIR/bin/run-with-timeout.sh" 120 bash "$RUNNER" 2>/dev/null)" || RQG_RC=$?
   else
-    RQG_OUT="$(cd "$repo" && AGENTS_CONFIG_DIR="$cfg" PATH="$(system_path)" \
+    RQG_OUT="$(cd "$repo" && env "AGENTS_CONFIG_DIR=$cfg" "PATH=$(system_path)" ${1+"$@"} \
       "$AGENTS_DIR/bin/run-with-timeout.sh" 120 bash "$RUNNER" 2>/dev/null)" || RQG_RC=$?
   fi
 }
@@ -246,6 +279,21 @@ no_read_observable() {
   return 0
 }
 
+# The merge-base resolver is NOT a gate — it is the helper the runner consults before any
+# gate runs, so it is copied in REAL rather than stubbed. A stub would make every G6 row
+# assert against the test's own idea of the answer instead of against the resolver, which is
+# the one thing G6 exists to check. It lives under $AGENTS_CONFIG_DIR/bin like everything
+# else the runner calls, so the fake config dir has to carry it.
+#
+# Its absence is itself a case (G6n), so this is a copy-if-present, not a hard requirement:
+# a config dir built before the helper exists simply does not have it, which is exactly the
+# input the degradation row wants.
+install_merge_base_helper() { # <cfg-bin-dir>
+  [ -f "$AGENTS_DIR/bin/resolve-merge-base.sh" ] || return 0
+  cp "$AGENTS_DIR/bin/resolve-merge-base.sh" "$1/resolve-merge-base.sh"
+  chmod +x "$1/resolve-merge-base.sh" 2>/dev/null || true
+}
+
 # A config dir with a stub for every derived gate, at the requested exec-bit setting.
 make_full_cfg() { # <exec|noexec> ; prints the config dir
   local cfg g
@@ -257,6 +305,7 @@ make_full_cfg() { # <exec|noexec> ; prints the config dir
     if [ "$1" = "noexec" ]; then write_stub_noexec "$cfg/bin" "$g" 0
     else write_stub "$cfg/bin" "$g" 0; fi
   done <<< "$GATES"
+  install_merge_base_helper "$cfg/bin"
   printf '%s' "$cfg"
 }
 
@@ -299,6 +348,8 @@ last_line() { printf '%s\n' "$RQG_OUT" | grep -v '^[[:space:]]*$' | tail -1; }
 . "$PARTS_DIR/config-dir-guard.sh"
 # shellcheck source=./fix-quality-gates-not-found/merge-base-report.sh
 . "$PARTS_DIR/merge-base-report.sh"
+# shellcheck source=./fix-quality-gates-not-found/base-state-propagation.sh
+. "$PARTS_DIR/base-state-propagation.sh"
 # shellcheck source=./fix-quality-gates-not-found/gate-summary.sh
 . "$PARTS_DIR/gate-summary.sh"
 

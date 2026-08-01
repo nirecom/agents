@@ -33,7 +33,7 @@ const { normalizeForCompare } = require("../git-repo-detection");
 const { getSessionRepoRoots } = require("../session-scope");
 const {
   stripRelSuffix, isUnderPlansDir, hasControlChar, UNSAFE_ARG_VALUE_RE,
-} = require("./finalize-worker-overlay");
+} = require("../arg-value-guard");
 
 // Worker-name enum SSOT. Loaded defensively: a partial revert that removes the
 // registry must degrade this overlay to BLOCK, not crash the whole hook.

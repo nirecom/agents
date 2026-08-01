@@ -168,3 +168,43 @@ Changes: Deterministic workers — test runner, worktree copy and backup, doc ap
 ### FEATURE: PR #1729 (2026-07-30)
 Background: feat(#1721): centralize subagent parallel-dispatch protocol
 Changes: Reduced redundant parallel-dispatch instructions across workflow skills by centralizing them in a shared subagent-concurrency protocol doc, and documented why a few steps must stay serial.
+
+### FEATURE: PR #1737 (2026-07-30)
+Background: fix(#1725): honor WORKFLOW_OFF / EMERGENCY OFF override in block-history-direct.js
+Changes: Fixed: `block-history-direct.js` now respects an active `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` session override instead of always blocking append-only doc writes.
+
+### FEATURE: PR #1752 (2026-07-31)
+Background: fix(#1734): route plan-truncation warning to stderr, not stdout
+Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to the Codex plan-review loop could incorrectly halt the review with an "unrecognized status header" error instead of proceeding normally.
+
+### FEATURE: PR #1751 (2026-07-31)
+Background: fix(#1068): exclude staged deletions from compute-staged-tests-token fingerprint
+Changes: Fixed `/review-tests` COMPLETE sentinel incorrectly blocking when staged test changes included deletions.
+
+### FEATURE: PR #1772 (2026-07-31)
+Background: feat(#1743): add /wf-init alias for /workflow-init
+Changes: Added `/wf-init` as a short alias for `/workflow-init` (re-run the installer to pick it up after `git pull`).
+
+### FEATURE: PR #1774 (2026-08-01)
+Background: feat(#1747): add SESSION_SYNC toggle (default off) + fixes for #1218 #1564 #1214 #1739
+Changes: Automatic Claude Code session sync is now **off by default**. Set `SESSION_SYNC=on` in `agents/.env` to keep the previous automatic fetch-on-shell-startup and push-on-`codes` behavior. Manual `session-sync push/pull/status/reset` is unaffected and continues to work regardless of the setting.;Windows shell startup no longer leaks raw git/SSH diagnostics into the console when the session-sync auto-fetch fails; a single one-line hint is shown instead, matching the Linux/macOS behavior.;`session-sync reset` and `cc-session-mtime` now reject option-looking timestamps read from session JSONL files and pass `--` before filenames, so unusual session data can no longer influence how `touch` interprets its arguments.
+
+### FEATURE: PR #1781 (2026-08-01)
+Background: feat(#1741): add CODE_LANG_EXCLUDE repo-level opt-out for language check
+Changes: Added `CODE_LANG_EXCLUDE` to let specific repos opt out of the `CODE_LANG` commit-time language check, matched by absolute path or glob (semicolon-separated), same matcher as `ENFORCE_WORKTREE_EXCLUDE`.
+
+### FEATURE: PR #1784 (2026-08-01)
+Background: feat(#1769): add /sweep-issues skill; flip /sweep family to apply-by-default
+Changes: **Breaking:** every `/sweep` member now applies changes by default. `--dry-run` is the new preview flag, replacing the previous `--apply` opt-in. Running `/sweep`, `bin/sweep-branches.sh`, `bin/sweep-worktrees.sh`, `bin/sweep-plans.sh`, `bin/audit-tests.sh` or `bin/audit-tests-common.sh` with no flags now removes worktrees, deletes local and remote branches, deletes plan files, `git rm`s retired tests, and closes issues for real. Add `--dry-run` to any of them to get the old flagless behavior back. `--apply` is accepted as a no-op where it previously existed. The nightly cron in `.github/workflows/sweep.yml` was adjusted so its effective behavior is unchanged.;Note the flags that changed meaning as a side effect: `--delete-no-pr` (sweep-branches) and `--fix-headers` (audit-tests) used to require `--apply` alongside them and were report-only on their own; each is now destructive by itself.;New `/sweep-issues` skill: finds stale open GitHub issues and closes them in two tiers — meta parents whose sub-issues are all closed, and issues whose referenced test paths no longer exist. Use `--deep` to verify each candidate by running the test it references, `--dry-run` to preview, and `--band-size`/`--band-index` to process large backlogs in chunks. A failed sub-step now surfaces in both the exit status and the error count instead of reporting as a clean empty sweep.;Fixed: `bin/sweep-plans.sh` could claim and delete files that were never workflow planning artifacts, whenever their names happened to start with a hyphen. Files that do not match the recognized artifact naming are now skipped and reported in a `files_skipped_unrecognized` count.
+
+### FEATURE: PR #1786 (2026-08-01)
+Background: feat(#1673): replace close-path LLM subagents with deterministic worker scripts
+Changes: Commit/push, issue-close-stage, and issue-close-finalize now run as deterministic worker-dispatch scripts instead of LLM subagents, improving reliability and speed.
+
+### FEATURE: PR #1801 (2026-08-01)
+Background: fix(#1782): normalize_token() no longer glob-expands or accepts root-equivalent tokens
+Changes: Fixed: `--fix-headers --apply` no longer corrupts `# Tests:` headers containing glob characters (`*`, `?`) or root-equivalent path tokens (`/`, `.`, `..`, `./`, `../`).
+
+### FEATURE: PR #1792 (2026-08-01)
+Background: fix(#1756): recognise complete as settled in next-step's fail-open re-invoke
+Changes: Fixed: `next-step` no longer re-invokes `/write-tests` forever once a session has finished. A completed `write_tests` step is now recognised as settled, so a wrapped-up session reports `ACTION=done` instead of looping back to a step that was already done.;Changed: `bin/workflow/next-step` is now a thin dispatcher over `bin/workflow/lib/next-step/`. Behaviour is unchanged; the recovery commands it prints (`--reset` / `--mark`) still name the entrypoint, not an internal module.

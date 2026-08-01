@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Thin wrapper: delegates to hooks/workflow-gate/staged-evidence.js#hasUnstagedTrackedChanges
 # (the SSOT for tracked-vs-unstaged detection, also used by workflow-gate.js PreToolUse hook).
-# The bash front exists because /worktree-end, /commit-push, and commit-push-worker need a CLI entry point;
+# The bash front exists because /worktree-end, /commit-push, and the commit-push worker module need a CLI entry point;
 # the actual logic lives in node so workflow-gate.js can call it without spawning a subprocess.
 # Exit codes: 0=clean, 1=dirty (file list on stdout), 2=usage error, 3=internal error (fail-safe — caller must abort).
 # See issue #269 for the 3-gate defense-in-depth rationale.

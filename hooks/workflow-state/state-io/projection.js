@@ -34,6 +34,7 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "last_pushed_sha",
   "session_worktree",
   "verbose_prompt",
+  "merge_base_baseline",
   "events",
   "current",
 ];

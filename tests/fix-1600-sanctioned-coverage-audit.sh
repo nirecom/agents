@@ -1,35 +1,46 @@
 #!/bin/bash
 # tests/fix-1600-sanctioned-coverage-audit.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
-# Tags: worktree, enforce, hook, security, scope:issue-specific
+# Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/arg-value-guard.js
+# Tags: worktree, enforce, hook, security, static, TL1, scope:issue-specific
 #
-# Issue #1600 coverage audit: verifies the finalize-worker overlay (a) accepts the
-# 3 live command shapes with no gaps, (b) does not over-accept a non-registry
-# sibling script, (c) has a well-formed FINALIZE_OVERLAY_REGISTRY / G5_DECISION_VALUES,
-# (d) enforces interpreter binding, and (e) still defers to write-scope governance.
-# The registry-integrity assertions inspect the REAL finalize-worker-overlay.js in
-# the repo (not the fake ACD) — they fail-with-require-error until the module exists.
+# SANCTIONED coverage audit. Originally (#1600) this file audited the
+# finalize-worker overlay's registry and command shapes. #1673 retires that
+# overlay: the three finalize scripts are no longer invoked as a Bash-tool `eval`
+# from the main worktree — they run as child processes of bin/worker-dispatch.js,
+# behind worker-dispatch-overlay.js + the registry capability layer. What is left
+# to audit is therefore the LEGACY SANCTIONED list itself:
 #
-# TL3 gap: same as fix-1600-finalize-worker-overlay.sh — a full /issue-close-finalize
-# chain from a real main worktree is only exercised at TL3 (RUN_TL3).
+#   (a) SANCTIONED holds exactly the 7 remaining entries — the 3 subprocess-only
+#       scripts (bin/issue-close-gate.sh, bin/github-issues/issue-close-stage-triage.sh,
+#       bin/github-issues/parent-body-update.sh) are gone, and nothing else was
+#       dropped along with them.
+#   (b) those 3 have no remaining Bash-TOOL call site: no prompt-facing `.md`
+#       under skills/ or docs/ tells Claude to run them. They stay reachable only
+#       as children of run-stage-chain.sh / run-initial.sh, which the guard never
+#       sees. This is the invariant that makes removal safe (Risks 7).
+#   (c) finalize-worker-overlay.js no longer exists — the shared helpers moved to
+#       hooks/enforce-worktree/arg-value-guard.js and the match function retired
+#       with the eval path it guarded.
+#
+# TL1 (static): the subject is a literal array in one source file plus a grep
+# over prompt text. Guard BEHAVIOR for the surviving SANCTIONED entries is
+# covered by tests/fix-959-enforce-worktree-worker-path-arg.sh, and for the
+# dispatch path by tests/feature-1643-worker-dispatch-guard.sh.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
-else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
-fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-OVERLAY_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js"
 WORKER_SCRIPT_JS="${AGENTS_DIR}/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+OVERLAY_JS="${AGENTS_DIR}/hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js"
+ARG_VALUE_GUARD_JS="${AGENTS_DIR}/hooks/enforce-worktree/arg-value-guard.js"
+
+nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 PASS=0
 FAIL=0
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -40,328 +51,189 @@ run_with_timeout() {
     fi
 }
 
-TMPDIR_BASE="$(node -e "
-const os=require('os'),path=require('path'),fs=require('fs');
-const d=path.join(os.tmpdir(),'fix1600audit-'+process.pid).replace(/\\\\/g,'/');
-fs.mkdirSync(d,{recursive:true});
-console.log(d);
-" 2>/dev/null)"
-[ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
-
-if [ ! -f "$GUARD_JS" ]; then
-    echo "FAIL: precondition missing — hooks/enforce-worktree.js"
+if [ ! -f "$WORKER_SCRIPT_JS" ]; then
+    echo "FAIL: precondition missing — worker-script.js"
     echo ""
     echo "Total: PASS=0 FAIL=1"
     exit 1
 fi
 
-json_quote() {
-    node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$1"
+# The 3 entries #1673 removes. Subprocess-only: their sole callers are
+# run-stage-chain.sh and run-initial.sh, both of which the dispatcher spawns.
+REMOVED_ENTRIES='bin/issue-close-gate.sh
+bin/github-issues/issue-close-stage-triage.sh
+bin/github-issues/parent-body-update.sh'
+
+# The 7 entries that MUST survive, each because a prompt-facing step runs it
+# through the Bash tool from the main worktree:
+#   check-unstaged-tracked.sh   /commit-push CP-1, /worktree-end WE-3
+#   probe-remote-bootstrap.sh   /commit-push bootstrap probe
+#   issue-create-dispatch.sh    /issue-create survey dispatch
+#   run-bulk-dispatch.sh        /issue-create bulk phase
+#   run-phase5-record.sh        /issue-create phase 5
+#   pre-flight.sh               /issue-close-finalize pre-flight gate (main context)
+#   run-quality-gates.sh        /review-code-security quality gates
+KEPT_ENTRIES='bin/check-unstaged-tracked.sh
+bin/probe-remote-bootstrap.sh
+bin/github-issues/issue-create-dispatch.sh
+skills/issue-create/scripts/run-bulk-dispatch.sh
+skills/issue-create/scripts/run-phase5-record.sh
+skills/issue-close-finalize/scripts/pre-flight.sh
+skills/review-code-security/scripts/run-quality-gates.sh'
+
+# ============================================================================
+# (a) SANCTIONED is exactly the 7 kept entries.
+#
+# Read by parsing the literal array out of the source: worker-script.js is not
+# require-able in isolation without its whole hook dependency tree, and the array
+# is the thing under audit — a mocked stand-in would audit the mock.
+# ============================================================================
+
+extract_sanctioned() {
+    run_with_timeout 30 node -e '
+        const fs = require("fs");
+        const src = fs.readFileSync(process.argv[1], "utf8");
+        const m = src.match(/const\s+SANCTIONED\s*=\s*\[([\s\S]*?)\]\s*;/);
+        if (!m) { console.log("PARSE_FAIL"); process.exit(0); }
+        const out = [];
+        const re = /"([^"]+)"/g;
+        let x;
+        while ((x = re.exec(m[1])) !== null) out.push(x[1]);
+        process.stdout.write(out.join("\n"));
+    ' "$(nodepath "$WORKER_SCRIPT_JS")" 2>&1
 }
 
-build_bash_payload() {
-    local cmd="$1"
-    local q; q="$(json_quote "$cmd")"
-    printf '{"tool_name":"Bash","tool_input":{"command":%s}}' "$q"
-}
-
-GUARD_OUT=""
-GUARD_RC=0
-run_guard() {
-    local payload="$1"; shift
-    local main_wt="$1"; shift
-    GUARD_RC=0
-    GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
-        -C "$main_wt" \
-        "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
-        "$@" \
-        node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
-    if [ "$GUARD_RC" -ne 0 ]; then
-        return 2
+test_sanctioned_exact_set() {
+    local actual expected count
+    actual="$(extract_sanctioned)"
+    if [ "$actual" = "PARSE_FAIL" ] || [ -z "$actual" ]; then
+        fail "a1: could not extract the SANCTIONED array from worker-script.js" "$actual"
+        return
     fi
-    if echo "$GUARD_OUT" | grep -q '"decision":"block"'; then
-        return 1
+    count="$(printf '%s\n' "$actual" | grep -c .)"
+    if [ "$count" -eq 7 ]; then
+        pass "a1: SANCTIONED holds exactly 7 entries"
+    else
+        fail "a1: SANCTIONED holds $count entries, expected 7 (RED until #1673 commit 5)" \
+            "$(printf '%s' "$actual" | tr '\n' ' ')"
     fi
-    return 0
+
+    expected="$(printf '%s\n' "$KEPT_ENTRIES" | sort)"
+    actual="$(printf '%s\n' "$actual" | sort)"
+    if [ "$actual" = "$expected" ]; then
+        pass "a2: SANCTIONED set matches the 7 documented Bash-tool call sites exactly"
+    else
+        fail "a2: SANCTIONED set drift (RED until #1673 commit 5)" \
+            "got: $(printf '%s' "$actual" | tr '\n' ' ')"
+    fi
 }
 
-if ! env -C "$TMPDIR_BASE" true 2>/dev/null; then
-    run_guard() {
-        local payload="$1"; shift
-        local main_wt="$1"; shift
-        GUARD_RC=0
-        GUARD_OUT="$(cd "$main_wt" && printf '%s' "$payload" | run_with_timeout 30 \
-            env -u CLAUDE_ENV_FILE \
-            "ENFORCE_WORKTREE=on" \
-            "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
-            "$@" \
-            node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
-        if [ "$GUARD_RC" -ne 0 ]; then
-            return 2
+# Symmetric negative: each removed entry must be gone from worker-script.js.
+test_removed_entries_absent_from_source() {
+    local errs="" rel
+    while IFS= read -r rel; do
+        [ -z "$rel" ] && continue
+        if grep -qF "\"$rel\"" "$WORKER_SCRIPT_JS"; then
+            errs="$errs $rel"
         fi
-        if echo "$GUARD_OUT" | grep -q '"decision":"block"'; then
-            return 1
+    done <<< "$REMOVED_ENTRIES"
+    if [ -z "$errs" ]; then
+        pass "a3: none of the 3 retired scripts is still listed in SANCTIONED"
+    else
+        fail "a3: retired script(s) still in SANCTIONED (RED until #1673 commit 5)" "$errs"
+    fi
+}
+
+# ============================================================================
+# (b) No prompt-facing Bash-tool call site remains for the 3 removed entries.
+#
+# Removing a SANCTIONED entry that a SKILL.md still tells Claude to run would
+# false-block a legitimate main-worktree operation. `.sh` / `.js` references are
+# expected and fine — those are subprocess call sites the PreToolUse hook never
+# inspects (it sees the command HEAD only).
+# ============================================================================
+
+test_no_bash_tool_call_sites() {
+    local errs="" rel hits
+    while IFS= read -r rel; do
+        [ -z "$rel" ] && continue
+        # Invocation shape only: `bash "<...>/<rel>"` or `bash <...>/<rel>` inside
+        # a prompt file. A prose mention in docs/history/*.md is a record of past
+        # work, not an instruction, and must not trip the audit.
+        hits="$(grep -rlnE "bash[[:space:]]+\"?[^\"[:space:]]*${rel//\//\\/}" \
+            --include='*.md' "$AGENTS_DIR/skills" "$AGENTS_DIR/docs" 2>/dev/null)"
+        if [ -n "$hits" ]; then
+            errs="$errs $rel->$(printf '%s' "$hits" | tr '\n' ',')"
         fi
-        return 0
-    }
-fi
-
-assert_allow() {
-    local label="$1" rc="$2"
-    case "$rc" in
-        0) pass "$label" ;;
-        1) fail "$label (BLOCK — expected ALLOW; out: $GUARD_OUT)" ;;
-        2) fail "$label (CRASH rc=$GUARD_RC; out: $GUARD_OUT)" ;;
-        *) fail "$label (unexpected rc=$rc; out: $GUARD_OUT)" ;;
-    esac
-}
-
-assert_block() {
-    local label="$1" rc="$2"
-    case "$rc" in
-        0) fail "$label (ALLOW — expected BLOCK; out: $GUARD_OUT)" ;;
-        1) pass "$label" ;;
-        2) fail "$label (CRASH rc=$GUARD_RC; out: $GUARD_OUT)" ;;
-        *) fail "$label (unexpected rc=$rc; out: $GUARD_OUT)" ;;
-    esac
-}
-
-# ----------------------------------------------------------------------------
-# Fixtures
-# ----------------------------------------------------------------------------
-
-setup_main_worktree() {
-    local name="$1"
-    local repo="$TMPDIR_BASE/$name"
-    mkdir -p "$repo"
-    git -C "$repo" init -q -b main
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name "Test"
-    git -C "$repo" config core.hooksPath /dev/null
-    echo "init" > "$repo/README.md"
-    git -C "$repo" add README.md
-    git -C "$repo" commit -q --no-verify -m "initial"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$repo"
+    done <<< "$REMOVED_ENTRIES"
+    if [ -z "$errs" ]; then
+        pass "b1: no skills/ or docs/ .md invokes any of the 3 retired scripts via the Bash tool"
     else
-        echo "$repo"
+        fail "b1: Bash-tool call site(s) survive for a retired SANCTIONED entry" "$errs"
     fi
 }
 
-add_linked_worktree() {
-    local main_wt="$1" name="$2" branch="$3"
-    local wt_path="$main_wt/.wt/$name"
-    git -C "$main_wt" worktree add -q -b "$branch" "$wt_path" >/dev/null
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$wt_path"
+# Mutation probe: prove b1's detector can fire at all. A synthetic prompt file
+# carrying the invocation shape must be matched by the same expression.
+test_bash_tool_detector_probe() {
+    local tmpd probe
+    tmpd="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/fix1600audit-$$")"
+    mkdir -p "$tmpd"
+    probe="$tmpd/synthetic-skill.md"
+    printf '%s\n' 'XX-1. Run `bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" "$OWNER_REPO" "$N"`.' > "$probe"
+    if grep -rqE 'bash[[:space:]]+"?[^"[:space:]]*bin\/issue-close-gate\.sh' --include='*.md' "$tmpd" 2>/dev/null; then
+        pass "b2: the b1 detector fires on a synthetic prompt-file call site (mutation probe)"
     else
-        echo "$wt_path"
+        fail "b2: the b1 detector does not fire — b1's green is meaningless"
+    fi
+    rm -rf "$tmpd"
+}
+
+# ============================================================================
+# (c) finalize-worker-overlay.js is retired; arg-value-guard.js owns the shared
+#     helpers it used to export.
+# ============================================================================
+
+test_overlay_file_absent() {
+    if [ ! -e "$OVERLAY_JS" ]; then
+        pass "c1: finalize-worker-overlay.js no longer exists"
+    else
+        fail "c1: finalize-worker-overlay.js still on disk (RED until #1673 commit 5)"
     fi
 }
 
-setup_fake_acd() {
-    local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-$name"
-    mkdir -p "$d/bin/github-issues"
-    # Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
-    # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
-    # one always carries the guard itself — a marker-less stub is not a faithful
-    # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
-    mkdir -p "$d/hooks"
-    touch "$d/hooks/enforce-worktree.js"
-    touch "$d/bin/check-unstaged-tracked.sh"
-    mkdir -p "$d/skills/issue-close-finalize/scripts"
-    touch "$d/skills/issue-close-finalize/scripts/pre-flight.sh"
-    touch "$d/skills/issue-close-finalize/scripts/run-initial.sh"
-    touch "$d/skills/issue-close-finalize/scripts/run-loop-step.js"
-    touch "$d/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
-    touch "$d/skills/issue-close-finalize/scripts/step-g5-loop.sh"
-    # Non-registry sibling script used for the over-acceptance probe.
-    touch "$d/skills/issue-close-finalize/scripts/evil.sh"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$d"
+test_worker_script_does_not_require_overlay() {
+    if grep -qF "finalize-worker-overlay" "$WORKER_SCRIPT_JS"; then
+        fail "c2: worker-script.js still references finalize-worker-overlay (RED until #1673 commit 5)"
     else
-        echo "$d"
+        pass "c2: worker-script.js has no finalize-worker-overlay require or (a0) branch"
     fi
 }
 
-setup_plans_dir() {
-    local name="$1"
-    local d="$TMPDIR_BASE/plans-$name"
-    mkdir -p "$d"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$d"
-    else
-        echo "$d"
+test_arg_value_guard_exports_shared_helpers() {
+    if [ ! -f "$ARG_VALUE_GUARD_JS" ]; then
+        fail "c3: hooks/enforce-worktree/arg-value-guard.js missing (RED until #1673 commit 1)"
+        return
     fi
-}
-
-# ============================================================================
-# 1. No gaps — the 3 live shapes from a registered main worktree all ALLOW.
-# ============================================================================
-
-test_no_gaps_all_three_shapes() {
-    local repo; repo="$(setup_main_worktree "audit-nogap")"
-    add_linked_worktree "$repo" "wt1" "feat/audit-nogap" >/dev/null
-    local acd; acd="$(setup_fake_acd "audit-nogap")"
-    local plans; plans="$(setup_plans_dir "audit-nogap")"
-    local scripts="$acd/skills/issue-close-finalize/scripts"
-    local statefile="$plans/sid-finalize-state-1234.json"
-    local outcome="$plans/sid-issue-close-outcome.json"
-
-    local cmd_initial cmd_loop cmd_term rc
-    cmd_initial="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234" "")"' "$acd" "$scripts" "$repo" "$scripts")"
-    rc=0; run_guard "$(build_bash_payload "$cmd_initial")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_allow "no-gaps: initial shape → ALLOW (RED before fix)" "$rc"
-
-    cmd_loop="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" node "%s/run-loop-step.js" "%s" "accept")"' "$acd" "$scripts" "$scripts" "$statefile")"
-    rc=0; run_guard "$(build_bash_payload "$cmd_loop")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_allow "no-gaps: loop_step shape → ALLOW (RED before fix)" "$rc"
-
-    cmd_term="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" bash "%s/run-finalize-terminal.sh" "%s" "sid" "%s")"' "$acd" "$scripts" "$statefile" "$outcome")"
-    rc=0; run_guard "$(build_bash_payload "$cmd_term")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_allow "no-gaps: finalize_terminal shape → ALLOW (RED before fix)" "$rc"
-}
-
-# ============================================================================
-# 2. No over-acceptance — non-registry sibling script (evil.sh) → BLOCK.
-# ============================================================================
-
-test_no_over_acceptance_sibling() {
-    local repo; repo="$(setup_main_worktree "audit-sibling")"
-    add_linked_worktree "$repo" "wt1" "feat/audit-sibling" >/dev/null
-    local acd; acd="$(setup_fake_acd "audit-sibling")"
-    local plans; plans="$(setup_plans_dir "audit-sibling")"
-    local scripts="$acd/skills/issue-close-finalize/scripts"
-    local cmd
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/evil.sh" "1234" "1234" "")"' "$acd" "$scripts" "$repo" "$scripts")"
-    local rc=0
-    run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "no-over-acceptance: non-registry sibling evil.sh → BLOCK" "$rc"
-}
-
-# ============================================================================
-# 3. Registry integrity — inspect the REAL finalize-worker-overlay.js.
-# ============================================================================
-
-test_registry_integrity() {
     local result
     result="$(run_with_timeout 30 node -e '
-        const p = process.argv[1];
         let mod;
-        try { mod = require(p); } catch (e) { console.log("REQUIRE_FAIL: " + e.message); process.exit(0); }
-        const reg = mod.FINALIZE_OVERLAY_REGISTRY;
-        const g5 = mod.G5_DECISION_VALUES;
-        const errs = [];
-        if (!Array.isArray(reg)) { errs.push("FINALIZE_OVERLAY_REGISTRY not an array"); }
-        else {
-            const rels = reg.map(e => e && e.rel).sort();
-            const expected = [
-                "skills/issue-close-finalize/scripts/run-finalize-terminal.sh",
-                "skills/issue-close-finalize/scripts/run-initial.sh",
-                "skills/issue-close-finalize/scripts/run-loop-step.js",
-                "skills/issue-close-finalize/scripts/step-g5-loop.sh",
-            ].sort();
-            if (JSON.stringify(rels) !== JSON.stringify(expected)) {
-                errs.push("rel set mismatch: " + JSON.stringify(rels));
-            }
-            const byRel = {};
-            for (const e of reg) { if (e && e.rel) byRel[e.rel] = e; }
-            const g5entry = byRel["skills/issue-close-finalize/scripts/step-g5-loop.sh"];
-            if (!g5entry || g5entry.matchable !== false) errs.push("step-g5-loop.sh must be matchable:false");
-            for (const rel of ["run-initial.sh","run-loop-step.js","run-finalize-terminal.sh"]) {
-                const e = byRel["skills/issue-close-finalize/scripts/"+rel];
-                if (!e || e.matchable !== true) errs.push(rel+" must be matchable:true");
-            }
-            const loop = byRel["skills/issue-close-finalize/scripts/run-loop-step.js"];
-            if (!loop || !Array.isArray(loop.argSpec) || loop.argSpec[1] !== "enum-g5") {
-                errs.push("run-loop-step.js argSpec[1] must be enum-g5 (got: " + JSON.stringify(loop && loop.argSpec) + ")");
-            }
+        try { mod = require(process.argv[1]); }
+        catch (e) { console.log("REQUIRE_FAIL: " + String(e.message).split("\n")[0]); process.exit(0); }
+        const missing = [];
+        for (const fn of ["stripRelSuffix","isUnderPlansDir","hasControlChar","isSimpleArgValue"]) {
+            if (typeof mod[fn] !== "function") missing.push(fn);
         }
-        const expectedG5 = ["accept","decline","llm_declined","recurse_done"];
-        if (JSON.stringify(g5) !== JSON.stringify(expectedG5)) {
-            errs.push("G5_DECISION_VALUES mismatch (order+case): " + JSON.stringify(g5));
+        for (const re of ["UNSAFE_ARG_VALUE_RE","ID_VALUE_RE","REPO_SLUG_VALUE_RE"]) {
+            if (!(mod[re] instanceof RegExp)) missing.push(re);
         }
-        if (errs.length) { console.log("INTEGRITY_FAIL: " + errs.join(" | ")); }
-        else { console.log("ok"); }
-    ' "$OVERLAY_JS" 2>&1)"
+        console.log(missing.length ? "MISSING: " + missing.join(",") : "ok");
+    ' "$(nodepath "$ARG_VALUE_GUARD_JS")" 2>&1)"
     if [ "$result" = "ok" ]; then
-        pass "registry-integrity: rels/matchable/argSpec/G5_DECISION_VALUES all correct"
+        pass "c3: arg-value-guard.js exports all 7 shared helpers moved off the overlay"
     else
-        fail "registry-integrity: $result"
+        fail "c3: arg-value-guard.js export set incomplete" "$result"
     fi
-}
-
-# Legacy SANCTIONED array still holds pre-flight.sh + run-quality-gates.sh but
-# NONE of the 4 overlay scripts (overlay owns those now).
-test_legacy_sanctioned_disjoint() {
-    local errs=""
-    grep -qF "skills/issue-close-finalize/scripts/pre-flight.sh" "$WORKER_SCRIPT_JS" \
-        || errs="$errs;pre-flight.sh missing from SANCTIONED"
-    grep -qF "skills/review-code-security/scripts/run-quality-gates.sh" "$WORKER_SCRIPT_JS" \
-        || errs="$errs;run-quality-gates.sh missing from SANCTIONED"
-    for s in run-initial.sh run-loop-step.js run-finalize-terminal.sh step-g5-loop.sh; do
-        if grep -qF "issue-close-finalize/scripts/$s" "$WORKER_SCRIPT_JS"; then
-            errs="$errs;overlay script $s leaked into worker-script.js SANCTIONED"
-        fi
-    done
-    if [ -z "$errs" ]; then
-        pass "legacy-sanctioned-disjoint: SANCTIONED keeps pre-flight/quality-gates, excludes 4 overlay scripts"
-    else
-        fail "legacy-sanctioned-disjoint:$errs"
-    fi
-}
-
-# ============================================================================
-# 4. Interpreter binding — node/bash mismatches → BLOCK.
-# ============================================================================
-
-test_interp_binding_node_on_bash() {
-    local repo; repo="$(setup_main_worktree "audit-nodebash")"
-    add_linked_worktree "$repo" "wt1" "feat/audit-nodebash" >/dev/null
-    local acd; acd="$(setup_fake_acd "audit-nodebash")"
-    local plans; plans="$(setup_plans_dir "audit-nodebash")"
-    local scripts="$acd/skills/issue-close-finalize/scripts"
-    local cmd
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" node "%s/run-initial.sh" "1234" "1234" "")"' "$acd" "$scripts" "$repo" "$scripts")"
-    local rc=0
-    run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "interp-binding: node run-initial.sh (bash script) → BLOCK" "$rc"
-}
-
-test_interp_binding_bash_on_node() {
-    local repo; repo="$(setup_main_worktree "audit-bashnode")"
-    add_linked_worktree "$repo" "wt1" "feat/audit-bashnode" >/dev/null
-    local acd; acd="$(setup_fake_acd "audit-bashnode")"
-    local plans; plans="$(setup_plans_dir "audit-bashnode")"
-    local scripts="$acd/skills/issue-close-finalize/scripts"
-    local statefile="$plans/sid-finalize-state-1234.json"
-    local cmd
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" bash "%s/run-loop-step.js" "%s" "accept")"' "$acd" "$scripts" "$scripts" "$statefile")"
-    local rc=0
-    run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "interp-binding: bash run-loop-step.js (node script) → BLOCK" "$rc"
-}
-
-# ============================================================================
-# 5. Write-scope still governs — outer redirect into main worktree → BLOCK.
-# ============================================================================
-
-test_write_scope_outer_redirect() {
-    local repo; repo="$(setup_main_worktree "audit-redir")"
-    add_linked_worktree "$repo" "wt1" "feat/audit-redir" >/dev/null
-    local acd; acd="$(setup_fake_acd "audit-redir")"
-    local plans; plans="$(setup_plans_dir "audit-redir")"
-    local scripts="$acd/skills/issue-close-finalize/scripts"
-    # Otherwise-valid overlay shape with an added outer redirect into the main worktree.
-    local cmd
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234" "")" > "%s/pwned.txt"' "$acd" "$scripts" "$repo" "$scripts" "$repo")"
-    local rc=0
-    run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "write-scope: overlay shape + outer redirect into main worktree → BLOCK" "$rc"
 }
 
 # ============================================================================
@@ -369,13 +241,13 @@ test_write_scope_outer_redirect() {
 # ============================================================================
 
 run_all() {
-    test_no_gaps_all_three_shapes
-    test_no_over_acceptance_sibling
-    test_registry_integrity
-    test_legacy_sanctioned_disjoint
-    test_interp_binding_node_on_bash
-    test_interp_binding_bash_on_node
-    test_write_scope_outer_redirect
+    test_sanctioned_exact_set
+    test_removed_entries_absent_from_source
+    test_no_bash_tool_call_sites
+    test_bash_tool_detector_probe
+    test_overlay_file_absent
+    test_worker_script_does_not_require_overlay
+    test_arg_value_guard_exports_shared_helpers
 }
 
 if command -v timeout >/dev/null 2>&1; then

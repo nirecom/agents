@@ -296,6 +296,7 @@ function migrateV1ToV2(v1State) {
   if (src.last_pushed_sha !== undefined) result.last_pushed_sha = src.last_pushed_sha;
   if (src.session_worktree !== undefined) result.session_worktree = src.session_worktree;
   if (src.verbose_prompt !== undefined) result.verbose_prompt = src.verbose_prompt;
+  if (src.merge_base_baseline !== undefined) result.merge_base_baseline = src.merge_base_baseline;
   result.events = events;
   return result;
 }

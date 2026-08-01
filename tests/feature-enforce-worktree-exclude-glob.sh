@@ -255,6 +255,107 @@ test_security_repeated_globstar_no_catastrophic_backtracking() {
     fi
 }
 
+# Run pathMatchesGlob and echo "<result> <elapsed-ms>"; pattern/target are built
+# inside node so a multi-kilobyte pathological string never crosses the shell.
+# Args: file-expr, pattern-expr — both are JS expressions eval'd by node.
+glob_match_timed() {
+    local file_expr="$1" pattern_expr="$2"
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$GLOB_JS');
+        const file = ($file_expr);
+        const pattern = ($pattern_expr);
+        const t0 = Date.now();
+        const r = m.pathMatchesGlob(file, pattern);
+        console.log((r ? 'true' : 'false') + ' ' + (Date.now() - t0));
+      } catch (e) {
+        console.log('ERROR: ' + e.message);
+      }
+    " 2>/dev/null
+}
+
+test_security_pattern_complexity_cap_stops_redos() {
+    # ReDoS (CWE-1333) regression guard. A pattern alternating wildcards with
+    # literals — "C:/git" + "**a" x20 + "z" — translates to 20 chained greedy
+    # `.*` groups, each followed by a literal. Against a target that shares the
+    # prefix but never supplies the trailing 'z', the engine must try every way
+    # of splitting the run of 'a's between those groups: exponential in the
+    # repeat count, and unreachable-in-practice at 20. The value is
+    # user-controlled (CODE_LANG_EXCLUDE / ENFORCE_WORKTREE_EXCLUDE arrive from
+    # .env or the environment), so the hang is reachable, not theoretical.
+    #
+    # The fix caps pattern complexity and treats an over-cap pattern as
+    # NON-MATCHING. That direction matters: "no match" means the exclusion does
+    # not apply and the language / worktree check still RUNS. A cap that instead
+    # returned true would convert a malformed pattern into a silent bypass of
+    # the very check the pattern gates.
+    #
+    # Both halves are asserted together. The wall-clock bound is what proves the
+    # cap actually engaged: 'false' alone is also what a still-vulnerable build
+    # produces — eventually. 2000ms is far above a capped run (sub-millisecond:
+    # the pattern is rejected before any regex is built) and far below the
+    # unbounded blow-up, so the threshold is not timing-sensitive on a loaded
+    # machine.
+    local out result elapsed
+    out="$(glob_match_timed "'C:/git' + 'a'.repeat(60)" "'C:/git' + '**a'.repeat(20) + 'z'")"
+    result="${out%% *}"
+    elapsed="${out##* }"
+    if [ "$result" != "false" ]; then
+        fail "ReDoS cap: pathological pattern expected 'false' (non-matching → check still runs), got '$out'"
+    elif ! [ "$elapsed" -lt 2000 ] 2>/dev/null; then
+        fail "ReDoS cap: returned false but took ${elapsed}ms (>=2000ms) — complexity cap did not engage"
+    else
+        pass "ReDoS cap: 20x '**a' pattern returns false in ${elapsed}ms (no catastrophic backtracking)"
+    fi
+
+    # Over-long pattern: the second half of the cap (length, not wildcard count).
+    # 4 wildcards only, so the wildcard limit cannot be what rejects it.
+    out="$(glob_match_timed "'C:/git/x.md'" "'C:/git/' + 'a'.repeat(4000) + '**/**/*.md'")"
+    result="${out%% *}"
+    if [ "$result" = "false" ]; then
+        pass "ReDoS cap: over-length pattern (>1KB) returns false"
+    else
+        fail "ReDoS cap: over-length pattern expected 'false', got '$out'"
+    fi
+}
+
+test_security_complexity_cap_spares_realistic_globs() {
+    # Counterpart to the cap test: the cap must not swallow ordinary patterns.
+    # A cap that rejected real-world globs would silently stop excluding the
+    # paths users configured — the same silent-bypass failure mode, arrived at
+    # from the other side. These mirror the shapes actually written in
+    # ENFORCE_WORKTREE_EXCLUDE / CODE_LANG_EXCLUDE.
+    assert_match "cap spares Windows worktree-root glob" \
+        'C:\git\worktrees\task\agents\hooks\lib\x.js' 'C:\git\worktrees\**' "true"
+    assert_match "cap spares ordinary **/*.md" \
+        "docs/sub/a.md" "**/*.md" "true"
+    assert_match "cap spares multi-wildcard entry" \
+        "src/a/b/test.spec.js" "src/**/*.spec.js" "true"
+
+    # POSIX absolute worktree root — the shape WORKTREE_BASE_DIR takes on
+    # macOS/Linux. Routed through glob_match_timed (which builds both strings
+    # inside node) rather than assert_match: MSYS2 rewrites a leading-'/' argv
+    # entry into a Windows path when handing it to node.exe, so on git-bash the
+    # shell would mangle the file argument and the case would fail for a reason
+    # that has nothing to do with the cap.
+    local out
+    out="$(glob_match_timed "'/home/u/git/worktrees/task/agents/x.js'" "'/home/u/git/worktrees/**'")"
+    if [ "${out%% *}" = "true" ]; then
+        pass "cap spares POSIX absolute worktree-root glob"
+    else
+        fail "cap spares POSIX absolute worktree-root glob: expected 'true', got '$out'"
+    fi
+
+    # Boundary pair around the 10-wildcard limit. Both sides are asserted so the
+    # cap is pinned as inclusive-at-10: the pass side fails if an off-by-one
+    # narrows what users can express, the reject side fails if the limit is
+    # loosened. Star counts are 2x5 = 10 and 2x5+1 = 11 respectively.
+    assert_match "cap boundary: exactly 10 wildcards still matches" \
+        "a/b/c/d/e/x.md" "**/**/**/**/**/x.md" "true"
+    assert_match "cap boundary: 11 wildcards is rejected (non-matching)" \
+        "a/b/c/d/e/f.md" "**/**/**/**/**/*.md" "false"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Non-goal verification: '?' is NOT a wildcard
 # ─────────────────────────────────────────────────────────────────────────────
@@ -352,6 +453,8 @@ test_edge_dotfiles
 # Security
 test_security_regex_meta_chars_literal
 test_security_repeated_globstar_no_catastrophic_backtracking
+test_security_pattern_complexity_cap_stops_redos
+test_security_complexity_cap_spares_realistic_globs
 
 # Non-goal
 test_nongoal_question_mark_literal

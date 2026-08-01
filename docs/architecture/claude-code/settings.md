@@ -44,6 +44,10 @@ See `docs/security-policy.md` for the full pattern list.
   are excluded by name. **Registered as two matcher groups**: `Edit|Write|MultiEdit|NotebookEdit`
   for tool writes, and `Bash|runInTerminal|runCommands` for shell redirects / `tee` / `cp` / `mv`
   into a protected path. Both groups are required — either alone leaves the other lane open.
+  `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` bypass: a protected
+  hit approves instead of blocking when the calling session has an active `isWorkflowOff(sid)`
+  marker, per `rules/workflow-off.md`. See `marker-bypass-contract.md` for the full cross-hook
+  honoring contract.
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
@@ -151,7 +155,7 @@ See `docs/security-policy.md` for the full pattern list.
   consumer carried its own ad-hoc quote walker, so a quoting form fixed in one predicate stayed
   broken in its siblings (CPR-8). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
   command-ir}.js`, `hooks/enforce-worktree/arg-tail-guard.js`, and
-  `main-worktree-allows/{worker-script,finalize-worker-overlay}.js`. Ambiguity is never guessed
+  `main-worktree-allows/worker-script.js`. Ambiguity is never guessed
   at: unparseable nesting or nesting past the depth cap (`MAX_SPAN_DEPTH`) yields `ok:false`
   plus a fail reason, and every consumer maps `ok:false` to the write/block side. The transform
   boundaries return their input unchanged instead of throwing, so a pathological command cannot
@@ -167,7 +171,7 @@ See `docs/security-policy.md` for the full pattern list.
   share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
   settings, or an alternate config dir would silently be injected with the real repo's `.env`
   (CPR-3). The two share only the candidate enumeration.
-  **Worker-dispatch sanction (#1643)** — `main-worktree-allows/worker-dispatch-overlay.js`
+  **Worker-dispatch sanction (#1643, #1673)** — `main-worktree-allows/worker-dispatch-overlay.js`
   sanctions exactly one command shape from the main worktree:
   `node "<acd>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>`. It deliberately
   does **not** call the quote-spans scanner: rather than parse arbitrary quoting, it accepts
@@ -177,12 +181,33 @@ See `docs/security-policy.md` for the full pattern list.
   `AGENTS_CONFIG_DIR`; the `<main-root>` argument equals the repo under judgement; and that
   same argument is one of `getSessionRepoRoots()`'s trusted main worktrees. The payload must
   live under the plans dir. Argument values are screened against the reject set exported by
-  `finalize-worker-overlay.js` (`UNSAFE_ARG_VALUE_RE`, `hasControlChar`, `isUnderPlansDir`) —
-  one set shared by both overlays rather than two copies that drift. The overlay never reads
+  `hooks/enforce-worktree/arg-value-guard.js` (`UNSAFE_ARG_VALUE_RE`, `hasControlChar`,
+  `isUnderPlansDir`, plus `ID_VALUE_RE` / `REPO_SLUG_VALUE_RE` / `isSimpleArgValue` /
+  `stripRelSuffix`). That module is the sole owner of those helpers, and it is the VALUE-level
+  sibling of the SHAPE-level `arg-tail-guard.js`: shape decides whether a token is one plain
+  word, value decides whether that word is safe to hand onward. The overlay never reads
   the payload: field-level trust is `bin/worker-dispatch/` 's own job, and a field it refuses
   surfaces as `status: failed` on stdout, never as a silent drop. Worker names come from
   `hooks/lib/worker-dispatch-registry.js`; when that module cannot be loaded the overlay
   degrades to BLOCK instead of crashing the hook.
+  Because the enum is read from the registry rather than restated in the overlay, this one
+  guard covers all nine declared workers (`WORKER_NAMES`) with no per-worker code. Together
+  with the registry's per-worker capability contracts (`payloadSpec`, `binaries`,
+  `envPassthrough`, `writeScopes`) it is the **sole** guard layer for worker-dispatch write
+  operations — there is no second, worker-specific overlay, by design (CPR-5).
+  **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts
+  (`run-initial.sh`, `run-loop-step.js`, `run-finalize-terminal.sh`) used to be invoked as a
+  Bash-tool `eval` from the main worktree, and that one shape needed an overlay of its own to
+  HARD-validate its env VALUES and argument positions. #1673 moved those scripts behind
+  `bin/worker-dispatch.js`, where they run as child processes: the `eval` shape no longer
+  exists, so the overlay guarding it was deleted rather than left as dead surface. Its shared
+  value helpers moved unchanged to `arg-value-guard.js` (above); its `G5_DECISION_VALUES` enum
+  became the `g5_decision` payload enum in the registry. Three `SANCTIONED` entries in
+  `worker-script.js` retired with it (`bin/issue-close-gate.sh`,
+  `bin/github-issues/issue-close-stage-triage.sh`, `bin/github-issues/parent-body-update.sh`):
+  all three are reachable only as children of `run-stage-chain.sh` / `run-initial.sh`, and a
+  PreToolUse hook that inspects the command head only never sees a child process, so the
+  listing granted nothing.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and
