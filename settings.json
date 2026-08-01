@@ -326,11 +326,6 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/lang-inject.js\"",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/issue-provenance-mint.js\"",
-            "timeout": 5
           }
         ]
       }

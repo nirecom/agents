@@ -1,16 +1,10 @@
 #!/usr/bin/env node
 // PreToolUse hook: block direct writes to — and deletions of — any CLEARANCE TOKEN,
 // the class of session-scoped files that decide what the pipeline believes about
-// user authorization (#1608 for `.off-clearance`, #1763 for the issue-provenance
-// markers). Only their owning minters may create them:
+// user authorization (#1608). Only their owning minters may create them:
 //   .off-clearance             bin/request-off-clearance (after a Phase1 examination)
-//   .issue-provenance          hooks/issue-provenance-mint.js (at a user turn boundary)
-//   .issue-provenance-consumed bin/github-issues/issue-provenance (single-use record)
-//   .issue-provenance-result   bin/github-issues/issue-provenance (decided verdict)
-//   .session-transcript        hooks/session-start.js (transcript pointer)
 //
-// DELETE is guarded as strictly as overwrite: removing the consumption record replays
-// an already-spent provenance token, and removing a clearance token re-arms it.
+// DELETE is guarded as strictly as overwrite: removing a clearance token re-arms it.
 //
 // TRUST MODEL (accepted limitation): this is a BEST-EFFORT deterrent, not a hard
 // gate. Dynamic path construction (variable concatenation, base64, an alternate
@@ -45,8 +39,6 @@ const BLOCK_MSG = [
   "Direct write to (or deletion of) a clearance token blocked.",
   "Clearance tokens are minted only by their owning tool — never by hand:",
   "  .off-clearance             bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
-  "  .issue-provenance*         hooks/issue-provenance-mint.js / bin/github-issues/issue-provenance --consume",
-  "  .session-transcript        hooks/session-start.js",
   "If the minter itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
 ].join("\n");
 
@@ -54,18 +46,13 @@ const BLOCK_MSG = [
 // token in one place — the class, not one member, is what is protected.
 const CLEARANCE_SUFFIXES = [
   "off-clearance",
-  "issue-provenance",
-  "issue-provenance-consumed",
-  "issue-provenance-result",
-  "session-transcript",
 ];
 
 // Basename match, intentionally directory-agnostic: the token directory varies by
 // CLAUDE_WORKFLOW_DIR, and a token written anywhere is still an attempt to forge one.
 // `.tmp` is included because the atomic-write staging path is renamed onto the token.
-// The `$` anchor is what keeps neighbours writable: `issue-provenance-notes.md`,
-// `docs/issue-provenance.md` and `session-transcript-sample.jsonl` are documents, not
-// tokens, and must not be caught.
+// The `$` anchor is what keeps neighbours writable: `off-clearance-notes.md` and
+// `docs/off-clearance.md` are documents, not tokens, and must not be caught.
 const TOKEN_BASENAME_RE = new RegExp("\\.(" + CLEARANCE_SUFFIXES.join("|") + ")(\\.tmp)?$");
 
 function hitsToken(filePath) {
@@ -104,7 +91,7 @@ function bashHitsToken(cmd) {
 // one-liner whose body mentions a clearance-token name. Only literal mentions
 // are caught; any constructed or encoded path escapes it by design.
 const INTERPRETER_RE = /\b(node|nodejs|python|python3|perl|ruby|deno|bun|pwsh|powershell)\b[^\n]*\s-(e|c|Command|command)\b/;
-const INTERPRETER_BODY_RE = /(off-clearance|issue-provenance|session-transcript)/;
+const INTERPRETER_BODY_RE = /(off-clearance)/;
 
 function hitsTokenViaInterpreter(cmd) {
   if (!INTERPRETER_RE.test(cmd)) return false;
