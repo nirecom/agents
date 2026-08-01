@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-719-supervisor-guard-hook.sh
-# Tests: hooks/supervisor-guard.js (Stop hook — wakeup reader / block-on-error)
+# Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, hook, layer2, stop
 # RED for issue #719.
 # L3 gap (what this test does NOT catch):

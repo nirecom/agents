@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1255-supervisor-block-severity.sh
-# Tests: hooks/lib/supervisor-emit.js hooks/lib/supervisor-state-writer.js
+# Tests: hooks/lib/supervisor-emit.js
 # Tags: supervisor, em-supervisor, layer1, reportBlock, severity, class-dedup, feature-1255, scope:issue-specific
 # Tests for issue #1255 — reportBlock severity notice (打ち手1) + session-wide
 # class dedup for block findings (打ち手2).

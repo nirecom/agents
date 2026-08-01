@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-719-supervisor-trigger-hook.sh
-# Tests: hooks/supervisor-trigger.js (PostToolUse — wakeup writer)
+# Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, hook, layer2
 # RED for issue #719.
 # L3 gap (what this test does NOT catch):

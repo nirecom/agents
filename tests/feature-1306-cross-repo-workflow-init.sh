@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/parse-issue-tokens, hooks/lib/parse-closes-issues.js (cross-repo parsing),
+# Tests: bin/parse-issue-tokens, hooks/lib/parse-closes-issues.js
 #        skills/workflow-init/scripts/filter-init-candidates.sh (cross-repo tokens),
 #        bin/github-issues/lib/board-card.sh (resolve_owner_repo BOARD_CARD_REPO_OVERRIDE),
 #        bin/github-issues/wip-state.sh (--repo arg),

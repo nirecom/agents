@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-triage.sh
+# Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-finalize-triage.sh
 # Tags: issue-close, stage, workflow, finalize, triage, scope:issue-specific
 # Tests for issue #325 — /issue-close-finalize skill triage script.
 #
