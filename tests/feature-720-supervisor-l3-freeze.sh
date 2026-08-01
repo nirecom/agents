@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-720-supervisor-l3-freeze.sh
-# Tests: bin/supervisor-write-alert, bin/supervisor-write-audit (independent freeze gates)
+# Tests: bin/supervisor-write-alert, bin/supervisor-write-audit
 # Tags: supervisor, em-supervisor, freeze, layer2, layer3, integration, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 #   Verifies CLI-driven retry-count increments and resulting frozen phase

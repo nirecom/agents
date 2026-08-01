@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/lib/plan-confirm-flag.js, hooks/lib/load-env.js, hooks/workflow-state/completion-approval.js, bin/workflow/next-step
+# Tests: hooks/lib/plan-confirm-flag.js, hooks/lib/load-env.js, hooks/workflow-state/completion-approval.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, outline, detail, confirm-flag, security, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

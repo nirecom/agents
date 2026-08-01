@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, scope:common
 #
 # Case group: state-transition resolution (cases 1–13b).

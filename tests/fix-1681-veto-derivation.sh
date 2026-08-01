@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # filename: tests/fix-1681-veto-derivation.sh
-# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/lib/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js
+# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/lib/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
 #
 # #1681: a recorded outline skip_verdict=veto never de-skips the step, so
@@ -126,11 +126,14 @@ require("fs").writeFileSync(out, JSON.stringify(state, null, 2), "utf8");
 
 raw_step_field() {
     local sid="$1" step="$2" field="$3"
+    # #1733: on disk, v2 state persists .steps only under the .current projection
+    # (top-level events are the SSOT); fall back to that shape.
     node -e '
 const [f, step, field] = process.argv.slice(1);
 try {
   const s = JSON.parse(require("fs").readFileSync(f, "utf8"));
-  const v = s.steps && s.steps[step] && s.steps[step][field];
+  const steps = s.steps || (s.current && s.current.steps);
+  const v = steps && steps[step] && steps[step][field];
   process.stdout.write(v === undefined || v === null ? "" : String(v));
 } catch (e) { process.stdout.write("MISSING"); }
 ' "$(to_node_path "$WORKFLOW_DIR/$sid.json")" "$step" "$field"

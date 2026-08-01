@@ -21,7 +21,10 @@ const { formatPreMergeBlockReason } = require("./lib/supervisor-report-format");
 const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK } = require("./lib/supervisor-state-schema");
 
 // Steps tracked by the workflow but not enforced at commit time.
-const NON_GATE_STEPS = ["research", "pre_final_report_gate"];
+// `final_report` is a TERMINAL step (SSOT: state-io TERMINAL_STEPS) recorded
+// AFTER the commit it would otherwise gate — demanding it here would make every
+// commit unreachable.
+const NON_GATE_STEPS = ["research", "pre_final_report_gate", "final_report"];
 const { parseGitConfigValues } = require("./lib/parse-git-args");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");

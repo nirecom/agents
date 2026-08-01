@@ -91,7 +91,7 @@ See `docs/security-policy.md` for the full pattern list.
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
-  `additionalContext` containing session_id, all 14 step statuses, and a `NEXT ACTION:` line
+  `additionalContext` containing session_id, all 15 step statuses, and a `NEXT ACTION:` line
   from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups

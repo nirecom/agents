@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # Shared helpers + JSON fixtures for the bin-workflow-next-step dispatcher.
@@ -18,6 +18,11 @@ run_with_timeout() {
 
 # Windows-native path to skip-signal-resolver.js (used by plant_valid_skip).
 SKIP_JUDGMENT_RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
+
+# Windows-native path to state-io.js (#1733: readState() projection is the SSOT
+# read path — a require() embedded in a node -e string needs a native path on
+# Windows, an MSYS-converted /c/... path fails module resolution there).
+STATE_IO_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/state-io.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/state-io.js")"
 
 # Guard: returns 0 if recordSkipJudgment is available, non-zero otherwise.
 api_exists() {
@@ -116,10 +121,13 @@ JSON_LIST_MIXED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent
 # as complete (migration adds branching_complete=complete when the key is absent).
 JSON_MISSING_STEP='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
-# Empty steps object: all steps absent. readState() migration synthesizes workflow_init,
-# clarify_intent, and branching_complete as complete — creating an inconsistency with the
-# absent research step (idx 2). next-step returns ACTION=abort, not ACTION=invoke.
-JSON_EMPTY_STEPS='{"steps":{},"closes_issues":[1053]}'
+# Empty steps object (renamed intent, #1733): under the event-log contract, an ABSENT
+# step key emits no step_status event at all, so an all-absent steps object migrates to
+# every step pending — a fully CONSISTENT state (ACTION=invoke, not abort). To keep
+# exercising the "later step complete while an earlier step is pending" abort path, this
+# fixture instead marks a later step (research, idx 2) complete while workflow_init/
+# clarify_intent (idx 0-1) stay absent/pending.
+JSON_EMPTY_STEPS='{"steps":{"research":{"status":"complete"}},"closes_issues":[1053]}'
 
 # Non-skill step fixtures: branching_complete and user_verification should emit NEXT_SKILL="" + NEXT_HINT non-empty.
 JSON_BRANCHING_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'

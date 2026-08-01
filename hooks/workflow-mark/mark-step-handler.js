@@ -4,7 +4,7 @@
 // (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, markStep, readState, writeState } = require("../workflow-state");
+const { VALID_STEPS, markStep, readState, appendEvents } = require("../workflow-state");
 const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
 const {
   UnapprovedCompletionError,
@@ -110,15 +110,31 @@ function handle(ctx) {
     // cannot trigger next-step's inconsistency abort (#1068).
     if (stepName === "workflow_init" && status === "complete") {
       try {
-        const st = readState(sessionId);
-        if (st) {
-          for (const s of VALID_STEPS) {
-            if (s !== "workflow_init") {
-              st.steps[s] = { status: "pending", updated_at: null };
+        if (readState(sessionId)) {
+          // Same batch shape as the RESET_FROM rollback (CPR-5): an explicit
+          // annotation tombstone plus a declared pending status per step, appended
+          // rather than rewritten, so the prior run's history stays readable.
+          // Top-level fields (workflow_type, closes_issues, ...) are never rebuilt.
+          appendEvents(sessionId, () => {
+            const events = [];
+            for (const s of VALID_STEPS) {
+              if (s === "workflow_init") continue;
+              events.push({
+                kind: "step_annotations_cleared",
+                step: s,
+                provenance: "declared",
+                origin: "workflow-init-downstream-reset",
+              });
+              events.push({
+                kind: "step_status",
+                step: s,
+                status: "pending",
+                provenance: "declared",
+                origin: "workflow-init-downstream-reset",
+              });
             }
-          }
-          // workflow_type is a top-level field, not inside steps[], so the reset loop above does not overwrite it.
-          writeState(sessionId, st);
+            return events;
+          });
         }
       } catch (e) {
         pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${e.message}`);

@@ -149,7 +149,7 @@ b3_recording_failure_is_not_fatal() {
   # is the fact the workflow depends on.
   check "B3-step: and branching_complete is still marked" "complete" \
     "$(env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "CLAUDE_WORKFLOW_DIR=$(to_node_path "$WFDIR")" \
-      node -e 'const fs=require("fs");const p=process.env.CLAUDE_WORKFLOW_DIR+"/'"$sid"'.json";try{const s=JSON.parse(fs.readFileSync(p,"utf8"));process.stdout.write(String(s.steps.branching_complete.status));}catch(e){process.stdout.write("READ_ERROR");}' 2>/dev/null)"
+      node -e 'const path=require("path");let ws;try{ws=require(path.join(process.env.AGENTS_DIR,"hooks","workflow-state"));const st=ws.readState("'"$sid"'");process.stdout.write(String(st.steps.branching_complete.status));}catch(e){process.stdout.write("READ_ERROR");}' 2>/dev/null)"
   # And the failure is not silent. Whichever stream workflow-mark uses, the reason has to be
   # somewhere a reader can find it.
   if printf '%s\n%s\n' "$BI_OUT" "$BI_ERR" | grep -qiE "merge.?base|baseline"; then

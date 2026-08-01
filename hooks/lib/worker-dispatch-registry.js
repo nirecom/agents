@@ -65,6 +65,9 @@ const CHILD_ENV_ALLOWLIST = [
   "ComSpec",
   "TEMP",
   "TMP",
+  // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
+  // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
+  "APPDATA",
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.

@@ -294,10 +294,16 @@ a stored artifact is never mistaken for a complete measurement once separated fr
 status. Symlinks are excluded from both tools, and `--ref` values starting with `-` are
 rejected rather than passed through to `git`.
 
-`RECORD_STEP_TIMESTAMPS=on` adds `started_at` to each workflow step in the session state
-file, making per-step elapsed time readable from the state alone. It is attempt-scoped:
-returning a step to `pending` (any `WORKFLOW_RESET_FROM_*`) drops it. Note that
-`started_at == updated_at` means only "zero measured elapsed time" — a reset marks the
-steps ahead of its target complete this way, but so does any step first recorded directly
-as `complete` or `skipped`. The equality does not by itself identify which of those
-happened, so do not read it as proof of a reset.
+Per-step elapsed time is read from the session state file's event stream via
+`computeIntervals` (`hooks/workflow-state/state-io/intervals.js`), which returns one row per
+event spanning the previous instant to that event's own. It needs no opt-in setting: since
+#1733 the stream records every transition, so the durations are always reconstructible.
+`RECORD_STEP_TIMESTAMPS` and the `started_at` field it wrote are retired — a keyed map that
+overwrote `updated_at` in place is what made the toggle necessary in the first place.
+
+Two row fields carry the measurement's own limits. `estimated: true` marks a duration
+computed against a reconstructed timestamp (a `backfilled` event, or one flagged
+`at_estimated`) — never present it as measured. `out_of_order: true` marks a pair whose
+later event carries the earlier timestamp; `duration_ms` stays `null` rather than going
+negative. Rows stop at the first `final_report` status event: anything appended after the
+session's terminal step is post-report bookkeeping, not elapsed work.

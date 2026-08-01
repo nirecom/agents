@@ -64,13 +64,14 @@ write_env_file() {
 # read_status <sid> <step> — emit the status string for a given step
 read_status() {
     local sid="$1" step="$2"
-    node -e "
-        const fs=require('fs');
+    # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
+    # on-disk event stream, not a persisted top-level key.
+    (cd "$AGENTS_DIR" && node -e "
         try {
-            const s=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-            process.stdout.write((s.steps[process.argv[2]]||{}).status||'MISSING');
+            const s=require('./hooks/workflow-state').readState(process.argv[1]);
+            process.stdout.write(((s&&s.steps&&s.steps[process.argv[2]])||{}).status||'MISSING');
         } catch(e){ process.stdout.write('ERR'); }
-    " -- "$CLAUDE_WORKFLOW_DIR/${sid}.json" "$step" 2>/dev/null || true
+    " -- "$sid" "$step" 2>/dev/null) || true
 }
 
 # read_last_pushed_sha <sid>

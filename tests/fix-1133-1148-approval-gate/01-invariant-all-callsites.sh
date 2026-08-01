@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step, hooks/workflow-mark.js
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step, hooks/workflow-mark.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, outline, detail, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
@@ -14,33 +14,47 @@ echo ""
 echo "=== G01: approval invariant at all write callsites (writeState + markStep) ==="
 
 # --- writeState(outline=complete, no approval) → throw no-approval-record ---
+# #1733: readState() returns a read-only projection (writes to .steps throw
+# immediately via a refusing Proxy) and writeState()'s completion-boundary
+# check was narrowed to the sanctioned-token domain only -- writeState never
+# computes a status transition anymore, since `events` (not `steps`) is what
+# it persists. The no-approval-record invariant now lives exclusively in
+# appendEvents() (the sole event-append path; markStep is a thin wrapper over
+# it -- see G01c/G01d below for the markStep callsite). appendEvents() is
+# therefore the correct "direct/raw" write callsite to probe here, replacing
+# the old readState()+mutate+writeState() pattern that can no longer express
+# an unapproved completion attempt at all.
 SID="g01a-$$"
 write_state "$SID" "$(gen_state '{}')"
 OUT=$(node_probe '
   const ws = require(process.argv[1]);
   const sid = process.argv[2];
-  const s = ws.readState(sid);
-  s.steps.outline.status = "complete";
-  s.steps.outline.updated_at = "2026-06-20T10:00:00.000Z";
-  try { ws.writeState(sid, s); console.log("NOERROR"); }
-  catch (e) { console.log("THREW:" + (e.code || e.name)); }
+  try {
+    ws.appendEvents(sid, {
+      kind: "step_status", step: "outline", status: "complete",
+      provenance: "declared", origin: "test-probe",
+    });
+    console.log("NOERROR");
+  } catch (e) { console.log("THREW:" + (e.code || e.name)); }
 ' "$WFSTATE_N" "$SID")
-check_contains "G01a. writeState outline=complete w/o approval throws" "THREW" "$OUT"
+check_contains "G01a. appendEvents outline=complete w/o approval throws" "THREW" "$OUT"
 check_contains "G01a2. throw carries no-approval-record code" "no-approval-record" "$OUT"
 
-# --- writeState(detail=complete, no approval) → throw (CPR-5 symmetric member) ---
+# --- appendEvents(detail=complete, no approval) → throw (CPR-5 symmetric member) ---
 SID="g01b-$$"
 write_state "$SID" "$(gen_state '{"outline":"complete"}' wf-code '{"plan_approvals":{"outline":{"source":"confirm-sentinel"}}}')"
 OUT=$(node_probe '
   const ws = require(process.argv[1]);
   const sid = process.argv[2];
-  const s = ws.readState(sid);
-  s.steps.detail.status = "complete";
-  s.steps.detail.updated_at = "2026-06-20T10:00:00.000Z";
-  try { ws.writeState(sid, s); console.log("NOERROR"); }
-  catch (e) { console.log("THREW:" + (e.code || e.name)); }
+  try {
+    ws.appendEvents(sid, {
+      kind: "step_status", step: "detail", status: "complete",
+      provenance: "declared", origin: "test-probe",
+    });
+    console.log("NOERROR");
+  } catch (e) { console.log("THREW:" + (e.code || e.name)); }
 ' "$WFSTATE_N" "$SID")
-check_contains "G01b. writeState detail=complete w/o approval throws" "THREW" "$OUT"
+check_contains "G01b. appendEvents detail=complete w/o approval throws" "THREW" "$OUT"
 
 # --- markStep(outline complete, no approval) → throw ---
 SID="g01c-$$"

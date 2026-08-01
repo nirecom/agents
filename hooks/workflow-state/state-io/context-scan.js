@@ -50,11 +50,14 @@ function findLatestStateForContext(ctx) {
       try {
         const state = readState(id);
         if (!state) continue;
-        if ((state.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
-        const allPending = Object.values(state.steps || {})
+        // Branch and steps are DERIVED (#1733): read them off the projection, which
+        // reflects the newest worktree event rather than a frozen init-time value.
+        const current = state.current || state;
+        if ((current.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
+        const allPending = Object.values(current.steps || {})
           .every((v) => !v || v.status === "pending");
         if (allPending) continue;
-        if (state.steps?.user_verification?.status === "complete") break;
+        if (current.steps?.user_verification?.status === "complete") break;
         return state;
       } catch (e) { continue; }
     }
