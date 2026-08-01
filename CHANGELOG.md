@@ -212,3 +212,7 @@ Changes: Fixed: `next-step` no longer re-invokes `/write-tests` forever once a s
 ### FEATURE: PR #1808 (2026-08-01)
 Background: feat(#1733): migrate workflow state file to an append-only event stream
 Changes: The workflow session state file is now an append-only event log (schema v2). Per-step elapsed time is derived from the log automatically, so the opt-in `RECORD_STEP_TIMESTAMPS` setting has been removed — delete it from your `.env` if present. Existing v1 state files are migrated automatically the next time their own session writes; reading a file never rewrites it, so sessions on older releases are unaffected.
+
+### FEATURE: PR #1826 (2026-08-02)
+Background: fix(#1779): detect zero-commit branches in resolve-merge-base and fall back to working-tree diff
+Changes: `select-tests.sh --auto` and `/run-tests` no longer silently skip all tests on a branch with zero commits — uncommitted and untracked work is now diffed directly against the working tree instead of an empty merge-base range.
