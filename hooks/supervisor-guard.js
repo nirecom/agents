@@ -75,11 +75,10 @@ if (require.main === module) {
   } catch (_) {
     process.exit(0);
   }
+  // sessionId flows into formatter recipe text as `node -e "...('${sessionId}', ...)"`.
+  // resolveSessionId (hooks/workflow-state/session-id.js) now validates every return
+  // path against SESSION_ID_VALID_RE, so a separate regex check here is redundant (#1319).
   if (!sessionId) process.exit(0);
-  // Defense-in-depth: sessionId flows into formatter recipe text as `node -e "...('${sessionId}', ...)"`.
-  // resolveSessionId does not regex-validate, so reject anything that does not match the
-  // canonical shape. Fail-open (exit 0) — the guard must never block on its own input parse.
-  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) process.exit(0);
 
   const effectiveSupervisorStateSessionId = sessionId;
 

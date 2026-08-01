@@ -8,8 +8,6 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
-const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
-
 // Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
 // second generic block in the same turn would surface two competing messages,
 // so this guard stays silent for them (CPR-3 — one owner per condition).
@@ -62,7 +60,7 @@ if (require.main === module) {
         transcriptPath: input.transcript_path,
       });
     } catch (_) {}
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) process.exit(0);
+    if (!sessionId) process.exit(0);
 
     // Skip when workflow-off marker is present.
     try {

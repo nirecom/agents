@@ -5,6 +5,9 @@ const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
 const { isSameGitRepo } = require("../lib/git-common-dir");
+// Direct submodule require (not the ./state-io barrel) to avoid a circular
+// dependency: state-io's barrel pulls in modules that require session-id.js.
+const { SESSION_ID_VALID_RE } = require("./state-io/core");
 
 /**
  * The one enumeration of a transcript directory, reporting what could NOT be observed
@@ -114,7 +117,10 @@ function _findOwnWorktreeDir(dirs, cwd) {
  *   7. JSONL mtime scan — last resort
  */
 function resolveSessionId(ctx = {}) {
-  if (typeof ctx.sessionIdFromInput === "string" && ctx.sessionIdFromInput.length > 0) {
+  if (
+    typeof ctx.sessionIdFromInput === "string" &&
+    SESSION_ID_VALID_RE.test(ctx.sessionIdFromInput)
+  ) {
     return ctx.sessionIdFromInput;
   }
   // CC-native session id, set directly in tool and hook subprocesses. Reliably
@@ -129,7 +135,7 @@ function resolveSessionId(ctx = {}) {
     try {
       const content = fs.readFileSync(envFile, "utf8");
       const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
-      if (match) return match[1].trim();
+      if (match && SESSION_ID_VALID_RE.test(match[1].trim())) return match[1].trim();
     } catch (e) {
       // fall through
     }
