@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, next-step, docs, evidence, scope:issue-specific
 
 # L3 gap (what this test does NOT catch):
