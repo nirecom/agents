@@ -208,3 +208,7 @@ Changes: Fixed: `--fix-headers --apply` no longer corrupts `# Tests:` headers co
 ### FEATURE: PR #1792 (2026-08-01)
 Background: fix(#1756): recognise complete as settled in next-step's fail-open re-invoke
 Changes: Fixed: `next-step` no longer re-invokes `/write-tests` forever once a session has finished. A completed `write_tests` step is now recognised as settled, so a wrapped-up session reports `ACTION=done` instead of looping back to a step that was already done.;Changed: `bin/workflow/next-step` is now a thin dispatcher over `bin/workflow/lib/next-step/`. Behaviour is unchanged; the recovery commands it prints (`--reset` / `--mark`) still name the entrypoint, not an internal module.
+
+### FEATURE: PR #1808 (2026-08-01)
+Background: feat(#1733): migrate workflow state file to an append-only event stream
+Changes: The workflow session state file is now an append-only event log (schema v2). Per-step elapsed time is derived from the log automatically, so the opt-in `RECORD_STEP_TIMESTAMPS` setting has been removed — delete it from your `.env` if present. Existing v1 state files are migrated automatically the next time their own session writes; reading a file never rewrites it, so sessions on older releases are unaffected.
