@@ -1,37 +1,34 @@
 #!/bin/bash
 # tests/fix-1630-overlay-cross-validation.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js, hooks/lib/agents-config-dir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
+# Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/lib/agents-config-dir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
 #
-# STATUS: RED until C5 lands (stripRelSuffix + three-way candidate
-# cross-validation in matchFinalizeWorkerOverlay, immediately after the
-# `if (!entry) return null;` early return).
+# #1630 built a three-way candidate cross-validation inside
+# matchFinalizeWorkerOverlay: strip the registry's relative suffix off the
+# invoked script path (stripRelSuffix) to derive the root it implies, then
+# require that derived root to match a resolver candidate AND to agree with the
+# inline AGENTS_CONFIG_DIR / FINALIZE_SCRIPTS_DIR / MAIN_WORKTREE_PATH values.
 #
-# What C5 changes: today the overlay identifies a finalize script by
-# `path.join(acd, entry.rel)` string equality against a single acd value. With
-# the #1630 resolver there is a CANDIDATE SET (env / module / realpath), so
-# identification inverts: strip the registry's relative suffix off the invoked
-# script path (stripRelSuffix) to derive the root it implies, then require that
-# derived root to match a resolver candidate AND to agree with the inline
-# AGENTS_CONFIG_DIR / FINALIZE_SCRIPTS_DIR / MAIN_WORKTREE_PATH values.
+# #1673 deleted the overlay together with the Bash-tool `eval` path it guarded,
+# and the suite split accordingly:
+#
+#   LIVE — the value helpers moved UNCHANGED into arg-value-guard.js, where
+#          worker-dispatch-overlay.js now consumes them. stripRelSuffix and
+#          isUnderPlansDir are still the real shipped code under test.
+#   RETIRED — everything that called matchFinalizeWorkerOverlay or read
+#          FINALIZE_OVERLAY_REGISTRY. Those rows are removed, not silently
+#          passed; each removal is documented at the site it left.
+#   POLARITY-FLIPPED — the hook-level rows that used to be ALLOW. No `eval` of a
+#          finalize script is permitted from a main worktree any more, so they
+#          now assert BLOCK and stand as retired-capability pins.
 #
 # Case groups live in tests/fix-1630-overlay-cross-validation/:
 #   xv-families.sh — candidate-mismatch BLOCK families, VALUE-* pins, canaries
-#   strip-units.sh — stripRelSuffix units + candidate acceptance
-#   path-edges.sh  — path edge shapes for the segment-wise suffix strip
-#   mutation.sh    — mutation-sensitive proof that each of the two equalities in
-#                    the three-way comparison is individually load-bearing
-#   metachar-args.sh — what the overlay accepts INSIDE an argument: shell
-#                    metacharacters in a plans-dir / id token, and arguments
-#                    past the end of the entry's argSpec
-#
-# Expected verdicts today:
-#   RED   — every STRIP-* unit (stripRelSuffix does not exist yet)
-#   RED   — CAND-accept-* (a script rooted at a non-env candidate is refused today)
-#   GREEN — every XV-* BLOCK family and every VALUE-* pin (regression guards that
-#           must survive C5 unchanged)
-#   GREEN — the normal-path ALLOW regression sourced from
-#           tests/fix-1600-finalize-worker-overlay/allow-cases.sh
+#   strip-units.sh — stripRelSuffix units (LIVE)
+#   path-edges.sh  — path edge shapes for the segment-wise suffix strip (LIVE)
+#   mutation.sh    — retired; see the file for where the guarantee went
+#   metachar-args.sh — what a plans-dir / id token may contain (LIVE token half;
+#                    retired argSpec-overrun half)
 #
 # TL3 gap (what this TL2 test does NOT catch):
 # - a real /issue-close-finalize chain emitting these evals from a genuine main
@@ -191,9 +188,9 @@ build_finalize_terminal() {
 }
 
 # ============================================================================
-# Normal-path ALLOW regression — sourced verbatim from the #1600 suite.
-# These must be unaffected by C5: a correctly-rooted finalize invocation keeps
-# working when identification switches from join-equality to suffix-stripping.
+# Normal-path regression — sourced verbatim from the #1600 suite, which flipped
+# the same rows to BLOCK in #1673. Kept sourced rather than copied so the two
+# suites cannot drift on what the retired shapes look like.
 # ============================================================================
 # shellcheck source=./fix-1600-finalize-worker-overlay/allow-cases.sh
 . "$AGENTS_DIR/tests/fix-1600-finalize-worker-overlay/allow-cases.sh"

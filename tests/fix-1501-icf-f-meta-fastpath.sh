@@ -12,7 +12,7 @@
 # TL1 (pure text): no hook/process needed. This is a documentation/static-assertion
 # test by design — ICF-F is a main-conversation step (LLM judge + AskUserQuestion,
 # per skills/issue-close-finalize/SKILL.md), not delegated to the
-# issue-close-finalize-worker subagent code. No TL2/TL3 headless worker-chain
+# issue-close-finalize worker (a dispatcher module since #1673). No TL2/TL3 headless worker-chain
 # harness can drive this gating logic, so no live coverage exists or is claimed
 # elsewhere for it.
 
