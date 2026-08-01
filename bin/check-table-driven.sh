@@ -23,6 +23,7 @@ PARSER_TARGETS=(
     "hooks/lib/command-parser.js"
     "hooks/lib/strip-quoted-args.js"
     "bin/scan-outbound.sh"
+    "bin/sweep-issues/scan-stale-paths.js"
     ".private-info-blocklist"
     ".private-info-allowlist"
 )

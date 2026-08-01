@@ -117,7 +117,7 @@ run_audit() {
   outf="$(mktemp)"; errf="$(mktemp)"
   set +e
   ( cd "$root" && PATH="$bindir:$PATH" MOCK_STATE="$state" MOCK_CLOSED_AT="$closed_at" \
-      bash "$AUDIT" "$@" ) >"$outf" 2>"$errf"
+      bash "$AUDIT" --dry-run "$@" ) >"$outf" 2>"$errf"
   RC=$?
   set -e
   OUT="$(cat "$outf")"
@@ -131,7 +131,7 @@ run_audit_offline() {
   local outf errf
   outf="$(mktemp)"; errf="$(mktemp)"
   set +e
-  ( cd "$root" && bash "$AUDIT" --offline "$@" ) >"$outf" 2>"$errf"
+  ( cd "$root" && bash "$AUDIT" --dry-run --offline "$@" ) >"$outf" 2>"$errf"
   RC=$?
   set -e
   OUT="$(cat "$outf")"
@@ -225,7 +225,7 @@ run_audit_with_root() {
   outf="$(mktemp)"; errf="$(mktemp)"
   set +e
   ( cd "$root" && PATH="$bindir:$PATH" MOCK_STATE="$state" MOCK_CLOSED_AT="$closed_at" \
-      bash "$AUDIT" "$@" ) >"$outf" 2>"$errf"
+      bash "$AUDIT" --dry-run "$@" ) >"$outf" 2>"$errf"
   RC=$?
   set -e
   OUT="$(cat "$outf")"
@@ -238,13 +238,13 @@ CUTOFF_90_DAYS_AGO=""
 if date -d "90 days ago" +%Y-%m-%d >/dev/null 2>&1; then
   CUTOFF_90_DAYS_AGO="$(date -d "90 days ago" +%Y-%m-%d)"
 else
-  CUTOFF_90_DAYS_AGO="$(python3 -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=90)).isoformat())")"
+  CUTOFF_90_DAYS_AGO="$(uv run python -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=90)).isoformat())")"
 fi
 
 # TC7: migration regression — old last-commit + recent closed_at => NOT a candidate
 # Verifies that old last-commit date alone does not trigger candidacy; closed_at
 # (post-migration logic) is what counts, and a recent closed_at means NOT a candidate.
-RECENT_CLOSED_AT="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")"
+RECENT_CLOSED_AT="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || uv run python -c "import datetime; print(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
 run_audit closed "$RECENT_CLOSED_AT"
 if [[ $RC -eq 1 && "$OUT" != *"CANDIDATE"* ]]; then
   pass "TC7 old last-commit + recent closed_at is not a candidate (migration regression)"
@@ -281,7 +281,7 @@ CLOSED_AT_120D=""
 if date -d "120 days ago" +%Y-%m-%dT%H:%M:%SZ >/dev/null 2>&1; then
   CLOSED_AT_120D="$(date -d "120 days ago" +%Y-%m-%dT%H:%M:%SZ)"
 else
-  CLOSED_AT_120D="$(python3 -c "import datetime; d=datetime.date.today()-datetime.timedelta(days=120); print(d.isoformat()+'T00:00:00Z')")"
+  CLOSED_AT_120D="$(uv run python -c "import datetime; d=datetime.date.today()-datetime.timedelta(days=120); print(d.isoformat()+'T00:00:00Z')")"
 fi
 run_audit closed "$CLOSED_AT_120D" --stale-months 3
 if [[ $RC -eq 0 && "$OUT" == *"CANDIDATE"* ]]; then
