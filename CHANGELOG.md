@@ -204,3 +204,7 @@ Changes: Commit/push, issue-close-stage, and issue-close-finalize now run as det
 ### FEATURE: PR #1801 (2026-08-01)
 Background: fix(#1782): normalize_token() no longer glob-expands or accepts root-equivalent tokens
 Changes: Fixed: `--fix-headers --apply` no longer corrupts `# Tests:` headers containing glob characters (`*`, `?`) or root-equivalent path tokens (`/`, `.`, `..`, `./`, `../`).
+
+### FEATURE: PR #1792 (2026-08-01)
+Background: fix(#1756): recognise complete as settled in next-step's fail-open re-invoke
+Changes: Fixed: `next-step` no longer re-invokes `/write-tests` forever once a session has finished. A completed `write_tests` step is now recognised as settled, so a wrapped-up session reports `ACTION=done` instead of looping back to a step that was already done.;Changed: `bin/workflow/next-step` is now a thin dispatcher over `bin/workflow/lib/next-step/`. Behaviour is unchanged; the recovery commands it prints (`--reset` / `--mark`) still name the entrypoint, not an internal module.
