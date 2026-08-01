@@ -234,11 +234,11 @@ run_t10() {
 }
 
 # ---------------------------------------------------------------------------
-# T11: pre-init state (all steps pending, ACTION=invoke for workflow_init)
-#      → decision:block (hook blocks pre-init sessions too, not only mid-workflow)
+# T11: pre-init state (workflow_init pending) → exit 0, no decision:block
+#      (#1794: workflow が開始されていないセッションには next-step 案内を強制しない)
 # ---------------------------------------------------------------------------
 run_t11() {
-    require_source "$HOOK" "T11: pre-init state + ACTION=invoke -> decision:block" || return
+    require_source "$HOOK" "T11: pre-init state -> no block" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"
     sid="t11-sid"
@@ -248,10 +248,10 @@ run_t11() {
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if echo "$out" | grep -q '"block"'; then
-        pass "T11: pre-init state + ACTION=invoke -> decision:block"
+    if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
+        pass "T11: pre-init state -> exit 0, no block"
     else
-        fail "T11: expected decision:block for pre-init invoke (rc=$rc, out=$out)"
+        fail "T11: expected silent exit 0 for pre-init (rc=$rc, out=$out)"
     fi
 }
 

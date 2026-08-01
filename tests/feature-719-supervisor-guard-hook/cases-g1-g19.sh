@@ -6,8 +6,9 @@ run_g1() {
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g1-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_workflow_init_complete "$tmp" "g1-sid"
     out=$(echo '{"stop_hook_active":false,"session_id":"g1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
@@ -155,8 +156,9 @@ run_g10() {
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g10-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'warning', findings: [] }"
+    seed_workflow_init_complete "$tmp" "g10-sid"
     out=$(echo '{"stop_hook_active":false,"session_id":"g10-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
