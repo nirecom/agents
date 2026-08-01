@@ -54,8 +54,8 @@ if (require.main === module) {
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
-    ({ arbitrate } = require("./lib/supervisor-guard/arbitrate"));
-    ({ formatIntegratedReason } = require("./lib/supervisor-guard/format-integrated"));
+    ({ arbitrate } = require("./supervisor-guard/arbitrate"));
+    ({ formatIntegratedReason } = require("./supervisor-guard/format-integrated"));
   } catch (_) {
     process.exit(0);
   }
@@ -63,7 +63,7 @@ if (require.main === module) {
   // Audit modules load separately so a bug in new files doesn't disable the alert guard.
   let collectAuditCandidatesFn = null;
   try {
-    ({ collectAuditCandidates: collectAuditCandidatesFn } = require("./lib/supervisor-guard/collect-audit-triggers"));
+    ({ collectAuditCandidates: collectAuditCandidatesFn } = require("./supervisor-guard/collect-audit-triggers"));
   } catch (_) {}
 
   let sessionId = null;

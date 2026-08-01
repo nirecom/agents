@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-atmost1.sh
-# Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-guard/collect-audit-triggers.js
+# Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard/collect-audit-triggers.js
 # Tags: supervisor, em-supervisor, at-most-1, dedup, audit-verdict, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - Real session where multiple hooks race to arm alert simultaneously
@@ -30,7 +30,7 @@ fi
 
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/collect-audit-triggers.js"
+COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -107,7 +107,7 @@ if (armed_at_after !== armed_at_before) {
 
 # --- T8b: audit_phase="done" → collect-audit-triggers must NOT re-arm ---
 run_t8b() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "T8b: collect-audit-triggers.js not present"
         return
     fi
@@ -208,7 +208,7 @@ process.stdout.write(JSON.stringify({ verdict, phase }));
 # But Step 6 restricts trigger (b) to cumSev==="error" only at Stop time.
 # This test asserts the Step 6 behavior: warning does NOT arm at Stop via collect-audit-triggers.
 run_t8d() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "T8d: collect-audit-triggers.js not present"
         return
     fi
@@ -280,7 +280,7 @@ run_t8e
 # collectAuditCandidates() should return shouldArm=true with a stage-boundary cause.
 # This is trigger (a) in collect-audit-triggers.js.
 run_additional1_confirm_sentinel() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "Additional-1: collect-audit-triggers.js not present"
         return
     fi
@@ -340,7 +340,7 @@ process.stdout.write(String(r.shouldArm) + '|' + String(r.cause || 'null'));
 }
 
 run_c8_confirm_table() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "C8: collect-audit-triggers.js not present"
         return
     fi
