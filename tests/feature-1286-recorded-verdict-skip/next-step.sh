@@ -1,5 +1,7 @@
 #!/bin/bash
 # shellcheck shell=bash
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: L2, workflow, skip-signal, next-step, scope:issue-specific
 # feature-1286 next-step cases: bin/workflow/next-step marks a planning step
 # skipped when a valid recorded judgment exists and advances the verdict.
 # Relies on helpers.sh being sourced by the dispatcher.

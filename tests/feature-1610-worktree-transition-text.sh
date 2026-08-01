@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1610-worktree-transition-text.sh
-# Tests: skills/_shared/worktree-transition.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, bin/workflow/next-step, hooks/workflow-gate/worktree-entry-gate.js, hooks/enforce-worktree/worktree-remedy.js
+# Tests: skills/_shared/worktree-transition.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, bin/workflow/next-step, hooks/workflow-gate/worktree-entry-gate.js, hooks/enforce-worktree/worktree-remedy.js, bin/workflow/lib/next-step/
 # Tags: prompt, skill, worktree, duplication-policy, TL1, pwsh-not-required, scope:issue-specific
 #
 # Issue #1610 — static half of the worktree-transition duplication policy.
@@ -16,7 +16,9 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRAGMENT="$AGENTS_DIR/skills/_shared/worktree-transition.md"
 WS="$AGENTS_DIR/skills/worktree-start/SKILL.md"
 WE="$AGENTS_DIR/skills/worktree-end/SKILL.md"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+# STEP_HINT moved out of the bin/workflow/next-step entrypoint when it was split
+# into bin/workflow/lib/next-step/ (#1756); steps.js now owns the hint strings.
+NEXT_STEP="$AGENTS_DIR/bin/workflow/lib/next-step/steps.js"
 ENTRY_GATE="$AGENTS_DIR/hooks/workflow-gate/worktree-entry-gate.js"
 REMEDY="$AGENTS_DIR/hooks/enforce-worktree/worktree-remedy.js"
 
@@ -245,7 +247,7 @@ run_X12() {
 #     from the WE-13a EnterWorktree/ExitWorktree protocol). `EnterWorktree` has
 #     no legitimate current use in this file, so it is checked as a blanket
 #     absence; `cd "` is checked with those two lines excluded.
-#   - NEXT_STEP (bin/workflow/next-step): the branching_complete STEP_HINT
+#   - NEXT_STEP (bin/workflow/lib/next-step/steps.js): the branching_complete STEP_HINT
 #     legitimately mentions `EnterWorktree` as advisory text, and multiple
 #     call sites legitimately use `git rev-parse --show-toplevel` to resolve
 #     the repo root. Only `cd "` (verified absent) is checked.

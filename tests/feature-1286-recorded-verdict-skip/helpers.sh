@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: L2, workflow, skip-signal, scope:issue-specific
 # Shared helpers + fixtures for feature-1286-recorded-verdict-skip tests.
 # Sourced by module-api.sh, cli.sh, gate.sh, next-step.sh — not a standalone runner.
 #
