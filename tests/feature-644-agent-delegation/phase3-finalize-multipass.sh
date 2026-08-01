@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # phase3-finalize-multipass.sh — GATED until Phase 3
-# After Phase 3: issue-close-finalize SKILL.md must use multi-pass worker pattern.
+# After Phase 3: issue-close-finalize SKILL.md must use the multi-pass worker pattern.
 # Worker must NOT call /issue-close-finalize internally (recursion owned by main).
+# #1673 retargeted the delegate from the `issue-close-finalize-worker` subagent
+# to bin/worker-dispatch/workers/issue-close-finalize.js; the prose contract
+# moved to docs/architecture/claude-code/worker-dispatch/close-family.md.
 : "${FEATURE_644_PHASE:=0}"
 if [ "$FEATURE_644_PHASE" -lt 3 ]; then
   echo "SKIP: requires FEATURE_644_PHASE>=3 (currently $FEATURE_644_PHASE)" >&2; exit 77
@@ -10,7 +13,8 @@ set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SKILL="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
-WORKER="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
+WORKER="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-finalize.js"
+LEGACY="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
@@ -18,25 +22,32 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 [ -f "$SKILL" ] || { fail "$SKILL not found"; exit 1; }
 [ -f "$WORKER" ] || { fail "$WORKER not found"; exit 1; }
 
-# SKILL must call the worker
-if grep -q 'issue-close-finalize-worker' "$SKILL"; then
-  pass "SKILL.md delegates to issue-close-finalize-worker"
+# SKILL must dispatch the worker
+if grep -q 'issue-close-finalize' "$SKILL" && grep -q 'worker-dispatch.md' "$SKILL"; then
+  pass "SKILL.md dispatches issue-close-finalize per worker-dispatch.md"
 else
-  fail "SKILL.md missing delegation to issue-close-finalize-worker"
+  fail "SKILL.md missing worker-dispatch delegation"
 fi
 
-# Worker must NOT contain /issue-close-finalize call (no recursive calls from worker)
+if [ -e "$LEGACY" ]; then
+  fail "agents/issue-close-finalize-worker.md still present (retired by #1673)"
+else
+  pass "agents/issue-close-finalize-worker.md retired"
+fi
+
+# Worker must NOT invoke the skill itself (no recursive calls from the worker)
 if grep -q '/issue-close-finalize' "$WORKER"; then
-  fail "issue-close-finalize-worker contains /issue-close-finalize call (recursion must stay in main)"
+  fail "issue-close-finalize worker contains /issue-close-finalize call (recursion must stay in main)"
 else
-  pass "issue-close-finalize-worker does not recurse"
+  pass "issue-close-finalize worker does not recurse"
 fi
 
-# Worker must not emit WORKFLOW_ sentinels
-if grep -q 'WORKFLOW_' "$WORKER"; then
-  fail "issue-close-finalize-worker emits WORKFLOW_ sentinel (must not)"
+# Worker must not emit WORKFLOW_ sentinels. Emission form only — the module
+# legitimately reads WORKFLOW_PLANS_DIR.
+if grep -q '<<WORKFLOW_' "$WORKER"; then
+  fail "issue-close-finalize worker emits WORKFLOW_ sentinel (must not)"
 else
-  pass "issue-close-finalize-worker does not emit WORKFLOW_ sentinels"
+  pass "issue-close-finalize worker does not emit WORKFLOW_ sentinels"
 fi
 
 # SKILL must contain AskUserQuestion (G.5-2 stays in main)
