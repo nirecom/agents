@@ -200,3 +200,7 @@ Changes: **Breaking:** every `/sweep` member now applies changes by default. `--
 ### FEATURE: PR #1786 (2026-08-01)
 Background: feat(#1673): replace close-path LLM subagents with deterministic worker scripts
 Changes: Commit/push, issue-close-stage, and issue-close-finalize now run as deterministic worker-dispatch scripts instead of LLM subagents, improving reliability and speed.
+
+### FEATURE: PR #1801 (2026-08-01)
+Background: fix(#1782): normalize_token() no longer glob-expands or accepts root-equivalent tokens
+Changes: Fixed: `--fix-headers --apply` no longer corrupts `# Tests:` headers containing glob characters (`*`, `?`) or root-equivalent path tokens (`/`, `.`, `..`, `./`, `../`).

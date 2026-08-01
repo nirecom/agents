@@ -122,3 +122,7 @@ Changes: #1769 FEATURE — Background: the `/sweep` family covered branches, wor
 ### FEATURE: PR #1786 — feature/1673 (2026-08-01, a071e131b0c166764cc4d1298710f4bd3e3e357f, #1786)
 Background: feat(#1673): replace close-path LLM subagents with deterministic worker scripts
 Changes: FEATURE: Replaced six LLM-subagent workers (commit-push, issue-close-stage, issue-close-finalize families) with deterministic scripts under `bin/worker-dispatch.js`, closing #1673. <!-- compose-doc-append-sentinel: branch=feature/1673 pr=#1786 -->
+
+### FEATURE: PR #1801 — fix/fix-1782-normalize-token-glob (2026-08-01, 43ef0a72ab0587388375b2063d62d03628ca1828, #1801)
+Background: fix(#1782): normalize_token() no longer glob-expands or accepts root-equivalent tokens
+Changes: #1782: `bin/lib/test-frontmatter-fix.sh`'s `normalize_token()` used an unquoted `for word in $pre`, causing shell glob/pathname expansion when a `# Tests:` header token contained `*`/`?`; fixed by switching to `read -r -a` word-splitting. Also added `_is_root_like_token()` so root-equivalent tokens (`/`, `.`, `..`, `./`, `../`) are no longer accepted as valid existing paths via `[[ -e "$word" ]]` (previously always true for these), across both `classify_tests_header()` and `_rebuild_tests_value()`'s direct-match branches. Covered by 16 new test cases (TC11-TC26) in `tests/fix-1576-audit-tests-fix-headers.sh`, split into 4 sourced fragment files to satisfy the file-split HARD limit. <!-- compose-doc-append-sentinel: branch=fix/fix-1782-normalize-token-glob pr=#1801 -->
