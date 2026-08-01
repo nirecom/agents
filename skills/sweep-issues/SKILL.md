@@ -5,7 +5,12 @@ user-invocable: true
 model: sonnet
 ---
 
-Sweeps the open-issue backlog. A flagless run closes tier-1 candidates and reports tier-2 candidates; `--dry-run` writes nothing.
+Sweeps the open-issue backlog.
+
+- tier 1 — meta parents whose sub-issues are all closed. Closed on every run.
+- tier 2 — issues whose referenced `tests/*.sh` paths no longer exist. Listed on every run; closed only under `--deep`, one at a time with the user's approval.
+
+The user types at most `--deep` and `--dry-run`. Passes 2 and 3 are this skill's own calls (SI-5, SI-7) — the user never supplies a TSV path.
 
 ## Procedure
 
@@ -26,8 +31,9 @@ SI-7. Emit `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: sweep-issues batch triage>>`, re-ru
 ## Rules
 
 - Applies by default; `--dry-run` suppresses tier-1 closes too.
-- `--deep` never changes the write mode — it changes candidate scope and human gating only.
-- Pass `--deep` on every tier-2 call (pass 2 and pass 3); omitting it exits 2.
+- `--deep` never changes the write mode, and never widens the candidate set — SI-2 scans identically with and without it. It decides only whether the tier-2 candidates reach the human gate or are dropped after being listed.
+- `--verify-candidates` / `--decisions` are this skill's protocol with the script, not user flags. Never surface them in a suggestion to the user; never expect the user to pass one.
+- Pass `--deep` on every tier-2 call (SI-5 and SI-7); omitting it exits 2.
 - The flagless run is non-interactive. Never place `AskUserQuestion` on the default path.
 - Pair `--deep` with a small band (e.g. `--band-size 20`) — SI-5 runs real tests and large bands do not finish in usable time.
 - Under `--dry-run`, SI-5 reports the test it would run instead of running it; running a repository script is an effect.
