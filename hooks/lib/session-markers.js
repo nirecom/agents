@@ -171,6 +171,43 @@ function isOffClearanceValid(sid, target, reasonText) {
   }
 }
 
+// isBackgroundWorkInFlight(sid): true iff <workflowDir>/<sid>.background-work
+// exists AND its expires_at is in the future. Fail-CLOSED (same shape as
+// evaluateOffClearance): absent / unreadable / non-JSON / expires_at missing,
+// non-string, unparseable, or in the past → false. A forgotten END must not
+// silence C4 forever.
+function isBackgroundWorkInFlight(sid) {
+  try {
+    if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
+    const markerPath = path.join(getWorkflowDir(), sid + ".background-work");
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    if (!marker || typeof marker !== "object") return false;
+    if (typeof marker.expires_at !== "string") return false;
+    const expiresAt = Date.parse(marker.expires_at);
+    if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) return false;
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+// backgroundWorkNoticeText(hookName, sid): human-readable string about the
+// background-work marker. NEVER throws.
+function backgroundWorkNoticeText(hookName, sid) {
+  let markerPath;
+  try {
+    const dir = getWorkflowDir();
+    markerPath = path.join(dir, sid + ".background-work");
+  } catch (e) {
+    markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
+  }
+  return (
+    "[" + hookName + "] background work is in flight for this session (sid=" + sid + "). " +
+    "Marker: " + markerPath + ". " +
+    "End with: echo \"<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>\""
+  );
+}
+
 module.exports = {
   isWorkflowOff,
   isNextStepPaused,
@@ -183,4 +220,6 @@ module.exports = {
   worktreeOffNoticeText,
   isIssueCloseVerified,
   issueCloseVerifiedNoticeText,
+  isBackgroundWorkInFlight,
+  backgroundWorkNoticeText,
 };
