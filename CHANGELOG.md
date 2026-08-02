@@ -216,3 +216,7 @@ Changes: The workflow session state file is now an append-only event log (schema
 ### FEATURE: PR #1826 (2026-08-02)
 Background: fix(#1779): detect zero-commit branches in resolve-merge-base and fall back to working-tree diff
 Changes: `select-tests.sh --auto` and `/run-tests` no longer silently skip all tests on a branch with zero commits — uncommitted and untracked work is now diffed directly against the working tree instead of an empty merge-base range.
+
+### FEATURE: PR #1854 (2026-08-02)
+Background: feat(#1849): add preuse-auto-approve hook for Monitor and EnterWorktree
+Changes: Monitor and EnterWorktree tool calls no longer pause for a confirmation dialog during normal workflow execution. Set `AUTO_APPROVE_TOOLS=off` in `.env` to restore the previous prompt behavior instantly.
