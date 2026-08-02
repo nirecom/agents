@@ -1,55 +1,72 @@
-#!/bin/bash
-# Tests: bin/check-inline-procedures, skills/review-code-security/scripts/run-quality-gates.sh
-# Tags: prompt, bin, quality-gate, inline-procedure, scope:issue-specific
+#!/usr/bin/env bash
+# tests/feature-1470-check-inline-procedures.sh
+# Tests: bin/check-inline-procedures
+# Tags: prompt, bin, quality-gate, inline-procedure, adapter, scope:issue-specific, scope:feature-1642, layer:TL2
 #
-# L3 gap (what this test does NOT catch):
-# - bin/check-inline-procedures integrated into run-quality-gates.sh firing in a real WF-CODE-6 session
+# Detection semantics moved to tests/feature-1642-check-prompt-extraction.sh.
+#
+# After issue #1642, bin/check-inline-procedures is a THIN ADAPTER over
+# bin/check-prompt-extraction (the single decision CLI). It owns no detection
+# logic of its own — only the advisory presentation contract that
+# skills/review-code-security/scripts/run-quality-gates.sh depends on:
+#
+#   * header line `## Inline Procedure Review: <STATE>`
+#   * advisory `WARN:` prefix (never `HARD:` — the adapter is non-blocking)
+#   * always exits 0, whatever the engine reports
+#   * degrades to `SKIPPED — engine not found` when the engine is unavailable
+#
+# Anything about WHICH content counts as an inline procedure belongs in the
+# #1642 file, not here (CPR-2: one owner per fact).
+#
+# TL3 gap (what this test does NOT catch):
+# - bin/check-inline-procedures firing from run-quality-gates.sh in a real WF-CODE-6 session
 # - run-quality-gates.sh PATH resolution ($AGENTS_CONFIG_DIR/bin on PATH) confirmed live
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-set -euo pipefail
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: skill-orchestration.
 
-AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+set -u
+
+AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$AGENTS_ROOT/bin/check-inline-procedures"
-ERRORS=0
+ENGINE="$AGENTS_ROOT/bin/check-prompt-extraction"
 
-fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
-pass() { echo "PASS: $1"; }
-
-# Portable timeout wrapper (from rules/test/macos-timeout.md)
-run_with_timeout() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 120 "$@"
-    else
-        perl -e 'alarm 120; exec @ARGV' -- "$@"
-    fi
-}
-
-# --- Existence gate ---------------------------------------------------------
 if [ ! -f "$SCRIPT" ]; then
-    echo "SKIP: bin/check-inline-procedures not yet created (write-code step pending)"
-    echo ""
-    echo "Results: 0 passed, 0 failed (skipped)"
-    exit 0
+    echo "SKIP: bin/check-inline-procedures not present"
+    exit 77
+fi
+if [ ! -f "$ENGINE" ]; then
+    echo "SKIP: bin/check-prompt-extraction (adapter engine) not present yet (issue #1642)"
+    exit 77
 fi
 
-TMPDIR_BASE=$(mktemp -d)
+PASS=0
+FAIL=0
+SKIP=0
+
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
+skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
+
+TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# ---------------------------------------------------------------------------
-# Helper: create a fresh isolated temp git repo with a main branch + initial commit
-# Uses an empty hooksPath to avoid inheriting global git hooks (e.g. ENFORCE_WORKTREE).
-# ---------------------------------------------------------------------------
 EMPTY_HOOKS_DIR="$TMPDIR_BASE/no-hooks"
 mkdir -p "$EMPTY_HOOKS_DIR"
 
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    fi
+}
+
 make_repo() {
-    local repo
-    repo=$(mktemp -d)
-    git -C "$repo" init -q
+    local repo="$TMPDIR_BASE/$1"
+    mkdir -p "$repo"
+    git -C "$repo" init -q -b main
     git -C "$repo" config core.hooksPath "$EMPTY_HOOKS_DIR"
     git -C "$repo" config core.autocrlf false
-    git -C "$repo" checkout -q -b main
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"
@@ -58,418 +75,159 @@ make_repo() {
     echo "$repo"
 }
 
-# Helper: emit a block of N consecutive column-0 numbered lines
-make_numbered() {
-    local n="$1"
-    local i
-    for ((i = 1; i <= n; i++)); do
-        echo "$i. step $i"
-    done
+# 4 numbered steps = one violation under the #1642 threshold (MORE THAN 3).
+emit_numbered() {
+    local n="$1" i
+    for ((i = 1; i <= n; i++)); do echo "$i. step $i"; done
 }
 
-# Helper: count how many WARN: lines are in the output
-count_warns() {
-    printf '%s\n' "$1" | grep -c "^WARN:" || true
+# add_violation <repo> — commits skills/foo/SKILL.md on a feature branch.
+add_violation() {
+    local repo="$1"
+    git -C "$repo" checkout -q -b feature-adapter
+    mkdir -p "$repo/skills/foo"
+    { echo "# Foo skill"; echo ""; echo "## Procedure"; echo ""; emit_numbered 4; } \
+        > "$repo/skills/foo/SKILL.md"
+    git -C "$repo" add skills/foo/SKILL.md
+    git -C "$repo" commit -q -m "add SKILL.md with an inline procedure"
 }
 
-# ---------------------------------------------------------------------------
-# T1: committed detection — commit skills/foo/SKILL.md with 3 numbered lines
-# ---------------------------------------------------------------------------
-REPO1=$(make_repo)
-git -C "$REPO1" checkout -q -b feature1
-mkdir -p "$REPO1/skills/foo"
-{ echo "# Foo skill"; echo ""; make_numbered 3; } > "$REPO1/skills/foo/SKILL.md"
-git -C "$REPO1" add "$REPO1/skills/foo/SKILL.md"
-git -C "$REPO1" commit -q -m "add SKILL.md with 3 numbered steps"
+OUT=""
+RC=0
+# run_adapter <repo> [args...]
+run_adapter() {
+    local repo="$1"; shift
+    RC=0
+    OUT="$( (cd "$repo" && run_with_timeout 60 bash "$SCRIPT" "$@") 2>&1 )" || RC=$?
+}
 
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO1" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+count_warns() { printf '%s\n' "$1" | grep -c "^WARN:" || true; }
 
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T1: expected exit 0, got $EXIT_CODE"
-else
-    pass "T1: exits 0 for committed 3-step block"
-fi
+assert_exit0() {
+    local label="$1"
+    if [ "$RC" -eq 0 ]; then
+        pass "$label"
+    else
+        fail "$label: expected exit 0, got $RC" "$OUT"
+    fi
+}
 
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T1: output contains PERFORMED"
-else
-    fail "T1: PERFORMED not found. Output: $OUTPUT"
-fi
+assert_contains() {
+    local label="$1" needle="$2"
+    if printf '%s\n' "$OUT" | grep -q -- "$needle"; then
+        pass "$label"
+    else
+        fail "$label: output missing '$needle'" "$OUT"
+    fi
+}
 
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T1: exactly 1 WARN hit"
-else
-    fail "T1: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
+# ============================================================================
+# Adapter contract
+# ============================================================================
 
-# ---------------------------------------------------------------------------
-# T2: staged detection — git add only, no commit
-# ---------------------------------------------------------------------------
-REPO2=$(make_repo)
-git -C "$REPO2" checkout -q -b feature2
-mkdir -p "$REPO2/skills/foo"
-{ echo "# Foo skill"; echo ""; make_numbered 3; } > "$REPO2/skills/foo/SKILL.md"
-git -C "$REPO2" add "$REPO2/skills/foo/SKILL.md"
+# T01: diff mode emits the PERFORMED header (header rename from the engine's
+#      "## Prompt Extraction Review:" to the adapter's own vocabulary).
+t01_performed_header() {
+    local repo; repo="$(make_repo r1)"
+    add_violation "$repo"
+    run_adapter "$repo" --base main
+    assert_exit0 "T01: --base <ref> exits 0"
+    assert_contains "T01: PERFORMED header present" "## Inline Procedure Review: PERFORMED"
+}
 
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO2" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+# T02: --all emits the all-scan variant of the header.
+t02_all_scan_header() {
+    local repo; repo="$(make_repo r2)"
+    add_violation "$repo"
+    run_adapter "$repo" --all
+    assert_exit0 "T02: --all exits 0"
+    assert_contains "T02: all-scan header present" "## Inline Procedure Review: PERFORMED (all-scan mode)"
+}
 
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T2: expected exit 0, got $EXIT_CODE"
-else
-    pass "T2: exits 0 for staged 3-step block"
-fi
+# T03: --base and --all are mutually exclusive -> SKIPPED, still exit 0.
+t03_mutually_exclusive() {
+    local repo; repo="$(make_repo r3)"
+    run_adapter "$repo" --base main --all
+    assert_exit0 "T03: mutually exclusive flags still exit 0"
+    assert_contains "T03: SKIPPED reported" "## Inline Procedure Review: SKIPPED"
+}
 
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T2: output contains PERFORMED"
-else
-    fail "T2: PERFORMED not found. Output: $OUTPUT"
-fi
+# T04: --base without an argument -> SKIPPED, still exit 0.
+t04_base_without_arg() {
+    local repo; repo="$(make_repo r4)"
+    run_adapter "$repo" --base
+    assert_exit0 "T04: dangling --base still exits 0"
+    assert_contains "T04: SKIPPED reported" "## Inline Procedure Review: SKIPPED"
+}
 
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T2: exactly 1 WARN hit"
-else
-    fail "T2: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
+# T05: exit 0 is unconditional, even when the engine finds violations.
+t05_always_exit_zero() {
+    local repo; repo="$(make_repo r5)"
+    add_violation "$repo"
+    run_adapter "$repo" --base main
+    assert_exit0 "T05: violations present, adapter still exits 0"
+}
 
-# ---------------------------------------------------------------------------
-# T3: unstaged detection — edit committed file to add 3 numbered lines, no add
-# ---------------------------------------------------------------------------
-REPO3=$(make_repo)
-git -C "$REPO3" checkout -q -b feature3
-mkdir -p "$REPO3/skills/foo"
-echo "# Foo skill (baseline, no procedure)" > "$REPO3/skills/foo/SKILL.md"
-git -C "$REPO3" add "$REPO3/skills/foo/SKILL.md"
-git -C "$REPO3" commit -q -m "add baseline SKILL.md"
-# Now edit in place, do NOT stage.
-{ echo "# Foo skill"; echo ""; make_numbered 3; } > "$REPO3/skills/foo/SKILL.md"
+# T06: violations surface as WARN:, never HARD: — the adapter is advisory.
+t06_warn_not_hard() {
+    local repo; repo="$(make_repo r6)"
+    add_violation "$repo"
+    run_adapter "$repo" --base main
+    if [ "$(count_warns "$OUT")" -ge 1 ]; then
+        pass "T06: at least one WARN: line emitted"
+    else
+        fail "T06: expected >=1 WARN: line, got $(count_warns "$OUT")" "$OUT"
+    fi
+    if printf '%s\n' "$OUT" | grep -q "^HARD:"; then
+        fail "T06: adapter leaked a blocking HARD: prefix" "$OUT"
+    else
+        pass "T06: no HARD: prefix in adapter output"
+    fi
+}
 
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO3" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+# T07: the adapter runs the engine in --advisory mode, so a committed allowlist
+#      must NOT suppress the WARN: lines (C4 — advisory implies --no-allowlist).
+t07_allowlist_does_not_suppress() {
+    local repo; repo="$(make_repo r7)"
+    add_violation "$repo"
+    printf 'inline-procedure skills/foo/SKILL.md *\n' > "$repo/.prompt-extraction-allowlist"
+    git -C "$repo" add .prompt-extraction-allowlist
+    git -C "$repo" commit -q -m "add wildcard allowlist entry"
+    run_adapter "$repo" --base main
+    assert_exit0 "T07: exits 0 with an allowlist present"
+    if [ "$(count_warns "$OUT")" -ge 1 ]; then
+        pass "T07: wildcard allowlist entry does not suppress advisory WARN: output"
+    else
+        fail "T07: allowlist suppressed the advisory output (advisory must ignore the allowlist)" "$OUT"
+    fi
+}
 
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T3: expected exit 0, got $EXIT_CODE"
-else
-    pass "T3: exits 0 for unstaged 3-step block"
-fi
+# T08: engine unavailable -> explicit SKIPPED reason, still exit 0.
+t08_engine_missing() {
+    local fakecfg="$TMPDIR_BASE/fakecfg"
+    mkdir -p "$fakecfg/bin" "$fakecfg/hooks"
+    echo "// stub marker" > "$fakecfg/hooks/enforce-worktree.js"
+    cp "$SCRIPT" "$fakecfg/bin/check-inline-procedures"
+    chmod +x "$fakecfg/bin/check-inline-procedures"
+    # Deliberately no bin/check-prompt-extraction next to the adapter copy.
+    local repo; repo="$(make_repo r8)"
+    add_violation "$repo"
+    RC=0
+    OUT="$( (cd "$repo" && run_with_timeout 60 env "AGENTS_CONFIG_DIR=$fakecfg" \
+        bash "$fakecfg/bin/check-inline-procedures" --base main) 2>&1 )" || RC=$?
+    assert_exit0 "T08: missing engine still exits 0"
+    assert_contains "T08: SKIPPED — engine not found" "SKIPPED — engine not found"
+}
 
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T3: output contains PERFORMED"
-else
-    fail "T3: PERFORMED not found. Output: $OUTPUT"
-fi
+t01_performed_header
+t02_all_scan_header
+t03_mutually_exclusive
+t04_base_without_arg
+t05_always_exit_zero
+t06_warn_not_hard
+t07_allowlist_does_not_suppress
+t08_engine_missing
 
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T3: exactly 1 WARN hit"
-else
-    fail "T3: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T4: untracked detection — new skills/foo/SKILL.md with 3 numbered lines, no add
-# ---------------------------------------------------------------------------
-REPO4=$(make_repo)
-git -C "$REPO4" checkout -q -b feature4
-mkdir -p "$REPO4/skills/foo"
-{ echo "# Foo skill"; echo ""; make_numbered 3; } > "$REPO4/skills/foo/SKILL.md"
-# Do NOT stage — leave untracked.
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO4" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T4: expected exit 0, got $EXIT_CODE"
-else
-    pass "T4: exits 0 for untracked 3-step block"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T4: output contains PERFORMED"
-else
-    fail "T4: PERFORMED not found. Output: $OUTPUT"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T4: exactly 1 WARN hit"
-else
-    fail "T4: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T5: threshold under 3 (2 consecutive numbered lines) → no WARN
-# ---------------------------------------------------------------------------
-REPO5=$(make_repo)
-git -C "$REPO5" checkout -q -b feature5
-mkdir -p "$REPO5/skills/foo"
-{ echo "# Foo skill"; echo ""; make_numbered 2; } > "$REPO5/skills/foo/SKILL.md"
-git -C "$REPO5" add "$REPO5/skills/foo/SKILL.md"
-git -C "$REPO5" commit -q -m "add SKILL.md with 2 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO5" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T5: expected exit 0, got $EXIT_CODE"
-else
-    pass "T5: exits 0 for 2-step block"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 0 ]]; then
-    pass "T5: no WARN for 2 consecutive numbered lines"
-else
-    fail "T5: expected 0 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T6: interrupted re-count (1./2./non-numbered/1./2.) → no WARN
-# ---------------------------------------------------------------------------
-REPO6=$(make_repo)
-git -C "$REPO6" checkout -q -b feature6
-mkdir -p "$REPO6/skills/foo"
-{
-    echo "# Foo skill"
-    echo ""
-    echo "1. first"
-    echo "2. second"
-    echo "some prose interrupts the run"
-    echo "1. first again"
-    echo "2. second again"
-} > "$REPO6/skills/foo/SKILL.md"
-git -C "$REPO6" add "$REPO6/skills/foo/SKILL.md"
-git -C "$REPO6" commit -q -m "add SKILL.md with interrupted numbered runs"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO6" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T6: expected exit 0, got $EXIT_CODE"
-else
-    pass "T6: exits 0 for interrupted numbered runs"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 0 ]]; then
-    pass "T6: no WARN when run resets on non-numbered line"
-else
-    fail "T6: expected 0 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T7: _archived/ exclusion — untracked skills/_archived/old/SKILL.md
-#     Path has 2 segments after skills/, so it must NOT match the scope regex.
-# ---------------------------------------------------------------------------
-REPO7=$(make_repo)
-git -C "$REPO7" checkout -q -b feature7
-mkdir -p "$REPO7/skills/_archived/old"
-{ echo "# Archived skill"; echo ""; make_numbered 4; } > "$REPO7/skills/_archived/old/SKILL.md"
-git -C "$REPO7" add "$REPO7/skills/_archived/old/SKILL.md"
-git -C "$REPO7" commit -q -m "add archived SKILL.md with 4 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO7" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T7: expected exit 0, got $EXIT_CODE"
-else
-    pass "T7: exits 0 for _archived/ file"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 0 ]]; then
-    pass "T7: _archived/ SKILL.md not scanned (no WARN)"
-else
-    fail "T7: _archived/ file was scanned. Output: $OUTPUT"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: SKIPPED"; then
-    pass "T7: output contains SKIPPED (no in-scope prompt files)"
-else
-    fail "T7: SKIPPED not found. Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T8: nested depth filtered — skills/_shared/sub/deep.md (2 segments after _shared)
-# ---------------------------------------------------------------------------
-REPO8=$(make_repo)
-git -C "$REPO8" checkout -q -b feature8
-mkdir -p "$REPO8/skills/_shared/sub"
-{ echo "# Deep shared"; echo ""; make_numbered 4; } > "$REPO8/skills/_shared/sub/deep.md"
-git -C "$REPO8" add "$REPO8/skills/_shared/sub/deep.md"
-git -C "$REPO8" commit -q -m "add nested skills/_shared/sub/deep.md with 4 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO8" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T8: expected exit 0, got $EXIT_CODE"
-else
-    pass "T8: exits 0 for nested skills/_shared/sub/deep.md"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 0 ]]; then
-    pass "T8: nested-depth file out of scope (no WARN)"
-else
-    fail "T8: nested-depth file was scanned. Output: $OUTPUT"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: SKIPPED"; then
-    pass "T8: output contains SKIPPED (nested file filtered out)"
-else
-    fail "T8: SKIPPED not found. Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T9: --all audit mode — agents/x.md with 3 numbered lines → WARN
-# ---------------------------------------------------------------------------
-REPO9=$(make_repo)
-git -C "$REPO9" checkout -q -b feature9
-mkdir -p "$REPO9/agents"
-{ echo "# Agent x"; echo ""; make_numbered 3; } > "$REPO9/agents/x.md"
-git -C "$REPO9" add "$REPO9/agents/x.md"
-git -C "$REPO9" commit -q -m "add agents/x.md with 3 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO9" && run_with_timeout bash "$SCRIPT" --all 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T9: expected exit 0, got $EXIT_CODE"
-else
-    pass "T9: exits 0 in --all audit mode"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED (all-scan mode)"; then
-    pass "T9: output contains PERFORMED (all-scan mode)"
-else
-    fail "T9: all-scan mode header not found. Output: $OUTPUT"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -ge 1 ]]; then
-    pass "T9: WARN present for agents/x.md 3-step block"
-else
-    fail "T9: expected >=1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T10: --base/--all mutual exclusion → SKIPPED
-# ---------------------------------------------------------------------------
-REPO10=$(make_repo)
-git -C "$REPO10" checkout -q -b feature10
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO10" && run_with_timeout bash "$SCRIPT" --base main --all 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T10: expected exit 0, got $EXIT_CODE"
-else
-    pass "T10: exits 0 when --base and --all both given"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: SKIPPED"; then
-    pass "T10: output contains SKIPPED for mutually-exclusive flags"
-else
-    fail "T10: SKIPPED not found. Output: $OUTPUT"
-fi
-
-if echo "$OUTPUT" | grep -iq "mutually exclusive"; then
-    pass "T10: output states 'mutually exclusive'"
-else
-    fail "T10: 'mutually exclusive' not found. Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T11: always exit 0 — even with WARNs, exit code must be 0
-# ---------------------------------------------------------------------------
-REPO11=$(make_repo)
-git -C "$REPO11" checkout -q -b feature11
-mkdir -p "$REPO11/skills/foo"
-{ echo "# Foo skill"; echo ""; make_numbered 5; } > "$REPO11/skills/foo/SKILL.md"
-git -C "$REPO11" add "$REPO11/skills/foo/SKILL.md"
-git -C "$REPO11" commit -q -m "add SKILL.md with 5 numbered steps (WARN)"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO11" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -eq 0 ]]; then
-    pass "T11: exits 0 even when WARN fired"
-else
-    fail "T11: expected exit 0 with WARN present, got $EXIT_CODE. Output: $OUTPUT"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -ge 1 ]]; then
-    pass "T11: WARN present (advisory, non-blocking)"
-else
-    fail "T11: expected >=1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T12: agents/*.md scope inclusion in diff mode (committed)
-# ---------------------------------------------------------------------------
-REPO12=$(make_repo)
-git -C "$REPO12" checkout -q -b feature12
-mkdir -p "$REPO12/agents"
-{ echo "# Agent x"; echo ""; make_numbered 3; } > "$REPO12/agents/x.md"
-git -C "$REPO12" add "$REPO12/agents/x.md"
-git -C "$REPO12" commit -q -m "add agents/x.md with 3 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO12" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T12: expected exit 0, got $EXIT_CODE"
-else
-    pass "T12: exits 0 for committed agents/*.md"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T12: agents/*.md picked up in diff mode (PERFORMED)"
-else
-    fail "T12: PERFORMED not found for agents/*.md. Output: $OUTPUT"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T12: exactly 1 WARN for agents/*.md 3-step block"
-else
-    fail "T12: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# T13: skills/_shared/*.md scope inclusion in diff mode (committed)
-# ---------------------------------------------------------------------------
-REPO13=$(make_repo)
-git -C "$REPO13" checkout -q -b feature13
-mkdir -p "$REPO13/skills/_shared"
-{ echo "# Shared doc"; echo ""; make_numbered 3; } > "$REPO13/skills/_shared/foo.md"
-git -C "$REPO13" add "$REPO13/skills/_shared/foo.md"
-git -C "$REPO13" commit -q -m "add skills/_shared/foo.md with 3 numbered steps"
-
-EXIT_CODE=0
-OUTPUT=$(cd "$REPO13" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "T13: expected exit 0, got $EXIT_CODE"
-else
-    pass "T13: exits 0 for committed skills/_shared/*.md"
-fi
-
-if echo "$OUTPUT" | grep -q "## Inline Procedure Review: PERFORMED"; then
-    pass "T13: skills/_shared/*.md picked up in diff mode (PERFORMED)"
-else
-    fail "T13: PERFORMED not found for skills/_shared/*.md. Output: $OUTPUT"
-fi
-
-if [[ "$(count_warns "$OUTPUT")" -eq 1 ]]; then
-    pass "T13: exactly 1 WARN for skills/_shared/*.md 3-step block"
-else
-    fail "T13: expected 1 WARN, got $(count_warns "$OUTPUT"). Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
 echo ""
-if [[ $ERRORS -eq 0 ]]; then
-    echo "All tests passed."
-    exit 0
-else
-    echo "$ERRORS test(s) failed."
-    exit "$ERRORS"
-fi
+echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
+exit $((FAIL > 0 ? 1 : 0))

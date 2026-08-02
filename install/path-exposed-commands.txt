@@ -22,5 +22,6 @@ review-code-size
 review-env-example
 review-step-numbers
 check-inline-procedures
+check-prompt-extraction
 review-e2e-coverage
 review-bare-python
