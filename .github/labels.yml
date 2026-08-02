@@ -31,9 +31,11 @@
   description: "Planning/architecture issue with no implementation. Sub-issues carry the actual work."
 
 # --- Severity ---
+# Definition SSOT: skills/issue-create/SKILL.md "Label policy". The descriptions
+# below are one-line summaries that reference it — never a second definition.
 - name: "severity:high"
   color: "b60205"
-  description: "Fatal: workflow stops, abort, infinite loop, security hole, or major feature impact"
+  description: "Mid-run interruption, security breach, or primary feature unusable (SSOT: /issue-create label policy)"
 
 - name: "severity:low"
   color: "c5def5"
