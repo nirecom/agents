@@ -52,6 +52,7 @@ init_repo() {
     : > "$repo/.private-info-allowlist"
 
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     git -C "$repo" config commit.gpgsign false

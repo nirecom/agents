@@ -41,6 +41,12 @@ export CLAUDE_ENV_FILE
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

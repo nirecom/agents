@@ -82,6 +82,13 @@ WORKFLOW_DIR="$TMPDIR_BASE/wf"
 mkdir -p "$WORKFLOW_DIR"
 WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR")"
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WORKFLOW_PLANS_DIR")"
+export WORKFLOW_PLANS_DIR
+
 # Clear inherited Claude Code session vars so resolveSessionId does not leak the
 # outer session into --session-less probes.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true

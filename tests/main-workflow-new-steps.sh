@@ -27,6 +27,12 @@ mkdir -p "$WORKFLOW_DIR"
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -35,6 +41,7 @@ setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"
     mkdir -p "$repo"
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"

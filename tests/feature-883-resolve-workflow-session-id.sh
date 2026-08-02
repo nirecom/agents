@@ -126,7 +126,7 @@ run_r0b() {
     plans_tmp="$(mktemp -d)"
     sid="${TODAY}-r0bsession"
     # Set up a minimal git repo with one commit so git worktree add works.
-    (cd "$main_repo" && git init -q && git config user.email "test@example.com" && \
+    (cd "$main_repo" && git init -q && git config core.hooksPath /dev/null && git config user.email "test@example.com" && \
         git config user.name "Test" && git commit -q --allow-empty -m "init") 2>/dev/null
     # Create linked worktree — no WORKTREE_NOTES.md there.
     (cd "$main_repo" && git worktree add -q "$linked_wt" -b "test-r0b") 2>/dev/null
