@@ -38,7 +38,7 @@ fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
 }
 
 # Seed a workflow state with workflow_init NOT complete (pending).
-# → #1794 以降、この状態は C4 の pre-workflow-init 免除に該当する(ブロックされない)。
+# → #1794: as of this change, this state qualifies for C4's pre-workflow-init exemption (not blocked).
 seed_workflow_state_no_init() {
     local tmp="$1" sid="$2"
     local wf_dir="$tmp/workflow"

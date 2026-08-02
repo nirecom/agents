@@ -235,7 +235,7 @@ run_t10() {
 
 # ---------------------------------------------------------------------------
 # T11: pre-init state (workflow_init pending) → exit 0, no decision:block
-#      (#1794: workflow が開始されていないセッションには next-step 案内を強制しない)
+#      (#1794: do not force next-step guidance on a session where the workflow hasn't started)
 # ---------------------------------------------------------------------------
 run_t11() {
     require_source "$HOOK" "T11: pre-init state -> no block" || return
