@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: enforce worktree-based parallel session workflow.
 //
-// Blocks Edit/Write/MultiEdit/Bash write operations when:
+// Blocks every write-capable tool — the edit-write class
+// (Edit/Write/MultiEdit/editFiles/NotebookEdit) and the command class
+// (Bash/runInTerminal/runCommands), enumerated in hooks/lib/write-tools.js — when:
 //   1. Running in the main git checkout (not a linked worktree), regardless of branch.
 //   2. Running on a protected branch even inside a linked worktree.
 // Allows writes only from a linked worktree on a non-protected branch.
@@ -33,9 +35,19 @@ const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, hasCommandSequencingOutsideHeredoc, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop, isAllowedReadOnlyWorkflowCli } = require("./enforce-worktree/main-worktree-allows");
-const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 const { buildWorktreeRemedy } = require("./enforce-worktree/worktree-remedy");
+const { buildExtras } = require("./enforce-worktree/report-extras");
+const { handleBashWrite } = require("./enforce-worktree/handle-bash-write");
+const { handleEditWrite } = require("./enforce-worktree/handle-edit-write");
+// H-2 (#1780 round-4): the guarded tool surface is a CLASS, not the four names
+// this hook happened to be written against. editFiles / NotebookEdit are
+// edit-write siblings and runInTerminal / runCommands are command siblings;
+// every one of them bypassed main-worktree and protected-branch enforcement
+// entirely. hooks/lib/write-tools.js is the SSOT for both classes and for the
+// settings.json matcher string (CPR-2/CPR-5).
+const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandTextOf } = require("./lib/write-tools");
 
 // readStdin / getWorktreeBaseDirResolved moved to enforce-worktree/entry-helpers.js
 // (file-split, rules/coding/file-split.md). getWorktreeBaseDirResolved stays re-exported below.
@@ -62,16 +74,9 @@ function done(decision) {
   process.exit(0);
 }
 
-function buildExtras(cmd, cwd, repoRoot, mainCheckoutResult) {
-  const extras = {};
-  if (cwd !== undefined) {
-    extras.context = { cwd };
-    if (repoRoot !== undefined) extras.context.git_root_resolved = !!repoRoot;
-  }
-  if (!repoRoot) extras.reason = "cwd_no_git_root";
-  else if (mainCheckoutResult === null) extras.reason = "isMainCheckout_unresolved";
-  return extras;
-}
+// buildExtras moved to enforce-worktree/report-extras.js (file-split,
+// rules/coding/file-split.md) — required above; shared with handle-bash-write.js
+// and handle-edit-write.js, which also populate _reportContext.extras.
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 // Wrapped in `if (require.main === module)` so the file can be `require()`d
@@ -148,9 +153,13 @@ const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 
 // Populate supervisor-emit context for done() block self-report.
+// The command text is derived through the shared normalizer so a runCommands
+// call self-reports what it was actually about to run, not `undefined`.
+const _cmdText = isCommandTool(toolName) ? commandTextOf(toolName, toolInput) : "";
+
 _reportContext = {
   sessionId: (input && input.session_id) || undefined,
-  command: (toolInput && toolInput.command) || undefined,
+  command: _cmdText || undefined,
   toolName,
   extras: undefined,
 };
@@ -165,21 +174,16 @@ const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
 // the CURRENT command names explicitly.
 {
   const derived = [];
-  if (toolName === "Bash") {
-    const _cmd = toolInput.command || "";
-    const _cArg = parseGitCPath(_cmd);
+  if (isCommandTool(toolName)) {
+    const _cArg = parseGitCPath(_cmdText);
     if (_cArg && path.isAbsolute(_cArg)) derived.push(_cArg);
-    const _cdArg = parseCdCommand(_cmd);
+    const _cdArg = parseCdCommand(_cmdText);
     if (_cdArg) derived.push(_cdArg);
-  } else if (toolName === "Edit" || toolName === "Write" || toolName === "MultiEdit") {
-    const fp = toolInput.file_path || toolInput.path;
-    if (fp && typeof fp === "string" && path.isAbsolute(fp)) derived.push(fp);
-    if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
-      for (const e of toolInput.edits) {
-        if (e && typeof e.file_path === "string" && path.isAbsolute(e.file_path)) {
-          derived.push(e.file_path);
-        }
-      }
+  } else if (isEditWriteTool(toolName)) {
+    // Every path spelling the class can use, top level and per-`edits[]` entry
+    // (shared with block-off-clearance-write via hooks/lib/write-tools.js).
+    for (const fp of collectEditWritePaths(toolInput)) {
+      if (path.isAbsolute(fp)) derived.push(fp);
     }
   }
   setPayloadDerivedPaths(derived);
@@ -188,255 +192,20 @@ const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
 let repoRoot = null;
 let _writeDetector = null;
 
-if (toolName === "Bash") {
-  const cmd = toolInput.command || "";
-  if (!cmd) done();
-  const ir = parse(cmd);
-  _writeDetector = detectWritePredicate(ir);
-  if (!_writeDetector) done(); // read-only command — allow
-
-  // Early-exit for git worktree remove/prune (write confirmed above): resolve
-  // repo root from CWD (not from -C flag) so the CWD checkout type drives the
-  // allow/block decision. This prevents the main-path isMainCheckout(repoRoot)
-  // from wrongly resolving via a -C target and allowing linked-CWD or
-  // cross-repo invocations. Non-git CWD (cwdRoot===null) falls through to the
-  // main fail-closed block below.
-  if (/\bgit\b/.test(cmd) && /\bworktree\s+(?:remove|prune)\b/.test(cmd)) {
-    const cwdRoot = findRepoRootForBash("git", _toolCwd);
-    if (cwdRoot !== null) {
-      const cwd = _toolCwd || process.cwd();
-      if (isMainCheckout(cwd) === true && isAllowedWorktreeCommand(cmd, cwdRoot)) {
-        done();
-      } else {
-        done({
-          block: true,
-          reason:
-            "ENFORCE_WORKTREE: git worktree remove/prune blocked.\n" +
-            "Reason: must be invoked from the main worktree (not a linked worktree),\n" +
-            "and -C (if used) must target the main repo root.\n" +
-            "Use /worktree-end to remove a linked worktree.",
-        });
-      }
-    }
-  }
-
-  repoRoot = findRepoRootForBash(cmd, _toolCwd);
-
-  // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
-  // Allowed only when the target branch is not currently checked out in any worktree.
-  if (isBranchDeleteCommand(cmd)) {
-    if (!repoRoot) done(); // not in a git repo — allow (matches policy below)
-    if (isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot)) done();
-    done({
-      block: true,
-      reason:
-        "ENFORCE_WORKTREE: git branch -d/-D blocked — target branch is still " +
-        "checked out in a worktree, force-delete was issued without the " +
-        "`WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` inline prefix " +
-        "shape required for /worktree-end Step WE-19 authorization, or " +
-        "`git worktree list` failed.\n" +
-        "- If the worktree is still active: run `/worktree-end` first to remove it, then retry.\n" +
-        "- If the worktree was already removed but the registry is stale: run " +
-        "`git worktree prune`, then retry.\n" +
-        "- If you need to force-delete an unmerged branch: set " +
-        "`ENFORCE_WORKTREE=off` in agents config, run the delete, then restore it.\n" +
-        "- Or run `/sweep-worktrees --apply` to reclaim merged zombie worktrees.",
-    });
-  }
-
-  if (hasGitHooksBypass(cmd)) {
-    done({
-      block: true,
-      reason:
-        "ENFORCE_WORKTREE: git hooks bypass blocked. Reason: hook-disabling override.\n" +
-        "Blocked: git -c core.hooksPath=…, git --config-env=core.hooksPath=…,\n" +
-        "GIT_CONFIG_PARAMETERS=…core.hooksPath… git …, and\n" +
-        "GIT_CONFIG_KEY_<n>=core.hooksPath … git ….\n" +
-        "These disable pre-commit / commit-msg / pre-push hooks.\n" +
-        "Remove the override, or set ENFORCE_WORKTREE=off in agents config\n" +
-        "if the bypass is intentional.",
-    });
-  }
-
-  // gh write commands (Group B) get an extra session-scope check before the
-  // standard main/worktree enforcement below. The whitelist defines the set of
-  // repos this session manages; gh writes outside the set are blocked even
-  // from a worktree, on the principle that out-of-session repos are not the
-  // current task's concern.
-  if (isGhWriteCommand(ir)) {
-    // --- #713: gh issue create skill-context gate ---
-    // Stage A: determine main worktree vs linked worktree.
-    // Stage B (main only): require ISSUE_CREATE_SKILL=1 inline prefix to enforce
-    // that /issue-create skill (survey-first + duplicate check) is used.
-    // Linked worktrees bypass Stage B — bare `gh issue create` is unrestricted there.
-    if (/\bgh\s+issue\s+create\b/.test(stripQuotedArgs(cmd))) {
-      // Axis A (#885): trivalue-aware — null (isMainCheckout indeterminate) routes
-      // to the block side, same as the main-path at line 441.
-      const mainCheckoutResultGate = repoRoot ? isMainCheckout(repoRoot) : false;
-      if (mainCheckoutResultGate !== false) {
-        const SANCTIONED_RE =
-          /^[ \t]*(?:MSYS_NO_PATHCONV=1[ \t]+)?ISSUE_CREATE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+create\b/;
-        if (!SANCTIONED_RE.test(cmd)) {
-          _reportContext.extras = buildExtras(cmd, _toolCwd, repoRoot, mainCheckoutResultGate);
-          done({
-            block: true,
-            reason:
-              "ENFORCE_WORKTREE: bare `gh issue create` blocked from main worktree.\n" +
-              "Reason: /issue-create skill must be used (survey-first + duplicate check).\n" +
-              "Run `/issue-create --title ... --body ...` from this session, or from a linked\n" +
-              "worktree if you really need bare `gh issue create`.\n" +
-              "(`ISSUE_CREATE_SKILL=1` is a content-integrity marker — NOT a worktree-\n" +
-              " enforcement bypass; cf. #672 removal of ISSUE_CLOSE_SKILL bypass.)",
-          });
-        }
-        // Sanctioned: fall through to session-scope check below.
-      }
-      // Linked worktree → Stage B skip → session-scope check below.
-    }
-    // --- end #713 gate ---
-
-    const sessionRoots = getSessionRepoRoots();
-    const detected = repoRoot ? normalizeForCompare(repoRoot) : null;
-
-    if (!detected) {
-      done({
-        block: true,
-        reason:
-          "ENFORCE_WORKTREE: gh write blocked. Reason: cannot determine repo root for this command.\n" +
-          "Run gh from inside a session repo's worktree, or set ENFORCE_WORKTREE=off." +
-          (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
-      });
-    }
-    if (!sessionRoots.has(detected)) {
-      done({
-        block: true,
-        reason:
-          `ENFORCE_WORKTREE: gh write blocked. Reason: target repo (${repoRoot}) is not in session scope.\n` +
-          "Add this repo to ENFORCE_WORKTREE_ADDITIONAL_REPOS in agents config, or run from a session repo.\n" +
-          "Or set ENFORCE_WORKTREE=off to bypass." +
-          (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
-      });
-    }
-    // gh writes are GitHub operations, not local file writes — session-scope is sufficient.
-    done();
-  }
-
-  const sessionRoots = getSessionRepoRoots();
-
-  // Universal target-aware allow (L1, #1045): allow if all extracted write targets
-  // are outside the session scope, before shape-based predicate checks.
-  // Sequenced commands and parse failures → abstain (fail-closed, C1).
-  {
-    const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir);
-    if (_ur.verdict === "allow") done();
-  }
-
-  // Bug 2 + Bug 1: non-gh Bash writes — check actual write targets.
-  {
-    // sessionRoots is already in scope (hoisted above for universal-rule reuse)
-    const excludePatterns = getExcludePatterns();
-    const { targets, parseFailure } = collectBashWriteTargets(ir, repoRoot);
-
-    if (!parseFailure) {
-      // Commands with sequencing operators (;, &&, ||) may contain un-extracted
-      // in-scope writes (e.g. `echo x > /tmp/out; rm README.md`). Skip the
-      // session-scope / EXCLUDE fast-paths for those; fall through to the
-      // main-checkout block (fail-closed). Single | (pipe) is allowed — it is
-      // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
-      if (!hasCommandSequencing(cmd)) {
-        // Bug 2: all targets resolve outside session scope → allow.
-        // Non-git CWD (#1448B): when repoRoot is null, also require that every target
-        // resolves to a non-git path (findRepoRoot===null) or is under plans-dir/.claude.
-        // Without repoRoot, sessionRoots may be empty and cannot reliably protect
-        // non-session git repos from accidental cross-repo writes.
-        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
-            (repoRoot !== null ||
-             areAllBashTargetsUnderPlansDir(targets) ||
-             areAllBashTargetsUnderClaude(targets) ||
-             targets.every(t => findRepoRoot(String(t.path || '').replace(/^["']|["']$/g, '')) === null))) {
-          done();
-        }
-
-        // Bug 1: all targets covered by EXCLUDE → allow.
-        if (excludePatterns.length > 0 &&
-            isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
-          done();
-        }
-      } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
-                 (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets))) {
-        // #1109: sequencing operators appear ONLY inside a heredoc body (e.g.
-        // shell fragments written by `cat <<'EOF' > plans-dir/file.md`).
-        // The actual write target is under plans-dir — allow.
-        done();
-      } else if (excludePatterns.length > 0 &&
-                 isEverySegmentExcluded(ir, repoRoot, excludePatterns)) {
-        // #739: sequenced commands where every write segment's targets are all
-        // covered by EXCLUDE → allow (e.g. `mkdir -p .worktree-backup/x && cp src .worktree-backup/x/f`).
-        done();
-      }
-    }
-
-    // git -C <path> style (no file targets extracted): use repoRoot for scope check.
-    if (!targets && !parseFailure && repoRoot) {
-      if (!isInSessionScope(repoRoot, sessionRoots)) done();
-    }
-    if (parseFailure && hasWorktreeEndSkillPrefix(cmd) && /^cp\s/.test(stripWorktreeEndSkillPrefix(cmd)) && /\.worktree-backup/.test(cmd)) done();
-    // parseFailure → fail-closed: fall through to main-checkout block below.
-  }
-} else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {
-  const sessionRoots = getSessionRepoRoots();
-  const excludePatterns = getExcludePatterns();
-
-  if (toolName === "MultiEdit" && Array.isArray(toolInput.edits) && toolInput.edits.length > 0) {
-    // Check every edit target — a mixed-repo MultiEdit must not slip through.
-    for (const edit of toolInput.edits) {
-      const fp = edit.file_path;
-      if (!fp || typeof fp !== "string") continue;
-
-      // Bug 1: EXCLUDE match → skip this edit (allow).
-      if (isExcluded(fp, excludePatterns)) continue;
-
-      const root = findRepoRoot(fp);
-      // Bug 2: non-git path or outside session scope → skip (allow).
-      if (!root || !isInSessionScope(root, sessionRoots)) continue;
-
-      const isMC = isMainCheckout(root);
-      const branch = getCurrentBranch(root);
-      const protected_ = getProtectedBranches(root);
-      // Axis A (#885): null (unresolved) routes to the block side, not allow.
-      if (isMC !== false) {
-        const branchDesc = branch ? `branch '${branch}'` : "detached HEAD";
-        _reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
-        const _remedy = buildWorktreeRemedy((input && input.session_id) || resolveSessionId());
-        done({
-          block: true,
-          reason:
-            `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
-            "Work from a linked worktree.\n" +
-            _remedy +
-            "Or set ENFORCE_WORKTREE=off.",
-        });
-      }
-      if (branch && protected_.includes(branch)) {
-        _reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
-        done({
-          block: true,
-          reason: `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${branch}' in linked worktree.\nSwitch to a feature branch or set ENFORCE_WORKTREE=off.`,
-        });
-      }
-    }
-    done(); // all edits passed
-  }
-  const filePath = toolInput.file_path || toolInput.path;
-  if (!filePath || typeof filePath !== "string") done();
-
-  // Bug 1: EXCLUDE match → allow.
-  if (isExcluded(filePath, excludePatterns)) done();
-
-  repoRoot = findRepoRoot(filePath);
-
-  // Bug 2: non-git path or outside session scope → allow.
-  if (!repoRoot || !isInSessionScope(repoRoot, sessionRoots)) done();
+// Bash-tool and Edit/Write/MultiEdit-tool write-target analysis are each a
+// cohesive, self-contained chunk of logic — extracted verbatim into sibling
+// modules (file-split, rules/coding/file-split.md). Each helper calls the
+// shared `done()` for every allow/block exit (process.exit(0) inside — control
+// never returns past those calls), and returns the resolved `repoRoot` (plus
+// `writeDetector` for Bash) on natural fall-through, exactly matching what the
+// former inline code left in the outer `repoRoot` / `_writeDetector` variables
+// for the post-dispatch main-checkout / protected-branch checks below.
+if (isCommandTool(toolName)) {
+  const result = handleBashWrite({ toolName, toolInput, _toolCwd, done, reportContext: _reportContext });
+  repoRoot = result.repoRoot;
+  _writeDetector = result.writeDetector;
+} else if (isEditWriteTool(toolName)) {
+  repoRoot = handleEditWrite({ input, toolName, toolInput, _toolCwd, done, reportContext: _reportContext, resolveSessionId });
 } else {
   done(); // unrecognised tool — allow
 }
@@ -447,10 +216,10 @@ if (toolName === "Bash") {
 // paths, which must remain allowed (the earlier isInSessionScope guard at line ~1266
 // already handles tool inputs).
 if (!repoRoot) {
-  if (toolName === "Bash") {
+  if (isCommandTool(toolName)) {
     // Axis A (#885): repoRoot was probed and absent → null sentinel for the
     // extras builder (vs. undefined which means "inspection didn't run").
-    _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, null, undefined);
+    _reportContext.extras = buildExtras(_cmdText || undefined, _toolCwd, null, undefined);
     done({
       block: true,
       reason:
@@ -475,8 +244,8 @@ if (mainCheckout !== false) {
   // Allow isolated worktree lifecycle commands (Bash only).
   // These operate on .git/worktrees/ metadata or external paths, not tracked files,
   // and must be invoked from the main worktree.
-  if (toolName === "Bash") {
-    const cmd = toolInput.command || "";
+  if (isCommandTool(toolName)) {
+    const cmd = _cmdText;
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
@@ -491,7 +260,7 @@ if (mainCheckout !== false) {
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
-  _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, repoRoot, mainCheckout);
+  _reportContext.extras = buildExtras(_cmdText || undefined, _toolCwd, repoRoot, mainCheckout);
   const _remedy = buildWorktreeRemedy((input && input.session_id) || resolveSessionId());
   done({
     block: true,
@@ -504,7 +273,7 @@ if (mainCheckout !== false) {
 }
 
 if (currentBranch && protectedBranches.includes(currentBranch)) {
-  _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, repoRoot, mainCheckout);
+  _reportContext.extras = buildExtras(_cmdText || undefined, _toolCwd, repoRoot, mainCheckout);
   done({
     block: true,
     reason:

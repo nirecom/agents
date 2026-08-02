@@ -23,10 +23,99 @@ process.stdin.on("end", () => {
     let wsidResolved = false;
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
-    if (toolName !== "Bash" && toolName !== "runInTerminal" && toolName !== "runCommands") process.exit(0);
-    const command = (parsed.tool_input && parsed.tool_input.command) || "";
+    // H-1 (#1780 round-4): runCommands carries an ARRAY under `commands`.
+    // Reading `.command` gave this gate "" for every runCommands call, so a
+    // sentinel emitted from commands[] was never examined. Both the tool set
+    // and the payload normalization come from hooks/lib/tool-command-text.js
+    // (CPR-2, shared with enforce-system-ops.js and block-off-clearance-write).
+    const { isCommandTool, commandTextOf, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
+    if (!isCommandTool(toolName)) process.exit(0);
 
     const patterns = require(path.join(__dirname, "./lib/sentinel-patterns.js"));
+
+    // convLangPrefix(): conversation-language injection for any block message.
+    // Shared by the multi-sentinel block below and the Step-5 block tail (CPR-2).
+    function convLangPrefix() {
+      try {
+        const { getConvLangInjection } = require(path.join(__dirname, "./lib/conv-lang.js"));
+        const injection = getConvLangInjection();
+        return injection ? injection + "\n" : "";
+      } catch (e) {
+        return ""; // fail-open: the message is emitted without the prefix
+      }
+    }
+    function emitBlock(body) {
+      process.stdout.write(JSON.stringify({ decision: "block", reason: convLangPrefix() + body }) + "\n");
+      process.exit(2);
+    }
+
+    // --- Adjudication units (#1780 round-5 H-1) ---------------------------
+    // ONE tool call can carry MANY commands, and the activation layer applies
+    // EVERY one of them:
+    //   runCommands            -> tool_input.commands is an ARRAY, each element runs
+    //   Bash / runInTerminal   -> `a && b` runs both, and hooks/workflow-mark.js
+    //                             splits the command on `&&` and dispatches each part
+    // The previous code adjudicated a SINGLE element (the first that looked like an
+    // OFF proposal) and derived the target, the reason, the clearance validation and
+    // the claim from it alone — so a call carrying two OFF sentinels was validated and
+    // claimed ONCE while activating BOTH, breaking single-use, reason binding and
+    // target binding. The gate must therefore see exactly the units the activation
+    // layer sees: the payload is expanded per array element AND per `&&` part, using
+    // the same naive splitter workflow-mark.js uses (its `&&` handling is the SSOT
+    // for what actually gets applied). Every sentinel pattern is anchored ^...$ with
+    // no `m` flag, so each unit has to be matched on its own — joined text matches
+    // nothing.
+    const AND_SPLIT_RE = /\s*&&\s*/;
+    const matchesAny = (res, text) => res.some((re) => re && re.test && re.test(text));
+    const units = [];
+    for (const element of commandListOf(toolName, parsed.tool_input)) {
+      for (const part of String(element).split(AND_SPLIT_RE)) {
+        const unit = part.trim();
+        if (unit) units.push(unit);
+      }
+    }
+
+    // ACTIVATING units are the strict (reason-carrying) forms only — the four that
+    // really turn an OFF on. LOOKSLIKE forms activate nothing (workflow-mark rejects
+    // them as malformed), so they are deliberately NOT counted here: counting them
+    // would block inert text.
+    const ACTIVATING_OFF_RES = [
+      patterns.ENFORCE_WORKFLOW_OFF_RE_DQ,
+      patterns.ENFORCE_WORKTREE_OFF_RE_DQ,
+      patterns.ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ,
+      patterns.ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ,
+    ];
+    const activatingUnits = units.filter((u) => matchesAny(ACTIVATING_OFF_RES, u));
+
+    // POLICY, EXPLICIT (CPR-8): one clearance authorizes exactly ONE activation, so
+    // a tool call may carry at most ONE activating OFF sentinel. N sentinels are
+    // REJECTED OUTRIGHT rather than gated N times — N clearances would still have to
+    // be bound to N distinct targets/reasons and consumed in an order this gate
+    // cannot observe, and the emergency form is human-gated per emission. Rejecting
+    // is the simplest rule that cannot under-gate; the caller re-emits one per call.
+    // This also covers the mixed case (a normal OFF plus an EMERGENCY one), which
+    // could otherwise use the emergency element to smuggle the gated one past Phase1.
+    if (activatingUnits.length > 1) {
+      emitBlock(
+        "[EM Supervisor] OFF sentinel emit blocked.\n" +
+        `This call carries ${activatingUnits.length} OFF sentinels; a clearance authorizes exactly ONE ` +
+        "activation, so multi-sentinel OFF calls are rejected outright.\n" +
+        "Emit ONE OFF sentinel per tool call (WORKFLOW_OFF already subsumes WORKTREE_OFF — " +
+        "emitting both is redundant)."
+      );
+    }
+
+    // Exactly one activating unit → adjudicate that unit. None → fall back to the
+    // first LOOKSLIKE unit so the malformed-form pass-through below still works,
+    // and to the whole command text when there is no list at all.
+    const NORMAL_OFF_LOOKSLIKE_RES = [
+      patterns.ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
+      patterns.ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
+    ];
+    const command =
+      activatingUnits[0] ||
+      units.find((u) => matchesAny(NORMAL_OFF_LOOKSLIKE_RES, u)) ||
+      commandTextOf(toolName, parsed.tool_input);
 
     // Step 1a: exclude the EMERGENCY sentinels. Only the dedicated *_EMERGENCY_*
     // regexes match them — the normal OFF regexes below never do — so this branch
@@ -116,7 +205,7 @@ process.stdin.on("end", () => {
       try {
         const token = JSON.parse(raw);
         if (!token || typeof token !== "object") return { status: "error" };
-        return { status: "found", token };
+        return { status: "found", token, tokenPath, sid };
       } catch (e) {
         return { status: "error" };
       }
@@ -131,15 +220,146 @@ process.stdin.on("end", () => {
       }
     }
 
-    // Validity is decided by the shared SSOT validator (hooks/lib/session-markers.js).
-    // Only the read layer above is local, so ENOENT stays distinguishable from errors.
-    let allow = false;
-    if (tokenResult.status === "found") {
+    // #1626: the bare token may be legitimately absent because an earlier proposal
+    // already claimed and consumed it. Distinguish that case (honest "already
+    // claimed" message) from "never granted" by checking for the .claimed marker
+    // before falling through to the generic no-clearance message. Read-only and
+    // reachable only when the verdict is already block — it never changes the verdict.
+    let claimFailedBecauseClaimed = false;
+    let unlinkFailedAfterClaim = false;
+    if (tokenResult.status !== "found") {
+      const candidateSids = [sessionId];
+      const wsidForClaimedCheck = resolveWsid();
+      if (wsidForClaimedCheck && wsidForClaimedCheck !== sessionId) candidateSids.push(wsidForClaimedCheck);
       try {
-        const { evaluateOffClearance } = require(path.join(__dirname, "./lib/session-markers.js"));
-        allow = evaluateOffClearance(tokenResult.token, offTarget, reasonText) === true;
-      } catch (e) {
-        allow = false; // validator unavailable → fail-CLOSED
+        const { getWorkflowDir } = require(path.join(__dirname, "./workflow-state"));
+        const dir = getWorkflowDir();
+        for (const sid of candidateSids) {
+          if (sid && SID_RE.test(sid) && fs.existsSync(path.join(dir, sid + ".off-clearance.claimed"))) {
+            claimFailedBecauseClaimed = true;
+            break;
+          }
+        }
+      } catch (e) { /* fail-open: diagnostic-only, verdict unaffected */ }
+    }
+
+    // #1780 round-14 HIGH — SHIM/MINT LOCK PARITY.
+    //
+    // The validate-then-claim-then-unlink sequence below mutates the exact same
+    // bare-token / claim pair that bin/request-off-clearance's mint transition
+    // (mint + rename + stale-claim-sweep) mutates, under the SAME SID-scoped
+    // lock (hooks/lib/off-clearance-mint-lock.js). Without this, a mint racing
+    // this shim could either (a) overwrite the bare token this process is about
+    // to unlink-by-path — destroying the FRESH grant instead of consuming the
+    // OLD one it validated — or (b) sweep the `.claimed` file this process is
+    // mid-way through creating, judging it "stale" by nonce mismatch when it is
+    // in fact a live claim being created right now. See the module header for
+    // the full race. Both participants key the lock off the identical bare
+    // token path, so they can never interleave.
+    //
+    // Only the MUTATING part of the gate needs the lock — the fast-path reads
+    // above (already-off, look-alike, absent-token diagnostics) do not touch
+    // shared state and would otherwise force every PreToolUse call through the
+    // lock for no benefit.
+    let validated = false;
+    let allow = false;
+    let lockUnavailable = false;
+    if (tokenResult.status === "found") {
+      const { acquireMintLock, releaseMintLock } = require(path.join(__dirname, "./lib/off-clearance-mint-lock.js"));
+      // Budget is far shorter than the mint's 5s: this runs inline in an
+      // interactive PreToolUse hook and must not stall the session, and a mint
+      // transition is a handful of synchronous syscalls, so genuine contention
+      // — if any — clears in milliseconds. A timeout fails CLOSED (below), same
+      // as every other branch of this gate; the caller simply retries the OFF
+      // sentinel emit.
+      const lock = acquireMintLock(tokenResult.tokenPath, 1000, 20);
+      if (!lock) {
+        lockUnavailable = true;
+      } else {
+        try {
+          // Re-read the bare token INSIDE the lock rather than trusting the
+          // pre-lock `tokenResult.token`: a concurrent mint could have
+          // overwritten it between that read and this lock acquisition, and
+          // validating/claiming/unlinking stale in-memory bytes is exactly the
+          // race this lock exists to close.
+          let freshRaw = null;
+          try {
+            freshRaw = fs.readFileSync(tokenResult.tokenPath, "utf8");
+          } catch (e) {
+            freshRaw = null; // ENOENT or other I/O error → treat as not found
+          }
+          let freshToken = null;
+          if (freshRaw !== null) {
+            try { freshToken = JSON.parse(freshRaw); } catch (e) { freshToken = null; }
+          }
+
+          // Validity is decided by the shared SSOT validator
+          // (hooks/lib/session-markers.js); it is a PRECONDITION only.
+          if (freshToken && typeof freshToken === "object") {
+            try {
+              const { evaluateOffClearance } = require(path.join(__dirname, "./lib/session-markers.js"));
+              validated = evaluateOffClearance(freshToken, offTarget, reasonText) === true;
+            } catch (e) {
+              validated = false; // validator unavailable → fail-CLOSED
+            }
+          }
+
+          // #1626: the CLAIM is the authorization. Exclusive creation of the
+          // .claimed file is one indivisible OS operation, so at most one of N
+          // concurrent proposals can obtain it — that closes the
+          // validate/consume TOCTOU window. There is deliberately NO fallback:
+          // a failed claim (EEXIST from an existing claim, or any I/O error)
+          // blocks. The bare token is by then either gone or contended, and an
+          // already-claimed token has spent its single use.
+          // `wx` is used rather than rename because rename's behaviour when the
+          // destination exists differs between POSIX (silent overwrite) and
+          // Windows (EEXIST) — `wx` throws EEXIST on both (CPR-8).
+          if (validated) {
+            const bare = tokenResult.tokenPath;
+            const claimed = bare + ".claimed";
+            // Payload is serialized BEFORE the exclusive open (codex HIGH-2): any
+            // reader racing this write can only ever observe the file as absent
+            // or as fully formed — never a transient empty/partial file —
+            // because nothing but the single fs.writeFileSync syscall below runs
+            // while the fd is open.
+            const claimPayload = JSON.stringify({
+              ...freshToken,
+              claimed_at: new Date().toISOString(),
+              claimed_by_sid: tokenResult.sid,
+              claimed_target: offTarget,
+              claimed_reason: reasonText,
+            });
+            let fd = null;
+            try {
+              fd = fs.openSync(claimed, "wx", 0o600);
+              fs.writeFileSync(fd, claimPayload);
+              allow = true;
+            } catch (e) {
+              if (e && e.code === "EEXIST") claimFailedBecauseClaimed = true;
+              allow = false;                                  // fail-CLOSED, no fallback
+            } finally {
+              if (fd !== null) { try { fs.closeSync(fd); } catch (_e) {} }
+            }
+            // M-1 fix: removing the bare token is NOT mere bookkeeping — the "can
+            // never be claimed again" argument only holds while .claimed exists, and
+            // consumeOffClearance() deletes .claimed on the very next step (OFF
+            // activation). If the unlink below fails for any reason other than
+            // ENOENT (already gone), a valid unclaimed bare token can survive to be
+            // claimed a second time inside the expiry window once .claimed is
+            // removed — a replay of this single-use grant. Fail closed: revoke the
+            // approval and leave .claimed in place so the sid is safely wedged until
+            // a new Phase1 examination clears it.
+            if (allow) {
+              try {
+                fs.unlinkSync(bare);
+              } catch (e) {
+                if (!e || e.code !== "ENOENT") { allow = false; unlinkFailedAfterClaim = true; }
+              }
+            }
+          }
+        } finally {
+          releaseMintLock(lock);
+        }
       }
     }
     if (allow) process.exit(0);
@@ -172,24 +392,52 @@ process.stdin.on("end", () => {
       stateReadFailed = true; // message falls back to the generic honest text
     }
 
-    const blockKind = stateReadFailed
-      ? "no-clearance-unknown"
-      : (stateFileFound ? "no-clearance-findings" : "no-clearance-enoent");
+    // The already-claimed state is used ONLY to pick an honest message. It never
+    // participates in the verdict — the verdict was decided by the claim attempt
+    // above, and no read of the .claimed file can grant permission.
+    const blockKind = unlinkFailedAfterClaim
+      ? "consume-failed"
+      : (claimFailedBecauseClaimed
+        ? "already-claimed"
+        : (lockUnavailable
+          ? "lock-busy"
+          : (stateReadFailed
+            ? "no-clearance-unknown"
+            : (stateFileFound ? "no-clearance-findings" : "no-clearance-enoent"))));
 
     const CLEARANCE_GUIDANCE =
       "Request clearance with: bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> " +
       "--category <rubric category> --detail \"<why>\"\n" +
-      "Then re-emit the OFF sentinel with the granted [category] inside the reason.\n" +
+      "Then re-emit the OFF sentinel with the granted [category] at the START of the reason.\n" +
       "If the examiner itself is broken, use the EMERGENCY OFF sentinel.";
 
-    function buildReason(isWtEnd, convLangPrefix, kind) {
+    function buildReason(isWtEnd, langPrefix, kind) {
       if (isWtEnd) {
-        return convLangPrefix +
+        return langPrefix +
           "[EM Supervisor] OFF sentinel emit blocked.\n" +
           "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-15) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
           "Follow the WE-16 fallback: skip to WE-20 and continue.";
       }
-      const head = convLangPrefix + "[EM Supervisor] OFF sentinel emit blocked.\n";
+      const head = langPrefix + "[EM Supervisor] OFF sentinel emit blocked.\n";
+      if (kind === "consume-failed") {
+        return head +
+          "This session's clearance token was found and claimed, but could not be fully consumed " +
+          "(the bare token file could not be removed) — it is left wedged as single-use-spent for safety. " +
+          "Request a new clearance.\n" +
+          CLEARANCE_GUIDANCE;
+      }
+      if (kind === "already-claimed") {
+        return head +
+          "This session's clearance token was already claimed by an earlier OFF proposal (single-use). " +
+          "Request a new clearance.\n" +
+          CLEARANCE_GUIDANCE;
+      }
+      if (kind === "lock-busy") {
+        return head +
+          "A clearance mint/claim for this session is in progress (mint lock busy). This is transient — " +
+          "re-emit the same OFF sentinel; the concurrent operation should have released the lock within " +
+          "a second or two.";
+      }
       if (kind === "no-clearance-enoent") {
         return head +
           "No clearance token for this session, and no supervisor examination has run yet. " +
@@ -222,14 +470,7 @@ process.stdin.on("end", () => {
       return false;
     }
 
-    let convLangPrefix = "";
-    try {
-      const { getConvLangInjection } = require(path.join(__dirname, "./lib/conv-lang.js"));
-      const injection = getConvLangInjection();
-      if (injection) convLangPrefix = injection + "\n";
-    } catch (e) { /* fail-open */ }
-
-    const reason = buildReason(computeIsWtEnd(), convLangPrefix, blockKind);
+    const reason = buildReason(computeIsWtEnd(), convLangPrefix(), blockKind);
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     process.exit(2);
   } catch (e) {

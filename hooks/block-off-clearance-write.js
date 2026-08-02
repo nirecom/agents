@@ -1,20 +1,43 @@
 #!/usr/bin/env node
-// PreToolUse hook: block direct writes to an OFF-clearance token
-// (<workflowDir>/<sid>.off-clearance), which only bin/request-off-clearance may
-// mint after a Phase1 examination (#1608).
+// PreToolUse hook: block direct writes to OFF-clearance state — the clearance
+// token (<workflowDir>/<sid>.off-clearance), which only bin/request-off-clearance
+// may mint after a Phase1 examination (#1608), and the session-override MARKERS
+// (<sid>.workflow-off / .worktree-off / .issue-close-verified / .next-step-paused
+// / .off-emergency-invoked), which hooks/lib/session-markers.js honours purely on
+// existence (#1780 H-1/H-2).
+//
+// WHY THE MARKER GATE LIVES HERE (#1780 H-1/H-2): marker integrity is a
+// LOCATION-INDEPENDENT property. hooks/enforce-worktree.js is a worktree-location
+// guard whose tail allows every write from a linked worktree on a feature branch
+// — the normal working mode — so its marker gate
+// (hooks/enforce-worktree/bash-write-scope/marker-gate.js) is inert exactly where
+// the work happens, and it never runs for Edit/Write at all when the target sits
+// outside a git repo (the workflow dir does). This hook is registered for
+// Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands and blocks
+// regardless of worktree, so it is the primary gate; marker-gate.js is kept as
+// defence in depth. Both read one protected-basename SSOT,
+// hooks/lib/protected-basenames.js (CPR-2).
 //
 // TRUST MODEL (accepted limitation): this is a BEST-EFFORT deterrent, not a hard
 // gate. Dynamic path construction (variable concatenation, base64, an alternate
 // interpreter) and edits to the examiner / codex / this hook itself are NOT
 // detectable here. The real gate is Phase2 human approval (settings.json `ask`,
 // which the model cannot self-approve) plus the audit trail.
+// READ side (#1709): the only sanctioned way to read a token is a plain shell
+// read (cat / Get-Content / ls); interpreter bodies are blocked by default and
+// pass only when they match one of the anchored read-only shapes.
 //
 // Fail-open: every error path approves rather than blocking.
+//
+// Dispatch + re-export only — analysis lives in ./block-off-clearance-write/
+// (file-split, rules/coding/file-split.md: the entrypoint exceeded the 500-line
+// HARD limit once the marker gate was added).
 "use strict";
-const path = require("path");
+
 const fs = require("fs");
-const { parse } = require("./lib/command-ir");
-const { collectWriteTargetsFromSegments, SHELL_CONFIG_VERB_SET } = require("./lib/bash-write-targets");
+const { evaluateProtectedWrite, TOKEN_BLOCK_MSG, MARKER_BLOCK_MSG, collectEditWritePaths } = require("./block-off-clearance-write/dispatch");
+const { bashHitsProtected } = require("./block-off-clearance-write/bash-scan");
+const { classifyProtectedPath, hitsProtectedPath } = require("./lib/protected-basenames");
 
 function readStdin() {
   const chunks = [];
@@ -32,76 +55,32 @@ function readStdin() {
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
-const BLOCK_MSG = [
-  "Direct write to an OFF-clearance token blocked.",
-  "Clearance tokens are minted only by the Phase1 examination:",
-  "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
-  "If the examiner itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
-].join("\n");
-
-// Basename match, intentionally directory-agnostic: the token directory varies by
-// CLAUDE_WORKFLOW_DIR, and a token written anywhere is still an attempt to forge one.
-const TOKEN_BASENAME_RE = /\.off-clearance(\.tmp)?$/;
-
-function hitsToken(filePath) {
-  if (!filePath || typeof filePath !== "string") return false;
-  return TOKEN_BASENAME_RE.test(path.basename(filePath.replace(/\\/g, "/")));
-}
-
-function bashHitsToken(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
+if (require.main === module) {
+  let input;
   try {
-    const ir = parse(cmd);
-    if (ir && !ir.parseFailure) {
-      const { targets } = collectWriteTargetsFromSegments(ir.segments, { verbs: SHELL_CONFIG_VERB_SET });
-      if (targets && targets.some(t => t && hitsToken(t.path))) return true;
-    }
-  } catch (_e) { /* fall through to the heuristic */ }
-  return hitsTokenViaInterpreter(cmd);
-}
-
-// vector2 heuristic (best-effort, deliberately incomplete): an interpreter
-// one-liner whose body mentions the clearance-token name. Only literal mentions
-// are caught; any constructed or encoded path escapes it by design.
-const INTERPRETER_RE = /\b(node|nodejs|python|python3|perl|ruby|deno|bun|pwsh|powershell)\b[^\n]*\s-(e|c|Command|command)\b/;
-
-function hitsTokenViaInterpreter(cmd) {
-  if (!INTERPRETER_RE.test(cmd)) return false;
-  return /off-clearance/.test(cmd);
-}
-
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (_e) {
-  approve();
-}
-if (!input || typeof input !== "object") approve();
-
-const toolName = input.tool_name;
-const toolInput = input.tool_input || {};
-
-let tokenHit = false;
-try {
-  switch (toolName) {
-    case "Edit":
-    case "Write":
-    case "MultiEdit":
-    case "editFiles":
-      tokenHit = hitsToken(toolInput.file_path);
-      break;
-    case "Bash":
-    case "runInTerminal":
-    case "runCommands":
-      tokenHit = bashHitsToken(toolInput.command);
-      break;
-    default:
-      break;
+    input = JSON.parse(readStdin());
+  } catch (_e) {
+    approve();
   }
-} catch (_e) {
-  approve(); // fail-open
+  if (!input || typeof input !== "object") approve();
+
+  let verdict = null;
+  try {
+    verdict = evaluateProtectedWrite(input.tool_name, input.tool_input || {});
+  } catch (_e) {
+    approve(); // fail-open
+  }
+
+  if (!verdict) approve();
+  block(verdict.reason);
 }
 
-if (!tokenHit) approve();
-
-block(BLOCK_MSG);
+module.exports = {
+  TOKEN_BLOCK_MSG,
+  MARKER_BLOCK_MSG,
+  collectEditWritePaths,
+  evaluateProtectedWrite,
+  bashHitsProtected,
+  classifyProtectedPath,
+  hitsProtectedPath,
+};

@@ -199,6 +199,33 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
+  escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
+  from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes
+  `<workflowDir>/<sid>.off-emergency-invoked`, any other prompt clears a stale one.
+  `workflow-mark/enforce-override-handlers/off-clearance.js` consumes and unlinks it when the
+  emergency sentinel fires, stamping the `escape_hatch_event` audit record and the override marker
+  with `provenance=user_skill_invocation` or `provenance=unattributed`. Evidence only, never a gate —
+  absence never blocks the override, and `unattributed` means "not provably user-invoked" (a user who
+  asks in prose rather than typing the slash command is under-attributed by design).
+  What `user_skill_invocation` asserts is bounded, and the marker payload is what bounds it
+  (`hooks/lib/off-emergency-provenance.js` is the shared writer/reader contract): the human typed a
+  slash command resolving to the `enforce-workflow-off` skill, within the freshness window, and that
+  skill covers the target being activated. It asserts nothing about the reason text, and nothing about
+  a target outside the set the marker names — the typed plugin namespace is deliberately not recorded,
+  since it is attacker-choosable prompt content, so the marker carries the resolved skill name instead.
+  Attribution is contingent on the marker being successfully CONSUMED: if the unlink fails, provenance
+  downgrades to `unattributed` and the audit record carries a `provenance_notes=` explanation, because
+  a marker that survives could otherwise vouch for several activations from one invocation. Every other
+  unverifiable case (stale, future-dated, corrupt, missing binding fields) downgrades the same way. The marker
+  basename is in the `hooks/lib/protected-basenames.js` protected set, so `block-off-clearance-write.js`
+  refuses `Edit`/`Write`/`MultiEdit`/`editFiles`/`NotebookEdit` calls naming it and refuses Bash write
+  targets that spell it — literally, via backslash escapes or intra-word quoting, via a glob, or via a
+  `$VAR` the same command line assigns. That is a best-effort deterrent, not proof of unforgeability:
+  the hook's TRUST MODEL comment enumerates what remains out of reach (dynamic path construction,
+  base64, alternate interpreters, edits to the hook itself). Nothing depends on it being airtight —
+  provenance is an audit signal, never a gate, so a forged marker grants no clearance; it only
+  mislabels the audit record. Fail-open: any error yields `{}`.
 - **Model-conditional prompt injection** — `hooks/lib/verbose-prompt.js` is the language-injection
   provider's sibling: a pure provider holding the single definition of a one-line procedure-hardening
   directive, injected only for models whose identifier matches `VERBOSE_PROMPT_MODELS`. Keeping the

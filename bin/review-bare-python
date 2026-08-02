@@ -47,6 +47,21 @@ EXCLUDED_FILES=(
   "tests/feature-enforce-system-ops.sh"
   "tests/fix-enforce-worktree-main-cleanup.sh"
   "tests/fix-992-bare-python.sh"
+  # enforce-protected-marker-write part files: `python3 -c ...` appears only as
+  # a hook-probe fixture string (table rows of the form label|expect|command,
+  # fed to the hook as JSON and never executed). The interpreter name IS the
+  # thing under test — the hook classifies on cmd0 — so rewriting these to
+  # `uv run python -c` would change the shape being probed.
+  "tests/enforce-protected-marker-write/cases-round6-identity.sh"
+  "tests/enforce-protected-marker-write/cases-round6-stdin.sh"
+  "tests/enforce-protected-marker-write/cases-round7-proof.sh"
+  "tests/enforce-protected-marker-write/cases-round8-operand.sh"
+  # #1780 round-12: same rationale as the round6-8 files above — `python3 -c
+  # ...` appears only as a table-row fixture string (label|expect|command,
+  # fed to the classifier under test as data), not an executed invocation.
+  # The interpreter name is the thing under test.
+  "tests/fix-1780-round12-classifier-attack-shapes.sh"
+  "tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh"
 )
 
 is_excluded() {

@@ -20,10 +20,10 @@ function extractFd(op) {
 // Build a SegmentIR from a segment string.
 // { cmd0, argv, redirects, kind, rawText, sub }
 // sub is set to true when this segment lives inside a subshell.
-function buildSegmentIR(segStr, isSubshell) {
+function buildSegmentIR(segStr, isSubshell, opts) {
   let richTokens;
   try {
-    richTokens = tokenizeSegmentWithQuotes(segStr);
+    richTokens = tokenizeSegmentWithQuotes(segStr, opts);
   } catch (e) {
     const seg = { cmd0: "", cmd0Raw: "", argv: [], argvRaw: [], redirects: [], kind: "simple", rawText: segStr };
     if (isSubshell) seg.sub = true;
@@ -100,7 +100,17 @@ function buildSegmentIR(segStr, isSubshell) {
  *
  * rawText is always set before any processing begins.
  */
-function parse(cmd) {
+// opts.preserveSubstitutionSpans (#1780 round-11 CAUSE-2, default OFF): keep
+// unquoted `$( … )` / `` ` … ` `` / `$(( … ))` / `${ … }` spans intact through
+// BOTH the segment split and the tokenizer, so a write target assembled inside a
+// substitution survives as one token. See the block comments in
+// ./command-parser.js and ./substitution-spans.js. Opt-in on purpose: this
+// parse is a SECOND, ADDITIVE reading, and the caller
+// (hooks/block-off-clearance-write/bash-scan/) merges its segments with the
+// ordinary ones rather than replacing them — the ordinary reading is what makes
+// substitution / subshell / process-substitution BODIES their own scanned
+// segments, and losing it would turn today's blocks into allows.
+function parse(cmd, opts) {
   const rawText = cmd;
 
   try {
@@ -116,9 +126,9 @@ function parse(cmd) {
     const trimmed = cmd.trim();
 
     const isSubshell = trimmed.startsWith("(");
-    const { segs: segStrings, seps } = splitSegmentsWithSeparators(cmd);
+    const { segs: segStrings, seps } = splitSegmentsWithSeparators(cmd, opts);
     const kind = isSubshell ? "subshell" : segStrings.length > 1 ? "pipeline" : "simple";
-    const segments = segStrings.map((s) => buildSegmentIR(s, isSubshell));
+    const segments = segStrings.map((s) => buildSegmentIR(s, isSubshell, opts));
 
     // Top-level IR comes from first segment
     const first = segments.length > 0 ? segments[0] : { cmd0: "", argv: [], redirects: [] };

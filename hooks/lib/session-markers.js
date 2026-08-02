@@ -146,10 +146,15 @@ function readOffClearance(sid) {
 }
 
 // evaluateOffClearance(token, target, reasonText): SSOT for OFF-clearance validity.
-// A token is valid iff it is unexpired, its target matches, and its category appears
-// inside the emitted sentinel reason (reason-binding, substring match).
+// A token is valid iff it is unexpired, its target matches, and the sentinel reason
+// STARTS WITH the granted category as a bracketed token — `[<category>] <free text>`
+// (#1625). A substring check let any reason that merely happened to contain the
+// category word pass; the bracketed prefix is the exact shape bin/request-off-clearance
+// instructs the caller to emit, so a structural match costs nothing and removes the
+// accidental-pass class entirely.
 // Fail-CLOSED on malformed expiry metadata: a missing, non-string, or unparseable
 // expires_at is treated as EXPIRED (a token that cannot prove it is live is not live).
+const REASON_CATEGORY_RE = /^\s*\[([A-Za-z0-9-]+)\]/;
 function evaluateOffClearance(token, target, reasonText) {
   if (!token || typeof token !== "object") return false;
   if (typeof token.expires_at !== "string") return false;
@@ -158,7 +163,9 @@ function evaluateOffClearance(token, target, reasonText) {
   if (typeof token.target !== "string" || token.target !== target) return false;
   if (typeof token.category !== "string" || token.category.length === 0) return false;
   if (typeof reasonText !== "string") return false;
-  return reasonText.includes(token.category);
+  const m = REASON_CATEGORY_RE.exec(reasonText);
+  if (!m) return false;
+  return m[1] === token.category;
 }
 
 // isOffClearanceValid(sid, target, reasonText): true iff a readable token for sid
