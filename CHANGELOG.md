@@ -220,3 +220,7 @@ Changes: `select-tests.sh --auto` and `/run-tests` no longer silently skip all t
 ### FEATURE: PR #1854 (2026-08-02)
 Background: feat(#1849): add preuse-auto-approve hook for Monitor and EnterWorktree
 Changes: Monitor and EnterWorktree tool calls no longer pause for a confirmation dialog during normal workflow execution. Set `AUTO_APPROVE_TOOLS=off` in `.env` to restore the previous prompt behavior instantly.
+
+### FEATURE: PR #1853 (2026-08-02)
+Background: feat(#1642): single-authority prompt-extraction CLI + blocking gate wiring
+Changes: **New**: `bin/check-prompt-extraction` — single-authority CLI for §1.5 code-fence and §1.3 inline-procedure violations; wired as workflow-gate Gate 3 (blocking) and pre-commit backstop; existing violations frozen in `.prompt-extraction-allowlist` ratchet;**Changed**: `bin/check-inline-procedures` converted to advisory adapter (always exits 0, delegates to new engine)
