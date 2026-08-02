@@ -182,40 +182,14 @@ fi
 
 # Structured parse (never regex-scraping): take the LAST complete JSON object in
 # stdout and read .verdict / .reason from it. Unparseable output → empty verdict → REJECT.
+#
+# The extractor lives in bin/lib/last-json-object.js so that this examiner and the
+# issue-verdict reviewer read codex output through the SAME parser (CPR-2). Contract is
+# unchanged: tab-separated verdict/reason of the last object, exit 1 when there is none.
+LJO="$AGENTS_CONFIG_DIR/bin/lib/last-json-object.js"
+if command -v cygpath >/dev/null 2>&1; then LJO="$(cygpath -m "$LJO")"; fi
 set +e
-PARSED="$(CODEX_STDOUT="$CODEX_OUT" node -e '
-"use strict";
-const s = process.env.CODEX_STDOUT || "";
-const objs = [];
-for (let i = 0; i < s.length; i++) {
-  if (s[i] !== "{") continue;
-  let depth = 0, inStr = false, esc = false;
-  for (let j = i; j < s.length; j++) {
-    const c = s[j];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === "\"") inStr = false;
-      continue;
-    }
-    if (c === "\"") { inStr = true; continue; }
-    if (c === "{") { depth++; continue; }
-    if (c !== "}") continue;
-    depth--;
-    if (depth !== 0) continue;
-    try {
-      const o = JSON.parse(s.slice(i, j + 1));
-      if (o && typeof o === "object" && !Array.isArray(o)) objs.push(o);
-    } catch (_e) { /* not JSON — skip */ }
-    i = j;
-    break;
-  }
-}
-if (objs.length === 0) process.exit(1);
-const last = objs[objs.length - 1];
-const flat = (v) => (typeof v === "string" ? v.replace(/[\t\r\n]+/g, " ").trim() : "");
-process.stdout.write(flat(last.verdict) + "\t" + flat(last.reason));
-' 2>/dev/null)"
+PARSED="$(printf '%s' "$CODEX_OUT" | node "$LJO" --fields verdict,reason 2>/dev/null)"
 PARSE_RC=$?
 set -e
 

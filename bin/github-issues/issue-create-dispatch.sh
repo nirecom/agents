@@ -7,7 +7,7 @@
 #
 # Verdicts:
 #   none         (no extra flags)            New issue with no relation
-#   reopen       --target N                  Reopen #N; no new issue created
+#   reopen       --target N [--note TEXT]    Reopen #N; no new issue created
 #   sub-of       --parent N                  New issue, attached as sub-issue of #N
 #   make-parent  --children N,M,...          New issue becomes parent of comma-separated children
 #   sibling      --related N,M,...           New issue with "Related to #N" appended to body
@@ -27,6 +27,10 @@ PARENT=""
 CHILDREN=""
 RELATED=""
 MANIFEST=""
+# --note is meaningful for `reopen` only: it explains why an already-closed issue is
+# coming back. It is deliberately NOT forwarded to any create branch — an explanation
+# for a decision that was never made has no place on a freshly created issue.
+NOTE=""
 PASSTHROUGH=()
 
 usage() {
@@ -66,6 +70,11 @@ while [ $# -gt 0 ]; do
         --children)  CHILDREN="${2:?--children requires value}"; shift 2 ;;
         --related)   RELATED="${2:?--related requires value}";  shift 2 ;;
         --manifest)  MANIFEST="${2:?--manifest requires value}"; shift 2 ;;
+        # `${2:?}` is wrong here: an empty note is a legitimate value (the upstream
+        # review reason can be empty), so only a MISSING operand is a usage error.
+        --note)
+            [ $# -ge 2 ] || { echo "Error: --note requires value" >&2; exit 2; }
+            NOTE="$2"; shift 2 ;;
         --)          shift; PASSTHROUGH=("$@"); break ;;
         -h|--help)   usage ;;
         *) echo "Error: unknown argument before --: $1" >&2; exit 2 ;;
@@ -185,7 +194,11 @@ case "$VERDICT" in
 
     reopen)
         [ -n "$TARGET" ] || { echo "Error: --target required for --verdict reopen" >&2; exit 2; }
-        bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
+        if [ -n "$NOTE" ]; then
+            bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET" "$NOTE"
+        else
+            bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
+        fi
         slug="$(get_repo_slug)"
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;

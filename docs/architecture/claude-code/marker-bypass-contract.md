@@ -37,7 +37,7 @@ exceptions independently.
 | `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
 | `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
 | `hooks/block-shell-config.js` | PreToolUse | **No** | **No** |
-| `hooks/block-off-clearance-write.js` | PreToolUse | **No** | **No** |
+| `hooks/block-clearance-token-write.js` | PreToolUse | **No** | **No** |
 | `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
 | `hooks/gate-plan-skip-sentinel.js` | PreToolUse | **No** | **No** |
 | `hooks/check-cross-platform.js` | PreToolUse | **No** | **No** |

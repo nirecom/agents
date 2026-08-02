@@ -220,6 +220,17 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- **Outbound content and the verdict review** — the verdict review runs on **every**
+  `/issue-create` candidate; there is no on/off toggle, and the only condition that skips it
+  is `codex` being absent from `PATH`. It sends the proposed issue text AND the bodies of the
+  surveyed candidate issues to codex. Server-side web search (`-c tools.web_search=true`) is
+  opt-in via `ISSUE_VERDICT_WEB_SEARCH` (default off); when enabled, model-composed queries
+  derived from that text also reach an external search engine. That second hop is bounded by
+  prompt constraint only — the prompt forbids repository names, URLs, issue numbers,
+  organization names and other identifying tokens in queries, and requires symptoms to be
+  paraphrased generically — which is not mechanically enforceable. The reverse direction
+  (codex output reaching GitHub) is scanned by `gh_outbound_guard` before any comment is
+  posted, and a web-search hit alone may never justify suppressing a filing.
 - **Model-conditional prompt injection** — `hooks/lib/verbose-prompt.js` is the language-injection
   provider's sibling: a pure provider holding the single definition of a one-line procedure-hardening
   directive, injected only for models whose identifier matches `VERBOSE_PROMPT_MODELS`. Keeping the

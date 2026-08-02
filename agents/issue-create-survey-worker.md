@@ -30,18 +30,16 @@ Receive a JSON object with:
 
 3. Deduplicate candidates across passes; inspect up to 25 unique candidates via `gh issue view <N> --json number,title,body,state,labels`.
 
-4. Apply IC-4 rubric (semantic judgement):
-   - IC-4a. Symptom match (high weight): same observable failure/behavior + same scope → `reopen`.
-   - IC-4b. Scope overlap (high weight): no overlap → at most `sibling`.
-   - IC-4c. Age is tie-break only: do not discard based on age.
-   - IC-4d. Tie-break order: closed > open; more recent > older; lower number > higher.
-   - IC-4e. No match on both IC-4a and IC-4b → `none`.
+4. Run `bash "$agents_config_dir/bin/github-issues/candidate-relations.sh" <owner/repo> <N,M,...>` once; keep its stdout array and its exit code (0 → `batched`, 3 → `partial`, 4 → `unavailable`).
 
-   Verdict classes: `none` | `reopen` | `sub-of` | `make-parent` | `sibling`.
+5. Read `$agents_config_dir/skills/_shared/issue-verdict-cascade.md` and decide with the ordered cascade defined there.
+   Order: IC-C1, IC-C2, IC-C3, IC-C4 — first match wins. Never restate the rules here.
 
-5. Write verdict JSON to `$artifact_dir/<session_id or timestamp>-issue-create-survey.json`:
-   `{ "verdict": "none|reopen|sub-of|make-parent|sibling", "target": null_or_integer, "reason": "<one sentence>", "candidates": [ { "number": N, "title": "...", "state": "open|closed" } ] }`
-   `target` is the issue number for non-none verdicts; `null` for `none`. `candidates` lists all issues inspected (up to 25).
+6. Write verdict JSON (schema v2) to `$artifact_dir/<session_id or timestamp>-issue-create-survey.json`. Every key below is always present — never omit a key, write the default instead (`target`: `null`; `children` / `related` / `relation_errors`: `[]`).
+   `{ "schema_version": 2, "proposal": { "title": "...", "background": "...", "changes": "..." }, "verdict": "none|reopen|sub-of|make-parent|sibling", "target": null_or_integer, "children": [], "related": [], "reason": "<one sentence>", "relations_mode": "batched|partial|unavailable", "relation_errors": [], "candidates": [ { "number": N, "title": "...", "state": "open|closed", "labels": [], "body": "...", "relation_status": "resolved|unresolved", "parent_number": null_or_integer, "parent_is_meta": false, "has_sub_issues": false } ] }`
+   `proposal` carries the Input contract values verbatim. `target` is a candidate number, or a candidate's parent number for IC-C2. `relation_errors` lists the unresolved candidate numbers. `candidates` lists all issues inspected (up to 25) merged with the relation array from step 4.
+
+7. Immediately restrict the file to its owner: `chmod 600 <artifact_path>` (failure is non-fatal). It holds full issue bodies from a possibly private repo, in a directory shared by every session.
 
 ## Rules
 

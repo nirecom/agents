@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// PreToolUse hook: block direct writes to an OFF-clearance token
-// (<workflowDir>/<sid>.off-clearance), which only bin/request-off-clearance may
-// mint after a Phase1 examination (#1608).
+// PreToolUse hook: block direct writes to — and deletions of — any CLEARANCE TOKEN,
+// the class of session-scoped files that decide what the pipeline believes about
+// user authorization (#1608). Only their owning minters may create them:
+//   .off-clearance             bin/request-off-clearance (after a Phase1 examination)
+//
+// DELETE is guarded as strictly as overwrite: removing a clearance token re-arms it.
 //
 // TRUST MODEL (accepted limitation): this is a BEST-EFFORT deterrent, not a hard
 // gate. Dynamic path construction (variable concatenation, base64, an alternate
@@ -33,23 +36,47 @@ function approve() { console.log(JSON.stringify({ decision: "approve" })); proce
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
 const BLOCK_MSG = [
-  "Direct write to an OFF-clearance token blocked.",
-  "Clearance tokens are minted only by the Phase1 examination:",
-  "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
-  "If the examiner itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
+  "Direct write to (or deletion of) a clearance token blocked.",
+  "Clearance tokens are minted only by their owning tool — never by hand:",
+  "  .off-clearance             bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
+  "If the minter itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
 ].join("\n");
+
+// The clearance-token class (CPR-4). Adding a suffix here extends the guard to a new
+// token in one place — the class, not one member, is what is protected.
+const CLEARANCE_SUFFIXES = [
+  "off-clearance",
+];
 
 // Basename match, intentionally directory-agnostic: the token directory varies by
 // CLAUDE_WORKFLOW_DIR, and a token written anywhere is still an attempt to forge one.
-const TOKEN_BASENAME_RE = /\.off-clearance(\.tmp)?$/;
+// `.tmp` is included because the atomic-write staging path is renamed onto the token.
+// The `$` anchor is what keeps neighbours writable: `off-clearance-notes.md` and
+// `docs/off-clearance.md` are documents, not tokens, and must not be caught.
+const TOKEN_BASENAME_RE = new RegExp("\\.(" + CLEARANCE_SUFFIXES.join("|") + ")(\\.tmp)?$");
 
 function hitsToken(filePath) {
   if (!filePath || typeof filePath !== "string") return false;
   return TOKEN_BASENAME_RE.test(path.basename(filePath.replace(/\\/g, "/")));
 }
 
+// A lexical sweep of every word in the command. The command-IR below only reports the
+// WRITE targets of verbs it models; deletion, truncation, in-place edits, `command`/`env`
+// prefixes, subshells and heredocs all reach the token without ever being a "write
+// target". Whatever the route, a literally-spelled token path still appears as a word,
+// so the word list is the route-independent observation.
+const WORD_SPLIT_RE = /[\s;&|()<>"'`=,{}]+/;
+
+function commandMentionsToken(cmd) {
+  for (const word of cmd.split(WORD_SPLIT_RE)) {
+    if (word && hitsToken(word)) return true;
+  }
+  return false;
+}
+
 function bashHitsToken(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
+  if (commandMentionsToken(cmd)) return true;
   try {
     const ir = parse(cmd);
     if (ir && !ir.parseFailure) {
@@ -61,13 +88,14 @@ function bashHitsToken(cmd) {
 }
 
 // vector2 heuristic (best-effort, deliberately incomplete): an interpreter
-// one-liner whose body mentions the clearance-token name. Only literal mentions
+// one-liner whose body mentions a clearance-token name. Only literal mentions
 // are caught; any constructed or encoded path escapes it by design.
 const INTERPRETER_RE = /\b(node|nodejs|python|python3|perl|ruby|deno|bun|pwsh|powershell)\b[^\n]*\s-(e|c|Command|command)\b/;
+const INTERPRETER_BODY_RE = /(off-clearance)/;
 
 function hitsTokenViaInterpreter(cmd) {
   if (!INTERPRETER_RE.test(cmd)) return false;
-  return /off-clearance/.test(cmd);
+  return INTERPRETER_BODY_RE.test(cmd);
 }
 
 let input;

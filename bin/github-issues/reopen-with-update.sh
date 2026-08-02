@@ -1,20 +1,28 @@
 #!/bin/bash
-# reopen-with-update.sh <ISSUE_NUMBER>
+# reopen-with-update.sh <ISSUE_NUMBER> [NOTE]
 #
 # Idempotent 3-point reopen flow for /issue-create reopen verdict:
 #   1. gh issue reopen (fatal if fails)
 #   2. body banner refresh  (WARN+continue on fail)
 #   3. reopen-log comment PATCH or create  (WARN+continue on fail)
 #   4. status:regressed label  (WARN+continue on fail)
+#
+# NOTE (optional, #1761) records WHY the reopen happened when the verdict came from
+# the codex verdict review rather than the survey alone. It is externally authored
+# free text, so it is treated exactly like the issue body already is (CPR-5): reduced
+# to one sanitized line and scanned by gh_outbound_guard before it can ride out on a
+# comment. A blocked note is DROPPED, never fatal — the reopen itself was already
+# decided, and losing the explanation must not leave the issue closed.
 
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-    echo "Error: usage: reopen-with-update.sh <ISSUE_NUMBER>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+    echo "Error: usage: reopen-with-update.sh <ISSUE_NUMBER> [NOTE]" >&2
     exit 2
 fi
 
 ISSUE_NUMBER="$1"
+NOTE_RAW="${2:-}"
 
 # M3: anchored digits-only guard — FIRST EXECUTABLE STATEMENT
 if ! printf '%s' "$ISSUE_NUMBER" | grep -qE '^[0-9]+$'; then
@@ -30,7 +38,44 @@ fi
 # M4: temp file setup (early, before any operation)
 BODY_TMPFILE="$(mktemp)"
 chmod 600 "$BODY_TMPFILE"
-trap 'rm -f "$BODY_TMPFILE"' EXIT
+NOTE_TMPFILE="$(mktemp)"
+chmod 600 "$NOTE_TMPFILE"
+trap 'rm -f "$BODY_TMPFILE" "$NOTE_TMPFILE"' EXIT
+
+# Outbound scan guard library — sourced once, used by both the note (below) and the
+# composed body (Step 2).
+# shellcheck source=../lib/gh-outbound-guard.sh
+. "$(dirname "$0")/../lib/gh-outbound-guard.sh"
+
+# --- note sanitization ------------------------------------------------------
+# Only the FIRST physical line survives. Joining the lines instead would keep every
+# later line's content in the comment while merely hiding the line break, which is the
+# opposite of what a one-line log entry is for. HTML comment markers are removed
+# because the entry is appended inside a marker-delimited comment body, where a stray
+# `<!--` / `-->` would open or close a marker that is not the note's to touch.
+NOTE=""
+if [[ -n "$NOTE_RAW" ]]; then
+    NOTE="${NOTE_RAW%%$'\n'*}"
+    NOTE="${NOTE//$'\r'/ }"
+    NOTE="${NOTE//$'\t'/ }"
+    # Removing a marker can SPELL one: `<!<!---->>` loses its inner pair and the
+    # remainder closes up into `<!-->`. One pass is therefore not enough — repeat
+    # until the text stops changing. Each pass strictly shortens it, so it ends.
+    while [[ "$NOTE" == *"<!--"* || "$NOTE" == *"-->"* ]]; do
+        NOTE="${NOTE//<!--/}"
+        NOTE="${NOTE//-->/}"
+    done
+    NOTE="$(printf '%s' "$NOTE" | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    NOTE="${NOTE:0:120}"
+fi
+
+if [[ -n "$NOTE" ]]; then
+    printf '%s\n' "$NOTE" > "$NOTE_TMPFILE"
+    if ! gh_outbound_guard "reopen-comment:#$ISSUE_NUMBER" < "$NOTE_TMPFILE"; then
+        echo "WARN: reopen note dropped for #${ISSUE_NUMBER} — outbound scan blocked it" >&2
+        NOTE=""
+    fi
+fi
 
 # M2: Determine and validate REPO_SLUG
 REPO_SLUG="$(MSYS_NO_PATHCONV=1 gh repo view --json nameWithOwner --jq .nameWithOwner | tr -d '\r')"
@@ -94,8 +139,6 @@ printf '%s' "$NEW_BODY" > "$BODY_TMPFILE"
 # Outbound scan guard (#1591) on the composed body, reusing the existing tempfile.
 # FATAL (exit 1), unlike the WARN+continue pattern used for the banner refresh
 # below: this is a security boundary, not a best-effort cosmetic update.
-# shellcheck source=../lib/gh-outbound-guard.sh
-. "$(dirname "$0")/../lib/gh-outbound-guard.sh"
 gh_outbound_guard "reopen:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
 
 if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$ISSUE_NUMBER" --body-file "$BODY_TMPFILE" >/dev/null 2>&1; then
@@ -121,6 +164,9 @@ if [ -n "$COMMENT_ID" ] && ! printf '%s' "$COMMENT_ID" | grep -qE '^[0-9]+$'; th
 fi
 
 LOG_ENTRY="- (count ${REOPEN_COUNT}) ${DATETIME} — session: ${SESSION_HASH}"
+if [[ -n "$NOTE" ]]; then
+    LOG_ENTRY="${LOG_ENTRY} — ${NOTE}"
+fi
 
 if [ -n "$COMMENT_ID" ]; then
     # Fetch existing comment body and append log entry
