@@ -110,6 +110,34 @@ run_workflow_mark() {
     return $rc
 }
 
+# run_workflow_mark_isolated <stdin-json> <workflow-dir> [extra env var ...]
+# Same contract as run_workflow_mark, but used where the test needs to prove
+# that NO fallback tier in resolveSessionId() can resolve a usable session id
+# (see rules/test/fixture-isolation.md "Unset inherited session IDs" / "Neutral
+# CWD"). Plain run_workflow_mark only unsets CLAUDE_ENV_FILE and runs from the
+# repo's own working directory — inside a live Claude Code session (or any
+# worktree carrying a WORKTREE_NOTES.md `Session-ID:` line) that leaves THREE
+# fallback tiers live: the CLAUDE_CODE_SESSION_ID / CLAUDE_SESSION_ID env vars
+# (tiers 2 and 4 in hooks/workflow-state/session-id.js resolveSessionId()) and
+# the own-worktree WORKTREE_NOTES.md scan (tier 6), any of which can resolve
+# the REAL ambient session id and mask the "no session id resolvable" case
+# under test. This variant additionally unsets both session-id env vars and
+# runs node from a neutral temp directory outside any git worktree, so tiers
+# 2, 4, 6, 6b, 6c and 7 (JSONL transcript mtime scan) all fail to resolve —
+# only tier 1 (the session_id supplied in the payload itself) remains live.
+run_workflow_mark_isolated() {
+    local payload="$1"; shift
+    local wfdir="$1"; shift
+    local rc=0
+    MARK_OUT="$(cd "$TMPDIR_BASE" && printf '%s' "$payload" | run_with_timeout 30 \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "$@" \
+        node "$MARK_JS" 2>&1)" || rc=$?
+    return $rc
+}
+
 # JSON-safely pack a string as a JSON-encoded literal (via node).
 json_quote() {
     node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$1"
@@ -723,6 +751,27 @@ count_workflow_off_files() {
     find "$parent" -maxdepth 3 -name '*.workflow-off' 2>/dev/null | wc -l | tr -d ' '
 }
 
+# Assert that no *.workflow-off file under `root` (searched the same way as
+# count_workflow_off_files, i.e. including the parent dir for traversal
+# escapes) carries a filename derived from `needle` (the malicious/malformed
+# session id under test). Echoes 1 (found — bad) or 0 (clean) on stdout.
+grep_marker_names_for_needle() {
+    local root="$1" needle="$2"
+    local parent; parent="$(dirname "$root")"
+    find "$parent" -maxdepth 3 -name '*.workflow-off' 2>/dev/null \
+        | grep -F -- "$needle" | wc -l | tr -d ' '
+}
+
+# SEC1 contract (post-#1794 resolveSessionId change, see hooks/workflow-state/session-id.js):
+# a tier-1-invalid session_id (e.g. path traversal) is no longer forced into a
+# hard-block at the point of resolution — resolveSessionId() rejects it at
+# tier 1 and falls through to later fallback tiers. Only if NO tier resolves a
+# usable id does workflow-mark.js hard-block. This test uses
+# run_workflow_mark_isolated so that no fallback tier CAN resolve an id,
+# reproducing the same "no session_id resolvable" outcome as test_A5 — see
+# that test for the reference rc/message contract. The invariant this test
+# actually protects is: the malicious string must never appear in a marker
+# filename, anywhere (including a parent-directory escape), regardless of rc.
 test_SEC1_path_traversal_rejected() {
     require_mark_js "SEC1" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
@@ -730,20 +779,36 @@ test_SEC1_path_traversal_rejected() {
     before_count="$(count_workflow_off_files "$wfdir")"
     local payload; payload="$(build_mark_payload "../evil" 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: SEC1 traversal>>"' 0)"
     local rc=0
-    run_workflow_mark "$payload" "$wfdir" || rc=$?
+    run_workflow_mark_isolated "$payload" "$wfdir" || rc=$?
     after_count="$(count_workflow_off_files "$wfdir")"
-    # Hard-block (exit 2) is required for invalid session IDs (#461).
+    # No fallback tier can resolve an id (isolated env+cwd) → same outcome as
+    # test_A5_no_session_id_hard_blocks: hard-block rc=2, diagnostic mentions
+    # session/resolve, no marker written at all.
     if [ "$rc" -ne 2 ]; then
-        fail "SEC1: expected hard-block rc=2 for traversal session ID, got rc=$rc (out: $MARK_OUT)"
+        fail "SEC1: expected the same 'no session_id resolvable' hard-block (rc=2) as A5, got rc=$rc (out: $MARK_OUT)"
         return
     fi
     if [ "$after_count" != "$before_count" ]; then
         fail "SEC1: traversal session ID produced a marker file (count $before_count -> $after_count, out: $MARK_OUT)"
         return
     fi
-    pass "SEC1: ../evil session ID hard-blocked (rc=2) — no marker"
+    if [ "$(grep_marker_names_for_needle "$wfdir" "evil")" != "0" ]; then
+        fail "SEC1: '../evil' string leaked into a marker filename (out: $MARK_OUT)"
+        return
+    fi
+    if ! echo "$MARK_OUT" | grep -qiE "session(_id)?|resolve"; then
+        fail "SEC1: stderr missing 'session'/'resolve' diagnostic (out: $MARK_OUT)"
+        return
+    fi
+    pass "SEC1: ../evil session ID never reaches a marker filename — resolves to A5's no-session-id hard-block (rc=2)"
 }
 
+# SEC2 contract: same reasoning as SEC1 above, applied to a set of shell-
+# metacharacter / malformed session ids. With run_workflow_mark_isolated, none
+# of them can be resolved by any fallback tier, so each reproduces A5's "no
+# session_id resolvable" hard-block (rc=2). The invariant under test is that
+# none of these strings ever appear in a written marker filename and the hook
+# never crashes.
 test_SEC2_shell_metachars_rejected() {
     require_mark_js "SEC2" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
@@ -755,11 +820,12 @@ test_SEC2_shell_metachars_rejected() {
         before_count="$(count_workflow_off_files "$wfdir")"
         local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: SEC2 metachars>>"' 0)"
         rc=0
-        run_workflow_mark "$payload" "$wfdir" || rc=$?
+        run_workflow_mark_isolated "$payload" "$wfdir" || rc=$?
         after_count="$(count_workflow_off_files "$wfdir")"
-        # Hard-block (exit 2) is required for invalid session IDs (#461).
+        # Same "no session_id resolvable" outcome as A5 (isolated: no fallback
+        # tier can resolve an id) — hard-block rc=2.
         if [ "$rc" -ne 2 ]; then
-            fail "SEC2: expected hard-block rc=2 for session ID '$sid', got rc=$rc (out: $MARK_OUT)"
+            fail "SEC2: expected the same 'no session_id resolvable' hard-block (rc=2) as A5 for session ID '$sid', got rc=$rc (out: $MARK_OUT)"
             any_failure=1
             continue
         fi
@@ -769,7 +835,7 @@ test_SEC2_shell_metachars_rejected() {
         fi
     done
     if [ "$any_failure" = "0" ]; then
-        pass "SEC2: all shell-metachar session IDs rejected — no markers, no crashes"
+        pass "SEC2: all shell-metachar session IDs never reach a marker filename — resolve to A5's no-session-id hard-block (rc=2), no crashes"
     fi
 }
 

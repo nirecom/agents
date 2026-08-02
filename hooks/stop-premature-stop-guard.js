@@ -24,7 +24,10 @@ const C4_EXEMPTIONS = [
   { id: "next-step-paused",  phase: "session", test: (c, d) => d.isNextStepPaused(c.sid) },
   { id: "pre-workflow-init", phase: "session", test: (c, d) => !d.isWorkflowStarted(c.sid) },
   { id: "background-work",   phase: "session", test: (c, d) => d.isBackgroundWorkInFlight(c.sid) },
-  // Step 5 adds awaiting-user here.
+  // Only exemption row with a side effect: consumes the marker the moment it
+  // decides the exemption applies (single-turn declaration, #1685).
+  { id: "awaiting-user",     phase: "session",
+    test: (c, d) => { if (!d.isAwaitingUser(c.sid)) return false; d.consumeAwaitingUser(c.sid); return true; } },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
 ];
@@ -35,9 +38,13 @@ const C4_EXEMPTIONS = [
 // require.main block's try/catch) — same handling as any other dependency
 // load failure.
 function buildExemptionDeps() {
-  const { isWorkflowOff, isNextStepPaused, isBackgroundWorkInFlight } = require("./lib/session-markers");
+  const { isWorkflowOff, isNextStepPaused, isBackgroundWorkInFlight, isAwaitingUser, consumeAwaitingUser } =
+    require("./lib/session-markers");
   const { isWorkflowStarted } = require("./workflow-state");
-  return { isWorkflowOff, isNextStepPaused, isWorkflowStarted, isBackgroundWorkInFlight };
+  return {
+    isWorkflowOff, isNextStepPaused, isWorkflowStarted, isBackgroundWorkInFlight,
+    isAwaitingUser, consumeAwaitingUser,
+  };
 }
 
 // An exemption holds only when it can be actively proven. A predicate that

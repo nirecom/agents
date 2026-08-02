@@ -112,6 +112,17 @@ const BACKGROUND_WORK_END_RE_DQ =
   /^echo "<<WORKFLOW_BACKGROUND_WORK_END: ([^>]+)>>"$/;
 const BACKGROUND_WORK_END_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_BACKGROUND_WORK_END([: ].*)?>>"$/;
+// AWAITING_USER/END (#1685): declares "ending this turn awaiting a user answer"
+// so C4 stays quiet. No TTL — consumed on the next Stop (consume-on-read).
+// Reason mandatory.
+const AWAITING_USER_RE_DQ =
+  /^echo "<<WORKFLOW_AWAITING_USER: ([^>]+)>>"$/;
+const AWAITING_USER_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_AWAITING_USER([: ].*)?>>"$/;
+const AWAITING_USER_END_RE_DQ =
+  /^echo "<<WORKFLOW_AWAITING_USER_END: ([^>]+)>>"$/;
+const AWAITING_USER_END_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_AWAITING_USER_END([: ].*)?>>"$/;
 
 // CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
 // make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
@@ -200,6 +211,10 @@ function isSentinel(cmd) {
     BACKGROUND_WORK_START_LOOKSLIKE_RE.test(cmd) ||
     BACKGROUND_WORK_END_RE_DQ.test(cmd) ||
     BACKGROUND_WORK_END_LOOKSLIKE_RE.test(cmd) ||
+    AWAITING_USER_RE_DQ.test(cmd) ||
+    AWAITING_USER_LOOKSLIKE_RE.test(cmd) ||
+    AWAITING_USER_END_RE_DQ.test(cmd) ||
+    AWAITING_USER_END_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
@@ -247,6 +262,8 @@ function isStrictSentinel(cmd) {
     NEXT_STEP_RESUME_RE_DQ.test(cmd) ||
     BACKGROUND_WORK_START_RE_DQ.test(cmd) ||
     BACKGROUND_WORK_END_RE_DQ.test(cmd) ||
+    AWAITING_USER_RE_DQ.test(cmd) ||
+    AWAITING_USER_END_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
@@ -326,6 +343,8 @@ module.exports = {
   NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
   BACKGROUND_WORK_START_RE_DQ, BACKGROUND_WORK_START_LOOKSLIKE_RE,
   BACKGROUND_WORK_END_RE_DQ, BACKGROUND_WORK_END_LOOKSLIKE_RE,
+  AWAITING_USER_RE_DQ, AWAITING_USER_LOOKSLIKE_RE,
+  AWAITING_USER_END_RE_DQ, AWAITING_USER_END_LOOKSLIKE_RE,
   CONFIRM_INTENT_RE_DQ, CONFIRM_INTENT_LOOKSLIKE_RE,
   CONFIRM_OUTLINE_RE_DQ, CONFIRM_OUTLINE_LOOKSLIKE_RE,
   CONFIRM_DETAIL_RE_DQ, CONFIRM_DETAIL_LOOKSLIKE_RE,

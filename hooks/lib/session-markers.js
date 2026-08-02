@@ -208,6 +208,53 @@ function backgroundWorkNoticeText(hookName, sid) {
   );
 }
 
+// isAwaitingUser(sid): true iff <workflowDir>/<sid>.awaiting-user exists.
+// No TTL — this is a single-turn declaration consumed by consumeAwaitingUser()
+// on the next Stop, not a duration-bound override. Fail-closed: any error → false.
+function isAwaitingUser(sid) {
+  try {
+    if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
+    const markerPath = path.join(getWorkflowDir(), sid + ".awaiting-user");
+    return fs.existsSync(markerPath);
+  } catch (_e) {
+    return false;
+  }
+}
+
+// consumeAwaitingUser(sid): best-effort delete of the .awaiting-user marker
+// (consume-on-read, same pattern as hooks/lib/turn-marker.js's
+// readAndDeleteTurnMarkers). Placed here rather than in a write-only module
+// because it is the sole deletion function among this file's marker readers —
+// the "awaiting user" fact is single-turn, so C4 must consume it the moment it
+// acts on it, not merely read it. Never throws: ENOENT and any other error are
+// both swallowed, since a failed cleanup must not block the Stop hook.
+function consumeAwaitingUser(sid) {
+  try {
+    if (typeof sid !== "string" || !SID_RE.test(sid)) return;
+    const markerPath = path.join(getWorkflowDir(), sid + ".awaiting-user");
+    fs.unlinkSync(markerPath);
+  } catch (_e) {
+    // best-effort: ENOENT (already consumed/absent) and any other I/O error are ignored.
+  }
+}
+
+// awaitingUserNoticeText(hookName, sid): human-readable string about the
+// awaiting-user marker. NEVER throws.
+function awaitingUserNoticeText(hookName, sid) {
+  let markerPath;
+  try {
+    const dir = getWorkflowDir();
+    markerPath = path.join(dir, sid + ".awaiting-user");
+  } catch (e) {
+    markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
+  }
+  return (
+    "[" + hookName + "] awaiting user input for this session (sid=" + sid + "). " +
+    "Marker: " + markerPath + ". Consumed automatically on the next Stop. " +
+    "Cancel with: echo \"<<WORKFLOW_AWAITING_USER_END: {reason}>>\""
+  );
+}
+
 module.exports = {
   isWorkflowOff,
   isNextStepPaused,
@@ -222,4 +269,7 @@ module.exports = {
   issueCloseVerifiedNoticeText,
   isBackgroundWorkInFlight,
   backgroundWorkNoticeText,
+  isAwaitingUser,
+  consumeAwaitingUser,
+  awaitingUserNoticeText,
 };
