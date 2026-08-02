@@ -55,6 +55,7 @@ setup_repo() {
     mkdir -p "$repo/install/win" "$repo/install/linux" "$repo/install/qnap"
     mkdir -p "$repo/src"
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"

@@ -19,6 +19,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+_SCRIPT_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -40,7 +41,25 @@ fs.mkdirSync(d,{recursive:true});
 console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+NEUTRAL_CWD=""
+trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE" "$NEUTRAL_CWD"' EXIT
+
+# --- Fixture isolation (see rules/test/fixture-isolation.md) ---------------
+# WORKFLOW_PLANS_DIR is pinned everywhere CLAUDE_WORKFLOW_DIR is pinned, so
+# supervisor-emit never resolves the developer's real ~/.workflow-plans/.
+FIXTURE_PLANS_DIR="$TMPDIR_BASE/fixture-plans"
+FIXTURE_PROJECT_DIR="$TMPDIR_BASE/fixture-project"
+mkdir -p "$FIXTURE_PLANS_DIR" "$FIXTURE_PROJECT_DIR"
+git -C "$FIXTURE_PROJECT_DIR" init -q -b main 2>/dev/null || true
+git -C "$FIXTURE_PROJECT_DIR" config core.hooksPath /dev/null 2>/dev/null || true
+if command -v cygpath >/dev/null 2>&1; then
+    FIXTURE_PLANS_DIR="$(cygpath -m "$FIXTURE_PLANS_DIR")"
+    FIXTURE_PROJECT_DIR="$(cygpath -m "$FIXTURE_PROJECT_DIR")"
+fi
+export CLAUDE_PROJECT_DIR="$FIXTURE_PROJECT_DIR"
+
+NEUTRAL_CWD="$(mktemp -d)"
+cd "$NEUTRAL_CWD" || exit 1
 
 # Portable timeout: prefers `timeout`, falls back to perl alarm (macOS-safe).
 run_with_timeout() {
@@ -117,9 +136,10 @@ run_workflow_mark() {
     local wfdir="$1"; shift
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "$@" \
         node "$MARK_JS" 2>&1)" || rc=$?
     return $rc
@@ -147,11 +167,12 @@ run_enforce_worktree() {
     local repo_scope="$1"; shift
     GUARD_RC=0
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "$@" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
     if [ "$GUARD_RC" -ne 0 ]; then
@@ -296,9 +317,10 @@ test_A4_env_file_fallback() {
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A4 env-file fallback>>"' 0)"
     # Note: run_workflow_mark unsets CLAUDE_ENV_FILE; pass it explicitly here.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$MARK_JS" 2>&1)" || true
     if [ -f "$wfdir/$sid.worktree-off" ]; then
@@ -315,9 +337,10 @@ test_A5_no_session_id_hard_blocks() {
     local rc=0
     # No CLAUDE_ENV_FILE → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     # No marker should be written.
     local count
@@ -526,9 +549,10 @@ test_A14_transcript_path_fallback() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A14 transcript fallback>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "A14: hook crashed with rc=$rc on transcript fallback (out: $MARK_OUT)"
@@ -549,9 +573,10 @@ test_A15_transcript_path_invalid_chars() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A15 invalid chars>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 2 ]; then
         fail "A15: expected hard-block rc=2 but got rc=$rc (out: $MARK_OUT)"
@@ -658,11 +683,12 @@ test_B5_input_session_id_wins_over_env_file() {
     write_marker_file "$wfdir" "abc123"
     local payload; payload="$(build_guard_payload_write "abc123" "Write" "$repo/foo.txt")"
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || true
     if echo "$GUARD_OUT" | grep -q '"decision":"block"'; then
@@ -821,11 +847,12 @@ test_SEC3_env_file_traversal_blocked() {
     local rc=0
     local out
     out="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || rc=$?
     rm -f "$parent/passwd.worktree-off" 2>/dev/null || true
@@ -925,7 +952,7 @@ run_all() {
 
 if command -v timeout >/dev/null 2>&1; then
     if [ -z "${_SESSION_OVERRIDE_TEST_INNER:-}" ]; then
-        _SESSION_OVERRIDE_TEST_INNER=1 timeout 120 bash "$0" "$@"
+        _SESSION_OVERRIDE_TEST_INNER=1 timeout 120 bash "$_SCRIPT_ABS" "$@"
         exit $?
     fi
 fi

@@ -232,19 +232,20 @@ run_tf6() {
 }
 
 # ---------------------------------------------------------------------------
-# TF-7: hooks/pre-commit _load_env_file — routes through env-os-filter
-# Guard: SKIP unless pre-commit source already references env-os-filter AND
+# TF-7: hooks/lib/load-env.sh _load_env_file — routes through env-os-filter
+# Guard: SKIP unless load-env.sh source already references env-os-filter AND
 #        bin/env-os-filter is executable.
 # ---------------------------------------------------------------------------
 run_tf7() {
-    local name="TF-7: hooks/pre-commit _load_env_file sources only running-OS block"
+    local name="TF-7: hooks/lib/load-env.sh _load_env_file sources only running-OS block"
+    local LOADENV_SH="$AGENTS_DIR/hooks/lib/load-env.sh"
     # Guard 1: bin/env-os-filter must exist
     if [ "$HAS_FILTER" != "1" ]; then
         skip "$name (bin/env-os-filter not yet created — pending write-code)"; return
     fi
-    # Guard 2: hooks/pre-commit must reference env-os-filter in its source
-    if ! grep -q "env-os-filter" "$PRECOMMIT" 2>/dev/null; then
-        skip "$name (hooks/pre-commit does not yet reference env-os-filter — pending write-code)"; return
+    # Guard 2: hooks/lib/load-env.sh must reference env-os-filter in its source
+    if ! grep -q "env-os-filter" "$LOADENV_SH" 2>/dev/null; then
+        skip "$name (hooks/lib/load-env.sh does not yet reference env-os-filter — pending write-code)"; return
     fi
     # Extract _load_env_file into a subshell and test it with a crafted temp dir
     local tmpdir out rc
@@ -261,7 +262,7 @@ run_tf7() {
         > "$tmpdir/.env"
     # Source _load_env_file in a subshell, then print the resolved var
     out=$(AGENTS_CONFIG_DIR="$tmpdir" run_with_timeout 15 bash -c "
-source '$PRECOMMIT' 2>/dev/null || true
+source '$LOADENV_SH' 2>/dev/null || true
 _load_env_file
 echo \"\$ENFORCE_WORKTREE_EXCLUDE\"
 " 2>/dev/null); rc=$?

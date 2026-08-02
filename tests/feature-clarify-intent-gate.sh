@@ -32,11 +32,17 @@ mkdir -p "$WORKFLOW_DIR"
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Resolve the actual plans dir from Node so the test path matches what the hook expects
 # (path.resolve() on /c/Users/... yields C:\c\Users\... on Windows, not the home dir).
-PLANS_DIR_NATIVE=$(node -e "console.log(require('path').join(require('os').homedir(), '.workflow-plans').replace(/\\\\/g, '/'))")
+PLANS_DIR_NATIVE=$(node -e "console.log((process.env.WORKFLOW_PLANS_DIR || require('path').join(require('os').homedir(), '.workflow-plans')).replace(/\\\\/g, '/'))")
 
 pending_state() {
     local sid="$1"

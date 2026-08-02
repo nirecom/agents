@@ -29,6 +29,24 @@ export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
 
+# Fixture repo so repoDir resolution never reaches the real worktree
+# (see rules/test/fixture-isolation.md).
+FIXTURE_REPO="$TMPDIR_BASE/fixture-repo"
+mkdir -p "$FIXTURE_REPO"
+git -C "$FIXTURE_REPO" init -q -b main 2>/dev/null || true
+git -C "$FIXTURE_REPO" config core.hooksPath /dev/null 2>/dev/null || true
+git -C "$FIXTURE_REPO" config user.email "test@example.com" 2>/dev/null || true
+git -C "$FIXTURE_REPO" config user.name "Test" 2>/dev/null || true
+printf 'fixture\n' > "$FIXTURE_REPO/README.md"
+git -C "$FIXTURE_REPO" add README.md >/dev/null 2>&1 || true
+git -C "$FIXTURE_REPO" commit -q -m "init" >/dev/null 2>&1 || true
+printf 'staged\n' > "$FIXTURE_REPO/staged.txt"
+git -C "$FIXTURE_REPO" add staged.txt >/dev/null 2>&1 || true
+if command -v cygpath >/dev/null 2>&1; then
+  FIXTURE_REPO="$(cygpath -m "$FIXTURE_REPO")"
+fi
+export CLAUDE_PROJECT_DIR="$FIXTURE_REPO"
+
 PASS=0
 FAIL=0
 
@@ -70,6 +88,7 @@ write_state() {
 run_mark() {
   local json="$1"
   echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+    CLAUDE_PROJECT_DIR="$FIXTURE_REPO" \
     run_with_timeout node "$MARK_HOOK" 2>/dev/null || true
 }
 

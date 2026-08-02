@@ -60,6 +60,7 @@ trap cleanup EXIT
 
 mkdir -p "$MAIN_REPO" "$WF_DIR"
 git -C "$MAIN_REPO" init -q
+git -C "$MAIN_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$MAIN_REPO" config user.email "test@example.com"
 git -C "$MAIN_REPO" config user.name "Test"
 touch "$MAIN_REPO/.gitkeep"
@@ -81,6 +82,13 @@ else
 fi
 
 NONEXISTENT_NODE="$TMPDIR_BASE/does-not-exist"
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WORKFLOW_PLANS_DIR")"
+export WORKFLOW_PLANS_DIR
 
 # ---------------------------------------------------------------------------
 # Helpers

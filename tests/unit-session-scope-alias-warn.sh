@@ -174,6 +174,7 @@ SCAN_REPO_DIR="$SCAN_TMP/my-repo"
 mkdir -p "$SCAN_REPO_DIR"
 # Initialize a real (minimal) git repo so git rev-parse --show-toplevel works
 git -C "$SCAN_REPO_DIR" init -q 2>/dev/null
+git -C "$SCAN_REPO_DIR" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$SCAN_REPO_DIR" config user.email "test@example.com" 2>/dev/null
 git -C "$SCAN_REPO_DIR" config user.name "Test" 2>/dev/null
 

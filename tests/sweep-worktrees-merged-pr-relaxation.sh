@@ -51,6 +51,7 @@ TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
 ENFORCE_WORKTREE=off git init "$TEST_DIR/main"
+git -C "$TEST_DIR/main" config core.hooksPath /dev/null 2>/dev/null || true
 cd "$TEST_DIR/main"
 git config user.email "test@test"
 git config user.name "test"

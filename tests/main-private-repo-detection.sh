@@ -71,6 +71,7 @@ setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"
     mkdir -p "$repo/src" "$repo/docs" "$repo/tests"
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     git -C "$repo" remote add origin "git@github.com:testowner/testrepo.git"
@@ -227,6 +228,7 @@ setup_mock_gh_private
 REPO_NO_REMOTE="$TMPDIR_BASE/repo-no-remote-$RANDOM"
 mkdir -p "$REPO_NO_REMOTE"
 git -C "$REPO_NO_REMOTE" init -q
+git -C "$REPO_NO_REMOTE" config core.hooksPath /dev/null 2>/dev/null || true
 if command -v cygpath >/dev/null 2>&1; then REPO_NO_REMOTE="$(cygpath -m "$REPO_NO_REMOTE")"; fi
 result=$(PATH="$MOCK_BIN:$PATH" node -e "
 const { isPrivateRepo } = require('$LIB');
@@ -259,6 +261,7 @@ setup_mock_gh_public
 REPO_GITLAB="$TMPDIR_BASE/repo-gitlab-$RANDOM"
 mkdir -p "$REPO_GITLAB"
 git -C "$REPO_GITLAB" init -q
+git -C "$REPO_GITLAB" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$REPO_GITLAB" config user.email "test@example.com"
 git -C "$REPO_GITLAB" config user.name "Test"
 git -C "$REPO_GITLAB" remote add origin "git@gitlab.example.com:team/project.git"
@@ -275,6 +278,7 @@ setup_mock_gh_public
 REPO_CUSTOM="$TMPDIR_BASE/repo-custom-$RANDOM"
 mkdir -p "$REPO_CUSTOM"
 git -C "$REPO_CUSTOM" init -q
+git -C "$REPO_CUSTOM" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$REPO_CUSTOM" config user.email "test@example.com"
 git -C "$REPO_CUSTOM" config user.name "Test"
 git -C "$REPO_CUSTOM" remote add origin "ssh://git@gitlab.example.com:2222/team/project.git"
@@ -291,6 +295,7 @@ setup_mock_gh_public
 REPO_GHE="$TMPDIR_BASE/repo-ghe-$RANDOM"
 mkdir -p "$REPO_GHE"
 git -C "$REPO_GHE" init -q
+git -C "$REPO_GHE" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$REPO_GHE" config user.email "test@example.com"
 git -C "$REPO_GHE" config user.name "Test"
 git -C "$REPO_GHE" remote add origin "git@github.company.com:team/project.git"

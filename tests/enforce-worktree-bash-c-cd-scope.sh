@@ -128,6 +128,7 @@ test_find_repo_root_bash_c_cd() {
     local main_repo="$tmpdir/main-repo"
     mkdir -p "$main_repo"
     git -C "$main_repo" init -q
+    git -C "$main_repo" config core.hooksPath /dev/null 2>/dev/null || true
     # Need git user.email/name for commit; fall back if unset
     git -C "$main_repo" -c user.email=test@example.com -c user.name=test \
         commit --allow-empty -m "init" -q 2>/dev/null

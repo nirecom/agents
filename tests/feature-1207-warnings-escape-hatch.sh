@@ -69,6 +69,12 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
 mkdir -p "$CLAUDE_WORKFLOW_DIR"
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

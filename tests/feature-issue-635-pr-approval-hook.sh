@@ -49,6 +49,7 @@ SENTINEL_CMD='echo \"<<WORKFLOW_USER_VERIFIED: issue-635 approval phrase test>>\
 GIT_REPO="$WORK_DIR/repo"
 mkdir -p "$GIT_REPO"
 git -C "$GIT_REPO" init -q
+git -C "$GIT_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$GIT_REPO" config user.email "test@example.com"
 git -C "$GIT_REPO" config user.name "Test"
 echo "hello" > "$GIT_REPO/foo.txt"
@@ -58,6 +59,7 @@ git -C "$GIT_REPO" add foo.txt
 EMPTY_REPO="$WORK_DIR/empty-repo"
 mkdir -p "$EMPTY_REPO"
 git -C "$EMPTY_REPO" init -q
+git -C "$EMPTY_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$EMPTY_REPO" config user.email "test@example.com"
 git -C "$EMPTY_REPO" config user.name "Test"
 

@@ -136,6 +136,7 @@ EXEC_PATH_PRIV="$STUB_BIN_PRIV:$PATH"
 PRIV_REPO="$TMPBASE/privrepo"
 mkdir -p "$PRIV_REPO"
 git -C "$PRIV_REPO" init -q
+git -C "$PRIV_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$PRIV_REPO" remote add origin "git@github.com:fake/private-repo.git"
 PRIV_FILE="$PRIV_REPO/note.txt"
 : > "$PRIV_FILE"

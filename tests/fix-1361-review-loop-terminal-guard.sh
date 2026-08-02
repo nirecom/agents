@@ -67,6 +67,7 @@ STUB
 build_repo() {
     local repo; repo=$(make_tmp)
     git -C "$repo" init -q 2>/dev/null
+    git -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$repo" config user.email t@example.com
     git -C "$repo" config user.name t
     mkdir -p "$repo/tests"

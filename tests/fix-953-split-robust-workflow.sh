@@ -65,6 +65,7 @@ setup_repo() {
     (
         cd "$main" || exit 1
         git init -q -b main
+        git config core.hooksPath /dev/null 2>/dev/null || true
         git config user.email "test@example.com"
         git config user.name "test"
         echo "seed" > README.md

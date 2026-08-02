@@ -141,6 +141,7 @@ STUB
 
     # Working repo: bin/existing.sh exists so issue 102 classifies as live.
     git -c init.defaultBranch=main init -q "$REPO"
+    git -C "$REPO" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$REPO" config user.email t@example.com
     git -C "$REPO" config user.name t
     printf '#!/bin/bash\n' > "$REPO/bin/existing.sh"

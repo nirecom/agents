@@ -4,9 +4,43 @@
 // Every export wraps its body in try/catch and returns void on failure.
 
 const { appendFinding } = require("./supervisor-state-writer");
+const { getPristineIsolationEnv } = require("./load-env");
+
+// isolationContradiction reports whether exactly one of the two plans-dir
+// isolation variables was set in the caller's PRISTINE environment (XOR).
+// Both set = a fully isolated harness. Neither set = a normal session.
+// Exactly one set = a half-pinned test that would leak supervisor findings
+// into the developer's real ~/.workflow-plans/ tree.
+function isolationContradiction() {
+  try {
+    const snap = getPristineIsolationEnv();
+    const workflowDirSet = snap.CLAUDE_WORKFLOW_DIR !== null;
+    const plansDirSet = snap.WORKFLOW_PLANS_DIR !== null;
+    return workflowDirSet !== plansDirSet;
+  } catch (_) {
+    return false; // fail-open: never block a write on guard failure
+  }
+}
+
+let _isolationWarnedOnce = false;
 
 function safeAppend(sessionId, finding) {
   try {
+    if (isolationContradiction()) {
+      if (!_isolationWarnedOnce) {
+        _isolationWarnedOnce = true;
+        try {
+          const snap = getPristineIsolationEnv();
+          const missing =
+            snap.CLAUDE_WORKFLOW_DIR === null ? "CLAUDE_WORKFLOW_DIR" : "WORKFLOW_PLANS_DIR";
+          // Variable NAME only — never the path value.
+          process.stderr.write(`[supervisor-emit] isolation contradiction: ${missing} unset\n`);
+        } catch (_) {
+          // swallow — diagnostics must never throw
+        }
+      }
+      return;
+    }
     if (!sessionId) return;
     appendFinding(sessionId, finding);
   } catch (_) {
@@ -92,4 +126,10 @@ function reportRetrospective(observation, sessionId) {
   }
 }
 
-module.exports = { reportBlock, reportFallback, reportSentinel, reportRetrospective };
+module.exports = {
+  reportBlock,
+  reportFallback,
+  reportSentinel,
+  reportRetrospective,
+  isolationContradiction,
+};

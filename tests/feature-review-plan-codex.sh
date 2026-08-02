@@ -1165,7 +1165,7 @@ fi
 # A4 — --repo-root defaults to git rev-parse --show-toplevel
 # ---------------------------------------------------------------------------
 # Make A_REPO a real git repo so git rev-parse works
-( cd "$A_REPO" && git init -q && git config user.email "t@example.com" \
+( cd "$A_REPO" && git init -q && git config core.hooksPath /dev/null && git config user.email "t@example.com" \
     && git config user.name "T" && git add README.md \
     && git commit -q -m "init" ) >/dev/null 2>&1 || true
 

@@ -35,6 +35,7 @@ fi
 new_repo() {
   local root; root="$(mktemp -d)"
   git -C "$root" init -q
+  git -C "$root" config core.hooksPath /dev/null 2>/dev/null || true
   git -C "$root" config user.email "t@example.com"
   git -C "$root" config user.name "t"
   mkdir -p "$root/tests" "$root/bin"

@@ -51,6 +51,12 @@ TEST_ROOT="$TMP_ROOT/fix-1138-cross-repo-$$"
 mkdir -p "$TEST_ROOT"
 trap 'rm -rf "$TEST_ROOT" 2>/dev/null || true' EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TEST_ROOT/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 # Build a fresh git repo at $1. core.hooksPath is emptied so the agents
 # pre-commit hook (ENFORCE_WORKTREE / scan-outbound) does not fire on the
 # throwaway repo's commit.
