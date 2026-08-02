@@ -564,6 +564,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Monitor|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/preuse-auto-approve.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
