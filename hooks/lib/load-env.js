@@ -21,6 +21,33 @@ const fs = require("fs");
 const path = require("path");
 const { configDirCandidates } = require("./agents-config-dir");
 
+// --- Pristine isolation-env snapshot -------------------------------------
+// Captured at module load time, BEFORE loadDefaultEnv() injects any .env
+// values into process.env. Consumers (supervisor-emit.js) need to know what
+// the CALLER's environment declared, not the post-injection view — a test that
+// pins only CLAUDE_WORKFLOW_DIR must remain distinguishable from a session
+// where both vars arrived from .env.
+const ISOLATION_ENV_KEYS = ["CLAUDE_WORKFLOW_DIR", "WORKFLOW_PLANS_DIR"];
+
+function normalizeIsolationValue(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length === 0 ? null : raw;
+}
+
+const _pristineIsolationEnv = Object.freeze(
+  ISOLATION_ENV_KEYS.reduce((acc, key) => {
+    acc[key] = normalizeIsolationValue(process.env[key]);
+    return acc;
+  }, {})
+);
+
+// getPristineIsolationEnv returns the frozen module-load-time snapshot of the
+// two plans-dir isolation variables. undefined / empty / whitespace-only → null.
+function getPristineIsolationEnv() {
+  return _pristineIsolationEnv;
+}
+
 // filterOsBlocks strips lines inside #@if <token> / #@endif blocks that do not
 // match the current platform, and removes all marker lines from the output.
 // Future extension: update activeTokens resolver below to add a repo-axis token.
@@ -178,4 +205,12 @@ function loadDefaultEnv() {
   return false;
 }
 
-module.exports = { loadEnv, loadDefaultEnv, filterOsBlocks, parseEnv, readEnvFile, readDefaultEnvFile };
+module.exports = {
+  loadEnv,
+  loadDefaultEnv,
+  filterOsBlocks,
+  parseEnv,
+  readEnvFile,
+  readDefaultEnvFile,
+  getPristineIsolationEnv,
+};

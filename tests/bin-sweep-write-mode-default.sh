@@ -1,12 +1,18 @@
 #!/bin/bash
 # tests/bin-sweep-write-mode-default.sh
-# Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
+# Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/sweep-supervisor-state.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
 # Tags: sweep, write-mode, defaults, cron, scope:common, TL2
 #
 # Pins the apply-by-default write-mode inversion across the whole /sweep series:
 #   - no flag  = production run (writes / deletes)
 #   - --dry-run = classify and report only, write nothing
 #   - --apply   = accepted, backward-compatible synonym of "no flag"
+#
+# ...and the ONE named exception to that inversion (D1): bin/sweep-supervisor-state.sh is
+# dry-run by default. It deletes records from a governance audit trail rather than a
+# regenerable derivative, so the family default is inverted for it deliberately. The
+# exception lives in this table (CPR-2: the family invariant owns its own exceptions) so a
+# future bulk edit cannot silently flip it back.
 #
 # Covers the three surfaces that must stay in lock-step (CPR-5 / CPR-6):
 #   A. bin/lib/sweep-write-mode.sh semantics SSOT
@@ -419,6 +425,58 @@ C2_no_stale_dry_run_prose() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+D1_sweep_supervisor_state_is_dry_run_by_default() {
+    local sweep="$AGENTS_DIR/bin/sweep-supervisor-state.sh"
+    if [ ! -f "$sweep" ]; then
+        fail "D1 exception member: $sweep does not exist"
+        return
+    fi
+
+    local plans="$TMPDIR_BASE/d1-plans"
+    local plans_node
+    mkdir -p "$plans"
+    if command -v cygpath >/dev/null 2>&1; then plans_node="$(cygpath -m "$plans")"; else plans_node="$plans"; fi
+    node -e '
+const fs = require("fs"), path = require("path");
+const now = "2024-01-02T03:04:05.000Z";
+const rec = {
+  categories: ["workflow"], severity: "warning",
+  detail: "escape-hatch sentinel: WORKFLOW_OFF (A1 marker test)",
+  reporter: "enforce-override-handlers", record_type: "escape_hatch_event", timestamp: now,
+};
+const state = {
+  version: 1, session_id: "d1sess", created_at: now, last_updated: now,
+  layer1: { findings: [rec] },
+  alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [],
+           alert_phase: null, alert_cause: null, alert_retry_count: 0,
+           findings_surfaced_at: null, alert_eligible_phase: null },
+  audit: { audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null,
+           audit_cause: null, audit_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(path.join(process.argv[1], "d1sess-supervisor-state.json"), JSON.stringify(state, null, 2));
+' "$plans_node"
+
+    local f="$plans/d1sess-supervisor-state.json"
+    local before after
+    before="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
+    env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID "WORKFLOW_PLANS_DIR=$plans_node" \
+        run_with_timeout bash "$sweep" >/dev/null 2>&1
+    after="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
+
+    if [ -n "$before" ] && [ "$before" = "$after" ]; then
+        pass "D1a sweep-supervisor-state flagless run writes nothing (dry-run default exception)"
+    else
+        fail "D1a sweep-supervisor-state flagless run modified state: before=$before after=$after"
+    fi
+    if [ ! -d "$plans/.sweep-supervisor-state-backup" ]; then
+        pass "D1b sweep-supervisor-state flagless run creates no backup directory"
+    else
+        fail "D1b sweep-supervisor-state flagless run created a backup dir — it wrote something"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 A1_lib_exists_and_defaults_to_apply
 A2_lib_footer_and_usage_helpers
 B1_all_scripts_accept_dry_run
@@ -429,6 +487,7 @@ B4_delete_no_pr_alone_is_destructive
 B5_sweep_worktrees_write_mode_asymmetry
 C1_cron_flags_updated
 C2_no_stale_dry_run_prose
+D1_sweep_supervisor_state_is_dry_run_by_default
 
 echo ""
 echo "─────────────────────────────────────────"

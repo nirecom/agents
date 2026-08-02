@@ -23,40 +23,40 @@ echo ""
 echo "--- Normal ---"
 
 # N1: frontmatter contains name: clarify-intent
-assert_contains "$SKILL_MD" "name:[[:space:]]*clarify-intent" \
+assert_contains "$LOCAL_SKILL_MD" "name:[[:space:]]*clarify-intent" \
     "N1: frontmatter contains 'name: clarify-intent'"
 
 # N2: interactive or AskUserQuestion appears (interactive context requirement)
-assert_contains "$SKILL_MD" "interactive|AskUserQuestion" \
+assert_contains "$LOCAL_SKILL_MD" "interactive|AskUserQuestion" \
     "N2: 'interactive' or 'AskUserQuestion' appears (interactive context requirement)"
 
 # N3: output path ~/.workflow-plans/ or $HOME/.workflow-plans/ mentioned
-assert_contains "$SKILL_MD" '~/.workflow-plans/|\$HOME/.workflow-plans/' \
+assert_contains "$LOCAL_SKILL_MD" '~/.workflow-plans/|\$HOME/.workflow-plans/' \
     "N3: output path ~/.workflow-plans/ or \$HOME/.workflow-plans/ mentioned"
 
 # N4: <session-id>-intent.md output filename mentioned
-assert_contains "$SKILL_MD" "session.id.*intent\.md|intent\.md" \
+assert_contains "$LOCAL_SKILL_MD" "session.id.*intent\.md|intent\.md" \
     "N4: session-id intent.md output filename mentioned"
 
 # N5: recommended answer instruction mentioned
-assert_contains "$SKILL_MD" '推奨|recommended|\(推奨\)' \
+assert_contains "$LOCAL_SKILL_MD" '推奨|recommended|\(推奨\)' \
     "N5: recommended answer instruction mentioned (推奨 or recommended)"
 
 # N6: 5-round cap mentioned
-assert_contains "$SKILL_MD" "5.*round|round.*5|上限.*5|5.*上限" \
+assert_contains "$LOCAL_SKILL_MD" "5.*round|round.*5|上限.*5|5.*上限" \
     "N6: 5-round cap mentioned"
 
 # N7: skip sentinel (WORKFLOW_CLARIFY_INTENT_NOT_NEEDED) referenced
 # plan-skip.md was removed; skip conditions are now inline in the skill.
-assert_contains "$SKILL_MD" "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED" \
+assert_contains "$LOCAL_SKILL_MD" "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED" \
     "N7: skip sentinel WORKFLOW_CLARIFY_INTENT_NOT_NEEDED referenced"
 
 # N8: grill-me / Matt Pocock attribution mentioned
-assert_contains "$SKILL_MD" "grill.me|Matt Pocock|mattpocock" \
+assert_contains "$LOCAL_SKILL_MD" "grill.me|Matt Pocock|mattpocock" \
     "N8: grill-me / Matt Pocock attribution mentioned"
 
 # N9: intent.md mentioned in output context
-assert_contains "$SKILL_MD" "intent\.md" \
+assert_contains "$LOCAL_SKILL_MD" "intent\.md" \
     "N9: intent.md mentioned in output context"
 
 echo ""
@@ -163,11 +163,11 @@ echo ""
 echo "--- Error ---"
 
 # E1: hard-fail on non-interactive
-assert_contains "$SKILL_MD" "hard.fail|hard_fail|診断|diagnostic" \
+assert_contains "$LOCAL_SKILL_MD" "hard.fail|hard_fail|診断|diagnostic" \
     "E1: hard-fail on non-interactive mentioned"
 
 # E2: 'do not silently proceed' or '暗黙' prohibition mentioned
-assert_contains "$SKILL_MD" "[Dd]o not silently proceed|暗黙" \
+assert_contains "$LOCAL_SKILL_MD" "[Dd]o not silently proceed|暗黙" \
     "E2: 'do not silently proceed' or '暗黙' prohibition mentioned"
 
 echo ""
@@ -177,13 +177,13 @@ echo ""
 echo "--- Edge ---"
 
 # Ed1: session-id appears in output path context (parameterized output)
-assert_contains "$SKILL_MD" "session.id|session_id" \
+assert_contains "$LOCAL_SKILL_MD" "session.id|session_id" \
     "Ed1: session-id appears in output path context (parameterized output)"
 
 # Ed2: round limit is specifically 5 — check both "5" and "round" present in file
-if [ ! -f "$SKILL_MD" ]; then
-    fail "Ed2: round limit is specifically 5 (file not found: $SKILL_MD)"
-elif grep -qE "5" "$SKILL_MD" && grep -qE "round" "$SKILL_MD"; then
+if [ ! -f "$LOCAL_SKILL_MD" ]; then
+    fail "Ed2: round limit is specifically 5 (file not found: $LOCAL_SKILL_MD)"
+elif grep -qE "5" "$LOCAL_SKILL_MD" && grep -qE "round" "$LOCAL_SKILL_MD"; then
     pass "Ed2: round limit is specifically 5 (both '5' and 'round' present in file)"
 else
     fail "Ed2: round limit is specifically 5 (need both '5' and 'round' in file)"

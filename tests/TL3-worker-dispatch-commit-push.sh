@@ -74,7 +74,9 @@ BRANCH="feature/1673-tl3"
 
 # --- real repo family: bare remote + main worktree + linked worktree ---------
 git init -q --bare "$TMPD/remote.git"
+git -C "$TMPD/remote.git" config core.hooksPath /dev/null 2>/dev/null || true
 git init -q -b main "$TMPD/main"
+git -C "$TMPD/main" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$TMPD/main" config user.email "tl3@example.com"
 git -C "$TMPD/main" config user.name "TL3"
 git -C "$TMPD/main" config commit.gpgsign false

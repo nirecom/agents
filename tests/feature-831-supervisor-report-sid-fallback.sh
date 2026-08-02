@@ -168,6 +168,7 @@ run_s4() {
     (
         cd "$mainrepo" && \
         git init -q -b main && \
+        git config core.hooksPath /dev/null && \
         git config user.email "test@example.com" && \
         git config user.name "test" && \
         printf 'Session-ID: common-dir-sid-s4\n' > WORKTREE_NOTES.md && \
