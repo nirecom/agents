@@ -29,6 +29,30 @@ _is_enforce_worktree_on() {
     esac
 }
 
+# WORKFLOW_OFF / WORKTREE_OFF session-marker probe: mirrors enforce-worktree.js.
+# Resolves the session id via hooks/workflow-state.js#resolveSessionId() and checks
+# both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
+# rc=0 -> bypass granted; rc=2 -> no bypass (sid unresolved OR no marker);
+# any other rc -> unexpected error (caller decides how to surface it).
+# Shared by the worktree-isolation gate and the prompt-extraction backstop (CPR-2).
+_session_marker_off() {
+    AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
+    node -e '
+      try {
+        const cfg = process.env.AGENTS_CONFIG_DIR;
+        if (!cfg) process.exit(2);
+        const { resolveSessionId } = require(cfg + "/hooks/workflow-state");
+        const { isWorkflowOff, isWorktreeOff } = require(cfg + "/hooks/lib/session-markers");
+        const sid = resolveSessionId();
+        if (!sid) process.exit(2);
+        if (isWorkflowOff(sid) || isWorktreeOff(sid)) process.exit(0);
+        process.exit(2);
+      } catch (_e) {
+        process.exit(3);
+      }
+    ' 2>/dev/null
+}
+
 if _is_enforce_worktree_on; then
     # ENFORCE_WORKTREE_EXCLUDE: unified path-coverage check via a committed Node
     # helper. Exit 0 → all staged files covered → skip the enforcement gate below.
@@ -55,28 +79,12 @@ if _is_enforce_worktree_on; then
         fi
     fi
 
-    # WORKFLOW_OFF / WORKTREE_OFF session-marker bypass: mirror enforce-worktree.js.
-    # Resolves session id via hooks/workflow-state.js#resolveSessionId() and
-    # checks both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
-    # rc=0 → bypass granted; rc=2 → no bypass (sid unresolved OR no marker); any
-    # other rc → unexpected error, surface a warning and fall through to enforcement.
+    # WORKFLOW_OFF / WORKTREE_OFF session-marker bypass (see _session_marker_off).
+    # rc=0 → bypass granted; rc=2 → no bypass; any other rc → unexpected error,
+    # surface a warning and fall through to enforcement.
     if [ "$_enforce_skip" = "0" ]; then
         _node_rc=0
-        AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
-        node -e '
-          try {
-            const cfg = process.env.AGENTS_CONFIG_DIR;
-            if (!cfg) process.exit(2);
-            const { resolveSessionId } = require(cfg + "/hooks/workflow-state");
-            const { isWorkflowOff, isWorktreeOff } = require(cfg + "/hooks/lib/session-markers");
-            const sid = resolveSessionId();
-            if (!sid) process.exit(2);
-            if (isWorkflowOff(sid) || isWorktreeOff(sid)) process.exit(0);
-            process.exit(2);
-          } catch (_e) {
-            process.exit(3);
-          }
-        ' 2>/dev/null || _node_rc=$?
+        _session_marker_off || _node_rc=$?
         if [ "$_node_rc" = "0" ]; then
             _enforce_skip=1
         elif [ "$_node_rc" != "2" ]; then
@@ -210,6 +218,79 @@ if [ -n "$SH_NO_EXEC" ]; then
     echo "pre-commit: .sh files lacking execute permission:$SH_NO_EXEC"
     echo "Run: git update-index --chmod=+x <file>"
     exit 1
+fi
+
+# ---------- prompt-extraction backstop (issue #1642) ----------
+# Defense-in-depth for workflow-gate.js Gate 3: catches commits that never pass
+# through the Claude Code Bash tool (terminal, editor, script).
+#
+# Two-condition AND guard:
+#   (a) the repo under commit IS the agents session repo (git common-dir match)
+#   (b) .prompt-extraction-allowlist exists at that repo root
+# Both must hold. Allowlist presence alone must never arm the backstop in a
+# foreign repo, even when a global core.hooksPath routes that repo here
+# (install/linux/dotfileslink.sh) — CPR-8: no implicit environment branching.
+#
+# Exit-code mapping: 1 -> block; anything else -> warn on stderr and continue.
+# The backstop is a safety net, not an availability dependency.
+_pe_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]; then
+    _pe_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _pe_is_agents_repo=0
+    _pe_agents_common="$(git -C "$_pe_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
+    _pe_repo_common="$(git -C "$_pe_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
+    # Resolve to absolute paths before comparing (relative paths, symlinks, case).
+    if [ -n "$_pe_agents_common" ] && [ -n "$_pe_repo_common" ]; then
+        _pe_agents_abs="$(cd "$_pe_cfg_dir" 2>/dev/null && cd "$_pe_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_pe_agents_common")"
+        _pe_repo_abs="$(cd "$_pe_repo_top" 2>/dev/null && cd "$_pe_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_pe_repo_common")"
+        if [ "$_pe_agents_abs" = "$_pe_repo_abs" ]; then
+            _pe_is_agents_repo=1
+        fi
+    fi
+
+    if [ "$_pe_is_agents_repo" = "1" ]; then
+        _pe_skip=0
+        _pe_marker_rc=0
+        _session_marker_off || _pe_marker_rc=$?
+        if [ "$_pe_marker_rc" = "0" ]; then
+            _pe_skip=1
+        elif [ "$_pe_marker_rc" != "2" ]; then
+            echo "pre-commit: _session_marker_off rc=$_pe_marker_rc — prompt-extraction backstop check continues" >&2
+        fi
+
+        if [ "$_pe_skip" = "0" ]; then
+            _pe_rc=0
+            _pe_out="$("$_pe_cfg_dir/bin/check-prompt-extraction" --staged 2>&1)" || _pe_rc=$?
+            case "$_pe_rc" in
+                0) : ;;
+                1)
+                    printf '%s\n' "$_pe_out"
+                    echo ""
+                    echo "Commit blocked: prompt extraction violations in staged files."
+                    echo "Extract the content (rules/prompt.md §1.3 / §1.5), or unstage the file."
+                    exit 1
+                    ;;
+                2)
+                    # Broken install, not an environment hiccup: the workflow-gate
+                    # fails closed on the same condition, so the backstop must too.
+                    printf '%s\n' "$_pe_out" >&2
+                    echo "" >&2
+                    echo "Commit blocked: check-prompt-extraction usage error (rc=2)." >&2
+                    echo "The prompt-extraction backstop is misinstalled — fix the invocation before committing." >&2
+                    exit 1
+                    ;;
+                126|127)
+                    echo "Commit blocked: check-prompt-extraction not found or not executable (rc=$_pe_rc)." >&2
+                    echo "Expected at: $_pe_cfg_dir/bin/check-prompt-extraction" >&2
+                    exit 1
+                    ;;
+                *)
+                    # rc=3 and anything else: genuine infrastructure error — fail open.
+                    echo "pre-commit: check-prompt-extraction rc=$_pe_rc — prompt-extraction backstop skipped" >&2
+                    ;;
+            esac
+        fi
+    fi
 fi
 
 # Check scope tag on staged tests/*.sh files
