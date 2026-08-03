@@ -11,12 +11,16 @@ const CATEGORIES = [
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
 // off_examination / off_clearance_consumed: OFF-clearance audit trail (#1608).
+// off_clearance_malformed_claim_swept: an unreadable .claimed file removed so it
+// cannot wedge future proposals — deliberately NOT the same record as a
+// consumption, because it authorized nothing (#1780 M-1).
 // Without these, appendFinding() would silently drop the audit entries.
 const RECORD_TYPE_VALUES = [
   "concern",
   "escape_hatch_event",
   "off_examination",
   "off_clearance_consumed",
+  "off_clearance_malformed_claim_swept",
 ];
 
 const ALERT_PHASE_VALUES = [null, "pending", "done", "paused", "closed"];

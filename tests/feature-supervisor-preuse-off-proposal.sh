@@ -332,6 +332,51 @@ run_T10b() {
     fi
 }
 
+# ===== T11 (#1626): a successful gate decision IS the claim. Validation-success
+# atomically renames <sid>.off-clearance -> <sid>.off-clearance.claimed via
+# fs.openSync(..., "wx"), so the token cannot be re-validated by a second proposal.
+# Previously the shim only READ the token and left it in place for workflow-mark to
+# consume later — a check-then-act window in which two proposals could both win. =====
+run_T11() {
+    local tmp tn r rc out ok=1
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    seed_state_empty "$tn" "t11sid"
+    write_token "$tn" "t11sid" "workflow" "workflow-bug" "valid"
+    r=$(run_shim "$tn" "t11sid" "$WF_BOUND"); rc="${r%%|*}"; out="${r#*|}"
+    [ "$rc" = "0" ] || ok=0
+    is_block "$out" && ok=0
+    [ -f "$tmp/t11sid.off-clearance.claimed" ] || ok=0   # claim written
+    [ -f "$tmp/t11sid.off-clearance" ] && ok=0           # bare token gone
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ "$ok" = "1" ]; then
+        pass "T11: valid token → allow AND atomic claim (.claimed created, bare token removed)"
+    else
+        fail "T11: RED-EXPECTED (claim-at-validation not implemented): rc=$rc out=$out"
+    fi
+}
+
+# ===== T11b (#1626): a second proposal for the same sid while the token is already
+# .claimed must block, and say so honestly ("already claimed") rather than reporting a
+# generic missing-token message — the distinction is what tells the user that the
+# clearance was spent, not never granted. =====
+run_T11b() {
+    local tmp tn r rc out ok=1
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    seed_state_empty "$tn" "t11bsid"
+    write_token "$tn" "t11bsid" "workflow" "workflow-bug" "valid"
+    run_shim "$tn" "t11bsid" "$WF_BOUND" >/dev/null 2>&1          # first proposal claims it
+    r=$(run_shim "$tn" "t11bsid" "$WF_BOUND"); rc="${r%%|*}"; out="${r#*|}"   # second proposal
+    [ "$rc" = "2" ] || ok=0
+    is_block "$out" || ok=0
+    echo "$out" | grep -qi "already claimed" || ok=0
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ "$ok" = "1" ]; then
+        pass "T11b: re-proposal against an already-claimed token → block (exit 2) with an 'already claimed' message"
+    else
+        fail "T11b: RED-EXPECTED (no claim state, so no honest 'already claimed' message): rc=$rc out=$out"
+    fi
+}
+
 run_T1
 run_T2
 run_T2b
@@ -346,6 +391,8 @@ run_T9b
 run_T9c
 run_T10
 run_T10b
+run_T11
+run_T11b
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

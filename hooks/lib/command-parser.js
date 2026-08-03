@@ -5,14 +5,22 @@
 // semantics) while pluggable `isTargetPath` decides what counts as a hit.
 "use strict";
 
+const { substitutionSpanEnds, spanEndAt } = require("./substitution-spans");
+
 // Redirect operators: the next token is the redirect target (a path).
-// Matches: >, >>, 1>, 1>>, 2>, 2>>, &>, &>>, <, <<<
-const REDIRECT_RE = /^(?:\d?>>?|&>>?|<<<|<)$/;
+// Matches: >, >>, 1>, 1>>, 2>, 2>>, &>, &>>, <, <<<, >|, N>|, >&, N>&.
+// `>|` and `>&FILE` must be recognized here or their `|`/`&` gets read as a
+// segment SEPARATOR downstream, demoting the real write target into the next
+// segment's cmd0 where no scanner looks for it. `>&` is admitted as a file
+// redirect only when not followed by an fd number or `-`, so `>&1`/`2>&1`/
+// `>&-` still take the fd-duplication route every downstream extractor expects.
+const REDIRECT_OP_ALT = String.raw`\d?>\||\d?>&(?![\d-]+$)|\d?>>?|&>>?|<<<|<`;
+const REDIRECT_RE = new RegExp(String.raw`^(?:${REDIRECT_OP_ALT})$`);
 
 // Attached-redirect form: operator and path glued into one token
 // (e.g. `echo x >~/.ssh/authorized_keys`, `cat <~/.ssh/id_rsa`, `cmd 2>~/.ssh/log`).
 // Capture group is the path part after the operator.
-const ATTACHED_REDIRECT_RE = /^(?:\d?>>?|&>>?|<<<|<)(.+)$/;
+const ATTACHED_REDIRECT_RE = new RegExp(String.raw`^(?:${REDIRECT_OP_ALT})(.+)$`);
 
 // Strip trailing shell-redirect suffixes off a raw command string.
 // Strips fd-dup forms (`2>&1`, `>&2`, `N>&-`) and unquoted file-redirect
@@ -58,54 +66,20 @@ function stripSubstitutions(cmd) {
   return out;
 }
 
-// Quote-aware tokenizer: respects "...", '...', $'...'. Returns UNQUOTED
-// tokens (outer quotes stripped). Backslash-escapes inside double quotes are
-// honored.
-function tokenizeSegment(seg) {
-  const tokens = [];
-  let i = 0;
-  const n = seg.length;
-  while (i < n) {
-    while (i < n && /\s/.test(seg[i])) i++;
-    if (i >= n) break;
-    let tok = "";
-    while (i < n && !/\s/.test(seg[i])) {
-      const ch = seg[i];
-      if (ch === '"') {
-        i++;
-        while (i < n && seg[i] !== '"') {
-          if (seg[i] === "\\" && i + 1 < n) { tok += seg[i + 1]; i += 2; }
-          else { tok += seg[i]; i++; }
-        }
-        if (i < n) i++;
-      } else if (ch === "'") {
-        i++;
-        while (i < n && seg[i] !== "'") { tok += seg[i]; i++; }
-        if (i < n) i++;
-      } else if (ch === "$" && seg[i + 1] === "'") {
-        i += 2;
-        while (i < n && seg[i] !== "'") {
-          if (seg[i] === "\\" && i + 1 < n) { tok += seg[i + 1]; i += 2; }
-          else { tok += seg[i]; i++; }
-        }
-        if (i < n) i++;
-      } else {
-        tok += ch;
-        i++;
-      }
-    }
-    tokens.push(tok);
-  }
-  return tokens;
-}
-
-// Quote-aware tokenizer variant that ALSO returns the pre-strip raw slice for
-// each token. Runs the identical character-level walk as tokenizeSegment but
-// returns Array<{value, raw}> where `value` is the quote-stripped token
-// (byte-identical to tokenizeSegment output) and `raw` is the original slice of
-// `seg` that produced it (outer quotes preserved). Downstream quote-context
-// resolution (expandRawToken) needs the raw form to decide single/double/unquoted.
-function tokenizeSegmentWithQuotes(seg) {
+// Quote-aware tokenizer CORE: respects "...", '...', $'...'. Returns
+// Array<{value, raw}> — value is quote-stripped, raw is the original slice
+// (quotes preserved) that expandRawToken needs for quote-context resolution.
+// tokenizeSegment/tokenizeSegmentWithQuotes used to duplicate this walk and
+// drift apart; both are now thin projections over this single core.
+//
+// opts.preserveSubstitutionSpans (default OFF): consumes an unquoted
+// substitution span (`$(...)`, backticks, `$((...))`, `${...}`) WHOLE so
+// interior whitespace does not split it — otherwise an assembled write target
+// tokenizes into unrelated words and evades detection. Fail-closed: keeping a
+// span whole can only make a token MORE complete.
+function tokenizeCore(seg, opts) {
+  const preserve = !!(opts && opts.preserveSubstitutionSpans);
+  const ends = preserve ? substitutionSpanEnds(seg) : null;
   const tokens = [];
   let i = 0;
   const n = seg.length;
@@ -116,6 +90,10 @@ function tokenizeSegmentWithQuotes(seg) {
     let tok = "";
     while (i < n && !/\s/.test(seg[i])) {
       const ch = seg[i];
+      if (preserve) {
+        const spanEnd = spanEndAt(seg, i, ends);
+        if (spanEnd > i) { tok += seg.slice(i, spanEnd); i = spanEnd; continue; }
+      }
       if (ch === '"') {
         i++;
         while (i < n && seg[i] !== '"') {
@@ -139,24 +117,52 @@ function tokenizeSegmentWithQuotes(seg) {
         i++;
       }
     }
-    const rawTok = seg.slice(tokStart, i);
-    tokens.push({ value: tok, raw: rawTok });
+    tokens.push({ value: tok, raw: seg.slice(tokStart, i) });
   }
   return tokens;
+}
+
+// Quote-aware tokenizer: returns UNQUOTED tokens (outer quotes stripped).
+function tokenizeSegment(seg, opts) {
+  return tokenizeCore(seg, opts).map((t) => t.value);
+}
+
+// Quote-aware tokenizer variant that ALSO returns the pre-strip raw slice for
+// each token. `value` stays byte-identical to tokenizeSegment output.
+function tokenizeSegmentWithQuotes(seg, opts) {
+  return tokenizeCore(seg, opts);
 }
 
 // Split cmd on UNQUOTED shell separators: && || ; | & ( )
 // Returns { segs: string[], seps: string[] } where seps records the separator
 // token at each split point (unconditionally, including leading/trailing).
-function splitSegmentsWithSeparators(cmd) {
+//
+// opts.preserveSubstitutionSpans (default OFF): consumes a substitution span
+// (`$(...)`, backticks, `$((...))`, `${...}`) as ONE unit instead of letting
+// its parens hit the separator branch below — otherwise a write target
+// assembled inside one splits across segments and evades detection.
+//
+// Must stay additive at the caller (command-ir's parse() appends these
+// segments rather than replacing the ordinary ones): the `( )` split is also
+// what promotes subshell/process-substitution bodies to their own scanned
+// segments, and shared-cmd-utils.js reads `ir.separators.length > 0` as
+// "this command chains" — swallowing `(`/`)` here would empty that signal
+// and turn a deny into an allow.
+function splitSegmentsWithSeparators(cmd, opts) {
   const segs = [];
   const seps = [];
+  const preserve = !!(opts && opts.preserveSubstitutionSpans);
+  const spanEnds = preserve ? substitutionSpanEnds(cmd) : null;
   let cur = "";
   let i = 0;
   const n = cmd.length;
   const flush = () => { const s = cur.trim(); if (s) segs.push(s); cur = ""; };
   while (i < n) {
     const ch = cmd[i];
+    if (preserve) {
+      const spanEnd = spanEndAt(cmd, i, spanEnds);
+      if (spanEnd > i) { cur += cmd.slice(i, spanEnd); i = spanEnd; continue; }
+    }
     if (ch === '"') {
       cur += ch; i++;
       while (i < n && cmd[i] !== '"') {
@@ -192,33 +198,27 @@ function splitSegmentsWithSeparators(cmd) {
       seps.push(sepStr);
       flush(); i += 1;
     } else if (/\d/.test(ch)) {
-      // fd-dup lookahead: N>&M or N>&-  — consume without splitting
+      // Digit-prefixed redirect operator: N>& (fd-dup N>&M / N>&- AND the
+      // file form N>&FILE) or N>| (noclobber override). Consume the OPERATOR
+      // only — whatever follows keeps flowing through normal accumulation, so
+      // `2>&1` still lands in one token exactly as before while `2>& FILE`
+      // now survives as the operator token `2>&` plus its target.
       let j = i;
       while (j < n && /\d/.test(cmd[j])) j++;
-      if (cmd[j] === ">" && cmd[j + 1] === "&" && j + 2 < n && (/\d/.test(cmd[j + 2]) || cmd[j + 2] === "-")) {
-        let k = j + 2;
-        if (cmd[k] === "-") {
-          k++;
-        } else {
-          while (k < n && /\d/.test(cmd[k])) k++;
-        }
-        cur += cmd.slice(i, k);
-        i = k;
+      if (cmd[j] === ">" && (cmd[j + 1] === "&" || cmd[j + 1] === "|")) {
+        cur += cmd.slice(i, j + 2);
+        i = j + 2;
       } else {
-        // Not a fd-dup — normal character accumulation
+        // Not a redirect operator — normal character accumulation
         cur += ch;
         i++;
       }
-    } else if (ch === ">" && cmd[i + 1] === "&" && i + 2 < n && (/\d/.test(cmd[i + 2]) || cmd[i + 2] === "-")) {
-      // >&M, >&-  — no-digit-prefix fd-dup form, consume without splitting
-      let k = i + 2;
-      if (cmd[k] === "-") {
-        k++;
-      } else {
-        while (k < n && /\d/.test(cmd[k])) k++;
-      }
-      cur += cmd.slice(i, k);
-      i = k;
+    } else if (ch === ">" && (cmd[i + 1] === "&" || cmd[i + 1] === "|")) {
+      // `>&` / `>|` must be consumed as a two-character OPERATOR before the
+      // separator branch above reads the `&` / `|` as a segment separator —
+      // otherwise the write target demotes into the next segment's cmd0.
+      cur += cmd.slice(i, i + 2);
+      i += 2;
     } else {
       cur += ch; i++;
     }
