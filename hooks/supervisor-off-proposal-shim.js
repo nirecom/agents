@@ -17,7 +17,7 @@ process.stdin.on("end", () => {
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
     // runCommands carries an ARRAY under `commands`, not `.command` — normalization
-    // shared with enforce-system-ops.js / block-off-clearance-write (CPR-2).
+    // shared with enforce-system-ops.js / block-clearance-token-write (CPR-2).
     const { isCommandTool, commandTextOf, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
     if (!isCommandTool(toolName)) process.exit(0);
 

@@ -23,7 +23,7 @@
 #
 #   PERMISSION direction (hooks/enforce-worktree/bash-write-scope/marker-gate.js)
 #     containment GRANTS leniency -> "cannot prove" must mean DENY the shortcut.
-#   DETECTION direction (hooks/block-off-clearance-write/bash-target-context.js)
+#   DETECTION direction (hooks/block-clearance-token-write/bash-target-context.js)
 #     containment ARMS a block     -> "cannot prove" must mean ARM the block.
 #
 # The function used to answer a single hardcoded `false` for "cannot prove"

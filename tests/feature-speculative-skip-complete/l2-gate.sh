@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: L2, workflow, speculative-skip, next-step, scope:issue-specific
 # L2 INTEGRATION — next-step write_tests gate (GATE_READY guarded)
 # Sourced by feature-speculative-skip-complete.sh.
 
@@ -11,12 +13,15 @@ run_next_step() {
 }
 
 if [ "$GATE_READY" = "true" ]; then
-  # G1: outline skipped + skip_verdict confirm → invoke, NEXT_SKILL=write-tests
+  # G1: outline skipped (confirm verdict) + every other step complete → done.
+  # write_gate_state marks all 14 steps complete before overriding one, so
+  # write_tests is already complete here: the fail-open terminal branch must NOT
+  # re-invoke /write-tests when write_tests is settled (#1756).
   SID="g1-$$"
   write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"confirm","source":"skip-verifier","recorded_at":"2026-04-11T10:00:00.000Z"}}'
   G1_OUT="$(run_next_step "$SID")"
-  if printf '%s' "$G1_OUT" | grep -q "ACTION=invoke" && printf '%s' "$G1_OUT" | grep -q "NEXT_SKILL=.*write-tests"; then
-    pass "G1. confirm verdict → invoke write-tests"
+  if printf '%s' "$G1_OUT" | grep -q "ACTION=done"; then
+    pass "G1. confirm verdict → all steps settled, done (does not block)"
   else
     fail "G1. confirm verdict — out=$G1_OUT"
   fi
@@ -44,11 +49,14 @@ if [ "$GATE_READY" = "true" ]; then
     fail "G3. pending verdict — out=$G3_OUT"
   fi
 
-  # G4: outline skipped + NO skip_verdict field → fail-open, not blocked (legacy)
+  # G4: outline skipped + NO skip_verdict field → fail-open, not blocked (legacy).
+  # As in G1, write_tests is already complete, so the terminal branch settles to
+  # done rather than re-invoking /write-tests (#1756). The point of the case is
+  # still that a legacy skip does NOT block.
   SID="g4-$$"
   write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"legacy"}'
   G4_OUT="$(run_next_step "$SID")"
-  if printf '%s' "$G4_OUT" | grep -q "ACTION=invoke"; then
+  if printf '%s' "$G4_OUT" | grep -q "ACTION=done"; then
     pass "G4. legacy skip (no verdict) → fail-open (not blocked)"
   else
     fail "G4. legacy skip — out=$G4_OUT"

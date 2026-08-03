@@ -3,7 +3,7 @@
 # Round-5 codex-HIGH (containment SSOT) and MEDIUM-7 (detection-direction gate).
 #
 # THE HOLE. Two entrypoints ask the SAME question about the SAME directory:
-#   hooks/block-off-clearance-write/bash-target-context.js — is this glob's dir
+#   hooks/block-clearance-token-write/bash-target-context.js — is this glob's dir
 #     inside the workflow dir? (if yes, a pure wildcard target fails closed)
 #   hooks/enforce-worktree/bash-write-scope/marker-gate.js — is this write target
 #     inside the workflow dir? (if yes, it gets the allow fast-path)

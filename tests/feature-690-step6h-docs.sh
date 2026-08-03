@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/feature-690-step6h-docs.sh
-# Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/worktree-end/scripts/write-env-json.js, bin/github-issues/issue-to-history.sh, agents/issue-close-finalize-worker.md, bin/compose-doc-append-entry, hooks/lib/lint-worktree-notes-lang.js
-# Tags: issue-close, docs-write, step6h, consolidation, triage
+# Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/worktree-end/scripts/write-env-json.js, bin/github-issues/issue-to-history.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, bin/compose-doc-append-entry, hooks/lib/lint-worktree-notes-lang.js
+# Tags: issue-close, docs-write, step6h, consolidation, triage, scope:issue-specific
 #
 # Static contract tests for issue #690 — Step 6h docs-write consolidation.
 # These are "red" tests initially — they define the expected post-implementation
@@ -97,9 +97,12 @@ test_t4_issue_to_history_standalone_annotation() {
     return 1
 }
 
-# T5: agents/issue-close-finalize-worker.md must contain written_by_step_6h constant
+# T5: the finalize terminal script must contain the written_by_step_6h constant.
+# #1673 moved the worker from agents/issue-close-finalize-worker.md to the
+# dispatcher module, but the constant was never in the prompt's own branch table:
+# it is set by run-finalize-terminal.sh, which the worker spawns via the registry.
 test_t5_worker_md_has_written_by_step_6h() {
-    local f="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
+    local f="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -158,7 +161,7 @@ run "T1: triage.sh — no Step E in NEXT_STEPS after removal"    test_t1_triage_
 run "T2: write-env-json.js — FIELDS includes MERGE_SHA"         test_t2_write_env_json_has_merge_sha
 run "T3: capture-env.sh — no rev-parse HEAD fallback for MERGE_SHA" test_t3_capture_env_no_rev_parse_fallback
 run "T4: issue-to-history.sh — standalone-only annotation present" test_t4_issue_to_history_standalone_annotation
-run "T5: issue-close-finalize-worker.md — written_by_step_6h present" test_t5_worker_md_has_written_by_step_6h
+run "T5: run-finalize-terminal.sh — written_by_step_6h present" test_t5_worker_md_has_written_by_step_6h
 run "T6: compose-doc-append-entry — --skip-history flag removed" test_t6_compose_no_skip_history_flag
 run "T7: lint-worktree-notes-lang.js — skipHistory option removed" test_t7_lint_no_skip_history_option
 run "T8: step-e.sh — file deleted"                              test_t8_step_e_sh_deleted

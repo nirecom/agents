@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-5 sections: the SHELL-SYNTAX holes that let a protected write reach the
-# filesystem while hooks/block-off-clearance-write/bash-scan.js saw nothing.
+# filesystem while hooks/block-clearance-token-write/bash-scan.js saw nothing.
 #
 # Every case below was ALLOW before the round-5 fix and must now BLOCK. Each is
 # paired with a CPR-5 sanctioned counterpart that must stay ALLOW - a scanner
@@ -21,7 +21,7 @@
 #                  text mentions a protected name (unparsedVerdict()).
 #   R5-3 (HIGH-3)  `eval` takes no `-c`-style flag, so the interpreter gate never
 #                  fired on it. The body is now recursed back through the whole
-#                  scan (hooks/block-off-clearance-write/nested-bodies.js), and
+#                  scan (hooks/block-clearance-token-write/nested-bodies.js), and
 #                  `command`/`builtin`/`exec` wrappers cannot launder it.
 #   R5-4 (MED-4)   backtick command substitution was not scanned even though
 #                  `$( )` already was - an orthogonality hole (CPR-5).

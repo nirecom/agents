@@ -77,6 +77,7 @@ make_fixture() {
   local hdr="$1"
   local root; root="$(mktemp -d)"
   git -C "$root" init -q
+  git -C "$root" config core.hooksPath /dev/null 2>/dev/null || true
   git -C "$root" config user.email "t@example.com"
   git -C "$root" config user.name "t"
   mkdir -p "$root/tests" "$root/bin"
@@ -146,6 +147,7 @@ rm -rf "$R2"
 # TC3: B-flag present (renamed path resolvable) => --apply must NOT delete
 R3="$(mktemp -d)"
 git -C "$R3" init -q
+git -C "$R3" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$R3" config user.email "t@example.com"; git -C "$R3" config user.name "t"
 mkdir -p "$R3/tests" "$R3/bin"
 echo '#!/usr/bin/env bash' > "$R3/bin/old.sh"
@@ -185,6 +187,7 @@ if [[ ! -f "$AUDIT_COMMON" ]]; then
 else
   R5="$(mktemp -d)"
   git -C "$R5" init -q
+  git -C "$R5" config core.hooksPath /dev/null 2>/dev/null || true
   git -C "$R5" config user.email "t@example.com"; git -C "$R5" config user.name "t"
   mkdir -p "$R5/tests" "$R5/bin"
   {

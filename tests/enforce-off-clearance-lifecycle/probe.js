@@ -1,7 +1,7 @@
 // Helper for tests/enforce-off-clearance-lifecycle.sh.
 //
 // In a FILE rather than a `node -e` body on purpose: every string this touches
-// spells an OFF-clearance name, and hooks/block-off-clearance-write.js blocks any
+// spells an OFF-clearance name, and hooks/block-clearance-token-write.js blocks any
 // interpreter body that does. Suffixes are taken from the SSOT
 // (hooks/lib/protected-basenames.js) at runtime, never hardcoded.
 //

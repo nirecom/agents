@@ -26,7 +26,7 @@ const { realResolve } = require("./realpath-resolve");
 // This file is defence in depth only — enforce-worktree.js is a
 // worktree-LOCATION guard, so a linked worktree on a feature branch still
 // allows. Marker integrity is location-independent and is primarily enforced
-// by hooks/block-off-clearance-write.js; both read the same protected-basename
+// by hooks/block-clearance-token-write.js; both read the same protected-basename
 // SSOT (hooks/lib/protected-basenames.js) so the two can never diverge (CPR-2).
 
 function areAllBashTargetsUnderWorkflowDir(targets) {
@@ -63,7 +63,7 @@ function areAllBashTargetsUnderWorkflowDir(targets) {
       // metachars / trailing whitespace-dots the raw command spelled (the
       // real shell resolves these at execution time, before this check runs)
       // so both forms are normalized before testing (CPR-5, same treatment as
-      // hooks/block-off-clearance-write.js). The OFF-clearance token lives in
+      // hooks/block-clearance-token-write.js). The OFF-clearance token lives in
       // this same directory and grants the same clearance, so it's excluded
       // from the allow fast-path on identical grounds — the sanctioned mint
       // route (bin/request-off-clearance) writes it from a subprocess no

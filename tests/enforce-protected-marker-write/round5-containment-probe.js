@@ -1,7 +1,7 @@
 // Helper for tests/enforce-protected-marker-write/cases-round5-containment.sh.
 //
 // Lives in a FILE rather than a `node -e` body on purpose: the OFF-clearance
-// token suffix is itself a protected string, and hooks/block-off-clearance-write.js
+// token suffix is itself a protected string, and hooks/block-clearance-token-write.js
 // blocks any interpreter body that spells one. Everything protected here is
 // derived from the SSOT (hooks/lib/protected-basenames.js) at runtime, so this
 // file also never hardcodes a suffix that could drift.
@@ -9,7 +9,7 @@
 // Usage: node round5-containment-probe.js <agentsDir> <wfDir> <aliasDir> <outsideDir>
 //   CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR must point at <wfDir> so that the
 //   enforce-worktree side's getWorkflowDir() resolves to the same directory the
-//   block-off-clearance-write side is handed explicitly.
+//   block-clearance-token-write side is handed explicitly.
 // Prints `key=value` lines (value: true/false/error:<msg>) — one assertion each.
 "use strict";
 
@@ -23,7 +23,7 @@ const pb = require(H("lib", "protected-basenames.js"));
 const tnorm = require(H("enforce-worktree", "bash-write-scope", "target-normalize.js"));
 const rres = require(H("enforce-worktree", "bash-write-scope", "realpath-resolve.js"));
 const gate = require(H("enforce-worktree", "bash-write-scope", "marker-gate.js"));
-const btc = require(H("block-off-clearance-write", "bash-target-context.js"));
+const btc = require(H("block-clearance-token-write", "bash-target-context.js"));
 
 const MARKER_SUF = "." + pb.SESSION_MARKER_KINDS[0];
 const TOKEN_SUF = pb.OFF_CLEARANCE_TOKEN_SUFFIXES[0];

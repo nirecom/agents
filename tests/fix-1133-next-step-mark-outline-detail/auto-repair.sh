@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: workflow, next-step, mark, auto-repair, scope:issue-specific
 # ===========================================================================
 # === A1-A9: outline/detail evidence-based auto-repair + mid-review guard ===
 # ===========================================================================

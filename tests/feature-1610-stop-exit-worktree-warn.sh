@@ -57,6 +57,13 @@ trap 'rm -rf "$TMP"' EXIT
 WF="$TMP/wf"; mkdir -p "$WF"
 export CLAUDE_WORKFLOW_DIR="$(node_path "$WF")"
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMP/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+WORKFLOW_PLANS_DIR="$(node_path "$WORKFLOW_PLANS_DIR")"
+export WORKFLOW_PLANS_DIR
+
 TU_ENTER='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"EnterWorktree","input":{"path":"/wt"}}]}}'
 TU_EXIT='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"ExitWorktree","input":{}}]}}'
 TU_BASH='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo hi"}}]}}'
@@ -92,13 +99,37 @@ fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
 ' "$CLAUDE_WORKFLOW_DIR" "$1" "${2:-}"
 }
 
+# state_field <sid> <key>
+# Reads a top-level state key, falling back to the same key inside `.current`.
+# #1733 moved the worktree timestamps out of the top level and into the derived
+# projection, so the top-level read alone would report "" on a v2 file. Both
+# shapes are accepted on purpose: this file asserts the recorder's OBSERVABLE
+# contract, not which layer of the state file holds the value.
 state_field() {
     node -e '
 const fs=require("fs"),path=require("path");
 const [dir,sid,key]=process.argv.slice(1);
 try{const s=JSON.parse(fs.readFileSync(path.join(dir,sid+".json"),"utf8"));
-  process.stdout.write(s[key]==null?"":String(s[key]));}catch(e){}
+  const v=s[key]!=null?s[key]:(s.current?s.current[key]:null);
+  process.stdout.write(v==null?"":String(v));}catch(e){}
 ' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+}
+
+# state_event_field <sid> <kind> <field>
+# Reads <field> off the LAST `events[]` entry of the given kind (#1733). Prints the
+# literal "null" for a JSON null, "" when there is no such event, so a null value and a
+# missing event are distinguishable — the whole point of the fallback assertion in R14.
+state_event_field() {
+    node -e '
+const fs=require("fs"),path=require("path");
+const [dir,sid,kind,field]=process.argv.slice(1);
+try{const s=JSON.parse(fs.readFileSync(path.join(dir,sid+".json"),"utf8"));
+  const ev=(s.events||[]).filter((e)=>e&&e.kind===kind);
+  if(!ev.length){process.stdout.write("");}
+  else{const v=ev[ev.length-1][field];
+    process.stdout.write(v===undefined?"(absent)":JSON.stringify(v));}
+}catch(e){}
+' "$CLAUDE_WORKFLOW_DIR" "$1" "$2" "$3"
 }
 
 state_keys() {
@@ -215,6 +246,13 @@ run_S9() {
 # precedence cases below run once hooks/postuse-native-worktree-record.js lands
 # (Step 8b). While it is absent they skip, which is a passing outcome for this
 # file pre-implementation.
+#
+# #1733 note: the recorder now appends a `worktree` event and the timestamps are
+# read back off the projection (see state_field). The `tool_input:{}` payloads
+# below are deliberately KEPT — with no path in the tool input the recorder must
+# fall back to the process cwd, so these cases are the standing coverage for the
+# fallback branch. The path-carrying branch and the path_source vocabulary itself
+# are covered in tests/feature-1733-state-event-stream/worktree-event.sh.
 
 R_LABELS=(
     "R1: EnterWorktree PostToolUse records worktree_entered_at"
@@ -230,6 +268,7 @@ R_LABELS=(
     "R11: workflow-mark.js Bash-only guard untouched"
     "R12: idempotent EnterWorktree re-invocation keeps a valid entered_at, no spurious exit key"
     "R13: no pre-existing state file -> fail-open, recorder does not fabricate one"
+    "R14: tool_input without a path -> worktree event says fallback-process-cwd, worktree_path null"
 )
 
 run_R() {
@@ -304,6 +343,21 @@ run_R() {
     else
         local r13_exists="no"; [ -f "$WF/r13sid.json" ] && r13_exists="yes"
         fail "${R_LABELS[12]} (rc=$RC out=$OUT state_file_created=$r13_exists)"
+    fi
+
+    # R14 — the fallback branch these `tool_input:{}` payloads exercise must RECORD that
+    # it is a fallback. The recorder's process cwd is the session's repo, not the
+    # worktree that was entered, so worktree_path has to be null: writing the observed
+    # cwd there would look exactly like a real reading to every downstream consumer.
+    mk_state r14sid
+    run_recorder '{"tool_name":"EnterWorktree","session_id":"r14sid","tool_input":{}}'
+    local r14_src r14_path
+    r14_src="$(state_event_field r14sid worktree path_source)"
+    r14_path="$(state_event_field r14sid worktree worktree_path)"
+    if [ "$RC" -eq 0 ] && [ "$r14_src" = '"fallback-process-cwd"' ] && [ "$r14_path" = "null" ]; then
+        pass "${R_LABELS[13]}"
+    else
+        fail "${R_LABELS[13]} (rc=$RC path_source=$r14_src worktree_path=$r14_path)"
     fi
 
     if [ -f "$STOP_HOOK" ]; then

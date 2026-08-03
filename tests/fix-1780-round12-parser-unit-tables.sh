@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1780-round12-parser-unit-tables.sh
-# Tests: hooks/block-off-clearance-write/bash-scan/argv-scan.js, hooks/block-off-clearance-write/bash-scan/assignment-text.js, hooks/block-off-clearance-write/interpreter-scan.js, hooks/block-off-clearance-write/nested-bodies.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/lib/protected-basenames.js
+# Tests: hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-scan/assignment-text.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/lib/protected-basenames.js
 # Tags: off-clearance, session-marker, protected-basename, parser, regex, table-driven, mutation-evidence, allowlist, glob, brace-expansion, ansi-c-quoting, interpreter, interpreter-identity, heredoc, here-string, eval, stdin-program, argv-operand, assignment-chain, pwsh-env, classifier, security, unit, scope:common, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
 # - Nothing about the HOOK. Every function here is called in-process; whether the

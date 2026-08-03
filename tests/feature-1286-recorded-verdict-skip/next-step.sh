@@ -1,5 +1,7 @@
 #!/bin/bash
 # shellcheck shell=bash
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: L2, workflow, skip-signal, next-step, scope:issue-specific
 # feature-1286 next-step cases: bin/workflow/next-step marks a planning step
 # skipped when a valid recorded judgment exists and advances the verdict.
 # Relies on helpers.sh being sourced by the dispatcher.
@@ -114,17 +116,22 @@ else
   pass "RV-REC-1 sanity: hasValidSkipJudgment is TRUE for rvrec1 outline fixture"
 fi
 
-# Fault injection: create a DIRECTORY at the .tmp path so writeFileSync throws EISDIR.
-RVREC1_TMP_DIR="$WORKFLOW_DIR/rvrec1.json.tmp"
-mkdir -p "$RVREC1_TMP_DIR"
-
-# Counter file: receives the *.json.tmp write-attempt count on process exit.
+# Fault injection: #1733 changed the atomic-write tmp path from the bare
+# <sid>.json.tmp to <sid>.json.<pid>.<counter>.tmp (writeStateLocked(), to
+# prevent collision with a stray hand-written .tmp file) -- a pre-created
+# directory at the old bare path no longer sits in the real write's way.
+# hvsj-call-counter.js now injects the EISDIR fault itself, keyed on
+# HVSJ_FAULT_SID, by intercepting fs.writeFileSync for the new tmp-path shape.
+#
+# Counter file: receives the *.json.<pid>.<counter>.tmp write-attempt count on
+# process exit.
 RVREC1_CTR_FILE="$WORKFLOW_DIR/rvrec1-write-counter.txt"
 RVREC1_CTR_FILE_N="$(cygpath -m "$RVREC1_CTR_FILE" 2>/dev/null || echo "$RVREC1_CTR_FILE")"
 
-# Run next-step with the counter preload.  The hard timeout (20 s) prevents a
-# genuine hang from wedging the suite; a stack-overflow/crash exits in < 1 s.
-RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
+# Run next-step with the counter+fault preload.  The hard timeout (20 s)
+# prevents a genuine hang from wedging the suite; a stack-overflow/crash
+# exits in < 1 s.
+RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" HVSJ_FAULT_SID="rvrec1" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
 
 # Read write-attempt count (default 0 if file missing).
 RVREC1_CTR="$(cat "$RVREC1_CTR_FILE" 2>/dev/null || echo "0")"
@@ -144,8 +151,6 @@ check_contains "RV-REC-1c: fell through to normal outline handling — NEXT_SKIL
 check_not_contains "RV-REC-1d: must not have advanced past outline to detail" \
   "NEXT_SKILL=make-detail-plan" "$RVREC1_OUT"
 
-# Clean up injected fault so it cannot affect later cases.
-rm -rf "$RVREC1_TMP_DIR"
 
 # ---------------------------------------------------------------------------
 # RV-35: hardening #3/#7 (plan RV-17) — skip_judgment audit trail preserved.
@@ -226,14 +231,12 @@ else
   pass "RV-REC-2 sanity: hasValidSkipJudgment is TRUE for rvrec2 detail fixture"
 fi
 
-# Fault injection for detail .tmp path.
-RVREC2_TMP_DIR="$WORKFLOW_DIR/rvrec2.json.tmp"
-mkdir -p "$RVREC2_TMP_DIR"
-
+# Fault injection for detail .tmp path -- see RV-REC-1 comment above; same
+# HVSJ_FAULT_SID-keyed injection inside hvsj-call-counter.js.
 RVREC2_CTR_FILE="$WORKFLOW_DIR/rvrec2-write-counter.txt"
 RVREC2_CTR_FILE_N="$(cygpath -m "$RVREC2_CTR_FILE" 2>/dev/null || echo "$RVREC2_CTR_FILE")"
 
-RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
+RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" HVSJ_FAULT_SID="rvrec2" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
 
 RVREC2_CTR="$(cat "$RVREC2_CTR_FILE" 2>/dev/null || echo "0")"
 
@@ -242,7 +245,6 @@ check "RV-REC-2b: markStep attempted exactly once — no recursion (unfixed: >1)
 check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL=make-detail-plan" \
   "NEXT_SKILL=make-detail-plan" "$RVREC2_OUT"
 
-rm -rf "$RVREC2_TMP_DIR"
 
 # ---------------------------------------------------------------------------
 # RV-36: hardening #3/#7 (plan RV-17b) — single-read: applyRecordedVerdictSkip

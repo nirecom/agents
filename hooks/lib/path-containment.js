@@ -1,6 +1,6 @@
 // hooks/lib/path-containment.js
 // SSOT for "is this path really inside that directory?" (CPR-2), shared by
-// enforce-worktree's marker-gate allow fast-path and block-off-clearance-write's
+// enforce-worktree's marker-gate allow fast-path and block-clearance-token-write's
 // glob qualifier — the two used to drift into separate implementations (one
 // resolved symlinks + probed case-sensitivity, one did a lexical resolve()),
 // so a symlink or case-only spelling difference could defeat containment on

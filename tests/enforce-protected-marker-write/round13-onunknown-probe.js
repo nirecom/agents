@@ -1,7 +1,7 @@
 // Helper for tests/enforce-protected-marker-write/cases-round13-onunknown.sh.
 //
 // Lives in a FILE rather than a `node -e` body for the same reason as its
-// sibling ./round5-containment-probe.js: hooks/block-off-clearance-write.js
+// sibling ./round5-containment-probe.js: hooks/block-clearance-token-write.js
 // blocks interpreter bodies that spell a protected basename, and a file keeps
 // the fixture text out of the command line entirely.
 //
@@ -21,7 +21,7 @@ const [agentsDir, wfDir, loopDir, deepDir, outsideLoopDir, outsideDir] = process
 const H = (...p) => path.join(agentsDir, "hooks", ...p);
 
 const pc = require(H("lib", "path-containment.js"));
-const btc = require(H("block-off-clearance-write", "bash-target-context.js"));
+const btc = require(H("block-clearance-token-write", "bash-target-context.js"));
 
 const out = [];
 function emit(key, fn) {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, approval-gate, outline, detail, confirm-sentinel, scope:common, pwsh-not-required
 #
 # TL3 gap (what this test does NOT catch):
@@ -153,11 +153,17 @@ write_state() {
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
 }
 
+# The three raw readers below accept BOTH state shapes: the legacy top-level
+# `steps` / `plan_approvals` maps, and the same maps inside `.current` (the derived
+# projection introduced by #1733). Fixtures here are hand-written v1 files that the
+# state layer migrates lazily, so one run can observe either shape. These assertions
+# are about the APPROVAL GATE, not the storage layout — the event-stream side of
+# plan_approvals is covered by tests/feature-1733-state-event-stream/provenance.sh.
 read_state_status() {
   local sid="$1" step="$2"
   local f="$WORKFLOW_DIR/${sid}.json"
   [ -f "$f" ] || { echo "MISSING"; return; }
-  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const st=s.steps&&s.steps[process.argv[2]];console.log(st&&st.status?st.status:'MISSING');}catch(e){console.log('ERR');}" "$f" "$step" 2>/dev/null || echo "ERR"
+  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const m=s.steps||(s.current&&s.current.steps);const st=m&&m[process.argv[2]];console.log(st&&st.status?st.status:'MISSING');}catch(e){console.log('ERR');}" "$f" "$step" 2>/dev/null || echo "ERR"
 }
 
 # read_approval_source <sid> <step> → plan_approvals[step].source or "MISSING"
@@ -165,7 +171,7 @@ read_approval_source() {
   local sid="$1" step="$2"
   local f="$WORKFLOW_DIR/${sid}.json"
   [ -f "$f" ] || { echo "MISSING"; return; }
-  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const a=s.plan_approvals&&s.plan_approvals[process.argv[2]];console.log(a&&a.source?a.source:'MISSING');}catch(e){console.log('ERR');}" "$f" "$step" 2>/dev/null || echo "ERR"
+  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const pa=s.plan_approvals||(s.current&&s.current.plan_approvals);const a=pa&&pa[process.argv[2]];console.log(a&&a.source?a.source:'MISSING');}catch(e){console.log('ERR');}" "$f" "$step" 2>/dev/null || echo "ERR"
 }
 
 # has_approval <sid> <step> → "yes" | "no"
@@ -173,7 +179,7 @@ has_approval() {
   local sid="$1" step="$2"
   local f="$WORKFLOW_DIR/${sid}.json"
   [ -f "$f" ] || { echo "no"; return; }
-  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));console.log(s.plan_approvals&&s.plan_approvals[process.argv[2]]?'yes':'no');}catch(e){console.log('no');}" "$f" "$step" 2>/dev/null || echo "no"
+  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const pa=s.plan_approvals||(s.current&&s.current.plan_approvals);console.log(pa&&pa[process.argv[2]]?'yes':'no');}catch(e){console.log('no');}" "$f" "$step" 2>/dev/null || echo "no"
 }
 
 # run_next_step: KEY=value lines on stdout (always exits 0 in verdict mode)

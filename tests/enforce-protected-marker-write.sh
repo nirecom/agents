@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/enforce-protected-marker-write.sh
-# Tests: hooks/block-off-clearance-write.js, hooks/block-off-clearance-write/dispatch.js, hooks/block-off-clearance-write/bash-scan.js, hooks/block-off-clearance-write/nested-bodies.js, hooks/block-off-clearance-write/interpreter-scan.js, hooks/block-off-clearance-write/bash-target-context.js, hooks/lib/command-parser.js, hooks/lib/path-containment.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/lib/session-markers.js
+# Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/bash-target-context.js, hooks/lib/command-parser.js, hooks/lib/path-containment.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/lib/session-markers.js
 # Tags: off-clearance, session-marker, protected-basename, glob, ads, pretooluse, block-write, classifier, security, redirect-operator, parse-failure, eval, command-substitution, here-string, heredoc, stdin-program, pipe, process-substitution, interpreter, interpreter-identity, argv-operand, flag-cluster, brace-expansion, ansi-c-quoting, workflow-dir, symlink, case-fold, fail-direction, on-unknown, path-containment, cwd-tracking, pushd, popd, dir-stack, command-wrapper, scope:common, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook inside a live claude -p session
@@ -51,7 +51,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
-HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
 MARKER_GATE_NODE="$_AGENTS_DIR_NODE/hooks/enforce-worktree/bash-write-scope/marker-gate.js"

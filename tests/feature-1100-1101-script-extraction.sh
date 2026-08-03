@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: skills/issue-close-stage/scripts/run-stage-chain.sh, skills/issue-close-finalize/scripts/run-initial.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, skills/issue-close-finalize/scripts/run-loop-step.js, agents/issue-close-stage-worker.md, agents/issue-close-finalize-worker.md
-# Tags: issue-close, stage, finalize, worker, script-extraction
+# Tests: skills/issue-close-stage/scripts/run-stage-chain.sh, skills/issue-close-finalize/scripts/run-initial.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, skills/issue-close-finalize/scripts/run-loop-step.js, bin/worker-dispatch/workers/issue-close-stage.js, bin/worker-dispatch/workers/issue-close-finalize.js, hooks/lib/worker-dispatch-registry.js
+# Tags: issue-close, stage, finalize, worker, script-extraction, scope:issue-specific
 set -euo pipefail
 
 run_with_timeout() {
@@ -269,36 +269,69 @@ test_s4_run_loop_step_syntax() {
 }
 
 # ---------------- Group 4: Worker dispatch pattern checks ----------------
+#
+# #1673 replaced the two subagent prompts (agents/issue-close-stage-worker.md,
+# agents/issue-close-finalize-worker.md) with deterministic dispatcher modules.
+# The scripts under test are unchanged; only who invokes them moved. W4 flips
+# sign as a consequence: the subagent had to hand bash an `eval` string, the
+# module spawns argv directly, so `eval` is now prohibited rather than required.
+
+STAGE_WORKER=bin/worker-dispatch/workers/issue-close-stage.js
+FINALIZE_WORKER=bin/worker-dispatch/workers/issue-close-finalize.js
+# A worker module never names a script by literal path: spawn.js `resolveScript()`
+# looks the key up in the registry's `binaries.scripts` table and joins it onto an
+# anchor. The registry is therefore the only place the three script paths exist,
+# and the only place this wiring can actually break.
+REGISTRY=hooks/lib/worker-dispatch-registry.js
 
 test_w1_stage_worker_references_run_stage_chain() {
-    grep -q 'run-stage-chain.sh' agents/issue-close-stage-worker.md
+    grep -q 'run-stage-chain.sh' "$STAGE_WORKER"
 }
 
 test_w2_finalize_worker_references_all_scripts() {
     local FAILED=0
-    if ! grep -q 'run-initial.sh' agents/issue-close-finalize-worker.md; then
-        echo "  run-initial.sh not referenced in finalize-worker.md"
-        FAILED=1
-    fi
-    if ! grep -q 'run-loop-step.js' agents/issue-close-finalize-worker.md; then
-        echo "  run-loop-step.js not referenced in finalize-worker.md"
-        FAILED=1
-    fi
-    if ! grep -q 'run-finalize-terminal.sh' agents/issue-close-finalize-worker.md; then
-        echo "  run-finalize-terminal.sh not referenced in finalize-worker.md"
+    [ -f "$REGISTRY" ] || { echo "  $REGISTRY missing"; return 1; }
+    local s
+    for s in run-initial.sh run-loop-step.js run-finalize-terminal.sh; do
+        if ! grep -q "skills/issue-close-finalize/scripts/$s" "$REGISTRY"; then
+            echo "  $s not declared in the issue-close-finalize worker's binaries.scripts"
+            FAILED=1
+        fi
+    done
+    # The declarations must belong to the issue-close-finalize entry, not merely
+    # appear somewhere in the file.
+    if ! node -e '
+const r = require(process.argv[1]);
+const s = ((r.workers["issue-close-finalize"] || {}).binaries || {}).scripts || {};
+const want = ["run-initial.sh", "run-loop-step.js", "run-finalize-terminal.sh"];
+const have = Object.values(s).map((d) => String(d.rel));
+process.exit(want.every((w) => have.some((h) => h.endsWith("/" + w))) ? 0 : 1);
+' "./$REGISTRY"; then
+        echo "  issue-close-finalize entry does not declare all 3 dispatch scripts"
         FAILED=1
     fi
     return $FAILED
 }
 
+# Existence guard: a "does not contain X" assertion is vacuously true against a
+# missing file, so both negative tests below fail loudly when the module is absent.
+_require_workers() {
+    local f rc=0
+    for f in "$STAGE_WORKER" "$FINALIZE_WORKER"; do
+        [ -f "$f" ] || { echo "  $f missing"; rc=1; }
+    done
+    return $rc
+}
+
 test_w3_workers_no_mktemp() {
     local FAILED=0
-    if grep -qE 'mktemp|tmpfile' agents/issue-close-stage-worker.md; then
-        echo "  mktemp/tmpfile found in issue-close-stage-worker.md"
+    _require_workers || return 1
+    if grep -qE 'mktemp|tmpfile' "$STAGE_WORKER"; then
+        echo "  mktemp/tmpfile found in issue-close-stage.js"
         FAILED=1
     fi
-    if grep -qE 'mktemp|tmpfile' agents/issue-close-finalize-worker.md; then
-        echo "  mktemp/tmpfile found in issue-close-finalize-worker.md"
+    if grep -qE 'mktemp|tmpfile' "$FINALIZE_WORKER"; then
+        echo "  mktemp/tmpfile found in issue-close-finalize.js"
         FAILED=1
     fi
     return $FAILED
@@ -323,18 +356,21 @@ _lines_near_each_other() {
     [ "$dist" -le "$max_dist" ]
 }
 
-test_w4_workers_use_eval_dispatch() {
-    local FAILED=0
-    # stage-worker: eval "$( on one line, run-stage-chain.sh within 5 lines
-    if ! _lines_near_each_other agents/issue-close-stage-worker.md 'eval' 'run-stage-chain\.sh' 5; then
-        echo "  eval dispatch near run-stage-chain.sh not found in stage-worker.md"
-        FAILED=1
-    fi
-    # finalize-worker: eval "$( on one line, run-initial.sh within 5 lines
-    if ! _lines_near_each_other agents/issue-close-finalize-worker.md 'eval' 'run-initial\.sh' 5; then
-        echo "  eval dispatch near run-initial.sh not found in finalize-worker.md"
-        FAILED=1
-    fi
+# W4 (post-#1673): the dispatcher modules must NOT re-introduce eval.
+# The eval hand-off existed only because a subagent could reach the scripts
+# solely through the Bash tool; a module spawns argv directly, so any surviving
+# eval would be a pure re-opening of the shell-injection surface the overlay
+# had to guard byte by byte. Asserted on both the JS `eval(` form and a shell
+# `eval "$(` string that a module might emit for the Bash tool.
+test_w4_workers_do_not_eval() {
+    local FAILED=0 f
+    _require_workers || return 1
+    for f in "$STAGE_WORKER" "$FINALIZE_WORKER"; do
+        if grep -qE 'eval\(|eval "\$\(' "$f"; then
+            echo "  eval found in $f (dispatcher workers spawn argv directly)"
+            FAILED=1
+        fi
+    done
     return $FAILED
 }
 
@@ -427,10 +463,10 @@ run "S2: run-initial.sh bash -n syntax check"           test_s2_run_initial_synt
 run "S3: run-finalize-terminal.sh bash -n syntax check" test_s3_run_finalize_terminal_syntax
 run "S4: run-loop-step.js node --check syntax"          test_s4_run_loop_step_syntax
 
-run "W1: stage-worker references run-stage-chain.sh"            test_w1_stage_worker_references_run_stage_chain
-run "W2: finalize-worker references all 3 dispatch scripts"     test_w2_finalize_worker_references_all_scripts
+run "W1: stage worker references run-stage-chain.sh"            test_w1_stage_worker_references_run_stage_chain
+run "W2: registry declares all 3 finalize dispatch scripts"     test_w2_finalize_worker_references_all_scripts
 run "W3: workers contain no mktemp/tmpfile"                     test_w3_workers_no_mktemp
-run "W4: workers use eval dispatch pattern"                     test_w4_workers_use_eval_dispatch
+run "W4: workers do not use eval"                               test_w4_workers_do_not_eval
 
 run "A1: accept g5_3a_completed=false → mock called, phase=awaiting_recursion" test_a1_accept_g5_3a_not_completed
 run "A2: accept g5_3a_completed=true → mock NOT called (idempotent)"           test_a2_accept_g5_3a_already_completed_idempotent

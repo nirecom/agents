@@ -56,6 +56,12 @@ mkdir -p "$WORKFLOW_DIR"
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 # Use a current timestamp so cleanupZombies(7) does not delete the prior state.
 NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -82,6 +88,13 @@ write_state_file() {
     printf '%s' "$content" > "$WORKFLOW_DIR/${sid}.json"
 }
 
+# read_step_field <sid> <step> <field>
+# Reads a step field from the raw state file, preferring the legacy top-level
+# `steps` map and falling back to `.current.steps`. #1733 made the event stream
+# authoritative and `steps` a key of the derived projection; both shapes are
+# accepted so this file keeps asserting the INHERITANCE contract rather than the
+# storage layout. The heir's stream shape itself is covered in
+# tests/feature-1733-state-event-stream/session-inherit.sh.
 read_step_field() {
     local sid="$1" step="$2" field="$3"
     local f="$WORKFLOW_DIR/${sid}.json"
@@ -89,7 +102,8 @@ read_step_field() {
     node -e "
 try {
   const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-  const st = s.steps && s.steps['$step'];
+  const steps = s.steps || (s.current && s.current.steps);
+  const st = steps && steps['$step'];
   const v = st && st['$field'];
   if (v === undefined || v === null) { console.log(''); }
   else { console.log(String(v)); }

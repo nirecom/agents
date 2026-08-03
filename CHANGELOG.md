@@ -192,3 +192,35 @@ Changes: Automatic Claude Code session sync is now **off by default**. Set `SESS
 ### FEATURE: PR #1781 (2026-08-01)
 Background: feat(#1741): add CODE_LANG_EXCLUDE repo-level opt-out for language check
 Changes: Added `CODE_LANG_EXCLUDE` to let specific repos opt out of the `CODE_LANG` commit-time language check, matched by absolute path or glob (semicolon-separated), same matcher as `ENFORCE_WORKTREE_EXCLUDE`.
+
+### FEATURE: PR #1784 (2026-08-01)
+Background: feat(#1769): add /sweep-issues skill; flip /sweep family to apply-by-default
+Changes: **Breaking:** every `/sweep` member now applies changes by default. `--dry-run` is the new preview flag, replacing the previous `--apply` opt-in. Running `/sweep`, `bin/sweep-branches.sh`, `bin/sweep-worktrees.sh`, `bin/sweep-plans.sh`, `bin/audit-tests.sh` or `bin/audit-tests-common.sh` with no flags now removes worktrees, deletes local and remote branches, deletes plan files, `git rm`s retired tests, and closes issues for real. Add `--dry-run` to any of them to get the old flagless behavior back. `--apply` is accepted as a no-op where it previously existed. The nightly cron in `.github/workflows/sweep.yml` was adjusted so its effective behavior is unchanged.;Note the flags that changed meaning as a side effect: `--delete-no-pr` (sweep-branches) and `--fix-headers` (audit-tests) used to require `--apply` alongside them and were report-only on their own; each is now destructive by itself.;New `/sweep-issues` skill: finds stale open GitHub issues and closes them in two tiers — meta parents whose sub-issues are all closed, and issues whose referenced test paths no longer exist. Use `--deep` to verify each candidate by running the test it references, `--dry-run` to preview, and `--band-size`/`--band-index` to process large backlogs in chunks. A failed sub-step now surfaces in both the exit status and the error count instead of reporting as a clean empty sweep.;Fixed: `bin/sweep-plans.sh` could claim and delete files that were never workflow planning artifacts, whenever their names happened to start with a hyphen. Files that do not match the recognized artifact naming are now skipped and reported in a `files_skipped_unrecognized` count.
+
+### FEATURE: PR #1786 (2026-08-01)
+Background: feat(#1673): replace close-path LLM subagents with deterministic worker scripts
+Changes: Commit/push, issue-close-stage, and issue-close-finalize now run as deterministic worker-dispatch scripts instead of LLM subagents, improving reliability and speed.
+
+### FEATURE: PR #1801 (2026-08-01)
+Background: fix(#1782): normalize_token() no longer glob-expands or accepts root-equivalent tokens
+Changes: Fixed: `--fix-headers --apply` no longer corrupts `# Tests:` headers containing glob characters (`*`, `?`) or root-equivalent path tokens (`/`, `.`, `..`, `./`, `../`).
+
+### FEATURE: PR #1792 (2026-08-01)
+Background: fix(#1756): recognise complete as settled in next-step's fail-open re-invoke
+Changes: Fixed: `next-step` no longer re-invokes `/write-tests` forever once a session has finished. A completed `write_tests` step is now recognised as settled, so a wrapped-up session reports `ACTION=done` instead of looping back to a step that was already done.;Changed: `bin/workflow/next-step` is now a thin dispatcher over `bin/workflow/lib/next-step/`. Behaviour is unchanged; the recovery commands it prints (`--reset` / `--mark`) still name the entrypoint, not an internal module.
+
+### FEATURE: PR #1808 (2026-08-01)
+Background: feat(#1733): migrate workflow state file to an append-only event stream
+Changes: The workflow session state file is now an append-only event log (schema v2). Per-step elapsed time is derived from the log automatically, so the opt-in `RECORD_STEP_TIMESTAMPS` setting has been removed — delete it from your `.env` if present. Existing v1 state files are migrated automatically the next time their own session writes; reading a file never rewrites it, so sessions on older releases are unaffected.
+
+### FEATURE: PR #1826 (2026-08-02)
+Background: fix(#1779): detect zero-commit branches in resolve-merge-base and fall back to working-tree diff
+Changes: `select-tests.sh --auto` and `/run-tests` no longer silently skip all tests on a branch with zero commits — uncommitted and untracked work is now diffed directly against the working tree instead of an empty merge-base range.
+
+### FEATURE: PR #1854 (2026-08-02)
+Background: feat(#1849): add preuse-auto-approve hook for Monitor and EnterWorktree
+Changes: Monitor and EnterWorktree tool calls no longer pause for a confirmation dialog during normal workflow execution. Set `AUTO_APPROVE_TOOLS=off` in `.env` to restore the previous prompt behavior instantly.
+
+### FEATURE: PR #1853 (2026-08-02)
+Background: feat(#1642): single-authority prompt-extraction CLI + blocking gate wiring
+Changes: **New**: `bin/check-prompt-extraction` — single-authority CLI for §1.5 code-fence and §1.3 inline-procedure violations; wired as workflow-gate Gate 3 (blocking) and pre-commit backstop; existing violations frozen in `.prompt-extraction-allowlist` ratchet;**Changed**: `bin/check-inline-procedures` converted to advisory adapter (always exits 0, delegates to new engine)

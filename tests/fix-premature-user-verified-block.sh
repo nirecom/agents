@@ -40,6 +40,12 @@ SENTINEL_CMD='echo \"<<WORKFLOW_USER_VERIFIED: implementation complete>>\"'
 SESSION_BASE="$WORK_DIR/workflow-dir"
 mkdir -p "$SESSION_BASE"
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$WORK_DIR/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 # Helper — invoke the hook and capture the decision field.
 # Args: enforce_worktree gh_dir json
 run_hook_decision() {
@@ -74,6 +80,7 @@ make_linked_worktree() {
   LINKED_WT="$WORK_DIR/wt-$tag"
   mkdir -p "$MAIN_REPO"
   git -C "$MAIN_REPO" init -q -b main
+  git -C "$MAIN_REPO" config core.hooksPath /dev/null 2>/dev/null || true
   git -C "$MAIN_REPO" config user.email "test@example.com"
   git -C "$MAIN_REPO" config user.name "Test"
   # Build seed commit via plumbing (avoids `git commit` which Claude Code's

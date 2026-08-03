@@ -46,6 +46,7 @@ SENTINEL_CMD='echo \"<<WORKFLOW_USER_VERIFIED: U1 staged files panel>>\"'
 GIT_REPO="$WORK_DIR/repo"
 mkdir -p "$GIT_REPO"
 git -C "$GIT_REPO" init -q
+git -C "$GIT_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$GIT_REPO" config user.email "test@example.com"
 git -C "$GIT_REPO" config user.name "Test"
 echo "hello" > "$GIT_REPO/foo.txt"
@@ -87,6 +88,7 @@ echo "=== U4: no staged files → (none) ==="
 EMPTY_REPO="$WORK_DIR/empty-repo"
 mkdir -p "$EMPTY_REPO"
 git -C "$EMPTY_REPO" init -q
+git -C "$EMPTY_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$EMPTY_REPO" config user.email "test@example.com"
 git -C "$EMPTY_REPO" config user.name "Test"
 U4_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$EMPTY_REPO\"}}"
@@ -205,6 +207,7 @@ echo "=== U11: CLAUDE_PROJECT_DIR is IGNORED when tool_input.cwd is absent ==="
 OTHER_REPO="$WORK_DIR/other-repo"
 mkdir -p "$OTHER_REPO"
 git -C "$OTHER_REPO" init -q
+git -C "$OTHER_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$OTHER_REPO" config user.email "test@example.com"
 git -C "$OTHER_REPO" config user.name "Test"
 echo "bar" > "$OTHER_REPO/bar.txt"

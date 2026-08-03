@@ -2,7 +2,7 @@
 # Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-13 / codex security scanner "C": THE DETECTION DIRECTION OF CONTAINMENT.
 #
-# THE HOLE. hooks/block-off-clearance-write/bash-target-context.js asks
+# THE HOLE. hooks/block-clearance-token-write/bash-target-context.js asks
 # hooks/lib/path-containment.js `resolvesUnder()` whether a write target's
 # DIRECTORY lands at/under the workflow dir. That question is the sole qualifier
 # behind the N-2 exception: a pure-wildcard basename (`<wf>/*`, `<wf>/s1*`)

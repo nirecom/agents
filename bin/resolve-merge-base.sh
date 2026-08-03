@@ -78,6 +78,11 @@ g() { git -C "$REPO_DIR" "$@"; }
 
 # ---- reported fields --------------------------------------------------------
 
+# Initialised HERE, above the "not a git repository" early exit below: that exit goes through
+# emit_and_exit, so a field first assigned further down would abort under `set -u`.
+#
+# The kv key ORDER is not part of the contract — every consumer parses it with a `case` over the
+# key, so fields may be added or reordered without breaking them.
 BASE=""
 STATE="UNRESOLVED"
 SOURCE="none"
@@ -87,6 +92,20 @@ BRANCH="DETACHED"
 WARN="none"
 ALT_BASE="-"
 DETAIL=""
+# #1779. A branch with no commits of its own resolves to a base that IS HEAD: correct, and the
+# range it implies (`<base>...HEAD`) is empty by construction. These four fields report that
+# observation plus the size of the working tree the consumer can fall back to. They are FACTS,
+# not a verdict — what to diff instead stays with each consumer.
+#
+# `uncommitted_*` comes from `git diff HEAD`, so it counts TRACKED paths only. A consumer that
+# builds a FILE SET for the degraded range must union `git ls-files --others --exclude-standard`
+# separately (prior art: bin/check-verification-gate.sh degraded_scope_files()). There is no
+# `untracked_lines` on purpose: counting lines in an untracked file needs one
+# `git diff --no-index` per file, which is not worth the cost of a reported number.
+BASE_IS_HEAD="-"
+UNCOMMITTED_LINES="-"
+UNCOMMITTED_FILES="-"
+UNTRACKED_FILES="-"
 
 emit_and_exit() { # <exit-code>
   if [[ "$FORMAT" == "base" ]]; then
@@ -95,7 +114,11 @@ emit_and_exit() { # <exit-code>
     printf 'base=%s\n' "$BASE"
     printf 'state=%s\n' "$STATE"
     printf 'source=%s\n' "$SOURCE"
+    printf 'base_is_head=%s\n' "$BASE_IS_HEAD"
     printf 'safe_base=%s\n' "HEAD"
+    printf 'uncommitted_lines=%s\n' "$UNCOMMITTED_LINES"
+    printf 'uncommitted_files=%s\n' "$UNCOMMITTED_FILES"
+    printf 'untracked_files=%s\n' "$UNTRACKED_FILES"
     printf 'diff_lines=%s\n' "$DIFF_LINES"
     printf 'diff_files=%s\n' "$DIFF_FILES"
     printf 'threshold_lines=%s\n' "$MAX_LINES"
@@ -177,6 +200,17 @@ count_uncommitted() { # prints "<lines> <files>"
   local out
   out="$(g diff --numstat HEAD 2>/dev/null)" || out=""
   count_numstat "$out"
+}
+
+# The other half of the working tree. `git diff HEAD` is blind to untracked paths, so this is a
+# SEPARATE axis rather than an addend: a consumer that read only uncommitted_files would report
+# "nothing changed" on a branch whose whole change is brand-new files. `--exclude-standard` keeps
+# gitignored build output and local scratch out of the census.
+count_untracked() { # prints "<files>"
+  local out
+  out="$(g ls-files --others --exclude-standard 2>/dev/null)" || out=""
+  # `grep -c` exits 1 on zero matches, which would surface as a failure under pipefail.
+  if [[ -n "$out" ]]; then printf '%s' "$(printf '%s\n' "$out" | grep -c .)"; else printf '0'; fi
 }
 
 # ---- layer 1: the recorded baseline ----------------------------------------
@@ -305,6 +339,27 @@ fi
 
 DETAIL="${DETAIL//$'\n'/ }"
 
+# ---- the working-tree observation (#1779) -----------------------------------
+#
+# Runs AFTER $BASE and $STATE are settled — base_is_head cannot be answered before there is a
+# base — and covers RECORDED as well as the layer-2 states, because a baseline recorded on a
+# branch with no commits names HEAD itself.
+#
+# One gate for all four fields: `--format base` prints a single line and cannot carry them, so
+# neither `git diff --numstat HEAD` nor `git ls-files --others` is worth running there.
+if [[ "$FORMAT" == "kv" || $EXPLAIN -eq 1 ]]; then
+  HEAD_SHA="$(g rev-parse --verify --quiet HEAD 2>/dev/null)" || HEAD_SHA=""
+  if [[ -n "$BASE" && -n "$HEAD_SHA" ]]; then
+    # `^{commit}` because a FALLBACK base is the literal string `HEAD~1`, not a sha.
+    BASE_SHA="$(g rev-parse --verify --quiet "${BASE}^{commit}" 2>/dev/null)" || BASE_SHA=""
+    if [[ -n "$BASE_SHA" ]]; then
+      if [[ "$BASE_SHA" == "$HEAD_SHA" ]]; then BASE_IS_HEAD="true"; else BASE_IS_HEAD="false"; fi
+    fi
+  fi
+  read -r UNCOMMITTED_LINES UNCOMMITTED_FILES <<< "$(count_uncommitted)"
+  UNTRACKED_FILES="$(count_untracked)"
+fi
+
 # ---- --explain (diagnostics only; never on stdout) --------------------------
 
 if [[ $EXPLAIN -eq 1 ]]; then
@@ -317,7 +372,8 @@ if [[ $EXPLAIN -eq 1 ]]; then
       printf '  %-18s: %-42s lines=%s files=%s\n' "$label" "$absent" "-" "-" >&2
     fi
   }
-  printf '[resolve-merge-base] repo=%s branch=%s state=%s\n' "$(_repo_display "$REPO_DIR")" "$BRANCH" "$STATE" >&2
+  printf '[resolve-merge-base] repo=%s branch=%s state=%s base_is_head=%s\n' \
+    "$(_repo_display "$REPO_DIR")" "$BRANCH" "$STATE" "$BASE_IS_HEAD" >&2
   if [[ $REC_PRESENT -eq 1 ]]; then
     explain_row "recorded-baseline" "$REC_BASE" "(none)"
   else
@@ -326,8 +382,10 @@ if [[ $EXPLAIN -eq 1 ]]; then
   explain_row "origin/main" "$MB_ORIGIN" "(unresolvable)"
   explain_row "main" "$MB_MAIN" "(unresolvable)"
   explain_row "HEAD~1" "$MB_HEAD1" "(unresolvable)"
-  read -r U_LINES U_FILES <<< "$(count_uncommitted)"
-  printf '  %-18s: %-42s lines=%s files=%s\n' "safe (uncommitted)" "HEAD" "$U_LINES" "$U_FILES" >&2
+  # Already computed above; recomputing here would run `git diff --numstat HEAD` twice.
+  printf '  %-18s: %-42s lines=%s files=%s\n' "safe (uncommitted)" "HEAD" \
+    "$UNCOMMITTED_LINES" "$UNCOMMITTED_FILES" >&2
+  printf '  %-18s: %-42s lines=%s files=%s\n' "untracked" "(not in HEAD)" "-" "$UNTRACKED_FILES" >&2
   [[ -n "$DEMOTE_REASON" ]] && printf '[resolve-merge-base] %s\n' "$DEMOTE_REASON" >&2
   printf '[resolve-merge-base] detail=%s\n' "$DETAIL" >&2
 fi

@@ -28,7 +28,7 @@ function readStdin() {
 }
 
 // Tool set + payload-shape normalization are shared with
-// hooks/block-off-clearance-write/dispatch.js and
+// hooks/block-clearance-token-write/dispatch.js and
 // hooks/supervisor-off-proposal-shim.js (CPR-2). This file modeled the
 // runCommands array shape correctly first; the helper preserves that
 // contract verbatim (join with "\n").

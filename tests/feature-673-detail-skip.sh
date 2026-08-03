@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: agents/detail-planner.md, skills/make-detail-plan/SKILL.md
-# Tags: worktree, detail, planning, sentinel, workflow
+# Tests: agents/detail-planner.md, skills/make-detail-plan/SKILL.md, bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: worktree, detail, planning, sentinel, workflow, scope:issue-specific
 # L1 unit tests for change ⑤ of issue #673 as superseded by #1286:
 # #673 introduced adaptive detail-plan skip via DETAIL_SKIPPABLE_BY_PLANNER.
 # #1286 changed MDP-4a so that sentinel is now a fallback notice only:

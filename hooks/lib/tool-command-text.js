@@ -10,7 +10,7 @@
 //
 // Every PreToolUse hook that scans a command therefore has to normalize, and
 // before #1780 each one open-coded it — hooks/enforce-system-ops.js handled the
-// array while hooks/block-off-clearance-write/dispatch.js and
+// array while hooks/block-clearance-token-write/dispatch.js and
 // hooks/supervisor-off-proposal-shim.js read `.command` only, so a runCommands
 // call sailed past them with `undefined`. That is a silent full bypass, not a
 // degraded check.

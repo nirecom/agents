@@ -2,7 +2,7 @@
 
 // Two different concerns used to share this file (CPR-3). Path containment
 // across filesystems of unknown case-sensitivity now lives in
-// hooks/lib/path-containment.js — hooks/block-off-clearance-write/ asks the
+// hooks/lib/path-containment.js — hooks/block-clearance-token-write/ asks the
 // same question about the same directory and had grown a second, weaker
 // (lexical, win32-only) answer (CPR-2). Re-exported here so existing
 // requirers keep working. normalizeTarget() stays: it's about the

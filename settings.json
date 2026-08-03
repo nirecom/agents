@@ -425,7 +425,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-off-clearance-write.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-clearance-token-write.js\"",
             "timeout": 5
           }
         ]
@@ -566,6 +566,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-off-proposal-shim.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Monitor|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/preuse-auto-approve.js\"",
             "timeout": 5
           }
         ]

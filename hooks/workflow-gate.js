@@ -4,7 +4,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync, spawnSync } = require("child_process");
 const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -13,15 +12,13 @@ const {
   reconcileEffectiveState,
 } = require("./workflow-state");
 
-const { isMergeToProtectedCommand, getProtectedBranches } = require("./lib/merge-detect");
-const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-const { readState: readSupervisorState, writeAuditState } = require("./lib/supervisor-state-writer");
-const { resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id");
-const { formatPreMergeBlockReason } = require("./lib/supervisor-report-format");
-const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK } = require("./lib/supervisor-state-schema");
+const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 
 // Steps tracked by the workflow but not enforced at commit time.
-const NON_GATE_STEPS = ["research", "pre_final_report_gate"];
+// `final_report` is a TERMINAL step (SSOT: state-io TERMINAL_STEPS) recorded
+// AFTER the commit it would otherwise gate — demanding it here would make every
+// commit unreachable.
+const NON_GATE_STEPS = ["research", "pre_final_report_gate", "final_report"];
 const { parseGitConfigValues } = require("./lib/parse-git-args");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");
@@ -92,198 +89,16 @@ function blockWithoutError(reason) {
   process.exit(0);
 }
 
-// Resolve supervisor state with wsid fallback.
-function resolveSupervisorState(sessionId) {
-  try {
-    let state = readSupervisorState(sessionId);
-    if (state) return { state, effectiveSid: sessionId, wsid: null };
-    const wsid = resolveWorkflowSessionId();
-    if (wsid) {
-      state = readSupervisorState(wsid);
-      if (state) return { state, effectiveSid: wsid, wsid };
-    }
-    return { state: null, effectiveSid: sessionId, wsid: null };
-  } catch (e) {
-    return { state: null, effectiveSid: sessionId, wsid: null };
-  }
-}
-
-// Resolve branch diff (changed files relative to the merge base with a protected branch).
-function resolveBranchDiff(repoDir) {
-  try {
-    if (!repoDir) return null;
-    const branches = getProtectedBranches();
-    let mergeBase = null;
-    for (const b of branches) {
-      const r = spawnSync("git", ["merge-base", "origin/" + b, "HEAD"], { cwd: repoDir, encoding: "utf8" });
-      if (r.status === 0 && r.stdout && r.stdout.trim()) {
-        mergeBase = r.stdout.trim();
-        break;
-      }
-    }
-    if (!mergeBase) return null;
-    const r = spawnSync("git", ["diff", "--name-only", mergeBase + "...HEAD"], { cwd: repoDir, encoding: "utf8" });
-    if (r.status !== 0) return null;
-    return (r.stdout || "").split("\n").map(p => p.trim().replace(/\\/g, "/")).filter(Boolean);
-  } catch (e) {
-    return null;
-  }
-}
-
-// Parse declared "Files to modify" from the detail plan.
-function parseDetailFilesToModify(plansDir, wsid) {
-  try {
-    if (!plansDir || !wsid) return null;
-    const detailPath = path.join(plansDir, wsid + "-detail.md");
-    let text;
-    try { text = fs.readFileSync(detailPath, "utf8"); } catch (e) { return null; }
-    const lines = text.split(/\r?\n/);
-    let inSection = false;
-    const paths = [];
-    for (const line of lines) {
-      if (line.trim() === "## Files to modify") { inSection = true; continue; }
-      if (inSection && /^## /.test(line)) break;
-      if (inSection) {
-        const m = line.match(/`([^`]+)`/);
-        if (m) paths.push(m[1].replace(/\\/g, "/"));
-      }
-    }
-    return paths;
-  } catch (e) {
-    return null;
-  }
-}
-
-// Returns true when the audit has seen all current findings (audit_last_run_at >= newest
-// finding timestamp) and the verdict is non-BLOCK. A fresh non-BLOCK verdict means the
-// audit already reviewed everything and approved or warned without blocking — so the
-// warning-flush path should be skipped (#1374).
-function isAuditVerdictFresh(auditState, alertFindings) {
-  if (!auditState) return false;
-  const verdict = auditState.audit_verdict;
-  if (!verdict || verdict === "BLOCK") return false;
-  const lastRunAt = auditState.audit_last_run_at;
-  if (lastRunAt == null) return false;
-  const lastRunMs = new Date(lastRunAt).getTime();
-  if (Number.isNaN(lastRunMs)) return false;
-  const findings = Array.isArray(alertFindings) ? alertFindings : [];
-  if (findings.length === 0) return true;
-  const newestFindingMs = Math.max(
-    ...findings.map((f) => (f && f.timestamp ? new Date(f.timestamp).getTime() : 0))
-  );
-  return Number.isFinite(newestFindingMs) && lastRunMs >= newestFindingMs;
-}
-
-// Returns true only for BLOCK verdict — the one verdict that always gates the merge (#1374).
-function shouldBlockOnAuditVerdict(auditState, alertFindings) {
-  if (!auditState) return false;
-  return auditState.audit_verdict === "BLOCK";
-}
-
-// Supervisor pre-merge gate: warning-flush and scope-drift checks.
-// hookCwd: resolved cwd from the hook payload (toolInput.cwd) — allows
-// resolveBranchDiff to target the actual repo being merged, not process.cwd().
-function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd) {
-  try {
-    const { state, effectiveSid, wsid } = resolveSupervisorState(sessionId);
-
-    // Path (i): warning flush — block when cumSev >= threshold and findings exist.
-    // Dual-store (C5): when CC UUID state has no alert findings, also check wsid state.
-    // CC UUID state may be empty while a wsid session has active warnings.
-    let alertState = state;
-    let alertEffectiveSid = effectiveSid;
-    let alertWsid = wsid;
-    const ccHasFindings = state && state.alert &&
-      Array.isArray(state.alert.findings) && state.alert.findings.length > 0;
-    if (!ccHasFindings) {
-      const wsidToTry = wsid || (() => {
-        const env = process.env.WORKFLOW_SESSION_ID;
-        if (env && /^[A-Za-z0-9_-]+$/.test(env)) return env;
-        try { return resolveWorkflowSessionId(); } catch (_) { return null; }
-      })();
-      if (wsidToTry && wsidToTry !== sessionId) {
-        const wsidState = readSupervisorState(wsidToTry);
-        if (wsidState) { alertState = wsidState; alertEffectiveSid = wsidToTry; alertWsid = wsidToTry; }
-      }
-    }
-    if (alertState) {
-      const cumSev = alertState.alert && alertState.alert.cumulative_severity;
-      const findings = (alertState.alert && Array.isArray(alertState.alert.findings) ? alertState.alert.findings : []);
-      if (cumSev && SEVERITY_RANK[cumSev] >= SEVERITY_RANK[AUDIT_SEVERITY_THRESHOLD] && findings.length > 0) {
-        const au = alertState.audit || {};
-        const skip = au.audit_phase === "pending" || au.audit_phase === "in_progress" ||
-          (au.audit_last_run_at != null && au.audit_cause === "pre-merge-warning-flush") ||
-          isAuditVerdictFresh(au, findings);
-        if (!skip) {
-          try {
-            writeAuditState(alertEffectiveSid, {
-              audit_phase: "pending",
-              audit_cause: "pre-merge-warning-flush",
-              audit_armed_at: new Date().toISOString(),
-              audit_retry_count: 0,
-            });
-          } catch (_) {}
-          blockWithoutError(formatPreMergeBlockReason("warning-flush", sessionId, alertWsid, null, null, alertEffectiveSid));
-        }
-      }
-    }
-
-    // Path (i-b): BLOCK verdict always gates the merge, regardless of findings (#1374).
-    // Non-BLOCK verdicts (WARN, CONTINUE) skip warning-flush via isAuditVerdictFresh above.
-    if (alertState) {
-      const auditState = alertState.audit || {};
-      const findings = (alertState.alert && Array.isArray(alertState.alert.findings) ? alertState.alert.findings : []);
-      if (shouldBlockOnAuditVerdict(auditState, findings)) {
-        blockWithoutError(formatPreMergeBlockReason("audit-verdict:" + auditState.audit_verdict, sessionId, alertWsid, null, null, alertEffectiveSid));
-      }
-    }
-
-    // Path (ii): scope-drift — block when branch diff contains undeclared files.
-    // repoDir deferred here (not needed for Path (i)): resolveRepoDir(null, null)
-    // calls parseGitCArg(null) which throws — deferring avoids the fail-open catch.
-    const repoDir = hookCwd || resolveRepoDir(null, null);
-    // Resolve wsid independently: resolveSupervisorState sets wsid only when state was
-    // found via wsid fallback. When state was found via CC sessionId, wsid is null but
-    // WORKFLOW_SESSION_ID env or resolveWorkflowSessionId() can still provide it.
-    // Priority: wsid → WORKFLOW_SESSION_ID env (tests inject this) → WORKTREE_NOTES.md.
-    const resolvedWsid = wsid || (() => {
-      const env = process.env.WORKFLOW_SESSION_ID;
-      if (env && /^[A-Za-z0-9_-]+$/.test(env)) return env;
-      try { return resolveWorkflowSessionId(); } catch (_) { return null; }
-    })();
-    if (!resolvedWsid) return;
-    const branchFiles = resolveBranchDiff(repoDir);
-    if (!branchFiles) return;
-    const plansDir = process.env.WORKFLOW_PLANS_DIR || require("os").homedir() + "/.workflow-plans";
-    const declaredFiles = parseDetailFilesToModify(plansDir, resolvedWsid);
-    if (!declaredFiles || declaredFiles.length === 0) return;
-
-    const undeclared = branchFiles.filter(p => {
-      return !declaredFiles.some(d => p === d || p.startsWith(d.endsWith("/") ? d : d + "/"));
-    });
-
-    const au = (state && state.audit) || {};
-    const skipDrift = au.audit_phase === "pending" || au.audit_phase === "in_progress" ||
-      (au.audit_last_run_at != null && au.audit_cause === "scope-drift:pre-merge");
-    // Arm audit unconditionally on first merge (pre-merge review cycle).
-    // Block only when undeclared files are present (scope drift detected).
-    if (!skipDrift && branchFiles.length > 0) {
-      try {
-        writeAuditState(effectiveSid, {
-          audit_phase: "pending",
-          audit_cause: "scope-drift:pre-merge",
-          audit_armed_at: new Date().toISOString(),
-          audit_retry_count: 0,
-        });
-      } catch (_) {}
-      if (undeclared.length > 0) {
-        blockWithoutError(formatPreMergeBlockReason("scope-drift:pre-merge", sessionId, resolvedWsid, null, null, effectiveSid));
-      }
-    }
-  } catch (e) {
-    // fail-open
-  }
-}
+// Supervisor pre-merge gate (warning-flush / audit-verdict / scope-drift):
+// hooks/workflow-gate/supervisor-check.js. blockWithoutError is injected at the
+// call site so the module stays free of this hook's stdout protocol.
+const {
+  checkSupervisorPreMerge,
+  parseDetailFilesToModify,
+  shouldBlockOnAuditVerdict,
+  isAuditVerdictFresh,
+} = require("./workflow-gate/supervisor-check");
+const { runEarlyGate } = require("./workflow-gate/early-gate");
 
 if (require.main === module) {
   let input;
@@ -308,120 +123,10 @@ if (require.main === module) {
   const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");
   if (isWorkflowOff(sessionId)) approve();
 
-  // EARLY GATE: 3-tier enforcement before Edit/Write tools.
-  //   Tier 1: workflow_init must be complete/skipped first.
-  //   Tier 2: clarify_intent must be complete/skipped (only checked once Tier 1 clears).
-  //   Tier 3: session-bound worktree exists but CWD is outside it (worktree-entry-gate.js).
-  // Fail-open precedence (do NOT reorder):
-  //   1. No sessionId → fall through (cannot enforce)
-  //   2. readState() returns null → fall through (no state to check)
-  //   3. plans-path Write/Edit/MultiEdit allowlist → fall through (skill output path)
-  //   4. Tier 1 not clear → block (references /workflow-init)
-  //   5. Tier 2 not clear → block (references /clarify-intent)
-  //   6. Both clear → fall through (gate dormant)
-  //   7. Tier 3 predicate false or throws → fall through (gate dormant)
-  //
-  // Multi-hook execution: Claude Code runs all PreToolUse hooks independently;
-  // approve from this hook does NOT short-circuit block-dotenv etc.
-  //
-  // Deferral contract with enforce-worktree.js: the "worktree exists but the session
-  // is not inside it" diagnosis is owned here; enforce-worktree.js keeps its own
-  // main-worktree block verdict unchanged and only swaps its remedy line (#1610).
-  //
-  // State inheritance: if findLatestStateForContext() inherited a state where both
-  // steps are already complete, gate is dormant by design — inherited state represents
-  // continuing prior work.
-  const EARLY_GATE_TOOLS = new Set([
-    "Edit", "Write", "MultiEdit", "editFiles", "NotebookEdit"
-  ]);
-  if (sessionId && EARLY_GATE_TOOLS.has(toolName)) {
-    const earlyState = readState(sessionId);
-    if (earlyState) {
-      // Plans-path allowlist: Write/Edit/MultiEdit tools, targeting ~/.workflow-plans/**
-      // (skill writes intent/outline/detail .md here while workflow_init is still pending).
-      // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
-      const filePath = toolInput.file_path || toolInput.path || "";
-      let isPlansAllowed = false;
-      if ((toolName === "Write" || toolName === "Edit" || toolName === "MultiEdit") && filePath) {
-        try {
-          const resolved = path.resolve(filePath);
-          const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
-          isPlansAllowed = resolved.toLowerCase().startsWith(plansRoot.toLowerCase());
-        } catch (e) { console.error(`workflow-gate: ${e.message}`); }
-      }
-      if (!isPlansAllowed) {
-        // Derived view (#1681): Tier 1/Tier 2 read the reconciled snapshot, not the
-        // raw record — so evidence-resolved steps clear the gate without the gate
-        // ever writing state back (Approach B replaces the old #1094 self-repair
-        // markStep).
-        // Security: no repoDir here — the early gate only reads workflow_init and
-        // clarify_intent, neither of which uses repoDir for evidence. Supplying
-        // toolInput.cwd would route git execs into an unvalidated path (#H1).
-        // Fail-closed: snapshot failure falls back to raw state, not "complete" (#H2).
-        let earlySnapshot = null;
-        try {
-          earlySnapshot = reconcileEffectiveState(earlyState, sessionId, {
-            isWfMeta: earlyState.workflow_type === "wf-meta",
-            evidencePolicy: "staged-only",
-          });
-        } catch (e) { earlySnapshot = null; }
-        const earlyStatus = (step) => {
-          if (!earlySnapshot || !earlySnapshot.steps) {
-            // Fall back to raw state on error (fail-closed, matching the commit gate).
-            return (earlyState && earlyState.steps && earlyState.steps[step] || {}).status || "pending";
-          }
-          return (earlySnapshot.steps[step] || {}).status || "pending";
-        };
-
-        // Tier 1: workflow_init
-        const wiStatus = earlyStatus("workflow_init");
-        if (wiStatus !== "complete" && wiStatus !== "skipped") {
-          block(
-            "workflow-gate: workflow_init has not been completed for this session.\n" +
-            "Tool \"" + toolName + "\" is blocked until the workflow is routed.\n\n" +
-            "To complete:\n" +
-            "  1. Invoke the `workflow-init` skill via the Skill tool, OR\n" +
-            "  2. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".\n\n" +
-            "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n\n" +
-            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_workflow_init: {reason}>>\""
-          );
-        }
-        // Tier 2: clarify_intent (only reached once workflow_init has cleared).
-        // The #1094 evidence self-repair is now derivation, not a write: an
-        // existing intent.md already resolves clarify_intent to complete inside
-        // the snapshot, so the gate simply reads it and stays dormant.
-        const ciStatus = earlyStatus("clarify_intent");
-        if (ciStatus !== "complete" && ciStatus !== "skipped") {
-          block(
-            "workflow-gate: clarify_intent has not been completed for this session.\n" +
-            "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
-            "To complete:\n" +
-            "  1. Invoke the `clarify-intent` skill via the Skill tool, OR\n" +
-            "  2. If intent is already clear: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {reason}>>>\".\n\n" +
-            "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n" +
-            "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
-            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent: {reason}>>\""
-          );
-        }
-        // Tier 3: session-bound worktree exists but CWD is outside it (#1610).
-        try {
-          const { evaluateWorktreeEntry, buildBlockReason } = require("./workflow-gate/worktree-entry-gate");
-          const wtVerdict = evaluateWorktreeEntry({ sessionId, input, toolName, toolInput, state: earlyState });
-          if (wtVerdict && wtVerdict.verdict === "advisory") {
-            process.stderr.write(
-              `workflow-gate: session worktree ${wtVerdict.worktreePath} was never entered (subagent context) — proceeding.\n`
-            );
-          } else if (wtVerdict && wtVerdict.verdict === "block") {
-            block(buildBlockReason({
-              toolName,
-              worktreePath: wtVerdict.worktreePath,
-              cwd: wtVerdict.cwd,
-            }));
-          }
-        } catch (e) { /* fail-open: Tier 3 dormant */ }
-      }
-    }
-  }
+  // EARLY GATE: 3-tier enforcement before Edit/Write tools (workflow_init /
+  // clarify_intent / worktree-entry). Owned by workflow-gate/early-gate.js;
+  // block() is injected so the module stays free of this hook stdout protocol.
+  runEarlyGate(input, { block });
 
   if (toolName !== "Bash") approve();
 
@@ -552,7 +257,10 @@ if (require.main === module) {
         'set Bash description: "User verification: approve if implementation is complete — approving unlocks the merge gate.")'
       );
     }
-    checkSupervisorPreMerge(sessionId, mergeHit.kind, normalizeForWindows(toolInput.cwd));
+    checkSupervisorPreMerge(sessionId, mergeHit.kind, normalizeForWindows(toolInput.cwd), {
+      blockFn: blockWithoutError,
+      resolveRepoDirFn: resolveRepoDir,
+    });
     approve();
   }
 
@@ -601,6 +309,20 @@ if (require.main === module) {
         ].join("\n")
       );
     }
+  }
+
+  // Gate 3 (issue #1642): prompt extraction — §1.5 code fences and §1.3 inline
+  // procedures in staged prompt files. bin/check-prompt-extraction --staged owns
+  // detection and the allowlist ratchet (CPR-2); this call site maps exit 1 -> block.
+  //
+  // Ordered BEFORE Gate 2 deliberately: Gate 3 self-limits to repos that carry a
+  // .prompt-extraction-allowlist, so it stays silent everywhere it does not apply,
+  // whereas Gate 2 applies repo-wide. Running the narrower gate first means an
+  // infrastructure failure is reported by the gate that actually owns the repo.
+  {
+    const { checkPromptExtraction } = require("./workflow-gate/prompt-extraction-gate");
+    const extractionVerdict = checkPromptExtraction(repoDir);
+    if (extractionVerdict.action === "block") block(extractionVerdict.reason);
   }
 
   // Gate 2 (issue #1701): HARD file-size limit. bin/review-code-size --staged owns the

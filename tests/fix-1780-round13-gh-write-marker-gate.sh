@@ -268,7 +268,7 @@ assert_guard() {
 # real block (from a linked feature worktree enforce-worktree.js is a LOCATION
 # guard whose tail allows — see the section-K comment in
 # tests/enforce-worktree-off-clearance-state-matrix.sh — which is exactly why
-# hooks/block-off-clearance-write.js exists as the location-independent gate,
+# hooks/block-clearance-token-write.js exists as the location-independent gate,
 # covered by tests/enforce-protected-marker-write.sh).
 #
 # Pre-fix, every row below measured ALLOW.

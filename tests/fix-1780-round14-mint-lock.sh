@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1780-round14-mint-lock.sh
-# Tests: hooks/lib/off-clearance-mint-lock.js, hooks/supervisor-off-proposal-shim.js, bin/request-off-clearance, hooks/lib/protected-basenames.js, hooks/block-off-clearance-write.js
+# Tests: hooks/lib/off-clearance-mint-lock.js, hooks/supervisor-off-proposal-shim.js, bin/request-off-clearance, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
 # Tags: off-clearance, mint-lock, concurrency, race, toctou, claim, audit-trail, fail-closed, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
 # - The shim running as a REAL PreToolUse hook while a REAL bin/request-off-clearance
@@ -50,7 +50,7 @@ if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGE
 LOCK_MOD_NODE="$_AGENTS_DIR_NODE/hooks/lib/off-clearance-mint-lock.js"
 BASENAMES_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
 SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 REQ="$AGENTS_DIR/bin/request-off-clearance"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 

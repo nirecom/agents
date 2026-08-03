@@ -1,5 +1,5 @@
 # tests/fix-1630-overlay-cross-validation/path-edges.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# Tests: hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, config-dir, overlay, unit, path, scope:issue-specific
 #
 # STATUS: RED until C5 lands (stripRelSuffix is not exported yet, so every row

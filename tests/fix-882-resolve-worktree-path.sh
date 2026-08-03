@@ -57,6 +57,7 @@ trap cleanup EXIT
 
 mkdir -p "$MAIN_REPO" "$WF_DIR"
 git -C "$MAIN_REPO" init -q
+git -C "$MAIN_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$MAIN_REPO" config user.email "test@example.com"
 git -C "$MAIN_REPO" config user.name "Test"
 touch "$MAIN_REPO/.gitkeep"

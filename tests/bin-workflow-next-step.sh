@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # L2 test of the workflow next-step's state-transition resolver and --list renderer.
@@ -26,6 +26,12 @@ fi
 TMPDIR_WT="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_WT"
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_WT/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 # Derive next-step path from the test file's own location so worktree runs
 # test the worktree's next-step rather than the one in $AGENTS_CONFIG_DIR.

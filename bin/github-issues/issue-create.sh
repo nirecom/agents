@@ -176,25 +176,9 @@ if [ -n "$REPORTER_MODEL" ]; then
     [ -n "$_rm_label" ] && EXTRA_LABELS+=("$_rm_label")
 fi
 
-# Keyword scan: force severity:high on confirmed-high signals.
-# Conservative: 4 words only; no -i flag; -w word-boundary (plural/gerund intentionally excluded).
-if [ -n "$TITLE" ]; then
-    _scan_text="$TITLE"
-    if [ -n "$BODY_FILE" ]; then
-        _scan_text="$_scan_text $(cat "$BODY_FILE")"
-    elif [ -n "$BODY" ]; then
-        _scan_text="$_scan_text $BODY"
-    fi
-    if printf '%s' "$_scan_text" | grep -qwE 'abort|hang|security|leak'; then
-        _new_labels=()
-        for _l in "${EXTRA_LABELS[@]:-}"; do
-            case "$_l" in severity:*) ;; *) _new_labels+=("$_l") ;; esac
-        done
-        _new_labels+=("severity:high")
-        EXTRA_LABELS=("${_new_labels[@]}")
-        echo "note: keyword scan matched — severity:high forced" >&2
-    fi
-fi
+# severity is NEVER inferred here (#1763). The Label policy in
+# skills/issue-create/SKILL.md is the single source of truth for severity
+# classification; whatever arrives via --label flows through untouched.
 
 GH_ARGS=(issue create --title "$TITLE" --label "type:task")
 if [ "$BODY_PROVIDED" -eq 1 ]; then

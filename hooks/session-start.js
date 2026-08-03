@@ -5,9 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
-const { cleanupZombies, createInitialState, writeState, readState,
+const { cleanupZombies, createInitialState, writeState, readState, appendEvents,
         getCurrentContext, findLatestStateForContext, reconcileEffectiveState,
-        VALID_STEPS } = require("./workflow-state");
+        getStatePath, VALID_STEPS } = require("./workflow-state");
+const { convertV1AnnotationsToEvents } =
+  require("./workflow-state/state-io/migrations/v1-to-v2");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
@@ -51,6 +53,112 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
   }
 }
 
+const INHERIT_ORIGIN = "session-inherit";
+
+// applyInheritance(sessionId, createdAt, donor)
+//
+// Carries a prior session's WORK RECORD into a fresh session as ONE append-only
+// batch (#1733). Pre-#1733 this was a blind deep copy of the donor's `steps` map;
+// expressing it as events makes three things explicit that the copy hid:
+//
+//   * provenance:"backfilled" + inherited_from — an inherited `complete` is not a
+//     completion this session observed. Downstream genuineness checks can finally
+//     tell the two apart (effective-state.hasGenuineRecordedComplete).
+//   * every event is stamped `at = createdAt` — the heir's timeline never reaches
+//     back into the donor's. The deliberate consequence is that an inherited step's
+//     `updated_at` is now the heir's created_at rather than the donor's original.
+//   * cleanup (#772) is RESET rather than carried: its donor annotations are
+//     dropped by an explicit tombstone, not merely shadowed.
+//
+// What is NOT inherited: session_model, complexity_evaluation, worktree_*,
+// git_branch/cwd, workflow_type, closes_issues, last_pushed_sha. Each is a fact
+// about the donor session itself, not about the work.
+function applyInheritance(sessionId, createdAt, donor) {
+  const donorSid = (donor && donor.session_id) || null;
+  const donorSteps = (donor && donor.steps) || {};
+  const donorApprovals = (donor && donor.plan_approvals) || null;
+
+  const stamp = (event) =>
+    Object.assign({}, event, {
+      at: createdAt,
+      provenance: "backfilled",
+      origin: INHERIT_ORIGIN,
+      inherited_from: donorSid,
+    });
+
+  const build = () => {
+    const events = [];
+
+    for (const step of VALID_STEPS) {
+      // cleanup is handled below — its donor record is discarded wholesale.
+      if (step === "cleanup") continue;
+      const entry = donorSteps[step];
+      if (!entry || typeof entry !== "object") continue;
+
+      if (typeof entry.status === "string" && entry.status !== "pending") {
+        events.push(stamp({ kind: "step_status", step, status: entry.status }));
+      }
+      // Annotations travel even on a PENDING step (a reset_reason explains why the
+      // step was rewound and is lost if only non-pending steps are carried).
+      // convertV1AnnotationsToEvents owns which entry fields ARE annotations —
+      // the same conversion the v1->v2 migration performs (CPR-4); only the
+      // stamping differs, so the two can never disagree about the field set.
+      for (const converted of convertV1AnnotationsToEvents(step, entry, { createdAt })) {
+        events.push(
+          stamp({ kind: "step_annotation", step, key: converted.key, value: converted.value })
+        );
+      }
+    }
+
+    // #772: cleanup must never inherit as already-done. The three events are one
+    // unit: discard the donor's notes, record the reset, state why.
+    events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
+    events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
+    events.push(
+      stamp({
+        kind: "step_annotation",
+        step: "cleanup",
+        key: "skip_reason",
+        value: "inherited-from-prior-session",
+      })
+    );
+
+    // #1133: an inherited outline/detail `complete` is a pending->complete
+    // transition for the NEW session, so the donor's approval must land in the
+    // SAME batch or the completion-boundary invariant refuses the whole append.
+    // The record stays bound to the artifact it was approved against
+    // (<owner-sid>-<step>.md) via artifact_session_id.
+    if (donorApprovals && typeof donorApprovals === "object") {
+      // Iterate VALID_STEPS, not the donor's keys: the donor is a FOREIGN session's
+      // file from the shared workflow dir, and an out-of-vocabulary key would make
+      // validateEvent throw, aborting inheritance and leaving this session with no
+      // state file at all. Skip what we don't recognize; never let it wedge us.
+      for (const step of VALID_STEPS) {
+        const rec = donorApprovals[step];
+        if (!rec || typeof rec !== "object") continue;
+        events.push(
+          stamp({
+            kind: "plan_approval",
+            step,
+            source: rec.source !== undefined ? rec.source : null,
+            reason: rec.reason !== undefined ? rec.reason : null,
+            artifact_sha256: rec.artifact_sha256 !== undefined ? rec.artifact_sha256 : null,
+            artifact_session_id: rec.artifact_session_id || donorSid || null,
+            artifact_hash_status:
+              rec.artifact_hash_status !== undefined ? rec.artifact_hash_status : null,
+          })
+        );
+      }
+    }
+
+    return events;
+  };
+
+  // Builder form: the batch is produced INSIDE the lock, and `now` pins every
+  // unstamped event to the heir's created_at.
+  appendEvents(sessionId, build, { origin: INHERIT_ORIGIN, now: createdAt });
+}
+
 // Create initial state file if session_id is available (with inheritance logic)
 let inheritedFromSessionId = null;
 let stateWriteError = null;
@@ -66,50 +174,9 @@ if (sessionId) {
       try { inherited = findLatestStateForContext(ctx); }
       catch (e) {}
 
-      let newState;
-      if (inherited) {
-        newState = {
-          version: 1,
-          session_id: sessionId,
-          created_at: new Date().toISOString(),
-          cwd: ctx.cwd,
-          git_branch: ctx.git_branch,
-          steps: JSON.parse(JSON.stringify(inherited.steps)),
-        };
-        // #1133: the inherited steps may already show outline/detail `complete`.
-        // writeState's completion-boundary invariant re-evaluates that as a
-        // pending->complete transition for the NEW session, so the prior
-        // session's approval records must travel with the steps — otherwise the
-        // write throws no-approval-record and the new session gets NO state file.
-        // Records stay bound to the artifact they were approved against via
-        // artifact_session_id (artifacts are named <owner-sid>-<step>.md).
-        if (inherited.plan_approvals && typeof inherited.plan_approvals === "object") {
-          const carried = JSON.parse(JSON.stringify(inherited.plan_approvals));
-          for (const step of Object.keys(carried)) {
-            const rec = carried[step];
-            if (rec && typeof rec === "object" && !rec.artifact_session_id) {
-              rec.artifact_session_id = inherited.session_id || null;
-            }
-          }
-          newState.plan_approvals = carried;
-        }
-        // Issue #772: never carry cleanup state across session boundaries.
-        // cleanup is the terminal step of the prior session's task; a new session
-        // represents a new task whose cleanup obligation has not yet been incurred.
-        // "skipped" bypasses workflow-gate (cleanup is in SKIPPABLE_STEPS).
-        // "pending" would re-block commits — that IS the original bug symptom.
-        // Omitting the key does NOT work: readState() re-injects it as "pending".
-        if (newState.steps && newState.steps.cleanup) {
-          newState.steps.cleanup = {
-            status: 'skipped',
-            updated_at: new Date().toISOString(),
-            skip_reason: 'inherited-from-prior-session',
-          };
-        }
-        inheritedFromSessionId = inherited.session_id;
-      } else {
-        newState = createInitialState(sessionId, ctx);
-      }
+      // The new session ALWAYS starts from a clean initial state: its own
+      // session_start_context, its own created_at, and an empty stream (#1733).
+      const newState = createInitialState(sessionId, ctx);
       // Fail-open on the hook, but NEVER silently: a throw here means no state
       // file exists for this session at all (total workflow-state loss).
       try {
@@ -120,6 +187,23 @@ if (sessionId) {
           process.stderr.write(`session-start: writeState failed for ${sessionId}: ${stateWriteError}\n`);
         } catch (_) {}
       }
+
+      if (inherited && !stateWriteError) {
+        try {
+          applyInheritance(sessionId, newState.created_at, inherited);
+          inheritedFromSessionId = inherited.session_id;
+        } catch (e) {
+          stateWriteError = (e && e.message) || String(e);
+          // A refused inheritance (e.g. artifact-hash mismatch on a carried
+          // approval) must leave NO state file: the base file written above
+          // would otherwise survive as an orphan asserting that this session
+          // has a clean, legitimately-created state (#1133/#1148).
+          try { fs.unlinkSync(getStatePath(sessionId)); } catch (_) {}
+          try {
+            process.stderr.write(`session-start: inheritance failed for ${sessionId}: ${stateWriteError}\n`);
+          } catch (_) {}
+        }
+      }
     }
   } catch (e) {
     // Fail-open
@@ -129,8 +213,9 @@ if (sessionId) {
 // Freeze which model drives this session, and with it the verbose-prompt flag.
 // Must run AFTER the state file exists so the record lands in this session's own
 // state rather than in a file created for it. Write-once — no-op when the hook
-// payload carried no identifier.
-if (sessionId) {
+// payload carried no identifier. Skipped when the state file was refused:
+// appendEvents would recreate the very file the refusal deleted.
+if (sessionId && !stateWriteError) {
   try {
     const { resolveModelId } = require("./lib/model-identity");
     const { recordSessionModel } = require("./workflow-state");

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1780-round12-classifier-attack-shapes.sh
-# Tests: hooks/block-off-clearance-write.js, hooks/block-off-clearance-write/dispatch.js, hooks/block-off-clearance-write/bash-scan.js, hooks/block-off-clearance-write/interpreter-scan.js, hooks/block-off-clearance-write/nested-bodies.js, hooks/lib/write-tools.js, hooks/lib/tool-command-text.js
+# Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/write-tools.js, hooks/lib/tool-command-text.js
 # Tags: off-clearance, session-marker, protected-basename, classifier, dispatch, tool-shape, notebook-edit, run-commands, run-in-terminal, redirect, symlink, hardlink, variable-expansion, glob, brace-expansion, ansi-c-quoting, interpreter, heredoc, here-string, eval, pipeline, over-block, cpr5, security, pretooluse, block-write, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook inside a live claude -p session.
@@ -65,7 +65,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
-HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
 WT_NODE="$_AGENTS_DIR_NODE/hooks/lib/write-tools.js"

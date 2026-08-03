@@ -141,10 +141,10 @@ PROBE_EOF
     # Static check only - see the "# TL3 gap" block in the dispatcher.
     if [ -f "$SETTINGS" ]; then
         local matcher
-        matcher=$(grep -B4 'block-off-clearance-write' "$SETTINGS" | grep -o '"matcher": *"[^"]*"' | tail -1)
+        matcher=$(grep -B4 'block-clearance-token-write' "$SETTINGS" | grep -o '"matcher": *"[^"]*"' | tail -1)
         case "$matcher" in
             *Edit*Write*Bash*|*Edit*Bash*Write*|*Bash*Edit*Write*) pass "X10 settings.json wires the guard to Edit/Write/MultiEdit/Bash ($matcher)" ;;
-            "") fail "X10 settings.json has no matcher for block-off-clearance-write" ;;
+            "") fail "X10 settings.json has no matcher for block-clearance-token-write" ;;
             *)  fail "X10 settings.json matcher does not cover Edit+Write+Bash: $matcher" ;;
         esac
         # marker-gate.js must keep re-exporting the SSOT rather than owning a

@@ -180,7 +180,7 @@ const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
     if (_cdArg) derived.push(_cdArg);
   } else if (isEditWriteTool(toolName)) {
     // Every path spelling the class can use, top level and per-`edits[]` entry
-    // (shared with block-off-clearance-write via hooks/lib/write-tools.js).
+    // (shared with block-clearance-token-write via hooks/lib/write-tools.js).
     for (const fp of collectEditWritePaths(toolInput)) {
       if (path.isAbsolute(fp)) derived.push(fp);
     }

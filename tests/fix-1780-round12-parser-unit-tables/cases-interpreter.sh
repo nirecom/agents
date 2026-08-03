@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Part of tests/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
 # Sections I and D - the interpreter / nested-body side:
-#   I  hooks/block-off-clearance-write/interpreter-scan.js
-#   D  hooks/block-off-clearance-write/nested-bodies.js
+#   I  hooks/block-clearance-token-write/interpreter-scan.js
+#   D  hooks/block-clearance-token-write/nested-bodies.js
 # Sourced by the parent, which owns run_table(), _expand() and the counters.
 
 # ===========================================================================

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-719-supervisor-md-checklist.sh
-# Tests: agents/supervisor.md (JD checklist content)
+# Tests: agents/supervisor.md
 # Tags: supervisor, em-supervisor, agents, layer2, doc
 # RED for issue #719.
 

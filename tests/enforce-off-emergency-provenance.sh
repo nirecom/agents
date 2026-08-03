@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/enforce-off-emergency-provenance.sh
-# Tests: hooks/record-off-skill-invocation.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/block-off-clearance-write.js
+# Tests: hooks/record-off-skill-invocation.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
 # Tags: off-clearance, emergency-off, provenance, audit, userpromptsubmit, session-marker, security, scope:common, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
 # - That Claude Code actually fires UserPromptSubmit for a typed slash command and
@@ -48,7 +48,7 @@ if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGE
 
 RECORDER="$AGENTS_DIR/hooks/record-off-skill-invocation.js"
 HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 SETTINGS="$AGENTS_DIR/settings.json"
 
@@ -318,7 +318,7 @@ else
 fi
 
 # --- P10: the marker must be unforgeable, or provenance self-certifies -----
-# This is the load-bearing tie to hooks/block-off-clearance-write.js: if the model
+# This is the load-bearing tie to hooks/block-clearance-token-write.js: if the model
 # could Write its own <sid>.off-emergency-invoked, it could manufacture
 # user_skill_invocation for an emission the user never asked for, and every
 # assertion above would be theatre.
@@ -333,7 +333,7 @@ if [ -f "$BLOCK_HOOK" ]; then
         (cd "$TMP" && CLAUDE_WORKFLOW_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
     assert_contains "P10 forging the provenance marker via Bash is blocked" '"decision":"block"' "$verdict"
 else
-    skip "P10 hooks/block-off-clearance-write.js not found"
+    skip "P10 hooks/block-clearance-token-write.js not found"
 fi
 
 # --- P11: the M-4 bindings - a marker only vouches for what it names -------

@@ -24,7 +24,7 @@
 // provenance=unattributed.
 //
 // The marker basename is in hooks/lib/protected-basenames.js's protected set,
-// so hooks/block-off-clearance-write.js refuses Edit/Write/MultiEdit/editFiles/
+// so hooks/block-clearance-token-write.js refuses Edit/Write/MultiEdit/editFiles/
 // NotebookEdit calls naming it and refuses Bash write targets that spell it —
 // literally, through backslash escapes or intra-word quoting, through a glob,
 // and through a `$VAR` the same command line assigns. That is a BEST-EFFORT

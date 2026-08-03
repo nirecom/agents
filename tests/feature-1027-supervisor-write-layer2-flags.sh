@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1027-supervisor-write-layer2-flags.sh
-# Tests: bin/supervisor-write-layer2, hooks/lib/supervisor-state-writer.js
+# Tests: bin/supervisor-write-alert, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — CLI flags --mark-findings-surfaced and
 # --set-alert-eligible-phase <value>.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-720-supervisor-l3-schema.sh
-# Tests: hooks/lib/supervisor-state-schema.js (L3 additions)
+# Tests: hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, schema, layer3, unit, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 #   Pure schema unit test. It does NOT verify that the live supervisor-guard

@@ -48,6 +48,7 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 - Incident issues: `gh issue create --label "type:incident"` directly (do not use this skill).
 - Non-GitHub remotes: skip the survey phase.
 - Projects v2 attach failure is non-fatal: issue created regardless; re-run `gh project item-add 1 --owner nirecom --url <issue-url>` to recover.
+- `severity:*` is judged only against the three conditions in the `/issue-create` label policy (SSOT) — no script infers it.
 
 ## meta label and admin_close_path
 

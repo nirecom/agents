@@ -31,10 +31,10 @@ try {
   M = {
     bgn: load("hooks/lib/basename-glob-normalize.js"),
     brace: load("hooks/lib/basename-glob-normalize/brace-ansi-expand.js"),
-    argvScan: load("hooks/block-off-clearance-write/bash-scan/argv-scan.js"),
-    assign: load("hooks/block-off-clearance-write/bash-scan/assignment-text.js"),
-    interp: load("hooks/block-off-clearance-write/interpreter-scan.js"),
-    nested: load("hooks/block-off-clearance-write/nested-bodies.js"),
+    argvScan: load("hooks/block-clearance-token-write/bash-scan/argv-scan.js"),
+    assign: load("hooks/block-clearance-token-write/bash-scan/assignment-text.js"),
+    interp: load("hooks/block-clearance-token-write/interpreter-scan.js"),
+    nested: load("hooks/block-clearance-token-write/nested-bodies.js"),
     ir: load("hooks/lib/command-ir.js"),
     pb: load("hooks/lib/protected-basenames.js"),
   };
@@ -82,7 +82,7 @@ const FNS = {
   bracecap: (i) => b(M.brace.expandBraces(i).overCap),
   spellings: (i) => j(M.brace.candidateSpellings(i).candidates),
 
-  // ---- hooks/block-off-clearance-write/bash-scan/argv-scan.js -------------
+  // ---- hooks/block-clearance-token-write/bash-scan/argv-scan.js -------------
   rocmd: (i) => t(M.argvScan.READ_ONLY_ARG_COMMAND_RE, i),
   lesslog: (i) => t(M.argvScan.LESS_LOG_OPT_RE, i),
   // input: "<cmdBase> <argv...>"
@@ -98,7 +98,7 @@ const FNS = {
     return m ? m[1] || m[2] || "-" : "-";
   },
 
-  // ---- hooks/block-off-clearance-write/bash-scan/assignment-text.js -------
+  // ---- hooks/block-clearance-token-write/bash-scan/assignment-text.js -------
   pwshassign: (i) => t(M.assign.PWSH_ENV_ASSIGN_ONLY_RE, i),
   assignonly: (i) => b(M.assign.isAssignmentOnlySegment(seg0(i))),
   // Both chain readers are asked about the LAST segment of the input command,
@@ -114,7 +114,7 @@ const FNS = {
     return out.trim() === "" ? "-" : out.trim().split(/\s*\n\s*/).join("~");
   },
 
-  // ---- hooks/block-off-clearance-write/interpreter-scan.js ----------------
+  // ---- hooks/block-clearance-token-write/interpreter-scan.js ----------------
   interpre: (i) => t(M.interp.INTERPRETER_RE, i),
   bodyfirst: (i) => t(M.interp.BODY_FIRST_INTERPRETER_RE, i),
   inlineflag: (i) => t(M.interp.INLINE_PROGRAM_FLAG_RE, i),
@@ -130,7 +130,7 @@ const FNS = {
   bodies: (i) => j(M.interp.extractAllInterpreterBodies(i).bodies),
   hits: (i) => b(M.interp.hitsProtectedViaInterpreter(i)),
 
-  // ---- hooks/block-off-clearance-write/nested-bodies.js -------------------
+  // ---- hooks/block-clearance-token-write/nested-bodies.js -------------------
   evalbody: (i) => M.nested.evalBodyOf(seg0(i)) || "-",
   herestr: (i) => j(M.nested.hereStringBodiesOf(seg0(i))),
   hereval: (i) => j(M.nested.hereStringValuesOf(seg0(i))),

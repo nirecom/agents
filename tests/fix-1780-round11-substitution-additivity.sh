@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1780-round11-substitution-additivity.sh
-# Tests: hooks/block-off-clearance-write.js, hooks/block-off-clearance-write/bash-scan/argv-scan.js, hooks/block-off-clearance-write/bash-scan/scan.js, hooks/lib/command-parser.js, hooks/lib/command-ir.js, hooks/lib/protected-basenames.js
+# Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/lib/command-parser.js, hooks/lib/command-ir.js, hooks/lib/protected-basenames.js
 # Tags: off-clearance, session-marker, bash-scan, substitution, command-substitution, backtick, argv-operand, workflow-dir, classifier, additivity, security, pretooluse, block-write, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook in a live claude -p session; here it
@@ -55,12 +55,12 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
-HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-SCAN_NODE="$_AGENTS_DIR_NODE/hooks/block-off-clearance-write/bash-scan/scan.js"
+SCAN_NODE="$_AGENTS_DIR_NODE/hooks/block-clearance-token-write/bash-scan/scan.js"
 IR_NODE="$_AGENTS_DIR_NODE/hooks/lib/command-ir.js"
-SCAN_REL="hooks/block-off-clearance-write/bash-scan/scan.js"
+SCAN_REL="hooks/block-clearance-token-write/bash-scan/scan.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

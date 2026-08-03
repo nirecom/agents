@@ -1,7 +1,20 @@
 "use strict";
 // tests/fixtures/finalize-overlay-probe.js
-// CLI probe over hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
-// for the #1630 cross-validation work.
+// CLI probe over the enforce-worktree argument-value guard for the #1630
+// cross-validation work.
+//
+// #1673 splits the subject in two:
+//   - the SHARED VALUE HELPERS (stripRelSuffix / isUnderPlansDir / hasControlChar
+//     / UNSAFE_ARG_VALUE_RE / ID_VALUE_RE / REPO_SLUG_VALUE_RE / isSimpleArgValue)
+//     live in hooks/enforce-worktree/arg-value-guard.js. The `strip` and
+//     `plansdir` ops read them from there and keep working after the overlay is
+//     retired.
+//   - matchFinalizeWorkerOverlay and FINALIZE_OVERLAY_REGISTRY belong to
+//     hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js,
+//     which #1673 commit 5 DELETES together with the Bash-tool `eval` path it
+//     guarded. The `match` / `mutmatch` / `matchextra` / `specshape` / `matchraw`
+//     ops therefore print an explicit OVERLAY-RETIRED line once the module is
+//     gone — never a silent pass.
 //
 // Usage:
 //   node finalize-overlay-probe.js strip <absScriptPath> <relSuffix>
@@ -24,19 +37,48 @@ const path = require("path");
 const Module = require("module");
 
 const AGENTS_DIR = path.resolve(__dirname, "..", "..");
+// Overlay module (retired by #1673 commit 5) — required lazily/softly.
 const MODULE_PATH = path.join(
   AGENTS_DIR, "hooks", "enforce-worktree", "main-worktree-allows",
   "finalize-worker-overlay.js"
 );
+// Shared value helpers (#1673 commit 1) — the durable home.
+const GUARD_PATH = path.join(
+  AGENTS_DIR, "hooks", "enforce-worktree", "arg-value-guard.js"
+);
 
 const line1 = (s) => String(s).split("\n")[0];
 
+let guard = null;
+let guardErr = null;
+try {
+  guard = require(GUARD_PATH);
+} catch (e) {
+  guardErr = line1(e.message);
+}
+
 let mod = null;
+let modErr = null;
 try {
   mod = require(MODULE_PATH);
 } catch (e) {
-  console.log("ERROR: require finalize-worker-overlay.js: " + line1(e.message));
-  process.exit(0);
+  modErr = line1(e.message);
+}
+
+// Value helpers resolve to arg-value-guard.js first; the overlay is only a
+// fallback for the migration window in which it still re-exports them.
+function helper(name) {
+  if (guard && typeof guard[name] !== "undefined") return guard[name];
+  if (mod && typeof mod[name] !== "undefined") return mod[name];
+  return undefined;
+}
+
+// The overlay ops cannot be answered once the module is gone. Print a distinct
+// marker rather than "null", so a retired capability can never read as a pass.
+function requireOverlay() {
+  if (mod) return true;
+  console.log("OVERLAY-RETIRED: " + (modErr || "finalize-worker-overlay.js absent"));
+  return false;
 }
 
 const op = process.argv[2] || "";
@@ -111,17 +153,20 @@ try {
     // stripRelSuffix(absPath, rel) -> the implied root, or null when the path
     // does not end with `rel` on a segment boundary.
     case "strip": {
-      if (typeof mod.stripRelSuffix !== "function") {
-        console.log("ERROR: stripRelSuffix is not exported");
+      const stripRelSuffix = helper("stripRelSuffix");
+      if (typeof stripRelSuffix !== "function") {
+        console.log("ERROR: stripRelSuffix is not exported"
+          + (guardErr ? " (arg-value-guard.js: " + guardErr + ")" : ""));
         break;
       }
-      const r = mod.stripRelSuffix(a1, a2);
+      const r = stripRelSuffix(a1, a2);
       console.log(r === null || r === undefined ? "null" : fwd(r));
       break;
     }
     // matchFinalizeWorkerOverlay(cmd, acd, repoRoot) -> the matched registry
     // script's basename, or "null".
     case "match": {
+      if (!requireOverlay()) break;
       if (typeof mod.matchFinalizeWorkerOverlay !== "function") {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
@@ -135,6 +180,7 @@ try {
     }
     // mutmatch <mutation> <command> <repoRoot>
     case "mutmatch": {
+      if (!requireOverlay()) break;
       if (typeof mod.matchFinalizeWorkerOverlay !== "function") {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
@@ -155,10 +201,12 @@ try {
     //
     // Prints "accepted" | "rejected".
     case "plansdir": {
-      if (typeof mod.isUnderPlansDir === "function") {
-        console.log(mod.isUnderPlansDir(a1) ? "accepted" : "rejected");
+      const isUnderPlansDir = helper("isUnderPlansDir");
+      if (typeof isUnderPlansDir === "function") {
+        console.log(isUnderPlansDir(a1) ? "accepted" : "rejected");
         break;
       }
+      if (!requireOverlay()) break;
       if (typeof mod.matchFinalizeWorkerOverlay !== "function") {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
@@ -177,6 +225,7 @@ try {
     // immediately: this pins the BRANCH, so that widening any entry's count
     // bound later cannot quietly open an unvalidated argument slot.
     case "matchextra": {
+      if (!requireOverlay()) break;
       if (typeof mod.matchFinalizeWorkerOverlay !== "function") {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
@@ -202,6 +251,7 @@ try {
     // for every argument position it is willing to accept. Prints "ok" or the
     // first offending entry.
     case "specshape": {
+      if (!requireOverlay()) break;
       const reg = mod.FINALIZE_OVERLAY_REGISTRY;
       if (!Array.isArray(reg)) { console.log("ERROR: FINALIZE_OVERLAY_REGISTRY is not exported"); break; }
       let bad = "";
@@ -217,6 +267,7 @@ try {
     }
     // Same call, raw JSON result — diagnostic only.
     case "matchraw": {
+      if (!requireOverlay()) break;
       const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
       console.log(JSON.stringify({ acd, r: mod.matchFinalizeWorkerOverlay(a1, acd, a2) }));
       break;

@@ -2,7 +2,7 @@
 # Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-14: THE TRACKED CWD MUST FOLLOW EVERY DIRECTORY MOVE THE SHELL MAKES.
 #
-# commandCwd() in hooks/block-off-clearance-write/bash-target-context.js is what
+# commandCwd() in hooks/block-clearance-token-write/bash-target-context.js is what
 # gives the N-2 containment qualifier a directory to resolve a RELATIVE glob
 # against. `echo x | tee *` commits no literal character to a protected suffix,
 # so the ONLY thing that can block it is knowing which directory the `*` expands

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1780-round4-command-tool-payload.sh
-# Tests: hooks/lib/tool-command-text.js, hooks/block-off-clearance-write.js, hooks/supervisor-off-proposal-shim.js, hooks/lib/sentinel-patterns.js
+# Tests: hooks/lib/tool-command-text.js, hooks/block-clearance-token-write.js, hooks/supervisor-off-proposal-shim.js, hooks/lib/sentinel-patterns.js
 # Tags: off-clearance, runcommands, runinterminal, tool-payload, pretooluse, classifier, security, scope:issue-specific, pwsh-not-required, TL1, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
 # - That Claude Code's real runCommands / runInTerminal tools deliver the payload
@@ -51,7 +51,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 TCT_NODE="$_AGENTS_DIR_NODE/hooks/lib/tool-command-text.js"
 SP_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
+BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
@@ -178,7 +178,7 @@ assert_eq "C5c an empty tool name is not a command tool" "false" \
 cleanup_tmp "$TMPC"
 
 # ===========================================================================
-# Section D (TL2) - hooks/block-off-clearance-write.js end-to-end via stdin JSON.
+# Section D (TL2) - hooks/block-clearance-token-write.js end-to-end via stdin JSON.
 #
 # The verdict vocabulary is deliberately strict (mirrors
 # tests/enforce-off-clearance-write.sh): an allow counts only when the process
@@ -215,7 +215,7 @@ assert_verdict() { # <label> <want> <raw>
 }
 
 if [ ! -f "$BLOCK_HOOK" ]; then
-    skip "D block-off-clearance-write.js not present"
+    skip "D block-clearance-token-write.js not present"
 else
     TMPD=$(make_tmp); TND=$(node_path "$TMPD")
     DDRV="$TMPD/mk-input.js"

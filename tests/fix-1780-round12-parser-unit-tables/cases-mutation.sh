@@ -64,17 +64,17 @@ run_M_mutation_evidence() {
         [ "$got_n" != "$got_m" ] && killed=$((killed + 1))
     done <<'TABLE'
 M-glob   | GLOB_METACHAR_RE            | hooks/lib/basename-glob-normalize.js                            | hasglob | s1@MK1@?                | true  | false
-M-rocmd  | READ_ONLY_ARG_COMMAND_RE    | hooks/block-off-clearance-write/bash-scan/argv-scan.js          | rocmd   | cat                     | true  | false
-M-lesslog| LESS_LOG_OPT_RE             | hooks/block-off-clearance-write/bash-scan/argv-scan.js          | roinv   | less -o /wf/s1@MK@      | false | true
-M-varref | VAR_REF_RE                  | hooks/block-off-clearance-write/bash-scan/argv-scan.js          | varref  | $A                      | A     | -
-M-pwsh   | PWSH_ENV_ASSIGN_ONLY_RE     | hooks/block-off-clearance-write/bash-scan/assignment-text.js    | pwshassign | $env:A=x             | true  | false
-M-interp | INTERPRETER_RE              | hooks/block-off-clearance-write/interpreter-scan.js             | interpre | node -e "x"            | true  | false
-M-bodyfirst | BODY_FIRST_INTERPRETER_RE | hooks/block-off-clearance-write/interpreter-scan.js            | bodyfirst | awk 'BEGIN{print}'    | true  | false
-M-inlineflag | INLINE_PROGRAM_FLAG_RE  | hooks/block-off-clearance-write/interpreter-scan.js             | inlineflag | -e                  | true  | false
-M-proof  | GENERIC_INLINE_PROGRAM_FLAG_RE | hooks/block-off-clearance-write/interpreter-scan.js          | proof   | -e node                 | true  | false
+M-rocmd  | READ_ONLY_ARG_COMMAND_RE    | hooks/block-clearance-token-write/bash-scan/argv-scan.js          | rocmd   | cat                     | true  | false
+M-lesslog| LESS_LOG_OPT_RE             | hooks/block-clearance-token-write/bash-scan/argv-scan.js          | roinv   | less -o /wf/s1@MK@      | false | true
+M-varref | VAR_REF_RE                  | hooks/block-clearance-token-write/bash-scan/argv-scan.js          | varref  | $A                      | A     | -
+M-pwsh   | PWSH_ENV_ASSIGN_ONLY_RE     | hooks/block-clearance-token-write/bash-scan/assignment-text.js    | pwshassign | $env:A=x             | true  | false
+M-interp | INTERPRETER_RE              | hooks/block-clearance-token-write/interpreter-scan.js             | interpre | node -e "x"            | true  | false
+M-bodyfirst | BODY_FIRST_INTERPRETER_RE | hooks/block-clearance-token-write/interpreter-scan.js            | bodyfirst | awk 'BEGIN{print}'    | true  | false
+M-inlineflag | INLINE_PROGRAM_FLAG_RE  | hooks/block-clearance-token-write/interpreter-scan.js             | inlineflag | -e                  | true  | false
+M-proof  | GENERIC_INLINE_PROGRAM_FLAG_RE | hooks/block-clearance-token-write/interpreter-scan.js          | proof   | -e node                 | true  | false
 M-mention | MARKER_MENTION_RE          | hooks/lib/protected-basenames.js                                | hits    | node -e "require('fs').writeFileSync('/wf/s1@MK@','x')" | true | false
-M-assignword | ASSIGN_WORD_RE          | hooks/block-off-clearance-write/nested-bodies.js                | routes  | FOO=1 node <<EOF\nx\nEOF\n | b=1,f=0,o=0 | b=0,f=0,o=0
-M-heredoc | HEREDOC_TERMINATED_RE      | hooks/block-off-clearance-write/nested-bodies.js                | routes  | FOO=1 node <<EOF\nx\nEOF\n | b=1,f=0,o=0 | b=0,f=0,o=1
+M-assignword | ASSIGN_WORD_RE          | hooks/block-clearance-token-write/nested-bodies.js                | routes  | FOO=1 node <<EOF\nx\nEOF\n | b=1,f=0,o=0 | b=0,f=0,o=0
+M-heredoc | HEREDOC_TERMINATED_RE      | hooks/block-clearance-token-write/nested-bodies.js                | routes  | FOO=1 node <<EOF\nx\nEOF\n | b=1,f=0,o=0 | b=0,f=0,o=1
 TABLE
     rm -r -f "$work" 2>/dev/null
 

@@ -179,29 +179,44 @@ test_ic_phase3_confirm_reopen_makeparent() {
         fail "8: skills/issue-create/SKILL.md missing"
         return
     fi
-    local has_reopen_confirm has_makeparent_confirm
-    has_reopen_confirm=0; has_makeparent_confirm=0
-    grep -qE 'reopen.*(Confirm|AskUserQuestion|required)|AskUserQuestion.*reopen' "$IC_MD" && has_reopen_confirm=1
-    grep -qE 'make-parent.*(Confirm|AskUserQuestion|required)|AskUserQuestion.*make.parent' "$IC_MD" && has_makeparent_confirm=1
-    if [ "$has_reopen_confirm" -eq 1 ] && [ "$has_makeparent_confirm" -eq 1 ]; then
-        pass "8: issue-create Phase 3 requires confirm for reopen and make-parent"
+    # Since #1763 the reopen/make-parent requirement is one of four OR-ed gate
+    # conditions (G1), documented as a bullet naming both verdicts. The guarantee is
+    # unchanged — those two verdicts always confirm — but it is no longer stated on a
+    # line that also carries the word "Confirm", so match the condition itself.
+    local has_g1_reopen has_g1_makeparent
+    has_g1_reopen=0; has_g1_makeparent=0
+    grep -qE '^- G1 .*reopen' "$IC_MD" && has_g1_reopen=1
+    grep -qE '^- G1 .*make-parent' "$IC_MD" && has_g1_makeparent=1
+    if [ "$has_g1_reopen" -eq 1 ] && [ "$has_g1_makeparent" -eq 1 ]; then
+        pass "8: issue-create Phase 3 gate condition G1 covers reopen and make-parent"
     else
-        fail "8: issue-create Phase 3 missing confirms" "reopen=$has_reopen_confirm make-parent=$has_makeparent_confirm"
+        fail "8: issue-create Phase 3 G1 does not cover both verdicts" "reopen=$has_g1_reopen make-parent=$has_g1_makeparent"
     fi
 }
 
-# ── Test 9: issue-create SKILL.md Phase 3 proceeds without confirm for none/sub-of/sibling ─
-test_ic_phase3_no_confirm_others() {
+# ── Test 9: issue-create SKILL.md Phase 3 documents the full confirm gate ────
+test_ic_phase3_gate_conditions_documented() {
     if [ ! -f "$IC_MD" ]; then
         fail "9: skills/issue-create/SKILL.md missing"
         return
     fi
-    # The skill must document that none/sub-of/sibling proceed without confirmation
-    if grep -qE 'sub-of.*(without|no).*(confirm|Confirm)|sibling.*(without|no).*(confirm|Confirm)|none.*(without|no).*(confirm|Confirm)' "$IC_MD" || \
-       grep -qE '(without|no).*(confirm|Confirm).*(sub-of|sibling|none)' "$IC_MD"; then
-        pass "9: issue-create Phase 3 documents no-confirm for none/sub-of/sibling"
+    # This test previously asserted that none/sub-of/sibling proceed WITHOUT
+    # confirmation. #1763 deliberately withdrew that guarantee: the gate is now an OR
+    # of four conditions, and G3 (mid-workflow provenance below severity:high) and G4
+    # (unverified verdict) can fire on any verdict. Asserting the old blanket
+    # exemption would now pin a contract the skill intentionally no longer offers.
+    # What must be documented instead is the complete condition set plus the single
+    # script that owns the decision, so no caller re-derives the gate by hand.
+    local missing=""
+    for g in G1 G2 G3 G4; do
+        grep -qE "^- $g " "$IC_MD" || missing="$missing $g"
+    done
+    if [ -n "$missing" ]; then
+        fail "9: issue-create Phase 3 gate conditions incomplete" "missing:$missing"
+    elif ! grep -q 'eval-confirm-gate.sh' "$IC_MD"; then
+        fail "9: issue-create Phase 3 does not delegate the gate decision to eval-confirm-gate.sh"
     else
-        fail "9: issue-create Phase 3 missing no-confirm documentation for none/sub-of/sibling"
+        pass "9: issue-create Phase 3 documents gate conditions G1-G4 and delegates to eval-confirm-gate.sh"
     fi
 }
 
@@ -226,7 +241,7 @@ test_survey_verdict_schema
 test_survey_no_candidates
 test_survey_worker_no_ask
 test_ic_phase3_confirm_reopen_makeparent
-test_ic_phase3_no_confirm_others
+test_ic_phase3_gate_conditions_documented
 test_ir_user_invocable_false
 
 echo ""

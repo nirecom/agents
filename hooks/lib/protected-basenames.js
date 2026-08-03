@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SSOT for which basenames hold OFF-clearance / session-override state that no
 // tool-issued write may create or mutate. Shared (rules/coding/file-split.md) by
-// block-off-clearance-write.js and enforce-worktree/bash-write-scope/marker-gate.js.
+// block-clearance-token-write.js and enforce-worktree/bash-write-scope/marker-gate.js.
 // Matching is directory-agnostic — a marker/token written anywhere is still a
 // forgery attempt. Suffix lists are canonical (CPR-2); regexes are derived from them.
 "use strict";

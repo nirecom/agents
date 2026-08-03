@@ -235,10 +235,10 @@ done
 # a partial guard (CPR-5).
 #
 # Behaviour lock on the absolute verdicts, per the module header of
-# hooks/block-off-clearance-write.js: enforce-worktree.js is a LOCATION guard,
+# hooks/block-clearance-token-write.js: enforce-worktree.js is a LOCATION guard,
 # so its marker gate blocks from the main checkout and from a protected branch
 # but is INERT inside a linked feature worktree - which is exactly why
-# block-off-clearance-write.js exists as the primary, location-independent gate
+# block-clearance-token-write.js exists as the primary, location-independent gate
 # (marker-gate.js is defence in depth). Locking `linked -> allow` here documents
 # that division of labour; it is NOT a statement that forging a marker from a
 # worktree is permitted overall.

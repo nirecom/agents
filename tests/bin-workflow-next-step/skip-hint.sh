@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step, hooks/workflow-state/skip-signal-resolver.js
+# Tests: bin/workflow/next-step, hooks/workflow-state/skip-signal-resolver.js, bin/workflow/lib/next-step/
 # Tags: L2, workflow, skip-signal, scope:common
 #
 # Case group: SKIP_HINT emission (#485 — cases 40–44).
@@ -107,11 +107,14 @@ run_skip_hint_tests() {
 
   # ---- Case 47: outline marked skipped in state file side-effect ----
   local OUTLINE_STATUS
+  # #1733: state on disk is an append-only event stream (no top-level .steps);
+  # read through readState() so the event log is projected.
   OUTLINE_STATUS="$(node -e "
     try {
-      const s = JSON.parse(require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/case46.json', 'utf8'));
-      const st = s.steps && s.steps.outline;
-      console.log(st && st.status ? st.status : 'MISSING');
+      const S = require('$STATE_IO_N');
+      const st = S.readState('case46');
+      const e = st && st.steps && st.steps.outline;
+      console.log(e && e.status ? e.status : 'MISSING');
     } catch(e) { console.log('MISSING'); }
   " 2>/dev/null || echo "MISSING")"
   check "47: outline step status=skipped after valid record" "skipped" "$OUTLINE_STATUS"
@@ -125,11 +128,14 @@ run_skip_hint_tests() {
 
   # ---- Case 49: branching_complete reached when both outline+detail have valid records ----
   local DETAIL_STATUS
+  # #1733: state on disk is an append-only event stream (no top-level .steps);
+  # read through readState() so the event log is projected.
   DETAIL_STATUS="$(node -e "
     try {
-      const s = JSON.parse(require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/case48.json', 'utf8'));
-      const st = s.steps && s.steps.detail;
-      console.log(st && st.status ? st.status : 'MISSING');
+      const S = require('$STATE_IO_N');
+      const st = S.readState('case48');
+      const e = st && st.steps && st.steps.detail;
+      console.log(e && e.status ? e.status : 'MISSING');
     } catch(e) { console.log('MISSING'); }
   " 2>/dev/null || echo "MISSING")"
   check "49: detail step status=skipped after valid record" "skipped" "$DETAIL_STATUS"

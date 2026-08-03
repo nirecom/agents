@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/review-step-numbers, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/session-close/SKILL.md, agents/issue-close-finalize-worker.md
+# Tests: bin/review-step-numbers, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/session-close/SKILL.md, skills/issue-close-finalize/scripts/run-finalize-terminal.sh
 # Tags: renumber, step-rename, sweep, issue-614, issue-971, issue-966, scope:issue-specific
 # Verifies renumber sweep tool exists and new step labels appear in SKILL.md files.
 
@@ -98,8 +98,11 @@ check_literal "R8" "MOP-0" "skills/make-outline-plan/SKILL.md"
 # R9: "SC-1" in session-close/SKILL.md
 check_literal "R9" "SC-1" "skills/session-close/SKILL.md"
 
-# R10: "written_by_step_6h" literal preserved in agents/issue-close-finalize-worker.md
-check_literal "R10" "written_by_step_6h" "agents/issue-close-finalize-worker.md"
+# R10: "written_by_step_6h" literal preserved in the finalize terminal script,
+# which owns Step L's historyEntry branch table. (#1673 replaced the
+# agents/issue-close-finalize-worker.md prompt with a dispatcher module that
+# spawns this script by registry key; the literal never lived in the module.)
+check_literal "R10" "written_by_step_6h" "skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
 
 # --- New assertions for #971 (step numbering rule + review-step-numbers) ---
 

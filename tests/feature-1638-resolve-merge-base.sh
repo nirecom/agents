@@ -23,6 +23,13 @@
 #   R18     --explain is diagnostics; it must not contaminate the machine-readable stdout.
 #   R19     the degradation contract — the helper is a self-contained CLI, so a fixture that
 #           copies the single file (tests/fix-quality-gates-not-found/) still exercises it.
+#   R20-R27 #1779: a branch with ZERO commits resolves to base == HEAD, so `<base>...HEAD` is
+#           empty no matter how much work is staged. base_is_head reports that fact, and the
+#           three working-tree counts give the consumers something to fall back to. Tracked and
+#           untracked are counted separately because `git diff HEAD` cannot see the latter.
+#           R24-R27 pin the counters at their edges: zero printed as zero rather than `-`, a
+#           change that exists only in the index, an exact count rather than "at least one",
+#           and a gitignored file excluded from the census entirely.
 #
 # ISOLATION. Every fixture repository is local with NO remote, and every invocation passes
 # --no-fetch, so no row can reach the network. CLAUDE_WORKFLOW_DIR is redirected to a temp
@@ -100,6 +107,20 @@ repo_with_main() { # prints the repo path
   commit_file "$r" second.txt 1 second
   git -C "$r" switch -q -c work >/dev/null 2>&1
   commit_file "$r" third.txt 5 third
+  printf '%s' "$r"
+}
+
+# #1779. main has real commits and the work branch was cut from it and has committed NOTHING.
+# `git merge-base main HEAD` therefore answers with HEAD itself, and every consumer that diffs
+# `<base>...HEAD` gets a structurally empty range while the branch is full of staged/unstaged/
+# untracked work. The base is not wrong — it is correct AND useless — so the resolver has to
+# say so in a field rather than by inventing a new state.
+repo_zero_commit() { # prints the repo path
+  local r
+  r="$(new_repo main)"
+  commit_file "$r" seed.txt 1 seed
+  commit_file "$r" second.txt 1 second
+  git -C "$r" switch -q -c work >/dev/null 2>&1
   printf '%s' "$r"
 }
 
@@ -270,6 +291,17 @@ r10_recorded_is_exempt_from_thresholds
 r11_post_session_head_is_a_note
 r12_format_base
 r13_all_kv_keys_present
+
+# R20-R23 (#1779) — the zero-commit branch: base == HEAD, plus the working-tree census the
+# consumers need in order to fall back to something non-empty.
+r20_base_is_head_false_when_ahead
+r21_base_is_head_true_on_zero_commit
+r22_uncommitted_counts_match_git
+r23_untracked_is_counted_separately
+r24_clean_tree_counts_are_zero
+r25_staged_only_change_is_counted
+r26_untracked_count_is_exact
+r27_gitignored_file_is_not_untracked
 
 # T — where the thresholds come from, and N/N+1 on both axes.
 t1_builtin_defaults

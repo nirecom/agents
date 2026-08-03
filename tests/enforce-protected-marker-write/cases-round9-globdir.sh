@@ -7,7 +7,7 @@
 # NON-match (otherwise `rm -rf build/*` would block). That named exception is
 # only safe while such a glob cannot land on a protected file, and the qualifier
 # that guarantees it is DIRECTORY CONTAINMENT in
-# hooks/block-off-clearance-write/bash-target-context.js.
+# hooks/block-clearance-token-write/bash-target-context.js.
 #
 # The qualifier fired for a LITERAL absolute directory only. A `$` anywhere in
 # the directory spelling, or a leading `~`, made it `continue` — i.e. CLEAR the

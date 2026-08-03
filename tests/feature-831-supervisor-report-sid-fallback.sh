@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-831-supervisor-report-sid-fallback.sh
-# Tests: bin/supervisor-report (session-id auto-resolve fallback chain)
+# Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, cli, session-id, fallback, scope:issue-specific
 # Tests for issue #831 — supervisor-report session-id auto-resolve.
 #
@@ -168,6 +168,7 @@ run_s4() {
     (
         cd "$mainrepo" && \
         git init -q -b main && \
+        git config core.hooksPath /dev/null && \
         git config user.email "test@example.com" && \
         git config user.name "test" && \
         printf 'Session-ID: common-dir-sid-s4\n' > WORKTREE_NOTES.md && \
