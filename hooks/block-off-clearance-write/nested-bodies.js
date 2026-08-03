@@ -1,22 +1,11 @@
 // hooks/block-off-clearance-write/nested-bodies.js
-// Extract, from a single parsed segment, every string the shell will go on to
-// execute AS COMMAND TEXT — so ./bash-scan.js can recurse the whole scanner
-// over it instead of leaving it as inert argv.
-//
-// #1780 round-5 HIGH-3 / MEDIUM-5. Two constructs make a plain argument (or a
-// redirect target) become a command line, and neither reaches the interpreter
-// gate in ./interpreter-scan.js, because that gate keys on an explicit
-// `-c` / `-e` / `-Command` FLAG:
-//
-//   eval 'echo {} > s1.<marker>'     — `eval` takes no flag at all
-//   sh <<< "echo x > s1.<marker>"    — the body arrives as a here-string, and
-//   xargs -I{} sh -c '…' <<< s1.<marker>   the `-c` body is a harmless literal
-//
-// Both are handled here by returning the text and letting the CALLER re-run the
-// full scan on it (depth-capped). That is deliberately more general than adding
-// `eval` to the interpreter-name list would be: recursion reuses every redirect,
-// argv, assignment and glob rule at once, so a nested construct is judged by
-// exactly the same standard as a top-level one (CPR-4/CPR-8).
+// Extract, from a parsed segment, every string the shell will execute as
+// COMMAND TEXT so ./bash-scan.js can recurse the scanner over it. `eval` (no
+// flag) and here-strings (`sh <<< "..."`) both turn a plain argument into a
+// command line without tripping the flag-based interpreter gate in
+// ./interpreter-scan.js. Recursing the full scanner here is more general than
+// enumerating `eval`-like names: it reuses every redirect/argv/assignment/glob
+// rule at once (CPR-4/CPR-8).
 "use strict";
 
 const path = require("path");
@@ -72,7 +61,7 @@ function hereStringBodiesOf(seg) {
 // anchored read-only body shapes in ./interpreter-scan.js can match. Feeding
 // them the raw `"…"` spelling would fail every `^…$` shape and fail-closed
 // block `node <<< "console.log(fs.readFileSync(…))"`, which its `-e` sibling
-// approves (#1709 symmetry).
+// approves (CPR-5 symmetry).
 function hereStringValuesOf(seg) {
   const out = [];
   for (const r of hereStringRedirects(seg)) {
@@ -92,44 +81,20 @@ function nestedCommandTextsOf(seg) {
 }
 
 // ---------------------------------------------------------------------------
-// Program text delivered on STDIN.
-//
-// #1780 round-5 follow-up. The here-string handling above routes every `<<<`
-// body to the SHELL scanner, which is right only when the reader is a shell.
-// `node`, `python3`, `perl`, `ruby`, `deno`, `bun` and `pwsh` all execute a
-// program read from stdin too, and for them shell text is the wrong grammar:
-// `node <<< 'require("fs").unlinkSync("<marker>")'` is one non-matching word to
-// the shell scanner and sailed through, while the byte-identical `node -e` form
-// blocked.
-//
-// The cut is therefore made on the RECEIVING COMMAND'S INTERPRETER IDENTITY,
-// never on the delivery syntax (CPR-4/CPR-8) — otherwise closing `<<<` alone
-// would leave `<<`, `|` and `<(…)` open, which is exactly how this class was
-// discovered. Every route that can put program text on an interpreter's stdin
-// is enumerated once, here, and classified by identity:
-//
-//   node <<< '…'          -> body known  -> classify in the interpreter's language
-//   node <<EOF … EOF      -> body known  -> same
-//   printf '…' | node     -> body OPAQUE -> fail closed if the upstream text
-//                                           mentions a protected name
-//   node < FILE           -> program is a file -> classify FILE as a path
-//   node <(printf '…')    -> body OPAQUE -> fail closed on a protected mention
-//
-// The opaque cases take the same direction as the HIGH-2 parse-failure rule
-// (CPR-5): "cannot analyse" means "cannot clear", not "nothing found".
+// Program text delivered on STDIN. A here-string routes to the shell scanner
+// above, but node/python/perl/ruby/deno/bun/pwsh also read a program from
+// stdin — the wrong grammar for shell text (`node <<< '...'` was invisible
+// while `node -e` blocked). The cut is made on the interpreter's IDENTITY, not
+// delivery syntax (`<<<`, `<<`, `|`, `<(...)` all count): a known body is
+// judged in its language; an opaque (piped/substituted) body fails closed on
+// any protected mention; a file operand is classified as a path.
 // ---------------------------------------------------------------------------
 
-// argvProvesInlineProgram(words, interpreterWord): does this word list carry an
-// inline program? Two conditions, both required:
-//
-//   1. a word is an inline-program flag FOR THIS INTERPRETER — kind-scoped, so
-//      a pwsh parameter name cannot clear `python3 -En -` (round 8);
-//   2. that flag actually carries a body: attached (`--eval=code`) or in a
-//      following word. The flag alone is not the proof — the program is its
-//      BODY — so `printf '<program>' | node -e` (dangling `-e`, program on
-//      stdin) stays a stdin-program route. Tier 2's own
-//      `flagCount > bodies.length` rule takes the same view of a bodyless
-//      flag (CPR-5).
+// argvProvesInlineProgram(words, interpreterWord): true only if a word is an
+// inline-program flag FOR THIS INTERPRETER (kind-scoped, so a pwsh parameter
+// can't clear a python3 invocation) AND that flag carries a body — attached
+// (`--eval=code`) or in the next word. A bodyless flag (e.g. dangling `-e`
+// before a stdin pipe) is not proof; Tier 2 takes the same view (CPR-5).
 function argvProvesInlineProgram(words, interpreterWord) {
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
@@ -139,36 +104,14 @@ function argvProvesInlineProgram(words, interpreterWord) {
   return false;
 }
 
-// stdinProgramInterpreterKind(seg): "language" | "shell" | null — the kind of
-// interpreter this segment is, reported whenever the program it runs is NOT
-// provably on argv, i.e. whenever stdin may be CODE rather than data.
-//
-// The burden of proof is on the ALLOW side, deliberately. The first version of
-// this function walked argv looking for the program operand ("a non-flag word
-// before the redirect means argv carries the program"), and that shape-based
-// walk was fail-OPEN: a flag's own VALUE is a non-flag word, so one shifted
-// token cleared a byte-identical body —
-//
-//   node <<< '<program>'                    -> blocked
-//   node --title x <<< '<program>'          -> ALLOWED   (`x` read as a program)
-//   python3 -X importtime <<< '<program>'   -> ALLOWED
-//
-// Knowing that `--title` consumes a value requires a per-interpreter, per-
-// version flag-arity table, which is the same enumeration-lag failure mode
-// ./interpreter-scan.js records for MEDIUM-6 (CPR-8). So argv SHAPE is not
-// consulted at all any more. The only accepted proof is a positive one: an
-// inline-program flag (INLINE_PROGRAM_FLAG_RE — the same `-c`/`-e`/`--eval`/
-// `-Command` family whose bodies the Tier-2 extractor already reads). Anything
-// else is unproven, and unproven means the stdin body is treated as program
-// text — the HIGH-2 direction, "cannot analyse" is "cannot clear" (CPR-5).
-//
-// Accepted consequence: a bare file operand cannot be proven without that same
-// flag-arity knowledge, so `node script.js <<< '<text naming a marker>'` is now
-// reported as a program route and blocks. That is over-block in the safe
-// direction, and the shape (feeding marker-naming DATA to a script through a
-// here-string) is rare; `cat <marker> | python3 -c '…'` and `printf hi | node`
-// — the everyday data-on-stdin shapes — stay clear, the first because `-c`
-// proves the program, the second because its text names nothing protected.
+// stdinProgramInterpreterKind(seg): "language" | "shell" | null, reported
+// whenever the program is NOT provably on argv (stdin may be CODE, not data).
+// Burden of proof is on the ALLOW side: a shape-based argv walk ("a non-flag
+// word before the redirect means argv carries the program") was fail-open,
+// since a flag's own VALUE is a non-flag word (e.g. `node --title x <<< prog`
+// wrongly cleared). Only a positive inline-program flag counts as proof now;
+// consequence: a bare file operand can't be proven either, so
+// `node script.js <<< data` over-blocks — accepted, since that shape is rare.
 function stdinProgramInterpreterKind(seg) {
   const eff = resolveEffectiveSegment(seg);
   if (!eff || typeof eff.cmd0 !== "string") return null;

@@ -100,16 +100,13 @@ function buildSegmentIR(segStr, isSubshell, opts) {
  *
  * rawText is always set before any processing begins.
  */
-// opts.preserveSubstitutionSpans (#1780 round-11 CAUSE-2, default OFF): keep
-// unquoted `$( … )` / `` ` … ` `` / `$(( … ))` / `${ … }` spans intact through
-// BOTH the segment split and the tokenizer, so a write target assembled inside a
-// substitution survives as one token. See the block comments in
-// ./command-parser.js and ./substitution-spans.js. Opt-in on purpose: this
-// parse is a SECOND, ADDITIVE reading, and the caller
-// (hooks/block-off-clearance-write/bash-scan/) merges its segments with the
-// ordinary ones rather than replacing them — the ordinary reading is what makes
-// substitution / subshell / process-substitution BODIES their own scanned
-// segments, and losing it would turn today's blocks into allows.
+// opts.preserveSubstitutionSpans (default OFF): keeps unquoted substitution
+// spans (`$(...)`, backticks, arithmetic, `${...}`) intact through the split
+// and tokenizer, so a write target assembled inside one survives as a single
+// token — see ./command-parser.js and ./substitution-spans.js. Opt-in: the
+// caller merges this ADDITIVE reading with the ordinary one rather than
+// replacing it, since the ordinary reading is what scans substitution/subshell
+// bodies as their own segments.
 function parse(cmd, opts) {
   const rawText = cmd;
 

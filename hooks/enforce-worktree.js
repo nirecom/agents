@@ -41,12 +41,11 @@ const { buildWorktreeRemedy } = require("./enforce-worktree/worktree-remedy");
 const { buildExtras } = require("./enforce-worktree/report-extras");
 const { handleBashWrite } = require("./enforce-worktree/handle-bash-write");
 const { handleEditWrite } = require("./enforce-worktree/handle-edit-write");
-// H-2 (#1780 round-4): the guarded tool surface is a CLASS, not the four names
-// this hook happened to be written against. editFiles / NotebookEdit are
-// edit-write siblings and runInTerminal / runCommands are command siblings;
-// every one of them bypassed main-worktree and protected-branch enforcement
-// entirely. hooks/lib/write-tools.js is the SSOT for both classes and for the
-// settings.json matcher string (CPR-2/CPR-5).
+// The guarded tool surface is a CLASS, not the four names this hook happened
+// to be written against — editFiles/NotebookEdit are edit-write siblings and
+// runInTerminal/runCommands are command siblings; each bypassed main-worktree
+// and protected-branch enforcement entirely. hooks/lib/write-tools.js is the
+// SSOT for both classes and the settings.json matcher string.
 const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandTextOf } = require("./lib/write-tools");
 
 // readStdin / getWorktreeBaseDirResolved moved to enforce-worktree/entry-helpers.js
@@ -192,14 +191,11 @@ const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
 let repoRoot = null;
 let _writeDetector = null;
 
-// Bash-tool and Edit/Write/MultiEdit-tool write-target analysis are each a
-// cohesive, self-contained chunk of logic — extracted verbatim into sibling
-// modules (file-split, rules/coding/file-split.md). Each helper calls the
-// shared `done()` for every allow/block exit (process.exit(0) inside — control
-// never returns past those calls), and returns the resolved `repoRoot` (plus
-// `writeDetector` for Bash) on natural fall-through, exactly matching what the
-// former inline code left in the outer `repoRoot` / `_writeDetector` variables
-// for the post-dispatch main-checkout / protected-branch checks below.
+// Bash-tool and Edit/Write/MultiEdit-tool write-target analysis are extracted
+// into sibling modules (file-split, rules/coding/file-split.md). Each helper
+// calls the shared `done()` for every allow/block exit and returns the
+// resolved `repoRoot` (plus `writeDetector` for Bash) for the post-dispatch
+// main-checkout / protected-branch checks below.
 if (isCommandTool(toolName)) {
   const result = handleBashWrite({ toolName, toolInput, _toolCwd, done, reportContext: _reportContext });
   repoRoot = result.repoRoot;

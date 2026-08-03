@@ -1,63 +1,26 @@
 #!/usr/bin/env node
 // Candidate-basename normalization + glob-aware deny-suffix matching.
 //
-// PreToolUse hooks see tool_input.command / tool_input.file_path BEFORE the real
-// shell expands it and before the OS normalizes it, so the text a hook inspects
-// can differ from the on-disk basename the write actually lands on:
-//   - shell globs (`s1.off-clearance.claimed*`) expand at execution time
-//   - Windows silently strips trailing whitespace and dots from a filename
-//   - NTFS alternate-data-stream specs (`name::$DATA`, `name:alt`) write the
-//     BASE file, not a file literally named `name::$DATA`
-// A `$`-anchored denylist regex applied to the raw text misses all three.
+// PreToolUse hooks see tool_input text before the shell expands it and the OS
+// normalizes it, so a `$`-anchored regex on raw text misses: shell globs that
+// expand at execution time, Windows stripping trailing whitespace/dots, and
+// NTFS alt-data-stream specs (`name::$DATA`) that write the BASE file.
 //
-// TWO exported entry points, deliberately separated (CPR-3):
-//   normalizeCandidateBasename()      — pure text normalization, glob metachars
-//                                       are left INTACT.
-//   candidateBasenameMatchesAnySuffix() — the denylist decision: normalize, then
-//                                       test whether the candidate matches (or,
-//                                       for a glob, COULD expand to) any of the
-//                                       protected suffixes.
+// Two entry points (CPR-3): normalizeCandidateBasename() does pure text
+// normalization, glob metachars left INTACT; candidateBasenameMatchesAnySuffix()
+// normalizes then decides — for a glob, whether it COULD expand to a protected
+// suffix. Metachar handling lives in the matcher so a metachar WIDENS the
+// decision (fail-closed) rather than collapsing to one non-matching string.
 //
-// #1780 H-3 (security-scanner round 8+): the previous version resolved `?` and
-// `[...]` to a literal filler character inside normalizeCandidateBasename().
-// That was NOT the "most permissive interpretation" the old header comment
-// claimed — it NARROWED the deny match and was a live bypass: `s1.off-clearanc?`
-// normalized to `s1.off-clearancX`, which no longer matched the `$`-anchored
-// token regex even though bash expands it onto the real token file. Metachar
-// handling now lives in the MATCHER, where a metachar can widen the decision
-// (fail-closed) instead of collapsing it to one concrete non-matching string.
+// Named exception (CPR-8): a glob whose literal text contributes NOTHING to
+// the suffix (`*`, `logs/2024*`) is a non-match — else `rm -rf build/*` would
+// block. This module is name-only; the caller (bash-target-context.js)
+// additionally fails closed when a glob's directory resolves under the
+// workflow dir.
 //
-// #1780 H-4: the ADS strip lives here so every call site (marker-gate.js,
-// block-off-clearance-write) inherits it from one place (CPR-4).
-//
-// RESIDUAL LIMITATION (named exception, CPR-8): a glob whose own literal text
-// contributes NOTHING to the protected suffix (`*`, `logs/2024*`) is reported as
-// a non-match. Such a pattern is a bulk operation, not evidence of targeting a
-// protected file, and treating it as a hit would block ordinary commands like
-// `rm -rf build/*`.
-//
-// #1780 N-2 — WHERE THE EXCEPTION IS QUALIFIED: this module is NAME-ONLY; it
-// cannot see where a target resolves, so it cannot itself distinguish
-// `rm -rf build/*` from `tee <workflowDir>/*`. The qualifier therefore lives in
-// the caller that does have that context:
-// hooks/block-off-clearance-write/bash-target-context.js fails closed when a
-// glob basename's DIRECTORY resolves at/under getWorkflowDir(), regardless of
-// literal overlap.
-//
-// An earlier revision of this comment credited
-// hooks/enforce-worktree/bash-write-scope/marker-gate.js with that containment.
-// That was FALSE in the deployed configuration: marker-gate.js runs inside
-// enforce-worktree.js, which allows unconditionally from a linked worktree —
-// the normal working mode — so the exception had no gate behind it at all.
-// marker-gate.js remains defence in depth only; do not cite it as a mitigation.
-//
-// #1780 round-9 HIGH-2 — BRACE EXPANSION and ANSI-C `$'…'` decoding live in the
-// sibling module ./basename-glob-normalize/brace-ansi-expand.js. They differ in
-// kind from the glob above: a glob can only ever match a file that ALREADY
-// exists, while `{f..f}` / `$'…\x66'` CREATE the exact protected basename. Read
-// that file's DIRECTION DISCIPLINE header before touching either: this module is
-// a NORMALIZER consumed in the DETECTION direction, so every step of it must
-// fail WIDE (emit more candidate spellings) and must never drop or rewrite one.
+// Brace/ANSI-C `$'...'` expansion lives in the sibling
+// ./basename-glob-normalize/brace-ansi-expand.js — read its DIRECTION
+// DISCIPLINE header before touching either module.
 "use strict";
 
 const { candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
@@ -65,11 +28,9 @@ const { candidateSpellings } = require("./basename-glob-normalize/brace-ansi-exp
 const GLOB_METACHAR_RE = /[*?[]/;
 
 // stripAlternateDataStream(name): drop a trailing NTFS stream spec
-// (`::$DATA`, `:$DATA`, `:altname`). A write to `x::$DATA` lands on `x`, so the
-// stream spec must not shield `x` from a denylist anchored on `x`.
-// The Windows drive-letter colon (`C:`) is explicitly NOT a stream separator —
-// scanning starts past it so a drive-qualified string is never truncated to a
-// bare letter.
+// (`::$DATA`, `:$DATA`, `:altname`) — a write to `x::$DATA` lands on `x`, so
+// it must not shield `x` from a denylist anchored on `x`. The drive-letter
+// colon (`C:`) is NOT a stream separator; scanning starts past it.
 function stripAlternateDataStream(name) {
   const start = /^[A-Za-z]:/.test(name) ? 2 : 0;
   const idx = name.indexOf(":", start);
@@ -107,12 +68,10 @@ function parseGlobAtoms(pattern) {
 }
 
 // globCanEndWith(atoms, suffix): true iff some expansion of the glob ENDS WITH
-// `suffix`, matched right-to-left so the unconstrained prefix costs nothing.
-// `[...]` is over-approximated as "any single char" (widening — the safe
-// direction for a denylist). `literalMatched` implements the named exception
-// documented in the header: at least one LITERAL character of the pattern must
-// land inside the protected suffix, so `*` / `2024*` (which commit to nothing)
-// are not reported as hits while `s1.off-clearanc*` and `s1.off-clearanc?` are.
+// `suffix`, matched right-to-left. `[...]` is over-approximated as "any single
+// char" (widening). `literalMatched` implements the header's named exception:
+// at least one LITERAL char must land inside the suffix, so `*`/`2024*` (which
+// commit to nothing) are not hits while `s1.off-clearanc*` is.
 function globCanEndWith(atoms, suffix) {
   const s = suffix.toLowerCase();
   const rev = atoms.slice().reverse();
@@ -155,15 +114,11 @@ function oneSpellingMatches(spelling, suffixes) {
 }
 
 // candidateBasenameMatchesAnySuffix(basename, suffixes): the denylist decision.
-// Fail-closed on error is the caller's job — this function only ever answers the
-// match question.
-//
-// #1780 round-9 HIGH-2: the question is asked of every spelling the raw text can
-// BECOME, not just of the raw text. candidateSpellings() enumerates the brace
-// and ANSI-C expansions (widening only — the raw text is always in the set), and
-// an enumeration it refused to finish (`overCap`) answers "hit": an expansion
-// this scanner could not complete has not been shown to miss the suffix, and the
-// detection direction resolves that doubt towards blocking.
+// Asked of every spelling the raw text can BECOME (candidateSpellings()
+// enumerates brace/ANSI-C expansions, widening only), not just the raw text.
+// An enumeration that gave up (`overCap`) answers "hit": an incomplete
+// expansion has not been shown to miss the suffix, so detection direction
+// resolves the doubt toward blocking. Fail-closed on error is the caller's job.
 function candidateBasenameMatchesAnySuffix(basename, suffixes) {
   if (typeof basename !== "string" || basename === "" || !Array.isArray(suffixes)) return false;
   const { candidates, overCap } = candidateSpellings(basename);

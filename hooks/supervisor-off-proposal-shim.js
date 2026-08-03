@@ -1,17 +1,10 @@
 "use strict";
 // PreToolUse hook: gates OFF-sentinel emit commands on a reason-bound clearance
-// token (<workflowDir>/<sid>.off-clearance) minted by bin/request-off-clearance
-// after a Phase1 examination (#1608).
-//
-// The gate is TOKEN-FIRST: it is decided before — and independently of — any
-// supervisor state read. Supervisor findings/severity no longer participate in
-// the verdict (deadlock root fix); the state file is consulted only to pick an
-// honest block message (#1606).
-//
-// Fail direction: the token gate is the single fail-CLOSED point (corrupt or
-// unreadable token → block). Everything else fails open (exit 0). The escape
-// when the examiner itself is broken is the EMERGENCY sentinel, which is
-// excluded from this gate by construction.
+// token (<workflowDir>/<sid>.off-clearance) minted by bin/request-off-clearance.
+// Token-first: decided before, and independent of, any supervisor state read —
+// the state file only picks an honest block message, never the verdict. Only the
+// token check fails CLOSED; everything else fails open. EMERGENCY sentinels
+// bypass this gate by construction (for when the examiner itself is broken).
 const fs = require("fs");
 const path = require("path");
 
@@ -23,11 +16,8 @@ process.stdin.on("end", () => {
     let wsidResolved = false;
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
-    // H-1 (#1780 round-4): runCommands carries an ARRAY under `commands`.
-    // Reading `.command` gave this gate "" for every runCommands call, so a
-    // sentinel emitted from commands[] was never examined. Both the tool set
-    // and the payload normalization come from hooks/lib/tool-command-text.js
-    // (CPR-2, shared with enforce-system-ops.js and block-off-clearance-write).
+    // runCommands carries an ARRAY under `commands`, not `.command` — normalization
+    // shared with enforce-system-ops.js / block-off-clearance-write (CPR-2).
     const { isCommandTool, commandTextOf, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
     if (!isCommandTool(toolName)) process.exit(0);
 
@@ -49,22 +39,12 @@ process.stdin.on("end", () => {
       process.exit(2);
     }
 
-    // --- Adjudication units (#1780 round-5 H-1) ---------------------------
-    // ONE tool call can carry MANY commands, and the activation layer applies
-    // EVERY one of them:
-    //   runCommands            -> tool_input.commands is an ARRAY, each element runs
-    //   Bash / runInTerminal   -> `a && b` runs both, and hooks/workflow-mark.js
-    //                             splits the command on `&&` and dispatches each part
-    // The previous code adjudicated a SINGLE element (the first that looked like an
-    // OFF proposal) and derived the target, the reason, the clearance validation and
-    // the claim from it alone — so a call carrying two OFF sentinels was validated and
-    // claimed ONCE while activating BOTH, breaking single-use, reason binding and
-    // target binding. The gate must therefore see exactly the units the activation
-    // layer sees: the payload is expanded per array element AND per `&&` part, using
-    // the same naive splitter workflow-mark.js uses (its `&&` handling is the SSOT
-    // for what actually gets applied). Every sentinel pattern is anchored ^...$ with
-    // no `m` flag, so each unit has to be matched on its own — joined text matches
-    // nothing.
+    // --- Adjudication units ------------------------------------------------
+    // One tool call can carry many commands (runCommands' `commands` array, or
+    // `a && b` in Bash/runInTerminal, which workflow-mark.js also splits on `&&`).
+    // Adjudicating only the first OFF-looking element let a call with two sentinels
+    // get validated/claimed once while activating both. So expand into the same
+    // units the activation layer sees, and judge each independently.
     const AND_SPLIT_RE = /\s*&&\s*/;
     const matchesAny = (res, text) => res.some((re) => re && re.test && re.test(text));
     const units = [];
@@ -87,14 +67,10 @@ process.stdin.on("end", () => {
     ];
     const activatingUnits = units.filter((u) => matchesAny(ACTIVATING_OFF_RES, u));
 
-    // POLICY, EXPLICIT (CPR-8): one clearance authorizes exactly ONE activation, so
-    // a tool call may carry at most ONE activating OFF sentinel. N sentinels are
-    // REJECTED OUTRIGHT rather than gated N times — N clearances would still have to
-    // be bound to N distinct targets/reasons and consumed in an order this gate
-    // cannot observe, and the emergency form is human-gated per emission. Rejecting
-    // is the simplest rule that cannot under-gate; the caller re-emits one per call.
-    // This also covers the mixed case (a normal OFF plus an EMERGENCY one), which
-    // could otherwise use the emergency element to smuggle the gated one past Phase1.
+    // One clearance authorizes exactly ONE activation (CPR-8): reject outright rather
+    // than gate N times, since N sentinels can't be bound/consumed in an order this
+    // gate can observe. Also blocks smuggling a gated sentinel past Phase1 by pairing
+    // it with an EMERGENCY one in the same call.
     if (activatingUnits.length > 1) {
       emitBlock(
         "[EM Supervisor] OFF sentinel emit blocked.\n" +
@@ -243,45 +219,26 @@ process.stdin.on("end", () => {
       } catch (e) { /* fail-open: diagnostic-only, verdict unaffected */ }
     }
 
-    // #1780 round-14 HIGH — SHIM/MINT LOCK PARITY.
-    //
-    // The validate-then-claim-then-unlink sequence below mutates the exact same
-    // bare-token / claim pair that bin/request-off-clearance's mint transition
-    // (mint + rename + stale-claim-sweep) mutates, under the SAME SID-scoped
-    // lock (hooks/lib/off-clearance-mint-lock.js). Without this, a mint racing
-    // this shim could either (a) overwrite the bare token this process is about
-    // to unlink-by-path — destroying the FRESH grant instead of consuming the
-    // OLD one it validated — or (b) sweep the `.claimed` file this process is
-    // mid-way through creating, judging it "stale" by nonce mismatch when it is
-    // in fact a live claim being created right now. See the module header for
-    // the full race. Both participants key the lock off the identical bare
-    // token path, so they can never interleave.
-    //
-    // Only the MUTATING part of the gate needs the lock — the fast-path reads
-    // above (already-off, look-alike, absent-token diagnostics) do not touch
-    // shared state and would otherwise force every PreToolUse call through the
-    // lock for no benefit.
+    // The validate-then-claim-then-unlink sequence below mutates the same bare-token/
+    // claim pair the mint transition mutates, so it takes the SAME SID-scoped lock
+    // (off-clearance-mint-lock.js) — otherwise a racing mint could overwrite the token
+    // this process is about to unlink, or sweep the `.claimed` file mid-creation as
+    // stale. Only this mutating section needs the lock; the fast-path reads above
+    // don't touch shared state.
     let validated = false;
     let allow = false;
     let lockUnavailable = false;
     if (tokenResult.status === "found") {
       const { acquireMintLock, releaseMintLock } = require(path.join(__dirname, "./lib/off-clearance-mint-lock.js"));
-      // Budget is far shorter than the mint's 5s: this runs inline in an
-      // interactive PreToolUse hook and must not stall the session, and a mint
-      // transition is a handful of synchronous syscalls, so genuine contention
-      // — if any — clears in milliseconds. A timeout fails CLOSED (below), same
-      // as every other branch of this gate; the caller simply retries the OFF
-      // sentinel emit.
+      // Shorter budget than the mint's 5s: this runs inline in an interactive hook
+      // and must not stall the session. Timeout fails CLOSED like every other branch.
       const lock = acquireMintLock(tokenResult.tokenPath, 1000, 20);
       if (!lock) {
         lockUnavailable = true;
       } else {
         try {
-          // Re-read the bare token INSIDE the lock rather than trusting the
-          // pre-lock `tokenResult.token`: a concurrent mint could have
-          // overwritten it between that read and this lock acquisition, and
-          // validating/claiming/unlinking stale in-memory bytes is exactly the
-          // race this lock exists to close.
+          // Re-read INSIDE the lock rather than trusting the pre-lock read — a
+          // concurrent mint could have overwritten it in between.
           let freshRaw = null;
           try {
             freshRaw = fs.readFileSync(tokenResult.tokenPath, "utf8");
@@ -304,24 +261,16 @@ process.stdin.on("end", () => {
             }
           }
 
-          // #1626: the CLAIM is the authorization. Exclusive creation of the
-          // .claimed file is one indivisible OS operation, so at most one of N
-          // concurrent proposals can obtain it — that closes the
-          // validate/consume TOCTOU window. There is deliberately NO fallback:
-          // a failed claim (EEXIST from an existing claim, or any I/O error)
-          // blocks. The bare token is by then either gone or contended, and an
-          // already-claimed token has spent its single use.
-          // `wx` is used rather than rename because rename's behaviour when the
-          // destination exists differs between POSIX (silent overwrite) and
-          // Windows (EEXIST) — `wx` throws EEXIST on both (CPR-8).
+          // The CLAIM is the authorization: exclusive-create of .claimed is one
+          // indivisible op, so at most one of N concurrent proposals can obtain it —
+          // closing the validate/consume TOCTOU window. No fallback on failure (block).
+          // `wx` not rename: rename's exists-destination behavior differs POSIX vs
+          // Windows; `wx` throws EEXIST on both (CPR-8).
           if (validated) {
             const bare = tokenResult.tokenPath;
             const claimed = bare + ".claimed";
-            // Payload is serialized BEFORE the exclusive open (codex HIGH-2): any
-            // reader racing this write can only ever observe the file as absent
-            // or as fully formed — never a transient empty/partial file —
-            // because nothing but the single fs.writeFileSync syscall below runs
-            // while the fd is open.
+            // Serialized before the exclusive open so a racing reader only ever
+            // observes absent or fully-formed, never a transient partial file.
             const claimPayload = JSON.stringify({
               ...freshToken,
               claimed_at: new Date().toISOString(),
@@ -340,15 +289,9 @@ process.stdin.on("end", () => {
             } finally {
               if (fd !== null) { try { fs.closeSync(fd); } catch (_e) {} }
             }
-            // M-1 fix: removing the bare token is NOT mere bookkeeping — the "can
-            // never be claimed again" argument only holds while .claimed exists, and
-            // consumeOffClearance() deletes .claimed on the very next step (OFF
-            // activation). If the unlink below fails for any reason other than
-            // ENOENT (already gone), a valid unclaimed bare token can survive to be
-            // claimed a second time inside the expiry window once .claimed is
-            // removed — a replay of this single-use grant. Fail closed: revoke the
-            // approval and leave .claimed in place so the sid is safely wedged until
-            // a new Phase1 examination clears it.
+            // Removing the bare token is not bookkeeping: consumeOffClearance() deletes
+            // .claimed on activation, so a surviving unclaimed bare token could be
+            // claimed a second time afterward — a replay. Fail closed on unlink failure.
             if (allow) {
               try {
                 fs.unlinkSync(bare);

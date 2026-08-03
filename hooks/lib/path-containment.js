@@ -1,58 +1,28 @@
 // hooks/lib/path-containment.js
-// SSOT for "is this path really inside that directory?" (CPR-2).
+// SSOT for "is this path really inside that directory?" (CPR-2), shared by
+// enforce-worktree's marker-gate allow fast-path and block-off-clearance-write's
+// glob qualifier — the two used to drift into separate implementations (one
+// resolved symlinks + probed case-sensitivity, one did a lexical resolve()),
+// so a symlink or case-only spelling difference could defeat containment on
+// only one side.
 //
-// Two hook entrypoints ask that question about the SAME directory (the workflow
-// state dir) for the SAME reason (a protected file lives there), so per
-// rules/coding/file-split.md the answer belongs in the shared hooks/lib/ layer:
-//
-//   hooks/enforce-worktree/bash-write-scope/marker-gate.js — allow fast-path
-//   hooks/block-off-clearance-write/bash-target-context.js — glob qualifier
-//
-// codex round-5 HIGH: those two had drifted into DIFFERENT implementations. The
-// enforce-worktree side resolved symlinks (realResolve) and probed the volume
-// for case-sensitivity; the block-off-clearance-write side used a lexical
-// path.resolve() and folded case on `process.platform === "win32"` alone. Both
-// deviations are exploitable in the same direction — a symlink under the
-// workflow dir, or a case-only spelling difference on a case-insensitive
-// non-Windows volume (macOS HFS+/APFS default, a Windows share mounted in WSL),
-// made the lexical side answer "not contained" for a path that really is. One
-// implementation, used by both, is the only way that stays fixed.
-//
-// The two concerns are kept separate inside this file (CPR-3):
-//   realResolve()      — PHYSICAL resolution (symlinks, nonexistent tails)
-//   isContainedUnder() — STRING containment, case-folded only when the volume
-//                        was PROVEN case-insensitive by probe
-//   resolvesUnder()    — the composition, which is what callers actually want
+//   realResolve()      — physical resolution (symlinks, nonexistent tails)
+//   isContainedUnder() — string containment, case-folded only when proven
+//                        case-insensitive by probe
+//   resolvesUnder()    — the composition callers actually want
 "use strict";
 
 const nodePath = require("path");
 const fs = require("fs");
 
 // ── Physical resolution ─────────────────────────────────────────────────────
-//
-// nodePath.resolve() is purely LEXICAL, so `<workflowDir>/escape -> /outside` is
-// lexically "under" the workflow dir while actually escaping it. The target
-// usually does not exist yet (it is about to be written), so the deepest
-// EXISTING ancestor is realpath'd and the not-yet-existing tail is re-appended.
-// Both sides of a comparison must go through this, otherwise a symlinked base
-// dir (e.g. macOS /tmp -> /private/tmp) produces a spurious mismatch.
-//
-// F-3 (security-scanner round 6): a two-step symlink attack — `ln -s
-// <wf>/<sid>.workflow-off <wf>/lnk` (the marker does not exist yet; it is about
-// to be forged by a SECOND write through the link) — makes fs.realpathSync(head)
-// throw ENOENT for the same reason a genuinely nonexistent path would: Node's
-// realpath requires the FINAL resolved target to exist, and pre-write it never
-// does. Treating both cases identically (walk up, re-append the tail lexically)
-// silently kept the symlink's own basename ("lnk") instead of following it. Peek
-// with lstat/readlink before the parent-walk so the eventual basename check
-// downstream sees "sid.workflow-off", not "lnk".
-//
-// MAX_SYMLINK_HOPS bounds a circular or attacker-crafted chain (DoS). Exceeding
-// it while `head` is STILL a live symlink THROWS rather than falling back to the
-// lexical parent-walk (codex round 6/7 HIGH): that fallback resolves the
-// unfollowed symlink by its own basename, which can lexically satisfy a
-// workflow-dir prefix check while the chain's real target lies outside it. Every
-// caller wraps this in a fail-closed try/catch, so throwing is safe.
+// nodePath.resolve() is purely lexical, so a symlinked base dir would produce
+// a spurious containment mismatch. The deepest EXISTING ancestor is
+// realpath'd and the not-yet-existing tail re-appended; a symlink target that
+// does not exist yet (mid-attack) is followed via lstat/readlink rather than
+// treated as a plain missing path. MAX_SYMLINK_HOPS bounds a circular/crafted
+// chain and THROWS rather than falling back to a lexical walk that would
+// trust the unfollowed symlink's own basename — callers wrap this fail-closed.
 const MAX_SYMLINK_HOPS = 40;
 
 function nativeRealpath() {
@@ -91,27 +61,14 @@ function realResolve(p, _depth) {
 }
 
 // ── Case-sensitivity, asked of the filesystem rather than the platform ───────
-//
-// #1780 H-3 (round 4). The old code decided folding from the PLATFORM
-// (`win32 || darwin`), then folded every darwin path even though its own comment
-// said case-sensitive macOS volumes must not be folded. Case-sensitivity is a
-// property of the VOLUME: darwin, WSL mounts, network shares and
-// case-sensitivity-enabled Windows directories all break the correlation
-// (CPR-8 — no implicit branching on an environment assumption).
-//
-// probeCaseInsensitive(dir) flips the case of the deepest existing ancestor's
-// basename and realpaths BOTH spellings. Same realpath ⇒ case-insensitive.
-// ENOENT, a different realpath, an unflippable name, or any error ⇒ treated as
-// CASE-SENSITIVE. That fallback direction is the whole point: "unknown" resolves
-// to case-sensitive, which makes containment STRICTER, which makes callers (all
-// of which use containment to GRANT an allow) fail closed toward blocking. It
-// can cost a legitimate write a fast-path; it can never hand an allow to a path
-// outside the root.
-//
-// Detection-direction callers must NOT use this. Folding case before testing
-// against a protected-name pattern is a block-direction test where over-matching
-// is safe — and those patterns already carry the `i` flag
-// (hooks/lib/protected-basenames.js), so they need no folding at all.
+// Case-sensitivity is a property of the VOLUME, not the platform (darwin, WSL
+// mounts, network shares, and case-sensitive Windows dirs all break a
+// platform-based guess). probeCaseInsensitive() flips the case of the deepest
+// existing ancestor and compares realpaths; any error/mismatch resolves to
+// CASE-SENSITIVE, which makes containment stricter and callers fail closed
+// toward blocking (never toward granting an allow outside root). Detection-
+// direction callers must not use this — protected-name patterns already carry
+// the `i` flag and need no folding.
 const _caseInsensitiveCache = new Map();
 
 // flipCase("Users") -> "uSERS"; null when the name has no cased letter
@@ -193,31 +150,14 @@ function isContainedUnder(child, parent, opts) {
 }
 
 // resolvesUnder(childPath, parentPath, opts) -> boolean
-// The composition callers actually want: resolve BOTH sides physically, then
-// test containment.
-//
-// codex scanner C: this used to return a single `false` for "cannot prove
-// containment" (an unresolvable path, or a symlink chain that hits
-// MAX_SYMLINK_HOPS and throws), on the theory that "cannot prove" is the
-// strict/safe answer everywhere. It is NOT — this SSOT is consulted from two
-// opposite directions (see the file header): a PERMISSION caller uses
-// containment to GRANT leniency (false = deny the shortcut = fail closed,
-// correct), while a DETECTION caller uses containment to ARM a block (false =
-// do NOT arm = allow the write through unblocked = fail OPEN, wrong). A single
-// hardcoded `false` was safe for the first shape and silently unsafe for the
-// second — an attacker-crafted circular symlink ancestor of a glob/dynamic
-// write target could force realResolve() to throw, forcing this function to
-// "cannot prove" -> false -> the deny-glob qualifier never arms -> the write
-// proceeds without the scrutiny that qualifier exists to add.
-//
-// `opts.onUnknown` (required boolean) makes the caller declare its own fail
-// direction explicitly instead of inheriting an implicit one (CPR-8): pass
-// `true` from a detection/block-arming caller so "cannot prove" resolves
-// toward blocking, `false` from a permission/leniency caller so it resolves
-// toward denying the shortcut. Missing/non-boolean `onUnknown` throws — a
-// programmer-contract violation, never triggered by attacker-controlled
-// input, so this does not weaken the "never throws on bad paths" behavior
-// callers rely on for the actual resolution attempt below.
+// Resolves both sides physically, then tests containment. "Cannot prove
+// containment" (unresolvable path, or a symlink chain hitting
+// MAX_SYMLINK_HOPS) must NOT collapse to a single hardcoded `false`: this
+// SSOT is consulted from opposite directions — a permission caller wants
+// false (deny the shortcut, fail closed), a detection caller wants true (arm
+// the block, fail closed) — so `opts.onUnknown` (required boolean) makes each
+// caller declare its own fail direction. Missing/non-boolean throws
+// (programmer-contract error, not attacker-triggered).
 function resolvesUnder(childPath, parentPath, opts) {
   if (!opts || typeof opts.onUnknown !== "boolean") {
     throw new Error("resolvesUnder: opts.onUnknown (boolean) is required — the caller must declare its fail direction");

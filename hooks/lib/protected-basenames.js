@@ -1,32 +1,19 @@
 #!/usr/bin/env node
-// SSOT for "which basenames hold OFF-clearance / session-override state that no
-// tool-issued write may create or mutate" (#1780 H-1/H-2/M-3).
-//
-// Two entrypoints consume this module — hooks/block-off-clearance-write.js
-// (location-INDEPENDENT: blocks the write outright, whatever the worktree) and
-// hooks/enforce-worktree/bash-write-scope/marker-gate.js (defence in depth:
-// denies the workflow-dir allow fast-paths) — so per rules/coding/file-split.md
-// it lives in the shared hooks/lib/ layer, not in either entrypoint's folder.
-//
-// Matching is intentionally DIRECTORY-AGNOSTIC: the workflow directory varies by
-// CLAUDE_WORKFLOW_DIR, and a marker or token written anywhere is still an attempt
-// to forge clearance state.
-//
-// The SUFFIX LISTS are the canonical form; the regexes are derived from them so
-// the two can never drift (CPR-2). Suffix lists are what the glob-aware matcher
-// in ./basename-glob-normalize needs, and they are trivially auditable.
+// SSOT for which basenames hold OFF-clearance / session-override state that no
+// tool-issued write may create or mutate. Shared (rules/coding/file-split.md) by
+// block-off-clearance-write.js and enforce-worktree/bash-write-scope/marker-gate.js.
+// Matching is directory-agnostic — a marker/token written anywhere is still a
+// forgery attempt. Suffix lists are canonical (CPR-2); regexes are derived from them.
 "use strict";
 
 const path = require("path");
 const { candidateBasenameMatchesAnySuffix } = require("./basename-glob-normalize");
 const { decodeAnsiCEscapes, candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
 
-// Every on-disk form of the OFF-clearance token: bare, the two write-then-rename
-// mint intermediates, the claimed form (#1626), and the SID-scoped exclusive
-// mint lock (#1780 round-14 HIGH-2). Unlike mintTmp (pid + random bytes), the
-// lock path is fully deterministic from the session ID — exactly what makes it
-// exploitable as a DoS vector (pre-create / delete-and-race another minter's
-// lock) if left unprotected here.
+// Every on-disk form of the OFF-clearance token: bare, the write-then-rename mint
+// intermediates, the claimed form, and the SID-scoped mint lock — the lock path is
+// deterministic from the session ID, so it must be protected here too or it's a
+// pre-create/delete-and-race DoS vector.
 const OFF_CLEARANCE_TOKEN_SUFFIXES = [
   ".off-clearance",
   ".off-clearance.tmp",
@@ -37,11 +24,10 @@ const OFF_CLEARANCE_TOKEN_SUFFIXES = [
   ".off-clearance.mint.lock.tmp",
 ];
 
-// Session-override markers. hooks/lib/session-markers.js authorizes purely on a
-// marker's EXISTENCE, so one forged file grants full clearance for the session.
-// `off-emergency-invoked` is the EMERGENCY-provenance marker (#1780 M-2) — it is
-// written only by the UserPromptSubmit hook and must be equally unforgeable.
-// Kept in sync with hooks/lib/session-markers.js and
+// Session-override markers. session-markers.js authorizes purely on a marker's
+// existence, so one forged file grants full clearance. `off-emergency-invoked` is
+// the EMERGENCY-provenance marker, written only by the UserPromptSubmit hook, and
+// must be equally unforgeable. Kept in sync with hooks/lib/session-markers.js and
 // hooks/workflow-state/state-io/zombie-cleanup.js.
 const EMERGENCY_PROVENANCE_MARKER_KIND = "off-emergency-invoked";
 
@@ -89,46 +75,25 @@ function mentionsProtectedName(text) {
   return TOKEN_MENTION_RE.test(text) || MARKER_MENTION_RE.test(text);
 }
 
-// TWO candidate normalizers, deliberately separated (CPR-3): the two input
-// shapes disagree about what a backslash MEANS, so one function cannot serve
-// both without silently mis-reading one of them.
-//
-//   candidateBasenameOf(filePath)          — an Edit/Write `file_path`. There is
-//     no shell in front of it, so `\` is a Windows PATH SEPARATOR and folding it
-//     to `/` is correct (`C:\wf\<sid>.workflow-off` → `<sid>.workflow-off`).
-//
-//   candidateBasenameOfBashToken(rawToken) — a word out of a Bash command line
-//     (a redirect target or an argv token, in the RAW spelling the user typed).
-//     There `\` is the shell's ESCAPE character and quotes may appear mid-word,
-//     so folding `\` to `/` is a live bypass: `s1.workflow\-off` folded to
-//     `s1.workflow/-off` yields the basename `-off`, while bash actually creates
-//     the file `s1.workflow-off` (#1780 N-1). This normalizer therefore
-//     UNESCAPES instead of folding, and collapses intra-word `'…'` / `"…"`
-//     quoting (`s1.workflow'-'off`, `s1.work"flow-off"`) before splitting.
-//
-// Only `/` splits a Bash word into path components — a backslash never does,
-// because it was consumed as an escape. A Windows-style Bash argument such as
-// `C:\wf\s1.workflow-off` therefore collapses to `C:wfs1.workflow-off`, which
-// still ends with the protected suffix and still matches (the suffix lists are
-// tail-anchored, so losing separators can never lose a hit).
+// Two normalizers, deliberately separated (CPR-3) — the two input shapes disagree
+// about what `\` means. candidateBasenameOf(filePath) is an Edit/Write path with no
+// shell in front, so `\` is a Windows separator (fold to `/`).
+// candidateBasenameOfBashToken(rawToken) is a raw Bash word, where `\` is the
+// shell's escape character and quotes may appear mid-word — folding it would be a
+// bypass (`s1.workflow\-off` folded to `/` yields basename `-off`, while bash
+// actually creates `s1.workflow-off`), so it unescapes and collapses intra-word
+// quoting instead of folding. Only `/` splits a Bash word into components; losing a
+// separator can never lose a match since the suffix lists are tail-anchored.
 function candidateBasenameOf(filePath) {
   return path.basename(String(filePath).replace(/\\/g, "/"));
 }
 
-// DIRECTION DISCIPLINE (same rule as the header of
-// ./basename-glob-normalize/brace-ansi-expand.js, and the mirror of the block
-// comment in hooks/block-off-clearance-write/interpreter-scan.js): this is a
-// NORMALIZER consumed in the DETECTION direction. Its output is matched against
-// a denylist, so a spelling it fails to produce is a bypass — and a spelling it
-// produces WRONGLY is worse than one it leaves alone.
-//
-// #1780 round-9 HIGH-2: bash ANSI-C quoting (`$'…'`) was not modelled at all, so
-// `$'<wf>/s1.workflow-of\x66'` fell through to the PLAIN-context escape rule
-// below (`\` + next char -> next char), which turned `\x66` into the literal
-// `x66` and ACTIVELY ERASED the match — the normalizer manufactured a basename
-// (`s1.workflow-ofx66`) that the real shell never creates, while the shell
-// created `s1.workflow-off`. An ANSI-C segment is now decoded as bash decodes
-// it, via the shared decoder in the sibling normalizer module (CPR-2).
+// Direction discipline (same rule as basename-glob-normalize/brace-ansi-expand.js):
+// this normalizer runs in the DETECTION direction and is matched against a
+// denylist, so a spelling it fails to produce is a bypass, and a wrong spelling is
+// worse than none. Bash ANSI-C quoting (`$'…'`) must be decoded the way bash
+// decodes it (via the shared decoder), not left to the plain-escape rule below —
+// that rule would erase rather than preserve the match.
 function unquoteBashWord(rawToken) {
   const s = String(rawToken);
   let out = "";
@@ -182,31 +147,13 @@ function candidateBasenameOfBashToken(rawToken) {
   return basenameOfUnquotedBashWord(unquoteBashWord(rawToken));
 }
 
-// candidateBasenamesOfBashToken(rawToken): { basenames, overCap } — EVERY
-// basename this token can land on.
-//
-// #1780 round-10 HIGH-1. The singular function above splits on `/` FIRST and
-// only then (deep inside candidateBasenameMatchesAnySuffix) asks the expander
-// what the resulting basename could become. That ordering contradicts both bash
-// and the DIRECTION DISCIPLINE stated at line 113: brace expansion is the FIRST
-// word expansion bash performs, so a brace group that SPANS a slash produces
-// alternatives with DIFFERENT directory parts —
-// `{<wf>/x,<wf>/s1.workflow-off}` really writes `s1.workflow-off` — while the
-// old order took the basename of the unexpanded word (`s1.workflow-off}`, or
-// worse a leading alternative that commits to nothing) and handed the expander
-// a string in which the protected alternative no longer existed. The normalizer
-// therefore ERASED the match instead of widening it. Measured ALLOW for
-// `touch`, `tee`, `dd of=`, `mv` and nested groups.
-//
-// Correct order, and the one bash uses: expand the WHOLE token first, then take
-// the basename of EVERY candidate. The raw token is always among the candidates
-// (candidateSpellings never drops it), so every non-brace token keeps exactly
-// its previous basename and its previous verdict.
-//
-// `overCap` is propagated rather than swallowed: candidateBasenameMatchesAnySuffix
-// already answers "hit" when the expander refuses to finish an enumeration, and
-// this call site must answer the same way or the two disagree about an identical
-// doubt (CPR-5).
+// candidateBasenamesOfBashToken(rawToken): { basenames, overCap } — every basename
+// this token can land on. Must expand the WHOLE token first, then take the
+// basename of every candidate — bash performs brace expansion before splitting on
+// `/`, so a brace group spanning a slash (`{<wf>/x,<wf>/s1.workflow-off}`) produces
+// alternatives with different directory parts; splitting first would erase the
+// protected alternative instead of finding it. `overCap` is propagated (not
+// swallowed) so an abandoned enumeration is treated as a hit here too (CPR-5).
 function candidateBasenamesOfBashToken(rawToken) {
   const raw = String(rawToken);
   const { candidates, overCap } = candidateSpellings(raw);
@@ -222,20 +169,12 @@ function candidateBasenamesOfBashToken(rawToken) {
   return { basenames, overCap };
 }
 
-// codex MEDIUM-1 (#1780): hooks/lib/consume-exact-file.js (the SSOT single-use
-// consumption primitive backing the OFF-clearance `.claimed` file AND the
-// EMERGENCY-OFF provenance marker, #1626) creates a claim file at
-// `${filePath}.consuming-<16-hex-sha256-prefix>.tmp` for the duration of its
-// exclusive-open window (see that module's header for why `wx` and not
-// `rename` is the mutex primitive on this platform). That claim basename is
-// itself protected state — pre-creating it lets a tool-issued write force the
-// real consumer's `wx` open into EEXIST ("lost"), and deleting it mid-window
-// breaks the exclusion — but it was never enumerable as a fixed suffix
-// because the hex prefix is content-derived (sha256 of the exact bytes being
-// consumed). Matched structurally instead: strip a trailing
-// `.consuming-<16 hex>.tmp` and re-classify what remains — the claim is
-// protected exactly when the state file it claims is (additive-only, DIRECTION
-// DISCIPLINE — this widens detection, never narrows it).
+// consume-exact-file.js creates a claim file at
+// `${filePath}.consuming-<16-hex-sha256-prefix>.tmp` during its exclusive-open
+// window. That basename is itself protected state — pre-creating it forces the
+// real consumer's `wx` open into EEXIST, and deleting it mid-window breaks the
+// exclusion — but the hex prefix is content-derived, so it's matched structurally:
+// strip the suffix and re-classify what remains (widens detection, never narrows).
 const CONSUMING_CLAIM_SUFFIX_RE = /\.consuming-[0-9a-f]{16}\.tmp$/i;
 
 function stripConsumingClaimSuffix(basename) {

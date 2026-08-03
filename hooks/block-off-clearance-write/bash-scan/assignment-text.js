@@ -5,10 +5,9 @@
 "use strict";
 
 const { resolveEffectiveSegment } = require("../../lib/command-ir");
-// H-4 (#1780 round-4): `$ENV:` is the same scope prefix as `$env:` in
-// PowerShell — this file's pwsh-assignment recognizers must fold it exactly as
-// interpreter-scan.js does, or one scanner sanctions a spelling the other
-// treats as unknown (CPR-5).
+// `$ENV:` is the same scope prefix as `$env:` in PowerShell — fold it the
+// same way interpreter-scan.js does, or one scanner sanctions a spelling the
+// other treats as unknown (CPR-5).
 const { PWSH_ENV_PREFIX } = require("../../lib/case-insensitive-literal");
 const { sourceOrderView } = require("../../lib/substitution-spans");
 
@@ -16,20 +15,12 @@ const { sourceOrderView } = require("../../lib/substitution-spans");
 // with no real command (resolveEffectiveSegment returns null for exactly
 // this shape, among others already excluded by the cmd0 check below).
 //
-// pwsh sibling (round-6 F-1 verification follow-up): `$env:NAME=value` is
-// pwsh's own assignment syntax — the direct sibling of bash `NAME=value` —
-// but its cmd0 starts with `$`, so the bash-only regex below never matched
-// it. A preceding `$env:A='<token>'; pwsh -Command "...$env:A..."` therefore
-// never had its assignment folded into precedingAssignmentChainText's
-// gateText, and the following pwsh segment's Tier-1 gate
-// (hitsProtectedViaInterpreter) checked only that segment's own text — which
-// never spells the token — so the whole invocation fell through as
-// "nothing to protect" even though the pwsh body dereferences the token via
-// $env:A. Recognized only in its single-token, no-space form (`$env:A=val`,
-// matching how FLAG_ALTS/PWSH_ENV already model this shape elsewhere);
-// spaced forms (`$env:A = val`) are not modeled and stay fail-closed
-// via the bash-assignment branch below returning false (CPR-5: same
-// intentionally-narrow-but-symmetric treatment as the bash sibling).
+// `$env:NAME=value` is pwsh's own assignment syntax — the direct sibling of
+// bash `NAME=value` — but its cmd0 starts with `$`, so the bash-only regex
+// below would otherwise miss it and a preceding pwsh assignment would never
+// reach a following interpreter segment's gate text. Recognized only in its
+// single-token, no-space form; spaced forms (`$env:A = val`) stay
+// fail-closed via the bash-assignment branch below (CPR-5).
 const PWSH_ENV_ASSIGN_ONLY_RE = new RegExp(String.raw`^\$${PWSH_ENV_PREFIX}[A-Za-z_][A-Za-z0-9_]*=\S`);
 
 function isAssignmentOnlySegment(seg) {
@@ -50,32 +41,20 @@ function precedingAssignmentChainText(segments, idx) {
 }
 
 // priorAssignmentsText(segments, idx): every assignment-only segment BEFORE
-// `idx`, nearest first. Wider than precedingAssignmentChainText on purpose, and
-// used only for WRITE-TARGET resolution.
+// `idx`, nearest first — wider than precedingAssignmentChainText, used only
+// for WRITE-TARGET resolution. Contiguity is right for the interpreter gate
+// (a distant unrelated `cd` must not arm it) but wrong for shell-variable
+// scope: in `S=<marker>; echo f | tee <wf>/s1$S`, the plain `echo f` segment
+// sits between assignment and use, yet the shell already set `S` before
+// forking the pipeline, so the write really lands on the marker. Nearest-first
+// ordering mirrors shell reassignment semantics.
 //
-// The contiguity requirement above exists to keep unrelated segments out of the
-// INTERPRETER gate text, where folding in a distant `cd .../off-clearance-1780/`
-// would arm the gate for an unrelated invocation. A write target has no such
-// hazard: it is resolved, not merely mentioned. And contiguity is simply wrong
-// for shell-variable scope — in `S=<marker>; echo f | tee <wf>/s1$S` the plain
-// `echo f` segment sits between the assignment and the use, yet the parent
-// shell has already set `S` and expands `$S` before forking the pipeline, so
-// the write really does land on the marker (#1780 N-1).
-//
-// Nearest-first ordering makes the most recent assignment win the single-match
-// lookup in ../bash-target-context.js, mirroring shell reassignment semantics.
-//
-// #1780 round-13 (unset staleness): reassignment was already modelled by that
-// nearest-first ordering, but `unset` was not — `S=<marker>; unset S; tee $S`
-// kept attributing the marker value to `S` for every later segment, so a write
-// the shell resolves to an EMPTY expansion was reported as landing on protected
-// state. That is a false BLOCK, i.e. the over-blocking failure mode this hook has
-// regressed into before, so honouring `unset` here is a correction in the safe
-// direction; it can only withdraw evidence the shell itself has already
-// discarded. Scoped deliberately to what can be proven from the text: a bash
-// `unset` segment naming the variable. Values injected by a WRAPPER
-// (`env -u`, `export` in a non-assignment-only segment) and subshell scoping
-// `( … )` are NOT modelled and keep their previous, wider treatment.
+// `unset` is honoured too: `S=<marker>; unset S; tee $S` writes an EMPTY
+// expansion, and attributing the stale value to `S` would be a false BLOCK
+// (the over-blocking failure mode this hook must avoid) — this can only
+// withdraw evidence the shell has already discarded. Scoped to what the text
+// proves: a bash `unset` segment naming the variable. Wrapper-injected
+// values (`env -u`, `export`) and subshell scoping are not modelled.
 const UNSET_FLAG_RE = /^-/;
 
 // unsetVarsOfSegment(seg): the variable names a `unset A B` segment clears, or

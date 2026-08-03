@@ -2,9 +2,8 @@
 // Top-level Bash command scan for the block-off-clearance-write entrypoint:
 // parse, merge in the substitution-span reading, then run the redirect / argv /
 // nested-body / interpreter rules (file-split, rules/coding/file-split.md
-// Pattern A). Moved from ../bash-scan.js; the behavioural change is that every
-// predicate now covers PROTECTED SESSION MARKERS as well as the OFF-clearance
-// token (#1780 H-1/H-2, CPR-5) and reports WHICH kind was hit so the block
+// Pattern A). Every predicate covers protected session markers as well as the
+// OFF-clearance token (CPR-5), and reports WHICH kind was hit so the block
 // message can name the right remediation.
 "use strict";
 
@@ -28,19 +27,13 @@ const { segmentArgvHitsProtectedArg } = require("./argv-scan");
 const { redirectRawTargetsHitProtected } = require("./redirect-scan");
 
 // unparsedVerdict(cmd): the verdict for command text this scanner could NOT
-// structurally analyse.
-//
-// #1780 round-5 HIGH-2: a parse failure used to ABANDON the structural scan and
-// fall through to the interpreter heuristic alone, so appending a single
-// unterminated quote inside a bash COMMENT (`echo x > <wf>/s1.<marker> #'`) —
-// legal, executable bash — disabled every redirect, argv and glob rule at once.
-// "Cannot analyse" must mean "cannot clear", not "nothing found": when the text
-// mentions a protected name at all and the parser could not prove where that
-// mention lands, it fails CLOSED.
-//
-// The kind is reported as `unparsed-token` / `unparsed-marker` so the block
-// message can say that PARSING failed — a false positive here is otherwise
-// unexplainable to the person hitting it.
+// structurally analyse. A parse failure must not fall through to "nothing
+// found" — a single unterminated quote inside a bash comment is legal,
+// executable bash that would otherwise disable every redirect/argv/glob rule.
+// "Cannot analyse" means "cannot clear": if the text mentions a protected
+// name and parsing can't prove where it lands, it fails CLOSED. The kind is
+// reported as `unparsed-token`/`unparsed-marker` so the block message can
+// say parsing failed, rather than leaving a false positive unexplainable.
 function unparsedVerdict(cmd) {
   if (mentionsProtectedName(cmd)) {
     return TOKEN_MENTION_RE.test(cmd) ? "unparsed-token" : "unparsed-marker";
@@ -57,27 +50,14 @@ const MAX_NESTED_SCAN_DEPTH = 3;
 // unquoted `$( … )` / `` ` … ` `` / `$(( … ))` / `${ … }` span is kept WHOLE,
 // minus the ones the ordinary parse already produced.
 //
-// #1780 round-11 CAUSE-2. The ordinary parse tears an unquoted substitution
-// apart: `$( )` because `(` and `)` are segment separators, and every spelling
-// because the tokenizer split on the whitespace INSIDE the span. Neither
-// fragment is the path the shell writes to, so no rule ever judged the real
-// target. Measured ALLOW:
-//
-//   touch `printf '%s%s' <wf>/s1.workflow -off`
-//   touch $(printf '%s%s' <wf>/s1.workflow -off)
-//   echo x > `printf '%s%s' <wf>/s1.workflow -off`
-//
-// DIRECTION DISCIPLINE — this reading is ADDED to the ordinary one, never
-// substituted for it. The ordinary `( )` split is load-bearing: it is what
-// promotes a substitution body, a subshell body and a process-substitution body
-// `<(cmd)` / `>(cmd)` to their own scanned segments, so `$(rm <marker>)` and
-// `tee >(cat > <marker>)` block TODAY because of it. A parser change that made
-// the span survive as one token INSTEAD would have silently traded four blocks
-// for three. Both readings are scanned; a denylist may only gain candidate
-// readings, never lose them.
-//
-// Fail-soft: if the second parse fails, the caller keeps exactly its previous
-// behaviour rather than losing the ordinary reading too.
+// The ordinary parse tears an unquoted substitution apart on its internal `(`/
+// `)` and whitespace, so neither fragment is the real write target
+// (`touch $(printf '%s%s' <wf>/s1.workflow -off)` was measured ALLOW). This
+// reading is ADDED to the ordinary one, never substituted for it: the
+// ordinary `( )` split is what promotes substitution/subshell/process-sub
+// bodies to their own scanned segments (`$(rm <marker>)` blocks because of
+// it), so replacing it would silently lose that coverage. Fail-soft: if the
+// second parse fails, the caller keeps its previous behaviour.
 function substitutionSpanSegments(cmd, ir) {
   const base = ir && Array.isArray(ir.segments) ? ir.segments : [];
   let spanIr;
@@ -87,36 +67,26 @@ function substitutionSpanSegments(cmd, ir) {
     return [];
   }
   if (!spanIr || spanIr.parseFailure === true || !Array.isArray(spanIr.segments)) return [];
-  // #1780 round-13: record each span segment's position in ITS OWN reading
-  // BEFORE the dedup filter below drops some of them, so the order-sensitive
-  // helpers (commandCwd / priorAssignmentsText) can recover true source order
-  // once these segments are appended to the ordinary list — array position in
-  // the merged list does not carry it. See ../../lib/substitution-spans.js.
+  // Record each span segment's position in ITS OWN reading before the dedup
+  // filter drops some of them, so order-sensitive helpers (commandCwd /
+  // priorAssignmentsText) can recover true source order once these segments
+  // are appended to the ordinary list — array position alone doesn't carry
+  // it. See ../../lib/substitution-spans.js.
   tagSourceOrder(spanIr.segments);
-  // Dedup key = the segment TEXT *and* its token structure. rawText alone is
-  // wrong: a backtick span never contained a `(`, so the two parses cut the
-  // command into byte-identical segments and differ only in how the TOKENIZER
-  // walked them (`` touch `printf '%s%s' <wf>/s1.workflow -off` `` is one
-  // segment either way, but four argv tokens under the ordinary parse and one
-  // under this one). Keying on rawText discarded exactly the segments this
-  // second reading exists to contribute.
+  // Dedup key = the segment TEXT *and* its token structure. rawText alone
+  // would drop exactly the segments this reading exists to contribute: the
+  // two parses can cut byte-identical text into a different argv (one token
+  // here vs. several under the ordinary tokenizer).
   const seen = new Set(base.map(segmentKey));
   return spanIr.segments.filter((s) => s && typeof s.rawText === "string" && !seen.has(segmentKey(s)));
 }
 
 // Structural identity of a segment: its text, its token cut, and its redirect
-// cut. All three must participate — the two parses can agree on the text and
-// the argv and still disagree on where a redirect TARGET ends
-// (`` echo x > `printf '%s%s' <wf>/s1.workflow -off` ``).
-//
-// codex MEDIUM/scanner A: these used to be raw control bytes (NUL / SOH) typed
-// directly into the source, which makes the file appear binary to git/GitHub
-// (diffs and review tools refuse to render it as text). Computing them at
-// runtime via String.fromCharCode keeps the source pure ASCII/diffable while
-// the resulting separator values are unchanged; the key space is unaffected
-// because both bytes are still guaranteed absent from any of the joined parts
-// (rawText / cmd0Raw / op / targetRaw are shell command text, which cannot
-// contain either control byte).
+// cut. All three must participate — the two parses can agree on text and argv
+// and still disagree on where a redirect TARGET ends. The separators are
+// computed via String.fromCharCode (rather than literal control bytes) to
+// keep the source pure ASCII/diffable; both bytes are guaranteed absent from
+// the joined shell-text parts, so the key space is unaffected.
 const SEG_KEY_SEP = String.fromCharCode(0);
 const SEG_KEY_ITEM_SEP = String.fromCharCode(1);
 
@@ -150,33 +120,28 @@ function bashHitsProtected(cmd, opts, _depth) {
   try {
     const ir = parse(cmd);
     if (!ir || ir.parseFailure) return unparsedVerdict(cmd);
-    // MEDIUM-4 (#1780 round-5, CPR-5): a COMMAND SUBSTITUTION body is command
-    // text and must be scanned as such. `$( … )` only appeared to be covered
-    // because `(` / `)` are segment separators, which accidentally promoted
-    // its body to a segment; backticks have no such accident, so
-    // `` echo x > `printf s1.<marker>` `` was invisible. Recursing every
-    // substitution body — both spellings — removes the asymmetry at its root
-    // instead of patching one more literal test.
+    // A command-substitution body is command text and must be scanned as
+    // such — `$( … )` only appeared covered because `(`/`)` are segment
+    // separators; backticks have no such accident. Recursing every
+    // substitution body (both spellings) removes the asymmetry at the root
+    // (CPR-5).
     if (depth < MAX_NESTED_SCAN_DEPTH) {
       for (const sub of extractSubstitutionContents(cmd)) {
         const kind = bashHitsProtected(sub, opts, depth + 1);
         if (kind) return kind;
       }
     }
-    // The substitution-span reading, appended AFTER the ordinary segments so the
-    // ordinary reading keeps its own indices. The appended tail's array position
-    // is NOT source order, so the index-based helpers (commandCwd,
-    // priorAssignmentsText) recover it from the tag applied in
-    // substitutionSpanSegments above (#1780 round-13).
+    // The substitution-span reading, appended AFTER the ordinary segments so
+    // the ordinary reading keeps its own indices. The appended tail's array
+    // position is NOT source order; index-based helpers (commandCwd,
+    // priorAssignmentsText) recover it from the tag applied above.
     const extraSegments = substitutionSpanSegments(cmd, ir);
     const segments = extraSegments.length > 0 ? ir.segments.concat(extraSegments) : ir.segments;
-    // codex MEDIUM/scanner B: this used to read `ir.segments` — the ORDINARY
-    // parse only — so a write target hidden inside a round-11 substitution
-    // span (see substitutionSpanSegments above) was invisible to the
-    // write-target collector even though the redirect/argv scans below
-    // already consult the merged `segments`. DIRECTION DISCIPLINE applies
-    // here too: the merged reading is additive, so this can only gain
-    // candidate targets, never lose the ones `ir.segments` alone already gave.
+    // Must read the merged `segments`, not just `ir.segments` — a write
+    // target hidden inside a substitution span is otherwise invisible to the
+    // write-target collector even though redirect/argv scans below already
+    // consult the merged list. The merge is additive: it can only gain
+    // candidate targets, never lose ones the ordinary parse already gave.
     const { targets } = collectWriteTargetsFromSegments(segments, { verbs: SHELL_CONFIG_VERB_SET });
     if (targets) {
       for (const t of targets) {
@@ -220,19 +185,14 @@ function bashHitsProtected(cmd, opts, _depth) {
     for (const t of stdinRoutes.opaqueTexts) {
       if (mentionsProtectedName(t)) return "interpreter";
     }
-    // Interpreter heuristic runs PER SEGMENT, not on the whole cmd string
-    // (supervisor-audit-4): a `cd` into a path containing "off-clearance", or
-    // an unrelated --detail argument describing the token, lives in a
-    // different segment than an interpreter invocation elsewhere on the same
-    // line and must not make that unrelated invocation look suspicious.
-    // The Tier-1 mention gate, however, also needs to see any IMMEDIATELY
-    // PRECEDING assignment-only segments (`P=<token>; node -e $BODY`): a
-    // shell variable set there can flow into this segment's own unquoted
-    // interpreter body, and that indirection must still fail closed (M1 /
-    // #1780 WR5) even though the assignment lives in a different segment.
-    // Non-assignment preceding segments (`cd ...`, an unrelated program's
-    // `--detail` flag) are never folded in — only a contiguous run of pure
-    // `VAR=val` segments immediately before the current one.
+    // Interpreter heuristic runs PER SEGMENT, not on the whole cmd string: a
+    // `cd` into a path containing "off-clearance", or an unrelated --detail
+    // argument, must not make an interpreter invocation elsewhere on the
+    // same line look suspicious. The Tier-1 mention gate does still need to
+    // see any IMMEDIATELY PRECEDING assignment-only segments
+    // (`P=<token>; node -e $BODY`) — a shell variable set there can flow
+    // into this segment's own interpreter body — so only a contiguous run
+    // of pure `VAR=val` segments is folded in.
     const interpreterHit = segments.some((seg, idx) => {
       let gateText = seg.rawText;
       for (let j = idx - 1; j >= 0; j--) {

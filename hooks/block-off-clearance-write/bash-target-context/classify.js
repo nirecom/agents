@@ -31,18 +31,11 @@ const WIN_ABS_RE = /^[A-Za-z]:[\\/]/;
 const UNRESOLVABLE_DIR_RE = /[$`*?[\]]/;
 
 // resolveWorkflowDir(): the SAME getWorkflowDir() the rest of the hook chain
-// uses (CPR-2). Lazy-required and fail-soft: an unresolvable workflow dir simply
-// disables the containment qualifier rather than blocking everything.
-//
-// codex round-5 HIGH: this used to return a case-FOLDED lexical path, folded on
-// `process.platform === "win32"` alone, and containment was then a `startsWith`
-// on that string. Both halves were wrong — a symlink inside the workflow dir
-// escaped a lexical prefix test, and a case-insensitive volume that is not
-// Windows (macOS by default, a share mounted under WSL) made a case-only
-// spelling difference read as "outside". The one filesystem-aware
-// implementation, shared with hooks/enforce-worktree/, now answers both
-// (hooks/lib/path-containment.js). The raw directory is returned; resolution
-// happens inside resolvesUnder().
+// uses (CPR-2). Lazy-required and fail-soft: an unresolvable workflow dir
+// simply disables the containment qualifier rather than blocking everything.
+// The raw directory is returned; a lexical `startsWith` check was wrong here
+// (misses symlinks, and misjudges case-insensitive volumes that aren't
+// Windows) — resolution is delegated to resolvesUnder() instead.
 function resolveWorkflowDir() {
   try {
     const { getWorkflowDir } = require("../../workflow-state");
@@ -64,25 +57,14 @@ function pathSpellings(rawText) {
 // actually names, with `~`, `$HOME`/`${HOME}` and `$CLAUDE_WORKFLOW_DIR`
 // resolved. Returns the input unchanged when nothing could be resolved.
 //
-// DIRECTION DISCIPLINE (the mirror of the block comment in
-// ../interpreter-scan.js; see also the header of
-// ../../lib/basename-glob-normalize/brace-ansi-expand.js): this resolver runs in
-// the DETECTION direction. Its only consumer asks "does this directory land
-// inside the workflow dir?", where resolving one more spelling can only ADD a
-// block and never clear one — so it must fail WIDE.
-//
-// #1780 round-9 MEDIUM-1: the qualifier used to `continue` — i.e. CLEAR the
-// route — the instant the directory spelling contained a `$`, and the relative
-// branch `continue`d on `~` because path.isAbsolute("~/…") is false. The
-// workflow dir's canonical spelling is `~/.claude/projects/workflow`, so the
-// NATURAL way to write it was the bypassing way: `tee $HOME/.claude/projects/
-// workflow/*`, `${HOME}/…/*`, `~/…/*` and `$CLAUDE_WORKFLOW_DIR/*` were all
-// measured ALLOW while the literal spelling BLOCKed. A glob cannot create a
-// file, so this is not a marker forge — it is a CONTENT forge (bin/request-off-
-// clearance mints an UNSIGNED token, so rewriting a live token file can flip
-// `target`/`claimed_target`) and a clean `tee`-truncation DoS on clearance
-// state. Abandoning on the first `$` is now reserved for spellings that survive
-// expansion.
+// DIRECTION DISCIPLINE: this resolver runs in the DETECTION direction — its
+// only consumer asks "does this directory land inside the workflow dir?",
+// where resolving one more spelling can only ADD a block, never clear one.
+// The workflow dir's canonical spelling is `~/.claude/projects/workflow`, so
+// bailing out on the first `$` or `~` used to let every natural spelling
+// (`$HOME/…`, `${HOME}/…`, `~/…`, `$CLAUDE_WORKFLOW_DIR/…`) bypass a rule the
+// literal spelling enforced. Bailing is now reserved for spellings that
+// survive expansion.
 const ENV_REF_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 const WORKFLOW_DIR_ENV_NAME = "CLAUDE_WORKFLOW_DIR";
 
@@ -125,15 +107,11 @@ function resolveAgainstCwd(p, ctx, wfDir) {
   return out;
 }
 
-// #1780 round-10 MEDIUM-1 (CPR-4): the N-2 qualifier asked "does the basename
-// carry a GLOB metachar?", but a glob is only one member of the class "the name
-// the write lands on is NOT the name the hook can see". A residual expansion —
-// `$(`, a backtick, or a `$` that substituteAssignments could not resolve — is
-// the other member, and it is the STRONGER one: a glob can only ever match a
-// file that already exists, while a substitution can CREATE the exact protected
-// basename. Measured ALLOW before this: `touch "$(printf '%s%s' <wf>/s1.workflow
-// -off)"` and `touch <wf>/s1.workflow$(printf -- -off)`, while the `$VAR` sibling
-// of the same shape already blocked.
+// A glob metachar is only one member of the class "the name the write lands
+// on is NOT the name the hook can see". A residual expansion (`$(`, a
+// backtick, or an unresolved `$`) is the stronger sibling: a glob can only
+// match a file that already exists, while a substitution can CREATE the
+// exact protected basename (CPR-4).
 const RESIDUAL_EXPANSION_RE = /[$`]/;
 
 // targetBaseInsideWorkflowDir(rawText, ctx, baseIsSuspect): true iff some
@@ -173,16 +151,12 @@ function dynamicTargetInsideWorkflowDir(rawText, ctx) {
 }
 
 // textNamesPathInsideWorkflowDir(text, ctx): a path-like fragment ANYWHERE in
-// the text — including inside a substitution BODY — that resolves at/under the
-// workflow dir.
-//
-// This is the third evidence source for the same question, and the only one that
-// survives the target being assembled INSIDE the substitution:
-// `"$(printf '%s%s' <wf>/s1.workflow -off)"` has no usable directory part (its
-// dirname still holds the `$(`), so the two qualifiers above cannot see it —
-// but the workflow directory is still spelled out in plain text right there.
-// Consulted ONLY when the target carries residual indirection, so a fully static
-// write into the workflow directory keeps its existing verdict.
+// the text — including inside a substitution BODY — that resolves at/under
+// the workflow dir. This is the third evidence source, and the only one that
+// survives a target assembled INSIDE the substitution (no usable dirname to
+// extract, but the workflow directory is still spelled out in plain text).
+// Consulted only when the target carries residual indirection, so a fully
+// static write keeps its existing verdict.
 const PATH_FRAGMENT_RE = /[^\s'"`$(){}[\],;|&<>]*[\\/][^\s'"`$(){}[\],;|&<>]*/g;
 
 function textNamesPathInsideWorkflowDir(text, ctx) {
@@ -222,15 +196,14 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
   }
   // Everything below is the RESIDUAL-INDIRECTION clause: the scanner could not
   // finish resolving this target, so it decides on EVIDENCE instead. Blanket
-  // fail-closed here is not acceptable — `> $LOG`, `> "$OUT"`, `> $TMPDIR/out.txt`,
-  // `> "$(mktemp)"` and `T=$(mktemp); > "$T"` are ordinary idioms — so each
-  // evidence source below must name the workflow dir or a protected file.
+  // fail-closed is not acceptable here — `> $LOG`, `> "$(mktemp)"` etc. are
+  // ordinary idioms — so each evidence source must name the workflow dir or a
+  // protected file.
   if (!sub.unresolved) return null;
 
-  // #1780 round-10 MEDIUM-1 (a): the mention question used to be asked of the
-  // ASSIGNMENT CHAIN alone, which is only one of the three texts in scope. The
-  // raw target and its partially-substituted form carry exactly the same kind of
-  // evidence and were simply never consulted (CPR-5).
+  // The mention check covers all three texts in scope: the assignment chain,
+  // the raw target, and its partially-substituted form all carry the same
+  // kind of evidence (CPR-5).
   for (const evidence of [assignText, raw, sub.text]) {
     if (mentionsProtectedName(evidence)) {
       return TOKEN_MENTION_RE.test(evidence) ? "token" : "marker";
@@ -241,13 +214,12 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
   // workflow dir; (c) the text names a path under the workflow dir anywhere,
   // including inside the substitution body that assembles the target.
   //
-  // WHERE THIS RULE STILL LOSES (named exception, CPR-8): a target assembled
-  // ENTIRELY inside a substitution that references neither the workflow
-  // directory nor any protected fragment — e.g. a body that reconstructs the
-  // directory from pieces, reads it out of a file, or decodes it — leaves no
-  // evidence in any of the three texts and is still approved here. The remaining
-  // defences for that case are the substitution-body re-scan in ../bash-scan.js
-  // and the Phase2 human approval prompt, not this clause.
+  // Named exception (CPR-8): a target assembled ENTIRELY inside a
+  // substitution that references neither the workflow dir nor any protected
+  // fragment (e.g. reconstructed from pieces, or decoded) leaves no evidence
+  // here and is still approved. The backstop for that case is the
+  // substitution-body re-scan in ../bash-scan.js and the Phase2 human
+  // approval prompt, not this clause.
   if (dynamicTargetInsideWorkflowDir(raw, ctx) ||
       dynamicTargetInsideWorkflowDir(sub.text, ctx) ||
       textNamesPathInsideWorkflowDir(raw, ctx) ||

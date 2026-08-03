@@ -1,43 +1,11 @@
 // hooks/lib/off-emergency-provenance.js
-// SSOT for the EMERGENCY-OFF provenance marker CONTRACT (#1780 M-2/M-4).
-//
-// Two entrypoints share it — hooks/record-off-skill-invocation.js writes the
-// marker on UserPromptSubmit, hooks/workflow-mark/enforce-override-handlers/
-// off-clearance.js consumes it when the emergency sentinel is handled — so per
-// rules/coding/file-split.md the contract lives in the shared hooks/lib/ layer.
-// Writer and reader MUST agree on the payload shape: a field the writer stops
-// emitting silently turns every activation `unattributed`, and a field the
-// reader stops checking silently widens what provenance appears to prove.
-//
-// WHAT THE MARKER PROVES, EXACTLY
-//   The UserPromptSubmit event fires only on a real user prompt submission, so a
-//   marker is evidence that A HUMAN TYPED the slash command that resolves to the
-//   enforce-workflow-off skill, within EMERGENCY_PROVENANCE_MAX_AGE_MS of the
-//   activation being stamped. It proves nothing about the reason text, nothing
-//   about which override the human had in mind, and it is not a gate — absence
-//   never blocks an activation (see off-clearance.js).
-//
-// M-4 (#1780 round 4) — TWO BINDINGS, because the marker used to carry neither:
-//   (a) SKILL IDENTITY. The invocation regex accepts an arbitrary plugin
-//       namespace (`/agents:enforce-workflow-off`), and that namespace text is
-//       attacker-choosable prompt content. The marker therefore records the
-//       RESOLVED skill name — a constant from this file — never the typed text,
-//       and the reader requires exactly that constant. The typed namespace is
-//       not recorded at all: it adds no evidence and prompts may carry private
-//       content.
-//   (b) TARGET. An emergency sentinel names a target (workflow | worktree), and
-//       provenance for one target must not silently vouch for another. The
-//       binding is honest rather than convenient: SKILL_TARGETS is the set of
-//       overrides the enforce-workflow-off skill actually covers, and its own
-//       description is the source of that claim — "Suspend workflow and worktree
-//       enforcement for the current session (subsumes WORKTREE_OFF)". So the
-//       skill authorizes BOTH targets, the marker says so explicitly, and the
-//       reader checks membership. A marker that does not carry the requested
-//       target in its authorized set is DOWNGRADED to unattributed rather than
-//       being stretched to cover it.
-//
-// Anything unverifiable downgrades to `unattributed` — "not provably
-// user-invoked", never an accusation.
+// SSOT for the EMERGENCY-OFF provenance marker contract, shared by the writer
+// (record-off-skill-invocation.js, on UserPromptSubmit — an event the model
+// can't trigger) and the reader (off-clearance.js). A marker proves only that
+// a human typed the enforce-workflow-off command recently; it is evidence, not
+// a gate — absence downgrades to `unattributed`, never blocks. It binds skill
+// identity (a constant, never raw prompt text) and target, so neither field
+// can be spoofed via prompt content or stretched to cover an unrelated target.
 "use strict";
 
 // The skill whose invocation this marker attests to. A constant, not prompt text.

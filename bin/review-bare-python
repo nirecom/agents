@@ -56,10 +56,8 @@ EXCLUDED_FILES=(
   "tests/enforce-protected-marker-write/cases-round6-stdin.sh"
   "tests/enforce-protected-marker-write/cases-round7-proof.sh"
   "tests/enforce-protected-marker-write/cases-round8-operand.sh"
-  # #1780 round-12: same rationale as the round6-8 files above — `python3 -c
-  # ...` appears only as a table-row fixture string (label|expect|command,
-  # fed to the classifier under test as data), not an executed invocation.
-  # The interpreter name is the thing under test.
+  # Same rationale as the round6-8 files above — python3 -c appears only as
+  # fixture data, not an executed invocation.
   "tests/fix-1780-round12-classifier-attack-shapes.sh"
   "tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh"
 )

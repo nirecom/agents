@@ -9,19 +9,11 @@ const { substitutionSpanEnds, spanEndAt } = require("./substitution-spans");
 
 // Redirect operators: the next token is the redirect target (a path).
 // Matches: >, >>, 1>, 1>>, 2>, 2>>, &>, &>>, <, <<<, >|, N>|, >&, N>&.
-//
-// #1780 round-5 HIGH-1: `>|` (noclobber override) and `>&FILE` (send stdout AND
-// stderr to FILE) were missing, and the omission is not merely a missed target —
-// it INVERTS the parse. An operator this alternation does not know keeps its `|`
-// / `&` character, which splitSegmentsWithSeparators() then reads as a SEGMENT
-// SEPARATOR, so the real write target degenerates into the NEXT segment's cmd0,
-// where no redirect-target scanner ever looks (`echo x >| s1.<marker>` parsed as
-// two segments, the second one being the marker itself).
-//
-// `>&` is admitted as a FILE redirect only when what follows is not an fd number
-// or `-`: the negative lookahead keeps `>&1`, `2>&1` and `>&-` on the old
-// fd-DUPLICATION route (op `>` / `2>`, target `&1` / `&-`), which every
-// downstream extractor already recognises and skips.
+// `>|` and `>&FILE` must be recognized here or their `|`/`&` gets read as a
+// segment SEPARATOR downstream, demoting the real write target into the next
+// segment's cmd0 where no scanner looks for it. `>&` is admitted as a file
+// redirect only when not followed by an fd number or `-`, so `>&1`/`2>&1`/
+// `>&-` still take the fd-duplication route every downstream extractor expects.
 const REDIRECT_OP_ALT = String.raw`\d?>\||\d?>&(?![\d-]+$)|\d?>>?|&>>?|<<<|<`;
 const REDIRECT_RE = new RegExp(String.raw`^(?:${REDIRECT_OP_ALT})$`);
 
@@ -75,29 +67,16 @@ function stripSubstitutions(cmd) {
 }
 
 // Quote-aware tokenizer CORE: respects "...", '...', $'...'. Returns
-// Array<{value, raw}> where `value` is the quote-stripped token and `raw` is the
-// original slice of `seg` that produced it (outer quotes preserved). Downstream
-// quote-context resolution (expandRawToken) needs the raw form to decide
-// single/double/unquoted.
+// Array<{value, raw}> — value is quote-stripped, raw is the original slice
+// (quotes preserved) that expandRawToken needs for quote-context resolution.
+// tokenizeSegment/tokenizeSegmentWithQuotes used to duplicate this walk and
+// drift apart; both are now thin projections over this single core.
 //
-// #1780 round-11 CAUSE-2 (CPR-2/CPR-5): tokenizeSegment and
-// tokenizeSegmentWithQuotes were the SAME character walk written out twice, and
-// the round-11 fix had to land in both. Two copies of one grammar is exactly how
-// the parser drifted away from ./quote-spans/scan.js in the first place, so they
-// are collapsed into this single core with two thin projections below. Any
-// future rule is now impossible to apply to one sibling and not the other.
-//
-// opts.preserveSubstitutionSpans (default OFF — see splitSegmentsWithSeparators
-// for why the default must stay off): consume an unquoted `$( … )`, `` ` … ` ``,
-// `$(( … ))` or `${ … }` span WHOLE, so interior whitespace does not split the
-// token. Without it, `` touch `printf '%s%s' <wf>/s1.workflow -off` `` tokenizes
-// into four unrelated words and the real write target — the whole backtick span —
-// never exists as a token for any classifier to judge (measured ALLOW).
-// The span text is appended to BOTH `value` and `raw`: a substitution is not a
-// quoted literal, so there is nothing meaningful to "unquote" out of it, and the
-// consumer (classifyBashWriteTarget) normalizes the word itself. Fail-closed
-// direction: keeping the span whole can only make a token MORE complete, and the
-// classifier then sees the same text the shell will expand.
+// opts.preserveSubstitutionSpans (default OFF): consumes an unquoted
+// substitution span (`$(...)`, backticks, `$((...))`, `${...}`) WHOLE so
+// interior whitespace does not split it — otherwise an assembled write target
+// tokenizes into unrelated words and evades detection. Fail-closed: keeping a
+// span whole can only make a token MORE complete.
 function tokenizeCore(seg, opts) {
   const preserve = !!(opts && opts.preserveSubstitutionSpans);
   const ends = preserve ? substitutionSpanEnds(seg) : null;
@@ -158,22 +137,17 @@ function tokenizeSegmentWithQuotes(seg, opts) {
 // Returns { segs: string[], seps: string[] } where seps records the separator
 // token at each split point (unconditionally, including leading/trailing).
 //
-// opts.preserveSubstitutionSpans (#1780 round-11 CAUSE-2, default OFF): consume
-// `$( … )` / `` ` … ` `` / `$(( … ))` / `${ … }` as ONE span instead of letting
-// its parens reach the separator branch below. `touch $(printf '%s%s'
-// <wf>/s1.workflow -off)` otherwise splits into three segments (`touch $`,
-// `printf … <wf>/s1.workflow -off`, ``) and the write target the shell actually
-// lands on is not any of them — measured ALLOW.
+// opts.preserveSubstitutionSpans (default OFF): consumes a substitution span
+// (`$(...)`, backticks, `$((...))`, `${...}`) as ONE unit instead of letting
+// its parens hit the separator branch below — otherwise a write target
+// assembled inside one splits across segments and evades detection.
 //
-// The default MUST stay off, and this option MUST stay additive at the caller
-// (command-ir's parse() appends the span-preserving segments to the ordinary
-// ones rather than replacing them). Two reasons, both fail-open if ignored:
-//   - The `( )` split is what promotes a substitution BODY, a subshell body and
-//     a process-substitution body `<(cmd)` / `>(cmd)` to their own scanned
-//     segments. `$(rm <marker>)` blocks TODAY because of it.
-//   - hooks/enforce-worktree/shared-cmd-utils.js reads `ir.separators.length > 0`
-//     as "this command chains" and fails closed on it. Swallowing the `(` / `)`
-//     of a `$( )` would empty that array and turn a deny into an allow.
+// Must stay additive at the caller (command-ir's parse() appends these
+// segments rather than replacing the ordinary ones): the `( )` split is also
+// what promotes subshell/process-substitution bodies to their own scanned
+// segments, and shared-cmd-utils.js reads `ir.separators.length > 0` as
+// "this command chains" — swallowing `(`/`)` here would empty that signal
+// and turn a deny into an allow.
 function splitSegmentsWithSeparators(cmd, opts) {
   const segs = [];
   const seps = [];
@@ -240,10 +214,9 @@ function splitSegmentsWithSeparators(cmd, opts) {
         i++;
       }
     } else if (ch === ">" && (cmd[i + 1] === "&" || cmd[i + 1] === "|")) {
-      // #1780 round-5 HIGH-1: `>&` / `>|` must be consumed as a two-character
-      // OPERATOR before the separator branch above can read the `&` / `|` as a
-      // segment separator. Losing that race is what let `echo x >| <marker>`
-      // demote its write target into the next segment's cmd0.
+      // `>&` / `>|` must be consumed as a two-character OPERATOR before the
+      // separator branch above reads the `&` / `|` as a segment separator —
+      // otherwise the write target demotes into the next segment's cmd0.
       cur += cmd.slice(i, i + 2);
       i += 2;
     } else {

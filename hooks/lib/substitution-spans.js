@@ -1,51 +1,17 @@
 "use strict";
 // hooks/lib/substitution-spans.js
-// "Where does an EXPANDING substitution span start and end?" — answered from the
-// #1569 span scanner (./quote-spans/scan.js) rather than from a second hand-rolled
-// walk.
-//
-// #1780 round-11 CAUSE-2. `hooks/lib/command-parser.js` hand-rolled its own
-// character walks (tokenizeSegment / tokenizeSegmentWithQuotes /
-// splitSegmentsWithSeparators) that knew about `"`, `'` and `$'` and NOTHING
-// else. An UNQUOTED substitution containing whitespace was therefore torn apart:
-//
-//     touch `printf '%s%s' <wf>/s1.workflow -off`     -> ALLOW (measured)
-//     touch $(printf '%s%s' <wf>/s1.workflow -off)    -> ALLOW (measured)
-//     echo x > `printf '%s%s' <wf>/s1.workflow -off`  -> ALLOW (measured)
-//
-// The backtick form split on WHITESPACE into `` `printf ``/`%s%s`/`<wf>/s1.workflow``
-// /``-off` `` and the `$( )` form additionally split on the PARENS into three
-// segments — so no single token was ever the write target the shell actually
-// lands on, and every target-classifying rule (redirect-raw, argv, workflow-dir
-// qualifier) looked at fragments instead. `hooks/lib/session-markers.js`
-// authorizes WORKFLOW_OFF / WORKTREE_OFF / issue-close-verified on file
-// EXISTENCE alone, so a single such `touch` forges those grants.
-//
-// This is a CPR-2 defect before it is a security defect: ./quote-spans/scan.js
-// already IS the single source of truth for this grammar (it models cmdsubst,
-// backtick, subshell and arith frames, with `case … esac` and dq-nesting rules
-// the ad-hoc walks never had). The parser duplicated it badly, and the two
-// disagreed. Nothing here re-implements the grammar; it only projects the SSOT
-// scan into the "does a span start at index i, and where does it end" lookup the
-// parser walks need.
-//
-// DIRECTION DISCIPLINE: this module is consumed in the DETECTION direction —
-// preserving a span keeps MORE text inside one candidate target, which can only
-// add a classification, never clear one. It therefore fails WIDE: an unclosed or
-// unscannable span simply reports "no span here" and the caller degrades to its
-// previous character-by-character behaviour rather than swallowing the rest of
-// the line.
+// Locates unquoted $(...) / `...` / $((...)) substitution spans via the
+// existing quote-spans scanner instead of a second hand-rolled walk — the
+// prior tokenizer split on whitespace/quotes only, so an unquoted
+// substitution containing whitespace let write targets evade detection.
+// Detection-direction: fails WIDE — an unscannable span degrades to the
+// caller's prior char-by-char behavior rather than swallowing the line.
 
 const { scanSpans } = require("./quote-spans/scan");
 
-// Deliberately NOT the SSOT's EXPANDING_KINDS: that set also contains
-// "subshell" (a bare `(`), and a bare `(` / `)` pair is what
-// splitSegmentsWithSeparators() uses to promote a subshell body — and a process
-// substitution body `<(cmd)` / `>(cmd)` — to its own scanned segment. Preserving
-// those spans as one opaque token would REMOVE that segment, i.e. lose a reading
-// that blocks today. Only the three kinds whose delimiters are unambiguous
-// substitution syntax are preserved here (CPR-8: the exception is named and
-// bounded rather than left implicit).
+// Excludes "subshell" (bare `(`) from the SSOT's EXPANDING_KINDS: a bare
+// `(`/`)` pair is what promotes a subshell or process-substitution body to
+// its own scanned segment, and preserving it as one token would drop that.
 const PRESERVED_SPAN_KINDS = new Set(["cmdsubst", "backtick", "arith"]);
 
 // `${…}` parameter expansion is the fourth member of the same class (a span the
@@ -108,35 +74,13 @@ function spanEndAt(str, i, ends) {
   return b > i ? b : -1;
 }
 
-// ---------------------------------------------------------------------------
 // SOURCE ORDER of a span-preserving parse's segments.
-//
-// #1780 round-13 (index-vs-source-order): the span-preserving parse is a SECOND,
-// ADDITIVE reading, and its segments are APPENDED after the ordinary ones by
-// hooks/block-off-clearance-write/bash-scan/scan.js. Array position in that
-// merged list therefore carries no source-order meaning for the appended tail —
-// but the index-based helpers commandCwd() and priorAssignmentsText() both scan
-// `segments[0..idx)` precisely BECAUSE they assume it does. An appended span
-// segment consequently inherited the `cd` / assignment state of every ordinary
-// segment, including the ones that occur LATER in the command text:
-//
-//     echo x > $(printf '%s' 's1.workflow') ; cd /tmp
-//
-// Here the trailing `cd /tmp` sits at a LOWER merged index than the span segment
-// for the redirect, so commandCwd() resolved the span segment's relative target
-// against /tmp — a directory the shell had not entered yet when that write ran.
-// That is a cwd the qualifier can be steered to from outside the workflow dir,
-// i.e. it can CLEAR a block, which is the direction this hook may never fail in.
-//
-// The fix keeps the merged list (it is what every non-order-sensitive rule
-// consumes) and records, on each span segment, the reading it came from and its
-// index inside it. tagSourceOrder() is applied to the span parse's FULL segment
-// list before the caller dedups against the ordinary parse, so the recorded
-// index stays faithful to the span reading even after filtering.
-//
-// The property is NON-ENUMERABLE: segment objects are compared, keyed and
-// snapshotted elsewhere (segmentKey in bash-scan/scan.js, redirects snapshots in
-// command-ir.js), and none of those may start seeing a new field.
+// The span-preserving parse is additive — its segments are APPENDED after the
+// ordinary ones, so array position no longer reflects source order. Helpers
+// that scan `segments[0..idx)` for cwd/assignment state then picked up state
+// from segments occurring LATER in the command text, letting a write target's
+// cwd be steered (e.g. via a trailing `cd`) to escape a block it should hit.
+// Each span segment carries its own (list, idx) non-enumerably to fix that.
 const SOURCE_ORDER_KEY = "sourceOrder";
 
 function tagSourceOrder(segments) {

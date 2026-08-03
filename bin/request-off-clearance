@@ -74,19 +74,17 @@ if [[ -z "$SID" || ! "$SID" =~ ^[A-Za-z0-9_-]+$ ]]; then
   exit 1
 fi
 
-# append_audit/emergency_hint are defined before any step that can fail (#1780
-# round-14 MEDIUM): under `set -euo pipefail`, a failure in the WORKFLOW_DIR
-# resolution below used to abort before these helpers existed, so an
-# examiner-side failure at that point produced no audit record and no
-# emergency-sentinel guidance — the one case where this command itself, the
-# documented recovery path, needs to still work.
+# append_audit/emergency_hint are defined before any step that can fail: under
+# `set -euo pipefail`, a failure in the WORKFLOW_DIR resolution below must still
+# produce an audit record and emergency-sentinel guidance — this command IS the
+# documented recovery path, so it needs to keep working even when it's the one
+# reporting its own failure.
 
 # append_audit <verdict> <reason>
-# NON-BLOCKING: an audit failure never aborts the examination, but the audit trail is
-# load-bearing for this feature's trust model, so a dropped entry is announced on stderr.
-# Depends only on AGENTS_CONFIG_DIR/SID/TARGET/CATEGORY/URGENCY (all set at the top of
-# the script, before argument parsing returns) — NOT on WORKFLOW_DIR, so it works even
-# when the WORKFLOW_DIR resolution below is what's being reported as failed.
+# NON-BLOCKING: an audit failure never aborts the examination, but the audit
+# trail is load-bearing for this feature's trust model, so a dropped entry is
+# announced on stderr. Depends only on vars set before argument parsing
+# returns — NOT on WORKFLOW_DIR, so it still works when that's what failed.
 append_audit() {
   local verdict="$1" reason="$2"
   local audit_err audit_rc
@@ -124,14 +122,13 @@ EMERGENCY sentinel: echo "<<WORKFLOW_ENFORCE_${1}_OFF_EMERGENCY: {reason}>>"
 HINT
 }
 
-# SYNC CONTRACT (#1658): resolve via the SAME getWorkflowDir() the shim and
-# workflow-mark use, instead of duplicating its $HOME-based fallback in bash
-# (which can diverge from Node's os.homedir(), e.g. on Windows). Wrapped so a
-# resolution failure reports through the same audit trail and emergency hint
-# as every other examiner-side failure (#1780 round-14 MEDIUM), instead of
-# exiting silently under `set -e`. No EXIT trap for the error-capture temp
-# file: later steps install their own EXIT traps (a single slot, so a later
-# `trap ... EXIT` would replace this one) — cleaned up synchronously instead.
+# Resolve via the SAME getWorkflowDir() the shim and workflow-mark use, rather
+# than duplicating its $HOME-based fallback in bash (which can diverge from
+# Node's os.homedir() on Windows). Wrapped so a resolution failure reports
+# through the same audit trail and emergency hint as other examiner-side
+# failures, instead of exiting silently under `set -e`. No EXIT trap for the
+# error-capture temp file — later steps install their own (single slot); it's
+# cleaned up synchronously instead.
 WORKFLOW_DIR_ERR_FILE="$(mktemp 2>/dev/null || mktemp -t offclrwfdir)"
 set +e
 WORKFLOW_DIR="$(node -e '
@@ -163,26 +160,18 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 CODEX_BIN="$(command -v codex)"
 
-# #1780 round-10 MEDIUM-2 — VERDICT NONCE-BINDING (scope of the guarantee: read
-# the codex HIGH-3 note below first). The verdict is parsed from the examiner's
-# stdout, and --detail (untrusted) is interpolated into the prompt — an
-# examiner that echoes its prompt back makes a --detail value containing a
-# verdict-shaped JSON object indistinguishable from the examiner's real
-# answer. EXAM_NONCE (128 bits, crypto.randomBytes — not $RANDOM, a 15-bit
-# guessable PRNG) is generated AFTER --detail is fixed on the command line, so
-# no request text can contain it; a candidate object without a matching nonce
-# is discarded (fail closed).
-#
-# codex HIGH-3: this binds "produced by a process that read this prompt", NOT
-# "the examiner's own reasoning decided this" — the nonce sits in the same
-# context as --detail, so a strong-enough injection can copy it. No
-# prompt-side fencing fully closes that gap. DETAIL_FENCE is a second,
-# independent nonce (never reused for verdict binding) that narrows the more
-# common failure mode instead: the examiner replaying a verdict-shaped object
-# LITERALLY present in --detail. Both residual risks are accepted deliberately
-# — this token is advisory triage, not a security primitive; the Phase 2
-# human-approval gate (hooks/supervisor-off-proposal-shim.js) is the actual
-# authorization boundary.
+# VERDICT NONCE-BINDING: --detail (untrusted) is interpolated into the prompt,
+# so an examiner that echoes its prompt back could make an injected
+# verdict-shaped JSON object in --detail indistinguishable from a real answer.
+# EXAM_NONCE (crypto.randomBytes, not the guessable $RANDOM) is generated
+# AFTER --detail is fixed, so request text can't contain it; a candidate
+# without a matching nonce is discarded (fail closed). This binds "produced by
+# a process that read this prompt", not "the examiner's own reasoning decided
+# this" — copying is still possible in principle. DETAIL_FENCE is a second,
+# independent nonce narrowing the more common case (the examiner literally
+# replaying an object from --detail). Both risks are accepted deliberately:
+# this token is advisory triage — the Phase 2 human-approval gate is the
+# actual authorization boundary.
 EXAM_NONCE="$(node -e 'process.stdout.write(require("crypto").randomBytes(16).toString("hex"))' 2>/dev/null || true)"
 if [[ ! "$EXAM_NONCE" =~ ^[0-9a-f]{32}$ ]]; then
   append_audit "UNAVAILABLE" "verdict nonce generation failed"
@@ -275,8 +264,7 @@ fi
 # in stdout — one whose `nonce` equals this invocation's — and read .verdict /
 # .reason from it. Unparseable output → empty verdict → REJECT. Objects present
 # but none nonce-bound → exit 2, reported separately so the operator can tell an
-# injected/echoed verdict apart from a broken examiner. (Nonce-bound ≠ examiner-
-# authenticated — see the codex HIGH-3 note above.) Logic lives in
+# injected/echoed verdict apart from a broken examiner. Logic lives in
 # ./request-off-clearance.d/parse-verdict.js (file-split HARD limit).
 set +e
 PARSED="$(CODEX_STDOUT="$CODEX_OUT" CODEX_NONCE="$EXAM_NONCE" node "$SCRIPT_DIR/request-off-clearance.d/parse-verdict.js" 2>/dev/null)"
@@ -310,11 +298,10 @@ append_audit "ALLOW" "$VERDICT_REASON"
 
 mkdir -p "$WORKFLOW_DIR"
 TOKEN_PATH="$WORKFLOW_DIR/$SID.off-clearance"
-# The mint and the stale-claim clear are one transition (#1780 M-3) that runs inside a
-# SID-scoped exclusive lock and fails closed (exit 3) rather than minting outside it
-# (#1780 round-13 HIGH-1) — see ./request-off-clearance.d/mint-token.js (file-split HARD
-# limit) for the full rationale. Its exit status is load-bearing and inspected below
-# instead of letting `set -e` abort the script silently.
+# The mint and the stale-claim clear are one transition, run inside a SID-scoped
+# exclusive lock, failing closed (exit 3) rather than minting outside it — see
+# ./request-off-clearance.d/mint-token.js for the full rationale. Exit status is
+# load-bearing and inspected below instead of letting `set -e` abort silently.
 set +e
 TOKEN_TARGET="$TARGET" TOKEN_CATEGORY="$CATEGORY" TOKEN_URGENCY="$URGENCY" \
 TOKEN_REASON="$VERDICT_REASON" TOKEN_DETAIL="$DETAIL" TOKEN_PATH="$TOKEN_PATH" \

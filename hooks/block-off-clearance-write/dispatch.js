@@ -16,9 +16,9 @@ const TOKEN_BLOCK_MSG = [
   "Recognized shapes take single-quoted literals or $env:/process.env only; double-quoted PowerShell arguments and backslash paths are never accepted.",
 ].join("\n");
 
-// #1780 H-1/H-2: session-override markers authorize purely on file EXISTENCE
-// (hooks/lib/session-markers.js), so a single forged file grants the session
-// full clearance. Writing one directly is never legitimate — the sentinels are
+// Session-override markers authorize purely on file EXISTENCE
+// (hooks/lib/session-markers.js), so a single forged file grants full
+// clearance. Writing one directly is never legitimate — the sentinels are
 // the only sanctioned route, and they are human-gated by settings.json `ask`.
 const MARKER_BLOCK_MSG = [
   "Direct write to a session-override marker blocked.",
@@ -30,11 +30,10 @@ const MARKER_BLOCK_MSG = [
   "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\"",
 ].join("\n");
 
-// #1780 N-2: a bulk glob (`<workflowDir>/*`, `<workflowDir>/s1*`) commits no
-// literal character to a protected suffix, but it still expands onto every file
-// in the workflow directory — including the live clearance token and every
-// session-override marker. It is blocked on DIRECTORY CONTAINMENT rather than
-// name overlap, so it gets its own remediation text.
+// A bulk glob (`<workflowDir>/*`, `<workflowDir>/s1*`) commits no literal
+// character to a protected suffix but still expands onto the live clearance
+// token and every session-override marker. Blocked on DIRECTORY CONTAINMENT
+// rather than name overlap, so it gets its own remediation text.
 const WORKFLOW_GLOB_BLOCK_MSG = [
   "Wildcard write into the workflow directory blocked.",
   "A glob in this directory expands onto the OFF-clearance token and the session-override",
@@ -44,12 +43,10 @@ const WORKFLOW_GLOB_BLOCK_MSG = [
   "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
 ].join("\n");
 
-// #1780 round-10 MEDIUM-1: a target whose BASENAME is assembled at execution
-// time (a command substitution, a backtick, an unresolved `$`) inside the
-// workflow directory gets its OWN text rather than reusing WORKFLOW_GLOB_BLOCK_MSG.
-// That message opens with "Wildcard write", which is actively misleading here —
-// there is no wildcard, and a reader told to "name the exact file you mean"
-// would look for a `*` that is not there (CPR-1/CPR-7).
+// A target whose BASENAME is assembled at execution time gets its own text
+// rather than reusing WORKFLOW_GLOB_BLOCK_MSG — that message opens with
+// "Wildcard write", which is misleading when there is no `*` to find
+// (CPR-1/CPR-7).
 const WORKFLOW_DYNAMIC_BLOCK_MSG = [
   "Dynamically-named write into the workflow directory blocked.",
   "The filename is assembled at execution time (command substitution, backtick, or an",
@@ -59,11 +56,9 @@ const WORKFLOW_DYNAMIC_BLOCK_MSG = [
   "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
 ].join("\n");
 
-// #1780 round-5 HIGH-2: a command this scanner cannot PARSE cannot be cleared,
-// so a protected mention inside unparsable text blocks. That verdict is the one
-// with a real false-positive surface (an unterminated quote in a comment, a
-// shell dialect the tokenizer does not model), so it says so out loud — a block
-// whose cause is invisible is a block nobody can act on (CPR-1).
+// A command this scanner cannot PARSE cannot be cleared, so a protected
+// mention inside unparsable text blocks — and says so out loud, since a
+// block whose cause is invisible is a block nobody can act on (CPR-1).
 const UNPARSED_PREFIX = [
   "This command could not be parsed, and its text names an OFF-clearance token",
   "or a session-override marker — so it cannot be cleared and is blocked.",
@@ -86,8 +81,8 @@ function blockMessageFor(kind) {
 // signal; this function itself never decides to approve on error.
 //
 // The tool-class membership tests and the edit-payload path extraction
-// (M-1/N-7 #1780: file_path / path / notebook_path, top level and per-entry in
-// `edits[]`) both live in hooks/lib/write-tools.js now, so this hook and
+// (file_path / path / notebook_path, top level and per-entry in `edits[]`)
+// both live in hooks/lib/write-tools.js, so this hook and
 // hooks/enforce-worktree.js cover exactly the same tool surface (CPR-2/CPR-5).
 function evaluateProtectedWrite(toolName, toolInput) {
   if (isEditWriteTool(toolName)) {
@@ -97,11 +92,10 @@ function evaluateProtectedWrite(toolName, toolInput) {
     }
     return null;
   }
-  // H-1 (#1780 round-4): runCommands delivers an ARRAY under `commands`, not a
-  // string under `command`. Reading `.command` here handed bashHitsProtected
-  // `undefined` for every runCommands call — a silent full bypass of this hook.
-  // commandTextOf joins with "\n" so a write in commands[1] is scanned as its
-  // own statement rather than glued onto the tail of commands[0].
+  // runCommands delivers an ARRAY under `commands`, not a string under
+  // `command` — reading `.command` here would silently bypass this hook.
+  // commandTextOf joins with "\n" so a write in commands[1] is scanned as
+  // its own statement rather than glued onto the tail of commands[0].
   if (isCommandTool(toolName)) {
     const kind = bashHitsProtected(commandTextOf(toolName, toolInput), { cwd: toolInput.cwd });
     return kind ? { kind, reason: blockMessageFor(kind) } : null;

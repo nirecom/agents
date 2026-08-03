@@ -1,18 +1,12 @@
 // hooks/enforce-worktree/handle-bash-write.js
-// Extracted verbatim (mechanical move only — no logic/behavior change) from the
-// `if (toolName === "Bash") { ... }` branch of hooks/enforce-worktree.js
-// (file-split, rules/coding/file-split.md — entrypoint exceeded the 500-line HARD
-// limit). Handles all Bash-tool write-target extraction, the #1780 H-3 protected-
-// marker gate, the universal target-aware allow (#1045), Bug1/Bug2 checks, and the
-// gh-write (#713 / Group B) session-scope gate.
+// Extracted (mechanical move, file-split rules/coding/file-split.md) from the
+// `Bash` branch of hooks/enforce-worktree.js. Handles Bash-tool write-target
+// extraction, the protected-marker gate, the universal target-aware allow,
+// Bug1/Bug2 checks, and the gh-write session-scope gate.
 //
-// Returns { repoRoot, writeDetector } on natural fall-through (no allow/block
-// decision reached inside this branch) so the entrypoint can continue with its
-// post-dispatch main-checkout / protected-branch checks using the same values
-// the inline code would have left in `repoRoot` / `_writeDetector`.
-// Calls `done()` (passed in via ctx) for every allow/block exit, exactly as the
-// original inline code did — `done()` calls process.exit(0), so control never
-// returns past those points.
+// Returns { repoRoot, writeDetector } on natural fall-through so the entrypoint
+// can continue its post-dispatch checks. Calls `done()` (via ctx) for every
+// allow/block exit — `done()` exits the process, so control never returns past it.
 
 "use strict";
 
@@ -30,59 +24,46 @@ const { checkUniversalTargetAllow } = require("./universal-target-allow");
 const { buildExtras } = require("./report-extras");
 const { commandTextOf } = require("../lib/write-tools");
 
-// #1780 H-3 (security-scanner round 8): compute the write-target list and the
-// protected-marker-hit flag ONCE, ahead of every allow path below.
-// checkUniversalTargetAllow's session-scope guard and the Bug2
-// `repoRoot !== null` disjunct both approve purely on "outside session scope" —
-// trivially true for the default workflow-dir location — without ever calling
-// areAllBashTargetsUnderWorkflowDir(), the only function that previously
-// consulted PROTECTED_MARKER_BASENAME_RE. A single centralized early gate (per
-// the scanner's own stated preference over scattering the check into each
-// allow path) skips ALL allow paths when any target hits a protected marker
-// basename, falling through to fail-closed enforcement — same idiom already
-// used for parseFailure below.
+// Compute the write-target list and protected-marker-hit flag ONCE, ahead of
+// every allow path below: several allow paths (universal-target-allow,
+// Bug2's `repoRoot !== null` disjunct) approve purely on "outside session
+// scope" — trivially true for the default workflow-dir location — without
+// ever consulting the marker check. This single centralized gate skips ALL
+// allow paths when any target hits a protected marker basename, falling
+// through to fail-closed enforcement (same idiom as parseFailure below).
 function handleBashWrite(ctx) {
   const { toolName, toolInput, _toolCwd, done, reportContext } = ctx;
 
   let repoRoot = null;
   let writeDetector = null;
 
-  // H-2 (#1780 round-4): runInTerminal/runCommands reach this handler too, and
-  // runCommands carries an ARRAY under `commands`. Reading `.command` yielded ""
-  // for it, so `if (!cmd) done()` approved every runCommands write outright.
+  // runInTerminal/runCommands reach this handler too; runCommands carries an
+  // ARRAY under `commands`, not `.command` — commandTextOf() normalizes both
+  // so `if (!cmd) done()` can't approve a runCommands write via an empty read.
   const cmd = commandTextOf(toolName, toolInput);
   if (!cmd) done();
   const ir = parse(cmd);
   writeDetector = detectWritePredicate(ir);
   if (!writeDetector) done(); // read-only command — allow
 
-  // #1780 round-13 (CPR-5 sibling-symmetry gap): `targets` / `parseFailure` /
-  // `_markerHit` are computed HERE — ahead of EVERY allow path in this function,
-  // which is what the centralized-gate comment above handleBashWrite has always
-  // stated the design to be. The round-13 fix that introduced the gate only
-  // hoisted the computation above the gh-write branch, leaving two earlier
-  // branches — `git worktree remove/prune` and `git branch -d/-D` — able to
-  // reach `done()` (allow) without ever consulting it. A sequenced command such
-  // as `git worktree prune && rm .workflow-off` therefore rode its protected-
-  // marker write out on the worktree-prune allow. `repoRoot` moves up with it
-  // because collectBashWriteTargets needs it; the worktree-remove/prune block
-  // below never read the outer `repoRoot` (it resolves its own `cwdRoot` from
-  // the CWD on purpose), so the earlier assignment changes nothing for it.
+  // `targets` / `parseFailure` / `_markerHit` are computed HERE, ahead of EVERY
+  // allow path in this function (including the `git worktree remove/prune` and
+  // `git branch -d/-D` branches below) — a sequenced command like
+  // `git worktree prune && rm .workflow-off` must not ride a marker write out
+  // on an earlier branch's allow. `repoRoot` moves up with it since
+  // collectBashWriteTargets needs it; the worktree-remove/prune block below
+  // still resolves its own `cwdRoot` from CWD on purpose, unaffected by this.
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
   const { targets, parseFailure } = collectBashWriteTargets(ir, repoRoot);
   const _markerHit = parseFailure || bashTargetsHitProtectedMarker(targets);
 
   // Early-exit for git worktree remove/prune (write confirmed above): resolve
-  // repo root from CWD (not from -C flag) so the CWD checkout type drives the
-  // allow/block decision. This prevents the main-path isMainCheckout(repoRoot)
-  // from wrongly resolving via a -C target and allowing linked-CWD or
-  // cross-repo invocations. Non-git CWD (cwdRoot===null) falls through to the
-  // main fail-closed block below.
-  // `!_markerHit &&` gates entry to the WHOLE block, not just its allow arm:
-  // when a target hits a protected marker basename the command must fall through
-  // to the fail-closed enforcement further down — exactly as the gh-write branch
-  // does — rather than being answered here by either arm (blocking here would
-  // report a worktree-shaped reason for a marker-shaped cause).
+  // repo root from CWD, not -C, so the CWD checkout type drives the decision
+  // (prevents a -C target from wrongly allowing a linked-CWD/cross-repo call).
+  // `!_markerHit &&` gates the WHOLE block: a marker-hit command must fall
+  // through to fail-closed enforcement below rather than being answered by
+  // either arm here (which would report a worktree-shaped reason for a
+  // marker-shaped cause).
   if (!_markerHit && /\bgit\b/.test(cmd) && /\bworktree\s+(?:remove|prune)\b/.test(cmd)) {
     const cwdRoot = findRepoRootForBash("git", _toolCwd);
     if (cwdRoot !== null) {
@@ -104,13 +85,10 @@ function handleBashWrite(ctx) {
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
   // Allowed only when the target branch is not currently checked out in any worktree.
-  //
-  // Both ALLOW exits carry the `!_markerHit &&` guard (same gate as the branches
-  // above/below): a protected-marker write riding along on a branch-delete
-  // command must never be approved here. On a marker hit the command falls to
-  // this block's own `done({block:true, …})`. Its wording names branch-delete
-  // rather than the marker, which is imprecise but still a correct refusal — the
-  // invariant that matters is that `_markerHit` can never produce an ALLOW.
+  // Both ALLOW exits carry `!_markerHit &&`: a protected-marker write riding
+  // along on a branch-delete command must never be approved here — on a marker
+  // hit it falls through to this block's own block reason instead (imprecise
+  // wording, but the invariant that `_markerHit` never produces an ALLOW holds).
   if (isBranchDeleteCommand(cmd)) {
     if (!_markerHit && !repoRoot) done(); // not in a git repo — allow (matches policy below)
     if (!_markerHit && isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot)) done();
@@ -145,21 +123,12 @@ function handleBashWrite(ctx) {
     });
   }
 
-  // #1780 scanner G: `_markerHit` is now computed at the TOP of this function
-  // (see the round-13 comment there); it was hoisted here first, ahead of the
-  // gh-write branch below, and later all the way up so the two git branches
-  // above are covered too. isGhWriteIR()
-  // classifies the WHOLE command as gh-write as soon as ANY segment matches a
-  // gh-write pattern (hooks/lib/bash-write-patterns/patterns.js) — so a
-  // sequenced command like `gh issue comment 1 --body hi && rm .workflow-off`
-  // was reaching the gh-write branch's unconditional `done()` (allow) below
-  // without ever consulting bashTargetsHitProtectedMarker on its OTHER
-  // segment, letting a protected-marker write ride along inside an
-  // otherwise-legitimate gh command. Computing `_markerHit` first and gating
-  // entry to the gh-write branch on it (see the `!_markerHit &&` below) closes
-  // that gap: a marker hit now falls through to the same fail-closed
-  // enforcement every other allow path already defers to (see the
-  // centralized-gate comment above `handleBashWrite`).
+  // isGhWriteIR() classifies the WHOLE command as gh-write as soon as ANY
+  // segment matches a gh-write pattern, so a sequenced command like
+  // `gh issue comment 1 --body hi && rm .workflow-off` could otherwise reach
+  // the unconditional allow below without the OTHER segment's marker write
+  // ever being checked. Gating entry on `_markerHit` (computed at the top of
+  // this function) closes that gap.
 
   // gh write commands (Group B) get an extra session-scope check before the
   // standard main/worktree enforcement below. The whitelist defines the set of
@@ -167,14 +136,12 @@ function handleBashWrite(ctx) {
   // from a worktree, on the principle that out-of-session repos are not the
   // current task's concern.
   if (!_markerHit && isGhWriteCommand(ir)) {
-    // --- #713: gh issue create skill-context gate ---
-    // Stage A: determine main worktree vs linked worktree.
-    // Stage B (main only): require ISSUE_CREATE_SKILL=1 inline prefix to enforce
-    // that /issue-create skill (survey-first + duplicate check) is used.
-    // Linked worktrees bypass Stage B — bare `gh issue create` is unrestricted there.
+    // gh issue create skill-context gate: from the main worktree, require the
+    // ISSUE_CREATE_SKILL=1 inline prefix so /issue-create (survey-first +
+    // duplicate check) is used instead of a bare call. Linked worktrees are
+    // unrestricted. isMainCheckout is trivalue-aware — null routes to block,
+    // same as the main-path check below.
     if (/\bgh\s+issue\s+create\b/.test(stripQuotedArgs(cmd))) {
-      // Axis A (#885): trivalue-aware — null (isMainCheckout indeterminate) routes
-      // to the block side, same as the main-path at line 441.
       const mainCheckoutResultGate = repoRoot ? isMainCheckout(repoRoot) : false;
       if (mainCheckoutResultGate !== false) {
         const SANCTIONED_RE =
@@ -189,14 +156,13 @@ function handleBashWrite(ctx) {
               "Run `/issue-create --title ... --body ...` from this session, or from a linked\n" +
               "worktree if you really need bare `gh issue create`.\n" +
               "(`ISSUE_CREATE_SKILL=1` is a content-integrity marker — NOT a worktree-\n" +
-              " enforcement bypass; cf. #672 removal of ISSUE_CLOSE_SKILL bypass.)",
+              " enforcement bypass.)",
           });
         }
         // Sanctioned: fall through to session-scope check below.
       }
-      // Linked worktree → Stage B skip → session-scope check below.
+      // Linked worktree: fall through to session-scope check below.
     }
-    // --- end #713 gate ---
 
     const sessionRoots = getSessionRepoRoots();
     const detected = repoRoot ? normalizeForCompare(repoRoot) : null;
@@ -226,18 +192,14 @@ function handleBashWrite(ctx) {
 
   const sessionRoots = getSessionRepoRoots();
 
-  // #1780 round-5 HIGH-2: `!parseFailure &&` inverted the sense of this gate.
-  // `_markerHit` means "skip every allow fast-path", so a command whose targets
-  // could not be extracted at all — the exact state in which nothing can be
-  // vouched for — was the one state that re-enabled them. A parse failure is a
-  // marker hit as far as the allow paths are concerned; the downstream branches
-  // already treat `parseFailure` as fail-closed for their own decisions.
-  // (`targets` / `parseFailure` / `_markerHit` themselves are now computed once,
-  // ahead of the gh-write branch above — see the scanner G comment there.)
+  // A parse failure is treated as a marker hit for the allow paths' purposes:
+  // when targets can't be extracted at all, nothing can be vouched for, so the
+  // fast-paths must stay disabled rather than re-enabled (downstream branches
+  // separately treat `parseFailure` as fail-closed for their own decisions).
 
-  // Universal target-aware allow (L1, #1045): allow if all extracted write targets
-  // are outside the session scope, before shape-based predicate checks.
-  // Sequenced commands and parse failures → abstain (fail-closed, C1).
+  // Universal target-aware allow: allow if all extracted write targets are
+  // outside the session scope, before shape-based predicate checks. Sequenced
+  // commands and parse failures abstain (fail-closed).
   if (!_markerHit) {
     const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir);
     if (_ur.verdict === "allow") done();
@@ -250,17 +212,13 @@ function handleBashWrite(ctx) {
     const excludePatterns = getExcludePatterns();
 
     if (!parseFailure) {
-      // #1709: workflow state dir is runtime state, never source. Writes whose
-      // targets all resolve under the workflow dir are always allowed, independent
-      // of sequencing — hoisted above the Bug2 branch so that
-      // `mkdir -p WFDIR && echo x > WFDIR/f` (sequenced, but every target still
-      // under the workflow dir) is not blocked.
-      // H-2 fix: per-segment check, not the flat merged target list — a sequenced
-      // command mixing one extractable workflow-dir target with one
-      // non-extractable write (e.g. `echo x > WFDIR/f && bash ./build.sh`) must
-      // still fail closed to the sequencing guard below. areAllWriteSegmentsUnderWorkflowDir
-      // fails closed on any write segment whose targets aren't all provably under
-      // the workflow dir, unlike the flat-list areAllBashTargetsUnderWorkflowDir.
+      // Workflow state dir is runtime state, never source: writes fully under it
+      // are allowed independent of sequencing (`mkdir -p WFDIR && echo x > WFDIR/f`
+      // is not blocked). Checked per-segment, not the flat merged target list —
+      // a sequenced command mixing one workflow-dir target with one
+      // non-extractable write must still fail closed to the sequencing guard
+      // below, which areAllWriteSegmentsUnderWorkflowDir (unlike the flat-list
+      // areAllBashTargetsUnderWorkflowDir) guarantees.
       if (areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot)) done();
 
       // Commands with sequencing operators (;, &&, ||) may contain un-extracted
@@ -269,13 +227,10 @@ function handleBashWrite(ctx) {
       // main-checkout block (fail-closed). Single | (pipe) is allowed — it is
       // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
       if (!hasCommandSequencing(cmd)) {
-        // Bug 2: all targets resolve outside session scope → allow.
-        // Non-git CWD (#1448B): when repoRoot is null, also require that every target
-        // resolves to a non-git path (findRepoRoot===null) or is under plans-dir/.claude.
-        // Without repoRoot, sessionRoots may be empty and cannot reliably protect
-        // non-session git repos from accidental cross-repo writes.
-        // #1709: the workflow-dir allow is handled unconditionally above; the
-        // disjunct below is a separate condition of the Bug 2 rule.
+        // Bug 2: all targets resolve outside session scope → allow. When repoRoot
+        // is null (non-git CWD), also require every target to resolve to a
+        // non-git path or live under plans-dir/.claude — otherwise an empty
+        // sessionRoots can't protect non-session git repos from cross-repo writes.
         if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
             (repoRoot !== null ||
              areAllBashTargetsUnderPlansDir(targets) ||
@@ -293,14 +248,14 @@ function handleBashWrite(ctx) {
       } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
                  (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets) ||
                   areAllBashTargetsUnderWorkflowDir(targets))) {
-        // #1109: sequencing operators appear ONLY inside a heredoc body (e.g.
-        // shell fragments written by `cat <<'EOF' > plans-dir/file.md`).
-        // The actual write target is under plans-dir — allow.
+        // Sequencing operators appear only inside a heredoc body (e.g. shell
+        // fragments written by `cat <<'EOF' > plans-dir/file.md`) — the actual
+        // write target is under plans-dir. Allow.
         done();
       } else if (excludePatterns.length > 0 &&
                  isEverySegmentExcluded(ir, repoRoot, excludePatterns)) {
-        // #739: sequenced commands where every write segment's targets are all
-        // covered by EXCLUDE → allow (e.g. `mkdir -p .worktree-backup/x && cp src .worktree-backup/x/f`).
+        // Sequenced command where every write segment's targets are covered by
+        // EXCLUDE (e.g. `mkdir -p .worktree-backup/x && cp src .worktree-backup/x/f`).
         done();
       }
     }

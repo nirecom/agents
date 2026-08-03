@@ -1,44 +1,28 @@
 // hooks/lib/basename-glob-normalize/brace-ansi-expand.js
-// Candidate-spelling WIDENERS for ../basename-glob-normalize.js (file-split,
-// rules/coding/file-split.md — entrypoint-private sibling folder).
+// Candidate-spelling WIDENERS for ../basename-glob-normalize.js (file-split
+// sibling folder, rules/coding/file-split.md).
 //
-// DIRECTION DISCIPLINE — read this before reusing anything here, and read the
-// "DIRECTION DISCIPLINE" block in hooks/block-off-clearance-write/
-// interpreter-scan.js for the same rule stated from the other side.
+// DIRECTION DISCIPLINE: this file is a NORMALIZER consumed in the DETECTION
+// direction — output feeds a denylist match, so more candidates only makes
+// the hook block MORE (fail closed), while dropping or rewriting a spelling
+// is a live BYPASS. Never remove a candidate; always keep the original
+// alongside every derived one. Never reuse this as a permission predicate.
 //
-//   Everything in this file is a NORMALIZER consumed in the DETECTION
-//   direction: its output feeds a denylist match, so producing MORE candidate
-//   spellings can only make the hook block more often (fail closed), while
-//   dropping — or worse, silently rewriting — a spelling is a live BYPASS.
-//   Therefore: never remove a candidate, always keep the original alongside
-//   every derived one, and resolve every doubt towards emitting one more
-//   string. Nothing here may ever be reused as a permission predicate.
-//
-// #1780 round-9 HIGH-2. Two shell constructs were missing from the candidate
-// normalizer, and unlike a glob (which can only ever match a file that already
-// exists) both CREATE the exact protected basename:
-//
-//   brace expansion   echo x > <wf>/s1.workflow-of{f..f}   -> s1.workflow-off
-//                     tee <wf>/s1.workflow-{off,off}       -> s1.workflow-off
-//   ANSI-C quoting    echo x > $'<wf>/s1.workflow-of\x66'  -> s1.workflow-off
-//
-// Both were measured ALLOW and fixture-verified to produce the real file.
+// Covers two constructs a glob cannot express, since both CREATE the exact
+// protected basename rather than matching an existing file: brace expansion
+// (`s1.workflow-of{f..f}` -> s1.workflow-off) and ANSI-C quoting
+// (`$'s1.workflow-of\x66'` -> s1.workflow-off). Both were fixture-verified to
+// produce the real file when undetected.
 "use strict";
 
-// Cap on the number of candidate spellings one token may expand to.
-// Rationale: the expansion product of a brace pattern is unbounded
-// (`{1..1000000}`), so without a cap an attacker buys unbounded CPU inside a
-// PreToolUse hook. 1024 is far past any hand-written path (`src/{a,b}/{c,d}` is
-// 4; `f{1..100}.txt` is 100; a 5-level 4-way nest is 1024) while still costing
-// only a few thousand tail comparisons.
-//
-// ABOVE THE CAP THE ANSWER IS "HIT" (fail closed) — an expansion this scanner
-// refused to finish has NOT been shown to miss the protected suffix, and the
-// direction discipline above says an unfinished normalization must widen, not
-// clear. ACCEPTED RESIDUAL (named exception, CPR-8): a legitimate write whose
-// brace pattern really does exceed the cap (`touch f{1..5000}.txt`) is blocked.
-// Remediation is to spell the write without the brace group, or to loop; the
-// block message names the file, so the cause is actionable.
+// Cap on the number of candidate spellings one token may expand to. A brace
+// pattern's expansion product is unbounded (`{1..1000000}`), so without a cap
+// an attacker buys unbounded CPU inside a PreToolUse hook; 1024 comfortably
+// covers any hand-written path while costing only a few thousand comparisons.
+// ABOVE THE CAP THE ANSWER IS "HIT" (fail closed) — an unfinished expansion
+// has not been shown to miss the suffix. Named exception (CPR-8): a
+// legitimate write whose pattern exceeds the cap is blocked; the block
+// message names the file, so spelling it without the brace group is the fix.
 const MAX_CANDIDATE_SPELLINGS = 1024;
 // A brace pattern nested deeper than this is not a spelling anybody types.
 const MAX_EXPANSION_ROUNDS = 16;
@@ -100,14 +84,10 @@ function decodeAnsiCEscapes(body) {
 }
 
 // ansiCVariantsOf(text): the ADDITIONAL spellings a $'…' reading of `text`
-// yields. Widening only — the caller always keeps `text` itself as well.
-//
-// Two shapes are decoded, on purpose:
-//   1. `$'…'` still wrapped  — the raw token as typed.
-//   2. any text containing a backslash — the wrapper is stripped by the
-//      tokenizer on several routes before this module sees the basename, and a
-//      surviving `\x66` there means exactly the same thing. Decoding it can
-//      only add a candidate.
+// yields (widening only — caller keeps `text` too). Decodes both the still-
+// wrapped `$'…'` token and any text containing a backslash, since the
+// tokenizer strips the wrapper on several routes before this module sees the
+// basename, and a surviving `\x66` there means the same thing.
 function ansiCVariantsOf(text) {
   if (typeof text !== "string" || text.indexOf("\\") === -1) return [];
   const out = [];

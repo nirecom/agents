@@ -29,9 +29,9 @@ function readStdin() {
 
 // Tool set + payload-shape normalization are shared with
 // hooks/block-off-clearance-write/dispatch.js and
-// hooks/supervisor-off-proposal-shim.js (CPR-2, #1780 round-4 H-1). This file
-// is where the runCommands array shape was modeled correctly first; the helper
-// preserves that contract verbatim (join with "\n").
+// hooks/supervisor-off-proposal-shim.js (CPR-2). This file modeled the
+// runCommands array shape correctly first; the helper preserves that
+// contract verbatim (join with "\n").
 const { COMMAND_TOOL_NAMES, commandTextOf } = require("./lib/tool-command-text");
 
 const ALLOWED_TOOLS = new Set(COMMAND_TOOL_NAMES);
