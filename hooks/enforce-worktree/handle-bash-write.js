@@ -20,6 +20,7 @@ const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc, getExcludePatt
 const { isBranchDeleteCommand, isAllowedBranchDeleteWhenNotCheckedOut } = require("./branch-delete-guard");
 const { isAllowedWorktreeCommand } = require("./main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./bash-write-scope");
+const { isGitWriteIR } = require("../lib/bash-write-patterns/patterns");
 const { checkUniversalTargetAllow } = require("./universal-target-allow");
 const { buildExtras } = require("./report-extras");
 const { commandTextOf } = require("../lib/write-tools");
@@ -261,7 +262,12 @@ function handleBashWrite(ctx) {
     }
 
     // git -C <path> style (no file targets extracted): use repoRoot for scope check.
-    if (!targets && !parseFailure && repoRoot) {
+    // Gated on isGitWriteIR(ir) — without it, ANY write-detected command whose
+    // target extraction comes up empty (npm install, rm -rf, Set-Content, eval,
+    // bash -c, heredocs, sed -i, ...) would fall into this branch and get
+    // evaluated against `isInSessionScope`, which never contains the main
+    // worktree by design — silently ALLOWing every one of them from main.
+    if (!targets && !parseFailure && repoRoot && isGitWriteIR(ir)) {
       if (!isInSessionScope(repoRoot, sessionRoots)) done();
     }
     // parseFailure → fail-closed: fall through to main-checkout block below.
