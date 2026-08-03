@@ -18,6 +18,8 @@ WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
 REQ="$AGENTS_DIR/bin/request-off-clearance"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+# shellcheck source=./lib/examiner-stub.sh
+. "$AGENTS_DIR/tests/lib/examiner-stub.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -66,13 +68,13 @@ run_req() {
     local tn="$1" sid="$2" kind="$3"; shift 3
     local stubbin; stubbin=$(make_tmp)
     if [ "$kind" = "allow" ]; then
-        printf '#!/usr/bin/env bash\necho "{\\"verdict\\":\\"ALLOW\\",\\"reason\\":\\"legit workflow bug\\"}"\nexit 0\n' > "$stubbin/codex"
+        write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
     elif [ "$kind" = "reject" ]; then
-        printf '#!/usr/bin/env bash\necho "{\\"verdict\\":\\"REJECT\\",\\"reason\\":\\"use /sweep-worktrees\\"}"\nexit 0\n' > "$stubbin/codex"
+        write_examiner_stub "$stubbin/codex" REJECT "use /sweep-worktrees"
     else
         printf '#!/usr/bin/env bash\nexit 1\n' > "$stubbin/codex"   # unavailable/failure
+        chmod +x "$stubbin/codex"
     fi
-    chmod +x "$stubbin/codex"
     local out rc
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
         CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
@@ -169,15 +171,17 @@ run_E() {
 run_F() {
     local tmp tn out consumed_ok token_gone
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    # seed a valid token
+    # seed a CLAIMED token. #1626: the shim claims the bare token at validation time
+    # (<sid>.off-clearance -> <sid>.off-clearance.claimed); by the time workflow-mark
+    # activates the marker, only the .claimed form exists and only it is consumable.
     "$RWT" 10 node -e "
 const fs=require('fs'),path=require('path');
-fs.writeFileSync(path.join('$tn','fsid.off-clearance'),JSON.stringify({target:'workflow',category:'workflow-bug',expires_at:new Date(Date.now()+900000).toISOString()}));" >/dev/null 2>&1
+fs.writeFileSync(path.join('$tn','fsid.off-clearance.claimed'),JSON.stringify({target:'workflow',category:'workflow-bug',expires_at:new Date(Date.now()+900000).toISOString(),claimed_at:new Date().toISOString(),claimed_target:'workflow',claimed_reason:'[workflow-bug] next-step bug'}));" >/dev/null 2>&1
     # drive the OFF marker activation via enforce-override-handlers
     WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 15 node -e "
 const h=require('$HANDLER_NODE');
 h.handle({cmd:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] next-step bug>>\"',sessionId:'fsid',pushMessage:()=>{},signalFatal:()=>{}});" >/dev/null 2>&1
-    token_gone=no; [ ! -f "$tmp/fsid.off-clearance" ] && token_gone=yes
+    token_gone=no; [ ! -f "$tmp/fsid.off-clearance.claimed" ] && token_gone=yes
     if [ "$token_gone" = "yes" ]; then
         pass "F1: OFF activation atomically consumes (unlinks) the clearance token (single-use)"
     else
@@ -194,8 +198,17 @@ h.handle({cmd:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] next-step 
 # ===== consumeOffClearance direct + wsid-fallback (single-use unlink + audit) =====
 OFFCLR_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 
-# seed_valid_token <tmp_node> <sid>
-seed_valid_token() {
+# seed_claimed_token <tmp_node> <sid> — the post-#1626 consumable form. Only a
+# <sid>.off-clearance.claimed file (produced by the shim's atomic wx claim) may be
+# consumed by workflow-mark; a bare token is NOT consumable (see CO-4).
+seed_claimed_token() {
+    "$RWT" 10 node -e "
+const fs=require('fs'),path=require('path');
+fs.writeFileSync(path.join('$1','$2'+'.off-clearance.claimed'),JSON.stringify({target:'workflow',category:'workflow-bug',expires_at:new Date(Date.now()+900000).toISOString(),claimed_at:new Date().toISOString(),claimed_target:'workflow',claimed_reason:'[workflow-bug] test'}));" >/dev/null 2>&1
+}
+
+# seed_bare_token <tmp_node> <sid> — an UNCLAIMED token (mint output, not yet gated).
+seed_bare_token() {
     "$RWT" 10 node -e "
 const fs=require('fs'),path=require('path');
 fs.writeFileSync(path.join('$1','$2'+'.off-clearance'),JSON.stringify({target:'workflow',category:'workflow-bug',expires_at:new Date(Date.now()+900000).toISOString()}));" >/dev/null 2>&1
@@ -205,11 +218,11 @@ fs.writeFileSync(path.join('$1','$2'+'.off-clearance'),JSON.stringify({target:'w
 run_CO1() {
     local tmp tn
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    seed_valid_token "$tn" "co1sid"
+    seed_claimed_token "$tn" "co1sid"
     WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co1sid');" >/dev/null 2>&1
     local ok=1
-    [ -f "$tmp/co1sid.off-clearance" ] && ok=0
+    [ -f "$tmp/co1sid.off-clearance.claimed" ] && ok=0
     grep -q "off_clearance_consumed" "$tmp/co1sid-supervisor-state.json" 2>/dev/null || ok=0
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
@@ -225,11 +238,11 @@ run_CO2() {
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     cwdd=$(make_tmp)
     printf 'Session-ID: co2wsid\n' > "$cwdd/WORKTREE_NOTES.md"
-    seed_valid_token "$tn" "co2wsid"   # token keyed to the WSID only, NOT to co2sid
+    seed_claimed_token "$tn" "co2wsid"   # claimed token keyed to the WSID only, NOT to co2sid
     ( cd "$cwdd" && WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co2sid');" >/dev/null 2>&1 )
     local ok=1
-    [ -f "$tmp/co2wsid.off-clearance" ] && ok=0                       # fallback token consumed
+    [ -f "$tmp/co2wsid.off-clearance.claimed" ] && ok=0               # fallback claimed token consumed
     grep -q "off_clearance_consumed" "$tmp/co2wsid-supervisor-state.json" 2>/dev/null || ok=0  # audit under WSID
     [ -f "$tmp/co2sid-supervisor-state.json" ] && ok=0               # NOT under the direct sid
     rm -rf "$tmp" "$cwdd" 2>/dev/null || true
@@ -258,130 +271,80 @@ run_CO3() {
     fi
 }
 
-# ===== request-off-clearance examiner robustness (custom codex stubs — never real codex) =====
-# exec_req <tmp_node> <sid> <codex-stub-body> <req-args...> → prints "rc|<combined output>"
-exec_req() {
-    local tn="$1" sid="$2" body="$3"; shift 3
-    local stubbin out rc
+# CO-4 (#1626): a BARE (unclaimed) token must NOT be consumable. Post-#1626 the shim
+# is what claims a token (bare -> .claimed) at validation-success time; workflow-mark is
+# bookkeeping-only and may unlink the .claimed form ONLY. Consuming a bare token here
+# would destroy a token that no proposal ever won, and would also let the consume path
+# double as an unaudited validator.
+run_CO4() {
+    local tmp tn ok=1
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    seed_bare_token "$tn" "co4sid"        # bare only — never claimed
+    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
+        "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co4sid');" >/dev/null 2>&1
+    [ -f "$tmp/co4sid.off-clearance" ] || ok=0                        # bare must survive
+    ls "$tmp"/*-supervisor-state.json >/dev/null 2>&1 && ok=0         # treated `absent` → no audit entry
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ "$ok" = "1" ]; then
+        pass "CO-4: bare (unclaimed) token is NOT consumable — treated absent, left in place, no audit entry"
+    else
+        fail "CO-4: RED-EXPECTED (consume still targets the bare token): unclaimed token was consumed/audited"
+    fi
+}
+
+# ===== mint-dir + stale-claim reset (bin/request-off-clearance) =====
+
+# MD-1 (#1658): with CLAUDE_WORKFLOW_DIR unset, the mint fallback must resolve to the
+# SAME directory as the canonical getWorkflowDir() in hooks/workflow-state/state-io/core.js
+# ($HOME/.claude/projects/workflow) — not the legacy $HOME/.workflow-state. A mismatch
+# means the minted token lands where no hook ever looks for it.
+run_MD1() {
+    if ! mint_available; then fail "MD-1: RED-EXPECTED (script missing)"; return; fi
+    local fh stubbin out canon legacy ok=1
+    fh=$(make_tmp)
     stubbin=$(make_tmp)
-    printf '%s' "$body" > "$stubbin/codex"
-    chmod +x "$stubbin/codex"
+    write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
+    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$(node_path "$fh")" \
+        HOME="$fh" USERPROFILE="$(node_path "$fh")" SESSION_ID="md1sid" CLAUDE_CODE_SESSION_ID="md1sid" \
+        env -u CLAUDE_WORKFLOW_DIR "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
+    canon="$fh/.claude/projects/workflow/md1sid.off-clearance"
+    legacy="$fh/.workflow-state/md1sid.off-clearance"
+    [ -f "$canon" ] || ok=0
+    [ -f "$legacy" ] && ok=0
+    rm -rf "$fh" "$stubbin" 2>/dev/null || true
+    if [ "$ok" = "1" ]; then
+        pass "MD-1: CLAUDE_WORKFLOW_DIR unset → token minted under \$HOME/.claude/projects/workflow (canonical getWorkflowDir)"
+    else
+        fail "MD-1: RED-EXPECTED (legacy \$HOME/.workflow-state fallback still in bin/request-off-clearance); out=$out"
+    fi
+}
+
+# MD-2 (#1626): a stale <sid>.off-clearance.claimed left behind by an abandoned session
+# would permanently deadlock the wx claim for that sid. Minting a fresh token must reset it.
+run_MD2() {
+    if ! mint_available; then fail "MD-2: RED-EXPECTED (script missing)"; return; fi
+    local tmp tn stubbin out ok=1
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    seed_claimed_token "$tn" "md2sid"
+    stubbin=$(make_tmp)
+    write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
-        "$RWT" 40 bash "$REQ" "$@" 2>&1)
-    rc=$?
-    rm -rf "$stubbin" 2>/dev/null || true
-    printf '%s|%s' "$rc" "$out"
-}
-
-# EX-1: preamble + decoy REJECT object + ALLOW object + trailing prose → LAST object wins → mint
-run_EX1() {
-    if ! mint_available; then fail "EX-1: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn r out body
-    tmp=$(make_tmp); tn=$(node_path "$tmp")
-    body='#!/usr/bin/env bash
-echo "Analysis: considering the request in detail."
-echo "{\"verdict\":\"REJECT\",\"reason\":\"decoy earlier object must be ignored\"}"
-echo "{\"verdict\":\"ALLOW\",\"reason\":\"legitimate workflow bug on second thought\"}"
-echo "Examination complete, thank you."
-exit 0
-'
-    r=$(exec_req "$tn" "ex1sid" "$body" --target workflow --category workflow-bug --detail "next-step bug"); out="${r#*|}"
-    if [ "$(token_count "$tmp")" -ge 1 ]; then
-        pass "EX-1: trailing prose + decoy object — parser takes the LAST JSON object (ALLOW) → token minted"
-    else
-        fail "EX-1: RED-EXPECTED: last-object-wins parse failed to mint on ALLOW; out=$out"
-    fi
-    rm -rf "$tmp" 2>/dev/null || true
-}
-
-# EX-2: ALLOW-looking JSON on stderr + REJECT on stdout → stdout wins → NO token (stderr can't supply a verdict)
-run_EX2() {
-    if ! mint_available; then fail "EX-2: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn r out body
-    tmp=$(make_tmp); tn=$(node_path "$tmp")
-    body='#!/usr/bin/env bash
-echo "{\"verdict\":\"ALLOW\",\"reason\":\"sneaky verdict on stderr\"}" >&2
-echo "{\"verdict\":\"REJECT\",\"reason\":\"the real stdout verdict\"}"
-exit 0
-'
-    r=$(exec_req "$tn" "ex2sid" "$body" --target workflow --category workflow-bug --detail "bug"); out="${r#*|}"
-    if [ "$(token_count "$tmp")" -eq 0 ]; then
-        pass "EX-2: verdict on stderr is ignored; stdout REJECT governs → NO token minted"
-    else
-        fail "EX-2: RED-EXPECTED: stderr must not be able to supply an ALLOW verdict; out=$out"
-    fi
-    rm -rf "$tmp" 2>/dev/null || true
-}
-
-# EX-3: stdout carries no parseable JSON object → empty verdict → REJECT → NO token
-run_EX3() {
-    if ! mint_available; then fail "EX-3: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn r out body
-    tmp=$(make_tmp); tn=$(node_path "$tmp")
-    body='#!/usr/bin/env bash
-echo "I was unable to reach a decision. There is no JSON here at all."
-exit 0
-'
-    r=$(exec_req "$tn" "ex3sid" "$body" --target workflow --category workflow-bug --detail "bug"); out="${r#*|}"
-    local ok=1
-    [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$out" | grep -qiE 'REJECT|no.*parseable|no clearance token' || ok=0
-    rm -rf "$tmp" 2>/dev/null || true
+        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="md2sid" CLAUDE_CODE_SESSION_ID="md2sid" \
+        "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
+    [ -f "$tmp/md2sid.off-clearance.claimed" ] && ok=0   # stale claim must be cleared
+    [ -f "$tmp/md2sid.off-clearance" ] || ok=0           # fresh bare token must be present
+    rm -rf "$tmp" "$stubbin" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
-        pass "EX-3: unparseable examiner stdout → REJECT (no verdict) → NO token minted"
+        pass "MD-2: mint removes a stale <sid>.off-clearance.claimed and writes a fresh bare token"
     else
-        fail "EX-3: RED-EXPECTED: unparseable stdout must default to REJECT/no-token; out=$out"
+        fail "MD-2: RED-EXPECTED (no stale-claim reset at mint time — claim deadlock persists); out=$out"
     fi
 }
 
-# EX-4: examiner exits 124 (timeout kill) → REJECT timeout path → NO token + off_examination audit
-run_EX4() {
-    if ! mint_available; then fail "EX-4: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn r out body
-    tmp=$(make_tmp); tn=$(node_path "$tmp")
-    body='#!/usr/bin/env bash
-exit 124
-'
-    r=$(exec_req "$tn" "ex4sid" "$body" --target worktree --category cleanup --detail "cleanup"); out="${r#*|}"
-    local ok=1
-    [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$out" | grep -qiE 'timed out|REJECT' || ok=0
-    state_has "$tmp" "off_examination" || ok=0
-    rm -rf "$tmp" 2>/dev/null || true
-    if [ "$ok" = "1" ]; then
-        pass "EX-4: examiner exit 124 → REJECT (timeout) → NO token + off_examination audit recorded"
-    else
-        fail "EX-4: RED-EXPECTED: exit-124 must map to REJECT/no-token with an audit entry; out=$out"
-    fi
-}
-
-# EX-5: run a copy of the script whose SCRIPT_DIR lacks run-with-timeout.sh → UNAVAILABLE → NO token
-run_EX5() {
-    if ! mint_available; then fail "EX-5: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn bindir stubbin r out rc
-    tmp=$(make_tmp); tn=$(node_path "$tmp")
-    bindir=$(make_tmp)                       # copy of the script only — NO run-with-timeout.sh sibling
-    cp "$REQ" "$bindir/request-off-clearance"
-    chmod +x "$bindir/request-off-clearance"
-    stubbin=$(make_tmp)                       # working codex on PATH so the wrapper check (not codex) is what fails
-    printf '#!/usr/bin/env bash\necho "{\\"verdict\\":\\"ALLOW\\",\\"reason\\":\\"would-allow but wrapper missing\\"}"\nexit 0\n' > "$stubbin/codex"
-    chmod +x "$stubbin/codex"
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="ex5sid" CLAUDE_CODE_SESSION_ID="ex5sid" \
-        bash "$bindir/request-off-clearance" --target workflow --category workflow-bug --detail "bug" 2>&1)
-    rc=$?
-    local ok=1
-    [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$out" | grep -qiE 'unavailable|timeout wrapper' || ok=0
-    [ "$rc" -ne 0 ] || ok=0
-    rm -rf "$tmp" "$bindir" "$stubbin" 2>/dev/null || true
-    if [ "$ok" = "1" ]; then
-        pass "EX-5: missing timeout wrapper → examiner UNAVAILABLE → NO token (even with a working codex)"
-    else
-        fail "EX-5: RED-EXPECTED: absent run-with-timeout.sh must yield UNAVAILABLE/no-token; rc=$rc out=$out"
-    fi
-}
+# ===== examiner robustness cases (EX-*) live in the sibling part file =====
+PARTS_DIR="$AGENTS_DIR/tests/feat-1608-off-clearance-mint"
+# shellcheck source=./feat-1608-off-clearance-mint/cases-examiner.sh
+. "$PARTS_DIR/cases-examiner.sh"
 
 run_A
 run_B
@@ -392,6 +355,9 @@ run_F
 run_CO1
 run_CO2
 run_CO3
+run_CO4
+run_MD1
+run_MD2
 run_EX1
 run_EX2
 run_EX3

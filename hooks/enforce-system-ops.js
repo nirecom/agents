@@ -27,7 +27,14 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-const ALLOWED_TOOLS = new Set(["Bash", "runInTerminal", "runCommands"]);
+// Tool set + payload-shape normalization are shared with
+// hooks/block-clearance-token-write/dispatch.js and
+// hooks/supervisor-off-proposal-shim.js (CPR-2). This file modeled the
+// runCommands array shape correctly first; the helper preserves that
+// contract verbatim (join with "\n").
+const { COMMAND_TOOL_NAMES, commandTextOf } = require("./lib/tool-command-text");
+
+const ALLOWED_TOOLS = new Set(COMMAND_TOOL_NAMES);
 
 const input = readStdin();
 if (!input || !input.trim()) process.exit(0);
@@ -41,13 +48,7 @@ try {
 
 if (!parsed || !ALLOWED_TOOLS.has(parsed.tool_name)) process.exit(0);
 
-let rawCmd = "";
-if (parsed.tool_name === "runCommands") {
-  const cmds = parsed.tool_input && parsed.tool_input.commands;
-  rawCmd = Array.isArray(cmds) ? cmds.join("\n") : String(cmds || "");
-} else {
-  rawCmd = (parsed.tool_input && parsed.tool_input.command) || "";
-}
+const rawCmd = commandTextOf(parsed.tool_name, parsed.tool_input);
 
 if (!rawCmd) process.exit(0);
 
