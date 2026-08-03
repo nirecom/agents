@@ -38,6 +38,7 @@ make_repo() {
     (
         cd "$dir"
         git init -q
+        git config core.hooksPath /dev/null 2>/dev/null || true
         git config user.email test@example.com
         git config user.name Test
         if [ -n "$url" ]; then

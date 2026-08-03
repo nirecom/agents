@@ -21,6 +21,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+_SCRIPT_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -41,7 +42,25 @@ fs.mkdirSync(d,{recursive:true});
 console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+NEUTRAL_CWD=""
+trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE" "$NEUTRAL_CWD"' EXIT
+
+# --- Fixture isolation (see rules/test/fixture-isolation.md) ---------------
+# WORKFLOW_PLANS_DIR is pinned everywhere CLAUDE_WORKFLOW_DIR is pinned, so
+# supervisor-emit never resolves the developer's real ~/.workflow-plans/.
+FIXTURE_PLANS_DIR="$TMPDIR_BASE/fixture-plans"
+FIXTURE_PROJECT_DIR="$TMPDIR_BASE/fixture-project"
+mkdir -p "$FIXTURE_PLANS_DIR" "$FIXTURE_PROJECT_DIR"
+git -C "$FIXTURE_PROJECT_DIR" init -q -b main 2>/dev/null || true
+git -C "$FIXTURE_PROJECT_DIR" config core.hooksPath /dev/null 2>/dev/null || true
+if command -v cygpath >/dev/null 2>&1; then
+    FIXTURE_PLANS_DIR="$(cygpath -m "$FIXTURE_PLANS_DIR")"
+    FIXTURE_PROJECT_DIR="$(cygpath -m "$FIXTURE_PROJECT_DIR")"
+fi
+export CLAUDE_PROJECT_DIR="$FIXTURE_PROJECT_DIR"
+
+NEUTRAL_CWD="$(mktemp -d)"
+cd "$NEUTRAL_CWD" || exit 1
 
 # shellcheck source=/dev/null
 . "$CASE_DIR/helpers.sh"
@@ -53,6 +72,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 . "$CASE_DIR/c-round-trip.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/sec-path-traversal.sh"
+
 
 # ============================================================================
 # Run all (wrap in 120s wall-clock timeout if available)
@@ -98,7 +118,7 @@ run_all() {
 
 if command -v timeout >/dev/null 2>&1; then
     if [ -z "${_WORKFLOW_OFF_TEST_INNER:-}" ]; then
-        _WORKFLOW_OFF_TEST_INNER=1 timeout 120 bash "$0" "$@"
+        _WORKFLOW_OFF_TEST_INNER=1 timeout 120 bash "$_SCRIPT_ABS" "$@"
         exit $?
     fi
 fi

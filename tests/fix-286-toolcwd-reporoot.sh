@@ -53,6 +53,7 @@ if [ -z "$REPO_DIR" ]; then
 fi
 trap 'rm -rf "$REPO_DIR"' EXIT
 git -C "$REPO_DIR" init -q >/dev/null 2>&1
+git -C "$REPO_DIR" config core.hooksPath /dev/null 2>/dev/null || true
 # Node-friendly form (forward slashes; absolute).
 if command -v cygpath >/dev/null 2>&1; then
     REPO_DIR_NODE="$(cygpath -m "$REPO_DIR")"

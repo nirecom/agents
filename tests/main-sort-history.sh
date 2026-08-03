@@ -19,6 +19,7 @@ setup() {
     TEST_REPO="$TMPDIR_BASE/test-repo"
     mkdir -p "$TEST_REPO"
     git -C "$TEST_REPO" init -q
+    git -C "$TEST_REPO" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$TEST_REPO" config user.email "test@example.com"
     git -C "$TEST_REPO" config user.name "Test"
     # Create commits with known dates (ascending order)

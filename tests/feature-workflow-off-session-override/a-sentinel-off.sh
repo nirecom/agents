@@ -68,9 +68,10 @@ test_A4_env_file_fallback() {
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A4 env-file fallback>>"' 0)"
     # Note: run_workflow_mark unsets CLAUDE_ENV_FILE; pass it explicitly here.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$MARK_JS" 2>&1)" || true
     if [ -f "$wfdir/$sid.workflow-off" ]; then
@@ -87,9 +88,10 @@ test_A5_no_session_id_hard_blocks() {
     local rc=0
     # No CLAUDE_ENV_FILE → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     # No marker should be written.
     local count
@@ -297,9 +299,10 @@ test_A14_transcript_path_fallback() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A14 transcript fallback>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "A14: hook crashed with rc=$rc on transcript fallback (out: $MARK_OUT)"
@@ -320,9 +323,10 @@ test_A15_transcript_path_invalid_chars() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A15 invalid chars>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 2 ]; then
         fail "A15: expected hard-block rc=2 but got rc=$rc (out: $MARK_OUT)"

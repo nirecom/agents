@@ -53,6 +53,7 @@ require_source() {
 init_sandbox_repo() {
     local typ="$1" tmp="$2"
     git init -q "$tmp"
+    git -C "$tmp" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$tmp" config user.email "test@example.com"
     git -C "$tmp" config user.name "Test"
     git -C "$tmp" config commit.gpgsign false
@@ -64,6 +65,7 @@ init_sandbox_repo() {
 init_agents_sandbox() {
     local tmp="$1"
     git init -q "$tmp"
+    git -C "$tmp" config core.hooksPath /dev/null 2>/dev/null || true
     git -C "$tmp" config user.email "test@example.com"
     git -C "$tmp" config user.name "Test"
     git -C "$tmp" config commit.gpgsign false

@@ -102,6 +102,7 @@ console.log(JSON.stringify({
         cd "$_AGENTS_DIR_NODE" && \
         ENFORCE_WORKTREE=on \
         WORKFLOW_PLANS_DIR="$tmp" \
+        CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-worktree.js" 2>/dev/null
     ))
     rc=$?
@@ -143,7 +144,7 @@ console.log(JSON.stringify({
   tool_input: { command: 'gh issue close 1' }
 }));" 2>/dev/null)
     local out rc
-    out=$(echo "$payload" | WORKFLOW_PLANS_DIR="$tmp" \
+    out=$(echo "$payload" | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-issue-close.js" 2>/dev/null)
     rc=$?
     local n; n=$(finding_count "$tmp_node" "$sid")
@@ -177,6 +178,7 @@ run_i3() {
     (
         cd "$repo" && \
         git init -q -b feature/i3 && \
+        git config core.hooksPath /dev/null && \
         git config user.email "test@example.com" && git config user.name "test" && \
         printf "v1\n" > tracked.txt && \
         git add tracked.txt && git commit -q -m "init" && \
@@ -194,6 +196,7 @@ console.log(JSON.stringify({
     out=$(echo "$payload" | (
         cd "$repo" && \
         WORKFLOW_PLANS_DIR="$tmp" \
+        CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/workflow-gate.js" 2>/dev/null
     ))
     rc=$?
@@ -224,6 +227,7 @@ run_i4() {
     # point — we exercise the override-handlers contract from inside it.
     local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
+    CLAUDE_WORKFLOW_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \
     run_with_timeout 10 node -e "
 const oh = require('$prog');
@@ -256,6 +260,7 @@ run_i5() {
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
     local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
+    CLAUDE_WORKFLOW_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \
     run_with_timeout 10 node -e "
 const oh = require('$prog');

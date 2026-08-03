@@ -37,7 +37,7 @@ exceptions independently.
 | `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
 | `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
 | `hooks/block-shell-config.js` | PreToolUse | **No** | **No** |
-| `hooks/block-off-clearance-write.js` | PreToolUse | **No** | **No** |
+| `hooks/block-clearance-token-write.js` | PreToolUse | **No** | **No** |
 | `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
 | `hooks/gate-plan-skip-sentinel.js` | PreToolUse | **No** | **No** |
 | `hooks/check-cross-platform.js` | PreToolUse | **No** | **No** |
@@ -54,12 +54,22 @@ exceptions independently.
 | `hooks/stop-l2-findings-display.js` | Stop | Yes | No |
 | `hooks/supervisor-guard.js` | Stop | Yes | No |
 | `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
-| `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
+| `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 
-`hooks/pre-commit` honors both markers **only for the worktree-isolation gate** (the
-"commits from main worktree are blocked" / "commits to protected branch" guard). The
-private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **not**
+`hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
+gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
+the prompt-extraction backstop (`bin/check-prompt-extraction --staged` runner added in
+issue #1642). Both sections check the same markers via the shared `_session_marker_off()`
+function. The permanent escape hatch for the prompt-extraction backstop is the committed
+`.prompt-extraction-allowlist` file; the session markers are for emergency bypass only.
+
+Note that prompt-extraction violations are a reversible quality concern, not secret leakage,
+which is why markers bypass the backstop here (unlike `scan-outbound.sh` which is
+unconditional — secret leakage is irreversible). Users needing permanent per-file exemptions
+should use `.prompt-extraction-allowlist` instead of session markers.
+
+The private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **not**
 bypassed by markers — secret leakage protection is unconditional on the git side.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.

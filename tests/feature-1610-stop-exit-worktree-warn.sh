@@ -57,6 +57,13 @@ trap 'rm -rf "$TMP"' EXIT
 WF="$TMP/wf"; mkdir -p "$WF"
 export CLAUDE_WORKFLOW_DIR="$(node_path "$WF")"
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMP/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+WORKFLOW_PLANS_DIR="$(node_path "$WORKFLOW_PLANS_DIR")"
+export WORKFLOW_PLANS_DIR
+
 TU_ENTER='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"EnterWorktree","input":{"path":"/wt"}}]}}'
 TU_EXIT='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"ExitWorktree","input":{}}]}}'
 TU_BASH='{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo hi"}}]}}'

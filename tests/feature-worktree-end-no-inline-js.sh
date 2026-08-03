@@ -264,7 +264,7 @@ STUB
     chmod +x "$stub_dir/gh"
 
     # Initialize tmp_wt as a minimal git repo so any `git -C` calls succeed.
-    (cd "$tmp_wt" && git init -q 2>/dev/null && \
+    (cd "$tmp_wt" && git init -q 2>/dev/null && git config core.hooksPath /dev/null && \
         git -c user.email=t@e -c user.name=t commit --allow-empty -q -m init 2>/dev/null) || true
 
     local env_json
