@@ -25,7 +25,7 @@ const path = require("path");
 
 const root = process.argv[2];
 const hooks = path.join(root, "hooks");
-const scanDir = path.join(hooks, "block-" + "off-" + "clearance" + "-write");
+const scanDir = path.join(hooks, "block-" + "clearance" + "-token" + "-write");
 const iscan = require(path.join(scanDir, "interpreter-scan.js"));
 const nested = require(path.join(scanDir, "nested-bodies.js"));
 const { parse } = require(path.join(hooks, "lib", "command-ir.js"));

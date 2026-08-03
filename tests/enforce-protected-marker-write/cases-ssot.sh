@@ -112,7 +112,7 @@ PROBE_EOF
     # A protected marker kind that the sweep does not know about never expires,
     # so a stale grant survives indefinitely. Both directions are checked: every
     # SSOT kind is swept, and every marker-ish suffix swept there is an SSOT kind
-    # (".json" / ".tmp" are the sweep's own generic branches, not marker kinds).
+    # (".json" / ".tmp" / ".lock" are the sweep's own generic branches, not marker kinds).
     if [ -f "$ZOMBIE_SRC" ]; then
         local swept missing="" k extra=""
         swept=$(grep -o 'endsWith("\.[A-Za-z][A-Za-z0-9.-]*")' "$ZOMBIE_SRC" | sed 's/.*("//; s/")$//' | sort -u)
@@ -123,7 +123,7 @@ PROBE_EOF
 
         for lit in $swept; do
             case "$lit" in
-                .json|.tmp) continue ;;
+                .json|.tmp|.lock) continue ;;
             esac
             if ! "$RWT" 10 node -e \
                 'const p=require(process.argv[1]);process.exit(p.classifyProtectedPath("s1"+process.argv[2])?0:1)' \

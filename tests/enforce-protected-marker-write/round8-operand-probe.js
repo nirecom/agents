@@ -26,7 +26,7 @@ const path = require("path");
 
 const root = process.argv[2];
 const hooks = path.join(root, "hooks");
-const scanDir = path.join(hooks, "block-" + "off-" + "clearance" + "-write");
+const scanDir = path.join(hooks, "block-" + "clearance" + "-token" + "-write");
 const bscan = require(path.join(scanDir, "bash-scan.js"));
 const iscan = require(path.join(scanDir, "interpreter-scan.js"));
 const { parse } = require(path.join(hooks, "lib", "command-ir.js"));
