@@ -57,7 +57,7 @@ process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
       }
     }
   }
-  Write-Host -NoNewline $val
+  Write-Output $val
 } finally {
   Remove-Item $kindFile -ErrorAction SilentlyContinue
 }
