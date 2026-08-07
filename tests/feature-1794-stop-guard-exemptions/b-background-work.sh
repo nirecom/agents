@@ -1,8 +1,7 @@
 # b-background-work.sh — B1-B13: the #1665 background-work primitive (B9 hostile
 # session ids, B10 TTL/payload edge table under a frozen clock, B11 expired-marker
 # end-to-end, B12 exact 4h TTL arithmetic, B13 malformed/injected START negative
-# path). B15 (marker-write I/O fault injection) lives in f-fault-injection.sh
-# next to its awaiting-user twin.
+# path). B15 (marker-write I/O fault injection) lives in f-fault-injection.sh.
 # Sourced by tests/feature-1794-stop-guard-exemptions.sh.
 
 BG_START='echo "<<WORKFLOW_BACKGROUND_WORK_START: monitoring a long subagent dispatch>>"'
@@ -173,9 +172,8 @@ require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------------------
-# B9 (security): hostile session ids never reach the filesystem — same guard,
-#     same probe as A7/A7b on the awaiting-user handler (CPR-5). Both the START
-#     and the END command path are driven.
+# B9 (security): hostile session ids never reach the filesystem. Both the START
+#     and the END command path are driven through the shared hostile_sid_probe.
 # ---------------------------------------------------------------------------
 run_B9() {
     local start_out end_out

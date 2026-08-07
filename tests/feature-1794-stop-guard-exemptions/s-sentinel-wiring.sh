@@ -1,6 +1,6 @@
-# s-sentinel-wiring.sh — S1-S2 + P1-P2: the wiring layer of the two new
-# primitives — the settings.json permission entries that let the sentinels be
-# emitted at all, and table-driven match tests for the four regexes added to
+# s-sentinel-wiring.sh — S1-S2 + P1-P2: the wiring layer of the background-work
+# primitive — the settings.json permission entries that let the sentinels be
+# emitted at all, and table-driven match tests for the regexes added to
 # hooks/lib/sentinel-patterns.js.
 # Sourced by tests/feature-1794-stop-guard-exemptions.sh.
 
@@ -22,18 +22,18 @@ const ask = s.permissions.ask || [];
 const rule = (n) => 'Bash(echo \"<<WORKFLOW_' + n + ': *>>\")';
 const problems = [];
 // START/declare -> ask, and never on allow
-for (const n of ['BACKGROUND_WORK_START', 'AWAITING_USER']) {
+for (const n of ['BACKGROUND_WORK_START']) {
   if (!ask.includes(rule(n))) problems.push(n + ':missing-from-ask');
   if (allow.includes(rule(n))) problems.push(n + ':wrongly-on-allow');
 }
 // END -> allow, and never on ask
-for (const n of ['BACKGROUND_WORK_END', 'AWAITING_USER_END']) {
+for (const n of ['BACKGROUND_WORK_END']) {
   if (!allow.includes(rule(n))) problems.push(n + ':missing-from-allow');
   if (ask.includes(rule(n))) problems.push(n + ':wrongly-on-ask');
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "S1: settings.json asks for BACKGROUND_WORK_START/AWAITING_USER and auto-allows both END forms"
+        pass "S1: settings.json asks for BACKGROUND_WORK_START and auto-allows the END form"
     else
         fail "S1: permission entries wrong; got '${out:-<err>}'"
     fi
@@ -60,7 +60,7 @@ if (!allow.includes(rule('NEXT_STEP_RESUME'))) problems.push('sibling-resume-not
 if (!ask.includes(rule('ENFORCE_WORKFLOW_OFF'))) problems.push('sibling-off-not-ask');
 if (!allow.includes(rule('ENFORCE_WORKFLOW_ON'))) problems.push('sibling-on-not-allow');
 // no duplicates, and nothing denied
-for (const n of ['BACKGROUND_WORK_START', 'BACKGROUND_WORK_END', 'AWAITING_USER', 'AWAITING_USER_END']) {
+for (const n of ['BACKGROUND_WORK_START', 'BACKGROUND_WORK_END']) {
   const r = rule(n);
   const hits = allow.filter((x) => x === r).length + ask.filter((x) => x === r).length;
   if (hits !== 1) problems.push(n + ':listed-' + hits + '-times');
@@ -75,7 +75,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
-# P1: table-driven match matrix for the four new patterns
+# P1: table-driven match matrix for the new patterns
 #     (test-design/parser-regex-tests.md). Each row is
 #     [command, strict-expected, lookslike-expected] and is checked against the
 #     named RE_DQ / LOOKSLIKE_RE pair directly, so a pattern that over-matches
@@ -89,8 +89,6 @@ const p = require('$PATTERNS_NODE');
 const groups = [
   ['BACKGROUND_WORK_START', p.BACKGROUND_WORK_START_RE_DQ, p.BACKGROUND_WORK_START_LOOKSLIKE_RE],
   ['BACKGROUND_WORK_END', p.BACKGROUND_WORK_END_RE_DQ, p.BACKGROUND_WORK_END_LOOKSLIKE_RE],
-  ['AWAITING_USER', p.AWAITING_USER_RE_DQ, p.AWAITING_USER_LOOKSLIKE_RE],
-  ['AWAITING_USER_END', p.AWAITING_USER_END_RE_DQ, p.AWAITING_USER_END_LOOKSLIKE_RE],
 ];
 const problems = [];
 for (const [name, strictRe, looseRe] of groups) {
@@ -124,7 +122,7 @@ for (const [name, strictRe, looseRe] of groups) {
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "P1: the four new sentinel patterns match the positive table and reject every negative row"
+        pass "P1: the new sentinel patterns match the positive table and reject every negative row"
     else
         fail "P1: sentinel pattern match matrix wrong; got '${out:-<err>}'"
     fi
@@ -135,7 +133,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2
 #     both strict and LOOKSLIKE forms (that is what makes a malformed sentinel
 #     reportable at all), isStrictSentinel() only the strict ones, and neither
 #     may fire on the negative rows. Also pins the sibling-name boundary:
-#     AWAITING_USER_END must not be swallowed by the AWAITING_USER pattern.
+#     BACKGROUND_WORK_END must not be swallowed by the START pattern.
 # ---------------------------------------------------------------------------
 run_P2() {
     local out
@@ -145,18 +143,13 @@ const problems = [];
 const strictOk = [
   'echo \"<<WORKFLOW_BACKGROUND_WORK_START: monitoring a subagent>>\"',
   'echo \"<<WORKFLOW_BACKGROUND_WORK_END: dispatch finished>>\"',
-  'echo \"<<WORKFLOW_AWAITING_USER: waiting for an answer>>\"',
-  'echo \"<<WORKFLOW_AWAITING_USER_END: user replied>>\"',
 ];
 const looseOnly = [
   'echo \"<<WORKFLOW_BACKGROUND_WORK_START>>\"',
   'echo \"<<WORKFLOW_BACKGROUND_WORK_END>>\"',
-  'echo \"<<WORKFLOW_AWAITING_USER>>\"',
-  'echo \"<<WORKFLOW_AWAITING_USER_END>>\"',
 ];
 const neither = [
   'echo \"<<WORKFLOW_BACKGROUND_WORK: x>>\"',
-  'echo \"<<WORKFLOW_AWAITING_USERS: x>>\"',
   'echo \"<<BACKGROUND_WORK_START: x>>\"',
   'git commit -m \"background work start\"',
   'echo hello',
@@ -174,9 +167,6 @@ for (const c of neither) {
   if (p.isStrictSentinel(c)) problems.push('isStrict-overmatch[' + c + ']');
 }
 // sibling-name boundary: the _END command must not match the START/declare pattern
-if (p.AWAITING_USER_RE_DQ.test('echo \"<<WORKFLOW_AWAITING_USER_END: done>>\"')) {
-  problems.push('AWAITING_USER-swallows-_END');
-}
 if (p.BACKGROUND_WORK_START_RE_DQ.test('echo \"<<WORKFLOW_BACKGROUND_WORK_END: done>>\"')) {
   problems.push('BACKGROUND_WORK_START-swallows-END');
 }

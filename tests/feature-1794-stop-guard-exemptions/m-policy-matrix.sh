@@ -15,10 +15,17 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-process.stdout.write(matrix.join(',') === table.join(',')
-  ? 'OK' : 'BAD matrix=' + matrix.join(',') + ' table=' + table.join(','));" 2>/dev/null)
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','background-work','delegated-reason'];
+const problems = [];
+if (matrix.join(',') !== table.join(',')) {
+  problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
+}
+if (matrix.join(',') !== expected.join(',')) {
+  problems.push('unexpected-rows=' + matrix.join(','));
+}
+process.stdout.write(problems.length ? 'BAD ' + problems.join(' | ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids (same set, same order)"
+        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 5 expected rows (same set, same order)"
     else
         fail "M1-a: matrix/table drift; got '${out:-<err>}'"
     fi
@@ -71,12 +78,11 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 # ---------------------------------------------------------------------------
 run_M1c() {
     local tmp tn id suffix want reason got failures="" base_out
-    for id in workflow-off next-step-paused background-work awaiting-user; do
+    for id in workflow-off next-step-paused background-work; do
         case "$id" in
             workflow-off)     suffix="workflow-off";     reason="workflow-off-quiet" ;;
             next-step-paused) suffix="next-step-paused"; reason="next-step-paused" ;;
             background-work)  suffix="background-work";  reason="background-work-in-flight" ;;
-            awaiting-user)    suffix="awaiting-user";    reason="" ;;
         esac
         want=$("$RWT" 15 node -e "
 process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].nextStep));" 2>/dev/null)
@@ -98,8 +104,6 @@ process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].next
 
         if [ "$suffix" = "background-work" ]; then
             write_bg_marker "$tmp" "m1csid" "3600000"
-        elif [ "$suffix" = "awaiting-user" ]; then
-            run_mark "$tn" "m1csid" "$AU_START"
         else
             : > "$tmp/m1csid.$suffix"
         fi
@@ -152,7 +156,7 @@ run_M1d() {
 const g = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const byId = Object.fromEntries(g.C4_EXEMPTIONS.map((e) => [e.id, e]));
 const problems = [];
-const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','background-work','awaiting-user'];
+const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','background-work'];
 for (const id of sessionRows) {
   if (!byId[id] || byId[id].phase !== 'session') problems.push(id + ':phase');
 }
@@ -186,7 +190,7 @@ const { firstExemption } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-
 const problems = [];
 const none = {
   isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,
-  isBackgroundWorkInFlight: () => false, isAwaitingUser: () => false, consumeAwaitingUser: () => {},
+  isBackgroundWorkInFlight: () => false,
 };
 // nothing holds -> null, and a session-phase hit is invisible to the other phase
 if (firstExemption('session', { sid: 's' }, none) !== null) problems.push('empty-not-null');
@@ -227,7 +231,6 @@ _m3_c2_with_marker() {
     case "$suffix" in
         none) : ;;
         background-work) write_bg_marker "$tmp" "$sid" "3600000" ;;
-        awaiting-user)   run_mark "$tn" "$sid" "$AU_START" ;;
         *) : > "$tmp/$sid.$suffix" ;;
     esac
     run_c2 "$tn" "$sid"
@@ -235,8 +238,8 @@ _m3_c2_with_marker() {
 }
 
 # ---------------------------------------------------------------------------
-# M3-a: the two C4-only marker primitives (background-work, awaiting-user —
-#       both c2:false) must NOT reach into C2: with the marker present and the
+# M3-a: the C4-only marker primitive (background-work, c2:false) must NOT reach
+#       into C2: with the marker present and the
 #       scheduled-review alert armed, C2 still blocks, exactly as with no marker.
 #       `delegated-reason` (also c2:false) has no session marker and is
 #       unreachable from C2 by construction — it lives in the next-step-output
@@ -244,14 +247,14 @@ _m3_c2_with_marker() {
 # ---------------------------------------------------------------------------
 run_M3a() {
     local suffix failures=""
-    for suffix in none background-work awaiting-user; do
+    for suffix in none background-work; do
         _m3_c2_with_marker "m3a-$suffix" "$suffix"
         if [ "$C2_RC" -ne 2 ] || ! echo "$C2_OUT" | grep -q '"decision":"block"'; then
             failures="$failures [$suffix: rc=$C2_RC]"
         fi
     done
     if [ -z "$failures" ]; then
-        pass "M3-a: c2:false holds for background-work and awaiting-user — C2 still blocks with either marker present"
+        pass "M3-a: c2:false holds for background-work — C2 still blocks with the marker present"
     else
         fail "M3-a: a C4-only marker suppressed C2;$failures"
     fi

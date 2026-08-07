@@ -1,25 +1,23 @@
 #!/usr/bin/env bash
 # tests/feature-1794-stop-guard-exemptions.sh
-# Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/enforce-override-handlers/background-work.js, hooks/workflow-mark/enforce-override-handlers/awaiting-user.js, bin/workflow/lib/next-step/verdict.js, settings.json
+# Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/enforce-override-handlers/background-work.js, bin/workflow/lib/next-step/verdict.js, settings.json
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
-# Issues #1794 / #1665 / #1685 — the Stop-guard exemption layer:
+# Issues #1794 / #1665 — the Stop-guard exemption layer:
 #   #1794  isWorkflowStarted() + the C4_EXEMPTIONS / buildExemptionDeps /
 #          firstExemption restructuring, and the C2 pre-workflow-init gate
 #   #1665  the background-work primitive (TTL 4h, fail-CLOSED)
-#   #1685  the awaiting-user primitive (no TTL, consumed on read)
-# X/T/Z/B/A cases are TL2 (real spawned hook, next-step and workflow-mark
+# X/T/Z/B cases are TL2 (real spawned hook, next-step and workflow-mark
 # processes against seeded temp state dirs); M cases are TL1 plus a TL2
 # cross-check of the declarative EXEMPTION_MATRIX against real behaviour.
 # S cases pin the settings.json permission wiring (ask on the START/declare
 # sentinels, allow on the END ones) and P cases are the table-driven regex
-# matrix for the four new sentinel patterns — both TL1.
-# Security/robustness rows: A7/A7b/B9 (hostile session ids never escape the
-# workflow dir), A8/A9 (consume-on-read fail-open), A10 (precedence masking —
-# awaiting-user is not consumed while an earlier row wins), B10/B11 (TTL boundary
-# under a frozen clock, and malformed markers fail CLOSED), B12 (exact 4h TTL),
-# B13 (malformed/injected START writes no marker and no .tmp residue),
-# B15/A11 (marker-write I/O fault injection), Z1 (sweep containment + resilience).
+# matrix for the background-work sentinel patterns — both TL1.
+# Security/robustness rows: B9 (hostile session ids never escape the workflow
+# dir), B10/B11 (TTL boundary under a frozen clock, and malformed markers fail
+# CLOSED), B12 (exact 4h TTL), B13 (malformed/injected START writes no marker
+# and no .tmp residue), B15 (marker-write I/O fault injection),
+# Z1 (sweep containment + resilience).
 #
 # L3 gap (what this test does NOT catch):
 # - Real Claude Code Stop hook invocation wiring (the settings.json Stop entries
@@ -51,8 +49,6 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 . "$CASE_DIR/x-lifecycle.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/b-background-work.sh"
-# shellcheck source=/dev/null
-. "$CASE_DIR/a-awaiting-user.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/m-policy-matrix.sh"
 # shellcheck source=/dev/null
@@ -87,22 +83,8 @@ run_B11
 run_B12
 run_B13
 
-# A1-A10 — awaiting-user primitive (#1685)
-run_A1
-run_A2
-run_A3
-run_A4
-run_A5
-run_A6
-run_A7
-run_A7b
-run_A8
-run_A9
-run_A10
-
-# B15 / A11 — the symmetric marker-write I/O fault-injection pair
+# B15 — marker-write I/O fault injection
 run_B15
-run_A11
 
 # M1-M3 — EXEMPTION_MATRIX cross-checks
 run_M1a

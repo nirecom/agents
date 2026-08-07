@@ -14,9 +14,6 @@ const EXEMPTION_MATRIX = Object.freeze({
   // the intended CLAUDE.md behavior. Only the Stop hook's forced nudge is silenced.
   "pre-workflow-init": { c4: true,  c2: true,  nextStep: false },
   "background-work":   { c4: true,  c2: false, nextStep: true  },
-  // nextStep:false — "awaiting user" is a single-turn fact; it does not change
-  // what next-step should recommend, only whether C4 should re-nudge this turn.
-  "awaiting-user":     { c4: true,  c2: false, nextStep: false },
   "delegated-reason":  { c4: true,  c2: false, nextStep: false },
 });
 

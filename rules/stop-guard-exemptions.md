@@ -1,8 +1,7 @@
 # Stop Guard Quiet-Layer Sentinels
 
 Session-scoped declarations that keep the C4 premature-stop guard
-(`hooks/stop-premature-stop-guard.js`) quiet during self-contained skill
-work or a single-turn wait for a user answer.
+(`hooks/stop-premature-stop-guard.js`) quiet during self-contained skill work.
 
 ## Scope
 
@@ -20,8 +19,6 @@ are deliberately absent from that table, the same way `.next-step-paused`
 |---|---|---|
 | `<<WORKFLOW_BACKGROUND_WORK_START: {reason}>>` | **ask** | Sets `.background-work`; quiets C4 and next-step for up to 4 hours (TTL) |
 | `<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>` | **allow** | Clears the marker early |
-| `<<WORKFLOW_AWAITING_USER: {reason}>>` | **ask** | Declares "this turn ends awaiting a user answer"; quiets C4 for the next Stop only |
-| `<<WORKFLOW_AWAITING_USER_END: {reason}>>` | **allow** | Cancels the declaration (idempotent if already consumed) |
 
 The `{reason}` field is mandatory and non-empty for every sentinel above.
 
@@ -34,26 +31,18 @@ is handled; not duplicated here.
 - `BACKGROUND_WORK_START` / `END`: work that will take multiple turns without
   a pending workflow-step gate to satisfy in between (e.g. a long subagent
   dispatch you are actively monitoring).
-- `AWAITING_USER`: the current turn ends with a question and no further action
-  is possible until the user replies — declare it so C4 does not treat the
-  stop as premature.
 
-Do NOT use either to suppress C4 indefinitely — `BACKGROUND_WORK_START` expires
-on its own after 4 hours; `AWAITING_USER` is consumed automatically on the next
-Stop regardless of whether `_END` was emitted.
+Do NOT use it to suppress C4 indefinitely — `BACKGROUND_WORK_START` expires
+on its own after 4 hours.
 
 ## Implementation Details
 
-- Marker files: `<workflowDir>/<sid>.background-work`,
-  `<workflowDir>/<sid>.awaiting-user`.
+- Marker file: `<workflowDir>/<sid>.background-work`.
 - Session-scoped: only the current Claude Code session is affected.
 - `.background-work` is fail-CLOSED on TTL (`hooks/lib/session-markers.js`
   `isBackgroundWorkInFlight`) — a missing/unparseable/expired `expires_at`
   is treated as not-in-flight.
-- `.awaiting-user` has no TTL; it is consumed on read by C4
-  (`consumeAwaitingUser`) the first time it is evaluated after being set —
-  a forgotten `_END` cannot silence C4 beyond the next Stop.
-- Both markers are swept by `cleanupZombies` after 7 days as a last-resort
+- The marker is swept by `cleanupZombies` after 7 days as a last-resort
   backstop (`hooks/workflow-state/state-io/zombie-cleanup.js`).
 - Full primitive-to-consumer correspondence: `hooks/lib/stop-exemption-policy.js`
   (`EXEMPTION_MATRIX`, declarative only — see its header comment for the

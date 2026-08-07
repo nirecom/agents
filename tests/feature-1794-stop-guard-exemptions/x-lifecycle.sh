@@ -181,8 +181,8 @@ run_T18() {
 }
 
 # ---------------------------------------------------------------------------
-# Z1: cleanupZombies is the fourth consumer touched by the new marker suffixes.
-#     B8/A6 prove it sweeps them by age; this case pins the two properties that
+# Z1: cleanupZombies is the fourth consumer touched by the new marker suffix.
+#     B8 proves it sweeps by age; this case pins the two properties that
 #     an age sweep can silently lose:
 #       (a) containment — nothing outside the workflow dir is ever unlinked,
 #           even when a same-named stale marker sits in the parent directory;
@@ -196,17 +196,15 @@ run_Z1() {
     tn="$(node_path "$wf")"
     # (a) same-named stale markers one level up — must survive the sweep
     : > "$tmp/z1-outside.background-work"
-    : > "$tmp/z1-outside.awaiting-user"
     age_file "$tmp/z1-outside.background-work" 30
-    age_file "$tmp/z1-outside.awaiting-user" 30
     # (b) an undeletable entry that sorts BEFORE the stale markers
-    mkdir -p "$wf/z1-aaa.awaiting-user"
-    age_file "$wf/z1-aaa.awaiting-user" 30
+    mkdir -p "$wf/z1-aaa.background-work"
+    age_file "$wf/z1-aaa.background-work" 30
     write_bg_marker "$wf" "z1-zzz" "3600000"
-    run_mark "$tn" "z1-zzy" "$AU_START"
+    write_bg_marker "$wf" "z1-zzy" "3600000"
     age_file "$wf/z1-zzz.background-work" 30
-    age_file "$wf/z1-zzy.awaiting-user" 30
-    : > "$wf/z1-fresh.awaiting-user"
+    age_file "$wf/z1-zzy.background-work" 30
+    : > "$wf/z1-fresh.background-work"
 
     CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
@@ -214,10 +212,9 @@ require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
 
     [ "$rc" -eq 0 ] || problems="$problems [sweep-threw rc=$rc]"
     [ -f "$tmp/z1-outside.background-work" ] || problems="$problems [deleted-outside-background-work]"
-    [ -f "$tmp/z1-outside.awaiting-user" ] || problems="$problems [deleted-outside-awaiting-user]"
     [ ! -f "$wf/z1-zzz.background-work" ] || problems="$problems [stale-background-work-survived-after-failing-entry]"
-    [ ! -f "$wf/z1-zzy.awaiting-user" ] || problems="$problems [stale-awaiting-user-survived-after-failing-entry]"
-    [ -f "$wf/z1-fresh.awaiting-user" ] || problems="$problems [fresh-marker-deleted]"
+    [ ! -f "$wf/z1-zzy.background-work" ] || problems="$problems [stale-background-work-zzy-survived-after-failing-entry]"
+    [ -f "$wf/z1-fresh.background-work" ] || problems="$problems [fresh-marker-deleted]"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "Z1: cleanupZombies stays inside the workflow dir and keeps sweeping past an entry it cannot unlink"

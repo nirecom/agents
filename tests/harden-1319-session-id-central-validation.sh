@@ -243,9 +243,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2
 # ---------------------------------------------------------------------------
 # U6: the session-marker readers are the other family that turns a session id
 #     into a path (<workflowDir>/<sid>.<suffix>). Every reader must refuse a
-#     hostile id rather than stat/read/unlink outside the workflow dir — proven
+#     hostile id rather than stat/read outside the workflow dir — proven
 #     by planting a real marker in the PARENT directory and confirming a
-#     traversal id cannot see it or delete it.
+#     traversal id cannot see it.
 # ---------------------------------------------------------------------------
 run_U6() {
     local tmp tnode out
@@ -253,7 +253,6 @@ run_U6() {
     mkdir -p "$tmp/wf"
     printf '{}' > "$tmp/outside.workflow-off"
     printf '{}' > "$tmp/outside.next-step-paused"
-    printf '{}' > "$tmp/outside.awaiting-user"
     printf '{"expires_at":"2999-01-01T00:00:00.000Z"}' > "$tmp/outside.background-work"
     out=$(TMPD="$tnode" CLAUDE_WORKFLOW_DIR="$tnode/wf" WORKFLOW_PLANS_DIR="$tnode/wf" "$RWT" 20 node -e "
 const fs = require('fs'), path = require('path');
@@ -266,7 +265,6 @@ const readers = [
   ['isIssueCloseVerified', sm.isIssueCloseVerified],
   ['isNextStepPaused', sm.isNextStepPaused],
   ['isBackgroundWorkInFlight', sm.isBackgroundWorkInFlight],
-  ['isAwaitingUser', sm.isAwaitingUser],
 ];
 const problems = [];
 for (const [name, fn] of readers) {
@@ -282,25 +280,19 @@ for (const sid of hostile) {
   try { got = sm.readOffClearance(sid); } catch (e) { problems.push('readOffClearance:threw'); continue; }
   if (got !== null) problems.push('readOffClearance[' + JSON.stringify(sid) + ']-not-null');
 }
-// the deleting reader must not reach outside either
-for (const sid of hostile) {
-  try { sm.consumeAwaitingUser(sid); } catch (e) { problems.push('consumeAwaitingUser:threw'); }
-}
-for (const f of ['outside.workflow-off', 'outside.next-step-paused', 'outside.awaiting-user', 'outside.background-work']) {
+for (const f of ['outside.workflow-off', 'outside.next-step-paused', 'outside.background-work']) {
   if (!fs.existsSync(path.join(dir, f))) problems.push('deleted-outside:' + f);
 }
 // positive anchor: the same readers DO see a marker inside the workflow dir
 const wf = path.join(dir, 'wf');
-fs.writeFileSync(path.join(wf, 'good.awaiting-user'), '{}');
+fs.writeFileSync(path.join(wf, 'good.background-work'), '{\"expires_at\":\"2999-01-01T00:00:00.000Z\"}');
 fs.writeFileSync(path.join(wf, 'good.workflow-off'), '');
-if (sm.isAwaitingUser('good') !== true) problems.push('positive-anchor:awaiting-user');
+if (sm.isBackgroundWorkInFlight('good') !== true) problems.push('positive-anchor:background-work');
 if (sm.isWorkflowOff('good') !== true) problems.push('positive-anchor:workflow-off');
-sm.consumeAwaitingUser('good');
-if (fs.existsSync(path.join(wf, 'good.awaiting-user'))) problems.push('positive-anchor:not-consumed');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "U6: every session-marker reader refuses hostile session ids and cannot read or delete outside the workflow dir"
+        pass "U6: every session-marker reader refuses hostile session ids and cannot read outside the workflow dir"
     else
         fail "U6: marker-reader path containment broken; got '${out:-<err>}'"
     fi
