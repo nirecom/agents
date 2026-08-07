@@ -4,6 +4,19 @@ $AgentsRoot = $PSScriptRoot
 $env:AGENTS_CONFIG_DIR = $AgentsRoot
 $env:AGENTS_DIR        = $AgentsRoot
 
+# Global default for Claude Code's auto-compact token window, read from .env.
+# get-config-var resolves process-env-wins-over-.env precedence itself, so a value
+# already set in this shell (or by a launcher such as code-ccgw.cmd for a single
+# local-LLM session) is left untouched.
+$_getCfgAcw = Join-Path $AgentsRoot 'bin\get-config-var.ps1'
+if (Test-Path $_getCfgAcw) {
+    try {
+        $_acw = & $_getCfgAcw CLAUDE_CODE_AUTO_COMPACT_WINDOW
+        if ($_acw) { $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = $_acw }
+    } catch {}
+}
+Remove-Variable _getCfgAcw, _acw -ErrorAction SilentlyContinue
+
 $_agentSymlinks = @("$HOME\.claude\CLAUDE.md", "$HOME\.claude\skills", "$HOME\.claude\rules", "$HOME\.claude\agents")
 $_agentBroken = $_agentSymlinks | Where-Object {
     $_path = $_

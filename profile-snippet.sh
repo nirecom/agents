@@ -11,6 +11,16 @@ fi
 export AGENTS_CONFIG_DIR="$_agents_root"
 export AGENTS_DIR="$_agents_root"
 
+# Global default for Claude Code's auto-compact token window, read from .env.
+# get-config-var resolves process-env-wins-over-.env precedence itself, so a value
+# already set in this shell (or by a launcher such as code-ccgw.cmd for a single
+# local-LLM session) is left untouched.
+if [ -x "$_agents_root/bin/get-config-var" ]; then
+    _acw="$("$_agents_root/bin/get-config-var" CLAUDE_CODE_AUTO_COMPACT_WINDOW 2>/dev/null)"
+    [ -n "$_acw" ] && export CLAUDE_CODE_AUTO_COMPACT_WINDOW="$_acw"
+    unset _acw
+fi
+
 _agent_broken=0
 for _f in "$HOME/.claude/CLAUDE.md" "$HOME/.claude/skills" "$HOME/.claude/rules" "$HOME/.claude/agents"; do
     if [ -L "$_f" ]; then
