@@ -19,3 +19,4 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
 - For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
 - When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).
+- For declaring background work so the Stop guard stays quiet, see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).

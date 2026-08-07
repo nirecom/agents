@@ -46,16 +46,16 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState;
+  let resolveSessionId, isWorkflowStarted, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState;
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   let arbitrate, formatIntegratedReason;
   try {
-    ({ resolveSessionId } = require("./workflow-state"));
+    ({ resolveSessionId, isWorkflowStarted } = require("./workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
-    ({ arbitrate } = require("./lib/supervisor-guard/arbitrate"));
-    ({ formatIntegratedReason } = require("./lib/supervisor-guard/format-integrated"));
+    ({ arbitrate } = require("./supervisor-guard/arbitrate"));
+    ({ formatIntegratedReason } = require("./supervisor-guard/format-integrated"));
   } catch (_) {
     process.exit(0);
   }
@@ -63,7 +63,7 @@ if (require.main === module) {
   // Audit modules load separately so a bug in new files doesn't disable the alert guard.
   let collectAuditCandidatesFn = null;
   try {
-    ({ collectAuditCandidates: collectAuditCandidatesFn } = require("./lib/supervisor-guard/collect-audit-triggers"));
+    ({ collectAuditCandidates: collectAuditCandidatesFn } = require("./supervisor-guard/collect-audit-triggers"));
   } catch (_) {}
 
   let sessionId = null;
@@ -75,11 +75,10 @@ if (require.main === module) {
   } catch (_) {
     process.exit(0);
   }
+  // sessionId flows into formatter recipe text as `node -e "...('${sessionId}', ...)"`.
+  // resolveSessionId (hooks/workflow-state/session-id.js) now validates every return
+  // path against SESSION_ID_VALID_RE, so a separate regex check here is redundant (#1319).
   if (!sessionId) process.exit(0);
-  // Defense-in-depth: sessionId flows into formatter recipe text as `node -e "...('${sessionId}', ...)"`.
-  // resolveSessionId does not regex-validate, so reject anything that does not match the
-  // canonical shape. Fail-open (exit 0) — the guard must never block on its own input parse.
-  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) process.exit(0);
 
   const effectiveSupervisorStateSessionId = sessionId;
 
@@ -110,7 +109,15 @@ if (require.main === module) {
     (Array.isArray(alertRaw.findings) && alertRaw.findings.length > 0);
   const alert = alertHasData ? alertRaw : ((state && state.layer2) || alertRaw);
   const isLegacyLayer2State = !alertHasData && !!(state && state.layer2);
+  // #1794: C2 scheduled-review only arms once workflow-init has completed.
+  // Zeroing it here closes both branch (3) and the audit Phase B alertWouldFire
+  // term at once. C1 hang / cumSev=error / audit are unaffected (out of scope).
+  // fail-open (locked constraint 2): when undecidable, drop the arm (never block).
+  // Deliberately opposite of C4's row-level semantics (throw -> not exempt) — see 3-4.
   let alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
+  try {
+    if (alertArmedAt && !isWorkflowStarted(sessionId)) alertArmedAt = null;
+  } catch (_) { alertArmedAt = null; }
   const cumSev = alert.cumulative_severity == null ? null : alert.cumulative_severity;
   const findings = Array.isArray(alert.findings) ? alert.findings : [];
   const alertPhase = alert.alert_phase === undefined ? null : alert.alert_phase;

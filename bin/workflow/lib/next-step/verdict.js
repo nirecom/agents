@@ -64,7 +64,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
   // fail-open: a marker-read failure just means the normal (noisy) verdict.
   try {
-    const { isNextStepPaused, isWorkflowOff } = require("../../../../hooks/lib/session-markers");
+    const { isNextStepPaused, isWorkflowOff, isBackgroundWorkInFlight } = require("../../../../hooks/lib/session-markers");
     if (isNextStepPaused(sid)) {
       emit(
         "paused",
@@ -83,6 +83,16 @@ function computeVerdict(rawSid, _didAutoRepair) {
           "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
           "(a next-step resume sentinel does NOT clear workflow-OFF)",
         "workflow-off-quiet"
+      );
+      return;
+    }
+    if (isBackgroundWorkInFlight(sid)) {
+      emit(
+        "paused",
+        "",
+        "background work is in flight for this session. Take no new workflow action; wait for it " +
+          "to complete. End with: echo \"<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>\"",
+        "background-work-in-flight"
       );
       return;
     }

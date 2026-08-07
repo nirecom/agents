@@ -9,7 +9,7 @@
 //       AUDIT_SEVERITY_THRESHOLD.
 // Anti-thrash: when audit_phase is pending/in_progress/frozen, never re-arm.
 
-const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK } = require("../supervisor-state-schema");
+const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK } = require("../lib/supervisor-state-schema");
 
 const CONFIRM_RE = /<<WORKFLOW_CONFIRM_(INTENT|OUTLINE|DETAIL):/;
 

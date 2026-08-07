@@ -6,7 +6,7 @@
 # Probe: returns "yes" when supervisor-guard.js requires arbitrate (i.e. Phase B
 # arbitration is wired into the hook). The check is a simple grep on the hook
 # source for "arbitrate" so it is robust to both
-# `require("./lib/supervisor-guard/arbitrate")` and `require(".../arbitrate.js")`
+# `require("./supervisor-guard/arbitrate")` and `require(".../arbitrate.js")`
 # spellings.
 require_phase_b_arbitrate() {
     local label="$1"

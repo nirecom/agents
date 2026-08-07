@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-891-l2-phase-guard-cli.sh
-# Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/workflow-state.js
-# Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli
+# Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/workflow-state.js, hooks/workflow-state/lifecycle.js
+# Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli, workflow-started
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json Stop hooks
 # - real Claude Code transcript format differences
@@ -68,6 +68,31 @@ make_fixture() {
 
 node_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
+}
+
+STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
+
+# seed_workflow_started <tmp> <sid> — marks workflow_init complete in the
+# workflow state file so hooks/workflow-state/lifecycle.js isWorkflowStarted()
+# returns true. Without this the #1794 pre-workflow-init exemption suppresses
+# the C2 (scheduled-review) branch of hooks/supervisor-guard.js.
+seed_workflow_started() {
+    local tmp="$1" sid="$2"
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+require('$STATEIO_NODE').markStep('$sid', 'workflow_init', 'complete');" >/dev/null 2>&1
+}
+
+# run_guard <tmp> <sid> <transcript_path> — drives the real Stop hook with both
+# state dirs dual-pinned at the fixture (rules/test/fixture-isolation.md) and the
+# inherited session IDs cleared so the live session is never resolved.
+# Sets GUARD_OUT / GUARD_RC.
+run_guard() {
+    local tmp="$1" sid="$2" tp="${3:-}"
+    GUARD_OUT=$(printf '{"stop_hook_active":false,"session_id":"%s","transcript_path":"%s"}' "$sid" "$tp" \
+        | ( unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+            CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
+              run_with_timeout 5 node "$HOOK" 2>/dev/null ))
+    GUARD_RC=$?
 }
 
 read_alert_phase() {
@@ -247,23 +272,125 @@ run_g42() {
     fi
 }
 
+# G43 / G43b are the two halves of the #1794 pre-workflow-init exemption on the
+# C2 (scheduled-review) branch: identical supervisor seeds, the presence or
+# absence of a settled workflow_init step is the only difference.
 run_g43() {
-    require_source "$HOOK" "G43: alert_phase=pending + alert_armed_at + final_report sentinel only -> exit 2 (C2 fires)" || return
-    local tmp out rc tp
+    local desc="G43: workflow NOT started + alert_phase=pending + alert_armed_at + final_report sentinel -> exit 0 (C2 suppressed by isWorkflowStarted gate)"
+    require_source "$HOOK" "$desc" || return
+    local tmp tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
+    # Deliberately no seed_workflow_started here — no workflow state file at all.
     seed_state_raw "$tmp" "g43-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
-    out=$(printf '{"stop_hook_active":false,"session_id":"g43-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
-    rc=$?
+    run_guard "$tmp" "g43-sid" "$tp"
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "G43: alert_phase=pending + alert_armed_at + final_report sentinel only -> exit 2 (C2 fires)"
+    if [ "$GUARD_RC" -eq 0 ] && ( [ -z "$GUARD_OUT" ] || [ "$GUARD_OUT" = "{}" ] ); then
+        pass "$desc"
     else
-        fail "G43: alert_phase=pending + alert_armed_at + final_report sentinel only -> exit 2 (C2 fires) (rc=$rc, out=$out)"
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
+    fi
+}
+
+run_g43b() {
+    local desc="G43b: workflow STARTED + alert_phase=pending + alert_armed_at + final_report sentinel -> exit 2 (C2 fires)"
+    require_source "$HOOK" "$desc" || return
+    local tmp tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_workflow_started "$tmp" "g43b-sid"
+    seed_state_raw "$tmp" "g43b-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
+    run_guard "$tmp" "g43b-sid" "$tp"
+    rm -rf "$tmp"
+    if [ "$GUARD_RC" -eq 2 ] && ( echo "$GUARD_OUT" | grep -qi "block" ); then
+        pass "$desc"
+    else
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
+    fi
+}
+
+# G43c pins the boundary the other way: workflow started but alert_phase=paused
+# (a TERMINAL_ALERT_PHASES member) must still suppress C2. Guards against a
+# regression that made isWorkflowStarted the ONLY gate on the branch.
+run_g43c() {
+    local desc="G43c: workflow STARTED + alert_phase=paused + alert_armed_at -> exit 0 (terminal phase still wins)"
+    require_source "$HOOK" "$desc" || return
+    local tmp
+    tmp="$(mktemp -d)"
+    seed_workflow_started "$tmp" "g43c-sid"
+    seed_state_raw "$tmp" "g43c-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
+    run_guard "$tmp" "g43c-sid" ""
+    rm -rf "$tmp"
+    if [ "$GUARD_RC" -eq 0 ] && ( [ -z "$GUARD_OUT" ] || [ "$GUARD_OUT" = "{}" ] ); then
+        pass "$desc"
+    else
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
+    fi
+}
+
+# G43d: the exemption is scoped to C2 only. cumulative_severity=error (branch 2)
+# must still block even before workflow-init — isWorkflowStarted never gates it.
+run_g43d() {
+    local desc="G43d: workflow NOT started + cumulative_severity=error -> exit 2 (branch 2 not exempted)"
+    require_source "$HOOK" "$desc" || return
+    local tmp
+    tmp="$(mktemp -d)"
+    seed_state_raw "$tmp" "g43d-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [], alert_phase: 'pending' }"
+    run_guard "$tmp" "g43d-sid" ""
+    rm -rf "$tmp"
+    if [ "$GUARD_RC" -eq 2 ] && ( echo "$GUARD_OUT" | grep -qi "block" ); then
+        pass "$desc"
+    else
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
+    fi
+}
+
+# G43e: boundary between "no state file" (G43) and "settled" (G43b) — a state
+# file that exists with workflow_init still pending is NOT started, so C2 stays
+# suppressed. isWorkflowStarted keys on the step status, not on file existence.
+run_g43e() {
+    local desc="G43e: workflow state exists but workflow_init pending + alert_armed_at -> exit 0 (C2 still suppressed)"
+    require_source "$HOOK" "$desc" || return
+    local tmp
+    tmp="$(mktemp -d)"
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+require('$STATEIO_NODE').markStep('g43e-sid', 'workflow_init', 'pending');" >/dev/null 2>&1
+    seed_state_raw "$tmp" "g43e-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
+    run_guard "$tmp" "g43e-sid" ""
+    rm -rf "$tmp"
+    if [ "$GUARD_RC" -eq 0 ] && ( [ -z "$GUARD_OUT" ] || [ "$GUARD_OUT" = "{}" ] ); then
+        pass "$desc"
+    else
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
+    fi
+}
+
+# G43f: CPR-ORTH symmetric counterpart of G43d on branch (3). The isWorkflowStarted
+# gate zeroes alert_armed_at ONLY — the C1 hang arm must still block before
+# workflow-init. Seeds alert_armed_at=null so only hangDetected can fire.
+run_g43f() {
+    local desc="G43f: workflow NOT started + hangDetected (write_code sentinel hang) + alert_armed_at=null -> exit 2 (C1 not exempted)"
+    require_source "$HOOK" "$desc" || return
+    local tmp tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    # Deliberately no seed_workflow_started here — workflow is NOT started.
+    seed_state_raw "$tmp" "g43f-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
+    run_guard "$tmp" "g43f-sid" "$tp"
+    rm -rf "$tmp"
+    if [ "$GUARD_RC" -eq 2 ] && ( echo "$GUARD_OUT" | grep -qi "block" ); then
+        pass "$desc"
+    else
+        fail "$desc (rc=$GUARD_RC, out=$GUARD_OUT)"
     fi
 }
 
@@ -350,6 +477,11 @@ run_g40
 run_g41
 run_g42
 run_g43
+run_g43b
+run_g43c
+run_g43d
+run_g43e
+run_g43f
 run_g44
 run_g45
 
