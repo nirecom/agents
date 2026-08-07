@@ -236,3 +236,7 @@ Changes: Fixed: `audit-tests.sh` (the stale-test sweep) now detects a test whose
 ### FEATURE: PR #1866 (2026-08-07)
 Background: refactor(#1858): replace CPR-N numeric IDs with semantic short codes, add CPR-WPH
 Changes: Core Principles now use semantic short codes instead of numbers — `CPR-UO`, `CPR-SC`, `CPR-SSOT`, `CPR-E2C`, `CPR-ORTH`, `CPR-E2E`, `CPR-NRS`, `CPR-UNV` — so a citation tells you which principle is meant without a lookup, and adding a principle no longer renumbers the rest.;Added a new principle, `CPR-WPH` (Why Precedes How): establish why before deciding how.;Reordered the principles so the ones that govern how you frame a problem come before the ones that govern how you structure a solution.;Hardened the Bash write-guard: the `eval` / `xargs` / `find` detection path now fails closed instead of silently allowing the command if its dependencies are not supplied.
+
+### FEATURE: PR #1855 (2026-08-07)
+Background: feat(#1794): add Stop-guard exemption sentinels for background work a...
+Changes: Stop-guard exemptions: background work can now be declared with a sentinel so the premature-stop guard stays quiet while it runs, and the EM Supervisor no longer intervenes before the workflow has been started. See `rules/stop-guard-exemptions.md`.;Hardening: session ids supplied by hook input are now validated centrally, closing a latent path-traversal in memory-directory write blocking.
