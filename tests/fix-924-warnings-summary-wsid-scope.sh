@@ -76,7 +76,7 @@ else
 fi
 
 # --- (b) warnings + wsid matches current → block preserved (GREEN now & after) ---
-# CPR-5 counterpart: fix must NOT over-permit when the warnings belong to the
+# CPR-ORTH counterpart: fix must NOT over-permit when the warnings belong to the
 # CURRENT wsid. storedWsid == resolveWorkflowSessionId() → still block.
 res_b=$(run_checker '{"status":"complete","warnings_summary":"warnings=2","wsid":"20260722-samewsid"}' "20260722-samewsid")
 if echo "$res_b" | grep -q '"reason":"warnings-pending"'; then

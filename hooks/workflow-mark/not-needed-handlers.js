@@ -8,7 +8,7 @@ const { markStep, recordSkipVerdict } = require("../workflow-state");
 
 // A *_NOT_NEEDED sentinel is the model ASSERTING that a step is unnecessary — the
 // hook observed no work, only the claim. Every member of the class carries the same
-// provenance (CPR-5), so a reader can tell a declared skip from an observed one.
+// provenance (CPR-ORTH), so a reader can tell a declared skip from an observed one.
 const DECLARED = { provenance: "declared" };
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,

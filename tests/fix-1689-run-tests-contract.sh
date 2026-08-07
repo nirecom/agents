@@ -18,7 +18,7 @@
 #   had no anomaly check, no recorded baseline and no way to stop. The rows below pin the
 #   REPLACEMENT — one reference to the resolver — and, just as importantly, pin the REMOVAL: as
 #   long as the old chain is still written here, a model reading the file can follow either one,
-#   and CPR-2 is violated whatever the resolver does.
+#   and CPR-SSOT is violated whatever the resolver does.
 #
 #   #1689 — RNT-9 HAD NO NON-COERCIVE RECOVERY. When the suite fails for a reason the diff did
 #   not cause (a pre-existing failure on main), the only documented outcomes were `pending`
@@ -183,7 +183,7 @@ expect_match "S10d" "and when the field is absent RNT-3 settles it locally" \
 expect_match "S10d2" "naming absence as the condition rather than a false value" \
   'absent' "$RNT3"
 # The exclusivity half of S10, in the same shape as S3a-S3d: as long as the old `--format base`
-# instruction is still written here, a model can follow either one and CPR-2 is violated
+# instruction is still written here, a model can follow either one and CPR-SSOT is violated
 # whatever the resolver does.
 expect_no_match "S10e" "RNT-3 no longer carries the bare --format base form" \
   '--format[[:space:]]+base' "$RNT3"

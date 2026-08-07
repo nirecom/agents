@@ -40,7 +40,7 @@ OUT=$(node_probe '
 check_contains "G01a. appendEvents outline=complete w/o approval throws" "THREW" "$OUT"
 check_contains "G01a2. throw carries no-approval-record code" "no-approval-record" "$OUT"
 
-# --- appendEvents(detail=complete, no approval) → throw (CPR-5 symmetric member) ---
+# --- appendEvents(detail=complete, no approval) → throw (CPR-ORTH symmetric member) ---
 SID="g01b-$$"
 write_state "$SID" "$(gen_state '{"outline":"complete"}' wf-code '{"plan_approvals":{"outline":{"source":"confirm-sentinel"}}}')"
 OUT=$(node_probe '

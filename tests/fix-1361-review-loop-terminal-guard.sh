@@ -132,7 +132,7 @@ run_case_c() {
     echo "echo changed" >> "$repo/tests/foo.sh"
     git -C "$repo" add tests/foo.sh 2>/dev/null
     rc2=$(run_loop "$plans" "$fake" "$repo" 1)
-    # CPR-5 sanctioned-pass counterpart of (a2): a genuine restart must NOT be blocked (exit != 6)
+    # CPR-ORTH sanctioned-pass counterpart of (a2): a genuine restart must NOT be blocked (exit != 6)
     if [ "$rc2" != "6" ]; then
         pass "(c) tests re-edited (fingerprint mismatch) → NOT blocked (rc=$rc2 != 6)"
     else

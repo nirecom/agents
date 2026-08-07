@@ -12,7 +12,7 @@
 # and which files stay unchanged. This file asserts the PARSER underneath it: given
 # an arbitrary PreToolUse payload, does the classifier reach a decision at all?
 #
-# Why the two are separated (CPR-3): a security assertion presumes the parser produced
+# Why the two are separated (CPR-SC): a security assertion presumes the parser produced
 # a verdict. When the payload is empty, truncated, or shaped for a tool the hook was
 # never written for, there is no verdict to assert on — the interesting question is
 # whether the hook answers cleanly (exit 0, parseable stdout, no stack trace) or dies.

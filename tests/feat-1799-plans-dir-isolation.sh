@@ -121,7 +121,7 @@ G2_wfdir_only_refuses() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# G3 — WORKFLOW_PLANS_DIR only: the symmetric arm must be treated identically (CPR-5).
+# G3 — WORKFLOW_PLANS_DIR only: the symmetric arm must be treated identically (CPR-ORTH).
 # ─────────────────────────────────────────────────────────────────────────────
 G3_plansdir_only_refuses() {
     local pinned home cfg pn err
@@ -186,21 +186,21 @@ G5_empty_string_is_unset() {
         fail "G5b empty-string half must still count as unset (files=$(count_states "$pinned") stderr='$err')"
     fi
 
-    # (c) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR unset → BOTH unset → write (CPR-5 symmetric).
+    # (c) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR unset → BOTH unset → write (CPR-ORTH symmetric).
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5c)"
     err="$(run_emit "" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
     if [ -f "$home/.workflow-plans/$SID-supervisor-state.json" ]; then
-        pass "G5c WORKFLOW_PLANS_DIR=\"\" counts as unset → both-unset → write succeeds (CPR-5)"
+        pass "G5c WORKFLOW_PLANS_DIR=\"\" counts as unset → both-unset → write succeeds (CPR-ORTH)"
     else
         fail "G5c empty WORKFLOW_PLANS_DIR was counted as set → false refusal (stderr=$err)"
     fi
 
-    # (d) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR pinned → still XOR → refuse (CPR-5 symmetric).
+    # (d) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR pinned → still XOR → refuse (CPR-ORTH symmetric).
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5d)"
     pn="$(node_path "$pinned")"
     err="$(run_emit "" "$pn" "$home" "$cfg" "$EMIT_SENTINEL")"
     if [ "$(count_states "$pinned")" = "0" ] && echo "$err" | grep -q 'WORKFLOW_PLANS_DIR unset'; then
-        pass "G5d WORKFLOW_PLANS_DIR=\"\" + pinned wfdir → contradiction → refused (CPR-5)"
+        pass "G5d WORKFLOW_PLANS_DIR=\"\" + pinned wfdir → contradiction → refused (CPR-ORTH)"
     else
         fail "G5d empty WORKFLOW_PLANS_DIR half must still be unset (files=$(count_states "$pinned") stderr='$err')"
     fi
@@ -258,7 +258,7 @@ process.stdout.write((frozen?'F':'f') + (ws?'W':'w') + (unset?'U':'u'));
         fail "G6c(wf) getPristineIsolationEnv() shape wrong (want FWU), got '${out:-<err>}'"
     fi
 
-    # WORKFLOW_PLANS_DIR="   " (whitespace-only) — must normalize to null (CPR-5 symmetric).
+    # WORKFLOW_PLANS_DIR="   " (whitespace-only) — must normalize to null (CPR-ORTH symmetric).
     root="$TMPDIR_BASE/g6c2"; cfg="$root/cfg"; mkdir -p "$cfg"
     out="$(env -u CLAUDE_WORKFLOW_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=   " \
         "$RWT" 15 node -e "
@@ -271,7 +271,7 @@ const ws = a.WORKFLOW_PLANS_DIR === null;
 process.stdout.write((frozen?'F':'f') + (unset_wf?'U':'u') + (ws?'W':'w'));
 " 2>/dev/null)"
     if [ "$out" = "FUW" ]; then
-        pass "G6c(plans) getPristineIsolationEnv() normalizes blank WORKFLOW_PLANS_DIR → null (CPR-5)"
+        pass "G6c(plans) getPristineIsolationEnv() normalizes blank WORKFLOW_PLANS_DIR → null (CPR-ORTH)"
     else
         fail "G6c(plans) getPristineIsolationEnv() shape wrong (want FUW), got '${out:-<err>}'"
     fi
@@ -302,7 +302,7 @@ em.reportFallback('worktree-end','notes','$SID');
 
 # ─────────────────────────────────────────────────────────────────────────────
 # G8 — all four report* entrypoints are covered. They share safeAppend(), so guarding the
-#      choke point covers the class structurally (CPR-4); this table proves it per member.
+#      choke point covers the class structurally (CPR-E2C); this table proves it per member.
 # ─────────────────────────────────────────────────────────────────────────────
 G8_all_entrypoints_guarded() {
     local name call pinned home cfg pn err

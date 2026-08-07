@@ -5,7 +5,7 @@
 #
 # readState pastes a projection onto the state object; a naive JSON.stringify of that
 # object would write the legacy fields straight back into the v2 file and create a
-# SECOND state representation next to `events` (CPR-2 violation, and a fork that would
+# SECOND state representation next to `events` (CPR-SSOT violation, and a fork that would
 # silently diverge). serializeStateForPersist is the only guard: an allowlist plus a
 # regenerated `current`. These cases assert the guard from the OUTSIDE — by the key set
 # actually present in the bytes on disk — so an implementation that forgets one key
@@ -127,7 +127,7 @@ console.log("read_status=" + read.steps.workflow_init.status +
     assert_eq "S6/current-regenerated" "read_status=complete disk_status=complete branch_poison=false" "$NODE_OUT"
 fi
 
-echo "== S7: appendEvents and persistMigratedState strip identically (CPR-5 symmetry) =="
+echo "== S7: appendEvents and persistMigratedState strip identically (CPR-ORTH symmetry) =="
 if run_case "S7/all-write-paths-strip"; then
     next_sid; SID_A="$SID"
     next_sid; SID_B="$SID"

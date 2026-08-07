@@ -6,6 +6,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { consumeExactFile } = require("../../lib/consume-exact-file");
 const {
   ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE,
@@ -47,56 +48,210 @@ function resolveClearanceWsid() {
   }
 }
 
-// unlinkClearance(sid): read-then-unlink one <sid>.off-clearance token.
-// Returns { status: "consumed", token } | { status: "absent" } | { status: "error" }.
-function unlinkClearance(sid) {
-  let token = null;
+// readClearance(sid): read (without unlinking) one sid's CLAIMED token file.
+// Returns { status: "found"|"malformed"|"absent"|"error", claimedPath, token, raw }.
+// "malformed" is distinct from "found with null token" — an unreadable claim
+// authorizes nothing and must never stand in for a real one. `raw` is returned
+// so a later identity-bound removal (consume-exact-file.js) deletes the exact
+// bytes that were inspected here.
+function readClearance(sid) {
+  const claimedPath = path.join(getWorkflowDir(), `${sid}.off-clearance.claimed`);
+  let raw;
   try {
-    const tokenPath = path.join(getWorkflowDir(), `${sid}.off-clearance`);
-    try {
-      token = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
-    } catch (_e) { token = null; }
-    fs.unlinkSync(tokenPath);
+    raw = fs.readFileSync(claimedPath, "utf8");
   } catch (e) {
     if (e && e.code === "ENOENT") return { status: "absent" };
     return { status: "error" };
   }
-  return { status: "consumed", token };
+  let token = null;
+  try {
+    token = JSON.parse(raw);
+  } catch (_e) {
+    return { status: "malformed", claimedPath, raw };
+  }
+  if (!token || typeof token !== "object" || Array.isArray(token)) {
+    return { status: "malformed", claimedPath, raw };
+  }
+  return { status: "found", claimedPath, token, raw };
 }
 
-// consumeOffClearance(target, sessionId): unlink the token that authorized this OFF
-// activation and record an off_clearance_consumed audit entry keyed to whichever
-// session id actually owned it. The shim may authorize on a FALLBACK token keyed to
-// the resolved workflow session id, so consumption mirrors that fallback — otherwise
-// a single-use token would survive its own use.
-// Single-use: a granted clearance authorizes exactly one OFF activation.
-// Fail-open — ENOENT and I/O errors are swallowed so a missing token never blocks an
-// already-approved override.
+// classifyClaim(token, target): "match" | "mismatch" | "legacy".
+//   match    — claim names this exact target (the only positive evidence).
+//   mismatch — claim names a different target; authorizes nothing here.
+//   legacy   — old shape with no claimed_target; accepted only as a last
+//              resort so upgrades don't strand an in-flight claim.
+function classifyClaim(token, target) {
+  const ct = token && token.claimed_target;
+  if (typeof ct !== "string") return "legacy";
+  return ct === target ? "match" : "mismatch";
+}
+
+// takeExact(filePath, expectedRaw): identity-bound removal — true only when the
+// exact bytes previously read were removed by THIS call. A plain read-then-unlink
+// races on the PATHNAME: another consumer can remove and recreate the file
+// between the read and unlink, so a naive unlink could destroy a live claim that
+// was never inspected. "Already gone" (ENOENT) is not success either — another
+// consumer took it, so this call must not claim the activation. See
+// ../../lib/consume-exact-file.js for the shared exclusion primitive.
+function takeExact(filePath, expectedRaw) {
+  return consumeExactFile(filePath, expectedRaw) === "consumed";
+}
+
+// consumeOffClearance(target, sessionId): unlink the token that authorized this
+// OFF activation, keyed to whichever session id actually owned it — the shim
+// may grant on a fallback token keyed to the workflow session id, so both
+// sessionId and that fallback are checked as candidates. All candidates are
+// classified before anything is consumed, so a stale or malformed claim under
+// one sid can't be consumed ahead of the real match under the other; a
+// malformed claim authorizes nothing and is swept separately (its own audit
+// record) so it doesn't wedge future proposals. Single-use; fail-open on I/O
+// errors or absence.
 function consumeOffClearance(target, sessionId) {
   if (!sessionId || !SID_RE.test(sessionId)) return;
-  let auditSid = sessionId;
-  let result = unlinkClearance(sessionId);
-  if (result.status === "absent") {
-    const wsid = resolveClearanceWsid();
-    if (wsid && wsid !== sessionId && SID_RE.test(wsid)) {
-      const fallback = unlinkClearance(wsid);
-      if (fallback.status !== "absent") {
-        result = fallback;
-        auditSid = wsid;
-      }
+  const candidates = [sessionId];
+  const wsid = resolveClearanceWsid();
+  if (wsid && wsid !== sessionId && SID_RE.test(wsid)) candidates.push(wsid);
+
+  const scanned = [];
+  for (const sid of candidates) {
+    const found = readClearance(sid);
+    if (found.status === "malformed") {
+      scanned.push({
+        sid,
+        claimedPath: found.claimedPath,
+        verdict: "malformed",
+        token: null,
+        raw: found.raw,
+      });
+    } else if (found.status === "found") {
+      scanned.push({
+        sid,
+        claimedPath: found.claimedPath,
+        verdict: classifyClaim(found.token, target),
+        token: found.token,
+        raw: found.raw,
+      });
     }
   }
-  if (result.status !== "consumed") return; // absent (e.g. emergency path) or I/O error
-  const token = result.token;
-  appendAudit(auditSid, {
+
+  for (const c of scanned) {
+    if (c.verdict !== "malformed" || !takeExact(c.claimedPath, c.raw)) continue;
+    appendAudit(c.sid, {
+      categories: ["workflow"],
+      severity: "warning",
+      detail:
+        `off_clearance malformed claim swept (unreadable contents — authorized nothing) ` +
+        `target=${target} sid=${c.sid}; the activation was NOT attributed to it`,
+      reporter: "off-clearance-examiner",
+      record_type: "off_clearance_malformed_claim_swept",
+    });
+  }
+
+  const chosen =
+    scanned.find((c) => c.verdict === "match") || scanned.find((c) => c.verdict === "legacy");
+  if (!chosen) return; // no claim positively matched (e.g. emergency path)
+  // Identity-bound: only the exact claim inspected above may be consumed, and only
+  // the process that actually removed it may audit the activation as its use.
+  if (!takeExact(chosen.claimedPath, chosen.raw)) return; // lost/changed — fail-open, no audit
+  const token = chosen.token;
+  appendAudit(chosen.sid, {
     categories: ["workflow"],
     severity: "notice",
     detail:
       `off_clearance consumed target=${target} ` +
-      `category=${(token && token.category) || "unknown"} single-use token unlinked`,
+      `category=${(token && token.category) || "unknown"} ` +
+      `claim_shape=${chosen.verdict} ` +
+      `claimed token unlinked (single-use enforced at claim time)`,
     reporter: "off-clearance-examiner",
     record_type: "off_clearance_consumed",
   });
+}
+
+// --- EMERGENCY provenance ---------------------------------------------------
+// The emergency branch bypasses Phase1 examination on the claim that a human
+// invoked skills/enforce-workflow-off. hooks/record-off-skill-invocation.js
+// (UserPromptSubmit — an event the model cannot trigger) drops a marker when
+// the user types the skill's slash command; this consumes it as evidence, not
+// a gate — absence never blocks the override, and the value is `unattributed`,
+// not an accusation. Contract details live in ../../lib/off-emergency-provenance.js
+// (shared with the writer — CPR-SSOT); this file owns only consumption.
+const {
+  OFF_EMERGENCY_PROVENANCE_SOURCE,
+  OFF_EMERGENCY_PROVENANCE_UNATTRIBUTED,
+  verifyProvenanceMarker,
+} = require("../../lib/off-emergency-provenance");
+
+// readAndClearProvenance(sid, target) -> { attributed, note }
+// Attribution is contingent on successfully CONSUMING the marker, not just
+// reading it — a marker that can't be removed must not keep vouching for later
+// activations. Consumption is identity-bound (../../lib/consume-exact-file.js)
+// so concurrent handlers can't both count the same marker: "lost" (someone else
+// took it, or it was rewritten since the read) is the ordinary case and carries
+// no note; only a real I/O fault does.
+function readAndClearProvenance(sid, target) {
+  const { EMERGENCY_PROVENANCE_MARKER_KIND } = require("../../lib/protected-basenames");
+  const markerPath = path.join(getWorkflowDir(), `${sid}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
+  let raw;
+  try {
+    raw = fs.readFileSync(markerPath, "utf8");
+  } catch (e) {
+    if (e && e.code === "ENOENT") return { attributed: false, note: null }; // no marker — the ordinary case
+    return {
+      attributed: false,
+      note: `provenance marker sid=${sid} could not be read — attribution withheld`,
+    };
+  }
+
+  const outcome = consumeExactFile(markerPath, raw);
+  // "lost": another handler consumed these bytes, or the marker was rewritten
+  // since the read. Either way THIS call consumed nothing, so it attributes
+  // nothing — and nothing is amiss, so it emits no note.
+  if (outcome === "lost") return { attributed: false, note: null };
+  if (outcome !== "consumed") {
+    return {
+      attributed: false,
+      note: `provenance marker sid=${sid} could not be consumed (removal failed) — attribution withheld`,
+    };
+  }
+
+  // Only reachable when this call removed exactly `raw`: the bytes attributed
+  // below and the bytes consumed above are the same bytes by construction.
+  const v = verifyProvenanceMarker(raw, target, Date.now());
+  if (v.attributed) return { attributed: true, note: null };
+  // Downgrades that are NOT a system fault (stale, corrupt, absent field) are
+  // the documented under-attribution behaviour, so they need no audit note
+  // beyond provenance=unattributed itself.
+  return { attributed: false, note: null };
+}
+
+// resolveEmergencyProvenanceDetail(sessionId, target):
+//   { provenance: "user_skill_invocation" | "unattributed", notes: string[] }
+// Checks the same sid candidates consumeOffClearance() does, so a session whose
+// workflow sid differs from the hook sid is attributed correctly (CPR-ORTH).
+function resolveEmergencyProvenanceDetail(sessionId, target) {
+  const candidates = [];
+  if (sessionId && SID_RE.test(sessionId)) candidates.push(sessionId);
+  const wsid = resolveClearanceWsid();
+  if (wsid && wsid !== sessionId && SID_RE.test(wsid)) candidates.push(wsid);
+  let attributed = false;
+  const notes = [];
+  for (const sid of candidates) {
+    // No early break: every candidate marker is consumed so none can linger.
+    const r = readAndClearProvenance(sid, target);
+    if (r.attributed) attributed = true;
+    if (r.note) notes.push(r.note);
+  }
+  return {
+    provenance: attributed ? OFF_EMERGENCY_PROVENANCE_SOURCE : OFF_EMERGENCY_PROVENANCE_UNATTRIBUTED,
+    notes,
+  };
+}
+
+// resolveEmergencyProvenance(sessionId, target): the value only. `target`
+// defaults to "workflow" so a caller that omits it cannot accidentally widen
+// attribution to every target.
+function resolveEmergencyProvenance(sessionId, target) {
+  return resolveEmergencyProvenanceDetail(sessionId, target || "workflow").provenance;
 }
 
 // writeMarker(kind, sessionId, payload): atomic marker write; throws on failure.
@@ -148,11 +303,18 @@ function handleEmergencyOff(ctx) {
     return true;
   }
 
+  const provenanceDetail = resolveEmergencyProvenanceDetail(sessionId, target);
+  const provenance = provenanceDetail.provenance;
+  for (const note of provenanceDetail.notes) {
+    process.stderr.write(`workflow-mark: WARNING — ${note}. Override still applied.\n`);
+  }
+
   let markerPath;
   try {
     markerPath = writeMarker(kind, sessionId, {
       reason,
       emergency: true,
+      provenance,
       set_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -165,9 +327,13 @@ function handleEmergencyOff(ctx) {
   appendAudit(sessionId, {
     categories: ["workflow"],
     severity: "warning",
-    detail: `emergency OFF activated target=${target} (Phase1 examination bypassed) reason=${reason}`,
+    detail:
+      `emergency OFF activated target=${target} (Phase1 examination bypassed) ` +
+      `provenance=${provenance} reason=${reason}` +
+      (provenanceDetail.notes.length ? ` provenance_notes=${provenanceDetail.notes.join("; ")}` : ""),
     reporter: "off-clearance-examiner",
     record_type: "escape_hatch_event",
+    provenance,
   });
 
   try {
@@ -177,10 +343,11 @@ function handleEmergencyOff(ctx) {
 
   pushMessage(
     `workflow-mark: EMERGENCY ${target} override applied (marker: ${markerPath}). ` +
-      `Phase1 examination was bypassed and the activation is recorded in the audit trail. ` +
+      `Phase1 examination was bypassed and the activation is recorded in the audit trail ` +
+      `as provenance=${provenance}. ` +
       `Restore with: echo "<<WORKFLOW_ENFORCE_${target === "workflow" ? "WORKFLOW" : "WORKTREE"}_ON: {reason}>>"`
   );
   return true;
 }
 
-module.exports = { consumeOffClearance, handleEmergencyOff };
+module.exports = { consumeOffClearance, handleEmergencyOff, resolveEmergencyProvenance };

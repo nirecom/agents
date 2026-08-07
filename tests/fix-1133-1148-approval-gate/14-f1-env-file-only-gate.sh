@@ -10,7 +10,7 @@
 # isConfirmOffForStageFromFile (parsed .env contents) and NEVER process.env.
 # fail-before-fix: the pre-fix gate called isConfirmOffForStage (process.env), so
 # the inline prefix below waived the gate and minted a confirm-flag-off record.
-# Both gated members (outline AND detail) are exercised — CPR-5.
+# Both gated members (outline AND detail) are exercised — CPR-ORTH.
 # ===========================================================================
 
 echo ""

@@ -8,7 +8,7 @@
 # so once review finishes they are absent again — indistinguishable to the
 # negative-evidence heuristic from window 1. Pre-fix next-step auto-completes
 # detail; post-fix refuses until an approval is recorded.
-# Symmetric to G02 (CPR-5): exercises the `detail` gated member.
+# Symmetric to G02 (CPR-ORTH): exercises the `detail` gated member.
 # fail-before-fix: pre-fix detail → complete.
 # ===========================================================================
 

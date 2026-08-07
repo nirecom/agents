@@ -7,7 +7,7 @@
 // print to the user resolve to an internal module path that is not executable as
 // a CLI. Resolution is deliberately placement-based rather than
 // `require.main.filename` / `process.argv[1]`, both of which depend on who
-// launched the process (CPR-8: no implicit environment-dependent branching).
+// launched the process (CPR-UNV: no implicit environment-dependent branching).
 
 const fs = require("fs");
 const path = require("path");

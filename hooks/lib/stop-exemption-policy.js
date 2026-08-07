@@ -4,7 +4,7 @@
 // composes its own gate internally. Adding a condition: (1) define one
 // primitive, (2) add one row here, (3) register it in the policy of every
 // consumer whose column is true. Forgetting (3) is a silent asymmetry
-// (CPR-5 violation) — tests cross-check this table against each consumer's
+// (CPR-ORTH violation) — tests cross-check this table against each consumer's
 // actual implementation.
 const EXEMPTION_MATRIX = Object.freeze({
   "workflow-off":      { c4: true,  c2: false, nextStep: true  },

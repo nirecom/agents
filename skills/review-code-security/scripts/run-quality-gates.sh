@@ -203,7 +203,7 @@ esac
 
 # A separate line, never folded into the RECORDED one: "the base is the recorded one" and
 # "the recorded one may be behind you" are two different facts, and a reader who only needs
-# the second must not have to parse the first to find it (CPR-3).
+# the second must not have to parse the first to find it (CPR-SC).
 if [[ "$MERGE_BASE_WARN" == "post-session-head" ]]; then
     echo "## merge-base: NOTE — the recorded baseline was created after this session started; commits made before the branching sentinel are outside the reviewed range (alt base: ${MERGE_BASE_ALT:-unknown})"
 fi

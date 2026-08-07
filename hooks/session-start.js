@@ -101,7 +101,7 @@ function applyInheritance(sessionId, createdAt, donor) {
       // Annotations travel even on a PENDING step (a reset_reason explains why the
       // step was rewound and is lost if only non-pending steps are carried).
       // convertV1AnnotationsToEvents owns which entry fields ARE annotations —
-      // the same conversion the v1->v2 migration performs (CPR-4); only the
+      // the same conversion the v1->v2 migration performs (CPR-E2C); only the
       // stamping differs, so the two can never disagree about the field set.
       for (const converted of convertV1AnnotationsToEvents(step, entry, { createdAt })) {
         events.push(

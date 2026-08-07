@@ -142,12 +142,12 @@ test_already_green() {
     if is_allow "$got"; then pass "AG-P5: gh issue comment → allow"; else fail "AG-P5: should allow (got: $got)"; fi
 
     # AG-NI-dq-scratchpad: DOUBLE-quoted $SCRATCHPAD path expands and resolves under the
-    # session scratchpad → allow. CPR-5 symmetry pair for INV-NI-sq-scratchpad (single-quote blocks).
+    # session scratchpad → allow. CPR-ORTH symmetry pair for INV-NI-sq-scratchpad (single-quote blocks).
     got="$(run_hook_env "New-Item -ItemType Directory -Force -Path \"\$SCRATCHPAD/x\"" "SCRATCHPAD=${SCRATCH_SESSA_NODE}")"
     if is_allow "$got"; then pass "AG-NI-dq-scratchpad: New-Item \"\$SCRATCHPAD/x\" (double-quote) → allow"; else fail "AG-NI-dq-scratchpad: should allow (got: $got)"; fi
 
     # AG-SCRATCH-same-session: SCRATCHPAD=sessA, target under sessA's own dir, from non-git CWD
-    # → allow (H2 same-session). CPR-5 symmetry pair for INV-SCRATCH-cross-session.
+    # → allow (H2 same-session). CPR-ORTH symmetry pair for INV-SCRATCH-cross-session.
     got="$(run_nongit_env "echo x > \"${SESSA_FWD}/x.md\"" "SCRATCHPAD=${SCRATCH_SESSA_NODE}")"
     if is_allow "$got"; then pass "AG-SCRATCH-same-session: sessA target (SCRATCHPAD=sessA) → allow"; else fail "AG-SCRATCH-same-session: should allow (got: $got)"; fi
 

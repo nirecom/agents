@@ -308,7 +308,7 @@ T11_isSweepBranchesSkillForceDelete_unit() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T12 — isSweepBranchesSkillForceDelete tolerates Bash-appended trailing
-#       redirects (#1380/#1172 CPR-5 symmetric pair). bin/sweep-branches.sh
+#       redirects (#1380/#1172 CPR-ORTH symmetric pair). bin/sweep-branches.sh
 #       callsites emit `2>/dev/null`, so the predicate must strip the suffix.
 #   a) "...branch -D feature/x 2>/dev/null" → true (RED before fix)
 #   b) "...branch -D feature/x 2>&1"        → true (RED before fix)

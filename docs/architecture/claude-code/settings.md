@@ -153,7 +153,7 @@ See `docs/security-policy.md` for the full pattern list.
   inside `'…'`, `"…"`, `$'…'`, `` `…` ``, `$(…)`, `(…)` or `$((…))` asks one scanner,
   `hooks/lib/quote-spans.js` (`quote-spans/{scan,query,transform}.js`). Before #1569 each
   consumer carried its own ad-hoc quote walker, so a quoting form fixed in one predicate stayed
-  broken in its siblings (CPR-8). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
+  broken in its siblings (CPR-UNV). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
   command-ir}.js`, `hooks/enforce-worktree/arg-tail-guard.js`, and
   `main-worktree-allows/worker-script.js`. Ambiguity is never guessed
   at: unparseable nesting or nesting past the depth cap (`MAX_SPAN_DEPTH`) yields `ok:false`
@@ -170,7 +170,7 @@ See `docs/security-policy.md` for the full pattern list.
   matching one marker is ambiguous and rejected. `hooks/lib/load-env.js` deliberately does not
   share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
   settings, or an alternate config dir would silently be injected with the real repo's `.env`
-  (CPR-3). The two share only the candidate enumeration.
+  (CPR-SC). The two share only the candidate enumeration.
   **Worker-dispatch sanction (#1643, #1673)** — `main-worktree-allows/worker-dispatch-overlay.js`
   sanctions exactly one command shape from the main worktree:
   `node "<acd>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>`. It deliberately
@@ -194,7 +194,7 @@ See `docs/security-policy.md` for the full pattern list.
   guard covers all nine declared workers (`WORKER_NAMES`) with no per-worker code. Together
   with the registry's per-worker capability contracts (`payloadSpec`, `binaries`,
   `envPassthrough`, `writeScopes`) it is the **sole** guard layer for worker-dispatch write
-  operations — there is no second, worker-specific overlay, by design (CPR-5).
+  operations — there is no second, worker-specific overlay, by design (CPR-ORTH).
   **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts
   (`run-initial.sh`, `run-loop-step.js`, `run-finalize-terminal.sh`) used to be invoked as a
   Bash-tool `eval` from the main worktree, and that one shape needed an overlay of its own to
@@ -220,6 +220,33 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
+  escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
+  from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes
+  `<workflowDir>/<sid>.off-emergency-invoked`, any other prompt clears a stale one.
+  `workflow-mark/enforce-override-handlers/off-clearance.js` consumes and unlinks it when the
+  emergency sentinel fires, stamping the `escape_hatch_event` audit record and the override marker
+  with `provenance=user_skill_invocation` or `provenance=unattributed`. Evidence only, never a gate —
+  absence never blocks the override, and `unattributed` means "not provably user-invoked" (a user who
+  asks in prose rather than typing the slash command is under-attributed by design).
+  What `user_skill_invocation` asserts is bounded, and the marker payload is what bounds it
+  (`hooks/lib/off-emergency-provenance.js` is the shared writer/reader contract): the human typed a
+  slash command resolving to the `enforce-workflow-off` skill, within the freshness window, and that
+  skill covers the target being activated. It asserts nothing about the reason text, and nothing about
+  a target outside the set the marker names — the typed plugin namespace is deliberately not recorded,
+  since it is attacker-choosable prompt content, so the marker carries the resolved skill name instead.
+  Attribution is contingent on the marker being successfully CONSUMED: if the unlink fails, provenance
+  downgrades to `unattributed` and the audit record carries a `provenance_notes=` explanation, because
+  a marker that survives could otherwise vouch for several activations from one invocation. Every other
+  unverifiable case (stale, future-dated, corrupt, missing binding fields) downgrades the same way. The marker
+  basename is in the `hooks/lib/protected-basenames.js` protected set, so `block-clearance-token-write.js`
+  refuses `Edit`/`Write`/`MultiEdit`/`editFiles`/`NotebookEdit` calls naming it and refuses Bash write
+  targets that spell it — literally, via backslash escapes or intra-word quoting, via a glob, or via a
+  `$VAR` the same command line assigns. That is a best-effort deterrent, not proof of unforgeability:
+  the hook's TRUST MODEL comment enumerates what remains out of reach (dynamic path construction,
+  base64, alternate interpreters, edits to the hook itself). Nothing depends on it being airtight —
+  provenance is an audit signal, never a gate, so a forged marker grants no clearance; it only
+  mislabels the audit record. Fail-open: any error yields `{}`.
 - **Outbound content and the verdict review** — the verdict review runs on **every**
   `/issue-create` candidate; there is no on/off toggle, and the only condition that skips it
   is `codex` being absent from `PATH`. It sends the proposed issue text AND the bodies of the

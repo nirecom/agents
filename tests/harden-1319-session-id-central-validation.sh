@@ -141,7 +141,7 @@ run_I1() { run_consumer_case "I1" "hooks/stop-final-report-guard.js"; }
 run_I2() { run_consumer_case "I2" "hooks/stop-l2-findings-display.js"; }
 # I3/I4 complete the set: all FOUR consumers whose redundant regex guard was
 # removed are driven with the same malformed session_id. Covering only two left
-# the other half of the class untested (CPR-5).
+# the other half of the class untested (CPR-ORTH).
 run_I3() { run_consumer_case "I3" "hooks/stop-premature-stop-guard.js"; }
 run_I4() { run_consumer_case "I4" "hooks/supervisor-guard.js"; }
 

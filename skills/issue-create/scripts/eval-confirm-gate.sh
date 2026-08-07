@@ -71,7 +71,7 @@ WORTH_FILING="$(printf '%s' "$FIELDS" | cut -f4)"
 REASONS=()
 
 # G1 — the verdict itself changes existing issues rather than only adding one.
-# `sub-of` and `bulk-sub-of` belong here with `reopen` and `make-parent` (CPR-5): they
+# `sub-of` and `bulk-sub-of` belong here with `reopen` and `make-parent` (CPR-ORTH): they
 # re-parent an existing issue and can reopen every closed ancestor of the parent chain.
 case "$VERDICT" in
     reopen|make-parent|sub-of|bulk-sub-of) REASONS+=("G1") ;;

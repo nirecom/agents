@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 # M1-a: the matrix key set and the C4_EXEMPTIONS id list are identical, in the
 #       same order. A row added to one and forgotten in the other is the exact
-#       silent asymmetry (CPR-5) the module header warns about.
+#       silent asymmetry (CPR-ORTH) the module header warns about.
 # ---------------------------------------------------------------------------
 run_M1a() {
     local out

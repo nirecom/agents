@@ -205,7 +205,7 @@ function checkDerivedFinalizeScriptsDir(value, anchors) {
 // returns: { number } for a local issue, { number, repo } for a cross-repo one.
 //
 // The record shape, not a bare integer, is what the canonical parser produces and
-// therefore what the dispatcher must accept (CPR-2). Projecting it down to numbers
+// therefore what the dispatcher must accept (CPR-SSOT). Projecting it down to numbers
 // at the boundary would discard the repo half of each issue's identity, and two
 // issues numbered 42 in two repositories would collapse into one `Closes #42` — a
 // closing keyword GitHub then applies to whichever repo the PR happens to live in.

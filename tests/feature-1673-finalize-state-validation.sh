@@ -204,7 +204,7 @@ TABLE
 
 # ===========================================================================
 # Extra: unknown key inside a g5_history element is refused the same way
-# (CPR-5 — the top-level fail-closed rule has a symmetric member here)
+# (CPR-ORTH — the top-level fail-closed rule has a symmetric member here)
 # ===========================================================================
 group_history_element() {
     write_state 's.g5_history[0].shell_command = "id";'

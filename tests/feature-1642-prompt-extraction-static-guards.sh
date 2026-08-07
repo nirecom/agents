@@ -29,7 +29,7 @@ fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 # ---------------------------------------------------------------------------
-# The CLI is the single owner of the arithmetic (CPR-2). Its contracted output
+# The CLI is the single owner of the arithmetic (CPR-SSOT). Its contracted output
 # (detail plan C3 決定) is exactly one line:
 #
 #     TOTAL <n> WILDCARD <m> ENTRIES <e>
@@ -117,7 +117,7 @@ setup_lines() {
 }
 
 # ratchet_check <label> <field> <hint>
-# One implementation for both monotonic measures (CPR-4/CPR-5: TOTAL and WILDCARD
+# One implementation for both monotonic measures (CPR-E2C/CPR-ORTH: TOTAL and WILDCARD
 # are symmetric members of the same "debt may shrink, never grow" class).
 ratchet_check() {
     local label="$1" field="$2" hint="$3"

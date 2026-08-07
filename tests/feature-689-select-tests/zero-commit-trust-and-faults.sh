@@ -11,7 +11,7 @@
 #        resolver — a baseline the session recorded, not a chain the resolver walked — and it
 #        is the state a #1779 session lands in the moment the user records a base to get past
 #        exit 4. A fallback wired only into the RESOLVED arm reproduces the bug for exactly the
-#        users who already hit one merge-base problem. CPR-5: the treatment given one member of
+#        users who already hit one merge-base problem. CPR-ORTH: the treatment given one member of
 #        the trustworthy pair belongs to the other.
 #
 #   S26  the degraded set is TWO git commands unioned. S19 kills the whole repository and gets
@@ -133,7 +133,7 @@ test_S26a_zero_commit_untracked_half_failure_is_exit_1() {
 }
 
 # S26b: the mirror. The tracked enumeration fails and the untracked one answers, so the partial
-# set is non-empty in the other direction. CPR-5 — the two halves get the same treatment.
+# set is non-empty in the other direction. CPR-ORTH — the two halves get the same treatment.
 test_S26b_zero_commit_tracked_half_failure_is_exit_1() {
     zc_fault_row "S26b_zero_commit_tracked_half_failure_is_exit_1" tracked \
         "a failing git diff HEAD half fails the run closed rather than selecting the untracked half alone"

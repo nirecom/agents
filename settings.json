@@ -328,6 +328,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/lang-inject.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/record-off-skill-invocation.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -418,7 +423,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit|Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -428,7 +433,7 @@
         ]
       },
       {
-        "matcher": "Bash|Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit|Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",

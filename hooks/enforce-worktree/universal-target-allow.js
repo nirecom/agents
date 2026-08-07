@@ -83,7 +83,7 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
 
     // Guard 5: every target must resolve outside every repo in sessionRoots.
     // areAllBashTargetsOutsideSessionScope strips surrounding shell quotes from
-    // each target's .path internally (centralized quote-strip — CPR-2), so no
+    // each target's .path internally (centralized quote-strip — CPR-SSOT), so no
     // pre-stripping is needed here. Fail-closed to abstain if any target is in scope.
     if (!areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) {
       return { verdict: "abstain" };

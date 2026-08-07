@@ -203,7 +203,7 @@ assert_sanctioned_bin "RISK10-399 clarify bare pipe rejected" \
     isAllowedClarifyGuardLoop "bash \"$CLARIFY\" 1234 | tee out.txt" false
 assert_sanctioned_bin "RISK10-399 clarify wrong script path rejected" \
     isAllowedClarifyGuardLoop "bash \"$EVIL/clarify-guard-loop.sh\" 1234" false
-# Symmetric with the :341 block above (CPR-5): the two predicates share the
+# Symmetric with the :341 block above (CPR-ORTH): the two predicates share the
 # `sanctioned-bin` profile, so every row here must answer identically to its
 # RISK10-341-* twin. A divergence means the merge tightened or loosened one site.
 assert_sanctioned_bin "RISK10-399-redirect clarify plain '>' rejected" \

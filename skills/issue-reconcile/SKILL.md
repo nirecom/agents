@@ -23,7 +23,7 @@ Resolve in main: `OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login
 
 ## Step 2: scan via worker
 
-Dispatch `issue-reconcile` per `skills/_shared/worker-dispatch.md`. Payload: `owner_repo`, `history_md_path`, `history_dir_path`, `artifact_dir` (the `PLANS_DIR` from WD-1), `limit` (omit for the 1000-issue default).
+Dispatch the `issue-reconcile` worker per `skills/_shared/worker-dispatch.md`. Payload: `owner_repo`, `history_md_path`, `history_dir_path`, `artifact_dir` (the `PLANS_DIR` from WD-1), `limit` (omit for the 1000-issue default).
 
 On `status: failed`: stop and report. A `scan truncated at <N>` summary means the closed-issue scan hit `limit` — re-dispatch with a higher `limit` rather than acting on the partial result. On `status: complete`: read the JSONL artifact — issues with `classification: needs-reconcile` feed Step 3.
 

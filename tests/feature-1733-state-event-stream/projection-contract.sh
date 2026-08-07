@@ -7,7 +7,7 @@
 # projection on top of the raw state. Two contracts must hold or the migration is a
 # silent behaviour change:
 #   (1) the pasted view is exactly projectState(raw) — one fold implementation, no
-#       second derivation living in a reader (CPR-2);
+#       second derivation living in a reader (CPR-SSOT);
 #   (2) the pasted view is deep-frozen, so a legacy write into it fails LOUDLY at
 #       development time rather than becoming a silent no-op.
 #

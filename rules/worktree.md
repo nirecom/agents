@@ -14,27 +14,42 @@ Set this in agents config (`.env`) when the isolation cost exceeds the benefit.
 See `branch.md` for branch naming and the standard branch flow.
 See `docs/parallel-sessions.md` for the full lifecycle guide.
 
-## Session-scoped escape hatch
+## Session-scoped escape hatch (WORKTREE_OFF)
 
-For maintenance or recovery work that must happen from the main worktree within
-a single session (e.g. `/worktree-end` × Windows CWD-lock recovery), use the
-session-scoped sentinel instead of editing `.env` globally:
+Session-scoped escape hatch that treats `ENFORCE_WORKTREE` as off for the current Claude Code session, without editing `.env` globally.
 
-    echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: {reason}>>"
+### Sentinels
 
-Attach `: {reason}` (bare form emits a warning). This writes a per-session
-marker file so that only the current session treats `ENFORCE_WORKTREE` as off.
-All other concurrent Claude Code sessions remain at `on`.
+| Sentinel | Permission | Effect |
+|---|---|---|
+| `<<WORKFLOW_ENFORCE_WORKTREE_OFF: {reason}>>` | **ask** (requires user approval) | Creates `${sid}.worktree-off` marker; main-worktree writes allowed |
+| `<<WORKFLOW_ENFORCE_WORKTREE_ON: {reason}>>` | **allow** (auto-approved) | Removes marker; enforcement restored |
 
-To restore enforcement within the same session, emit the matching sentinel:
+The `{reason}` field is mandatory and non-empty (bare form emits a warning).
 
-    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: {reason}>>"
+### What is bypassed
 
-The hook layer resolves the session ID (Anthropic bug #27987 prevents
-`$CLAUDE_SESSION_ID` from being propagated to Bash subprocesses) and deletes
-the marker keyed to the current session. The operation is idempotent — if no
-marker exists, it is a silent no-op. Enforcement also restores automatically
-in the next session, since the marker is keyed on the current session ID.
+Only `enforce-worktree.js`. Every other hook — credentials, outbound scan, system ops, workflow gate — stays active.
+Inclusion criterion and the full honoring-hooks table: SSOT is `docs/architecture/claude-code/marker-bypass-contract.md`.
+WORKFLOW_OFF subsumes this marker; emitting both is redundant — see `rules/workflow-off.md`.
+
+### When to use
+
+Appropriate for: maintenance or recovery work that must run from the main worktree in one session (e.g. `/worktree-end` × Windows CWD-lock recovery).
+Do NOT use for: ordinary feature work that belongs in a linked worktree, or to unblock a single hook-blocked command.
+
+### Sanctioned-command false-block recovery
+
+SSOT: the same-named section in `rules/workflow-off.md`.
+
+### Restoring enforcement
+
+Emit the `_ON` sentinel (auto-allowed). The hook layer resolves the session ID (Anthropic bug #27987 prevents `$CLAUDE_SESSION_ID` from reaching Bash subprocesses) and deletes the marker keyed to the current session; deleting a marker that does not exist is a silent no-op.
+Enforcement also restores automatically in the next session, since the marker is keyed on the current session ID.
+
+### Scope
+
+Session-scoped: only the current session is affected; all other concurrent Claude Code sessions remain at `on`.
 
 ## Standard Path
 

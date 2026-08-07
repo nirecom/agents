@@ -84,7 +84,7 @@
 #               nothing").
 #   C2 HIGH   — T17 (status-combinations.sh): deletion+survivor combination
 #               using the singular test/ prefix (prior cases only used
-#               tests/), closing the CPR-5 orthogonality gap.
+#               tests/), closing the CPR-ORTH orthogonality gap.
 #   C3 MEDIUM — T15d now also asserts is_valid_hex_token, so it can no
 #               longer trivially pass on a NULL==NULL coincidence pre-fix.
 #   C4 MEDIUM — T13 documented: an embedded-newline filename (the ideal -z

@@ -8,7 +8,7 @@
 # workflow_type / session_model / last_pushed_sha — a pre-existing bug that append-only
 # fixes structurally. Both halves are pinned here: the stream may only GROW, and the
 # top-level settings must survive. The same batch shape is used by the workflow_init
-# downstream reset, so that route is covered too (CPR-5 symmetry).
+# downstream reset, so that route is covered too (CPR-ORTH symmetry).
 #
 # TL3 gap (what this test does NOT catch):
 # - the real PreToolUse Bash hook that parses the RESET_FROM sentinel out of a command

@@ -40,7 +40,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
-# S2: symmetry with the pre-existing quiet-layer siblings (CPR-5) — the new
+# S2: symmetry with the pre-existing quiet-layer siblings (CPR-ORTH) — the new
 #     rows follow the exact same START=ask / END=allow shape as
 #     NEXT_STEP_PAUSE / NEXT_STEP_RESUME and ENFORCE_WORKFLOW_OFF / _ON, and
 #     none of the four new rules is duplicated across lists.

@@ -11,10 +11,10 @@
 # ...and the ONE named exception to that inversion (D1): bin/sweep-supervisor-state.sh is
 # dry-run by default. It deletes records from a governance audit trail rather than a
 # regenerable derivative, so the family default is inverted for it deliberately. The
-# exception lives in this table (CPR-2: the family invariant owns its own exceptions) so a
+# exception lives in this table (CPR-SSOT: the family invariant owns its own exceptions) so a
 # future bulk edit cannot silently flip it back.
 #
-# Covers the three surfaces that must stay in lock-step (CPR-5 / CPR-6):
+# Covers the three surfaces that must stay in lock-step (CPR-ORTH / CPR-E2E):
 #   A. bin/lib/sweep-write-mode.sh semantics SSOT
 #   B. every member script's flag face and observable footer / side effects
 #   C. the unattended callers (.github/workflows/sweep.yml) and the SKILL.md prose
@@ -158,14 +158,18 @@ audit-tests-common  | bin/audit-tests-common.sh
 TABLE
 }
 
-B1b_audit_tests_common_still_rejects_apply() {
+# B1b. #1833 made audit-tests-common.sh a full member of the write-mode class,
+# so --apply is no longer rejected. --help keeps the probe side-effect-free;
+# the deletion itself is asserted on a fixture repo in
+# tests/fix-1576-audit-tests-apply.sh TC5.
+B1b_audit_tests_common_accepts_apply() {
     local out rc
-    out="$(run_with_timeout bash "$AGENTS_DIR/bin/audit-tests-common.sh" --apply 2>&1)"
+    out="$(run_with_timeout bash "$AGENTS_DIR/bin/audit-tests-common.sh" --apply --help 2>&1)"
     rc=$?
-    if [ "$rc" -ne 0 ]; then
-        pass "B1b audit-tests-common still rejects --apply (exit=$rc)"
+    if [ "$rc" -eq 0 ] && ! echo "$out" | grep -qi 'apply is not supported'; then
+        pass "B1b audit-tests-common accepts --apply (write-mode class member)"
     else
-        fail "B1b audit-tests-common must keep rejecting --apply, got exit 0 (out=$out)"
+        fail "B1b audit-tests-common must no longer reject --apply (exit=$rc, out=$out)"
     fi
 }
 
@@ -290,7 +294,7 @@ B4_delete_no_pr_alone_is_destructive() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# B5. sweep-worktrees.sh run to completion (CPR-5: same standard as its
+# B5. sweep-worktrees.sh run to completion (CPR-ORTH: same standard as its
 #     siblings — sweep-branches in B4, sweep-plans in B2 /
 #     tests/fix-847-sweep-plans-empty-prefix.sh, audit-tests in B3 /
 #     tests/feature-test-cleanup-944/group-e-deletion.sh). A --help-only smoke
@@ -480,7 +484,7 @@ fs.writeFileSync(path.join(process.argv[1], "d1sess-supervisor-state.json"), JSO
 A1_lib_exists_and_defaults_to_apply
 A2_lib_footer_and_usage_helpers
 B1_all_scripts_accept_dry_run
-B1b_audit_tests_common_still_rejects_apply
+B1b_audit_tests_common_accepts_apply
 B2_sweep_plans_footer_follows_mode
 B3_audit_tests_dry_run_writes_nothing
 B4_delete_no_pr_alone_is_destructive

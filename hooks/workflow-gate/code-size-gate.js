@@ -1,7 +1,7 @@
 "use strict";
 // hooks/workflow-gate/code-size-gate.js
 // Gate 2 (issue #1701): HARD file-size limit check for staged code files.
-// bin/review-code-size --staged owns the thresholds and line counting (CPR-2);
+// bin/review-code-size --staged owns the thresholds and line counting (CPR-SSOT);
 // this module only spawns it and maps the exit code to a gate verdict.
 
 const { spawnSync } = require("child_process");
@@ -14,7 +14,7 @@ const { normalizeForWindows } = require("./path-normalize");
 const BYPASS_LINE =
   'Emergency bypass (session-scoped): echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>"';
 
-// Fail-closed message shared by every infrastructure-error path (CPR-5).
+// Fail-closed message shared by every infrastructure-error path (CPR-ORTH).
 function infraBlock(causeLine, resolveLines) {
   return {
     action: "block",

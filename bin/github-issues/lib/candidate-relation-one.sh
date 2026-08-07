@@ -38,7 +38,7 @@ NAME="${REPO##*/}"
 # 100 is the GraphQL page maximum, and the page is what decides `parent_is_meta`:
 # a `meta` label sitting past the end of the page reads exactly like no meta label,
 # which silently drops the parent out of the sub-of rule. Kept identical to the
-# batched query in candidate-relations.sh (CPR-5) — the two must not diverge.
+# batched query in candidate-relations.sh (CPR-ORTH) — the two must not diverge.
 QUERY="{ repository(owner: \"${OWNER}\", name: \"${NAME}\") { issue(number: ${N}) { number state parent { number state labels(first: 100) { nodes { name } } } subIssues(first: 1) { totalCount } } } }"
 
 gh api graphql -f query="$QUERY" 2>/dev/null | tr -d '\r'

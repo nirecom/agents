@@ -371,7 +371,7 @@ require('$STATEIO_NODE').markStep('g43e-sid', 'workflow_init', 'pending');" >/de
     fi
 }
 
-# G43f: CPR-5 symmetric counterpart of G43d on branch (3). The isWorkflowStarted
+# G43f: CPR-ORTH symmetric counterpart of G43d on branch (3). The isWorkflowStarted
 # gate zeroes alert_armed_at ONLY — the C1 hang arm must still block before
 # workflow-init. Seeds alert_armed_at=null so only hangDetected can fire.
 run_g43f() {

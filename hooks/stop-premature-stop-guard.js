@@ -10,7 +10,7 @@ const path = require("path");
 
 // Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
 // second generic block in the same turn would surface two competing messages,
-// so this guard stays silent for them (CPR-3 — one owner per condition).
+// so this guard stays silent for them (CPR-SC — one owner per condition).
 // - pre_final_report_gate → owned by hooks/stop-final-report-guard.js lane B.
 const DELEGATED_REASONS = new Set(["pre_final_report_gate"]);
 

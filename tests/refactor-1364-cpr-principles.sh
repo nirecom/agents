@@ -1,23 +1,45 @@
 #!/bin/bash
 # tests/refactor-1364-cpr-principles.sh
 # Tests: rules/core-principles.md, CLAUDE.md, agents/supervisor.md, skills/survey-history/SKILL.md, agents/detail-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, skills/survey-code/SKILL.md
-# Tags: core-principles, refactor, scope:issue-specific
+# Tags: core-principles, refactor, scope:common
 #
 # Structural tests for issue #1364 — renumber core-principles.md sections to the
-# CPR-N scheme, add CPR-3 "切り分けて考える" (separation-of-concerns) principle,
+# CPR-N scheme, add CPR-SC "切り分けて考える" (separation-of-concerns) principle,
 # and purge legacy §N cross-references from downstream prompt files.
+#
+# ALSO guards issue #1858 — the CPR-N numeric IDs are replaced by semantic short
+# codes (CPR-UO, CPR-WPH, CPR-SC, CPR-SSOT, CPR-E2C, CPR-ORTH, CPR-E2E, CPR-NRS,
+# CPR-UNV) in a fixed canonical order, and no residual CPR-<N> numeric ID may
+# remain anywhere outside append-only historical records and lines carrying the
+# line-scoped [CPR-LEGACY-ID-OK] allowlist marker (contract documented at
+# CPR_LEGACY_ID_MARKER in refactor-1364-cpr-principles/mapping.sh). Both
+# invariants are guarded here: #1364 established the scheme, #1858 renamed its
+# members.
+#
+# Entrypoint only — the cases live in two sourced fragments (Pattern A split):
+#   refactor-1364-cpr-principles/structure.sh — rules/core-principles.md itself
+#   refactor-1364-cpr-principles/mapping.sh   — the downstream reference sweep
+# This file owns what both fragments share: CORE, the section/occurrence helpers,
+# the PASS/FAIL counters, run_all ordering, and the wall-clock timeout.
 #
 # fail-before-fix: authored before the source edits land. Many cases FAIL until
 # rules/core-principles.md is renumbered and downstream files are updated.
 #
-# L3 gap: these are static-text assertions only. Whether the renumbered principles
-# and CPR-3 are actually loaded into a live planner/reviewer/Codex context — and
-# whether Claude Code honors them at runtime — can only be verified in an L3
-# session with a real `claude -p` invocation. Not covered here.
+# TL3 gap (what this test does NOT catch):
+# - Whether the renamed principles reach a live planner/reviewer/Codex context —
+#   this reads the file from disk, not the prompt a running agent receives.
+# - Whether Claude Code honors CPR-WPH at runtime (does the model really state the
+#   invariant before the mechanism?). Only visible in a real `claude -p` session.
+# - Whether a skill that references core-principles.md silently stops loading it —
+#   a dangling `CPR-ORTH` is text-visible here, a broken load is not.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration (the #1858 sweep
+# edits skills/**/*.md, so the classifier raises "Did you run the skill end-to-end?").
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/refactor-1364-cpr-principles"
 
 PASS=0
 FAIL=0
@@ -37,165 +59,35 @@ run_with_timeout() {
 
 CORE="$AGENTS_DIR/rules/core-principles.md"
 
-# ============================================================================
-# N: positive cases — expected structure after the refactor
-# ============================================================================
+# ----------------------------------------------------------------------------
+# Shared helpers — used by BOTH fragments, so they live here, not in either one.
+# ----------------------------------------------------------------------------
 
-test_N1_all_cpr_headers_present() {
-    if [ ! -f "$CORE" ]; then
-        fail "N1: rules/core-principles.md not found (prerequisite)"
-        return
-    fi
-    local missing=""
-    local n
-    for n in 1 2 3 4 5 6 7 8; do
-        if ! grep -qE "^## CPR-${n}\b" "$CORE"; then
-            missing="$missing CPR-$n"
-        fi
-    done
-    if [ -z "$missing" ]; then
-        pass "N1: all CPR-1..CPR-8 headers present"
-    else
-        fail "N1: missing CPR headers:$missing"
-    fi
+# Body of ONE CPR section: lines after its `## CPR-<code>` heading, up to the next
+# `## ` heading. The `([ \t]|$)` boundary is mandatory — without it `E2C` matches the
+# `CPR-E2E` heading and `UO` matches `CPR-UNV`, asserting against the wrong section.
+cpr_section() {
+    awk -v code="$1" '
+        $0 ~ "^## CPR-" code "([ \t]|$)" { inside = 1; next }
+        inside && /^## / { inside = 0 }
+        inside { print }
+    ' "$CORE"
 }
 
-test_N2_cpr3_new_principle() {
-    if [ ! -f "$CORE" ]; then
-        fail "N2: rules/core-principles.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "^## CPR-3\b" "$CORE"; then
-        pass "N2: '## CPR-3' new principle header present"
-    else
-        fail "N2: '## CPR-3' header NOT found in rules/core-principles.md"
-    fi
+ALL_CPR_CODES="CPR-UO CPR-WPH CPR-SC CPR-SSOT CPR-E2C CPR-ORTH CPR-E2E CPR-NRS CPR-UNV"
+
+# Count OCCURRENCES (not matching lines) of one code in one file: `grep -o` emits one
+# line per match, so a single line carrying two references counts as two. The trailing
+# boundary keeps CPR-E2C from being counted as CPR-E2E (and any code from matching a
+# longer sibling).
+cpr_occurrences() {
+    grep -oE "$1([^A-Za-z0-9]|\$)" "$2" 2>/dev/null | wc -l | tr -d ' '
 }
 
-
-test_N4_supervisor_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/agents/supervisor.md"
-    if [ ! -f "$f" ]; then
-        fail "N4: agents/supervisor.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N4: legacy §N reference still present in agents/supervisor.md"
-    else
-        pass "N4: no legacy §N reference in agents/supervisor.md"
-    fi
-}
-
-test_N5_survey_history_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/skills/survey-history/SKILL.md"
-    if [ ! -f "$f" ]; then
-        fail "N5: skills/survey-history/SKILL.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N5: legacy §N reference still present in skills/survey-history/SKILL.md"
-    else
-        pass "N5: no legacy §N reference in skills/survey-history/SKILL.md"
-    fi
-}
-
-test_N6_detail_planner_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/agents/detail-planner.md"
-    if [ ! -f "$f" ]; then
-        fail "N6: agents/detail-planner.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N6: legacy §N reference still present in agents/detail-planner.md"
-    else
-        pass "N6: no legacy §N reference in agents/detail-planner.md"
-    fi
-}
-
-test_N7_detail_reviewer_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/agents/detail-reviewer.md"
-    if [ ! -f "$f" ]; then
-        fail "N7: agents/detail-reviewer.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N7: legacy §N reference still present in agents/detail-reviewer.md"
-    else
-        pass "N7: no legacy §N reference in agents/detail-reviewer.md"
-    fi
-}
-
-test_N8_outline_reviewer_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/agents/outline-reviewer.md"
-    if [ ! -f "$f" ]; then
-        fail "N8: agents/outline-reviewer.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N8: legacy §N reference still present in agents/outline-reviewer.md"
-    else
-        pass "N8: no legacy §N reference in agents/outline-reviewer.md"
-    fi
-}
-
-test_N9_survey_code_no_legacy_section_ref() {
-    local f="$AGENTS_DIR/skills/survey-code/SKILL.md"
-    if [ ! -f "$f" ]; then
-        fail "N9: skills/survey-code/SKILL.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$f"; then
-        fail "N9: legacy §N reference still present in skills/survey-code/SKILL.md"
-    else
-        pass "N9: no legacy §N reference in skills/survey-code/SKILL.md"
-    fi
-}
-
-# ============================================================================
-# L: negative cases — legacy forms must be gone from core-principles.md
-# ============================================================================
-
-test_L1_no_legacy_section_ref_in_core() {
-    if [ ! -f "$CORE" ]; then
-        fail "L1: rules/core-principles.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "§[1-9]" "$CORE"; then
-        fail "L1: legacy §N cross-reference still present in rules/core-principles.md"
-    else
-        pass "L1: no legacy §N cross-reference in rules/core-principles.md"
-    fi
-}
-
-test_L2_no_old_numbered_header() {
-    if [ ! -f "$CORE" ]; then
-        fail "L2: rules/core-principles.md not found (prerequisite)"
-        return
-    fi
-    if grep -qE "^## [0-9]+\." "$CORE"; then
-        fail "L2: legacy '## N.' numbered header still present in rules/core-principles.md"
-    else
-        pass "L2: no legacy '## N.' numbered header in rules/core-principles.md"
-    fi
-}
-
-# ============================================================================
-# S: structural case — exact CPR header count
-# ============================================================================
-
-test_S1_exactly_8_cpr_headers() {
-    if [ ! -f "$CORE" ]; then
-        fail "S1: rules/core-principles.md not found (prerequisite)"
-        return
-    fi
-    local count
-    count="$(grep -c "^## CPR-" "$CORE")"
-    if [ "$count" -eq 8 ]; then
-        pass "S1: exactly 8 '## CPR-' headers"
-    else
-        fail "S1: expected 8 '## CPR-' headers, found $count"
-    fi
-}
+# shellcheck source=tests/refactor-1364-cpr-principles/structure.sh
+. "$FRAGMENT_DIR/structure.sh"
+# shellcheck source=tests/refactor-1364-cpr-principles/mapping.sh
+. "$FRAGMENT_DIR/mapping.sh"
 
 # ============================================================================
 # Run all (wrap in 120s wall-clock timeout if available)
@@ -203,16 +95,17 @@ test_S1_exactly_8_cpr_headers() {
 
 run_all() {
     test_N1_all_cpr_headers_present
-    test_N2_cpr3_new_principle
-    test_N4_supervisor_no_legacy_section_ref
-    test_N5_survey_history_no_legacy_section_ref
-    test_N6_detail_planner_no_legacy_section_ref
-    test_N7_detail_reviewer_no_legacy_section_ref
-    test_N8_outline_reviewer_no_legacy_section_ref
-    test_N9_survey_code_no_legacy_section_ref
+    test_N2_cpr_wph_new_principle
+    test_N3_cpr_wph_content
+    test_N4_downstream_no_legacy_section_ref
     test_L1_no_legacy_section_ref_in_core
     test_L2_no_old_numbered_header
-    test_S1_exactly_8_cpr_headers
+    test_S1_exactly_9_cpr_headers
+    test_S2_header_order
+    test_S3_all_sections_non_empty
+    test_S4_section_anchor_phrases
+    test_G1_no_residual_numeric_cpr
+    test_M1_downstream_mapping
 }
 
 if command -v timeout >/dev/null 2>&1; then

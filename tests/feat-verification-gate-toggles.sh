@@ -182,7 +182,7 @@ else
     fi
 fi
 
-# Case 6 — distinct log annotation string `skipped: RUN_TL4=off` (CPR-5)
+# Case 6 — distinct log annotation string `skipped: RUN_TL4=off` (CPR-ORTH)
 echo "=== Case 6: log annotation 'skipped: RUN_TL4=off' ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "6. user-verified.md not found"
