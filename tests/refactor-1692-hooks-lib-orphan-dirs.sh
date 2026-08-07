@@ -95,20 +95,31 @@ process.stdout.write(ok ? 'OK' : 'BAD');" 2>&1)
 }
 
 # ---------------------------------------------------------------------------
-# C4: zero stale references to the pre-move path anywhere in the repo
-#     (excludes .git/, node_modules/, and this test file itself)
+# C4: zero stale references to the pre-move path across the repo's TRACKED
+#     files (this test file itself excluded, so it cannot flag its own source).
+#
+#     Scan domain is `git grep`, i.e. tracked content only — NOT a plain
+#     `grep -r` of the working tree. Untracked/gitignored scratch files
+#     (WORKTREE_NOTES.md, editor backups, local notes) are not repo content:
+#     they exist on one developer's machine and may quote the old path in
+#     prose. Scanning them makes the case environment-dependent — green in CI,
+#     red locally — which is exactly the claim this case must not make.
+#
+#     Fail-closed on git errors: `git grep` exits 1 for "no matches" and >=2
+#     for a real failure; a failure cannot certify anything and must not be
+#     read as "clean".
 # ---------------------------------------------------------------------------
 run_C4() {
-    local hits
-    hits=$(cd "$AGENTS_DIR" && grep -rn \
-        --exclude-dir=.git --exclude-dir=node_modules --exclude="$SELF_BASENAME" \
-        -e "$OLD_DIR_REF" . 2>/dev/null || true)
-    if [ -z "$hits" ]; then
-        pass "C4: zero stale references to the pre-move path across the repo"
-    else
-        fail "C4: stale pre-move references remain:
-$hits"
-    fi
+    local hits rc
+    hits=$(cd "$AGENTS_DIR" && git grep -nF -e "$OLD_DIR_REF" -- \
+        ":(exclude,glob)**/$SELF_BASENAME" 2>&1)
+    rc=$?
+    case "$rc" in
+      1) pass "C4: zero stale references to the pre-move path across tracked files" ;;
+      0) fail "C4: stale pre-move references remain in tracked files:
+$hits" ;;
+      *) fail "C4: git grep failed (exit $rc) — cannot certify the sweep: $hits" ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
