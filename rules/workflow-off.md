@@ -7,9 +7,13 @@ Session-scoped escape hatch that suspends workflow enforcement for the current C
 | Sentinel | Permission | Effect |
 |---|---|---|
 | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` | **ask** (requires user approval) | Creates `${sid}.workflow-off` marker; suspends enforcement |
+| `<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: {reason}>>` | **ask** (requires user approval) | Same marker, but bypasses the Phase1 clearance examination; emitted by `/enforce-workflow-off` because explicit user invocation is itself the human decision |
 | `<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>` | **allow** (auto-approved) | Removes marker; restores enforcement |
 
 The `{reason}` field is mandatory and non-empty. Bare sentinel form (no `: {reason}`) is rejected.
+
+`{reason}` must begin with the granted clearance category as a bracketed token: `[<category>] <free text>`.
+The bracketed category must equal the `category` on the clearance token minted by `bin/request-off-clearance`; any other spelling fails closed.
 
 ## What is bypassed when WORKFLOW_OFF is active
 
@@ -56,3 +60,5 @@ Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"` to restore enforcement. This
 WORKFLOW_OFF is session-scoped: only the current Claude Code session (identified by its session ID) is affected. Other concurrent sessions remain at full enforcement.
 
 WORKFLOW_OFF subsumes WORKTREE_OFF: when WORKFLOW_OFF is active, `enforce-worktree.js` is also bypassed. Emitting both sentinels is redundant — use WORKFLOW_OFF alone.
+
+WORKTREE_OFF-specific detail (its own sentinels, bypass scope, and when to prefer it) lives in `rules/worktree.md` "Session-scoped escape hatch (WORKTREE_OFF)".

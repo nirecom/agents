@@ -220,3 +220,15 @@ Changes: `select-tests.sh --auto` and `/run-tests` no longer silently skip all t
 ### FEATURE: PR #1854 (2026-08-02)
 Background: feat(#1849): add preuse-auto-approve hook for Monitor and EnterWorktree
 Changes: Monitor and EnterWorktree tool calls no longer pause for a confirmation dialog during normal workflow execution. Set `AUTO_APPROVE_TOOLS=off` in `.env` to restore the previous prompt behavior instantly.
+
+### FEATURE: PR #1853 (2026-08-02)
+Background: feat(#1642): single-authority prompt-extraction CLI + blocking gate wiring
+Changes: **New**: `bin/check-prompt-extraction` — single-authority CLI for §1.5 code-fence and §1.3 inline-procedure violations; wired as workflow-gate Gate 3 (blocking) and pre-commit backstop; existing violations frozen in `.prompt-extraction-allowlist` ratchet;**Changed**: `bin/check-inline-procedures` converted to advisory adapter (always exits 0, delegates to new engine)
+
+### SECURITY: PR #1857 -- fix/off-clearance-1780 (2026-08-03)
+Background: Hardened the OFF-clearance token lifecycle used to gate emergency write access outside the normal worktree workflow.
+Changes: Closed a mint/claim race, several cwd-tracking bypasses of the OFF-clearance write guard (popd, cd -, pushd -n, command/builtin prefixes), and a silent-allow gap in the main-worktree write guard for commands whose target could not be extracted.
+
+### FEATURE: PR #1860 (2026-08-07)
+Background: fix(#1833): audit-tests.sh primary filter is now target survival, not issue-closed staleness
+Changes: Fixed: `audit-tests.sh` (the stale-test sweep) now detects a test whose target source file has been deleted or renamed immediately, instead of waiting for the tracking issue to be closed and age past the stale-months threshold.

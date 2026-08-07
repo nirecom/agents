@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# Detects scope:common test files whose all # Tests: paths are missing.
-# Usage: bin/audit-tests-common.sh [--format text|json] [--offline] [--dry-run]
+# audit-tests-common.sh — Retire checker for common (non-issue-specific) tests.
+#
+# Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
+#                                  [--stale-months N] [--format text|json]
+#                                  [--fix-headers]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error
 #
-# --offline is accepted for interface symmetry with audit-tests.sh but has no
-# effect (orphan detection does not require GitHub API calls).
-# --dry-run is likewise an accepted no-op: this script has no write path, so
-# there is no default to invert. It exists so the /sweep family presents one
-# flag face (CPR-ORTH) and so the nightly cron can state its intent explicitly.
-# --apply stays rejected — deletion here would need issue staleness context.
+# Writes by default: a flagless run DELETES orphans (git rm). Pass --dry-run
+# to report only.
+#
+# Scans top-level tests/*.sh EXCEPT issue-specific tests/feature-<N>-*.sh
+# (those belong to bin/audit-tests.sh). A file is an ORPHAN when every path in
+# its `# Tests:` header is gone. Deletion is then gated on the issue reference
+# carried by the filename: none = delete, an explicit `<feature|fix|feat>-<N>-`
+# prefix = delete only once issue N is closed and stale, anything merely
+# number-shaped = held as ambiguous. A file plus its sibling tests/<stem>/
+# folder is one retire unit.
 
 set -euo pipefail
 
@@ -17,159 +24,223 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
 # shellcheck source=lib/test-frontmatter-fix.sh
 source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+# shellcheck source=lib/test-retire-predicate.sh
+source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
+# shellcheck source=lib/sweep-write-mode.sh
+source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 
-FORMAT="text"
+STALE_MONTHS=3
 OFFLINE=0
+FORMAT=text
 FIX_HEADERS=0
+FIX_APPLY=0
+sweep_write_mode_init
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --format) FORMAT="$2"; shift 2 ;;
+    --stale-months)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: --stale-months requires an argument" >&2
+        exit 2
+      fi
+      STALE_MONTHS="$2"
+      shift 2
+      ;;
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
-    --dry-run) shift ;;
-    --apply) echo "ERROR: --apply is not supported by audit-tests-common.sh (deletion requires issue staleness context)" >&2; exit 2 ;;
-    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+    --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
+    --dry-run) sweep_write_mode_dry_run; shift ;;
+    --format)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: --format requires an argument (text|json)" >&2
+        exit 2
+      fi
+      FORMAT="$2"
+      shift 2
+      ;;
+    -h|--help)
+      sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+      sweep_write_mode_usage_lines
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown argument: $1" >&2
+      exit 2
+      ;;
   esac
 done
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "ERROR: not inside a git repository" >&2
+if [[ "$FORMAT" != "text" && "$FORMAT" != "json" ]]; then
+  echo "ERROR: --format must be text or json (got: $FORMAT)" >&2
   exit 2
-}
+fi
+if [[ ! "$STALE_MONTHS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --stale-months must be a non-negative integer (got: $STALE_MONTHS)" >&2
+  exit 2
+fi
 
-if [[ ! -d "$REPO_ROOT/tests" ]]; then
-  echo "ERROR: tests/ directory not found in $REPO_ROOT" >&2
+# Fail closed: with apply-by-default, an unresolvable repo root must delete
+# nothing rather than operate against whatever tests/ the CWD happens to expose.
+if ! REPO_ROOT="$(trp_require_repo_root)"; then
+  echo "ERROR: not inside a git repository — cannot resolve the repo root" >&2
+  exit 2
+fi
+cd "$REPO_ROOT"
+if [[ ! -d tests ]]; then
+  echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
   exit 2
 fi
 
 TODAY="$(date +%Y-%m-%d)"
+trp_compute_cutoff "$STALE_MONTHS" >/dev/null
+CUTOFF_DATE="$TRP_CUTOFF_DATE"
+TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 
-orphan_files=()
-orphan_tests_csvs=()
-orphan_missing_csvs=()
-
-shopt -s nullglob
-for testfile in "$REPO_ROOT/tests/"*.sh; do
-  base="$(basename "$testfile")"
-
-  # feature-[0-9]*- files are scope:issue-specific — handled by audit-tests.sh
-  if [[ "$base" =~ ^feature-[0-9]+- ]]; then
-    continue
-  fi
-
-  # tests/_archive/ is excluded by the glob (subdirectory), but guard explicitly
-  case "$testfile" in
-    */tests/_archive/*) continue ;;
+# in_common_scope <relpath> — top-level, non-archived, non-issue-specific.
+in_common_scope() {
+  local rel="$1" name
+  name="$(basename "$rel")"
+  case "$rel" in
+    tests/_archive/*) return 1 ;;
   esac
+  [[ "$(trp_scope_of "$name")" == "common" ]]
+}
 
-  # --fix-headers mode: report A/B/C token classification per file (no rewrite;
-  # deletion is not supported here — CPR-ORTH symmetry with audit-tests.sh).
-  if [[ "$FIX_HEADERS" -eq 1 ]]; then
-    ( cd "$REPO_ROOT" && _fix_headers_report "tests/$base" )
-    continue
-  fi
-
-  tests_header="$(grep -m1 -E '^# Tests:' "$testfile" 2>/dev/null || true)"
-  if [[ -z "$tests_header" ]]; then
-    # No # Tests: line — cannot determine orphan status; skip
-    continue
-  fi
-
-  paths_csv="${tests_header#\# Tests:}"
-  paths_csv="${paths_csv# }"
-
-  if [[ -z "$paths_csv" ]]; then
-    # Empty # Tests: header — skip (cannot determine orphan status)
-    continue
-  fi
-
-  IFS=',' read -r -a paths_arr <<< "$paths_csv"
-
-  if [[ "${#paths_arr[@]}" -eq 0 ]]; then
-    continue
-  fi
-
-  all_missing=1
-  missing_parts=()
-  for p in "${paths_arr[@]}"; do
-    p_trim="$(echo "$p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    [[ -z "$p_trim" ]] && continue
-    if [[ -e "$REPO_ROOT/$p_trim" ]]; then
-      all_missing=0
-      break
-    else
-      missing_parts+=("$p_trim")
+if [[ "$FIX_HEADERS" -eq 1 ]]; then
+  for testfile in tests/*.sh; do
+    [[ -e "$testfile" ]] || continue
+    in_common_scope "$testfile" || continue
+    _fix_headers_report "$testfile"
+    if [[ "$APPLY" -eq 1 && "$FIX_APPLY" -eq 1 ]]; then
+      _fix_headers_apply "$testfile"
     fi
   done
-
-  if [[ "$all_missing" -eq 1 && "${#paths_arr[@]}" -gt 0 ]]; then
-    orphan_files+=("tests/$base")
-    orphan_tests_csvs+=("$paths_csv")
-    local_missing="$(IFS=','; echo "${missing_parts[*]:-}")"
-    orphan_missing_csvs+=("$local_missing")
-  fi
-done
-
-# --fix-headers mode reports per-file classification and does not emit orphans.
-if [[ "$FIX_HEADERS" -eq 1 ]]; then
   exit 0
 fi
 
-if [[ "${#orphan_files[@]}" -eq 0 ]]; then
-  if [[ "$FORMAT" == "json" ]]; then
-    printf '{"generated":"%s","orphans":[]}\n' "$TODAY"
+trp_init_gh "$OFFLINE"
+OFFLINE="$TRP_OFFLINE"
+
+DIAG_FILES=()
+DIAG_KINDS=()
+ORPHANS=()
+DELETE_FAILED=0
+JSON_ITEMS=()
+
+if [[ "$FORMAT" == "text" ]]; then
+  echo "# audit-tests-common.sh report — ${TODAY}"
+  echo "# Scope: top-level tests/*.sh excluding issue-specific feature-<N>-*.sh"
+  echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
+  echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
+  if [[ "$OFFLINE" -eq 1 ]]; then
+    echo "# Mode: OFFLINE (orphans are still reported; deletion of issue-referencing files is held)"
   fi
-  exit 1
+  echo ""
 fi
+
+for testfile in tests/*.sh; do
+  [[ -e "$testfile" ]] || continue
+  in_common_scope "$testfile" || continue
+  base="$(basename "$testfile")"
+
+  trp_survival_verdict "$REPO_ROOT" "$testfile" >/dev/null
+  verdict="$TRP_VERDICT"
+
+  case "$verdict" in
+    malformed)
+      DIAG_FILES+=("$testfile"); DIAG_KINDS+=("malformed_header")
+      if [[ "$FORMAT" == "text" ]]; then echo "MALFORMED_HEADER: ${testfile}"; fi
+      continue
+      ;;
+    no-header)
+      DIAG_FILES+=("$testfile"); DIAG_KINDS+=("no_tests_header")
+      if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${testfile}"; fi
+      continue
+      ;;
+    orphan) ;;
+    *) continue ;;
+  esac
+
+  tokens_all=("${TRP_TOKENS_ALL[@]:-}")
+  tokens_missing=("${TRP_TOKENS_MISSING[@]:-}")
+  tests_csv="$TRP_TESTS_CSV"
+
+  trp_unit_of "$REPO_ROOT" "$testfile"
+  sibling="$TRP_SIBLING"
+  sib_count="$TRP_SIBLING_COUNT"
+  unit_paths=("${TRP_UNIT_PATHS[@]}")
+
+  scope="$(trp_scope_of "$base")"
+  ref="$(trp_issue_ref "$base")"
+  meta="none"
+  if [[ "$ref" == "explicit" ]]; then
+    issue_num="$(trp_issue_number "$base")"
+    trp_fetch_issue_meta "$issue_num" >/dev/null
+    meta="$TRP_ISSUE_META"
+  fi
+  trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
+  gate="$TRP_GATE"
+
+  ORPHANS+=("$testfile")
+
+  if [[ "$FORMAT" == "text" ]]; then
+    echo "ORPHAN: ${testfile}"
+    echo "  Tests: ${tests_csv}"
+    echo "  Missing paths: $(IFS=','; echo "${tokens_missing[*]}")"
+    if [[ -n "$sibling" ]]; then
+      echo "  Sibling folder: ${sibling}/ (${sib_count} files)"
+      echo "  Deletion unit: ${testfile} ${sibling}/"
+    else
+      echo "  Deletion unit: ${testfile}"
+    fi
+  fi
+
+  hold_token="$(trp_gate_line_token "$gate")"
+  if [[ -n "$hold_token" ]]; then
+    if [[ "$FORMAT" == "text" ]]; then echo "${hold_token}: ${testfile}"; fi
+  elif [[ "$APPLY" -eq 1 ]]; then
+    if trp_git_rm_unit "${unit_paths[@]}"; then
+      if [[ "$FORMAT" == "text" ]]; then echo "DELETED: ${testfile}"; fi
+    else
+      DELETE_FAILED=1
+    fi
+  fi
+  if [[ "$FORMAT" == "text" ]]; then echo ""; fi
+
+  if [[ "$FORMAT" == "json" ]]; then
+    sib_json=""
+    if [[ -n "$sibling" ]]; then sib_json="${sibling}/"; fi
+    JSON_ITEMS+=("$(printf '{"file":"%s","tests_paths":%s,"missing_paths":%s,"sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
+      "$(trp_json_escape "$testfile")" \
+      "$(trp_json_array "${tokens_all[@]}")" \
+      "$(trp_json_array "${tokens_missing[@]}")" \
+      "$(trp_json_escape "$sib_json")" "$sib_count" "$(trp_json_escape "$gate")")")
+  fi
+done
 
 if [[ "$FORMAT" == "json" ]]; then
-  printf '{"generated":"%s","orphans":[\n' "$TODAY"
-  last_idx=$(( ${#orphan_files[@]} - 1 ))
-  for i in "${!orphan_files[@]}"; do
-    comma=","
-    [[ $i -eq $last_idx ]] && comma=""
-
-    IFS=',' read -r -a tp <<< "${orphan_tests_csvs[$i]}"
-    IFS=',' read -r -a mp <<< "${orphan_missing_csvs[$i]:-}"
-
-    tests_json="["
-    last_tp=$(( ${#tp[@]} - 1 ))
-    for j in "${!tp[@]}"; do
-      t="$(echo "${tp[$j]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-      tc=","
-      [[ $j -eq $last_tp ]] && tc=""
-      tests_json+="\"$t\"$tc"
-    done
-    tests_json+="]"
-
-    missing_json="["
-    if [[ "${#mp[@]}" -gt 0 && -n "${mp[0]:-}" ]]; then
-      last_mp=$(( ${#mp[@]} - 1 ))
-      for j in "${!mp[@]}"; do
-        m="$(echo "${mp[$j]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-        [[ -z "$m" ]] && continue
-        mc=","
-        [[ $j -eq $last_mp ]] && mc=""
-        missing_json+="\"$m\"$mc"
-      done
-    fi
-    missing_json+="]"
-
-    printf '  {"file":"%s","tests_paths":%s,"missing_paths":%s}%s\n' \
-      "${orphan_files[$i]}" "$tests_json" "$missing_json" "$comma"
+  diag_json=""
+  for i in "${!DIAG_FILES[@]}"; do
+    if [[ -n "$diag_json" ]]; then diag_json+=","; fi
+    diag_json+="$(printf '{"file":"%s","kind":"%s"}' \
+      "$(trp_json_escape "${DIAG_FILES[$i]}")" "${DIAG_KINDS[$i]}")"
   done
-  printf ']}\n'
+  orph_json=""
+  for item in "${JSON_ITEMS[@]:-}"; do
+    if [[ -z "$item" ]]; then continue; fi
+    if [[ -n "$orph_json" ]]; then orph_json+=","; fi
+    orph_json+="$item"
+  done
+  printf '{"generated":"%s","cutoff":"%s","stale_months":%s,"offline":%s,"diagnostics":[%s],"orphans":[%s]}\n' \
+    "$TODAY" "$CUTOFF_DATE" "$STALE_MONTHS" "$OFFLINE" "$diag_json" "$orph_json"
 else
-  printf '# audit-tests-common.sh report — %s\n' "$TODAY"
-  printf '# Criteria: non-feature-NNN tests whose all # Tests: paths are missing\n'
-  printf '\n'
-  for i in "${!orphan_files[@]}"; do
-    printf 'ORPHAN: %s\n' "${orphan_files[$i]}"
-    printf '  Tests: %s\n' "${orphan_tests_csvs[$i]}"
-    printf '  Missing paths: %s\n' "${orphan_missing_csvs[$i]:-}"
-    printf '\n'
-  done
+  sweep_write_mode_footer
 fi
 
+if [[ "$DELETE_FAILED" -eq 1 ]]; then
+  exit 2
+fi
+if [[ "${#ORPHANS[@]}" -eq 0 ]]; then
+  exit 1
+fi
 exit 0

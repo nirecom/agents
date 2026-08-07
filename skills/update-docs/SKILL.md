@@ -60,6 +60,7 @@ UD-8a. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Note
 UD-8b. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
 UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step WE-21 (single canonical writer for both files).
 UD-8d. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
+   - A no-op `git add docs/` is expected on this path — history and changelog content sits in `WORKTREE_NOTES.md`, not under `docs/`; the `docs_complete` sentinel alone satisfies the gate.
 UD-8e. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
 UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; next-step owns `user_verification` (deferred to `/worktree-end` under `ENFORCE_WORKTREE=on`).
 
@@ -67,7 +68,7 @@ UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the wor
 
 UD-9. Complete delivery (Path B — `ENFORCE_WORKTREE=off`).
 
-UD-9a. History entry — dispatch `doc-append` per `skills/_shared/worker-dispatch.md`. Payload: `mode: "history"`, `cwd`, `category`, `subject`, `commits`, `background`, `changes`, `test_gap` (required when `category` is BUGFIX), `artifact_dir`.
+UD-9a. History entry — dispatch the `doc-append` worker per `skills/_shared/worker-dispatch.md`. Payload: `mode: "history"`, `cwd`, `category`, `subject`, `commits`, `background`, `changes`, `test_gap` (required when `category` is BUGFIX), `artifact_dir`.
 UD-9b. For public repos — changelog entry: same dispatch with `mode: "changelog"` and no `commits` (payload sequence suffix `-2`).
    On `failed` status: surface `summary` + `artifact_path` to the user and stop.
 UD-9c. `git add docs/ README.md CHANGELOG.md`

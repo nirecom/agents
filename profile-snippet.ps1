@@ -78,7 +78,12 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
         $_fetchKilled = $false
         try {
             $env:GIT_TERMINAL_PROMPT = '0'
-            $env:GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+            # Bare "ssh" resolves via PATH, which on Windows finds Git's bundled MSYS2
+            # ssh.exe ahead of the Windows-native one — that binary can't reach the
+            # Windows OpenSSH Authentication Agent, so a passphrase-protected key fails
+            # publickey auth outright instead of just skipping the interactive prompt.
+            # The Windows-native path keeps agent access while still enforcing BatchMode.
+            $env:GIT_SSH_COMMAND = '"C:\Windows\System32\OpenSSH\ssh.exe" -o BatchMode=yes'
             # Start-Process -ArgumentList joins array elements with plain spaces before
             # handing them to the OS process-creation API — the array form alone does NOT
             # quote elements containing spaces. $SessionDir must therefore be wrapped in
