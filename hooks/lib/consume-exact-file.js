@@ -1,4 +1,4 @@
-// SSOT (CPR-2) for single-use consumption of a state file whose removal is the
+// SSOT (CPR-SSOT) for single-use consumption of a state file whose removal is the
 // authorization event (OFF-clearance `.claimed`, EMERGENCY-OFF provenance marker).
 // Keyed on the claim file's exclusive-create ("wx"), not rename — rename is not a
 // mutual-exclusion primitive on Windows (measured: N concurrent renameSync calls to

@@ -1,5 +1,5 @@
 // hooks/lib/write-tools.js
-// SSOT (CPR-2) for the WRITE-CAPABLE TOOL CLASSES that PreToolUse hooks guard,
+// SSOT (CPR-SSOT) for the WRITE-CAPABLE TOOL CLASSES that PreToolUse hooks guard,
 // and the payload shapes each class uses to name its target.
 //
 //   edit-write class : Edit, Write, MultiEdit, editFiles, NotebookEdit —
@@ -8,7 +8,7 @@
 //   command class    : Bash, runInTerminal, runCommands (see
 //                      hooks/lib/tool-command-text.js for its payload)
 //
-// Every guard needs both classes (CPR-5) — enforce-worktree.js used to
+// Every guard needs both classes (CPR-ORTH) — enforce-worktree.js used to
 // recognize only the original four tools, so editFiles/NotebookEdit/
 // runInTerminal/runCommands bypassed main-worktree enforcement outright.
 //

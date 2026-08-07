@@ -8,7 +8,7 @@ const {
 } = require("../../lib/protected-basenames");
 
 // Session markers and OFF-clearance tokens are symmetric members of one
-// protected-basename class (CPR-5); both are consulted together everywhere a
+// protected-basename class (CPR-ORTH); both are consulted together everywhere a
 // write is being detected, so the pairing is written once here.
 function hitsAnyProtectedBasename(basename) {
   return hitsProtectedMarkerBasename(basename) || hitsTokenBasename(basename);
@@ -27,7 +27,7 @@ const { realResolve } = require("./realpath-resolve");
 // worktree-LOCATION guard, so a linked worktree on a feature branch still
 // allows. Marker integrity is location-independent and is primarily enforced
 // by hooks/block-clearance-token-write.js; both read the same protected-basename
-// SSOT (hooks/lib/protected-basenames.js) so the two can never diverge (CPR-2).
+// SSOT (hooks/lib/protected-basenames.js) so the two can never diverge (CPR-SSOT).
 
 function areAllBashTargetsUnderWorkflowDir(targets) {
   if (!targets || targets.length === 0) return false;
@@ -62,7 +62,7 @@ function areAllBashTargetsUnderWorkflowDir(targets) {
       // indirection fails closed too. `resolved` still carries whatever glob
       // metachars / trailing whitespace-dots the raw command spelled (the
       // real shell resolves these at execution time, before this check runs)
-      // so both forms are normalized before testing (CPR-5, same treatment as
+      // so both forms are normalized before testing (CPR-ORTH, same treatment as
       // hooks/block-clearance-token-write.js). The OFF-clearance token lives in
       // this same directory and grants the same clearance, so it's excluded
       // from the allow fast-path on identical grounds — the sanctioned mint

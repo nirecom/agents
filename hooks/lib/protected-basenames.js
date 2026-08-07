@@ -3,7 +3,7 @@
 // tool-issued write may create or mutate. Shared (rules/coding/file-split.md) by
 // block-clearance-token-write.js and enforce-worktree/bash-write-scope/marker-gate.js.
 // Matching is directory-agnostic — a marker/token written anywhere is still a
-// forgery attempt. Suffix lists are canonical (CPR-2); regexes are derived from them.
+// forgery attempt. Suffix lists are canonical (CPR-SSOT); regexes are derived from them.
 "use strict";
 
 const path = require("path");
@@ -42,7 +42,7 @@ const SESSION_MARKER_KINDS = [
 // M-3 (#1780): writeMarker() in workflow-mark/enforce-override-handlers/
 // off-clearance.js writes `<marker>.tmp` then renames, exactly as the token mint
 // does — so the marker list covers the `.tmp` intermediate too, symmetric with
-// OFF_CLEARANCE_TOKEN_SUFFIXES (CPR-5).
+// OFF_CLEARANCE_TOKEN_SUFFIXES (CPR-ORTH).
 const PROTECTED_MARKER_SUFFIXES = SESSION_MARKER_KINDS.reduce(
   (acc, kind) => acc.concat(["." + kind, "." + kind + ".tmp"]),
   []
@@ -75,7 +75,7 @@ function mentionsProtectedName(text) {
   return TOKEN_MENTION_RE.test(text) || MARKER_MENTION_RE.test(text);
 }
 
-// Two normalizers, deliberately separated (CPR-3) — the two input shapes disagree
+// Two normalizers, deliberately separated (CPR-SC) — the two input shapes disagree
 // about what `\` means. candidateBasenameOf(filePath) is an Edit/Write path with no
 // shell in front, so `\` is a Windows separator (fold to `/`).
 // candidateBasenameOfBashToken(rawToken) is a raw Bash word, where `\` is the
@@ -153,7 +153,7 @@ function candidateBasenameOfBashToken(rawToken) {
 // `/`, so a brace group spanning a slash (`{<wf>/x,<wf>/s1.workflow-off}`) produces
 // alternatives with different directory parts; splitting first would erase the
 // protected alternative instead of finding it. `overCap` is propagated (not
-// swallowed) so an abandoned enumeration is treated as a hit here too (CPR-5).
+// swallowed) so an abandoned enumeration is treated as a hit here too (CPR-ORTH).
 function candidateBasenamesOfBashToken(rawToken) {
   const raw = String(rawToken);
   const { candidates, overCap } = candidateSpellings(raw);
@@ -204,7 +204,7 @@ function classifyProtectedPath(filePath) {
 }
 
 // classifyProtectedBashToken(rawToken): the Bash-word sibling of
-// classifyProtectedPath (CPR-5 — same verdict vocabulary, different normalizer).
+// classifyProtectedPath (CPR-ORTH — same verdict vocabulary, different normalizer).
 function classifyProtectedBashToken(rawToken) {
   if (!rawToken || typeof rawToken !== "string") return null;
   const { basenames, overCap } = candidateBasenamesOfBashToken(rawToken);

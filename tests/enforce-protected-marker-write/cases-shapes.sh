@@ -62,7 +62,7 @@ run_R_redirect() {
     assert_block "R3 cp onto a marker"   "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "cp /etc/hosts $mk" "$LINKED_WT")")"
     assert_block "R3 mv onto a marker"   "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "mv /tmp/a $mk" "$LINKED_WT")")"
 
-    # --- CPR-5 counterpart: genuinely dynamic redirects stay approved --------
+    # --- CPR-ORTH counterpart: genuinely dynamic redirects stay approved --------
     # Blanket-blocking every unresolvable redirect would break ordinary logging.
     assert_approve "R4 dynamic redirect '> \$LOG'"            "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input 'echo x > $LOG' "$LINKED_WT")")"
     assert_approve "R4 dynamic redirect '> \"\$OUT\"'"        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input 'echo x > "$OUT"' "$LINKED_WT")")"

@@ -97,7 +97,7 @@ run_R_cli_wfdir_failure() {
     assert_eq  "R1 no stray mint lock left behind" "no" "$(exists_str "$tmp/$SID.off-clearance.mint.lock.tmp")"
     rm -rf "$tmp"
 
-    # ---- R1b: CPR-5 symmetry. The worktree target is the other half of this
+    # ---- R1b: CPR-ORTH symmetry. The worktree target is the other half of this
     # command's domain and must get the CORRECT emergency sentinel name — a hint
     # naming the wrong sentinel is worse than none, since the operator would emit
     # a sentinel that does not clear their block.
@@ -144,7 +144,7 @@ run_R_cli_wfdir_failure() {
     assert_has "R4 the ALLOW is audited" "verdict=ALLOW" "$(_r_audit_text "$tmp")"
     rm -rf "$tmp"
 
-    # ---- R5: the mint side of the SAME lock the shim takes (CPR-5 — both
+    # ---- R5: the mint side of the SAME lock the shim takes (CPR-ORTH — both
     # participants, same mutex, same fail-closed direction). With the lock
     # already held the mint must NOT proceed: an ALLOW verdict that cannot be
     # safely published is an UNAVAILABLE examination, not a token.

@@ -3,7 +3,7 @@
 //
 // Re-export only. The implementation lives in ./state-io/skip-verdict.js, which is
 // the same module the state-io barrel exposes — two copies of this lifecycle would
-// be two places to fix a bug (CPR-2).
+// be two places to fix a bug (CPR-SSOT).
 
 const {
   recordSkipVerdict,

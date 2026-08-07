@@ -2,7 +2,7 @@
 // bin/lib/prompt-extraction/procedure-scanner.js
 // rules/prompt.md §1.3 detection: inline procedures of MORE THAN 3 steps.
 //
-// Counting axes (CPR-3 — kept separate on purpose):
+// Counting axes (CPR-SC — kept separate on purpose):
 //   * section  — a markdown heading opens a new section and resets every series
 //   * prefix   — "numbered" and each label prefix (WE, SC, WF-CODE, ...) count apart
 //   * identity — the same full label inside one section counts once (cross-refs)

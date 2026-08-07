@@ -1,5 +1,5 @@
 // hooks/lib/tool-command-text.js
-// SSOT (CPR-2) for "what shell text is this tool call about to execute?".
+// SSOT (CPR-SSOT) for "what shell text is this tool call about to execute?".
 //
 // Claude Code ships THREE command-executing tools and they do NOT agree on the
 // payload shape:
@@ -51,7 +51,7 @@ function commandTextOf(toolName, toolInput) {
 }
 
 // commandListOf(toolName, toolInput) -> string[]
-// The same payload, kept SEPARATE instead of joined (CPR-3). Two different
+// The same payload, kept SEPARATE instead of joined (CPR-SC). Two different
 // questions are being asked of a tool call and they need different shapes:
 //
 //   "does any protected path appear anywhere in what will run?"  -> commandTextOf

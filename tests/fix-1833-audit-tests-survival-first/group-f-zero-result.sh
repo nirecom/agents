@@ -216,7 +216,7 @@ if [[ -f "$LOCAL_SKILL_MD" ]]; then
         pass "F3h SKILL.md no longer conjoins issue staleness into the candidate criterion"
     fi
 
-    # F3i — both invocation lines must offer --apply (CPR-5: the common script
+    # F3i — both invocation lines must offer --apply (CPR-ORTH: the common script
     # gained a write path, so its argument list has to say so), and STE-2 must
     # offer --offline now that the flag is effective there.
     F3_STE1="$(printf '%s\n' "$F3_SKILL" | grep -A1 -E '^STE-1\.' | grep -E 'audit-tests\.sh' | head -1)"

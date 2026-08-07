@@ -4,7 +4,7 @@
 # Both the tier-1 (unattended) and tier-2 (human-gated) routes funnel through
 # here, so --dry-run has exactly one place to take effect.
 #
-# ─── JUDGEMENT AXIS TABLE (repository SSOT — CPR-2) ──────────────────────────
+# ─── JUDGEMENT AXIS TABLE (repository SSOT — CPR-SSOT) ──────────────────────────
 # skills/sweep-issues/SKILL.md and bin/sweep-issues.sh REFERENCE this table and
 # must not restate it.
 #

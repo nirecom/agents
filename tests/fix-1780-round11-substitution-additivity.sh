@@ -102,7 +102,7 @@ SID="s1"
 MARKER="${SID}${MARKER_SUFFIX}"                      # e.g. s1.workflow-off
 TOKEN="${SID}${TOKEN_SUFFIX}"                        # e.g. s1.off-clearance
 # The two halves an attacker feeds a name-assembling command. The split point is
-# arbitrary (any command that concatenates works — CPR-8); the last 3 characters
+# arbitrary (any command that concatenates works — CPR-UNV); the last 3 characters
 # keep the tail off the first fragment so neither half is protected on its own.
 MK1="${MARKER:0:${#MARKER}-3}"; MK2="${MARKER: -3}"
 TK1="${TOKEN:0:${#TOKEN}-3}";   TK2="${TOKEN: -3}"
@@ -170,7 +170,7 @@ assert_block "A1 cd + touch quoted \$( ) result (marker, interior whitespace)" \
     "cd $WF && touch \"\$(printf '%s%s' $MK1 $MK2)\""
 assert_block "A2 cd + tee quoted \$( ) result (marker, interior whitespace)" \
     "cd $WF && tee \"\$(printf '%s%s' $MK1 $MK2)\" < /dev/null"
-assert_block "A3 cd + touch quoted \$( ) result (TOKEN family, CPR-5 sibling)" \
+assert_block "A3 cd + touch quoted \$( ) result (TOKEN family, CPR-ORTH sibling)" \
     "cd $WF && touch \"\$(printf '%s%s' $TK1 $TK2)\""
 assert_block "A4 whitespace introduced by a transform (echo | tr -d ' ')" \
     "cd $WF && touch \"\$(echo $MK1 $MK2 | tr -d ' ')\""
@@ -186,7 +186,7 @@ assert_block "B3 backtick span as a REDIRECT target" \
     "echo x > \`printf '%s%s' $WF/$MK1 $MK2\`"
 assert_block "B4 backtick span + cd, relative resolution" \
     "cd $WF && touch \`printf '%s%s' $MK1 $MK2\`"
-assert_block "B5 backtick span, TOKEN family (CPR-5 sibling of B1)" \
+assert_block "B5 backtick span, TOKEN family (CPR-ORTH sibling of B1)" \
     "touch \`printf '%s%s' $WF/$TK1 $TK2\`"
 
 # B6/B7: the MECHANISM, asserted directly. Without this, A/B could pass for an
@@ -214,7 +214,7 @@ fi
 
 # ===== Section C: symmetric non-protected controls — the SAME shapes ==========
 # A guard that over-blocks ordinary work is a different, equally real defect
-# (CPR-5). Each case here is the byte-shape of a Section A/B case with a
+# (CPR-ORTH). Each case here is the byte-shape of a Section A/B case with a
 # non-protected target.
 assert_approve "C1 quoted \$( ) result with interior whitespace -> /tmp path" \
     "touch \"\$(printf '%s%s' /tmp/ordinary -name)\""

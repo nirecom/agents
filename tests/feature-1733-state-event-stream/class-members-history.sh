@@ -7,7 +7,7 @@
 # its most visible member. The other three members — plan_approvals, complexity_evaluation
 # and session_model — used to be read-modify-write top-level fields, i.e. exactly the
 # overwrite semantics #1733 exists to remove. Covering step_status alone would leave the
-# class half-migrated with a green suite (CPR-5).
+# class half-migrated with a green suite (CPR-ORTH).
 #
 # Each member is asserted on the same two axes:
 #   history    — the superseded record is still IN events[] after the second write

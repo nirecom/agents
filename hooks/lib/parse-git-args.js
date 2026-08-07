@@ -83,7 +83,7 @@ function parseCdCommandInInterpreter(command) {
  * Returns { subcommand: null, rest: "" } when no subcommand is found.
  * Quote-aware (handles "..." and '...').
  */
-// SSOT (CPR-2): git global flags that consume the next token as their value (when
+// SSOT (CPR-SSOT): git global flags that consume the next token as their value (when
 // not given via =value). Imported by hooks/lib/bash-write-patterns/patterns.js
 // (resolveGitSubArgv) so the two do not drift. Do not duplicate this set.
 const FLAGS_WITH_ARG = new Set([

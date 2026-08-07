@@ -283,7 +283,7 @@ assert_guard "B4 gh pr merge && redirect-forge marker" \
     block "$GHW && echo x > $MARKER_N" "$MAIN"
 assert_guard "B5 marker segment FIRST, gh segment second (order-independence)" \
     block "echo x > $MARKER_N && $GHW" "$MAIN"
-assert_guard "B6 gh pr merge && forge the OFF-clearance token (CPR-5 sibling family)" \
+assert_guard "B6 gh pr merge && forge the OFF-clearance token (CPR-ORTH sibling family)" \
     block "$GHW && echo x > $TOKEN_N" "$MAIN"
 assert_guard "B7 gh release create && rm marker (a different Group B subcommand)" \
     block "$GHW_REL && rm $MARKER_N" "$MAIN"

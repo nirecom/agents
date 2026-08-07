@@ -27,7 +27,7 @@
 # block row's expansion set contains the exact protected basename in the exact
 # workflow directory.
 #
-# THE ALLOW ROWS ARE THE OTHER HALF OF THE FIX (CPR-5). Enumerating candidates from
+# THE ALLOW ROWS ARE THE OTHER HALF OF THE FIX (CPR-ORTH). Enumerating candidates from
 # the raw word touches every write target in every command, so a widener that
 # widens too far is a different and equally real defect:
 #   10-nr1  bash fidelity, argv position: `{x}` has no comma and no `..`, so bash
@@ -61,7 +61,7 @@ _run_r10_table() {
 }
 
 # run_R10_brace_span - the measured ALLOW->BLOCK shapes. Both protected families
-# (CPR-5), and every write route the fix touches: argv, redirect, tee, dd of=, mv,
+# (CPR-ORTH), and every write route the fix touches: argv, redirect, tee, dd of=, mv,
 # ln -s.
 run_R10_brace_span() {
     _run_r10_table "R10" <<'TABLE'

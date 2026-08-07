@@ -8,7 +8,7 @@
 # The backstop is armed only under a 2-condition AND guard:
 #   (a) the repo being committed to IS the agents session repo, AND
 #   (b) .prompt-extraction-allowlist exists in that repo.
-# Any other repo is untouched (CPR-8: no implicit environment branching).
+# Any other repo is untouched (CPR-UNV: no implicit environment branching).
 #
 # Exit-code mapping enforced here (M3 security fix):
 #   1 / 2 / 126 / 127 -> commit blocked (usage errors and missing/non-executable
@@ -200,7 +200,7 @@ t02_agents_repo_blocked() {
 
 # T01b: a foreign repo that DOES carry a .prompt-extraction-allowlist is still
 #       untouched. The guard is a 2-condition AND — allowlist presence alone must
-#       never arm the backstop in someone else's repository (CPR-8).
+#       never arm the backstop in someone else's repository (CPR-UNV).
 t01b_foreign_repo_with_allowlist_untouched() {
     local cfg; cfg="$(make_agents_like_repo cfg01b yes real)"
     local other="$TMPDIR_BASE/other01b"
@@ -225,7 +225,7 @@ t01b_foreign_repo_with_allowlist_untouched() {
 }
 
 # T01c: the agents session repo WITHOUT an allowlist is also skipped — the other
-#       half of the AND guard (symmetric counterpart of T01b, CPR-5).
+#       half of the AND guard (symmetric counterpart of T01b, CPR-ORTH).
 t01c_agents_repo_without_allowlist_skipped() {
     local repo; repo="$(make_agents_like_repo cfg01c no real)"
     stage_violation "$repo"
@@ -239,7 +239,7 @@ t01c_agents_repo_without_allowlist_skipped() {
 
 # T03 — session-marker bypass. Both markers are honoured (detail plan C2 決定,
 #       rules/workflow-off.md: WORKFLOW_OFF subsumes WORKTREE_OFF, so the
-#       backstop must treat them symmetrically — CPR-5).
+#       backstop must treat them symmetrically — CPR-ORTH).
 assert_marker_skips_backstop() {
     local label="$1" marker="$2" tag="$3"
     local repo; repo="$(make_agents_like_repo "cfg-$tag" yes real)"

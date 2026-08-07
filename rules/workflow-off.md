@@ -21,7 +21,7 @@ Inclusion criterion and full hook list: SSOT is the Honoring-hooks table in
 `docs/architecture/claude-code/marker-bypass-contract.md` — a hook absent from
 that table never reads the marker and is never bypassed. The table below is a
 curated excerpt for the hooks most relevant to everyday WORKFLOW_OFF usage;
-it must stay a subset of, and consistent with, that SSOT (CPR-5).
+it must stay a subset of, and consistent with, that SSOT (CPR-ORTH).
 
 | Hook | Bypassed? |
 |---|---|

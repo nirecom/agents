@@ -3,7 +3,7 @@
 # Section X - M-3 (.tmp symmetry) and CROSS-FILE DRIFT DETECTION.
 #
 # hooks/lib/protected-basenames.js is the SSOT for "which basenames hold clearance
-# state" (CPR-2), but it is only a real SSOT while its consumers agree with it. The
+# state" (CPR-SSOT), but it is only a real SSOT while its consumers agree with it. The
 # marker list is protected precisely BECAUSE hooks/lib/session-markers.js grants
 # authorization on a marker's mere existence; if a future kind is added there and
 # not here, that kind becomes forgeable the moment it starts granting anything, and
@@ -14,7 +14,7 @@
 # by writing `<marker>.tmp` and renaming. If only the final name is protected, the
 # intermediate is a free write and the attacker just supplies the `mv` - which is
 # why the token list has always carried `.off-clearance.tmp`, and why the marker
-# list must carry `.tmp` for every kind (CPR-5 symmetry).
+# list must carry `.tmp` for every kind (CPR-ORTH symmetry).
 
 run_X_ssot() {
     local probe="$SANDBOX/ssot-probe.js" out line
@@ -148,7 +148,7 @@ PROBE_EOF
             *)  fail "X10 settings.json matcher does not cover Edit+Write+Bash: $matcher" ;;
         esac
         # marker-gate.js must keep re-exporting the SSOT rather than owning a
-        # second copy of the regex (CPR-2 defence in depth, not a fork).
+        # second copy of the regex (CPR-SSOT defence in depth, not a fork).
         if [ -f "$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js" ]; then
             if grep -q 'protected-basenames' "$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js"; then
                 pass "X11 marker-gate.js sources its marker set from the SSOT"

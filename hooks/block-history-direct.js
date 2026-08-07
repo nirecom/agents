@@ -32,7 +32,7 @@ function readStdin() {
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
-// Shared by both dispatch lanes (CPR-5): a protected hit blocks UNLESS the
+// Shared by both dispatch lanes (CPR-ORTH): a protected hit blocks UNLESS the
 // calling session has an active WORKFLOW_ENFORCE_WORKFLOW_OFF /
 // WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY marker (<workflowDir>/<sid>.workflow-off),
 // in which case it approves instead —
@@ -54,7 +54,7 @@ function blockOrBypass(sid) {
 }
 
 // The append-only document family. Case-insensitive: Windows filesystems are
-// case-insensitive, so `Docs/History/2026.md` must not slip past (CPR-8).
+// case-insensitive, so `Docs/History/2026.md` must not slip past (CPR-UNV).
 const PROTECTED_PATTERNS = [
   /(^|\/)docs\/history\.md$/i,          // canonical history
   /(^|\/)changelog\.md$/i,              // canonical changelog
@@ -82,7 +82,7 @@ function normalizePath(filePath) {
 }
 
 // Single predicate shared by the tool-write path and the shell path — never
-// add a second one; both call sites must stay symmetric (CPR-5).
+// add a second one; both call sites must stay symmetric (CPR-ORTH).
 function isProtectedPath(filePath) {
   if (!filePath || typeof filePath !== "string") return false;
   const norm = normalizePath(filePath);

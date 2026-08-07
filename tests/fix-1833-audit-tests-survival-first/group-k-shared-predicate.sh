@@ -3,7 +3,7 @@
 # Tags: TL2, audit-tests, retire, wiring, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# CPR-2 (single source of truth) is the reason bin/lib/test-retire-predicate.sh
+# CPR-SSOT (single source of truth) is the reason bin/lib/test-retire-predicate.sh
 # exists at all: BOTH audit scripts must reach the same survival predicate and
 # the same delete gate. A file-presence check cannot see the failure mode that
 # actually matters — the module gets created, and each script keeps its own

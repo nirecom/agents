@@ -33,7 +33,7 @@ Report medium and low gaps as advisory only.
   - Permission: operations respect access control boundaries — unprivileged callers are denied (OWASP ASVS V4 Access Control)
   - Prompt injection: LLM/agent inputs from untrusted sources do not override system instructions or trigger unintended tool calls (OWASP LLM Top 10 LLM01, MCP Top 10 MCP06)
   - Security idempotency: re-running security-relevant operations (e.g., permission grants, secret rotation) does not escalate privileges or leave duplicate entries (extension of Idempotency cases)
-- **Classifier / guard cases**: when the unit yields one of several verdicts (allow/block, read/write, match/miss), cover every verdict — not only the one the change targets. The non-targeted verdict on sanctioned input is the CPR-5 symmetric counterpart of the targeted-reject case; omitting it ships false-positive over-blocking (origin: #1425).
+- **Classifier / guard cases**: when the unit yields one of several verdicts (allow/block, read/write, match/miss), cover every verdict — not only the one the change targets. The non-targeted verdict on sanctioned input is the CPR-ORTH symmetric counterpart of the targeted-reject case; omitting it ships false-positive over-blocking (origin: #1425).
 - **Config-dependent branches**: when behavior branches on an env/config value (e.g. `CONFIRM_*`, feature flags), the test must set that value explicitly for every branch under test, never rely on the ambient `.env`'s current value — an unpinned value silently flips the verdict under test (origin: #1133 CONFIRM_DETAIL=off masked a guard-refusal assertion).
 
 ## Security vs Test Compatibility

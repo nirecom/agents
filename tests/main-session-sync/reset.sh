@@ -129,7 +129,7 @@ fi
 #   a known coverage limitation, not an assumption of universality.
 #   Payload matrix: identical to the one pinned for bin/cc-session-mtime in
 #   tests/cc-session-mtime.sh. The two `touch -d "$ts" "$f"` sinks are symmetric
-#   members of one class (CPR-5), so neither may carry a narrower matrix than the
+#   members of one class (CPR-ORTH), so neither may carry a narrower matrix than the
 #   other — a shape rejected in one tool but accepted in the other is exactly the
 #   asymmetry this pairing exists to catch.
 #

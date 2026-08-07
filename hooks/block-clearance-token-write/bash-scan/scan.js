@@ -3,7 +3,7 @@
 // parse, merge in the substitution-span reading, then run the redirect / argv /
 // nested-body / interpreter rules (file-split, rules/coding/file-split.md
 // Pattern A). Every predicate covers protected session markers as well as the
-// OFF-clearance token (CPR-5), and reports WHICH kind was hit so the block
+// OFF-clearance token (CPR-ORTH), and reports WHICH kind was hit so the block
 // message can name the right remediation.
 "use strict";
 
@@ -124,7 +124,7 @@ function bashHitsProtected(cmd, opts, _depth) {
     // such — `$( … )` only appeared covered because `(`/`)` are segment
     // separators; backticks have no such accident. Recursing every
     // substitution body (both spellings) removes the asymmetry at the root
-    // (CPR-5).
+    // (CPR-ORTH).
     if (depth < MAX_NESTED_SCAN_DEPTH) {
       for (const sub of extractSubstitutionContents(cmd)) {
         const kind = bashHitsProtected(sub, opts, depth + 1);

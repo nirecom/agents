@@ -3,11 +3,11 @@
 // metric (a) of the lightweight measurement set. Nothing is executed and no LLM is called:
 // the tool reads files (or a git ref) and adds up their size.
 //
-// ALWAYS-LOADED is defined here and ONLY here (CPR-2):
+// ALWAYS-LOADED is defined here and ONLY here (CPR-SSOT):
 //   the repo-root `CLAUDE.md`, plus every `rules/**/*.md` whose YAML frontmatter carries
 //   no `paths:` key. A `paths:` key means the file is loaded conditionally, so it is not
 //   part of the always-on budget. Paths containing an `_archived` segment are excluded,
-//   the same exclusion bin/review-prompt-size applies (CPR-5).
+//   the same exclusion bin/review-prompt-size applies (CPR-ORTH).
 //
 // `CLAUDE.local.md` is deliberately NOT counted: it is a private, untracked file, so a
 // `--ref` baseline could never be computed for it and the two modes would disagree.
@@ -87,7 +87,7 @@ function walkRules(repo, out) {
   // The top-level rules/ is lstat'ed rather than read blind. Every directory BELOW it is
   // reached through a dirent whose isSymbolicLink() was checked, so without this the one
   // directory the walk never inspects would be the only one able to link out of the repo —
-  // and ref mode already skips a symlinked rules/ via its mode-120000 filter (CPR-5).
+  // and ref mode already skips a symlinked rules/ via its mode-120000 filter (CPR-ORTH).
   // A symlinked rules/ is skipped exactly as a missing one is: an empty repo, not a failure.
   try {
     if (fs.lstatSync(path.join(repo, 'rules')).isSymbolicLink()) return;
@@ -137,7 +137,7 @@ function git(repo, args) {
 }
 
 // Target list at `ref`. Mode 120000 entries are symlinks and are skipped, symmetric with
-// the working-tree walk (CPR-5).
+// the working-tree walk (CPR-ORTH).
 function collectRefTargets(repo, ref) {
   const out = git(repo, ['ls-tree', '-r', ref, '--', 'CLAUDE.md', 'rules']).toString('utf8');
   const targets = [];
@@ -273,7 +273,7 @@ function main() {
       ref: ref === null ? null : ref,
       // `warning` and `errors` are carried into JSON for the same reason the text mode
       // prints WARN/ERROR rows: a stored report that dropped them would be
-      // indistinguishable from a complete measurement (CPR-5, symmetric with the two
+      // indistinguishable from a complete measurement (CPR-ORTH, symmetric with the two
       // output modes and with bin/count-subagents --json).
       files: report.rows.map((row) => ({
         path: row.path, bytes: row.bytes, lines: row.lines, warning: row.warning,

@@ -277,7 +277,7 @@ function handleBashWrite(ctx) {
   // `cp` into `.worktree-backup`. It is kept outside the `_markerHit` guard
   // above because that guard now treats a parse failure itself as "cannot
   // vouch" — this narrow, shape-anchored escape is the deliberate exception,
-  // named rather than left implicit (CPR-8).
+  // named rather than left implicit (CPR-UNV).
   if (parseFailure && hasWorktreeEndSkillPrefix(cmd) && /^cp\s/.test(stripWorktreeEndSkillPrefix(cmd)) && /\.worktree-backup/.test(cmd)) done();
 
   return { repoRoot, writeDetector };

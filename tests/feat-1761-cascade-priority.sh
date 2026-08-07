@@ -161,7 +161,7 @@ fi
 
 echo ""
 echo "=== S7: the survey worker defers to the SSOT rather than restating the cascade ==="
-# CPR-2: two copies of the ordering will drift, and the drifting copy is the one
+# CPR-SSOT: two copies of the ordering will drift, and the drifting copy is the one
 # that decides. The worker must reference the shared file.
 if [ ! -f "$WORKER" ]; then
     fail "S7-worker-references-ssot" "agents/issue-create-survey-worker.md not found"

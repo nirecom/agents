@@ -116,7 +116,7 @@ function hasForceDeleteFlag(cmd) {
 // `master`, `release/v2.0`, or any non-typed branch are rejected even with
 // the inline prefix — defense-in-depth against bypass misuse.
 function isWorktreeEndSkillForceDelete(cmd) {
-  // Defense-in-depth symmetric with isSweepBranchesSkillForceDelete (CPR-5):
+  // Defense-in-depth symmetric with isSweepBranchesSkillForceDelete (CPR-ORTH):
   // reject shell chaining on the ORIGINAL cmd before the anchored match, so a
   // future widening of stripTrailingRedirects cannot let a chained command
   // reach the `^...$` predicate. hasShellChaining is evaluated on the raw cmd.

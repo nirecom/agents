@@ -143,7 +143,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# codes() auto-push matrix — same value domain, second call site (CPR-5: the
+# codes() auto-push matrix — same value domain, second call site (CPR-ORTH: the
 # two automatic sites are symmetric members of one class and must agree).
 # ---------------------------------------------------------------------------
 tc_gate_codes_push() {
@@ -259,7 +259,7 @@ tc_gate_fetch_merge_real "TC16g" maybe with-node 0 "unrecognized value, fail-saf
 tc_gate_fetch_merge_real "TC16h" on    with-node 1 "explicit on"
 tc_gate_fetch_merge_real "TC16i" ON    with-node 1 "value match is case-insensitive"
 
-# CPR-5: the push matrix carries exactly the same row set as the fetch matrix
+# CPR-ORTH: the push matrix carries exactly the same row set as the fetch matrix
 # above. A value domain covered at one automatic call site but not the other is
 # the asymmetry this pairing exists to catch.
 tc_gate_codes_push "TC17"  off   with-node 0 "explicit off"

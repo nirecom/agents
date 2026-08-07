@@ -4,9 +4,9 @@
 # SSOT for the survival-first retire predicate shared by bin/audit-tests.sh and
 # bin/audit-tests-common.sh (#1833). Both scripts MUST reach candidacy and
 # deletion authority through these functions — an inline copy in either script
-# is the duplication this module exists to remove (CPR-2).
+# is the duplication this module exists to remove (CPR-SSOT).
 #
-# Two axes are kept explicitly apart (CPR-3):
+# Two axes are kept explicitly apart (CPR-SC):
 #   1. SURVIVAL       — do the `# Tests:` targets still exist? Decides candidacy.
 #   2. ISSUE METADATA — is the referenced issue closed and stale? Decides only
 #                       whether an already-selected candidate may be deleted.

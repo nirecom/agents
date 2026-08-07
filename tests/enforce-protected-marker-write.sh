@@ -36,7 +36,7 @@
 #   M-3  TMP-SYMMETRIC. The write-then-rename `.tmp` intermediate is protected for
 #        markers exactly as it already was for the token (Section X).
 #
-# Every block case is paired with its CPR-5 sanctioned counterpart: a guard that
+# Every block case is paired with its CPR-ORTH sanctioned counterpart: a guard that
 # over-blocks ordinary work is a different, equally real defect (Section N).
 #
 # ASSERTION CONTRACT (same strictness as tests/enforce-off-clearance-write.sh):
@@ -241,12 +241,12 @@ PARTS_DIR="$AGENTS_DIR/tests/enforce-protected-marker-write"
 
 run_L_marker_matrix        # H-1: every kind x {bare,.tmp} x {Edit,Write,MultiEdit,Bash}
 run_L_location_invariance  # H-1: identical verdict from linked / main / non-repo CWD
-run_L_token_suffixes       # CPR-5: the token side of the same matrix
+run_L_token_suffixes       # CPR-ORTH: the token side of the same matrix
 run_G_glob                 # H-3
 run_A_ads                  # H-4
 run_S_input_shapes         # M-1
 run_R_redirect             # unresolvable-but-literal redirect targets
-run_N_false_positive       # CPR-5 sanctioned counterparts
+run_N_false_positive       # CPR-ORTH sanctioned counterparts
 run_X_ssot                 # M-3 + cross-file drift detection
 run_R5_shell_syntax        # round-5 R5-1..R5-4: redirect ops, parse failure, eval, substitution
 run_R5_nested_bodies       # round-5 R5-5/R5-6: here-strings, body-first interpreters
@@ -285,8 +285,8 @@ run_R13_onunknown_direction   # round-13 scanner C: resolvesUnder's DETECTION fa
 run_R14_cwd_forward        # round-14: every spelling of "change directory" moves the tracked cwd
 run_R14_cwd_inverse        # round-14: popd / `cd -` are real INVERSES, not one-way moves
 run_R14_cwd_wrapper        # round-14: `command cd` / `builtin cd` are unwrapped one level
-run_R14_cwd_nonmoves       # round-14 CPR-5: `pushd -n` / `pushd +N` must NOT move the tracked cwd
-run_R14_cwd_unknown_origin # round-14 CPR-8: origin unknown => pop fails CLOSED, bounded to the pop path
+run_R14_cwd_nonmoves       # round-14 CPR-ORTH: `pushd -n` / `pushd +N` must NOT move the tracked cwd
+run_R14_cwd_unknown_origin # round-14 CPR-UNV: origin unknown => pop fails CLOSED, bounded to the pop path
 
 cleanup_tmp "$SANDBOX"
 if [ -n "$FIXTURE" ] && [ -d "$FIXTURE" ]; then

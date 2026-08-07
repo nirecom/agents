@@ -12,13 +12,13 @@
 # Pattern A). The sibling file covers the *declared* outputs (--out, stdout, stderr,
 # --log-dir). This file covers the *undeclared* one: the temp directory.
 #
-# Why this is a separate concern (CPR-3): the review has to materialise the prompt
+# Why this is a separate concern (CPR-SC): the review has to materialise the prompt
 # somewhere before handing it to codex, and the obvious implementation is a temp file.
 # A temp file is not an output the author thinks about, it survives the process, and
 # on a shared host it is world-readable by default. The sibling file's assertions
 # would all still pass while a full candidate body sat in $TMPDIR.
 #
-# Why all four outcomes (CPR-8): cleanup written as a plain last line of the happy
+# Why all four outcomes (CPR-UNV): cleanup written as a plain last line of the happy
 # path disappears the moment the run does not reach that line. success is the case
 # an author tests; invalid, timeout and killed are the cases that actually leak.
 

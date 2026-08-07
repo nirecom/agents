@@ -10,7 +10,7 @@
 //   what is left here is VARIABLE SPLICING (`S=.workflow-off; … > <wf>/s1$S`).
 //   The sibling case where the WHOLE argv token is `$NAME` was already covered
 //   by bash-scan.js's VAR_REF_RE, but concatenation (`<wf>/s1$S`) and redirect
-//   targets were not — an asymmetry (CPR-5). substituteAssignments() resolves
+//   targets were not — an asymmetry (CPR-ORTH). substituteAssignments() resolves
 //   `$NAME` / `${NAME}` ANYWHERE inside the target against the same contiguous
 //   preceding assignment chain, and anything still unresolved fails closed when
 //   the chain mentions a protected name at all.

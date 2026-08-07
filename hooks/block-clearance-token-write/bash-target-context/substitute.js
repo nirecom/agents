@@ -10,7 +10,7 @@ const VAR_REF_IN_TEXT_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-
 
 // `$NAME` and `` `cmd` `` are symmetric members of one class — text the
 // SHELL replaces before the write lands — so "unresolved expansion?" must
-// ask about both (CPR-5). The substitution BODY is separately re-scanned as
+// ask about both (CPR-ORTH). The substitution BODY is separately re-scanned as
 // command text by ./bash-scan.js; this half is about the target it produces.
 const EXPANSION_CHAR_RE = /[$`]/;
 
@@ -26,11 +26,11 @@ function withoutAnsiCSegments(text) {
 }
 
 // Same assignment shape bash-scan.js / interpreter-scan.js already look for,
-// including the pwsh `$env:NAME=` prefix (CPR-2 — one spelling of the lookup).
+// including the pwsh `$env:NAME=` prefix (CPR-SSOT — one spelling of the lookup).
 function lookupAssignedValue(assignText, varName) {
   if (typeof assignText !== "string" || assignText === "") return null;
   // `$ENV:`/`$Env:` are the same prefix — folded via the shared
-  // PWSH_ENV_PREFIX so all three assignment lookups agree (CPR-2/CPR-5).
+  // PWSH_ENV_PREFIX so all three assignment lookups agree (CPR-SSOT/CPR-ORTH).
   const { PWSH_ENV_PREFIX } = require("../../lib/case-insensitive-literal");
   const re = new RegExp("(?:^|[\\s;&|]|\\$" + PWSH_ENV_PREFIX + ")" + varName + "=(\\S+)", "m");
   const m = re.exec(assignText);

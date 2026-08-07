@@ -401,7 +401,7 @@ function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   } catch (e) { return false; }
   if (normScript.toLowerCase() !== normTarget.toLowerCase()) return false;
 
-  // Span-aware argTail scan — same `sanctioned-bin` profile as :341 (CPR-5).
+  // Span-aware argTail scan — same `sanctioned-bin` profile as :341 (CPR-ORTH).
   if (rejectsUnsafeArgTail(argTail, "sanctioned-bin")) return false;
 
   // Fail-closed: any write targets in the command → reject

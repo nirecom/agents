@@ -22,7 +22,7 @@
 #       the WRAPPER word in seg.cmd0, so the real `cd` was never seen. Measured
 #       live: `cd <wf> && … tee *` blocked, `command cd <wf> && … tee *` allowed.
 #
-# AND THE INVERSE DEFECT, which is equally real (CPR-5): a move model that only
+# AND THE INVERSE DEFECT, which is equally real (CPR-ORTH): a move model that only
 # ever walks FORWARD over-blocks. `pushd -n <dir>` pushes without cd-ing, and
 # `pushd +1` rotates the stack naming no path at all — treating either as a real
 # `cd` moves the tracked cwd while the shell's stays put, which is the exact
@@ -122,7 +122,7 @@ run_R14_cwd_wrapper() {
 TABLE
 }
 
-# run_R14_cwd_nonmoves — the CPR-5 counterweight. `pushd -n <dir>` pushes
+# run_R14_cwd_nonmoves — the CPR-ORTH counterweight. `pushd -n <dir>` pushes
 # WITHOUT cd-ing and `pushd +N` / `pushd -N` rotate the stack naming no path, so
 # neither may move the tracked cwd. Getting this wrong in EITHER direction is a
 # defect: 14-d1/14-d2 catch the over-block (tracked cwd moved when the shell's
@@ -138,7 +138,7 @@ run_R14_cwd_nonmoves() {
 TABLE
 }
 
-# run_R14_cwd_unknown_origin — CPR-8 named exception. The payload here omits
+# run_R14_cwd_unknown_origin — CPR-UNV named exception. The payload here omits
 # `tool_input.cwd`, i.e. the ORIGIN directory is unknown to commandCwd(). That is
 # not a contrived shape: dispatch.js reads only `toolInput.cwd`, so any caller
 # that supplies the starting directory at the TOP level of the hook payload lands

@@ -28,7 +28,7 @@
 # even though those are precisely the paths that decide WHETHER a token can be
 # minted and WHERE it lands.
 #
-# The three properties this file pins, each on its own (CPR-3):
+# The three properties this file pins, each on its own (CPR-SC):
 #   A  REFUSALS ARE TOTAL. Every rejected invocation exits non-zero, mints
 #      nothing, and — for the argument/env/sid gates — never even reaches the
 #      examiner. An exit-0 refusal or a silently-minted token is the whole bug.

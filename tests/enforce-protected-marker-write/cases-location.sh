@@ -12,7 +12,7 @@
 #
 # The kind list is DERIVED from hooks/lib/protected-basenames.js at runtime, so a
 # marker kind added later is automatically covered here instead of silently
-# escaping this matrix (CPR-2).
+# escaping this matrix (CPR-SSOT).
 
 # run_L_marker_matrix: every marker kind x {bare, .tmp} x {Edit, Write, MultiEdit, Bash}
 run_L_marker_matrix() {
@@ -66,7 +66,7 @@ run_L_location_invariance() {
 }
 
 # run_L_token_suffixes: the OFF-clearance token side of the same matrix, derived
-# from OFF_CLEARANCE_TOKEN_SUFFIXES rather than hardcoded (CPR-2). Kept to
+# from OFF_CLEARANCE_TOKEN_SUFFIXES rather than hardcoded (CPR-SSOT). Kept to
 # Write + Bash because Edit/MultiEdit share the classifier call proven above.
 run_L_token_suffixes() {
     local sfx p

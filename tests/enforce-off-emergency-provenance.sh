@@ -129,7 +129,7 @@ iso_at() { "$RWT" 10 node -e "process.stdout.write(new Date(Date.now()+($1)).toI
 
 # The payload SHAPE is not restated here. It is produced by the writer's own
 # contract function, hooks/lib/off-emergency-provenance.js buildProvenanceMarker()
-# (CPR-2) - the same function hooks/record-off-skill-invocation.js calls. The
+# (CPR-SSOT) - the same function hooks/record-off-skill-invocation.js calls. The
 # earlier hand-rolled `{invoked_at, source}` literal is exactly what went wrong:
 # when M-4 bound the marker to a skill identity and a target set, the fixture
 # froze the pre-M-4 shape and started asserting a downgrade the reader was RIGHT
@@ -296,7 +296,7 @@ assert_eq "P7 corrupt marker is unattributed" "unattributed" "$(provenance_in "$
 assert_absent "P7 corrupt marker is consumed" "$(marker_of "$sid")"
 assert_contains "P7 override still applied" '"fatal":[]' "$out"
 
-# --- P8: CPR-5 - the WORKTREE emergency gets identical treatment ----------
+# --- P8: CPR-ORTH - the WORKTREE emergency gets identical treatment ----------
 sid=pv8sid
 submit_prompt "$sid" "/enforce-workflow-off"
 out=$(run_emergency "$sid" "$(emerg_cmd WORKTREE 'worktree emergency')")

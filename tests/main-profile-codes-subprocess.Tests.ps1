@@ -197,7 +197,7 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
     Context "Startup auto-fetch against a real repository" {
         # Same value domain as the bash side (TC16d-TC16i in
         # tests/fix-1225-profile-snippet-guards/session-sync-gate.sh) — the two
-        # snippets are symmetric members of one class (CPR-5).
+        # snippets are symmetric members of one class (CPR-ORTH).
         It "SESSION_SYNC=<label> -> fetch and merge <expectText> (<why>)" -ForEach @(
             @{ label = 'off';           value = 'off';   brokenNode = $false; expect = $false; expectText = 'do not run'; why = 'explicit off' }
             @{ label = '(unset)';       value = $null;   brokenNode = $false; expect = $false; expectText = 'do not run'; why = 'shipped default is off' }

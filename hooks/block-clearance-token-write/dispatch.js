@@ -46,7 +46,7 @@ const WORKFLOW_GLOB_BLOCK_MSG = [
 // A target whose BASENAME is assembled at execution time gets its own text
 // rather than reusing WORKFLOW_GLOB_BLOCK_MSG — that message opens with
 // "Wildcard write", which is misleading when there is no `*` to find
-// (CPR-1/CPR-7).
+// (CPR-UO/CPR-NRS).
 const WORKFLOW_DYNAMIC_BLOCK_MSG = [
   "Dynamically-named write into the workflow directory blocked.",
   "The filename is assembled at execution time (command substitution, backtick, or an",
@@ -58,7 +58,7 @@ const WORKFLOW_DYNAMIC_BLOCK_MSG = [
 
 // A command this scanner cannot PARSE cannot be cleared, so a protected
 // mention inside unparsable text blocks — and says so out loud, since a
-// block whose cause is invisible is a block nobody can act on (CPR-1).
+// block whose cause is invisible is a block nobody can act on (CPR-UO).
 const UNPARSED_PREFIX = [
   "This command could not be parsed, and its text names an OFF-clearance token",
   "or a session-override marker — so it cannot be cleared and is blocked.",
@@ -83,7 +83,7 @@ function blockMessageFor(kind) {
 // The tool-class membership tests and the edit-payload path extraction
 // (file_path / path / notebook_path, top level and per-entry in `edits[]`)
 // both live in hooks/lib/write-tools.js, so this hook and
-// hooks/enforce-worktree.js cover exactly the same tool surface (CPR-2/CPR-5).
+// hooks/enforce-worktree.js cover exactly the same tool surface (CPR-SSOT/CPR-ORTH).
 function evaluateProtectedWrite(toolName, toolInput) {
   if (isEditWriteTool(toolName)) {
     for (const p of collectEditWritePaths(toolInput)) {

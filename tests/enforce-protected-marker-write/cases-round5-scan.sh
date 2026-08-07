@@ -4,7 +4,7 @@
 # filesystem while hooks/block-clearance-token-write/bash-scan.js saw nothing.
 #
 # Every case below was ALLOW before the round-5 fix and must now BLOCK. Each is
-# paired with a CPR-5 sanctioned counterpart that must stay ALLOW - a scanner
+# paired with a CPR-ORTH sanctioned counterpart that must stay ALLOW - a scanner
 # that blocks `2>&1` or `awk '{print $1}' data.txt` is a different, equally real
 # defect, and every one of these holes is closed by a broadening change whose
 # natural failure mode is over-blocking.
@@ -24,7 +24,7 @@
 #                  scan (hooks/block-clearance-token-write/nested-bodies.js), and
 #                  `command`/`builtin`/`exec` wrappers cannot launder it.
 #   R5-4 (MED-4)   backtick command substitution was not scanned even though
-#                  `$( )` already was - an orthogonality hole (CPR-5).
+#                  `$( )` already was - an orthogonality hole (CPR-ORTH).
 #   R5-5 (MED-5)   here-string bodies (`sh <<< "..."`, `xargs -I{} sh -c ... <<<`)
 #                  are command text for the reader that executes them.
 #   R5-6 (MED-6)   BODY-FIRST interpreters (awk & family, tclsh, php, lua, Rscript,

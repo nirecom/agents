@@ -4,7 +4,7 @@
 //
 // Fence nesting is decided by marker length, not by nesting depth: a 3-backtick
 // line inside a 4-backtick fence is content, not a close. Tilde fences are
-// treated identically to backtick fences (CPR-8 — one rule for the whole domain).
+// treated identically to backtick fences (CPR-UNV — one rule for the whole domain).
 
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 const MIN_FENCE_LINES = 3;
@@ -12,7 +12,7 @@ const MIN_INDENT_LINES = 3;
 
 /**
  * Boolean mask marking every line that is a fence marker or fence interior.
- * Shared with procedure-scanner.js so both scanners agree on fence state (CPR-2).
+ * Shared with procedure-scanner.js so both scanners agree on fence state (CPR-SSOT).
  * @param {string[]} lines
  * @returns {boolean[]}
  */

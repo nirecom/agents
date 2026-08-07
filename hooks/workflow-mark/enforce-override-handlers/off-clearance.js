@@ -174,7 +174,7 @@ function consumeOffClearance(target, sessionId) {
 // the user types the skill's slash command; this consumes it as evidence, not
 // a gate — absence never blocks the override, and the value is `unattributed`,
 // not an accusation. Contract details live in ../../lib/off-emergency-provenance.js
-// (shared with the writer — CPR-2); this file owns only consumption.
+// (shared with the writer — CPR-SSOT); this file owns only consumption.
 const {
   OFF_EMERGENCY_PROVENANCE_SOURCE,
   OFF_EMERGENCY_PROVENANCE_UNATTRIBUTED,
@@ -227,7 +227,7 @@ function readAndClearProvenance(sid, target) {
 // resolveEmergencyProvenanceDetail(sessionId, target):
 //   { provenance: "user_skill_invocation" | "unattributed", notes: string[] }
 // Checks the same sid candidates consumeOffClearance() does, so a session whose
-// workflow sid differs from the hook sid is attributed correctly (CPR-5).
+// workflow sid differs from the hook sid is attributed correctly (CPR-ORTH).
 function resolveEmergencyProvenanceDetail(sessionId, target) {
   const candidates = [];
   if (sessionId && SID_RE.test(sessionId)) candidates.push(sessionId);

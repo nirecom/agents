@@ -145,7 +145,7 @@ function collectAll(root) {
  * --staged: every target file present in the git INDEX, content read from the
  * index. The unit of judgement is the tree that the commit would create, not the
  * diff against HEAD: `git add` on a byte-identical file still puts it into the
- * commit, and a commit must be judged against what it actually contains (CPR-6).
+ * commit, and a commit must be judged against what it actually contains (CPR-E2E).
  * Pre-existing debt is neutralised by .prompt-extraction-allowlist, not by
  * narrowing the scan.
  * @returns {Array|null} null when the index listing or blob read fails.
@@ -221,7 +221,7 @@ function collectBase(root, ref) {
 
 /**
  * Allowlist text for the given mode. --staged prefers the INDEX copy so the
- * commit is judged against what is actually being committed (CPR-6).
+ * commit is judged against what is actually being committed (CPR-E2E).
  * @returns {string|null} null when no allowlist exists anywhere.
  */
 function readRepoAllowlist(root, mode) {

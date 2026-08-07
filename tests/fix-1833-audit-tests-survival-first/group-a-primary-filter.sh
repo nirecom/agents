@@ -4,7 +4,7 @@
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
 # One fixture repo carries every survival verdict at once so a single run
-# proves the filter partitions the input set (CPR-3: the six verdicts are
+# proves the filter partitions the input set (CPR-SC: the six verdicts are
 # separated explicitly, not collapsed into "candidate / not candidate").
 
 A_REPO="$(make_repo)"
@@ -109,7 +109,7 @@ else
     fail "A9b --fix-headers emitted no classification lines (out=<<$OUT>>)"
 fi
 
-# A10 — CPR-5 mirror: audit-tests-common.sh applies the same survival filter to
+# A10 — CPR-ORTH mirror: audit-tests-common.sh applies the same survival filter to
 # its own scope. A common-scope file with an alive target is never an orphan.
 A_COMMON_REPO="$(make_repo)"
 add_src "$A_COMMON_REPO" "bin/alive.sh"
@@ -121,7 +121,7 @@ commit_repo "$A_COMMON_REPO" "common dispatchers"
 run_in_repo "$A_COMMON_REPO" "-" "$AUDIT_COMMON" --dry-run --offline --format text
 A_COMMON_OUT="$OUT"; A_COMMON_RC="$RC"
 
-# A10 — the same matrix shape applied to the sibling script (CPR-5): the only
+# A10 — the same matrix shape applied to the sibling script (CPR-ORTH): the only
 # difference allowed between the two scripts is which files they scan.
 while IFS='|' read -r a_name a_file a_want; do
     [[ -z "${a_name//[[:space:]]/}" || "$a_name" =~ ^[[:space:]]*# ]] && continue

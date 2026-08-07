@@ -286,7 +286,7 @@ e3_out_of_range_line() {
 # Both subcommands read the file before they do anything with it, so both owe
 # the same contract on an unreadable input: nonzero exit, an explicit
 # diagnostic, the file left exactly as it was, and — for annotate, which is the
-# one that writes — no half-written temp file left behind (CPR-5: the guard is
+# one that writes — no half-written temp file left behind (CPR-ORTH: the guard is
 # not `list`-only).
 e4_unreadable_input() {
     local dir="$TMPD/e4" notes md5 rc out line missing=""

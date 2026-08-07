@@ -3,7 +3,7 @@
 # THE LOCK FILE IS PROTECTED STATE — round-14 HIGH-2.
 #
 # A mutex whose file anyone may create or delete is not a mutex. Both directions
-# are live attacks on the OFF path, and they are opposites (CPR-5 — the guard
+# are live attacks on the OFF path, and they are opposites (CPR-ORTH — the guard
 # must cover the pair, not one side):
 #
 #   CREATE  — pre-create `<sid>.off-clearance.mint.lock.tmp` and every mint and
@@ -90,7 +90,7 @@ console.log("P3_derives=" + (B.OFF_CLEARANCE_TOKEN_SUFFIXES.some(function (s) { 
 
     # P4/P5a/P5b — the three ways an agent could reach the lock file. Each is a
     # DIFFERENT tool surface of the same hook, so covering one proves nothing
-    # about the others (CPR-5).
+    # about the others (CPR-ORTH).
     assert_eq "P4 Write tool to the lock path is blocked" "block" \
         "$(_p_run_hook "$tn" "$(_p_write_input "$lockpath")")"
     assert_eq "P5a bash redirect creating the lock is blocked" "block" \

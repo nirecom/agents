@@ -141,7 +141,7 @@ fi
 # The two ways this review's coverage can be incomplete are announced HERE, on stdout, above
 # the verdict — because "nothing concerning" read next to nothing else is indistinguishable
 # from "nothing concerning in the 12% I looked at". They are two separate lines: a truncated
-# diff and an untrustworthy base are different facts with different remedies (CPR-3).
+# diff and an untrustworthy base are different facts with different remedies (CPR-SC).
 SCOPE_WARNING=""
 MAX_DIFF_LINES=5000
 if (( DIFF_LINES > MAX_DIFF_LINES )); then

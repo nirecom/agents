@@ -1,4 +1,4 @@
-// SID-scoped exclusive lock (SSOT, CPR-2) serializing every mutator of a session's
+// SID-scoped exclusive lock (SSOT, CPR-SSOT) serializing every mutator of a session's
 // OFF-clearance bare-token/claim pair. Both the mint transition
 // (bin/request-off-clearance) and this shim's claim transition touch the same files,
 // so both must hold this SAME lock (keyed off the bare token path) or one can destroy

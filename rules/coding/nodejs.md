@@ -25,7 +25,7 @@ paths:
 #### Windows: POSIX path normalization
 
 - `toolInput.cwd`, env vars, and CLI args may deliver paths in POSIX drive-letter form (`/c/...` from Git Bash / MSYS2); Node.js `fs.*` and `spawnSync cwd` fail with ENOENT on this form — normalize via `toWindowsPath` (no-op on POSIX) before every file or process API call.
-- Apply at every call site that accepts the same path input class; omitting one site while normalizing another is a CPR-5 violation.
+- Apply at every call site that accepts the same path input class; omitting one site while normalizing another is a CPR-ORTH violation.
 
 #### TypeScript-specific (applies when .ts files are added)
 

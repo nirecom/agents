@@ -125,7 +125,7 @@ done <<'TABLE'
 A1-subof-target-is-parent      | batched | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"parent is meta","worth_filing":true}     | valid
 A2-subof-target-unknown        | batched | {"verdict":"sub-of","target":777,"children":[],"related":[],"reason":"nope","worth_filing":true}             | invalid
 A3-subof-unavailable-outside   | unavail | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"no relations","worth_filing":true}      | invalid
-# --- baseline valid forms (CPR-5 counterparts: the validator must not over-reject) ---
+# --- baseline valid forms (CPR-ORTH counterparts: the validator must not over-reject) ---
 A4-subof-target-in-cand        | batched | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true}         | valid
 A5-reopen-valid                | batched | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true}   | valid
 # A6 names the two ORPHANS (#11, #12). Naming #10 here would be a re-parent, not an
@@ -137,7 +137,7 @@ A8-none-valid                  | batched | {"verdict":"none","target":null,"chil
 A9-subof-unavailable-in-cand   | unavail | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true}         | valid
 # IC-C1 admits an OPEN candidate: state is a tie-break input only, never an eligibility
 # test, so "the duplicate is still open" is a dispatch-time no-op and not a malformed
-# verdict. A5 is the closed counterpart; both must be accepted (CPR-5).
+# verdict. A5 is the closed counterpart; both must be accepted (CPR-ORTH).
 A10-reopen-open-candidate      | batched | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}       | valid
 # A candidate that already has a (non-meta) parent is still a legal sub-of TARGET —
 # what B19 rejects is naming that parent itself.
@@ -185,7 +185,7 @@ if [ "$got" = "<missing>" ]; then
 else
     assert_eq "B15-reason-501-chars" "invalid" "$got"
 fi
-# B16: exactly 500 chars must remain valid (off-by-one boundary, CPR-5 counterpart).
+# B16: exactly 500 chars must remain valid (off-by-one boundary, CPR-ORTH counterpart).
 BOUNDARY_REASON=$(node -e "process.stdout.write('x'.repeat(500))" 2>/dev/null || printf 'x%.0s' $(seq 1 500))
 got=$(run_validate batched "{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"$BOUNDARY_REASON\",\"worth_filing\":true}")
 if [ "$got" = "<missing>" ]; then

@@ -24,7 +24,7 @@
 # the whole batch: entries already renamed are never reported, the tally is never returned,
 # and the user is left with displaced files and no record of them. That is the same failure
 # L02 pins for `via.root`, reached through two other doors — the class, not the member
-# (CPR-4/CPR-5).
+# (CPR-E2C/CPR-ORTH).
 #
 # WHAT IS OWED. A malformed plan is a CALLER error, which this suite has already ruled
 # belongs in `failed` rather than in an observation bucket that invites a re-run (J04, where

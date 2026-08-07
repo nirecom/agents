@@ -49,7 +49,7 @@
 # WHAT IS BEING DEFENDED. hooks/lib/session-markers.js authorizes on a marker
 # file's EXISTENCE alone, so every one of these parsers sits on the path between
 # "a shell command that creates a file" and "full session clearance". A widening
-# regex over-blocks ordinary work (CPR-5, the ALLOW-side rows); a narrowing one
+# regex over-blocks ordinary work (CPR-ORTH, the ALLOW-side rows); a narrowing one
 # is a one-command forge of WORKFLOW_OFF.
 #
 # NO PROTECTED NAME IS HARDCODED. The marker and token spellings are read from
@@ -105,7 +105,7 @@ else
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
 
-# Protected spellings DERIVED from the SSOT (CPR-2), never written out here.
+# Protected spellings DERIVED from the SSOT (CPR-SSOT), never written out here.
 MK=$("$RWT" 10 node -e \
     "process.stdout.write('.' + require(process.argv[1]).SESSION_MARKER_KINDS[0])" "$PB_NODE" 2>/dev/null)
 TOK=$("$RWT" 10 node -e \

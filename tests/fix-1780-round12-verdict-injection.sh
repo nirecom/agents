@@ -192,7 +192,7 @@ run_J5() {
 
 # ===========================================================================
 # J6 - MALFORMED / ABSENT JSON. Two distinct outcomes the operator must be able
-# to tell apart (CPR-3): "nothing parseable came back" (broken examiner) versus
+# to tell apart (CPR-SC): "nothing parseable came back" (broken examiner) versus
 # "objects came back but none were authentic" (injected or echoed verdict). The
 # second raises an explicit alarm on STDERR — the channel the verdict can never
 # come from — and that separation is asserted, not just the rejection.
@@ -250,7 +250,7 @@ run_J7() {
 # ===========================================================================
 # J8 - THE REQUEST TEXT ITSELF. --detail is model-supplied and interpolated into
 # the prompt, so it is the attacker's channel. Three distinct hazards, separated
-# (CPR-3): shell interpretation, verdict injection through an echoing examiner,
+# (CPR-SC): shell interpretation, verdict injection through an echoing examiner,
 # and secret leakage back out through the script's own output.
 # ===========================================================================
 run_J8() {

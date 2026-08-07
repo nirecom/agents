@@ -9,7 +9,7 @@
 # basename classifier or the interpreter MENTION gate treats them as protected,
 # then reading the rule blocks, editing the skill blocks, and the only remaining
 # way to make progress is to turn enforcement off wholesale - the guard would
-# actively push sessions toward the bypass it exists to prevent (CPR-1/CPR-6).
+# actively push sessions toward the bypass it exists to prevent (CPR-UO/CPR-E2E).
 #
 # Two distinct mechanisms must both stay clear, and they fail differently:
 #   - the basename classifier: `workflow-off.md` ends in `.md`, so a suffix match

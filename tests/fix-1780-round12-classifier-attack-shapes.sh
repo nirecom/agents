@@ -51,7 +51,7 @@
 #
 # Sections:
 #   T  edit/write tool shapes x payload keys        (block + innocent controls)
-#   P  command tool parity: Bash / runInTerminal / runCommands[i]   (CPR-5)
+#   P  command tool parity: Bash / runInTerminal / runCommands[i]   (CPR-ORTH)
 #   W  attack-shape matrix over shell commands      (each row paired)
 #   O  over-block sizing + accepted, NAMED over-blocks
 #
@@ -97,7 +97,7 @@ export CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
 cleanup() { [ -n "${SANDBOX:-}" ] && [ -d "$SANDBOX" ] && rm -r -f "$SANDBOX" 2>/dev/null; return 0; }
 trap cleanup EXIT
 
-# --- protected names DERIVED from the SSOT, never hardcoded (CPR-2) ---------
+# --- protected names DERIVED from the SSOT, never hardcoded (CPR-SSOT) ---------
 MARKER_SUFFIX=$("$RWT" 10 node -e \
     "process.stdout.write('.' + require(process.argv[1]).SESSION_MARKER_KINDS[0])" "$PB_NODE" 2>/dev/null)
 TOKEN_SUFFIX=$("$RWT" 10 node -e \
@@ -110,7 +110,7 @@ pass "H1 protected-basename SSOT introspected: marker=[$MARKER_SUFFIX] token=[$T
 
 SID="s1"
 MK="$WF/${SID}${MARKER_SUFFIX}"        # the marker path an attacker wants to exist
-TOK="$WF/${SID}${TOKEN_SUFFIX}"        # its clearance-token sibling (CPR-5)
+TOK="$WF/${SID}${TOKEN_SUFFIX}"        # its clearance-token sibling (CPR-ORTH)
 OK="$WF/notes.txt"                     # the innocent counterpart every control uses
 # The marker minus its LAST character. Every "one char short" control is built
 # from this, so the control differs from its block row by exactly one byte of the
@@ -219,7 +219,7 @@ run_T_tool_shapes() {
             # Top-level key: the protected MARKER.
             assert_tool "T1 $tool.$key -> marker" block "$tool" "$(ti_key "$MK" "$key")"
         done
-        # CPR-5: the clearance TOKEN is the marker's symmetric sibling — same
+        # CPR-ORTH: the clearance TOKEN is the marker's symmetric sibling — same
         # privilege, different suffix family. One assertion per tool is enough to
         # prove the token family is not routed differently.
         assert_tool "T2 $tool.file_path -> token" block "$tool" "$(ti_key "$TOK" file_path)"
@@ -246,7 +246,7 @@ run_T_tool_shapes() {
 run_T_tool_shapes
 
 # ===========================================================================
-# Section P — AXIS 1b: command tool parity (CPR-5).
+# Section P — AXIS 1b: command tool parity (CPR-ORTH).
 #
 # hooks/lib/tool-command-text.js exists because dispatch.js once read
 # `tool_input.command` only: a `runCommands` call carries `commands[]` instead,

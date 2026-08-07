@@ -17,7 +17,7 @@ const {
 } = require("../interpreter-scan");
 // `$ENV:` is the same scope prefix as `$env:` in PowerShell — fold it the
 // same way interpreter-scan.js does, or one scanner sanctions a spelling the
-// other treats as unknown (CPR-5).
+// other treats as unknown (CPR-ORTH).
 const { PWSH_ENV_PREFIX } = require("../../lib/case-insensitive-literal");
 
 // Verbs like `ln -s`, `sed -i`, `install`, `dd of=`, `truncate`, and `touch`
@@ -30,7 +30,7 @@ const READ_ONLY_ARG_COMMAND_RE = /^(?:cat|type|ls|dir|head|tail|wc|file|stat|rea
 // `less -o FILE` / `-O FILE` / `--log-file=FILE` opens a log and CREATES the
 // named file, so read-only-ness is a property of command+args, not just the
 // name. The rest of the allowlist emits to stdout only with no output/log/
-// in-place-edit option — re-verify that before adding a new member (CPR-4).
+// in-place-edit option — re-verify that before adding a new member (CPR-E2C).
 const LESS_LOG_OPT_RE = /^(?:-o(?![-\s])|--log-file(?:=|$))/i;
 
 function readOnlyInvocation(cmdBase, argv) {
@@ -60,7 +60,7 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
   // cmd0 gets the same protected-name classification argv does: a mis-parsed
   // redirect operator can deposit the real write target at position zero
   // (`echo x >| s1.<marker>`), and this is the general defence against any
-  // future tokenizer gap that shifts a target into command position (CPR-4).
+  // future tokenizer gap that shifts a target into command position (CPR-E2C).
   const cmd0Kind =
     classifyProtectedBashToken(seg && seg.cmd0Raw ? seg.cmd0Raw : eff.cmd0) ||
     classifyProtectedBashToken(eff.cmd0);
@@ -71,7 +71,7 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
   // The RAW spelling, index-aligned to eff.argv. cmd0 and redirect targets
   // already classify the raw text typed; the argv loop is the one site that
   // would otherwise read only the COOKED token, letting an ANSI-C-escaped
-  // target slip past a byte-identical redirect that blocks (CPR-5).
+  // target slip past a byte-identical redirect that blocks (CPR-ORTH).
   // resolveEffectiveSegment() strips a token PREFIX but leaves argvRaw stale,
   // so eff.argv is a suffix of seg.argv; rawOffset recovers the alignment,
   // and disables raw reading (rather than mis-pairing tokens) if that

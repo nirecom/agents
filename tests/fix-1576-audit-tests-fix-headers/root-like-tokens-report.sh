@@ -7,8 +7,8 @@
 #
 # TC11, TC12, TC22-TC26 (#1782): glob-expansion and root-equivalent-token
 # report-mode coverage against bin/audit-tests.sh (and bin/audit-tests-common.sh
-# for CPR-5 symmetry). TC11/TC12/TC23 are bespoke (single-token annotation,
-# embedded-prose, and cross-binary CPR-5-symmetry fixtures respectively — none
+# for CPR-ORTH symmetry). TC11/TC12/TC23 are bespoke (single-token annotation,
+# embedded-prose, and cross-binary CPR-ORTH-symmetry fixtures respectively — none
 # fit the table shape). TC22/TC24-TC26 are table-driven (round-4 test-review
 # gap C1) into a single input(token)->expected-MRR-presence loop; this moves
 # TC22 to run after TC23 (was before it pre-refactor) since it now shares a
@@ -51,7 +51,7 @@ else
 fi
 rm -rf "$R12"
 
-# TC23 (#1782 CPR-5 symmetry): the same standalone-root-equivalent-token
+# TC23 (#1782 CPR-ORTH symmetry): the same standalone-root-equivalent-token
 # regression (TC14's bare "/") must also be caught through
 # bin/audit-tests-common.sh's --fix-headers path, not only bin/audit-tests.sh.
 if [[ -f "$AUDIT_COMMON" ]]; then
@@ -59,9 +59,9 @@ if [[ -f "$AUDIT_COMMON" ]]; then
   write_dispatcher "$R23" "check-bareroot.sh" '# Tests: bin/foo.sh, /'
   run_in "$R23" "$AUDIT_COMMON" --fix-headers
   if printf '%s\n' "$OUT" "$ERR" | grep -qxF "MANUAL_REVIEW_REQUIRED: tests/check-bareroot.sh: /"; then
-    pass "TC23 audit-tests-common.sh --fix-headers flags standalone / CSV token via MANUAL_REVIEW_REQUIRED (CPR-5 symmetry)"
+    pass "TC23 audit-tests-common.sh --fix-headers flags standalone / CSV token via MANUAL_REVIEW_REQUIRED (CPR-ORTH symmetry)"
   else
-    fail "TC23 audit-tests-common.sh --fix-headers flags standalone / CSV token via MANUAL_REVIEW_REQUIRED (CPR-5 symmetry)" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
+    fail "TC23 audit-tests-common.sh --fix-headers flags standalone / CSV token via MANUAL_REVIEW_REQUIRED (CPR-ORTH symmetry)" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
   fi
   rm -rf "$R23"
 fi

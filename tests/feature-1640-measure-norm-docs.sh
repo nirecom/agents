@@ -78,7 +78,7 @@ summary() { # <key>
 
 # POSIX read denial with proof it took effect. chmod is advisory on MSYS/Windows and
 # ignored for root, so a naive `chmod 000` would produce a false PASS. Mirrors deny_read
-# in tests/feature-1640-count-subagents.sh (CPR-5).
+# in tests/feature-1640-count-subagents.sh (CPR-ORTH).
 deny_read() { # <path>
     chmod 000 "$1" 2>/dev/null || return 1
     head -c 1 "$1" >/dev/null 2>&1 && { chmod 644 "$1" 2>/dev/null || true; return 1; }
@@ -200,7 +200,7 @@ assert_eq "L5/total-consistent" "files-ok bytes-ok lines-ok" "$JSON_PROBE"
 # Text mode prints a WARN row for a malformed document and an ERROR row for one that
 # could not be read. A JSON report that dropped both would be indistinguishable from a
 # complete measurement once stored, and asymmetric with `count-subagents --json`, which
-# does carry `excluded` / `errors` (CPR-5). CLI_OUT is still the clean --repo $CORE run
+# does carry `excluded` / `errors` (CPR-ORTH). CLI_OUT is still the clean --repo $CORE run
 # from L5: 5 rows, one of them malformed, no failures.
 echo "== L5b: per-file warning + top-level errors in --json =="
 JSON_WARN_PROBE="$(J="$CLI_OUT" run_with_timeout 30 node -e '

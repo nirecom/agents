@@ -20,7 +20,7 @@ const { resolveDirSpelling, WIN_ABS_RE } = require("./classify");
 // unambiguous literal arguments count; anything dynamic leaves the cwd
 // unchanged. The directory is routed through the same resolver
 // globTargetInsideWorkflowDir uses, so `cd ~/...` and the literal-path
-// spelling of the same target land on the same verdict (CPR-5/CPR-8).
+// spelling of the same target land on the same verdict (CPR-ORTH/CPR-UNV).
 function staticPathArg(rawArg) {
   if (typeof rawArg !== "string" || rawArg === "" || rawArg[0] === "-") return null;
   const t = unquoteBashWord(rawArg);
@@ -38,7 +38,7 @@ function staticPathArg(rawArg) {
 // command can only ADD a containment hit). PowerShell cmdlet/alias names are
 // case-folded here since they're case-insensitive at runtime while
 // command-ir.js keeps cmd0 case-preserved — deliberate over-recognition in
-// the fail-wide direction (CPR-8).
+// the fail-wide direction (CPR-UNV).
 const DIR_CHANGE_CMDS = new Set([
   "cd",                            // bash builtin / pwsh alias of Set-Location
   "pushd",                         // bash builtin / pwsh alias of Push-Location
@@ -66,7 +66,7 @@ const OLDPWD_SWAP_CMDS = new Set(["cd", "set-location", "sl", "chdir"]);
 
 // `pushd +1` / `pushd -0` ROTATE the directory stack and name no path at
 // all — must not be mistaken for a relative directory. Left unmodelled
-// (CPR-8 named exception): the cwd is simply left unchanged, same as any
+// (CPR-UNV named exception): the cwd is simply left unchanged, same as any
 // other unresolvable directory-changing argument, and the residual-
 // indirection clauses in classifyBashWriteTarget remain the backstop.
 const DIR_STACK_ROTATION_RE = /^[+-]\d+$/;
@@ -106,7 +106,7 @@ function commandCwd(segments, idx, toolCwd) {
   // A substitution-span segment (../bash-scan/scan.js) is APPENDED after the
   // ordinary segments, so its array index says nothing about where it sits
   // in the command text; sourceOrderView() recovers true source order
-  // (CPR-2, shared with priorAssignmentsText).
+  // (CPR-SSOT, shared with priorAssignmentsText).
   const view = sourceOrderView(segments, idx);
   const segs = view.segments;
   const end = view.idx;

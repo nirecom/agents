@@ -6,7 +6,7 @@
 # Undecidable files (prose header, no header) must be REPORTED rather than
 # silently dropped — that silence is what let 25 of 26 common-scope "orphans"
 # stay false positives. The reporting vocabulary is shared by both scripts
-# (CPR-5) and lives beside, not inside, the candidate list, so existing JSON
+# (CPR-ORTH) and lives beside, not inside, the candidate list, so existing JSON
 # consumers keep working.
 
 D_REPO="$(make_repo)"
@@ -55,7 +55,7 @@ run_in_repo "$DC_REPO" "-" "$AUDIT_COMMON" --dry-run --offline --format text
 D1C_OUT="$OUT"
 if echo "$D1C_OUT" | grep -q "^MALFORMED_HEADER: tests/cc-malformed.sh$" \
    && echo "$D1C_OUT" | grep -q "^NO_TESTS_HEADER: tests/cc-noheader.sh$"; then
-    pass "D1d audit-tests-common uses the identical diagnostic tokens (CPR-5)"
+    pass "D1d audit-tests-common uses the identical diagnostic tokens (CPR-ORTH)"
 else
     fail "D1d audit-tests-common must emit the same MALFORMED_HEADER/NO_TESTS_HEADER tokens (out=<<$D1C_OUT>>)"
 fi

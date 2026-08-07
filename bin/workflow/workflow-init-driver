@@ -109,7 +109,7 @@ function resolveSessionId() {
     }
   }
   // SID unresolvable — use timestamp fallback for checkpoint naming only.
-  // Digits-only by construction, but validated symmetrically (CPR-5).
+  // Digits-only by construction, but validated symmetrically (CPR-ORTH).
   const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
   return { sid: validSid(ts) || "unresolved-sid", reliable: false };
 }

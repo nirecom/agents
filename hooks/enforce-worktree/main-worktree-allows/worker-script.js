@@ -57,7 +57,7 @@ const SANCTIONED = [
  * True when `seg` (a single split segment with no &&/||/; separators) matches
  * exactly one of the sanctioned worker-script invocation patterns.
  * Does NOT call writeTargetsAllInLinkedWorktrees — write-scope runs once on the
- * WHOLE command in the caller (CPR-3: one scope check, not one per segment).
+ * WHOLE command in the caller (CPR-SC: one scope check, not one per segment).
  */
 function isSanctionedSingleInvocation(seg, acd, repoRoot) {
   // (a0) Worker-dispatch overlay (#1643): the single plain-script dispatch entry

@@ -17,14 +17,14 @@ process.stdin.on("end", () => {
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
     // runCommands carries an ARRAY under `commands`, not `.command` — normalization
-    // shared with enforce-system-ops.js / block-clearance-token-write (CPR-2).
+    // shared with enforce-system-ops.js / block-clearance-token-write (CPR-SSOT).
     const { isCommandTool, commandTextOf, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
     if (!isCommandTool(toolName)) process.exit(0);
 
     const patterns = require(path.join(__dirname, "./lib/sentinel-patterns.js"));
 
     // convLangPrefix(): conversation-language injection for any block message.
-    // Shared by the multi-sentinel block below and the Step-5 block tail (CPR-2).
+    // Shared by the multi-sentinel block below and the Step-5 block tail (CPR-SSOT).
     function convLangPrefix() {
       try {
         const { getConvLangInjection } = require(path.join(__dirname, "./lib/conv-lang.js"));
@@ -67,7 +67,7 @@ process.stdin.on("end", () => {
     ];
     const activatingUnits = units.filter((u) => matchesAny(ACTIVATING_OFF_RES, u));
 
-    // One clearance authorizes exactly ONE activation (CPR-8): reject outright rather
+    // One clearance authorizes exactly ONE activation (CPR-UNV): reject outright rather
     // than gate N times, since N sentinels can't be bound/consumed in an order this
     // gate can observe. Also blocks smuggling a gated sentinel past Phase1 by pairing
     // it with an EMERGENCY one in the same call.
@@ -145,7 +145,7 @@ process.stdin.on("end", () => {
       return resolvedWsid;
     }
 
-    // Step 2: already OFF → nothing left to gate. Target-aware (CPR-5): WORKFLOW_OFF
+    // Step 2: already OFF → nothing left to gate. Target-aware (CPR-ORTH): WORKFLOW_OFF
     // subsumes both targets, while WORKTREE_OFF only clears a worktree-target sentinel.
     try {
       const { isWorkflowOff, isWorktreeOff } = require(path.join(__dirname, "./lib/session-markers.js"));
@@ -265,7 +265,7 @@ process.stdin.on("end", () => {
           // indivisible op, so at most one of N concurrent proposals can obtain it —
           // closing the validate/consume TOCTOU window. No fallback on failure (block).
           // `wx` not rename: rename's exists-destination behavior differs POSIX vs
-          // Windows; `wx` throws EEXIST on both (CPR-8).
+          // Windows; `wx` throws EEXIST on both (CPR-UNV).
           if (validated) {
             const bare = tokenResult.tokenPath;
             const claimed = bare + ".claimed";
