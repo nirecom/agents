@@ -184,7 +184,7 @@ fi
 # stdout and read .verdict / .reason from it. Unparseable output → empty verdict → REJECT.
 #
 # The extractor lives in bin/lib/last-json-object.js so that this examiner and the
-# issue-verdict reviewer read codex output through the SAME parser (CPR-2). Contract is
+# issue-verdict reviewer read codex output through the SAME parser (CPR-SSOT). Contract is
 # unchanged: tab-separated verdict/reason of the last object, exit 1 when there is none.
 LJO="$AGENTS_CONFIG_DIR/bin/lib/last-json-object.js"
 if command -v cygpath >/dev/null 2>&1; then LJO="$(cygpath -m "$LJO")"; fi

@@ -7,7 +7,7 @@
 //
 // Extracted here (#1761) from bin/request-off-clearance so that every consumer of
 // codex output — the OFF-clearance examiner and the issue-verdict reviewer — reads
-// the same parser (CPR-2). Callers that must reject an ambiguous answer need the
+// the same parser (CPR-SSOT). Callers that must reject an ambiguous answer need the
 // CARDINALITY too, so the array is the primary export and `lastJsonObject` is the
 // convenience wrapper over it.
 //

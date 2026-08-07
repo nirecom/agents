@@ -80,7 +80,7 @@ process.stdin.on("end", () => {
       return resolvedWsid;
     }
 
-    // Step 2: already OFF → nothing left to gate. Target-aware (CPR-5): WORKFLOW_OFF
+    // Step 2: already OFF → nothing left to gate. Target-aware (CPR-ORTH): WORKFLOW_OFF
     // subsumes both targets, while WORKTREE_OFF only clears a worktree-target sentinel.
     try {
       const { isWorkflowOff, isWorktreeOff } = require(path.join(__dirname, "./lib/session-markers.js"));

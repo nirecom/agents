@@ -15,8 +15,8 @@
 # on PATH" is written down twice — nineteen hand-written `Write-Launcher "$LocalBin\...`
 # blocks in install/win/dotfileslink.ps1 and the same commands again as `ln -sf` blocks in
 # install/linux/dotfileslink.sh — with no list and no loop anywhere. Adding a gate means
-# remembering two files in two languages, and forgetting is silent (CPR-2 single source of
-# truth; CPR-4 fix the class, not the member).
+# remembering two files in two languages, and forgetting is silent (CPR-SSOT single source of
+# truth; CPR-E2C fix the class, not the member).
 #
 # THE CONTRACT UNDER TEST. One declarative file, install/path-exposed-commands.txt, names
 # the PATH-exposed bin/ commands. Both installers LOOP over it — the Windows script reusing
@@ -138,7 +138,7 @@ t1_invocations_covered() {
   # T1a ("$SSOT_REL is non-empty") was dropped: with T7's canary now proving
   # derive_bare_invocations() still detects a known bare invocation, "$DERIVED is empty"
   # is no longer read as possible parser breakage, so the only thing T1a was left guarding
-  # was "the SSOT list is non-empty" -- which is T5c's assertion verbatim (CPR-2: one
+  # was "the SSOT list is non-empty" -- which is T5c's assertion verbatim (CPR-SSOT: one
   # canonical location per fact). Re-asserting it here would be a second, driftable copy.
   if [ "$n" -eq 0 ]; then
     echo "INFO: T1: the parse found zero bare-name bin/ invocations in skills/**/scripts/*.sh (T1b is vacuously satisfied)"
@@ -221,7 +221,7 @@ t3_installers_loop() {
   fi
 }
 
-# ---- T4: both platforms expose the same set (CPR-5) -------------------------
+# ---- T4: both platforms expose the same set (CPR-ORTH) -------------------------
 
 # What an installer exposes = the list, if it reads the list, PLUS whatever it still
 # hand-writes. Computed the same way for both scripts so no platform can silently ship a

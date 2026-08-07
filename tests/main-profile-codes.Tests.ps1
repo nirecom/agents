@@ -80,7 +80,7 @@ Describe "codes function (profile-snippet.ps1)" {
 # ---------------------------------------------------------------------------
 # SESSION_SYNC gate — the pwsh half of the contract also covered on the bash
 # side by tests/fix-1225-profile-snippet-guards/session-sync-gate.sh. The two
-# snippets are symmetric members of one class (CPR-5), so the value domain and
+# snippets are symmetric members of one class (CPR-ORTH), so the value domain and
 # the expectations below are deliberately identical to TC13-TC21 there.
 #
 # Contract: SESSION_SYNC gates the two *automatic* call sites only —
@@ -280,7 +280,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
 
     Context "codes() auto-push" {
         # Same six rows as the startup-fetch matrix above. The two call sites are
-        # symmetric members of one class (CPR-5): a value that must not start the
+        # symmetric members of one class (CPR-ORTH): a value that must not start the
         # fetch must not start the push either, so neither matrix may be the
         # shorter one — an unrecognized value with a *working* resolver and the
         # upper-case spelling are exactly where the two paths could diverge.

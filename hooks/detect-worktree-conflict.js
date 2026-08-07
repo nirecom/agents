@@ -37,7 +37,7 @@ const WORKTREE_CONFLICT_RE = /fatal: '([^']+)' is already used by worktree/;
 const WORKTREE_PATH_RE = /is already used by worktree at '([^']+)'/;
 
 // Terminal-style tool names that carry the same `git worktree add` stderr shape as
-// the Bash tool. Kept in sync with the settings.json PostToolUse matcher (CPR-5).
+// the Bash tool. Kept in sync with the settings.json PostToolUse matcher (CPR-ORTH).
 const TERMINAL_TOOL_NAMES = new Set(["Bash", "runInTerminal", "runCommands"]);
 
 function main() {

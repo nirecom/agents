@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Entry point for the prompt-extraction gate (issue #1642).
-# Thin delegator: bin/lib/prompt-extraction/cli.js owns every decision (CPR-2).
+# Thin delegator: bin/lib/prompt-extraction/cli.js owns every decision (CPR-SSOT).
 #
 # AGENTS_CONFIG_DIR is deliberately NOT consulted here. The engine lives next to
 # this script, so the script location is the only correct resolver: a fixture or
 # foreign repo may export AGENTS_CONFIG_DIR at some other checkout while invoking
-# this exact file (CPR-8 — no implicit environment branching).
+# this exact file (CPR-UNV — no implicit environment branching).
 set -euo pipefail
 
 _pe_self="${BASH_SOURCE[0]}"

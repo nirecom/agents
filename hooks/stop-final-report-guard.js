@@ -3,7 +3,7 @@
 // with all 13 canonical section headings present and no unsubstituted
 // `<PLACEHOLDER>` tokens remaining.
 //
-// Triggers (#1611 — two independent lanes, CPR-3):
+// Triggers (#1611 — two independent lanes, CPR-SC):
 // - Lane A: <plans-dir>/<sid>-final-report-env.json exists (written by
 //   worktree-end Step WE-9..WE-11 or session-close SC-2A/SC-2B/SC-2C) → validate
 //   the Final Report shape (the whole validation section below is lane A only).

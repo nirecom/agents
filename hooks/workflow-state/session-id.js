@@ -14,7 +14,7 @@ const { isSameGitRepo } = require("../lib/git-common-dir");
  *            `dir` error and no files; a failed lstatSync drops only that one file.
  * The stat is an lstat and non-regular entries are skipped, so a `.jsonl` symlink cannot
  * pull a transcript in from outside the selected directory — symmetric with the prune
- * walker and with bin/measure-norm-docs (CPR-5). A skipped entry is simply not listed; it
+ * walker and with bin/measure-norm-docs (CPR-ORTH). A skipped entry is simply not listed; it
  * is not an error, because nothing about it failed to be observed.
  * Callers that must distinguish "the directory is empty" from "the directory could not be
  * read" use this view; _listJsonlByMtime below is the swallowing view of the same walk.
@@ -156,7 +156,7 @@ function resolveSessionId(ctx = {}) {
     // not in a git repo or git unavailable
   }
   // Priority 6c: sibling worktree scan — symmetric to resolve-workflow-session-id.js
-  // Priority 1d (CPR-5). Reached only after Priority 6/6b (CWD notes reads) fail.
+  // Priority 1d (CPR-ORTH). Reached only after Priority 6/6b (CWD notes reads) fail.
   // Own-worktree-first: identify the worktree root that is CWD itself or an ancestor
   // of CWD (so a CWD in a linked-worktree SUBDIR still resolves to that worktree, not
   // a sibling). If own's WORKTREE_NOTES.md yields a Session-ID, it wins immediately.

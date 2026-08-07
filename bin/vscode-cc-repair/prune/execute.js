@@ -191,7 +191,7 @@ function isCounterpartPath(decision) {
   // Coercion did not accept those spellings, it only hid that it was the wrong question.
   if (typeof viaFile !== 'string') return false;
   if (typeof via.root !== 'string') return false;
-  // The same rule on the target side, for the same reason (CPR-5): prunable() has already
+  // The same rule on the target side, for the same reason (CPR-ORTH): prunable() has already
   // established this, and this function is a public export reached by callers who have not.
   if (typeof decision.file !== 'string') return false;
   const viaBase = path.basename(viaFile);

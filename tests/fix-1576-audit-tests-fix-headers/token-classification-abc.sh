@@ -7,7 +7,7 @@
 #
 # TC1-TC10: original #1576 A/B/C token classification coverage —
 # format-invalid (A), renamed (B), and deleted (C) tokens, multi-paren
-# handling, and audit-tests-common.sh --fix-headers symmetry (CPR-5).
+# handling, and audit-tests-common.sh --fix-headers symmetry (CPR-ORTH).
 #
 # Depends on the caller (tests/fix-1576-audit-tests-fix-headers.sh) having
 # already defined: $AUDIT, $AUDIT_COMMON, PASS/FAIL, pass(), fail(),
@@ -110,7 +110,7 @@ else
 fi
 rm -rf "$R7"
 
-# TC8: audit-tests-common.sh --fix-headers A-report (CPR-5 symmetry)
+# TC8: audit-tests-common.sh --fix-headers A-report (CPR-ORTH symmetry)
 if [[ ! -f "$AUDIT_COMMON" ]]; then
   fail "TC8 audit-tests-common.sh --fix-headers symmetry" "script not found: $AUDIT_COMMON"
 else
@@ -128,7 +128,7 @@ else
   rm -rf "$R8"
 fi
 
-# TC9: audit-tests-common.sh --fix-headers B-token (CPR-5 symmetry)
+# TC9: audit-tests-common.sh --fix-headers B-token (CPR-ORTH symmetry)
 if [[ -f "$AUDIT_COMMON" ]]; then
   R9="$(make_fixture)"
   echo '#!/usr/bin/env bash' > "$R9/bin/old.sh"
@@ -146,7 +146,7 @@ if [[ -f "$AUDIT_COMMON" ]]; then
   rm -rf "$R9"
 fi
 
-# TC10: audit-tests-common.sh --fix-headers C-token (path deleted, no rename) (CPR-5 symmetry)
+# TC10: audit-tests-common.sh --fix-headers C-token (path deleted, no rename) (CPR-ORTH symmetry)
 if [[ -f "$AUDIT_COMMON" ]]; then
   R10="$(make_fixture)"
   write_dispatcher "$R10" "check-orphan.sh" '# Tests: bin/deleted.sh'

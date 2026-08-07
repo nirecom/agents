@@ -20,7 +20,7 @@ g1_full_path_invocations() {
   # either way the per-gate rows below would be reasoning about the wrong set.
   check "G1b: the invocation count matches the derived gate count" \
     "$GATE_COUNT" "$INVOCATION_COUNT"
-  # CPR-5: ALL of them, not the ones someone remembered. One surviving bare-name line is
+  # CPR-ORTH: ALL of them, not the ones someone remembered. One surviving bare-name line is
   # one gate that can go on being silently skipped.
   bad="$(printf '%s\n' "$INVOCATIONS" | grep -v '/bin/' | sed 's/:.*//' | tr '\n' ' ' || true)"
   check "G1c: every gate invocation names the executable by full path (offending line numbers)" \

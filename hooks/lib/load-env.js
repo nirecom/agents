@@ -183,7 +183,7 @@ function loadDefaultEnv() {
   // `/c/git/agents` value resolves), and (c) is still the
   // `realpathSync(__filename)` walk that reaches a symlinked checkout.
   //
-  // The SELECTION POLICY is deliberately NOT shared (CPR-3): load-env decides
+  // The SELECTION POLICY is deliberately NOT shared (CPR-SC): load-env decides
   // where SETTINGS come from, so an explicit AGENTS_CONFIG_DIR short-circuits —
   // it is the sole config source and never falls through, or a child process
   // pointed at an alternate/test config dir would get the real repo's .env

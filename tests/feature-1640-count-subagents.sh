@@ -136,7 +136,7 @@ assert_eq "B5/exit-0"        "0" "$CLI_RC"
 assert_eq "B5/invocations"   "1" "$(summary invocations)"
 assert_eq "B5/survey-code"   "1" "$(type_count survey-code)"
 
-echo "== B6: the predicate is input.subagent_type, not block.name (CPR-8) =="
+echo "== B6: the predicate is input.subagent_type, not block.name (CPR-UNV) =="
 R6="$(new_root)"
 mkdir -p "$R6/slug-one"
 { content "$SID_A"; rec "$SID_A" survey-code Task old-name
@@ -308,7 +308,7 @@ SYM_ENTRY="$R12/slug-one/$SID_C.jsonl"
 # `ln -s` silently degrades to a copy on MSYS/Windows without developer mode or
 # MSYS=winsymlinks:nativestrict. A copy IS a regular file and would legitimately be
 # listed, so the assertion is only meaningful behind an `[ -L ]` proof — same gate as L8
-# in tests/feature-1640-measure-norm-docs.sh (CPR-5).
+# in tests/feature-1640-measure-norm-docs.sh (CPR-ORTH).
 if ln -s "$TMPROOT/outside-$SID_C.jsonl" "$SYM_ENTRY" 2>/dev/null && [ -L "$SYM_ENTRY" ]; then
     DIR="$(native_path "$R12/slug-one")" BAD_NAME="__no-such-path-1640__" node_m "$STRICT_JS"
     assert_eq "C3-f/symlink-skipped-not-an-error" "files=1 errors=0 scope=" "$NODE_OUT"
@@ -340,7 +340,7 @@ NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" 
     DIR="$(native_path "$TMPROOT")/no-such-dir-1640" BAD_NAME="" run_with_timeout 60 node -e "$LEGACY_JS" 2>&1)" || NODE_RC=$?
 assert_eq "C3-d/dir-failure-empty" "[]" "$NODE_OUT"
 
-# Non-regression counterpart (CPR-5): the healthy path must still return entries.
+# Non-regression counterpart (CPR-ORTH): the healthy path must still return entries.
 NODE_RC=0
 NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$R11_SLUG" BAD_NAME="" run_with_timeout 60 node -e '
@@ -354,7 +354,7 @@ assert_eq "C3-d/healthy-path-unchanged" "2" "$NODE_OUT"
 echo "== B8: argument handling =="
 # Table-driven: one exit-code contract (0 ok / 2 argument error) over the whole argument
 # surface. The `..` rows are symmetric with L7/dotdot-repo in
-# tests/feature-1640-measure-norm-docs.sh (CPR-5): both path-taking CLIs must reject a
+# tests/feature-1640-measure-norm-docs.sh (CPR-ORTH): both path-taking CLIs must reject a
 # `..` segment even when the resolved target is a perfectly good directory.
 # No field contains a space, so unquoted expansion of $args is intentional word-splitting.
 R1_NATIVE="$(native_path "$R1")"

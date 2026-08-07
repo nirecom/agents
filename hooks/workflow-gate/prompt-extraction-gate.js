@@ -2,10 +2,10 @@
 // hooks/workflow-gate/prompt-extraction-gate.js
 // Gate 3 (issue #1642): prompt-extraction check for staged prompt files.
 // bin/check-prompt-extraction --staged owns detection, the allowlist and the
-// exit-code contract (CPR-2); this module only spawns it and maps exit 1 -> block.
+// exit-code contract (CPR-SSOT); this module only spawns it and maps exit 1 -> block.
 //
 // Fail-closed on every infrastructure error. Timeout is the ONLY fail-open path
-// (mirrors Gate 2 / code-size-gate.js — CPR-5).
+// (mirrors Gate 2 / code-size-gate.js — CPR-ORTH).
 
 const { spawnSync } = require("child_process");
 const fs = require("fs");
@@ -50,7 +50,7 @@ function checkPromptExtraction(rawRepoDir) {
   // Repo-scope opt-in, evaluated BEFORE any infrastructure check: a repository
   // that carries no .prompt-extraction-allowlist has not adopted the gate, so a
   // missing CLI there is not an infrastructure failure. Same condition (b) as the
-  // hooks/pre-commit backstop (CPR-5).
+  // hooks/pre-commit backstop (CPR-ORTH).
   if (!repoDir || !fs.existsSync(path.join(repoDir, ".prompt-extraction-allowlist"))) {
     return { action: "ok" };
   }

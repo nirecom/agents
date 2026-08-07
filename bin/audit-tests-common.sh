@@ -7,7 +7,7 @@
 # effect (orphan detection does not require GitHub API calls).
 # --dry-run is likewise an accepted no-op: this script has no write path, so
 # there is no default to invert. It exists so the /sweep family presents one
-# flag face (CPR-5) and so the nightly cron can state its intent explicitly.
+# flag face (CPR-ORTH) and so the nightly cron can state its intent explicitly.
 # --apply stays rejected — deletion here would need issue staleness context.
 
 set -euo pipefail
@@ -64,7 +64,7 @@ for testfile in "$REPO_ROOT/tests/"*.sh; do
   esac
 
   # --fix-headers mode: report A/B/C token classification per file (no rewrite;
-  # deletion is not supported here — CPR-5 symmetry with audit-tests.sh).
+  # deletion is not supported here — CPR-ORTH symmetry with audit-tests.sh).
   if [[ "$FIX_HEADERS" -eq 1 ]]; then
     ( cd "$REPO_ROOT" && _fix_headers_report "tests/$base" )
     continue

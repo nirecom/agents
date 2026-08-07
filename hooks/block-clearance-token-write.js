@@ -42,7 +42,7 @@ const BLOCK_MSG = [
   "If the minter itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
 ].join("\n");
 
-// The clearance-token class (CPR-4). Adding a suffix here extends the guard to a new
+// The clearance-token class (CPR-E2C). Adding a suffix here extends the guard to a new
 // token in one place — the class, not one member, is what is protected.
 const CLEARANCE_SUFFIXES = [
   "off-clearance",

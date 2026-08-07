@@ -26,7 +26,7 @@ const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
 const { SESSION_ID_VALID_RE, readState } = require("./state-io");
 
 // The ONLY enumeration of the approval-gated step class. Every check iterates
-// this array — never hardcode one member without the other (CPR-5).
+// this array — never hardcode one member without the other (CPR-ORTH).
 const APPROVAL_GATED_STEPS = Object.freeze(["outline", "detail"]);
 
 // Frozen closed set of named exceptions. 1:1 with the sanctioned override
@@ -177,7 +177,7 @@ function buildAuditApproval(source, reason) {
 }
 
 // The same audit record as a `plan_approval` event. `recorded_at` is dropped:
-// the stream stamps `at`, and the projection derives recorded_at from it (CPR-2).
+// the stream stamps `at`, and the projection derives recorded_at from it (CPR-SSOT).
 function buildAuditApprovalEvent(step, source, reason, origin) {
   const rec = buildAuditApproval(source, reason);
   delete rec.recorded_at;

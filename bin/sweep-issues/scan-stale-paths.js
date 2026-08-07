@@ -22,7 +22,7 @@
 // grammar to a CSV that was produced elsewhere and emits, one row per token:
 //     accept<TAB>token          |  reject<TAB>token<TAB>reason
 // It exists so that downstream consumers (bin/sweep-issues/verify-candidate.sh)
-// re-apply THIS rule instead of hand-rolling a second copy of it (CPR-2). The
+// re-apply THIS rule instead of hand-rolling a second copy of it (CPR-SSOT). The
 // tokens reaching those consumers ultimately derive from attacker-authored
 // GitHub issue text, so the invariant must hold at every consumer, not just at
 // the point of extraction.

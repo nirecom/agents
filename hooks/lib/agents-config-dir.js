@@ -9,7 +9,7 @@
 // "which directory is the agents checkout that is executing me?" from evidence
 // that does not depend on the environment being intact.
 //
-// Deliberate policy asymmetry with hooks/lib/load-env.js (CPR-3): both consume
+// Deliberate policy asymmetry with hooks/lib/load-env.js (CPR-SC): both consume
 // configDirCandidates(), but only the CANDIDATE ENUMERATION is shared —
 //   resolveAgentsConfigDir : env -> module -> realpath  (falls through)
 //   loadDefaultEnv         : env only                   (short-circuits)
@@ -33,7 +33,7 @@ const MARKER_DIR = ["bin"];
 
 // Windows POSIX normalization (rules/coding/nodejs.md): `/c/git/agents` from Git
 // Bash must become a real path before any path.join / fs call. Applied to all
-// three candidate sources symmetrically (CPR-5).
+// three candidate sources symmetrically (CPR-ORTH).
 function normDir(p) {
   if (typeof p !== "string") return null;
   const t = p.trim();

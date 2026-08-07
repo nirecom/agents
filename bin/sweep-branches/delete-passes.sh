@@ -14,7 +14,7 @@
 #
 # The local and no-PR passes previously carried byte-identical worktree-locked
 # recovery blocks; they now share delete_local_branch so the two can never
-# diverge (CPR-5). The only per-pass differences are the WARN wording and the
+# diverge (CPR-ORTH). The only per-pass differences are the WARN wording and the
 # `errors[]` tag, both of which are parameters.
 #
 # Must be `source`d, not executed directly — it reads and mutates caller-scope
