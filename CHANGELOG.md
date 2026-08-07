@@ -240,3 +240,7 @@ Changes: Core Principles now use semantic short codes instead of numbers — `CP
 ### FEATURE: PR #1855 (2026-08-07)
 Background: feat(#1794): add Stop-guard exemption sentinels for background work a...
 Changes: Stop-guard exemptions: background work can now be declared with a sentinel so the premature-stop guard stays quiet while it runs, and the EM Supervisor no longer intervenes before the workflow has been started. See `rules/stop-guard-exemptions.md`.;Hardening: session ids supplied by hook input are now validated centrally, closing a latent path-traversal in memory-directory write blocking.
+
+### FEATURE: PR #1867 (2026-08-07)
+Background: feat(#530,#688,#1805,#1766,#1825,#1758,#1693): unconditional WORKTREE...
+Changes: worktree-end and issue-close-finalize now automatically file GitHub issues for outstanding WORKTREE_NOTES.md findings instead of deferring them to a later session (#530).;Clearer prompts during worktree-end's notes-promotion and docs-completion steps (#688).;Fixed worktree-end documentation referencing incorrect subagent names (#1805).;Clarified worktree-end docs around PRs merged via the GitHub web UI (#1766).;Aligned documentation for the WORKFLOW_OFF and WORKTREE_OFF override mechanisms (#1825).;Fixed misleading wording in detect-restart.sh about rules/ file changes (#1758).;migration-from-todo.md's --from-step now warns when it silently skips intermediate steps (#1693).
