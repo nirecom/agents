@@ -121,7 +121,10 @@ function validateArtifact(a) {
     if (typeof c.title !== "string") return { ok: false, reason: "candidate #" + c.number + ": title must be a string" };
     // `state` is read by the cascade tie-break and by every downstream reopen
     // decision, so an unrecognised word is not a cosmetic defect.
-    if (ISSUE_STATES.indexOf(c.state) === -1) {
+    // `gh issue view --json state` returns the value uppercased (`OPEN` / `CLOSED`),
+    // which is why the casing is normalized here before the allowlist test — the
+    // typeof guard runs first, so a non-string state is rejected, never coerced.
+    if (typeof c.state !== "string" || ISSUE_STATES.indexOf(c.state.toLowerCase()) === -1) {
       return { ok: false, reason: "candidate #" + c.number + ": state must be open or closed (got: " + JSON.stringify(c.state) + ")" };
     }
     if (typeof c.body !== "string") return { ok: false, reason: "candidate #" + c.number + ": body must be a string" };
