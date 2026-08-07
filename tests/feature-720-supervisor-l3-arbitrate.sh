@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-720-supervisor-l3-arbitrate.sh
-# Tests: hooks/lib/supervisor-guard/arbitrate.js
+# Tests: hooks/supervisor-guard/arbitrate.js
 # Tags: supervisor, em-supervisor, layer3, arbitrate, unit, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 #   Pure function unit test for the arbitration rule table R0-R8.
@@ -16,8 +16,8 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 
-SRC="$AGENTS_DIR/hooks/lib/supervisor-guard/arbitrate.js"
-SRC_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/arbitrate.js"
+SRC="$AGENTS_DIR/hooks/supervisor-guard/arbitrate.js"
+SRC_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/arbitrate.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

@@ -34,7 +34,6 @@ if (require.main === module) {
 
   let resolveSessionId, readState, writeAlertState, getStatePath;
   let formatLayer2Findings;
-  const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
   try {
     ({ resolveSessionId } = require("./workflow-state"));
@@ -52,7 +51,7 @@ if (require.main === module) {
         transcriptPath: input.transcript_path,
       });
     } catch (_) {}
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) process.exit(0);
+    if (!sessionId) process.exit(0);
 
     // Quiet layer (#1607): exit BEFORE findings_surfaced_at is written, so the
     // findings are not consumed and resurface once the session resumes. fail-open.
