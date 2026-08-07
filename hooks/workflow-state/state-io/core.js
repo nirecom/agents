@@ -3,7 +3,7 @@
 // Entrypoint-private to state-io.js.
 //
 // Since #1733 the state file is an append-only event stream: `events` is the
-// only source of truth (CPR-2) and every derived view is folded from it by
+// only source of truth (CPR-SSOT) and every derived view is folded from it by
 // projection.js. `markStep` is a thin appender; nothing rewrites history.
 
 const fs = require("fs");
@@ -353,7 +353,7 @@ function createInitialState(sessionId, ctx) {
     session_id: sessionId,
     created_at: new Date().toISOString(),
     // The context the session STARTED in. Later movement is recorded as
-    // worktree events, so this field never changes after init (CPR-3).
+    // worktree events, so this field never changes after init (CPR-SC).
     session_start_context: {
       cwd: ctx && typeof ctx.cwd === "string" ? ctx.cwd : null,
       git_branch: ctx && ctx.git_branch !== undefined ? ctx.git_branch : null,
@@ -385,7 +385,7 @@ function getCurrentContext(dir) {
 }
 
 // resolveWorktreeContext(rawPath) -> the fields a `worktree` event needs.
-// `path_source` records HOW the path was obtained (CPR-3): a path read from
+// `path_source` records HOW the path was obtained (CPR-SC): a path read from
 // tool input is evidence, a process cwd is a guess, and the two must never be
 // conflated downstream.
 //

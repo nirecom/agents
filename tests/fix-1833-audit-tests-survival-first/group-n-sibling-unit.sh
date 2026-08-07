@@ -110,7 +110,7 @@ assert_eq "N3b its sibling folder went with it — no orphaned directory remains
     "gone" "$(fs_of "$N_REPO" "tests/feature-1301-deadunit")"
 
 # The common script deletes now too (#1833), so it owes the same atomicity —
-# CPR-5: same class of unit, same treatment.
+# CPR-ORTH: same class of unit, same treatment.
 assert_gate_row "N3c the common dispatcher is deleted" \
     "$N3C_OUT" "$N_REPO" "tests/cc-deadunit-n.sh" orphan deleted gone
 assert_eq "N3d the common sibling folder went with it" \

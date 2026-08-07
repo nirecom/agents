@@ -20,7 +20,7 @@
 // an attacker buys unbounded CPU inside a PreToolUse hook; 1024 comfortably
 // covers any hand-written path while costing only a few thousand comparisons.
 // ABOVE THE CAP THE ANSWER IS "HIT" (fail closed) — an unfinished expansion
-// has not been shown to miss the suffix. Named exception (CPR-8): a
+// has not been shown to miss the suffix. Named exception (CPR-UNV): a
 // legitimate write whose pattern exceeds the cap is blocked; the block
 // message names the file, so spelling it without the brace group is the fix.
 const MAX_CANDIDATE_SPELLINGS = 1024;

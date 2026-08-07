@@ -29,7 +29,7 @@ function segHasHereInput(seg) {
 /**
  * isHereWriteIR: pure here-shapes are stdin/argument data (read); a co-located
  * write redirect (if any) is owned by isPosixRedirWriteIR. This predicate verifies
- * the shape and returns false, keeping the read/write boundary in one place (CPR-2).
+ * the shape and returns false, keeping the read/write boundary in one place (CPR-SSOT).
  * @param {object} ir
  * @returns {boolean}
  */

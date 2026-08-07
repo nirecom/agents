@@ -1,4 +1,6 @@
 # cleanup-zombies-469.sh — #469 cleanupZombies extension tests (B1..B6).
+# Tests: hooks/workflow-state/state-io.js
+# Tags: session-id, cleanup-zombies, scope:common
 # Sourced by fix-session-id-fixes-451-469-543.sh; inherits globals and helpers.
 
 # === #469 cleanupZombies extension ===
@@ -165,7 +167,7 @@ else
 fi
 rm -rf "$B8_DIR" 2>/dev/null || true
 
-# B9: fresh .next-step-paused preserved (CPR-5 counterpart — must not over-reap)
+# B9: fresh .next-step-paused preserved (CPR-ORTH counterpart — must not over-reap)
 B9_DIR="$AGENTS_DIR/tests/.tmp-b9-$$"
 mkdir -p "$B9_DIR"
 B9_FILE="$B9_DIR/sid-fresh.next-step-paused"
@@ -178,7 +180,7 @@ else
 fi
 rm -rf "$B9_DIR" 2>/dev/null || true
 
-# B10: fresh .off-clearance preserved (CPR-5 counterpart — must not over-reap)
+# B10: fresh .off-clearance preserved (CPR-ORTH counterpart — must not over-reap)
 B10_DIR="$AGENTS_DIR/tests/.tmp-b10-$$"
 mkdir -p "$B10_DIR"
 B10_FILE="$B10_DIR/sid-fresh.off-clearance"

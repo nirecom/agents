@@ -153,7 +153,7 @@ rm -f "$PLANS_DIR/${SID}-detail.md"
 # A3-A5 / A7-A8 (BLOCK): an in-flight codex review cycle marker for the SAME
 # stage must suppress evidence-based auto-complete — the draft .md is
 # overwritten every revision round, so its existence is not proof of approval.
-# A6 / A9 (ALLOW, CPR-5 symmetry): a marker belonging to the OTHER stage must
+# A6 / A9 (ALLOW, CPR-ORTH symmetry): a marker belonging to the OTHER stage must
 # not block, since the marker prefix is stage-scoped (outline-plan-/detail-plan-).
 # ---------------------------------------------------------------------------
 

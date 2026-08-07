@@ -30,7 +30,7 @@
 # normalize_token()'s skip-guard (`*"*"*` / `*"?"*` only — bracket expressions
 # are not special-cased). TC22 covers "./" as its own standalone CSV token
 # (distinct from TC13's "./" embedded in prose). TC23 mirrors TC14's bare "/"
-# regression through bin/audit-tests-common.sh's --fix-headers path (CPR-5
+# regression through bin/audit-tests-common.sh's --fix-headers path (CPR-ORTH
 # symmetry with bin/audit-tests.sh).
 #
 #

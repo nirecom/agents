@@ -37,7 +37,7 @@ require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessa
 
 # ============================================================================
 # C8 — zombie cleanup: an old-mtime .claimed file must be swept, and a fresh one
-# preserved (CPR-5 counterpart — the sweep must not over-reap).
+# preserved (CPR-ORTH counterpart — the sweep must not over-reap).
 # Pattern mirrors tests/fix-session-id-fixes-451-469-543/cleanup-zombies-469.sh.
 # ============================================================================
 backdate_node() {  # <file> <days>

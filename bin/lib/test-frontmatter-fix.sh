@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared `# Tests:` header classification + fix helpers for audit-tests.sh and
-# audit-tests-common.sh (CPR-2: single source, sourced by both).
+# audit-tests-common.sh (CPR-SSOT: single source, sourced by both).
 # Source this file (do not export). Requires FRONTMATTER_TOKEN_VALID_RE.
 
 _TFF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

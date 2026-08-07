@@ -45,7 +45,7 @@ TABLE
 # fail-closed, and the pair above (TKR-dq-escaped-dollar) shows the dq side is
 # genuinely different, so this is not a blanket rejection.
 assert_probe "TKR-unquoted-escaped-dollar" '--title a\$b' rejtok 1 true
-# Symmetric half of rule 4's escape exclusion (CPR-5): the exclusion covers
+# Symmetric half of rule 4's escape exclusion (CPR-ORTH): the exclusion covers
 # BOTH `\$` and `\``, so the backtick pair must answer exactly like the dollar
 # pair — allowed inside dq (TKR-dq-escaped-backtick above), still rejected
 # unquoted. An implementation that special-cased only `\$` fails here.

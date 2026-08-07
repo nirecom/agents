@@ -330,7 +330,7 @@ if run_case "X11/malformed-stream-not-trusted"; then
     #   invalid_status / invalid_provenance / missing_provenance — validateEvent() would
     #                                                have refused these on the write path
     #
-    # Two assertions per variant, and they are separate concerns (CPR-3):
+    # Two assertions per variant, and they are separate concerns (CPR-SC):
     #   trusted_complete=false — a gate must not read `complete` off a stream it can see
     #                            has been tampered with (the FIRST event is a genuine
     #                            workflow_init complete; the point is that a corrupt

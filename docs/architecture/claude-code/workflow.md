@@ -8,7 +8,7 @@ time by a PreToolUse hook.
 Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outside any repo)
 
 Since #1733 the file is an **append-only event stream**. `events` is the only source of
-truth (CPR-2); every other field is a derived view folded from it and rewritten on each
+truth (CPR-SSOT); every other field is a derived view folded from it and rewritten on each
 write. Nothing rewrites history — a step changing status appends an event, it does not
 replace one. This is what makes per-step elapsed time computable (`computeIntervals`),
 which a keyed map that overwrote `updated_at` in place could never reconstruct.
@@ -344,7 +344,7 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
   Gate 2 (code-size HARD limit, #1701): runs `bash bin/review-code-size --staged` against the
     staged index and blocks when any staged code file exceeds the 500-line HARD limit
-    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-2);
+    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-SSOT);
     the hook only maps exit 1 → block. Line counts come from the staged blob
     (`git show :<file>`), not the working tree, so the commit that performs a split passes.
     Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —

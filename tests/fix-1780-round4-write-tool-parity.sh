@@ -24,7 +24,7 @@
 # editFiles, NotebookEdit, runInTerminal and runCommands therefore bypassed
 # main-worktree and protected-branch enforcement OUTRIGHT — not a weaker check, no
 # check at all. A guard that covers one member of a class and not its siblings is
-# a bypass, not a partial guard (CPR-5).
+# a bypass, not a partial guard (CPR-ORTH).
 #
 # THE ASSERTION IS PARITY, NOT "BLOCK". Each case runs the SAME payload semantics
 # through a sibling and through the already-covered reference member (Edit for
@@ -206,7 +206,7 @@ done
 # ===========================================================================
 # Section P - the OTHER block reason: a protected branch inside a linked
 # worktree. It is a separate code path from the main-checkout branch above, so
-# sibling parity has to be asserted there too (CPR-5) - a tool recognized by one
+# sibling parity has to be asserted there too (CPR-ORTH) - a tool recognized by one
 # path and not the other is still a bypass.
 # ===========================================================================
 if [ ! -d "$WTP" ]; then

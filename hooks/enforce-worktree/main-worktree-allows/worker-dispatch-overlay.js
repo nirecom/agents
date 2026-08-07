@@ -6,7 +6,7 @@
 //
 //     node "<AGENTS_CONFIG_DIR>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>
 //
-// Trust split (CPR-3): this overlay validates the Bash COMMAND STRING only.
+// Trust split (CPR-SC): this overlay validates the Bash COMMAND STRING only.
 // Payload FILE CONTENTS are validated by bin/worker-dispatch/capability.js on the
 // dispatcher side — the file lives in the git-unmanaged plans dir and is untrusted
 // here by construction.
@@ -93,7 +93,7 @@ function tokenizeSimple(cmd) {
 // Every token value must survive a second round of shell parsing unchanged.
 // Whitespace is included in the reject set (it is part of UNSAFE_ARG_VALUE_RE),
 // so a config dir / plans dir containing a space is refused here exactly as it
-// already is by the finalize-worker overlay (CPR-5) — the sanctioned layout has
+// already is by the finalize-worker overlay (CPR-ORTH) — the sanctioned layout has
 // no such path.
 function isSafeValue(v) {
   if (typeof v !== "string" || v === "") return false;

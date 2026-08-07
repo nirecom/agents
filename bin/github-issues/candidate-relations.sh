@@ -76,7 +76,7 @@ fi
 # Every response below is parsed by node, and the job file itself is assembled from
 # node output. Without it the parse produces empty strings that compose into a
 # malformed job file and surface as "could not normalize" — a true statement about
-# a wrong cause. Say which dependency is actually missing (CPR-5 with the gh check).
+# a wrong cause. Say which dependency is actually missing (CPR-ORTH with the gh check).
 if ! command -v node >/dev/null 2>&1; then
     echo "Error: node not found — candidate relations cannot be normalized" >&2
     exit 4

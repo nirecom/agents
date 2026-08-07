@@ -18,7 +18,7 @@
 // not being offered. CP-2b instead requires the URL in the turn's final response.
 //
 // openInBrowser is REUSED from hooks/lib/open-external.js rather than reproduced
-// (CPR-2): the platform table, the opt-out variable and the test mode stay in one
+// (CPR-SSOT): the platform table, the opt-out variable and the test mode stay in one
 // place, so this CLI and the surviving hook can never drift.
 //
 // Fail-open, unconditionally. This runs after a successful push and a created

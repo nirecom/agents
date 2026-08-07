@@ -154,7 +154,7 @@ assert_eq "C3f a null-valued ELEMENT is dropped, not stringified to \"null\"" \
 assert_eq "C3g a missing tool_input entirely yields an empty list" \
     '[]' "$(tct '{"toolName":"runCommands","toolInput":null}' list)"
 
-# C4 - runInTerminal and Bash read `.command` (CPR-5: identical treatment).
+# C4 - runInTerminal and Bash read `.command` (CPR-ORTH: identical treatment).
 for t in Bash runInTerminal; do
     assert_eq "C4 $t reads .command" '["echo one"]' \
         "$(tct "{\"toolName\":\"$t\",\"toolInput\":{\"command\":\"echo one\"}}" list)"
@@ -247,7 +247,7 @@ DDRV_EOF
     assert_verdict "D3 runCommands token write at commands[0] is blocked (baseline)" block \
         "$(run_block_hook "$TND" "$(mk_cmd_input runCommands "$TND" "echo forged > $TOKEN" "$BENIGN1")")"
 
-    # D4/D5 - CPR-5 siblings: the same write through runInTerminal and Bash.
+    # D4/D5 - CPR-ORTH siblings: the same write through runInTerminal and Bash.
     assert_verdict "D4 runInTerminal token write is blocked" block \
         "$(run_block_hook "$TND" "$(mk_cmd_input runInTerminal "$TND" "echo forged > $TOKEN")")"
     assert_verdict "D5 Bash token write is blocked (already-covered member)" block \
@@ -319,7 +319,7 @@ EDRV_EOF
     # approval prompt with no Phase1 clearance behind it at all.
     assert_eq "E1 OFF sentinel at runCommands commands[2] is gated (blocked, no token)" \
         "2|yes" "$(run_shim runCommands e1sid "git status" "npm test" "$OFF_CMD")"
-    # E2 - CPR-5 control: the already-covered Bash member, same sentinel, same dir.
+    # E2 - CPR-ORTH control: the already-covered Bash member, same sentinel, same dir.
     assert_eq "E2 the same sentinel through Bash is gated identically" \
         "2|yes" "$(run_shim Bash e2sid "$OFF_CMD")"
     # E3 - and through runInTerminal.

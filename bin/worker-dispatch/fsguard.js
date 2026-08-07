@@ -94,7 +94,7 @@ function renameWithin(workerName, tmpPath, dstPath, ctx) {
     throw new Error("rename source and destination must both be absolute paths");
   }
   // Reuse the single scope-check path rather than re-resolving roots here: both
-  // ends get the identical treatment every other write gets (CPR-2).
+  // ends get the identical treatment every other write gets (CPR-SSOT).
   assertWritable(workerName, absTmp, ctx);
   assertWritable(workerName, absDst, ctx);
 

@@ -121,7 +121,7 @@ assert_conflict_output "A1" "Bash + exit_code 1 + matching stderr -> additionalC
     "additionalContext" "main" "C:/git/agents"
 
 # A1b: exitCode 1 (camelCase, no snake_case field) + matching stderr -> same match output.
-# CPR-5 counterpart of A4b: the camelCase field must drive the FAILURE path too,
+# CPR-ORTH counterpart of A4b: the camelCase field must drive the FAILURE path too,
 # not only the success-noop path.
 assert_conflict_output "A1b" "exitCode 1 (camelCase) + matching stderr -> additionalContext + branch + path" \
     "$(node -e 'const s=process.argv[1];process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"git worktree add x"},tool_response:{exitCode:1,stderr:s}}))' "$STDERR_MATCH")" \
@@ -218,7 +218,7 @@ assert_conflict_output "A8" "runInTerminal + exit_code 1 + matching stderr -> ad
     "additionalContext" "main"
 
 # A8b: tool_name "runCommands" + exit_code 1 + matching stderr -> additionalContext.
-# CPR-5 counterpart of A8: all three admitted tools must trigger the hook.
+# CPR-ORTH counterpart of A8: all three admitted tools must trigger the hook.
 assert_conflict_output "A8b" "runCommands + exit_code 1 + matching stderr -> additionalContext + branch" \
     "$(node -e 'const s=process.argv[1];process.stdout.write(JSON.stringify({tool_name:"runCommands",tool_input:{command:"git worktree add x"},tool_response:{exit_code:1,stderr:s}}))' "$STDERR_MATCH")" \
     "additionalContext" "main"

@@ -11,7 +11,7 @@
 #   G1  final verdict touches EXISTING issues            (destructive / restructuring)
 #       reopen | make-parent | sub-of | bulk-sub-of — all four re-parent or reopen
 #       something that already exists, and sub-of/bulk-sub-of can reopen every closed
-#       ancestor of the parent chain, so they are not the "additive" case (CPR-5).
+#       ancestor of the parent chain, so they are not the "additive" case (CPR-ORTH).
 #   G2  the review stage replaced the survey verdict     (survey != review)
 #   G3  the reviewer did not affirm the issue is worth filing — unless the answer never
 #       reached the gate at all (worth_filing absent/unreadable) AND severity is high

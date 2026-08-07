@@ -5,7 +5,7 @@
 // command line without tripping the flag-based interpreter gate in
 // ./interpreter-scan.js. Recursing the full scanner here is more general than
 // enumerating `eval`-like names: it reuses every redirect/argv/assignment/glob
-// rule at once (CPR-4/CPR-8).
+// rule at once (CPR-E2C/CPR-UNV).
 "use strict";
 
 const path = require("path");
@@ -44,7 +44,7 @@ function hereStringRedirects(seg) {
 // preserved) — the form the shell scanner wants, since it re-tokenizes.
 // A here-string is stdin, so it is command text only when the reader executes
 // it — which is exactly what `sh <<< …`, `xargs … <<< …` and friends do. Rather
-// than enumerating readers (an enumeration that always lags — CPR-8), the text
+// than enumerating readers (an enumeration that always lags — CPR-UNV), the text
 // is scanned unconditionally: a here-string spelling a protected path is not a
 // shape any legitimate command in this repo needs.
 function hereStringBodiesOf(seg) {
@@ -61,7 +61,7 @@ function hereStringBodiesOf(seg) {
 // anchored read-only body shapes in ./interpreter-scan.js can match. Feeding
 // them the raw `"…"` spelling would fail every `^…$` shape and fail-closed
 // block `node <<< "console.log(fs.readFileSync(…))"`, which its `-e` sibling
-// approves (CPR-5 symmetry).
+// approves (CPR-ORTH symmetry).
 function hereStringValuesOf(seg) {
   const out = [];
   for (const r of hereStringRedirects(seg)) {
@@ -94,7 +94,7 @@ function nestedCommandTextsOf(seg) {
 // inline-program flag FOR THIS INTERPRETER (kind-scoped, so a pwsh parameter
 // can't clear a python3 invocation) AND that flag carries a body — attached
 // (`--eval=code`) or in the next word. A bodyless flag (e.g. dangling `-e`
-// before a stdin pipe) is not proof; Tier 2 takes the same view (CPR-5).
+// before a stdin pipe) is not proof; Tier 2 takes the same view (CPR-ORTH).
 function argvProvesInlineProgram(words, interpreterWord) {
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
@@ -166,7 +166,7 @@ const ASSIGN_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 // readerKindOfHead(head): the interpreter kind of the command a heredoc feeds,
 // under the SAME burden of proof stdinProgramInterpreterKind() applies to the
-// other routes (CPR-5) — the kind is reported unless an inline-program flag
+// other routes (CPR-ORTH) — the kind is reported unless an inline-program flag
 // proves the program is on argv, so `node -e '…' <<EOF` treats the heredoc as
 // data while `node script.js <<EOF` does not.
 function readerKindOfHead(head) {
@@ -232,7 +232,7 @@ function stdinProgramRoutes(cmdText, segments) {
   }
   // An UNTERMINATED heredoc yields no body but still delivers one at runtime —
   // the same "more invocations than extractable bodies" mismatch that
-  // extractAllInterpreterBodies() fail-closes on (CPR-5).
+  // extractAllInterpreterBodies() fail-closes on (CPR-ORTH).
   let openers = 0;
   let interpreterOpener = false;
   HEREDOC_OPENER_RE.lastIndex = 0;

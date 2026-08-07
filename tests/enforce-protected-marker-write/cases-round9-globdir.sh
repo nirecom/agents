@@ -32,7 +32,7 @@
 # blocked BEFORE the fix as well: it is the control that pins the defect to the
 # SPELLING of the directory rather than to the containment rule itself.
 #
-# THE BOUNDARY IS PINNED BY THE ALLOW ROWS (CPR-5). Containment is what keeps
+# THE BOUNDARY IS PINNED BY THE ALLOW ROWS (CPR-ORTH). Containment is what keeps
 # this from becoming "every glob blocks":
 #   20-nr1  a $HOME-relative glob in a DIFFERENT directory
 #   20-nr2  `cd` to an unrelated absolute dir, then a bare glob

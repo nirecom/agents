@@ -12,7 +12,7 @@
 //     is asserted directly and exhaustively over the SSOT arrays rather than
 //     sampled through payloads. Case, directory prefix and `.exe` must all be
 //     tolerated - Windows resolves `NODE.EXE` and `C:\...\python3.exe` to the
-//     same program a POSIX host spells `node` (CPR-8).
+//     same program a POSIX host spells `node` (CPR-UNV).
 //  2. stdinProgramInterpreterKind() must return null EXACTLY when argv PROVABLY
 //     carries the program — round-7 rule: proof is a body-carrying
 //     inline-program flag (INLINE_PROGRAM_FLAG_RE), never argv shape. That is

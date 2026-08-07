@@ -270,7 +270,7 @@ else
 fi
 rm -rf "$c3_main" "$c3_tbase"
 
-# C4: two siblings with IDENTICAL ids, env cleared -> returns it (CPR-5 counterpart of B5).
+# C4: two siblings with IDENTICAL ids, env cleared -> returns it (CPR-ORTH counterpart of B5).
 c4_main="$(build_fixture "test-sid-c4" "test-sid-c4")"
 c4_tbase="$(mktemp -d)"
 c4_out="$(call_sid "$c4_main" "$c4_tbase")"
@@ -282,7 +282,7 @@ fi
 rm -rf "$c4_main" "$c4_tbase"
 
 # C5: CWD = the linked worktree itself + conflicting second sibling -> own id via
-# Priority 6 (WORKTREE_NOTES.md in CWD). CPR-5 counterpart of B6. Regression guard —
+# Priority 6 (WORKTREE_NOTES.md in CWD). CPR-ORTH counterpart of B6. Regression guard —
 # may PASS pre-implementation (Priority 6 already exists); post-fix it proves the
 # sibling scan does not preempt the CWD notes read or turn it ambiguous.
 c5_main="$(build_fixture "test-sid-c5-own" "test-sid-c5-other")"
@@ -295,7 +295,7 @@ else
 fi
 rm -rf "$c5_main" "$c5_tbase"
 
-# C6: CPR-5 counterpart of B7 for resolveSessionId(). CWD = a subdirectory inside
+# C6: CPR-ORTH counterpart of B7 for resolveSessionId(). CWD = a subdirectory inside
 # the ONLY linked worktree, env cleared, Priority 7 neutralized, no other sibling
 # -> own Session-ID. Regression guard (currently passes by accident).
 c6_main="$(build_fixture "test-sid-c6-own")"
@@ -309,7 +309,7 @@ else
 fi
 rm -rf "$c6_main" "$c6_tbase"
 
-# C7: CPR-5 counterpart of B8. CWD = a subdirectory inside linked worktree A
+# C7: CPR-ORTH counterpart of B8. CWD = a subdirectory inside linked worktree A
 # ('sid-own-c7'), PLUS a second linked worktree B ('sid-other-c7'). Expect own id.
 # HIGH-1 bug: own root wrongly collected as sibling → false ambiguity → NULL.
 c7_main="$(build_fixture "sid-own-c7" "sid-other-c7")"

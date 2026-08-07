@@ -340,7 +340,7 @@ $block"; i=$((i - 1)) ;;
     fi
 
     # Same wording as the other boolean toggles, so the shipped default reads the
-    # same way across the file (CPR-5). A trailing clause is fine; the leading
+    # same way across the file (CPR-ORTH). A trailing clause is fine; the leading
     # `off (default) | on.` shape is what has to match.
     if printf '%s' "$block" | grep -qE '^#[[:space:]]*Format:[[:space:]]*off \(default\) \| on\.'; then
         pass "T16b-3: the comment declares 'Format: off (default) | on.' like the other boolean entries"
@@ -356,7 +356,7 @@ tc_env_example_comment_wording
 # 4. Installer bootstrap — both installers' `session-sync-init` call is
 #    unconditional bootstrap infrastructure, required for the manual sync
 #    subcommands to have a repo/remote/attributes to act on at all. It is
-#    symmetric across both shells (CPR-5): neither installer may gate it
+#    symmetric across both shells (CPR-ORTH): neither installer may gate it
 #    without the other. Proven here by execution (T20/T21 below), not by
 #    static grep — a grep cannot distinguish a real gate from a comment that
 #    merely mentions the variable, which is exactly the shape of the code

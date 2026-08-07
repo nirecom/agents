@@ -6,13 +6,13 @@
 // expand at execution time, Windows stripping trailing whitespace/dots, and
 // NTFS alt-data-stream specs (`name::$DATA`) that write the BASE file.
 //
-// Two entry points (CPR-3): normalizeCandidateBasename() does pure text
+// Two entry points (CPR-SC): normalizeCandidateBasename() does pure text
 // normalization, glob metachars left INTACT; candidateBasenameMatchesAnySuffix()
 // normalizes then decides — for a glob, whether it COULD expand to a protected
 // suffix. Metachar handling lives in the matcher so a metachar WIDENS the
 // decision (fail-closed) rather than collapsing to one non-matching string.
 //
-// Named exception (CPR-8): a glob whose literal text contributes NOTHING to
+// Named exception (CPR-UNV): a glob whose literal text contributes NOTHING to
 // the suffix (`*`, `logs/2024*`) is a non-match — else `rm -rf build/*` would
 // block. This module is name-only; the caller (bash-target-context.js)
 // additionally fails closed when a glob's directory resolves under the

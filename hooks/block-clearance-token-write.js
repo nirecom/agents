@@ -16,8 +16,8 @@
 // Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands and blocks
 // regardless of worktree, so it is the primary gate; marker-gate.js is kept as
 // defence in depth. Both read one protected-basename SSOT,
-// hooks/lib/protected-basenames.js (CPR-2), whose OFF_CLEARANCE_TOKEN_SUFFIXES
-// array is the class-based extension point (CPR-4) for future clearance tokens.
+// hooks/lib/protected-basenames.js (CPR-SSOT), whose OFF_CLEARANCE_TOKEN_SUFFIXES
+// array is the class-based extension point (CPR-E2C) for future clearance tokens.
 //
 // TRUST MODEL (accepted limitation): this is a BEST-EFFORT deterrent, not a hard
 // gate. Dynamic path construction (variable concatenation, base64, an alternate

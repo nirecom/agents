@@ -160,7 +160,7 @@ install_gh_mock "$H4_STUB"
 install_failing_git_rm "$H4_STUB"
 export MOCK_ISSUES="931 closed 2019-01-01T00:00:00Z"
 
-# Both scripts get the IDENTICAL five-part contract (CPR-5): no DELETED line,
+# Both scripts get the IDENTICAL five-part contract (CPR-ORTH): no DELETED line,
 # non-success exit code, file still on disk, file still tracked in the index
 # with a clean status, and the failure surfaced on stderr. Asserting only "no
 # DELETED line" leaves a script that reports honestly but exits 0 and lets the

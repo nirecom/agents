@@ -163,7 +163,7 @@ else
   fail "TC8 no arguments exits 2" "rc=$RC err=<<$ERR>>"
 fi
 
-# TC9: scope:issue-specific accepted in --staged mode (CPR-5 symmetric coverage)
+# TC9: scope:issue-specific accepted in --staged mode (CPR-ORTH symmetric coverage)
 # TC1 uses scope:issue-specific implicitly; TC9 asserts it explicitly with an
 # isolated fixture so both scope variants (common, issue-specific) have named cases.
 STAGE9_DIR="$(mktemp -d)"

@@ -13,7 +13,7 @@
 #   A (H-4, ADS):   NTFS resolves `<file>::$DATA` to <file>'s default stream, so a
 #                   trailing stream spec is a no-op suffix that hides the basename.
 #
-# Each section carries its CPR-5 counterpart in the same run: over-blocking every
+# Each section carries its CPR-ORTH counterpart in the same run: over-blocking every
 # `*` or every `:` would break ordinary bulk file operations and every Windows
 # drive-letter path, which is a real defect of equal weight, not a safe default.
 
@@ -44,7 +44,7 @@ run_G_glob() {
     p="$wf/$SID.off-clearance.claime?"
     assert_block "G5 glob '?' on a .claimed receipt (rm)" "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "rm -f $p" "$LINKED_WT")")"
 
-    # --- CPR-5 counterpart: ordinary bulk globs must still be approved -------
+    # --- CPR-ORTH counterpart: ordinary bulk globs must still be approved -------
     # If these block, the guard has made routine build/log housekeeping
     # impossible - an over-block is as much a defect as an under-block.
     assert_approve "G6 ordinary glob 'rm -rf build/*'"     "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "rm -rf build/*" "$LINKED_WT")")"
@@ -77,12 +77,12 @@ run_A_ads() {
     assert_block "A3 ADS named stream ':alt' on marker (Bash)"  "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "printf 'x' > $p" "$LINKED_WT")")"
     assert_block "A3 ADS named stream ':alt' on marker (Write)" "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$p")")"
 
-    # Emergency-provenance marker gets the same treatment (CPR-5: it is a
+    # Emergency-provenance marker gets the same treatment (CPR-ORTH: it is a
     # marker kind like any other, and forging it fakes user attribution).
     p="$wf/$SID.off-emergency-invoked::\$DATA"
     assert_block "A4 ADS on .off-emergency-invoked (Write)" "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$p")")"
 
-    # --- CPR-5 counterpart: the colon must stay legal where it means a drive -
+    # --- CPR-ORTH counterpart: the colon must stay legal where it means a drive -
     # Stripping every `:`-suffix would eat Windows drive letters, i.e. every
     # absolute path on the primary platform of this repo.
     assert_approve "A5 bare drive letter 'C:' (Bash)"        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_bash_input "echo x > C:" "$LINKED_WT")")"

@@ -20,7 +20,7 @@
 # behaviour: a re-forked copy that happens to agree today would pass a behavioural
 # check and fail an identity one. Behaviour is then asserted as AGREEMENT between
 # the two call sites, with the expected answer taken from the filesystem itself
-# (pc.isCaseInsensitiveFsAt) rather than hardcoded per platform — CPR-8.
+# (pc.isCaseInsensitiveFsAt) rather than hardcoded per platform — CPR-UNV.
 #
 # MEDIUM-7 is the orthogonality half: bashTargetsHitProtectedMarker() is a
 # DETECTION predicate ("skip every allow fast-path"), so it must answer true for
@@ -98,7 +98,7 @@ run_R5_containment() {
     assert_eq "R5-C case_glob agrees with the volume (case-insensitive=$ci)" "$ci" "$(_r5_kv case_glob)"
     assert_eq "R5-C case_gate agrees with the volume (case-insensitive=$ci)" "$ci" "$(_r5_kv case_gate)"
 
-    # (4) CPR-5 counterpart: the shared helper did not widen containment
+    # (4) CPR-ORTH counterpart: the shared helper did not widen containment
     _r5_expect outside_glob false
     _r5_expect outside_gate false
     _r5_expect inside_glob true
@@ -129,7 +129,7 @@ run_R5_marker_gate() {
     _r5_expect det_malformed_null true     # MEDIUM-7: malformed returned false
     _r5_expect det_malformed_nopath true
     _r5_expect det_malformed_mixed true
-    # CPR-5 counterparts: an ordinary target must NOT arm the gate.
+    # CPR-ORTH counterparts: an ordinary target must NOT arm the gate.
     _r5_expect det_plain false
     _r5_expect det_empty false
     # PERMISSION direction: the same three inputs answer the opposite way.

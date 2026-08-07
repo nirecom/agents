@@ -261,7 +261,7 @@ console.log("PLAN="+has(/planPruneRoots\s*\(/)+" EXEC="+has(/executePrunePlan\s*
 # G12 — the dead export. `CONTENT_RECORD_TYPES` was the SSOT for "which record types are
 # transcript content" until `CONTENT_PAYLOAD` replaced it with a type→payload-field map;
 # the Set is now derived from that Map, exported, and consumed by nothing. A second
-# exported name for one fact is exactly the drift CPR-2 forbids: the next reader takes the
+# exported name for one fact is exactly the drift CPR-SSOT forbids: the next reader takes the
 # Set as authoritative, adds a type to it, and the payload rule silently stops applying to
 # that type — a content record with no payload would then authorise a deletion.
 #

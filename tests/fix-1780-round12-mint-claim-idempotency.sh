@@ -34,7 +34,7 @@
 #   DIFFERENT grant than the one just minted (different mint_nonce, or none at
 #   all). A claim carrying this grant's nonce is never removed.
 #
-# Two further properties are load-bearing and asserted separately (CPR-3):
+# Two further properties are load-bearing and asserted separately (CPR-SC):
 #   ORDER   the claim is cleared only AFTER the new bare token is durably
 #           minted — so a failed mint leaves the old single-use lock INTACT
 #           rather than leaving an already-spent grant replayable (M6).

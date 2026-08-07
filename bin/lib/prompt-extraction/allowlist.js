@@ -39,7 +39,7 @@ function parseAllowlist(text) {
 
 /**
  * Decide whether `actualCount` violations of `kind` in `filePath` are covered.
- * A missing entry behaves exactly like an entry with count 0 (CPR-5).
+ * A missing entry behaves exactly like an entry with count 0 (CPR-ORTH).
  */
 function matchAllowlist(entries, kind, filePath, actualCount) {
   const path = normalizePath(filePath);

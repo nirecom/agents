@@ -2,7 +2,7 @@
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 // Command wrappers that prefix a real command and transparently exec it. Peeling
-// them is a CLASS-level fix (CPR-4/5): every write predicate that resolves a
+// them is a CLASS-level fix (CPR-E2C/CPR-ORTH): every write predicate that resolves a
 // segment's effective command (green file-op / pwsh / redirect predicates AND
 // isGitWriteIR) uniformly sees through `command git commit`, `env -u X git commit`,
 // `nice rm f`, etc. Without peeling, a wrapper hides the write verb and the

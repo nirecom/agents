@@ -237,7 +237,7 @@ function rejectsUnsafeArgTail(argTail, profile) {
   // EXPANDING_KINDS is the scanner's own list of frames whose body the shell
   // re-parses (cmdsubst, backtick, subshell, arith); ANSI-C is quoted but
   // re-escaped. Taken from the scanner rather than re-listed here so a new kind
-  // cannot be added upstream and silently fall through this gate (CPR-2).
+  // cannot be added upstream and silently fall through this gate (CPR-SSOT).
   for (const s of sr.spans) {
     if (s.kind === "ansic" || EXPANDING_KINDS.indexOf(s.kind) !== -1) return true;
   }

@@ -187,7 +187,7 @@ console.log(norm(want) === norm(got) ? "EQUAL" : "DIFFER\nwant=" + norm(want) + 
     done
 fi
 
-echo "== K-g: the annotation ordering rule is shared with session inheritance (CPR-4) =="
+echo "== K-g: the annotation ordering rule is shared with session inheritance (CPR-E2C) =="
 if run_case "K-g/shared-ordering-helper"; then
     next_sid
     nodejs "$SID" '

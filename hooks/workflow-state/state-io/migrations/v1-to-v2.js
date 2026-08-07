@@ -18,7 +18,7 @@ const ENTRY_META_KEYS = ["status", "updated_at", "started_at"];
 
 // Deterministic annotation order for one step entry: known keys in
 // STEP_ANNOTATION_KEYS order, then everything else alphabetically. Shared with
-// session inheritance so the two can never drift (CPR-4).
+// session inheritance so the two can never drift (CPR-E2C).
 function orderedAnnotationKeys(entry) {
   if (!entry || typeof entry !== "object") return [];
   const known = [];

@@ -110,7 +110,7 @@ run_S_shim_lock() {
         "$(exists_str "$(_s_bare_path "$tmp")")"
     rm -rf "$tmp"
 
-    # ---- S4b: POST-LOCK RE-READ, deny direction (CPR-5 — the mirror of S4a).
+    # ---- S4b: POST-LOCK RE-READ, deny direction (CPR-ORTH — the mirror of S4a).
     # Same timeline, but generation B is EXPIRED. A shim that validated its
     # pre-lock read of the still-valid A would claim an expired grant. The
     # verdict must follow the bytes that are on disk inside the lock.

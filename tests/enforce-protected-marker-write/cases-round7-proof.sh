@@ -11,7 +11,7 @@
 #     node --title x <<< '<program>'    -> ALLOW   (`x` mistaken for the program)
 #
 # Knowing that `--title` consumes a value needs a per-interpreter, per-version
-# flag-arity table - the enumeration-lag failure mode CPR-8 rejects. So round 7
+# flag-arity table - the enumeration-lag failure mode CPR-UNV rejects. So round 7
 # moves the burden of proof onto the ALLOW side: the stdin body is PROGRAM text
 # unless argv carries an inline-program flag (`-c`/`-e`/`--eval`/`-Command`
 # family) THAT HAS A BODY. A bodyless `-e` proves nothing - the program then

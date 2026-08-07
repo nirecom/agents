@@ -16,7 +16,7 @@
 #   * degrades to `SKIPPED — engine not found` when the engine is unavailable
 #
 # Anything about WHICH content counts as an inline procedure belongs in the
-# #1642 file, not here (CPR-2: one owner per fact).
+# #1642 file, not here (CPR-SSOT: one owner per fact).
 #
 # TL3 gap (what this test does NOT catch):
 # - bin/check-inline-procedures firing from run-quality-gates.sh in a real WF-CODE-6 session

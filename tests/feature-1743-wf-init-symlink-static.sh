@@ -5,7 +5,7 @@
 #
 # Issue #1743: installer-created directory symlink alias /wf-init -> /workflow-init.
 # Both installers must create skills/wf-init as a symlink to skills/workflow-init
-# (CPR-5 symmetry), and the generated path must stay untracked (.gitignore).
+# (CPR-ORTH symmetry), and the generated path must stay untracked (.gitignore).
 #
 # Layer: TL2 (static/grep over the real installer sources; no installer execution).
 # TL3 gap (what this test does NOT catch):
@@ -45,7 +45,7 @@ has_win_entry() {
 # Windows: the same entry, with Dest anchored under the repo root ($AgentsRoot).
 # The whole point of this alias is that it is repo-internal — every other entry in the
 # same $links table targets $ClaudeDir, so an accidental $ClaudeDir Dest here would look
-# plausible and still be wrong (CPR-5 orthogonality: this member differs by design).
+# plausible and still be wrong (CPR-ORTH orthogonality: this member differs by design).
 has_win_dest_under_agents_root() {
     local file="$1"
     [ -f "$file" ] || return 1
@@ -148,7 +148,7 @@ else
     fail "L3: wf-init _link_one (line $_wf_line) is inside the ~/.claude/.git guard (fi at line $_guard_fi_line)"
 fi
 
-# --- L4: CPR-5 symmetry — both platforms must carry the entry ---
+# --- L4: CPR-ORTH symmetry — both platforms must carry the entry ---
 _win_found=0; _sh_found=0
 has_win_entry "$PS_FILE" && _win_found=1
 has_sh_entry "$SH_FILE" && _sh_found=1

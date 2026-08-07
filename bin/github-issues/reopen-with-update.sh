@@ -9,7 +9,7 @@
 #
 # NOTE (optional, #1761) records WHY the reopen happened when the verdict came from
 # the codex verdict review rather than the survey alone. It is externally authored
-# free text, so it is treated exactly like the issue body already is (CPR-5): reduced
+# free text, so it is treated exactly like the issue body already is (CPR-ORTH): reduced
 # to one sanitized line and scanned by gh_outbound_guard before it can ride out on a
 # comment. A blocked note is DROPPED, never fatal — the reopen itself was already
 # decided, and losing the explanation must not leave the issue closed.

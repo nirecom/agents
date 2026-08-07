@@ -15,7 +15,7 @@
 // (spurious matches, and for a fail-closed gate that means spurious blocks).
 // Expanding only the case-insensitive literals into explicit [Aa] classes keeps
 // each half faithful to its own language's rules and, more importantly, keeps
-// the choice VISIBLE at every call site (CPR-8: no implicit assumption).
+// the choice VISIBLE at every call site (CPR-UNV: no implicit assumption).
 "use strict";
 
 // ci("node") -> "[Nn][Oo][Dd][Ee]"; non-letters are passed through escaped so
@@ -37,7 +37,7 @@ function ci(literal) {
 // scanner that recognizes this prefix must recognize all of its casings — and
 // must recognize the SAME set, or one hook's "sanctioned inert token" becomes
 // another's "unknown interpolation" (#1780 H-4). Kept here, next to ci(),
-// because it is the one such literal shared across hooks (CPR-2).
+// because it is the one such literal shared across hooks (CPR-SSOT).
 const PWSH_ENV_PREFIX = ci("env") + ":";
 
 module.exports = { ci, PWSH_ENV_PREFIX };

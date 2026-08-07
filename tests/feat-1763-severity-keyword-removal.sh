@@ -135,7 +135,7 @@ if assert_created "K8-no-severity-label-when-unspecified"; then
     fi
 fi
 
-# K9: explicit severity:high is still honoured (CPR-5 counterpart of K1-K6).
+# K9: explicit severity:high is still honoured (CPR-ORTH counterpart of K1-K6).
 run_ic --title "t" --body "b" --label "severity:high"
 if grep -qxF 'severity:high' "$CAP"; then
     pass "K9-explicit-high-passes-through"
@@ -152,7 +152,7 @@ else
 fi
 
 echo ""
-echo "=== S1: --body-file is the same input, and must get the same treatment (CPR-5) ==="
+echo "=== S1: --body-file is the same input, and must get the same treatment (CPR-ORTH) ==="
 # --body and --body-file are symmetric ways to supply the body. A keyword scan that
 # was deleted from the --body path but survived on the --body-file path (where the
 # text is read with `cat` at a different point in the script) would be invisible to
@@ -193,7 +193,7 @@ if assert_created "K19-bodyfile-special-chars-in-path"; then
     fi
 fi
 
-# K20: the explicit label still wins on the --body-file path (CPR-5 counterpart of K7).
+# K20: the explicit label still wins on the --body-file path (CPR-ORTH counterpart of K7).
 run_ic --title "abort now" --body-file "$(bf explicit "abort hang security leak")" --label "severity:low"
 SEV="$(severity_labels)"
 if [ "$SEV" = "severity:low" ]; then
@@ -202,7 +202,7 @@ else
     fail "K20-bodyfile-explicit-low-survives" "want exactly 'severity:low' (got: '$SEV'; all labels: $(labels_seen))"
 fi
 
-# K21: and explicit high is still honoured there too (CPR-5 counterpart of K9).
+# K21: and explicit high is still honoured there too (CPR-ORTH counterpart of K9).
 run_ic --title "t" --body-file "$(bf high "nothing notable")" --label "severity:high"
 if grep -qxF 'severity:high' "$CAP"; then
     pass "K21-bodyfile-explicit-high-passes-through"

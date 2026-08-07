@@ -19,7 +19,7 @@ const {
 const { hasGlobMetachar } = require("../../lib/basename-glob-normalize");
 const { resolvesUnder } = require("../../lib/path-containment");
 // The SAME static expander marker-gate.js and scope-checks.js already use for
-// $HOME / ~ (CPR-2) — one spelling of "what does this directory resolve to".
+// $HOME / ~ (CPR-SSOT) — one spelling of "what does this directory resolve to".
 const { expandStaticShellTokens } = require("../../lib/bash-write-targets/helpers");
 const { substituteAssignments, EXPANSION_CHAR_RE } = require("./substitute");
 
@@ -31,7 +31,7 @@ const WIN_ABS_RE = /^[A-Za-z]:[\\/]/;
 const UNRESOLVABLE_DIR_RE = /[$`*?[\]]/;
 
 // resolveWorkflowDir(): the SAME getWorkflowDir() the rest of the hook chain
-// uses (CPR-2). Lazy-required and fail-soft: an unresolvable workflow dir
+// uses (CPR-SSOT). Lazy-required and fail-soft: an unresolvable workflow dir
 // simply disables the containment qualifier rather than blocking everything.
 // The raw directory is returned; a lexical `startsWith` check was wrong here
 // (misses symlinks, and misjudges case-insensitive volumes that aren't
@@ -79,7 +79,7 @@ function resolveDirSpelling(dir, workflowDir) {
   }
   // expandStaticShellTokens is scoped to $HOME / ~ / the plans dir, so the one
   // env var that NAMES this very directory is resolved here — from the resolved
-  // workflow dir itself (CPR-2: getWorkflowDir is the SSOT), falling back to the
+  // workflow dir itself (CPR-SSOT: getWorkflowDir is the SSOT), falling back to the
   // process environment for any other variable whose value is a plain path.
   if (out.includes("$")) {
     out = out.replace(ENV_REF_RE, (m, braced, bare) => {
@@ -96,7 +96,7 @@ function resolveDirSpelling(dir, workflowDir) {
 
 // resolveAgainstCwd(p, ctx): `p` as an absolute path, or null when it cannot be
 // made absolute (still dynamic, or relative with no known cwd). One spelling of
-// the resolution step both qualifiers below need (CPR-2).
+// the resolution step both qualifiers below need (CPR-SSOT).
 function resolveAgainstCwd(p, ctx, wfDir) {
   let out = resolveDirSpelling(p, wfDir);                // ~ / $HOME / $CLAUDE_WORKFLOW_DIR
   if (UNRESOLVABLE_DIR_RE.test(out)) return null;        // STILL dynamic or itself a glob
@@ -111,7 +111,7 @@ function resolveAgainstCwd(p, ctx, wfDir) {
 // on is NOT the name the hook can see". A residual expansion (`$(`, a
 // backtick, or an unresolved `$`) is the stronger sibling: a glob can only
 // match a file that already exists, while a substitution can CREATE the
-// exact protected basename (CPR-4).
+// exact protected basename (CPR-E2C).
 const RESIDUAL_EXPANSION_RE = /[$`]/;
 
 // targetBaseInsideWorkflowDir(rawText, ctx, baseIsSuspect): true iff some
@@ -203,7 +203,7 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
 
   // The mention check covers all three texts in scope: the assignment chain,
   // the raw target, and its partially-substituted form all carry the same
-  // kind of evidence (CPR-5).
+  // kind of evidence (CPR-ORTH).
   for (const evidence of [assignText, raw, sub.text]) {
     if (mentionsProtectedName(evidence)) {
       return TOKEN_MENTION_RE.test(evidence) ? "token" : "marker";
@@ -214,7 +214,7 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
   // workflow dir; (c) the text names a path under the workflow dir anywhere,
   // including inside the substitution body that assembles the target.
   //
-  // Named exception (CPR-8): a target assembled ENTIRELY inside a
+  // Named exception (CPR-UNV): a target assembled ENTIRELY inside a
   // substitution that references neither the workflow dir nor any protected
   // fragment (e.g. reconstructed from pieces, or decoded) leaves no evidence
   // here and is still approved. The backstop for that case is the

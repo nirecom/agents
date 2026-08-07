@@ -6,7 +6,7 @@
 # A — the two *directory* flags, --worktree and --main-root.
 #
 # security.sh covers the two attacker-shaped *identifier* flags (--session-id,
-# --pr-branch). The directory flags are the symmetric other half (CPR-5) and are
+# --pr-branch). The directory flags are the symmetric other half (CPR-ORTH) and are
 # attacked differently:
 #
 #   A1/A2  shell metacharacters. The resolved notesPath is interpolated into a
@@ -208,7 +208,7 @@ a3_main_root_is_anchor_only() {
 # A4 — `..` inside an ABSOLUTE path is still traversal
 # ---------------------------------------------------------------------------
 # hasTraversal() screens the raw argument before path.resolve() collapses it, so
-# an absolute path is not exempt. Both flags must behave the same way (CPR-5).
+# an absolute path is not exempt. Both flags must behave the same way (CPR-ORTH).
 a4_absolute_traversal_segments() {
     local base="$TMPD/a4" abs missing=""
     plant_notes "$base/wt"

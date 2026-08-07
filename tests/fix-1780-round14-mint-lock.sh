@@ -15,7 +15,7 @@
 # #1780 round-14 — WHY THIS FILE EXISTS.
 #
 # Three separate defects share one root cause and are pinned here together
-# (CPR-3 — they are separated by WHERE they act, not merged into one blob):
+# (CPR-SC — they are separated by WHERE they act, not merged into one blob):
 #
 #   HIGH  — MINT/CLAIM RACE. bin/request-off-clearance's mint transition and the
 #           shim's claim lifecycle mutate the SAME bare-token/claim pair for one

@@ -32,7 +32,7 @@
 # request is rejected.
 #
 # The four properties below are what make that a security boundary rather than a
-# formality, and each is asserted on its own (CPR-3):
+# formality, and each is asserted on its own (CPR-SC):
 #   N1  absent nonce   -> discarded -> NO token   (the shape alone proves nothing)
 #   N2  correct nonce  -> honoured  -> token      (N1 must not pass by breaking mint)
 #   N3  wrong nonce    -> discarded -> NO token   (well-formed but unauthentic)

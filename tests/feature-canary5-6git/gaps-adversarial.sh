@@ -48,7 +48,7 @@ G3.n3 nice git status → read^nice git status^false
 G3_TABLE
 
 # GAP 3 orthogonality: the green file-op predicate benefits from the SAME shared
-# resolver — wrappers must not hide rm/cp/mv either (CPR-5).
+# resolver — wrappers must not hide rm/cp/mv either (CPR-ORTH).
 echo "=== GAP3b: green file-op predicate wrapper coverage (L1) ==="
 while IFS='^' read -r name cmd want; do
   [ -z "$name" ] && continue
@@ -114,12 +114,12 @@ assert_eq "GAP4.n2 flag after && not attributed to git → null" "null" \
 # ---------------------------------------------------------------------------
 # MEDIUM (SSOT) — GIT_VALUE_TAKING_GLOBAL_FLAGS is derived from parse-git-args
 # FLAGS_WITH_ARG (imported, not re-declared). Assert the two sets are identical
-# so drift is impossible (CPR-2). Also assert no hardcoded re-declaration remains.
+# so drift is impossible (CPR-SSOT). Also assert no hardcoded re-declaration remains.
 # ---------------------------------------------------------------------------
 echo "=== MEDIUM SSOT: value-taking git global flag set (L1) ==="
 # git-write-ir.js (extracted from patterns.js at the 500-line file-split, #1401)
 # derives GIT_VALUE_TAKING_GLOBAL_FLAGS from the imported FLAGS_WITH_ARG (SSOT),
-# never re-declaring the set — so the two cannot drift (CPR-2).
+# never re-declaring the set — so the two cannot drift (CPR-SSOT).
 assert_eq "SSOT.1 git-write-ir imports FLAGS_WITH_ARG (no re-declare)" "true" \
   "$(run_with_timeout 30 node -e "
     const fs=require('fs');

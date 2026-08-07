@@ -177,7 +177,7 @@ echo "== W-c5: a POSIX drive-form path (/c/...) is normalized, not rejected =="
 if run_case "W-c5/posix-drive-form-normalized"; then
     next_sid
     nodejs "$SID" "$INIT_JS"
-    # Platform-specific INPUT, identical EXPECTATION (CPR-8): on win32 the MSYS/Git-Bash
+    # Platform-specific INPUT, identical EXPECTATION (CPR-UNV): on win32 the MSYS/Git-Bash
     # form `/c/...` must be normalized by normalizeCwd before the isAbsolute/stat checks;
     # on POSIX the same string IS the native form. Either way the entered repo resolves.
     # This is the shape a Git-Bash-launched session actually hands the hook.
@@ -269,7 +269,7 @@ const S = require("./hooks/workflow-state/state-io");
 const noArg = S.getCurrentContext();
 const explicit = S.getCurrentContext(process.cwd());
 // The pre-#1733 contract is exactly {cwd, git_branch}; a new optional arg
-// must not change the no-arg shape or values (CPR-8: no environment-dependent drift).
+// must not change the no-arg shape or values (CPR-UNV: no environment-dependent drift).
 console.log("keys=" + Object.keys(noArg).sort().join(",") +
             " same_as_explicit=" + (JSON.stringify(noArg) === JSON.stringify(explicit)));
 '

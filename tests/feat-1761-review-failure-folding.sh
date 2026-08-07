@@ -7,7 +7,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# S13 "fail 種別の畳み込み" — CPR-3 separates the failure kinds, but they must all fold
+# S13 "fail 種別の畳み込み" — CPR-SC separates the failure kinds, but they must all fold
 # to the SAME observable outcome so no failure can silently promote a verdict:
 #     codex CLI absent            → review_result: skipped
 #     everything else that fails  → review_result: invalid
@@ -215,7 +215,7 @@ fi
 
 echo ""
 echo "=== F11: every failure kind is distinguishable in review.status detail ==="
-# CPR-3: the kinds fold to one outcome for the caller, but must stay separable for
+# CPR-SC: the kinds fold to one outcome for the caller, but must stay separable for
 # post-hoc diagnosis. review.detail is the only place that may differ.
 if [ "$RS_PRESENT" != "yes" ]; then
     red "F11-detail-recorded"

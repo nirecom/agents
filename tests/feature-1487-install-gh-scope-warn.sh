@@ -341,7 +341,7 @@ fi
 #
 # When apt-get/brew exits non-zero for jq install, jq.sh must re-check with
 # command -v jq. If jq is now available (e.g. another mechanism installed it),
-# jq.sh must exit 0. This mirrors the CPR-5 symmetric re-check in jq.ps1.
+# jq.sh must exit 0. This mirrors the CPR-ORTH symmetric re-check in jq.ps1.
 # Relies on install/linux/jq.sh (created in write-code step).
 # ---------------------------------------------------------------------------
 T7_BIN="$TMP/t7-bin"

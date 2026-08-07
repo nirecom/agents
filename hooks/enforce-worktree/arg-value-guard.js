@@ -14,7 +14,7 @@
 // which #1673 deleted together with the Bash-tool `eval` path it guarded. They
 // were moved here UNCHANGED so worker-dispatch-overlay.js — which outlived that
 // file — keeps screening argument values against ONE reject set rather than two
-// drifting copies (CPR-2). This module is now their sole owner.
+// drifting copies (CPR-SSOT). This module is now their sole owner.
 
 const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
@@ -50,7 +50,7 @@ function hasControlChar(s) {
 
 // The `id` positions are opaque identifiers (issue numbers, session ids). Exact
 // shape rather than "no metacharacters", so this validator is as strict as the
-// enum one (CPR-5). The empty string is legal — run-initial.sh's third argument
+// enum one (CPR-ORTH). The empty string is legal — run-initial.sh's third argument
 // is a documented empty placeholder.
 const ID_VALUE_RE = /^[A-Za-z0-9._-]*$/;
 
@@ -88,7 +88,7 @@ function normLower(p) {
 }
 
 // Separator semantics are PLATFORM-dependent, and the assumption is named here
-// rather than branched implicitly at each split (CPR-8). On win32 both `/` and
+// rather than branched implicitly at each split (CPR-UNV). On win32 both `/` and
 // `\` delimit segments. On macOS/Linux `\` is an ordinary FILENAME character, so
 // `/trusted/acd\skills/issue-close-finalize/...` is ONE directory literally named
 // `acd\skills` — a name any writable directory can host. Treating it as a
@@ -133,7 +133,7 @@ function stripRelSuffix(absPath, rel) {
   // root shape loses it differently: `path.join("c:", "git")` yields the
   // drive-RELATIVE `c:git`, and a leading empty segment (POSIX root `/x`, or a
   // UNC `//server/share`) simply disappears, turning an absolute path into a
-  // cwd-relative one. Each shape is named explicitly here (CPR-8) rather than
+  // cwd-relative one. Each shape is named explicitly here (CPR-UNV) rather than
   // left to path.join's defaults.
   let head = null;
   let tail = rest;
@@ -170,7 +170,7 @@ function stripRelSuffix(absPath, rel) {
 // sibling-prefix lookalikes (<plans>-evil/...) and ..-traversal escapes are rejected.
 function isUnderPlansDir(token) {
   try {
-    // Same reject set the universal token gate uses (CPR-2) — so the predicate
+    // Same reject set the universal token gate uses (CPR-SSOT) — so the predicate
     // is safe on its own terms, not only behind a matcher.
     if (typeof token !== "string") return false;
     if (hasControlChar(token) || UNSAFE_ARG_VALUE_RE.test(token)) return false;

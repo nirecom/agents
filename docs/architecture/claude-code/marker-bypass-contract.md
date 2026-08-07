@@ -25,7 +25,7 @@ Inclusion criterion: every hook that calls `isWorkflowOff` / `isWorktreeOff` fro
 check inline for the git context — see Session-ID resolution below). This is a
 grep-derivable criterion (`grep -rl "isWorkflowOff\|isWorktreeOff" hooks/`), not an
 enumerated guess: a hook absent from this table does not call either function and is
-never bypassed. This table is the SSOT (CPR-2); no other document enumerates
+never bypassed. This table is the SSOT (CPR-SSOT); no other document enumerates
 exceptions independently.
 
 | Hook | Layer | Honors `.workflow-off` | Honors `.worktree-off` |
@@ -75,7 +75,7 @@ Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
-scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-5). Users
+scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
 who need to bypass a specific match must use `.private-info-allowlist` instead.
 
 `hooks/block-history-direct.js`'s marker check runs only after a protected-path hit is

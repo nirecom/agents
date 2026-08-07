@@ -93,7 +93,7 @@ process.stdout.write(String(p.ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ.test(process.
 fi
 
 # ---------------------------------------------------------------------------
-# S4 - orthogonality guard (CPR-5): the counterpart restore skill must keep pointing at
+# S4 - orthogonality guard (CPR-ORTH): the counterpart restore skill must keep pointing at
 # the plain WORKFLOW_ENFORCE_WORKFLOW_ON sentinel. There is no _EMERGENCY variant of the
 # ON side (restoring enforcement is always safe and auto-approved), so the S-7 edit must
 # NOT be mirrored onto the ON path.
@@ -161,7 +161,7 @@ else
         "0|no|0" "$rc|$(blocked_of "$out")|$ntok"
     cleanup_tmp "$TMP1"
 
-    # E2 - CONTROL (CPR-5 counterpart). The SAME shim, the same empty token dir, but
+    # E2 - CONTROL (CPR-ORTH counterpart). The SAME shim, the same empty token dir, but
     # the STANDARD sentinel: it must be blocked. Without this, E1 could pass simply
     # because the shim ignores everything it is fed.
     TMP2=$(make_tmp); TN2=$(node_path "$TMP2")

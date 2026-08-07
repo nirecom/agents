@@ -4,7 +4,7 @@
 #
 # pwsh-alias retire verification (#1402 canary-7 Step 1):
 # - sc/ac/ni/ri/mi/ci WRITE_PATTERNS entries retired; isPwshWriteIR owns detection.
-# - mi/ci added to QUOTED_COMMAND_WORD_WRITE_NAMES (CPR-5 symmetry).
+# - mi/ci added to QUOTED_COMMAND_WORD_WRITE_NAMES (CPR-ORTH symmetry).
 # - WRITE_PATTERNS must NOT contain pwsh-alias kind entries post-retire.
 #
 # L3 gap: real enforce-worktree hook invocation in a live claude session not tested.
@@ -42,8 +42,8 @@ PA-IR-mi^mi src.txt dst.txt^true
 PA-IR-ci^ci src.txt dst.txt^true
 PA_IR_TABLE
 
-echo "=== PA-QCWW: mi/ci in QUOTED_COMMAND_WORD_WRITE_NAMES (CPR-5) ==="
-# mi/ci at command position in double quotes → write (CPR-5 symmetric with sc/ac/ni/ri).
+echo "=== PA-QCWW: mi/ci in QUOTED_COMMAND_WORD_WRITE_NAMES (CPR-ORTH) ==="
+# mi/ci at command position in double quotes → write (CPR-ORTH symmetric with sc/ac/ni/ri).
 while IFS='^' read -r name cmd want; do
   [ -z "$name" ] && continue
   assert_eq "$name" "$want" "$(classify_ir "$cmd")"

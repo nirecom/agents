@@ -10,7 +10,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Two distinct concerns (CPR-3 — do not conflate them):
+# Two distinct concerns (CPR-SC — do not conflate them):
 #   L (leak)      Candidate bodies and proposal prose DO belong in the codex prompt
 #                 (that is the review's whole input). They must NOT reach the `--out`
 #                 artifact, stdout, stderr, or any retained log — those are what the

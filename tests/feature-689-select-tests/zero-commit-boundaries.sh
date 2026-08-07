@@ -38,7 +38,7 @@ zc_check() { # <row> <desc> <want> <got>
 # settle the question itself. The decoy's stem has a test file of its own in the fake tree, so if
 # the local check answered "zero commit" the decoy would appear in stdout and be visible here.
 #
-# This is the CPR-5 counterpart of S16: the same absent field, the same local observation, and
+# This is the CPR-ORTH counterpart of S16: the same absent field, the same local observation, and
 # the OPPOSITE answer. S16 alone would be satisfied by a selector that degraded unconditionally
 # whenever the field was missing, which is every old-resolver install on every ordinary branch.
 test_S21_normal_branch_field_absent_ignores_worktree() {

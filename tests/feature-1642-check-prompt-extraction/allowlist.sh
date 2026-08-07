@@ -279,7 +279,7 @@ al06_advisory_ignores_allowlist() {
 # AL07 — --staged reads the allowlist from the INDEX, not the working tree
 #
 # The allowlist file is itself a tracked file, so it is subject to the same
-# index-vs-working-tree precedence as the prompt files being scanned (CPR-6:
+# index-vs-working-tree precedence as the prompt files being scanned (CPR-E2E:
 # a commit must be judged against what is actually being committed).
 # ============================================================================
 al07_staged_uses_index_allowlist() {

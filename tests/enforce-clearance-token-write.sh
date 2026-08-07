@@ -89,7 +89,7 @@ assert_block "B7 rm token"                "$(run_hook "$TN" "$(mk_bash_input "rm
 assert_block "B8 rm -rf token"            "$(run_hook "$TN" "$(mk_bash_input "rm -rf $TOKEN")")"
 assert_block "B9 mv token away"           "$(run_hook "$TN" "$(mk_bash_input "mv $TOKEN $TN/stash.bak")")"
 
-# --- approve: sanctioned unrelated paths (CPR-5 counterparts) ---
+# --- approve: sanctioned unrelated paths (CPR-ORTH counterparts) ---
 assert_approve "A1 redirect > unrelated file"  "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/notes.txt")")"
 assert_approve "A2 Write unrelated file_path"  "$(run_hook "$TN" "$(mk_file_input Write "$TN/other.json")")"
 assert_approve "A3 harmless node -e (no token)" "$(run_hook "$TN" "$(mk_bash_input "node -e \"console.log(1+1)\"")")"

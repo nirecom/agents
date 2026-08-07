@@ -66,7 +66,7 @@ run_M_multi_sentinel() {
         "$(run_shim "$tn" "$cwd" "$(mk_runcommands_json "$sid" "$WF_BOUND" "$WF_BOUND")")"
     rm -r -f "$tmp" 2>/dev/null
 
-    # === CPR-5 counterparts: everything with ONE activation must still work ===
+    # === CPR-ORTH counterparts: everything with ONE activation must still work ===
 
     # --- M5: single activating sentinel + valid token -> allow, token spent ---
     tmp=$(make_tmp); tn=$(node_path "$tmp"); cwd="$tmp"; sid="lifem5"

@@ -40,7 +40,7 @@
 #     expansion exceeds MAX_CANDIDATE_SPELLINGS answers "hit" rather than
 #     finishing, which costs a legitimate `touch f{1..5000}.txt` a block.
 #
-# THE BOUNDARY IS PINNED BY THE ALLOW ROWS (CPR-5). The normalizer runs on every
+# THE BOUNDARY IS PINNED BY THE ALLOW ROWS (CPR-ORTH). The normalizer runs on every
 # write target in every command, so a widener that widens too far is a different
 # and equally real defect:
 #   19-nr1  bash fidelity — a single brace element with no comma and no `..` is
@@ -73,7 +73,7 @@ _run_r9_table() {
 }
 
 # run_R9_brace_ansi - the measured ALLOW->BLOCK shapes, both protected families
-# (CPR-5) and both construct families.
+# (CPR-ORTH) and both construct families.
 run_R9_brace_ansi() {
     _run_r9_table "R9" <<'TABLE'
 19-a brace range rebuilds marker|block|echo x > @DIR@/@MK1@{f..f}

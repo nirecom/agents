@@ -5,7 +5,7 @@
 # WHY THIS EXISTS
 # The three fix-1780-round12-* suites all drive the SAME binary as a real
 # subprocess and all need the same four things, which is exactly the set that is
-# easy to get subtly wrong per-file (CPR-2: one owner, not three copies):
+# easy to get subtly wrong per-file (CPR-SSOT: one owner, not three copies):
 #
 #   1. FIXTURE ISOLATION (rules/test/fixture-isolation.md). CLAUDE_WORKFLOW_DIR
 #      and WORKFLOW_PLANS_DIR are DUAL-PINNED to the same throwaway dir on every
@@ -89,7 +89,7 @@ process.stdout.write(v === undefined ? "(undef)" : String(v));
 # `node`, which bin/request-off-clearance needs for the workflow-dir resolution,
 # the nonce, the audit and the mint. So the stripped PATH is re-supplied with a
 # private shim that re-execs the node binary by ABSOLUTE path. Removing an
-# entry must not smuggle in an unrelated failure mode (CPR-3: the case under
+# entry must not smuggle in an unrelated failure mode (CPR-SC: the case under
 # test is "codex is missing", nothing else).
 OFFCLR_REAL_NODE="$(command -v node 2>/dev/null || true)"
 offclr_strip_codex_dirs() {

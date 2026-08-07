@@ -290,7 +290,7 @@ test_N5_cmdsub_backtick_no_side_effect() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# C2 (CPR-5) — S6/S7/S8: sweep-side hook e2e symmetry with the WE cases
+# C2 (CPR-ORTH) — S6/S7/S8: sweep-side hook e2e symmetry with the WE cases
 #      T21/T22/T23. S1 only covers ` 2>&1`; the truncating file-redirect forms
 #      (`>/dev/null`, `2>/dev/null`, stacked `>/dev/null 2>&1`) are exercised
 #      here through the REAL hook via the SWEEP_BRANCHES_SKILL=1 route, using a

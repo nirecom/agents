@@ -29,7 +29,7 @@ check_eq "F1: on-disk write_tests.status still literally complete (no rewrite)" 
 
 # ---------------------------------------------------------------------------
 # F2 (RED): the symmetric sibling — detail is the recorded-verdict skip and
-# outline is complete. Same class member, same loop (CPR-5).
+# outline is complete. Same class member, same loop (CPR-ORTH).
 # ---------------------------------------------------------------------------
 F2_SID="$(new_sid f2)"
 write_state "$F2_SID" "{$HEAD_COMPLETE,\"outline\":{\"status\":\"complete\"},$RV_DETAIL,$TAIL_COMPLETE}"

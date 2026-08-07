@@ -242,8 +242,8 @@ done
 
 # --- PATH-exposed bin/ command symlinks ---
 # The command set is declared once in install/path-exposed-commands.txt and looped over
-# here; install/win/dotfileslink.ps1 consumes the same file (CPR-2 single source of truth,
-# CPR-5 both platforms expose the same set). Do NOT hand-write an `ln -sf` below —
+# here; install/win/dotfileslink.ps1 consumes the same file (CPR-SSOT single source of truth,
+# CPR-ORTH both platforms expose the same set). Do NOT hand-write an `ln -sf` below —
 # add the command name to the list file instead.
 _path_exposed_list="$AGENTS_ROOT/install/path-exposed-commands.txt"
 if [[ ! -f "$_path_exposed_list" ]]; then

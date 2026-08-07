@@ -220,7 +220,7 @@ fi
 # T17 — Concern C2 (HIGH): deletion+survivor combination using the SINGULAR
 # `test/` prefix. Every prior deletion+survivor case (T1, T7, T8, T9, T15,
 # T16) only ever used the plural `tests/` prefix — this closes the
-# orthogonality gap between the two accepted prefixes (CPR-5: symmetric
+# orthogonality gap between the two accepted prefixes (CPR-ORTH: symmetric
 # class members require symmetric treatment).
 # EXPECTED: FAIL pre-fix (same root cause as T1 — the deletion poisons the
 # whole staged set regardless of which accepted prefix is used).

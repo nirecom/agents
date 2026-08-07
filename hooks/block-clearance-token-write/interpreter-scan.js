@@ -2,7 +2,7 @@
 // Interpreter-one-liner analysis, split out of the entrypoint (file-split,
 // rules/coding/file-split.md). Tier-1 gate and Tier-2 prefilter recognize
 // protected session markers as well as the clearance token, via the shared
-// SSOT in hooks/lib/protected-basenames.js (CPR-5).
+// SSOT in hooks/lib/protected-basenames.js (CPR-ORTH).
 "use strict";
 
 const { mentionsProtectedName, TOKEN_MENTION_RE } = require("../lib/protected-basenames");
@@ -72,7 +72,7 @@ const INTERPRETER_RE = new RegExp(
 // prefix here once let `printf '<program>' | python3 -E -` (ignore-env, read
 // stdin) go ALLOW. Short clusters stay lowercase-only, pwsh parameter names
 // count only when cmd0 is actually pwsh, and ambiguous flags (`-E`, `-p`,
-// `--print`) are omitted (CPR-8) — doubt always resolves toward over-block.
+// `--print`) are omitted (CPR-UNV) — doubt always resolves toward over-block.
 // `(?:=|$)` accepts the attached long form (`--eval=code`) too.
 // ---------------------------------------------------------------------------
 const PROOF_CLUSTER_FLAG = String.raw`-[a-z]{0,2}[ce][a-z]{0,2}`;
@@ -103,7 +103,7 @@ function inlineProgramFlagProof(word, interpreterWord) {
 // the whole hook. These are matched on NAME ALONE, arming Tier 1; Tier 2 then
 // finds no extractable body and fails closed, which is correct since none has
 // a recognized read-only shape. This is enumeration and inherently lags — the
-// real backstops are the structural, name-independent checks elsewhere (CPR-8).
+// real backstops are the structural, name-independent checks elsewhere (CPR-UNV).
 const BODY_FIRST_INTERPRETER_NAMES = [
   "awk", "gawk", "mawk", "nawk", "busybox-awk",
   "tclsh", "wish", "php", "lua", "luajit", "rscript", "osascript", "expect",
@@ -267,7 +267,7 @@ function bodyDerefsProtectedViaAssignment(body, gateText) {
     const assignRe = new RegExp("(?:^|[\\s;&|]|\\$" + PWSH_ENV_PREFIX + ")" + varName + "=(\\S+)", "m");
     const am = assignRe.exec(gateText);
     // A marker path assigned to the variable is the same class of
-    // indirection as a token path (CPR-5).
+    // indirection as a token path (CPR-ORTH).
     if (am && mentionsProtectedName(am[1])) return true;
   }
   return false;
@@ -279,7 +279,7 @@ function bodyDerefsProtectedViaAssignment(body, gateText) {
 // only via a `-c`/`-e`/`-Command` flag, so a body arriving via here-string/
 // heredoc/pipe fell back to the shell scanner and was approved as an ordinary
 // non-matching word. ./nested-bodies.js now reuses this one classifier
-// (CPR-2/CPR-4).
+// (CPR-SSOT/CPR-E2C).
 function interpreterBodyHitsProtected(body, gateText) {
   if (typeof body !== "string" || body === "") return false;
   const scope = typeof gateText === "string" ? gateText : body;

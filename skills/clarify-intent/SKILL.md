@@ -94,7 +94,7 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 - `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
 - `CLOSED_ENTRY` → `AskUserQuestion` "Tracking-issue guard detected a CLOSED entry. How should we recover?" — "Reopen the closed entry and retry" / "Abort session" → `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`.
 
-Note (CPR-5 Orthogonality): no new workflow sentinel is introduced. Interactive recovery remains in SKILL.md.
+Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interactive recovery remains in SKILL.md.
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).

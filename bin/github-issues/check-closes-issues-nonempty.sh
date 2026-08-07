@@ -11,7 +11,7 @@
 #         caller to reopen the issue or remove it from the session.
 #
 # SSOT: closes_issues parsing delegates to hooks/lib/parse-closes-issues.js.
-#       Do not reimplement — see core-principles.md CPR-2.
+#       Do not reimplement — see core-principles.md CPR-SSOT.
 
 set -uo pipefail
 

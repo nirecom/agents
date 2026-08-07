@@ -13,7 +13,7 @@
 # here as a real subprocess inside a sandbox whose install/ tree is entirely
 # recording stubs; the session-sync init step's own stub is the observable.
 #
-# Both installers are the same class member-for-member (CPR-5): the matrix below
+# Both installers are the same class member-for-member (CPR-ORTH): the matrix below
 # is applied to install.sh and install.ps1 identically.
 #
 # TL3 gap (what this test does NOT catch):

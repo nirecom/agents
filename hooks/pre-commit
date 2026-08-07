@@ -34,7 +34,7 @@ _is_enforce_worktree_on() {
 # both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
 # rc=0 -> bypass granted; rc=2 -> no bypass (sid unresolved OR no marker);
 # any other rc -> unexpected error (caller decides how to surface it).
-# Shared by the worktree-isolation gate and the prompt-extraction backstop (CPR-2).
+# Shared by the worktree-isolation gate and the prompt-extraction backstop (CPR-SSOT).
 _session_marker_off() {
     AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
     node -e '
@@ -229,7 +229,7 @@ fi
 #   (b) .prompt-extraction-allowlist exists at that repo root
 # Both must hold. Allowlist presence alone must never arm the backstop in a
 # foreign repo, even when a global core.hooksPath routes that repo here
-# (install/linux/dotfileslink.sh) — CPR-8: no implicit environment branching.
+# (install/linux/dotfileslink.sh) — CPR-UNV: no implicit environment branching.
 #
 # Exit-code mapping: 1 -> block; anything else -> warn on stderr and continue.
 # The backstop is a safety net, not an availability dependency.

@@ -60,7 +60,7 @@ $links = @(
 )
 
 # Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
-# Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md CPR-5).
+# Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md CPR-ORTH).
 $linkFailed = 0
 $_failAfterN = if ($env:DOTFILESLINK_FAIL_AT_INDEX -match '^\d+$') { [int]$env:DOTFILESLINK_FAIL_AT_INDEX } else { -1 }
 $_linkIdx = 0
@@ -203,8 +203,8 @@ foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.c
 
 # --- PATH-exposed bin/ commands (cmd + bash shim) ---
 # The command set is declared once in install/path-exposed-commands.txt and looped over
-# here; install/linux/dotfileslink.sh consumes the same file (CPR-2 single source of truth,
-# CPR-5 both platforms expose the same set). Do NOT hand-write a launcher pair below —
+# here; install/linux/dotfileslink.sh consumes the same file (CPR-SSOT single source of truth,
+# CPR-ORTH both platforms expose the same set). Do NOT hand-write a launcher pair below —
 # add the command name to the list file instead.
 # Write-Launcher registers every list entry (review-code-codex, review-env-example, ...)
 # as a .cmd launcher plus a bash shim.

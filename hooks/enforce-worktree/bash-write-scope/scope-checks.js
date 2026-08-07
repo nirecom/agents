@@ -22,7 +22,7 @@ function areAllBashTargetsOutsideSessionScope(targets, sessionRoots) {
     if (t.malformed === true) return false;
     // Strip surrounding shell quotes from the path (some extractors return raw
     // token strings that include the original quotes) — the quote-strip that used
-    // to live in universal-target-allow's caller is centralized here (CPR-2).
+    // to live in universal-target-allow's caller is centralized here (CPR-SSOT).
     const rawPath = String(t.path).replace(/^["']|["']$/g, "");
     let repo;
     if (t.resolveVia === "self") {

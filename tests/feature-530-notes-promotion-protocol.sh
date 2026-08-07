@@ -376,7 +376,7 @@ group_notice_states_count_and_reason() {
 }
 
 # The callsites must not carry their own copy of the loop: a second copy is a
-# second place for the prefilter to be forgotten (CPR-2).
+# second place for the prefilter to be forgotten (CPR-SSOT).
 group_callsites_delegate_the_loop() {
     local entry rel label path block
     for entry in "skills/worktree-end/SKILL.md|WE-11|Step WE-11" \

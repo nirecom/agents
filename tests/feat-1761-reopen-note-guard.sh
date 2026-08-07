@@ -11,7 +11,7 @@
 # S13: reopen-with-update.sh gains an optional 2nd argument (note) carrying
 # review-stage provenance derived from codex free text. Because externally authored
 # text now rides on the comment body, the comment body must pass gh_outbound_guard
-# exactly like the issue body already does (CPR-5). Guard failure drops the note and
+# exactly like the issue body already does (CPR-ORTH). Guard failure drops the note and
 # continues with the fixed text — it never aborts the reopen.
 
 set -u
@@ -125,7 +125,7 @@ else
 fi
 
 echo ""
-echo "=== N2: the comment body passes gh_outbound_guard (CPR-5 with the issue body) ==="
+echo "=== N2: the comment body passes gh_outbound_guard (CPR-ORTH with the issue body) ==="
 if [ "$RWU_ACCEPTS_NOTE" != "yes" ]; then
     fail "N2-comment-guard-invoked" "RED-EXPECTED: note argument not yet supported"
     fail "N3-note-present-in-comment" "RED-EXPECTED: note argument not yet supported"
@@ -208,7 +208,7 @@ fi
 
 echo ""
 echo "=== N13: marker stripping runs to a FIXED POINT, not a single pass ==="
-# Same class as validate-review-verdict.js's stripCommentMarkers (CPR-5): both sites
+# Same class as validate-review-verdict.js's stripCommentMarkers (CPR-ORTH): both sites
 # take reviewer-authored free text and must remove HTML comment markers from it, so the
 # same PoC has to fail at both or the weaker site is the one an attacker uses.
 # `<<!--!--` holds `<!--` at offset 1; deleting it rejoins `<` + `!--` into a NEW `<!--`.

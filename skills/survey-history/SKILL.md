@@ -56,8 +56,8 @@ SH-5. **Relevance scoring:**
 SH-6. Run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/artifact-template.sh"` to get the output format,
    then write `<PLANS_DIR>/<session-id>-survey-history.md` following that format.
    The `## Candidate class members` section lists sibling members identified
-   from git history and history.md (per `rules/core-principles.md` CPR-4 Elevate
-   Perspective). Each member is two lines: (a) name + description + commit/history-entry reference;
+   from git history and history.md (per `rules/core-principles.md` CPR-E2C Elevate
+   to the Class). Each member is two lines: (a) name + description + commit/history-entry reference;
    (b) `proposed triage:` value and 1-line rationale grounded in historical evidence.
    Triage values: `proposed triage: MUST` (symmetric change required for class
    consistency), `proposed triage: OPTIONAL` (related but independently fixable),

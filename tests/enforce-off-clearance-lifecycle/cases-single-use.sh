@@ -3,7 +3,7 @@
 # Sections C and P - L-2 (identity-bound consumption) and L-3 (single-use
 # EMERGENCY provenance).
 #
-# TWO LAYERS, ASSERTED SEPARATELY (CPR-3):
+# TWO LAYERS, ASSERTED SEPARATELY (CPR-SC):
 #   C1 the PRIMITIVE, hooks/lib/consume-exact-file.js, over its whole verdict
 #      domain - consumed / lost / failed. A three-valued contract whose "lost" and
 #      "failed" arms are untested is a contract in name only: both arms exist
@@ -102,7 +102,7 @@ run_P_provenance() {
     assert_eq "P1 no exclusive-claim file left behind" "0" "$(_consuming_left "$tmp")"
     rm -r -f "$tmp" 2>/dev/null
 
-    # P2 - CPR-5 counterpart on the target axis: the skill covers both overrides,
+    # P2 - CPR-ORTH counterpart on the target axis: the skill covers both overrides,
     #      so a worktree-target emergency is attributed from the same marker shape.
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep2"
     "$RWT" 15 node "$PROBE" mkmarker "$_AGENTS_DIR_NODE" "$tn" "$sid" 0 >/dev/null 2>&1

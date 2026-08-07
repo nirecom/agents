@@ -58,7 +58,7 @@ emit("glob_deep", () => globInside(j(deepDir, "x*")));
 // Pre-fix control: the plain, fully resolvable spelling already blocked. It
 // pins the defect to the UNRESOLVABLE ancestor rather than to the rule itself.
 emit("glob_plain_inside", () => globInside(j(wfDir, "x*")));
-// CPR-5 counterpart: an ordinary resolvable directory outside the workflow dir
+// CPR-ORTH counterpart: an ordinary resolvable directory outside the workflow dir
 // must still answer false, so the fix cannot degenerate into "every glob".
 emit("glob_plain_outside", () => globInside(j(outsideDir, "x*")));
 // ACCEPTED OVER-BLOCK, pinned deliberately: an unresolvable ancestor ANYWHERE
@@ -69,7 +69,7 @@ emit("glob_outside_loop", () => globInside(j(outsideLoopDir, "x*")));
 
 // --- call site 1b: the residual-expansion sibling of the same qualifier ---
 // dynamicTargetInsideWorkflowDir shares targetBaseInsideWorkflowDir, so it
-// shares the fail direction (CPR-5 — one class, one treatment).
+// shares the fail direction (CPR-ORTH — one class, one treatment).
 emit("dyn_loop", () => dynInside(j(loopDir, "x$V")));
 emit("dyn_plain_inside", () => dynInside(j(wfDir, "x$V")));
 emit("dyn_plain_outside", () => dynInside(j(outsideDir, "x$V")));

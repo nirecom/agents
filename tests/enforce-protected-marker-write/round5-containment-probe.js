@@ -60,14 +60,14 @@ emit("alias_glob", () => globInside(j(aliasDir, "x*")));
 emit("alias_gate", () => gateAllows(j(aliasDir, "x.json")));
 
 // Case-only spelling difference. The EXPECTATION is not hardcoded: it is whatever
-// the volume actually does (CPR-8 — no implicit branch on platform), and both
+// the volume actually does (CPR-UNV — no implicit branch on platform), and both
 // sides must match it.
 const CI = pc.isCaseInsensitiveFsAt(wfDir);
 emit("case_expected", () => CI);
 emit("case_glob", () => globInside(j(wfDir.toUpperCase(), "x*")));
 emit("case_gate", () => gateAllows(j(wfDir.toUpperCase(), "x.json")));
 
-// Outside stays outside on both sides (CPR-5 counterpart: the shared helper must
+// Outside stays outside on both sides (CPR-ORTH counterpart: the shared helper must
 // not have widened containment).
 emit("outside_glob", () => globInside(j(outsideDir, "x*")));
 emit("outside_gate", () => gateAllows(j(outsideDir, "x.json")));

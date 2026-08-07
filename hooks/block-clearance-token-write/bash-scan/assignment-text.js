@@ -7,7 +7,7 @@
 const { resolveEffectiveSegment } = require("../../lib/command-ir");
 // `$ENV:` is the same scope prefix as `$env:` in PowerShell — fold it the
 // same way interpreter-scan.js does, or one scanner sanctions a spelling the
-// other treats as unknown (CPR-5).
+// other treats as unknown (CPR-ORTH).
 const { PWSH_ENV_PREFIX } = require("../../lib/case-insensitive-literal");
 const { sourceOrderView } = require("../../lib/substitution-spans");
 
@@ -20,7 +20,7 @@ const { sourceOrderView } = require("../../lib/substitution-spans");
 // below would otherwise miss it and a preceding pwsh assignment would never
 // reach a following interpreter segment's gate text. Recognized only in its
 // single-token, no-space form; spaced forms (`$env:A = val`) stay
-// fail-closed via the bash-assignment branch below (CPR-5).
+// fail-closed via the bash-assignment branch below (CPR-ORTH).
 const PWSH_ENV_ASSIGN_ONLY_RE = new RegExp(String.raw`^\$${PWSH_ENV_PREFIX}[A-Za-z_][A-Za-z0-9_]*=\S`);
 
 function isAssignmentOnlySegment(seg) {

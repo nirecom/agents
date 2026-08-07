@@ -55,7 +55,7 @@ for qname in "tee" "rm" "mv" "cp" "patch" "touch" "chmod" "dd" "rsync" "unzip" "
   assert_eq "PS-QCWW-$qname-present" "true" "$qpresent"
 done
 
-# New entries added in canary-7 (mi/ci symmetry, CPR-5).
+# New entries added in canary-7 (mi/ci symmetry, CPR-ORTH).
 for qname in "mi" "ci"; do
   qpresent="$(run_with_timeout 30 node -e "
     const {QUOTED_COMMAND_WORD_WRITE_NAMES}=require('${WT_NODE}/hooks/lib/bash-write-patterns/patterns');

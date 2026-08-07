@@ -146,7 +146,7 @@ run_R13_onunknown_direction() {
         skip "R13 hop-cap row - the >40-hop chain fixture could not be built here; verify on a POSIX host"
     fi
 
-    # ACCEPTED OVER-BLOCK, pinned on purpose (CPR-8 named exception): the
+    # ACCEPTED OVER-BLOCK, pinned on purpose (CPR-UNV named exception): the
     # detection direction answers "contained" for an unresolvable ancestor
     # ANYWHERE, including outside the workflow dir. The blast radius is bounded —
     # reaching it requires a symlink loop or a >40-hop chain, which no ordinary
@@ -173,7 +173,7 @@ run_R13_onunknown_direction() {
     # Pre-fix control: the literal spelling blocked before this fix as well.
     assert_block "R13 E4 control: plain glob directly in the workflow dir still blocks" \
         "$(run_hook_cwd "$LINKED_WT" "$wf_n" "$(mk_bash_input "echo x > $wf_n/*" "$LINKED_WT")")"
-    # CPR-5 counterpart: ordinary bulk work outside the workflow dir must keep
+    # CPR-ORTH counterpart: ordinary bulk work outside the workflow dir must keep
     # working, or the fix has traded a bypass for an over-block.
     assert_approve "R13 E5 ordinary bulk glob outside the workflow dir stays allowed" \
         "$(run_hook_cwd "$LINKED_WT" "$wf_n" "$(mk_bash_input "rm -rf $out_n/*" "$LINKED_WT")")"

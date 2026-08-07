@@ -6,7 +6,7 @@
 // The counted thing is a `tool_use` block whose `input.subagent_type` is a non-empty
 // string. The block's `name` is deliberately NOT part of the predicate: it reads "Task" on
 // older Claude Code builds and "Agent" on current ones, and keying on a version-dependent
-// literal would silently zero the metric after an upgrade (CPR-8).
+// literal would silently zero the metric after an upgrade (CPR-UNV).
 //
 // An observation that FAILED is never reported as a count of zero. A directory that could
 // not be enumerated, a file that could not be read, and a file too large to classify all
@@ -184,7 +184,7 @@ function aggregate(options) {
       invocations: counted.total,
       // A subagent_type is attacker-shaped input, so the per-session breakdown is held in
       // the same Map the totals use and converted only at the serialization boundary
-      // (CPR-5): accumulating into a plain object would let `__proto__` or `constructor`
+      // (CPR-ORTH): accumulating into a plain object would let `__proto__` or `constructor`
       // be dropped or mangled, and the breakdown would then disagree with the totals.
       by_type: Object.fromEntries(counted.byType),
     });

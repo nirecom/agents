@@ -45,7 +45,7 @@ const STEP_ANNOTATION_KEYS = [
 
 const WORKTREE_TRANSITIONS = ["entered", "exited"];
 
-// Where a recorded worktree path came from. Kept explicit (CPR-3) so a path
+// Where a recorded worktree path came from. Kept explicit (CPR-SC) so a path
 // observed from tool input is never confused with a process-cwd guess.
 const PATH_SOURCES = ["tool_input", "fallback-process-cwd", "prior-entry", "migration-unknown"];
 

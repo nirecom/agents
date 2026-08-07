@@ -46,7 +46,7 @@
 # Table format and placeholders: see ./cases-round6-stdin.sh.
 
 # run_R8_sibling_operand - the nine measured ALLOW->BLOCK shapes, both protected
-# families (CPR-5), across the four interpreter grammars that carry an inline
+# families (CPR-ORTH), across the four interpreter grammars that carry an inline
 # body plus the two indirection wrappers (`xargs -I{} sh -c`, argv-index reads).
 run_R8_sibling_operand() {
     _run_r6_table "R8" <<'TABLE'

@@ -38,7 +38,7 @@ m_fixture() {
 
 # m_assert_fallback <label> <audit-output> <common-output> <root>
 # The full contract for one fallback flavour, applied identically to all three
-# (CPR-5: the three causes differ, the required behaviour does not).
+# (CPR-ORTH: the three causes differ, the required behaviour does not).
 m_assert_fallback() {
     local label="$1" a_out="$2" c_out="$3" root="$4"
 

@@ -40,7 +40,7 @@
 #     protected path is a hit (READ_ONLY_ARG_COMMAND_RE is an allowlist, and
 #     `less -o` is why membership is granted to a NAME only after a per-option
 #     sweep). Relaxing any of these means extending that allowlist as a CLASS
-#     (CPR-4), never special-casing one row here.
+#     (CPR-E2C), never special-casing one row here.
 #
 # WHICH MECHANISM IS RESPONSIBLE — the controls are not decoration. 18-c1..18-c3
 # were measured BLOCK against the pre-fix code as well, and they are what pins
@@ -51,7 +51,7 @@
 #   18-c3  `tar -cf '/tmp/a.tar' '<marker>'` — only the token immediately AFTER
 #          the flag was swallowed, so the SECOND operand always blocked
 #
-# THE PAIRING IS THE POINT (CPR-5). A "fix" that simply deleted the deferral
+# THE PAIRING IS THE POINT (CPR-ORTH). A "fix" that simply deleted the deferral
 # would turn every 18-x row green while re-breaking the RD3 read path round 8
 # exists to protect, so 18-nr1..18-nr7 are load-bearing: they are the round-8
 # deferral rows re-asserted under this file's change, plus the #1709 plain reads.
@@ -76,7 +76,7 @@ _r9_mk_commands_input() {
 }
 
 # run_R9_flag_cluster - the measured ALLOW->BLOCK shapes. Both protected
-# families where the shape allows it (CPR-5).
+# families where the shape allows it (CPR-ORTH).
 run_R9_flag_cluster() {
     _run_r6_table "R9" <<'TABLE'
 18-a tar -cf creates marker|block|tar -cf '@DIR@/@MK@' /tmp/x
@@ -112,7 +112,7 @@ run_R9_flag_cluster_controls() {
 TABLE
 }
 
-# run_R9_deferral_intact - the counterweight (CPR-5). The gate NARROWS the
+# run_R9_deferral_intact - the counterweight (CPR-ORTH). The gate NARROWS the
 # deferral set; it must not delete it. Every row here is a deferral that must
 # still happen: an interpreter body whose trailing `'<path>'` merely LOOKS like
 # a bare path (RD3), and the #1709 plain reads that a marker guard must never

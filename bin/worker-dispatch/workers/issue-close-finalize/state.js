@@ -11,7 +11,7 @@
 // unknown keys. A state file that grew a field, changed owner_repo, or came from
 // another session is refused before any child process starts.
 //
-// Three separate jobs, deliberately kept apart (CPR-3):
+// Three separate jobs, deliberately kept apart (CPR-SC):
 //
 //   1. validateState()   — type/constraint table over the state object itself.
 //                          Every field goes through capability.checkField, the
@@ -355,7 +355,7 @@ function writeAtomic(ctx, target, data) {
 // has already posted its proposal comment. The exclusive lock file closes that
 // window: `wx` creation fails when the file exists, so exactly one pass at a time
 // holds the check-through-create interval. Same technique and same
-// `<target>.lock` naming as run-loop-step.js's lock over the loop passes (CPR-5).
+// `<target>.lock` naming as run-loop-step.js's lock over the loop passes (CPR-ORTH).
 //
 // The lock is created with plain fs because fsguard has no exclusive-create mode,
 // so its path is put through fsguard's own containment check first — a lock file
@@ -415,7 +415,7 @@ function releaseCreateLock(lockPath) {
 
 // The refusal message for an initial pass over a chain that is already under way.
 // Shared so the fast-fail pre-check in the worker and the authoritative check
-// inside writeInitial() cannot describe the same condition differently (CPR-2).
+// inside writeInitial() cannot describe the same condition differently (CPR-SSOT).
 const ALREADY_INITIALIZED =
   "a finalize state file already exists for this session and root issue — the chain is already initialized; refusing to overwrite it (delete it deliberately to restart)";
 

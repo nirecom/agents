@@ -153,7 +153,7 @@ See `docs/security-policy.md` for the full pattern list.
   inside `'…'`, `"…"`, `$'…'`, `` `…` ``, `$(…)`, `(…)` or `$((…))` asks one scanner,
   `hooks/lib/quote-spans.js` (`quote-spans/{scan,query,transform}.js`). Before #1569 each
   consumer carried its own ad-hoc quote walker, so a quoting form fixed in one predicate stayed
-  broken in its siblings (CPR-8). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
+  broken in its siblings (CPR-UNV). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
   command-ir}.js`, `hooks/enforce-worktree/arg-tail-guard.js`, and
   `main-worktree-allows/worker-script.js`. Ambiguity is never guessed
   at: unparseable nesting or nesting past the depth cap (`MAX_SPAN_DEPTH`) yields `ok:false`
@@ -170,7 +170,7 @@ See `docs/security-policy.md` for the full pattern list.
   matching one marker is ambiguous and rejected. `hooks/lib/load-env.js` deliberately does not
   share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
   settings, or an alternate config dir would silently be injected with the real repo's `.env`
-  (CPR-3). The two share only the candidate enumeration.
+  (CPR-SC). The two share only the candidate enumeration.
   **Worker-dispatch sanction (#1643, #1673)** — `main-worktree-allows/worker-dispatch-overlay.js`
   sanctions exactly one command shape from the main worktree:
   `node "<acd>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>`. It deliberately
@@ -194,7 +194,7 @@ See `docs/security-policy.md` for the full pattern list.
   guard covers all nine declared workers (`WORKER_NAMES`) with no per-worker code. Together
   with the registry's per-worker capability contracts (`payloadSpec`, `binaries`,
   `envPassthrough`, `writeScopes`) it is the **sole** guard layer for worker-dispatch write
-  operations — there is no second, worker-specific overlay, by design (CPR-5).
+  operations — there is no second, worker-specific overlay, by design (CPR-ORTH).
   **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts
   (`run-initial.sh`, `run-loop-step.js`, `run-finalize-terminal.sh`) used to be invoked as a
   Bash-tool `eval` from the main worktree, and that one shape needed an overlay of its own to

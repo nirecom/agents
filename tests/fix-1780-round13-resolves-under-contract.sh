@@ -34,7 +34,7 @@
 # qualifier never arms, and the write proceeds unscrutinised.
 #
 # The fix makes the fail direction a REQUIRED, EXPLICIT parameter
-# (`opts.onUnknown`, boolean) instead of an implicit constant (CPR-8).
+# (`opts.onUnknown`, boolean) instead of an implicit constant (CPR-UNV).
 #
 # WHAT IS ASSERTED HERE (all three halves of the contract):
 #   (1) the parameter is MANDATORY - a missing or non-boolean `onUnknown`
@@ -186,7 +186,7 @@ emit("loop_onUnknown_true", () => pc.resolvesUnder(loopDir, parentDir, { allowEq
 emit("loop_onUnknown_false", () => pc.resolvesUnder(loopDir, parentDir, { allowEqual: true, onUnknown: false }));
 emit("deep_onUnknown_true", () => pc.resolvesUnder(deepDir, parentDir, { allowEqual: true, onUnknown: true }));
 emit("deep_onUnknown_false", () => pc.resolvesUnder(deepDir, parentDir, { allowEqual: true, onUnknown: false }));
-// The PARENT side of the comparison is unresolvable (symmetric member, CPR-5).
+// The PARENT side of the comparison is unresolvable (symmetric member, CPR-ORTH).
 emit("loopparent_onUnknown_true", () => pc.resolvesUnder(insideDir, loopDir, { allowEqual: true, onUnknown: true }));
 emit("loopparent_onUnknown_false", () => pc.resolvesUnder(insideDir, loopDir, { allowEqual: true, onUnknown: false }));
 
@@ -308,7 +308,7 @@ expect undefchild_false false
 # ===========================================================================
 # Section P - PROVABLE input: `onUnknown` is inert.
 #
-# The CPR-5 counterpart of Section U. Without these rows, `onUnknown:true` could
+# The CPR-ORTH counterpart of Section U. Without these rows, `onUnknown:true` could
 # degenerate into "always true" (blocking every glob everywhere) and still pass
 # Section U - which is exactly the false-positive over-block failure mode the
 # fix must not introduce.

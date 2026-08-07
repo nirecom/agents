@@ -281,7 +281,7 @@ OUT=$(run_hook "$JSON_FILE" "$TMP_NODE")
 assert_blocked_with_pred "T13" "$OUT" "isExtendedFileOpWriteIR"
 rm -f "$JSON_FILE"; rm -rf "$TMP"
 
-# ── T_ALLOW: symmetry (CPR-5) — read-only command must NOT be blocked ─────────
+# ── T_ALLOW: symmetry (CPR-ORTH) — read-only command must NOT be blocked ─────────
 TMP=$(make_tmp)
 if command -v cygpath >/dev/null 2>&1; then TMP_NODE=$(cygpath -m "$TMP"); else TMP_NODE="$TMP"; fi
 SID="${SID_BASE}-tallow"

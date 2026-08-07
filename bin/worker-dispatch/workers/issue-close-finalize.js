@@ -343,7 +343,7 @@ function runFinalizeTerminal(payload, ctx, log, finish) {
   const loaded = stateStore.loadValidated(payload, ctx);
   if (loaded.error) return finish("failed", loaded.error);
 
-  // Same compare-and-swap check as loop_step (CPR-5): a state file replaced
+  // Same compare-and-swap check as loop_step (CPR-ORTH): a state file replaced
   // between validation and spawn must not be acted on. And the token TRAVELS ON,
   // exactly as it does for run-loop-step.js: the terminal script re-reads the
   // state file in its own process and drives `gh issue close` from what it finds

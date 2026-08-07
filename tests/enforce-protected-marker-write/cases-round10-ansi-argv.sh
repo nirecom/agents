@@ -28,12 +28,12 @@
 # itself, so the raw word carries no visible path separator at all.
 #
 # ACCEPTED OVER-BLOCK, inherited unchanged from round-9 and re-pinned in argv
-# position (CPR-5): `$'…\X66'` uses an uppercase `\X`, which bash does NOT decode,
+# position (CPR-ORTH): `$'…\X66'` uses an uppercase `\X`, which bash does NOT decode,
 # so the shell creates `…-of\X66` and no forge occurs - but the shared decoder does
 # decode it. That is widening in the DETECTION direction and it stands. Do not
 # narrow the decoder to "fix" it.
 #
-# THE ALLOW ROWS (CPR-5): the raw spelling now reaches the classifier for every
+# THE ALLOW ROWS (CPR-ORTH): the raw spelling now reaches the classifier for every
 # argument of every write command, so the null cases matter as much as the forges:
 #   10-h2nr1  a `$'…'` with no escape sequences at all, argv position (the argv
 #             sibling of round-9's redirect-position 19-nr2)
@@ -76,7 +76,7 @@ run_R10_ansi_argv_parity() {
 # run_R10_ansi_argv_commands - the same escape in the argument of write commands
 # that have no redirect sibling at all. Parity cannot speak for these, so each is a
 # plain verdict row; together with the parity block above they cover the write
-# routes the fix touches (CPR-5).
+# routes the fix touches (CPR-ORTH).
 run_R10_ansi_argv_commands() {
     _run_r10_table "R10" <<'TABLE'
 10-h2i tee argument|block|echo x | tee $'@DIR@/@MK1@@BS@x66'

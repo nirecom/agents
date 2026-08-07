@@ -41,7 +41,7 @@
 # This file is the cross-product of the two axes neither covers:
 #   {read, state-write, marker-write} x {main, linked-feature, protected}
 #   x {Bash, runInTerminal, runCommands} x {ENFORCE_WORKTREE on, off}
-# plus the edit-write class writing into the state dir (CPR-5: the clearance
+# plus the edit-write class writing into the state dir (CPR-ORTH: the clearance
 # staging path must behave the same for every write-capable tool class).
 #
 # ASSERTION CONTRACT (strict, inherited from fix-1709): enforce-worktree.js
@@ -232,7 +232,7 @@ done
 # Section K - protected clearance-MARKER basenames (.workflow-off etc.) inside
 # the state dir. The assertion is PARITY across the command class first: a
 # marker forge that one tool name blocks and its sibling allows is a bypass, not
-# a partial guard (CPR-5).
+# a partial guard (CPR-ORTH).
 #
 # Behaviour lock on the absolute verdicts, per the module header of
 # hooks/block-clearance-token-write.js: enforce-worktree.js is a LOCATION guard,

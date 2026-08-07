@@ -252,7 +252,7 @@ TABLE
 
 # ---------------------------------------------------------------------------
 # Mutation probe (required): the repo's own bin/mutation-probe.sh, not a local
-# re-implementation of it (CPR-2 — one owner for "how a mutation is applied").
+# re-implementation of it (CPR-SSOT — one owner for "how a mutation is applied").
 # It rewrites each single-line `const NAME = /regex/;` in the target to a
 # never-matching regex and requires the test command to FAIL for each one.
 #

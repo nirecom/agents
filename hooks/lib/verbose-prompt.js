@@ -12,7 +12,7 @@ const { readState, SESSION_ID_VALID_RE } = require("../workflow-state");
 // The single definition of the hardening line. One sentence covering the three
 // observed failure modes: skipped skill steps, summarizing over a prescribed
 // command's output, and editing append-only documents directly. It must never
-// be copied anywhere else (CPR-2, pinned by a drift check in the tests).
+// be copied anywhere else (CPR-SSOT, pinned by a drift check in the tests).
 const VERBOSE_PROMPT_TEXT =
   "Follow every skill step literally and in order: never replace a step's prescribed command output with your own summary, and never edit append-only documents directly.";
 

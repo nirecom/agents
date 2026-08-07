@@ -27,7 +27,7 @@ const { FLAGS_WITH_ARG } = require("../parse-git-args");
 // SECURITY (C2): without skipping value-taking globals, `git -C <path> commit`
 // or `git --config-env core.hooksPath=VAR commit` shifts argv so the write
 // subcommand is missed → git write fast-allows with no scope enforcement.
-// SSOT (CPR-2): value-taking global set is the SAME as parse-git-args.js
+// SSOT (CPR-SSOT): value-taking global set is the SAME as parse-git-args.js
 // FLAGS_WITH_ARG — imported, not re-declared, so the two cannot drift.
 const GIT_VALUE_TAKING_GLOBAL_FLAGS = FLAGS_WITH_ARG;
 const GIT_CONFIG_INJECTION_FLAGS = new Set(["-c", "--config-env"]);

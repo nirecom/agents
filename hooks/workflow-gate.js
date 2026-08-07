@@ -313,7 +313,7 @@ if (require.main === module) {
 
   // Gate 3 (issue #1642): prompt extraction — §1.5 code fences and §1.3 inline
   // procedures in staged prompt files. bin/check-prompt-extraction --staged owns
-  // detection and the allowlist ratchet (CPR-2); this call site maps exit 1 -> block.
+  // detection and the allowlist ratchet (CPR-SSOT); this call site maps exit 1 -> block.
   //
   // Ordered BEFORE Gate 2 deliberately: Gate 3 self-limits to repos that carry a
   // .prompt-extraction-allowlist, so it stays silent everywhere it does not apply,
@@ -326,7 +326,7 @@ if (require.main === module) {
   }
 
   // Gate 2 (issue #1701): HARD file-size limit. bin/review-code-size --staged owns the
-  // thresholds and line counting (CPR-2); this call site only maps exit 1 -> block.
+  // thresholds and line counting (CPR-SSOT); this call site only maps exit 1 -> block.
   {
     const { checkCodeSizeHardLimit } = require("./workflow-gate/code-size-gate");
     const sizeVerdict = checkCodeSizeHardLimit(repoDir);

@@ -111,7 +111,7 @@ function handle(ctx) {
     if (stepName === "workflow_init" && status === "complete") {
       try {
         if (readState(sessionId)) {
-          // Same batch shape as the RESET_FROM rollback (CPR-5): an explicit
+          // Same batch shape as the RESET_FROM rollback (CPR-ORTH): an explicit
           // annotation tombstone plus a declared pending status per step, appended
           // rather than rewritten, so the prior run's history stays readable.
           // Top-level fields (workflow_type, closes_issues, ...) are never rebuilt.

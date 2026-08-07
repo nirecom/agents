@@ -93,7 +93,7 @@ g5_config_dir_must_be_usable() {
 }
 
 # The three properties every spelling owes, asserted identically so the five rows cannot
-# drift apart (CPR-5): the verdict is on stdout, the exit is 0, and stdout is not empty —
+# drift apart (CPR-ORTH): the verdict is on stdout, the exit is 0, and stdout is not empty —
 # the last one is what separates "reported" from "died before printing anything".
 g5_row() { # <name> <repo>
   local name="$1"

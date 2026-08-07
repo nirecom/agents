@@ -2,7 +2,7 @@
 
 // Derived read model over the append-only `events` stream (#1733).
 //
-// `events` is the single source of truth (CPR-2). Everything a reader used to
+// `events` is the single source of truth (CPR-SSOT). Everything a reader used to
 // find at the top level of the state file — `steps`, `plan_approvals`,
 // `git_branch`, ... — is *derived* here by folding the stream, never stored
 // independently. `current` on disk is a cache of this fold, rewritten from

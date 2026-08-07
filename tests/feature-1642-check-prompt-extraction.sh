@@ -181,7 +181,7 @@ t03_nested_fence_by_count() {
     fi
 }
 
-# T04: tilde fence is treated identically to a backtick fence (CPR-8).
+# T04: tilde fence is treated identically to a backtick fence (CPR-UNV).
 t04_tilde_fence() {
     local repo; repo="$(make_repo t04)"
     {
@@ -365,7 +365,7 @@ t22_staged_reads_index() {
 
 # T23: mutually exclusive modes -> usage error, exit 2.
 #      Table-driven: every pairing of the three modes must be rejected the same
-#      way (CPR-5 — the three modes are symmetric members of one family).
+#      way (CPR-ORTH — the three modes are symmetric members of one family).
 t23_usage_error() {
     local repo; repo="$(make_repo t23)"
     local name args

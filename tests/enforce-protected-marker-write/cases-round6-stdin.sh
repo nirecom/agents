@@ -11,9 +11,9 @@
 #     node <<< "require('fs').unlinkSync('<marker>')"   -> APPROVE (round 5 hole)
 #
 # The fix keys routing on the RECEIVING COMMAND'S INTERPRETER IDENTITY rather
-# than on the delivery syntax (CPR-4: fix the class, not the member), so the
+# than on the delivery syntax (CPR-E2C: fix the class, not the member), so the
 # cases below are organised by ROUTE, and each route is asserted for BOTH
-# interpreter kinds and for both protected families (marker + token, CPR-5):
+# interpreter kinds and for both protected families (marker + token, CPR-ORTH):
 #
 #   R6-8  here-string  -> body known    -> judged in the interpreter's language
 #   R6-9  heredoc      -> body known    -> same, incl. quoted delimiter and the
@@ -26,7 +26,7 @@
 # DELIBERATE ASYMMETRY (do not "fix" these into symmetry):
 #   * an opaque route is judged by MENTION, not parsed, so `printf '<read-only
 #     body>' | node` BLOCKS while the same body via `-e` is APPROVED. Over-block
-#     is the sanctioned direction for "cannot analyse" (CPR-5 with HIGH-2).
+#     is the sanctioned direction for "cannot analyse" (CPR-ORTH with HIGH-2).
 #   * a heredoc feeding a SHELL or a non-interpreter is NOT shell-recursed:
 #     recursing all heredocs as shell text would fail-close on ordinary prose,
 #     which 9-nr3/9-nr4 pin as ALLOW.

@@ -18,7 +18,7 @@
 #   resolveAgentsConfigDir : env -> module -> realpath   (falls through)
 #   loadDefaultEnv         : env only                    (short-circuits)
 # Rationale: load-env decides where SETTINGS come from, the resolver decides
-# WHO is executing (CPR-3). Letting load-env fall through would inject the real
+# WHO is executing (CPR-SC). Letting load-env fall through would inject the real
 # repository's .env into a child process that deliberately pointed at an
 # alternate/test config dir.
 #

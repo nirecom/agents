@@ -9,7 +9,7 @@
 # out to `bash bin/check-prompt-extraction --staged`.
 #
 # Fail-closed contract: every infrastructure error blocks. Timeout is the ONLY
-# fail-open path (mirrors Gate 2 / code-size-gate.js — CPR-5).
+# fail-open path (mirrors Gate 2 / code-size-gate.js — CPR-ORTH).
 #
 # TL3 gap (what this test does NOT catch):
 # - Whether the PreToolUse hook actually fires when Claude Code issues a git commit

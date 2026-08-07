@@ -3,7 +3,7 @@
 # Usage: check-inline-procedures [--base <ref>] [--all]
 #
 # Thin adapter over bin/check-prompt-extraction (issue #1642). That CLI is the
-# single owner of detection semantics, the target set and the thresholds (CPR-2);
+# single owner of detection semantics, the target set and the thresholds (CPR-SSOT);
 # this script only preserves the historical output contract for existing callers.
 #
 # Always emits one of:
