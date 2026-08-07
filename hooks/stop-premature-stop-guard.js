@@ -8,13 +8,58 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
-const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
-
 // Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
 // second generic block in the same turn would surface two competing messages,
 // so this guard stays silent for them (CPR-SC — one owner per condition).
 // - pre_final_report_gate → owned by hooks/stop-final-report-guard.js lane B.
 const DELEGATED_REASONS = new Set(["pre_final_report_gate"]);
+
+// Exemption table. Add a row to extend the conditions.
+// phase="session"          : decidable from session state alone, before next-step runs
+// phase="next-step-output" : decidable only after seeing next-step's output (REASON)
+// Each test is a pure function of (ctx, deps) — it must not close over module-scope
+// `let` bindings from the require.main block, or it throws ReferenceError (see #1794).
+const C4_EXEMPTIONS = [
+  { id: "workflow-off",      phase: "session", test: (c, d) => d.isWorkflowOff(c.sid) },
+  { id: "next-step-paused",  phase: "session", test: (c, d) => d.isNextStepPaused(c.sid) },
+  { id: "pre-workflow-init", phase: "session", test: (c, d) => !d.isWorkflowStarted(c.sid) },
+  { id: "background-work",   phase: "session", test: (c, d) => d.isBackgroundWorkInFlight(c.sid) },
+  { id: "delegated-reason",  phase: "next-step-output",
+    test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
+];
+
+// Assembles the predicates the table needs. Both the hook body and tests use
+// only this function, so the wiring never diverges between the two.
+// A require failure throws here and is caught by the caller (the
+// require.main block's try/catch) — same handling as any other dependency
+// load failure.
+function buildExemptionDeps() {
+  const { isWorkflowOff, isNextStepPaused, isBackgroundWorkInFlight } =
+    require("./lib/session-markers");
+  const { isWorkflowStarted } = require("./workflow-state");
+  return {
+    isWorkflowOff, isNextStepPaused, isWorkflowStarted, isBackgroundWorkInFlight,
+  };
+}
+
+// An exemption holds only when it can be actively proven. A predicate that
+// throws is treated as NOT holding, and its id is pushed onto `degraded` so
+// evaluation continues to the next row. Treating a throw as exempt would let
+// a single buggy predicate silence C4 across every session.
+function firstExemption(phase, ctx, deps, degraded) {
+  for (const e of C4_EXEMPTIONS) {
+    if (e.phase !== phase) continue;
+    let hit = false;
+    try {
+      hit = e.test(ctx, deps);
+    } catch (_err) {
+      if (degraded) degraded.push(e.id);
+      continue;
+    }
+    if (hit) return e.id;
+  }
+  return null;
+}
 
 function readStdin() {
   const chunks = [];
@@ -42,13 +87,13 @@ if (require.main === module) {
   // Loop prevention: when this hook itself caused Claude to re-invoke, skip.
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, readWorkflowState;
-  let isWorkflowOff;
+  let resolveSessionId;
   let appendFinding;
+  let deps;
   try {
-    ({ resolveSessionId, readState: readWorkflowState } = require("./workflow-state"));
-    ({ isWorkflowOff } = require("./lib/session-markers"));
+    ({ resolveSessionId } = require("./workflow-state"));
     ({ appendFinding } = require("./lib/supervisor-state-writer"));
+    deps = buildExemptionDeps();
   } catch (_) {
     process.exit(0);
   }
@@ -62,27 +107,10 @@ if (require.main === module) {
         transcriptPath: input.transcript_path,
       });
     } catch (_) {}
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) process.exit(0);
+    if (!sessionId) process.exit(0);
 
-    // Skip when workflow-off marker is present.
-    try {
-      if (isWorkflowOff(sessionId)) process.exit(0);
-    } catch (_) {
-      process.exit(0);
-    }
-
-    // Skip when next-step is paused (#1607): no auto-resume while quiet.
-    try {
-      const { isNextStepPaused } = require("./lib/session-markers");
-      if (isNextStepPaused(sessionId)) process.exit(0);
-    } catch (_) { /* fail-open */ }
-
-    // Skip sessions with no workflow state file (non-workflow sessions).
-    let wfState = null;
-    try {
-      wfState = readWorkflowState(sessionId);
-    } catch (_) {}
-    if (!wfState) process.exit(0);
+    const degraded = [];
+    if (firstExemption("session", { sid: sessionId }, deps, degraded)) process.exit(0);
 
     // Locate next-step binary.
     const agentsDir = process.env.AGENTS_CONFIG_DIR
@@ -106,7 +134,9 @@ if (require.main === module) {
     // Delegate reasons owned by a dedicated Stop hook (REASON is single-quoted).
     const reasonLine = lines.find((l) => l.startsWith("REASON="));
     const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
-    if (DELEGATED_REASONS.has(reasonValue)) process.exit(0);
+    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue }, deps, degraded)) {
+      process.exit(0);
+    }
 
     // Extract NEXT_SKILL for the continuation message.
     const skillLine = lines.find((l) => l.startsWith("NEXT_SKILL="));
@@ -126,7 +156,15 @@ if (require.main === module) {
     const skillNote = nextSkill
       ? `Run /${nextSkill} now via the Skill tool to continue the workflow.`
       : "Re-run next-step to determine the pending workflow skill.";
-    const reason = `[C4 premature-stop] ACTION=invoke was pending (NEXT_SKILL=${nextSkill || "(unknown)"}). ${skillNote} (Hook: stop-premature-stop-guard.js)`;
+    const degradedNote = degraded.length
+      ? ` [warning: exemption predicate(s) failed: ${degraded.join(",")}]`
+      : "";
+    const reason = `[C4 premature-stop] ACTION=invoke was pending (NEXT_SKILL=${nextSkill || "(unknown)"}). ${skillNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
+    if (degraded.length) {
+      try {
+        process.stderr.write(`stop-premature-stop-guard: exemption predicate(s) failed: ${degraded.join(",")}\n`);
+      } catch (_) {}
+    }
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     process.exit(2);
   } catch (_) {
@@ -135,4 +173,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = {};
+module.exports = { C4_EXEMPTIONS, buildExemptionDeps, firstExemption };
