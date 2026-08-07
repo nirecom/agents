@@ -1,14 +1,30 @@
 #!/bin/bash
 # tests/feature-worktree-end-step55-promotion.sh
 # Tests: bin/worktree-notes-triage.js
-# Tags: worktree, end, cleanup, hook, bin
+# Tags: worktree, end, cleanup, hook, bin, TL2, scope:common
 #
-# Worktree-end Step 5.5 promotion feature.
+# Worktree-end Step WE-11 promotion feature (historically labelled "Step 5.5"
+# before the WE-<N> renumbering; the filename keeps the old token for git blame
+# continuity, the assertions do not).
 #
-# Test-first: the triage CLI does not yet exist. F1–F7 SKIP-gracefully when the
-# binary is absent. R1 has been replaced post-#771: the renderer (bin/worktree-
-# final-report.js) is abolished, so R1 now asserts its absence rather than
-# golden output.
+# F1–F7 SKIP-gracefully when bin/worktree-notes-triage.js is absent. R1 has been
+# replaced post-#771: the renderer (bin/worktree-final-report.js) is abolished,
+# so R1 now asserts its absence rather than golden output.
+#
+# The `## ManualReminders` section added by #530 is covered separately in
+# tests/feature-530-manual-reminders-triage-exclusion.sh — split out when this
+# file crossed the 500-line HARD limit.
+#
+# TL3 gap (what this test does NOT catch):
+# - Whether WE-11 in a live /worktree-end run actually calls this CLI at all,
+#   and calls it before the worktree is removed — after removal the notes file
+#   is gone and the findings are lost silently.
+# - Whether the numbers passed to `annotate` are the issue numbers /issue-create
+#   really created, rather than numbers invented by the model.
+# - Whether the Bash-tool hooks (enforce-worktree) permit these invocations as
+#   written from the worktree being torn down.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -273,22 +289,87 @@ test_F5_triage_annotate_invalid_line() {
     fi
 }
 
-# ---- F6 (security): path traversal → non-zero exit ----
+# ---- F6 (security): path traversal cannot reach a REAL outside notes file ----
+# The protected resource must exist and hold recognisable content: pointing the
+# CLI at a path that does not exist proves nothing, because "rejected" and "file
+# not found" are the same nonzero exit.
+#
+# Note on path shape: the current guard tests `path.normalize(p)`, and normalize
+# collapses `..` inside an ABSOLUTE path — so `<tmp>/a/../protected/...` arrives
+# indistinguishable from a direct path and sails through. Only the RELATIVE form
+# keeps its leading `..` and is caught. Both are exercised, and the contract is
+# the same for both: a path whose raw string contains `..` must be refused
+# before normalization, and the protected file must be neither disclosed nor
+# modified. Case (b) is the RED half — it fails today by writing to the
+# protected file.
+file_md5_of() {
+    node -e "
+        const c = require('crypto'), fs = require('fs');
+        try { process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex')); }
+        catch (e) { process.stdout.write('NOFILE'); }
+    " -- "$1" 2>/dev/null
+}
+
 test_F6_path_traversal_rejected() {
     require_bin "F6: path traversal rejected" || return
 
-    # Path containing '..' must be rejected regardless of basename.
-    local bad_path="$TMPDIR_BASE/../etc/WORKTREE_NOTES.md"
+    local token="F6LEAK-3ab91d-PROTECTED"
+    local protected_dir="$TMPDIR_BASE/f6-protected"
+    local work_dir="$TMPDIR_BASE/f6-work"
+    mkdir -p "$protected_dir" "$work_dir"
+    cat > "$protected_dir/WORKTREE_NOTES.md" <<EOF
+# Worktree Notes
+Branch: victim
+Created: 2026-05-22
 
-    run_with_timeout 30 node "$TRIAGE_BIN" list "$bad_path" >/dev/null 2>&1
-    local code_list=$?
-    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$bad_path" 2 1 >/dev/null 2>&1
-    local code_anno=$?
+## BugsFound
+- $token do not disclose this line
 
-    if [ "$code_list" != "0" ] && [ "$code_anno" != "0" ]; then
-        pass "F6: path traversal rejected (list=$code_list, annotate=$code_anno)"
+## RelatedTasks
+- (none)
+
+## NextTasks
+- (none)
+
+## History Notes
+- (none)
+EOF
+    cp "$FIXTURE_NOTES" "$work_dir/WORKTREE_NOTES.md"
+    local before; before="$(file_md5_of "$protected_dir/WORKTREE_NOTES.md")"
+    local failures=""
+
+    # (a) relative traversal — the form the guard can see.
+    local rel="../f6-protected/WORKTREE_NOTES.md" out code
+    out="$( cd "$work_dir" && run_with_timeout 30 node "$TRIAGE_BIN" list "$rel" 2>&1 )"
+    code=$?
+    [ "$code" != "0" ] || failures="$failures rel-list-exit=0"
+    case "$out" in *"$token"*) failures="$failures rel-list-disclosed-content" ;; esac
+
+    ( cd "$work_dir" && run_with_timeout 30 node "$TRIAGE_BIN" annotate "$rel" 6 1 >/dev/null 2>&1 )
+    code=$?
+    [ "$code" != "0" ] || failures="$failures rel-annotate-exit=0"
+
+    # (b) absolute traversal — normalizes to the same file; the contract asserted
+    #     here is confinement of WRITES, not of reads.
+    # node_path() runs the whole string through `cygpath -m`, which silently
+    # collapses `..` inside an existing path — the literal traversal segment
+    # would never reach the CLI. Convert only the base directory, then append
+    # the `../` suffix as a plain string so the raw `..` survives intact on
+    # both Windows/git-bash and POSIX.
+    local abs_base; abs_base="$(node_path "$TMPDIR_BASE")"
+    local abs="$abs_base/f6-work/../f6-protected/WORKTREE_NOTES.md"
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$abs" 6 1 >/dev/null 2>&1
+
+    # (c) the protected file must be byte-identical after every attempt, with no
+    #     half-written temp file left beside it.
+    [ "$(file_md5_of "$protected_dir/WORKTREE_NOTES.md")" = "$before" ] \
+        || failures="$failures protected-file-modified"
+    ls "$protected_dir"/*.tmp >/dev/null 2>&1 && failures="$failures tmp-residue"
+
+    if [ -z "$failures" ]; then
+        pass "F6: traversal to an existing outside WORKTREE_NOTES.md is refused; the file is neither disclosed nor modified"
     else
-        fail "F6: expected non-zero for both, got list=$code_list annotate=$code_anno"
+        fail "F6: traversal guard leaked —$failures"
     fi
 }
 

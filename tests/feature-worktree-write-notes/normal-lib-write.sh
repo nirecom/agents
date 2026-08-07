@@ -53,6 +53,9 @@ test_N1_writeNotes_exact_content() {
         '## NextTasks' \
         '- (none)' \
         '' \
+        '## ManualReminders' \
+        '- (none)' \
+        '' \
         '## History Notes' \
         '- (none)' \
         '' \
@@ -146,6 +149,9 @@ test_I1_writeNotes_idempotent() {
         '- (none)' \
         '' \
         '## NextTasks' \
+        '- (none)' \
+        '' \
+        '## ManualReminders' \
         '- (none)' \
         '' \
         '## History Notes' \

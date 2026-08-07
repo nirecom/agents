@@ -12,7 +12,10 @@
 #   5. Backfill commit comments + clean up state
 #
 # Usage:
-#   bin/github-issues/migration/orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full]
+#   bin/github-issues/migration/orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full] [--ack-skipped-steps]
+#
+# --ack-skipped-steps: acknowledge that `--from-step N` jumps over steps that
+# were never run. Without it, every skipped step is named on stderr.
 set -euo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
@@ -21,15 +24,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
 
-REPO_DIR="${1:?usage: orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full] [--history-files <list>]}"
+REPO_DIR="${1:?usage: orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full] [--history-files <list>] [--ack-skipped-steps]}"
 DRY_RUN=0
 FROM_STEP=1
 HISTORY_FILES=""
 STAGE=""
+ACK_SKIPPED=0
 shift
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)       DRY_RUN=1; shift ;;
+    --ack-skipped-steps) ACK_SKIPPED=1; shift ;;
     --from-step)     FROM_STEP="${2:?--from-step requires N}"; shift 2 ;;
     --history-files) HISTORY_FILES="${2:?--history-files requires comma-separated list}"; shift 2 ;;
     --stage)         STAGE="${2:?--stage requires canary-1|canary-2|full}"; shift 2 ;;
@@ -67,6 +72,11 @@ echo "Repo:      $REPO_DIR"
 echo "From-step: $FROM_STEP"
 [ "$DRY_RUN" -eq 1 ] && echo "Mode:      DRY RUN"
 echo ""
+
+# --- skipped-step warning (#1693) -----------------------------------------
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/skipped-step-warning.sh"
+_warn_skipped_steps
 
 history_entries_total() {
   # HIST_FILE and HIST_DIR must be in scope.

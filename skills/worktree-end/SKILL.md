@@ -32,7 +32,7 @@ Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reu
 4. Skip WE-5 through WE-8; continue at WE-9, WE-12 (with `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA`), WE-15.
 
 ### Step WE-5 — Merge decision
-`gh pr view "$PR_NUMBER" --json state --jq .state`: `MERGED` → WE-7. `CLOSED` → error and stop. `OPEN` → continue. other/error/empty → error and stop.
+`gh pr view "$PR_NUMBER" --json state --jq .state`: `MERGED` → WE-7 (the merge happened outside this session's WE-8 — Web UI or another client — so WE-7 is the detection path for it). `CLOSED` → error and stop. `OPEN` → continue. other/error/empty → error and stop.
 
 Check `AUTO_MERGE_PR`: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" AUTO_MERGE_PR on'`. `ON`/`ERROR` → announce and proceed to WE-8. `OFF` → `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. Default **wait-for-web-merge** when AskUserQuestion unavailable.
 
@@ -40,7 +40,8 @@ Check `AUTO_MERGE_PR`: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG
 Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-7; else re-display and stop.
 
 ### Step WE-7 — Post-web-merge sync
-`git fetch --prune origin`, then emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → WE-9. Keep CWD in the linked worktree throughout WE-7; do not switch to main worktree before WE-13.
+`git fetch --prune origin`, then emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → WE-9.
+Skip the sentinel and go straight to WE-9 when this session already recorded `user_verification` as complete for this merge — check `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SID"` and treat a `REASON=` other than `user_verification` as already-recorded. Keep CWD in the linked worktree throughout WE-7; do not switch to main worktree before WE-13.
 
 ### Step WE-8 — Local merge
 Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
@@ -48,7 +49,7 @@ Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: 
 ### Step WE-9 — Gitignored state inventory
 Backup dir is derived by the worker as `<main_root>/.worktree-backup/<branch>/` — never passed in.
 
-Both passes dispatch `worktree-backup` per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
+Both passes dispatch the `worktree-backup` worker per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
 
 Serial by dependency (SC-S): Pass 2 copies exactly the file set Pass 1 inventoried and reported — a parallel Pass 2 would act on an uninventoried set and both passes write the same backup directory. See `skills/_shared/subagent-concurrency.md`.
 
@@ -60,9 +61,11 @@ Serial by dependency (SC-S): Pass 2 copies exactly the file set Pass 1 inventori
 Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after this step are excluded from the Final Report.
 
 ### Step WE-11 — Promote WORKTREE_NOTES entries to issues
-Skip when `bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"` fails. List: `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" list "$WORKTREE_PATH/WORKTREE_NOTES.md"`, filter `hasMarker: false`. Empty or non-interactive → WE-12.
+Run the pass in `skills/_shared/notes-promotion.md` unconditionally at this step — the worktree and its notes are deleted later in this skill, so no downstream callsite can reach them.
 
-Confirm via AskUserQuestion (multi-select). For each selected: invoke `/issue-create`; annotate via `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" annotate ...`. `## History Notes` / `## Changelog Notes` are excluded.
+Resolve the path with `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" resolve --caller worktree-end --worktree "$WORKTREE_PATH"`, then follow NP-1..NP-11 as written.
+
+`## History Notes` / `## Changelog Notes` are excluded from the pass. Continue to WE-12 in every outcome.
 
 ### Step WE-12 — Env collection + JSON persist
 Resolve `SID`: `awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$WORKTREE_PATH/WORKTREE_NOTES.md"` → fallback `$CLAUDE_SESSION_ID`.

@@ -45,7 +45,7 @@ RNT-5. **Empty-selection policy (no silent `--all` fallback).**
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
 
-RNT-7. **Dispatch `test-runner`** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `timeout_seconds` (omit for the 120s default).
+RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `timeout_seconds` (omit for the 120s default).
 
 RNT-8. **Parse the YAML** the dispatch call printed on stdout.
 
