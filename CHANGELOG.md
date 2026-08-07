@@ -228,3 +228,7 @@ Changes: **New**: `bin/check-prompt-extraction` — single-authority CLI for §1
 ### SECURITY: PR #1857 -- fix/off-clearance-1780 (2026-08-03)
 Background: Hardened the OFF-clearance token lifecycle used to gate emergency write access outside the normal worktree workflow.
 Changes: Closed a mint/claim race, several cwd-tracking bypasses of the OFF-clearance write guard (popd, cd -, pushd -n, command/builtin prefixes), and a silent-allow gap in the main-worktree write guard for commands whose target could not be extracted.
+
+### FEATURE: PR #1860 (2026-08-07)
+Background: fix(#1833): audit-tests.sh primary filter is now target survival, not issue-closed staleness
+Changes: Fixed: `audit-tests.sh` (the stale-test sweep) now detects a test whose target source file has been deleted or renamed immediately, instead of waiting for the tracking issue to be closed and age past the stale-months threshold.
