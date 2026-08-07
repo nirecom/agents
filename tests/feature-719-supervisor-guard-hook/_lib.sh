@@ -42,6 +42,18 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
+# #1794: seed a workflow state where workflow_init is complete, so that
+# isWorkflowStarted(sid) reads true and C2's alertArmedAt gate does not
+# suppress the armed alert. $1=tmp $2=sid; writes into "$tmp/workflow" and
+# the caller must export CLAUDE_WORKFLOW_DIR="$tmp/workflow" for the hook call.
+seed_workflow_init_complete() {
+    local tmp="$1" sid="$2" wf_dir="$tmp/workflow"
+    mkdir -p "$wf_dir"
+    cat > "$wf_dir/$sid.json" <<EOF
+{"version":1,"session_id":"$sid","steps":{"workflow_init":{"status":"complete","updated_at":"2026-06-06T12:00:00Z"}},"workflow_type":"wf-code"}
+EOF
+}
+
 make_fixture() {
     local path="$1"; shift
     for line in "$@"; do printf '%s\n' "$line"; done > "$path"

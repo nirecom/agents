@@ -13,8 +13,10 @@ run_g20() {
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # Seed supervisor state with alert_armed_at non-null to trigger branch (3).
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: $sid" && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -33,8 +35,10 @@ run_g21() {
     # No WORKTREE_NOTES.md, no context.md in tmp — resolveWorkflowSessionId returns null -> UNAVAILABLE.
     # Running from $tmp ensures the repo's own WORKTREE_NOTES.md in CWD does not interfere.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: UNAVAILABLE"; then
@@ -80,9 +84,17 @@ run_g23() {
     # the case where Layer-1 wrote state keyed by workflow session id but the
     # Stop hook receives a different CC UUID (dual-ID fallback regression).
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) gates on isWorkflowStarted(sessionId), and sessionId here
+    # resolves to the CC UUID from input.session_id (resolveSessionId Priority 1
+    # wins over WORKTREE_NOTES.md whenever session_id is present and valid) — the
+    # SAME id the guard uses to key BOTH the isWorkflowStarted check and the
+    # supervisor-state read/write (effectiveSupervisorStateSessionId = sessionId,
+    # no dual-ID fallback exists in hooks/supervisor-guard.js). Seed workflow_init
+    # under ccuuid, matching what the hook actually resolves.
+    seed_workflow_started "$tmp" "$ccuuid"
     # Invoke guard with session_id = ccuuid (CC UUID, different from wsid).
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     # Translate $tmp for Node.js on Windows (MSYS path translation asymmetry)
     if command -v cygpath >/dev/null 2>&1; then
@@ -123,8 +135,10 @@ const cmd = "echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"";
 const obj = {type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:cmd}}]}};
 require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -143,8 +157,10 @@ run_g25() {
     # wsid same as sessionId — resolver must skip fallback path.
     printf "Session-ID: %s\n" "$sid" > "$tmp/WORKTREE_NOTES.md"
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: $sid"; then
@@ -165,8 +181,10 @@ run_g26() {
     # supervisor-guard.js then skips fallback and uses sessionId for state lookup.
     printf "Session-ID: %s\n" "invalid@charset!" > "$tmp/WORKTREE_NOTES.md"
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ]; then

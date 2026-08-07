@@ -1,4 +1,4 @@
-# state-seeds.sh — workflow/supervisor state seeding helpers for T1-T11 and H1-H8 tests
+# state-seeds.sh — workflow/supervisor state seeding helpers for T1-T18 and H1-H8 tests
 # Sourced by tests/feature-1498-stop-premature-stop-guard.sh
 
 # Seed a workflow state that has workflow_init=complete and clarify_intent=complete
@@ -38,6 +38,7 @@ fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
 }
 
 # Seed a workflow state with workflow_init NOT complete (pending).
+# → #1794: as of this change, this state qualifies for C4's pre-workflow-init exemption (not blocked).
 seed_workflow_state_no_init() {
     local tmp="$1" sid="$2"
     local wf_dir="$tmp/workflow"

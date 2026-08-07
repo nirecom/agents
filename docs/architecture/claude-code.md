@@ -25,7 +25,7 @@ Alert mode (`agents/supervisor.md`, model: Sonnet) handles C1/C2/C3 triggers. In
 
 Audit mode (`agents/supervisor-audit.md`, model: Opus) handles stage-boundary and severity-threshold triggers. Information scope: all stages + finding history. Two triggers arm `audit_armed_at`: (a) stage-boundary — `<<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>` sentinel in the most recent assistant turn; (b) severity-threshold — `alert.cumulative_severity` reaches `AUDIT_SEVERITY_THRESHOLD` (`error`).
 
-Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `state.audit.audit_verdict`, written via `bin/supervisor-write-audit-verdict`. The verdict is combined with any concurrent alert verdict by `hooks/lib/supervisor-guard/arbitrate.js` (rule table: BLOCK wins, WARN aggregates, otherwise allow) before the Stop hook emits a single block-or-allow decision.
+Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `state.audit.audit_verdict`, written via `bin/supervisor-write-audit-verdict`. The verdict is combined with any concurrent alert verdict by `hooks/supervisor-guard/arbitrate.js` (rule table: BLOCK wins, WARN aggregates, otherwise allow) before the Stop hook emits a single block-or-allow decision.
 
 **Lifecycle (two-phase):** *arm* — Stop hook detects trigger, writes `audit_phase=pending` + `audit_armed_at` + `audit_cause`, then blocks with a prompt to invoke the audit agent. *surface* — the agent runs, writes `audit_phase=done` + `audit_verdict`; the next Stop event reads the verdict, surfaces it through `arbitrate()`, then clears `audit_phase=null` so the next stage boundary can re-arm. Anti-thrash: `incrementAuditRetryCount` auto-freezes the session after `AUDIT_RETRY_THRESHOLD` (2) consecutive failures. Alert and audit freeze independently.
 
@@ -112,7 +112,7 @@ The file is directly inspectable for debugging.
 
 Helper modules: `hooks/lib/supervisor-finding-status.js` and `hooks/lib/codex-review-parse.js`.
 
-**Trigger collector:** `hooks/lib/supervisor-guard/collect-audit-triggers.js` — pure function for audit mode trigger detection (stage-boundary + severity-threshold). Uses `AUDIT_SEVERITY_THRESHOLD` constant.
+**Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — pure function for audit mode trigger detection (stage-boundary + severity-threshold). Uses `AUDIT_SEVERITY_THRESHOLD` constant.
 
 **"escalation" terminology abolished:** The three concepts previously unified as "escalation" are now distinct: (1) **severity-threshold** — `AUDIT_SEVERITY_THRESHOLD` level check (`cumulative_severity === "error"`); (2) **recurrence-patterns** — same failure mode across multiple alert reviews (detected by audit mode); (3) **arming** — `ensureAlertScheduled` / `audit_armed_at` set.
 

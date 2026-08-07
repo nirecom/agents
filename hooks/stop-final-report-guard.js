@@ -129,7 +129,7 @@ if (require.main === module) {
     sessionIdFromInput: input.session_id,
     transcriptPath: input.transcript_path,
   });
-  if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)) process.exit(0);
+  if (!sid) process.exit(0);
 
   const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
   let plansDir;

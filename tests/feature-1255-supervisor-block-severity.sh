@@ -39,8 +39,8 @@ EMIT="$AGENTS_DIR/hooks/lib/supervisor-emit.js"
 EMIT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-emit.js"
 WRITER="$AGENTS_DIR/hooks/lib/supervisor-state-writer.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-COLLECT="$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js"
-COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/collect-audit-triggers.js"
+COLLECT="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
+COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0
 FAIL=0

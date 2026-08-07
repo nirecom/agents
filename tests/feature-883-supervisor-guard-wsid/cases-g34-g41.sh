@@ -322,8 +322,10 @@ run_g47() {
     tmp="$(mktemp -d)"
     sid="g47-sid"
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "C2 scheduled review"; then
@@ -344,9 +346,13 @@ run_g48() {
     printf "CLAUDE_SESSION_ID=%s\n" "$wsid" > "$env_file"
     touch "$tmp/${wsid}-intent.md"
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) also requires isWorkflowStarted(sessionId). resolveSessionId
+    # Priority 1 (ctx.sessionIdFromInput) resolves to $sid here since input.session_id
+    # is present and valid, so isWorkflowStarted is evaluated against $sid — seed it there.
+    seed_workflow_started "$tmp" "$sid"
     # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_ENV_FILE.
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_ENV_FILE="$env_file" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" CLAUDE_ENV_FILE="$env_file" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"; rm -f "$env_file"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then

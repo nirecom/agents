@@ -22,8 +22,8 @@ CLI_L2="$AGENTS_DIR/bin/supervisor-write-alert"
 CLI_L3="$AGENTS_DIR/bin/supervisor-write-audit"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/collect-audit-triggers.js"
-COLLECT_L3_FILE="$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js"
+COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
+COLLECT_L3_FILE="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

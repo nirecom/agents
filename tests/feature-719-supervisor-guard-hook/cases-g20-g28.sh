@@ -89,12 +89,13 @@ run_g22() {
     local tmp out1 rc1 out2 rc2
     tmp="$(mktemp -d)"
     seed_state_with_retry "$tmp" "g22-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 0
+    seed_workflow_init_complete "$tmp" "g22-sid"
     out1=$(echo '{"stop_hook_active":false,"session_id":"g22-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc1=$?
     # Second invocation: state still has l2_armed_at, retry_count should have been incremented to 1
     out2=$(echo '{"stop_hook_active":false,"session_id":"g22-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc2=$?
     rm -rf "$tmp"
     if [ $rc1 -eq 2 ] && ( echo "$out1" | grep -qi "block" ) && [ $rc2 -eq 0 ]; then
