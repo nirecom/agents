@@ -14,6 +14,16 @@ WD-4. Read the rendered contract from the command's stdout. Exit 0 always accomp
 
 WD-5. One dispatch call acts on exactly one repository. For a sibling repo, re-run WD-1 against that repo and dispatch again.
 
+## Naming
+
+Name the form on every dispatch line — the three kinds are spawned by different mechanisms, and an unmarked name leaves the reader guessing which one runs.
+
+- Plain-script worker (this protocol): put the word worker next to the name — the `doc-append` worker.
+- LLM subagent (Task tool, `agents/<name>.md`): put the word subagent next to the name — the `skip-verifier` subagent.
+- Skill (`skills/<name>/SKILL.md`): use the slash form — /commit-push.
+
+Carry exactly one marker per line; two markers are as ambiguous as none.
+
 ## Rules
 
 - Never add a redirect, pipe, `&&`, `;`, `cd`, env prefix, or `$VAR` to the WD-3 command — `enforce-worktree` sanctions only the bare canonical form, and any addition makes it a blocked write from the main worktree.

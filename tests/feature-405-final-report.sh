@@ -629,10 +629,10 @@ test_I13_detect_restart_rules_reason() {
            env PATH="$mock_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
            bash "$detect_sh" "999" 2>/dev/null)"
 
-    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)'; then
-        pass "I13: detect-restart.sh rules/ file → cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)"
+    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)'; then
+        pass "I13: detect-restart.sh rules/ file → cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)"
     else
-        fail "I13: expected 'cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)', got:
+        fail "I13: expected 'cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)', got:
 $out"
     fi
 }

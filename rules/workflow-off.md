@@ -60,3 +60,5 @@ Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"` to restore enforcement. This
 WORKFLOW_OFF is session-scoped: only the current Claude Code session (identified by its session ID) is affected. Other concurrent sessions remain at full enforcement.
 
 WORKFLOW_OFF subsumes WORKTREE_OFF: when WORKFLOW_OFF is active, `enforce-worktree.js` is also bypassed. Emitting both sentinels is redundant — use WORKFLOW_OFF alone.
+
+WORKTREE_OFF-specific detail (its own sentinels, bypass scope, and when to prefer it) lives in `rules/worktree.md` "Session-scoped escape hatch (WORKTREE_OFF)".
