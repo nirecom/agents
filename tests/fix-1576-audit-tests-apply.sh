@@ -3,14 +3,19 @@
 # Tags: TL2, scope:issue-specific, fix-1576-test-frontmatter
 #
 # TL2 test of the #1576 --apply feature in audit-tests.sh. --apply performs a
-# real `git rm` of a deletion candidate, but ONLY when every # Tests: token is
-# format-OK (A-flag=false) AND path-deleted-with-no-rename (C), and the issue
-# is CLOSED with closed_at older than the staleness cutoff. Uses a mocked gh
-# CLI on PATH so no network is touched. --apply on audit-tests-common.sh is
-# unsupported (no deletion).
+# real `git rm` of a deletion candidate. Uses a mocked gh CLI on PATH so no
+# network is touched.
 #
-# Fail-before-fix: --apply does not exist yet. Every TC below is EXPECTED TO
-# FAIL until #1576 write-code lands the feature.
+# Revised for #1833: candidacy is decided by TARGET SURVIVAL (every # Tests:
+# token format-OK, missing, and not renamed), and the issue's state is only a
+# delete-time gate. Consequences for the cases below:
+#   - a prose/A-flag header is undecidable, so it is neither a candidate nor a
+#     deletion — and the retired SKIP_DELETE_HAS_A_OR_B label is gone;
+#   - a resolvable rename means the target is ALIVE, so the file is not a
+#     candidate at all;
+#   - a recently-closed issue no longer suppresses the candidate, it only holds
+#     the deletion (SKIP_DELETE_ISSUE_ACTIVE);
+#   - --apply on audit-tests-common.sh is now supported and does delete.
 #
 # TL3 gap (what this test does NOT catch):
 # - Real pre-commit hook firing via actual git commit attempt
@@ -111,7 +116,7 @@ run_apply() {
 }
 
 OLD_CLOSED_AT="2020-01-01T00:00:00Z"
-TODAY_CLOSED_AT="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c "import datetime;print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")"
+TODAY_CLOSED_AT="$(date +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || uv run python -c "import datetime;print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")"
 
 # --- Cases -----------------------------------------------------------------
 
@@ -134,17 +139,25 @@ else
 fi
 rm -rf "$R1"
 
-# TC2: A-flag present (bracket annotation) => --apply must NOT delete
+# TC2: prose / A-flag header is UNDECIDABLE — never a candidate, never deleted,
+# and reported on the diagnostics channel rather than as a skipped deletion.
 R2="$(make_fixture '# Tests: bin/gone.sh (annotation)')"
 run_apply "$R2" closed "$OLD_CLOSED_AT" "$AUDIT" --apply
-if [[ -f "$R2/tests/feature-1576-target.sh" && "$OUT$ERR" == *"SKIP_DELETE_HAS_A_OR_B"* ]]; then
-  pass "TC2 A-flag blocks --apply deletion (SKIP_DELETE_HAS_A_OR_B)"
+if [[ -f "$R2/tests/feature-1576-target.sh" && "$OUT" != *"CANDIDATE"* \
+      && "$OUT$ERR" == *"MALFORMED_HEADER"* ]]; then
+  pass "TC2 prose header is reported MALFORMED_HEADER, is no candidate, is not deleted"
 else
-  fail "TC2 A-flag blocks --apply deletion (SKIP_DELETE_HAS_A_OR_B)" "rc=$RC exists=$([[ -f "$R2/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
+  fail "TC2 prose header is reported MALFORMED_HEADER, is no candidate, is not deleted" "rc=$RC exists=$([[ -f "$R2/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
+fi
+if [[ "$OUT$ERR" != *"SKIP_DELETE_HAS_A_OR_B"* ]]; then
+  pass "TC2b retired SKIP_DELETE_HAS_A_OR_B label is no longer emitted"
+else
+  fail "TC2b retired SKIP_DELETE_HAS_A_OR_B label is no longer emitted" "out=<<$OUT>> err=<<$ERR>>"
 fi
 rm -rf "$R2"
 
-# TC3: B-flag present (renamed path resolvable) => --apply must NOT delete
+# TC3: renamed path resolvable => the target is ALIVE, so the file is not a
+# candidate and is never deleted.
 R3="$(mktemp -d)"
 git -C "$R3" init -q
 git -C "$R3" config core.hooksPath /dev/null 2>/dev/null || true
@@ -164,26 +177,30 @@ GIT_AUTHOR_DATE="2020-01-02T00:00:00" GIT_COMMITTER_DATE="2020-01-02T00:00:00" g
 git -C "$R3" add -A >/dev/null 2>&1
 GIT_AUTHOR_DATE="2020-01-03T00:00:00" GIT_COMMITTER_DATE="2020-01-03T00:00:00" git -C "$R3" commit -q --no-verify -m disp >/dev/null 2>&1
 run_apply "$R3" closed "$OLD_CLOSED_AT" "$AUDIT" --apply
-if [[ -f "$R3/tests/feature-1576-target.sh" && "$OUT$ERR" == *"SKIP_DELETE_HAS_A_OR_B"* ]]; then
-  pass "TC3 B-flag blocks --apply deletion (SKIP_DELETE_HAS_A_OR_B)"
+if [[ -f "$R3/tests/feature-1576-target.sh" && "$OUT" != *"CANDIDATE"* \
+      && "$OUT$ERR" != *"DELETED: tests/feature-1576-target.sh"* ]]; then
+  pass "TC3 resolvable rename counts as survival: no candidate, no deletion"
 else
-  fail "TC3 B-flag blocks --apply deletion (SKIP_DELETE_HAS_A_OR_B)" "rc=$RC exists=$([[ -f "$R3/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
+  fail "TC3 resolvable rename counts as survival: no candidate, no deletion" "rc=$RC exists=$([[ -f "$R3/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
 fi
 rm -rf "$R3"
 
-# TC4: all-C but issue closed_at within cutoff => not a CANDIDATE, not deleted
+# TC4: all targets gone but the issue closed only moments ago => still a
+# CANDIDATE (survival decides candidacy), deletion HELD by the issue gate.
 R4="$(make_fixture '# Tests: bin/gone.sh')"
 run_apply "$R4" closed "$TODAY_CLOSED_AT" "$AUDIT" --apply
-if [[ -f "$R4/tests/feature-1576-target.sh" && "$OUT" != *"CANDIDATE"* ]]; then
-  pass "TC4 recently-closed all-C is not a candidate, not deleted"
+if [[ -f "$R4/tests/feature-1576-target.sh" && "$OUT" == *"CANDIDATE"* \
+      && "$OUT$ERR" == *"SKIP_DELETE_ISSUE_ACTIVE"* ]]; then
+  pass "TC4 recently-closed issue holds the deletion but not the candidacy"
 else
-  fail "TC4 recently-closed all-C is not a candidate, not deleted" "rc=$RC exists=$([[ -f "$R4/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>>"
+  fail "TC4 recently-closed issue holds the deletion but not the candidacy" "rc=$RC exists=$([[ -f "$R4/tests/feature-1576-target.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
 fi
 rm -rf "$R4"
 
-# TC5: audit-tests-common.sh --apply => unsupported / no-op, no deletion
+# TC5: audit-tests-common.sh --apply => supported; a common-scope file whose
+# name carries no issue reference passes the delete gate (ok-no-issue-ref).
 if [[ ! -f "$AUDIT_COMMON" ]]; then
-  fail "TC5 audit-tests-common.sh --apply no-op" "script not found: $AUDIT_COMMON"
+  fail "TC5 audit-tests-common.sh --apply deletes an orphan" "script not found: $AUDIT_COMMON"
 else
   R5="$(mktemp -d)"
   git -C "$R5" init -q
@@ -199,12 +216,15 @@ else
   git -C "$R5" add -A >/dev/null 2>&1
   git -C "$R5" commit -q --no-verify -m init >/dev/null 2>&1
   run_apply "$R5" closed "$OLD_CLOSED_AT" "$AUDIT_COMMON" --apply
-  # --apply must not delete on the common script. Either it rejects the flag
-  # (rc=2) or ignores it, but the file must survive.
-  if [[ -f "$R5/tests/check-orphan.sh" ]]; then
-    pass "TC5 audit-tests-common.sh --apply does not delete"
+  if [[ ! -f "$R5/tests/check-orphan.sh" && "$OUT$ERR" == *"DELETED: tests/check-orphan.sh"* ]]; then
+    pass "TC5 audit-tests-common.sh --apply deletes an orphan with no issue reference"
   else
-    fail "TC5 audit-tests-common.sh --apply does not delete" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
+    fail "TC5 audit-tests-common.sh --apply deletes an orphan with no issue reference" "rc=$RC exists=$([[ -f "$R5/tests/check-orphan.sh" ]] && echo yes || echo no) out=<<$OUT>> err=<<$ERR>>"
+  fi
+  if [[ "$RC" -ne 2 || "$ERR" != *"--apply is not supported"* ]]; then
+    pass "TC5b --apply is no longer rejected by audit-tests-common.sh"
+  else
+    fail "TC5b --apply is no longer rejected by audit-tests-common.sh" "rc=$RC err=<<$ERR>>"
   fi
   rm -rf "$R5"
 fi
