@@ -38,6 +38,7 @@ Receive a JSON object with:
 6. Write verdict JSON (schema v2) to `$artifact_dir/<session_id or timestamp>-issue-create-survey.json`. Every key below is always present — never omit a key, write the default instead (`target`: `null`; `children` / `related` / `relation_errors`: `[]`).
    `{ "schema_version": 2, "proposal": { "title": "...", "background": "...", "changes": "..." }, "verdict": "none|reopen|sub-of|make-parent|sibling", "target": null_or_integer, "children": [], "related": [], "reason": "<one sentence>", "relations_mode": "batched|partial|unavailable", "relation_errors": [], "candidates": [ { "number": N, "title": "...", "state": "open|closed", "labels": [], "body": "...", "relation_status": "resolved|unresolved", "parent_number": null_or_integer, "parent_is_meta": false, "has_sub_issues": false } ] }`
    `proposal` carries the Input contract values verbatim. `target` is a candidate number, or a candidate's parent number for IC-C2. `relation_errors` lists the unresolved candidate numbers. `candidates` lists all issues inspected (up to 25) merged with the relation array from step 4.
+   Lowercase each candidate's `state` — `gh` returns `OPEN`/`CLOSED`, the canonical form is `open`/`closed`.
 
 7. Immediately restrict the file to its owner: `chmod 600 <artifact_path>` (failure is non-fatal). It holds full issue bodies from a possibly private repo, in a directory shared by every session.
 
