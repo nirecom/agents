@@ -49,10 +49,20 @@ MOCK
 chmod +x "$MOCKDIR/codex"
 
 # --- survey artifact fixtures (schema v2). CAND = {10, 11}; PARENTS = {99} -------
-write_artifact() {  # <path> <survey-verdict> <survey-target> [--no-proposal]
-    local path="$1" v="$2" t="$3" noprop="${4:-}"
+write_artifact() {  # <path> <survey-verdict> <survey-target> [--no-proposal] [--upper-state]
+    local path="$1" v="$2" t="$3"; shift 3
     local proposal='"proposal": { "title": "Fix the flaky provenance hook", "background": "BG text", "changes": "CH text" },'
-    [ "$noprop" = "--no-proposal" ] && proposal=''
+    # Default casing is the lowercase the artifact schema is written in. --upper-state
+    # reproduces what `gh issue view --json state` actually answers (#1862), so a
+    # fixture built the way a real survey builds one can be exercised end-to-end.
+    local S_OPEN="open" S_CLOSED="closed"
+    local flag
+    for flag in "$@"; do
+        case "$flag" in
+            --no-proposal) proposal='' ;;
+            --upper-state) S_OPEN="OPEN"; S_CLOSED="CLOSED" ;;
+        esac
+    done
     cat > "$path" <<JSON
 { "schema_version": 2,
   $proposal
@@ -60,9 +70,9 @@ write_artifact() {  # <path> <survey-verdict> <survey-target> [--no-proposal]
   "reason": "survey reason",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
-    { "number": 10, "title": "c10", "state": "open", "labels": [], "body": "b10",
+    { "number": 10, "title": "c10", "state": "$S_OPEN", "labels": [], "body": "b10",
       "relation_status": "resolved", "parent_number": 99, "parent_is_meta": true, "has_sub_issues": false },
-    { "number": 11, "title": "c11", "state": "closed", "labels": [], "body": "b11",
+    { "number": 11, "title": "c11", "state": "$S_CLOSED", "labels": [], "body": "b11",
       "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false }
   ] }
 JSON
@@ -108,8 +118,13 @@ assert_case() {  # <label> <want-review_result> <want-final-verdict>
 ART_NONE="$WORK/survey-none.json";     write_artifact "$ART_NONE"   none   null
 ART_REOPEN="$WORK/survey-reopen.json"; write_artifact "$ART_REOPEN" reopen 10
 ART_NOPROP="$WORK/survey-noprop.json"; write_artifact "$ART_NOPROP" none   null --no-proposal
+# Uppercase-state counterparts of ART_NONE / ART_REOPEN (#1862) — same survey verdicts,
+# only the candidate `state` casing differs.
+ART_NONE_UPPER="$WORK/survey-none-upper.json";     write_artifact "$ART_NONE_UPPER"   none   null --upper-state
+ART_REOPEN_UPPER="$WORK/survey-reopen-upper.json"; write_artifact "$ART_REOPEN_UPPER" reopen 10   --upper-state
 
 REVIEW_REOPEN='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same root cause as #10","worth_filing":true}'
+REVIEW_REOPEN_11='{"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause as #11","worth_filing":true}'
 REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true}'
 REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate","worth_filing":true}'
 
@@ -226,6 +241,39 @@ else
     else
         pass "G-noproposal-codex-not-called"
     fi
+fi
+
+echo ""
+echo "=== (h) uppercase gh state → the review actually runs ==="
+# `gh issue view --json state` answers OPEN/CLOSED, so this is the casing every
+# artifact built from real gh output carries. The artifact gate runs before any
+# per-verdict logic, so rejecting that casing does not merely mis-handle reopen —
+# it fails the whole wrapper ("FAILED — candidate #10: state must be open or
+# closed") and folds every review to invalid, whatever the reviewer said.
+run_review h1 "$ART_NONE_UPPER" "$REVIEW_REOPEN_11"
+assert_case "H1-uppercase-escalation" "replaced" "reopen"
+if [ "$RS_PRESENT" = "yes" ]; then
+    # #11 is the CLOSED candidate: it surviving the allowlist and landing as the
+    # reopen target is the whole point of the fix.
+    T=$(final_q "d.target"); [ "$T" = "11" ] && pass "H1-uppercase-target-carried" \
+        || fail "H1-uppercase-target-carried" "an uppercase-CLOSED candidate must be usable as the reopen target (got: $T)"
+    T=$(final_q "d.review && d.review.status"); [ "$T" = "replaced" ] && pass "H1-uppercase-review-status" \
+        || fail "H1-uppercase-review-status" "review.status must record the fold (got: $T)"
+    printf '%s' "$FIRST" | grep -q '^## Issue Verdict Review: PERFORMED' && pass "H1-uppercase-first-line-performed" \
+        || fail "H1-uppercase-first-line-performed" "the review must actually run, not fail on state casing (got: '$FIRST')"
+else
+    red "H1-uppercase-target-carried"; red "H1-uppercase-review-status"; red "H1-uppercase-first-line-performed"
+fi
+
+# Agreement counterpart (CPR-ORTH): the same casing must not push an agreeing
+# review into a replacement either.
+run_review h2 "$ART_REOPEN_UPPER" "$REVIEW_REOPEN"
+assert_case "H2-uppercase-agreement" "upheld" "reopen"
+if [ "$RS_PRESENT" = "yes" ]; then
+    T=$(final_q "d.review && d.review.status"); [ "$T" = "upheld" ] && pass "H2-uppercase-review-status" \
+        || fail "H2-uppercase-review-status" "review.status must be 'upheld' when the reviewer agrees (got: $T)"
+else
+    red "H2-uppercase-review-status"
 fi
 
 echo ""
