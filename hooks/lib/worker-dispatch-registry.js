@@ -68,6 +68,12 @@ const CHILD_ENV_ALLOWLIST = [
   // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
   "APPDATA",
+  // Windows OpenSSH.exe expands %ProgramData% internally for its default
+  // ssh_known_hosts2 path; without it the native client exits 255 with no
+  // output before attempting host-key or key auth, so git push/fetch over
+  // ssh fails as "Could not read from remote repository" for every worker.
+  "ProgramData",
+  "PROGRAMDATA",
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
