@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: agents/supervisor.md (closed-issue UNAVAILABLE guard)
+# Tests: agents/supervisor.md
 # Tags: supervisor, em-supervisor, supervisor-md, fix-1160, scope:issue-specific
 # RED for issue #1160.
 #

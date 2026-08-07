@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/supervisor-guard.js (branch 2 cumSev=error alert_phase guard)
+# Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, fix-955, scope:issue-specific
 # RED for issue #955.
 #

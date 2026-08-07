@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # filename: tests/fix-1681-veto-derivation.sh
-# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/lib/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
+# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
 #
 # #1681: a recorded outline skip_verdict=veto never de-skips the step, so

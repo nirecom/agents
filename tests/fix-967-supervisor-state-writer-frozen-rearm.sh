@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/supervisor-state-writer.js (ensureAlertScheduled paused re-arm; validateAlertPhaseTransition)
+# Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, layer2, writer, fix-967, paused, scope:issue-specific
 # RED for issue #967 (updated for #1166 frozen->paused rename).
 #

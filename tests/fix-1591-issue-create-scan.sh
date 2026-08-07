@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1591-issue-create-scan.sh
-# Tests: bin/github-issues/issue-create.sh scan guard on title/body/body-file before gh
+# Tests: bin/github-issues/issue-create.sh
 # Tags: github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
 #
 # Issue #1591 — issue-create.sh composes $TITLE + (body-file contents or $BODY)

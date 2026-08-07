@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-bin-tool-allow.sh
-# Tests: hooks/enforce-worktree.js — supervisor bin tool allow-list (#1422)
+# Tests: hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, supervisor, scope:common
 #
 # Verifies that supervisor bin tool invocations (bash "$AGENTS_CONFIG_DIR/bin/supervisor-*")

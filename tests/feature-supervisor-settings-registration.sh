@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-settings-registration.sh
-# Tests: settings.json PreToolUse hook registration for supervisor-off-proposal-shim.js
+# Tests: settings.json
 # Tags: supervisor, em-supervisor, settings-registration, scope:issue-specific, hook-registration, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - The shim actually firing in a live Claude Code session (requires real claude -p)

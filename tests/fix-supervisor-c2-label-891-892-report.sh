@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-supervisor-c2-label-891-892-report.sh
-# Tests: bin/supervisor-report (post-Final-Report guard integration)
+# Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, layer2, fix, integration
 # RED for issue #891 (bin/supervisor-report post-Final-Report behavior).
 

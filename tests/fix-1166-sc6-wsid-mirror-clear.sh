@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: skills/session-close/SKILL.md (SC-6 wsid mirror-clear)
+# Tests: skills/session-close/SKILL.md
 # Tags: supervisor, em-supervisor, session-close, sc6, wsid, fix-1166, scope:issue-specific
 # RED for issue #1166.
 #

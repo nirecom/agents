@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1591-intent-to-issue.sh
-# Tests: bin/github-issues/lib/intent-to-issue.sh intent_extract_title / intent_extract_body
+# Tests: bin/github-issues/lib/intent-to-issue.sh
 # Tags: intent, github, issues, scan-outbound, scope:issue-specific, layer:TL2
 #
 # Issue #1591 — extract a clean Title + Body from a session intent.md for issue

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1591-clarify-commit-scope-intent-body.sh
-# Tests: bin/github-issues/clarify-commit-scope.sh Path C intent->issue body + scan guard
+# Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
 #
 # Issue #1591 — clarify-commit-scope Path C composes the intent Title+Body into a

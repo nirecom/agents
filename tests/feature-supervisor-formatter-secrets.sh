@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-formatter-secrets.sh
-# Tests: hooks/lib/supervisor-report-format.js — secret-leakage prevention for summary-only output
+# Tests: hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, formatter, secrets, security, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - The formatter running inside a real Claude Code session block reason displayed to user
