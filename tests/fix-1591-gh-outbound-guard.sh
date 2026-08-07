@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1591-gh-outbound-guard.sh
-# Tests: bin/lib/gh-outbound-guard.sh gh_outbound_guard rc->return mapping + message + var propagation
+# Tests: bin/lib/gh-outbound-guard.sh
 # Tags: scan-outbound, security, gh, guard, scope:issue-specific, layer:TL1
 #
 # Issue #1591 — shared fail-closed outbound-scan guard for scripts that call gh

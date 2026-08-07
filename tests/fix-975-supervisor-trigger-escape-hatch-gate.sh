@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/supervisor-trigger.js (escape-hatch arm finding-presence gate)
+# Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, layer2, trigger, posttooluse, fix-975, scope:issue-specific
 # RED for issue #975.
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1591-gh-outbound-guard-integration.sh
-# Tests: bin/lib/gh-outbound-guard.sh against the REAL bin/scan-outbound.sh scanner
+# Tests: bin/lib/gh-outbound-guard.sh
 # Tags: scan-outbound, security, gh, guard, integration, scope:issue-specific, layer:TL2
 #
 # Issue #1591 — end-to-end guard behavior over the real scanner: hard patterns

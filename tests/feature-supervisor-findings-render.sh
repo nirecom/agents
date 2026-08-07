@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-findings-render.sh
-# Tests: hooks/lib/supervisor-findings-render.js, hooks/lib/supervisor-report-format.js (CONV_LANG symmetric)
+# Tests: hooks/lib/supervisor-findings-render.js, hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, findings-render, conv-lang, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - formatLayer2Findings rendered inside a real Claude Code Final Report block

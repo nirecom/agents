@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-shim-injection.sh
-# Tests: hooks/supervisor-off-proposal-shim.js adversarial injection cases
+# Tests: hooks/supervisor-off-proposal-shim.js
 # Tags: supervisor, em-supervisor, shim, injection, adversarial, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - The shim firing as a real PreToolUse hook inside a live claude -p session

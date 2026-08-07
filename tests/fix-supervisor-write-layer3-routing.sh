@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-supervisor-write-layer3-routing.sh
-# Tests: bin/supervisor-write-layer3
+# Tests: bin/supervisor-write-audit
 # Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - real Claude Code Stop event firing — tests invoke CLI directly, not via hook registration

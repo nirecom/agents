@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-scope-drift-audit-p2.sh
-# Tests: hooks/workflow-gate.js (checkSupervisorPreMerge Path ii), hooks/lib/supervisor-state-writer.js
+# Tests: hooks/workflow-gate.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, workflow-gate, scope-drift, audit, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):
 # - workflow-gate.js firing as a real PreToolUse hook (hook registration via settings.json)

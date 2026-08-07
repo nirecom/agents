@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-525-orphan-cwd-bash-c-bypass.sh
-# Tests: hooks/enforce-worktree.js Change ④ (lines 358-368)
+# Tests: hooks/enforce-worktree.js
 # Tags: enforce-worktree, orphan-cwd, bash-c, fail-closed, issue-525
 #
 # Change ④: when repoRoot is null (non-git CWD or parseFailure) and toolName is

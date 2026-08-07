@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-feat-928-supervisor-report-format.sh
-# Tests: hooks/lib/supervisor-report-format.js (formatter module) + supervisor-guard.js integration
+# Tests: hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, format, display
 
 # L3 gap (what this test suite does NOT catch):

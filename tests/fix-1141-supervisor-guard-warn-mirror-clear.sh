@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/supervisor-guard.js (Phase B WARN path alert_armed_at mirror-clear)
+# Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, dual-store, fix-1141, scope:issue-specific
 # RED for issue #1141.
 #
