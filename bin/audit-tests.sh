@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# audit-tests.sh — Staleness checker for issue-specific test files.
+# audit-tests.sh — Retire checker for issue-specific test files.
 #
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
 #                           [--format text|json] [--fix-headers]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error
 #
-# Writes by default: a flagless run DELETES stale candidates (git rm), and
+# Writes by default: a flagless run DELETES candidates (git rm), and
 # --fix-headers rewrites headers in place. Pass --dry-run to report only.
 #
-# Scans top-level tests/feature-NNN-*.sh files. For each, locates the optional
-# sibling tests/<stem>/ folder, computes MAX last-commit date across both,
-# and (when online) checks the matching GitHub issue's state. Files whose
-# issue is CLOSED and whose issue's closed_at is older than N months (default 3)
-# are reported as deletion candidates.
+# Scans top-level tests/feature-NNN-*.sh. A file becomes a CANDIDATE when every
+# path in its `# Tests:` header is gone (target survival) — the issue's state is
+# NOT part of that filter. Issue metadata is consulted only at deletion time:
+# a candidate whose issue is open, recently closed, or unreadable is reported
+# and kept (SKIP_DELETE_*). A file plus its sibling tests/<stem>/ folder is one
+# retire unit. Malformed and missing headers are reported as diagnostics.
 
 set -euo pipefail
 
@@ -21,6 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
 # shellcheck source=lib/test-frontmatter-fix.sh
 source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+# shellcheck source=lib/test-retire-predicate.sh
+source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 
@@ -28,6 +31,7 @@ STALE_MONTHS=3
 OFFLINE=0
 FORMAT=text
 FIX_HEADERS=0
+FIX_APPLY=0
 sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
@@ -40,33 +44,21 @@ while [[ $# -gt 0 ]]; do
       STALE_MONTHS="$2"
       shift 2
       ;;
-    --offline)
-      OFFLINE=1
-      shift
-      ;;
-    --fix-headers)
-      FIX_HEADERS=1
-      shift
-      ;;
-    --apply)
-      # Backward-compatible synonym of the flagless default.
-      sweep_write_mode_apply
-      shift
-      ;;
-    --dry-run)
-      sweep_write_mode_dry_run
-      shift
-      ;;
+    --offline) OFFLINE=1; shift ;;
+    --fix-headers) FIX_HEADERS=1; shift ;;
+    --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
+    --dry-run) sweep_write_mode_dry_run; shift ;;
     --format)
       if [[ $# -lt 2 ]]; then
-        echo "ERROR: --format requires an argument" >&2
+        echo "ERROR: --format requires an argument (text|json)" >&2
         exit 2
       fi
       FORMAT="$2"
       shift 2
       ;;
     -h|--help)
-      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+      sweep_write_mode_usage_lines
       exit 0
       ;;
     *)
@@ -77,212 +69,175 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$FORMAT" != "text" && "$FORMAT" != "json" ]]; then
-  echo "ERROR: --format must be text or json" >&2
+  echo "ERROR: --format must be text or json (got: $FORMAT)" >&2
+  exit 2
+fi
+if [[ ! "$STALE_MONTHS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --stale-months must be a non-negative integer (got: $STALE_MONTHS)" >&2
   exit 2
 fi
 
-if ! [[ "$STALE_MONTHS" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: --stale-months must be a non-negative integer" >&2
-  exit 2
-fi
-
-# Resolve repo root via git.
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -z "$REPO_ROOT" ]]; then
-  echo "ERROR: not inside a git repository" >&2
+# Fail closed: with apply-by-default, an unresolvable repo root must delete
+# nothing rather than operate against whatever tests/ the CWD happens to expose.
+if ! REPO_ROOT="$(trp_require_repo_root)"; then
+  echo "ERROR: not inside a git repository — cannot resolve the repo root" >&2
   exit 2
 fi
 cd "$REPO_ROOT"
-
 if [[ ! -d tests ]]; then
-  echo "ERROR: tests/ directory not found at repo root" >&2
+  echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
   exit 2
 fi
 
-# Compute cutoff date (ISO YYYY-MM-DD). Prefer GNU date -d; fall back to python.
-CUTOFF_DAYS=$(( STALE_MONTHS * 30 ))
-CUTOFF_DATE=""
-if date -d "${CUTOFF_DAYS} days ago" +%Y-%m-%d >/dev/null 2>&1; then
-  CUTOFF_DATE="$(date -d "${CUTOFF_DAYS} days ago" +%Y-%m-%d)"
-else
-  CUTOFF_DATE="$(uv run python -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=${CUTOFF_DAYS})).isoformat())")"
-fi
-
 TODAY="$(date +%Y-%m-%d)"
+trp_compute_cutoff "$STALE_MONTHS" >/dev/null
+CUTOFF_DATE="$TRP_CUTOFF_DATE"
+TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 
-# Determine repo OWNER/NAME for gh api.
-REPO_SLUG=""
-GH_OK=0
-if [[ "$OFFLINE" -eq 0 ]]; then
-  if command -v gh >/dev/null 2>&1; then
-    if REPO_SLUG="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null)"; then
-      GH_OK=1
-    else
-      echo "WARNING: gh repo view failed — falling back to offline mode" >&2
-      OFFLINE=1
+# ── header-repair mode is a separate job, not part of the retire pass ────────
+if [[ "$FIX_HEADERS" -eq 1 ]]; then
+  for dispatcher in tests/feature-[0-9]*-*.sh; do
+    [[ -e "$dispatcher" ]] || continue
+    _fix_headers_report "$dispatcher"
+    if [[ "$APPLY" -eq 1 && "$FIX_APPLY" -eq 1 ]]; then
+      _fix_headers_apply "$dispatcher"
     fi
-  else
-    echo "WARNING: gh CLI not found — falling back to offline mode" >&2
-    OFFLINE=1
-  fi
+  done
+  exit 0
 fi
 
-# Header.
+trp_init_gh "$OFFLINE"
+OFFLINE="$TRP_OFFLINE"
+
+DIAG_FILES=()
+DIAG_KINDS=()
+CANDIDATES=()
+DELETE_FAILED=0
+JSON_ITEMS=()
+
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests.sh report — ${TODAY}"
-  echo "# Criteria: feature-NNN-* pattern, issue CLOSED, issue's closed_at older than ${STALE_MONTHS} months (cutoff ${CUTOFF_DATE})"
+  echo "# Scope: top-level tests/feature-<N>-*.sh (issue-specific)"
+  echo "# Criteria: every '# Tests:' target is missing — issue state gates deletion only"
+  echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
-    echo "# Mode: OFFLINE (issue-state checks skipped — no candidates will be emitted)"
+    echo "# Mode: OFFLINE (candidates are still reported; deletion of issue-referencing files is held)"
   fi
   echo ""
 fi
 
-CANDIDATES=()
-JSON_ITEMS=()
-
-shopt -s nullglob
 for dispatcher in tests/feature-[0-9]*-*.sh; do
+  [[ -e "$dispatcher" ]] || continue
   base="$(basename "$dispatcher")"
-  # Extract issue number: first numeric run after "feature-".
-  if [[ ! "$base" =~ ^feature-([0-9]+)- ]]; then
-    continue
-  fi
+  [[ "$base" =~ ^feature-([0-9]+)- ]] || continue
   issue_num="${BASH_REMATCH[1]}"
-  stem="${base%.sh}"
-  sibling="tests/${stem}"
 
-  # --fix-headers mode: report (or, with --apply, rewrite) the # Tests: header
-  # for every dispatcher regardless of staleness. Deletion staleness logic is
-  # skipped in this mode.
-  if [[ "$FIX_HEADERS" -eq 1 ]]; then
-    _fix_headers_report "$dispatcher"
-    if [[ "$APPLY" -eq 1 ]]; then
-      _fix_headers_apply "$dispatcher"
-    fi
-    continue
-  fi
+  # Primary filter: does the target still survive? (never the issue's state)
+  trp_survival_verdict "$REPO_ROOT" "$dispatcher" >/dev/null
+  verdict="$TRP_VERDICT"
 
-  # Validate # Tests: header (warn if listed path missing).
-  tests_header="$(grep -m1 -E '^# Tests:' "$dispatcher" 2>/dev/null || true)"
-  if [[ -n "$tests_header" ]]; then
-    paths_csv="${tests_header#\# Tests:}"
-    paths_csv="${paths_csv# }"
-    IFS=',' read -r -a paths_arr <<< "$paths_csv"
-    for p in "${paths_arr[@]}"; do
-      p_trim="$(echo "$p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-      [[ -z "$p_trim" ]] && continue
-      if [[ ! -e "$p_trim" ]]; then
-        echo "WARNING: ${dispatcher}: # Tests: path missing: ${p_trim}" >&2
-      fi
-    done
-  fi
+  case "$verdict" in
+    malformed)
+      DIAG_FILES+=("$dispatcher"); DIAG_KINDS+=("malformed_header")
+      if [[ "$FORMAT" == "text" ]]; then echo "MALFORMED_HEADER: ${dispatcher}"; fi
+      continue
+      ;;
+    no-header)
+      DIAG_FILES+=("$dispatcher"); DIAG_KINDS+=("no_tests_header")
+      if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${dispatcher}"; fi
+      continue
+      ;;
+    orphan) ;;
+    *) continue ;;
+  esac
 
-  # Last-commit date for dispatcher.
+  trp_unit_of "$REPO_ROOT" "$dispatcher"
+  sibling="$TRP_SIBLING"
+  sib_count="$TRP_SIBLING_COUNT"
+  unit_paths=("${TRP_UNIT_PATHS[@]}")
+
   disp_date="$(git log -1 --format=%cd --date=short -- "$dispatcher" 2>/dev/null || true)"
-  [[ -z "$disp_date" ]] && disp_date="0000-00-00"
+  sib_date=""
+  if [[ -n "$sibling" ]]; then
+    sib_date="$(git log -1 --format=%cd --date=short -- "$sibling" 2>/dev/null || true)"
+  fi
+  last_commit="$disp_date"
+  if [[ -n "$sib_date" && "$sib_date" > "$last_commit" ]]; then last_commit="$sib_date"; fi
 
-  # Last-commit date for sibling folder (recursive).
-  sib_date="N/A"
-  sib_count=0
-  if [[ -d "$sibling" ]]; then
-    raw_sib_date="$(git log -1 --format=%cd --date=short -- "$sibling" 2>/dev/null || true)"
-    if [[ -n "$raw_sib_date" ]]; then
-      sib_date="$raw_sib_date"
-    fi
-    sib_count=$(find "$sibling" -type f | wc -l | tr -d ' ')
-  fi
+  trp_fetch_issue_meta "$issue_num" >/dev/null
+  meta="$TRP_ISSUE_META"
+  case "$meta" in
+    closed:*) issue_state="closed"; issue_closed_date="${meta#closed:}" ;;
+    open)     issue_state="open";   issue_closed_date="" ;;
+    state:*)  issue_state="${meta#state:}"; issue_closed_date="" ;;
+    *)        issue_state="unknown"; issue_closed_date="" ;;
+  esac
 
-  # MAX of disp_date and sib_date (lexicographic ISO works).
-  max_date="$disp_date"
-  if [[ "$sib_date" != "N/A" && "$sib_date" > "$max_date" ]]; then
-    max_date="$sib_date"
-  fi
-
-  # Online: query issue state and closed_at.
-  issue_state="unknown"
-  issue_closed_at=""
-  if [[ "$OFFLINE" -eq 0 && "$GH_OK" -eq 1 ]]; then
-    GH_TIMEOUT="${GH_TIMEOUT:-30}"
-    raw_fields="$("$SCRIPT_DIR/run-with-timeout.sh" "$GH_TIMEOUT" gh api "repos/${REPO_SLUG}/issues/${issue_num}" \
-      --jq '.state + " " + (.closed_at // "")' 2>/dev/null || true)"
-    issue_state="$(echo "$raw_fields" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]')"
-    issue_closed_at="$(echo "$raw_fields" | cut -d' ' -f2-)"
-  fi
-
-  # Offline: skip emission.
-  if [[ "$OFFLINE" -eq 1 ]]; then
-    continue
-  fi
-
-  # Filter: issue must be closed AND closed_at older than cutoff
-  if [[ "$issue_state" != "closed" ]]; then
-    continue
-  fi
-  issue_closed_date="${issue_closed_at%%T*}"
-  if [[ -z "$issue_closed_date" ]]; then
-    echo "WARNING: ${dispatcher}: issue #${issue_num} is closed but closed_at unavailable — skipped" >&2
-    continue
-  fi
-  if [[ ! "$issue_closed_date" < "$CUTOFF_DATE" ]]; then
-    continue
-  fi
+  scope="$(trp_scope_of "$base")"
+  ref="$(trp_issue_ref "$base")"
+  trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
+  gate="$TRP_GATE"
 
   CANDIDATES+=("$dispatcher")
 
-  # --apply (deletion) mode: git-rm the candidate only when every # Tests: token
-  # is format-OK (A-flag=false) AND path-deleted-with-no-rename (C-class).
-  if [[ "$APPLY" -eq 1 ]]; then
-    classify_tests_header "$dispatcher"
-    if [[ "$CHR_ALL_C" -eq 1 ]]; then
-      git rm -q "$dispatcher" >/dev/null 2>&1 || git rm "$dispatcher" || true
-      echo "DELETED: ${dispatcher}"
-    else
-      echo "SKIP_DELETE_HAS_A_OR_B: ${dispatcher}"
-    fi
-  fi
-
   if [[ "$FORMAT" == "text" ]]; then
     echo "CANDIDATE: ${dispatcher}"
-    echo "  Issue: #${issue_num} (${issue_state}, closed: ${issue_closed_date})"
-    if [[ -d "$sibling" ]]; then
-      echo "  Last-commit: ${max_date} (dispatcher: ${disp_date} | sibling: ${sib_date})"
+    echo "  Issue: #${issue_num} (${issue_state}, closed: ${issue_closed_date:-n/a})"
+    echo "  Last-commit: ${last_commit:-unknown} (dispatcher: ${disp_date:-unknown} | sibling: ${sib_date:-n/a})"
+    if [[ -n "$sibling" ]]; then
       echo "  Sibling folder: ${sibling}/ (${sib_count} files)"
       echo "  Deletion unit: ${dispatcher} ${sibling}/"
     else
-      echo "  Last-commit: ${max_date} (dispatcher: ${disp_date} | sibling: N/A)"
       echo "  Sibling folder: (none)"
       echo "  Deletion unit: ${dispatcher}"
     fi
-    echo ""
-  else
-    sib_field="null"
-    if [[ -d "$sibling" ]]; then
-      sib_field="\"${sibling}/\""
+  fi
+
+  hold_token="$(trp_gate_line_token "$gate")"
+  if [[ -n "$hold_token" ]]; then
+    if [[ "$FORMAT" == "text" ]]; then echo "${hold_token}: ${dispatcher}"; fi
+  elif [[ "$APPLY" -eq 1 ]]; then
+    if trp_git_rm_unit "${unit_paths[@]}"; then
+      if [[ "$FORMAT" == "text" ]]; then echo "DELETED: ${dispatcher}"; fi
+    else
+      DELETE_FAILED=1
     fi
-    JSON_ITEMS+=("{\"dispatcher\":\"${dispatcher}\",\"issue\":${issue_num},\"state\":\"${issue_state}\",\"closed_at\":\"${issue_closed_date}\",\"last_commit\":\"${max_date}\",\"dispatcher_date\":\"${disp_date}\",\"sibling_date\":\"${sib_date}\",\"sibling\":${sib_field},\"sibling_file_count\":${sib_count}}")
+  fi
+  if [[ "$FORMAT" == "text" ]]; then echo ""; fi
+
+  if [[ "$FORMAT" == "json" ]]; then
+    sib_json=""
+    if [[ -n "$sibling" ]]; then sib_json="${sibling}/"; fi
+    JSON_ITEMS+=("$(printf '{"dispatcher":"%s","issue":%s,"state":"%s","closed_at":"%s","last_commit":"%s","dispatcher_date":"%s","sibling_date":"%s","sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
+      "$(trp_json_escape "$dispatcher")" "$issue_num" "$(trp_json_escape "$issue_state")" \
+      "$(trp_json_escape "$issue_closed_date")" "$(trp_json_escape "$last_commit")" \
+      "$(trp_json_escape "$disp_date")" "$(trp_json_escape "$sib_date")" \
+      "$(trp_json_escape "$sib_json")" "$sib_count" "$(trp_json_escape "$gate")")")
   fi
 done
 
-# --fix-headers mode reports per-file and does not emit staleness candidates.
-if [[ "$FIX_HEADERS" -eq 1 ]]; then
-  exit 0
-fi
-
 if [[ "$FORMAT" == "json" ]]; then
-  printf '{"generated":"%s","cutoff":"%s","stale_months":%s,"offline":%s,"candidates":[' \
-    "$TODAY" "$CUTOFF_DATE" "$STALE_MONTHS" "$([[ $OFFLINE -eq 1 ]] && echo true || echo false)"
-  first=1
-  for item in "${JSON_ITEMS[@]}"; do
-    if [[ "$first" -eq 1 ]]; then
-      first=0
-    else
-      printf ','
-    fi
-    printf '%s' "$item"
+  diag_json=""
+  for i in "${!DIAG_FILES[@]}"; do
+    if [[ -n "$diag_json" ]]; then diag_json+=","; fi
+    diag_json+="$(printf '{"file":"%s","kind":"%s"}' \
+      "$(trp_json_escape "${DIAG_FILES[$i]}")" "${DIAG_KINDS[$i]}")"
   done
-  printf ']}\n'
+  cand_json=""
+  for item in "${JSON_ITEMS[@]:-}"; do
+    if [[ -z "$item" ]]; then continue; fi
+    if [[ -n "$cand_json" ]]; then cand_json+=","; fi
+    cand_json+="$item"
+  done
+  printf '{"generated":"%s","cutoff":"%s","stale_months":%s,"offline":%s,"diagnostics":[%s],"candidates":[%s]}\n' \
+    "$TODAY" "$CUTOFF_DATE" "$STALE_MONTHS" "$OFFLINE" "$diag_json" "$cand_json"
+else
+  sweep_write_mode_footer
 fi
 
+if [[ "$DELETE_FAILED" -eq 1 ]]; then
+  exit 2
+fi
 if [[ "${#CANDIDATES[@]}" -eq 0 ]]; then
   exit 1
 fi

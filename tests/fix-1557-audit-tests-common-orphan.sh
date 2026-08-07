@@ -5,8 +5,15 @@
 # TL2 test of bin/audit-tests-common.sh orphan detection. An orphan is a
 # common-scope test dispatcher whose `# Tests:` header lists only paths that
 # no longer exist on disk. Spawns the real script against a throwaway git
-# fixture. Source under test is being created by #1557 — cases go green once
-# bin/audit-tests-common.sh lands.
+# fixture.
+#
+# Revised for #1833. Two contracts changed:
+#   1. The script now shares the survival predicate with audit-tests.sh, so a
+#      prose / non-path `# Tests:` token is UNDECIDABLE (MALFORMED_HEADER) and
+#      no longer counts as a missing path — that conflation is what made 25 of
+#      26 reported common-scope orphans false positives.
+#   2. Write mode is apply-by-default, so every report-only case must pass
+#      --dry-run explicitly.
 #
 # TL3 gap (what this test does NOT catch):
 # - Interaction with the online audit-tests.sh candidate emission
@@ -76,12 +83,15 @@ commit() {
 }
 
 # run_common <root> [args...] -> sets OUT ERR RC
+# Always report-only: the script applies by default, and every case in this
+# file asserts on the REPORT. The apply-by-default behaviour itself is covered
+# by tests/bin-sweep-write-mode-default.sh and the #1833 delete-gate group.
 run_common() {
   local root="$1"; shift
   local outf errf
   outf="$(mktemp)"; errf="$(mktemp)"
   set +e
-  ( cd "$root" && bash "$SCRIPT" "$@" ) >"$outf" 2>"$errf"
+  ( cd "$root" && bash "$SCRIPT" --dry-run "$@" ) >"$outf" 2>"$errf"
   RC=$?
   set -e
   OUT="$(cat "$outf")"
@@ -116,15 +126,42 @@ else
 fi
 rm -rf "$root"
 
-# TC3: no `# Tests:` header => skipped, exit 1
+# TC3: no `# Tests:` header => not an orphan, but reported as a diagnostic
+# rather than silently dropped.
 root="$(new_repo)"
 add_dispatcher_nohdr "$root" "cc-nohdr.sh"
 commit "$root"
 run_common "$root"
 if [[ $RC -eq 1 && "$OUT" != *"ORPHAN:"* ]]; then
-  pass "TC3 dispatcher without # Tests: header is skipped"
+  pass "TC3 dispatcher without # Tests: header is not an orphan"
 else
-  fail "TC3 dispatcher without # Tests: header is skipped" "rc=$RC out=<<$OUT>>"
+  fail "TC3 dispatcher without # Tests: header is not an orphan" "rc=$RC out=<<$OUT>>"
+fi
+if [[ "$OUT" == *"NO_TESTS_HEADER: tests/cc-nohdr.sh"* ]]; then
+  pass "TC3b dispatcher without # Tests: header is reported as NO_TESTS_HEADER"
+else
+  fail "TC3b dispatcher without # Tests: header is reported as NO_TESTS_HEADER" "rc=$RC out=<<$OUT>>"
+fi
+rm -rf "$root"
+
+# TC3c: prose / non-path `# Tests:` token => UNDECIDABLE, never an orphan.
+# This is the #1833 false-positive class: `Missing paths: bin/x.sh (prose)`
+# used to be reported as a missing path because the whole annotated token was
+# stat'ed as if it were a filename.
+root="$(new_repo)"
+add_bin "$root" "bin/present.sh"
+add_dispatcher "$root" "cc-prose.sh" "bin/present.sh (and the notes below)"
+commit "$root"
+run_common "$root"
+if [[ "$OUT" != *"ORPHAN:"*"cc-prose.sh"* ]]; then
+  pass "TC3c prose-annotated header is not reported as an orphan"
+else
+  fail "TC3c prose-annotated header is not reported as an orphan" "rc=$RC out=<<$OUT>>"
+fi
+if [[ "$OUT" == *"MALFORMED_HEADER: tests/cc-prose.sh"* ]]; then
+  pass "TC3d prose-annotated header is reported as MALFORMED_HEADER"
+else
+  fail "TC3d prose-annotated header is reported as MALFORMED_HEADER" "rc=$RC out=<<$OUT>>"
 fi
 rm -rf "$root"
 
@@ -171,9 +208,8 @@ else
 fi
 rm -rf "$root" "$root2"
 
-# TC7: empty `# Tests:` value => skipped (not an orphan candidate)
-# A dispatcher whose `# Tests:` header exists but has no paths listed should
-# not be flagged as an orphan — there is no missing path to detect.
+# TC7: empty `# Tests:` value => not an orphan (no missing path to detect),
+# but reported on the diagnostics channel like the header-less case.
 root="$(new_repo)"
 {
   echo '#!/usr/bin/env bash'
@@ -184,9 +220,14 @@ root="$(new_repo)"
 commit "$root"
 run_common "$root"
 if [[ $RC -eq 1 && "$OUT" != *"ORPHAN:"* ]]; then
-  pass "TC7 empty # Tests: value is skipped (not an orphan)"
+  pass "TC7 empty # Tests: value is not an orphan"
 else
-  fail "TC7 empty # Tests: value is skipped (not an orphan)" "rc=$RC out=<<$OUT>>"
+  fail "TC7 empty # Tests: value is not an orphan" "rc=$RC out=<<$OUT>>"
+fi
+if [[ "$OUT" == *"NO_TESTS_HEADER: tests/cc-empty-tests-header.sh"* ]]; then
+  pass "TC7b empty # Tests: value is reported as NO_TESTS_HEADER"
+else
+  fail "TC7b empty # Tests: value is reported as NO_TESTS_HEADER" "rc=$RC out=<<$OUT>>"
 fi
 rm -rf "$root"
 

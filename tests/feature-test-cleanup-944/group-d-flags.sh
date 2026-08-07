@@ -2,21 +2,48 @@
 # Tests: bin/audit-tests.sh
 # Tags: audit-tests, flags, cli, scope:issue-specific, TL2
 # Sourced by tests/feature-test-cleanup-944.sh
+#
+# Revised for #1833. Fixtures carry a real `# Tests:` header because target
+# survival is what makes a file a candidate. --stale-months and the issue state
+# now move the DELETE gate, not the candidate list, so the staleness cases
+# assert on DELETED / SKIP_DELETE_* instead of on CANDIDATE presence.
 
 if [[ ! -f "$AUDIT_TESTS" ]]; then
     skip "Cases 17-27: bin/audit-tests.sh does not exist yet"
 else
 
+# d_dead_dispatcher <repo> <name> — target never existed (a candidate).
+d_dead_dispatcher() {
+    {
+        echo "#!/bin/bash"
+        echo "# Tests: bin/gone.sh"
+        echo "# Tags: TL2, scope:issue-specific"
+    } > "$1/tests/$2"
+}
+
+# d_live_dispatcher <repo> <name> — target present on disk (never a candidate).
+d_live_dispatcher() {
+    mkdir -p "$1/bin"
+    echo "#!/bin/bash" > "$1/bin/alive.sh"
+    {
+        echo "#!/bin/bash"
+        echo "# Tests: bin/alive.sh"
+        echo "# Tags: TL2, scope:issue-specific"
+    } > "$1/tests/$2"
+}
+
 # Case 17: --format json produces valid JSON with candidates
 STUB17=$(mktemp -d -p "$TMPDIR_BASE")
 make_gh_stub "$STUB17" "closed"
 REPO17=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO17/tests/feature-100-json.sh"
+d_dead_dispatcher "$REPO17" "feature-100-json.sh"
 git -C "$REPO17" add tests/feature-100-json.sh
 backdate_commit "$REPO17" 200 "stale json"
 
+# stdout only: --format json must be machine-parseable, so any diagnostic that
+# the script writes to stderr must not be spliced into the document.
 EXIT17=0
-OUT17=$(cd "$REPO17" && PATH="$STUB17:$PATH" run_with_timeout bash "$REPO17/bin/audit-tests.sh" --dry-run --format json 2>&1) || EXIT17=$?
+OUT17=$(cd "$REPO17" && PATH="$STUB17:$PATH" run_with_timeout bash "$REPO17/bin/audit-tests.sh" --dry-run --format json 2>/dev/null) || EXIT17=$?
 
 if echo "$OUT17" | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")); process.exit((d.candidates&&d.candidates.length>0)?0:1)' 2>/dev/null; then
     pass "Case 17: --format json produces valid JSON with non-empty candidates"
@@ -24,32 +51,32 @@ else
     fail "Case 17: --format json output is invalid or candidates empty (output: $OUT17)"
 fi
 
-# Case 18: --stale-months 1 lowers threshold
-# The threshold is applied to the issue's closed_at (#1557), so the 60-day
-# boundary lives in the stub, not in the fixture's commit date.
+# Case 18: --stale-months moves the DELETE boundary. The 60-day-old close is
+# inside the default 3-month window (deletion held) and outside a 1-month
+# window (deletion authorised); the candidate itself is reported either way.
 STUB18=$(mktemp -d -p "$TMPDIR_BASE")
 make_gh_stub "$STUB18" "closed" "$(days_ago_iso 60)"
 REPO18=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO18/tests/feature-100-short.sh"
+d_dead_dispatcher "$REPO18" "feature-100-short.sh"
 git -C "$REPO18" add tests/feature-100-short.sh
 backdate_commit "$REPO18" 60 "60-day-old"
 
-# Default 3-month (~90 days) — 60-day-old file should NOT qualify
 EXIT18a=0
-OUT18a=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --dry-run 2>&1) || EXIT18a=$?
-if echo "$OUT18a" | grep -q "CANDIDATE:"; then
-    fail "Case 18a: 60-day-old file should not qualify at default 3-month threshold"
+OUT18a=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" 2>&1) || EXIT18a=$?
+if echo "$OUT18a" | grep -q "CANDIDATE:" \
+   && echo "$OUT18a" | grep -q "SKIP_DELETE_ISSUE_ACTIVE" \
+   && [[ -f "$REPO18/tests/feature-100-short.sh" ]]; then
+    pass "Case 18a: 60-day-old close is reported but not deleted at the default threshold"
 else
-    pass "Case 18a: 60-day-old file excluded at default 3-month threshold"
+    fail "Case 18a: expected report + held deletion at the default threshold (output: $OUT18a)"
 fi
 
-# --stale-months 1 (~30 days) — 60-day-old file SHOULD qualify
 EXIT18b=0
-OUT18b=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --dry-run --stale-months 1 2>&1) || EXIT18b=$?
-if echo "$OUT18b" | grep -q "CANDIDATE:"; then
-    pass "Case 18b: 60-day-old file qualifies with --stale-months 1"
+OUT18b=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --stale-months 1 2>&1) || EXIT18b=$?
+if echo "$OUT18b" | grep -q "DELETED: tests/feature-100-short.sh"; then
+    pass "Case 18b: --stale-months 1 authorises deleting the 60-day-old close"
 else
-    fail "Case 18b: 60-day-old file should qualify with --stale-months 1 (output: $OUT18b)"
+    fail "Case 18b: --stale-months 1 should authorise the deletion (output: $OUT18b)"
 fi
 
 # Cases 19a-d: invalid CLI args exit 2
@@ -81,29 +108,29 @@ else
     fail "Case 23: --help expected exit 0, got $EXIT23"
 fi
 
-# Case 24: --stale-months 0 — even a 1-day-old issue qualifies
+# Case 24: --stale-months 0 — even a 1-day-old close authorises deletion
 STUB24=$(mktemp -d -p "$TMPDIR_BASE")
 make_gh_stub "$STUB24" "closed" "$(days_ago_iso 1)"
 REPO24=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO24/tests/feature-100-new.sh"
+d_dead_dispatcher "$REPO24" "feature-100-new.sh"
 git -C "$REPO24" add tests/feature-100-new.sh
 backdate_commit "$REPO24" 1 "1-day-old"
 
 EXIT24=0
-OUT24=$(cd "$REPO24" && PATH="$STUB24:$PATH" run_with_timeout bash "$REPO24/bin/audit-tests.sh" --dry-run --stale-months 0 2>&1) || EXIT24=$?
+OUT24=$(cd "$REPO24" && PATH="$STUB24:$PATH" run_with_timeout bash "$REPO24/bin/audit-tests.sh" --stale-months 0 2>&1) || EXIT24=$?
 
-if echo "$OUT24" | grep -q "CANDIDATE:"; then
-    pass "Case 24: --stale-months 0 qualifies 1-day-old CLOSED file"
+if echo "$OUT24" | grep -q "DELETED: tests/feature-100-new.sh"; then
+    pass "Case 24: --stale-months 0 authorises deleting a 1-day-old close"
 else
-    fail "Case 24: --stale-months 0 should qualify 1-day-old file (output: $OUT24)"
+    fail "Case 24: --stale-months 0 should authorise the deletion (output: $OUT24)"
 fi
 
 # Case 25: multi-file — two qualifying files both appear in report
 STUB25=$(mktemp -d -p "$TMPDIR_BASE")
 make_gh_stub "$STUB25" "closed"
 REPO25=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO25/tests/feature-100-first.sh"
-echo "#!/bin/bash" > "$REPO25/tests/feature-300-second.sh"
+d_dead_dispatcher "$REPO25" "feature-100-first.sh"
+d_dead_dispatcher "$REPO25" "feature-300-second.sh"
 git -C "$REPO25" add tests/feature-100-first.sh tests/feature-300-second.sh
 backdate_commit "$REPO25" 200 "two stale files"
 
@@ -116,16 +143,17 @@ else
     fail "Case 25: multi-file accumulation failed (output: $OUT25)"
 fi
 
-# Case 26: --format json with zero candidates → empty candidates array
+# Case 26: --format json with zero candidates → empty candidates array.
+# Under the survival contract a live target is what produces zero candidates.
 STUB26=$(mktemp -d -p "$TMPDIR_BASE")
-make_gh_stub "$STUB26" "open"
+make_gh_stub "$STUB26" "closed"
 REPO26=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO26/tests/feature-200-open.sh"
-git -C "$REPO26" add tests/feature-200-open.sh
-backdate_commit "$REPO26" 200 "open issue"
+d_live_dispatcher "$REPO26" "feature-200-live.sh"
+git -C "$REPO26" add -A
+backdate_commit "$REPO26" 200 "live target"
 
 EXIT26=0
-OUT26=$(cd "$REPO26" && PATH="$STUB26:$PATH" run_with_timeout bash "$REPO26/bin/audit-tests.sh" --dry-run --format json 2>&1) || EXIT26=$?
+OUT26=$(cd "$REPO26" && PATH="$STUB26:$PATH" run_with_timeout bash "$REPO26/bin/audit-tests.sh" --dry-run --format json 2>/dev/null) || EXIT26=$?
 
 if echo "$OUT26" | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")); process.exit((Array.isArray(d.candidates)&&d.candidates.length===0)?0:1)' 2>/dev/null; then
     pass "Case 26: --format json with no candidates → empty candidates array"
@@ -133,8 +161,8 @@ else
     fail "Case 26: --format json empty-candidates shape wrong (output: $OUT26)"
 fi
 
-# Case 27: gh repo view fails → falls back to offline (WARNING on stderr, no candidates)
-# Use a stub gh that always returns exit 1 (simulates broken gh auth)
+# Case 27: gh repo view fails → offline fallback. Reporting is local and keeps
+# working; the delete gate has no metadata, so nothing is deleted.
 STUB27=$(mktemp -d -p "$TMPDIR_BASE")
 cat > "$STUB27/gh" <<'GHEOF'
 #!/bin/bash
@@ -142,12 +170,12 @@ exit 1
 GHEOF
 chmod +x "$STUB27/gh"
 REPO27=$(setup_audit_repo)
-echo "#!/bin/bash" > "$REPO27/tests/feature-100-old.sh"
+d_dead_dispatcher "$REPO27" "feature-100-old.sh"
 git -C "$REPO27" add tests/feature-100-old.sh
 backdate_commit "$REPO27" 200 "stale"
 
 EXIT27=0
-OUT27=$(cd "$REPO27" && PATH="$STUB27:$PATH" run_with_timeout bash "$REPO27/bin/audit-tests.sh" --dry-run 2>&1) || EXIT27=$?
+OUT27=$(cd "$REPO27" && PATH="$STUB27:$PATH" run_with_timeout bash "$REPO27/bin/audit-tests.sh" 2>&1) || EXIT27=$?
 
 if echo "$OUT27" | grep -qi "offline\|WARNING"; then
     pass "Case 27: gh repo view failure → falls back to offline mode with warning"
@@ -155,10 +183,16 @@ else
     fail "Case 27: expected offline fallback warning when gh fails (output: $OUT27)"
 fi
 
-if [[ $EXIT27 -eq 1 ]]; then
-    pass "Case 27b: offline fallback exits 1 (no candidates)"
+if echo "$OUT27" | grep -q "CANDIDATE: tests/feature-100-old.sh" && [[ $EXIT27 -eq 0 ]]; then
+    pass "Case 27b: offline fallback still reports survival candidates (exit 0)"
 else
-    fail "Case 27b: expected exit 1 for offline fallback, got $EXIT27"
+    fail "Case 27b: offline fallback must still report candidates, got exit $EXIT27 (output: $OUT27)"
+fi
+
+if [[ -f "$REPO27/tests/feature-100-old.sh" ]] && echo "$OUT27" | grep -q "SKIP_DELETE_METADATA_UNAVAILABLE"; then
+    pass "Case 27c: offline fallback deletes nothing (metadata unavailable)"
+else
+    fail "Case 27c: offline fallback must hold every deletion (output: $OUT27)"
 fi
 
 fi  # end [[ -f "$AUDIT_TESTS" ]]
