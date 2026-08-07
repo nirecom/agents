@@ -54,7 +54,7 @@ WS-6. Create the worktree (isolated command — same chaining caveat as step WS-
    git worktree add <path> -b <type>/<task-name>
    ```
 
-WS-7. Dispatch `worktree-copy` per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
+WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
 
    Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
    In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF — `AskUserQuestion` cannot be called in subagent contexts.

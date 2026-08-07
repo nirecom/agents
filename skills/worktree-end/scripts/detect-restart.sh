@@ -8,7 +8,7 @@
 #
 # reason strings are fixed sentinels (not variable filenames):
 #   cc_restart:       CLAUDE.md modified in PR
-#                     rules/ modified in PR (cascaded into CLAUDE.md)
+#                     rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)
 #                     settings.json model field changed
 #   vscode_reload:    keybindings.json modified | vscode settings modified
 #   installer_rerun:  install.ps1 modified in PR | install.sh modified in PR | installer script modified in PR
@@ -44,7 +44,7 @@ CC_RESTART_LINE="cc_restart=not_required|"
 if printf '%s\n' "$CC_FILES" | grep -qE '^(CLAUDE\.md|CLAUDE\.local\.md)$'; then
   CC_RESTART_LINE="cc_restart=required|CLAUDE.md modified in PR"
 elif printf '%s\n' "$CC_FILES" | grep -qE '^rules/.+$'; then
-  CC_RESTART_LINE="cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)"
+  CC_RESTART_LINE="cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)"
 elif printf '%s\n' "$CC_FILES" | grep -qE '^settings(-extension)?\.json$'; then
   # gh pr diff retrieves the diff via GitHub API; works after squash-merge.
   # Capture to variable first to avoid grep -q early-exit triggering SIGPIPE on

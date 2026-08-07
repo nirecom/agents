@@ -6,12 +6,15 @@
 // Usage:
 //   node bin/worktree-notes-triage.js list <absolute-path>
 //   node bin/worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>
+//   node bin/worktree-notes-triage.js resolve --caller <callsite> [...]
 //
 // `list`     — prints a JSON array of unpromoted entries from BugsFound /
 //              RelatedTasks / NextTasks (entries without the `<!-- promoted: #N -->`
 //              marker). Empty array when nothing is pending.
 // `annotate` — appends ` <!-- promoted: #<issueNumber> -->` to the given line,
 //              writing the file atomically (tmp + rename).
+// `resolve`  — decides, per callsite, which WORKTREE_NOTES.md (if any) the
+//              promotion protocol should act on. See bin/worktree-notes-triage/resolve.js.
 
 const fs = require("fs");
 const path = require("path");
@@ -19,8 +22,14 @@ const {
   parseSectionEntries,
   markEntryPromoted,
 } = require("../hooks/lib/worktree-notes-sections");
+const { runResolve } = require("./worktree-notes-triage/resolve");
 
+// Triage sections only. `## ManualReminders` is deliberately absent: a reminder
+// is addressed to the person closing the session, not to a future implementer,
+// so promoting one into a GitHub issue is the wrong outcome (#530).
 const SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
+
+const MARKER_RE = / <!-- promoted: #(\d+) -->$/;
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-triage] ${msg}\n`);
@@ -30,14 +39,16 @@ function usage() {
   process.stderr.write(
     "Usage:\n" +
       "  worktree-notes-triage.js list <absolute-path>\n" +
-      "  worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>\n"
+      "  worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>\n" +
+      "  worktree-notes-triage.js resolve --caller <worktree-end|session-close|issue-close-finalize> [...]\n"
   );
 }
 
-// Defense-in-depth: normalize collapses ".." before the split, so this rarely
-// fires. The real write-confinement guarantee is basename === "WORKTREE_NOTES.md".
+// Checked against the RAW argument, before any normalization: `path.normalize`
+// collapses `..` inside an absolute path, so a normalized-then-split guard
+// silently lets `<dir>/../protected/WORKTREE_NOTES.md` through.
 function hasTraversal(p) {
-  return path.normalize(p).split(/[/\\]/).includes("..");
+  return String(p).split(/[/\\]/).includes("..");
 }
 
 function validatePath(rawPath) {
@@ -73,14 +84,20 @@ function cmdList(rawPath) {
     err(`file not found: ${resolved}`);
     return 1;
   }
-  const text = fs.readFileSync(resolved, "utf8");
+  let text;
+  try {
+    text = fs.readFileSync(resolved, "utf8");
+  } catch (e) {
+    err(`cannot read ${resolved}: ${e.message}`);
+    return 1;
+  }
   const out = [];
   for (const section of SECTIONS) {
     const entries = parseSectionEntries(text, section);
     for (const entry of entries) {
       // Filter out already-promoted entries — they are no longer triage
       // candidates. The marker is appended by `annotate` (worktree-end Step
-      // 5.5) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
+      // WE-11) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
       if (entry.hasMarker) continue;
       out.push({
         section,
@@ -121,7 +138,38 @@ function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
     return 1;
   }
 
-  const text = fs.readFileSync(resolved, "utf8");
+  let text;
+  try {
+    text = fs.readFileSync(resolved, "utf8");
+  } catch (e) {
+    err(`cannot read ${resolved}: ${e.message}`);
+    return 1;
+  }
+
+  // Locate the target line with the same split contract markEntryPromoted uses,
+  // so an out-of-range or non-entry line is refused BEFORE any write happens.
+  // markEntryPromoted returns the text unchanged in those cases, which would
+  // otherwise look like success.
+  const parts = text.split(/(\r\n|\n)/);
+  const idx = (lineNumber - 1) * 2;
+  if (idx >= parts.length || typeof parts[idx] !== "string") {
+    err(`lineNumber ${lineNumber} is past the end of ${resolved}`);
+    return 1;
+  }
+  const original = parts[idx];
+  if (!original.startsWith("- ")) {
+    err(`line ${lineNumber} is not a notes entry: ${JSON.stringify(original)}`);
+    return 1;
+  }
+  const existing = MARKER_RE.exec(original);
+  if (existing !== null) {
+    // Idempotent retry: the same annotation is already recorded, so the file is
+    // left byte-identical rather than growing a second marker.
+    if (existing[1] === String(issueNumber)) return 0;
+    err(`line ${lineNumber} is already promoted as #${existing[1]}`);
+    return 1;
+  }
+
   const updated = markEntryPromoted(text, lineNumber, issueNumber);
 
   const tmp = `${resolved}.tmp`;
@@ -147,6 +195,9 @@ function main() {
   }
   if (cmd === "annotate") {
     return cmdAnnotate(filePath, rest[0], rest[1]);
+  }
+  if (cmd === "resolve") {
+    return runResolve(process.argv.slice(3));
   }
   err(`unknown subcommand: ${cmd}`);
   usage();

@@ -136,7 +136,7 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 
 ## Steps SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
-Dispatch `session-close-gate` per `skills/_shared/worker-dispatch.md`. Payload:
+Dispatch the `session-close-gate` worker per `skills/_shared/worker-dispatch.md`. Payload:
 - `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
 - `plans_dir`: the `PLANS_DIR` from WD-1 — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback
 - `artifact_dir`: same value as `plans_dir`
@@ -181,6 +181,10 @@ When the render is non-empty: emit the text verbatim into the assistant reply (n
 Mark surfaced and complete:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --mark-findings-surfaced
   echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
+
+## Step SC-8 — Promote residual WORKTREE_NOTES entries (post-Final-Report)
+
+- Runs after the Final Report is emitted, only when unpromoted entries remain (`/worktree-end` WE-11 normally clears them): resolve the notes path via `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" resolve --caller session-close --session-id "<session-id>"`; on `action: skip` return, otherwise run `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
 
 ## Rules
 

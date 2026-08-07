@@ -58,15 +58,16 @@ IC-2. Parse `closes_issues` (pass path as script argument — never use `node -e
    If `CLOSES` is `[]` or empty: skip gate silently, proceed to Phase 1.
 
 IC-3. When `CLOSES` is non-empty, emit a notice:
-   - **Interactive:** "The new issue will NOT be added to the current session's
-     `closes_issues` (#N, ...). It will require a separate session. Alternatively,
-     write to `<worktree>/WORKTREE_NOTES.md` as a fallback — see `CLAUDE.md`
-     `## Mid-workflow finding capture`." Then proceed to Phase 1 unconditionally.
+   - **Interactive:** "This issue is created now and is NOT added to the current session's
+     `closes_issues` (#N, ...); only its implementation belongs to a separate session.
+     Fallback: write to `<worktree>/WORKTREE_NOTES.md` — see
+     `rules/mid-workflow-findings.md`." Then proceed to Phase 1 unconditionally.
    - **Non-interactive:** print the same notice to stderr. Proceed to Phase 1.
 
 ## Procedure
 
 Must be invoked from a linked worktree when `ENFORCE_WORKTREE=on`.
+Exception — the notes-promotion pass reaches this skill from the main worktree via `/session-close` Step SC-8 and via `/issue-close-finalize`; both are sanctioned callers with no linked worktree of their own.
 
 Four phases: **Gather → Survey → Confirm → Dispatch**.
 
@@ -99,7 +100,7 @@ If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and suppl
 Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 
 2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
-2b. Invoke `issue-create-survey-worker` via Task tool with `title`, `background`, `changes` from Phase 1 input.
+2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 2e. `status: complete` → read verdict JSON from `artifact_path`.

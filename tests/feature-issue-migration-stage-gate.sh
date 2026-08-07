@@ -12,6 +12,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORCH_SRC="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
 STATE_SRC="$AGENTS_DIR/bin/github-issues/migration/state.sh"
+SKIPPED_STEP_WARNING_SRC="$AGENTS_DIR/bin/github-issues/migration/skipped-step-warning.sh"
 
 PASS=0
 FAIL=0
@@ -28,7 +29,7 @@ run_with_timeout() {
     fi
 }
 
-if [ ! -f "$ORCH_SRC" ] || [ ! -f "$STATE_SRC" ]; then
+if [ ! -f "$ORCH_SRC" ] || [ ! -f "$STATE_SRC" ] || [ ! -f "$SKIPPED_STEP_WARNING_SRC" ]; then
     echo "FAIL: orchestrate.sh or state.sh not found"
     echo "Results: 0 passed, 1 failed"
     exit 1
@@ -45,6 +46,7 @@ export MOCK_CALLS_LOG
 # to the harness dir and picks up our mocked migrate-*.sh siblings.
 cp "$ORCH_SRC" "$HARNESS_DIR/orchestrate.sh"
 cp "$STATE_SRC" "$HARNESS_DIR/state.sh"
+cp "$SKIPPED_STEP_WARNING_SRC" "$HARNESS_DIR/skipped-step-warning.sh"
 
 cat > "$HARNESS_DIR/migrate-history.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -388,6 +390,7 @@ fi
 HARNESS_4="$(mktemp -d)"
 cp "$ORCH_SRC" "$HARNESS_4/orchestrate.sh"
 cp "$STATE_SRC" "$HARNESS_4/state.sh"
+cp "$SKIPPED_STEP_WARNING_SRC" "$HARNESS_4/skipped-step-warning.sh"
 
 # Reuse the same working mocks for steps 1-3 siblings.
 cat > "$HARNESS_4/migrate-history.sh" <<'EOF'
@@ -442,6 +445,7 @@ rm -rf "$HARNESS_4"
 HARNESS_5="$(mktemp -d)"
 cp "$ORCH_SRC" "$HARNESS_5/orchestrate.sh"
 cp "$STATE_SRC" "$HARNESS_5/state.sh"
+cp "$SKIPPED_STEP_WARNING_SRC" "$HARNESS_5/skipped-step-warning.sh"
 
 cat > "$HARNESS_5/migrate-history.sh" <<'EOF'
 #!/usr/bin/env bash

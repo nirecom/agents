@@ -74,7 +74,9 @@ MIGRATE_PROJECT_NUM=<n> MIGRATE_PROJECT_ID=<PVT_…> MIGRATE_FIELD_ID=<PVTF_…>
 
 Extracts `YYYY-MM-DD` from each migrated issue's first body line and sets the Projects v2 "Content Date" field. Iterates over the issue numbers recorded in `.migration-state.json` (`.history.migrated[].issue_number`) — `/migrate-repo` wires the env vars from `create-project.sh` automatically.
 
-Required only if Projects v2 is in use.
+Run for all repos by default. Skip only when Projects v2 is explicitly not used.
+
+Starting the orchestrator with `--from-step N` where N > 4 does not run this step. To skip it deliberately, pass `--ack-skipped-steps` — otherwise the orchestrator warns that the Projects v2 board and Content Date backfill were never created. Recover by re-running with `--from-step 4`.
 
 ## Step 5 — Backfill J-1/J-2 sentinel comments — *Migration (catch-up)*
 
