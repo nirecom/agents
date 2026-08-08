@@ -244,3 +244,7 @@ Changes: Stop-guard exemptions: background work can now be declared with a senti
 ### FEATURE: PR #1867 (2026-08-07)
 Background: feat(#530,#688,#1805,#1766,#1825,#1758,#1693): unconditional WORKTREE...
 Changes: worktree-end and issue-close-finalize now automatically file GitHub issues for outstanding WORKTREE_NOTES.md findings instead of deferring them to a later session (#530).;Clearer prompts during worktree-end's notes-promotion and docs-completion steps (#688).;Fixed worktree-end documentation referencing incorrect subagent names (#1805).;Clarified worktree-end docs around PRs merged via the GitHub web UI (#1766).;Aligned documentation for the WORKFLOW_OFF and WORKTREE_OFF override mechanisms (#1825).;Fixed misleading wording in detect-restart.sh about rules/ file changes (#1758).;migration-from-todo.md's --from-step now warns when it silently skips intermediate steps (#1693).
+
+### FEATURE: PR #1890 (2026-08-08)
+Background: fix: correct issueNumber field mismatch in Final Report and remove dead forFinalReport option
+Changes: Fixed a bug where the Final Report's "Closed Issue Outcomes" section showed `#undefined` instead of the actual issue number (#1614).
