@@ -23,20 +23,25 @@
 // what a reader actually sees. On a step-3 hit the rendered output is DISCARDED
 // and replaced by a fixed literal that contains no untrusted bytes at all.
 
+// collapseControl / redactSentinels / sanitizeLine live in hooks/lib/
+// output-sanitize.js: hooks/workflow-run-tests.js needs the SAME substitution for
+// the trigger_command annotation it records, and two copies of a security
+// substitution are two things to keep in step (CPR-SSOT). They are re-exported
+// below as ordinary properties, so this module's public surface is unchanged.
 const { isStrictSentinel } = require("../../hooks/lib/sentinel-patterns");
+const {
+  collapseControl,
+  redactSentinels,
+  sanitizeLine,
+  MAX_LINE,
+} = require("../../hooks/lib/output-sanitize");
 
 const SENTINEL_SCAN_RE = /<<\s*WORKFLOW/i;
-const SENTINEL_REDACT_RE = /<<\s*WORKFLOW/gi;
 
-const MAX_LINE = 500;
 const MAX_SUMMARY = 300;
 const MAX_YAML_SUMMARY = 296; // + the two single quotes stays inside 300
 const MAX_TAIL_LINES = 40;
 const MAX_FAILING_TESTS = 10;
-
-const TAB_CODE = 9;
-const SPACE_CODE = 32;
-const DEL_CODE = 127;
 
 const FALLBACK_MSG = "output withheld (sentinel-like content detected)";
 const FALLBACK_TRIPLE = `status: failed\nsummary: ${FALLBACK_MSG}\nartifact_path: (none)\n`;
@@ -46,37 +51,6 @@ const FALLBACK_TRIPLE_QUOTED = `status: failed\nsummary: "${FALLBACK_MSG}"\narti
 const FALLBACK_YAML =
   "status: runner-error\nexit_code: -1\nduration_seconds: 0\n" +
   `summary: '${FALLBACK_MSG}'\nfailing_tests: []\nlog_tail: |\n  ${FALLBACK_MSG}\n`;
-
-// Every C0 control (including CR/LF) and DEL becomes a space; TAB survives.
-// Written as a code-point walk rather than a regex escape class so the source
-// carries no literal control bytes of its own.
-function collapseControl(input) {
-  let out = "";
-  for (const ch of input) {
-    const code = ch.codePointAt(0);
-    out += (code < SPACE_CODE && code !== TAB_CODE) || code === DEL_CODE ? " " : ch;
-  }
-  return out;
-}
-
-// The redaction step on its own, for the other boundary at which untrusted bytes
-// re-enter a Claude Code transcript: an artifact file the calling skill reads.
-// Same substitution as sanitizeLine's, so stdout and artifacts cannot drift.
-function redactSentinels(input) {
-  return String(input === null || input === undefined ? "" : input).replace(
-    SENTINEL_REDACT_RE,
-    "<<_REDACTED_WORKFLOW",
-  );
-}
-
-function sanitizeLine(input, maxLen) {
-  let out = input === null || input === undefined ? "" : String(input);
-  out = collapseControl(out);
-  out = out.replace(SENTINEL_REDACT_RE, "<<_REDACTED_WORKFLOW");
-  const limit = typeof maxLen === "number" && maxLen > 0 ? maxLen : MAX_LINE;
-  if (out.length > limit) out = `${out.slice(0, limit - 3)}...`;
-  return out;
-}
 
 // Value for an UNQUOTED contract slot: no double quotes at all, never empty.
 function plainValue(input, maxLen, fallback) {
@@ -112,8 +86,68 @@ function renderStatusTriple(result, quoted) {
   return `status: ${status}\nsummary: ${summary}\nartifact_path: ${artifact}\n`;
 }
 
+// The worker reports the suite's contract as structured data; this renders it
+// back as ONE line, unindented, at the very top — the only place the run_tests
+// hook can read it without parsing the `log_tail` block scalar (#1378).
+// Both spellings the worker may hand over are accepted (object today, plain
+// string historically); anything else yields no line at all, because a contract
+// this renderer invented would be a verdict the suite never gave.
+function formatRunContract(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    const m = /^\s*(?:RUN_CONTRACT:\s*)?PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)\s*$/.exec(value);
+    return m === null ? null : `PASS=${m[1]} FAIL=${m[2]} SKIP=${m[3]} EXECUTED=${m[4]}`;
+  }
+  if (typeof value !== "object") return null;
+  const nums = ["pass", "fail", "skip", "executed"].map((k) => value[k]);
+  if (nums.some((n) => typeof n !== "number" || !Number.isFinite(n) || n < 0)) return null;
+  const [p, f, s, e] = nums.map((n) => Math.trunc(n));
+  return `PASS=${p} FAIL=${f} SKIP=${s} EXECUTED=${e}`;
+}
+
+// Same shape the hook's parser recognises, so "would the parser see two of
+// these?" is answered with the parser's own question.
+const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/;
+const CONTRACT_CAPTURE_RE =
+  /^[ \t]*RUN_CONTRACT: (PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+)[ \t]*$/;
+
+// RETIRED, DEFINITION ONLY — deliberately not called (#1273 round 3 / NEW-L1).
+//
+// It used to lift a contract-shaped line out of the log tail into the
+// authoritative top-level slot when the worker handed over no structured
+// contract. What it actually was, by then, is a launderer: it copied untrusted
+// log text into the ONE position the hook treats as a verdict, with no check on
+// where that text came from. And it had no live purpose — workers/test-runner.js
+// parses the suite's contract into `runContract` AND strips contract lines out of
+// `logTail` before handing the result over, so the fallback was unreachable for
+// every worker in the dispatcher.
+//
+// The top-level slot is now written from structured worker data alone. Kept here
+// unwired, rather than deleted, so a future caller must add the source-identity
+// check that this shape never had; a caller that simply re-wires it reopens the
+// hole.
+//
+// Exactly-one, mirroring the hook's own rule: zero is nothing to lift, and two
+// is ambiguous — inventing a winner would be this renderer issuing a verdict the
+// suite never gave.
+// eslint-disable-next-line no-unused-vars
+function promoteContractFromTail(tailSource) {
+  const found = [];
+  for (const l of tailSource) {
+    const m = CONTRACT_CAPTURE_RE.exec(sanitizeLine(l, MAX_LINE));
+    if (m !== null) found.push(m[1]);
+  }
+  return found.length === 1 ? found[0] : null;
+}
+
 function renderTestRunnerYaml(result) {
   const lines = [];
+  const tailSource = Array.isArray(result.logTail) ? result.logTail : [];
+  // Emitted BEFORE `status:` so the contract is the first line of the payload.
+  // Structured worker data is its ONLY source: see the retired promotion helper
+  // above for why log-tail text may not reach this slot.
+  const contract = formatRunContract(result.runContract);
+  if (contract !== null) lines.push(`RUN_CONTRACT: ${contract}`);
   lines.push(`status: ${plainValue(result.status, 64, "runner-error")}`);
   lines.push(`exit_code: ${toInt(result.exitCode, -1)}`);
   lines.push(`duration_seconds: ${Math.max(0, toInt(result.durationSeconds, 0))}`);
@@ -130,10 +164,14 @@ function renderTestRunnerYaml(result) {
   }
 
   lines.push("log_tail: |");
-  const tailSource = Array.isArray(result.logTail) ? result.logTail : [];
+  // The log_tail copy is dropped ONLY when a top-level line was emitted. Two
+  // visible contract lines trip the hook's exactly-one rule (ambiguous →
+  // demotion, i.e. #1378 wearing a different face); dropping unconditionally
+  // would instead delete the sole contract of a worker that reported none.
   const tail = tailSource
     .map((l) => sanitizeLine(l, MAX_LINE))
     .filter((l) => l.trim() !== "")
+    .filter((l) => contract === null || !CONTRACT_LINE_RE.test(l))
     .slice(-MAX_TAIL_LINES);
   if (tail.length === 0) lines.push("  (no output)");
   else for (const l of tail) lines.push(`  ${l}`);
@@ -201,6 +239,9 @@ function failure(entry, message) {
 }
 
 module.exports = {
+  // Re-exported from hooks/lib/output-sanitize.js as plain properties (never
+  // getters): the sentinel-stdout test resolves them off this module.
+  collapseControl,
   redactSentinels,
   sanitizeLine,
   render,

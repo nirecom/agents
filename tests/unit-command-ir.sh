@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/unit-command-ir.sh
 # Tests: hooks/lib/command-ir.js
-# Tags: hook, classify, unit, scope:issue-specific
+# Tags: hook, classify, unit, argv-raw, TL1, scope:issue-specific
 #
 # Unit tests for hasUnclosedQuote (tested indirectly via parse().parseFailure,
 # since hasUnclosedQuote is private). When hasUnclosedQuote returns true,
@@ -66,6 +66,97 @@ normal text|false|UC3: plain text has no unclosed quote
 "hello world"|false|UC6: closed double-quoted string
 "unclosed|true|UC7: unclosed double-quoted string is fail-closed
 TABLE
+
+# ===========================================================================
+# Group R — argv/argvRaw positional-correspondence invariant (#1273 C1)
+#
+# stripEnvPrefix() and resolveEffectiveSegment()'s control-keyword branch shift
+# `argv` without shifting `argvRaw`, so after either transform `argv[i]` and
+# `argvRaw[i]` describe different tokens and `cmd0Raw` still points at the
+# stripped keyword/assignment. The execution-position classifier indexes the two
+# arrays against each other, so the invariant "same length, same position" must
+# hold on the resolved segment — and a segment whose argvRaw is missing or short
+# must fall back to a copy of argv rather than throw (the same module backs
+# three security hooks; a TypeError there fails the guard open).
+# ===========================================================================
+
+RAW_PROBE_JS="$(mktemp -t irprobe.XXXXXX.js 2>/dev/null || echo "${TMPDIR:-/tmp}/irprobe-$$.js")"
+trap 'rm -f "$RAW_PROBE_JS"' EXIT
+cat > "$RAW_PROBE_JS" <<'PROBE'
+"use strict";
+// argv/argvRaw correspondence probe.
+//   node probe.js <command-ir.js> parse "<command>"
+//   node probe.js <command-ir.js> synth '<segment-json>'
+// Prints cmd0|cmd0Raw|argvLen|argvRawLen|argvRaw0|argv0, or THREW on exception.
+const irPath = process.argv[2];
+const mode = process.argv[3];
+const arg = process.argv[4];
+let eff = null;
+try {
+  const { parse, resolveEffectiveSegment } = require(irPath);
+  if (mode === "synth") {
+    eff = resolveEffectiveSegment(JSON.parse(arg));
+  } else {
+    const ir = parse(arg);
+    for (const seg of ir.segments) {
+      const r = resolveEffectiveSegment(seg);
+      if (r !== null && r.cmd0 !== "") { eff = r; break; }
+    }
+  }
+} catch (e) {
+  process.stdout.write("THREW");
+  process.exit(0);
+}
+if (eff === null) { process.stdout.write("NULL"); process.exit(0); }
+const raw = Array.isArray(eff.argvRaw) ? eff.argvRaw : null;
+process.stdout.write([
+  String(eff.cmd0),
+  String(eff.cmd0Raw),
+  String(Array.isArray(eff.argv) ? eff.argv.length : -1),
+  String(raw === null ? -1 : raw.length),
+  raw === null || raw.length === 0 ? "(none)" : String(raw[0]),
+  Array.isArray(eff.argv) && eff.argv.length > 0 ? String(eff.argv[0]) : "(none)",
+].join("|"));
+PROBE
+
+raw_probe() {
+  run_with_timeout node "$RAW_PROBE_JS" "$IR_JS" "$1" "$2" 2>/dev/null
+}
+
+assert_eq() {
+  local name="$1" want="$2" got="$3"
+  if [ "$want" = "$got" ]; then pass "$name"
+  else fail "$name (want=$(printf '%q' "$want") got=$(printf '%q' "$got"))"; fi
+}
+
+# label~mode~input~expected  (cmd0|cmd0Raw|argvLen|argvRawLen|argvRaw[0]|argv[0])
+while IFS='~' read -r label mode input expected; do
+  [ -z "$label" ] && continue
+  case "$label" in '#'*) continue ;; esac
+  assert_eq "$label" "$expected" "$(raw_probe "$mode" "$input")"
+done <<'TABLE'
+R1: env prefix keeps argv/argvRaw aligned~parse~A=1 B=2 bash tests/x.sh~bash|bash|1|1|tests/x.sh|tests/x.sh
+R2: env prefix preserves the quoted raw spelling~parse~A=1 bash "tests/x.sh"~bash|bash|1|1|"tests/x.sh"|tests/x.sh
+R3: control body keyword keeps argv/argvRaw aligned~parse~for f in x; do bash tests/x.sh; done~bash|bash|1|1|tests/x.sh|tests/x.sh
+R4: control keyword + env prefix combined~parse~for f in x; do A=1 bash tests/x.sh; done~bash|bash|1|1|tests/x.sh|tests/x.sh
+R5: condition header + env prefix combined~parse~while A=1 node tests/y.js; do echo hi; done~node|node|1|1|tests/y.js|tests/y.js
+R6: missing argvRaw falls back to a copy of argv~synth~{"cmd0":"A=1","argv":["bash","tests/x.sh"],"cmd0Raw":"A=1"}~bash|bash|1|1|tests/x.sh|tests/x.sh
+R7: short argvRaw falls back to a copy of argv~synth~{"cmd0":"do","argv":["bash","tests/x.sh"],"cmd0Raw":"do","argvRaw":["do"]}~bash|bash|1|1|tests/x.sh|tests/x.sh
+TABLE
+
+# The fallback must be reached WITHOUT an exception — asserted separately from the
+# value check above so a crash is never reported as a mere value mismatch.
+for _synth in \
+  '{"cmd0":"A=1","argv":["bash","tests/x.sh"],"cmd0Raw":"A=1"}' \
+  '{"cmd0":"do","argv":["bash","tests/x.sh"],"cmd0Raw":"do","argvRaw":["do"]}'
+do
+  _got="$(raw_probe synth "$_synth")"
+  if [ "$_got" = "THREW" ]; then
+    fail "R8: malformed argvRaw must not throw (input=$_synth)"
+  else
+    pass "R8: malformed argvRaw must not throw (input=$_synth)"
+  fi
+done
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

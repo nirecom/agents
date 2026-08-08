@@ -41,10 +41,12 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         fail "C-VALID. run-all.sh + exit=0 + valid contract → expected complete, got: $STATUS"
     fi
 
-    # SKIPPED: absolute-path run-all.sh provenance (e.g. /home/user/agents/tests/run-all.sh or a worktree abs path)
-    # Because: RUN_ALL_SH_RE anchors on the relative `tests/run-all.sh` reference; an absolute path is a known
-    #   provenance false-NEGATIVE (documented Out-of-scope in the detail plan). Harmless: no contract in stdout → pending, never false-green.
-    # L3 gap: only a real session invoking run-all.sh via an absolute path would exercise this; not reproducible at this L2 layer.
+    # RETIRED SKIP: absolute-path run-all.sh provenance is no longer unverified.
+    # The note here previously claimed a POSIX absolute path was a provenance
+    # false-negative; RUN_ALL_SH_RE's `[./\w-]*\/` prefix in fact matches it, and
+    # quoted-arg-and-provenance.sh (QA-ABS / QA-ABS-TO) now asserts that directly.
+    # The residual false-negative is the drive-letter spelling only (`:` is absent
+    # from the prefix class) — covered there as QA-ABS-WIN.
 
     # C-NOPROV: bash tests/foo.sh (no run-all.sh), exit=0, one valid RUN_CONTRACT line,
     # write_tests=complete → pending (provenance fail).

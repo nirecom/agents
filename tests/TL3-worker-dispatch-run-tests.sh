@@ -135,6 +135,66 @@ else
 fi
 
 # ===========================================================================
+# Group D — the real generator against the real detector (#1378 / #1798)
+#
+# Groups A and B prove the worker's output is well-formed. That is not the same
+# as it being READABLE by hooks/workflow-run-tests.js, and #1378 was exactly that
+# difference: both sides passed their own suites while the contract crossed the
+# seam in a shape the parser's anchor rejected. Here the REAL YAML produced above
+# is fed to the REAL hook, paired with the REAL dispatch command string — the two
+# artefacts the TL2 round trip can only synthesise.
+#
+# The command string is built from the same values the dispatcher was invoked
+# with, so it cannot drift from what /run-tests RNT-1 actually issues.
+# ===========================================================================
+D_STATE="$TMPD/hook-state"
+D_PLANS="$TMPD/hook-plans"
+mkdir -p "$D_STATE" "$D_PLANS"
+# Fixture isolation: the hook gets its own state AND plans dir (dual-pin), and no
+# inherited session id — this file otherwise runs inside a live session whose
+# real state file must not be touched.
+D_SID="tl3rt-$$-$RANDOM"
+# A subshell rather than `env -u`: this platform's `env` stops accepting options
+# once a VAR=value assignment has been seen, so the -u forms would be parsed as
+# the command name.
+d_node() {
+    (
+        export CLAUDE_WORKFLOW_DIR="$D_STATE"
+        export WORKFLOW_PLANS_DIR="$(nodepath "$D_PLANS")"
+        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        run_with_timeout 60 node "$@"
+    )
+}
+d_node -e '
+require(process.argv[1] + "/hooks/workflow-state").markStep(process.argv[2], "write_tests", "complete");
+' "$(nodepath "$AGENTS_DIR")" "$D_SID" >/dev/null 2>&1 || true
+
+D_CMD="node \"$(nodepath "$DISPATCH_JS")\" test-runner \"$MAIN_ROOT\" \"$(nodepath "$PAYLOAD")\""
+D_PAYLOAD_JSON="$TMPD/hook-stdin.json"
+d_node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1], JSON.stringify({
+  tool_name: "Bash",
+  tool_input: { command: process.argv[2] },
+  tool_response: { exit_code: 0, stdout: fs.readFileSync(process.argv[3], "utf8") },
+  session_id: process.argv[4],
+}));
+' "$(nodepath "$D_PAYLOAD_JSON")" "$D_CMD" "$(nodepath "$OUT")" "$D_SID" >/dev/null 2>&1 || true
+
+if [ -f "$D_PAYLOAD_JSON" ]; then
+    d_node "$AGENTS_DIR/hooks/workflow-run-tests.js" < "$D_PAYLOAD_JSON" >/dev/null 2>&1 || true
+    D_STATUS="$(d_node -e '
+try {
+  const s = require(process.argv[1] + "/hooks/workflow-state").readState(process.argv[2]);
+  console.log(s && s.steps && s.steps.run_tests ? s.steps.run_tests.status : "absent");
+} catch (e) { console.log("absent"); }
+' "$(nodepath "$AGENTS_DIR")" "$D_SID" 2>/dev/null)"
+    assert_eq "tl3/roundtrip/real-worker-output-completes-run_tests" "complete" "$D_STATUS"
+else
+    fail "tl3/roundtrip/real-worker-output-completes-run_tests — could not build hook stdin"
+fi
+
+# ===========================================================================
 # Group C — containment: no log files written, no sentinel leakage
 # ===========================================================================
 PLANS_AFTER="$(cd "$PLANS_RAW" && find . -type f | LC_ALL=C sort)"
