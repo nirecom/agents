@@ -3,30 +3,12 @@
 # Tests: bin/github-issues/lib/ensure-project-ready.sh, bin/github-issues/migration/link-project.sh
 # Tags: github-issues, issue-setup, ensure-project-ready, link-project, scope:issue-specific
 #
-# Regression test for #488 (reopened): the /issue-setup path
-# (bin/github-issues/lib/ensure-project-ready.sh) creates or reuses a Projects v2
-# board but never links it to the repository. The sibling migration path
-# (migration/create-project.sh) was already fixed via link_project_to_repo();
-# this file is the missing coverage for the /issue-setup path, and mirrors
-# tests/fix-488-create-project-link-repo.sh (its L1/L2/L3/L5 → LNK-1..LNK-4).
-# The migration test's L4 (dry-run) is NOT ported: ensure_project_ready() has no
-# dry-run mode.
+# Regression test for #488 (reopened): /issue-setup path never linked its
+# Projects v2 board to the repo. Mirrors tests/fix-488-create-project-link-repo.sh
+# (LNK-1..LNK-4); no dry-run case (ensure_project_ready() has none).
 #
-# TL3 gap (what this test does NOT catch):
-# - Whether the real GitHub GraphQL API's linkProjectV2ToRepository mutation
-#   actually attaches the board to the repository (this is a mocked gh CLI).
-# - Whether repeated link calls are truly server-side idempotent — LNK-4 only
-#   proves the client re-issues the mutation, not that GitHub tolerates it.
-# - Whether the repo node_id returned by `gh api repos/<o>/<r> --jq .node_id` is
-#   the id shape linkProjectV2ToRepository accepts.
-# Closest-to-action mitigation: none of bin/check-verification-gate.sh's risk
-# categories (hook-registration, installer, pwsh-required, skill-orchestration,
-# merge-base-suspect) fires for this change's bin/ + tests/ file set — verified
-# empirically by running the classifier over those paths, which emits no
-# CATEGORY line. So the USER_VERIFIED preflight will NOT ask about this gap.
-# The closer is therefore explicit: run with RUN_TL4=on, or manually invoke
-# /issue-setup twice against a scratch repo and confirm on github.com that the
-# board appears under the repo's Projects tab after both runs.
+# TL3 gap: mocked gh CLI — real GraphQL link mutation + idempotency unverified.
+# Closer: RUN_TL4=on, or manually confirm the board on github.com after /issue-setup.
 
 # shellcheck source=feature-1340-issue-setup/_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-1340-issue-setup/_lib.sh"
