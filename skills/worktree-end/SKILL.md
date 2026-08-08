@@ -59,6 +59,7 @@ Serial by dependency (SC-S): Pass 2 copies exactly the file set Pass 1 inventori
 
 ### Step WE-10 — Last-chance findings
 Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after this step are excluded from the Final Report.
+Use the append CLI and severity tagging per `rules/mid-workflow-findings.md`.
 
 ### Step WE-11 — Promote WORKTREE_NOTES entries to issues
 Run the pass in `skills/_shared/notes-promotion.md` unconditionally at this step — the worktree and its notes are deleted later in this skill, so no downstream callsite can reach them.

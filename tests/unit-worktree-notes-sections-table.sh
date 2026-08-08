@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # tests/unit-worktree-notes-sections-table.sh
 # Tests: hooks/lib/worktree-notes-sections.js
-# Tags: worktree-notes, parser, marker-regex, table-driven, mutation-probe, TL1, scope:common
+# Tags: worktree-notes, parser, marker-regex, severity-marker, scan-section, table-driven, mutation-probe, TL1, scope:common
 #
-# hooks/lib/worktree-notes-sections.js is a parser: a section scanner plus one
-# regex constant (MARKER_RE) that decides whether an entry has already been
-# promoted. Everything downstream trusts that decision — a false negative files
-# the same finding as a second GitHub issue, a false positive silently drops a
-# finding on the floor. Both failures are invisible in the promotion flow, so
-# the regex and the section boundaries are pinned here case by case.
+# hooks/lib/worktree-notes-sections.js is a parser: a section scanner plus
+# THREE regex constants, each guarding a different failure mode. Everything
+# downstream trusts their verdicts, and every one of these failures is
+# invisible at the point it happens:
+#   - PROMOTED_MARKER_RE — "has this entry already become a GitHub issue?"
+#     A false negative files the same finding twice; a false positive silently
+#     drops a finding on the floor (bin/worktree-notes-triage.js).
+#   - SEVERITY_MARKER_RE — "is this entry severity:high?" Strict, canonical-form
+#     only. A false positive dumps a full-text entry into the Final Report and
+#     re-opens the CPR-UO blow-up of #1886; a false negative merely compresses
+#     (fail-safe), which is why the non-canonical spellings are pinned as null.
+#   - TRAILING_MARKER_RE — body stripping. Lenient by design (any kind, any
+#     order). A miss leaks a raw `<!-- ... -->` marker into the Final Report and
+#     into GitHub issue titles created from entry text.
 #
 # The table is then handed to bin/mutation-probe.sh as its test command: the
 # probe breaks each regex constant in the module in turn and requires this file
 # to fail for every one of them. A table that still passes against a broken
-# MARKER_RE is a table that is not testing the regex, and the probe says so with
+# constant is a table that is not testing that regex, and the probe says so with
 # an explicit mutation score checked against MP_THRESHOLD below.
 #
 # TL1: pure in-process parsing, no subprocess under test beyond the node host.
@@ -47,7 +55,14 @@ trap 'rm -rf "$TMPD"' EXIT
 cat > "$TMPD/run-cases.js" <<'JS'
 "use strict";
 const lib = require(process.argv[2]);
-const { parseSectionEntries, extractSection, markEntryPromoted } = lib;
+const {
+  parseSectionEntries,
+  extractSection,
+  markEntryPromoted,
+  entryBody,
+  scanSection,
+  PROMOTED_MARKER_RE,
+} = lib;
 
 const CRLF = (s) => s.replace(/\n/g, "\r\n");
 
@@ -62,7 +77,33 @@ function summarize(entries) {
   ].join(":");
 }
 
+// severity|hasMarker|body of the first entry — the three per-entry verdicts the
+// Final Report compression branches on (bin/render-final-report/notes.js).
+function sevOf(entries) {
+  if (entries.length === 0) return "0";
+  const e = entries[0];
+  return [
+    e.severity === null || e.severity === undefined ? "null" : e.severity,
+    e.hasMarker ? "T" : "F",
+    e.body,
+  ].join(":");
+}
+
+// entries|strayCount|stoppedAtSubHeading|subHeading. subHeading is normalized to
+// "-" when absent so that null/undefined/"" all read the same in the table; the
+// assertion that matters is the populated case.
+function scanOf(s) {
+  return [
+    s.entries.length,
+    s.strayCount,
+    String(s.stoppedAtSubHeading),
+    s.subHeading ? s.subHeading : "-",
+  ].join(":");
+}
+
 const S = (body) => `# Worktree Notes\nBranch: t\n\n${body}\n`;
+const B = (body) => S(`## BugsFound\n${body}`);
+const sev = (line) => sevOf(parseSectionEntries(B(line), "BugsFound"));
 
 const CASES = {
   // --- section boundaries ------------------------------------------------
@@ -155,6 +196,89 @@ const CASES = {
     summarize(parseSectionEntries(
       S("## BugsFound\n- one <!-- promoted: #12 --> \n"), "BugsFound")),
 
+  // --- SEVERITY_MARKER_RE (strict canonical-form recognition) -------------
+  // Canonical form is `- <body> <!-- severity: high --> <!-- promoted: #N -->`.
+  // Recognition is strict (anything else is null = compressed = fail-safe);
+  // stripping is lenient (see entryBody cases below). The asymmetry is
+  // deliberate — see the header.
+  "sev-canonical": () => sev("- body <!-- severity: high -->"),
+  "sev-with-promoted": () =>
+    sev("- body <!-- severity: high --> <!-- promoted: #12 -->"),
+
+  // Reversed order is NOT canonical: severity is not recognized (fail-safe to
+  // compression) and promoted is not at EOL, but the body must still come out
+  // clean because TRAILING_MARKER_RE strips in a loop regardless of kind.
+  "sev-reversed": () =>
+    sev("- body <!-- promoted: #12 --> <!-- severity: high -->"),
+
+  "sev-no-inner-spaces": () => sev("- body <!--severity: high-->"),
+  "sev-capitalized": () => sev("- body <!-- Severity: High -->"),
+  "sev-no-space-after-colon": () => sev("- body <!-- severity:high -->"),
+  "sev-uppercase-value": () => sev("- body <!-- severity: HIGH -->"),
+  "sev-mid-line": () => sev("- a <!-- severity: high --> b"),
+  "sev-unknown-value-medium": () => sev("- body <!-- severity: medium -->"),
+  // `low` is an accepted CLI input value but is never written as a marker, so
+  // the read side must treat it as an unknown value, not as a severity.
+  "sev-unknown-value-low": () => sev("- body <!-- severity: low -->"),
+  // The leading `(?:(?!<!--).)*` guard: any earlier HTML comment kills the match.
+  "sev-preceded-by-comment": () =>
+    sev("- a <!-- x --> b <!-- severity: high -->"),
+  "sev-absent": () => sev("- body"),
+  "sev-canonical-crlf": () =>
+    sevOf(parseSectionEntries(CRLF(B("- body <!-- severity: high -->")), "BugsFound")),
+
+  // --- PROMOTED_MARKER_RE capture group ----------------------------------
+  "promoted-capture": () => {
+    const m = PROMOTED_MARKER_RE.exec("- a <!-- promoted: #77 -->");
+    return m === null ? "nomatch" : m[1];
+  },
+
+  // --- entryBody (lenient stripping) -------------------------------------
+  "eb-both-markers": () =>
+    entryBody("- x <!-- severity: high --> <!-- promoted: #3 -->"),
+  "eb-promoted-only": () => entryBody("- x <!-- promoted: #3 -->"),
+  "eb-severity-only": () => entryBody("- x <!-- severity: high -->"),
+  "eb-reversed": () =>
+    entryBody("- x <!-- promoted: #3 --> <!-- severity: high -->"),
+  "eb-no-marker": () => entryBody("- x"),
+  // An issue reference in the prose is body text, not a marker: keep it.
+  "eb-keeps-issue-ref": () =>
+    entryBody("- fix thing (#42) <!-- promoted: #42 -->"),
+
+  // --- heading match rule (trimEnd) --------------------------------------
+  // A trailing space on the heading used to make the whole section vanish
+  // silently. `line.trimEnd() === "## " + heading` fixes that.
+  "heading-trailing-space": () =>
+    summarize(parseSectionEntries(S("## BugsFound \n- bug one\n"), "BugsFound")),
+  // Extra space BEFORE the heading word is deliberately NOT accepted.
+  "heading-leading-extra-space": () =>
+    summarize(parseSectionEntries(S("##  BugsFound\n- bug one\n"), "BugsFound")),
+
+  // --- scanSection -------------------------------------------------------
+  "scan-stray-count": () =>
+    scanOf(scanSection(B("- e1\nprose one\nprose two\n- (none)"), "BugsFound")),
+  "scan-stray-count-crlf": () =>
+    scanOf(scanSection(CRLF(B("- e1\nprose one\nprose two\n- (none)")), "BugsFound")),
+  "scan-sub-heading": () =>
+    scanOf(scanSection(B("- e1\n### Repro\n- e2"), "BugsFound")),
+  "scan-missing-section": () =>
+    scanOf(scanSection(S("## RelatedTasks\n- x"), "BugsFound")),
+  "scan-duplicate-headings-merge": () =>
+    scanOf(scanSection(
+      S("## BugsFound\n- first block\n\n## BugsFound\n- second block"), "BugsFound")),
+  "scan-heading-trailing-space": () =>
+    scanOf(scanSection(S("## BugsFound \n- e1\n"), "BugsFound")),
+  // parseSectionEntries must be a thin wrapper over scanSection().entries.
+  "scan-matches-parse": () => {
+    const doc = B("- one <!-- promoted: #1 -->\nprose\n- two <!-- severity: high -->");
+    const a = JSON.stringify(scanSection(doc, "BugsFound").entries);
+    const b = JSON.stringify(parseSectionEntries(doc, "BugsFound"));
+    return String(a === b);
+  },
+  // N2: no unconsumed fields may creep back into the return shape.
+  "scan-key-set": () =>
+    Object.keys(scanSection(B("- e1"), "BugsFound")).sort().join(","),
+
   // --- extractSection ----------------------------------------------------
   "extract-missing": () => extractSection(S("## RelatedTasks\n- x"), "BugsFound"),
   "extract-placeholder": () => extractSection(S("## BugsFound\n- (none)"), "BugsFound"),
@@ -239,6 +363,36 @@ marker-missing-hash|1:- one <!-- promoted: 12 -->:5:F
 marker-not-at-end|1:- one <!-- promoted: #12 --> trailing words:5:F
 marker-no-leading-space|1:- one<!-- promoted: #12 -->:5:F
 marker-trailing-space|1:- one <!-- promoted: #12 --> :5:F
+sev-canonical|high:F:body
+sev-with-promoted|high:T:body
+sev-reversed|null:F:body
+sev-no-inner-spaces|null:F:body
+sev-capitalized|null:F:body
+sev-no-space-after-colon|null:F:body
+sev-uppercase-value|null:F:body
+sev-mid-line|null:F:a <!-- severity: high --> b
+sev-unknown-value-medium|null:F:body
+sev-unknown-value-low|null:F:body
+sev-preceded-by-comment|null:F:a <!-- x --> b
+sev-absent|null:F:body
+sev-canonical-crlf|high:F:body
+promoted-capture|77
+eb-both-markers|x
+eb-promoted-only|x
+eb-severity-only|x
+eb-reversed|x
+eb-no-marker|x
+eb-keeps-issue-ref|fix thing (#42)
+heading-trailing-space|1:- bug one:5:F
+heading-leading-extra-space|0
+scan-stray-count|1:2:false:-
+scan-stray-count-crlf|1:2:false:-
+scan-sub-heading|1:0:true:### Repro
+scan-missing-section|0:0:false:-
+scan-duplicate-headings-merge|2:0:false:-
+scan-heading-trailing-space|1:0:false:-
+scan-matches-parse|true
+scan-key-set|entries,stoppedAtSubHeading,strayCount,subHeading
 extract-missing|(none)
 extract-placeholder|(none)
 extract-single|- bug one
@@ -260,8 +414,13 @@ TABLE
 # from the `# Tests:` header, which is THIS file, and the child would run the
 # probe again. MP_CHILD=1 makes the child run the table only.
 #
-# Threshold is 100, not the tool's default 80: the target declares exactly one
-# regex constant (MARKER_RE), so 80% would round down to "0 of 1 killed passes".
+# Threshold is 100, not the tool's default 80: the target declares exactly three
+# regex constants (PROMOTED_MARKER_RE / SEVERITY_MARKER_RE / TRAILING_MARKER_RE),
+# and 80% would let one of the three survive unkilled — which is exactly the
+# state "we renamed/added a constant and forgot to test it" produces. Each
+# constant owns a distinct, silent failure mode (see the header), so partial
+# credit is not acceptable here. Adding a fourth constant to the module means
+# adding both a case for it and a `^KILLED:` line below.
 MP_THRESHOLD=100
 
 mutation_probe() {
@@ -279,7 +438,14 @@ mutation_probe() {
     # The tool reports "KILLED: <k> / <n> (score: <s>%)".
     score="$(printf '%s\n' "$out" | sed -n 's/.*(score: \([0-9]*\)%).*/\1/p' | head -1)"
     [ -n "$score" ] || missing="$missing no-score-reported"
-    printf '%s\n' "$out" | grep -q '^KILLED: MARKER_RE' || missing="$missing MARKER_RE-not-killed"
+    # Every named regex constant in the module must die against this table.
+    # Named individually (not just via the score) so a rename shows up as the
+    # specific constant that lost coverage rather than as an opaque -33%.
+    local rc_name
+    for rc_name in PROMOTED_MARKER_RE SEVERITY_MARKER_RE TRAILING_MARKER_RE; do
+        printf '%s\n' "$out" | grep -q "^KILLED: $rc_name" \
+            || missing="$missing $rc_name-not-killed"
+    done
     printf '%s\n' "$out" | grep -q '^LIVE:' && missing="$missing live-mutant-survived"
     if [ -n "$score" ] && [ "$score" -lt "$MP_THRESHOLD" ]; then
         missing="$missing score=$score<$MP_THRESHOLD"

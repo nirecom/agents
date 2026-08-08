@@ -153,8 +153,7 @@ On `status: complete`:
 ## Step SC-6 — Emit Final Report directly into assistant text
 
 Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" "<session-id>" "<PLANS_DIR>/<session-id>-final-report-env.json" "<PLANS_DIR>/<session-id>-issue-close-outcome.json" "<PLANS_DIR>/<session-id>-intent.md" "<PLANS_DIR>/<session-id>-supervisor-state.json"
-Emit the stdout verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
-Retrieve `CONV_LANG=$(bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG 2>/dev/null || true)`. When non-empty and not `english`, translate the body text into that language — headings remain English.
+Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
 
 SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
 

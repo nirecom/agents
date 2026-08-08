@@ -3,8 +3,18 @@
 // Shared helpers for parsing and annotating WORKTREE_NOTES.md.
 // Consumed by:
 //   - bin/worktree-notes-triage.js (parseSectionEntries, markEntryPromoted)
+//   - bin/worktree-notes-append.js (parseSectionEntries)
+//   - bin/render-final-report/notes.js (scanSection)
+//
+// Marker convention on an entry line (canonical, fixed order):
+//   - <body> <!-- severity: high --> <!-- promoted: #N -->
+// Recognition is strict (canonical form only, so a malformed severity tag
+// fails safe to "compress"); stripping is lenient (any trailing comment, any
+// order), so no raw marker ever leaks into rendered output.
 
-const MARKER_RE = / <!-- promoted: #\d+ -->$/;
+const PROMOTED_MARKER_RE = / <!-- promoted: #(\d+) -->$/;
+const SEVERITY_MARKER_RE = /^- (?:(?!<!--).)*<!-- severity: (high) -->(?: <!-- promoted: #\d+ -->)?$/;
+const TRAILING_MARKER_RE = / <!--[^<>]*-->$/;
 
 function extractSection(text, heading) {
   const lines = text.split(/\r?\n/);
@@ -20,31 +30,68 @@ function extractSection(text, heading) {
   return bullets.join("\n");
 }
 
-// Returns Array<{raw: string, lineNumber: number, hasMarker: boolean, section?: string}>.
-// lineNumber is 1-indexed against the full document.
-// Empty array for missing section OR section that contains only "- (none)".
-function parseSectionEntries(text, heading) {
+// Strip the leading "- " and every trailing HTML comment marker, whatever its
+// kind or order. In-body text such as "(#42)" is preserved.
+function entryBody(rawLine) {
+  let body = String(rawLine);
+  if (body.startsWith("- ")) body = body.slice(2);
+  while (TRAILING_MARKER_RE.test(body)) {
+    body = body.replace(TRAILING_MARKER_RE, "");
+  }
+  return body.trim();
+}
+
+// Single-pass section scan. Returns exactly:
+//   { entries, strayCount, stoppedAtSubHeading, subHeading }
+// entries: Array<{raw, lineNumber, hasMarker, severity, body}> — lineNumber is
+//   1-indexed against the full document; "- (none)" placeholders are skipped.
+// strayCount: non-blank lines inside the section that are not "- " bullets.
+// stoppedAtSubHeading / subHeading: a "### " line cut the scan short, so the
+//   remaining entries were never seen (they are lost, not merely compressed).
+// A duplicate "## <heading>" re-enters the same section rather than ending it.
+function scanSection(text, heading) {
+  const target = `## ${heading}`;
   const lines = text.split(/\r?\n/);
-  let inSection = false;
   const entries = [];
+  let inSection = false;
+  let strayCount = 0;
+  let stoppedAtSubHeading = false;
+  let subHeading = null;
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (line === `## ${heading}`) { inSection = true; continue; }
-    if (inSection && (line.startsWith("## ") || line.startsWith("### "))) break;
+    if (line.trimEnd() === target) { inSection = true; continue; }
     if (!inSection) continue;
-    if (!line.startsWith("- ")) continue;
+    if (line.startsWith("### ")) {
+      stoppedAtSubHeading = true;
+      subHeading = line;
+      break;
+    }
+    if (line.startsWith("## ")) break;
+    if (!line.startsWith("- ")) {
+      if (line.trim() !== "") strayCount += 1;
+      continue;
+    }
     if (line === "- (none)") continue;
     entries.push({
       raw: line,
       lineNumber: i + 1,
-      hasMarker: MARKER_RE.test(line),
+      hasMarker: PROMOTED_MARKER_RE.test(line),
+      severity: SEVERITY_MARKER_RE.test(line) ? "high" : null,
+      body: entryBody(line),
     });
   }
-  return entries;
+  return { entries, strayCount, stoppedAtSubHeading, subHeading };
+}
+
+// Thin wrapper: the entry list is the only thing most consumers need.
+function parseSectionEntries(text, heading) {
+  return scanSection(text, heading).entries;
 }
 
 // Append ` <!-- promoted: #<issueNumber> -->` to the line at lineNumber (1-indexed).
 // Preserves CRLF if the original line used it. Out-of-range → unchanged.
+// The unconditional end-of-line append is what keeps the canonical marker order
+// (severity first, promoted last) intact.
 function markEntryPromoted(text, lineNumber, issueNumber) {
   if (!Number.isInteger(lineNumber) || lineNumber < 1) return text;
   // Split preserving line endings: capture each line's original terminator.
@@ -59,4 +106,13 @@ function markEntryPromoted(text, lineNumber, issueNumber) {
   return parts.join("");
 }
 
-module.exports = { extractSection, parseSectionEntries, markEntryPromoted };
+module.exports = {
+  PROMOTED_MARKER_RE,
+  SEVERITY_MARKER_RE,
+  TRAILING_MARKER_RE,
+  extractSection,
+  entryBody,
+  scanSection,
+  parseSectionEntries,
+  markEntryPromoted,
+};
