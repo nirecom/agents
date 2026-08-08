@@ -214,6 +214,8 @@ assert_absent "S3/pem-inside-json-payload" "$PEM_BODY" \
 #     the fixed-prefix form; `private_key_id` is the service-account JSON field
 #     whose NAME contains "key" but matches none of the secret-word alternation
 #     (token|secret|password|api[_-]?key|apikey|credential|auth).
+# NOTE: this is a synthetic/fake placeholder value used only to test the
+#       redaction logic below — it is not a real Google API key.
 GCP_API_KEY='AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q'
 assert_absent "S3/gcp-api-key-bare" "$GCP_API_KEY" \
     "curl https://maps.googleapis.com/maps/api/geocode/json?key=${GCP_API_KEY}"
