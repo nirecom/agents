@@ -194,3 +194,7 @@ Changes: Background: #1886 — Final Report's Bugs Found/Related Tasks/Next Task
 ### FEATURE: PR #1907 — refactor/issue-1904 (2026-08-08, 060216f36454d67506aab7006351a02dc2e2feb2, #1907)
 Background: cleanup(workflow-state): remove unused WORKFLOW_START_STEP constant + add MEDIUM-1 inheritance-origin regression test (#1904)
 Changes: Removed unused `WORKFLOW_START_STEP` constant (and its comment and export) from `hooks/workflow-state/lifecycle.js`; dead code since PR #1893/#1794 rewrote `isWorkflowStarted()` to use event-stream + `ADOPTION_ORIGINS` allow-list. Added `tests/feature-1904-inheritance-origin-stamp.sh` regression test locking the `applyInheritance()` invariant: every inherited event is stamped `origin:"session-inherit"` regardless of the donor's own origin, including v1-migrated donors whose events carry `origin:"migration-v1-to-v2"` (closes #1904). <!-- compose-doc-append-sentinel: branch=refactor/issue-1904 pr=#1907 -->
+
+### FEATURE: PR #1909 — fix/fix-488-ensure-project-ready-link (2026-08-08, 704bae54e3c035c047a4d4b7e68f960425f72b89, #1909)
+Background: fix(issue-setup): link Projects v2 board to repo in ensure-project-re...
+Changes: FIX: `ensure-project-ready.sh` (the `/issue-setup` path) did not link the Projects v2 board to its repository — the same regression `create-project.sh` had before PR #496. Now calls the shared `link_project_to_repo()` helper on both the create and reuse paths, non-fatally (warns on failure). Closes #488. <!-- compose-doc-append-sentinel: branch=fix/fix-488-ensure-project-ready-link pr=#1909 -->
