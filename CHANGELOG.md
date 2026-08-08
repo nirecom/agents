@@ -248,3 +248,7 @@ Changes: worktree-end and issue-close-finalize now automatically file GitHub iss
 ### FEATURE: PR #1890 (2026-08-08)
 Background: fix: correct issueNumber field mismatch in Final Report and remove dead forFinalReport option
 Changes: Fixed a bug where the Final Report's "Closed Issue Outcomes" section showed `#undefined` instead of the actual issue number (#1614).
+
+### FEATURE: PR #1897 (2026-08-08)
+Background: fix: replace cwd+branch session-start inheritance with lineage-based key (#1305)
+Changes: Fixed: a new Claude Code session could silently inherit stale workflow progress from an
