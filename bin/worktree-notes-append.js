@@ -1,28 +1,36 @@
 #!/usr/bin/env node
 "use strict";
 
-// CLI for appending a new issue reference to WORKTREE_NOTES.md (issue #622).
+// CLI for appending an entry to WORKTREE_NOTES.md. Two modes; argument parsing
+// and mode resolution live in bin/worktree-notes-append/args.js.
 //
-// Usage:
+// Mode A — promotion pointer for an existing issue (#622):
 //   node bin/worktree-notes-append.js \
 //     --notes-path <absolute-path-to-WORKTREE_NOTES.md> \
-//     --issue-number <N> \
-//     --title "<short title>" \
-//     [--label <label> [--label ...]] \
-//     [--skip-if-main]
+//     --issue-number <N> --title "<short title>" \
+//     [--label <label> [--label ...]] [--skip-if-main]
+//   Routes to ## BugsFound when any --label is type:incident, else ## RelatedTasks.
+//   Writes `- <title> (#N) <!-- promoted: #N -->`; idempotent on (#N).
 //
-// Routes to ## BugsFound when any --label is type:incident, else ## RelatedTasks.
-// Idempotent: re-running with the same --issue-number is a no-op (no duplicate).
-// Atomic write via tmp + rename. Pre-marks the new entry with
-// ` <!-- promoted: #<N> -->` so the triage list filter treats it as resolved.
+// Mode B — finding authoring (#1886), selected by omitting --issue-number:
+//   node bin/worktree-notes-append.js \
+//     --notes-path <absolute-path-to-WORKTREE_NOTES.md> \
+//     --section <BugsFound|RelatedTasks|NextTasks|ManualReminders> \
+//     --title "<one-line finding>" [--severity high|low|none] [--skip-if-main]
+//   --severity is required for BugsFound and rejected elsewhere. `high` writes
+//   `- <title> <!-- severity: high -->` (kept verbatim in the Final Report);
+//   `low`/`none` write a plain `- <title>`. Idempotent on the entry body.
+//
+// Both modes: atomic write via tmp + rename, `- (none)` placeholder replacement,
+// missing-section append at EOF.
 
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { parseArgs } = require("util");
 const {
   parseSectionEntries,
 } = require("../hooks/lib/worktree-notes-sections");
+const { resolveArgs } = require("./worktree-notes-append/args");
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-append] ${msg}\n`);
@@ -175,6 +183,7 @@ function sectionPresent(text, section) {
   return false;
 }
 
+// Mode A idempotency: keyed on the `(#N)` back-reference in the raw line.
 function entryAlreadyPresent(text, section, issueNumber) {
   if (!text) return false;
   const entries = parseSectionEntries(text, section);
@@ -185,58 +194,25 @@ function entryAlreadyPresent(text, section, issueNumber) {
   return false;
 }
 
-function parseCliArgs(argv) {
-  try {
-    const { values } = parseArgs({
-      args: argv,
-      options: {
-        "notes-path": { type: "string" },
-        "issue-number": { type: "string" },
-        title: { type: "string" },
-        label: { type: "string", multiple: true },
-        "skip-if-main": { type: "boolean" },
-      },
-      strict: true,
-      allowPositionals: false,
-    });
-    return values;
-  } catch (e) {
-    err(`argument parse failed: ${e.message}`);
-    return null;
+// Mode B idempotency: keyed on the stripped entry body, so re-running with a
+// different --severity does not append an untagged duplicate of a tagged entry.
+function bodyAlreadyPresent(text, section, title) {
+  if (!text) return false;
+  const wanted = title.trim();
+  for (const entry of parseSectionEntries(text, section)) {
+    if (entry.body === wanted) return true;
   }
+  return false;
 }
 
 function main() {
-  const args = parseCliArgs(process.argv.slice(2));
+  const args = resolveArgs(process.argv.slice(2));
   if (!args) return 2;
 
-  const notesPathRaw = args["notes-path"];
-  const issueNumberRaw = args["issue-number"];
-  const title = args.title;
-  const labels = Array.isArray(args.label) ? args.label : [];
-  const skipIfMain = Boolean(args["skip-if-main"]);
+  const { mode, title, issueNumber, severity, skipIfMain } = args;
 
-  if (!notesPathRaw) {
-    err("missing --notes-path");
-    return 2;
-  }
-  if (!issueNumberRaw || !/^\d+$/.test(String(issueNumberRaw))) {
-    err(`invalid --issue-number: ${issueNumberRaw}`);
-    return 2;
-  }
-  if (typeof title !== "string" || title.length === 0) {
-    err("missing --title");
-    return 2;
-  }
-  if (title.includes("<!--") || title.includes("\n") || title.includes("\r")) {
-    err("invalid title");
-    return 2;
-  }
-
-  const resolved = validatePath(notesPathRaw);
+  const resolved = validatePath(args.notesPath);
   if (!resolved) return 2;
-
-  const issueNumber = parseInt(issueNumberRaw, 10);
 
   if (skipIfMain) {
     const notesDir = path.dirname(resolved);
@@ -249,7 +225,7 @@ function main() {
     }
   }
 
-  const section = targetSectionForLabels(labels);
+  const section = mode === "A" ? targetSectionForLabels(args.labels) : args.section;
 
   let text = "";
   try {
@@ -263,14 +239,19 @@ function main() {
     }
   }
 
-  // Idempotency: skip silently when the issue is already recorded in the
-  // target section.
-  if (text.length > 0 && entryAlreadyPresent(text, section, issueNumber)) {
+  // Idempotency: skip silently when the entry is already recorded in the
+  // target section. The key differs per mode (issue back-reference vs body).
+  const present = mode === "A"
+    ? entryAlreadyPresent(text, section, issueNumber)
+    : bodyAlreadyPresent(text, section, title);
+  if (text.length > 0 && present) {
     return 0;
   }
 
   const eol = detectEol(text);
-  const newLine = `- ${title} (#${issueNumber}) <!-- promoted: #${issueNumber} -->`;
+  const newLine = mode === "A"
+    ? `- ${title} (#${issueNumber}) <!-- promoted: #${issueNumber} -->`
+    : (severity === "high" ? `- ${title} <!-- severity: high -->` : `- ${title}`);
 
   let updated;
   if (text.length === 0) {

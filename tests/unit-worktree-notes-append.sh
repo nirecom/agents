@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/unit-worktree-notes-append.sh
-# Tests: bin/worktree-notes-append.js, bin/worktree-notes-triage.js
-# Tags: worktree, workflow, bin, tests
+# Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js, bin/worktree-notes-triage.js
+# Tags: worktree, workflow, bin, append-cli, severity, TL2, scope:common
 #
 # Unit tests for bin/worktree-notes-append.js (issue #622).
 #
@@ -16,6 +16,17 @@
 # Test-first: the helper does not yet exist. Tests are SKIP-graceful — they
 # emit SKIP (not FAIL) when the helper is absent so the workflow can land
 # tests before implementation without showing red.
+#
+# TL3 gap (what this test does NOT catch):
+# - A real /worktree-end or /issue-create run choosing the section and the
+#   --severity value: the CLI contract is exercised here, but the classification
+#   itself is model behavior driven by rules/mid-workflow-findings.md.
+# - Concurrent appends from two live sessions racing on the same
+#   WORKTREE_NOTES.md (the tmp+rename atomicity is checked single-process only).
+# - The real enforce-worktree / pre-commit hooks around --skip-if-main; the
+#   fixture repo here pins core.hooksPath to /dev/null.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -469,6 +480,11 @@ test_A12_title_has_marker_syntax
 test_A12b_title_has_newline
 test_A13_skip_if_main_in_tmpdir
 test_A14_label_precedence_incident_wins
+
+# Mode B (finding authoring, #1886) lives in a sibling folder: this file is
+# already near the 500-line HARD split limit (rules/coding/file-split.md).
+# shellcheck source=./unit-worktree-notes-append/mode-b-tests.sh
+. "$(dirname "${BASH_SOURCE[0]}")/unit-worktree-notes-append/mode-b-tests.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
