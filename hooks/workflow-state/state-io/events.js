@@ -28,6 +28,16 @@ const EVENT_KINDS = [
 //   backfilled  — reconstructed after the fact (schema migration, repair)
 const PROVENANCE_VALUES = ["observed", "declared", "backfilled"];
 
+// Provenance values that represent a GENUINELY recorded fact — i.e. NOT
+// reconstructed by migration/session-inheritance. Used wherever code must
+// distinguish "this session actually observed/declared this" from "this was
+// backfilled from somewhere else" (#1794).
+const GENUINE_PROVENANCE = PROVENANCE_VALUES.filter((p) => p !== "backfilled");
+
+function isGenuineProvenance(provenance) {
+  return GENUINE_PROVENANCE.includes(provenance);
+}
+
 // Known annotation keys, in table order. Unknown keys are NOT rejected — the
 // table drives ordering and documentation only, so a newly introduced key
 // still round-trips verbatim instead of being dropped.
@@ -206,6 +216,8 @@ function appendEvents(sessionId, eventsOrBuilder, opts = {}) {
 module.exports = {
   EVENT_KINDS,
   PROVENANCE_VALUES,
+  GENUINE_PROVENANCE,
+  isGenuineProvenance,
   STEP_ANNOTATION_KEYS,
   WORKTREE_TRANSITIONS,
   PATH_SOURCES,

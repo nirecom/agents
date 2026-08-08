@@ -496,6 +496,49 @@ the subcommand verb (matching git's own option-parsing semantics). The
 `commit-push` skill's `--wip` flag generates this exact form. See
 `skills/commit-push/SKILL.md` for usage.
 
+### Adoption-origin allow-list (`ADOPTION_ORIGINS`, #1794)
+
+`hooks/workflow-state/lifecycle.js` (`hasSelfRecordedStepSettlement` /
+`isWorkflowStarted`) answers "did THIS session genuinely start the workflow
+itself?" for the C4 premature-stop guard and the C2 supervisor scheduled
+review. A naive "is any step settled?" check is fooled by cross-session
+inheritance (`hooks/session-start.js` can replay a prior session's entire
+event stream, stamped `origin: "session-inherit"`), so the predicate is an
+explicit allow-list on the settling event's `origin`, not a denylist on
+`session-inherit`: only origins known to represent the current session's own
+genuine action count (CPR-UNV — no implicit fallback).
+
+`ADOPTION_ORIGINS` currently contains:
+
+- `mark-step` — the direct, user/skill-driven completion path (default
+  origin when `markStep()` is called without an override).
+- `migration-v1-to-v2` — the legacy-schema upgrade path; it replays THIS
+  session's own pre-#1733 history into the new event-stream schema, so it is
+  not session inheritance.
+- `reset-sentinel` — the `WORKFLOW_RESET_FROM_{step}` sentinel path
+  (`hooks/workflow-mark/reset-handler.js`). This sentinel is gated by
+  `permissions.ask` in `settings.json`, so every reset-sentinel event
+  required the user's explicit, THIS-session approval — as genuine as a
+  direct `mark-step` call, even though the rollback it produces resets later
+  steps to `pending`.
+
+Deliberately EXCLUDED: `session-inherit` (cross-session inheritance, by
+design — see above); `next-step-evidence-resolution` /
+`next-step-recorded-verdict-skip` (automated `next-step` auto-persist paths
+— see `bin/workflow/lib/next-step/verdict.js` header comment); and any
+automated PostToolUse detection such as `hooks/workflow-run-tests.js`'s
+pattern-matched test-command completion, which carries its own explicit
+`workflow-run-tests-auto-detect` origin override for exactly this reason — a
+pattern-matched Bash command is not a deliberate workflow action, so it must
+not silently satisfy adoption via the default `mark-step` origin.
+
+The scan is existential and order-independent in one direction: once a
+genuine adoption-worthy event has been appended anywhere in the stream, later
+auto/backfilled noise (or even a `reset-sentinel` rollback) can never erase
+that the session did, at some point, genuinely engage with the workflow —
+see `tests/feature-1794-stop-guard-exemptions/i-adoption-predicate.sh` (I11)
+for the locked-in truth table.
+
 ### Final Report
 
 `/session-close` SC-6 emits the Final Report directly into assistant text

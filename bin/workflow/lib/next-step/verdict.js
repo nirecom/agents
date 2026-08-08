@@ -7,6 +7,11 @@
 // rules/coding/file-split.md. The HARD limit (500 lines) IS met. A second-stage
 // split of this block (diagnostics / recovery layer) is deliberately deferred to
 // a follow-up issue so that the #1756 split stays a mechanical code move.
+//
+// #1794: the two markStep() auto-persist calls below carry explicit origins
+// (not ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart
+// from a genuine user-driven markStep. Labeling only — logic unchanged.
+// Detail: docs/architecture/claude-code/workflow.md#exemptions.
 
 const fs = require("fs");
 const {
@@ -175,7 +180,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
-        markStep(sid, r.step, "complete");
+        markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
           emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
@@ -381,7 +386,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
       const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
       if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
       try {
-        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj });
+        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj }, { origin: "next-step-recorded-verdict-skip" });
         // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
         // markStep so the read-modify-write preserves skip_reason/skip_judgment.
         try {

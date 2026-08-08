@@ -1,5 +1,9 @@
-# helpers.sh — state/marker seeding and hook drivers for the #1794/#1665/#1685
-# stop-guard exemption suite. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# helpers.sh
+# Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/workflow-mark.js, hooks/workflow-state/state-io.js, bin/workflow/next-step
+# Tags: stop-hook, supervisor-guard, exemption, session-marker, regression-1794, scope:issue-specific, pwsh-not-required, TL2
+#
+# State/marker seeding and hook drivers for the #1794/#1665/#1685 stop-guard
+# exemption suite. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
 # Expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT, and the pass/fail/skip counters.
 
 STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
@@ -94,20 +98,23 @@ const t = new Date(Date.now() - Number(process.env.D) * 24 * 60 * 60 * 1000);
 fs.utimesSync(process.env.P, t, t);" >/dev/null 2>&1
 }
 
-# run_c4 <tn> <sid> — drives the real C4 Stop hook. Sets C4_OUT / C4_RC.
+# run_c4 <tn> <sid> [transcript] — drives the real C4 Stop hook. Sets C4_OUT / C4_RC.
+# <transcript> is optional and defaults to "" (the historical behaviour); pass a
+# node_path-normalised path so the JSON payload needs no escaping.
 run_c4() {
-    C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
+    C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }
 
-# run_c2 <tn> <sid> — drives the real C2 Stop hook as a child process.
-# Sets C2_OUT / C2_RC / C2_ERR (stderr text).
+# run_c2 <tn> <sid> [transcript] — drives the real C2 Stop hook as a child process.
+# Sets C2_OUT / C2_RC / C2_ERR (stderr text). <transcript> is optional (default "")
+# and is what the C1 sentinel-hang detector reads.
 run_c2() {
     local errf
     errf="$(mktemp)"
-    C2_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
+    C2_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>"$errf")
     C2_RC=$?
@@ -222,3 +229,9 @@ no_new_finding() {
     [ ! -f "$f" ] && return 0
     ! grep -q '"detail"' "$f" 2>/dev/null
 }
+
+# Session-inheritance fixtures for the #1794 adoption (I) cases live in their own
+# file so neither exceeds the 300-line WARN threshold (rules/coding/file-split.md
+# Pattern A). Sourced last: it depends on STATEIO_NODE / node_path above.
+# shellcheck source=tests/feature-1794-stop-guard-exemptions/helpers/inheritance.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/inheritance.sh"
