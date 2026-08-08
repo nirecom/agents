@@ -60,14 +60,15 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# c. SKILL.md contains `get-config-var --is-off CONFIRM_CODE`
+# c. SKILL.md gates on CONFIRM_CODE via bin/confirm-off (get-config-var
+#    --is-off was retired repo-wide in favor of bin/confirm-off; #1002)
 # ---------------------------------------------------------------------------
-echo "=== c. SKILL.md contains get-config-var --is-off CONFIRM_CODE ==="
+echo "=== c. SKILL.md contains bin/confirm-off CONFIRM_CODE gate ==="
 if require_file "$WRITE_CODE_SKILL"; then
-    if has_fixed "get-config-var --is-off CONFIRM_CODE" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md contains 'get-config-var --is-off CONFIRM_CODE'"
+    if has_fixed "bin/confirm-off\" CONFIRM_CODE" "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md contains 'bin/confirm-off\" CONFIRM_CODE'"
     else
-        fail "SKILL.md missing 'get-config-var --is-off CONFIRM_CODE'"
+        fail "SKILL.md missing 'bin/confirm-off\" CONFIRM_CODE' gate"
     fi
 fi
 
