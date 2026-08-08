@@ -211,7 +211,7 @@ function closedIssueOutcomeLines(outcome) {
   return issues
     .map((it) => {
       const state = it.state === "skipped_wf_meta" ? "kept open (planning session)" : it.state;
-      return `- #${it.number}: ${state} (history: ${it.historyEntry}, closed: ${it.issueClosed}, sentinels: ${it.sentinelsPosted}, wip: ${it.wipCleared})`;
+      return `- #${it.issueNumber}: ${state} (history: ${it.historyEntry}, closed: ${it.issueClosed}, sentinels: ${it.sentinelsPosted}, wip: ${it.wipCleared})`;
     })
     .join("\n");
 }
