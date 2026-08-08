@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-1340-issue-setup/_mock-ensure-project-ready.sh — file-specific gh mock
+# Tests: bin/github-issues/lib/ensure-project-ready.sh
+# Tags: github-issues, issue-setup, ensure-project-ready, scope:issue-specific
 #
 # Entrypoint-private helper for ensure-project-ready.sh (file-split.md Pattern A).
 # Provides write_epr_gh_mock <dest>, which writes an executable gh mock to <dest>.
@@ -10,6 +12,7 @@
 #   GH_MOCK_STATUS_FIELD_EXISTS    1 → discovery reports Status field present
 #   GH_MOCK_FINGERPRINT_FIELD_EXISTS 1 → discovery reports fingerprint present
 #   GH_MOCK_FINGERPRINT_CREATE_FAIL 1 → createProjectV2Field TEXT mutation fails
+#   GH_MOCK_LINK_FAILS             1 → linkProjectV2ToRepository mutation fails
 #
 # Idempotent — guarded against double-sourcing.
 
@@ -49,8 +52,30 @@ case "$ARGS" in
     fi
     exit 0
     ;;
+  api\ repos/*)
+    # Repo node-id lookup performed by link_project_to_repo() BEFORE the
+    # linkProjectV2ToRepository mutation. The real call is
+    #   gh api repos/<owner>/<repo> --jq .node_id
+    # and the mock does not interpret --jq, so it prints the RAW value gh would
+    # have extracted (not a JSON envelope). Placed above `api graphql*` so the
+    # two `api ` arms cannot collide.
+    printf '%s\n' "R_kgDOmockrepo"
+    exit 0
+    ;;
   api\ graphql*)
     case "$ARGS" in
+      *linkProjectV2ToRepository*)
+        # MUST stay at the head of this inner case: the mutation body contains
+        # the substring `projectId`, so the *fields*|*projectId*) discovery arm
+        # below would otherwise swallow it.
+        # NB: already logged once at the top of the mock — do NOT log again here.
+        if [ "${GH_MOCK_LINK_FAILS:-0}" = "1" ]; then
+            echo "error: linkProjectV2ToRepository failed (simulated)" >&2
+            exit 1
+        fi
+        printf '{"data":{"linkProjectV2ToRepository":{"repository":{"id":"R_kgDOmockrepo"}}}}\n'
+        exit 0
+        ;;
       *createProjectV2Field*SINGLE_SELECT*)
         # NB: already logged once at the top of the mock — do NOT log again here
         # (would double-count mutation invocations in grep -c assertions).

@@ -22,7 +22,8 @@
 # On failure (rc=1) prints an `error:`-prefixed line to stderr; the caller
 # decides fatality. Hard-fail conditions: gh lacks `project` scope, generic
 # graphql API error, or gh project list failure. Malformed/injection owner/repo
-# is rejected before any gh call.
+# is rejected before any gh call. Failing to link the board to the repository is
+# explicitly NOT a hard-fail condition — it only warns (see link_project_to_repo).
 #
 # Never writes .env or the TSV cache — cache writes are the caller's job
 # (run-issue-setup.sh --step ensure-project).
@@ -32,6 +33,12 @@ if [ -n "${_ENSURE_PROJECT_READY_SOURCED:-}" ]; then
     return 0 2>/dev/null || true
 fi
 _ENSURE_PROJECT_READY_SOURCED=1
+
+# Reuse the canonical repo-link helper. This file is always sourced, never
+# executed, so resolve the sibling relative to BASH_SOURCE (not $0).
+_EPR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../migration/link-project.sh
+. "$_EPR_LIB_DIR/../migration/link-project.sh"
 
 # Strip a trailing CR and keep the first line of gh/jq output.
 _epr_clean() { printf '%s' "$1" | tr -d '\r' | head -1; }
@@ -127,6 +134,12 @@ ensure_project_ready() {
     EPR_PROJECT_ID="$pid"
     EPR_PROJECT_NUM="$pnum"
     EPR_PROJECT_OWNER="$owner"
+
+    # Unconditional on both the create and reuse paths: this function keeps no
+    # state across runs, and the mutation is idempotent server-side, so a repeat
+    # link is harmless. Non-fatal because an unlinked board must not sink the
+    # rest of /issue-setup — the helper already warns on stderr.
+    link_project_to_repo "$pid" "$owner" "$repo" || true
 
     # ---- Content Date field (best-effort ensure) ----
     _epr_ensure_content_date "$pid" || true
