@@ -17,7 +17,7 @@ are deliberately absent from that table, the same way `.next-step-paused`
 
 | Sentinel | Permission | Effect |
 |---|---|---|
-| `<<WORKFLOW_BACKGROUND_WORK_START: {reason}>>` | **ask** | Sets `.background-work`; quiets C4 and next-step for up to 4 hours (TTL) |
+| `<<WORKFLOW_BACKGROUND_WORK_START: {reason}>>` | **allow** | Sets `.background-work`; quiets C4 and next-step for up to 4 hours (TTL) |
 | `<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>` | **allow** | Clears the marker early |
 
 The `{reason}` field is mandatory and non-empty for every sentinel above.

@@ -5,9 +5,6 @@
 // origin list: docs/architecture/claude-code/workflow.md#exemptions (#1794).
 const { readState, isGenuineProvenance } = require("./state-io");
 
-// Named constant for the start boundary, same convention as SENTINEL_HANG_EXEMPT_STEPS.
-const WORKFLOW_START_STEP = "workflow_init";
-
 // Event kinds that can represent a step settlement worth adopting. Currently
 // only step_status — other kinds don't carry a completion/skip fact.
 const ADOPTION_EVENT_KINDS = ["step_status"];
@@ -71,5 +68,4 @@ module.exports = {
   ADOPTION_EVENT_KINDS,
   ADOPTION_ORIGINS,
   isAdoptionEvent,
-  WORKFLOW_START_STEP,
 };
