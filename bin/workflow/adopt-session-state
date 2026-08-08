@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * bin/workflow/adopt-session-state
+ *
+ * Explicit crash-resume adoption (#1305). Since inheritance became lineage-keyed,
+ * a session that lost its id has no way to prove descent — this CLI is the
+ * non-interactive route that lets the user assert it by hand.
+ *
+ * Usage:
+ *   adopt-session-state [--session <heir-sid>] --list
+ *   adopt-session-state [--session <heir-sid>] --from <donor-sid>
+ *
+ * --session defaults to the resolved current session. All guards live in
+ * hooks/workflow-state/inheritance/adopt.js — this file is argument parsing and
+ * output only.
+ */
+
+const path = require("path");
+
+const agentsConfigDir = process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "../..");
+const { adoptState, listAdoptCandidates } =
+  require(path.join(agentsConfigDir, "hooks", "workflow-state", "inheritance", "adopt.js"));
+const { resolveSessionId } =
+  require(path.join(agentsConfigDir, "hooks", "workflow-state", "session-id.js"));
+
+const SID_RE = /^[A-Za-z0-9_-]+$/;
+
+function usage() {
+  process.stdout.write(
+    "Usage: adopt-session-state [--session <heir-sid>] --list\n" +
+    "       adopt-session-state [--session <heir-sid>] --from <donor-sid>\n"
+  );
+}
+
+function parseArgs(argv) {
+  const out = { session: null, from: null, list: false, help: false, error: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") out.help = true;
+    else if (a === "--list") out.list = true;
+    else if (a === "--session" && i + 1 < argv.length) out.session = argv[++i];
+    else if (a === "--from" && i + 1 < argv.length) out.from = argv[++i];
+    else out.error = `unrecognized argument: ${a}`;
+  }
+  return out;
+}
+
+function fail(message) {
+  process.stderr.write(`adopt-session-state: ${message}\n`);
+  process.exit(1);
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) { usage(); return; }
+  if (args.error) { usage(); fail(args.error); }
+
+  // The sid flows into path.join() inside the state layer, so an out-of-charset
+  // value is rejected here rather than normalized (CWE-22).
+  for (const [label, value] of [["--session", args.session], ["--from", args.from]]) {
+    if (value !== null && !SID_RE.test(value)) fail(`${label} value is not a valid session id`);
+  }
+
+  let heirSid = args.session;
+  if (!heirSid) {
+    try { heirSid = resolveSessionId(); } catch (e) { heirSid = null; }
+  }
+  if (!heirSid) fail("could not resolve this session's id; pass --session <sid>");
+
+  if (args.list) {
+    const r = listAdoptCandidates(heirSid);
+    if (!r.ok) fail(r.error);
+    if (r.candidates.length === 0) {
+      process.stdout.write("No adoptable prior session found for this cwd+branch.\n");
+      return;
+    }
+    process.stdout.write("Adoptable prior sessions (same cwd+branch, still resumable):\n");
+    for (const c of r.candidates) {
+      process.stdout.write(`  ${c.sessionId}\t${c.git_branch || "(no branch)"}\t${c.last_activity || "(unknown)"}\n`);
+    }
+    process.stdout.write(
+      `\nAdopt with: node bin/workflow/adopt-session-state --session ${heirSid} --from <sid>\n`
+    );
+    return;
+  }
+
+  if (!args.from) { usage(); fail("nothing to do — pass --list or --from <donor-sid>"); }
+
+  const result = adoptState({ heirSid, donorSid: args.from });
+  if (!result.ok) fail(result.error);
+  process.stdout.write(
+    `Adopted workflow state from session ${result.donorSessionId} into ${heirSid}.\n`
+  );
+}
+
+main();
