@@ -256,3 +256,7 @@ Changes: Fixed: a new Claude Code session could silently inherit stale workflow 
 ### FEATURE: PR #1893 (2026-08-08)
 Background: fix(workflow): close gaps in Stop-guard/EM-Supervisor workflow-started detection (#1794)
 Changes: Fixed two gaps in the Stop-guard/EM-Supervisor "workflow started" detection: a legitimate `WORKFLOW_RESET_FROM_*` recovery no longer looks like an unstarted session, and running the test suite from an unrelated self-contained task no longer falsely marks the workflow as started.
+
+### FEATURE: PR #1903 (2026-08-08)
+Background: fix: compress Final Report Bugs Found/Related/Next Tasks sections
+Changes: Fixed: Final Report's Bugs Found/Related Tasks/Next Tasks sections no longer dump WORKTREE_NOTES.md verbatim — entries are compressed to a title line unless explicitly tagged high severity, and the report now follows the configured output language consistently.
