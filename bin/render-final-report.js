@@ -57,39 +57,19 @@ if (intentPath) {
   closesIssues = parseClosesIssues(intentPath).map((e) => e.number);
 }
 
-const NOTES_SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
-function extractNotesSections(notesPath) {
-  const result = { BugsFound: "(none)", RelatedTasks: "(none)", NextTasks: "(none)" };
-  let text;
-  try {
-    text = fs.readFileSync(notesPath, "utf8");
-  } catch (_) {
-    return result;
-  }
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  let current = null;
-  const buffers = { BugsFound: [], RelatedTasks: [], NextTasks: [] };
-  for (const line of lines) {
-    const headingMatch = line.match(/^## (.+?)\s*$/);
-    if (headingMatch) {
-      const name = headingMatch[1].trim();
-      current = NOTES_SECTIONS.includes(name) ? name : null;
-      continue;
-    }
-    if (current) buffers[current].push(line);
-  }
-  for (const name of NOTES_SECTIONS) {
-    const content = buffers[name].join("\n").trim();
-    result[name] = content || "(none)";
-  }
-  return result;
-}
-
+// Fail-open: an unreadable or absent notes backup yields the "(none)" triple
+// rather than blocking the report.
 let notesSections = { bugs: "(none)", related: "(none)", next: "(none)" };
 const notesBackupPath = env.NOTES_BACKUP_PATH;
 if (notesBackupPath && fs.existsSync(notesBackupPath)) {
-  const extracted = extractNotesSections(notesBackupPath);
-  notesSections = { bugs: extracted.BugsFound, related: extracted.RelatedTasks, next: extracted.NextTasks };
+  try {
+    const notesText = fs.readFileSync(notesBackupPath, "utf8");
+    const { compressNotesSections } = require(path.resolve(__dirname, "./render-final-report/notes"));
+    const compressed = compressNotesSections(notesText, { backupPath: notesBackupPath });
+    notesSections = { bugs: compressed.BugsFound, related: compressed.RelatedTasks, next: compressed.NextTasks };
+  } catch (_) {
+    notesSections = { bugs: "(none)", related: "(none)", next: "(none)" };
+  }
 }
 
 let supervisorState = null;

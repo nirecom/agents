@@ -21,15 +21,16 @@ const path = require("path");
 const {
   parseSectionEntries,
   markEntryPromoted,
+  PROMOTED_MARKER_RE,
 } = require("../hooks/lib/worktree-notes-sections");
 const { runResolve } = require("./worktree-notes-triage/resolve");
 
 // Triage sections only. `## ManualReminders` is deliberately absent: a reminder
 // is addressed to the person closing the session, not to a future implementer,
 // so promoting one into a GitHub issue is the wrong outcome (#530).
+// Not shared with notes.js's output list or args.js's input allowlist —
+// same names, three different scopes.
 const SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
-
-const MARKER_RE = / <!-- promoted: #(\d+) -->$/;
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-triage] ${msg}\n`);
@@ -161,7 +162,7 @@ function cmdAnnotate(rawPath, lineNumberArg, issueNumberArg) {
     err(`line ${lineNumber} is not a notes entry: ${JSON.stringify(original)}`);
     return 1;
   }
-  const existing = MARKER_RE.exec(original);
+  const existing = PROMOTED_MARKER_RE.exec(original);
   if (existing !== null) {
     // Idempotent retry: the same annotation is already recorded, so the file is
     // left byte-identical rather than growing a second marker.
