@@ -4,7 +4,6 @@
 // submodule directly.
 
 const core = require("./state-io/core");
-const contextScan = require("./state-io/context-scan");
 const reviewTests = require("./state-io/review-tests");
 const sessionFields = require("./state-io/session-fields");
 const zombieCleanup = require("./state-io/zombie-cleanup");
@@ -33,12 +32,13 @@ module.exports = {
   createInitialState: core.createInitialState,
   getCurrentContext: core.getCurrentContext,
   resolveWorktreeContext: core.resolveWorktreeContext,
-  findLatestStateForContext: contextScan.findLatestStateForContext,
   markStep: core.markStep,
   appendEvents: events.appendEvents,
   validateEvent: events.validateEvent,
   EVENT_KINDS: events.EVENT_KINDS,
   PROVENANCE_VALUES: events.PROVENANCE_VALUES,
+  GENUINE_PROVENANCE: events.GENUINE_PROVENANCE,
+  isGenuineProvenance: events.isGenuineProvenance,
   STEP_ANNOTATION_KEYS: events.STEP_ANNOTATION_KEYS,
   computeIntervals: intervals.computeIntervals,
   projectState: projection.projectState,

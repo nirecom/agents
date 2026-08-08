@@ -7,6 +7,11 @@
 // rules/coding/file-split.md. The HARD limit (500 lines) IS met. A second-stage
 // split of this block (diagnostics / recovery layer) is deliberately deferred to
 // a follow-up issue so that the #1756 split stays a mechanical code move.
+//
+// #1794: the two markStep() auto-persist calls below carry explicit origins
+// (not ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart
+// from a genuine user-driven markStep. Labeling only — logic unchanged.
+// Detail: docs/architecture/claude-code/workflow.md#exemptions.
 
 const fs = require("fs");
 const {
@@ -180,7 +185,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
-        markStep(sid, r.step, "complete");
+        markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
           emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
@@ -394,6 +399,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
           skipReason,
           skipJudgment: sj,
           skipVerdictSource: "next-step-recorded-verdict",
+          origin: "next-step-recorded-verdict-skip",
         });
         if (!res.ok) return null;
         return computeVerdict(rawSid, true);

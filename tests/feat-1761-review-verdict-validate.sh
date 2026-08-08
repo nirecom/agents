@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore (pre-existing Japanese fixture string, unrelated to this session's diff)
 # tests/feat-1761-review-verdict-validate.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, validator, table-driven, scope:issue-specific, pwsh-not-required, TL1
@@ -86,6 +87,89 @@ cat > "$WORK/unavail.json" <<'JSON'
   ] }
 JSON
 
+# ---------------------------------------------------------------------------
+# State-casing fixtures (#1862). `gh issue view --json state` answers in UPPER
+# CASE (`OPEN` / `CLOSED`), so every artifact built from real gh output carries
+# that casing. These four fixtures are `batched.json` with only the `state`
+# values changed — same candidates, same relations, same open/closed roles.
+#
+#   upper         → gh's real casing: OPEN / CLOSED
+#   mixedcase     → a third casing: Open / Closed
+#   badstate      → #10 carries an unknown word (MERGED) in any casing
+#   badstate-array→ #10 carries a non-string (["open"])
+# ---------------------------------------------------------------------------
+cat > "$WORK/upper.json" <<'JSON'
+{ "schema_version": 2,
+  "proposal": { "title": "T", "background": "B", "changes": "C" },
+  "verdict": "none", "target": null, "children": [], "related": [],
+  "reason": "survey found nothing",
+  "relations_mode": "batched", "relation_errors": [],
+  "candidates": [
+    { "number": 10, "title": "c10", "state": "OPEN", "labels": [], "body": "b10",
+      "relation_status": "resolved", "parent_number": 99, "parent_is_meta": true, "has_sub_issues": false },
+    { "number": 11, "title": "c11", "state": "CLOSED", "labels": [], "body": "b11",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 12, "title": "c12", "state": "OPEN", "labels": [], "body": "b12",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 13, "title": "c13", "state": "CLOSED", "labels": [], "body": "b13",
+      "relation_status": "resolved", "parent_number": 88, "parent_is_meta": false, "has_sub_issues": false }
+  ] }
+JSON
+
+cat > "$WORK/mixedcase.json" <<'JSON'
+{ "schema_version": 2,
+  "proposal": { "title": "T", "background": "B", "changes": "C" },
+  "verdict": "none", "target": null, "children": [], "related": [],
+  "reason": "survey found nothing",
+  "relations_mode": "batched", "relation_errors": [],
+  "candidates": [
+    { "number": 10, "title": "c10", "state": "Open", "labels": [], "body": "b10",
+      "relation_status": "resolved", "parent_number": 99, "parent_is_meta": true, "has_sub_issues": false },
+    { "number": 11, "title": "c11", "state": "Closed", "labels": [], "body": "b11",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 12, "title": "c12", "state": "Open", "labels": [], "body": "b12",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 13, "title": "c13", "state": "Closed", "labels": [], "body": "b13",
+      "relation_status": "resolved", "parent_number": 88, "parent_is_meta": false, "has_sub_issues": false }
+  ] }
+JSON
+
+cat > "$WORK/badstate.json" <<'JSON'
+{ "schema_version": 2,
+  "proposal": { "title": "T", "background": "B", "changes": "C" },
+  "verdict": "none", "target": null, "children": [], "related": [],
+  "reason": "survey found nothing",
+  "relations_mode": "batched", "relation_errors": [],
+  "candidates": [
+    { "number": 10, "title": "c10", "state": "MERGED", "labels": [], "body": "b10",
+      "relation_status": "resolved", "parent_number": 99, "parent_is_meta": true, "has_sub_issues": false },
+    { "number": 11, "title": "c11", "state": "closed", "labels": [], "body": "b11",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 12, "title": "c12", "state": "open", "labels": [], "body": "b12",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 13, "title": "c13", "state": "closed", "labels": [], "body": "b13",
+      "relation_status": "resolved", "parent_number": 88, "parent_is_meta": false, "has_sub_issues": false }
+  ] }
+JSON
+
+cat > "$WORK/badstate-array.json" <<'JSON'
+{ "schema_version": 2,
+  "proposal": { "title": "T", "background": "B", "changes": "C" },
+  "verdict": "none", "target": null, "children": [], "related": [],
+  "reason": "survey found nothing",
+  "relations_mode": "batched", "relation_errors": [],
+  "candidates": [
+    { "number": 10, "title": "c10", "state": ["open"], "labels": [], "body": "b10",
+      "relation_status": "resolved", "parent_number": 99, "parent_is_meta": true, "has_sub_issues": false },
+    { "number": 11, "title": "c11", "state": "closed", "labels": [], "body": "b11",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 12, "title": "c12", "state": "open", "labels": [], "body": "b12",
+      "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false },
+    { "number": 13, "title": "c13", "state": "closed", "labels": [], "body": "b13",
+      "relation_status": "resolved", "parent_number": 88, "parent_is_meta": false, "has_sub_issues": false }
+  ] }
+JSON
+
 VALIDATOR_PRESENT=no; [ -f "$VALIDATOR" ] && VALIDATOR_PRESENT=yes
 
 # run_validate <artifact-key> <raw-review-text> → "valid" | "invalid" | "<missing>"
@@ -142,6 +226,21 @@ A10-reopen-open-candidate      | batched | {"verdict":"reopen","target":10,"chil
 # A candidate that already has a (non-meta) parent is still a legal sub-of TARGET —
 # what B19 rejects is naming that parent itself.
 A11-subof-target-is-parented-cand | batched | {"verdict":"sub-of","target":13,"children":[],"related":[],"reason":"same area","worth_filing":true}      | valid
+# --- state casing (#1862): `gh issue view --json state` answers OPEN/CLOSED ---
+# The artifact is validated BEFORE any per-verdict logic, so an uppercase `state`
+# rejects the whole artifact — every verdict, including `none`, folds to invalid.
+# A14/A16 are therefore the load-bearing cases: they prove the defect sits in the
+# artifact gate, not in the reopen branch.
+A12-reopen-uppercase-closed-target | upper | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true} | valid
+A13-reopen-uppercase-open-target   | upper | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}    | valid
+A14-none-uppercase-artifact        | upper | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true} | valid
+# A15/A16 use a THIRD casing ("Open"/"Closed") deliberately. They pin the SHAPE of the
+# fix, not just its symptom: expanding the literal allowlist (ISSUE_STATES + "OPEN",
+# "CLOSED") would turn A12-A14 green while leaving any other casing broken — a
+# special-case patch, not a general one (CPR-UNV). Only normalizing the casing
+# (`.toLowerCase()` behind a `typeof c.state === "string"` guard) satisfies all five.
+A15-reopen-mixedcase-closed-target | mixedcase | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true} | valid
+A16-none-mixedcase-artifact        | mixedcase | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true} | valid
 # --- malformed verdicts ---
 B1-unknown-verdict             | batched | {"verdict":"escalate","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}             | invalid
 B2-reopen-target-null          | batched | {"verdict":"reopen","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}               | invalid
@@ -172,6 +271,15 @@ B19-subof-non-meta-parent      | batched | {"verdict":"sub-of","target":88,"chil
 # B20: both unavail candidates are `unresolved`, so their "no parent" is an UNKNOWN, not
 #      an observed absence. IC-C3 may not be evaluated at all against them.
 B20-make-parent-unresolved     | unavail | {"verdict":"make-parent","target":null,"children":[10,20],"related":[],"reason":"r","worth_filing":true}    | invalid
+# --- state casing GUARDS: what must stay rejected once casing is normalized ---
+# B21: "MERGED" is not open or closed in ANY casing. Tolerating unknown words is the
+#      over-correction a case-insensitive fix invites, so it is pinned explicitly.
+B21-state-unknown-word         | badstate | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}               | invalid
+# B22: a non-string `state`. This is the counter-case to a `String(c.state).toLowerCase()`
+#      implementation, which would stringify ["open"] into "open" and admit it. The
+#      validator coerces nothing elsewhere (see its header) — a wrong TYPE is a producer
+#      defect, not a value to repair, so it must be rejected on type before casing.
+B22-state-non-string-array     | badstate-array | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}         | invalid
 # --- JSON extraction cardinality (bin/lib/last-json-object.js) ---
 C1-zero-json-objects           | batched | I think the survey verdict is fine, no JSON here.                                        | invalid
 C2-prose-then-one-json         | batched | Reasoning...\nHere is my answer:\n{"verdict":"none","target":null,"children":[],"related":[],"reason":"ok","worth_filing":true} | valid

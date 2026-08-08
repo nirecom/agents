@@ -35,7 +35,7 @@
 // scan would then abort on. opts.resolveAll lifts that cutoff for callers that
 // need a complete picture (--list rendering, commit gate, session-start display).
 
-const { VALID_STEPS, normalizeStateVersion } = require("./state-io");
+const { VALID_STEPS, normalizeStateVersion, isGenuineProvenance } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
@@ -103,15 +103,38 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
 // holds — re-reading it by `state.session_id` would answer about a DIFFERENT
 // session whenever the two disagree, which is exactly the case for a migrated
 // fixture or a transcript-recovered donor whose file name is the canonical id.
+// The events actually recorded for this state, or null when none can be read.
+// Shared by every predicate that must answer about what was RECORDED rather
+// than about what the projection derived (CPR-SSOT).
+function recordedEventsOf(state) {
+  if (!state || typeof state !== "object") return null;
+  if (Array.isArray(state.events)) return state.events;
+  // A raw v1 object handed in directly: fold it to events in memory only.
+  const normalized = normalizeStateVersion(state);
+  return normalized && Array.isArray(normalized.events) ? normalized.events : null;
+}
+
+// True when the stream records at least one step leaving `pending`.
+function hasRecordedProgress(state) {
+  try {
+    const events = recordedEventsOf(state);
+    if (!events) {
+      // No stream to judge by — fall back to the projection rather than
+      // declaring a state we cannot read to be empty.
+      const steps = (state && state.steps) || {};
+      return Object.values(steps).some((s) => s && s.status && s.status !== "pending");
+    }
+    return events.some(
+      (e) => e && e.kind === "step_status" && e.status && e.status !== "pending"
+    );
+  } catch (_) {
+    return true; // fail-open: inheritance is a convenience, never a safety gate
+  }
+}
+
 function hasGenuineRecordedComplete(state, step) {
   try {
-    if (!state || typeof state !== "object") return false;
-    let events = Array.isArray(state.events) ? state.events : null;
-    if (!events) {
-      // A raw v1 object handed in directly: fold it to events in memory only.
-      const normalized = normalizeStateVersion(state);
-      events = normalized && Array.isArray(normalized.events) ? normalized.events : null;
-    }
+    const events = recordedEventsOf(state);
     if (!events) return false;
     let latest = null;
     for (const e of events) {
@@ -121,39 +144,47 @@ function hasGenuineRecordedComplete(state, step) {
     }
     if (!latest) return false;
     if (latest.status !== "complete") return false;
-    return latest.provenance !== "backfilled";
+    return isGenuineProvenance(latest.provenance);
   } catch (_) {
     return false;
   }
 }
 
-// evaluateInheritance(state) → { eligible: boolean, scan: "stop" | "continue" | null }
+// evaluateResumability(state) → { eligible: boolean, reason: string|null }
 //
-// SSOT for "may a new session inherit this state?" (#1305). `scan` tells the
-// caller how to continue the transcript walk when the candidate is rejected:
-//   "stop"     — a staleness boundary; abort the ENTIRE search (older states are
-//                by definition even more stale). Returning only "reject" here was
-//                the #1305 bug: the walk fell through to an older transcript.
-//   "continue" — this candidate is unusable but carries no boundary meaning.
+// SSOT for "is this state usable by a session that continues it?" (#1305).
+//
+// WHY the shape changed: pre-#1305 this also returned scan:"stop"/"continue",
+// because the donor was picked by scanning a whole directory of transcripts and
+// the verdict had to steer that walk. Donor selection is now keyed on lineage
+// (hooks/workflow-state/inheritance.js), and the nearest ancestor that holds
+// state is the SOLE decision-maker — there is no walk left to steer, so the
+// field is gone.
+//
+// S2 (review_security complete) was REMOVED for the same reason: it existed as a
+// staleness boundary against an UNRELATED session grabbing late-stage work.
+// With descent proven, the heir IS that session's continuation, and refusing to
+// let it resume its own verified work protects nobody.
 //
 // Fail-open: any unexpected error yields eligible (inheritance is a convenience,
 // never a safety gate).
-function evaluateInheritance(state) {
+function evaluateResumability(state) {
   try {
     const steps = (state && state.steps) || {};
 
-    // S0: nothing has happened yet — not stale, just empty.
-    const allPending = Object.values(steps).every((s) => !s || s.status === "pending");
-    if (allPending) return { eligible: false, scan: "continue" };
+    // S0: nothing has happened yet — there is nothing to carry over.
+    //
+    // Judged on the RECORDED stream, not on `state.steps`: readState() runs
+    // applyLegacyV1ReadDefaults, which synthesizes workflow_init /
+    // clarify_intent / branching_complete as complete for every v1 file. A
+    // genuinely empty v1 donor therefore never looks all-pending in the
+    // projection, and would be offered as an inheritance source that carries
+    // nothing but those three synthetic completions.
+    if (!hasRecordedProgress(state)) return { eligible: false, reason: "all-pending" };
 
     // S1: the session was finalized by the user.
     if (steps.user_verification && steps.user_verification.status === "complete") {
-      return { eligible: false, scan: "stop" };
-    }
-
-    // S2: implementation reached the security review — #1305 staleness boundary.
-    if (steps.review_security && steps.review_security.status === "complete") {
-      return { eligible: false, scan: "stop" };
+      return { eligible: false, reason: "user-verified" };
     }
 
     // S3: clarify_intent genuinely recorded complete but its intent.md is gone —
@@ -164,13 +195,25 @@ function evaluateInheritance(state) {
       hasGenuineRecordedComplete(state, "clarify_intent") &&
       !hasPlanArtifact("clarify_intent", state && state.session_id)
     ) {
-      return { eligible: false, scan: "stop" };
+      return { eligible: false, reason: "intent-artifact-missing" };
     }
 
-    return { eligible: true, scan: null };
+    return { eligible: true, reason: null };
   } catch (_) {
-    return { eligible: true, scan: null };
+    return { eligible: true, reason: null };
   }
+}
+
+// Back-compat shim for the pre-#1305 name and shape.
+//
+// `scan` steered the directory walk that used to pick a donor; nothing walks
+// anymore, so the field is derived rather than decided — "stop" is simply the
+// restatement of "not eligible". Kept because the #1733 event-stream suite
+// observes hasGenuineRecordedComplete (module-private, deliberately) through
+// this exact signature. New code must call evaluateResumability.
+function evaluateInheritance(state) {
+  const verdict = evaluateResumability(state);
+  return Object.assign({}, verdict, { scan: verdict.eligible ? null : "stop" });
 }
 
 // reconcileEffectiveState(state, sessionId, opts)
@@ -260,5 +303,6 @@ module.exports = {
   APPROVAL_GATED_STEPS,
   effectiveStatus,
   reconcileEffectiveState,
+  evaluateResumability,
   evaluateInheritance,
 };

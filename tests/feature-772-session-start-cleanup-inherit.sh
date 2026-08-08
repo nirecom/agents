@@ -144,11 +144,20 @@ prior_state_json() {
 EOF
 }
 
-# Write a transcript line so findLatestStateForContext can discover the prior state.
+# The donor's own SessionStart announce line — the breadcrumb that maps an
+# ancestor session id back to its state file.
 write_transcript_line() {
     local jsonl_file="$1" sid="$2" state_path="$3"
     mkdir -p "$(dirname "$jsonl_file")"
     printf '%s\n' "{\"type\": \"attachment\", \"attachment\": {\"type\": \"hook_success\", \"hookEvent\": \"SessionStart\", \"stdout\": \"{\\\"additionalContext\\\": \\\"Current workflow session_id: $sid\\\\nState file: $state_path\\\"}\", \"exitCode\": 0, \"command\": \"node session-start.js\"}}" >> "$jsonl_file"
+}
+
+# Lineage evidence (#1305): a `forkedFrom` row naming the donor session.
+write_forked_line() {
+    local jsonl_file="$1" heir="$2" donor="$3"
+    mkdir -p "$(dirname "$jsonl_file")"
+    printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' \
+        "$heir" "$heir" "$donor" >> "$jsonl_file"
 }
 
 # Drive: simulate a NEW session starting (with NEW_SID) in a repo that has a
@@ -157,7 +166,13 @@ write_transcript_line() {
 run_session_start_new() {
     local repo="$1" new_sid="$2" fake_home="$3"
     local env_file="$TMPDIR_BASE/env-${new_sid}.env"
-    echo "{\"session_id\":\"$new_sid\"}" | \
+    # Since #1305 the donor is reached through the heir's own transcript, so the
+    # payload must carry the two fields that make lineage resolvable at all:
+    # `source` (only a continuation may inherit) and `transcript_path`.
+    local cwd_enc heir_tp
+    cwd_enc=$(encode_path "$(to_node_path "$repo")")
+    heir_tp="$(to_node_path "$fake_home/.claude/projects/$cwd_enc/${new_sid}.jsonl")"
+    echo "{\"session_id\":\"$new_sid\",\"source\":\"resume\",\"transcript_path\":\"$heir_tp\"}" | \
         HOME="$fake_home" \
         CLAUDE_PROJECT_DIR="$repo" \
         CLAUDE_ENV_FILE="$env_file" \
@@ -182,6 +197,10 @@ setup_prior_and_new() {
     write_state_file "$PRIOR_SID" "$(prior_state_json "$PRIOR_SID" "$prior_cleanup")"
     write_transcript_line "$FAKE_HOME/.claude/projects/$cwd_enc/${PRIOR_SID}.jsonl" \
         "$PRIOR_SID" "$(to_node_path "$WORKFLOW_DIR/${PRIOR_SID}.json")"
+    # #1305: the new session must be able to prove the prior one is its own
+    # ancestor. Without this forkedFrom row there is no donor to inherit from.
+    write_forked_line "$FAKE_HOME/.claude/projects/$cwd_enc/${NEW_SID}.jsonl" \
+        "$NEW_SID" "$PRIOR_SID"
 }
 
 # ============================================================================

@@ -248,7 +248,7 @@ ADVANCE_MEMBERS="next-step record-skip-judgment record-complexity-and-skip set-w
 # verdict about a skip someone else declared, so it never advances the workflow
 # on its own behalf. That is why it is an exception and not a member.
 NAMED_EXCEPTIONS="record-skip-verdict"
-NON_MEMBERS="read-complexity-evaluation read-merge-base-baseline reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
+NON_MEMBERS="adopt-session-state read-complexity-evaluation read-merge-base-baseline reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
 
 ACTUAL="$(ls "$AGENTS_DIR/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \

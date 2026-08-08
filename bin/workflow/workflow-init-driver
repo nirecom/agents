@@ -18,6 +18,7 @@ const path = require("path");
 const { ISSUE_TOKEN_CLI_GUARD_RE } = require("../../hooks/lib/parse-closes-issues.js");
 const { checkpointPath, makeInitialState, writeCheckpoint, readCheckpoint } = require("./lib/workflow-init/checkpoint");
 const { emitDone, emitAskUser, emitBlocked } = require("./lib/workflow-init/directive");
+const { adoptPriorState, ADOPT_PRIOR_STATE_ASK_ID } = require("./lib/workflow-init/phases/adopt-prior-state");
 const { detectIssues } = require("./lib/workflow-init/phases/detect-issues");
 const { fetchIssues } = require("./lib/workflow-init/phases/fetch-issues");
 const { wipCheck } = require("./lib/workflow-init/phases/wip-check");
@@ -165,6 +166,17 @@ function applyAnswer(ckptData, answer, tokens) {
     return { blocked: true, reason: "user_aborted" };
   }
 
+  // adopt_prior_state (#1305) — `fresh` is the default and a plain no-op; only
+  // `adopt` carries work over, and the phase itself performs it on re-entry so
+  // the CLI stays the single execution point.
+  if (ask_id === ADOPT_PRIOR_STATE_ASK_ID) {
+    if (answer === "fresh" || answer === "adopt") {
+      state.adopt_decision = answer;
+      return { ok: true, state, startPhase: "adopt-prior-state" };
+    }
+    return { invalid: true, message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: fresh|adopt|abort` };
+  }
+
   // fetch_failed_path_c
   if (ask_id === "fetch_failed_path_c") {
     if (answer === "continue") {
@@ -264,6 +276,9 @@ function applyAnswer(ckptData, answer, tokens) {
 // --- Phase pipeline -----------------------------------------------------------
 
 const PHASE_ORDER = [
+  // #1305: first, because a crash-resumed session must be offered its own prior
+  // state before any later phase records anything into the fresh one.
+  "adopt-prior-state",
   "detect-issues",
   "fetch-issues",
   "wip-check",
@@ -295,7 +310,9 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
     currentPhase = phase;
     let result;
 
-    if (phase === "detect-issues") {
+    if (phase === "adopt-prior-state") {
+      result = adoptPriorState(state, agentsConfigDir, sessionId);
+    } else if (phase === "detect-issues") {
       result = detectIssues(state, tokens, agentsConfigDir);
     } else if (phase === "fetch-issues") {
       result = fetchIssues(state);
@@ -411,7 +428,7 @@ function main() {
     return;
   }
 
-  runPipeline(state, "detect-issues", tokens, wipSid, ckptFile);
+  runPipeline(state, "adopt-prior-state", tokens, wipSid, ckptFile);
 }
 
 main();

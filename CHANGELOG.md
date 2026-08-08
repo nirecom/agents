@@ -244,3 +244,19 @@ Changes: Stop-guard exemptions: background work can now be declared with a senti
 ### FEATURE: PR #1867 (2026-08-07)
 Background: feat(#530,#688,#1805,#1766,#1825,#1758,#1693): unconditional WORKTREE...
 Changes: worktree-end and issue-close-finalize now automatically file GitHub issues for outstanding WORKTREE_NOTES.md findings instead of deferring them to a later session (#530).;Clearer prompts during worktree-end's notes-promotion and docs-completion steps (#688).;Fixed worktree-end documentation referencing incorrect subagent names (#1805).;Clarified worktree-end docs around PRs merged via the GitHub web UI (#1766).;Aligned documentation for the WORKFLOW_OFF and WORKTREE_OFF override mechanisms (#1825).;Fixed misleading wording in detect-restart.sh about rules/ file changes (#1758).;migration-from-todo.md's --from-step now warns when it silently skips intermediate steps (#1693).
+
+### FEATURE: PR #1890 (2026-08-08)
+Background: fix: correct issueNumber field mismatch in Final Report and remove dead forFinalReport option
+Changes: Fixed a bug where the Final Report's "Closed Issue Outcomes" section showed `#undefined` instead of the actual issue number (#1614).
+
+### FEATURE: PR #1897 (2026-08-08)
+Background: fix: replace cwd+branch session-start inheritance with lineage-based key (#1305)
+Changes: Fixed: a new Claude Code session could silently inherit stale workflow progress from an
+
+### FEATURE: PR #1893 (2026-08-08)
+Background: fix(workflow): close gaps in Stop-guard/EM-Supervisor workflow-started detection (#1794)
+Changes: Fixed two gaps in the Stop-guard/EM-Supervisor "workflow started" detection: a legitimate `WORKFLOW_RESET_FROM_*` recovery no longer looks like an unstarted session, and running the test suite from an unrelated self-contained task no longer falsely marks the workflow as started.
+
+### FEATURE: PR #1903 (2026-08-08)
+Background: fix: compress Final Report Bugs Found/Related/Next Tasks sections
+Changes: Fixed: Final Report's Bugs Found/Related Tasks/Next Tasks sections no longer dump WORKTREE_NOTES.md verbatim — entries are compressed to a title line unless explicitly tagged high severity, and the report now follows the configured output language consistently.
