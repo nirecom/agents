@@ -260,3 +260,7 @@ Changes: Fixed two gaps in the Stop-guard/EM-Supervisor "workflow started" detec
 ### FEATURE: PR #1903 (2026-08-08)
 Background: fix: compress Final Report Bugs Found/Related/Next Tasks sections
 Changes: Fixed: Final Report's Bugs Found/Related Tasks/Next Tasks sections no longer dump WORKTREE_NOTES.md verbatim — entries are compressed to a title line unless explicitly tagged high severity, and the report now follows the configured output language consistently.
+
+### FEATURE: PR #1907 (2026-08-08)
+Background: cleanup(workflow-state): remove unused WORKFLOW_START_STEP constant + add MEDIUM-1 inheritance-origin regression test (#1904)
+Changes: Removed dead `WORKFLOW_START_STEP` export from workflow-state lifecycle; added regression test for `applyInheritance()` origin-stamp invariant against v1-migrated donors (#1904).
