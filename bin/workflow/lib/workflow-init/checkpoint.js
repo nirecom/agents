@@ -19,6 +19,9 @@ function makeInitialState() {
     label_sets: {},
     force_path_b: false,
     path_decision: null,
+    // #1305 adopt-prior-state: the offered donor and the user's answer.
+    adopt_candidate: null,
+    adopt_decision: null,
   };
 }
 

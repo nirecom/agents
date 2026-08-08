@@ -151,8 +151,10 @@ Inspect the step list and current session state with `bin/workflow/next-step --l
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
   satisfies the corresponding steps — no manual marker required.
-- **State inheritance**: after context compaction or a fresh session on the same cwd+branch,
-  prior workflow state is inherited so progress is not lost.
+- **State inheritance**: after context compaction or a resumed session with provable
+  transcript descent from a prior one (same cwd+branch alone is not enough), prior workflow
+  state is inherited so progress is not lost. A session that lost its own id outright (crash
+  recovery) can adopt prior state explicitly via `bin/workflow/adopt-session-state`.
 
 > **Note**: `--permission-mode plan` is incompatible with this workflow. In plan mode the
 > Skill tool is restricted, so skills such as `/clarify-intent` and `/make-outline-plan`

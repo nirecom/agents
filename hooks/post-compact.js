@@ -6,6 +6,7 @@ const path = require("path");
 const os = require("os");
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { readState } = require("./workflow-state");
+const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 
 const WORKFLOW_STEPS = [
   "workflow_init",
@@ -48,7 +49,9 @@ try {
   const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
     path.join(os.homedir(), ".claude", "projects", "workflow");
   const lines = [
-    `Current workflow session_id: ${sessionId}`,
+    // Lineage evidence for #1305 — the compacted transcript carries this
+    // attachment forward, naming the pre-compact session. SSOT: lib/session-announce.
+    `${SESSION_ID_ANNOUNCE_PREFIX}${sessionId}`,
     `State file: ${path.join(stateDir, sessionId + ".json")}`,
   ];
   try {

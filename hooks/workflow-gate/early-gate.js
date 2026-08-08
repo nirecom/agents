@@ -22,9 +22,10 @@
 // is not inside it" diagnosis is owned here; enforce-worktree.js keeps its own
 // main-worktree block verdict unchanged and only swaps its remedy line (#1610).
 //
-// State inheritance: if findLatestStateForContext() inherited a state where both
+// State inheritance: if resolveInheritanceDonor() inherited a state where both
 // steps are already complete, gate is dormant by design — inherited state represents
-// continuing prior work.
+// continuing prior work (and since #1305 the donor is a proven lineage ancestor,
+// not merely the most recent session sharing this cwd+branch).
 
 const path = require("path");
 const { readState, reconcileEffectiveState } = require("../workflow-state");

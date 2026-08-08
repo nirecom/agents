@@ -35,11 +35,14 @@ transcript_dir_for() {
   run_with_timeout node -e "console.log(process.argv[1].toLowerCase().replace(/[^a-zA-Z0-9]/g,'-'));" "$1"
 }
 
-# seed_prior_session <old-sid> <proj-dir> <transcript-base> <state-json>
-# Writes the prior session's state file plus the JSONL breadcrumb that
-# findLatestStateForContext() follows to discover it.
+# seed_prior_session <old-sid> <proj-dir> <transcript-base> <state-json> <new-sid>
+# Writes the prior session's state file, the JSONL announce breadcrumb that maps
+# its session id back to that state file, and — since #1305 — the NEW session's
+# own transcript carrying the `forkedFrom` row that makes the prior session its
+# ancestor. Without that lineage row there is no donor to inherit from at all,
+# no matter how well the cwd and branch line up.
 seed_prior_session() {
-  local old_sid="$1" proj="$2" tbase="$3" json="$4"
+  local old_sid="$1" proj="$2" tbase="$3" json="$4" new_sid="$5"
   write_state "$old_sid" "$json"
   local rcwd tdir
   rcwd="$(resolved_cwd "$proj")"
@@ -57,12 +60,26 @@ seed_prior_session() {
     });
     fs.writeFileSync(process.argv[1], line + "\n");
   ' "$tdir/prior.jsonl" "$old_sid"
+  run_with_timeout node -e '
+    const fs = require("fs");
+    const line = JSON.stringify({
+      type: "user", uuid: "u1-" + process.argv[2], sessionId: process.argv[2],
+      forkedFrom: { sessionId: process.argv[3], messageUuid: "m1" },
+    });
+    fs.writeFileSync(process.argv[1], line + "\n");
+  ' "$tdir/$new_sid.jsonl" "$new_sid" "$old_sid"
 }
 
 # run_session_start <new-sid> <proj-dir> <transcript-base> → global SS_OUT
+# `source` and `transcript_path` are real SessionStart payload fields; after #1305
+# they are load-bearing — only a continuation may inherit, and its transcript is
+# where the ancestry is read from.
 run_session_start() {
   local new_sid="$1" proj="$2" tbase="$3"
-  SS_OUT="$(printf '{"session_id":"%s"}' "$new_sid" | \
+  local rcwd tpath
+  rcwd="$(resolved_cwd "$proj")"
+  tpath="$tbase/$(transcript_dir_for "$rcwd")/$new_sid.jsonl"
+  SS_OUT="$(printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' "$new_sid" "$tpath" | \
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     AGENTS_CONFIG_DIR="$CONFIG_DIR_ON" CLAUDE_PROJECT_DIR="$proj" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$tbase" CONFIRM_OUTLINE=on CONFIRM_DETAIL=on \
@@ -86,7 +103,7 @@ TBASE="$TMPDIR_BASE/transcripts"
 OLD_SID="g15old-$$"
 NEW_SID="g15new-$$"
 PROJ_OK="$(setup_repo)"
-# intent.md must exist: evaluateInheritance S3 blocks inheritance when
+# intent.md must exist: evaluateResumability S3 blocks inheritance when
 # clarify_intent is genuinely recorded complete but intent.md is absent.
 printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_SID}-intent.md"
 printf 'approved outline body\n' > "$PLANS_DIR/${OLD_SID}-outline.md"
@@ -107,7 +124,8 @@ OLD_EXTRA="$(run_with_timeout node -e '
 ' "$CWD_OK" "$BRANCH_OK" "$OLD_SID" "$SHA_O" "$SHA_D")"
 
 seed_prior_session "$OLD_SID" "$PROJ_OK" "$TBASE" \
-  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete","detail":"complete"}' wf-code "$OLD_EXTRA")"
+  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete","detail":"complete"}' wf-code "$OLD_EXTRA")" \
+  "$NEW_SID"
 
 check "G15-pre. prior session has outline complete" "complete" "$(read_state_status "$OLD_SID" outline)"
 
@@ -151,7 +169,8 @@ BAD_EXTRA="$(run_with_timeout node -e '
 
 printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_BAD}-intent.md"
 seed_prior_session "$OLD_BAD" "$PROJ_BAD" "$TBASE" \
-  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$BAD_EXTRA")"
+  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$BAD_EXTRA")" \
+  "$NEW_BAD"
 
 # Tamper AFTER the approval hash was recorded.
 printf 'silently rewritten outline body\n' > "$PLANS_DIR/${OLD_BAD}-outline.md"
@@ -184,7 +203,8 @@ DEL_EXTRA="$(run_with_timeout node -e '
 
 printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_DEL}-intent.md"
 seed_prior_session "$OLD_DEL" "$PROJ_DEL" "$TBASE" \
-  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$DEL_EXTRA")"
+  "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$DEL_EXTRA")" \
+  "$NEW_DEL"
 
 rm -f "$PLANS_DIR/${OLD_DEL}-outline.md"
 
