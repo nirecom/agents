@@ -65,8 +65,9 @@ rejects `backfilled`.
 
 `readState` normalizes a v1 file **in memory only** and never persists the result. The
 workflow directory is shared by every session on the machine, and callers read *foreign*
-session ids out of it (`context-scan.js` harvests them from other sessions' transcripts), so
-a v1 file may belong to a session still running an older release that cannot read v2 —
+session ids out of it (`inheritance/lineage.js` harvests them from the current session's own
+transcript ancestry — see "Session ID flow" below), so a v1 file may belong to a session still
+running an older release that cannot read v2 —
 migrating it on read would corrupt that session. Bringing a file forward is a **writer's**
 job: `writeState`, `updateTopLevel`, and `appendEvents` all normalize under the state lock,
 so a file migrates the moment its own session next writes. `persistMigratedState` exists for
@@ -293,18 +294,33 @@ binding gate.
 Session start → session-start.js (SessionStart hook)
   appends CLAUDE_SESSION_ID=<sid> to CLAUDE_ENV_FILE
   if state file does not exist:
-    resolves cwd (CLAUDE_PROJECT_DIR or process.cwd()) and git_branch
-    scans ~/.claude/projects/<encoded-cwd>/<session_id>.jsonl (mtime desc, up to 10)
-    for each transcript: collects ALL "Current workflow session_id: <prior-sid>"
-      markers from SessionStart and PostCompact entries (in file order)
-    tries each collected ID in reverse order (PostCompact/most-recent first):
-      skip if: no state file, branch mismatch, or all-pending
-        (all-pending guard: a session whose every step is pending was abandoned
-         before doing any real work — inheriting it would overwrite a genuine
-         in-progress session's state; skip and try the next collected ID — #1305)
-      if user_verification=complete: stop trying this JSONL (task done, start fresh)
-      else: copies matching session's steps (state inheritance)
-    if no match found in any transcript: creates fresh state with all steps pending
+    resolveInheritanceDonor({sessionId, source, transcriptPath, ctx, agentId}) (#1305):
+      Gate A (subagent exclusion): agentId present → no auto-inherit
+      Gate B (source gate): source must be "resume" or "compact" to auto-inherit;
+        "startup" → non-blocking "startup-no-lineage" outcome (no scan, no candidate offer);
+        "clear" / unknown source → "source-gated" (no auto-inherit)
+      Gate C (readLineageAncestors, hooks/workflow-state/inheritance/lineage.js):
+        reads the CURRENT transcript only (no cwd+branch directory scan — the
+        #1305 bug's root cause) for entries carrying forkedFrom.sessionId or a
+        copied SessionStart/PostCompact "Current workflow session_id: <sid>"
+        announce line; returns ancestors nearest-first, de-duplicated, self-excluded
+      Gate D (nearest-ancestor-decides): the FIRST ancestor with a state file is
+        the sole decision-maker — no falling through to an older ancestor when the
+        nearest one is ineligible (this fixes the original ancestor-passthrough bug;
+        under the old cwd+branch scan, skipping an ineligible candidate and trying
+        the next one let evidence-free sessions inherit through it)
+      Gate E (contextMatches): the donor's cwd/branch must match the heir's —
+        necessary-condition sanity check, not the primary key
+      Gate F (evaluateResumability): all-pending donor → not resumable
+        (a session whose every step is pending was abandoned before doing any
+         real work — inheriting it would overwrite a genuine in-progress
+         session's state); user_verification=complete → not resumable (task
+         done, start fresh)
+    ancestor passes all gates → copies its steps (state inheritance)
+    no ancestor / gate failure: session starts fresh; a same-cwd+branch candidate
+      that failed only on lineage (no provable descent) is offered via the
+      explicit adoption path below, never auto-inherited
+    if no match found: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
   calls bin/workflow/next-step --session <sid> → injects all 15 step statuses
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
@@ -364,13 +380,22 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   approves if all steps complete/skipped; blocks with remediation message otherwise
 ```
 
-State inheritance is cwd+branch scoped. The practical inheritance window is 7 days (zombie
-cleanup limit). Parallel sessions: transcript mtime ordering ensures the most-recently-used
-session wins. Non-git directories and detached HEAD both use `git_branch: null` — they match
-each other but not named branches. Completed workflows (`user_verification: complete`) are
-never inherited — the JSONL is skipped entirely so the new session starts fresh. PostCompact
-entries take priority because they are appended after SessionStart and reflect the most
-recent session_id in any given JSONL file.
+State inheritance is keyed on provable transcript descent (lineage), not on cwd+branch alone
+(#1305) — cwd+branch (`contextMatches`) is a necessary condition checked after lineage, never
+the primary key. The practical inheritance window is 7 days (zombie cleanup limit). Non-git
+directories and detached HEAD both use `git_branch: null` — they match each other but not
+named branches. Completed workflows (`user_verification: complete`) are never inherited — the
+ancestor is treated as not-resumable so the new session starts fresh.
+
+A session that loses its own id outright (a true process crash, with no `forkedFrom` /
+announce-line evidence to prove descent) cannot auto-inherit — nothing in its fresh transcript
+can prove where it came from. That case is served by explicit, user-approved adoption instead:
+`bin/workflow/adopt-session-state --session <heir-sid> --from <donor-sid>` (or the
+`/workflow-init` `adopt-prior-state` phase, same underlying implementation in
+`hooks/workflow-state/inheritance/adopt.js` — CPR-SSOT, one execution point for both routes).
+Adoption re-runs the same guards as automatic inheritance (heir must be untouched/all-pending,
+donor context must match, donor must be resumable) — being named on a command line is not
+itself evidence.
 
 ### Bash/CLI-side resolution
 

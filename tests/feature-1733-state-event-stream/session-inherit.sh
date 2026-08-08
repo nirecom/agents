@@ -25,18 +25,20 @@ CASE_TAG="si"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # ── donor discovery fixture ──────────────────────────────────────────────────
-# findLatestStateForContext (hooks/workflow-state/inheritance.js — the version the
-# session-start.js barrel actually wires up; state-io/context-scan.js's own copy of
-# the same name is shadowed by object-spread order in hooks/workflow-state.js)
-# discovers a donor by scanning real Claude Code transcript .jsonl files under
-# CLAUDE_TRANSCRIPT_BASE_DIR/<encoded-cwd>/ for a SessionStart/PostCompact
-# hook-event line whose stdout contains "Current workflow session_id: <sid>". This
-# harness drives session-start.js directly via stdin (not through real Claude Code),
-# so no such transcript exists unless manufactured here.
+# Since #1305 a donor is not found by scanning the cwd's transcript directory for
+# whatever session ran here last — it is reached through the HEIR's OWN lineage:
+# resolveInheritanceDonor (hooks/workflow-state/inheritance.js) reads the heir's
+# transcript, collects the ancestors named by `forkedFrom` rows (and by copied
+# SessionStart/PostCompact announce lines), and takes the nearest ancestor that
+# holds state. The donor's announce line is still needed — it is the breadcrumb
+# that maps an ancestor session id back to its state file — but on its own it no
+# longer makes a session inheritable. This harness drives session-start.js
+# directly via stdin (not through real Claude Code), so both the donor's announce
+# line and the heir's lineage row must be manufactured here.
 TRANSCRIPTS_BASE="$TMPROOT/transcripts"; mkdir -p "$TRANSCRIPTS_BASE"
 TRANSCRIPTS_BASE_NATIVE="$(native_path "$TRANSCRIPTS_BASE")"
 
-# The directory name findLatestStateForContext derives from ctx.cwd is
+# The directory name the transcript lookup derives from ctx.cwd is
 # ctx.cwd.toLowerCase().replace(/[^a-zA-Z0-9]/g, "-") — computed by asking node
 # itself, in the same cwd ($AGENTS_DIR, no CLAUDE_PROJECT_DIR override) that
 # session-start.js runs from below, rather than reimplemented in bash, so it can
@@ -44,16 +46,16 @@ TRANSCRIPTS_BASE_NATIVE="$(native_path "$TRANSCRIPTS_BASE")"
 ENCODED_CWD="$(cd "$AGENTS_DIR" && node -e 'console.log(require("path").resolve(process.cwd()).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"))')"
 TRANSCRIPT_DIR="$TRANSCRIPTS_BASE/$ENCODED_CWD"; mkdir -p "$TRANSCRIPT_DIR"
 
-# announce_donor <donor-sid> — makes <donor-sid> discoverable by the real donor scan:
+# announce_donor <donor-sid> — makes <donor-sid> resolvable once the heir names it:
 #   1. Writes a synthetic transcript line, shaped exactly like a real Claude Code
-#      SessionStart hook attachment, announcing the donor's session_id.
+#      SessionStart hook attachment, announcing the donor's session_id. This is the
+#      ancestor-id → state-file breadcrumb, not an inheritance trigger.
 #   2. Drops the clarify_intent plan artifact the donor's state needs: SEED_DONOR
 #      marks clarify_intent complete with genuine (non-backfilled) provenance, and
-#      evaluateInheritance's S3 rule (hooks/workflow-state/effective-state.js) treats
-#      a genuinely-complete clarify_intent with no intent.md as a staleness boundary
-#      and stops the ENTIRE scan — without this file every case below would see
-#      scan="stop" on the donor itself, independent of whether the transcript was
-#      found at all.
+#      evaluateResumability's S3 rule (hooks/workflow-state/effective-state.js)
+#      treats a genuinely-complete clarify_intent with no intent.md as unusable
+#      state — without this file every case below would be refused on the donor
+#      itself, independent of whether the lineage resolved at all.
 announce_donor() {
     local donor="$1"
     printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode":0,"stdout":"Current workflow session_id: %s"}}\n' \
@@ -61,11 +63,22 @@ announce_donor() {
     printf '# fixture intent\n' > "$PLANS/$donor-intent.md"
 }
 
+# seed_heir_lineage <heir-sid> <donor-sid> — the heir's own transcript, carrying
+# the `forkedFrom` row that makes the donor its ancestor (#1305).
+seed_heir_lineage() {
+    printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' \
+        "$1" "$1" "$2" > "$TRANSCRIPT_DIR/$1.jsonl"
+}
+
 # start_session <sid> — drives the real SessionStart hook, as Claude Code does.
+# `source` and `transcript_path` are part of the real SessionStart payload and are
+# what lineage resolution needs: only a continuation (resume/compact) may inherit,
+# and the transcript is where its ancestry is read from.
 start_session() {
-    local sid="$1"
+    local sid="$1" src="${2:-resume}"
     HOOK_RC=0
-    HOOK_OUT="$(cd "$AGENTS_DIR" && printf '{"session_id":"%s"}' "$sid" | env \
+    HOOK_OUT="$(cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"%s","transcript_path":"%s"}' \
+        "$sid" "$src" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$sid.jsonl" | env \
         CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_BASE_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
@@ -107,6 +120,7 @@ seed_pair() { # sets DONOR and HEIR
     nodejs "$DONOR" "$SEED_DONOR"
     announce_donor "$DONOR"
     next_sid; HEIR="$SID"
+    seed_heir_lineage "$HEIR" "$DONOR"
     start_session "$HEIR"
 }
 
@@ -278,7 +292,7 @@ if run_case "SI9/inherited-not-genuine"; then
 // Deliberate semantic change (plan risk #11): pre-#1733 the inherited updated_at made
 // these look genuinely recorded. Now provenance says backfilled, which is the honest
 // answer — and a later real markStep in THIS session flips it back to genuine.
-// genuine() observes the predicate through evaluateInheritance, whose subject IS
+// genuine() observes the predicate through evaluateResumability, whose subject IS
 // clarify_intent (GENUINE_SUBJECT) — see the contract in common.sh.
 // Guard first: "not genuine" is only meaningful if the subject WAS inherited. Without
 // this, a donor that failed to seed (or an inheritance that copied nothing) would leave
@@ -313,7 +327,10 @@ if run_case "SI11/no-donor-plain-init"; then
     next_sid
     EMPTY_WF="$TMPROOT/wf-empty"; mkdir -p "$EMPTY_WF"
     EMPTY_WF_NATIVE="$(native_path "$EMPTY_WF")"
-    (cd "$AGENTS_DIR" && printf '{"session_id":"%s"}' "$SID" | env \
+    # Same realistic SessionStart payload as start_session; the heir simply has no
+    # ancestor to name, which is what "no donor in range" means after #1305.
+    (cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' \
+        "$SID" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$SID.jsonl" | env \
         CLAUDE_WORKFLOW_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js >/dev/null 2>&1) || true
@@ -344,6 +361,7 @@ if run_case "SI12/donor-immutable"; then
 
     DONOR_BEFORE="$(cksum < "$WF/$DONOR.json" 2>/dev/null | awk '{print $1}')"
     next_sid; HEIR="$SID"
+    seed_heir_lineage "$HEIR" "$DONOR"
     start_session "$HEIR"
     DONOR_AFTER="$(cksum < "$WF/$DONOR.json" 2>/dev/null | awk '{print $1}')"
 
