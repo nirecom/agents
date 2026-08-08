@@ -1,23 +1,16 @@
 "use strict";
 
 // Argument parsing, validation and mode resolution for
-// bin/worktree-notes-append.js. Kept out of the entrypoint so the entrypoint
-// stays focused on I/O and line construction (rules/coding/file-split.md).
-//
-// Two mutually exclusive modes, discriminated by --issue-number:
-//   Mode A (--issue-number present) — promotion pointer for an issue that
-//     already exists; section comes from --label. Byte-for-byte unchanged
-//     since #622.
-//   Mode B (--issue-number absent)  — finding authoring; section comes from
-//     --section, and --severity is mandatory for BugsFound only.
+// bin/worktree-notes-append.js (split out per rules/coding/file-split.md).
+// Mode is discriminated by --issue-number: present = Mode A (existing-issue
+// promotion, section from --label); absent = Mode B (finding authoring,
+// section from --section, --severity mandatory for BugsFound only).
 
 const { parseArgs } = require("util");
 
-// Input allowlist. Deliberately NOT shared with bin/worktree-notes-triage.js's
-// SECTIONS (promotion targets) nor with NOTES_SECTIONS in
-// bin/render-final-report/notes.js (output sections): this list accepts one
-// more — ManualReminders — because hand-editing that section needs a CLI
-// replacement too, even though a reminder is never promoted to an issue.
+// Input allowlist. Not shared with triage.js's or notes.js's section lists —
+// this one adds ManualReminders since it needs a CLI edit path too, even
+// though a reminder is never promoted to an issue.
 const MODE_B_SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks", "ManualReminders"];
 const SEVERITY_VALUES = ["high", "low", "none"];
 

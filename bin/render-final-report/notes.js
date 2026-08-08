@@ -1,24 +1,16 @@
 "use strict";
 
-// Compresses the WORKTREE_NOTES.md finding sections for the Final Report (#1886).
+// Compresses WORKTREE_NOTES.md finding sections for the Final Report (#1886).
+// Verbatim dumping used to emit thousands of chars into the reply (CPR-UO);
+// now every entry collapses to a title line except `<!-- severity: high -->`
+// entries, which stay verbatim. One summary line carries counts + backup pointer.
 //
-// Why: the sections used to be pasted in verbatim, so a long session emitted
-// thousands of characters into the assistant reply (CPR-UO). Here every entry
-// collapses to a bounded title line, EXCEPT entries the author tagged
-// `<!-- severity: high -->`, which stay verbatim because their repro steps and
-// evidence are the whole point. One summary line carries the counts plus a
-// pointer to the full backup text.
-//
-// Purity contract: this module runs on the Stop hook's critical path. Pure
-// functions only — no file access, no subprocess, no network, no model calls.
-// The single dependency is the shared notes parser.
+// Pure functions only (Stop hook critical path) — no file access, subprocess, network, or model calls.
 
 const { scanSection } = require("../../hooks/lib/worktree-notes-sections");
 
-// Output sections of the Final Report. Deliberately NOT shared with
-// bin/worktree-notes-triage.js's SECTIONS (promotion targets) nor with the
-// input allowlist in bin/worktree-notes-append/args.js (which additionally
-// accepts ManualReminders): same names, three different scopes.
+// Output sections of the Final Report. Not shared with triage.js's promotion
+// targets or args.js's input allowlist — same names, three different scopes.
 const NOTES_SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
 const TITLE_MAX_CHARS = 120;
 const COMPRESSED_LIST_MAX = 10;

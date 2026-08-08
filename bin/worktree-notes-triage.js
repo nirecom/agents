@@ -28,10 +28,8 @@ const { runResolve } = require("./worktree-notes-triage/resolve");
 // Triage sections only. `## ManualReminders` is deliberately absent: a reminder
 // is addressed to the person closing the session, not to a future implementer,
 // so promoting one into a GitHub issue is the wrong outcome (#530).
-// Deliberately NOT shared with the render-side list in
-// bin/render-final-report/notes.js nor with the CLI input allowlist in
-// bin/worktree-notes-append/args.js: same names, three different scopes
-// (promotion targets / output sections / accepted input).
+// Not shared with notes.js's output list or args.js's input allowlist —
+// same names, three different scopes.
 const SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
 
 function err(msg) {

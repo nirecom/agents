@@ -1,25 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-// CLI for appending an entry to WORKTREE_NOTES.md. Two modes; argument parsing
-// and mode resolution live in bin/worktree-notes-append/args.js.
+// CLI for appending an entry to WORKTREE_NOTES.md. Argument parsing and mode
+// resolution live in bin/worktree-notes-append/args.js.
 //
-// Mode A — promotion pointer for an existing issue (#622):
-//   node bin/worktree-notes-append.js \
-//     --notes-path <absolute-path-to-WORKTREE_NOTES.md> \
-//     --issue-number <N> --title "<short title>" \
-//     [--label <label> [--label ...]] [--skip-if-main]
-//   Routes to ## BugsFound when any --label is type:incident, else ## RelatedTasks.
-//   Writes `- <title> (#N) <!-- promoted: #N -->`; idempotent on (#N).
-//
-// Mode B — finding authoring (#1886), selected by omitting --issue-number:
-//   node bin/worktree-notes-append.js \
-//     --notes-path <absolute-path-to-WORKTREE_NOTES.md> \
-//     --section <BugsFound|RelatedTasks|NextTasks|ManualReminders> \
-//     --title "<one-line finding>" [--severity high|low|none] [--skip-if-main]
-//   --severity is required for BugsFound and rejected elsewhere. `high` writes
-//   `- <title> <!-- severity: high -->` (kept verbatim in the Final Report);
-//   `low`/`none` write a plain `- <title>`. Idempotent on the entry body.
+// Mode A (--issue-number given): promotion pointer for an existing issue (#622)
+//   — routes to BugsFound for a type:incident label, else RelatedTasks; idempotent on (#N).
+// Mode B (--issue-number omitted): finding authoring (#1886) via --section/--title
+//   [--severity high|low|none]; severity required only for BugsFound, and `high`
+//   is kept verbatim in the Final Report; idempotent on the entry body.
 //
 // Both modes: atomic write via tmp + rename, `- (none)` placeholder replacement,
 // missing-section append at EOF.
