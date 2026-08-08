@@ -252,3 +252,7 @@ Changes: Fixed a bug where the Final Report's "Closed Issue Outcomes" section sh
 ### FEATURE: PR #1897 (2026-08-08)
 Background: fix: replace cwd+branch session-start inheritance with lineage-based key (#1305)
 Changes: Fixed: a new Claude Code session could silently inherit stale workflow progress from an
+
+### FEATURE: PR #1893 (2026-08-08)
+Background: fix(workflow): close gaps in Stop-guard/EM-Supervisor workflow-started detection (#1794)
+Changes: Fixed two gaps in the Stop-guard/EM-Supervisor "workflow started" detection: a legitimate `WORKFLOW_RESET_FROM_*` recovery no longer looks like an unstarted session, and running the test suite from an unrelated self-contained task no longer falsely marks the workflow as started.
