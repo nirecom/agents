@@ -26,7 +26,6 @@ function aggregateCategories(findings) {
  * @param {string|null} [opts.workflowSessionId]
  * @param {string} opts.supervisorPath
  * @param {string} opts.stateFilePath
- * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039, normalize newlines, and suppress footer
  * @param {boolean} [opts.summaryOnly] - when true, return a 1-line summary instead of the full list
  * @param {boolean} [opts.actionableOnly] - when true, return only severity>=warning findings, one line each; zero actionable → 1-line "no actionable findings" message
  */
@@ -34,7 +33,6 @@ function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
 
   const { sessionId, workflowSessionId, supervisorPath, stateFilePath } = opts;
-  const forFinalReport = opts.forFinalReport === true;
   const summaryOnly = opts.summaryOnly === true;
   const actionableOnly = opts.actionableOnly === true;
 
@@ -74,8 +72,7 @@ function formatLayer2Findings(findings, opts) {
 
   if (warningOrErrorFindings.length === 0 && noticeFindings.length === 0) return null;
 
-  const allCatsRaw = aggregateCategories(findings);
-  const allCats = forFinalReport ? allCatsRaw.map(escapeTokens) : allCatsRaw;
+  const allCats = aggregateCategories(findings);
   const lines = [];
 
   lines.push(`[EM Supervisor] Alert mode findings (post-completion review):`);
@@ -85,32 +82,22 @@ function formatLayer2Findings(findings, opts) {
     lines.push(`Findings (severity >= warning):`);
     for (let i = 0; i < warningOrErrorFindings.length; i++) {
       const f = warningOrErrorFindings[i];
-      let cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
-      let detail = typeof f.detail === "string" ? f.detail : "(no detail)";
-      let reporterValue = typeof f.reporter === "string" && f.reporter ? f.reporter : "(none)";
-      if (forFinalReport) {
-        detail = detail.replace(/[\r\n]+/g, " ");
-        cats = escapeTokens(cats);
-        detail = escapeTokens(detail);
-        reporterValue = escapeTokens(reporterValue);
-      }
+      const cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
+      const detail = typeof f.detail === "string" ? f.detail : "(no detail)";
+      const reporterValue = typeof f.reporter === "string" && f.reporter ? f.reporter : "(none)";
       lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} reporter=${reporterValue} detail=${detail}`);
     }
   }
 
   if (noticeFindings.length > 0) {
-    const noticeRef = forFinalReport
-      ? "see supervisor state for full audit trail"
-      : `consult ${stateFilePath} for the full audit trail`;
+    const noticeRef = `consult ${stateFilePath} for the full audit trail`;
     lines.push(`Notices: ${noticeFindings.length} additional notice-severity finding(s) recorded — not shown (${noticeRef}).`);
   }
 
-  if (!forFinalReport) {
-    lines.push(`Session ID: ${sessionId}`);
-    lines.push(`Workflow session ID: ${wsidLabel}`);
-    lines.push(`Full audit trail: ${stateFilePath}`);
-    lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
-  }
+  lines.push(`Session ID: ${sessionId}`);
+  lines.push(`Workflow session ID: ${wsidLabel}`);
+  lines.push(`Full audit trail: ${stateFilePath}`);
+  lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
 
   return lines.join("\n");
 }
