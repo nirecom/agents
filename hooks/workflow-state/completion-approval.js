@@ -36,12 +36,27 @@ const SANCTIONED_SOURCES = Object.freeze([
   "confirm-sentinel",
   "confirm-flag-off",
   "reset-sentinel",
+  // #1305: a completion carried over from a session this one provably descends
+  // from (fork lineage) or that the user named by hand via
+  // bin/workflow/adopt-session-state. The approval was given in that
+  // conversation; the donor simply predates plan_approvals or never recorded
+  // one. Used ONLY when the donor holds no approval record at all for the gated
+  // steps in the batch — a donor that HAS a record is verified normally, so a
+  // tampered or missing artifact is still refused.
+  "session-inherit",
 ]);
 
 // Approval sources that are approval-equivalent on their own (audit records):
 // the source itself encodes an explicit user approval, so no artifact hash is
 // bound to them.
-const HASH_EXEMPT_SOURCES = Object.freeze(["reset-sentinel", "confirm-flag-off"]);
+const HASH_EXEMPT_SOURCES = Object.freeze([
+  "reset-sentinel",
+  "confirm-flag-off",
+  // #1305: no artifact hash was ever bound to it — there was no donor record to
+  // take one from. Omitting it here would make the audit record this module
+  // itself stamps fail its own later re-read (artifact-hash-unverifiable).
+  "session-inherit",
+]);
 
 class UnapprovedCompletionError extends Error {
   constructor(step, code, recovery) {

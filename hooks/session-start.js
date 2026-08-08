@@ -5,11 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
-const { cleanupZombies, createInitialState, writeState, readState, appendEvents,
-        getCurrentContext, findLatestStateForContext, reconcileEffectiveState,
-        getStatePath, VALID_STEPS } = require("./workflow-state");
-const { convertV1AnnotationsToEvents } =
-  require("./workflow-state/state-io/migrations/v1-to-v2");
+const { cleanupZombies, createInitialState, writeState, readState,
+        getCurrentContext, resolveInheritanceDonor, listRecentContextCandidates,
+        reconcileEffectiveState, getStatePath, VALID_STEPS } = require("./workflow-state");
+const { applyInheritance } = require("./workflow-state/inheritance/apply");
+const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
@@ -28,12 +28,21 @@ function readStdin() {
 
 let sessionId;
 let modelHint = null;
+// #1305: `source` and `transcript_path` are the two payload fields inheritance
+// is keyed on — only a continuation may inherit, and the transcript is where its
+// ancestry is read from. `agent_id` marks a subagent, which never inherits.
+let sessionSource = null;
+let transcriptPath = null;
+let agentId = null;
 try {
   const input = JSON.parse(readStdin());
   sessionId = input.session_id;
   // Layer① of model identification — kept as a bare value, not the whole input,
   // so nothing else in this hook can start depending on the payload shape.
   modelHint = input.model ?? null;
+  sessionSource = input.source ?? null;
+  transcriptPath = input.transcript_path ?? null;
+  agentId = input.agent_id ?? null;
   // transcript_path → correct JSONL path for worktree sessions
   if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
 } catch (e) {
@@ -53,115 +62,13 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
   }
 }
 
-const INHERIT_ORIGIN = "session-inherit";
-
-// applyInheritance(sessionId, createdAt, donor)
-//
-// Carries a prior session's WORK RECORD into a fresh session as ONE append-only
-// batch (#1733). Pre-#1733 this was a blind deep copy of the donor's `steps` map;
-// expressing it as events makes three things explicit that the copy hid:
-//
-//   * provenance:"backfilled" + inherited_from — an inherited `complete` is not a
-//     completion this session observed. Downstream genuineness checks can finally
-//     tell the two apart (effective-state.hasGenuineRecordedComplete).
-//   * every event is stamped `at = createdAt` — the heir's timeline never reaches
-//     back into the donor's. The deliberate consequence is that an inherited step's
-//     `updated_at` is now the heir's created_at rather than the donor's original.
-//   * cleanup (#772) is RESET rather than carried: its donor annotations are
-//     dropped by an explicit tombstone, not merely shadowed.
-//
-// What is NOT inherited: session_model, complexity_evaluation, worktree_*,
-// git_branch/cwd, workflow_type, closes_issues, last_pushed_sha. Each is a fact
-// about the donor session itself, not about the work.
-function applyInheritance(sessionId, createdAt, donor) {
-  const donorSid = (donor && donor.session_id) || null;
-  const donorSteps = (donor && donor.steps) || {};
-  const donorApprovals = (donor && donor.plan_approvals) || null;
-
-  const stamp = (event) =>
-    Object.assign({}, event, {
-      at: createdAt,
-      provenance: "backfilled",
-      origin: INHERIT_ORIGIN,
-      inherited_from: donorSid,
-    });
-
-  const build = () => {
-    const events = [];
-
-    for (const step of VALID_STEPS) {
-      // cleanup is handled below — its donor record is discarded wholesale.
-      if (step === "cleanup") continue;
-      const entry = donorSteps[step];
-      if (!entry || typeof entry !== "object") continue;
-
-      if (typeof entry.status === "string" && entry.status !== "pending") {
-        events.push(stamp({ kind: "step_status", step, status: entry.status }));
-      }
-      // Annotations travel even on a PENDING step (a reset_reason explains why the
-      // step was rewound and is lost if only non-pending steps are carried).
-      // convertV1AnnotationsToEvents owns which entry fields ARE annotations —
-      // the same conversion the v1->v2 migration performs (CPR-E2C); only the
-      // stamping differs, so the two can never disagree about the field set.
-      for (const converted of convertV1AnnotationsToEvents(step, entry, { createdAt })) {
-        events.push(
-          stamp({ kind: "step_annotation", step, key: converted.key, value: converted.value })
-        );
-      }
-    }
-
-    // #772: cleanup must never inherit as already-done. The three events are one
-    // unit: discard the donor's notes, record the reset, state why.
-    events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
-    events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
-    events.push(
-      stamp({
-        kind: "step_annotation",
-        step: "cleanup",
-        key: "skip_reason",
-        value: "inherited-from-prior-session",
-      })
-    );
-
-    // #1133: an inherited outline/detail `complete` is a pending->complete
-    // transition for the NEW session, so the donor's approval must land in the
-    // SAME batch or the completion-boundary invariant refuses the whole append.
-    // The record stays bound to the artifact it was approved against
-    // (<owner-sid>-<step>.md) via artifact_session_id.
-    if (donorApprovals && typeof donorApprovals === "object") {
-      // Iterate VALID_STEPS, not the donor's keys: the donor is a FOREIGN session's
-      // file from the shared workflow dir, and an out-of-vocabulary key would make
-      // validateEvent throw, aborting inheritance and leaving this session with no
-      // state file at all. Skip what we don't recognize; never let it wedge us.
-      for (const step of VALID_STEPS) {
-        const rec = donorApprovals[step];
-        if (!rec || typeof rec !== "object") continue;
-        events.push(
-          stamp({
-            kind: "plan_approval",
-            step,
-            source: rec.source !== undefined ? rec.source : null,
-            reason: rec.reason !== undefined ? rec.reason : null,
-            artifact_sha256: rec.artifact_sha256 !== undefined ? rec.artifact_sha256 : null,
-            artifact_session_id: rec.artifact_session_id || donorSid || null,
-            artifact_hash_status:
-              rec.artifact_hash_status !== undefined ? rec.artifact_hash_status : null,
-          })
-        );
-      }
-    }
-
-    return events;
-  };
-
-  // Builder form: the batch is produced INSIDE the lock, and `now` pins every
-  // unstamped event to the heir's created_at.
-  appendEvents(sessionId, build, { origin: INHERIT_ORIGIN, now: createdAt });
-}
-
 // Create initial state file if session_id is available (with inheritance logic)
 let inheritedFromSessionId = null;
 let stateWriteError = null;
+// #1305 reporting surface — see the SD-4 block near the bottom of this file.
+let inheritDecision = null;
+let inheritCandidateSid = null;
+let adoptCandidate = null;
 if (sessionId) {
   try {
     const existing = readState(sessionId);
@@ -170,9 +77,27 @@ if (sessionId) {
       try { ctx = getCurrentContext(); }
       catch (e) { ctx = { cwd: process.cwd(), git_branch: null }; }
 
+      // #1305: inheritance is keyed on PROVABLE DESCENT, not on cwd+branch.
+      // resolveInheritanceDonor owns every gate; this hook only reports.
       let inherited = null;
-      try { inherited = findLatestStateForContext(ctx); }
-      catch (e) {}
+      try {
+        const verdict = resolveInheritanceDonor({
+          sessionId, source: sessionSource, transcriptPath, ctx, agentId,
+        });
+        inherited = verdict.donor;
+        inheritDecision = verdict.decision;
+        inheritCandidateSid = verdict.candidateSessionId;
+      } catch (e) { inherited = null; }
+
+      // A `startup` session is the true crash-resume case: nothing is inherited,
+      // but a resumable same-context session is surfaced so the user can adopt it
+      // explicitly.
+      if (inheritDecision === "startup-no-lineage") {
+        try {
+          const candidates = listRecentContextCandidates(ctx) || [];
+          adoptCandidate = candidates.length > 0 ? candidates[0] : null;
+        } catch (e) { adoptCandidate = null; }
+      }
 
       // The new session ALWAYS starts from a clean initial state: its own
       // session_start_context, its own created_at, and an empty stream (#1733).
@@ -350,10 +275,38 @@ const lines = [];
 if (sessionId) {
   const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
     path.join(os.homedir(), ".claude", "projects", "workflow");
-  lines.push(`Current workflow session_id: ${sessionId}`);
+  // This line is itself lineage evidence: a compacted / forked transcript copies
+  // the attachment forward, which is how readLineageAncestors recovers the
+  // ancestor when no forkedFrom row exists. SSOT for the wording: lib/session-announce.
+  lines.push(`${SESSION_ID_ANNOUNCE_PREFIX}${sessionId}`);
   lines.push(`State file: ${path.join(stateDir, sessionId + ".json")}`);
   if (inheritedFromSessionId) {
-    lines.push(`Inherited workflow steps from session ${inheritedFromSessionId} (cwd+branch match)`);
+    lines.push(
+      `Inherited workflow steps from session ${inheritedFromSessionId} ` +
+      `(fork lineage, SessionStart source=${sessionSource})`
+    );
+  } else if (
+    inheritCandidateSid &&
+    (inheritDecision === "context-mismatch" ||
+      (typeof inheritDecision === "string" && inheritDecision.indexOf("not-resumable:") === 0))
+  ) {
+    // An ancestor WAS found and deliberately refused. Silence here would read as
+    // "no prior work existed", which is the opposite of the truth.
+    lines.push(
+      `Prior session ${inheritCandidateSid} is in this session's lineage but was ` +
+      `not inherited (${inheritDecision}).`
+    );
+  } else if (inheritDecision === "startup-no-lineage" && adoptCandidate) {
+    lines.push(
+      `A recent session ${adoptCandidate.sessionId} on this cwd+branch has workflow state ` +
+      `(last activity ${adoptCandidate.last_activity}).`
+    );
+    lines.push("It is NOT inherited automatically. If this session is a crash-resume of it:");
+    lines.push("  interactive     : run /workflow-init and choose \"adopt\"");
+    lines.push(
+      `  non-interactive : node bin/workflow/adopt-session-state --session ${sessionId} ` +
+      `--from ${adoptCandidate.sessionId}`
+    );
   }
   if (stateWriteError) {
     lines.push(

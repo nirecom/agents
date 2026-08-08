@@ -1,6 +1,8 @@
 # shellcheck shell=bash
 # Case group: Section 5 — Branch Isolation.
 # Sourced by main-workflow-state-machine.sh; relies on helpers from common.sh.
+# Tests: hooks/workflow-state.js
+# Tags: helper, branch-isolation, scope:common
 
 run_branch_isolation_tests() {
     # ---------------------------------------------------------------------------
@@ -56,13 +58,18 @@ EOF
 }
 EOF
 )"
-    write_transcript_line "$HOME_5/.claude/projects/$ENC_5/main-${SID_5_MAIN}.jsonl" \
-        "$SID_5_MAIN" "$(to_node_path "$WORKFLOW_DIR/${SID_5_MAIN}.json")"
-    write_transcript_line "$HOME_5/.claude/projects/$ENC_5/feat-${SID_5_FEAT}.jsonl" \
-        "$SID_5_FEAT" "$(to_node_path "$WORKFLOW_DIR/${SID_5_FEAT}.json")"
+    # Since #1305 the donor comes from the heir's own lineage, so each query
+    # below forks a heir off the branch-matching donor. Branch isolation is now
+    # the context guard (gate E) applied to that donor, not a directory scan.
+    HEIR_5_MAIN="l5mainheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    HEIR_5_FEAT="l5featheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${HEIR_5_MAIN}.jsonl" \
+        "$HEIR_5_MAIN" "$SID_5_MAIN"
+    write_forked_transcript_line "$HOME_5/.claude/projects/$ENC_5/${HEIR_5_FEAT}.jsonl" \
+        "$HEIR_5_FEAT" "$SID_5_FEAT"
 
-    # L5-a: query main → returns main state (outline=pending, not feature/x's outline=complete)
-    RESULT_5A=$(call_find_latest "$CWD_5" "main" "$HOME_5")
+    # L5-a: heir on main → main donor state (outline=pending, not feature/x's complete)
+    RESULT_5A=$(call_resolve_donor "$CWD_5" "main" "$HOME_5" "$HEIR_5_MAIN")
     PLAN_5A=$(get_json_step_status "$RESULT_5A" "outline")
     if [ "$PLAN_5A" = "pending" ]; then
         pass "L5-a. query main → main state (outline=pending, not feature/x outline=complete)"
@@ -70,8 +77,8 @@ EOF
         fail "L5-a. query main — expected outline=pending (main), got: $PLAN_5A (result: $RESULT_5A)"
     fi
 
-    # L5-b: query feature/x → returns feature/x state (outline=complete, not main's outline=pending)
-    RESULT_5B=$(call_find_latest "$CWD_5" "feature/x" "$HOME_5")
+    # L5-b: heir on feature/x → feature/x donor state (outline=complete)
+    RESULT_5B=$(call_resolve_donor "$CWD_5" "feature/x" "$HOME_5" "$HEIR_5_FEAT")
     PLAN_5B=$(get_json_step_status "$RESULT_5B" "outline")
     if [ "$PLAN_5B" = "complete" ]; then
         pass "L5-b. query feature/x → feature/x state (outline=complete)"
@@ -85,15 +92,14 @@ EOF
     ENC_5C=$(encode_path "$CWD_5C")
     mkdir -p "$HOME_5C/.claude/projects/$ENC_5C"
     SID_5C="l5c-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    HEIR_5C="l5cheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_5C" "$(INHERIT_STATE_JSON "$SID_5C" "main")"
-    write_transcript_line "$HOME_5C/.claude/projects/$ENC_5C/${SID_5C}.jsonl" \
-        "$SID_5C" "$(to_node_path "$WORKFLOW_DIR/${SID_5C}.json")"
-    RESULT_5C=$(call_find_latest "$CWD_5C" "null" "$HOME_5C")
-    if [ "$RESULT_5C" = "null" ] || [ -z "$RESULT_5C" ]; then
-        pass "L5-c. detached HEAD (git_branch=null) query → null (no match with main state)"
-    else
-        fail "L5-c. detached HEAD → expected null, got: $RESULT_5C"
-    fi
+    write_forked_transcript_line "$HOME_5C/.claude/projects/$ENC_5C/${HEIR_5C}.jsonl" \
+        "$HEIR_5C" "$SID_5C"
+    RESULT_5C=$(call_resolve_donor "$CWD_5C" "null" "$HOME_5C" "$HEIR_5C")
+    expect_not_inherited \
+        "L5-c. detached HEAD (git_branch=null) heir → its main-branch ancestor is refused" \
+        "$RESULT_5C"
 
     # L5-d: security — CLAUDE_PROJECT_DIR with shell metacharacters → no command injection, no crash
     # getCurrentContext calls: git -C JSON.stringify(cwd) rev-parse --abbrev-ref HEAD

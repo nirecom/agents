@@ -370,12 +370,16 @@ try {
     // recorded earlier in the session keeps its "demoted because X" note visible
     // on a step that has since actually completed — a stale reason is read as a
     // current one.
+    //
+    // origin override: this is PostToolUse pattern-detection on a Bash
+    // command, not a deliberate user/skill action — must not count as
+    // "this session genuinely started the workflow" (#1794 ADOPTION_ORIGINS).
     markStep(sessionId, "run_tests", "complete", {
       last_run_failed: null,
       last_exit_code: null,
       contract_absent: null,
       trigger_command: null,
-    });
+    }, { origin: "workflow-run-tests-auto-detect" });
   }
   // else: write_tests not yet satisfied → fail-open (do not mark complete).
 } catch (e) {

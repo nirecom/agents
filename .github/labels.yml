@@ -35,7 +35,7 @@
 # below are one-line summaries that reference it — never a second definition.
 - name: "severity:high"
   color: "b60205"
-  description: "Mid-run interruption, security breach, or primary feature unusable (SSOT: /issue-create label policy)"
+  description: "Mid-run interruption, security breach, or primary feature unusable (SSOT: /issue-create policy)"
 
 - name: "severity:low"
   color: "c5def5"
