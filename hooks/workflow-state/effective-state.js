@@ -35,7 +35,7 @@
 // scan would then abort on. opts.resolveAll lifts that cutoff for callers that
 // need a complete picture (--list rendering, commit gate, session-start display).
 
-const { VALID_STEPS, normalizeStateVersion } = require("./state-io");
+const { VALID_STEPS, normalizeStateVersion, isGenuineProvenance } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
@@ -121,7 +121,7 @@ function hasGenuineRecordedComplete(state, step) {
     }
     if (!latest) return false;
     if (latest.status !== "complete") return false;
-    return latest.provenance !== "backfilled";
+    return isGenuineProvenance(latest.provenance);
   } catch (_) {
     return false;
   }

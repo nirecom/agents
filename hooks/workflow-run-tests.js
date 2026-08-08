@@ -222,7 +222,10 @@ try {
     ? state.steps.write_tests.status
     : undefined;
   if (writeTestsStatus === "complete" || writeTestsStatus === "skipped") {
-    markStep(sessionId, "run_tests", "complete");
+    // origin override: this is PostToolUse pattern-detection on a Bash
+    // command, not a deliberate user/skill action — must not count as
+    // "this session genuinely started the workflow" (#1794 ADOPTION_ORIGINS).
+    markStep(sessionId, "run_tests", "complete", {}, { origin: "workflow-run-tests-auto-detect" });
   }
   // else: write_tests not yet satisfied → fail-open (do not mark complete).
 } catch (e) {
