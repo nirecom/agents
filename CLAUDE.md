@@ -12,7 +12,10 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
 
 ## Notes
 
-- Skill procedures settle a step and read the next action in one call: `next-step --advance --step <step> --status <status> [--skip-reason <reason>] --next`. `record-skip-judgment` / `record-complexity-and-skip` / `set-workflow-type` support the same `--advance [--next]` pair for their own step. Only pass `--next` when the call is expected to consume the returned `ACTION` block right away; otherwise omit it and proceed to the skill's own next documented step. `--next` never emits an `ACTION=` line when the settled step is not the session's current step (`ADVANCE_SCOPE=not-current-step`) — absence of `ACTION=` means proceed to your own next documented step, not an error.
+- Skill procedures settle a step and read the next action in one call: `next-step --advance --step <step> --status <status> [--skip-reason <reason>] --next`.
+  - `record-skip-judgment` / `record-complexity-and-skip` / `set-workflow-type` support the same `--advance [--next]` pair for their own step.
+  - Pass `--next` only when the call will consume the returned `ACTION` block immediately; otherwise omit it and proceed to the skill's own next documented step.
+  - `--next` emits no `ACTION=` line when the settled step is not the session's current step (`ADVANCE_SCOPE=not-current-step`) — treat a missing `ACTION=` as "proceed to your own next step," not an error.
 - Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
 - `write-code` is not a tracked `next-step` step — invoke it manually once `write_tests`/`review_tests` complete, before `/run-tests`.
 - Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_{step}: {reason}>>` only when holistic context justifies it.
