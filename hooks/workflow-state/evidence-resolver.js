@@ -186,6 +186,16 @@ function describeEvidence(step) {
       "a committed file under tests/ or test/ differs from the default branch (post-merge fallback)",
     ];
   }
+  if (step === "run_tests") {
+    return [
+      "NO completion evidence exists: hasCompletionEvidence(\"run_tests\") is always false — "
+        + "completion is owned by workflow-run-tests.js (tests/run-all.sh RUN_CONTRACT) "
+        + "or the MARK_STEP sentinel",
+      "SKIP only: when every staged file is human-facing docs (isDocsOnlyStaged), "
+        + "echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>\" records it as skipped; "
+        + "docs-only grants explicability, never completion authority",
+    ];
+  }
   return [];
 }
 

@@ -104,6 +104,7 @@
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",

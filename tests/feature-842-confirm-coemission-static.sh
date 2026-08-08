@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md
-# Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard
+# Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common
 # Static grep-based checks verifying that #842 structural wiring is in place:
 #   - make-outline-plan Completion emits WORKFLOW_MARK_STEP_outline_complete before calling make-detail-plan
 #   - make-detail-plan ON path emits WORKFLOW_MARK_STEP_detail_complete after confirm
@@ -44,21 +44,46 @@ require_file() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. make-outline-plan/SKILL.md Completion: emits mark_step
-#    AND invokes make-detail-plan
+# 3. make-outline-plan/SKILL.md Completion: completes the outline step via
+#    the next-step --advance co-emission mechanism (replaced the literal
+#    WORKFLOW_MARK_STEP_outline_complete sentinel echo in #1644's roundtrip
+#    reduction) AND that mechanism routes to make-detail-plan.
 # ---------------------------------------------------------------------------
-echo "=== 3. make-outline-plan/SKILL.md: Completion sentinels ==="
+echo "=== 3. make-outline-plan/SKILL.md: Completion co-emission ==="
+NEXT_STEP_STEPS="$REPO_ROOT/bin/workflow/lib/next-step/steps.js"
+NEXT_STEP_ADVANCE_SHARED="$REPO_ROOT/bin/workflow/lib/next-step/advance-shared.js"
 if require_file "$OUTLINE_SKILL"; then
-    if has_fixed "WORKFLOW_MARK_STEP_outline_complete" "$OUTLINE_SKILL"; then
-        pass "make-outline-plan/SKILL.md references WORKFLOW_MARK_STEP_outline_complete"
+    if has_fixed 'next-step" --advance --step outline --status complete --next' "$OUTLINE_SKILL"; then
+        pass "make-outline-plan/SKILL.md completes outline via next-step --advance --next"
     else
-        fail "make-outline-plan/SKILL.md missing WORKFLOW_MARK_STEP_outline_complete"
+        fail "make-outline-plan/SKILL.md missing next-step --advance --step outline --status complete --next call"
     fi
 
-    if has_fixed "make-detail-plan" "$OUTLINE_SKILL"; then
-        pass "make-outline-plan/SKILL.md references make-detail-plan"
+    if has_fixed "WORKFLOW_MARK_STEP_outline_complete" "$OUTLINE_SKILL"; then
+        fail "make-outline-plan/SKILL.md still contains legacy WORKFLOW_MARK_STEP_outline_complete sentinel (should route through next-step --advance instead)"
     else
-        fail "make-outline-plan/SKILL.md missing make-detail-plan reference"
+        pass "make-outline-plan/SKILL.md: legacy WORKFLOW_MARK_STEP_outline_complete sentinel absent"
+    fi
+fi
+
+# The next-step --advance path co-emits with make-detail-plan by: (a) writing
+# state via record-step-verdict.js (not a hook-observed sentinel string), and
+# (b) steps.js mapping the following step ("detail") to the make-detail-plan
+# skill, so the CLI's returned NEXT_SKILL after outline completes is
+# make-detail-plan.
+if require_file "$NEXT_STEP_ADVANCE_SHARED"; then
+    if has_fixed "record-step-verdict" "$NEXT_STEP_ADVANCE_SHARED"; then
+        pass "next-step advance-shared.js writes outline completion via record-step-verdict.js"
+    else
+        fail "next-step advance-shared.js missing record-step-verdict.js wiring"
+    fi
+fi
+
+if require_file "$NEXT_STEP_STEPS"; then
+    if has "detail:\s*\"make-detail-plan\"" "$NEXT_STEP_STEPS"; then
+        pass "next-step steps.js maps the step after outline (detail) to make-detail-plan"
+    else
+        fail "next-step steps.js missing detail -> make-detail-plan mapping"
     fi
 fi
 

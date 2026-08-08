@@ -1,6 +1,8 @@
 # shellcheck shell=bash
 # TL3 seam body for session-start.js (SessionStart).
 # Sourced by ../TL3-hook-session-start.sh after helpers.sh.
+# Tests: tests/TL3-hook-session-start.sh
+# Tags: scope:common
 
 echo ""
 echo "=== TL3: session-start.js SessionStart real invocation ==="

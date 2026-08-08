@@ -2,14 +2,12 @@
 // --reset / --mark subcommands for bin/workflow/next-step. Each owns its own
 // output and process.exit, so the entrypoint stays dispatch-only.
 
-const {
-  resolveSessionId,
-  markStep,
-} = require("../../../../hooks/workflow-state");
-const {
-  UnapprovedCompletionError,
-  confirmSentinelFor,
-} = require("../../../../hooks/workflow-state/completion-approval");
+const { resolveSessionId } = require("../../../../hooks/workflow-state");
+const { confirmSentinelFor } = require("../../../../hooks/workflow-state/completion-approval");
+// #1644: --reset and --mark are declarations too, so they go through the same
+// single writer. Their own gates keep the narrower side-effect set they have
+// today — no A-4 co-write, no workflow_init downstream reset.
+const { recordStepVerdict } = require("../../../../hooks/workflow-state/record-step-verdict");
 
 function runReset(session, step) {
   const sid = resolveSessionId({ sessionIdFromInput: session });
@@ -17,7 +15,11 @@ function runReset(session, step) {
     process.stderr.write("next-step: could not resolve session id\n");
     process.exit(1);
   }
-  markStep(sid, step, "pending");
+  const res = recordStepVerdict(sid, step, "pending", { gate: "reset" });
+  if (!res.ok) {
+    process.stderr.write("next-step: --reset failed — " + (res.detail || res.message) + "\n");
+    process.exit(1);
+  }
   process.stdout.write("RESET=" + step + " status=pending\n");
   process.exit(0);
 }
@@ -35,19 +37,18 @@ function runMark(session, step) {
   // Deliberately NOT sanctioned: --reason/--mark is model-issued free text and
   // must never be approval-equivalent. Gated steps go through the same approval
   // invariant as every other write path (#1133) and fail closed here.
-  try {
-    markStep(sid, step, "complete");
-  } catch (e) {
-    if (e instanceof UnapprovedCompletionError) {
-      process.stderr.write(
-        "next-step: --mark " + step + " complete refused — " + e.code + ".\n" +
-        "  " + step + " requires recorded user approval; --mark cannot grant it.\n" +
-        "  Ask the user to approve, then emit: echo \"<<" +
-          confirmSentinelFor(step) + ": {summary}>>\"\n"
-      );
-      process.exit(1);
-    }
-    process.stderr.write("next-step: --mark failed — " + e.message + "\n");
+  const res = recordStepVerdict(sid, step, "complete", { gate: "mark" });
+  if (!res.ok && res.kind === "unapproved") {
+    process.stderr.write(
+      "next-step: --mark " + step + " complete refused — " + res.detail + ".\n" +
+      "  " + step + " requires recorded user approval; --mark cannot grant it.\n" +
+      "  Ask the user to approve, then emit: echo \"<<" +
+        confirmSentinelFor(step) + ": {summary}>>\"\n"
+    );
+    process.exit(1);
+  }
+  if (!res.ok) {
+    process.stderr.write("next-step: --mark failed — " + (res.detail || res.message) + "\n");
     process.exit(1);
   }
   process.stdout.write("MARK=" + step + " status=complete\n");

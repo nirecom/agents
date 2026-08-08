@@ -4,24 +4,36 @@
 // Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, recordSkipVerdict } = require("../workflow-state");
+// #1644: the declared-class single writer. It owns the state write, the A-4
+// speculative-skip verdict, the D1 BUGFIX defense and the #833 symmetric
+// propagation; this module keeps only the sentinel-specific wording.
+const { recordStepVerdict } = require("../workflow-state/record-step-verdict");
+// #1644: the docs-only predicate has exactly one owner. RUN_TESTS_NOT_NEEDED is
+// settings.json `allow` rather than `ask` *because* this machine-verifiable fact
+// stands in for the human approval — so the check must be fail-closed here.
+const { isDocsOnlyStaged } = require("../workflow-gate/staged-evidence");
 
 // A *_NOT_NEEDED sentinel is the model ASSERTING that a step is unnecessary — the
 // hook observed no work, only the claim. Every member of the class carries the same
 // provenance (CPR-ORTH), so a reader can tell a declared skip from an observed one.
-const DECLARED = { provenance: "declared" };
+const DECLARED = { gate: "sentinel", provenance: "declared", origin: "mark-step" };
+
+function declareSkip(sessionId, step, reason) {
+  return recordStepVerdict(sessionId, step, "skipped", Object.assign({ skipReason: reason }, DECLARED));
+}
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
   DETAIL_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_LOOKSLIKE_RE,
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
+  RUN_TESTS_NOT_NEEDED_RE_DQ, RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
   DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
 
   const researchNotNeededMatch = cmd.match(RESEARCH_NOT_NEEDED_RE_DQ);
   const researchNotNeededLooksLike =
@@ -61,11 +73,10 @@ function handle(ctx) {
       );
       return true;
     }
-    try {
-      markStep(sessionId, "research", "skipped", { skip_reason: v.reason }, DECLARED);
-    } catch (e) {
+    const res = declareSkip(sessionId, "research", v.reason);
+    if (!res.ok) {
       pushMessage(
-        `workflow-mark: failed to write state — ${e.message}. research NOT recorded.`
+        `workflow-mark: failed to write state — ${res.detail || res.message}. research NOT recorded.`
       );
     }
     return true;
@@ -94,12 +105,10 @@ function handle(ctx) {
         `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
-    try {
-      markStep(sessionId, "outline", "skipped", { skip_reason: v.reason }, DECLARED);
-      // A-4: attach speculative skip verdict (pending-verification)
-      recordSkipVerdict(sessionId, "outline", "pending", "sentinel");
-    } catch (e) {
-      pushMessage(`workflow-mark: failed to write state — ${e.message}. outline NOT recorded.`);
+    // The A-4 speculative skip verdict is co-written by recordStepVerdict.
+    const res = declareSkip(sessionId, "outline", v.reason);
+    if (!res.ok) {
+      pushMessage(`workflow-mark: failed to write state — ${res.detail || res.message}. outline NOT recorded.`);
     }
     return true;
   }
@@ -127,12 +136,10 @@ function handle(ctx) {
         `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
-    try {
-      markStep(sessionId, "detail", "skipped", { skip_reason: v.reason }, DECLARED);
-      // A-4: attach speculative skip verdict (pending-verification)
-      recordSkipVerdict(sessionId, "detail", "pending", "sentinel");
-    } catch (e) {
-      pushMessage(`workflow-mark: failed to write state — ${e.message}. detail NOT recorded.`);
+    // The A-4 speculative skip verdict is co-written by recordStepVerdict.
+    const res = declareSkip(sessionId, "detail", v.reason);
+    if (!res.ok) {
+      pushMessage(`workflow-mark: failed to write state — ${res.detail || res.message}. detail NOT recorded.`);
     }
     return true;
   }
@@ -162,27 +169,66 @@ function handle(ctx) {
       );
       return true;
     }
-    // D1 defense (#1147 T0-A): BUGFIX sessions must write tests — skip is not allowed.
-    try {
-      const { isBugfixSession } = require("../workflow-state/is-bugfix-session");
-      if (isBugfixSession({ sessionId })) {
-        pushMessage(
-          `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — BUGFIX sessions require ` +
-            `tests (fail-before-fix policy). Run /write-tests instead.`
-        );
-        return true;
-      }
-    } catch (_) {}
-    try {
-      markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason }, DECLARED);
-      // Symmetric skip propagation (issue #833): review_tests is paired with
-      // write_tests. If there are no tests to write, there are no tests to review.
-      markStep(sessionId, "review_tests", "skipped", {
-        skip_reason: `(symmetric: write_tests not needed) ${v.reason}`,
-      }, DECLARED);
-    } catch (e) {
+    // The D1 BUGFIX defense (#1147 T0-A) and the #833 symmetric propagation to
+    // review_tests both live in recordStepVerdict now: D1 is the skippable-steps
+    // constraint every declaring path shares, so it can no longer be true on one
+    // door and absent on another.
+    const res = declareSkip(sessionId, "write_tests", v.reason);
+    if (!res.ok && res.kind === "not-skippable") {
       pushMessage(
-        `workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`
+        `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — BUGFIX sessions require ` +
+          `tests (fail-before-fix policy). Run /write-tests instead.`
+      );
+    } else if (!res.ok) {
+      pushMessage(
+        `workflow-mark: failed to write state — ${res.detail || res.message}. write_tests NOT recorded.`
+      );
+    }
+    return true;
+  }
+
+  // --- RUN_TESTS_NOT_NEEDED handler ---
+  const runTestsNotNeededMatch = cmd.match(RUN_TESTS_NOT_NEEDED_RE_DQ);
+  const runTestsNotNeededLooksLike =
+    !runTestsNotNeededMatch && RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  if (runTestsNotNeededLooksLike) {
+    pushMessage(
+      `workflow-mark: malformed RUN_TESTS_NOT_NEEDED — ` +
+        `expected: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: REASON>>" ` +
+        `(reason must be >=3 non-space chars, no '>')`
+    );
+    return true;
+  }
+  if (runTestsNotNeededMatch) {
+    const v = validateSkipReason(runTestsNotNeededMatch[1]);
+    if (!v.ok) {
+      pushMessage(
+        `workflow-mark: RUN_TESTS_NOT_NEEDED rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {better reason}>>"`
+      );
+      return true;
+    }
+    // Fail-closed: the docs-only staged set IS the approval. Verified before the
+    // write, so a rejection can never leave a half-recorded skip behind.
+    if (!isDocsOnlyStaged(repoCwd)) {
+      pushMessage(
+        `workflow-mark: WORKFLOW_RUN_TESTS_NOT_NEEDED rejected — the staged set is not ` +
+          `human-facing docs only. Run the tests (/run-tests), or stage only docs/*.md ` +
+          `and root README/CHANGELOG/CONTRIBUTING/LICENSE before re-emitting.`
+      );
+      return true;
+    }
+    if (!sessionId) {
+      signalFatal(
+        `workflow-mark: could not resolve session_id — run_tests NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: ${v.reason}>>"`
+      );
+      return true;
+    }
+    const res = declareSkip(sessionId, "run_tests", v.reason);
+    if (!res.ok) {
+      pushMessage(
+        `workflow-mark: failed to write state — ${res.detail || res.message}. run_tests NOT recorded.`
       );
     }
     return true;
@@ -213,11 +259,10 @@ function handle(ctx) {
       );
       return true;
     }
-    try {
-      markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason }, DECLARED);
-    } catch (e) {
+    const res = declareSkip(sessionId, "review_security", v.reason);
+    if (!res.ok) {
       pushMessage(
-        `workflow-mark: failed to write state — ${e.message}. review_security NOT recorded.`
+        `workflow-mark: failed to write state — ${res.detail || res.message}. review_security NOT recorded.`
       );
     }
     return true;
@@ -257,11 +302,10 @@ function handle(ctx) {
       );
       return true;
     }
-    try {
-      markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason }, DECLARED);
-    } catch (e) {
+    const res = declareSkip(sessionId, "clarify_intent", v.reason);
+    if (!res.ok) {
       pushMessage(
-        `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
+        `workflow-mark: failed to write state — ${res.detail || res.message}. clarify_intent NOT recorded.`
       );
     }
     return true;

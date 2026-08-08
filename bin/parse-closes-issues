@@ -1,6 +1,38 @@
 #!/usr/bin/env node
 'use strict';
 const path = require('path');
+
+// Two invocation forms:
+//   parse-closes-issues <intent-md-path>          (legacy, unchanged — direct
+//                                                    one-shot parse, no cache)
+//   parse-closes-issues --session <sid> [--plans-dir <dir>]
+//                                                  (#1644 stage 4 — routes
+//                                                    through the write-once
+//                                                    session cache)
+const args = process.argv.slice(2);
+const sessionIdx = args.indexOf('--session');
+
+if (sessionIdx !== -1) {
+  const sessionId = args[sessionIdx + 1];
+  if (!sessionId) { console.log('[]'); process.exit(0); }
+  const plansDirIdx = args.indexOf('--plans-dir');
+  const explicitPlansDir = plansDirIdx !== -1 ? args[plansDirIdx + 1] : null;
+  try {
+    const { getClosesIssues } = require(
+      path.join(path.dirname(__dirname), 'hooks', 'workflow-state', 'session-facts.js')
+    );
+    const plansDir = explicitPlansDir || require(
+      path.join(path.dirname(__dirname), 'hooks', 'lib', 'workflow-plans-dir.js')
+    ).getWorkflowPlansDir();
+    console.log(JSON.stringify(getClosesIssues(sessionId, { plansDir })));
+  } catch (e) {
+    process.stderr.write('[parse-closes-issues] ' + e.message + '\n');
+    console.log('[]');
+    process.exit(0); // intentional: gate is never-aborts
+  }
+  process.exit(0);
+}
+
 const filePath = process.argv[2];
 if (!filePath) { console.log('[]'); process.exit(0); }
 try {

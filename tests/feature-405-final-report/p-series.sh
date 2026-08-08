@@ -1,6 +1,7 @@
 #!/bin/bash
 # P-series: parse-closes-issues.js
 # Tests: hooks/lib/parse-closes-issues.js
+# Tags: scope:common
 #
 # Sourced helpers: feature-405-final-report/helpers.sh
 

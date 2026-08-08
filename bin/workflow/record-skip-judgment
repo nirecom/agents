@@ -16,10 +16,21 @@
 // --c3 is required when --target=detail; ignored for outline.
 // Prints to stdout: RECORDED=<target> all_conditions_met=<true|false>
 // Exits 0 on success, 1 on bad args.
+//
+// --advance (#1644) additionally settles the target step as skipped, but ONLY
+// when all_conditions_met is true — the recorded judgment is the authority, so a
+// false judgment records the judgment and stops. --next adds the ACTION block.
+// The RECORDED= line above keeps its exact bytes in every mode.
 
 const path = require("path");
 const { recordSkipJudgment, readSkipJudgment } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
+);
+const { runAdvance } = require(
+  path.join(__dirname, "lib", "next-step", "advance-shared")
+);
+const { RECORDED_VERDICT_REASONS } = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state", "record-step-verdict")
 );
 
 function verifyWrite(sj, conditions, allMet) {
@@ -53,7 +64,7 @@ function parseFlagBool(argv, i, flagName) {
 }
 
 function parseArgs(argv) {
-  const out = { session: null, target: null, c1: null, c2: null, c3: null };
+  const out = { session: null, target: null, c1: null, c2: null, c3: null, advance: false, next: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--session") {
@@ -72,10 +83,21 @@ function parseArgs(argv) {
       const r = parseFlagBool(argv, i, "--c3");
       out.c3 = r.value;
       i += r.consumed;
+    } else if (a === "--advance") {
+      out.advance = true;
+    } else if (a === "--next") {
+      out.next = true;
     } else {
       process.stderr.write("record-skip-judgment: unknown argument: " + a + "\n");
       process.exit(1);
     }
+  }
+  // --next asks for the action AFTER the forward operation, so on its own it has
+  // nothing to follow. Rejected here — before any write — so a malformed call
+  // never leaves a half-applied judgment behind.
+  if (out.next && !out.advance) {
+    process.stderr.write("record-skip-judgment: --next is only meaningful with --advance\n");
+    process.exit(1);
   }
   return out;
 }
@@ -124,11 +146,30 @@ function main() {
   const __readBack = readSkipJudgment(args.session.trim(), args.target);
   if (!verifyWrite(__readBack, conditions, allMet)) {
     process.stderr.write("record-skip-judgment: write verification failed for target " + args.target + "\n");
-    process.exit(1);
+    // Without --advance this is the frozen exit 1. With --advance the judgment
+    // write is the first half of the forward transaction, so its failure is a
+    // record failure and carries the class's exit 2.
+    process.exit(args.advance ? 2 : 1);
   }
 
-  process.stdout.write("RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n");
-  process.exit(0);
+  const recordedLine = "RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n";
+  if (!args.advance || allMet !== true) {
+    // A false judgment is a valid recording, not an error: the step stays
+    // unsettled and the caller decides what to do next.
+    process.stdout.write(recordedLine);
+    process.exit(0);
+  }
+
+  runAdvance({
+    session: args.session.trim(),
+    binary: "record-skip-judgment",
+    step: args.target,
+    status: "skipped",
+    skipReason: RECORDED_VERDICT_REASONS[args.target],
+    skipJudgment: __readBack,
+    next: args.next,
+    prefix: recordedLine,
+  });
 }
 
 main();
