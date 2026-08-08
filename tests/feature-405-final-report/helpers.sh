@@ -1,6 +1,8 @@
 #!/bin/bash
 # Shared helpers for feature-405-final-report tests.
 # Sourced by p-series.sh / s-series.sh / k-series.sh / i-series.sh — not a standalone runner.
+# Tests: tests/feature-405-final-report.sh
+# Tags: scope:common
 
 set -u
 

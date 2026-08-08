@@ -3,7 +3,6 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { parseClosesIssues } = require("./parse-closes-issues");
 
 // Subagent guard: CLAUDE_CODE_CHILD_SESSION=1 → skip all writes
 function _isChildSession() {

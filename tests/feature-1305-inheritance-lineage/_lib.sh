@@ -1,5 +1,7 @@
 # shellcheck shell=bash
 # Helpers for tests/feature-1305-inheritance-lineage.sh. Sourced, not run.
+# Tests: tests/feature-1305-inheritance-lineage.sh
+# Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"
 PROBE_JS="$AGENTS_DIR/tests/feature-1305-inheritance-lineage/probe.js"

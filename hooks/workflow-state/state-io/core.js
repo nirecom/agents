@@ -45,7 +45,10 @@ const VALID_STEPS = [
 // SSOT for "the session is over". Anything appended after a terminal step is
 // out-of-band bookkeeping and closes no interval (see intervals.js).
 const TERMINAL_STEPS = ["final_report"];
-const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "review_security", "cleanup"];
+// run_tests (#1644) is skippable ONLY through a docs-only-verified door: both
+// write sides (not-needed-handlers.js and mark-step-handler.js) check
+// isDocsOnlyStaged fail-closed before recording it.
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "run_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // "settled" = the step needs no further action: it is either done ("complete")

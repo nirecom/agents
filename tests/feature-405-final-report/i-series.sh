@@ -1,6 +1,7 @@
 #!/bin/bash
 # I-series: integration invariants
 # Tests: skills/worktree-end/SKILL.md, skills/worktree-end/scripts/detect-restart.sh
+# Tags: scope:common
 #
 # (R/T renderer tests removed in #771; I3–I6 kept since they test SKILL.md
 # structural invariants that are still relevant.)

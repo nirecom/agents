@@ -1,6 +1,7 @@
 #!/bin/bash
 # structural-tests.sh: SKILL.md + guard structural assertions (S-series)
 # Tests: skills/session-close/SKILL.md, bin/render-final-report.js, hooks/stop-final-report-guard.js
+# Tags: scope:issue-specific
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
 

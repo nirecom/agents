@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore (pre-existing Japanese fixture string, unrelated to this session's diff)
 # tests/feat-1761-review-verdict-validate.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, validator, table-driven, scope:issue-specific, pwsh-not-required, TL1

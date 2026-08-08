@@ -200,7 +200,7 @@ their pre-existing behavior — the field is additive, not a breaking change to 
 `git_branch` is `null` for non-git directories and detached HEAD.
 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
-- `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `review_security`, and `cleanup`
+- `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `run_tests`, `review_security`, and `cleanup`. `run_tests` is admitted only on the docs-only route: both write-side doors (`not-needed-handlers.js`, `mark-step-handler.js`) verify `isDocsOnlyStaged` fail-closed before recording it
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 - `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
 
@@ -244,7 +244,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
-| `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
+| `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --status skipped` |
 | `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |

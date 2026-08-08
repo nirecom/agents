@@ -1,6 +1,8 @@
 #!/bin/bash
 # Shared helpers for feature-1463-session-close-scriptify tests.
 # Sourced by render-tests.sh / detect-sc7-tests.sh / structural-tests.sh — not a standalone runner.
+# Tests: tests/feature-1463-session-close-scriptify.sh
+# Tags: scope:issue-specific
 
 set -u
 

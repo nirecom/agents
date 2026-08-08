@@ -34,6 +34,9 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model deri
 
 WCD-5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
 
+WCD-5a. Run `skills/write-code/scripts/self-check-siblings.sh "<what changed>" "<why>"` — CPR-E2C sibling-sweep reminder.
+WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` — flag edited files with no matching test; fold into WCD-6.
+
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
    - stdout `OFF`: skip this step; proceed (no user wait).

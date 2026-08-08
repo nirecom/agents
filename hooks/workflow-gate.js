@@ -412,7 +412,17 @@ if (require.main === module) {
     }
 
     if (status === "complete") continue;
-    if (status === "skipped" && skippable.includes(step)) continue;
+    if (status === "skipped" && skippable.includes(step)) {
+      // H1 (TOCTOU hardening): a recorded run_tests=skipped was only proven
+      // docs-only at the moment the skip sentinel/advance was emitted. Nothing
+      // demotes it if the staged set later grows to include non-docs files, so
+      // re-verify the CURRENT staged set (docsOnly, computed above from the
+      // same repoDir) before honoring the skip here. Scoped to run_tests only —
+      // the other SKIPPABLE_STEPS have no staged-set-dependent legitimacy
+      // condition (CPR-UNV: isolate the special case, don't widen the general path).
+      if (step !== "run_tests" || docsOnly) continue;
+      // else: fall through — treated the same as an unmet run_tests requirement.
+    }
     // BUGFIX: write_tests skipped (excluded from skippable) but bypassed by staged tests/ evidence.
     if (step === "write_tests" && writeTestsEvidenceBypassed) continue;
     // docs-only short-circuit: skip all steps except user_verification
@@ -442,7 +452,7 @@ if (require.main === module) {
     branching_complete: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: {name}|worktree: {path}>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>> on adequate coverage; re-editing tests/ after a passing review invalidates the pairing — re-run /review-tests)',
-    run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run `bash tests/run-all.sh <files>` directly — the PostToolUse hook (workflow-run-tests.js) marks complete only from its RUN_CONTRACT line. Ad-hoc test commands (e.g. `pytest tests/`) no longer auto-complete: they demote run_tests to pending.',
+    run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run `bash tests/run-all.sh <files>` directly — the PostToolUse hook (workflow-run-tests.js) marks complete only from its RUN_CONTRACT line. Ad-hoc test commands (e.g. `pytest tests/`) no longer auto-complete: they demote run_tests to pending. When every staged file is human-facing documentation: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>" (rejected otherwise).',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
     user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to /worktree-end Step 4; premature emit without an open PR is hard-blocked by workflow-gate — see issue #577) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',

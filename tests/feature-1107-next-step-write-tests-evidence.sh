@@ -95,8 +95,11 @@ read_state_status() {
 }
 
 run_next_step() {
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
+  (
+    cd "$REPO" || exit 1
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" CLAUDE_PROJECT_DIR="$REPO_N" \
+      run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
+  )
 }
 
 setup_repo() {

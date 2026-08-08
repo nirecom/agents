@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/session-start.js
-# Tags: session-start, hook, TL3, run-e2e, scope:permanent
+# Tags: session-start, hook, TL3, run-e2e, scope:common
 #
 # Issue #943 — per-hook seam TL3 test: session-start.js (SessionStart).
 # Fresh `claude -p` session with no prior state → createInitialState writes a

@@ -8,6 +8,9 @@ SESSION_ID=""
 VERDICT=""
 SIGNALS=""
 TARGET="outline"
+ADVANCE=0
+SO_C1=""
+SO_C2=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -15,6 +18,9 @@ while [[ $# -gt 0 ]]; do
         --verdict) VERDICT="$2"; shift 2 ;;
         --signals) SIGNALS="$2"; shift 2 ;;
         --target)  TARGET="$2"; shift 2 ;;
+        --advance) ADVANCE=1; shift ;;
+        --so-c1)   SO_C1="$2"; shift 2 ;;
+        --so-c2)   SO_C2="$2"; shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 2 ;;
     esac
 done
@@ -25,36 +31,86 @@ done
 # Normalize AGENTS_CONFIG_DIR to Windows-style path for Node.js on Windows/Cygwin.
 AGENTS_CONFIG_DIR_N="$(cygpath -m "$AGENTS_CONFIG_DIR" 2>/dev/null || echo "$AGENTS_CONFIG_DIR")"
 
+# On the --advance path the internal node exit codes are NORMALIZED, not
+# propagated: `set -e` would otherwise surface a child's own 2 as this script's
+# 2, which already means "unknown flag". Every advance-path failure is exit 3.
+# The legacy path keeps the current `set -e` propagation untouched.
+advance_fail() {
+    echo "record-complexity-and-skip: $1 failed with exit $2 (normalized to 3)" >&2
+    exit 3
+}
+
 # Step 1: Record complexity evaluation. stdout redirected to stderr so RECORDED_* lines
 # do NOT contaminate caller's SKIP_MODE capture.
-node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
-    --session "$SESSION_ID" \
-    --verdict "$VERDICT" \
-    --signals "$SIGNALS" 1>&2
+if [[ "$ADVANCE" -eq 1 ]]; then
+    RC=0
+    node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
+        --session "$SESSION_ID" \
+        --verdict "$VERDICT" \
+        --signals "$SIGNALS" 1>&2 || RC=$?
+    [[ "$RC" -eq 0 ]] || advance_fail "record-complexity-evaluation" "$RC"
+else
+    node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
+        --session "$SESSION_ID" \
+        --verdict "$VERDICT" \
+        --signals "$SIGNALS" 1>&2
+fi
 
 # Step 2: Resolve skip conditions. Values are passed via env vars (not string interpolation)
 # to prevent JS injection if SESSION_ID or TARGET contain quote characters.
-SKIP_MODE=$(RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/workflow-state/skip-signal-resolver.js" \
-  RCS_SID="$SESSION_ID" RCS_TARGET="$TARGET" node -e '
+RESOLVE_SKIP_MODE() {
+    RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/workflow-state/skip-signal-resolver.js" \
+      RCS_SID="$SESSION_ID" RCS_TARGET="$TARGET" node -e '
 const r = require(process.env.RCS_BRIDGE);
 const v = r.resolveSkipConditionsFromComplexity(process.env.RCS_SID, process.env.RCS_TARGET);
 process.stdout.write(v ? "auto" : "judgment");
-')
+'
+}
+if [[ "$ADVANCE" -eq 1 ]]; then
+    RC=0
+    SKIP_MODE="$(RESOLVE_SKIP_MODE)" || RC=$?
+    [[ "$RC" -eq 0 ]] || advance_fail "skip-signal-resolver" "$RC"
+    # Emitted before Step 3 so the resolved mode is on stdout even when the
+    # delegated record fails — the caller always learns which branch it was on.
+    printf 'SKIP_MODE=%s\n' "$SKIP_MODE"
+else
+    SKIP_MODE="$(RESOLVE_SKIP_MODE)"
+fi
 
-# Step 3: If auto, record skip judgment. stdout redirected to stderr.
+# An explicitly false so_c1/so_c2 is the caller's own judgment that the skip does
+# not apply, and it outranks the complexity-derived auto branch.
+SKIP_DISPATCH="need-judgment"
+if [[ "$ADVANCE" -eq 1 ]] && { [[ "$SO_C1" = "false" ]] || [[ "$SO_C2" = "false" ]]; }; then
+    SKIP_DISPATCH="no-skip"
+    printf 'SKIP_DISPATCH=%s\n' "$SKIP_DISPATCH"
+    exit 0
+fi
+
+# Step 3: If auto, record skip judgment. On the --advance path the delegate is
+# also asked to settle the step, and its stdout is NOT redirected: the ADVANCED=
+# line it prints is this call's own result, not incidental chatter.
 if [[ "$SKIP_MODE" = "auto" ]]; then
-    if [[ "$TARGET" = "detail" ]]; then
+    C3_ARGS=()
+    if [[ "$TARGET" = "detail" ]]; then C3_ARGS=(--c3 true); fi
+    if [[ "$ADVANCE" -eq 1 ]]; then
+        RC=0
         node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
             --session "$SESSION_ID" \
             --target "$TARGET" \
-            --c1 true --c2 true --c3 true 1>&2
+            --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance || RC=$?
+        [[ "$RC" -eq 0 ]] || advance_fail "record-skip-judgment" "$RC"
+        SKIP_DISPATCH="advanced"
     else
         node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
             --session "$SESSION_ID" \
             --target "$TARGET" \
-            --c1 true --c2 true 1>&2
+            --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} 1>&2
     fi
 fi
 
 # Step 4: Output ONLY 'auto' or 'judgment' to stdout. Nothing else.
-printf '%s' "$SKIP_MODE"
+if [[ "$ADVANCE" -eq 1 ]]; then
+    printf 'SKIP_DISPATCH=%s\n' "$SKIP_DISPATCH"
+else
+    printf '%s' "$SKIP_MODE"
+fi

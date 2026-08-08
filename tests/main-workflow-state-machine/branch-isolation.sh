@@ -1,6 +1,8 @@
 # shellcheck shell=bash
 # Case group: Section 5 — Branch Isolation.
 # Sourced by main-workflow-state-machine.sh; relies on helpers from common.sh.
+# Tests: tests/main-workflow-state-machine.sh
+# Tags: scope:common
 
 run_branch_isolation_tests() {
     # ---------------------------------------------------------------------------

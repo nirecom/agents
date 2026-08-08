@@ -35,8 +35,8 @@ assert_contains "$CLARIFY_INTENT_MD" "clarify-commit-scope|add-label" \
     "C11b: clarify-intent Completion delegates label-add (clarify-commit-scope or add-label)"
 assert_contains "$CLARIFY_INTENT_MD" "intent:clarified" \
     "C11c: clarify-intent Completion references 'intent:clarified'"
-assert_contains "$CLARIFY_INTENT_MD" "workflow_init" \
-    "C11d: clarify-intent TodoWrite checklist marks workflow_init as completed"
+assert_contains "$CLARIFY_INTENT_MD" "WORKFLOW_CLARIFY_INTENT_COMPLETE" \
+    "C11d: clarify-intent Completion emits WORKFLOW_CLARIFY_INTENT_COMPLETE (step completion is tracked via the workflow state store, not a separate in-prompt checklist copy)"
 
 echo ""
 echo "--- C12: CLAUDE.md and .github/labels.yml ---"

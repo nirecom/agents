@@ -28,6 +28,11 @@ function getConfirmFlagName(suffix) {
   if (suffix === "intent") return "CONFIRM_INTENT";
   if (suffix === "outline") return "CONFIRM_OUTLINE";
   if (suffix === "detail") return "CONFIRM_DETAIL";
+  // "tests" has no plan artifact, so getSuffix() never returns it and every
+  // existing caller is unaffected. It is admitted here purely so the skip
+  // allowance module (#1644) can read CONFIRM_TESTS through the same
+  // config-file-only door as the plan stages.
+  if (suffix === "tests") return "CONFIRM_TESTS";
   return null;
 }
 

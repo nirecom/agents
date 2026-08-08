@@ -8,10 +8,12 @@
 const { parseArgs } = require("./lib/next-step/cli");
 const { runList } = require("./lib/next-step/list");
 const { runReset, runMark } = require("./lib/next-step/state-ops");
+const { runAdvanceCli } = require("./lib/next-step/advance");
 const { computeVerdict } = require("./lib/next-step/verdict");
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.advance) return runAdvanceCli(args);
   if (args.list) return runList(args.session);
   if (args.reset !== undefined) return runReset(args.session, args.reset);
   if (args.mark !== undefined) return runMark(args.session, args.mark);

@@ -4,6 +4,13 @@
 // Usage: record-skip-verdict --session <sid> --target <outline|detail> --verdict <confirm|veto> --reason <text>
 // Exits 0 on success, 1 on validation error.
 // stdout: RECORDED=<target> verdict=<confirm|veto>
+//
+// NAMED EXCEPTION to the #1644 advance class: this CLI deliberately has no
+// --advance / --next. Its only caller is the skip-verifier subagent, and a
+// subagent must not advance the workflow on its own behalf — recording a verdict
+// is a PRECONDITION for advancing, not the advance itself. The main conversation
+// observes the subagent's completion and calls `next-step --advance --next`.
+// Adding the flags here would create a flag with zero callers.
 
 const path = require("path");
 const { parseArgs } = require("util");

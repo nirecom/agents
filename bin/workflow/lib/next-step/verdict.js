@@ -35,6 +35,11 @@ const {
   confirmSentinelFor,
   recoveryFor,
 } = require("../../../../hooks/workflow-state/completion-approval");
+const {
+  recordStepVerdict,
+  RECORDED_VERDICT_PREFIX,
+  RECORDED_VERDICT_REASONS,
+} = require("../../../../hooks/workflow-state/record-step-verdict");
 const { STEP_TO_SKILL, STEP_HINT, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
@@ -163,7 +168,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     if (
       rawEntry.status === "skipped" &&
       typeof rawEntry.skip_reason === "string" &&
-      rawEntry.skip_reason.startsWith("recorded-verdict:")
+      rawEntry.skip_reason.startsWith(RECORDED_VERDICT_PREFIX)
     ) {
       continue;
     }
@@ -249,11 +254,11 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // A valid skip_judgment allows resolving outline/detail=pending BEFORE the scan
   // fires an abort on "later step complete but current step pending".
   if (currentStep === "outline") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
+    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", RECORDED_VERDICT_REASONS.outline);
     if (v !== null) return v;
   }
   if (currentStep === "detail") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
+    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", RECORDED_VERDICT_REASONS.detail);
     if (v !== null) return v;
   }
 
@@ -385,19 +390,21 @@ function computeVerdict(rawSid, _didAutoRepair) {
       if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
       const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
       if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+      // The status write and the A-4 speculative verdict are one declaration, so
+      // the single writer performs both — the verdict can no longer be dropped
+      // by a caller that forgot the second call.
       try {
-        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj }, { origin: "next-step-recorded-verdict-skip" });
-        // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
-        // markStep so the read-modify-write preserves skip_reason/skip_judgment.
-        try {
-          const wfState2 = require("../../../../hooks/workflow-state");
-          if (typeof wfState2.recordSkipVerdict === "function") {
-            wfState2.recordSkipVerdict(sid, stepName, "pending", "next-step-recorded-verdict");
-          }
-        } catch (_) { /* fail-open */ }
+        const res = recordStepVerdict(sid, stepName, "skipped", {
+          gate: "recorded-verdict",
+          skipReason,
+          skipJudgment: sj,
+          skipVerdictSource: "next-step-recorded-verdict",
+          origin: "next-step-recorded-verdict-skip",
+        });
+        if (!res.ok) return null;
         return computeVerdict(rawSid, true);
       } catch (_) {
-        return null;   // markStep/verdict failed — fall through, NO recursion
+        return null;   // write/verdict failed — fall through, NO recursion
       }
     } catch (_) {
       return null;   // fail-open
@@ -419,6 +426,14 @@ function computeVerdict(rawSid, _didAutoRepair) {
           ? "WORKFLOW_OUTLINE_NOT_NEEDED"
           : "WORKFLOW_DETAIL_NOT_NEEDED";
       }
+    } catch (e) { /* fail-open: no hint */ }
+  }
+  // #1644: separate branch — the run_tests hint rests on a machine-verified
+  // staged-set fact, not on the isTrivial plan-prose signal above.
+  if (currentStep === "run_tests") {
+    try {
+      const { isDocsOnlyStaged } = require("../../../../hooks/workflow-gate/staged-evidence");
+      if (isDocsOnlyStaged(resolveRepoDir())) skipHint = "WORKFLOW_RUN_TESTS_NOT_NEEDED";
     } catch (e) { /* fail-open: no hint */ }
   }
 

@@ -53,8 +53,11 @@ if (intentPath) {
   if (!fs.existsSync(intentPath)) {
     fail(`render-final-report: intent.md not found: ${intentPath}\n`);
   }
-  const { parseClosesIssues } = require(path.resolve(__dirname, "../hooks/lib/parse-closes-issues"));
-  closesIssues = parseClosesIssues(intentPath).map((e) => e.number);
+  // #1644 stage 4: route through the write-once session cache instead of
+  // re-parsing intent.md on every render — a session that already recorded
+  // closes_issues returns it as-is.
+  const { getClosesIssues } = require(path.resolve(__dirname, "../hooks/workflow-state/session-facts.js"));
+  closesIssues = getClosesIssues(sessionId, { plansDir: path.dirname(intentPath) }).map((e) => e.number);
 }
 
 // Fail-open: an unreadable or absent notes backup yields the "(none)" triple

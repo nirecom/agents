@@ -63,11 +63,13 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
+CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
+
 CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
 
-CI-6. This step exits exclusively via the Completion section below — the skill terminates only after CI-C1 emits the completion sentinel.
+CI-6. This step exits exclusively via the Completion section below, where CI-C2 applies the `skills/_shared/survey-artifact-valid.md` validity check — the skill terminates only after CI-C1 emits the completion sentinel.
 
 ## Completion
 
@@ -97,13 +99,10 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interactive recovery remains in SKILL.md.
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
-CI-C1b. Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Then run as a separate Bash call: `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`. `$SKIP_MODE` is `auto` or `judgment`; the shared script records complexity_evaluation and (when `auto`) record-skip-judgment.
-CI-C1c. **Outline skip — sentinel dispatch**: `SKIP_MODE=judgment` → evaluate so_c1 (single obvious approach) and so_c2 (change locations identified) from intent.md context first. Run `TOKEN=$(bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/check-complexity-skip.sh" --session "$SESSION_ID" [--so-c1 <bool>] [--so-c2 <bool>] | tail -1)` (script emits `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>` when applicable; `SKIP_MODE` inherited from CI-C1b).
-   - `SENTINEL_EMITTED` → Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md` → CI-C2.
-   - `NO_SENTINEL` → CI-C2.
-CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
-CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
+CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1b; call after intent.md is written).
+CI-C1b. Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Also evaluate so_c1/so_c2 (criteria: `skills/_shared/judge-plan-skip.md`) from intent.md — needed regardless of the internal `SKIP_MODE`, since that is not known until the call returns. Run as a single Bash call: `SKIP_DISPATCH=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`. `$SKIP_DISPATCH` is `no-skip` / `advanced` / `need-judgment` — the wrapper records complexity_evaluation and, when its internal `SKIP_MODE=auto`, also settles `outline` as skipped via `--advance` in the same call.
+CI-C1c. **Outline skip — judgment dispatch**: `SKIP_DISPATCH=no-skip` → CI-C2 (outline not skipped). `SKIP_DISPATCH=advanced` → outline already settled skipped by CI-C1b's `--advance` call; dispatch Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md` → CI-C2. `SKIP_DISPATCH=need-judgment` (internal `SKIP_MODE=judgment` with so_c1/so_c2 both true) → run `SKIP_MODE=judgment bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/check-complexity-skip.sh" --session "$SESSION_ID" --so-c1 true --so-c2 true` (script settles `outline` as skipped via `--advance` internally; still emits `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>` for the debug log) → dispatch the same Agent tool call → CI-C2.
+CI-C2. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
    - Either invalid → invoke the affected survey(s) directly before proceeding.

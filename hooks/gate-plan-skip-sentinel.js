@@ -6,10 +6,20 @@ const { OUTLINE_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDE
   require("./lib/sentinel-patterns");
 
 // #1286: recorded-verdict allow-gate. Fail-open on any import error.
-let hasValidSkipJudgment = null;
 let resolveSessionId = null;
 try {
-  ({ hasValidSkipJudgment, resolveSessionId } = require("./workflow-state"));
+  ({ resolveSessionId } = require("./workflow-state"));
+} catch (_e) { /* fail-open */ }
+
+// #1644: the allow rule itself lives in plan-skip-allowance.js, shared with the
+// CLI door (bin/workflow --advance --status skipped). Only the WORDING of the
+// allow reason belongs to this hook. Fail-open: an unimportable module simply
+// never promotes to allow, exactly as before.
+let hasRecordedSkipJudgment = null;
+let isConfirmOffForStepSentinel = null;
+try {
+  ({ hasRecordedSkipJudgment, isConfirmOffForStepSentinel } =
+    require("./workflow-state/plan-skip-allowance"));
 } catch (_e) { /* fail-open */ }
 
 function readStdin() {
@@ -38,11 +48,14 @@ function allow(reason) {
   process.exit(0);
 }
 
-const OFF_LITERALS = new Set(["off"]);
+function hasRecord(sid, step) {
+  return !!sid && typeof hasRecordedSkipJudgment === "function"
+    && hasRecordedSkipJudgment(sid, step) === true;
+}
 
-function isOff(name) {
-  const raw = process.env[name];
-  return raw != null && OFF_LITERALS.has(String(raw).trim().toLowerCase());
+function isOff(step) {
+  return typeof isConfirmOffForStepSentinel === "function"
+    && isConfirmOffForStepSentinel(step) === true;
 }
 
 let input;
@@ -65,22 +78,18 @@ try {
 
 // #1286: allow when a valid recorded verdict exists OR legacy CONFIRM_*=off.
 if (OUTLINE_NOT_NEEDED_RE_DQ.test(cmd)) {
-  const hasRecord = resolvedSessionId && typeof hasValidSkipJudgment === "function"
-    && hasValidSkipJudgment(resolvedSessionId, "outline");
-  if (hasRecord)
+  if (hasRecord(resolvedSessionId, "outline"))
     allow("recorded-verdict: outline skip_judgment orchestrator+all_conditions_met — outline skip auto-approved.");
-  if (isOff("CONFIRM_OUTLINE"))
+  if (isOff("outline"))
     allow("CONFIRM_OUTLINE=off — outline skip auto-approved.");
 }
 if (DETAIL_NOT_NEEDED_RE_DQ.test(cmd)) {
-  const hasRecord = resolvedSessionId && typeof hasValidSkipJudgment === "function"
-    && hasValidSkipJudgment(resolvedSessionId, "detail");
-  if (hasRecord)
+  if (hasRecord(resolvedSessionId, "detail"))
     allow("recorded-verdict: detail skip_judgment orchestrator+all_conditions_met — detail skip auto-approved.");
-  if (isOff("CONFIRM_DETAIL"))
+  if (isOff("detail"))
     allow("CONFIRM_DETAIL=off — detail skip auto-approved.");
 }
-if (WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_TESTS"))
+if (WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) && isOff("write_tests"))
   allow("CONFIRM_TESTS=off — write-tests skip auto-approved.");
 
 passThrough();

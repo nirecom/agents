@@ -5,7 +5,7 @@ usable artifact rather than returning findings only in chat.
 
 Consumers (which MUST reference this file with a one-line pointer, never duplicate):
 - `skills/workflow-init/SKILL.md` Step WI-12
-- `skills/clarify-intent/SKILL.md` Completion CI-C3
+- `skills/clarify-intent/SKILL.md` Completion CI-C2
 
 ## Validity criteria
 
