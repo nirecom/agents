@@ -546,7 +546,10 @@ if [[ -n "$REPO_ROOT_ARG" ]]; then
   fi
   export REPO_ROOT="$REPO_ROOT_ARG"
 fi
-timeout 180 codex exec --skip-git-repo-check "${MCP_OVERRIDES[@]+"${MCP_OVERRIDES[@]}"}" - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
+# Read timeout from .env via get-config-var; fall back to 300 s (same resolution as codex_core_run in lib/codex-core.sh).
+CODEX_TIMEOUT_SECS_RESOLVED="$(cd "${AGENTS_CONFIG_DIR:-.}" && get-config-var CODEX_TIMEOUT_SECS 300 2>/dev/null)"
+CODEX_TIMEOUT_SECS_RESOLVED="${CODEX_TIMEOUT_SECS_RESOLVED:-300}"
+timeout "$CODEX_TIMEOUT_SECS_RESOLVED" codex exec --skip-git-repo-check "${MCP_OVERRIDES[@]+"${MCP_OVERRIDES[@]}"}" - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
   || codex_exit=$?
 
 case $codex_exit in
@@ -569,8 +572,8 @@ case $codex_exit in
     ;;
   124)
     log_persist_or_fail "FAILED-timeout" ""
-    echo "## ${CODEX_LABEL}: FAILED — timeout (180s)"
-    codex_core_log failed "timeout (180s)" "$INPUT_LINES"
+    echo "## ${CODEX_LABEL}: FAILED — timeout (${CODEX_TIMEOUT_SECS_RESOLVED}s)"
+    codex_core_log failed "timeout (${CODEX_TIMEOUT_SECS_RESOLVED}s)" "$INPUT_LINES"
     ;;
   *)
     STDERR_TAIL=$(tail -3 "$CODEX_STDERR" | tr '\n' ' ')

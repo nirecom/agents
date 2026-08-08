@@ -4,8 +4,8 @@
 # Static grep-based checks for the /write-code skill implementation.
 #
 # Verifies that skills/write-code/SKILL.md exists with correct content,
-# that CLAUDE.md Step 5 routes through /write-code, that .env.example
-# defines CONFIRM_CODE, and that module-system guidance respects SSOT
+# that CLAUDE.md documents write-code as a manually-invoked untracked step,
+# that .env.example defines CONFIRM_CODE, and that module-system guidance respects SSOT
 # (nodejs.md is the canonical source; SKILL.md must not duplicate it).
 #
 # Pre-implementation: assertions are expected to FAIL until the skill is
@@ -122,44 +122,47 @@ if require_file "$ENV_EXAMPLE"; then
 fi
 
 # ---------------------------------------------------------------------------
-# h. CLAUDE.md WF-CODE-5 does NOT contain "Present a diff in chat"
+# h. CLAUDE.md does NOT contain "Present a diff in chat"
+#    (per-step WF-CODE-N headers were removed from CLAUDE.md; the whole file
+#     is the scope now — the step list lives in bin/workflow/next-step --list)
 # ---------------------------------------------------------------------------
-echo "=== h. CLAUDE.md WF-CODE-5 does NOT contain 'Present a diff in chat' ==="
+echo "=== h. CLAUDE.md does NOT contain 'Present a diff in chat' ==="
 if require_file "$CLAUDE_MD"; then
-    # Extract lines in the WF-CODE-5 block
-    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
-    if echo "$step5_block" | grep -F "Present a diff in chat" >/dev/null 2>&1; then
-        fail "CLAUDE.md WF-CODE-5 must NOT contain 'Present a diff in chat'"
+    if has_fixed "Present a diff in chat" "$CLAUDE_MD"; then
+        fail "CLAUDE.md must NOT contain 'Present a diff in chat'"
     else
-        pass "CLAUDE.md WF-CODE-5 does not contain 'Present a diff in chat'"
+        pass "CLAUDE.md does not contain 'Present a diff in chat'"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# i. CLAUDE.md WF-CODE-5 does NOT contain old ENFORCE_WORKTREE=off diff branching pattern
+# i. CLAUDE.md does NOT contain old ENFORCE_WORKTREE=off diff branching pattern
 # ---------------------------------------------------------------------------
-echo "=== i. CLAUDE.md WF-CODE-5 does NOT contain old diff branching pattern ==="
+echo "=== i. CLAUDE.md does NOT contain old diff branching pattern ==="
 if require_file "$CLAUDE_MD"; then
-    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
     # Old pattern was two lines both present: ENFORCE_WORKTREE=off AND Present a diff
-    if echo "$step5_block" | grep -F "ENFORCE_WORKTREE=off" >/dev/null 2>&1 && \
-       echo "$step5_block" | grep -F "Present a diff" >/dev/null 2>&1; then
-        fail "CLAUDE.md WF-CODE-5 still has old ENFORCE_WORKTREE=off + Present a diff branching pattern"
+    if has_fixed "ENFORCE_WORKTREE=off" "$CLAUDE_MD" && \
+       has_fixed "Present a diff" "$CLAUDE_MD"; then
+        fail "CLAUDE.md still has old ENFORCE_WORKTREE=off + Present a diff branching pattern"
     else
-        pass "CLAUDE.md WF-CODE-5 does not have old diff branching pattern"
+        pass "CLAUDE.md does not have old diff branching pattern"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# j. CLAUDE.md WF-CODE-5 contains /write-code
+# j. CLAUDE.md documents write-code as a manually-invoked, untracked step
 # ---------------------------------------------------------------------------
-echo "=== j. CLAUDE.md WF-CODE-5 contains /write-code ==="
+echo "=== j. CLAUDE.md documents write-code as an untracked manual step ==="
 if require_file "$CLAUDE_MD"; then
-    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
-    if echo "$step5_block" | grep -F "/write-code" >/dev/null 2>&1; then
-        pass "CLAUDE.md WF-CODE-5 contains '/write-code'"
+    if has_fixed "write-code" "$CLAUDE_MD"; then
+        pass "CLAUDE.md references 'write-code'"
     else
-        fail "CLAUDE.md WF-CODE-5 missing '/write-code'"
+        fail "CLAUDE.md missing reference to 'write-code'"
+    fi
+    if has_fixed 'is not a tracked `next-step` step' "$CLAUDE_MD"; then
+        pass "CLAUDE.md states write-code 'is not a tracked \`next-step\` step'"
+    else
+        fail "CLAUDE.md missing 'is not a tracked \`next-step\` step' note for write-code"
     fi
 fi
 
