@@ -264,3 +264,7 @@ Changes: Fixed: Final Report's Bugs Found/Related Tasks/Next Tasks sections no l
 ### FEATURE: PR #1907 (2026-08-08)
 Background: cleanup(workflow-state): remove unused WORKFLOW_START_STEP constant + add MEDIUM-1 inheritance-origin regression test (#1904)
 Changes: Removed dead `WORKFLOW_START_STEP` export from workflow-state lifecycle; added regression test for `applyInheritance()` origin-stamp invariant against v1-migrated donors (#1904).
+
+### FEATURE: PR #1909 (2026-08-08)
+Background: fix(issue-setup): link Projects v2 board to repo in ensure-project-re...
+Changes: Fixed: `/issue-setup` now links the GitHub Projects v2 board to the repository when setting up a project, matching the migration path's behavior.
