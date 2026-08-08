@@ -7,6 +7,17 @@
 // rules/coding/file-split.md. The HARD limit (500 lines) IS met. A second-stage
 // split of this block (diagnostics / recovery layer) is deliberately deferred to
 // a follow-up issue so that the #1756 split stays a mechanical code move.
+//
+// #1794 note: the two markStep() auto-persist call sites below
+// (persistResolutions's evidence-complete, and applyRecordedVerdictSkip's
+// recorded-verdict-skip) are stamped with explicit origins
+// ("next-step-evidence-resolution", "next-step-recorded-verdict-skip") so
+// hooks/workflow-state/lifecycle.js's adoption allow-list can tell them apart
+// from a genuine user-driven markStep. These origins are DELIBERATELY NOT
+// members of ADOPTION_ORIGINS: next-step auto-persisting a step from evidence
+// is not the same fact as the user having started the workflow themselves.
+// This is a LABELING change only — judgment/output logic in this file is
+// unchanged. Rationale detail: docs/architecture/claude-code/workflow.md#exemptions.
 
 const fs = require("fs");
 const {
@@ -175,7 +186,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
-        markStep(sid, r.step, "complete");
+        markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
           emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
@@ -381,7 +392,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
       const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
       if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
       try {
-        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj });
+        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj }, { origin: "next-step-recorded-verdict-skip" });
         // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
         // markStep so the read-modify-write preserves skip_reason/skip_judgment.
         try {
