@@ -1,5 +1,5 @@
 "use strict";
-// lang-check: ignore
+// lang-check: ignore (pre-existing Japanese UI hint string, unrelated to this session's diff)
 
 function escapeTokens(str) {
   return typeof str === "string" ? str.replace(/</g, "‹") : str;
