@@ -4,6 +4,8 @@
 # L-1 .. L-11 — gate ordering and evidence handling in resolveInheritanceDonor.
 # Gate order under test: A subagent → B source → C lineage → D nearest ancestor
 # with a state file (SOLE decision-maker) → E context match → F resumability.
+# Tests: hooks/workflow-state/inheritance/candidates.js
+# Tags: inheritance-lineage, gates, scope:common
 
 echo ""
 echo "=== #1305 L-1..L-11: donor gates ==="

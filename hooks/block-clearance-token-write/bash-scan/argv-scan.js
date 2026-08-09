@@ -61,8 +61,14 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
   // redirect operator can deposit the real write target at position zero
   // (`echo x >| s1.<marker>`), and this is the general defence against any
   // future tokenizer gap that shifts a target into command position (CPR-E2C).
+  // Three spellings are tried, never fewer: the SEGMENT's raw head, the
+  // RESOLVED segment's raw head (which since #1273 C1 is re-synced past any
+  // stripped env-prefix / control keyword, so it is the raw text of eff.cmd0
+  // rather than of the stripped token), and the cooked eff.cmd0. Additive by
+  // construction — each spelling can only widen the detection surface.
   const cmd0Kind =
     classifyProtectedBashToken(seg && seg.cmd0Raw ? seg.cmd0Raw : eff.cmd0) ||
+    classifyProtectedBashToken(eff && eff.cmd0Raw ? eff.cmd0Raw : eff.cmd0) ||
     classifyProtectedBashToken(eff.cmd0);
   if (cmd0Kind) return cmd0Kind;
 
@@ -72,10 +78,11 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
   // already classify the raw text typed; the argv loop is the one site that
   // would otherwise read only the COOKED token, letting an ANSI-C-escaped
   // target slip past a byte-identical redirect that blocks (CPR-ORTH).
-  // resolveEffectiveSegment() strips a token PREFIX but leaves argvRaw stale,
-  // so eff.argv is a suffix of seg.argv; rawOffset recovers the alignment,
-  // and disables raw reading (rather than mis-pairing tokens) if that
-  // invariant ever breaks.
+  // Since #1273 C1, resolveEffectiveSegment() re-syncs argvRaw when it strips a
+  // token PREFIX, so eff.argvRaw is already same-length and same-position as
+  // eff.argv. rawOffset is kept as an INDEPENDENT second safety valve: it
+  // recovers the alignment from the unresolved segment and disables raw reading
+  // (rather than mis-pairing tokens) if either invariant ever breaks.
   const segArgv = seg && Array.isArray(seg.argv) ? seg.argv : [];
   const segArgvRaw = seg && Array.isArray(seg.argvRaw) ? seg.argvRaw : [];
   const rawOffset =

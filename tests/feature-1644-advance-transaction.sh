@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/advance.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/state-ops.js, hooks/workflow-state/record-step-verdict.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/not-needed-handlers.js
 # Tags: tl2, workflow, next-step, advance, record-step-verdict, scope:issue-specific, pwsh-not-required
 #

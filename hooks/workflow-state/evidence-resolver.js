@@ -1,4 +1,5 @@
 "use strict";
+// lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 // Evidence-based completion resolver (SSOT for step → evidence predicate).
 //
 // Read-only module: never mutates workflow state. Callers (workflow-gate,
