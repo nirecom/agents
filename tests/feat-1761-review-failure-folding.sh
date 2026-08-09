@@ -48,9 +48,9 @@ chmod +x "$MOCKDIR/codex"
 # Survey artifact: CAND = {10, 11}; PARENTS = {99}. Survey says reopen #10.
 ART="$WORK/survey.json"
 cat > "$ART" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "Fix the flaky provenance hook", "background": "BG", "changes": "CH" },
-  "verdict": "reopen", "target": 10, "children": [], "related": [],
+  "verdict": "reopen", "same_fix": true, "target": 10, "children": [], "related": [],
   "reason": "survey reason",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -61,7 +61,7 @@ cat > "$ART" <<'JSON'
   ] }
 JSON
 
-VALID_JSON='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true}'
+VALID_JSON='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true,"same_fix":false}'
 
 final_q() {  # <node expr over `d`>
     [ -f "${FINAL:-/nonexistent}" ] || { printf 'no-final'; return; }
@@ -182,7 +182,7 @@ else
         pass "F9-missing-artifact-codex-not-called"
     fi
 
-    CORRUPT="$WORK/corrupt.json"; printf '%s' '{ "schema_version": 2, "verdict":' > "$CORRUPT"
+    CORRUPT="$WORK/corrupt.json"; printf '%s' '{ "schema_version": 3, "verdict":' > "$CORRUPT"
     run_case f9b "$VALID_JSON" "$CORRUPT"
     [ "$RC" -eq 0 ] && pass "F9b-corrupt-artifact-exit-0" || fail "F9b-corrupt-artifact-exit-0" "want exit 0 (got $RC)"
     [ "$LAST" = "review_result: invalid" ] && pass "F9b-corrupt-artifact-review_result" \

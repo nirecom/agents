@@ -261,6 +261,15 @@ else
     fi
 fi
 
+# --- sections ------------------------------------------------------------------------
+# Same wiring gap as tests/feat-1761-candidate-relations.sh: dispatch-routing.sh existed
+# but no top-level parent ran it, so tests/run-all.sh never saw its 12 assertions.
+SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1761-reopen-note-guard"
+# shellcheck source=./lib/section-runner.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"
+
+run_section "dispatch-routing.sh" 240
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

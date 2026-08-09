@@ -40,8 +40,8 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 |---|---|
 | `none` | Create a new standalone issue |
 | `reopen` | Reopen an existing duplicate (with user confirmation) |
-| `sub-of` | Create the new issue and attach it under an existing parent |
-| `make-parent` | Create the new issue as parent of existing siblings (user confirmation) |
+| `sub-of` | Create the new issue and attach it under an existing meta parent |
+| `make-parent` | Create a meta parent plus the proposal as its child, and attach the existing siblings (user confirmation) |
 | `sibling` | Create the new issue with `Related to #N` cross-reference in body |
 
 - Enforce `type:task`; attach to Projects v2 automatically.
@@ -49,14 +49,24 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 - Non-GitHub remotes: skip the survey phase.
 - Projects v2 attach failure is non-fatal: issue created regardless; re-run `gh project item-add 1 --owner nirecom --url <issue-url>` to recover.
 - `severity:*` is judged only against the three conditions in the `/issue-create` label policy (SSOT) — no script infers it.
+- `make-parent` creates TWO issues: the meta parent (generated body, `meta` label, no severity) and the proposal verbatim as its child. stdout is parent first, child last.
+- `sub-of` / `bulk-sub-of` verify the named parent at dispatch time via `bin/github-issues/lib/require-meta-parent.sh` — ineligible parent aborts before any issue is created.
 
 ## meta label and admin_close_path
 
-- Title convention: `Group: ` prefix (apply by hand; not code-enforced).
+- Title convention: `Group: ` prefix — applied automatically on the `/issue-create` `make-parent` route, by hand elsewhere.
 - Close route: `admin_close_path` when OPEN + all sub-issues closed — no Phase 1 sentinel, no PR, no worktree required.
 - G.5 cascade: auto-accepts meta parents (code-based; no `AskUserQuestion`).
 - `historyEntry` in outcome JSON: `"skipped_admin_close"`.
 - Body: do NOT carry sub-issue completion state (checkboxes, status columns). SSOT is each sub-issue's own state via GitHub's native sub-issue progress UI.
+
+## Converting an issue into a meta parent
+
+An issue that already carries implementation work is not a meta parent, and labelling it `meta` does not make it one — the label would only hide the work. Convert it in this order, or decline and let `make-parent` create a fresh parent instead.
+
+1. Move the issue's own implementation work out into a new sub-issue (its Background/Changes go with it, verbatim).
+2. Retitle the issue `Group: <theme>` and rewrite its body as a container: theme only, no implementation, no completion checkboxes.
+3. Apply the `meta` label last — after steps 1 and 2, never before.
 
 ## Close path
 

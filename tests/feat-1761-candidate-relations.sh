@@ -211,6 +211,18 @@ else
     else fail "R8-candidate-relation-one-exists" "RED-EXPECTED: bin/github-issues/lib/candidate-relation-one.sh not yet created"; fi
 fi
 
+# --- sections ------------------------------------------------------------------------
+# tests/run-all.sh globs tests/*.sh at the TOP LEVEL only, so a file under
+# tests/feat-1761-candidate-relations/ runs in CI only if this parent reaches it.
+# edge-cases.sh was written but never wired, and therefore never ran. Subprocess style:
+# it is a standalone program with its own mock, own $WORK and own EXIT trap — sourcing it
+# would collide with this file's trap. See tests/lib/section-runner.sh.
+SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1761-candidate-relations"
+# shellcheck source=./lib/section-runner.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"
+
+run_section "edge-cases.sh" 240
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

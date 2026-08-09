@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make-empty-verdict.sh <out-path> <verdict> --title T --background B --changes C [--target N] [--parent N]
 #
-# Emit a schema-v2 survey artifact for the three routes that never reach the
+# Emit a schema-v3 survey artifact for the three routes that never reach the
 # survey worker: zero candidates, a non-GitHub remote, and --skip-survey
 # (bulk-sub-of). Downstream readers then use one shape on every route.
 #
@@ -67,20 +67,30 @@ else
     TMP_NODE="$TMP"
 fi
 
+# This is a THIRD producer of schema_version / same_fix. Both are read out of the
+# validator module rather than retyped here, so a table change cannot leave this
+# route behind. Resolved relative to this script — AGENTS_CONFIG_DIR may be unset.
+MEV_VALIDATOR_DIR="$(cd "$(dirname "$0")/../../../bin/github-issues/lib" && pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+    MEV_VALIDATOR_DIR="$(cygpath -m "$MEV_VALIDATOR_DIR")"
+fi
+
 MEV_TITLE="$TITLE" MEV_BACKGROUND="$BACKGROUND" MEV_CHANGES="$CHANGES" \
-MEV_VERDICT="$VERDICT" MEV_TARGET="$TARGET" \
+MEV_VERDICT="$VERDICT" MEV_TARGET="$TARGET" MEV_VALIDATOR_DIR="$MEV_VALIDATOR_DIR" \
 node -e '
 "use strict";
 const fs = require("fs");
+const V = require(process.env.MEV_VALIDATOR_DIR + "/validate-review-verdict.js");
 const target = process.env.MEV_TARGET ? Number(process.env.MEV_TARGET) : null;
 const artifact = {
-  schema_version: 2,
+  schema_version: V.SCHEMA_VERSION,
   proposal: {
     title: process.env.MEV_TITLE || "",
     background: process.env.MEV_BACKGROUND || "",
     changes: process.env.MEV_CHANGES || ""
   },
   verdict: process.env.MEV_VERDICT,
+  same_fix: V.SAME_FIX_BY_VERDICT[process.env.MEV_VERDICT],
   target: target,
   children: [],
   related: [],

@@ -120,6 +120,7 @@ The gate is the logical OR of four conditions; the script owns the decision, thi
 - G4 — review status is anything other than `upheld` or `replaced` (verdict unverified)
 
 Note: `sub-of` and `bulk-sub-of` are G1 because they may trigger ancestor reopen when the parent chain contains closed issues.
+Note: the artifact's `same_fix` is a different axis and is never a gate input — G1 asks how destructive the action is, `same_fix` asks whether one fix covers both.
 
 After a `reopen`: continue the workflow using the existing issue number. Follow
 the same routing as `/workflow-init`:
@@ -139,9 +140,19 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 
 `--note` applies to `reopen` only, and only when `review.status` is `replaced`: build it with `node "$AGENTS_CONFIG_DIR/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
 
+`make-parent` creates TWO issues:
+- a `meta`-labeled, `Group: `-titled parent with a generated body
+- the proposal verbatim as its child
+- the named `--children` and the new child all attach under that parent
+
+`sub-of` / `bulk-sub-of` vet the parent before creating anything:
+- parent is not `meta` + `Group: ` → exit 2
+- parent is unreadable → exit 1
+- recover per `rules/github-issues.md` "Converting an issue into a meta parent"
+
 For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
 
-**Stdout contract**: single verdicts (`none|reopen|sub-of|make-parent|sibling`) emit exactly one URL line on success (last line of stdout); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers extract the issue number with `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
+**Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers extract the issue number with `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
 Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
 
@@ -173,7 +184,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 - **Projects v2**: the linked Projects v2 (owner, number, node id) is auto-resolved from the git remote via `bin/github-issues/lib/resolve-project.sh` (#641). No hardcoded defaults — repos without a linked Projects v2 skip the attach step with a warning. Result is cached per `owner/repo` at `${WORKFLOW_PLANS_DIR}/cache/project-resolve.tsv`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
 - **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (fetched via `gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`), passed via `-F` (integer type).
-- **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
+- **make-parent partial failure**: if a child attach fails mid-loop, both the parent and the proposal are already created — their URLs are still emitted, and `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
 - **bulk-sub-of partial failure**: if any child create or attach fails, successfully created URLs are still output and recorded; the dispatcher writes retry info to stderr and exits non-zero. No atomic semantics (GitHub has no transactions).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
 - **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.
