@@ -272,3 +272,7 @@ Changes: Fixed: `/issue-setup` now links the GitHub Projects v2 board to the rep
 ### FEATURE: PR #1906 (2026-08-08)
 Background: feat: reduce workflow roundtrips (types 1-4) + symmetrize related SKI...
 Changes: Reduced workflow round-trip steps: outline/detail planning stages are now skipped correctly for self-evident changes, and `/write-code` self-checks its own diff for the same finding class it just fixed and flags tests whose pinned contracts it changed — fewer unnecessary review/re-plan cycles per session.
+
+### FEATURE: PR #1928 (2026-08-10)
+Background: fix: suppress gh CLI stdout leaks in issue-close-stage helper scripts
+Changes: Fixed: `/clarify-intent` completion could return a GitHub board-card URL instead of `PROCEED` when a session closed more than one issue, stalling the workflow at the completion-token check.;Fixed: parent issue body updates now report failure instead of passing silently — `parent-body-update.sh` exits non-zero with a warning when `gh issue edit` fails.
