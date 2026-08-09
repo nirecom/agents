@@ -90,9 +90,11 @@ make_survey() {  # <path> <verdict> <target>
     V="$2" T="$3" node -e "
 const fs=require('fs');
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
+  schema_version: 3,
   proposal: { title: 'wiring proposal', background: 'BG', changes: 'CH' },
-  verdict: process.env.V, target: process.env.T === 'null' ? null : Number(process.env.T),
+  verdict: process.env.V,
+  same_fix: process.env.V === 'reopen',
+  target: process.env.T === 'null' ? null : Number(process.env.T),
   children: [], related: [], reason: 'survey reason',
   relations_mode: 'batched', relation_errors: [],
   candidates: [{ number: 10, title: 'c10', state: 'open', labels: [], body: 'b10',
@@ -134,8 +136,8 @@ try { const d = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
   process.stdout.write(String($1)); } catch (e) { process.stdout.write('parse-error'); }" "$(node_path "$FINAL")" 2>/dev/null
 }
 
-WORTH='{"verdict":"none","target":null,"children":[],"related":[],"reason":"distinct root cause","worth_filing":true}'
-NOT_WORTH='{"verdict":"none","target":null,"children":[],"related":[],"reason":"already fixed upstream in v2.1","worth_filing":false}'
+WORTH='{"verdict":"none","target":null,"children":[],"related":[],"reason":"distinct root cause","worth_filing":true,"same_fix":false}'
+NOT_WORTH='{"verdict":"none","target":null,"children":[],"related":[],"reason":"already fixed upstream in v2.1","worth_filing":false,"same_fix":false}'
 
 echo "=== A: the reviewer affirms the issue is worth filing — nothing fires ==="
 if [ "$CHAIN_READY" != "yes" ]; then
@@ -215,7 +217,7 @@ if [ "$CHAIN_READY" != "yes" ]; then
     for t in D1-review-replaced D2-survey-preserved D3-gate-G1-and-G2; do redchain "$t"; done
 else
     run_chain d none null \
-        '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect as #10","worth_filing":true}' "severity:high"
+        '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect as #10","worth_filing":true,"same_fix":true}' "severity:high"
     S=$(final_q "d.review.status"); [ "$S" = "replaced" ] && pass "D1-review-replaced" \
         || fail "D1-review-replaced" "want review.status replaced (got: $S)"
     SV=$(final_q "d.survey.verdict"); [ "$SV" = "none" ] && pass "D2-survey-preserved" \

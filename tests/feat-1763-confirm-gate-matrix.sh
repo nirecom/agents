@@ -58,13 +58,17 @@ trap 'rm -rf "$WORK"' EXIT
 mk_json() {
     V="$2" SV="$3" RST="$4" WF="$5" node -e "
 const fs=require('fs');
+// same_fix is schema-3 required and verdict-determined. It is set here only to keep the
+// fixture well-formed — the gate must keep reading worth_filing, never same_fix.
+const SF = v => v === 'reopen';
 const review = { status: process.env.RST, verdict: process.env.V, target: null,
-                 children: [], related: [], reason: 'r', detail: '' };
+                 children: [], related: [], reason: 'r', detail: '',
+                 same_fix: SF(process.env.V) };
 if (process.env.WF !== '__OMIT__') review.worth_filing = JSON.parse(process.env.WF);
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
-  verdict: process.env.V, target: null, children: [], related: [], reason: 'r',
-  survey: { verdict: process.env.SV, target: null, children: [], related: [], reason: 's' },
+  schema_version: 3,
+  verdict: process.env.V, same_fix: SF(process.env.V), target: null, children: [], related: [], reason: 'r',
+  survey: { verdict: process.env.SV, same_fix: SF(process.env.SV), target: null, children: [], related: [], reason: 's' },
   review,
   candidates: [{ number: 1, title: 't', state: 'open' }]
 }, null, 2));" "$1"
@@ -168,9 +172,9 @@ else
     node -e "
 const fs=require('fs');
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
+  schema_version: 3,
   proposal: { title: 't', background: 'b', changes: 'c' },
-  verdict: 'none', target: null, children: [], related: [], reason: 'r',
+  verdict: 'none', same_fix: false, target: null, children: [], related: [], reason: 'r',
   candidates: [{ number: 1, title: 't', state: 'open', body: 'b1', labels: [] }]
 }, null, 2));" "$WORK/nonode.json"
     run_gate "$WORK/nonode.json" severity:high
@@ -183,8 +187,8 @@ fs.writeFileSync(process.argv[1], JSON.stringify({
     node -e "
 const fs=require('fs');
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
-  verdict: 'none', target: null, children: [], related: [], reason: 'r',
+  schema_version: 3,
+  verdict: 'none', same_fix: false, target: null, children: [], related: [], reason: 'r',
   survey: { verdict: 'none', target: null, children: [], related: [], reason: 's' },
   review: { detail: 'partially written', verdict: null, target: null, worth_filing: true },
   candidates: [{ number: 1, title: 't', state: 'open' }]

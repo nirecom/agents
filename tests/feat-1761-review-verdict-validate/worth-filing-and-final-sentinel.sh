@@ -38,9 +38,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 # CAND = {10, 11}; both resolved and parentless, so reopen/none/sibling are expressible.
 cat > "$WORK/batched.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -79,7 +79,7 @@ assert_verdict() {
 
 echo "=== W: worth_filing is a REQUIRED boolean on the review verdict ==="
 
-BASE='"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches"'
+BASE='"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","same_fix":false'
 
 # W1/W5 are the pair that makes the rest non-vacuous: the identical verdict differs
 # only in worth_filing, so a validator that ignored the field entirely would fail W1
@@ -110,8 +110,8 @@ fi
 echo ""
 echo "=== S: raw text is scoped to the LAST FINAL_VERDICT_JSON: sentinel ==="
 
-GOOD="{\"verdict\":\"reopen\",\"target\":10,\"children\":[],\"related\":[],\"reason\":\"same root cause\",\"worth_filing\":true}"
-OTHER="{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"different\",\"worth_filing\":false}"
+GOOD="{\"verdict\":\"reopen\",\"target\":10,\"children\":[],\"related\":[],\"reason\":\"same root cause\",\"worth_filing\":true,\"same_fix\":true}"
+OTHER="{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"different\",\"worth_filing\":false,\"same_fix\":false}"
 
 # S1 is the whole point: a reviewer that quoted a JSON object while reasoning (now
 # likely, because web search is enabled) used to collide with its own answer.
@@ -129,7 +129,7 @@ assert_verdict S3-last-sentinel-wins valid \
 
 # ... and the converse: a well-formed earlier block cannot rescue a malformed last one.
 assert_verdict S4-last-sentinel-malformed invalid \
-    "FINAL_VERDICT_JSON:\n$GOOD\nOn reflection:\nFINAL_VERDICT_JSON:\n{\"verdict\":\"reopen\",\"target\":4242,\"children\":[],\"related\":[],\"reason\":\"not a candidate\",\"worth_filing\":true}"
+    "FINAL_VERDICT_JSON:\n$GOOD\nOn reflection:\nFINAL_VERDICT_JSON:\n{\"verdict\":\"reopen\",\"target\":4242,\"children\":[],\"related\":[],\"reason\":\"not a candidate\",\"worth_filing\":true,\"same_fix\":true}"
 
 # A sentinel with nothing after it is an empty answer, not a licence to fall back to
 # the prose above it — falling back would resurrect the collision S1 exists to remove.

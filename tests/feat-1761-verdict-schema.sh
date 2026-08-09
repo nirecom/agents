@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/feat-1761-verdict-schema.sh
 # Tests: skills/issue-create/scripts/make-empty-verdict.sh, agents/issue-create-survey-worker.md, skills/_shared/issue-verdict-cascade.md, bin/github-issues/review-survey-verdict-codex.sh
-# Tags: issue-create, verdict, schema-v2, survey-artifact, scope:issue-specific, pwsh-not-required, TL1
+# Tags: issue-create, verdict, schema-v3, survey-artifact, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
-# - The real survey sub-agent actually emitting schema v2 (LLM output, not shell-testable).
+# - The real survey sub-agent actually emitting schema v3 (LLM output, not shell-testable).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
@@ -29,8 +29,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 MEV_PRESENT=no; [ -f "$MEV" ] && MEV_PRESENT=yes
 
-# The 10 top-level keys that schema v2 declares always present (S6).
-TOP_KEYS="schema_version proposal verdict target children related reason relations_mode relation_errors candidates"
+# The 11 top-level keys that schema v3 declares always present (S6 + same_fix).
+TOP_KEYS="schema_version proposal verdict same_fix target children related reason relations_mode relation_errors candidates"
 
 # jsonq <file> <node-expression using variable `d`> → prints result, or empty on error
 jsonq() {
@@ -65,25 +65,25 @@ assert_route() {
         fi
     done
     if [ -n "$missing" ]; then
-        fail "$label" "schema v2 keys missing: $missing"
+        fail "$label" "schema v3 keys missing: $missing"
     else
         pass "$label"
     fi
 }
 
-echo "=== S7: the three worker-bypassing routes all emit schema v2 ==="
+echo "=== S7: the three worker-bypassing routes all emit schema v3 ==="
 
 gen "no-candidates.json"  none
-assert_route "E1-no-candidates route has all 10 top-level keys" "no-candidates.json"
+assert_route "E1-no-candidates route has all 11 top-level keys" "no-candidates.json"
 
 gen "non-github.json"     none
-assert_route "E2-non-github route has all 10 top-level keys" "non-github.json"
+assert_route "E2-non-github route has all 11 top-level keys" "non-github.json"
 
 # The --skip-survey route attaches N children to one parent. Its verdict word is
 # `bulk-sub-of`, not `sub-of`: writing the singular form here would tell every
 # downstream reader that one child was attached when N were.
 gen "bulk-sub-of.json"    bulk-sub-of --parent 4242
-assert_route "E3-skip-survey/bulk-sub-of route has all 10 top-level keys" "bulk-sub-of.json"
+assert_route "E3-skip-survey/bulk-sub-of route has all 11 top-level keys" "bulk-sub-of.json"
 
 echo ""
 echo "=== S7: explicit defaults must be written, never omitted ==="
@@ -95,7 +95,7 @@ if [ ! -f "$F" ]; then
     fail "E6-children-related-arrays"    "RED-EXPECTED: make-empty-verdict.sh not yet created"
     fail "E7-relations-mode-unavailable" "RED-EXPECTED: make-empty-verdict.sh not yet created"
     fail "E8-relation-errors-array"      "RED-EXPECTED: make-empty-verdict.sh not yet created"
-    fail "E9-schema-version-2"           "RED-EXPECTED: make-empty-verdict.sh not yet created"
+    fail "E9-schema-version-3"           "RED-EXPECTED: make-empty-verdict.sh not yet created"
 else
     T=$(jsonq "$F" "d.proposal && d.proposal.title ? 'nonempty' : 'empty'")
     [ "$T" = "nonempty" ] && pass "E4-proposal-title-non-empty" \
@@ -118,8 +118,8 @@ else
         || fail "E8-relation-errors-array" "relation_errors is not an array (got: $T)"
 
     T=$(jsonq "$F" "d.schema_version")
-    [ "$T" = "2" ] && pass "E9-schema-version-2" \
-        || fail "E9-schema-version-2" "schema_version should be 2 (got: $T)"
+    [ "$T" = "3" ] && pass "E9-schema-version-3" \
+        || fail "E9-schema-version-3" "schema_version should be 3 (got: $T)"
 fi
 
 # E10: the bulk-sub-of route must carry --parent through to target.
@@ -256,7 +256,7 @@ else
 fi
 
 echo ""
-echo "=== S6: the worker prompt documents schema v2 ==="
+echo "=== S6: the worker prompt documents schema v3 ==="
 
 if [ ! -f "$WORKER_MD" ]; then
     fail "E11-worker-schema-keys" "agents/issue-create-survey-worker.md not found"
