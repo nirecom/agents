@@ -155,7 +155,7 @@ for i in "${!CLEAN_ISSUES[@]}"; do
     if [ -n "${REPO_OF[$i]:-}" ]; then
         ISSUE_REPO_ARGS+=(--repo "${REPO_OF[$i]}")
     fi
-    gh issue edit "$N" --add-label "intent:clarified" ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} 2>/dev/null || true
+    gh issue edit "$N" --add-label "intent:clarified" ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} >/dev/null 2>&1 || true
     WIP_RC=0
     # C4 fix: wip-set-single.sh does not accept "set" as a positional verb
     WIP_OUT=$(wip-set-single.sh ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} "$N" 2>/dev/null) || WIP_RC=$?
@@ -163,7 +163,7 @@ for i in "${!CLEAN_ISSUES[@]}"; do
         echo "RC2"
         exit 2
     fi
-    ensure-board-card.sh ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} "$N" 2>/dev/null || true
+    ensure-board-card.sh ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} "$N" >/dev/null 2>&1 || true
 done
 
 exit 0

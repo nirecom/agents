@@ -342,22 +342,22 @@ case "$ARGS" in
     fi
     exit 0
     ;;
-  # label delete アーム (migrate-model-labels.sh pre-delete guard 用)
+  # label delete arm — used by migrate-model-labels.sh pre-delete guard.
   "label delete "*)
     if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
         printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
     fi
     exit 0
     ;;
-  # label edit --name アーム (migrate-model-labels.sh rename 用)
+  # label edit --name arm — used by migrate-model-labels.sh rename.
   "label edit "*"--name "*)
     if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
         printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
     fi
     exit 0
     ;;
-  # label list --search アーム (migrate-model-labels.sh 存在確認用)
-  # GH_MOCK_LABEL_SEARCH: 改行区切りリスト。search 語が含まれれば返す。
+  # label list --search arm — used by migrate-model-labels.sh existence check.
+  # GH_MOCK_LABEL_SEARCH: newline-separated list; echo the term when it is present.
   "label list --search "*"--json name"*)
     SEARCH_TERM="$(printf '%s' "$ARGS" | sed -nE 's/.*--search ([^ ]+).*/\1/p')"
     if printf '%s\n' "${GH_MOCK_LABEL_SEARCH:-}" | grep -qxF "$SEARCH_TERM"; then
@@ -365,8 +365,8 @@ case "$ARGS" in
     fi
     exit 0
     ;;
-  # issue list --label アーム (migrate-model-labels.sh issue 数確認用)
-  # GH_MOCK_ISSUE_COUNT: unset/空 → 0。set されていればその数値を返す。
+  # issue list --label arm — used by migrate-model-labels.sh issue-count check.
+  # GH_MOCK_ISSUE_COUNT: unset/empty -> 0; otherwise echo that number.
   "issue list --label "*"--json number --jq"*)
     printf '%s\n' "${GH_MOCK_ISSUE_COUNT:-0}"
     exit 0
@@ -812,10 +812,21 @@ case "$SCENARIO" in
         exit 0
         ;;
       "issue edit 99 --body "*)
+        # GH_MOCK_EDIT_RC simulates a failed edit (default 0 = success).
+        # Failure emits a distinct canary on BOTH streams: the real gh can print
+        # to stdout even when it fails, so a caller that only redirects stderr
+        # still leaks. Tests assert neither canary reaches the caller's streams.
+        if [ "${GH_MOCK_EDIT_RC:-0}" != "0" ]; then
+          echo "GHCANARY_EDIT_STDOUT_LEAK"
+          echo "gh: mock issue edit failed GHCANARY_EDIT_STDERR_LEAK" >&2
+          exit "${GH_MOCK_EDIT_RC}"
+        fi
         if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
           BODY="${ARGS#*--body }"
           printf 'EDIT_PARENT_99: %s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
         fi
+        # Fidelity: real `gh issue edit` prints the issue URL to stdout on success.
+        echo "https://github.com/owner/repo/issues/99"
         exit 0
         ;;
     esac

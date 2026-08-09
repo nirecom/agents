@@ -53,7 +53,7 @@ SIBLINGS=("${POSITIONAL[@]:1}")
 for k in "${!SIBLINGS[@]}"; do
     N="${SIBLINGS[$k]}"
     i=$((k + 1))
-    if ! gh issue edit "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --add-label "intent:clarified"; then
+    if ! gh issue edit "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --add-label "intent:clarified" >/dev/null 2>&1; then
         if [ -n "${PLANS_DIR:-}" ] && [ -n "${SESSION_ID:-}" ]; then
             MARKER="$PLANS_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
             printf 'workflow-init Path A2 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true

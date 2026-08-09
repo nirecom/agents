@@ -46,4 +46,7 @@ fi
 PARENT_BODY=$(gh issue view "$PARENT" --json body --jq .body)
 NEW_BODY=$(printf '%s' "$PARENT_BODY" \
     | perl -pe "s/- \\[ \\] #${N}\\b/- [x] #${N}/g")
-ISSUE_CLOSE_SKILL=1 gh issue edit "$PARENT" --body "$NEW_BODY"
+if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$PARENT" --body "$NEW_BODY" >/dev/null 2>&1; then
+    echo "WARN: parent body update failed for #${PARENT}" >&2
+    exit 1
+fi
