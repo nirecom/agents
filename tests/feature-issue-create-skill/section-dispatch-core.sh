@@ -164,7 +164,11 @@ if [ ! -x "$DISPATCH" ]; then
     fail "DV5: dispatch script missing — RED until implementation"
 else
     setup_mock
-    export GH_MOCK_NEW_ISSUE_NUM=201
+    # #1699: make-parent now creates TWO issues — the meta parent first (201),
+    # then the unmodified proposal as a child (202). stdout ends with the child
+    # URL so `tail -n 1` still yields the proposal.
+    export GH_MOCK_ISSUE_NUMS="201,202"
+    export GH_MOCK_CREATE_CURSOR="$TMP/dv5-create-cursor"
     STDOUT_OUT="$TMP/dv5-stdout.txt"
     run_with_timeout 30 bash "$DISPATCH" --verdict make-parent --children 42,43 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
@@ -179,8 +183,8 @@ else
        && grep -q -- "-F sub_issue_id=42000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q -- "-F sub_issue_id=43000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && [ "$ATTACH_201_COUNT" -ge 2 ] \
-       && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/201" ]; then
-        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new parent 201 with -F sub_issue_id=<integer>"
+       && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/202" ]; then
+        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new meta parent 201 with -F sub_issue_id=<integer>, proposal URL last"
     else
         fail "DV5: verdict=make-parent behavior incorrect (rc=$RC stdout='$LAST_LINE' attach_201_count=$ATTACH_201_COUNT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi

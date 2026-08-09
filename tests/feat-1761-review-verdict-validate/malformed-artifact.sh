@@ -34,7 +34,7 @@ echo "=== E: malformed SURVEY artifacts — the other input, and the one not yet
 # allowlist — and an empty allowlist silently accepts nothing OR everything depending
 # on how the check is written. Both directions are dangerous, so every malformed
 # artifact must be rejected outright rather than silently narrowing the allowlist.
-VALID_REVIEW='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}'
+VALID_REVIEW='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true,"same_fix":true}'
 
 # run_validate_art <artifact-json-literal-or-path> <raw> → verdict word
 run_validate_art() {
@@ -68,42 +68,42 @@ assert_art_invalid E1-wrong-schema-version \
      \"relations_mode\": \"batched\", \"relation_errors\": [], \"candidates\": [ $BASE_CANDS ] }"
 
 assert_art_invalid E2-candidates-missing \
-  '{ "schema_version": 2, "proposal": {"title":"T","background":"B","changes":"C"},
-     "verdict": "none", "target": null, "children": [], "related": [], "reason": "r",
+  '{ "schema_version": 3, "proposal": {"title":"T","background":"B","changes":"C"},
+     "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [], "reason": "r",
      "relations_mode": "batched", "relation_errors": [] }'
 
 assert_art_invalid E3-candidates-not-an-array \
-  '{ "schema_version": 2, "proposal": {"title":"T","background":"B","changes":"C"},
-     "verdict": "none", "target": null, "children": [], "related": [], "reason": "r",
+  '{ "schema_version": 3, "proposal": {"title":"T","background":"B","changes":"C"},
+     "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [], "reason": "r",
      "relations_mode": "batched", "relation_errors": [], "candidates": {"10": {}} }'
 
 assert_art_invalid E4-candidate-number-is-a-string \
-  '{ "schema_version": 2, "proposal": {"title":"T","background":"B","changes":"C"},
-     "verdict": "none", "target": null, "children": [], "related": [], "reason": "r",
+  '{ "schema_version": 3, "proposal": {"title":"T","background":"B","changes":"C"},
+     "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [], "reason": "r",
      "relations_mode": "batched", "relation_errors": [],
      "candidates": [ { "number": "10", "title": "c", "state": "open", "labels": [], "body": "b",
        "relation_status": "resolved", "parent_number": null, "parent_is_meta": false, "has_sub_issues": false } ] }'
 
 # Duplicate candidate numbers make the allowlist ambiguous: which #10 did the review mean?
 assert_art_invalid E5-duplicate-candidate-numbers \
-  "{ \"schema_version\": 2, \"proposal\": {\"title\":\"T\",\"background\":\"B\",\"changes\":\"C\"},
-     \"verdict\": \"none\", \"target\": null, \"children\": [], \"related\": [], \"reason\": \"r\",
+  "{ \"schema_version\": 3, \"proposal\": {\"title\":\"T\",\"background\":\"B\",\"changes\":\"C\"},
+     \"verdict\": \"none\", \"same_fix\": false, \"target\": null, \"children\": [], \"related\": [], \"reason\": \"r\",
      \"relations_mode\": \"batched\", \"relation_errors\": [], \"candidates\": [ $BASE_CANDS, $BASE_CANDS ] }"
 
 assert_art_invalid E6-candidate-missing-relation-fields \
-  '{ "schema_version": 2, "proposal": {"title":"T","background":"B","changes":"C"},
-     "verdict": "none", "target": null, "children": [], "related": [], "reason": "r",
+  '{ "schema_version": 3, "proposal": {"title":"T","background":"B","changes":"C"},
+     "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [], "reason": "r",
      "relations_mode": "batched", "relation_errors": [],
      "candidates": [ { "number": 10, "title": "c", "state": "open", "labels": [], "body": "b" } ] }'
 
 assert_art_invalid E7-survey-verdict-not-in-enum \
-  "{ \"schema_version\": 2, \"proposal\": {\"title\":\"T\",\"background\":\"B\",\"changes\":\"C\"},
-     \"verdict\": \"merge\", \"target\": null, \"children\": [], \"related\": [], \"reason\": \"r\",
+  "{ \"schema_version\": 3, \"proposal\": {\"title\":\"T\",\"background\":\"B\",\"changes\":\"C\"},
+     \"verdict\": \"merge\", \"same_fix\": false, \"target\": null, \"children\": [], \"related\": [], \"reason\": \"r\",
      \"relations_mode\": \"batched\", \"relation_errors\": [], \"candidates\": [ $BASE_CANDS ] }"
 
 assert_art_invalid E8-artifact-root-is-null 'null'
 assert_art_invalid E9-artifact-is-an-array  '[]'
-assert_art_invalid E10-artifact-truncated   '{ "schema_version": 2, "candidates": ['
+assert_art_invalid E10-artifact-truncated   '{ "schema_version": 3, "candidates": ['
 assert_art_invalid E11-artifact-empty       ''
 
 # A nonexistent artifact path is not the same defect as a malformed one, but must
@@ -124,8 +124,8 @@ echo "=== E14-E24: relation fields carry the wrong TYPE or an out-of-enum VALUE 
 # A validator that coerces instead of rejecting turns "unknown" into a truthy value and
 # silently widens the allowlist the review's target is checked against.
 cand() {  # <field-overrides-json-fragment> → a one-candidate artifact
-    printf '{ "schema_version": 2, "proposal": {"title":"T","background":"B","changes":"C"},
-     "verdict": "none", "target": null, "children": [], "related": [], "reason": "r",
+    printf '{ "schema_version": 3, "proposal": {"title":"T","background":"B","changes":"C"},
+     "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [], "reason": "r",
      "relations_mode": "batched", "relation_errors": [],
      "candidates": [ { "number": 10, "title": "c", "state": "open", %s } ] }' "$1"
 }
@@ -178,25 +178,25 @@ else
 const fs = require('fs');
 const cand = n => ({ number: n, title: 'c' + n, state: 'open', labels: [], body: 'b',
   relation_status: 'resolved', parent_number: null, parent_is_meta: false, has_sub_issues: false });
-fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 2,
+fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 3,
   proposal: { title: 'T', background: 'B', changes: 'C' },
-  verdict: 'none', target: null, children: [], related: [], reason: 'r',
+  verdict: 'none', same_fix: false, target: null, children: [], related: [], reason: 'r',
   relations_mode: 'batched', relation_errors: [],
   candidates: Array.from({ length: 5000 }, (_, i) => cand(i + 1)) }));" "$(node_path "$WORK/huge.json")"
-    GOT=$(run_validate_art "$WORK/huge.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}')
+    GOT=$(run_validate_art "$WORK/huge.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true,"same_fix":true}')
     [ "$GOT" = "invalid" ] && pass "E13-huge-candidate-list" \
         || fail "E13-huge-candidate-list" "a 5000-candidate artifact exceeds the documented 25-candidate ceiling and must be rejected (got: $GOT)"
 
     node -e "
 const fs = require('fs');
-fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 2,
+fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 3,
   proposal: { title: 'T', background: 'B', changes: 'C' },
-  verdict: 'none', target: null, children: [], related: [], reason: 'r',
+  verdict: 'none', same_fix: false, target: null, children: [], related: [], reason: 'r',
   relations_mode: 'batched', relation_errors: [],
   candidates: [ { number: 10, title: 'x'.repeat(1000000), state: 'open', labels: [], body: 'b',
     relation_status: 'resolved', parent_number: null, parent_is_meta: false, has_sub_issues: false } ] }));" \
       "$(node_path "$WORK/hugestr.json")"
-    GOT=$(run_validate_art "$WORK/hugestr.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}')
+    GOT=$(run_validate_art "$WORK/hugestr.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true,"same_fix":true}')
     # Either verdict is defensible here; what must NOT happen is a crash or a hang,
     # which would surface as an empty first line.
     if [ "$GOT" = "valid" ] || [ "$GOT" = "invalid" ]; then

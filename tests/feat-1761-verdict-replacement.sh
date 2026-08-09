@@ -48,9 +48,15 @@ exit "${CODEX_MOCK_RC:-0}"
 MOCK
 chmod +x "$MOCKDIR/codex"
 
-# --- survey artifact fixtures (schema v2). CAND = {10, 11}; PARENTS = {99} -------
+# --- survey artifact fixtures (schema v3). CAND = {10, 11}; PARENTS = {99} -------
 write_artifact() {  # <path> <survey-verdict> <survey-target> [--no-proposal] [--upper-state]
     local path="$1" v="$2" t="$3"; shift 3
+    # same_fix is not free-floating: it is a function of the verdict (only `reopen`
+    # asserts that one fix resolves both — every parent-attaching verdict names a meta
+    # parent, which is never implemented against), so the fixture derives it rather
+    # than letting a caller pass an inconsistent pair.
+    local sf=false
+    case "$v" in reopen) sf=true ;; esac
     local proposal='"proposal": { "title": "Fix the flaky provenance hook", "background": "BG text", "changes": "CH text" },'
     # Default casing is the lowercase the artifact schema is written in. --upper-state
     # reproduces what `gh issue view --json state` actually answers (#1862), so a
@@ -64,9 +70,9 @@ write_artifact() {  # <path> <survey-verdict> <survey-target> [--no-proposal] [-
         esac
     done
     cat > "$path" <<JSON
-{ "schema_version": 2,
+{ "schema_version": 3,
   $proposal
-  "verdict": "$v", "target": $t, "children": [], "related": [],
+  "verdict": "$v", "same_fix": $sf, "target": $t, "children": [], "related": [],
   "reason": "survey reason",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -123,10 +129,10 @@ ART_NOPROP="$WORK/survey-noprop.json"; write_artifact "$ART_NOPROP" none   null 
 ART_NONE_UPPER="$WORK/survey-none-upper.json";     write_artifact "$ART_NONE_UPPER"   none   null --upper-state
 ART_REOPEN_UPPER="$WORK/survey-reopen-upper.json"; write_artifact "$ART_REOPEN_UPPER" reopen 10   --upper-state
 
-REVIEW_REOPEN='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same root cause as #10","worth_filing":true}'
-REVIEW_REOPEN_11='{"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause as #11","worth_filing":true}'
-REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true}'
-REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate","worth_filing":true}'
+REVIEW_REOPEN='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same root cause as #10","worth_filing":true,"same_fix":true}'
+REVIEW_REOPEN_11='{"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause as #11","worth_filing":true,"same_fix":true}'
+REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true,"same_fix":false}'
+REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate","worth_filing":true,"same_fix":true}'
 
 echo "=== (a) escalation: survey none → review reopen → replaced ==="
 run_review a "$ART_NONE" "$REVIEW_REOPEN"

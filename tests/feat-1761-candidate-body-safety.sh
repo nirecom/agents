@@ -63,11 +63,11 @@ build_artifact() {  # <path>
     "$RWT" 15 node -e "
 const fs = require('fs');
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
+  schema_version: 3,
   proposal: { title: 'reviewer stage leaks candidate bodies',
               background: 'private context ' + process.env.CP,
               changes: 'add a guard' },
-  verdict: 'sibling', target: null, children: [], related: [10, 11],
+  verdict: 'sibling', same_fix: false, target: null, children: [], related: [10, 11],
   reason: 'adjacent but distinct',
   relations_mode: 'batched', relation_errors: [],
   candidates: [
@@ -227,7 +227,7 @@ echo "===     accepted through the normal validation path, never by frame positi
 # #10 IS a candidate, so this one is allowed to land. The point is that it lands as a
 # reviewed verdict (review.status: replaced) with the survey preserved for the G2 gate —
 # not silently swapped in.
-INSIDE='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"on reflection #10 is the same defect","worth_filing":true}'
+INSIDE='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"on reflection #10 is the same defect","worth_filing":true,"same_fix":true}'
 run_review "$WORK/inside" "$INSIDE"
 if [ "$RS_PRESENT" != "yes" ]; then
     red "I6-replacement-recorded"; red "I6-survey-preserved-for-gate"
@@ -255,6 +255,25 @@ else
         fail "I7-single-output-frame" "stdout must carry exactly one codex-output frame pair (begin=$NB end=$NE)"
     fi
 fi
+
+
+# --- sections ------------------------------------------------------------------------
+# tests/run-all.sh globs tests/*.sh — TOP-LEVEL ONLY. Until this block existed, both
+# section files below were dead code in CI: field-defang.sh's 53 defang assertions and
+# tmpfile-residue.sh's temp-file leak assertions had never executed under run-all.
+#
+# Subprocess, not sourced (unlike tests/feat-1699-meta-parent-guard.sh): each section
+# installs its own codex mock, its own $WORK, and its own `trap ... EXIT`. Bash keeps
+# one EXIT trap per shell, so sourcing them would leak every $WORK but the last — and
+# tmpfile-residue.sh T6 scans the real $TMPDIR for canary-bearing residue, so a
+# sibling's leftovers would turn it red for the wrong reason. See tests/lib/section-runner.sh.
+SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1761-candidate-body-safety"
+# shellcheck source=./lib/section-runner.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"
+
+run_section "field-defang.sh" 240
+run_section "tmpfile-residue.sh" 240
+run_section "tmpfile-lifecycle.sh" 240
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

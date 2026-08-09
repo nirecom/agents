@@ -35,7 +35,27 @@ const VERDICTS = ["none", "reopen", "sub-of", "make-parent", "sibling"];
 const ARTIFACT_VERDICTS = VERDICTS.concat(["bulk-sub-of"]);
 const RELATION_STATUSES = ["resolved", "unresolved"];
 const ISSUE_STATES = ["open", "closed"];
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
+// SSOT for `same_fix`: does ONE fix resolve both the proposal and the existing issue
+// the verdict names? It is a pure function of the verdict, so both producers copy it
+// rather than re-judging it. Prose twin: skills/_shared/issue-verdict-cascade.md
+// (drift-checked by tests/feat-1912-verdict-criterion-drift.sh).
+// Different axis from the confirm gate's G1: G1 asks how destructive the action is.
+// Only `reopen` is true. Every parent-attaching verdict is false for one reason: the
+// issue those verdicts name is a meta parent, a container that is never implemented
+// against, so creating or attaching resolves nothing. That covers `make-parent` (the
+// grouped children each keep their own fix) and, symmetrically, `sub-of` /
+// `bulk-sub-of`. The cascade order says the same thing independently: IC-C1 asks the
+// one-fix question of every candidate and only falls through to IC-C2 when the answer
+// was no for all of them.
+const SAME_FIX_BY_VERDICT = {
+  none: false,
+  reopen: true,
+  "sub-of": false,
+  "bulk-sub-of": false,
+  "make-parent": false,
+  sibling: false,
+};
 const CANDIDATE_MAX = 25;
 const REASON_MAX = 500;
 const NOTE_REASON_MAX = 120;
@@ -98,6 +118,14 @@ function validateArtifact(a) {
   }
   if (typeof a.verdict !== "string" || ARTIFACT_VERDICTS.indexOf(a.verdict) === -1) {
     return { ok: false, reason: "survey artifact verdict is not a known verdict (got: " + JSON.stringify(a.verdict) + ")" };
+  }
+  // REQUIRED and strictly boolean, checked here so a bulk-sub-of artifact with the
+  // wrong value is rejected FOR same_fix rather than swallowed by the grammar fold.
+  if (typeof a.same_fix !== "boolean") {
+    return { ok: false, reason: "survey artifact same_fix must be a boolean (got: " + JSON.stringify(a.same_fix) + ")" };
+  }
+  if (a.same_fix !== SAME_FIX_BY_VERDICT[a.verdict]) {
+    return { ok: false, reason: "survey artifact same_fix must be " + JSON.stringify(SAME_FIX_BY_VERDICT[a.verdict]) + " for verdict " + a.verdict + " (got: " + JSON.stringify(a.same_fix) + ")" };
   }
   if (!Array.isArray(a.candidates)) {
     return { ok: false, reason: "survey artifact candidates must be an array" };
@@ -212,6 +240,11 @@ function validate(artifact, rawText) {
   if (typeof r.worth_filing !== "boolean") {
     return { ok: false, reason: "worth_filing must be a boolean" };
   }
+  // Same treatment for same_fix: required, strictly boolean, no coercion. The
+  // verdict-consistency cross-check runs after the per-verdict shape switch below.
+  if (typeof r.same_fix !== "boolean") {
+    return { ok: false, reason: "same_fix must be a boolean" };
+  }
 
   const target = r.target === undefined ? null : r.target;
   const children = r.children === undefined ? [] : r.children;
@@ -276,10 +309,16 @@ function validate(artifact, rawText) {
       return { ok: false, reason: "unknown verdict" };
   }
 
+  // A reviewer whose verdict and whose "one fix covers both" answer disagree has
+  // drifted from the cascade, whatever else its shape looks like.
+  if (r.same_fix !== SAME_FIX_BY_VERDICT[verdict]) {
+    return { ok: false, reason: "same_fix must be " + JSON.stringify(SAME_FIX_BY_VERDICT[verdict]) + " for verdict " + verdict + " (got: " + JSON.stringify(r.same_fix) + ")" };
+  }
+
   return {
     ok: true,
     reason: "",
-    review: { verdict, target, children, related, reason: r.reason, worth_filing: r.worth_filing },
+    review: { verdict, target, children, related, reason: r.reason, worth_filing: r.worth_filing, same_fix: r.same_fix },
   };
 }
 
@@ -323,7 +362,8 @@ function formatNote(surveyVerdict, reviewVerdict, status, reason) {
 module.exports = {
   validate, validateArtifact, formatNote, stripCommentMarkers,
   VERDICTS, ARTIFACT_VERDICTS, RELATION_STATUSES, ISSUE_STATES,
-  SCHEMA_VERSION, CANDIDATE_MAX, REASON_MAX, NOTE_REASON_MAX, MAKE_PARENT_MIN_CHILDREN,
+  SCHEMA_VERSION, SAME_FIX_BY_VERDICT,
+  CANDIDATE_MAX, REASON_MAX, NOTE_REASON_MAX, MAKE_PARENT_MIN_CHILDREN,
 };
 
 if (require.main === module) {

@@ -60,11 +60,11 @@ build_artifact() {  # <path>
     "$RWT" 15 node -e "
 const fs = require('fs');
 fs.writeFileSync(process.argv[1], JSON.stringify({
-  schema_version: 2,
+  schema_version: 3,
   proposal: { title: 'review stage temp-file residue',
               background: 'private context ' + process.env.CP,
               changes: 'add a guard' },
-  verdict: 'sibling', target: null, children: [], related: [10],
+  verdict: 'sibling', same_fix: false, target: null, children: [], related: [10],
   reason: 'adjacent but distinct',
   relations_mode: 'batched', relation_errors: [],
   candidates: [

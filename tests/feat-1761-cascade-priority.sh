@@ -172,17 +172,25 @@ else
     else
         fail "S7-worker-references-ssot" "RED-EXPECTED: the worker does not reference skills/_shared/issue-verdict-cascade.md"
     fi
-    # A reference is fine; a second full statement of the rules is not. Count how many
-    # rule IDs carry their own trigger prose in the worker.
-    DUP=0
-    for id in IC-C1 IC-C2 IC-C3 IC-C4; do
-        IDX=$(first_index "$WORKER" "$id")
-        [ -n "$IDX" ] && [ "$(sed -n "${IDX}p" "$WORKER" | wc -c)" -gt 120 ] && DUP=$((DUP + 1))
-    done
-    if [ "$DUP" -eq 0 ]; then
+    # A reference is fine; a second full statement of the rules is not.
+    #
+    # This was a LINE-LENGTH heuristic (a rule ID on a line longer than 120 characters was
+    # assumed to be a restatement). Length is not evidence in either direction: a one-line
+    # paraphrase of IC-C1 is a complete second copy at 90 characters, and a long line that
+    # only cites the file is not a copy at all. So the check is structural — it looks for
+    # the landmarks a copy necessarily brings with it: the cascade's own section headings.
+    # Those are the SSOT's structure; reproducing one means the rule text came along.
+    DUP=""
+    while IFS= read -r h; do
+        [ -n "$h" ] || continue
+        grep -qF -- "$h" "$WORKER" 2>/dev/null && DUP="$DUP[$h] "
+    done <<EOF
+$(sed -n 's/^##*[[:space:]]*//p' "$SSOT" 2>/dev/null | sed -n '/./p')
+EOF
+    if [ -z "$DUP" ]; then
         pass "S7-worker-no-duplicate-cascade"
     else
-        fail "S7-worker-no-duplicate-cascade" "$DUP rule(s) are restated in full in the worker instead of referencing the SSOT"
+        fail "S7-worker-no-duplicate-cascade" "cascade section heading(s) reproduced in the worker instead of referencing the SSOT: $DUP"
     fi
 fi
 
@@ -213,9 +221,9 @@ MOCK
     # decision is derivable from the artifact alone.
     ART="$WORK/multi.json"
     cat > "$ART" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "provenance token is consumed twice", "background": "BG", "changes": "CH" },
-  "verdict": "reopen", "target": 10, "children": [], "related": [11, 12],
+  "verdict": "reopen", "same_fix": true, "target": 10, "children": [], "related": [11, 12],
   "reason": "#10 is the same root cause",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
