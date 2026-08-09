@@ -79,6 +79,44 @@ function buildSegmentIR(segStr, isSubshell, opts) {
   return seg;
 }
 
+// INVARIANT (argv/argvRaw positional correspondence).
+//
+// Every SegmentIR produced or transformed by this module satisfies:
+//   argvRaw.length === argv.length, and argvRaw[i] is the RAW (quote-preserving)
+//   spelling of argv[i]; cmd0Raw is the raw spelling of cmd0.
+//
+// buildSegmentIR() establishes it by shifting both arrays together. Any transform
+// that shifts tokens off the front of argv (env-prefix stripping, control-keyword
+// stripping) MUST shift argvRaw by the same count — see syncRaw() below. Callers
+// that index the two arrays against each other (the execution-position classifier
+// in hooks/workflow-run-tests/exec-model.js, the protected-token scanner in
+// hooks/block-clearance-token-write/) depend on it.
+
+/**
+ * Recompute {cmd0Raw, argvRaw} after `shiftCount` tokens were shifted off the
+ * front of `seg.argv`.
+ *
+ * Guard BEFORE index: this module backs three security hooks, so a segment whose
+ * argvRaw is missing, not an array, or out of sync must degrade to a copy of argv
+ * rather than throw — a TypeError here would fail those guards OPEN.
+ *
+ * @param {object} seg - source SegmentIR (pre-shift argv/argvRaw)
+ * @param {number} shiftCount - how many leading argv tokens were consumed
+ * @returns {{cmd0Raw: string, argvRaw: string[]}}
+ */
+function syncRaw(seg, shiftCount) {
+  const argv = Array.isArray(seg && seg.argv) ? seg.argv : [];
+  const raw =
+    seg && Array.isArray(seg.argvRaw) && seg.argvRaw.length === argv.length
+      ? seg.argvRaw
+      : argv.slice();
+  const headIdx = shiftCount - 1;
+  return {
+    cmd0Raw: headIdx >= 0 && headIdx < raw.length ? raw[headIdx] : "",
+    argvRaw: raw.slice(shiftCount),
+  };
+}
+
 /**
  * Parse a bash command string into an IR (Intermediate Representation).
  *
@@ -184,7 +222,7 @@ function stripEnvPrefix(seg) {
   if (!Array.isArray(seg.argv)) return null;
   const idx = seg.argv.findIndex((a) => !ASSIGN_RE.test(a));
   if (idx === -1) return null;
-  return { ...seg, cmd0: seg.argv[idx], argv: seg.argv.slice(idx + 1) };
+  return { ...seg, cmd0: seg.argv[idx], argv: seg.argv.slice(idx + 1), ...syncRaw(seg, idx + 1) };
 }
 
 /**
@@ -219,10 +257,11 @@ function resolveEffectiveSegment(segmentIR) {
   // strip the keyword, the remaining argv is the effective command.
   if (CONTROL_COND_HEADERS.has(cmd0) || CONTROL_BODY_KEYWORDS.has(cmd0)) {
     if (!Array.isArray(segmentIR.argv) || segmentIR.argv.length === 0) return null;
-    let effective = {
+    const effective = {
       ...segmentIR,
       cmd0: segmentIR.argv[0],
-      argv: segmentIR.argv.slice(1)
+      argv: segmentIR.argv.slice(1),
+      ...syncRaw(segmentIR, 1)
     };
     // Compose with env-prefix stripping
     return stripEnvPrefix(effective);

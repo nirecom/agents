@@ -76,11 +76,24 @@ See `docs/security-policy.md` for the full pattern list.
   `resolveEffectiveSegment()`), which resolves each segment's effective command through control-structure
   keywords and env-prefix assignments before matching path pattern (`tests/`) and known runner names — so a
   read-only command that merely names a test path inside a loop/condition header (e.g.
-  `for f in tests/*.sh; do head "$f"; done`) is no longer mis-detected (#1330). `complete` requires all of:
-  run-all.sh provenance, exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and
-  `write_tests` already satisfied). exit ≠ 0, or any test command lacking a valid contract (ad-hoc runner,
-  piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes, read-only
-  commands, and git non-exec subcommands (resolved past leading global options) excluded
+  `for f in tests/*.sh; do head "$f"; done`) is no longer mis-detected (#1330). Exec-position classification
+  (which command-IR segments count as candidate emitters at all) and emitter-identity/provenance resolution
+  are split into `hooks/workflow-run-tests/exec-model.js` and `hooks/workflow-run-tests/provenance-identity.js`
+  respectively (#1273) — the former decides *where in the command* a test runner could legitimately execute,
+  the latter decides *which segment's* output is attributable to a verified runner, flagging 2+ distinct
+  verified emitters as `ambiguous` (same emitter appearing twice is not ambiguous by itself). Independently,
+  `stdoutAttributed()` enforces byte-position invariants over the whole stdout string so a forged
+  `RUN_CONTRACT`/`log_tail` line prepended or appended around the real payload cannot be parsed as
+  authoritative: worker-dispatch payloads require `RUN_CONTRACT:` as the first line with exactly one
+  unindented `log_tail: |` marker; run-all payloads require `RUN_CONTRACT:` as the last non-empty line.
+  `complete` requires all of: run-all.sh provenance, unambiguous emitter attribution, stdout byte-attribution,
+  exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and `write_tests` already
+  satisfied). exit ≠ 0, any test command lacking a valid contract (ad-hoc runner, piped/compound run-all.sh,
+  no-match), ambiguous emitter attribution, or an unattributed stdout region, demotes `run_tests` to
+  `pending`. Sentinel echoes, read-only commands, and git non-exec subcommands (resolved past leading global
+  options) excluded. Any unrelated Bash call observed between an explicit completion sentinel and the next
+  workflow-state read can retrigger this demotion (continuous re-verification, not a bug) — re-emit the
+  completion sentinel immediately before checking workflow state if this happens.
 - `detect-worktree-conflict.js` (PostToolUse, matcher: `Bash|runInTerminal|runCommands`) — when a
   failed terminal command's stderr matches `fatal: '<branch>' is already used by worktree`, emits a
   single `additionalContext` guidance message (locate via `git worktree list`, finish with

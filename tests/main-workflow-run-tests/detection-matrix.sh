@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-run-tests.js
-# Tags: workflow, tests, runner, hook, detection-matrix, scope:common
+# Tags: workflow, tests, runner, hook, detection-matrix, TL2, scope:common
 # Case group: Table-driven detection matrix (DM-group) — issue #1330 C1.
 # Systematically covers every READ_ONLY_CMDS entry, every GIT_NON_EXEC_SUBCMDS
 # entry, and every test-runner regex branch in isTestCommand().
@@ -128,6 +128,34 @@ git-inline-worktree  | git --work-tree=/x diff tests/foo.sh   | absent
 git-inline-namespace | git --namespace=ns log tests/           | absent
 git-inline-execpath  | git --exec-path=/p status tests/        | absent
 git-inline-superpfx  | git --super-prefix=pre/ diff tests/     | absent
-git-archive-tests    | git archive tests/                      | pending
+# #1273: `git archive tests/` executes nothing — it writes an archive of that
+# path. The old `pending` expectation froze a false positive of the substring
+# matcher; under the execution-position model `tests/` here is an argument value.
+git-archive-tests    | git archive tests/                      | absent
+# --- #1273 / #1798: execution-position model (detail plan S2-5) -------------
+# Only the head, an interpreter's script/module operand, and a known
+# dispatcher's worker name are execution positions.
+wd-test-runner     | node /r/bin/worker-dispatch.js test-runner /r /p/s-worker-test-runner.json | pending
+# Same dispatcher, different worker: nothing here runs a test suite.
+wd-other-worker    | node /r/bin/worker-dispatch.js doc-append /r /p/s-worker-doc-append.json   | absent
+py-m-pytest        | python -m pytest tests/                 | pending
+py-m-unittest      | python -m unittest discover tests/      | pending
+timeout-bash       | timeout 120 bash tests/foo.sh           | pending
+timeout-k-bash     | timeout -k 5 120 bash tests/foo.sh      | pending
+env-bash           | env FOO=1 bash tests/foo.sh             | pending
+command-v-pytest   | command -v pytest                       | absent
+invoke-pester-real | Invoke-Pester tests/X.Tests.ps1         | pending
+powershell-file    | PowerShell.exe -File tests/X.ps1        | pending
+# BODY form: the whole command is folded into one argv token and is never
+# recursed into — parsing inside a token would reintroduce the substring axis.
+pwsh-command-body  | pwsh -Command "Invoke-Pester tests/X.Tests.ps1"  | absent
+# `--require` takes a VALUE; the script operand is the next token.
+node-require-target | node --require ./setup.js tests/foo.js | pending
+node-require-value  | node --require tests/setup.js app.js   | absent
+# Also a BODY form: `-x`'s argument is a single argv token whose basename is in
+# no head table. The asymmetry with `git bisect run bash tests/foo.sh` (detected)
+# is deliberate — there the executed command occupies SEPARATE argv tokens, so
+# recursion is well-defined without reading inside a token.
+git-rebase-exec    | git rebase -x "bash tests/foo.sh" main  | absent
 TABLE
 }

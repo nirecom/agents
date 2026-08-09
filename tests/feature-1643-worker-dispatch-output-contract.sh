@@ -162,6 +162,22 @@ const tail = raw.split(/^log_tail: \|\s*$/m)[1] || "";
 const tailLines = tail.split("\n").filter((l) => l.trim() !== "");
 if (tailLines.length > 40) bad(`log_tail ${tailLines.length} lines > 40`);
 for (const l of tailLines) if (l !== "" && !/^\s\s+/.test(l)) bad("log_tail line not indented");
+// #1378: when the suite emitted exactly ONE well-formed contract line, the
+// renderer must surface it as the first top-level line, where the hook's parser
+// reads it — and must not leave a second copy indented inside log_tail, because
+// the parser's exactly-one rule reads two lines as ambiguous and demotes.
+//
+// The condition is "the fixture produced exactly one contract line", NOT
+// `status: pass`: with zero or two contract lines, emitting none is the CORRECT
+// behaviour, so keying on status would turn right answers into failures.
+const CONTRACT_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/gm;
+const contractLines = raw.match(CONTRACT_RE) || [];
+if (contractLines.length === 1) {
+  if (!/^RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+$/.test(lines[0] || "")) {
+    bad(`single contract line must be the first line, got '${lines[0]}'`);
+  }
+  if (/^[ \t]+RUN_CONTRACT:/m.test(tail)) bad("contract line must not remain inside log_tail");
+}
 process.stdout.write("OK");
 YCJS
 
@@ -208,9 +224,19 @@ DKSTUB
 chmod +x "$STUB/gh" "$STUB/uv" "$STUB/docker"
 
 # `tests/run-all.sh` stub for the test-runner row.
+#
+# Stub inventory (#1378). Four test files carry a synthetic run-all.sh output:
+# this one, feature-1643-worker-dispatch-canary-no-side-effect.sh:112,
+# feature-1643-worker-dispatch-sentinel-stdout.sh:153 and
+# feature-1643-worker-dispatch-test-runner-behavior.sh. Only THIS one verifies
+# the emitted output contract, so only this one gains `RUN_CONTRACT:` — the
+# sentinel-stdout stub deliberately emits hostile text and the canary stub exists
+# to prove nothing was written, and giving either a contract line would make them
+# assert something they are not about.
 cat > "$MAIN_RAW/tests/run-all.sh" <<'RASTUB'
 #!/usr/bin/env bash
 echo "Results: PASS=1  FAIL=0  SKIP=0"
+echo "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
 exit 0
 RASTUB
 chmod +x "$MAIN_RAW/tests/run-all.sh"

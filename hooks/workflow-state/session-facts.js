@@ -1,4 +1,5 @@
 "use strict";
+// lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 
 // Stage 4 (#1644) — 型2: セッション内キャッシュの一度きり解決.
 //

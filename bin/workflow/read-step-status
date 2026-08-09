@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/read-step-status
+// One fact about one workflow step, for a SKILL.md Bash call.
+//
+// Usage:
+//   read-step-status --session <sid> --step <step>
+//
+// Prints `status=<value>` and exits 0 when the step has a recorded status.
+// Prints `NONE` and exits 0 when nothing is recorded — no state file, an
+// unknown session, a corrupt file, or a step this session never touched.
+// Exits 1 on a malformed request, with a message on stderr.
+//
+// WHY it exists (#1378): the only way a skill could observe a run_tests
+// demotion was `next-step`, which also decides and advises — so the reader
+// could not tell a fact from a recommendation. This bridge reports and never
+// decides; `ACTION` / `NEXT_SKILL` / `NEXT_HINT` must never appear in its
+// output.
+//
+// The argument form, the NONE marker and the exit codes deliberately match the
+// sibling bridges read-merge-base-baseline and read-complexity-evaluation
+// (CPR-ORTH): a third convention inside one skill is a third thing to remember.
+// The store is reached through the hooks/workflow-state barrel only — never a
+// state-io/ submodule, which would couple a shell bridge to the file layout.
+
+const path = require("path");
+const { readState, VALID_STEPS } = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const TOOL = "read-step-status";
+
+function usageError(message) {
+  process.stderr.write(`${TOOL}: ${message}\n`);
+  process.exit(1);
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  let step = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--session") session = argv[++i] || null;
+    else if (argv[i] === "--step") step = argv[++i] || null;
+    else usageError(`unknown argument: ${argv[i]}`);
+  }
+
+  if (!session || !SESSION_ID_RE.test(session)) {
+    usageError("--session is required and must match /^[A-Za-z0-9_-]+$/");
+  }
+  if (!step) usageError("--step is required");
+  if (!VALID_STEPS.includes(step)) {
+    usageError(`unknown step: ${step} (valid: ${VALID_STEPS.join(", ")})`);
+  }
+
+  // readState is fail-open: a missing or corrupt file yields null, never a
+  // throw, so all three absences collapse into the same NONE below.
+  let state = null;
+  try {
+    state = readState(session);
+  } catch (e) {
+    state = null;
+  }
+
+  const entry = state && state.steps ? state.steps[step] : null;
+  // `steps` is a FULL projection: every one of the 15 steps is present, and a
+  // step the session never touched reads back as {status:"pending",
+  // updated_at:null}. Reporting that as `status=pending` would turn "no record"
+  // into a recorded fact — the timestamp is what separates the two.
+  if (entry && entry.status && entry.updated_at) {
+    process.stdout.write(`status=${entry.status}\n`);
+    process.exit(0);
+  }
+  process.stdout.write("NONE\n");
+  process.exit(0);
+}
+
+main();

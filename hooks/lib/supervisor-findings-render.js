@@ -1,5 +1,4 @@
 "use strict";
-// lang-check: ignore (pre-existing Japanese UI hint string, unrelated to this session's diff)
 
 function escapeTokens(str) {
   return typeof str === "string" ? str.replace(/</g, "‹") : str;
@@ -61,7 +60,7 @@ function formatLayer2Findings(findings, opts) {
       cats = escapeTokens(cats);
       let line = `[EM Supervisor] ${f.severity} (${cats}): ${detail}`;
       const needsHint = Array.isArray(f.categories) && f.categories.some(c => ISSUE_CREATE_CATEGORIES.has(c));
-      if (needsHint) line += " [→ /issue-create 推奨]";
+      if (needsHint) line += " [→ /issue-create recommended]";
       lines.push(line);
     }
     return lines.join("\n");

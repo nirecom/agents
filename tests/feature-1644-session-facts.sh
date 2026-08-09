@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, bin/workflow/next-step, bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/state-io/projection.js
 # Tags: tl2, workflow, session-facts, closes-issues, caching, scope:issue-specific
 #

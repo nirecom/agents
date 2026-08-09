@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # tests/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
 # Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2
