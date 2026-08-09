@@ -10,17 +10,14 @@
 # Group K/L — the guard's two edges on the route it governs, and its absence on the
 # route it must NOT govern.
 #
-# Why (CPR-WPH): Group A pins `bulk-sub-of` REJECTION only (A4/A4b). A guard that is
-# always-on and a guard that is correct look identical from the rejection side — a
-# `require_meta_parent` accidentally hard-wired to fail would keep A4 green while making
-# every legitimate bulk run impossible. The success path (K) is what distinguishes them.
+# Group A pins `bulk-sub-of` REJECTION only (A4/A4b), and an always-on guard looks identical
+# from the rejection side — one hard-wired to fail keeps A4 green while making every
+# legitimate bulk run impossible. The success path (K) is what distinguishes them.
 #
-# The symmetric half (L) is CPR-ORTH read in the other direction: the guard exists because
-# `sub-of` / `bulk-sub-of` ATTACH a new issue under a claimed parent. `reopen` attaches
-# nothing and creates nothing — it acts on an issue that already exists and whose shape is
-# not the caller's claim. Extending the guard there would be a silent regression: reopening
-# an ordinary `type:task` issue (the overwhelmingly common case) would start failing rc 2.
-# So "the guard does not fire on reopen" is a contract, not an omission.
+# L is the same principle in the other direction: the guard exists because sub-of /
+# bulk-sub-of ATTACH under a claimed parent. `reopen` attaches and creates nothing, so
+# extending the guard there would make the everyday reopen of an ordinary `type:task` issue
+# fail rc 2. "The guard does not fire on reopen" is a contract, not an omission.
 
 # --- K1: bulk-sub-of under an eligible parent — the success path ----------------------
 setup_mock
@@ -48,8 +45,8 @@ if [ "${a:-0}" -eq 2 ]; then
 else
     fail "K1c-bulk-eligible-attaches-every-child" "want 2 sub_issues POSTs (got: $a) — created-but-unattached children are orphans"
 fi
-# Manifest ORDER is the caller's index into its own rows: the skill maps URL n back to
-# manifest row n. Order-insensitive assertions would let a reshuffle through.
+# The skill maps URL n back to manifest row n, so an order-insensitive assertion would let
+# a reshuffle through.
 if [ "$(printf '%s\n' "$OUT" | grep -c 'issues/40')" -eq 2 ] \
    && [ "$(printf '%s\n' "$OUT" | sed -n '1p')" = "https://github.com/nirecom/agents/issues/401" ] \
    && [ "$(printf '%s\n' "$OUT" | sed -n '2p')" = "https://github.com/nirecom/agents/issues/402" ]; then
@@ -57,8 +54,7 @@ if [ "$(printf '%s\n' "$OUT" | grep -c 'issues/40')" -eq 2 ] \
 else
     fail "K1d-bulk-eligible-urls-in-manifest-order" "stdout must be the created URLs in manifest order; got: $OUT"
 fi
-# The guard must still have RUN — K1 proves the happy path, not that the check was
-# skipped for eligible-looking input.
+# The guard must still have RUN, not been skipped for eligible-looking input.
 if grep -q 'issue view 99' "$GH_MOCK_ARGS_LOG"; then
     pass "K1e-bulk-eligible-still-consults-the-guard"
 else
@@ -67,8 +63,8 @@ fi
 teardown_mock
 
 # --- K2: bulk-sub-of, parent lookup indeterminate → fail CLOSED, no partial state -----
-# The orthogonal twin of A5 (which covers sub-of). Bulk is where "fail open" hurts most:
-# one indeterminate lookup would strand a whole manifest's worth of issues.
+# Twin of A5 (sub-of). Bulk is where fail-open hurts most: one indeterminate lookup would
+# strand a whole manifest's worth of issues.
 setup_mock
 export GH_MOCK_VIEW_FAIL=1
 export GH_MOCK_ISSUE_NUMS="411,412"
@@ -96,9 +92,8 @@ fi
 teardown_mock
 
 # --- L1: reopen does NOT consult the parent guard (CPR-ORTH, negative direction) ------
-# #99 here is deliberately the shape the guard REJECTS: plain type:task, no Group: title.
-# That is the ordinary issue a regression reopens. If the guard ever spread to this route,
-# rc would become 2 and the everyday reopen would break.
+# #99 is deliberately the shape the guard REJECTS (plain type:task, no Group: title) — the
+# ordinary issue a regression reopens. If the guard spread here, rc would become 2.
 setup_mock
 export GH_MOCK_LABELS_99="type:task"
 export GH_MOCK_TITLE_99="dispatcher drops the last manifest row"
@@ -108,8 +103,8 @@ if [ "$RC" -eq 0 ]; then
 else
     fail "L1-reopen-non-meta-target-rc0" "want rc 0 — reopen must accept an ordinary issue (got: $RC); stderr: $ERR"
 fi
-# The decisive evidence: the guard's lookup is `issue view <n> --json labels,title`.
-# Its absence is what proves the guard was not consulted, independent of the exit code.
+# The guard's lookup is `issue view <n> --json labels,title`; its absence proves the guard
+# was not consulted, independent of the exit code.
 if grep -q 'issue view 99 --json labels,title' "$GH_MOCK_ARGS_LOG"; then
     fail "L1b-reopen-does-not-invoke-the-meta-parent-guard" "reopen performed the guard's labels,title lookup — the parent-eligibility check leaked onto a route that attaches nothing"
 else

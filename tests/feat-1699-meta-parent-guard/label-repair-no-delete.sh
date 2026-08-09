@@ -9,24 +9,21 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group R — repairing ONE missing label must not delete the repo's other labels
+# Group R — repairing ONE missing label must not delete the repo's other labels.
 #
-# Why: `sync-labels.sh` is a full reconciler. Its DELETE branch removes every remote label
-# that is absent from `.github/labels.yml` and not listed under `protected:`. Both issue
-# creation paths call it as a REPAIR — one label is missing and needs creating — so
-# without `--no-delete` a single `/issue-create` run against a repo with its own label
-# taxonomy silently destroys that taxonomy. The two call sites are symmetric (CPR-ORTH),
-# so both are pinned here; a fix applied to one alone is the defect this group exists for.
+# sync-labels.sh is a full reconciler: its DELETE branch removes every remote label absent
+# from `.github/labels.yml` and not `protected:`. Both issue-creation paths call it as a
+# REPAIR, so without `--no-delete` one /issue-create run silently destroys a repo's own
+# label taxonomy. Both call sites are pinned; a fix applied to one alone is the defect.
 #
-# The assertions are behavioural, not textual: R1/R2 assert that no `gh label delete` is
-# ever issued, and R3 drives sync-labels.sh directly to prove the DELETE branch is real
-# and that `--no-delete` is what suppresses it. Without R3 the first two would pass
-# against a flag nobody honours.
+# R1/R2 assert no `gh label delete` is issued; R3 drives sync-labels.sh directly to prove
+# the DELETE branch is real and that `--no-delete` is what suppresses it — without R3 the
+# first two would pass against a flag nobody honours.
 
 R_SYNC="$AGENTS_DIR/bin/github-issues/sync-labels.sh"
 R_LABELS_YML="$AGENTS_DIR/.github/labels.yml"
-# A remote label that appears in no labels.yml and no protected: list — the DELETE
-# branch's one candidate, standing in for a repo's own taxonomy.
+# In no labels.yml and no protected: list — the DELETE branch's one candidate, standing
+# in for a repo's own taxonomy.
 R_DOOMED="doomed-taxonomy-label"
 
 r_delete_calls() { grep -c '^label delete ' "$GH_MOCK_ARGS_LOG" 2>/dev/null || true; }
@@ -49,8 +46,7 @@ assert_no_deletes() {
 }
 
 # --- R3 (first, because R1/R2 depend on it being true): the DELETE branch is real -------
-# Same labels.yml and same remote inventory as R1/R2 use, driven directly. Two runs
-# differing only in the flag isolate the flag as the cause.
+# Two runs differing only in the flag isolate the flag as the cause.
 setup_mock
 export GH_MOCK_REPO_LABELS="type:task,$R_DOOMED"
 
@@ -76,8 +72,7 @@ if grep -qF "[NO-DELETE] Skipped delete: $R_DOOMED" "$TMP/sync-nodelete.out"; th
 else
     fail "R3c-no-delete-reports-the-skip" "the suppressed delete must be reported so an operator can still see the drift (stdout: $(head -c 400 "$TMP/sync-nodelete.out"))"
 fi
-# The flag must suppress deletion only — a --no-delete that also stopped creating would
-# make both call sites fail to repair the very label they were called for.
+# Deletion only: a --no-delete that also stopped creating would fail the repair itself.
 if r_created "meta"; then
     pass "R3d-no-delete-still-creates"
 else
@@ -91,8 +86,8 @@ fi
 teardown_mock
 
 # --- R1: the make-parent `meta` repair in issue-create-dispatch.sh -----------------------
-# `meta` absent from the remote → the dispatcher repairs before creating the parent,
-# because a parent without `meta` is invisible to require-meta-parent.sh.
+# `meta` absent → the dispatcher repairs before creating the parent, because a parent
+# without `meta` is invisible to require-meta-parent.sh.
 setup_mock
 export GH_MOCK_REPO_LABELS="type:task,$R_DOOMED"
 export GH_MOCK_ISSUE_NUMS="301,302"
@@ -104,8 +99,7 @@ if [ "$RC" -eq 0 ]; then
 else
     fail "R1a-make-parent-rc0" "want rc 0 (got: $RC); stderr: $ERR"
 fi
-# Non-vacuity: the repair path must actually have been taken. If `meta` was never
-# created, sync never ran and "no deletes" is trivially true.
+# Non-vacuity: if `meta` was never created, sync never ran and "no deletes" is trivial.
 if r_created "meta"; then
     pass "R1b-meta-was-repaired"
 else
@@ -115,9 +109,8 @@ assert_no_deletes "R1c" "the make-parent meta repair"
 teardown_mock
 
 # --- R2: the type:task repair in issue-create.sh (CPR-ORTH sibling) ----------------------
-# Reached through the dispatcher's `none` path, which is how the skill reaches it. Phase 0a
-# only runs when the remote is github.com, so the case runs inside a throwaway fixture repo
-# with a github.com origin rather than against the developer's checkout.
+# Reached through the dispatcher's `none` path. Phase 0a only runs when the remote is
+# github.com, so this runs in a throwaway fixture repo, not the developer's checkout.
 setup_mock
 export GH_MOCK_REPO_LABELS="$R_DOOMED"
 export GH_MOCK_NEW_ISSUE_NUM=311
@@ -135,8 +128,7 @@ if [ "$RC" -eq 0 ]; then
 else
     fail "R2a-none-rc0" "want rc 0 (got: $RC); stderr: $ERR"
 fi
-# Non-vacuity, twice over: the repair branch announces itself on stderr, and the label
-# it was called for must exist afterwards.
+# Non-vacuity, twice: the repair branch announces itself, and the label must exist after.
 if printf '%s' "$ERR" | grep -qF "labels synced (type:task was missing)"; then
     pass "R2b-repair-branch-taken"
 else

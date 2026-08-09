@@ -10,29 +10,24 @@
 #
 # Group T — the guard must not relay the forge client's raw output.
 #
-# Why (CPR-WPH): require-meta-parent.sh captures `gh issue view ... 2>&1` into one variable
-# so a failed lookup can be explained, then re-emits that capture. The capture is the
-# CLIENT's output, not the guard's — and the client's output is not under the guard's
-# control. With GH_DEBUG=api set (the standard way an operator debugs a failing gh call)
-# that text includes the outgoing request headers, and the outgoing request headers include
-# `Authorization: token <the user's PAT>`. One diagnostic run then prints a live credential
-# into the terminal, the CI log, and anything downstream that captures dispatcher stderr.
+# require-meta-parent.sh captures `gh issue view ... 2>&1` and re-emits it. That capture is
+# the CLIENT's output, and under GH_DEBUG=api (how an operator debugs a failing gh call) it
+# carries the outgoing request headers — including `Authorization: token <the user's PAT>`.
+# One diagnostic run then prints a live credential into the terminal, the CI log, and
+# anything capturing dispatcher stderr.
 #
-# The contract asserted here is narrow and does not require the guard to go quiet: it may
-# say the lookup failed and why, but it must not pass credential-shaped material through
-# verbatim. Both channels are checked, because either one alone is a leak.
+# The contract is narrow: the guard may say the lookup failed and why, but must not relay
+# credential-shaped material verbatim. Both channels are checked; either alone is a leak.
 #
-# Canaries are assembled from fragments at runtime so no credential-shaped literal is ever
-# stored in this file — the outbound scanner would (correctly) object to one, and a test
-# that has to be exempted from a security check is the wrong test.
+# Canaries are assembled from fragments at runtime so no credential-shaped literal is stored
+# in this file — a test needing an exemption from the outbound scanner is the wrong test.
 
 TOK_CANARY="gh""p_"'CANARYcanary0000000000000000000000000'
 HDR_CANARY="Authorization: token ${TOK_CANARY}"
 
 setup_mock
 export GH_MOCK_VIEW_FAIL=1
-# The multi-line shape a real GH_DEBUG=api run produces: a request line, the headers, and
-# only then the error the user was actually looking for.
+# The shape a real GH_DEBUG=api run produces: request line, headers, then the actual error.
 GH_MOCK_VIEW_FAIL_MSG="$(printf '> GET /repos/nirecom/agents/issues/99 HTTP/1.1\n> %s\n> User-Agent: GitHub CLI\nerror: HTTP 404 (issue not found)' "$HDR_CANARY")"
 export GH_MOCK_VIEW_FAIL_MSG
 
@@ -74,8 +69,7 @@ else
     pass "T5-token-canary-not-on-stdout"
 fi
 
-# The guard must still explain itself. Redaction that also removes the diagnosis would
-# trade one defect for another — the operator has to learn that the lookup failed.
+# Redaction that also removes the diagnosis trades one defect for another.
 if printf '%s' "$T_ERR" | grep -qi 'indeterminate'; then
     pass "T6-failure-is-still-explained"
 else
@@ -84,9 +78,8 @@ fi
 teardown_mock
 
 # --- T7: the same output travelling through the dispatcher -----------------------------
-# The guard is never run by hand in production; the dispatcher runs it, and the dispatcher's
-# stderr is what a skill captures into a log or a notes file. The leak has to be absent at
-# the point where the text actually becomes durable.
+# In production the dispatcher runs the guard, and a skill captures the dispatcher's stderr
+# into a log or notes file — the leak must be absent where the text becomes durable.
 setup_mock
 export GH_MOCK_VIEW_FAIL=1
 export GH_MOCK_VIEW_FAIL_MSG="$(printf '> GET /repos/nirecom/agents/issues/99 HTTP/1.1\n> %s\nerror: HTTP 404 (issue not found)' "$HDR_CANARY")"

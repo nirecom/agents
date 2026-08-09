@@ -11,24 +11,14 @@
 # Section of tests/feat-1912-same-fix-crosscheck.sh (run as a subprocess by the parent;
 # see tests/lib/section-runner.sh).
 #
-# Why this exists (CPR-UNV): the parent file walks `same_fix` per verdict but only in
-# two value classes — the table's value and its negation — and it probes the OTHER
-# classes (missing / null / non-boolean) against a single verdict, `none`. That shape
-# encodes an assumption the validator does not make: that the type check is verdict-
-# independent. It is today, but nothing pins it, so a future per-verdict branch could
-# start coercing `"true"` for `reopen` alone and every existing row would still pass.
+# The parent probes missing/null/non-boolean against `none` alone, which assumes the type
+# check is verdict-independent — true today, pinned nowhere. This file is the full cross
+# product: every verdict × every value class, on both producers.
 #
-# So this file is the full cross product: every verdict × every value class, on BOTH
-# producers. It is deliberately mechanical — the table below is the specification.
-#
-# The second half of the concern is attribution: "invalid" is not enough. A row that
-# rejects for the right verdict but the WRONG reason (a shape defect in the fixture,
-# say) is indistinguishable from a correct rejection if only the boolean is read. So
-# every rejection whose cause is `same_fix` also asserts the reason names `same_fix`,
-# and the two rows that are rejected for a DIFFERENT documented cause
-# (`bulk-sub-of` on either side) assert that their reason does NOT name `same_fix`.
-# Those two are the counterweight: without them, an implementation that answered
-# "same_fix" to every question would pass the whole file.
+# Every row also asserts ATTRIBUTION: "invalid" alone cannot distinguish a same_fix
+# rejection from an incidental shape defect. The two `bulk-sub-of` rows are the
+# counterweight (rejected for a documented non-same_fix cause) — without them an
+# implementation that answered "same_fix" to everything would pass the whole file.
 
 set -u
 
@@ -47,8 +37,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # ---------------------------------------------------------------------------
-# Fixtures. CAND = {10, 11}, both resolved orphans, so every verdict is expressible
-# and no row can fail for want of a well-shaped allowlist.
+# Fixtures. CAND = {10, 11}, both resolved orphans, so every verdict is expressible.
 # ---------------------------------------------------------------------------
 mk_artifact() {  # <path> <verdict> <same_fix-json | __OMIT__>
     V="$2" SF="$3" "$RWT" 15 node -e '
@@ -83,8 +72,7 @@ run_validate() {  # <artifact> <raw review text> → VERDICT, REASON
 }
 
 # assert_cell <label> <want valid|invalid> <want-reason-names: same_fix|not-same_fix|-> <artifact> <raw>
-# One helper for both halves of the concern, so a row can never assert the routing
-# without also asserting the attribution.
+# One helper for routing + attribution, so a row cannot assert one without the other.
 assert_cell() {
     local label="$1" want="$2" attr="$3"
     run_validate "$4" "$5"
@@ -113,32 +101,25 @@ assert_cell() {
     esac
 }
 
-# The six value classes. `correct` and `wrong` are filled in per verdict below,
-# because the admissible boolean is a function of the verdict.
-#   correct  → the SAME_FIX_BY_VERDICT value          (the non-vacuity counterweight)
+# The six value classes:
+#   correct  → the SAME_FIX_BY_VERDICT value (non-vacuity counterweight)
 #   wrong    → its negation
 #   missing  → key absent
 #   null     → JSON null
-#   string   → "true": truthy in JS, so a coercing implementation would accept it
-#   number   → 1: the OTHER truthy non-boolean. It is a separate class from the string
-#              because the two fail different naive checks — `!!v` accepts both, but a
-#              guard written as `typeof v === "string" ? ... : v` rejects only the
-#              string. JSON producers emit 1/0 for booleans routinely enough (SQLite,
-#              some YAML→JSON paths) that this is the likeliest real arrival.
-#
-# `reopen` is the only verdict whose correct value is true; see the parent file's
-# X4-X9 for why. Encoding that here as data rather than as an `if` keeps this file
-# a table and makes a future flip a one-line diff.
+#   string   → "true": truthy in JS, so a coercing implementation accepts it
+#   number   → 1: a separate class because `typeof v === "string" ? ... : v` rejects only
+#              the string, and JSON producers emit 1/0 for booleans routinely.
+# `reopen` is the only verdict whose correct value is true (parent X4–X9); kept as data
+# so a future flip is a one-line diff.
 sf_for() { case "$1" in reopen) printf 'true' ;; *) printf 'false' ;; esac; }
 not_sf_for() { case "$1" in reopen) printf 'false' ;; *) printf 'true' ;; esac; }
 
 OK_REVIEW='{"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false}'
 
 echo "=== E: artifact side — every verdict × every same_fix value class ==="
-# `bulk-sub-of` is an ARTIFACT verdict only, and a well-formed one is folded to invalid
-# by the review grammar rather than by same_fix. It is in the loop because the artifact
-# same_fix check runs BEFORE that fold, so all four defective classes must still be
-# attributed to same_fix — and the `correct` row must NOT be.
+# `bulk-sub-of` is artifact-only: a well-formed one folds to invalid on the review
+# grammar, but the artifact same_fix check runs BEFORE that fold — so the defective
+# classes must still be attributed to same_fix and the `correct` row must not be.
 for V in none reopen sub-of bulk-sub-of make-parent sibling; do
     OKV="$(sf_for "$V")"; BADV="$(not_sf_for "$V")"
 
@@ -166,13 +147,11 @@ done
 echo ""
 echo "=== F: review side — every verdict × every same_fix value class ==="
 # The artifact is held at `none`/false throughout, so every F row is decided by the
-# REVIEW's own same_fix, never by the artifact's. A row that started passing because
-# the artifact was rejected first would show up as the wrong reason, not as a pass.
+# REVIEW's own same_fix, never by the artifact's.
 ART="$WORK/f-artifact.json"
 mk_artifact "$ART" none false
 
-# Per-verdict review shapes, minus same_fix — the class suffix is appended per row.
-# `%s` is where the same_fix fragment goes.
+# Per-verdict review shapes; `%s` is where the same_fix fragment is appended.
 review_body() {  # <verdict> <same_fix-fragment-or-empty>
     local v="$1" sf="$2"
     case "$v" in
@@ -195,16 +174,13 @@ for V in none reopen sub-of make-parent sibling; do
     assert_cell "F-$V-number"       invalid same_fix "$ART" "$(review_body "$V" ',"same_fix":1')"
 done
 
-# The review-side counterweight. `bulk-sub-of` is outside the review grammar, so it is
-# rejected on the VERDICT — even though its same_fix is deliberately the wrong value.
-# If the implementation reached the same_fix cross-check for an unknown verdict it
-# would have had to index SAME_FIX_BY_VERDICT with a verdict it never validated, and
-# this row is what makes that visible.
+# Review-side counterweight: `bulk-sub-of` is outside the review grammar, so it must be
+# rejected on the VERDICT despite a deliberately wrong same_fix — reaching the cross-check
+# would mean indexing SAME_FIX_BY_VERDICT with an unvalidated verdict.
 assert_cell "F-bulk-sub-of-rejected-on-verdict-not-same-fix" invalid not-same_fix \
     "$ART" "$(review_body bulk-sub-of ',"same_fix":true')"
 
-# And the same shape with the "correct" value, to show the rejection does not depend on
-# which same_fix was supplied — i.e. the verdict check genuinely precedes it.
+# Same shape with the "correct" value: the verdict check genuinely precedes same_fix.
 assert_cell "F-bulk-sub-of-rejected-regardless-of-same-fix" invalid not-same_fix \
     "$ART" "$(review_body bulk-sub-of ',"same_fix":false')"
 

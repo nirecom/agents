@@ -14,17 +14,13 @@
 # Sibling of tests/feat-1761-candidate-body-safety.sh, which asserts the fence holds for
 # ONE field (the candidate body) against ONE payload. This file is the per-field matrix.
 #
-# Why a matrix and not one more case (CPR-UNV): the fence is only as strong as its
-# weakest interpolation. `body` was defanged from the start because it is obviously
-# attacker prose; `state`, `labels` and `relations_mode` were interpolated raw, and a
-# GitHub label name is free-form text an outside contributor can choose. A label
-# literally named "[CANDIDATES END]" closes the untrusted region, and everything the
-# attacker writes after it reads as trusted instruction. Every field that reaches the
-# prompt is therefore a row here, including the ones already safe — a refactor that
-# drops defang() from `title` is the same defect as never having added it to `labels`.
-#
-# The two numeric fields are a separate row family: they are not defanged but coerced,
-# so their failure mode is different (attacker text emitted verbatim vs. "?"/"none").
+# The fence is only as strong as its weakest interpolation: a GitHub label is free-form
+# text, so a label named "[CANDIDATES END]" closes the untrusted region and everything
+# after it reads as trusted instruction. Every field reaching the prompt is a row here,
+# including the already-safe ones — dropping defang() from `title` is the same defect as
+# never adding it to `labels`.
+# The two numeric fields are a separate family: coerced, not defanged, so their failure
+# mode differs (attacker text verbatim vs. "?"/"none").
 
 set -u
 

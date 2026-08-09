@@ -12,24 +12,16 @@
 #
 # Section of tests/feat-1761-candidate-body-safety.sh (subprocess; tests/lib/section-runner.sh).
 #
-# Why this file exists (CPR-WPH): the sibling tmpfile-residue.sh proves the temp files are
-# GONE at the end of four outcomes. Gone-at-the-end leaves two windows unexamined, and the
-# candidate bodies sit in both:
+# The sibling tmpfile-residue.sh proves the temp files are GONE at the end. Two windows
+# stay unexamined, and the candidate bodies sit in both:
 #
-#   (a) WHILE the file exists. The review materialises the whole prompt — every candidate
-#       body, verbatim untrusted issue text — into $TMPDIR and leaves it there for the life
-#       of the codex call, which is the longest step in the run. `mktemp` is 0600 on the
-#       platforms we target but does not promise it, so the script pins the mode explicitly.
-#       Nothing checks the pin: a `chmod 600 ... || true` that silently failed, or a later
-#       edit that dropped the line, is invisible from outside.
-#
-#   (b) WHEN THE OPERATOR INTERRUPTS. Ctrl-C during a slow review, or a TERM from a
-#       supervising process, is the ordinary way a review ends early. The sibling's "killed"
-#       case kills the codex CHILD; the script itself always reaches its own exit. Cleanup
-#       written as a plain last line would survive that case and still leak here.
-#
-# Both are asserted against the same canary the sibling uses, so a leak found here is the
-# same disclosure, only through a window the sibling cannot see through.
+#   (a) WHILE the file exists — the whole prompt (verbatim untrusted issue text) lives in
+#       $TMPDIR for the life of the codex call. `mktemp` is 0600 on our platforms but does
+#       not promise it, so the script pins the mode; a pin that silently failed or was
+#       dropped is invisible from outside.
+#   (b) WHEN THE OPERATOR INTERRUPTS — the sibling's "killed" case kills the codex CHILD,
+#       so the script always reaches its own exit. Cleanup as a plain last line survives
+#       that case and still leaks on Ctrl-C/TERM.
 
 set -u
 

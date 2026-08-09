@@ -6,12 +6,10 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group A — parent-eligibility guard (require-meta-parent.sh + dispatcher wiring)
-#
-# Contract under test: `sub-of` and `bulk-sub-of` must verify the named parent is a
-# real meta parent (label `meta` AND title prefix `Group: `, logical AND) BEFORE the
-# first `gh issue create`. Ineligible → dispatcher rc 2. Indeterminate (lookup failed)
-# → rc 1, fail-CLOSED. Either way, zero issues created.
+# Group A — parent-eligibility guard (require-meta-parent.sh + dispatcher wiring).
+# `sub-of`/`bulk-sub-of` must verify the parent is a real meta parent (label `meta` AND
+# title prefix `Group: `) BEFORE the first `gh issue create`. Ineligible → dispatcher rc 2;
+# indeterminate (lookup failed) → rc 1, fail-CLOSED. Either way, zero issues created.
 
 # --- A1: sub-of, parent lacks the meta label -----------------------------------------
 setup_mock
@@ -142,27 +140,25 @@ if [ "$rc" -eq 3 ]; then
 else
     fail "A7-guard-ineligible-rc3" "want rc 3 (got: $rc); stderr: $GUARD_ERR"
 fi
-# The message must name WHICH condition failed — "not eligible" alone leaves the
-# operator guessing between label and title.
-# Both tokens are required: the script's own path contains "meta", so a bare 'meta'
-# grep would also match `require-meta-parent.sh: No such file` and report a false green.
+# The message must name WHICH condition failed. Both tokens are required: the script's own
+# path contains "meta", so a bare 'meta' grep also matches `require-meta-parent.sh: No such
+# file` and reports a false green.
 if printf '%s' "$GUARD_ERR" | grep -q 'meta' && printf '%s' "$GUARD_ERR" | grep -qi 'label'; then
     pass "A7b-guard-rc3-names-missing-condition"
 else
     fail "A7b-guard-rc3-names-missing-condition" "stderr does not name the missing 'meta' label: $GUARD_ERR"
 fi
-# Two recovery routes, enumerated. Counted as enumerated lines so the assertion does
-# not depend on the exact wording of either route.
+# Two recovery routes. Counted as enumerated lines so the assertion does not depend on
+# the wording of either route.
 routes=$(printf '%s\n' "$GUARD_ERR" | grep -c -E '^[[:space:]]*([0-9]+[).]|[-*])[[:space:]]') || true
 if [ "${routes:-0}" -ge 2 ]; then
     pass "A7c-guard-rc3-two-recovery-routes"
 else
     fail "A7c-guard-rc3-two-recovery-routes" "want >=2 enumerated recovery lines (got: ${routes:-0}); stderr: $GUARD_ERR"
 fi
-# Explicitly NOT a copy-paste --add-label one-liner: slapping `meta` on an issue that
-# was never scoped as a group is the mistake the guard exists to prevent.
-# Conditioned on rc 3 so the case cannot go green merely because the guard is absent
-# and produced no stderr at all.
+# No copy-paste --add-label one-liner: slapping `meta` on an issue never scoped as a group
+# is the mistake the guard exists to prevent. Conditioned on rc 3 so the case cannot go
+# green merely because the guard is absent and produced no stderr at all.
 if [ "$rc" -eq 3 ] && ! printf '%s' "$GUARD_ERR" | grep -q -- '--add-label'; then
     pass "A7d-guard-rc3-no-add-label-oneliner"
 else

@@ -10,25 +10,22 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group M — the sibling path's injected body file is not world-readable
+# Group M — the sibling path's injected body file is not world-readable.
 #
-# The `sibling` verdict appends "Related to #N" to the issue body. With --body-file it
-# cannot edit the caller's file, so it copies the body into a temp file and passes that
-# to issue-create.sh. That temp file holds the FULL issue body — the same untrusted and
-# potentially private prose the review stage takes such care with — and it lives in a
-# shared temp directory for as long as `gh issue create` runs.
+# `sibling` appends "Related to #N" to the body; with --body-file it cannot edit the
+# caller's file, so it copies the body to a temp file. That copy holds the FULL issue body
+# and sits in a shared temp directory for as long as `gh issue create` runs.
 #
-# The mode has to be observed WHILE the file exists: the dispatcher removes it on exit,
-# so a post-hoc stat can only ever report "gone". The probe therefore sits in the gh
-# mock, which is the one place that runs with the file live.
+# The mode must be observed WHILE the file exists — the dispatcher removes it on exit, so
+# a post-hoc stat only reports "gone". The probe therefore sits in the gh mock.
 
 M_SKIP=0
 m_skip() { echo "SKIP: $1"; M_SKIP=$((M_SKIP + 1)); }
 
 setup_mock
 
-# Platform gate. On MSYS/Git-Bash (and any filesystem without POSIX mode bits) chmod is a
-# no-op and every file reports 644, so the assertion would be a false RED, not a finding.
+# Platform gate: without POSIX mode bits (MSYS/Git-Bash) chmod is a no-op and every file
+# reports 644, so the assertion would be a false RED, not a finding.
 printf 'x' > "$TMP/mode-probe"
 chmod 600 "$TMP/mode-probe" 2>/dev/null || true
 M_MODE_OBSERVABLE=no
@@ -41,9 +38,8 @@ if [ "$M_MODE_OBSERVABLE" != "yes" ]; then
     m_skip "M3-injected-body-file-is-removed-afterwards"
     teardown_mock
 else
-    # A gh wrapper that records the mode of every --body-file operand and then delegates
-    # to the suite's shared mock, so the call accounting the other groups rely on is
-    # unchanged.
+    # Records the mode of every --body-file operand, then delegates to the suite's shared
+    # mock so the call accounting other groups rely on is unchanged.
     mkdir -p "$TMP/mode-bin"
     cat > "$TMP/mode-bin/gh" <<'MODE_EOF'
 #!/usr/bin/env bash
@@ -63,8 +59,8 @@ MODE_EOF
     M_OLD_PATH="$PATH"
     export PATH="$TMP/mode-bin:$PATH"
 
-    # The caller's own file is deliberately world-readable: if the dispatcher passed it
-    # through unchanged, M1 would fail and M2 would name why.
+    # Deliberately world-readable: if the dispatcher forwarded it unchanged, M1 fails and
+    # M2 names why.
     M_SRC="$TMP/caller-body.md"
     printf "$CANONICAL_BODY\n" > "$M_SRC"
     chmod 644 "$M_SRC"
@@ -94,16 +90,15 @@ MODE_EOF
             fail "M1-injected-body-file-is-0600" "the injected body temp file was mode $M_MODE while gh read it — the full issue body was readable by every account on the host ($M_PATH)"
         fi
 
-        # Non-vacuity: 600 would also be reported if the dispatcher had simply forwarded a
-        # caller file that happened to be private. The source here is 644 on purpose.
+        # Non-vacuity: 600 would also be reported for a forwarded caller file that happened
+        # to be private. The source here is 644 on purpose.
         if [ "$M_PATH" != "$M_SRC" ]; then
             pass "M2-injected-body-file-is-not-the-caller-s"
         else
             fail "M2-injected-body-file-is-not-the-caller-s" "the dispatcher passed the caller's own file ($M_SRC) to gh, so M1 says nothing about the temp copy it is supposed to create"
         fi
 
-        # The mode pin is one of two defences; the other is that the file does not outlive
-        # the run. Asserting both keeps a regression in either one visible.
+        # Second defence: the file must not outlive the run. Both are asserted.
         if [ ! -e "$M_PATH" ]; then
             pass "M3-injected-body-file-is-removed-afterwards"
         else

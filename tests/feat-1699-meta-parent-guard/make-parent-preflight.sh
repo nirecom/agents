@@ -7,26 +7,19 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group E — make-parent's pre-creation validation, and the seam it does NOT cover
+# Group E — make-parent's pre-creation validation, and the seam it does NOT cover.
 #
-# `make-parent` creates two issues in sequence and GitHub has no transaction. The only
-# defence available is to reject a bad proposal argv while nothing has been created yet,
-# so the boundary between "rejected before the first create" and "rejected after the
-# parent is live" is the contract this group measures.
+# make-parent creates two issues in sequence and GitHub has no transaction, so the boundary
+# between "rejected before the first create" and "rejected after the parent is live" is the
+# contract measured here. The dispatcher validates argv PRESENCE only (B9/B9b in
+# make-parent.sh); everything else is validated by issue-create.sh, reached on the SECOND
+# create. E1-E4 therefore pin the current, weaker reality — a proposal issue-create.sh will
+# refuse still costs one live meta parent. E5 pins the same seam from the transport side.
+# These fail loudly the day the boundary moves, in either direction.
 #
-# The dispatcher validates argv PRESENCE (--title, and one of --body/--body-file) itself
-# — those are cases B9/B9b in make-parent.sh. Everything else about the proposal is
-# validated by issue-create.sh, which the dispatcher reaches only on the SECOND create.
-# E1–E4 therefore pin the current, weaker reality: a proposal that issue-create.sh will
-# refuse still costs one live meta parent. E5 pins the same seam from the other side (a
-# transport failure on the second create). These cases exist to make that boundary
-# visible and to fail loudly the day it moves — in either direction.
-#
-# The cost of that boundary is bounded by the REPORTING contract, which every case below
-# also pins: when the proposal create fails after the parent is live, the dispatcher exits
-# 1 explicitly (not via a `set -e` unwind), names the stranded parent by number AND URL on
-# stderr, and states how to recover — while stdout stays empty, because the URL contract
-# for make-parent is two URLs or none, never a half-built pair.
+# Every case also pins the REPORTING contract: explicit exit 1 (not a `set -e` unwind),
+# stranded parent named by number AND URL on stderr, recovery stated, stdout empty — the
+# make-parent URL contract is two URLs or none, never a half-built pair.
 
 # mpp_run <extra passthrough args...> — standard make-parent argv with a substitutable tail
 mpp_run() {
@@ -39,19 +32,16 @@ mpp_run() {
 assert_stranded_parent() {
     local p="$1" parent="$2" n
     n=$(count_creates)
-    # rc 1, exactly: the dispatcher reaches its own `exit 1` after printing the report.
-    # A `set -e` unwind of the failing command substitution would surface issue-create.sh's
-    # own rc (2 for a usage error) instead, so the exact value is what distinguishes
-    # "reported then aborted" from "silently unwound".
+    # rc 1, exactly: a `set -e` unwind would surface issue-create.sh's own rc (2 for a usage
+    # error), so the exact value distinguishes "reported then aborted" from "silently unwound".
     if [ "$RC" -eq 1 ]; then
         pass "${p}-rc1"
     else
         fail "${p}-rc1" "want rc 1 from the dispatcher's explicit abort after reporting the stranded parent (got: $RC); stderr: $ERR"
     fi
-    # ONE, not zero: the dispatcher validates argv PRESENCE only, so a proposal that
-    # issue-create.sh refuses is caught on the second create, after the parent is live.
-    # If a future change moves that validation ahead of the parent create, this flips to
-    # 0 and the case fails — which is the notification, not a regression.
+    # ONE, not zero: a proposal issue-create.sh refuses is caught on the second create,
+    # after the parent is live. If validation ever moves ahead of the parent create this
+    # flips to 0 and fails — that failure is the notification, not a regression.
     if [ "${n:-0}" -eq 1 ]; then
         pass "${p}-exactly-one-create-parent-only"
     else
@@ -86,9 +76,8 @@ setup_mock
 export GH_MOCK_ISSUE_NUMS="601,602"
 mpp_run --body "just some prose with no canonical fields"
 assert_stranded_parent E1-malformed-body 601
-# The parent created here is #601. stdout is the URL contract and must stay empty, so the
-# report has exactly one channel available: stderr. E1d checks that channel end to end —
-# the operator can read the whole intermediate state off a single stream.
+# stdout is the URL contract and must stay empty, so stderr is the only channel left for
+# the report — the operator reads the whole intermediate state off one stream.
 if printf '%s' "$ERR" | grep -q 'Stranded meta parent: #601'; then
     pass "E1d-stranded-parent-reported-on-stderr"
 else
@@ -120,9 +109,8 @@ assert_stranded_parent E4-unknown-passthrough-arg 631
 teardown_mock
 
 # --- E5: the SECOND create fails at the transport layer ----------------------------------
-# The parent is already live on GitHub at this point; the proposal is not. This is the
-# worst intermediate state make-parent can reach, and unlike the partial-attach case
-# (B10) the dispatcher has not yet emitted either URL.
+# Parent live, proposal not — the worst intermediate state make-parent can reach, and
+# unlike the partial-attach case (B10) neither URL has been emitted yet.
 setup_mock
 export GH_MOCK_ISSUE_NUMS="641,642"
 export GH_MOCK_CREATE_FAIL_FROM=2
@@ -151,9 +139,8 @@ if [ -z "$(printf '%s' "$OUT" | grep . || true)" ]; then
 else
     fail "E5d-no-url-on-stdout" "stdout carried a URL although the proposal was never created: $OUT"
 fi
-# Same reporting contract as E1d, reached through the transport layer instead of through
-# argv validation — which is why it is worth a second case: the two routes run through the
-# same `child_rc` guard, but only a distinct case proves the guard is not argv-specific.
+# Same contract as E1d but reached through the transport layer: both routes share the
+# `child_rc` guard, and only a distinct case proves that guard is not argv-specific.
 if printf '%s' "$ERR" | grep -q 'Stranded meta parent: #641'; then
     pass "E5e-stranded-parent-reported-on-stderr"
 else

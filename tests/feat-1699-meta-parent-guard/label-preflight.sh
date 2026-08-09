@@ -7,12 +7,11 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group L — --label validation, as a matrix
+# Group L — --label validation, as a matrix.
 #
-# The dispatcher passes `--label meta` into this script before make-parent, so the value
-# is a constant today. It will not stay one: --check-labels is the generic existence
-# probe, and the value it is handed is compared with `grep -qxF` against repo data. The
-# validation therefore has two jobs, and they fail differently:
+# The dispatcher passes a constant `--label meta` today, but --check-labels is the generic
+# existence probe and its value is compared with `grep -qxF` against repo data. Validation
+# therefore has two jobs, which fail differently:
 #   (a) semantic — an unanchored or empty name would MATCH labels it does not name
 #       (`.*` would report "exists" against any repo, sending the dispatcher on),
 #   (b) transport — the value reaches a `gh` command line.
@@ -42,15 +41,14 @@ assert_label_rejected() {
     else
         fail "L-${case_id}-rejected-rc2" "want rc=2 (invalid argv) for --label '$value' (got: $PF_RC) — rc=1 would be read by the caller as 'label absent' and rc=0 as 'label exists'"
     fi
-    # The point of validating at all. rc=2 after the call already went out would still
-    # have put an unvalidated string on a gh command line.
+    # rc=2 after the call went out would still have put an unvalidated string on a gh
+    # command line.
     if [ "${n:-0}" -eq 0 ]; then
         pass "L-${case_id}-no-gh-call"
     else
         fail "L-${case_id}-no-gh-call" "want 0 gh invocations before rejection (got: ${n:-0}); log: $(cat "$GH_MOCK_ARGS_LOG")"
     fi
-    # A rejection that does not say what it rejected leaves the operator guessing which
-    # of several labels on the command line was the bad one.
+    # Otherwise the operator must guess which of several labels was the bad one.
     if printf '%s' "$PF_ERR" | grep -qi 'invalid --label'; then
         pass "L-${case_id}-names-the-offending-flag"
     else
@@ -78,8 +76,8 @@ assert_label_accepted() {
 }
 
 # --- L1: names GitHub actually uses in this repo must pass ------------------------------
-# Charset coverage, one row per character class the regex admits: bare word, colon,
-# slash, dot+digits, single character. `meta` is the one the dispatcher itself sends.
+# One row per character class the regex admits: bare word, colon, slash, dot+digits,
+# single character. `meta` is the one the dispatcher itself sends.
 while IFS='|' read -r cid value; do
     [ -z "$cid" ] && continue
     assert_label_accepted "$cid" "$value" 0
@@ -92,8 +90,7 @@ done <<'ACCEPT_TABLE'
 1f|a
 ACCEPT_TABLE
 
-# A well-formed name that simply is not in the repo: rc=1, distinct from rc=2. This row
-# is what keeps the accept/reject axis from collapsing — without it, "rejected" could be
+# Well-formed but absent: rc=1, distinct from rc=2. Without this row "rejected" could be
 # satisfied by any non-zero rc.
 assert_label_accepted "1g-well-formed-but-absent" "no-such-label" 1
 
@@ -122,25 +119,21 @@ done <<'REJECT_TABLE'
 2m-backslash|meta\x
 REJECT_TABLE
 
-# The empty string cannot be expressed as a table row (a blank cid is the loop's own
-# terminator), and it is the row that matters most: an unset-looking value that would
-# make `grep -qxF ""` match any blank line in the label list.
+# Not expressible as a table row (a blank cid terminates the loop), and the row that
+# matters most: `grep -qxF ""` matches any blank line in the label list.
 assert_label_rejected "2o-empty-string" ""
 
-# An embedded newline is the one payload a line-oriented table cannot express at all, and
-# the one the anchors exist for: bash's =~ with ^…$ matches per-line unless the whole
-# string is anchored, so "meta\nrm -rf /" must not pass on the strength of its first line.
+# The payload the anchors exist for: bash's =~ with ^…$ matches per-line, so "meta\nrm -rf
+# /" must not pass on the strength of its first line. Not expressible in the table.
 assert_label_rejected "2p-embedded-newline" "$(printf 'meta\nrm -rf /')"
 # $'…', not "$(printf …)": command substitution strips the trailing newline, which would
 # silently turn this row into a duplicate of the valid `meta` row above.
 assert_label_rejected "2q-trailing-newline" $'meta\n'
 
 # --- L3: length is NOT constrained — pinned as observed ---------------------------------
-# GitHub caps label names at 50 characters; the regex does not. A 300-character name in
-# the admitted charset therefore passes validation and is sent to `gh label list`, where
-# it simply fails to match and returns rc=1 ("absent"). That is harmless — the value is
-# still charset-clean — so this is pinned rather than reported as a defect. If a length
-# bound is added later, this case fails and is the place to record the new limit.
+# GitHub caps label names at 50 chars; the regex does not. A 300-char charset-clean name
+# therefore passes validation and returns rc=1 ("absent") — harmless, so pinned as observed
+# rather than reported. If a length bound is added, this case fails and records the limit.
 LONG_LABEL="$(printf 'a%.0s' $(seq 1 300))"
 pf_run --check-labels --label "$LONG_LABEL"
 if [ "$PF_RC" -eq 1 ]; then
@@ -150,9 +143,8 @@ else
 fi
 
 # --- L4: the flag's own argv contract ----------------------------------------------------
-# `--label` with nothing after it must not silently fall back to the `type:task` default:
-# a caller asking about `meta` and receiving an answer about `type:task` is the worst
-# possible outcome of this script, because it is a plausible-looking rc=0.
+# A dangling `--label` must not fall back to the `type:task` default: asking about `meta`
+# and being answered about `type:task` yields a plausible-looking rc=0.
 pf_run --check-labels --label
 if [ "$PF_RC" -eq 2 ]; then
     pass "L4-dangling-label-flag-rejected"
@@ -166,8 +158,8 @@ else
     fail "L4b-dangling-label-flag-makes-no-gh-call" "want 0 gh invocations (got: ${n:-0})"
 fi
 
-# The `--label=NAME` spelling reaches the same validation. It is a separate parser branch
-# in the source, so a fix applied to one form and not the other would go unnoticed.
+# `--label=NAME` is a separate parser branch, so a fix applied to one form only would go
+# unnoticed.
 pf_run --check-labels --label=meta
 if [ "$PF_RC" -eq 0 ]; then
     pass "L4c-equals-form-accepted"
@@ -182,9 +174,8 @@ else
     fail "L4d-equals-form-validated-too" "want rc=2 with 0 gh calls for --label=.* (got rc=$PF_RC, ${n:-0} gh calls)"
 fi
 
-# Omitting --label entirely keeps the documented default. Asserted so the validation
-# above can never be "fixed" by making the flag mandatory without anyone noticing that
-# every existing caller of --check-labels passes no label at all.
+# Omitting --label keeps the documented default — so the validation above cannot be "fixed"
+# by making the flag mandatory, which every existing --check-labels caller relies on.
 pf_run --check-labels
 if [ "$PF_RC" -eq 0 ] && gh_called_with "label list"; then
     pass "L4e-default-label-still-type-task"

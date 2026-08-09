@@ -11,25 +11,15 @@
 #
 # Section of tests/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
 #
-# Why this file exists (CPR-WPH): #1912 REPLACED the IC-C1 criterion. The old one asked
-# whether two issues shared a root cause *or* an observed symptom; the new one asks
-# whether ONE fix resolves the proposal and the candidate AT THE SAME TIME. The parent
-# file pins fragments of that sentence (O2–O7) and the negative directive (N1–N3). What
-# neither pins is the criterion as a SEMANTIC WHOLE — the four properties that together
-# make it decidable. A rewrite that kept every phrase the parent greps for while dropping
-# one of these four would leave a criterion a grader cannot apply.
-#
+# The parent pins fragments of the new IC-C1 sentence (O2–O7, N1–N3). This file pins the
+# criterion as a semantic WHOLE — the four properties that make it decidable:
 #   (a) simultaneity      one fix, both items, at the same time — not two fixes in a row
 #   (b) cause identity    the shared thing is the underlying cause, not the appearance
 #   (c) symptom exclusion symptom similarity ALONE is named and refused, for reopen
-#   (d) reason contract   `reason` is required, and when same_fix is true it must make
-#                         the single covering fix identifiable — otherwise "one fix
-#                         covers both" is an unfalsifiable claim
-#
-# Every case is section-scoped (CPR-SC). (a)–(c) read the IC-C1 block; (d) reads the
-# block that owns the `reason` contract. A whole-file grep would let a sentence sitting
-# anywhere in the cascade satisfy an assertion about IC-C1 — and this file's sibling has
-# a live example of exactly that (see M6 in the parent).
+#   (d) reason contract   `reason` required; when same_fix is true it must make the single
+#                         covering fix identifiable
+# Section-scoped (CPR-SC): (a)–(c) read the IC-C1 block, (d) the `reason` rule. A
+# whole-file grep would accept a sentence from anywhere (see M6 in the parent).
 
 set -u
 
@@ -55,10 +45,8 @@ ICC1="$WORK/icc1.txt"; ICC1_FLAT="$WORK/icc1-flat.txt"
 md_section "$CASCADE" '^##[[:space:]]+IC-C1' > "$ICC1" 2>/dev/null || : > "$ICC1"
 tr '\n' ' ' < "$ICC1" > "$ICC1_FLAT" 2>/dev/null || : > "$ICC1_FLAT"
 
-# The `reason` contract does not live under a heading of its own — it is a bullet in the
-# auxiliary rules. Locate it by its subject rather than by section name, so a reshuffle of
-# the cascade's headings does not turn a present contract into a reported-missing one, and
-# flatten the bullet (it wraps) before matching.
+# The `reason` contract is a bullet, not a section: located by subject so a heading
+# reshuffle cannot report a present contract as missing, and flattened because it wraps.
 REASON_RULE="$WORK/reason-rule.txt"
 : > "$REASON_RULE"
 if [ -f "$CASCADE" ]; then
@@ -70,9 +58,8 @@ fi
 
 echo "=== Q: the IC-C1 criterion as a semantic whole (4 properties) ==="
 
-# Non-vacuity gate. Every case below reads one of the two extracted blocks; if extraction
-# silently produced nothing, a `grep -q` on an empty file fails for the wrong reason and
-# the failure message would send the next reader after the wrong defect.
+# Non-vacuity gate: if extraction produced nothing, every grep below fails for the wrong
+# reason and points the next reader at the wrong defect.
 if [ -s "$ICC1" ]; then
     pass "Q0-icc1-block-extracted"
 else
@@ -84,34 +71,31 @@ else
     fail "Q0b-reason-rule-extracted" "no \`reason\` rule found in $CASCADE — Q4/Q5 read that rule"
 fi
 
-# (a) SIMULTANEITY. The whole point of the rewrite: "one fix resolves both" is also true
-# of two issues a single PR happens to touch in sequence. The criterion must bind the two
-# resolutions to the SAME fix event, and it must name both sides of what is resolved.
+# (a) SIMULTANEITY. "one fix resolves both" is also true of two issues one PR touches in
+# sequence, so the criterion must bind both resolutions to the SAME fix event.
 if grep -qiE 'one fix[^.?]*(resolve|fix|close)[^.?]*(this proposal|the proposal)[^.?]*(candidate|issue)[^.?]*(at the same time|simultaneous)' "$ICC1_FLAT"; then
     pass "Q1-criterion-is-one-fix-both-sides-at-the-same-time"
 else
     fail "Q1-criterion-is-one-fix-both-sides-at-the-same-time" "IC-C1 must ask, in one sentence, whether ONE fix resolves the proposal AND the candidate AT THE SAME TIME; block: $(cat "$ICC1_FLAT")"
 fi
 
-# (a′) The criterion has to be the DECIDING question, not a remark. Without this an
-# editor could relegate the sentence to an aside and Q1 would still pass.
+# (a′) It must be the DECIDING question: relegated to an aside, Q1 would still pass.
 if grep -qiE '(ask|answer)[^.?]*(question|one fix)|if the answer is yes[^.]*(decide|reopen)' "$ICC1_FLAT"; then
     pass "Q2-criterion-is-posed-as-the-deciding-question"
 else
     fail "Q2-criterion-is-posed-as-the-deciding-question" "the one-fix sentence must be posed as the question IC-C1 decides by, not stated as an aside; block: $(cat "$ICC1_FLAT")"
 fi
 
-# (b) CAUSE IDENTITY. What makes one fix able to close both is that the thing being fixed
-# is the same thing. IC-C1 must say so in terms of the underlying/root cause — the word
-# that separates "the same defect" from "two defects that look alike".
+# (b) CAUSE IDENTITY. Grounded in the underlying/root cause — the word separating "the
+# same defect" from "two defects that look alike".
 if grep -qiE '(underlying|root)[- ]?cause' "$ICC1_FLAT"; then
     pass "Q3-criterion-rests-on-cause-identity"
 else
     fail "Q3-criterion-rests-on-cause-identity" "IC-C1 must ground the match in the underlying/root cause, not in appearance; block: $(cat "$ICC1_FLAT")"
 fi
 
-# (b′) And the cause must be tied to the consequence that makes it decidable: differing
-# causes mean two fixes. A bare mention of "root cause" with no consequence is decoration.
+# (b′) The cause test needs its consequence — differing causes mean two fixes. A bare
+# mention of "root cause" is decoration.
 if grep -qiE '(underlying|root)[- ]?cause[^.]*(differ|different|not the same)[^.]*(two|separate|distinct)[^.]*fix' "$ICC1_FLAT" \
    || grep -qiE '(two|separate|distinct)[^.]*fix[^.]*(underlying|root)[- ]?cause[^.]*(differ|different)' "$ICC1_FLAT"; then
     pass "Q3b-differing-causes-mean-two-fixes"
@@ -119,11 +103,9 @@ else
     fail "Q3b-differing-causes-mean-two-fixes" "IC-C1 must state the consequence of the cause test — different underlying causes need two separate fixes; block: $(cat "$ICC1_FLAT")"
 fi
 
-# (c) SYMPTOM EXCLUSION. The retired criterion offered the symptom as an ALTERNATIVE
-# ground. The replacement must refuse it by name, in the negative, and must say what it is
-# refusing it FOR (reopen) — a general "symptoms are not enough" attached to no verdict
-# constrains nothing. The word ALONE is the substance: symptoms remain admissible evidence,
-# they are just not sufficient on their own.
+# (c) SYMPTOM EXCLUSION. Refused by name, in the negative, and for a named verdict
+# (reopen). "ALONE" is the substance: symptoms stay admissible evidence, just not
+# sufficient on their own.
 if grep -qiE 'symptom[^.]*(alone|only|by itself|on its own)[^.]*(must never|never|must not|do not)' "$ICC1_FLAT" \
    || grep -qiE '(must never|never|must not|do not)[^.]*symptom[^.]*(alone|only|by itself|on its own)' "$ICC1_FLAT"; then
     pass "Q4-symptom-similarity-alone-is-refused"
@@ -140,9 +122,8 @@ fi
 echo ""
 echo "=== Q5/Q6: the reason contract makes the one-fix claim falsifiable ==="
 
-# (d) REASON REQUIRED. `same_fix: true` asserts that one fix covers both. An assertion no
-# reader can check is not a contract, and the review stage's whole job is checking. The
-# cascade must therefore require a `reason`, and require that it identify the rule.
+# (d) REASON REQUIRED, and it must identify the matching rule — otherwise the review
+# stage has nothing to check.
 if grep -qiE '`?reason`?[^.]*(one sentence|required|must)' "$REASON_RULE" \
    && grep -qiE 'rule[^.]*identifiab|identifiab[^.]*rule' "$REASON_RULE"; then
     pass "Q5-reason-is-required-and-identifies-the-rule"
@@ -150,9 +131,8 @@ else
     fail "Q5-reason-is-required-and-identifies-the-rule" "the cascade must require a \`reason\` that makes the matching rule identifiable; rule: $(cat "$REASON_RULE")"
 fi
 
-# (d′) The conditional half, which is the #1912 addition: when same_fix is true, the
-# reason must make THE SINGLE COVERING FIX identifiable. Without this the field records a
-# claim ("one fix covers both") with no way to tell whether the grader had a fix in mind.
+# (d′) The #1912 addition: when same_fix is true the reason must make THE SINGLE COVERING
+# FIX identifiable, or the claim is unfalsifiable.
 if grep -qiE 'same_fix[^.]*(true)[^.]*(single|one)[^.]*fix[^.]*identifiab' "$REASON_RULE" \
    || grep -qiE '(single|one)[^.]*fix[^.]*identifiab[^.]*same_fix[^.]*true' "$REASON_RULE"; then
     pass "Q6-true-same-fix-requires-an-identifiable-single-fix"
@@ -160,9 +140,8 @@ else
     fail "Q6-true-same-fix-requires-an-identifiable-single-fix" "when same_fix is true the reason must make the single covering fix identifiable — otherwise the field asserts something nobody can check; rule: $(cat "$REASON_RULE")"
 fi
 
-# Counterweight (non-vacuity of Q6): the conditional must be conditional. A cascade that
-# demanded the single-fix identification on EVERY verdict would be asking the grader to
-# name a fix that, for the four false verdicts, does not exist.
+# Counterweight to Q6: the requirement must stay conditional — on the four false verdicts
+# there is no single covering fix to name.
 if grep -qiE 'when[^.]*same_fix[^.]*true|same_fix[^.]*is[^.]*`?true`?[^.]*(so|then)' "$REASON_RULE"; then
     pass "Q6b-single-fix-requirement-is-conditional-on-same-fix"
 else

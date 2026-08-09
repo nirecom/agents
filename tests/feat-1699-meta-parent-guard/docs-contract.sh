@@ -7,15 +7,14 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group D2 — the prose contract for the meta model
+# Group D2 — the prose contract for the meta model.
 #
-# rules/github-issues.md and skills/issue-create/SKILL.md are the two files a human (and
-# every model that loads them) reads before touching this route. #1699 changed what they
-# must say in two ways that code alone cannot hold: the `Group: ` prefix is now enforced
-# by the dispatcher on the make-parent route rather than applied by hand, and make-parent
-# creates two issues rather than promoting the proposal. A doc that still describes the
-# old shape is a doc that will be followed, so both claims are pinned here — including
-# the retired wording, in the negative.
+# rules/github-issues.md and skills/issue-create/SKILL.md are what a human (and every model
+# that loads them) reads before touching this route. #1699 changed two claims code alone
+# cannot hold: the `Group: ` prefix is now dispatcher-enforced on make-parent, and
+# make-parent creates two issues rather than promoting the proposal. A doc describing the
+# old shape will be followed, so both claims are pinned — including the retired wording,
+# in the negative.
 
 DOC_RULES="$AGENTS_DIR/rules/github-issues.md"
 DOC_SKILL="$AGENTS_DIR/skills/issue-create/SKILL.md"
@@ -34,11 +33,9 @@ doc_has() {  # <label> <file> <pattern> <why>
 }
 
 # --- section scoping -------------------------------------------------------------------
-# Why (CPR-SC): an assertion phrased "the meta section must say X" but executed as a
-# whole-file grep is satisfied by an X sitting anywhere in the document — a different
-# section, a table row, even a heading. The document then passes while the section a reader
-# actually lands on says nothing. Every case whose message names a section is run against
-# that section's body only, so the assertion and the check finally agree.
+# A "the meta section must say X" assertion run as a whole-file grep is satisfied by an X
+# anywhere in the document, while the section a reader lands on says nothing. Every case
+# whose message names a section is therefore run against that section's body only.
 #
 # doc_section <file> <heading-regex> → the body of the first matching `##`/`###` section,
 # headings excluded. An unmatched heading yields empty output, which doc_section_has
@@ -92,9 +89,8 @@ doc_section_has D2.1c-admin-close-path-conditions "$DOC_RULES" "$META_SEC" \
     'admin_close_path.*(all sub-issues closed|OPEN)' \
     "admin_close_path must state WHEN it applies, not merely that it exists"
 
-# The correction #1699 required: the prefix used to be documented as manual and not
-# enforced by code. Both the new claim and the absence of the old one are asserted —
-# adding the new sentence while leaving the old one would leave a self-contradicting doc.
+# Both the new claim and the absence of the old one are asserted: adding the new sentence
+# while leaving the old one gives a self-contradicting doc.
 doc_section_has D2.2-group-prefix-is-code-enforced-on-make-parent "$DOC_RULES" "$META_SEC" \
     'Group: .*(applied automatically|automatic).*make-parent|make-parent.*(applied automatically|automatic)' \
     "the meta section owns the title convention, so it is where the automatic-prefix claim has to live"
@@ -143,10 +139,8 @@ else
 fi
 
 # --- D2.6: skills/issue-create/SKILL.md — the make-parent instructions ---------------------
-# All eight claims belong to the dispatch phase — the step at which the operator chooses a
-# verdict and reads the resulting URLs. Stating them anywhere else in the skill (a scope
-# note, a behavioural aside) would satisfy a whole-file grep while leaving the procedure
-# the operator follows silent.
+# These claims belong to the dispatch phase, where the operator chooses a verdict and reads
+# the URLs. Stated elsewhere they satisfy a whole-file grep but leave the procedure silent.
 DISPATCH_SEC='^###[[:space:]]+Phase 4'
 doc_section_has D2.6-skill-make-parent-two-issues "$DOC_SKILL" "$DISPATCH_SEC" \
     'make-parent creates TWO issues|make-parent.*two issues' \
@@ -171,8 +165,7 @@ doc_section_has D2.8b-skill-points-at-conversion-section "$DOC_SKILL" "$DISPATCH
     "the skill's recovery pointer must name the same rules section the guard's stderr names (one SSOT, two referrers)"
 
 # --- D2.9: both files stay inside the prompt-file HARD limit ------------------------------
-# rules/*.md and SKILL.md are Pattern B prompt files (HARD 200 lines, rules/coding/file-split.md).
-# #1699 added to both; a doc that silently crossed the limit is a split nobody planned.
+# Pattern B prompt files: HARD 200 lines (rules/coding/file-split.md). #1699 added to both.
 for pair in "D2.9-rules-under-hard-limit:$DOC_RULES" "D2.9b-skill-under-hard-limit:$DOC_SKILL"; do
     label="${pair%%:*}"; f="${pair#*:}"
     if [ ! -f "$f" ]; then

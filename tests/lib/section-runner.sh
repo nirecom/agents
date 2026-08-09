@@ -3,28 +3,23 @@
 # Tests: tests/lib/section-runner.sh
 # Tags: test-infrastructure, section-runner, shared-lib, scope:common
 #
-# Why this exists (the defect it closes): tests/run-all.sh globs "$TESTS_DIR"/*.sh, which
-# is TOP-LEVEL ONLY. A file under tests/<family>/ is dead code in CI unless the top-level
-# parent reaches it. Several families grew section files that no parent ever ran.
+# tests/run-all.sh globs "$TESTS_DIR"/*.sh — TOP-LEVEL ONLY — so a file under
+# tests/<family>/ is dead code in CI unless its top-level parent reaches it.
 #
-# Two wiring styles exist in this repo and they are NOT interchangeable:
+# Two wiring styles exist here and are NOT interchangeable:
 #
 #   sourced   (tests/feat-1699-meta-parent-guard.sh)
-#             Sections are fragments: no shebang exec, no own mock, no own $WORK, no own
-#             EXIT trap. They read the parent's PASS/FAIL/pass()/fail() and its gh mock.
+#             Sections are fragments sharing the parent's PASS/FAIL/pass()/fail() and mock.
 #             Correct when every section shares one seam and a per-section mock would drift.
 #
-#   subprocess (this helper; also tests/feature-1733-state-event-stream.sh's run_sub)
-#             Sections are standalone programs: own shebang, own mock, own $WORK, own
-#             `trap ... EXIT`, own PASS/FAIL, own "Results:" line.
-#             Correct when sourcing would COLLIDE. Bash keeps exactly one EXIT trap per
-#             shell, so sourcing N such files leaks N-1 temp dirs — and a section that
-#             probes the real $TMPDIR for residue (feat-1761-candidate-body-safety/
-#             tmpfile-residue.sh T6) would then go red because of a SIBLING's leftovers,
-#             not because of the code under test.
+#   subprocess (this helper; also feature-1733-state-event-stream.sh's run_sub)
+#             Sections are standalone programs with their own mock, $WORK, EXIT trap and
+#             counters. Correct when sourcing would COLLIDE: bash keeps one EXIT trap per
+#             shell, so sourcing N such files leaks N-1 temp dirs — enough to redden
+#             feat-1761-candidate-body-safety/tmpfile-residue.sh T6 on a sibling's leftovers.
 #
-# This helper implements the subprocess style with the property the sourced style gets
-# for free: ONE combined total, and no way for a section failure to be swallowed.
+# This helper implements the subprocess style with one combined total and no way for a
+# section failure to be swallowed.
 #
 # Contract required of a section file:
 #   - runs standalone: `bash <section>` exits 0 (all pass) or non-zero (any fail)
@@ -67,9 +62,8 @@ run_section() {
     PASS=$((PASS + sp))
     FAIL=$((FAIL + sf))
 
-    # Cross-check the two independent signals. A section that exits non-zero while
-    # reporting zero failures has failed somewhere its own counters do not see
-    # (e.g. a trailing command after the Results line), and that must not be swallowed.
+    # Cross-check the two independent signals: exit code and reported counts must agree,
+    # or a failure outside the section's own counters gets swallowed.
     if [ "$rc" -ne 0 ] && [ "$sf" -eq 0 ]; then
         fail "section:$file" "exited $rc but reported 0 failures — a failure was swallowed"
     elif [ "$rc" -eq 0 ] && [ "$sf" -ne 0 ]; then

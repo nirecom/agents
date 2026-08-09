@@ -12,19 +12,13 @@
 #
 # Section of tests/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
 #
-# Why this file exists (CPR-WPH): the cascade is an SSOT only if both graders read the
-# same bytes. The parent file proves each side REFERENCES the file — the worker names the
-# path, the reviewer `cat`s it — and that the 2-column table survives the trip. Neither is
-# the property that matters. A reviewer handed a truncated cascade, or a worker pointed at
-# a stale sibling copy, satisfies every one of those checks while the two sides decide by
-# different rules; and the failure is invisible, because each verdict on its own is
-# well-formed. So this file compares the INJECTED TEXT itself:
-#
+# The parent proves each grader REFERENCES the cascade; a truncated injection or a stale
+# sibling copy passes that while the two sides decide by different rules. This file
+# compares the injected TEXT:
 #   V  the reviewer's prompt contains the cascade file verbatim and contiguous
 #   W  the path the worker is given resolves to that same file, byte for byte
-#   X  neither grader carries a SECOND copy — checked structurally (headings, rule IDs,
-#      table rows), never by line length. A long line is not a copy and a short one is
-#      not a reference; only the cascade's own structural landmarks answer the question.
+#   X  neither grader carries a SECOND copy — checked structurally (headings, table rows),
+#      never by line length: a 90-char paraphrase is a copy, a long citation is not.
 
 set -u
 
@@ -45,8 +39,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "=== V: the reviewer's prompt carries the cascade verbatim and contiguous ==="
 
-# The prompt is built in a 0600 temp file and deleted on exit, so it can only be observed
-# from inside the run. The mock codex reads it from stdin and keeps a copy.
+# The prompt lives in a 0600 temp file deleted on exit, so the mock codex keeps a copy
+# from stdin — the only way to observe it.
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 cat > "$MOCKDIR/codex" <<'MOCK'
 #!/usr/bin/env bash
@@ -85,11 +79,9 @@ else
     fail "V1-prompt-captured" "the mock codex received no prompt (review-survey-verdict-codex.sh present=$([ -f "$CODEX_SH" ] && echo yes || echo no)) — every case below reads it"
 fi
 
-# Locate the injected region by the cascade's own first line, then compare the next N
-# lines against the file. This is the whole concern: an equality on the TEXT catches a
-# truncation, a re-wrap, a paraphrase and a stale copy alike, none of which a "does the
-# prompt mention the cascade" check can see. Contiguity matters too — a cascade whose
-# rules were interleaved with other prompt material is no longer an ordered cascade.
+# Locate the injected region by the cascade's first line, then compare the next N lines.
+# Text equality catches truncation, re-wrap, paraphrase and staleness alike; contiguity
+# matters because interleaved rules are no longer an ordered cascade.
 INJECTED="$WORK/injected.txt"
 : > "$INJECTED"
 if [ -s "$PROMPT" ] && [ -f "$CASCADE" ]; then
@@ -107,9 +99,8 @@ else
     fail "V2-injected-cascade-is-byte-identical-to-the-ssot" "the reviewer's prompt does not contain the cascade verbatim and contiguous; first differing lines: $(diff "$CASCADE" "$INJECTED" 2>&1 | head -n 6 | tr '\n' ' ')"
 fi
 
-# Non-vacuity: V2 compares a slice of the prompt against the file, so it would also pass
-# if the prompt were nothing BUT the cascade — in which case the reviewer never received
-# its instructions. The cascade must be embedded in a larger prompt.
+# Non-vacuity: V2 also passes if the prompt were nothing BUT the cascade, leaving the
+# reviewer with no instructions.
 PN=$(grep -c '' "$PROMPT" 2>/dev/null || printf 0)
 CN2=$(grep -c '' "$CASCADE" 2>/dev/null || printf 0)
 if [ "$PN" -gt "$CN2" ] && [ "$CN2" -gt 0 ]; then
@@ -121,10 +112,9 @@ fi
 echo ""
 echo "=== W: the worker is pointed at the SAME file the reviewer was handed ==="
 
-# The worker receives a path, not text: it is a subagent that Reads the file at run time.
-# So the comparable artifact on its side is the file that path resolves to. `$agents_config_dir`
-# is the worker's name for what this test calls $AGENTS_DIR — the caller passes it in — so
-# it is substituted rather than treated as an unresolvable variable.
+# The worker receives a path, not text, so the comparable artifact is what that path
+# resolves to. `$agents_config_dir` is the worker's name for $AGENTS_DIR (the caller
+# passes it in), so it is substituted rather than left unresolvable.
 WPATH_RAW=""
 if [ -f "$WORKER_MD" ]; then
     WPATH_RAW="$(grep -oE '[^` ]*issue-verdict-cascade\.md' "$WORKER_MD" | head -n 1)"
@@ -148,9 +138,8 @@ else
     fail "W2-worker-path-resolves-to-a-real-file" "the worker's cascade path does not resolve under the agents config dir (raw: '${WPATH_RAW:-<none>}' → '${WPATH:-<none>}') — the worker would Read nothing and decide with no cascade at all"
 fi
 
-# The parity itself. Two graders, one text. Compared against the INJECTED copy rather than
-# against $CASCADE, so this case fails when either side drifts — including the case where
-# the reviewer's injection is stale but the worker's path is fine.
+# The parity itself. Compared against the INJECTED copy, not $CASCADE, so it also fails
+# when the reviewer's injection is stale and the worker's path is fine.
 if [ -n "$WPATH" ] && [ -f "$WPATH" ] && [ -s "$INJECTED" ] \
    && diff -q "$WPATH" "$INJECTED" >/dev/null 2>&1; then
     pass "W3-both-graders-receive-the-same-cascade-text"
@@ -161,12 +150,9 @@ fi
 echo ""
 echo "=== X: neither grader carries a second copy — structural, not line-length ==="
 
-# Why structural: the previous heuristic for "has the worker restated the cascade?" was
-# the LENGTH of the line carrying each rule ID (>120 chars ⇒ assumed a restatement). Length
-# is not evidence in either direction — a one-line paraphrase of IC-C1 is a full second
-# copy at 90 characters, and a long line that merely cites the file is not a copy at all.
-# The cascade's structural landmarks are: its `## ` headings, its rule-ID headings, and its
-# 2-column table rows. Those are what a copy necessarily brings with it.
+# Structural, replacing the old >120-char line-length heuristic, which is evidence in
+# neither direction. A copy necessarily brings the cascade's landmarks with it: its `## `
+# headings (including rule IDs) and its 2-column table rows.
 
 # cascade_headings: the section headings, normalised (leading #s and whitespace stripped).
 cascade_headings() {
@@ -174,8 +160,7 @@ cascade_headings() {
     sed -n 's/^##*[[:space:]]*//p' "$CASCADE" | sed -n '/./p'
 }
 
-# table_rows: the same parser the parent file uses, so "a copy of the table" means the
-# same thing in both places.
+# table_rows: the parent file's parser, so "a copy of the table" means the same in both.
 table_rows() {
     [ -f "$1" ] || return 0
     awk -F'|' '
@@ -193,9 +178,8 @@ else
     fail "X0-cascade-has-structural-landmarks-to-look-for" "the cascade exposes only ${HEADCOUNT:-0} heading(s); X1/X2 below would be vacuous"
 fi
 
-# X1/X2: a grader file may CITE the cascade, but reproducing its headings means the rules
-# have been restated locally — and the local copy is the one that drifts, silently, while
-# every path-reference check keeps passing.
+# X1/X2: citing the cascade is fine; reproducing its headings means the rules were
+# restated locally, and the local copy is the one that drifts.
 check_no_heading_copy() {  # <label> <file>
     local label="$1" f="$2" hits=""
     if [ ! -f "$f" ]; then
@@ -204,9 +188,8 @@ check_no_heading_copy() {  # <label> <file>
     fi
     while IFS= read -r h; do
         [ -n "$h" ] || continue
-        # Heading text only, matched literally and whole-line-anchored at the start of a
-        # markdown heading or a bullet: a passing MENTION of "IC-C1" is a citation, while
-        # a heading line reproducing "IC-C1 — reopen (highest priority)" is a copy.
+        # Full heading text, matched literally: a mention of "IC-C1" is a citation, while
+        # "IC-C1 — reopen (highest priority)" reproduced verbatim is a copy.
         if grep -qF -- "$h" "$f" 2>/dev/null; then
             hits="$hits[$h] "
         fi
@@ -223,9 +206,7 @@ EOF
 check_no_heading_copy "X1-worker-does-not-reproduce-cascade-headings" "$WORKER_MD"
 check_no_heading_copy "X2-codex-does-not-reproduce-cascade-headings" "$CODEX_SH"
 
-# X3/X4: the table rows, for the same reason and by the same parser. This is the check the
-# `same_fix` values would drift through, and it is independent of the headings above: a
-# copy can arrive as a bare table with no headings at all.
+# X3/X4: the table rows, independent of the headings — a copy can arrive as a bare table.
 for pair in "X3-worker:$WORKER_MD" "X4-codex:$CODEX_SH"; do
     label="${pair%%:*}"; f="${pair#*:}"
     rows="$(table_rows "$f" | tr '\n' ' ')"
@@ -236,9 +217,8 @@ for pair in "X3-worker:$WORKER_MD" "X4-codex:$CODEX_SH"; do
     fi
 done
 
-# X5: the counterweight that keeps X1–X4 from being satisfiable by silence. A file that
-# neither copies NOR references the cascade passes every case above; the point of the
-# non-duplication rule is single-sourcing, not absence.
+# X5/X6: counterweight — a file that neither copies NOR references the cascade passes
+# X1–X4. Non-duplication means single-sourcing, not absence.
 for pair in "X5-worker:$WORKER_MD" "X6-codex:$CODEX_SH"; do
     label="${pair%%:*}"; f="${pair#*:}"
     if [ -f "$f" ] && grep -qF 'issue-verdict-cascade' "$f"; then

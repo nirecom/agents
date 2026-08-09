@@ -7,17 +7,16 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Group G — the guard under pathological input
+# Group G — the guard under pathological input.
 #
-# Group A establishes the guard's four verdicts on well-formed input. This group asks the
-# only question that matters for a fail-CLOSED component: can any input make it exit 0
-# without having confirmed both conditions? Every case below therefore asserts the exact
-# non-zero code AND, separately, that the code is not 0 — because "not eligible" is the
-# safety property, and the specific code is the contract on top of it.
+# Group A covers well-formed input; this group asks the fail-CLOSED question: can any input
+# make the guard exit 0 without confirming both conditions? Each case asserts the exact
+# non-zero code AND, separately, that it is not 0 — "not eligible" is the safety property,
+# the specific code is the contract on top of it.
 #
-# The four verdicts are not interchangeable at the caller: the dispatcher maps 3 → rc 2
-# ("this parent is wrong, pick another") and everything else → rc 1 ("could not tell").
-# Collapsing them would turn an unanswerable lookup into a confident rejection.
+# The codes are not interchangeable: the dispatcher maps 3 → rc 2 ("wrong parent, pick
+# another") and everything else → rc 1 ("could not tell"). Collapsing them turns an
+# unanswerable lookup into a confident rejection.
 
 # gp_run <args…> — guard invocation with rc/stderr captured into GP_RC / GP_ERR.
 gp_run() {
@@ -36,8 +35,8 @@ assert_guard_rc() {
     else
         fail "G-${cid}-rc${want}" "want rc=$want (got: $GP_RC); stderr: $GP_ERR"
     fi
-    # Stated as its own assertion rather than folded into the one above: if the expected
-    # code ever changes, this line still holds the line that matters — never eligible.
+    # Separate from the assertion above so that if the expected code changes, the property
+    # that matters — never eligible — is still held.
     if [ "$GP_RC" -ne 0 ]; then
         pass "G-${cid}-not-eligible"
     else
@@ -50,8 +49,7 @@ setup_mock
 export GH_MOCK_LABELS_99="type:task,meta"
 export GH_MOCK_TITLE_99="Group: platform hardening"
 
-# A negative number, a signed one, and a decimal: all numeric-looking, none an issue
-# number. `-5` additionally tests that a leading dash is not parsed as a flag.
+# Numeric-looking, none an issue number. `-5` also checks a leading dash is not a flag.
 assert_guard_rc "1a-negative" 2 -5
 assert_guard_rc "1b-explicit-plus" 2 +5
 assert_guard_rc "1c-decimal" 2 5.0
@@ -59,12 +57,11 @@ assert_guard_rc "1d-non-numeric" 2 abc
 assert_guard_rc "1e-empty-string" 2 ""
 assert_guard_rc "1f-leading-space" 2 " 99"
 assert_guard_rc "1g-trailing-newline" 2 "$(printf '99\n99')"
-# Command-injection shaped input. `grep -qxF`-style literal handling is not available
-# here — the value is interpolated into a gh command line — so the regex IS the defence.
+# The value is interpolated into a gh command line with no literal-handling available,
+# so the regex IS the defence.
 assert_guard_rc "1h-shell-semicolon" 2 "99; rm -rf /"
 assert_guard_rc "1i-command-substitution" 2 '99$(id)'
-# Arity: the guard takes exactly one argument. Two would let a caller smuggle a second
-# issue number past the one that was checked.
+# Arity: exactly one argument — two would smuggle a second number past the checked one.
 assert_guard_rc "1j-no-arguments" 2
 assert_guard_rc "1k-two-arguments" 2 99 42
 # No gh call may be made for any of the above — validation precedes the lookup.
@@ -76,10 +73,9 @@ fi
 teardown_mock
 
 # --- G2: numerically valid but nonsensical issue numbers --------------------------------
-# `0` and a 21-digit number both satisfy ^[0-9]+$, so the regex admits them and the
-# forge is asked. The mock has no such issue, so both come back with neither condition
-# met. Pinned as rc 3 (ineligible) rather than rc 2: the guard deliberately does not
-# second-guess which numbers GitHub considers real — that is the forge's answer to give.
+# `0` and a 21-digit number satisfy ^[0-9]+$, so the forge is asked and answers with
+# neither condition met. Pinned rc 3, not rc 2: the guard does not second-guess which
+# numbers GitHub considers real — that is the forge's answer to give.
 setup_mock
 assert_guard_rc "2a-issue-zero" 3 0
 teardown_mock
@@ -92,8 +88,7 @@ setup_mock
 assert_guard_rc "2c-leading-zeros" 3 0099
 teardown_mock
 
-# Wired back through the dispatcher, because rc 3 and rc 4 are only meaningful as the
-# rc 2 / rc 1 the caller reports — and zero issues must exist either way.
+# Through the dispatcher: rc 3/4 only matter as the rc 2/1 the caller reports.
 setup_mock
 run_dispatch --verdict sub-of --parent 0 -- --title "child" --body "$(printf "$CANONICAL_BODY")"
 if [ "$RC" -eq 2 ] && [ "$(count_creates)" -eq 0 ]; then
@@ -104,9 +99,8 @@ fi
 teardown_mock
 
 # --- G3: gh absent from PATH → indeterminate, never eligible ----------------------------
-# The distinction this case protects: "I cannot ask" must not read as "the answer is no"
-# (rc 3 would tell the operator to fix a parent that may be perfectly fine) and must
-# certainly not read as "the answer is yes".
+# "I cannot ask" must not read as "the answer is no" (rc 3 sends the operator to fix a
+# parent that may be fine), and certainly not as "yes".
 setup_mock
 mkdir -p "$TMP/empty-bin"
 # $BASH, not `bash`: the PATH override is what is under test, so the interpreter cannot
@@ -127,9 +121,8 @@ fi
 teardown_mock
 
 # --- G4: a SUCCESSFUL lookup whose payload cannot be parsed -----------------------------
-# rc=0 from gh, garbage on stdout. The `if ! RAW=$(…)` check passes, so the true/false
-# validation is the only thing standing between the payload and an eligibility verdict.
-# Each row is a different way the two-line boolean pair can be wrong.
+# rc=0 from gh, garbage on stdout: the `if ! RAW=$(…)` check passes, so the true/false
+# validation is all that stands between the payload and an eligibility verdict.
 setup_mock
 while IFS='|' read -r cid payload; do
     [ -z "$cid" ] && continue
@@ -154,8 +147,8 @@ assert_guard_rc "4h-well-formed-false-pair-is-rc3-not-rc4" 3 99
 unset GH_MOCK_VIEW_GARBAGE
 teardown_mock
 
-# …and a well-formed "yes" pair still reaches rc 0. Without this the whole group could be
-# satisfied by a guard that never returns 0 at all, which would be a different bug.
+# …and a well-formed "yes" pair still reaches rc 0: without this the group is satisfied by
+# a guard that never returns 0 at all.
 setup_mock
 export GH_MOCK_VIEW_GARBAGE="$(printf 'true\ntrue')"
 gp_run 99

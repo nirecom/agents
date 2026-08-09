@@ -13,13 +13,10 @@ evaluated.
 
 ## IC-C1 — reopen (highest priority)
 
-Ask one question of each candidate: does **one fix resolve this proposal and that
-candidate at the same time**? If the answer is yes for even one candidate, decide
-`reopen`. Differences in surface framing, wording, or scope description must not be
-used as grounds for non-match.
-Symptom similarity alone must never carry a `reopen`: two issues whose observed
-symptoms match but whose underlying causes differ need two separate fixes, so let the
-cascade fall through to the later rules instead.
+Ask of each candidate: does **one fix resolve this proposal and that candidate at the
+same time**? Yes for even one candidate → decide `reopen`.
+Differences in surface framing, wording, or scope description are never grounds for non-match.
+Symptom similarity alone must never carry a `reopen`: when the underlying causes differ, two separate fixes are needed, so fall through to the later rules.
 `target` = the matching candidate's number. `children` / `related` are empty.
 
 ## IC-C2 — sub-of (attach to an existing meta parent)
@@ -45,13 +42,13 @@ at all (`target` is `null`, `children` / `related` are empty).
 
 ## same_fix — required on every verdict
 
-`same_fix` answers the IC-C1 question for whichever verdict was decided: does **one
-fix resolve both the proposal and the existing issue this verdict names**?
-It is a pure function of the verdict — copy the value from the table, never re-judge it.
-It is a different axis from the confirm gate: `same_fix` describes whether one fix
-covers both, the gate describes how destructive the resulting action is.
-`bulk-sub-of` is deliberately absent below because it is outside the review grammar;
-the validator's machine-readable map carries it for the survey artifact.
+Answers the IC-C1 question for the decided verdict: does **one fix resolve both the
+proposal and the existing issue this verdict names**?
+A pure function of the verdict — copy the value from the table, never re-judge it.
+A different axis from the confirm gate: `same_fix` is whether one fix covers both; the
+gate is how destructive the action is.
+`bulk-sub-of` is deliberately absent below — outside the review grammar; the
+validator's machine-readable map carries it for the survey artifact.
 
 | verdict | same_fix |
 |---|---|
@@ -61,15 +58,13 @@ the validator's machine-readable map carries it for the survey artifact.
 | `sibling` | `false` |
 | `none` | `false` |
 
-`reopen` is the only `true`, and that follows from the evaluation order: IC-C1 asks the
-one-fix question of every candidate, so any verdict below it was reached precisely
-because the answer was no for all of them.
+`reopen` is the only `true`: IC-C1 asks the one-fix question of every candidate, so any
+verdict below it was reached because the answer was no for all of them.
 
-Both parent-attaching verdicts are `false` for the same reason — the issue they name is
-a meta parent, a container that is never implemented against. `make-parent` creates one,
-and the grouped children each keep their own fix, so creating it resolves none of them.
-`sub-of` attaches to an existing one, and attaching resolves it no more than creating it
-would.
+Both parent-attaching verdicts are `false` because the issue they name is a meta parent,
+a container never implemented against. `make-parent` creates one and its grouped children
+each keep their own fix; `sub-of` attaches to an existing one, which resolves it no more
+than creating it would.
 
 ## Auxiliary rules
 

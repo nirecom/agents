@@ -8,22 +8,14 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Why this file exists (CPR-WPH): tests/lib/section-runner.sh is the load-bearing piece of
-# the split-suite design. tests/run-all.sh globs tests/*.sh at the TOP LEVEL only, so every
-# assertion living in tests/<family>/ reaches CI exclusively through a parent's run_section
-# call. If that path ever swallows a failure — a broken counter, a mis-parsed Results line,
-# a section that dies before printing one — whole families go silently green. Silently
-# green is worse than absent: an absent test is noticed, a lying one is trusted.
+# run-all.sh globs tests/*.sh at the TOP LEVEL only, so assertions under tests/<family>/
+# reach CI exclusively via a parent's run_section call. If that path swallows a failure,
+# whole families go silently green.
 #
-# The proof has to be by DELIBERATE BREAKAGE. Asserting that a passing section is counted
-# shows only that the happy path works, which is precisely the path a swallowing bug also
-# gets right. So each case below plants a fixture section that is broken in one specific
-# way and asserts the PARENT process exits non-zero because of it.
-#
-# Self-contained by construction (CPR-UNV): every fixture is generated under a temp dir and
-# driven through the REAL tests/lib/section-runner.sh. No file in tests/ is edited, so the
-# proof cannot rot when a real section is rewritten, and running this test can never make a
-# real suite red.
+# Proof is by DELIBERATE BREAKAGE: a happy-path check passes against a swallowing bug too,
+# so each case plants a fixture broken one specific way and asserts the PARENT exits
+# non-zero. Fixtures are generated under a temp dir and driven through the REAL
+# tests/lib/section-runner.sh, so no file in tests/ is touched.
 
 set -u
 
@@ -75,8 +67,7 @@ echo "PASS: fixture-crash-1"
 exit 3
 EOF
 
-# Reports failures but exits 0. The two signals disagree; trusting the exit code alone
-# would lose the failures, trusting the counters alone would keep them.
+# Reports failures but exits 0 — the two signals disagree.
 cat > "$FIXTURES/lies-exit0.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "Results: 0 passed, 2 failed"
@@ -93,8 +84,8 @@ EOF
 chmod +x "$FIXTURES"/*.sh
 
 # --- parent driver --------------------------------------------------------------------
-# A minimal stand-in for a real top-level suite: the same six things section-runner.sh
-# requires of its caller, the real helper, and the same final exit convention.
+# Minimal stand-in for a top-level suite: the six things section-runner.sh requires of its
+# caller, the real helper, and the same final exit convention.
 make_parent() {  # <parent-path> <section-file>...
     local out="$1"; shift
     {
@@ -124,8 +115,7 @@ run_parent() {
 }
 
 echo "=== S1: a healthy section is counted, and the parent stays green ==="
-# The control. Without it, every red-on-breakage case below could be satisfied by a runner
-# that simply always fails.
+# The control: without it, a runner that always fails would satisfy every case below.
 run_parent healthy good.sh
 if [ "$P_RC" -eq 0 ]; then
     pass "S1-healthy-parent-exits-0"
@@ -154,8 +144,8 @@ fi
 
 echo ""
 echo "=== S3: a section that dies before reporting is not silence ==="
-# The dangerous shape: no Results line means no counters to add, and adding zero is
-# indistinguishable from a clean run unless the runner objects explicitly.
+# No Results line means no counters to add, and adding zero looks like a clean run unless
+# the runner objects explicitly.
 run_parent crashes crashes.sh
 if [ "$P_RC" -ne 0 ]; then
     pass "S3-crashed-section-makes-the-parent-exit-nonzero"
@@ -186,7 +176,7 @@ fi
 
 echo ""
 echo "=== S5: a section the parent names but that does not exist ==="
-# The rename/move accident. Skipping it silently would delete coverage on the quiet.
+# The rename/move accident: skipping it silently would delete coverage on the quiet.
 run_parent missing does-not-exist.sh
 if [ "$P_RC" -ne 0 ]; then
     pass "S5-missing-section-file-fails-the-parent"
@@ -196,8 +186,8 @@ fi
 
 echo ""
 echo "=== S6: one broken section among healthy ones is not diluted ==="
-# Real parents run several sections. A runner that ORs exit codes correctly but overwrites
-# rather than accumulates counters would pass every case above and fail only here.
+# A runner that ORs exit codes correctly but overwrites rather than accumulates counters
+# passes every case above and fails only here.
 run_parent mixed good.sh broken.sh good.sh
 if [ "$P_RC" -ne 0 ]; then
     pass "S6-one-broken-section-among-healthy-ones-fails-the-parent"

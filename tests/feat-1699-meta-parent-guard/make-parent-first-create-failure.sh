@@ -10,20 +10,15 @@
 #
 # Group N — make-parent when the FIRST create fails.
 #
-# Why (CPR-WPH): make-parent is the only verdict that creates two issues, and the existing
-# failure cases all sit on the second one — E1..E5 in make-parent-preflight.sh pin the
-# stranded-parent report for "parent exists, proposal does not". The mirror case is
-# unpinned: the parent create itself fails, so NO parent exists. Two distinct wrong
-# behaviours are possible there, and both are silent:
+# E1..E5 in make-parent-preflight.sh pin "parent exists, proposal does not". The mirror —
+# the parent create itself fails, so NO parent exists — allows two silent wrong behaviours:
 #
-#   (i)  report a parent that does not exist — the dispatcher reads the issue number out of
-#        an empty URL, so a naive path prints `Stranded meta parent: # — ` and sends the
-#        operator hunting for an issue nobody created;
-#   (ii) create the proposal anyway — the parent was the only reason the second create was
-#        ordered second. Proceeding produces a real, unattached, UNREPORTED issue: the exact
-#        orphan the whole guard design exists to prevent, arriving through the back door.
+#   (i)  report a parent that does not exist: the issue number is read out of an empty URL,
+#        so a naive path prints `Stranded meta parent: # — ` and sends the operator hunting;
+#   (ii) create the proposal anyway, producing a real, unattached, UNREPORTED orphan — the
+#        exact outcome the guard design exists to prevent, through the back door.
 #
-# Both are asserted below as absences, plus the positive facts that make those absences
+# Both are asserted as absences, plus the positive facts that make those absences
 # meaningful (the run was attempted, and it failed loudly).
 
 setup_mock
@@ -38,9 +33,8 @@ else
     fail "N1-first-create-failure-nonzero-rc" "want non-zero rc when the meta parent could not be created (got: $RC); stdout: $OUT"
 fi
 
-# Positive control. Without it every absence assertion below could pass for the wrong
-# reason — a dispatcher that rejected the argv before reaching gh would create nothing,
-# report nothing, and look identical.
+# Positive control: a dispatcher that rejected the argv before reaching gh would create
+# nothing, report nothing, and satisfy every absence assertion below.
 n=$(count_creates)
 if [ "${n:-0}" -ge 1 ]; then
     pass "N1b-first-create-was-actually-attempted"
@@ -48,9 +42,7 @@ else
     fail "N1b-first-create-was-actually-attempted" "the run never reached a 'gh issue create' (got: ${n:-0}) — the failure under test was not exercised"
 fi
 
-# (ii) No orphan. The proposal must not be created once its parent has failed: there is
-# nothing left to attach it to, and an unattached issue nobody was told about is worse
-# than no issue at all.
+# (ii) No orphan: with the parent failed there is nothing left to attach the proposal to.
 if [ "${n:-0}" -eq 1 ]; then
     pass "N2-no-proposal-created-after-the-parent-failed"
 else
@@ -63,17 +55,15 @@ else
     fail "N2b-no-attach-attempted" "want 0 sub_issues POSTs (got: ${a:-0}) — attaching under a parent that was never created cannot succeed and hides the real error"
 fi
 
-# stdout is the URL contract: every line on it is a claim that the issue exists. Nothing
-# was created, so nothing may appear.
+# stdout is the URL contract: every line claims an issue exists. Nothing was created.
 if [ -z "$(printf '%s' "$OUT" | tr -d '[:space:]')" ]; then
     pass "N3-no-url-on-stdout"
 else
     fail "N3-no-url-on-stdout" "stdout must stay empty when no issue was created; got: $OUT"
 fi
 
-# (i) No phantom parent. The stranded-parent report is correct ONLY when a parent exists.
-# Here it must be absent entirely — and specifically must not appear in its degenerate
-# form, with the issue number extracted from an empty URL.
+# (i) No phantom parent: the report is correct only when a parent exists, so it must be
+# absent — in particular in its degenerate form, with the number read from an empty URL.
 if printf '%s\n' "$ERR" | grep -qE 'Stranded meta parent: #([^0-9]|$)'; then
     fail "N4-no-phantom-stranded-parent-report" "stderr reports a stranded parent with no issue number — the operator is sent looking for an issue that was never created: $ERR"
 else
@@ -85,8 +75,7 @@ else
     pass "N4b-no-numberless-issue-url-in-the-report"
 fi
 
-# The failure must be legible. A non-zero rc with a silent stderr leaves the caller unable
-# to distinguish "the parent could not be created" from "the run was cancelled".
+# A non-zero rc with silent stderr cannot be told apart from a cancelled run.
 if printf '%s' "$ERR" | grep -qiE 'error|fail'; then
     pass "N5-failure-is-reported-on-stderr"
 else

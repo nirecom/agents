@@ -9,20 +9,14 @@
 #
 # Group U — meta-parent-body.sh on its own terms.
 #
-# Why direct coverage (CPR-SC): every other group in this suite reaches this script
-# through the dispatcher, where its output is one argv element among many and the only
-# thing observed is that a body arrived. That answers "was it called", never "what does
-# it do with the input it is given" — so the argument parser, the `--children`
-# normaliser and the interpolation of an operator-supplied title are all untested.
+# Every other group reaches this script through the dispatcher, which observes only that a
+# body arrived — leaving the argument parser, the `--children` normaliser and title
+# interpolation untested. The title is treated as untrusted: it is free text interpolated
+# into a printf, and `$(...)`/backticks/`;` are ordinary punctuation a human might type.
+# Render them, never run them.
 #
-# Why the title is treated as untrusted: it is free text typed by whoever ran
-# /issue-create and it is interpolated into a shell script's printf. It is not
-# attacker-controlled in the way a candidate body is, but it travels the same path, and
-# `$(...)`/backticks/`;` in a group theme are ordinary punctuation a human might type
-# without meaning anything by it. The script must render them, never run them.
-#
-# This group calls the script directly and does not use the suite's gh mock — there is
-# no forge call on this path at all, which is itself part of the contract (U0).
+# Called directly, no gh mock — there is no forge call on this path, itself part of the
+# contract (U0).
 
 MPB="$AGENTS_DIR/bin/github-issues/lib/meta-parent-body.sh"
 
@@ -44,9 +38,8 @@ else
     pass "U0-script-exists"
 
     # -----------------------------------------------------------------------------
-    # U1 — argument parser. Every rejection is exit 2 with a message on STDERR and
-    # nothing on stdout: a body that is half-written is worse than no body, because the
-    # caller pipes stdout straight into `gh issue create --body-file`.
+    # U1 — argument parser. Every rejection is exit 2, message on stderr, nothing on stdout:
+    # the caller pipes stdout straight into `gh issue create --body-file`.
     # -----------------------------------------------------------------------------
     while IFS='|' read -r name want_rc args; do
         [ -z "${name// }" ] && continue
@@ -98,9 +91,8 @@ TABLE
     else
         fail "U2b-exactly-one-changes-line" "want exactly one 'Changes: ' line (got $(u_count_prefix "$U_BASE" 'Changes: '))"
     fi
-    # The header comment makes a specific promise about the FIRST line: it names the
-    # theme and says the parent carries no implementation. Previews and digests show
-    # only that line, so its content is a contract, not formatting.
+    # Previews and digests show only the FIRST line, so its content is a contract: it names
+    # the theme and says the parent carries no implementation.
     U_FIRST="$(printf '%s\n' "$U_BASE" | sed -n '1p')"
     case "$U_FIRST" in
         Background:*flaky\ worker\ dispatch*) pass "U2c-first-line-names-the-theme" ;;
@@ -119,8 +111,8 @@ TABLE
     fi
 
     # -----------------------------------------------------------------------------
-    # U3 — --children normalisation. The value arrives as one comma-joined string from
-    # a shell caller, so whitespace and empty slots are the normal case, not an edge.
+    # U3 — --children normalisation. The value arrives as one comma-joined string, so
+    # whitespace and empty slots are the normal case, not an edge.
     # -----------------------------------------------------------------------------
     while IFS='|' read -r name children want; do
         [ -z "${name// }" ] && continue
@@ -148,13 +140,10 @@ U3f-only-separators       | ,,,           | __ABSENT__
 TABLE
 
     # -----------------------------------------------------------------------------
-    # U4 — the title is rendered, never executed, and never reinterpreted.
-    #
-    # Each row supplies a title that would do something visible if it were evaluated,
-    # and asserts (a) the literal text survives into the body and (b) the evidence of
-    # evaluation is absent. Asserting only (a) would pass on a shell that expanded the
-    # substring and happened to leave the rest; asserting only (b) would pass if the
-    # title had been dropped entirely.
+    # U4 — the title is rendered, never executed or reinterpreted. Each row asserts BOTH
+    # (a) the literal text survives and (b) evidence of evaluation is absent: (a) alone
+    # passes on a shell that expanded part and left the rest; (b) alone passes if the
+    # title was dropped entirely.
     # -----------------------------------------------------------------------------
     u_run --title 'theme $(id) and `id` end'
     if printf '%s' "$U_OUT" | grep -qF 'theme $(id) and `id` end'; then
@@ -175,9 +164,8 @@ TABLE
         pass "U4c-semicolon-not-a-command-separator"
     fi
 
-    # A glob in the title must not be expanded against the CWD. Running from a
-    # directory that contains files makes the row non-vacuous: an unquoted expansion
-    # would substitute their names.
+    # Run from a directory that contains matching files, so the row is non-vacuous: an
+    # unquoted expansion would substitute their names.
     U_OLDPWD="$PWD"
     cd "$U_TMP" || true
     : > "$U_TMP/glob-bait-one"; : > "$U_TMP/glob-bait-two"
@@ -224,9 +212,8 @@ TABLE
     fi
 
     # -----------------------------------------------------------------------------
-    # U5 — a --children value carrying metacharacters is rendered, not run. Same
-    # concern as U4 on the other operand, which is normalised by a different code path
-    # (IFS split + substring removal) and so cannot inherit U4's result (CPR-ORTH).
+    # U5 — metacharacters in --children are rendered, not run. Cannot inherit U4's result:
+    # this operand goes through a different path (IFS split + substring removal).
     # -----------------------------------------------------------------------------
     u_run --title "T" --children '1,$(id),`id`,2'
     if printf '%s' "$U_OUT" | grep -qE 'uid=[0-9]+'; then
@@ -242,8 +229,7 @@ TABLE
     fi
 
     # -----------------------------------------------------------------------------
-    # U6 — size. A long theme must not truncate or crash; the body is what a human
-    # reads, so silent loss is worse than a long line.
+    # U6 — size. Silent truncation of the theme is worse than a long line.
     # -----------------------------------------------------------------------------
     U_LONG="$(printf 'x%.0s' $(seq 1 5000))"
     u_run --title "$U_LONG"

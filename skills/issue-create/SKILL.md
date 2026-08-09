@@ -140,8 +140,15 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 
 `--note` applies to `reopen` only, and only when `review.status` is `replaced`: build it with `node "$AGENTS_CONFIG_DIR/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
 
-`make-parent` creates TWO issues: a `meta`-labeled `Group: `-titled parent with a generated body, plus the proposal verbatim as its child; the named `--children` and the new child all attach under it.
-`sub-of` / `bulk-sub-of` refuse a parent that is not `meta` + `Group: ` (exit 2), or an unreadable one (exit 1), before creating anything — recover per `rules/github-issues.md` "Converting an issue into a meta parent".
+`make-parent` creates TWO issues:
+- a `meta`-labeled, `Group: `-titled parent with a generated body
+- the proposal verbatim as its child
+- the named `--children` and the new child all attach under that parent
+
+`sub-of` / `bulk-sub-of` vet the parent before creating anything:
+- parent is not `meta` + `Group: ` → exit 2
+- parent is unreadable → exit 1
+- recover per `rules/github-issues.md` "Converting an issue into a meta parent"
 
 For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
 

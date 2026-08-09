@@ -12,16 +12,10 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Two copies of a decision table are one copy too many. `same_fix` now exists in three
-# places that must agree: the human-and-model-readable table in the cascade SSOT, the
-# machine-readable map in the validator, and the prompt the reviewer actually receives.
-# Any pair silently disagreeing produces the worst failure mode available here — a
-# verdict that is structurally valid and substantively wrong. This file pins the
-# agreement itself rather than any one copy.
-#
-# The comparison is deliberately a SUBSET comparison: `bulk-sub-of` lives in the JS map
-# (the artifact grammar admits it) but must NOT appear in the cascade table (the review
-# grammar does not). A naive "the two are equal" assertion would fail forever.
+# `same_fix` lives in three places that must agree: the cascade SSOT table, the
+# validator's map, and the assembled reviewer prompt. This file pins the agreement.
+# The comparison is a SUBSET one: `bulk-sub-of` is in the JS map (artifact grammar)
+# but must NOT be in the cascade table (review grammar), so equality would never hold.
 
 set -u
 
@@ -42,16 +36,10 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # --- section scoping (CPR-SC) ---------------------------------------------------------
-# Every doc-contract case below asserts something about ONE section of the cascade, so it
-# must read that section and nothing else. A whole-file grep is satisfied by an unrelated
-# occurrence elsewhere, and this file has a live example of the failure mode: the phrase
-# "sub-of ... meta parent" appears in the IC-C2 HEADING ("sub-of (attach to an existing
-# meta parent)"), so a whole-file M6 reports "the same_fix section states its reason"
-# while reading a heading that states nothing of the kind.
-#
-# Both a line-oriented copy and a flattened copy are produced per section: a line grep is
-# the right tool for a table row or a directive that must stand alone, and a flattened
-# copy is the right tool for a sentence the file wraps across several lines.
+# Doc-contract cases read ONE cascade section, not the whole file: e.g. "sub-of ... meta
+# parent" also appears in the IC-C2 heading, which would satisfy M6 while stating nothing.
+# Each section gets a line-oriented copy (for rows/standalone directives) and a flattened
+# copy (for sentences the file wraps across lines).
 md_section() {  # <file> <heading-regex> → the body of that `## ` section, headings excluded
     [ -f "$1" ] || return 0
     awk -v re="$2" '
@@ -69,10 +57,9 @@ tr '\n' ' ' < "$ICC1"          > "$ICC1_FLAT"    2>/dev/null || : > "$ICC1_FLAT"
 tr '\n' ' ' < "$SAMEFIX_BLOCK" > "$SAMEFIX_FLAT" 2>/dev/null || : > "$SAMEFIX_FLAT"
 if [ -f "$CASCADE" ]; then tr '\n' ' ' < "$CASCADE" > "$CASCADE_FLAT"; else : > "$CASCADE_FLAT"; fi
 
-# table_rows <file> → sorted `verdict=bool` lines for every fixed 2-column markdown row.
-# Backticks and whitespace are stripped so the table may be written either way; a row
-# whose second column is not a bare boolean (the `|---|---|` separator, or a prose
-# table) is skipped rather than mis-parsed into a phantom pair.
+# table_rows <file> → sorted `verdict=bool` lines for every 2-column markdown row.
+# Backticks/whitespace stripped so either spelling parses; rows whose second column is
+# not a bare boolean (separators, prose tables) are skipped, not mis-parsed.
 table_rows() {
     [ -f "$1" ] || return 0
     awk -F'|' '
@@ -116,8 +103,7 @@ count_lines() { local n; n=$(grep -c . "$1" 2>/dev/null) || true; printf '%s' "$
 CROWS=$(count_lines "$CASCADE_ROWS")
 JROWS=$(count_lines "$JS_ROWS")
 
-# P1 exists so P3 cannot pass vacuously: two empty lists are "equal" and would report
-# agreement between a table that is not there and a map that is not there.
+# P1/P2 keep P3 non-vacuous: two empty lists would compare "equal".
 if [ "$CROWS" -eq 5 ]; then
     pass "P1-cascade-table-has-five-rows"
 else
@@ -136,9 +122,9 @@ else
     fail "P3-cascade-table-matches-js-map" "cascade=[$(tr '\n' ' ' < "$CASCADE_ROWS")] js=[$(tr '\n' ' ' < "$JS_ROWS")]"
 fi
 
-# The asymmetry is intentional and must be visible in BOTH directions: absent from the
-# doc table, present in the map. Asserting only one side would let a well-meaning edit
-# "complete" the table and reintroduce a verdict the reviewer may not answer with.
+# The asymmetry is pinned in both directions: absent from the doc table, present in the
+# map. One-sided, an edit could "complete" the table with a verdict the reviewer may not
+# answer with.
 if [ "$CROWS" -gt 0 ] && ! grep -q '^bulk-sub-of=' "$CASCADE_ROWS"; then
     pass "P4-cascade-table-omits-bulk-sub-of"
 else
@@ -154,9 +140,8 @@ fi
 echo ""
 echo "=== M: both parent-attaching verdicts are false in the cascade table (standalone) ==="
 
-# Deliberately independent of the awk parser above. If the table's shape changes in a
-# way the parser cannot read, P3 turns into a parse complaint and this case still says
-# plainly whether the one value #1912 reverses is written down correctly.
+# Independent of the awk parser above: if the table shape stops parsing, P3 degrades to
+# a parse complaint while M1 still reports the value #1912 reverses.
 if [ ! -f "$CASCADE" ]; then
     fail "M1-make-parent-row-is-false" "cascade SSOT not found at $CASCADE"
 elif grep -qE '^[[:space:]]*\|[^|]*make-parent[^|]*\|[[:space:]]*`?false`?[[:space:]]*\|' "$CASCADE"; then
@@ -173,11 +158,8 @@ else
 fi
 
 # A value with no stated reason is a value the next editor will 'correct'.
-# Flattened before matching: the rationale is a paragraph the file wraps across several
-# lines, so a line-oriented grep would report a present reason as missing purely because
-# of where the paragraph happens to break. Scoped to the `same_fix` section (see the
-# section-scoping note above): the reason has to sit with the table it explains, not
-# somewhere else in the file where a reader deciding a verdict will never meet it.
+# Flattened before matching because the rationale wraps across lines; scoped to the
+# `same_fix` section so the reason must sit with the table it explains.
 if grep -qiE 'make-parent[^.]*(own fix|its own|each [^.]*fix)|(own fix|each keeps)[^.]*make-parent' "$SAMEFIX_FLAT"; then
     pass "M3-make-parent-false-has-a-stated-reason"
 else
@@ -185,9 +167,8 @@ else
 fi
 
 # --- sub-of: the value #1912 reverses on the parent-ATTACHING side ----------------------
-# CPR-ORTH: sub-of and make-parent both name a meta parent, so the pin that guards one
-# must guard the other. Kept standalone for the same reason M1/M2 are: if the table's
-# shape stops parsing, P3 degrades to a parse complaint and these still speak plainly.
+# CPR-ORTH: sub-of and make-parent both name a meta parent, so both get the pin.
+# Standalone for the same reason M1/M2 are (parser-independent).
 if [ ! -f "$CASCADE" ]; then
     fail "M4-sub-of-row-is-false" "cascade SSOT not found at $CASCADE"
 elif grep -qE '^[[:space:]]*\|[^|]*`?sub-of`?[^|]*\|[[:space:]]*`?false`?[[:space:]]*\|' "$CASCADE"; then
@@ -203,16 +184,11 @@ else
     pass "M5-sub-of-row-not-true"
 fi
 
-# The two `false` rows must share ONE stated reason, not two coincidences: the issue a
-# parent-attaching verdict names is a meta parent, a container never implemented against.
-# Without this the next editor sees two unrelated values and 'corrects' one of them.
-#
-# Scoped to the `same_fix` section, and that scoping is load-bearing rather than tidiness:
-# read against the whole file this case is satisfied by the IC-C2 HEADING, "sub-of (attach
-# to an existing meta parent)", which names a route and explains nothing. The reason may be
-# written collectively ("both parent-attaching verdicts …") or per-verdict, so both forms
-# are accepted — but the section must also NAME sub-of, or the collective sentence could be
-# about anything.
+# The two `false` rows must share ONE stated reason: the issue a parent-attaching verdict
+# names is a meta parent, never implemented against.
+# Scoped to `same_fix` and load-bearing: whole-file, the IC-C2 heading "sub-of (attach to
+# an existing meta parent)" would satisfy this while explaining nothing. Collective and
+# per-verdict phrasings both pass, but the section must also NAME sub-of.
 if grep -qiE '(sub-of|parent-attaching)[^.]*(meta parent|never implemented|container)|(meta parent|never implemented|container)[^.]*(sub-of|parent-attaching)' "$SAMEFIX_FLAT" \
    && grep -qF 'sub-of' "$SAMEFIX_FLAT"; then
     pass "M6-sub-of-false-has-a-stated-reason"
@@ -223,14 +199,10 @@ fi
 echo ""
 echo "=== N: symptom similarity alone does not justify reopen ==="
 
-# IC-C1's old wording read 'same root cause OR observed symptom', and the OR is what
-# let a symptom match carry a reopen on its own. The replacement must say so in the
-# negative, on its own line — a positive restatement of the root-cause test does not
-# stop a grader that already believes the symptom is enough.
-#
-# All three cases read the IC-C1 BLOCK, not the file. The rule they describe is IC-C1's
-# rule; a prohibition parked in a later section is one the grader deciding IC-C1 has
-# already walked past, and a whole-file grep cannot tell the two apart.
+# IC-C1's old wording read 'same root cause OR observed symptom'; the OR let a symptom
+# match carry a reopen. The replacement must forbid it in the negative, on its own line.
+# All three cases read the IC-C1 BLOCK, not the file: a prohibition parked in a later
+# section is one the grader deciding IC-C1 has already walked past.
 if [ ! -s "$ICC1" ]; then
     fail "N1-negative-directive-present" "no '## IC-C1' section found in $CASCADE"
 elif grep -qiE '^[^|]*(must not|never|do not|don.t)[^|]*symptom' "$ICC1" \
@@ -258,26 +230,18 @@ fi
 echo ""
 echo "=== O: IC-C1 states the same-fix criterion POSITIVELY, in its own block ==="
 
-# Why this group exists as a separate one: N asserts the negative sentence ("symptom
-# similarity alone never carries a reopen"). A negative alone does not tell a grader what
-# DOES carry a reopen — delete the positive rule and keep the negative, and every case in
-# N still passes while the cascade has lost its criterion entirely. #1912's change is the
-# positive sentence; that is what has to be pinned, and pinned INSIDE the IC-C1 block,
-# because the same wording also appears in the `same_fix` section further down (which is
-# about copying a table value, not about deciding a verdict).
-# $ICC1 / $ICC1_FLAT are extracted once near the top of this file (section-scoping note).
-# The flattened copy exists because the criterion is a single sentence that the file wraps
-# across three lines, and a line-oriented grep would report it missing purely because of
-# where the paragraph happens to break.
+# Separate from N: delete the positive rule and keep the negative, and every N case still
+# passes while the cascade has lost its criterion. Pinned INSIDE the IC-C1 block because
+# the same wording also appears in the `same_fix` section (a lookup, not a decision).
+# $ICC1_FLAT is used where the criterion wraps across lines.
 if [ -s "$ICC1" ]; then
     pass "O1-icc1-block-is-extractable"
 else
     fail "O1-icc1-block-is-extractable" "no '## IC-C1' section found in $CASCADE — every case below reads that block"
 fi
 
-# The criterion itself: ONE fix, BOTH items, AT THE SAME TIME. All three parts are
-# required, and each is asserted separately so the failure message names the missing one.
-# "one fix" alone would also match "one fix per issue"; the conjunction is the substance.
+# The criterion: ONE fix, BOTH items, AT THE SAME TIME — asserted part by part so the
+# failure names the missing one ("one fix" alone also matches "one fix per issue").
 if grep -qiE 'one fix' "$ICC1"; then
     pass "O2-icc1-says-one-fix"
 else
@@ -293,33 +257,30 @@ if grep -qiE 'at the same time|simultaneous' "$ICC1_FLAT"; then
 else
     fail "O4-icc1-requires-simultaneity" "'one fix resolves both' without 'at the same time' admits two sequential fixes, which is exactly the case #1912 excludes"
 fi
-# The criterion has to be operative — an instruction to decide, not a description. A
-# grader reading a definition with no imperative has been told nothing to do.
+# The criterion must be operative — an instruction to decide, not a description.
 if grep -qiE '(decide|choose|answer)[^.]*reopen|reopen[^.]*(decide|choose)' "$ICC1_FLAT"; then
     pass "O5-icc1-criterion-drives-the-reopen-decision"
 else
     fail "O5-icc1-criterion-drives-the-reopen-decision" "the IC-C1 block must instruct the grader to DECIDE reopen when the criterion holds"
 fi
-# One candidate is enough. Without this, "does one fix resolve the proposal and the
-# candidates" could be read as requiring the whole set to match.
+# One candidate is enough — otherwise "the proposal and the candidates" reads as
+# requiring the whole set to match.
 if grep -qiE 'even one candidate|any candidate|for one candidate' "$ICC1_FLAT"; then
     pass "O6-icc1-one-matching-candidate-suffices"
 else
     fail "O6-icc1-one-matching-candidate-suffices" "IC-C1 must say a single matching candidate is enough to decide reopen"
 fi
 
-# The retired formulation, in the negative. The pre-#1912 wording made root cause and
-# observed symptom alternatives ('or'), and that disjunction is precisely what let a
-# symptom match carry a reopen. Restricted to the IC-C1 block: the word "symptom" still
-# legitimately appears there in the negative sentence N asserts.
+# The retired cause-OR-symptom disjunction must be gone. Restricted to the IC-C1 block:
+# "symptom" still legitimately appears there in the negative sentence N asserts.
 if grep -qiE '(root cause|underlying cause)[^.]*\bor\b[^.]*symptom|symptom[^.]*\bor\b[^.]*(root cause|underlying cause)' "$ICC1_FLAT"; then
     fail "O7-retired-cause-or-symptom-disjunction-absent" "IC-C1 still offers root cause OR symptom as alternatives — this is the pre-#1912 criterion #1912 replaced"
 else
     pass "O7-retired-cause-or-symptom-disjunction-absent"
 fi
 
-# The two places that phrase the criterion must phrase it the SAME way, or a grader who
-# reads only one of them decides on different grounds than one who reads the other.
+# Both places that phrase the criterion must phrase it the same way, or graders decide
+# on different grounds depending on which they read.
 if [ -s "$SAMEFIX_BLOCK" ] && grep -qiE 'one[[:space:]]*fix' "$SAMEFIX_BLOCK" \
    && grep -qiE 'IC-C1' "$SAMEFIX_BLOCK"; then
     pass "O8-same-fix-section-defers-to-the-icc1-criterion"
@@ -330,12 +291,10 @@ fi
 echo ""
 echo "=== S: both graders reference the SSOT, neither duplicates the table ==="
 
-# The worker's cascade instruction is ONE numbered procedure step. S2b–S2f below assert
-# what that step says, so they must read that step: "never restate" written in a rules
-# bullet at the bottom of the file, or "first match wins" quoted in an unrelated example,
-# would satisfy a whole-file grep while the step the worker actually executes said neither.
-# The block is self-locating — it starts at the line naming the SSOT and ends at the next
-# numbered step — so renumbering the procedure cannot silently empty it.
+# S2b–S2f assert what the worker's ONE numbered cascade step says, so they read only that
+# step — the same phrases elsewhere in the file would satisfy a whole-file grep while the
+# executed step said neither. The block is self-locating (SSOT line → next numbered step),
+# so renumbering cannot silently empty it.
 WORKER_STEP="$WORK/worker-cascade-step.txt"
 : > "$WORKER_STEP"
 if [ -f "$WORKER_MD" ]; then
@@ -356,33 +315,28 @@ else
     fail "S2-worker-mentions-same-fix" "the survey worker emits same_fix, so it must name the field"
 fi
 
-# S4/S5 below prove the worker does not COPY the cascade. That is only half the contract:
-# a worker that copies nothing and says nothing about how to use the file it was pointed
-# at is equally broken, and the S1/S2 path-and-field checks would not notice. S2b–S2e pin
-# the four instructions that make the pointer usable — they are the entire mechanism by
-# which the SSOT reaches the survey side.
+# S4/S5 prove the worker does not COPY the cascade; S2b–S2f pin the instructions that
+# make the pointer usable. Both halves are needed — a worker that copies nothing and says
+# nothing about how to use the file still passes S1/S2.
 if [ -s "$WORKER_STEP" ] && grep -qE 'IC-C1,[[:space:]]*IC-C2,[[:space:]]*IC-C3,[[:space:]]*IC-C4' "$WORKER_STEP"; then
     pass "S2b-worker-states-the-cascade-order"
 else
     fail "S2b-worker-states-the-cascade-order" "the worker must name the evaluation order IC-C1..IC-C4; a pointer to an ordered cascade that omits the order invites arbitrary evaluation"
 fi
-# Without first-match-wins, a grader that finds two matching rules picks either one, and
-# IC-C1's priority over IC-C3 (the reopen-vs-group decision) becomes non-deterministic.
+# Without first-match-wins, IC-C1's priority over IC-C3 becomes non-deterministic.
 if [ -s "$WORKER_STEP" ] && grep -qiE 'first match wins|first[- ]match[- ]wins|the first rule that matches' "$WORKER_STEP"; then
     pass "S2c-worker-states-first-match-wins"
 else
     fail "S2c-worker-states-first-match-wins" "the worker must state first-match-wins, not merely list the rules in order"
 fi
-# The instruction that makes S4 enforceable at authoring time: restating the rules is
-# what produces the second copy S4 exists to detect.
+# Restating the rules is what produces the second copy S4 exists to detect.
 if [ -s "$WORKER_STEP" ] && grep -qiE 'never restate|do not restate|never repeat the rules' "$WORKER_STEP"; then
     pass "S2d-worker-forbids-restating-the-rules"
 else
     fail "S2d-worker-forbids-restating-the-rules" "the worker must forbid restating the cascade rules inline — that prohibition is what keeps the SSOT single"
 fi
-# same_fix is a table LOOKUP, not a judgment. A worker that re-judges it can disagree
-# with the validator's map for the same verdict, and the artifact is then rejected for a
-# field the grader was never supposed to reason about.
+# same_fix is a table LOOKUP, not a judgment: a worker that re-judges it can disagree
+# with the validator's map and get the artifact rejected.
 if [ -s "$WORKER_STEP" ] && grep -qiE 'same_fix.*(table|fixed by the verdict)|(table|fixed by the verdict).*same_fix' "$WORKER_STEP"; then
     pass "S2e-worker-takes-same-fix-from-the-table"
 else
@@ -401,8 +355,7 @@ else
     fail "S3-codex-injects-cascade-body" "review-survey-verdict-codex.sh must cat the cascade SSOT into the prompt"
 fi
 
-# Non-duplication is checked structurally: the table's ROW FORM must exist in exactly
-# one file. A second copy is the copy that drifts, and it drifts silently.
+# Non-duplication checked structurally: the table's ROW FORM must exist in one file only.
 for pair in "S4-worker:$WORKER_MD" "S5-codex:$CODEX_SH"; do
     label="${pair%%:*}"; f="${pair#*:}"
     table_rows "$f" > "$WORK/rows-$label.txt"
@@ -417,9 +370,8 @@ done
 echo ""
 echo "=== R: the assembled reviewer prompt carries same_fix and the cascade ==="
 
-# Mock codex captures the prompt on stdin. This is the only way to see the prompt the
-# reviewer is actually handed: the script builds it in a 600-mode temp file and deletes
-# it on exit, so reading the script's source would only prove intent, not the result.
+# Mock codex captures the prompt on stdin — the only way to see the assembled prompt,
+# since the script builds it in a 600-mode temp file and deletes it on exit.
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 cat > "$MOCKDIR/codex" <<'MOCK'
 #!/usr/bin/env bash
@@ -460,8 +412,8 @@ else
     fail "R1-prompt-captured" "the mock codex received no prompt (review-survey-verdict-codex.sh present=$([ -f "$CODEX_SH" ] && echo yes || echo no))"
 fi
 
-# The JSON shape line is the reviewer's output contract. same_fix appearing anywhere
-# else in the prompt would not make it a required key of the answer.
+# The JSON shape line is the output contract; same_fix elsewhere in the prompt would not
+# make it a required key of the answer.
 SHAPE_LINE=$(grep -F '"verdict":"<one of the above>"' "$PROMPT" 2>/dev/null | head -n 1)
 if [ -n "$SHAPE_LINE" ] && printf '%s' "$SHAPE_LINE" | grep -qF 'same_fix'; then
     pass "R2-same-fix-on-the-json-shape-line"
@@ -469,8 +421,8 @@ else
     fail "R2-same-fix-on-the-json-shape-line" "the output-shape line must require same_fix (got: '${SHAPE_LINE:-<no shape line>}')"
 fi
 
-# The table has to survive the trip. Parsing the PROMPT with the same parser used on
-# the cascade proves the rows arrived intact, not merely that some prose did.
+# Parsing the PROMPT with the cascade's parser proves the rows arrived intact, not just
+# that some prose did.
 PROMPT_ROWS="$WORK/prompt-rows.txt"
 table_rows "$PROMPT" > "$PROMPT_ROWS"
 if [ "$CROWS" -eq 5 ] && diff -q "$CASCADE_ROWS" "$PROMPT_ROWS" >/dev/null 2>&1; then
@@ -479,8 +431,8 @@ else
     fail "R3-cascade-table-reaches-the-prompt" "prompt rows=[$(tr '\n' ' ' < "$PROMPT_ROWS")] cascade rows=[$(tr '\n' ' ' < "$CASCADE_ROWS")]"
 fi
 
-# Order matters for prompt-injection reasons that predate #1912: the rules must be
-# established BEFORE any attacker-controlled issue body is read.
+# Prompt-injection ordering (predates #1912): the rules must be established BEFORE any
+# attacker-controlled issue body is read.
 TI=$(first_index "$PROMPT" 'make-parent')
 CI=$(first_index "$PROMPT" '[CANDIDATES START]')
 if [ -n "$TI" ] && [ -n "$CI" ] && [ "$TI" -lt "$CI" ]; then
@@ -491,12 +443,10 @@ fi
 
 
 # --- sections ------------------------------------------------------------------------
-# Two concerns too large for this file (already ~450 lines, rules/coding/file-split.md
-# HARD limit 500):
-#   icc1-semantics.sh        the four properties of the NEW IC-C1 criterion
-#   ssot-injection-parity.sh the two graders receive the SAME cascade bytes
-# tests/run-all.sh globs tests/*.sh (top level only), so without this block neither
-# would ever run — see tests/lib/section-runner.sh.
+# Split out to stay under the 500-line HARD limit (rules/coding/file-split.md):
+#   icc1-semantics.sh        properties of the NEW IC-C1 criterion
+#   ssot-injection-parity.sh both graders receive the SAME cascade bytes
+# run-all.sh globs tests/*.sh only, so sections run via tests/lib/section-runner.sh.
 SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1912-verdict-criterion-drift"
 # shellcheck source=./lib/section-runner.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"

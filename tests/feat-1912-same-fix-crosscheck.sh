@@ -8,26 +8,11 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# #1912 adds one field, `same_fix`, to BOTH verdict producers (survey artifact and
-# codex review), and raises the artifact schema to 3. `same_fix` answers exactly one
-# question — "does ONE fix resolve the proposal and the named existing issue at the
-# same time?" — and because that answer is a function of the verdict, it is not free
-# text a producer may fill in as it likes: each verdict has exactly one admissible
-# value, and any other value is a producer whose reasoning drifted.
-#
-# The cross-check is the whole point. Without it `same_fix` would be a field nobody
-# reads, and a model that emitted `make-parent` while thinking "one fix covers both"
-# would sail through. `make-parent` = false is the value that catches that drift, and
-# it is a REVERSAL of the earlier draft (which keyed on close-state coupling), so it
-# is asserted in both directions here — a table that quietly flipped back would fail.
-#
-# `sub-of` / `bulk-sub-of` = false are the same kind of reversal, on the parent-ATTACHING
-# side: the issue those verdicts name is a meta parent, a container that is never
-# implemented against, so attaching to one resolves it no more than creating one does.
-# `reopen` is the only `true` left, and the cascade order says the same thing
-# independently — IC-C1 asks the one-fix question of every candidate and only falls
-# through to IC-C2 when the answer was no for all of them. Both polarities are pinned
-# for each verdict below so a table that flipped back would fail here too.
+# #1912 adds `same_fix` to both verdict producers (survey artifact and codex review) and
+# raises the artifact schema to 3. The value is a function of the verdict, not free text,
+# so the validator cross-checks it: `reopen` = true, everything else false.
+# `make-parent`/`sub-of`/`bulk-sub-of` = false are REVERSALS of the earlier draft, so each
+# verdict is pinned in BOTH polarities below — a table that flipped back would fail.
 
 set -u
 
@@ -46,10 +31,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # ---------------------------------------------------------------------------
-# X: SAME_FIX_BY_VERDICT is exported, and it is the machine-readable SSOT.
-# A prose table in the cascade doc cannot be read by the validator, the survey
-# worker or the reviewer prompt; only an exported map can, so its absence is a
-# failure in its own right rather than a stylistic preference.
+# X: SAME_FIX_BY_VERDICT is exported — the machine-readable SSOT. The cascade doc's
+# prose table cannot be read by code, so the export's absence is a failure in itself.
 # ---------------------------------------------------------------------------
 echo "=== X: exported constants (SCHEMA_VERSION, SAME_FIX_BY_VERDICT) ==="
 
@@ -84,21 +67,17 @@ assert_export() {  # <label> <prefix> <want>
 
 assert_export X1-schema-version-3 "SCHEMA_VERSION=" "3"
 assert_export X2-table-is-an-object "TABLE_TYPE=" "object"
-# Exactly six keys: a table missing bulk-sub-of would make the artifact-side check
-# unresolvable for the bulk route, and an extra key means a verdict nobody dispatches.
+# Exactly six keys: missing bulk-sub-of leaves the bulk route unresolvable; an extra key
+# means a verdict nobody dispatches.
 assert_export X3-table-covers-every-verdict "KEYS=" "bulk-sub-of,make-parent,none,reopen,sibling,sub-of"
 
-# reopen is the ONLY true: it re-uses the existing issue, so the one fix that closes the
-# proposal is literally the fix that closes it.
+# reopen is the ONLY true: it re-uses the existing issue, so one fix closes both.
 assert_export X4-reopen-true       "V:reopen="       "true"
-# Both parent-attaching verdicts are false. The issue they name is a meta parent — a
-# container that is never implemented against — so attaching to one (sub-of/bulk-sub-of)
-# resolves it no more than creating one (make-parent) does. These are the values #1912
-# reverses; A9/A10 and B9/B10 below pin the same flip through the validator.
+# Parent-attaching verdicts are false: the issue they name is a meta parent, never
+# implemented against. These are the values #1912 reverses (see A9/A10, B9/B10).
 assert_export X5-sub-of-false      "V:sub-of="       "false"
 assert_export X6-bulk-sub-of-false "V:bulk-sub-of="  "false"
-# make-parent groups issues that each still need their OWN fix — the grouping is
-# organisational, not a shared repair.
+# make-parent groups issues that each still need their OWN fix.
 assert_export X7-make-parent-false "V:make-parent="  "false"
 assert_export X8-sibling-false     "V:sibling="      "false"
 assert_export X9-none-false        "V:none="         "false"
@@ -181,22 +160,21 @@ mk_artifact "$WORK/a-null.json"    none  null
 mk_artifact "$WORK/a-num.json"     none  1
 
 # A1 is the positive control: without it every "invalid" below could come from an
-# unrelated defect in the fixture rather than from same_fix.
+# unrelated fixture defect.
 assert_route A1-schema3-consistent  valid   "$WORK/a-none.json" "$OK_REVIEW"
 assert_route A2-schema-version-2    invalid "$WORK/a-v2.json"   "$OK_REVIEW"
 assert_reason_names A2r-reason-names-schema-version schema_version "$WORK/a-v2.json" "$OK_REVIEW"
 
 assert_route A3-same-fix-missing    invalid "$WORK/a-omit.json" "$OK_REVIEW"
 assert_reason_names A3r-reason-names-same-fix same_fix "$WORK/a-omit.json" "$OK_REVIEW"
-# No coercion: "true" and 1 are producer defects, and a truthy string would flip the
-# cross-check the wrong way exactly like worth_filing's `"false"`.
+# No coercion: a truthy string would flip the cross-check the wrong way, exactly like
+# worth_filing's `"false"`.
 assert_route A4-same-fix-string     invalid "$WORK/a-str.json"  "$OK_REVIEW"
 assert_route A5-same-fix-null       invalid "$WORK/a-null.json" "$OK_REVIEW"
 assert_route A6-same-fix-number     invalid "$WORK/a-num.json"  "$OK_REVIEW"
 
-# Per-verdict consistency, both directions. The "wrong" row of each pair is the one
-# that catches a producer whose verdict and reasoning disagree; the "right" row keeps
-# the wrong row non-vacuous.
+# Per-verdict consistency, both directions: the "wrong" row catches producer drift, the
+# "right" row keeps it non-vacuous.
 while IFS='|' read -r name verdict sf want; do
     [[ -z "${name// }" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"; verdict="${verdict//[[:space:]]/}"
@@ -216,20 +194,16 @@ A15-none-false        | none        | false | valid
 A16-none-true         | none        | true  | invalid
 TABLE
 
-# A12 is the reversal guard, so its reason is pinned too: "make-parent groups issues
-# that each keep their own fix" must be legible to whoever reads the failure.
+# A12/A10 are the reversal guards, so their rejection reason is pinned too: they must be
+# rejected FOR same_fix, not for an incidental shape defect.
 mk_artifact "$WORK/a-mp-true.json" make-parent true
 assert_reason_names A12r-reason-names-same-fix same_fix "$WORK/a-mp-true.json" "$OK_REVIEW"
 
-# A10 is the parent-attaching reversal guard, and it gets the same treatment: an artifact
-# claiming one fix covers both while attaching to a meta parent must be rejected FOR
-# same_fix, not for some incidental shape defect.
 mk_artifact "$WORK/a-so-true.json" sub-of true
 assert_reason_names A10r-reason-names-same-fix same_fix "$WORK/a-so-true.json" "$OK_REVIEW"
 
-# bulk-sub-of is folded to invalid by the review grammar, but the ARTIFACT is checked
-# first — so a bulk artifact with the wrong same_fix must be rejected FOR same_fix, not
-# swallowed by the grammar fold. Both rows together pin that ordering.
+# bulk-sub-of folds to invalid on the review grammar, but the ARTIFACT is checked first;
+# both rows pin that ordering.
 mk_artifact "$WORK/a-bulk-bad.json" bulk-sub-of true
 mk_artifact "$WORK/a-bulk-ok.json"  bulk-sub-of false
 assert_reason_names A17-bulk-wrong-same-fix-named same_fix "$WORK/a-bulk-bad.json" "$OK_REVIEW"
@@ -251,9 +225,8 @@ assert_route B4-review-same-fix-null    invalid "$ART" "{\"verdict\":\"none\",$B
 assert_route B5-review-same-fix-number  invalid "$ART" "{\"verdict\":\"none\",$BASE,\"same_fix\":0}"
 assert_reason_names B6-review-reason-names-same-fix same_fix "$ART" "{\"verdict\":\"none\",$BASE}"
 
-# Per-verdict consistency on the review side. The review may disagree with the survey
-# (artifact verdict is `none` throughout), so each row exercises the review's OWN row
-# of the table, not the artifact's.
+# Per-verdict consistency on the review side. The artifact verdict stays `none`
+# throughout, so each row exercises the review's own table row, not the artifact's.
 while IFS='|' read -r name body want; do
     [[ -z "${name// }" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"
@@ -271,21 +244,14 @@ B14-sibling-true      | {"verdict":"sibling","target":null,"children":[],"relate
 B15-none-true         | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":true}     | invalid
 TABLE
 
-# B15 completes the review-side cross-product: every one of the five verdicts is now
-# asserted in BOTH polarities (its table value, and the wrong one). The `none` row is the
-# one that could most easily have been left out — B2 already covers `none`+false, so the
-# verdict looked "done" — and it is also the most consequential omission, because
-# `none` + `same_fix: true` is self-contradictory in a way the other rows are not: it
-# claims one fix resolves the proposal and an existing issue while simultaneously
-# reporting that no existing issue is related at all (`target` null, both lists empty).
+# B15 completes the cross-product (`none`+true is self-contradictory: one fix resolves an
+# existing issue while target is null and both lists are empty).
 
-# B12 is the review-side reversal guard.
+# B12/B10 are the review-side reversal guards; both pass every shape check, so the
+# same_fix cross-check must be what rejects them.
 assert_reason_names B12r-reason-names-same-fix same_fix "$ART" \
     '{"verdict":"make-parent","target":null,"children":[10,11],"related":[],"reason":"one theme","worth_filing":true,"same_fix":true}'
 
-# B10 is the same guard on the parent-attaching side, and its reason is pinned for the
-# same reason: sub-of passes every shape check, so the only thing that may reject it is
-# the same_fix cross-check itself.
 assert_reason_names B10r-reason-names-same-fix same_fix "$ART" \
     '{"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"belongs under it","worth_filing":true,"same_fix":true}'
 
@@ -310,10 +276,8 @@ fi
 echo ""
 echo "=== D: make-empty-verdict.sh agrees with SAME_FIX_BY_VERDICT ==="
 
-# The empty-verdict route bypasses the survey worker entirely (zero candidates,
-# non-GitHub remote, --skip-survey). It is a THIRD producer of the field, and a
-# producer that hard-codes the wrong constant is invisible to A and B above —
-# those read fixtures, this one reads the shipped script.
+# The empty-verdict route (zero candidates, non-GitHub remote, --skip-survey) is a THIRD
+# producer. A and B read fixtures; this one reads the shipped script.
 MEV="$AGENTS_DIR/skills/issue-create/scripts/make-empty-verdict.sh"
 
 mev_field() {  # <artifact-path> <field> → JSON value, or <absent>
@@ -355,12 +319,9 @@ TABLE
 
 
 # --- sections ------------------------------------------------------------------------
-# A / B above walk each verdict in two value classes (the table's value and its
-# negation) and probe the remaining classes against `none` alone. The section below is
-# the full verdict × value-class cross product on both producers, plus the reason
-# attribution. It lives in a section file because this one is already ~360 lines.
-# tests/run-all.sh globs tests/*.sh (top level only), so without this block it would
-# never run — see tests/lib/section-runner.sh.
+# A/B cover each verdict in two value classes and probe the rest against `none` alone.
+# The section adds the full verdict × value-class cross product on both producers.
+# run-all.sh globs tests/*.sh only, so sections run via tests/lib/section-runner.sh.
 SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1912-same-fix-crosscheck"
 # shellcheck source=./lib/section-runner.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"
