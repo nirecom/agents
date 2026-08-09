@@ -121,8 +121,12 @@ if (args[0] === "--fallback") {
   }
   let issues = [];
   try {
-    const parseClosesIssues = require(path.join(AGENTS_CONFIG_DIR, "hooks/lib/parse-closes-issues.js"));
-    issues = parseClosesIssues.parseClosesIssues(intentMd);
+    // #1644 stage 4: route through the write-once session cache. sessionId is
+    // derived from the <sid>-intent.md filename convention (no --session-id
+    // is passed to --fallback mode).
+    const { getClosesIssues } = require(path.join(AGENTS_CONFIG_DIR, "hooks/workflow-state/session-facts.js"));
+    const fallbackSessionId = path.basename(intentMd, "-intent.md");
+    issues = getClosesIssues(fallbackSessionId, { plansDir: path.dirname(intentMd) });
   } catch (e) {
     process.stderr.write("[issue-close-write-outcome] WARN: could not parse closes_issues: " + e.message + "\n");
   }
@@ -181,9 +185,9 @@ if (args[0] === "--session-id") {
   // this, only the primary N gets written and siblings go missing.
   try {
     const plansDir = resolvePlansDir();
-    const intentPath = path.join(plansDir, sessionId + "-intent.md");
-    const parseClosesIssues = require(path.join(AGENTS_CONFIG_DIR, "hooks/lib/parse-closes-issues.js"));
-    const siblings = parseClosesIssues.parseClosesIssues(intentPath) || [];
+    // #1644 stage 4: route through the write-once session cache.
+    const { getClosesIssues } = require(path.join(AGENTS_CONFIG_DIR, "hooks/workflow-state/session-facts.js"));
+    const siblings = getClosesIssues(sessionId, { plansDir }) || [];
     for (const entry of siblings) {
       const siblingNumber = typeof entry === "number" ? entry : entry.number;
       if (siblingNumber === issueNumber2) continue;

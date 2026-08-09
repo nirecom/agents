@@ -1,7 +1,7 @@
 #!/bin/bash
 # detect-sc7-tests.sh: bin/session-close-detect-wf-meta.js + bin/session-close-render-sc7.js
 # Tests: bin/session-close-detect-wf-meta.js, bin/session-close-render-sc7.js
-# Tags: session-close, sc7, scope:common
+# Tags: scope:issue-specific
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
 

@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Helpers for tests/feature-1305-adopt-session-state.sh. Sourced, not run.
-# Tests: bin/workflow/adopt-session-state
-# Tags: helper, adopt-session-state, scope:common
+# Tests: tests/feature-1305-adopt-session-state.sh
+# Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"
 ADOPT_CLI="$AGENTS_DIR/bin/workflow/adopt-session-state"

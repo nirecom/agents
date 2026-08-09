@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # Case group: Section 1 — State Inheritance.
 # Sourced by main-workflow-state-machine.sh; relies on helpers from common.sh.
-# Tests: hooks/workflow-state/inheritance.js
-# Tags: helper, state-inheritance, scope:common
+# Tests: tests/main-workflow-state-machine.sh
+# Tags: scope:common
 
 run_state_inheritance_tests() {
     # ---------------------------------------------------------------------------

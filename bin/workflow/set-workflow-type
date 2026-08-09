@@ -1,12 +1,70 @@
 #!/usr/bin/env node
 "use strict";
+// Usage:
+//   set-workflow-type <session-id> <type>                    (positional, frozen)
+//   set-workflow-type --session <sid> --type <t>
+//                     [--advance --step <step> --status <status> [--next]]
+//
+// The two argument forms are mutually exclusive: mixing them is exit 1, because
+// a call carrying both has two candidate session ids and no rule says which wins.
+// Without --advance the stdout stays empty, exactly as before (#1644).
 
 const path = require("path");
-const { updateTopLevel } = require(path.join(__dirname, "../../hooks/workflow-state"));
+const { updateTopLevel, VALID_STEPS, VALID_STATUSES } =
+  require(path.join(__dirname, "../../hooks/workflow-state"));
+const { runAdvance } = require(path.join(__dirname, "lib", "next-step", "advance-shared"));
 
 const VALID_TYPES = new Set(["wf-code", "wf-meta"]);
+const ADVANCE_STATUSES = VALID_STATUSES.filter((s) => s !== "in_progress");
 
-const [sessionId, type] = process.argv.slice(2);
+function die(msg) {
+  process.stderr.write("set-workflow-type: " + msg + "\n");
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  const out = {
+    session: null, type: null, advance: false, next: false,
+    step: null, status: null, positional: [],
+  };
+  const value = (i, flag) => {
+    if (i + 1 >= argv.length) die(flag + " requires an argument");
+    return argv[i + 1];
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--session") { out.session = value(i, "--session"); i++; }
+    else if (a === "--type") { out.type = value(i, "--type"); i++; }
+    else if (a === "--step") { out.step = value(i, "--step"); i++; }
+    else if (a === "--status") { out.status = value(i, "--status"); i++; }
+    else if (a === "--advance") { out.advance = true; }
+    else if (a === "--next") { out.next = true; }
+    else if (a.startsWith("--")) { die("unknown argument: " + a); }
+    else { out.positional.push(a); }
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+
+// Any flag at all counts as the flag form: the positional form is frozen at its
+// exact two-argument shape, so `swt <sid> <type> --advance ...` has no defined
+// reading and must not half-apply.
+const usedFlagForm =
+  args.session !== null || args.type !== null || args.advance ||
+  args.next || args.step !== null || args.status !== null;
+if (usedFlagForm && args.positional.length > 0) {
+  die("do not mix the positional form with --session/--type");
+}
+
+let sessionId;
+let type;
+if (usedFlagForm) {
+  sessionId = args.session;
+  type = args.type;
+} else {
+  [sessionId, type] = args.positional;
+}
 
 if (!sessionId || !type) {
   process.stderr.write("Usage: set-workflow-type <session-id> <type>\n");
@@ -23,11 +81,43 @@ if (!VALID_TYPES.has(type)) {
   process.exit(1);
 }
 
+if (args.next && !args.advance) die("--next is only meaningful with --advance");
+if (args.advance) {
+  if (!args.step) die("--advance requires --step <step>");
+  if (VALID_STEPS.indexOf(args.step) === -1) die("invalid step for --advance: " + args.step);
+  if (!args.status) die("--advance requires --status <status>");
+  if (ADVANCE_STATUSES.indexOf(args.status) === -1) {
+    die("--advance --status " + args.status + " is not a forward operation " +
+      "(accepted: " + ADVANCE_STATUSES.join(", ") + ")");
+  }
+} else if (args.step || args.status) {
+  die("--step/--status are only meaningful with --advance");
+}
+
 // workflow_type is a persisted top-level setting, not a derived value: a narrow
 // locked read-modify-write touches it and nothing else, so a concurrently appended
 // event can never be lost to a stale whole-state snapshot (#1733). updateTopLevel
 // creates the state file when the session has none yet.
-updateTopLevel(sessionId, (record) => {
-  record.workflow_type = type;
+//
+// It is written BEFORE the step verdict and in a SEPARATE transaction: the
+// wf-meta auto-skip in effectiveStatus reads workflow_type, so a step settled
+// before the type is on record would be judged against the wrong workflow.
+try {
+  updateTopLevel(sessionId, (record) => {
+    record.workflow_type = type;
+  });
+} catch (e) {
+  process.stderr.write("set-workflow-type: failed to write workflow_type — " + e.message + "\n");
+  process.exit(args.advance ? 2 : 1);
+}
+
+if (!args.advance) process.exit(0);
+
+runAdvance({
+  session: sessionId,
+  binary: "set-workflow-type",
+  step: args.step,
+  status: args.status,
+  next: args.next,
+  prefix: "WORKFLOW_TYPE=" + type + "\n",
 });
-process.exit(0);

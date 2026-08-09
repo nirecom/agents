@@ -1,7 +1,7 @@
 #!/bin/bash
 # S-series: worktree-notes.js buildNotesBody schema extension
 # Tests: hooks/lib/worktree-notes.js
-# Tags: final-report, worktree-notes, scope:common
+# Tags: scope:common
 #
 # Sourced helpers: feature-405-final-report/helpers.sh
 

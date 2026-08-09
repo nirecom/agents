@@ -1,7 +1,7 @@
 #!/bin/bash
 # K-series: renderSkeleton / renderFinalReport (post-#771)
 # Tests: hooks/lib/final-report-schema.js
-# Tags: final-report, render, scope:common
+# Tags: scope:common
 #
 # Sourced helpers: feature-405-final-report/helpers.sh
 

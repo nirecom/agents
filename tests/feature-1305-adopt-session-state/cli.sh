@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # AD-1 .. AD-5 — the CLI: the single execution point for adoption.
-# Tests: bin/workflow/adopt-session-state
-# Tags: adopt-session-state, cli, scope:common
+# Tests: tests/feature-1305-adopt-session-state.sh
+# Tags: scope:issue-specific
 
 echo ""
 echo "=== #1305 AD-1..AD-5: bin/workflow/adopt-session-state ==="

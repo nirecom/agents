@@ -1,7 +1,7 @@
 #!/bin/bash
 # render-tests.sh: bin/render-final-report.js existence + rendering behavior
 # Tests: bin/render-final-report.js, hooks/lib/final-report-schema.js
-# Tags: session-close, render-final-report, scope:common
+# Tags: scope:issue-specific
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
 
