@@ -288,3 +288,7 @@ Changes: `/issue-create` now decides duplicate and parent-child relationships by
 ### FEATURE: PR #1950 (2026-08-10)
 Background: fix(worker-dispatch): add XDG_CONFIG_HOME and GH_CONFIG_DIR to CHILD_ENV_ALLOWLIST
 Changes: worker-dispatch: dispatched workers now inherit `GH_CONFIG_DIR` and `XDG_CONFIG_HOME`, so a host that relocates the gh config directory no longer breaks gh-driven workers (`/worktree-end` doc-append, commit-push, the issue-close pair, issue-reconcile).
+
+### FEATURE: PR #1945 (2026-08-10)
+Background: feat: warn at commit time when a staged file's comment blocks grow too large (#1894)
+Changes: `git commit` now prints an advisory warning when a staged code file's comment blocks have grown past the length threshold — a long comment block is easy to add and hard to notice in review. The warning never blocks a commit and never rewrites a file. Tune it with `COMMENT_BLOCK_WARN_LINES` (default 10), or silence it with `COMMENT_BLOCK_WARN=off`. Run `bin/review-comment-block-size --all` for a whole-tree inventory of the same measurement.
