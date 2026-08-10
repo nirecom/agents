@@ -192,7 +192,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# X4 - COMMENT_BLOCK_FILE_EXTENSIONS shaped like a command
+# X4 - CODE_FILE_EXTENSIONS shaped like a command
 # ---------------------------------------------------------------------------
 # config-hostility.sh already pins the SCOPE axis for this variable (a glob in it
 # must not widen the scan) and injection-hardening.sh pins the OUTPUT axis (a
@@ -200,7 +200,7 @@ fi
 # the value is read with `IFS=';' read -r -a` and printed through esc, so it must
 # never be evaluated - no marker, and the ordinary contract still holds.
 echo ""
-echo "=== X4: executable-shaped COMMENT_BLOCK_FILE_EXTENSIONS ==="
+echo "=== X4: executable-shaped CODE_FILE_EXTENSIONS ==="
 XE="$(new_repo injexecexts)"
 { xpad 2; xcm 12 plain; } > "$XE/a.sh"
 git -C "$XE" add -A >/dev/null 2>&1
@@ -213,7 +213,7 @@ while IFS='|' read -r name val; do
     val="${val%"${val##*[![:space:]]}"}"
     mk="XPWNE-$$-$name"
     val="${val//@M@/$mk}"
-    run_cb "$XE" "COMMENT_BLOCK_FILE_EXTENSIONS=$val" -- --staged
+    run_cb "$XE" "CODE_FILE_EXTENSIONS=$val" -- --staged
     assert_eq "X4/$name-rc" "0" "$CB_RC"
     assert_eq "X4/$name-header-is-staged-mode" \
         "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
@@ -232,7 +232,7 @@ ampersand  | sh;x&touch @M@
 TABLE
 
 # Same axis on the --all walk: the value steers ext_ok there too.
-run_cb "$XE" "COMMENT_BLOCK_FILE_EXTENSIONS=sh;\$(touch XPWNE-$$-all)" -- --all
+run_cb "$XE" "CODE_FILE_EXTENSIONS=sh;\$(touch XPWNE-$$-all)" -- --all
 assert_eq "X4/all-rc" "0" "$CB_RC"
 assert_contains "X4/all-sh-still-selects-a.sh" "WARN: a.sh" "$CB_OUT"
 if marker_seen "XPWNE-$$-all"; then

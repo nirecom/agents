@@ -55,7 +55,7 @@ stage_literal() {
 # are harmless comment padding: the assertion is about SCOPE, and planting real
 # key-shaped content would only trip the outbound scanner.
 echo ""
-echo "=== C1: glob-shaped COMMENT_BLOCK_FILE_EXTENSIONS (F4) ==="
+echo "=== C1: glob-shaped CODE_FILE_EXTENSIONS (F4) ==="
 GLOBR="$(new_repo extglob)"
 { cpad 2; ccm 12 plain; } > "$GLOBR/a.sh"
 { cpad 2; ccm 12 note; } > "$GLOBR/secrets.pem"
@@ -69,7 +69,7 @@ if stage_literal "$GLOBR" 'lit.[a-z]'; then C1_LIT=1; fi
 # also pass if the two fixtures had never been staged. Name their real
 # extensions once and require them to be reported — after this, an absence means
 # out-of-scope rather than not-there.
-run_cb "$GLOBR" "COMMENT_BLOCK_FILE_EXTENSIONS=pem;local" -- --staged
+run_cb "$GLOBR" "CODE_FILE_EXTENSIONS=pem;local" -- --staged
 assert_contains "C1/fixtures-are-really-staged-secrets.pem" "WARN: secrets.pem" "$CB_OUT"
 assert_contains "C1/fixtures-are-really-staged-.env.local" "WARN: .env.local" "$CB_OUT"
 
@@ -79,7 +79,7 @@ while IFS='|' read -r name val; do
     name="${name//[[:space:]]/}"
     val="${val# }"
     val="${val%"${val##*[![:space:]]}"}"
-    run_cb "$GLOBR" "COMMENT_BLOCK_FILE_EXTENSIONS=$val" -- --staged
+    run_cb "$GLOBR" "CODE_FILE_EXTENSIONS=$val" -- --staged
     assert_eq "C1/$name-rc" "0" "$CB_RC"
     assert_absent "C1/$name-does-not-reach-secrets.pem" "secrets.pem" "$CB_OUT"
     assert_absent "C1/$name-does-not-reach-.env.local" ".env.local" "$CB_OUT"
@@ -92,7 +92,7 @@ TABLE
 
 # CPR-ORTH counterpart: the fix cannot be "match nothing". A literal list still
 # selects exactly the files it names, and nothing else.
-run_cb "$GLOBR" "COMMENT_BLOCK_FILE_EXTENSIONS=sh;py" -- --staged
+run_cb "$GLOBR" "CODE_FILE_EXTENSIONS=sh;py" -- --staged
 assert_eq "C1/literal-list-rc" "0" "$CB_RC"
 assert_contains "C1/literal-list-still-matches-a.sh" "WARN: a.sh" "$CB_OUT"
 assert_eq "C1/literal-list-warn-count-is-1" "1" "$(cb_warn_count)"
@@ -109,7 +109,7 @@ assert_absent "C1/literal-list-excludes-.env.local" ".env.local" "$CB_OUT"
 echo ""
 echo "=== C2: glob-shaped extension matches literally ==="
 if [ "$C1_LIT" = "1" ]; then
-    run_cb "$GLOBR" "COMMENT_BLOCK_FILE_EXTENSIONS=[a-z]" -- --staged
+    run_cb "$GLOBR" "CODE_FILE_EXTENSIONS=[a-z]" -- --staged
     assert_eq "C2/rc" "0" "$CB_RC"
     assert_contains "C2/literal-suffix-matches" 'WARN: lit.[a-z]' "$CB_OUT"
     assert_eq "C2/warn-count-is-1" "1" "$(cb_warn_count)"

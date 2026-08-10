@@ -48,13 +48,13 @@ fi
 T="${COMMENT_BLOCK_WARN_LINES:-10}"
 { [[ "$T" =~ ^[0-9]+$ ]] && [[ "$T" -gt 0 ]]; } || T=10
 
-_EXTS="${COMMENT_BLOCK_FILE_EXTENSIONS:-${CODE_FILE_EXTENSIONS:-js;sh;py}}"
+_EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
 IFS=';' read -r -a _EXT_ARR <<< "$_EXTS"
 
-_MAX_FILES="${COMMENT_BLOCK_MAX_FILES:-200}"
-[[ "$_MAX_FILES" =~ ^[0-9]+$ ]] || _MAX_FILES=200
-_MAX_BYTES="${COMMENT_BLOCK_MAX_BYTES:-1000000}"
-[[ "$_MAX_BYTES" =~ ^[0-9]+$ ]] || _MAX_BYTES=1000000
+# Compiled-in performance guards, not configuration: an ambient variable able to
+# raise them would let this advisory check silently review nothing.
+_MAX_FILES=200
+_MAX_BYTES=1000000
 
 # --- output escaping -------------------------------------------------------
 # Paths arrive from `git ... -z`, which emits raw bytes and ignores

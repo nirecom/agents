@@ -103,23 +103,20 @@ export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-# The six variables that can steer a verdict. Every invocation starts from
-# "all six removed from the child environment" and then re-pins only what the
-# case is about, so neither the ambient shell nor the developer's .env can
-# decide an outcome (test-design.md "Config-dependent branches").
+# The three variables that can steer a verdict: the kill switch, the threshold
+# and the extension list. Every invocation starts from "all three removed from
+# the child environment" and then re-pins only what the case is about, so
+# neither the ambient shell nor the developer's .env can decide an outcome
+# (test-design.md "Config-dependent branches"). The file-count and byte-size
+# caps are compiled-in constants with no env knob — config-numeric-caps.sh
+# pins both their boundaries and their non-configurability.
 CB_ENV_RESET=(
     -u COMMENT_BLOCK_WARN
     -u COMMENT_BLOCK_WARN_LINES
-    -u COMMENT_BLOCK_FILE_EXTENSIONS
-    -u COMMENT_BLOCK_MAX_FILES
-    -u COMMENT_BLOCK_MAX_BYTES
     -u CODE_FILE_EXTENSIONS
 )
 BASE_ENV=(
     "COMMENT_BLOCK_WARN_LINES=10"
-    "COMMENT_BLOCK_FILE_EXTENSIONS=js;sh;py"
-    "COMMENT_BLOCK_MAX_BYTES=1000000"
-    "COMMENT_BLOCK_MAX_FILES=200"
     "CODE_FILE_EXTENSIONS=js;sh;py"
 )
 # A comment body planted in fixture files. The output contract reports paths,

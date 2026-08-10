@@ -84,76 +84,47 @@ run_cb "$MANY" -- --staged
 assert_eq "O3/five-detail-lines" "5" "$(printf '%s\n' "$CB_OUT" | grep -c '^  L' || true)"
 assert_contains "O3/and-n-more" "  ... and 2 more" "$CB_OUT"
 
-# ---------------------------------------------------------------------------
-# O4 / O5 — size and count guards
-# ---------------------------------------------------------------------------
-echo ""
-echo "=== O4: COMMENT_BLOCK_MAX_FILES guard ==="
-GUARD="$(new_repo guards)"
-for f in g1 g2 g3; do { opad 2; ocm 12 note; } > "$GUARD/$f.sh"; done
-git -C "$GUARD" add -A >/dev/null 2>&1
-run_cb "$GUARD" "COMMENT_BLOCK_MAX_FILES=2" -- --staged
-case "$(cb_header)" in
-    "## Comment-block Size Review: SKIPPED"*) pass "O4/skipped-header" ;;
-    *) fail "O4/skipped-header" "got: $(cb_header)" ;;
-esac
-assert_contains "O4/reason-names-the-count" "too many staged files (3)" "$CB_OUT"
-assert_eq "O4/rc" "0" "$CB_RC"
-# Symmetric counterpart: below the cap the same index is scanned normally.
-run_cb "$GUARD" "COMMENT_BLOCK_MAX_FILES=200" -- --staged
-assert_eq "O4/under-cap-header" \
-    "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
-assert_eq "O4/under-cap-warns" "3" "$(cb_warn_count)"
-# Boundary: the guard is "too many", so cap == count is still inside the budget.
-run_cb "$GUARD" "COMMENT_BLOCK_MAX_FILES=3" -- --staged
-assert_eq "O4/at-cap-header" \
-    "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
-assert_eq "O4/at-cap-warns" "3" "$(cb_warn_count)"
-
-echo ""
-echo "=== O5: COMMENT_BLOCK_MAX_BYTES per-file guard ==="
-BIG="$(new_repo bigfile)"
-{ opad 2; ocm 20 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; } > "$BIG/big.sh"
-{ ocm 12 s; } > "$BIG/small.sh"
-git -C "$BIG" add -A >/dev/null 2>&1
-run_cb "$BIG" "COMMENT_BLOCK_MAX_BYTES=200" -- --staged
-assert_contains "O5/summary-counts-skipped" "skipped (too large): 1" "$CB_OUT"
-assert_absent "O5/oversized-file-not-reported" "WARN: big.sh" "$CB_OUT"
-assert_contains "O5/small-file-still-reported" "WARN: small.sh" "$CB_OUT"
-assert_eq "O5/rc" "0" "$CB_RC"
-# Boundary: "too large" means strictly greater, so size == cap is still scanned
-# and size == cap-1 keeps the file in range on the other side of the equality.
-SMALL_BYTES="$(wc -c < "$BIG/small.sh" | tr -d '[:space:]')"
-run_cb "$BIG" "COMMENT_BLOCK_MAX_BYTES=$SMALL_BYTES" -- --staged
-assert_contains "O5/at-cap-file-still-scanned" "WARN: small.sh" "$CB_OUT"
-run_cb "$BIG" "COMMENT_BLOCK_MAX_BYTES=$((SMALL_BYTES - 1))" -- --staged
-assert_absent "O5/one-byte-over-cap-skipped" "WARN: small.sh" "$CB_OUT"
-assert_contains "O5/one-byte-over-cap-counted" "skipped (too large): 2" "$CB_OUT"
+# O4 / O5 — the file-count and byte-size guards. Both caps are compiled-in
+# constants rather than configuration, so their output contract (the SKIPPED
+# reason naming the count; the "skipped (too large): N" summary line) is pinned
+# together with their boundaries in config-numeric-caps.sh (N1/N3) rather than
+# split across two files.
 
 # ---------------------------------------------------------------------------
-# O6 — extension resolution: COMMENT_BLOCK_FILE_EXTENSIONS -> CODE_FILE_EXTENSIONS
-#      -> built-in js;sh;py
+# O6 — CODE_FILE_EXTENSIONS is the single source for the extension list
 # ---------------------------------------------------------------------------
+# There is no resolution chain left to order: the scanner reads
+# CODE_FILE_EXTENSIONS and falls back to the built-in js;sh;py. The removed
+# COMMENT_BLOCK_FILE_EXTENSIONS must therefore be unable to change the scan set
+# from either side — neither narrowing what CODE_FILE_EXTENSIONS admits nor
+# widening what it excludes.
 echo ""
-echo "=== O6: extension resolution chain ==="
+echo "=== O6: CODE_FILE_EXTENSIONS is the single source ==="
 EXTR="$(new_repo extres)"
 { opad 2; ocm 12 note; } > "$EXTR/target.sh"
 git -C "$EXTR" add -A >/dev/null 2>&1
 
-run_cb "$EXTR" "COMMENT_BLOCK_FILE_EXTENSIONS=js" -- --staged
-assert_eq "O6/explicit-list-excludes-sh" "0" "$(cb_warn_count)"
+# Both directions of the pin, so neither can pass vacuously.
+run_cb "$EXTR" "CODE_FILE_EXTENSIONS=js" -- --staged
+assert_eq "O6/pinned-list-excludes-sh" "0" "$(cb_warn_count)"
+run_cb "$EXTR" "CODE_FILE_EXTENSIONS=sh" -- --staged
+assert_eq "O6/pinned-list-includes-sh" "1" "$(cb_warn_count)"
 
-raw_cb "$EXTR" "CODE_FILE_EXTENSIONS=sh" "COMMENT_BLOCK_WARN_LINES=10" -- --staged
-assert_eq "O6/falls-back-to-CODE_FILE_EXTENSIONS" "1" "$(cb_warn_count)"
+# The removed variable cannot resurrect an extension the pinned list excludes.
+run_cb "$EXTR" "CODE_FILE_EXTENSIONS=js" "COMMENT_BLOCK_FILE_EXTENSIONS=sh" -- --staged
+assert_eq "O6/removed-knob-cannot-widen" "0" "$(cb_warn_count)"
+assert_contains "O6/summary-lists-the-pinned-value" "(extensions: js;" "$CB_OUT"
+# ...nor take one away from a list that admits it.
+run_cb "$EXTR" "CODE_FILE_EXTENSIONS=sh" "COMMENT_BLOCK_FILE_EXTENSIONS=js" -- --staged
+assert_eq "O6/removed-knob-cannot-narrow" "1" "$(cb_warn_count)"
 
+# With nothing pinned the built-in default applies, and the removed variable
+# cannot stand in for it either.
 raw_cb "$EXTR" "COMMENT_BLOCK_WARN_LINES=10" -- --staged
 assert_eq "O6/built-in-default-includes-sh" "1" "$(cb_warn_count)"
 assert_contains "O6/built-in-default-listed-in-summary" "(extensions: js;sh;py;" "$CB_OUT"
-
-# CODE_FILE_EXTENSIONS must NOT win when the specific variable is present.
-raw_cb "$EXTR" "COMMENT_BLOCK_FILE_EXTENSIONS=js" "CODE_FILE_EXTENSIONS=sh" \
-    "COMMENT_BLOCK_WARN_LINES=10" -- --staged
-assert_eq "O6/specific-var-wins" "0" "$(cb_warn_count)"
+raw_cb "$EXTR" "COMMENT_BLOCK_FILE_EXTENSIONS=js" "COMMENT_BLOCK_WARN_LINES=10" -- --staged
+assert_eq "O6/removed-knob-cannot-replace-the-default" "1" "$(cb_warn_count)"
 
 # ---------------------------------------------------------------------------
 # O7 — idempotency: the CLI is a pure inspection, so a second run must be

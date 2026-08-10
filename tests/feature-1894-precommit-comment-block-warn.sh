@@ -228,16 +228,13 @@ stage_sample() {
     git -C "$repo" add sample.js
 }
 
-# The six variables that can steer a verdict. Every invocation starts from
-# "all removed" and then re-pins only what the case is about, so the ambient
-# shell/.env can never decide an outcome (test-design.md "Config-dependent
-# branches").
+# The three variables that can steer a verdict: the kill switch, the threshold
+# and the extension list. Every invocation starts from "all removed" and then
+# re-pins only what the case is about, so the ambient shell/.env can never
+# decide an outcome (test-design.md "Config-dependent branches").
 CB_ENV_RESET=(
     -u COMMENT_BLOCK_WARN
     -u COMMENT_BLOCK_WARN_LINES
-    -u COMMENT_BLOCK_FILE_EXTENSIONS
-    -u COMMENT_BLOCK_MAX_FILES
-    -u COMMENT_BLOCK_MAX_BYTES
     -u CODE_FILE_EXTENSIONS
 )
 
@@ -255,7 +252,7 @@ run_precommit() {
             "AGENTS_CONFIG_DIR=$cfg" \
             "ENFORCE_WORKTREE=off" \
             "COMMENT_BLOCK_WARN_LINES=10" \
-            "COMMENT_BLOCK_FILE_EXTENSIONS=js;sh;py" \
+            "CODE_FILE_EXTENSIONS=js;sh;py" \
             "$@" \
             bash "$PRECOMMIT") 2>"$errfile" )" || RC=$?
     ERR="$(cat "$errfile" 2>/dev/null || true)"
@@ -273,7 +270,7 @@ run_commit() {
             "AGENTS_CONFIG_DIR=$cfg" \
             "ENFORCE_WORKTREE=off" \
             "COMMENT_BLOCK_WARN_LINES=10" \
-            "COMMENT_BLOCK_FILE_EXTENSIONS=js;sh;py" \
+            "CODE_FILE_EXTENSIONS=js;sh;py" \
             "$@" \
             git -c "core.hooksPath=$hooks" commit -q -m "$msg") 2>&1 )" || RC=$?
     ERR=""

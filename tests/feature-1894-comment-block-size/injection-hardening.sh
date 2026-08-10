@@ -8,7 +8,7 @@
 # hostile-content.sh covers bytes the scanner READS (blob text); special-paths.sh
 # covers names it PASSES TO GIT. This file covers the third surface (CPR-SC): the
 # two untrusted strings the report interpolates into its own stdout — the path
-# (F1) and $COMMENT_BLOCK_FILE_EXTENSIONS (F5).
+# (F1) and $CODE_FILE_EXTENSIONS (F5).
 #
 # Why it matters: the scanner reads its file list with `git ... diff -z` /
 # `ls-files -z`, which emit raw path bytes and ignore core.quotePath by design.
@@ -160,7 +160,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# I4 — $COMMENT_BLOCK_FILE_EXTENSIONS is printed verbatim in the header (F5)
+# I4 — $CODE_FILE_EXTENSIONS is printed verbatim in the header (F5)
 # ---------------------------------------------------------------------------
 # Same class as I1, different source: the summary line prints `extensions: $_EXTS`
 # unfiltered. The value is configuration, so it is only semi-trusted — a repo
@@ -169,7 +169,7 @@ fi
 # the first newline, so the extension list itself still matches a.sh: the forged
 # text is pure output, which is what makes it a spoof rather than a config typo.
 echo ""
-echo "=== I4: control bytes in COMMENT_BLOCK_FILE_EXTENSIONS (F5) ==="
+echo "=== I4: control bytes in CODE_FILE_EXTENSIONS (F5) ==="
 INJE="$(new_repo injexts)"
 { ipad 2; icm 12 plain; } > "$INJE/a.sh"
 git -C "$INJE" add -A >/dev/null 2>&1
@@ -180,7 +180,7 @@ while IFS='|' read -r name val; do
     name="${name//[[:space:]]/}"
     val="${val# }"
     val="$(printf '%b' "$val")"
-    run_cb "$INJE" "COMMENT_BLOCK_FILE_EXTENSIONS=$val" -- --staged
+    run_cb "$INJE" "CODE_FILE_EXTENSIONS=$val" -- --staged
     assert_eq "I4/$name-rc" "0" "$CB_RC"
     # The only real finding is a.sh; anything else on a ^WARN: line is forged.
     assert_eq "I4/$name-warn-count-is-1" "1" "$(cb_warn_count)"
@@ -196,7 +196,7 @@ esc             | sh;\x1Bzz
 TABLE
 
 # Positive escaping contract, same renderer as I1.
-run_cb "$INJE" "COMMENT_BLOCK_FILE_EXTENSIONS=$(printf 'sh\nzz')" -- --staged
+run_cb "$INJE" "CODE_FILE_EXTENSIONS=$(printf 'sh\nzz')" -- --staged
 assert_contains "I4/newline-renders-as-\\x0A" 'extensions: sh\x0Azz' "$CB_OUT"
-run_cb "$INJE" "COMMENT_BLOCK_FILE_EXTENSIONS=$(printf 'sh;\x1Bzz')" -- --staged
+run_cb "$INJE" "CODE_FILE_EXTENSIONS=$(printf 'sh;\x1Bzz')" -- --staged
 assert_contains "I4/esc-renders-as-\\x1B" 'extensions: sh;\x1Bzz' "$CB_OUT"

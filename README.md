@@ -190,9 +190,8 @@ only when its comment blocks got longer, so an already-long block never nags on 
 edit; a file with no committed version is judged on its own contents. The warning never
 blocks a commit and never rewrites a file, and it fires only for this repository even though
 the hook path is configured globally. Run `bin/review-comment-block-size --all` for the same
-report over the whole working tree. Set `COMMENT_BLOCK_WARN_LINES` (default 10),
-`COMMENT_BLOCK_FILE_EXTENSIONS`, or `COMMENT_BLOCK_WARN=off` to tune or silence it — see
-`.env.example`.
+report over the whole working tree. Set `COMMENT_BLOCK_WARN_LINES` (default 10) or
+`COMMENT_BLOCK_WARN=off` to tune or silence it — see `.env.example`.
 
 ### VS Code worktree session visibility
 
