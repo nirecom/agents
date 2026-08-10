@@ -276,3 +276,7 @@ Changes: Reduced workflow round-trip steps: outline/detail planning stages are n
 ### FEATURE: PR #1928 (2026-08-10)
 Background: fix: suppress gh CLI stdout leaks in issue-close-stage helper scripts
 Changes: Fixed: `/clarify-intent` completion could return a GitHub board-card URL instead of `PROCEED` when a session closed more than one issue, stalling the workflow at the completion-token check.;Fixed: parent issue body updates now report failure instead of passing silently — `parent-body-update.sh` exits non-zero with a warning when `gh issue edit` fails.
+
+### FEATURE: PR #1902 (2026-08-10)
+Background: fix: rewrite run_tests workflow-gate classifier to close emitter-ambiguity and stdout byte-attribution gaps
+Changes: Fixed a false-negative in the `run_tests` workflow gate where a Bash command that merely mentioned a `tests/` path in an argument (without actually running tests) could be misclassified, and closed two related gaps where a compound/forged command could cause the gate to mark tests complete despite a real failure.
