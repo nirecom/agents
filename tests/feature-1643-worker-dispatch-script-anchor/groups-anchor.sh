@@ -6,9 +6,7 @@
 # that is about WHICH ROOT a declared script resolves against. The buildEnv
 # groups live in the two group-env-*.sh parts.
 
-# ===========================================================================
 # Group A — SCRIPT_ANCHORS is the vocabulary, and no worker escapes it
-# ===========================================================================
 group_a() {
     if impl_missing "registry/script-anchors-exported" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then return; fi
     if ! probe registry; then
@@ -33,9 +31,7 @@ group_a() {
     assert_ne "registry/test-runner-runall-not-main-root" "main-root" "$(pv tr_runall_anchor)"
 }
 
-# ===========================================================================
 # Group B / D — resolveScript anchoring and anchorRoot's null verdict
-# ===========================================================================
 group_bd() {
     if impl_missing "resolve/family-anchored-under-cwd" "$SPAWN_JS" "bin/worker-dispatch/spawn.js"; then return; fi
     if ! probe resolve; then
@@ -58,9 +54,7 @@ group_bd() {
     esac
 }
 
-# ===========================================================================
 # Group C — cwd must be a proven family member, and proven BEFORE resolution
-# ===========================================================================
 group_c() {
     if impl_missing "contain/exists-in-family" "$SPAWN_JS" "bin/worker-dispatch/spawn.js"; then return; fi
     if ! probe contain; then
@@ -92,9 +86,7 @@ group_c() {
     esac
 }
 
-# ===========================================================================
-# Group E — timeout_seconds bound (raised 3600 → 21600; default unchanged)
-# ===========================================================================
+# Group E — timeout_seconds bound (raised 3600 -> 21600; default unchanged)
 group_e() {
     if impl_missing "timeout/max-21600-accepted" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then return; fi
     if ! probe timeout; then
@@ -109,12 +101,10 @@ group_e() {
     assert_eq "timeout/default-still-120" "120" "$(pv default)"
 }
 
-# ===========================================================================
 # Group F — end-to-end: a dispatch targeting the LINKED worktree must run the
-# LINKED tests/run-all.sh. Main's copy prints MAIN-SUITE, the linked copy prints
-# LINKED-SUITE; under the pre-fix main-root anchor this run reported success
-# while executing MAIN's suite.
-# ===========================================================================
+# LINKED tests/run-all.sh. Main prints MAIN-SUITE, linked prints LINKED-SUITE;
+# under the pre-fix main-root anchor this run reported success while
+# executing MAIN's suite.
 group_f() {
     if impl_missing "e2e/runs-linked-suite" "$DISPATCH_JS" "bin/worker-dispatch.js"; then
         fail "e2e/does-not-run-main-suite — implementation missing: bin/worker-dispatch.js"

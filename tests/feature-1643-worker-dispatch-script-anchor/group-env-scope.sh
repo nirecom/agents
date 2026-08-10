@@ -2,32 +2,22 @@
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
 #
-# Group G: WHICH NAMES reach a child env. The companion part group-env-branches.sh
+# Group G: WHICH NAMES reach a child env. Companion part group-env-branches.sh
 # covers the branches that are about VALUES rather than membership.
-
-# ===========================================================================
+#
 # Group G — buildEnv credential scope (behavioural counterpart of the static
-# registry rows in tests/feature-1643-worker-dispatch-schema.sh Group E)
-#
-# GH_TOKEN / GITHUB_TOKEN used to sit in the global CHILD_ENV_ALLOWLIST, which
-# spawn.js applies to every worker. Combined with Group A's family-worktree
-# script anchor that put both credentials into the environment of
-# tests/run-all.sh — a script read from the branch under review, i.e. code
-# nobody has looked at yet. Moving them to issue-reconcile's envPassthrough is
-# only a fix if buildEnv actually distinguishes the workers, so the assertion is
-# made on the env buildEnv returns, per worker, with both vars really set in the
-# parent process.
-#
-# The group runs in BOTH directions, because the same allowlist decides both. A
-# variable that names WHERE a tool reads its configuration must REACH every
-# worker: #1719 was the mirror image of the credential leak — the dispatched `gh`
-# inherited no config-location var, landed in a different config directory than
-# its parent, and failed auth for every gh-driven worker. The admission rule for
-# that set is not restated here; its SSOT is the comment block above
-# CHILD_ENV_ALLOWLIST in hooks/lib/worker-dispatch-registry.js. What this group
-# adds over the static rows in the schema suite is VALUE IDENTITY through the
-# real buildEnv, per worker, with the vars really set in the parent process.
-# ===========================================================================
+# registry rows in tests/feature-1643-worker-dispatch-schema.sh Group E).
+# GH_TOKEN/GITHUB_TOKEN used to sit in the global CHILD_ENV_ALLOWLIST applied
+# to every worker — combined with Group A's family-worktree anchor, that put
+# both credentials into tests/run-all.sh, a script from the unreviewed branch
+# under review. Moving them to issue-reconcile's envPassthrough is only a fix
+# if buildEnv actually distinguishes workers, so this asserts the real env
+# buildEnv returns, per worker, with both vars really set in the parent.
+# Runs in BOTH directions since the same allowlist decides both: a
+# config-location var must REACH every worker (#1719 was the mirror-image
+# leak — the dispatched `gh` inherited none, landed in a different config
+# dir, and failed auth). Admission-rule SSOT is the comment block above
+# CHILD_ENV_ALLOWLIST in the registry, not restated here.
 group_g() {
     local name tok want v
     if impl_missing "env/token-reaches-issue-reconcile" "$SPAWN_JS" "bin/worker-dispatch/spawn.js"; then return; fi
@@ -38,8 +28,8 @@ group_g() {
     # Precondition: without this the "0" rows below would be trivially true.
     assert_eq "env/parent-has-gh-token" "1" "$(pv parent_has_GH_TOKEN)"
     assert_eq "env/parent-has-github-token" "1" "$(pv parent_has_GITHUB_TOKEN)"
-    # Same precondition for the positive half: an unset parent var would make
-    # every cfg- row below pass on `undefined === undefined`.
+    # Same precondition for the positive half: an unset var would make every
+    # cfg- row below pass on `undefined === undefined`.
     for v in APPDATA ProgramData PROGRAMDATA XDG_CONFIG_HOME GH_CONFIG_DIR; do
         assert_eq "env/parent-has-$v" "1" "$(pv "parent_cfg_$v")"
     done
@@ -55,10 +45,10 @@ group_g() {
         for tok in GH_TOKEN GITHUB_TOKEN; do
             assert_eq "env/$name/$tok" "$want" "$(pv "${tok}__${name}")"
         done
-        # Per-worker non-vacuity: the env is populated, just not with credentials.
+        # Non-vacuity: the env is populated, just not with credentials.
         assert_eq "env/$name/path-still-present" "1" "$(pv "PATHOK__${name}")"
         assert_eq "env/$name/acd-pinned-to-anchor" "1" "$(pv "ACDOK__${name}")"
-        # …and the positive half, for every worker: buildEnv applies the allowlist
+        # Positive half, every worker: buildEnv applies the allowlist
         # unconditionally, so a config-location var reaches all nine or none.
         for v in APPDATA ProgramData PROGRAMDATA XDG_CONFIG_HOME GH_CONFIG_DIR; do
             assert_eq "env/$name/cfg-$v" "1" "$(pv "CFG__${v}__${name}")"

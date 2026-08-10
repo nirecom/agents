@@ -2,50 +2,32 @@
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
 #
-# Group K: the child env as a REAL CHILD PROCESS sees it.
+# Group K: the child env as a REAL CHILD PROCESS sees it. Every other env
+# group calls spawnMod.buildEnv() directly and asserts on the returned
+# object, leaving the WIRING between buildEnv and spawnSync unmeasured: a
+# regression from `env: buildEnv(...)` to `env: process.env` (or a dropped
+# `env` key) would keep groups G-J green while the dispatched child silently
+# received the operator's entire environment. So this group plants a
+# synthetic variable in the PARENT of a real dispatch, runs a real child
+# through spawnMod.run(), and asks the CHILD ITSELF which names it can see.
 #
-# Every other env group in this suite calls spawnMod.buildEnv() directly and
-# asserts on the object it returns. That leaves one seam entirely unmeasured: the
-# WIRING between buildEnv and spawnSync. If run() ever regressed from
-#   env: buildEnv(entry, anchors, opts.extraEnv)
-# to
-#   env: process.env
-# (or dropped the `env` key altogether, which makes spawnSync inherit the parent
-# env wholesale), every buildEnv assertion in groups G–J would still be green
-# while the dispatched child — including `gh`, and including tests/run-all.sh read
-# from the branch under review — silently received the operator's entire
-# environment: credentials, tokens, everything.
+# Three arms (a one-arm version could hide behind a special case):
+#   real-test-runner  unmodified registry entry, dispatched the real way:
+#                     command `bash`, family-worktree-anchored run-all.sh.
+#   synth-plain       synthetic entry, EMPTY envPassthrough, command `node`.
+#   synth-declared    same synthetic entry with the sentinel DECLARED — the
+#                     child must now SEE it, which is what makes the first
+#                     two arms conclusive rather than "the probe never read
+#                     its env at all". APPDATA (already allowlisted) is the
+#                     per-arm positive control, asserted byte-identical.
 #
-# So this group asserts nothing about buildEnv's return value. It plants an
-# obviously-synthetic variable in the PARENT of a real dispatch, runs a real
-# child process through spawnMod.run(), and asks the CHILD ITSELF which names it
-# can see.
-#
-# Three arms, because a one-arm version could hide behind a special case:
-#   real-test-runner  the unmodified registry entry `test-runner`, dispatched the
-#                     way the dispatcher really dispatches it: command `bash`,
-#                     family-worktree-anchored script tests/run-all.sh.
-#   synth-plain       a synthetic entry with an EMPTY envPassthrough, command
-#                     `node`. Same expectation as the real arm.
-#   synth-declared    the same synthetic entry with the sentinel DECLARED in its
-#                     envPassthrough. The child must now SEE it.
-#
-# The third arm is what makes the first two conclusive. Absence in a child can
-# mean "the allowlist filtered it" or "the probe never managed to read its env at
-# all"; only a paired arm where the identical probe DOES see the identical name
-# distinguishes those. APPDATA — already allowlisted — is the second, per-arm
-# positive control, asserted byte-identical rather than merely present.
-#
-# There is deliberately no skip path anywhere in this group. A probe that cannot
-# run is a FAIL: an unproven isolation claim is worth exactly as much as a
-# disproven one.
+# No skip path anywhere in this group: a probe that cannot run is a FAIL, not
+# a quiet pass for an unproven isolation claim.
 
-# ---------------------------------------------------------------------------
-# Sentinels. Both are undeclared by construction: not on CHILD_ENV_ALLOWLIST and
-# not in any worker's envPassthrough (the driver asserts both facts against the
-# live registry rather than trusting this comment). Values are inert text and are
-# never sent anywhere — no `gh`, no network, no credential shape.
-# ---------------------------------------------------------------------------
+# Sentinels. Both undeclared by construction: not on CHILD_ENV_ALLOWLIST and
+# not in any worker's envPassthrough (driver asserts both facts against the
+# live registry rather than trusting this comment). Inert text, never sent
+# anywhere — no `gh`, no network, no credential shape.
 K_SENTINEL_NAME="WORKER_DISPATCH_LEAK_SENTINEL_1719"
 K_SENTINEL_VALUE="leak-sentinel-1719-must-not-reach-any-child"
 K_SENTINEL_B_NAME="WORKER_DISPATCH_LEAK_SENTINEL_1719_B"

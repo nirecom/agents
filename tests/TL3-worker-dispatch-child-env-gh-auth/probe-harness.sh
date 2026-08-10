@@ -3,49 +3,35 @@
 # Tags: worker-dispatch, child-env, config-path, gh-cli, auth-resolution, real-environment, TL3, scope:common
 #
 # The node probe (one process per mode, emitting `key=value` lines) and the
-# shell-side helpers that read it: run_probe / pv / expect_class, plus the two
-# small deciders the suite's honesty rests on — trim() and exit_verdict().
-# Everything here depends on the fixtures and counters the dispatcher defined
-# before sourcing this file.
-
-# ---------------------------------------------------------------------------
-# Probe harness. Two modes:
-#   direct    child_process.spawnSync of gh with this process's own env — the
-#             dispatcher is not loaded into the call path at all.
+# shell-side helpers that read it: run_probe / pv / expect_class, plus
+# trim() and exit_verdict(). Depends on fixtures/counters defined before
+# this file is sourced.
+#
+# Two probe modes:
+#   direct    child_process.spawnSync of gh with this process's own env —
+#             the dispatcher is not in the call path at all.
 #   dispatch  spawnMod.run(), i.e. the env buildEnv() assembled.
 # Both emit only `class` / `status` / `timedout` / `spawn_error`.
-# ---------------------------------------------------------------------------
 PROBE="$TMPD/probe.js"
 cat > "$PROBE" <<'PROBEJS'
 const path = require("path");
 const childProcess = require("child_process");
 
-// ---------------------------------------------------------------------------
-// Child-env measurement, taken AT THE SPAWN SITE.
-//
-// Reading process.env would measure THIS process, not the environment handed to
-// the gh child, and the two are not the same object on the dispatched path:
-// buildEnv() constructs a fresh allowlisted object, so a credential present in
-// the parent can be absent in the child and vice versa. An assert named
-// `credential-free` has to be answered at the boundary it names.
-//
-// spawnSync is wrapped BEFORE bin/worker-dispatch/spawn.js is required, so the
-// wrapper is the binding that module destructures at load time and every gh
-// child — direct site and dispatched site alike — is observed where it is
-// actually started. `spawnSite` records WHICH site produced the observation, so
-// the two are reported distinctly instead of collapsed.
-//
-// Secrecy is unaffected: the captured object is reduced to a 0/1 here and never
-// printed, returned or written.
-// ---------------------------------------------------------------------------
+// Child-env measurement, taken AT THE SPAWN SITE: reading process.env would
+// measure this process, not what's handed to the gh child — buildEnv()
+// constructs a fresh allowlisted object on the dispatched path, so a
+// credential present in the parent can be absent in the child or vice versa.
+// spawnSync is wrapped BEFORE spawn.js is required, so this is the binding
+// that module destructures at load time; `spawnSite` records which call site
+// produced the observation. The captured env is reduced to 0/1 and never
+// printed, returned, or written (secrecy).
 const realSpawnSync = childProcess.spawnSync;
 let childEnv = null;
 let childEnvSite = "none";
 let spawnSite = "none";
 childProcess.spawnSync = function (cmd, args, opts) {
   if (cmd === "gh") {
-    // An absent `env` means the child inherits this process's env, so that IS
-    // the child's env at this site.
+    // An absent `env` means the child inherits this process's env.
     childEnv = opts && opts.env ? opts.env : process.env;
     childEnvSite = spawnSite;
   }
@@ -60,9 +46,8 @@ const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registr
 
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
 
-// The only place gh output is ever inspected. It is reduced to one of three
-// tokens here and the raw bytes are dropped with the local `blob` binding — they
-// are never returned, logged, or written anywhere.
+// The only place gh output is ever inspected: reduced to one of three tokens,
+// raw bytes dropped with the local `blob` binding, never returned/logged/written.
 function classify(res) {
   if (res.timedOut) return "inconclusive";
   if (res.status === 0) return "authenticated";
@@ -76,18 +61,15 @@ function classify(res) {
 const GH_ARGS = ["auth", "status", "--hostname", host];
 const TIMEOUT_MS = 20000;
 
-// The four names gh can authenticate with straight from the environment. None of
-// them may be present in the CHILD: the gate and the dispatched arms are only
-// comparable when both run credential-free. Emitted with every probe so the
-// claim is measured rather than assumed.
+// The four names gh can authenticate with straight from the environment; none
+// may be present in the CHILD, or the gate/dispatched-arm comparison breaks.
+// Emitted with every probe so the claim is measured rather than assumed.
 const CRED_VARS = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
 const credsAbsentIn = (env) => (CRED_VARS.every((n) => typeof env[n] !== "string") ? 1 : 0);
 
-// `child_env_measured` guards `creds_absent` against reading 1 vacuously: with
-// no gh child ever started there is no child env, and "absent" would then mean
-// "unobserved". `creds_absent_parent` is the probe's own env, reported under its
-// own name so the parent and child measurements can never be mistaken for one
-// another.
+// `child_env_measured` guards `creds_absent` against reading 1 vacuously when no
+// gh child ever started. `creds_absent_parent` is the probe's own env, kept
+// under its own name so parent and child measurements can't be conflated.
 const outEnvFacts = () => {
   out("child_env_measured", childEnv ? 1 : 0);
   out("env_site", childEnvSite);
@@ -103,17 +85,14 @@ const report = (res, extra) => {
   outEnvFacts();
 };
 
-// -------------------------------------------------------------------------
-// classify() unit cases. Deterministic by construction: synthetic result
-// objects, no gh, no network, no timing. A real timeout or a real spawn failure
-// cannot be induced on demand, but the CLASSIFICATION of one can — and the
-// classification is the part that decides whether an unproven arm is allowed to
-// read as a pass, which is the property worth fencing.
-// -------------------------------------------------------------------------
+// classify() unit cases. Deterministic: synthetic result objects, no gh, no
+// network, no timing. A real timeout/spawn-failure can't be induced on demand,
+// but its CLASSIFICATION can — that's the part deciding whether an unproven
+// arm reads as a pass, the property worth fencing.
 if (mode === "classify-selftest") {
   const CASES = [
-    // The three ways an arm can fail to produce an answer. All must be
-    // `inconclusive`; anything else would let an unproven arm count as proof.
+    // The three ways an arm can fail to produce an answer — all must be
+    // `inconclusive`, or an unproven arm would count as proof.
     ["timeout", { timedOut: true, status: null, stdout: "", stderr: "" }],
     ["spawn-failure", {
       timedOut: false, status: null, stdout: "", stderr: "",
@@ -166,9 +145,9 @@ if (mode === "direct") {
 if (mode === "dispatch") {
   const anchors = anchorMod.resolveAnchors(mainRoot);
   if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
-  // envPassthrough: [] on purpose. A parent that holds GH_TOKEN must not be able
-  // to authenticate this child for it — the config directory has to do the work,
-  // which is exactly the property #1719 broke.
+  // envPassthrough: [] on purpose — a parent holding GH_TOKEN must not be able
+  // to authenticate this child; the config directory must do the work, which
+  // is exactly the property #1719 broke.
   const probeEntry = {
     name: "probe-gh",
     binaries: { external: ["gh"], scripts: {} },
@@ -182,8 +161,8 @@ if (mode === "dispatch") {
   try {
     res = spawnMod.run(entry, { anchors, command: "gh", args: GH_ARGS, cwd: mainRoot, timeoutMs: TIMEOUT_MS });
   } catch (e) {
-    // spawnMod.run() can throw before it ever reaches spawnSync, in which case
-    // there is no child env — outEnvFacts() says so rather than guessing.
+    // spawnMod.run() can throw before ever reaching spawnSync — no child env
+    // then, and outEnvFacts() says so rather than guessing.
     out("class", "inconclusive");
     out("status", "throw");
     out("timedout", 0);
@@ -203,10 +182,9 @@ PROBE_OUT=""
 pv() { printf '%s\n' "$PROBE_OUT" | sed -n "s/^$1=//p" | head -1; }
 
 # run_probe <mode> <entry-kind> [env-args...]
-# Every arm states its own parent-env condition in [env-args...]; those are handed
-# straight to `env`, so `-u VAR` and `VAR=value` are both usable (options first).
-# The fixed prefix is the fixture isolation contract: no inherited session id, no
-# inherited credential, and both workflow dirs pinned into the temp tree.
+# [env-args...] states the arm's parent-env condition, handed straight to
+# `env` (`-u VAR` / `VAR=value`, options first). Fixed prefix is the fixture
+# isolation contract: no inherited session id/credential, workflow dirs pinned.
 run_probe() {
     local mode="$1" kind="$2"; shift 2
     PROBE_OUT="$(run_with_timeout 60 env \
