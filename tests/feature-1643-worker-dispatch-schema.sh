@@ -223,8 +223,8 @@ group_c() {
             case "cmd-subst":     v = "before $(rm -rf /) `id` after"; break;
             case "shell-chain":   v = "one; two && three | four > five"; break;
             case "newlines":      v = "line1\nline2\r\nline3"; break;
-            case "japanese":      v = "日本語の背景説明です。"; break;
-            case "over-4kb":      v = "あX".repeat(2600); break;
+            case "japanese":      v = "\u65E5\u672C\u8A9E\u306E\u80CC\u666F\u8AAC\u660E\u3067\u3059\u3002"; break;
+            case "over-4kb":      v = "\u3042X".repeat(2600); break;
             default: throw new Error("unknown kind " + kind);
           }
           fs.writeFileSync(valFile, v);
@@ -300,6 +300,15 @@ group_d() {
 # tokens therefore belong to `issue-reconcile`'s envPassthrough, the one worker
 # that authenticates against GitHub, and nowhere else.
 #
+# The same allowlist carries a POSITIVE contract as well, and this group owns
+# both halves. A variable that names WHERE a tool reads its configuration must be
+# on the list, because a child that inherits only some of the config-location
+# vars lands in a different config directory than its parent and fails exactly
+# the way a missing credential would look (#1719: the dispatched `gh` could not
+# reach hosts.yml). The admission rule for that set — and how it grows — is NOT
+# restated here: its SSOT is the comment block above CHILD_ENV_ALLOWLIST in
+# hooks/lib/worker-dispatch-registry.js. This group only fences the membership.
+#
 # `test_args` is asserted here for the same reason it is typed: as `text[]` it
 # was free text that became argv for a script runner.
 # ===========================================================================
@@ -350,6 +359,28 @@ group_e() {
       const spec = (workers["test-runner"] || {}).payloadSpec || {};
       out("test_args_type", spec.test_args ? spec.test_args.type : "(absent)");
       out("test_args_max_items", spec.test_args ? spec.test_args.maxItems : "(absent)");
+      // Config-location vars. SSOT for the admission rule and for how this set
+      // grows: the comment block above CHILD_ENV_ALLOWLIST in the registry.
+      const CONFIG_PATH_VARS = ["APPDATA", "ProgramData", "PROGRAMDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR"];
+      out("config_path_count", CONFIG_PATH_VARS.length);
+      out("config_path_missing", allow ? CONFIG_PATH_VARS.filter((v) => !allow.includes(v)).join(",") : "NOT_ARRAY");
+      // Data integrity of the array being edited, not a security policy: a member
+      // listed twice means two people added it independently and neither noticed.
+      out("allowlist_dupes", allow ? allow.filter((v, i) => allow.indexOf(v) !== i).join(",") : "NOT_ARRAY");
+      // Exact membership, pinned as a sorted set plus its cardinality.
+      //
+      // This is a CHANGE DETECTOR ON PURPOSE. Every other assert in this group
+      // names a specific variable, so it can only catch the mistakes someone
+      // already thought of; this array is a security boundary applied to the
+      // children of all nine workers, and the dangerous edit is the one nobody
+      // anticipated — a credential such as AWS_SECRET_ACCESS_KEY or NPM_TOKEN
+      // quietly appended, or an existing member silently dropped. Both turn this
+      // row red. Going green again requires editing the expected value below,
+      // which is the point: the list may only move by a deliberate human decision.
+      // Cardinality is pinned alongside the set so a duplicate-driven length
+      // change cannot hide behind an identical sorted join.
+      out("allowlist_sorted", allow ? allow.slice().sort().join(",") : "NOT_ARRAY");
+      out("allowlist_count", allow ? allow.length : -1);
     ' "$REGISTRY_JS" 2>&1)" || out="REQUIRE_FAILED"
     ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
 
@@ -367,6 +398,24 @@ group_e() {
 
     assert_eq "payload/test-args-is-rel-path-arg" "rel-path-arg[]" "$(ev test_args_type)"
     assert_eq "payload/test-args-max-items-64" "64" "$(ev test_args_max_items)"
+
+    # Targets the whole config-location-variable class. It does not look only
+    # at gh-related vars because the allowlist is a "class" contract applied
+    # unconditionally to every worker.
+    assert_eq "config-paths/set-non-vacuous" "5" "$(ev config_path_count)"
+    assert_eq "config-paths/all-present-in-allowlist" "" "$(ev config_path_missing)"
+    assert_eq "allowlist/no-duplicate-entries" "" "$(ev allowlist_dupes)"
+
+    # Change-detection assert (intentional). The individual asserts above can
+    # only catch "a mistake someone already thought of". These 2 lines pin the
+    # allowlist set itself, so any unexpected addition (including a
+    # credential) or removal always turns red, forcing a human decision.
+    # The expected-value ordering follows JS's default sort (UTF-16 code
+    # units), where uppercase sorts before lowercase.
+    assert_eq "allowlist/exact-sorted-membership" \
+        "APPDATA,COMSPEC,ComSpec,GH_CONFIG_DIR,HOME,PATH,PATHEXT,PROGRAMDATA,Path,ProgramData,SYSTEMROOT,SystemRoot,TEMP,TMP,USERPROFILE,XDG_CONFIG_HOME" \
+        "$(ev allowlist_sorted)"
+    assert_eq "allowlist/exact-cardinality" "16" "$(ev allowlist_count)"
 }
 
 if command -v timeout >/dev/null 2>&1; then
