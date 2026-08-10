@@ -181,6 +181,18 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
+### Comment-block size warning
+
+A long run of consecutive comment lines is easy to add and hard to notice in review, so
+`git commit` prints an advisory warning when a staged code file's longest comment block
+crosses the threshold. A staged file is compared against its committed version and reported
+only when its comment blocks got longer, so an already-long block never nags on an unrelated
+edit; a file with no committed version is judged on its own contents. The warning never
+blocks a commit and never rewrites a file, and it fires only for this repository even though
+the hook path is configured globally. Run `bin/review-comment-block-size --all` for the same
+report over the whole working tree. Set `COMMENT_BLOCK_WARN_LINES` (default 10) or
+`COMMENT_BLOCK_WARN=off` to tune or silence it — see `.env.example`.
+
 ### VS Code worktree session visibility
 
 The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in its

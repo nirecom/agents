@@ -20,6 +20,7 @@ Each pattern has the same axis: entrypoint-private vs shared.
 - Keep `<name>.<ext>` as dispatch + re-export only; no logic inside it.
 - Entrypoint-private modules: sibling `<name>/` folder.
 - Shared across multiple entrypoints: adjacent `lib/` (e.g., `hooks/lib/`).
+- Long comment blocks inside a code file: `bin/review-comment-block-size` owns that threshold.
 
 ## Pattern B — Prompt files (SKILL.md, rules/*.md, agents/*.md, skills/_shared/*.md)
 
