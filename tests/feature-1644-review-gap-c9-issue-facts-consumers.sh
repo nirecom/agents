@@ -72,7 +72,7 @@ export CLAUDE_PROJECT_DIR="$(nrm "$FIXTURE_REPO")"
 NEUTRAL_CWD="$TMPDIR_BASE/neutral"; mkdir -p "$NEUTRAL_CWD"
 cd "$NEUTRAL_CWD" || exit 1
 
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 
 # seed_state <sid> <closes_issues-json>
 seed_state() {

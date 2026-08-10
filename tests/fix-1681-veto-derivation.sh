@@ -104,8 +104,11 @@ write_state() {
     local sid="$1" overrides="$2"
     node -e '
 const [sid, overrides, out] = process.argv.slice(1);
+// #1665 inserted write_code between review_tests and run_tests. A step absent from this
+// list cannot be addressed by an override, so it would stay pending and could become the
+// current step instead of the one a case is aiming at.
 const STEPS = ["workflow_init","clarify_intent","research","outline","detail",
-  "branching_complete","write_tests","review_tests","run_tests","review_security",
+  "branching_complete","write_tests","review_tests","write_code","run_tests","review_security",
   "docs","user_verification","cleanup","pre_final_report_gate"];
 const o = JSON.parse(overrides);
 const now = new Date().toISOString();
@@ -151,7 +154,7 @@ run_gate() {
 # Steps before outline, all cleared.
 PRE_OUTLINE='"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"}'
 # Everything after detail, all cleared (used by the "only the veto blocks" fixtures).
-POST_DETAIL='"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
+POST_DETAIL='"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
 VETOED_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-07-01T00:00:00.000Z"}}'
 PENDING_VERDICT_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"pending","source":"next-step-recorded-verdict","recorded_at":"2026-07-01T00:00:00.000Z"}}'
 

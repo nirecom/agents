@@ -87,8 +87,12 @@ run_with_timeout() {
   else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
 }
 
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
-SETTLED_BEFORE_RUN_TESTS=" workflow_init clarify_intent research outline detail branching_complete write_tests review_tests "
+# #1665 inserted write_code between review_tests and run_tests. It must appear in BOTH
+# lists: in STEPS_ALL so the fixture keeps enumerating every VALID_STEPS entry, and in the
+# settled prefix because write_code is NOT skippable — left pending it, not run_tests,
+# would be the first non-settled step and every case below would be aimed at the wrong step.
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+SETTLED_BEFORE_RUN_TESTS=" workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code "
 
 # at_run_tests <sid> — state whose first non-settled step is run_tests.
 at_run_tests() {

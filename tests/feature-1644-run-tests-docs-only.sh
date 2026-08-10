@@ -100,13 +100,16 @@ run_with_timeout() {
   else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
 }
 
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 # State whose first non-settled step is run_tests.
+# #1665: write_code sits between review_tests and run_tests and is NOT skippable, so it has
+# to be part of the settled prefix below — otherwise the first non-settled step is
+# write_code and every case here would be probing the wrong step.
 at_run_tests() {
   local sid="$1" json='{"steps":{' first=1 s st
   for s in $STEPS_ALL; do
     st="pending"
-    case " workflow_init clarify_intent research outline detail branching_complete write_tests review_tests " in
+    case " workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code " in
       *" $s "*) st="complete" ;;
     esac
     [ $first -eq 1 ] || json="$json,"

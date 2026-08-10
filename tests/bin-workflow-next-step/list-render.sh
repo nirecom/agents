@@ -9,16 +9,28 @@ run_list_render_tests() {
   local OUT ACTION NEXT_SKILL NEXT_HINT REASON
 
   # ---- Case 14: --list (no session) ----------------------------------------
-  local LIST_OUT LINE_COUNT
+  # Row count and the expected name set are derived from VALID_STEPS (the SSOT) rather
+  # than hardcoded, so inserting a step (#1733 final_report, #1665 write_code) cannot
+  # leave this case asserting a stale literal.
+  local LIST_OUT LINE_COUNT VALID_STEPS_LIST VALID_STEPS_COUNT
+  VALID_STEPS_LIST="$(run_with_timeout node -e "process.stdout.write(require('$STATE_IO_N').VALID_STEPS.join(' '))" 2>/dev/null || true)"
+  VALID_STEPS_COUNT="$(printf '%s' "$VALID_STEPS_LIST" | wc -w | tr -d ' ')"
   LIST_OUT="$(run_next_step --list 2>/dev/null || true)"
   LINE_COUNT="$(printf '%s\n' "$LIST_OUT" | grep -c . || true)"
-  # #1733: final_report is now a genuine terminal VALID_STEPS entry, surfaced
-  # as its own --list row (15 total, was 14).
-  check "14a: --list emits 15 rows" "15" "$LINE_COUNT"
+  # Guard the derivation itself: an empty/failed probe would make 14a compare "" to ""
+  # and false-green the whole case.
+  if [ "$VALID_STEPS_COUNT" -ge 15 ] 2>/dev/null; then
+    echo "PASS: 14a-pre: VALID_STEPS probe returned a plausible step list ($VALID_STEPS_COUNT)"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: 14a-pre: VALID_STEPS probe failed -- got [$VALID_STEPS_LIST]"
+    FAIL=$((FAIL + 1))
+  fi
+  check "14a: --list emits one row per VALID_STEPS entry" "$VALID_STEPS_COUNT" "$LINE_COUNT"
 
   local step
   local missing=0
-  for step in workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report; do
+  for step in $VALID_STEPS_LIST; do
     if ! echo "$LIST_OUT" | grep -qF "$step"; then
       echo "FAIL: 14b: --list missing step name [$step]"
       FAIL=$((FAIL + 1))
@@ -26,7 +38,7 @@ run_list_render_tests() {
     fi
   done
   if [ "$missing" = "0" ]; then
-    echo "PASS: 14b: --list contains all 15 step names"
+    echo "PASS: 14b: --list contains all $VALID_STEPS_COUNT VALID_STEPS names"
     PASS=$((PASS + 1))
   fi
 

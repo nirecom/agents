@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # tests/feature-1794-stop-guard-exemptions.sh
-# Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/enforce-override-handlers/background-work.js, bin/workflow/lib/next-step/verdict.js, hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, settings.json
+# Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, bin/workflow/lib/next-step/verdict.js, hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, settings.json
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
 # Issues #1794 / #1665 — the Stop-guard exemption layer:
 #   #1794  isWorkflowStarted() + the C4_EXEMPTIONS / buildExemptionDeps /
 #          firstExemption restructuring, and the C2 pre-workflow-init gate
-#   #1665  the background-work primitive (TTL 4h, fail-CLOSED)
-# X/T/Z/B cases are TL2 (real spawned hook, next-step and workflow-mark
-# processes against seeded temp state dirs); M cases are TL1 plus a TL2
-# cross-check of the declarative EXEMPTION_MATRIX against real behaviour.
-# S cases pin the settings.json permission wiring (ask on the START/declare
-# sentinels, allow on the END ones) and P cases are the table-driven regex
-# matrix for the background-work sentinel patterns — both TL1.
-# Security/robustness rows: B9 (hostile session ids never escape the workflow
-# dir), B10/B11 (TTL boundary under a frozen clock, and malformed markers fail
-# CLOSED), B12 (exact 4h TTL), B13 (malformed/injected START writes no marker
-# and no .tmp residue), B15 (marker-write I/O fault injection),
-# Z1 (sweep containment + resilience).
+#   #1665  commit 4 removed the `.background-work` marker primitive; its C4 role
+#          is now held by the state-derived `write-code-in-flight` row
+#          (write_code at in_progress inside a 4h TTL). The B/F/S/P case files
+#          that existed only to drive the marker went with it; what the removal
+#          must NOT touch is pinned by the surviving pre-workflow-init /
+#          workflow-off / next-step-paused rows, and the removal itself by
+#          tests/feature-1665-background-work-removed.sh.
+# X/T/Z cases are TL2 (real spawned hook and next-step processes against seeded
+# temp state dirs); M cases are TL1 plus a TL2 cross-check of the declarative
+# EXEMPTION_MATRIX against real behaviour.
+# Robustness rows: Z1 (sweep containment + resilience across the surviving
+# marker suffixes).
 # I1-I14 are the #1794 adoption regression: an inherited session (built here by
 # launching the real hooks/session-start.js against a donor state + transcript)
 # projects workflow_init=complete out of purely `backfilled`/`session-inherit`
@@ -61,13 +61,7 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 # shellcheck source=/dev/null
 . "$CASE_DIR/x-lifecycle.sh"
 # shellcheck source=/dev/null
-. "$CASE_DIR/b-background-work.sh"
-# shellcheck source=/dev/null
 . "$CASE_DIR/m-policy-matrix.sh"
-# shellcheck source=/dev/null
-. "$CASE_DIR/s-sentinel-wiring.sh"
-# shellcheck source=/dev/null
-. "$CASE_DIR/f-fault-injection.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/i-inherited-adoption.sh"
 # shellcheck source=/dev/null
@@ -98,15 +92,12 @@ require_defined() {
 require_defined \
     pass fail skip \
     make_tmp node_path seed_started seed_preinit seed_raw_state seed_corrupt_state \
-    seed_sup_armed seed_sup_error write_bg_marker age_file \
+    seed_sup_armed seed_sup_error seed_write_code_in_flight age_file \
     run_c4 run_c2 run_mark run_next_step hostile_sid_probe no_new_finding \
     mk_fixture_repo inh_node seed_donor_and_inherit seed_recording_only \
     inh_wf inh_guard inh_probe inh_anchor write_hang_transcript pred_eval \
     run_X1 run_X2 run_X3 run_X4 run_X5 run_X6 run_X7 run_T17 run_T18 run_Z1 \
-    run_B1 run_B2 run_B3 run_B4 run_B5 run_B6 run_B7 run_B8 run_B9 run_B10 \
-    run_B11 run_B12 run_B13 run_B15 \
-    run_M1a run_M1b run_M1c run_M1d run_M2 run_M3a run_M3b run_M3c \
-    run_S1 run_S2 run_P1 run_P2 \
+    run_M1a run_M1b run_M1c run_M1d run_M1e run_M2 run_M3a run_M3b run_M3c \
     run_I1 run_I2 run_I3 run_I4 run_I5 run_I6 run_I7 run_I8 run_I9 \
     run_I10 run_I10b run_I11 run_I12 run_I13 run_I14
 
@@ -122,39 +113,17 @@ run_T17
 run_T18
 run_Z1
 
-# B1-B13 — background-work primitive (#1665)
-run_B1
-run_B2
-run_B3
-run_B4
-run_B5
-run_B6
-run_B7
-run_B8
-run_B9
-run_B10
-run_B11
-run_B12
-run_B13
-
-# B15 — marker-write I/O fault injection
-run_B15
-
-# M1-M3 — EXEMPTION_MATRIX cross-checks
+# M1-M3 — EXEMPTION_MATRIX cross-checks (M1-e is the #1665 write-code-in-flight
+# row that replaced background-work)
 run_M1a
 run_M1b
 run_M1c
 run_M1d
+run_M1e
 run_M2
 run_M3a
 run_M3b
 run_M3c
-
-# S1-S2 + P1-P2 — settings.json permission wiring and the sentinel pattern table
-run_S1
-run_S2
-run_P1
-run_P2
 
 # I1-I14 — session-inheritance adoption regression (#1794)
 run_I1

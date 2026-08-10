@@ -10,10 +10,12 @@ const {
   orderedAnnotationKeys,
   convertV1AnnotationsToEvents,
 } = require("./migrations/v1-to-v2");
+const { migrateV2ToV3 } = require("./migrations/v2-to-v3");
 
 module.exports = {
   applyV1FieldBackfill,
   migrateV1ToV2,
+  migrateV2ToV3,
   orderedAnnotationKeys,
   convertV1AnnotationsToEvents,
 };

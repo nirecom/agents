@@ -546,9 +546,9 @@ if [[ -n "$REPO_ROOT_ARG" ]]; then
   fi
   export REPO_ROOT="$REPO_ROOT_ARG"
 fi
-# Read timeout from .env via get-config-var; fall back to 300 s (same resolution as codex_core_run in lib/codex-core.sh).
-CODEX_TIMEOUT_SECS_RESOLVED="$(cd "${AGENTS_CONFIG_DIR:-.}" && get-config-var CODEX_TIMEOUT_SECS 300 2>/dev/null)"
-CODEX_TIMEOUT_SECS_RESOLVED="${CODEX_TIMEOUT_SECS_RESOLVED:-300}"
+# Timeout resolution is owned by codex_timeout_resolve (lib/codex-timeout.sh, re-exported
+# through lib/codex-core.sh) — same value every codex invocation in the repo uses.
+CODEX_TIMEOUT_SECS_RESOLVED="$(codex_timeout_resolve)"
 timeout "$CODEX_TIMEOUT_SECS_RESOLVED" codex exec --skip-git-repo-check "${MCP_OVERRIDES[@]+"${MCP_OVERRIDES[@]}"}" - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
   || codex_exit=$?
 

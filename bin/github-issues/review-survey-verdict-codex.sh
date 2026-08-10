@@ -34,6 +34,8 @@ AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 VALIDATOR="$SCRIPT_DIR/lib/validate-review-verdict.js"
 CASCADE_SSOT="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
+# shellcheck source=../lib/codex-timeout.sh
+source "$AGENTS_DIR/bin/lib/codex-timeout.sh"
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -346,11 +348,9 @@ process.stdout.write("relations_mode: " + defang(a.relations_mode) + "\n");' "$(
     echo "The survey worker's verdict was: $SURVEY_VERDICT"
 } > "$PROMPT_FILE"
 
-TIMEOUT_SECS="${CODEX_TIMEOUT_SECS:-}"
-if [[ -z "$TIMEOUT_SECS" && -x "$AGENTS_DIR/bin/get-config-var" ]]; then
-    TIMEOUT_SECS="$("$AGENTS_DIR/bin/get-config-var" CODEX_TIMEOUT_SECS 300 2>/dev/null || true)"
-fi
-[[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]] || TIMEOUT_SECS=300
+# Timeout resolution is owned by codex_timeout_resolve (bin/lib/codex-timeout.sh) — the
+# same value, and the same .env key, that every other codex invocation in the repo uses.
+TIMEOUT_SECS="$(codex_timeout_resolve)"
 
 CODEX_EXEC_ARGS=(exec --skip-git-repo-check)
 [[ "$WEB_SEARCH_ENABLED" == "1" ]] && CODEX_EXEC_ARGS+=(-c tools.web_search=true)

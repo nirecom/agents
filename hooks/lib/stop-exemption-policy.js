@@ -13,7 +13,12 @@ const EXEMPTION_MATRIX = Object.freeze({
   // next-step correctly returns ACTION=invoke workflow-init pre-init, which is
   // the intended CLAUDE.md behavior. Only the Stop hook's forced nudge is silenced.
   "pre-workflow-init": { c4: true,  c2: true,  nextStep: false },
-  "background-work":   { c4: true,  c2: false, nextStep: true  },
+  // nextStep:false — a DELIBERATE difference from the retired TTL-marker row, on the same
+  // logic as pre-workflow-init: next-step returning ACTION=invoke write-code
+  // while /write-code runs is correct guidance, so only the Stop hook's forced
+  // nudge is silenced. c2:false — a long implementation turn must not defer a
+  // scheduled supervisor review.
+  "write-code-in-flight": { c4: true, c2: false, nextStep: false },
   "delegated-reason":  { c4: true,  c2: false, nextStep: false },
 });
 

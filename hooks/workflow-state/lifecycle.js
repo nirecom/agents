@@ -62,8 +62,49 @@ function isWorkflowStarted(sid) {
   }
 }
 
+// How long a `write_code in_progress` record may keep C4 quiet. Same 4 hours as
+// the retired TTL-based quiet-layer marker whose role this exemption inherits.
+const WRITE_CODE_IN_FLIGHT_TTL_MS = 4 * 60 * 60 * 1000;
+
+// isWriteCodeInFlight(sid): true when THIS session's `write_code` step is
+// recorded `in_progress` and that record is younger than the TTL. Total
+// function — never throws.
+//
+// Deliberately scoped to `write_code` ALONE. `in_progress` already means "not
+// settled" everywhere else (core.js isSettledStatus, consumed by workflow-gate
+// / verdict / list) and that meaning is unchanged; C4 asks a different question
+// ("is someone actively working, so don't nudge"). Separating the two by
+// PREDICATE SCOPE rather than by redefining the status vocabulary keeps the
+// exception named and bounded — a blanket "any in_progress step" predicate
+// would silently extend the grace to e.g. `docs` (CPR-UNV).
+//
+// TIME AXIS: wall-clock `updated_at`, because the question is "how long has
+// this been running?" — elapsed time. `updated_seq` MUST NOT be used here: it
+// is a causal-ordering position with no duration meaning, and a stream position
+// can never expire.
+//
+// Fail-CLOSED, same failure shape as the retired marker reader it replaces: unreadable
+// state, missing step entry, wrong status, missing / non-string / unparseable
+// `updated_at`, or TTL exceeded all read as false. An unbounded quiet window
+// would silently disable C4 for the rest of the session.
+function isWriteCodeInFlight(sid) {
+  try {
+    const state = readState(sid);
+    const entry = state && state.steps && state.steps.write_code;
+    if (!entry || entry.status !== "in_progress") return false;
+    if (typeof entry.updated_at !== "string") return false;
+    const updatedAt = Date.parse(entry.updated_at);
+    if (Number.isNaN(updatedAt)) return false;
+    return Date.now() - updatedAt < WRITE_CODE_IN_FLIGHT_TTL_MS;
+  } catch (_e) {
+    return false;
+  }
+}
+
 module.exports = {
   isWorkflowStarted,
+  WRITE_CODE_IN_FLIGHT_TTL_MS,
+  isWriteCodeInFlight,
   hasSelfRecordedStepSettlement,
   ADOPTION_EVENT_KINDS,
   ADOPTION_ORIGINS,

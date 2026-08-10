@@ -2,20 +2,20 @@
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
 #
-# Trigger-decoupling tests for issue #1611 (系統B: env-file-independent trigger).
+# Trigger-decoupling tests for issue #1611 (Track B: env-file-independent trigger).
 # Sourced by feature-534-stop-final-report-guard.sh — no shebang, no runner.
 #
 # Function numbering continues at G33 because G28–G32 are already taken by
 # g21-g27.sh; the filename follows the plan, the numbering follows the suite.
 #
 # Contract under test (new):
-#   系統A — env file readable+parsable → Final Report shape validation (unchanged).
-#   系統B — env file ABSENT and `bin/workflow/next-step --session <sid>` reports
+#   Track A — env file readable+parsable → Final Report shape validation (unchanged).
+#   Track B — env file ABSENT and `bin/workflow/next-step --session <sid>` reports
 #           ACTION=invoke with REASON='pre_final_report_gate' → the close
 #           procedure was never started; block unconditionally (exit 2), WITHOUT
 #           scanning the transcript. A hand-written 13-heading report must NOT
 #           be accepted.
-#   Escape hatches for 系統B: <sid>-session-close-gate.json gate_action:yield,
+#   Escape hatches for Track B: <sid>-session-close-gate.json gate_action:yield,
 #           <sid>.workflow-off marker, pre_final_report_gate marked complete.
 #   Anything else → exit 0.
 #
@@ -35,8 +35,11 @@ b_mk_state() {
 const fs = require("fs");
 const dir = process.argv[1], sid = process.argv[2];
 const pendings = process.argv.slice(3);
+// Mirrors VALID_STEPS. #1665 inserted write_code between review_tests and run_tests;
+// a step missing here is never written complete, so it silently stays pending and the
+// "every step complete except the listed ones" premise of every case below breaks.
 const V = ["workflow_init","clarify_intent","research","outline","detail",
-           "branching_complete","write_tests","review_tests","run_tests",
+           "branching_complete","write_tests","review_tests","write_code","run_tests",
            "review_security","docs","user_verification","cleanup",
            "pre_final_report_gate"];
 const steps = {};

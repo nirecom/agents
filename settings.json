@@ -108,8 +108,6 @@
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",
-      "Bash(echo \"<<WORKFLOW_BACKGROUND_WORK_END: *>>\")",
-      "Bash(echo \"<<WORKFLOW_BACKGROUND_WORK_START: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",

@@ -17,7 +17,6 @@ const {
 const { getWorkflowDir } = require("../workflow-state");
 const { consumeOffClearance, handleEmergencyOff } = require("./enforce-override-handlers/off-clearance");
 const { handleNextStepPause } = require("./enforce-override-handlers/next-step-pause");
-const { handleBackgroundWork } = require("./enforce-override-handlers/background-work");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
@@ -29,9 +28,6 @@ function handle(ctx) {
 
   // --- NEXT_STEP_PAUSE / NEXT_STEP_RESUME handler (#1607 quiet layer) ---
   if (handleNextStepPause(ctx)) return true;
-
-  // --- BACKGROUND_WORK_START / BACKGROUND_WORK_END handler (#1665 quiet layer) ---
-  if (handleBackgroundWork(ctx)) return true;
 
   // --- ENFORCE_WORKTREE_OFF handler ---
   const enforceOffMatch = cmd.match(ENFORCE_WORKTREE_OFF_RE_DQ);

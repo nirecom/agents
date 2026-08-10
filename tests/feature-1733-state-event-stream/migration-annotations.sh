@@ -39,13 +39,13 @@ console.log("known_keys=" + KEYS.length + " missing_as_event=" + (missing.join("
     assert_eq "K0/nine-known-keys" "known_keys=9 missing_as_event=0" "$NODE_OUT"
 fi
 
-echo "== K0b: STEP_ANNOTATION_KEYS is the documented 9-key table =="
+echo "== K0b: STEP_ANNOTATION_KEYS is the documented 10-key table =="
 if run_case "K0b/annotation-key-table"; then
     next_sid
     nodejs "$SID" '
 const E = require("./hooks/workflow-state/state-io/events");
-const WANT = ["invalidate_reason", "reset_reason", "skip_judgment", "skip_reason", "skip_verdict",
-              "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
+const WANT = ["invalidate_reason", "reset_reason", "run_outcome", "skip_judgment", "skip_reason",
+              "skip_verdict", "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
 const got = [...E.STEP_ANNOTATION_KEYS].sort();
 console.log(JSON.stringify(got) === JSON.stringify(WANT) ? "MATCH" : "DIFFER got=" + JSON.stringify(got));
 '
@@ -165,23 +165,44 @@ const v1 = JSON.parse(raw());
 // long-standing pre-#1733 invariant, not new behaviour) — so `want` must seed the same
 // defaults before overlaying the explicit v1 fixture steps, or the fixture-absent steps
 // (present in `got` as pending defaults) make the comparison fail on key-set alone.
+// The excluded-key list mirrors ENTRY_META_KEYS in v1-to-v2.js: those keys are projection
+// metadata, never annotations, so they must not be re-emitted as extras. #1665 adds
+// updated_seq to that set, and the two lists have to move together or this property test
+// starts demanding an `updated_seq` annotation the migration correctly refuses to emit.
+const META_KEYS = ["status", "updated_at", "started_at", "updated_seq"];
 const want = {};
-for (const step of C.VALID_STEPS) want[step] = { status: "pending", updated_at: null };
+for (const step of C.VALID_STEPS) want[step] = { status: "pending", updated_at: null, updated_seq: null };
 for (const [step, entry] of Object.entries(v1.steps || {})) {
-  const extras = Object.keys(entry).filter((k) => !["status", "updated_at", "started_at"].includes(k));
+  const extras = Object.keys(entry).filter((k) => !META_KEYS.includes(k));
   if (entry.updated_at == null && entry.status === "pending" && extras.length === 0) continue;
-  const out = { status: entry.status, updated_at: entry.updated_at };
+  const out = { status: entry.status, updated_at: entry.updated_at, updated_seq: null };
   for (const k of extras) if (entry[k] !== null) out[k] = entry[k];
   want[step] = out;
 }
-const got = PJ.projectState(M.migrateV1ToV2(JSON.parse(raw()))).steps;
+const v2 = M.migrateV1ToV2(JSON.parse(raw()));
+const got = PJ.projectState(v2).steps;
 const norm = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, Object.keys(o[k]).sort().map((f) => [f, o[k][f]])]));
 // updated_at for a backfilled entry becomes created_at, which the invariant allows:
 // compare it separately from the rest of the entry.
 for (const step of Object.keys(want)) {
   if (want[step].updated_at == null && got[step]) want[step].updated_at = got[step].updated_at;
 }
-console.log(norm(want) === norm(got) ? "EQUAL" : "DIFFER\nwant=" + norm(want) + "\ngot =" + norm(got));
+// updated_seq is the FOLD POSITION of the step_status event — a number the fixture cannot
+// predict, so it cannot be spelled out in `want`. Its invariant is checkable: exactly the
+// steps for which the migration emitted a step_status event carry a finite position, and
+// every step left at the pending default carries null. That is asserted first; only then is
+// the value adopted into `want`, so the key-set comparison below still fails if the key is
+// missing on either side.
+const seqBad = [];
+const emitted = new Set(v2.events.filter((e) => e.kind === "step_status").map((e) => e.step));
+for (const step of Object.keys(want)) {
+  const g = got[step] || {};
+  if (!("updated_seq" in g)) { seqBad.push(step + ":absent"); continue; }
+  if (Number.isFinite(g.updated_seq) !== emitted.has(step)) { seqBad.push(step + ":" + g.updated_seq); continue; }
+  want[step].updated_seq = g.updated_seq;
+}
+if (seqBad.length) console.log("SEQ-INVARIANT-BROKEN " + seqBad.join(","));
+else console.log(norm(want) === norm(got) ? "EQUAL" : "DIFFER\nwant=" + norm(want) + "\ngot =" + norm(got));
 '
         assert_eq "K-f/property-round-trip[$preset]" "EQUAL" "$NODE_OUT"
     done

@@ -1,5 +1,7 @@
 # x-lifecycle.sh — X1-X7 + T17/T18 + Z1: isWorkflowStarted, the C4/C2 restructuring
 # and the marker sweep introduced by #1794. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# Tests: hooks/workflow-state/lifecycle.js, hooks/workflow-state.js, hooks/workflow-state/state-io.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js
+# Tags: stop-hook, supervisor-guard, session-marker, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
 
 # ---------------------------------------------------------------------------
 # X1: isWorkflowStarted(sid) truth table
@@ -181,9 +183,10 @@ run_T18() {
 }
 
 # ---------------------------------------------------------------------------
-# Z1: cleanupZombies is the fourth consumer touched by the new marker suffix.
-#     B8 proves it sweeps by age; this case pins the two properties that
-#     an age sweep can silently lose:
+# Z1: cleanupZombies is the marker family's sweeper. #1665 removed the
+#     `.background-work` arm, so this case now drives the surviving sibling
+#     `.next-step-paused` — the sweep block itself must keep working, and the
+#     two properties an age sweep can silently lose are still pinned:
 #       (a) containment — nothing outside the workflow dir is ever unlinked,
 #           even when a same-named stale marker sits in the parent directory;
 #       (b) resilience — an entry whose unlink FAILS (a directory carrying a
@@ -195,26 +198,26 @@ run_Z1() {
     tmp="$(make_tmp)"; wf="$tmp/wf"; mkdir -p "$wf"
     tn="$(node_path "$wf")"
     # (a) same-named stale markers one level up — must survive the sweep
-    : > "$tmp/z1-outside.background-work"
-    age_file "$tmp/z1-outside.background-work" 30
+    : > "$tmp/z1-outside.next-step-paused"
+    age_file "$tmp/z1-outside.next-step-paused" 30
     # (b) an undeletable entry that sorts BEFORE the stale markers
-    mkdir -p "$wf/z1-aaa.background-work"
-    age_file "$wf/z1-aaa.background-work" 30
-    write_bg_marker "$wf" "z1-zzz" "3600000"
-    write_bg_marker "$wf" "z1-zzy" "3600000"
-    age_file "$wf/z1-zzz.background-work" 30
-    age_file "$wf/z1-zzy.background-work" 30
-    : > "$wf/z1-fresh.background-work"
+    mkdir -p "$wf/z1-aaa.next-step-paused"
+    age_file "$wf/z1-aaa.next-step-paused" 30
+    : > "$wf/z1-zzz.next-step-paused"
+    : > "$wf/z1-zzy.next-step-paused"
+    age_file "$wf/z1-zzz.next-step-paused" 30
+    age_file "$wf/z1-zzy.next-step-paused" 30
+    : > "$wf/z1-fresh.next-step-paused"
 
     CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
     local rc=$?
 
     [ "$rc" -eq 0 ] || problems="$problems [sweep-threw rc=$rc]"
-    [ -f "$tmp/z1-outside.background-work" ] || problems="$problems [deleted-outside-background-work]"
-    [ ! -f "$wf/z1-zzz.background-work" ] || problems="$problems [stale-background-work-survived-after-failing-entry]"
-    [ ! -f "$wf/z1-zzy.background-work" ] || problems="$problems [stale-background-work-zzy-survived-after-failing-entry]"
-    [ -f "$wf/z1-fresh.background-work" ] || problems="$problems [fresh-marker-deleted]"
+    [ -f "$tmp/z1-outside.next-step-paused" ] || problems="$problems [deleted-outside-marker]"
+    [ ! -f "$wf/z1-zzz.next-step-paused" ] || problems="$problems [stale-marker-survived-after-failing-entry]"
+    [ ! -f "$wf/z1-zzy.next-step-paused" ] || problems="$problems [stale-marker-zzy-survived-after-failing-entry]"
+    [ -f "$wf/z1-fresh.next-step-paused" ] || problems="$problems [fresh-marker-deleted]"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "Z1: cleanupZombies stays inside the workflow dir and keeps sweeping past an entry it cannot unlink"

@@ -253,7 +253,6 @@ run_U6() {
     mkdir -p "$tmp/wf"
     printf '{}' > "$tmp/outside.workflow-off"
     printf '{}' > "$tmp/outside.next-step-paused"
-    printf '{"expires_at":"2999-01-01T00:00:00.000Z"}' > "$tmp/outside.background-work"
     out=$(TMPD="$tnode" CLAUDE_WORKFLOW_DIR="$tnode/wf" WORKFLOW_PLANS_DIR="$tnode/wf" "$RWT" 20 node -e "
 const fs = require('fs'), path = require('path');
 const sm = require('$_AGENTS_DIR_NODE/hooks/lib/session-markers.js');
@@ -264,7 +263,6 @@ const readers = [
   ['isWorktreeOff', sm.isWorktreeOff],
   ['isIssueCloseVerified', sm.isIssueCloseVerified],
   ['isNextStepPaused', sm.isNextStepPaused],
-  ['isBackgroundWorkInFlight', sm.isBackgroundWorkInFlight],
 ];
 const problems = [];
 for (const [name, fn] of readers) {
@@ -280,14 +278,14 @@ for (const sid of hostile) {
   try { got = sm.readOffClearance(sid); } catch (e) { problems.push('readOffClearance:threw'); continue; }
   if (got !== null) problems.push('readOffClearance[' + JSON.stringify(sid) + ']-not-null');
 }
-for (const f of ['outside.workflow-off', 'outside.next-step-paused', 'outside.background-work']) {
+for (const f of ['outside.workflow-off', 'outside.next-step-paused']) {
   if (!fs.existsSync(path.join(dir, f))) problems.push('deleted-outside:' + f);
 }
 // positive anchor: the same readers DO see a marker inside the workflow dir
 const wf = path.join(dir, 'wf');
-fs.writeFileSync(path.join(wf, 'good.background-work'), '{\"expires_at\":\"2999-01-01T00:00:00.000Z\"}');
+fs.writeFileSync(path.join(wf, 'good.next-step-paused'), '');
 fs.writeFileSync(path.join(wf, 'good.workflow-off'), '');
-if (sm.isBackgroundWorkInFlight('good') !== true) problems.push('positive-anchor:background-work');
+if (sm.isNextStepPaused('good') !== true) problems.push('positive-anchor:next-step-paused');
 if (sm.isWorkflowOff('good') !== true) problems.push('positive-anchor:workflow-off');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true

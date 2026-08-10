@@ -36,8 +36,14 @@ console.log("version=" + st.version + " sorted=" + sorted + " order=" + order);
 '
     # docs has updated_at:null -> at = created_at -> earliest, and at_estimated events
     # sort to the head of their `at` group.
+    #
+    # The trailing write_code is the v2->v3 stage (#1665): normalizeStateVersion chains
+    # both stages, and this fixture settles `docs` — a step AFTER write_code — so the
+    # backfill fires. It is appended with the LAST event's own `at`, which is why
+    # `sorted` still holds. The v2->v3 stage owns its own cases in
+    # tests/feature-1665-write-code-step/f-v2-to-v3.sh; here it is only the chain tail.
     assert_eq "V1/sorted-by-at" \
-        "version=2 sorted=true order=docs>workflow_init>clarify_intent>detail" "$NODE_OUT"
+        "version=3 sorted=true order=docs>workflow_init>clarify_intent>detail>write_code" "$NODE_OUT"
 fi
 
 echo "== V2: an empty pending entry is dropped; a non-pending null-timestamp entry is backfilled =="
@@ -154,7 +160,7 @@ console.log("workflow_type=" + onDisk.workflow_type +
         "workflow_type=wf-code closes_issues=[1733] created_at=2026-06-20T09:00:00.000Z" "$NODE_OUT"
 fi
 
-echo "== V8: one readState persists v2; the second read is byte-identical (idempotent) =="
+echo "== V8: one readState persists the current version; the second read is byte-identical =="
 if run_case "V8/lazy-persist-idempotent"; then
     next_sid
     seed_v1 "$SID" "toplevel"
@@ -170,7 +176,7 @@ console.log("changed_from_v1=" + (v1raw !== first) +
             " version=" + JSON.parse(first).version +
             " second_read_identical=" + (first === second));
 '
-    assert_eq "V8/lazy-persist-idempotent" "changed_from_v1=true version=2 second_read_identical=true" "$NODE_OUT"
+    assert_eq "V8/lazy-persist-idempotent" "changed_from_v1=true version=3 second_read_identical=true" "$NODE_OUT"
 fi
 
 echo "== V9: migrateV1ToV2 is a pure function — two calls give identical output =="
@@ -209,10 +215,10 @@ console.log("version=" + st.version + " steps=" + steps + " workflow_type=" + st
             " retired_present=" + /"step":"(verify|branching_decision)"/.test(JSON.stringify(st.events)));
 '
     assert_eq "V10/field-backfill-then-v2" \
-        "version=2 steps=branching_complete,run_tests workflow_type=wf-meta retired_present=false" "$NODE_OUT"
+        "version=3 steps=branching_complete,run_tests,write_code workflow_type=wf-meta retired_present=false" "$NODE_OUT"
 fi
 
-echo "== V11: an already-v2 file is not re-migrated (no event churn) =="
+echo "== V11: an already-current file is not re-migrated (no event churn) =="
 if run_case "V11/v2-untouched"; then
     next_sid
     nodejs "$SID" "$PRE"'
@@ -239,7 +245,7 @@ console.log("raw_version=" + rawState.version +
             " file_untouched=" + (before === raw()));
 '
     assert_eq "V12/readRawState-unchanged" \
-        "raw_version=1 raw_has_steps=true norm_version=2 norm_has_events=true file_untouched=true" "$NODE_OUT"
+        "raw_version=1 raw_has_steps=true norm_version=3 norm_has_events=true file_untouched=true" "$NODE_OUT"
 fi
 
 echo "== V13: a corrupt state file still fails open (readState -> null, no throw) =="
@@ -277,7 +283,7 @@ console.log([
 ].join(" "));
 '
     assert_eq "V14/unversioned-v1-migrates" \
-        "version=2 steps=workflow_init=complete,research=complete token=tok-unversioned docs_projects=pending no_toplevel_steps=true persisted_version=2" \
+        "version=3 steps=workflow_init=complete,research=complete token=tok-unversioned docs_projects=pending no_toplevel_steps=true persisted_version=3" \
         "$NODE_OUT"
 fi
 
@@ -289,24 +295,32 @@ if run_case "V15/equal-timestamp-tiebreak"; then
     # that is not stable — or that falls back on Object.keys order — reproduces the input
     # and fails here. Two sessions migrating the same file must agree on the sequence,
     # otherwise `seq` stops being a shared identifier for the same event.
+    # SCOPED TO THE v1->v2 STAGE ON PURPOSE: normalizeStateVersion chains v2->v3 after
+    # it, and this fixture settles run_tests, so #1665 appends one more estimated
+    # step_status (write_code) at the TAIL. Judging "estimated events sort first" over
+    # the whole stream would therefore measure the later stage's append position rather
+    # than this stage's tie-break. The v3 tail is asserted separately below.
     nodejs "$SID" "$PRE"'
 const st = S.readState(sid);
-const seq = st.events.map((e) => e.kind === "step_annotation" ? e.step + ":" + e.key : e.step + ":" + e.kind).join(" ");
-const oneAt = new Set(st.events.map((e) => e.at)).size;
-const est = st.events.filter((e) => e.at_estimated === true).map((e) => e.step).join(",");
-const estFirst = st.events.findIndex((e) => e.at_estimated !== true) >
-                 st.events.map((e) => e.at_estimated === true).lastIndexOf(true);
+const v1ev = st.events.filter((e) => e.origin === "migration-v1-to-v2");
+const seq = v1ev.map((e) => e.kind === "step_annotation" ? e.step + ":" + e.key : e.step + ":" + e.kind).join(" ");
+const oneAt = new Set(v1ev.map((e) => e.at)).size;
+const est = v1ev.filter((e) => e.at_estimated === true).map((e) => e.step).join(",");
+const estFirst = v1ev.findIndex((e) => e.at_estimated !== true) >
+                 v1ev.map((e) => e.at_estimated === true).lastIndexOf(true);
+const tail = st.events[st.events.length - 1];
 console.log([
   "distinct_at=" + oneAt,
   "estimated=" + est,
   "estimated_first=" + estFirst,
+  "v3_tail=" + tail.step + ":" + tail.origin,
   "order=" + seq,
 ].join(" "));
 '
     # VALID_STEPS index order within the equal-`at` group, step_status before that
     # step annotations, STEP_ANNOTATION_KEYS index (token before wsid) within a step.
     assert_eq "V15/equal-timestamp-tiebreak" \
-        "distinct_at=1 estimated=clarify_intent estimated_first=true order=clarify_intent:step_status workflow_init:step_status detail:step_status review_tests:step_status review_tests:token review_tests:wsid run_tests:step_status" \
+        "distinct_at=1 estimated=clarify_intent estimated_first=true v3_tail=write_code:migration-v2-to-v3 order=clarify_intent:step_status workflow_init:step_status detail:step_status review_tests:step_status review_tests:token review_tests:wsid run_tests:step_status" \
         "$NODE_OUT"
 fi
 
@@ -331,7 +345,7 @@ console.log("same_stream=" + (strip(ra) === strip(rb)) + " idempotent=" + (ra ==
     assert_eq "V16/tiebreak-deterministic-and-idempotent" "same_stream=true idempotent=true" "$NODE_OUT"
 fi
 
-echo "== V17: the unversioned file is persisted as v2 and re-read without further change =="
+echo "== V17: the unversioned file is persisted at the current version and re-read unchanged =="
 if run_case "V17/unversioned-persist-idempotent"; then
     next_sid
     seed_v1 "$SID" "unversioned"
@@ -345,7 +359,7 @@ console.log("version=" + st.version + " byte_identical=" + (first === raw()) +
             " events=" + st.events.length + " no_started_at=" + (first.indexOf("started_at") === -1));
 '
     assert_eq "V17/unversioned-persist-idempotent" \
-        "version=2 byte_identical=true events=3 no_started_at=true" "$NODE_OUT"
+        "version=3 byte_identical=true events=3 no_started_at=true" "$NODE_OUT"
 fi
 
 echo "== V18: readState never writes — only a writer brings a v1 file forward =="
@@ -365,7 +379,7 @@ S.markStep(sid, "docs", "complete");
 const after = JSON.parse(raw());
 console.log("projected=" + st.steps.workflow_init.status +
             " read_left_bytes_untouched=" + readOnly +
-            " writer_migrated=" + (after.version === 2) +
+            " writer_migrated=" + (after.version === 3) +
             " write_survived=" + (after.current.steps.docs.status === "complete"));
 '
     assert_eq "V18/read-does-not-persist" \

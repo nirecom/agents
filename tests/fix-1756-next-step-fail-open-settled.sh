@@ -130,8 +130,10 @@ write_state() {
     local sid="$1" overrides="$2" issues="${3:-[1756]}" wtype="${4:-wf-code}"
     node -e '
 const [sid, overrides, issues, wtype, out] = process.argv.slice(1);
+// #1665: write_code sits between review_tests and run_tests. It is enumerated here so
+// fixtures can address it; steps left out of this list would silently ignore overrides.
 const STEPS = ["workflow_init","clarify_intent","research","outline","detail",
-  "branching_complete","write_tests","review_tests","run_tests","review_security",
+  "branching_complete","write_tests","review_tests","write_code","run_tests","review_security",
   "docs","user_verification","cleanup","pre_final_report_gate"];
 const o = JSON.parse(overrides);
 const now = new Date().toISOString();
@@ -195,22 +197,30 @@ list_markers() {
 
 new_sid() { printf '%s-%04x%04x' "$1" $RANDOM $RANDOM; }
 
+# `--list` renders exactly one row per VALID_STEPS entry. Derive the count from the
+# SSOT instead of pinning a literal, so a step insertion (#1733 final_report, #1665
+# write_code) extends these baselines instead of stranding them.
+VALID_STEPS_COUNT="$(run_with_timeout 60 node -e '
+process.stdout.write(String(require(process.argv[1]).VALID_STEPS.length));
+' "$(to_node_path "$AGENTS_DIR/hooks/workflow-state/state-io.js")" 2>/dev/null || echo "")"
+
 # ---- Shared fixture fragments ---------------------------------------------
 RV_OUTLINE='"outline":{"status":"skipped","skip_reason":"recorded-verdict: so_c1+so_c2 met"}'
 RV_DETAIL='"detail":{"status":"skipped","skip_reason":"recorded-verdict: sd_c1+sd_c2+sd_c3 met"}'
 SPEC_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative"}'
 HEAD_COMPLETE='"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"}'
-# Everything from branching_complete onward, all complete (write_tests included).
-TAIL_COMPLETE='"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
+# Everything from branching_complete onward, all complete (write_tests and, since #1665,
+# write_code included — write_code is NOT skippable, so a terminal fixture must complete it).
+TAIL_COMPLETE='"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
 # Same, but write_tests carries an unrecognized status (must never read settled).
-TAIL_WTS_BOGUS='"branching_complete":{"status":"complete"},"write_tests":{"status":"bogus"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
+TAIL_WTS_BOGUS='"branching_complete":{"status":"complete"},"write_tests":{"status":"bogus"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
 # Same, but write_tests still in flight (the negative branch of the predicate).
 # The steps AFTER write_tests are left pending on purpose: a completed later step
 # would trip the inconsistency scan / review_tests-ordering recovery (ACTION=abort)
 # before any settled-status check is reached, and the probe would prove nothing.
 TAIL_WTS_IN_PROGRESS='"branching_complete":{"status":"complete"},"write_tests":{"status":"in_progress"}'
 # Same, but write_tests explicitly skipped (session opted out of tests).
-TAIL_WTS_SKIPPED='"branching_complete":{"status":"complete"},"write_tests":{"status":"skipped","skip_reason":"tests not needed"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
+TAIL_WTS_SKIPPED='"branching_complete":{"status":"complete"},"write_tests":{"status":"skipped","skip_reason":"tests not needed"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
 
 # ---- Shared module probe (consumed by the S cases) -------------------------
 # One guarded node run answers both the predicate-behavior table (S1) and the

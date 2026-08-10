@@ -79,7 +79,7 @@ run_with_timeout() {
 }
 
 # --- fixture builders -------------------------------------------------------
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 
 # make_state <sid> "<space separated complete steps>" [extra-top-level-json]
 make_state() {

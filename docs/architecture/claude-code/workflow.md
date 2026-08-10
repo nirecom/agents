@@ -1,6 +1,6 @@
 # Workflow State Machine
 
-All 15 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
+All 16 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
 time by a PreToolUse hook.
 
 ## State file
@@ -87,6 +87,23 @@ that does not run through `validateEvent`, so it sanitizes instead: out-of-vocab
 keys are dropped and out-of-vocabulary statuses emit nothing (leaving the projection default
 `pending`), because a stream the integrity assertion later rejects would wedge the file with
 no in-band repair. `started_at` (retired with #1640) is dropped rather than carried.
+
+### Migration from v2 (schema v3)
+
+The schema version is how a state file **declares what its writer knew**. #1665 inserted
+`write_code` into `VALID_STEPS`, and a v2 file written before that has no `write_code` event at
+all — the projection defaults the step to `pending` while `run_tests` already stands complete,
+which `next-step` would report as an inconsistency and abort on. `migrateV2ToV3` resolves it at
+the schema layer instead: when the stream mentions `write_code` in no `step_status` event **and**
+at least one step after it in `VALID_STEPS` is settled, it appends a single
+`step_status: write_code=complete` with `provenance: "backfilled"`. Sessions that never got that
+far gain nothing, and a `write_code` recorded pending on purpose (`RESET_FROM`, `--reset`) is left
+untouched — so the `next-step` abort branch still fires for a genuine inconsistency.
+
+`CURRENT_STATE_VERSION` (`state-io/core.js`) is the SSOT for "the newest form this release
+writes"; `MAX_KNOWN_STATE_VERSION`, `createInitialState`, and `serializeStateForPersist` all
+derive from it. A per-stage migration output version stays a literal in its own stage, because
+that is a different fact.
 
 ### `plan_approvals` (approval-gated steps)
 
@@ -202,7 +219,7 @@ their pre-existing behavior — the field is additive, not a breaking change to 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
 - `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `run_tests`, `review_security`, and `cleanup`. `run_tests` is admitted only on the docs-only route: both write-side doors (`not-needed-handlers.js`, `mark-step-handler.js`) verify `isDocsOnlyStaged` fail-closed before recording it
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
-- `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
+- `branching_complete`, `write_code`, and `pre_final_report_gate`: cannot be `skipped`
 
 **`skip_verdict` field (outline/detail only):** When a speculative skip is recorded
 (`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED`), a `skip_verdict` object is
@@ -244,6 +261,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
+| `write_code` | `/write-code` skill — emits `WORKFLOW_MARK_STEP_write_code_in_progress` before its subagent launch and `WORKFLOW_MARK_STEP_write_code_complete` after the post-action review. Not skippable: the implementation body has no not-needed door |
 | `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --status skipped` |
 | `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
@@ -251,6 +269,8 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
 | `final_report` | `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"` after the Final Report is rendered — the sole `TERMINAL_STEPS` member, and the only step the commit gate never enforces |
+
+A failing `/run-tests` re-opens `write_code` together with `run_tests`, and because the masking happens inside `reconcileEffectiveState` the commit gate inherits it: `workflow-gate.js` blocks the commit until the implementation is fixed and the suite is green again (#1665).
 
 `write_tests` and `docs` accept evidence-based completion: at commit time, `workflow-gate.js`
 checks `git diff --cached --name-only` and treats staged test/doc files as proof of completion,
@@ -322,7 +342,7 @@ Session start → session-start.js (SessionStart hook)
       explicit adoption path below, never auto-inherited
     if no match found: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
-  calls bin/workflow/next-step --session <sid> → injects all 15 step statuses
+  calls bin/workflow/next-step --session <sid> → injects all 16 step statuses
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
@@ -436,7 +456,7 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
-`--list` mode renders the full 15-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
+`--list` mode renders the full 16-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 
@@ -449,6 +469,8 @@ echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"
 ```
 
 Example: `echo "<<WORKFLOW_RESET_FROM_write_tests: user requested re-plan>>"`
+
+`{step}` is any `VALID_STEPS` member, so `WORKFLOW_RESET_FROM_write_code` became valid when `write_code` joined the vocabulary (#1665).
 
 `reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by next-step. Use `--list` to verify before proceeding.
 

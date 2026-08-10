@@ -26,8 +26,14 @@
 //   3. Post-veto reset: every step after the first vetoed one becomes
 //      effective-pending regardless of its record — the work downstream of a
 //      vetoed plan stage was performed on a rejected premise.
-//   4. Evidence (+ approval, for gated steps) resolution happens LAST, and is
-//      skipped entirely for steps touched by stages 2-3.
+//   4. Evidence (+ approval, for gated steps) resolution happens LAST of the
+//      per-step stages, and is skipped entirely for steps touched by stages 2-3.
+//   5. write_code resume mask (#1665) — a SECOND PASS applied after 1-4 have
+//      settled, precisely so it can override stage 4: a `docs` resolved to
+//      complete by an artifact that predates the failing run is stale too. Its
+//      causal axis is read from the RAW `state.steps`, never from the derived
+//      `steps` built at :291, which deliberately carries no `updated_seq`.
+//      Implementation: effective-state/write-code-resume.js.
 //
 // By default resolution stops at the first step that remains neither complete nor
 // skipped — that step is the current step, and steps after it keep their recorded
@@ -38,6 +44,7 @@
 const { VALID_STEPS, normalizeStateVersion, isGenuineProvenance } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
+const { applyWriteCodeResume } = require("./effective-state/write-code-resume");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
   APPROVAL_GATED_STEPS,
@@ -58,7 +65,7 @@ const EVIDENCE_STEPS = Object.freeze([
 // silently erase the boundary the interval calculation folds against.
 // `pre_final_report_gate` is likewise excluded — a meta session still closes.
 const WF_META_AUTO_SKIP = new Set([
-  "branching_complete", "detail", "write_tests", "review_tests", "run_tests",
+  "branching_complete", "detail", "write_tests", "review_tests", "write_code", "run_tests",
   "review_security", "docs", "user_verification", "cleanup",
 ]);
 
@@ -293,6 +300,9 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
       steps[step].skip_verdict_state = skipVerdictState;
     }
   }
+
+  // 5. write_code resume mask — last, so it can override stage 4.
+  applyWriteCodeResume(steps, resolutions, state);
 
   return { steps, resolutions };
 }
