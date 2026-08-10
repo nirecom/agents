@@ -79,7 +79,7 @@ git -C "$FIXTURE_REPO" config core.hooksPath /dev/null
 export CLAUDE_PROJECT_DIR="$(nrm "$FIXTURE_REPO")"
 cd "$FIXTURE_REPO" || exit 1
 
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 make_state() {
   local sid="$1" complete="$2" json='{"steps":{' first=1 s st
   for s in $STEPS_ALL; do

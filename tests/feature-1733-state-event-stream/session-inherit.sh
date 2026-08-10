@@ -344,7 +344,7 @@ console.log("inherit_events=" + rd().events.filter((e) => e.origin === "session-
             " non_pending=" + (nonPending.join(",") || "0") +
             " version=" + rd().version);
 ' 2>&1)" || true
-    assert_eq "SI11/no-donor-plain-init" "inherit_events=0 non_pending=0 version=2" "$NODE_OUT"
+    assert_eq "SI11/no-donor-plain-init" "inherit_events=0 non_pending=0 version=3" "$NODE_OUT"
 fi
 
 echo "== SI12: inheriting leaves the DONOR's own state file byte-identical =="

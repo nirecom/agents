@@ -51,7 +51,17 @@ const STEP_ANNOTATION_KEYS = [
   "skip_verdict",
   "skip_judgment",
   "reset_reason",
+  "run_outcome",
 ];
+
+// Step-entry fields that are STRUCTURE, never annotation. An annotation named
+// after any of them would overwrite a projected fact with caller-supplied data —
+// for `updated_seq` that means forging the causal position the write-code resume
+// cascade trusts. Reserved at three sites with deliberately different refusals
+// (CPR-ORTH): validateEvent throws, markStep's extraFields silently skips, and
+// the v1 entry converter drops (ENTRY_META_KEYS in migrations/v1-to-v2.js —
+// throwing there would abort a whole inheritance batch).
+const RESERVED_ANNOTATION_KEYS = ["status", "updated_at", "started_at", "updated_seq"];
 
 const WORKTREE_TRANSITIONS = ["entered", "exited"];
 
@@ -122,7 +132,7 @@ function validateEvent(event) {
     if (typeof event.key !== "string" || event.key.length === 0) {
       throw new InvalidEventError("event.key must be a non-empty string");
     }
-    if (event.key === "status" || event.key === "updated_at" || event.key === "started_at") {
+    if (RESERVED_ANNOTATION_KEYS.includes(event.key)) {
       throw new InvalidEventError(`event.key "${event.key}" is reserved and cannot be an annotation`);
     }
   }
@@ -219,6 +229,7 @@ module.exports = {
   GENUINE_PROVENANCE,
   isGenuineProvenance,
   STEP_ANNOTATION_KEYS,
+  RESERVED_ANNOTATION_KEYS,
   WORKTREE_TRANSITIONS,
   PATH_SOURCES,
   REQUIRED_FIELDS,

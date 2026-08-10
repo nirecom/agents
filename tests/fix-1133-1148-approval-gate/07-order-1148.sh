@@ -16,7 +16,7 @@ echo ""
 echo "=== G07: #1148 — docs-pending + later-step-complete + evidence must NOT abort ==="
 
 SID="g07-$$"
-write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete","detail":"complete","branching_complete":"complete","write_tests":"complete","review_tests":"complete","run_tests":"complete","review_security":"complete","user_verification":"complete"}')"
+write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete","detail":"complete","branching_complete":"complete","write_tests":"complete","review_tests":"complete","write_code":"complete","run_tests":"complete","review_security":"complete","user_verification":"complete"}')"
 
 REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")

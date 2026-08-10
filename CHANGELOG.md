@@ -272,3 +272,7 @@ Changes: Fixed: `/issue-setup` now links the GitHub Projects v2 board to the rep
 ### FEATURE: PR #1906 (2026-08-08)
 Background: feat: reduce workflow roundtrips (types 1-4) + symmetrize related SKI...
 Changes: Reduced workflow round-trip steps: outline/detail planning stages are now skipped correctly for self-evident changes, and `/write-code` self-checks its own diff for the same finding class it just fixed and flags tests whose pinned contracts it changed — fewer unnecessary review/re-plan cycles per session.
+
+### REFACTOR: Retire the BACKGROUND_WORK stop-guard sentinels in favour of NEXT_STEP_PAUSE (#1665) (2026-08-10)
+Background: The C4 premature-stop guard needed an explicit sentinel pair to stay quiet during long implementation turns, which is now covered automatically by the tracked write_code step.
+Changes: The WORKFLOW_BACKGROUND_WORK_START / _END sentinels and the per-session marker file they wrote are removed. The Stop guard now stays quiet automatically while the write_code step is in_progress (4-hour TTL), so no declaration is needed for implementation turns. For long-running work outside write_code, use <<WORKFLOW_NEXT_STEP_PAUSE: {reason}>> instead: it silences the Stop guard and next-step just as strongly, but it has no TTL, so the matching <<WORKFLOW_NEXT_STEP_RESUME: {reason}>> must be issued by hand when the work ends.

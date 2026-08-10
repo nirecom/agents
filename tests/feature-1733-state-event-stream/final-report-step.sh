@@ -160,7 +160,7 @@ SEED_DONE_JS='
 S.updateTopLevel(sid, (st) => { st.workflow_type = "wf-code"; st.closes_issues = [1733]; });
 ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests",
  "review_security", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
-["workflow_init", "branching_complete", "run_tests", "docs", "user_verification",
+["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "user_verification",
  "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete"));
 console.log("SEEDED " + S.readState(sid).steps.final_report.status);
 '

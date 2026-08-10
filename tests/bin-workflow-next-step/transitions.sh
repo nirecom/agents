@@ -48,12 +48,15 @@ run_transitions_tests() {
   check "5: research-skipped NEXT_SKILL=make-outline-plan" "make-outline-plan" "${NEXT_SKILL:-}"
 
   # ---- Case 6: write_tests + review_tests skipped --------------------------
+  # #1665: write_code is a tracked step between review_tests and run_tests, and it is
+  # NOT in SKIPPABLE_STEPS — skipping the tests never skips the implementation, so the
+  # step after a tests-skipped pair is write-code, not run-tests.
   ACTION=""; NEXT_SKILL=""
   write_state "case6" "$JSON_TESTS_SKIPPED"
   OUT="$(run_next_step --session "case6" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "6: tests-skipped ACTION=invoke" "invoke" "${ACTION:-}"
-  check "6: tests-skipped NEXT_SKILL=run-tests" "run-tests" "${NEXT_SKILL:-}"
+  check "6: tests-skipped NEXT_SKILL=write-code" "write-code" "${NEXT_SKILL:-}"
 
   # ---- Case 7: in_progress step --------------------------------------------
   ACTION=""; NEXT_SKILL=""
@@ -103,9 +106,11 @@ run_transitions_tests() {
   check_contains "12: corrupt-state REASON marker" "corrupt-state:" "${REASON:-}"
 
   # ---- Case 13: inconsistent-state (write_tests=pending + review_tests=complete) ----
-  # With staged tests present: after #1107 fix, next-step auto-repairs write_tests=complete
-  # and advances (ACTION=invoke NEXT_SKILL=run-tests). Before fix: next-step aborts.
-  # Soft assertion: accept pre-fix abort as PASS; hard check post-fix invoke path.
+  # With staged tests present, next-step auto-repairs write_tests=complete and advances
+  # (#1107). #1665 makes the destination concrete: the step after review_tests is
+  # write_code, so the repaired session lands on NEXT_SKILL=write-code (it used to be
+  # run-tests). The pre-#1107 abort tolerance is retired here — the repair block has
+  # been in place for many releases and accepting `abort` would hide its removal.
   ACTION=""; NEXT_SKILL=""; REASON=""
   C13_REPO=$(mktemp -d)
   git -C "$C13_REPO" init -q 2>/dev/null || true
@@ -123,16 +128,8 @@ run_transitions_tests() {
   OUT="$(CLAUDE_PROJECT_DIR="$C13_REPO_N" run_next_step --session "case13" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   rm -rf "$C13_REPO"
-  if [ "${ACTION:-}" = "invoke" ] && [ "${NEXT_SKILL:-}" != "write-tests" ]; then
-    echo "PASS: 13: write_tests auto-repaired → ACTION=invoke NEXT_SKILL=${NEXT_SKILL:-}"
-    PASS=$((PASS + 1))
-  elif [ "${ACTION:-}" = "abort" ]; then
-    echo "PASS: 13: pre-#1107-fix: abort expected before auto-repair block is in place"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL: 13: unexpected: ACTION=${ACTION:-} NEXT_SKILL=${NEXT_SKILL:-}"
-    FAIL=$((FAIL + 1))
-  fi
+  check "13: write_tests auto-repaired ACTION=invoke" "invoke" "${ACTION:-}"
+  check "13: write_tests auto-repaired NEXT_SKILL=write-code" "write-code" "${NEXT_SKILL:-}"
 
   # ---- Case 13b: cross-task contamination (#1068) --------------------------
   # pre_final_report_gate=complete from a prior workflow run; clarify_intent=pending now.
@@ -150,22 +147,16 @@ run_transitions_tests() {
     echo "FAIL: 13b: cross-task-contam NEXT_HINT should be non-empty (got empty)"
     FAIL=$((FAIL + 1))
   fi
-  # Post-#1085-fix regression guard: abort NEXT_HINT must NOT expose WORKFLOW_RESET_FROM recipe
-  # Soft assertion: if RESET_FROM still in NEXT_HINT, source fix not yet applied → pre-code pass
-  if [ -n "${NEXT_HINT:-}" ]; then
-    if echo "${NEXT_HINT:-}" | grep -qF "WORKFLOW_RESET_FROM"; then
-      echo "PASS: 13b: WORKFLOW_RESET_FROM in NEXT_HINT (pre-#1085-fix; will verify after write_code)"
-      PASS=$((PASS + 1))
-    else
-      echo "PASS: 13b: WORKFLOW_RESET_FROM not in NEXT_HINT (post-#1085-fix)"
-      PASS=$((PASS + 1))
-    fi
-  fi
+  # Post-#1085-fix regression guard: abort NEXT_HINT must NOT expose the destructive
+  # WORKFLOW_RESET_FROM recipe. This was a soft either-way assertion deferred until the
+  # write_code step existed (#1665); the fix has long landed, so it is concrete now.
+  check_not_contains "13b: cross-task-contam NEXT_HINT must not expose WORKFLOW_RESET_FROM" \
+    "WORKFLOW_RESET_FROM" "${NEXT_HINT:-}"
 
   # ---- Case 14: post-merge reset (#1161) -----------------------------------
-  # user_verification は pending だが reset_reason=post-merge のため complete 扱い。
-  # next-step は cleanup を current step と判定し、ACTION=invoke を返す。
-  # cleanup は STEP_TO_SKILL="" のため NEXT_SKILL は空; worktree-end は NEXT_HINT に含まれる。
+  # user_verification is pending but is treated as complete because reset_reason=post-merge.
+  # next-step determines cleanup is the current step and returns ACTION=invoke.
+  # cleanup has STEP_TO_SKILL="", so NEXT_SKILL is empty; worktree-end appears in NEXT_HINT.
   ACTION=""; NEXT_SKILL=""; NEXT_HINT=""; REASON=""
   write_state "case14" "$JSON_UV_POST_MERGE"
   OUT="$(run_next_step --session "case14" 2>/dev/null || true)"

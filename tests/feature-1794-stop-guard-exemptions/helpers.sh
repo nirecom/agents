@@ -77,17 +77,13 @@ st.alert.findings = [{ categories: ['code'], severity: 'error', detail: 'blockin
 fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
 }
 
-# write_bg_marker <tmp> <sid> <expires_offset_ms|none|badjson>
-write_bg_marker() {
-    local tmp="$1" sid="$2" mode="$3"
-    if [ "$mode" = "badjson" ]; then printf 'not json at all' > "$tmp/$sid.background-work"; return; fi
-    MODE="$mode" OUTP="$(node_path "$tmp/$sid.background-work")" "$RWT" 15 node -e "
-const fs = require('fs');
-const payload = { reason: 'seeded by test', set_at: new Date().toISOString() };
-if (process.env.MODE !== 'none') {
-  payload.expires_at = new Date(Date.now() + Number(process.env.MODE)).toISOString();
-}
-fs.writeFileSync(process.env.OUTP, JSON.stringify(payload));" >/dev/null 2>&1
+# seed_write_code_in_flight <tn> <sid> — #1665 commit 4 replaced the
+# `.background-work` marker with a state-derived exemption: write_code sitting
+# at `in_progress` inside the 4h TTL. There is no marker file to write, so the
+# fixture is a real markStep on the real state store.
+seed_write_code_in_flight() {
+    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+require('$STATEIO_NODE').markStep('$2', 'write_code', 'in_progress');" >/dev/null 2>&1
 }
 
 # age_file <path> <days> — backdate mtime so cleanupZombies() sees it as stale.

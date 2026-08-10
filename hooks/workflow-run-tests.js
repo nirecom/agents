@@ -25,6 +25,12 @@
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./workflow-state");
 const { isTestCommand, resolveTestProvenance } = require("./workflow-run-tests/exec-model");
+const {
+  WORKER_PASS_STATUS,
+  parseWorkerVerdict,
+  isContractTrusted,
+  resolveRunOutcome,
+} = require("./workflow-run-tests/outcome");
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
@@ -93,6 +99,10 @@ function sanitizeTrigger(command) {
 // own trailing contract and promotes whatever preceded the marker to sole
 // authority. Raw suite output is read WHOLE, so the hook's existing exactly-one
 // rule keeps deciding it.
+//
+// This positional scope is the safety boundary not only for `RUN_CONTRACT` but
+// also for `status:` and, since #1665, for the `run_outcome` derived from it —
+// every one of those reads takes the HEADER, never the raw stdout (risk (i)).
 const LOG_TAIL_MARKER_RE = /^log_tail:[ \t]*\|.*$/m;
 
 function payloadHeader(stdout) {
@@ -190,16 +200,26 @@ function stdoutAttributed(toolResponse, emitter) {
 // outside any denylist and read as success. The renderer's vocabulary is
 // pass | fail | timeout | runner-error, so the sanctioned green set has exactly
 // one member and anything else — including a missing `status:` line — vetoes.
-const WORKER_PASS_STATUS = "pass";
-
+//
+// The PARSE itself lives in ./workflow-run-tests/outcome.js (R7). Those same two
+// lines are now also the source of `run_outcome`, and two consumers reading one
+// line through two regexes drift: the hook could veto a completion while
+// recording "pass". This function is therefore a thin evaluator over
+// parseWorkerVerdict()'s return value and holds no pattern of its own.
 function workerVerdictVetoes(toolResponse) {
   const header = responseHeader(toolResponse, "worker-dispatch");
   if (header === "") return false;
-  const sm = /^status:[ \t]*(\S+)/m.exec(header);
-  if (sm === null || sm[1].toLowerCase() !== WORKER_PASS_STATUS) return true;
-  const em = /^exit_code:[ \t]*(-?\d+)/m.exec(header);
-  if (em !== null && parseInt(em[1], 10) !== 0) return true;
+  const { status, exitCode } = parseWorkerVerdict(header);
+  if (status !== WORKER_PASS_STATUS) return true;
+  if (exitCode !== null && exitCode !== 0) return true;
   return false;
+}
+
+// The worker's own status word, or null off the worker route / when the line is
+// absent. Same single parse site; the allowlist judgement stays with the caller.
+function workerStatusOf(toolResponse, emitter) {
+  if (emitter !== "worker-dispatch") return null;
+  return parseWorkerVerdict(responseHeader(toolResponse, "worker-dispatch")).status;
 }
 
 // Count and parse RUN_CONTRACT lines in tool_response.stdout.
@@ -272,69 +292,121 @@ const sessionId = input.session_id || resolveSessionId();
 if (!sessionId) done();
 
 try {
-  // Fast path: non-zero exit code always reverts to pending regardless of contract.
+  // --- trust conditions, evaluated BEFORE the exit-code fast path ------------
+  //
+  // WHY THE ORDER IS THIS WAY (#1665 / C1): tests/run-all.sh prints a WELL-FORMED
+  // RUN_CONTRACT line and THEN exits 1 whenever FAIL>0. An ordinary failing test
+  // run is therefore a valid contract plus a non-zero exit, and a hook that
+  // returns on the exit code before parsing would record "no observation" for the
+  // single most common failure in the repo. The two axes are decided separately
+  // (CPR-SC): the OUTCOME axis reads the contract and never consults the exit
+  // code; the STATUS axis keeps its fail-safe unchanged — non-zero exit always
+  // reverts run_tests to pending.
+  //
+  // WHY THE LOCAL CATCH (#1665 / R2): resolveTestProvenance() reaches
+  // verifyEmitterIdentity(), which does realpath / stat / readFileSync on the
+  // emitter script. Hoisting it above the fast path means that I/O can now throw
+  // where nothing threw before — a removed worktree, an EACCES, a vanished
+  // network path. Without this catch the throw would land in the outer fail-open
+  // catch below and skip BOTH writes, so a crashed run would silently keep a
+  // stale `complete`: a strictly worse regression than the bug being fixed. The
+  // catch falls back to contract-absent defaults, which withhold the outcome
+  // (nothing was observed, so nothing may be claimed) while leaving the status
+  // demotions below to run exactly as they always did. The outer catch stays as
+  // the last resort for everything else.
+  let hasProvenance = false;
+  let ambiguous = false;
+  let emitter = null;
+  let contract = null;
+  let attributed = false;
+  let vetoed = false;
+  let workerStatus = null;
+
+  try {
+    // C′ contract-trust model with provenance gating and exactly-one rule.
+    // Trust conditions (all must hold):
+    //   (a) provenance: an execution position names an authorised contract emitter
+    //       — tests/run-all.sh however it is spelled, or the worker-dispatch
+    //       test-runner worker (#1798: that form carries no run-all.sh literal at
+    //       all, so the old substring probe was structurally always false)
+    //   (b) stdout has exactly one well-formed RUN_CONTRACT: line (parseContract)
+    //       — zero → absent; >=2 → ambiguous (forged append or fixture collision)
+    //   (c) validity: executed>0, (PASS+FAIL)>0, FAIL==0
+    // Any failure → ACTIVE DEMOTION to pending (clears a stale complete).
+    // The Bash tool's own cwd is what a relative execution position is relative to;
+    // `process.cwd()` is the fallback the sibling hooks (enforce-worktree.js,
+    // scan-outbound.js, show-user-verified-context.js) use for exactly this input
+    // class. normalizeCwd handles the POSIX drive-letter form Git Bash delivers.
+    const toolCwd = input.tool_input && typeof input.tool_input.cwd === "string"
+      ? input.tool_input.cwd : undefined;
+    const commandCwd = normalizeCwd(toolCwd) || process.cwd();
+
+    // (a) also carries a filesystem identity check now: the emitter must BE this
+    //     repo's tests/run-all.sh or bin/worker-dispatch.js, not merely share its
+    //     name (#1273 H2 — a same-named file plus a hand-written contract line was
+    //     otherwise a complete run_tests completion).
+    const provenance = resolveTestProvenance(command, commandCwd);
+    hasProvenance = provenance !== null;
+    // (a′) AMBIGUOUS PROVENANCE (#1273 round 4 / NEW-N1). When the command holds
+    //      two DISTINCT authorised emitters, the shell concatenated their output
+    //      into one flat string and no byte of it is attributable to a segment.
+    //      "Which emitter produced this contract?" then has no answer, and an
+    //      unanswerable provenance question resolves to NOT TRUSTED — the same
+    //      rule provenance-identity.js applies to a path it cannot verify. The
+    //      demotion is unconditional: the payload's own `status:` is precisely the
+    //      claim whose author is in doubt, so it may not rescue the run.
+    ambiguous = hasProvenance && provenance.ambiguous === true;
+    // The RESOLVED route. Everything that reads stdout is scoped by it: only the
+    // worker-dispatch route has a renderer-owned payload shape to scope to.
+    emitter = hasProvenance ? provenance.emitter : null;
+    contract = hasProvenance ? parseContract(toolResponse, emitter) : null;
+    // (a″) UNATTRIBUTED STDOUT (#1273 round 5 / H1). See stdoutAttributed() for
+    //      why position — not presence, not indentation — is the property each
+    //      emitter actually guarantees.
+    attributed = !hasProvenance || stdoutAttributed(toolResponse, emitter);
+
+    // (d) the worker's own status/exit_code veto, scoped to the route where the OS
+    //     exit code carries no verdict.
+    vetoed = emitter === "worker-dispatch" && workerVerdictVetoes(toolResponse);
+    // The worker's own word, for the OUTCOME axis only. The veto above is the
+    // STATUS axis's reading of the very same parse (R7).
+    workerStatus = workerStatusOf(toolResponse, emitter);
+  } catch (e) {
+    // Contract-absent defaults. `attributed = false` is the conservative reading:
+    // the question "are these bytes the emitter's own?" was never answered, and an
+    // unanswered attribution question resolves to NOT TRUSTED, so the outcome is
+    // withheld rather than guessed. The status demotions below still run.
+    hasProvenance = false;
+    ambiguous = false;
+    emitter = null;
+    contract = null;
+    attributed = false;
+    vetoed = false;
+    workerStatus = null;
+  }
+
+  // The OUTCOME axis, decided once from already-computed scalars only — never
+  // from raw stdout (risk (i); see ./workflow-run-tests/outcome.js). `null` is a
+  // TOMBSTONE: no trustworthy observation exists, so any prior annotation is
+  // cleared rather than left to read as current.
+  const outcomeInput = { emitter, ambiguous, attributed, vetoed, contract, workerStatus };
+  const runOutcome = resolveRunOutcome(outcomeInput);
+
+  // Fast path: non-zero exit code always reverts to pending regardless of
+  // contract. Unconditional — it runs whether or not the local catch above fired,
+  // because the STATUS fail-safe never depended on the trust computation.
   if (exitCode !== 0) {
     markStep(sessionId, "run_tests", "pending", {
       last_run_failed: true,
       last_exit_code: exitCode,
       trigger_command: sanitizeTrigger(command),
+      run_outcome: runOutcome,
     });
     done();
   }
 
-  // C′ contract-trust model with provenance gating and exactly-one rule.
-  // Trust conditions (all must hold):
-  //   (a) provenance: an execution position names an authorised contract emitter
-  //       — tests/run-all.sh however it is spelled, or the worker-dispatch
-  //       test-runner worker (#1798: that form carries no run-all.sh literal at
-  //       all, so the old substring probe was structurally always false)
-  //   (b) stdout has exactly one well-formed RUN_CONTRACT: line (parseContract)
-  //       — zero → absent; >=2 → ambiguous (forged append or fixture collision)
-  //   (c) validity: executed>0, (PASS+FAIL)>0, FAIL==0
-  // Any failure → ACTIVE DEMOTION to pending (clears a stale complete).
-  // The Bash tool's own cwd is what a relative execution position is relative to;
-  // `process.cwd()` is the fallback the sibling hooks (enforce-worktree.js,
-  // scan-outbound.js, show-user-verified-context.js) use for exactly this input
-  // class. normalizeCwd handles the POSIX drive-letter form Git Bash delivers.
-  const toolCwd = input.tool_input && typeof input.tool_input.cwd === "string"
-    ? input.tool_input.cwd : undefined;
-  const commandCwd = normalizeCwd(toolCwd) || process.cwd();
-
-  // (a) also carries a filesystem identity check now: the emitter must BE this
-  //     repo's tests/run-all.sh or bin/worker-dispatch.js, not merely share its
-  //     name (#1273 H2 — a same-named file plus a hand-written contract line was
-  //     otherwise a complete run_tests completion).
-  const provenance = resolveTestProvenance(command, commandCwd);
-  const hasProvenance = provenance !== null;
-  // (a′) AMBIGUOUS PROVENANCE (#1273 round 4 / NEW-N1). When the command holds
-  //      two DISTINCT authorised emitters, the shell concatenated their output
-  //      into one flat string and no byte of it is attributable to a segment.
-  //      "Which emitter produced this contract?" then has no answer, and an
-  //      unanswerable provenance question resolves to NOT TRUSTED — the same
-  //      rule provenance-identity.js applies to a path it cannot verify. The
-  //      demotion is unconditional: the payload's own `status:` is precisely the
-  //      claim whose author is in doubt, so it may not rescue the run.
-  const ambiguous = hasProvenance && provenance.ambiguous === true;
-  // The RESOLVED route. Everything that reads stdout is scoped by it: only the
-  // worker-dispatch route has a renderer-owned payload shape to scope to.
-  const emitter = hasProvenance ? provenance.emitter : null;
-  const contract = hasProvenance ? parseContract(toolResponse, emitter) : null;
-  // (a″) UNATTRIBUTED STDOUT (#1273 round 5 / H1). See stdoutAttributed() for
-  //      why position — not presence, not indentation — is the property each
-  //      emitter actually guarantees.
-  const attributed = !hasProvenance || stdoutAttributed(toolResponse, emitter);
-
-  // (d) the worker's own status/exit_code veto, scoped to the route where the OS
-  //     exit code carries no verdict.
-  const vetoed = emitter === "worker-dispatch" && workerVerdictVetoes(toolResponse);
-
-  const contractValid = !ambiguous
-    && attributed
-    && !vetoed
-    && contract !== null
-    && contract.executed > 0
-    && (contract.pass + contract.fail) > 0  // all-SKIP guard
-    && contract.fail === 0;
+  // Derived from the ONE trust predicate (R3), never re-listed term by term.
+  const contractValid = isContractTrusted(outcomeInput) && contract.fail === 0;
 
   if (!contractValid) {
     // ACTIVE DEMOTION: a test command ran but no trusted valid contract arrived.
@@ -345,6 +417,7 @@ try {
       last_run_failed: false,
       contract_absent: contractAbsent,
       trigger_command: sanitizeTrigger(command),
+      run_outcome: runOutcome,
     });
     // A silent demotion is why #1378 cost a session to diagnose. The reason goes
     // to the ONE channel a human reads directly — and only here: the valid-contract
@@ -379,6 +452,7 @@ try {
       last_exit_code: null,
       contract_absent: null,
       trigger_command: null,
+      run_outcome: "pass",
     }, { origin: "workflow-run-tests-auto-detect" });
   }
   // else: write_tests not yet satisfied → fail-open (do not mark complete).

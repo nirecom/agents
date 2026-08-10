@@ -69,8 +69,16 @@ class StreamIntegrityError extends Error {
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
+// One of THREE sites that hand-build a step entry (the others: the
+// step_annotations_cleared rebuild below, and applyLegacyV1ReadDefaults in
+// core.js). They are deliberately NOT unified behind a shared helper — the
+// core.js one lives inside a temporary migration block slated for wholesale
+// deletion — so their key-set parity is pinned by test instead
+// (tests/feature-1665-seq-cascade/b-entry-shape-parity.sh). Adding a field here
+// without adding it to the other two produces entries whose `updated_seq` reads
+// `undefined`, which silently defeats the write-code resume cascade (CPR-ORTH).
 function emptyStepEntry() {
-  return { status: "pending", updated_at: null };
+  return { status: "pending", updated_at: null, updated_seq: null };
 }
 
 // Throws StreamIntegrityError when `events` could not have been produced by
@@ -106,6 +114,24 @@ function assertStreamIntegrity(events) {
 // reject every legitimate append. Callers that fold a stream claiming to be
 // the durable on-disk truth (readState, appendEvents' pre-append check) call
 // assertStreamIntegrity themselves first.
+//
+// INVARIANT — `updated_seq` is the FOLD LOOP POSITION (`i + 1`), never `e.seq`.
+// The two are equivalent by definition for a durable stream: appendEvents
+// assigns `merged[i].seq = i + 1` over the whole array (events.js), and
+// assertStreamIntegrity enforces that equivalence as tamper detection. Reading
+// `e.seq` here would nonetheless be WRONG, because appendEvents folds the
+// withBatch stream through this function BEFORE it assigns seq — so the very
+// events a decision depends on would project `undefined`. Non-object records
+// are skipped
+// with `continue` but still consume a position, matching the seq assignment.
+//
+// INVARIANT — role separation of the two per-entry axes:
+//   `updated_at`  — WALL-CLOCK only. Answers "how long ago?" (elapsed time).
+//                   Useless for ordering: a single batch stamps every one of its
+//                   events with the same `at`.
+//   `updated_seq` — CAUSAL ORDER only. Answers "before or after?" Never used to
+//                   measure elapsed time.
+// Neither may substitute for the other.
 function projectState(state) {
   const events = state && Array.isArray(state.events) ? state.events : [];
   const ctx = (state && state.session_start_context) || {};
@@ -122,13 +148,16 @@ function projectState(state) {
   let worktreeBranch = null;
   let worktreeCwd = null;
 
-  for (const e of events) {
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
     if (!e || typeof e !== "object") continue;
     switch (e.kind) {
       case "step_status": {
         if (!steps[e.step]) steps[e.step] = emptyStepEntry();
         steps[e.step].status = e.status;
         steps[e.step].updated_at = e.at !== undefined ? e.at : null;
+        // Position, NOT e.seq — see the INVARIANT note on projectState.
+        steps[e.step].updated_seq = i + 1;
         break;
       }
       case "step_annotation": {
@@ -140,8 +169,17 @@ function projectState(state) {
         break;
       }
       case "step_annotations_cleared": {
+        // Rebuild carrying STRUCTURE only. `updated_seq` is structure, not an
+        // annotation: dropping it here would wipe the causal axis on every
+        // annotation clear (RESET_FROM included).
         const entry = steps[e.step];
-        if (entry) steps[e.step] = { status: entry.status, updated_at: entry.updated_at };
+        if (entry) {
+          steps[e.step] = {
+            status: entry.status,
+            updated_at: entry.updated_at,
+            updated_seq: entry.updated_seq,
+          };
+        }
         break;
       }
       case "worktree": {
@@ -302,7 +340,10 @@ function serializeStateForPersist(state) {
       `unknown top-level workflow state key(s): ${unknown.sort().join(", ")}`
     );
   }
-  const out = { version: 2 };
+  // Lazy require avoids a load-time cycle: core.js requires this module at its
+  // top level, so a top-level `require("./core")` here would see an empty export.
+  const { CURRENT_STATE_VERSION } = require("./core");
+  const out = { version: CURRENT_STATE_VERSION };
   for (const key of PERSISTED_TOP_LEVEL_KEYS) {
     if (key === "version" || key === "current") continue;
     if (hasOwn(stripped, key)) out[key] = stripped[key];
