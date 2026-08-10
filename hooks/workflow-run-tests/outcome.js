@@ -1,64 +1,39 @@
 "use strict";
-// The run_tests OUTCOME axis (#1665 commit 2).
+// The run_tests OUTCOME axis: complements the existing STATUS axis
+// (complete/pending — "may the workflow move on?") with the orthogonal fact
+// "what did the run itself report?", so a failing run and a run that was never
+// trusted are distinguishable, and the write_code resume cascade has something
+// to trigger on. This module decides a VALUE; it never writes state.
 //
-// WHY (CPR-WPH): `run_tests` has always carried exactly one axis — a STATUS
-// (complete / pending) that answers "may the workflow move on?". It never
-// recorded the orthogonal fact "what did the run itself report?", so a failing
-// run and a run that was never trusted are indistinguishable downstream, and the
-// write_code resume cascade has nothing to trigger on. This module owns that
-// second axis and nothing else (CPR-SC): it decides a VALUE, it never writes.
+// The vocabulary (pass/fail/timeout/runner-error) is borrowed verbatim from
+// bin/worker-dispatch/emit.js's renderer — never invent a synonym here.
 //
-// Two rules shape every signature here.
-//
-//   1. VOCABULARY IS BORROWED, NOT INVENTED. The outcome domain is exactly
-//      bin/worker-dispatch/emit.js's renderer vocabulary — pass | fail | timeout
-//      | runner-error. A synonym introduced here would be a second spelling of a
-//      fact the renderer already names (CPR-SSOT).
-//
-//   2. NO RAW STDOUT CROSSES THIS BOUNDARY. Every entry point takes either
-//      already-computed judgements or the `log_tail`-stripped HEADER — never the
-//      whole stdout of a Bash call. bin/worker-dispatch/emit.js hard-indents the
-//      block scalar with bytes the SUITE chose, so a `status:` or `RUN_CONTRACT:`
-//      line found there is log text, not a verdict. Keeping stdout out of the
-//      signature makes "I accidentally passed the log tail" unrepresentable
-//      rather than merely discouraged (detail plan risk (i)).
+// No raw stdout crosses this boundary: every entry point takes either
+// already-computed judgements or the `log_tail`-stripped HEADER, never the
+// whole stdout of a Bash call — a `status:`/`RUN_CONTRACT:` line inside the
+// worker's block-scalar log text is log text, not a verdict.
 
-// The whole outcome domain. Order matches emit.js's documented vocabulary.
 const RUN_OUTCOME_VALUES = ["pass", "fail", "timeout", "runner-error"];
 
-// The single sanctioned green word. ALLOWLIST, not denylist (#1273 round 3 /
-// NEW-L2): "not a known failure" is not the same claim as "the worker said it
-// passed", so a renamed word, a typo (`passed`) or a value clipped by emit.js's
-// 64-char plainValue cap must all read as NOT-pass.
+// Allowlist, not denylist: "not a known failure" is not the same claim as "the
+// worker said it passed", so a renamed word, a typo, or a value clipped by
+// emit.js's plainValue cap must all read as NOT-pass.
 const WORKER_PASS_STATUS = "pass";
 
-// The worker's own failure words — the outcome domain minus the green one. These
-// are the only values the worker route may contribute VERBATIM.
 const WORKER_FAILURE_STATUSES = RUN_OUTCOME_VALUES.filter((v) => v !== WORKER_PASS_STATUS);
 
-// --- the worker's verdict fields (R7: ONE parse site) -----------------------
-//
-// Both consumers of the `status:` / `exit_code:` lines go through here: the veto
-// (does this payload forbid a completion?) and the outcome (what did it report?).
-// A second regex next to the first would drift on the first tweak — someone
-// tolerates a trailing comment, or stops lowercasing, in one site only — and the
-// hook could then veto a completion while recording "pass".
-//
-// Line-anchored on purpose: `^` with /m, no leading-whitespace tolerance. An
-// indented `  status: pass` is block-scalar text even if a caller hands it in.
+// One parse site for both the veto check and the outcome check — a second
+// regex next to this one would drift and let the hook veto a completion while
+// recording "pass". Line-anchored (`^` with /m): an indented `  status: pass`
+// is block-scalar text, not a verdict line, even if a caller hands it in.
 const STATUS_LINE_RE = /^status:[ \t]*(\S+)/m;
 const EXIT_CODE_LINE_RE = /^exit_code:[ \t]*(-?\d+)/m;
 
-// parseWorkerVerdict(header) -> { status, exitCode }
-// `status` is the token VERBATIM, lowercased — this site reports, it does not
-// judge; the allowlist decision belongs to the caller. `header` must already be
-// log_tail-stripped.
-//
-// The two lines are ONE verdict record, so `exit_code:` is only read when an
-// anchored `status:` line established that a verdict header is present at all.
-// Otherwise an indented `  status: pass` (block-scalar text the suite chose)
-// sitting above an unrelated unindented `exit_code: 0` would contribute half a
-// verdict, and half a verdict is the shape a forger needs.
+// parseWorkerVerdict(header) -> { status, exitCode }. `status` is returned
+// verbatim/lowercased — this reports, it doesn't judge. `exit_code` is only
+// read once an anchored `status:` line proves a verdict header is present;
+// otherwise an unrelated stray `exit_code:` line could contribute half a
+// verdict.
 function parseWorkerVerdict(header) {
   const text = typeof header === "string" ? header : "";
   const sm = STATUS_LINE_RE.exec(text);
@@ -70,25 +45,14 @@ function parseWorkerVerdict(header) {
   };
 }
 
-// --- the trust condition (R3: ONE definition site) --------------------------
-//
-// Six conjuncts, all of which must hold before a RUN_CONTRACT line may be read
-// as this run's report of itself:
-//
-//   !ambiguous        two distinct authorised emitters in one command — nothing
-//                     is attributable to either (#1273 round 4 / NEW-N1)
-//   attributed        the bytes are positionally the emitter's own (#1273 H1)
-//   !vetoed           the worker process did not contradict the contract (#1242 C')
-//   contract !== null present and unambiguous (the exactly-one rule)
-//   executed > 0      the run matched something
-//   pass + fail > 0   not an all-SKIP run
-//
-// `fail === 0` is deliberately NOT a conjunct. This predicate answers "may I
-// believe this contract?", not "did the run pass" — folding the verdict in would
-// make a trustworthy FAIL>0 report indistinguishable from an untrustworthy one,
-// which is exactly the C1 primary path (tests/run-all.sh prints a valid contract
-// and THEN exits 1). Callers that need the old seven-term meaning derive it as
-// `isContractTrusted(x) && x.contract.fail === 0`.
+// The trust condition — every conjunct must hold before a RUN_CONTRACT line may
+// be read as this run's report of itself: unambiguous emitter, attributed
+// bytes, not vetoed by the process, a present contract, and a non-empty,
+// non-all-skip run. `fail === 0` is deliberately NOT a conjunct — this answers
+// "may I believe this contract?", not "did the run pass"; a trustworthy
+// FAIL>0 report (suite prints a valid contract, then exits 1) must stay
+// distinguishable from an untrustworthy one. Callers wanting the old
+// pass-or-fail meaning derive it as `isContractTrusted(x) && x.contract.fail === 0`.
 function isContractTrusted(input) {
   const i = input || {};
   const c = i.contract;
@@ -100,29 +64,22 @@ function isContractTrusted(input) {
     && (c.pass + c.fail) > 0;
 }
 
-// --- the decision table -----------------------------------------------------
-//
 // resolveRunOutcome(input) -> one of RUN_OUTCOME_VALUES, or null.
+// input: { emitter, ambiguous, attributed, vetoed, contract, workerStatus } —
+// all precomputed by the caller.
 //
-// input: { emitter, ambiguous, attributed, vetoed, contract, workerStatus }
-//   — all precomputed by the caller; see rule 2 in the header comment.
+// Decision order: an unambiguous, attributed worker-route failure word wins
+// verbatim (the process that ran the suite outranks a contract computed from
+// its own stdout — a suite that died after printing its summary produces a
+// green contract and a red process); otherwise a trusted contract decides
+// pass/fail by its fail count; otherwise null.
 //
-//   1. worker route, unambiguous, attributed, and the worker named a failure
-//      word  -> that word, verbatim. The process that ran the suite outranks a
-//      contract computed from its stdout: a suite that died after printing its
-//      summary produces a green contract and a red process.
-//   2. trusted contract with FAIL > 0 -> "fail"  (the C1 primary path)
-//   3. trusted contract with FAIL == 0 -> "pass"
-//   4. anything else -> null
-//
-// null is NOT "the run failed". It is "no trustworthy observation exists", and
-// the writer treats it as a TOMBSTONE that clears any prior annotation — a stale
-// outcome surviving an unobservable run would keep the resume cascade firing on
-// evidence that no longer exists.
-//
-// Note the asymmetry in row 1: `status: pass` is not a row-1 value. A worker that
-// claims pass while its contract is untrustworthy is two trusted renderings
-// disagreeing, which is an attribution failure, not a verdict.
+// `status: pass` is deliberately not a winning case in row 1 — a worker
+// claiming pass while its contract is untrustworthy is two renderings
+// disagreeing, not a verdict. null means "no trustworthy observation exists"
+// (not "the run failed"), and the writer treats it as a tombstone clearing any
+// prior annotation, since a stale outcome would keep the resume cascade firing
+// on evidence that no longer exists.
 function resolveRunOutcome(input) {
   const i = input || {};
   if (

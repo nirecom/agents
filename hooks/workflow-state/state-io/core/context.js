@@ -10,11 +10,10 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { normalizeCwd } = require("../../../lib/path-normalize");
 
-// getCurrentContext(dir) -> { cwd, git_branch }.
-// With no argument the behaviour is exactly the pre-#1733 one (back-compat for
-// session-start.js and friends). With `dir` given, the POSIX drive-letter form
-// emitted by Git Bash / MSYS2 is normalized first, because `git -C` and the
-// fs APIs below cannot use it on win32 (rules/coding/nodejs.md).
+// getCurrentContext(dir) -> { cwd, git_branch }. With no argument this is a
+// back-compat path for session-start.js and friends. With `dir` given, the
+// POSIX drive-letter form emitted by Git Bash / MSYS2 is normalized first,
+// because `git -C` and the fs APIs below cannot use it on win32.
 function getCurrentContext(dir) {
   const base = normalizeCwd(dir) || dir || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const cwd = path.resolve(base);
@@ -32,17 +31,16 @@ function getCurrentContext(dir) {
 }
 
 // resolveWorktreeContext(rawPath) -> the fields a `worktree` event needs.
-// `path_source` records HOW the path was obtained (CPR-SC): a path read from
-// tool input is evidence, a process cwd is a guess, and the two must never be
+// `path_source` records how the path was obtained: a path read from tool
+// input is evidence, a process cwd is a guess, and the two must never be
 // conflated downstream.
 //
-// A path is only trusted as `tool_input` when EVERY link of the chain holds:
-//   1. a non-empty string that normalizes to an ABSOLUTE path,
-//   2. that path exists and is a directory,
-//   3. `git -C <path> rev-parse --git-dir` succeeds.
-// Any failure falls through to the process-cwd fallback with worktree_path:null —
-// recording the hook's own cwd as "the worktree that was entered" would be a
-// confident-looking lie. FAILS OPEN on every branch: this never throws.
+// A path is only trusted as `tool_input` when it's a non-empty string that
+// normalizes to an absolute, existing directory where `git -C <path>
+// rev-parse --git-dir` succeeds. Any failure falls through to the
+// process-cwd fallback with worktree_path:null — recording the hook's own
+// cwd as "the worktree that was entered" would be a confident-looking lie.
+// Fails open on every branch: this never throws.
 function resolveWorktreeContext(rawPath) {
   try {
     if (typeof rawPath === "string" && rawPath.trim()) {
