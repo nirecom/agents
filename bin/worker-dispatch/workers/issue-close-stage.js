@@ -53,6 +53,7 @@
 
 const { run: spawnRun } = require("../spawn");
 const { samePath } = require("../anchor");
+const { parseOriginOwnerRepo, redactUserinfo } = require("../../../hooks/lib/parse-remote-url");
 
 const CHAIN_TIMEOUT_MS = 600000;
 const REPO_RESOLVE_TIMEOUT_MS = 60000;
@@ -113,32 +114,46 @@ function mapStatus(token) {
 // (bin/worker-dispatch/workers/issue-close-finalize.js) — resolve, compare,
 // refuse, then act on the resolved value.
 //
-// FAIL CLOSED: an unavailable, slow or unparsable `gh` yields no target at all,
+// #1899: the probe reads the ORIGIN remote locally rather than asking the API
+// which repository the checkout belongs to — on a fork carrying both `origin`
+// and `upstream` the API can answer `upstream`, and Steps D/F/G would then land
+// on a repository the caller never named.
+//
+// FAIL CLOSED: an unavailable, slow or unparsable `git` yields no target at all,
 // never a fallback to the payload's claim.
 function resolveCurrentRepo(payload, ctx, log) {
   let res = null;
   try {
     res = spawnRun(ctx.entry, {
       anchors: ctx.anchors,
-      command: "gh",
-      args: ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+      command: "git",
+      args: ["remote", "get-url", "origin"],
       cwd: payload.worktree_path,
       timeoutMs: REPO_RESOLVE_TIMEOUT_MS,
     });
   } catch (e) {
-    return { error: `gh repo view could not start: ${e && e.message ? e.message : "unknown error"}` };
+    return { error: `git remote get-url origin could not start: ${e && e.message ? e.message : "unknown error"}` };
   }
-  log.push(`$ gh repo view --json nameWithOwner -> status=${res.status}`, res.stdout, res.stderr);
-  if (res.timedOut) return { error: "gh repo view timed out" };
-  if (res.spawnError !== null) return { error: `gh repo view could not run: ${res.spawnError}` };
-  if (res.status !== 0) return { error: `gh repo view exited ${res.status}` };
-  const name = String(res.stdout === null || res.stdout === undefined ? "" : res.stdout)
+  // The command's output IS the origin URL, and an HTTPS origin can embed an
+  // access token — this log is written to disk, so the userinfo is stripped
+  // before it is recorded. stderr gets the same treatment in case a git error
+  // echoes the URL back.
+  log.push(
+    `$ git remote get-url origin -> status=${res.status}`,
+    redactUserinfo(res.stdout),
+    redactUserinfo(res.stderr)
+  );
+  if (res.timedOut) return { error: "git remote get-url origin timed out" };
+  if (res.spawnError !== null) return { error: `git remote get-url origin could not run: ${res.spawnError}` };
+  if (res.status !== 0) return { error: `git remote get-url origin exited ${res.status}` };
+  const url = String(res.stdout === null || res.stdout === undefined ? "" : res.stdout)
     .split(/\r?\n/)[0]
     .trim();
-  if (!RE_OWNER_REPO.test(name)) {
-    return { error: "gh repo view did not report a well-formed owner/repo" };
+  const parsed = parseOriginOwnerRepo(url);
+  if (!parsed.ok || !RE_OWNER_REPO.test(parsed.ownerRepo)) {
+    return { error: `the origin remote does not name a github.com owner/repo: ${parsed.ok ? parsed.ownerRepo : parsed.message}` };
   }
-  return { ownerRepo: name };
+  return { ownerRepo: parsed.ownerRepo };
 }
 
 // GitHub treats owner and repo names case-insensitively.

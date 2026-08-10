@@ -38,7 +38,7 @@ still runs** as normal.
 - `skills/workflow-init/SKILL.md` Step WI-2 — inline `is-github-dotcom-remote` (not yet migrated)
 - `skills/commit-push/SKILL.md` Phase 1 pre-flight — uses `detect-non-github.sh`
 - `skills/issue-close-stage/SKILL.md` Pre-flight — uses `detect-non-github.sh`
-- `skills/issue-close-finalize/SKILL.md` Pre-flight — uses dedicated `scripts/pre-flight.sh` (also resolves OWNER_REPO to stdout; not migrated to detect-non-github.sh)
+- `skills/issue-close-finalize/SKILL.md` Pre-flight — uses dedicated `scripts/pre-flight.sh`; derives the gate from the same origin parse that yields OWNER_REPO (`bin/github-issues/lib/origin-repo.sh`), so it calls neither wrapper
 - `skills/issue-create/SKILL.md` Phase 2 (Survey) — inline `is-github-dotcom-remote` (not yet migrated)
 
 Keep this list in sync when adding/removing consumers.

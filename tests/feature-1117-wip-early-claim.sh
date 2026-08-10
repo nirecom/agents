@@ -10,11 +10,11 @@
 # wip-check). Tests here verify the driver's directive output for the key WIP
 # scenarios that the old script covered.
 #
-# L3 gap (what these tests do NOT catch):
+# TL3 gap (what this test does NOT catch):
 # - Whether the real Projects v2 API accepts the WIP claim
 # - Whether wip-state.sh actually flips Status=In Progress in live GitHub
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -56,6 +56,12 @@ setup_case() {
     GH_LOG="$CASE_DIR/gh-calls.log"
     mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    # #1899: repo identity resolves from origin (not `gh repo view`), so CWD
+    # must be a git repo with a github.com origin matching the gh mock's
+    # mockorg/mockrepo. core.hooksPath disabled per rules/test/fixture-isolation.md.
+    git -C "$CASE_DIR" init -q >/dev/null 2>&1
+    git -C "$CASE_DIR" config core.hooksPath /dev/null >/dev/null 2>&1
+    git -C "$CASE_DIR" remote add origin "https://github.com/mockorg/mockrepo.git" >/dev/null 2>&1
     _write_gh_mock
     _write_wip_mock
     _write_cfg_prims

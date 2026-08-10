@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-init-driver/_lib.sh — shared helper library, NOT a test file.
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, directive-contract, origin-resolution, scope:issue-specific
 # Source from sibling tests: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 #
 # TDD red phase: the SUT (bin/workflow/workflow-init-driver) does not exist yet.
@@ -72,6 +74,7 @@ setup_case() {  # <session-id>
     GH_LOG="$CASE_DIR/gh-calls.log"
     mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    _init_case_repo
     _write_gh_mock
     _write_wip_mock
     _write_cfg_prims
@@ -85,6 +88,35 @@ setup_case() {  # <session-id>
 teardown_case() {
     export PATH="$ORIG_PATH"
     unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID NON_GITHUB 2>/dev/null || true
+}
+
+# --- git fixture (#1899) -----------------------------------------------------
+# Repo identity is derived from the checkout's ORIGIN remote, not `gh repo view`,
+# so every case needs a real git repo. Origin deliberately names a DIFFERENT repo
+# than the mock's `repo view` answer (mockorg/mockrepo), so an accidental
+# fallback to the API path is visible.
+CASE_ORIGIN_URL="https://github.com/originorg/originrepo.git"
+CASE_ORIGIN_OWNER_REPO="originorg/originrepo"
+
+_init_case_repo() {
+    git -C "$CASE_DIR" init -q
+    # MANDATORY per rules/test/fixture-isolation.md.
+    git -C "$CASE_DIR" config core.hooksPath /dev/null
+    git -C "$CASE_DIR" config user.email "fixture@example.com"
+    git -C "$CASE_DIR" config user.name "Fixture"
+    git -C "$CASE_DIR" remote add origin "$CASE_ORIGIN_URL"
+}
+
+case_set_origin() {  # <url>
+    git -C "$CASE_DIR" remote remove origin 2>/dev/null || true
+    git -C "$CASE_DIR" remote add origin "$1"
+}
+case_add_upstream() {  # <url>
+    git -C "$CASE_DIR" remote remove upstream 2>/dev/null || true
+    git -C "$CASE_DIR" remote add upstream "$1"
+}
+case_unset_origin() {
+    git -C "$CASE_DIR" remote remove origin 2>/dev/null || true
 }
 
 # --- mocks -------------------------------------------------------------------

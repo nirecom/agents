@@ -162,9 +162,10 @@ Any one of the three files alone is forgeable by whoever can write it; agreement
 between all three is not.
 
 Path fields are compared with `anchor.samePath`, never `===`. Callers
-legitimately hand the dispatcher `/c/git/…` (MSYS), `C:/git/…` and `C:\git\…`
-forms of the same file; a string compare would reject the honest case while
-being no stronger against the dishonest one.
+legitimately hand the dispatcher the MSYS POSIX form, the forward-slash
+Windows form, and the backslash Windows form of the same file path; a string
+compare would reject the honest case while being no stronger against the
+dishonest one.
 
 ## Cross-repo mix-up detection
 
@@ -173,6 +174,19 @@ it as `OWNER_REPO`. When that disagrees with `payload.owner_repo`, the two sides
 are talking about different issues, and the pass fails **without writing the
 state file or the binding record** — a state file carrying the wrong
 `owner_repo` would propagate the mistake into every subsequent pass.
+
+Where a worker resolves that identity from the *checkout* rather than from the
+issue, it reads the `origin` remote directly and never asks the forge which
+repository the checkout belongs to. On a fork carrying both `origin` and
+`upstream`, `gh repo view` has two defensible answers and the one it returns is
+not necessarily the one the caller named; Steps D/F/G would then act on the
+upstream repository. `git remote get-url origin` has exactly one answer, and
+`hooks/lib/parse-remote-url.js` accepts it only when it parses to a github.com
+`owner/repo`. Resolution stays fail-closed: an unavailable, slow or unparsable
+remote yields no target at all, never a fallback to the payload's claim. The
+origin URL is also the one value here that can carry an access token, so
+anything that echoes it into an on-disk log passes it through `redactUserinfo`
+first.
 
 ## Environment resolution
 

@@ -1,14 +1,30 @@
 #!/usr/bin/env bash
-# Detects whether the current git repo's origin remote is github.com.
+# Detects whether a git repo's origin remote is github.com.
 # Exit 0 = github.com, 1 = non-GitHub, 2 = unknown/error (fail-open)
 #
 # Usage: is-github-dotcom-remote [<repo-dir>]
+#        is-github-dotcom-remote --url <remote-url>
 #   Default <repo-dir> is the current directory ($PWD).
+#
+# --url classifies a remote URL the caller already read, instead of reading
+# `git remote get-url origin` here. A caller that both PARSES the URL (for
+# owner/repo) and CLASSIFIES it (for the host) must not read the remote twice:
+# two independent reads can diverge, and the parsed value would then never have
+# been the value this classifier approved (#1899). --url makes the parsed bytes
+# and the classified bytes provably identical.
 set -u
 
-DIR="${1:-.}"
+url=""
 
-url=$(git -C "$DIR" remote get-url origin 2>/dev/null) || exit 2
+if [ "${1:-}" = "--url" ]; then
+    # Empty/absent URL is indistinguishable from "no origin" → unknown.
+    [ "$#" -ge 2 ] || exit 2
+    url="$2"
+else
+    DIR="${1:-.}"
+    url=$(git -C "$DIR" remote get-url origin 2>/dev/null) || exit 2
+fi
+
 [ -z "$url" ] && exit 2
 
 host=""

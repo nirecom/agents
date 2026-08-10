@@ -337,7 +337,7 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
 
     if (result && result.blocked) {
       writeCheckpoint(ckptFile, sessionId, phase, null, state);
-      emitBlocked(ckptFile, result.reason || "unknown");
+      emitBlocked(ckptFile, result.reason || "unknown", result.nextHint);
       return;
     }
   }

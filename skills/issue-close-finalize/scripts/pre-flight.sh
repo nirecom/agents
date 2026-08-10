@@ -1,7 +1,7 @@
 #!/bin/bash
 # pre-flight.sh — issue-close-finalize Pre-flight check.
 #
-# Checks for GitHub remote and resolves OWNER_REPO via gh.
+# Resolves OWNER_REPO from the checkout's ORIGIN remote (#1899).
 # Output (stdout, sourceable):
 #   OWNER_REPO=<owner/repo>
 # Exit codes:
@@ -12,17 +12,13 @@ set -euo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
 
-rc=0
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" || rc=$?
-if [[ "$rc" -eq 1 ]]; then
-    echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping issue-close-finalize]" >&2
-    exit 1
-fi
-# rc=0 (GitHub) or rc=2 (unknown): proceed
+# shellcheck source=../../../bin/github-issues/lib/origin-repo.sh
+. "$AGENTS_CONFIG_DIR/bin/github-issues/lib/origin-repo.sh"
 
-OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')
-if [[ -z "$OWNER_REPO" ]]; then
-    echo "Error: unable to resolve owner/repo via gh" >&2
+rc=0
+OWNER_REPO=$(resolve_origin_owner_repo) || rc=$?
+if [[ "$rc" -ne 0 ]] || [[ -z "$OWNER_REPO" ]]; then
+    echo "[GITHUB_ISSUES disabled: origin remote is missing or not a github.com repo (rc=$rc), skipping issue-close-finalize]" >&2
     exit 1
 fi
 

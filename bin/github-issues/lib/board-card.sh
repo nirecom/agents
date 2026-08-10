@@ -9,17 +9,20 @@
 #
 # This file is sourced (not executed). It has no env-var dependency of its own.
 
-# Resolve owner/repo from the current working directory (gh uses cwd-based
-# repo resolution for all `gh issue`/`gh repo` calls). Return non-zero on
-# failure so callers can propagate read errors distinctly from empty results.
-# If BOARD_CARD_REPO_OVERRIDE is set, it is returned directly (no gh call).
+# shellcheck source=origin-repo.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/origin-repo.sh"
+
+# Resolve owner/repo from the current working directory's ORIGIN remote (#1899).
+# Return non-zero on failure so callers can propagate read errors distinctly
+# from empty results — never fall back to another remote.
+# If BOARD_CARD_REPO_OVERRIDE is set, it is returned directly (no git call).
 resolve_owner_repo() {
     if [[ -n "${BOARD_CARD_REPO_OVERRIDE:-}" ]]; then
         echo "$BOARD_CARD_REPO_OVERRIDE"
         return 0
     fi
     local out
-    if ! out=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
+    if ! out=$(resolve_origin_owner_repo); then
         return 1
     fi
     out=$(printf '%s' "$out" | tr -d '\r' | head -1)

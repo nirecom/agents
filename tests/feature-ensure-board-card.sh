@@ -1,12 +1,20 @@
 #!/bin/bash
-# Tests: agents/issues/42, bin/gh, bin/github-issues/ensure-board-card.sh
-# Tags: github, issues, agent, bin, tests
+# Tests: agents/issues/42, bin/gh, bin/github-issues/ensure-board-card.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tags: github, issues, agent, bin, tests, scope:issue-specific
 # Tests for bin/github-issues/ensure-board-card.sh — Issue #548
 # Ensures a GitHub issue is on Projects v2 board with Content Date set.
 #
 # Inline gh-mock pattern from tests/feature-wip-state.sh.
 #
 # RED: this suite fails clean while bin/github-issues/ensure-board-card.sh is missing.
+#
+# TL3 gap (what this test does NOT catch):
+# - Whether the real Projects v2 GraphQL API accepts the Content Date field
+#   mutation this script issues.
+# - Whether a live `gh` invocation resolves origin-derived owner/repo the same
+#   way the inline gh-mock stub does.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
