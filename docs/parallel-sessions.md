@@ -29,7 +29,7 @@ All worktrees follow a two-level layout:
 | Variable | Default | Description |
 |---|---|---|
 | `WORKTREE_BASE_DIR` | `~/git/worktrees` | Root for all worktrees. Set in agents config (`.env`). |
-| `task-name` | from user message | Short task identifier, shared across repos (`[a-zA-Z0-9_-]+`). |
+| `task-name` | derived automatically | Short task identifier, shared across repos (`[a-zA-Z0-9][a-zA-Z0-9_-]*`). Derived by `/worktree-start` from the session intent — never asked for. |
 | `repo-name` | git repo directory name | Set automatically by `/worktree-start`. |
 
 **Windows example** (set in `.env`):
@@ -48,8 +48,8 @@ C:\git\worktrees\
 ## Lifecycle
 
 ```
-/worktree-start <task-name>
-│  Confirms task-name + branch type → path
+/worktree-start
+│  Derives task-name + branch type → path
 │  mkdir -p <base>/<task>
 │  git worktree add <path> -b <type>/<task>
 │  Copies gitignored state via .worktreeinclude (automated)
@@ -131,7 +131,7 @@ The hook blocks when:
 | Protected-branch commits | Blocked — `pre-commit` | Allowed |
 | Merge gate (`gh pr merge` / `git push origin main`) | Blocks until `user_verification` complete — **unconditional** in both modes | Same — unconditional |
 | PR flow in `/commit-push` | PR created; `AskUserQuestion`: merge / wait / abort | PR step skipped — commit goes direct |
-| Worktree setup required | Yes — `/worktree-start <task>` before work begins | No |
+| Worktree setup required | Yes — `/worktree-start` before work begins | No |
 | Intended use | Parallel features, multi-session work | Single trivial commits (typo, lockfile-only) |
 
 Set in agents config (`.env`):
@@ -144,7 +144,7 @@ enforcement. An entry with a glob metachar (`*` / `**`) matches file paths via g
 path entry matches via path-boundary prefix (covering that path and its whole subtree). Both
 `enforce-worktree.js` and `pre-commit` honor it. Glob and plain entries may be mixed:
 ```
-ENFORCE_WORKTREE_EXCLUDE=C:\git\repo-a;C:\git\**\todo.md   # POSIX: /home/user/repo-a;/home/user/agents/docs/**/*.md
+ENFORCE_WORKTREE_EXCLUDE=C:\git\repo-a;C:\git\**\todo.md   # POSIX: /home/<user>/repo-a;/home/<user>/agents/docs/**/*.md
 ```
 
 > **Migration:** `ENFORCE_WORKTREE_EXCLUDE_REPOS` is deprecated. Move the same entries to
@@ -192,7 +192,7 @@ commands. The CWD repo is always included.
 ```
 ENFORCE_WORKTREE: write blocked. Reason: main worktree (branch 'main').
 ```
-→ Run `/worktree-start <task-name>` and continue from the worktree.
+→ Run `/worktree-start` and continue from the worktree.
 
 **Stale worktree entry after manual deletion:**
 ```

@@ -10,7 +10,7 @@
 //
 // Any failure falls back to the default branch — never rethrows.
 
-const DEFAULT_REMEDY = "Run: /worktree-start <task-name>\n";
+const DEFAULT_REMEDY = "Run: /worktree-start\n";
 
 function buildWorktreeRemedy(sessionId) {
   try {

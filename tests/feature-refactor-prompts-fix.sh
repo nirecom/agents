@@ -1,15 +1,18 @@
 #!/bin/bash
 # Tests: skills/refactor-prompts/SKILL.md
-# Tags: worktree, start, prompts, refactor, skill
-# Tests for issue #602 PR1 — skills/refactor-prompts/SKILL.md content fixes.
+# Tags: worktree, start, prompts, refactor, skill, static, TL2, scope:common
+# Tests for skills/refactor-prompts/SKILL.md content fixes (issue #602 PR1, extended by #1910).
 #
 # Asserts static SKILL.md content:
-#   TC1: NO `/tmp/rp-scan.json` redirect (Windows-unsafe pattern; the current bug).
+#   TC1: NO `/tmp/rp-scan.json` redirect (Windows-unsafe pattern).
 #   TC2: USES `SCAN_JSON=$(...)` variable-capture form.
-#   TC3: worktree-start invocation includes `--task-name` (non-interactive).
-#   TC4: worktree-start invocation includes `--branch-type`.
+#   TC3: worktree-start invocation no longer passes `--task-name` (#1910 removed the flag).
+#   TC4: worktree-start invocation no longer passes `--branch-type`.
+#   TC5: worktree-start is invoked as `/worktree-start --headless refactor-prompts`.
+#   TC6: the /worktree-start line contains no `$(` — slash-command args are not
+#        shell-expanded, so the old `$(date +%Y%m%d)` form was a latent bug.
 #
-# RED until PR1 lands (the SKILL.md is still in the old form today).
+# TC3-TC6 are RED until the #1910 implementation lands (fail-before-fix).
 
 set -u
 
@@ -43,18 +46,34 @@ else
     fail "TC2: SCAN_JSON=\$(...) capture form missing"
 fi
 
-# --- TC3: --task-name flag in worktree-start invocation --------------------
-if grep -qE '/worktree-start[^\n]*--task-name' "$SKILL_MD"; then
-    pass "TC3: /worktree-start --task-name present"
+# --- TC3: --task-name flag removed from worktree-start invocation ----------
+if grep -qE '/worktree-start.*--task-name' "$SKILL_MD"; then
+    fail "TC3: /worktree-start still passes --task-name (flag was removed in #1910)"
 else
-    fail "TC3: /worktree-start --task-name not found"
+    pass "TC3: /worktree-start does not pass --task-name"
 fi
 
-# --- TC4: --branch-type flag in worktree-start invocation ------------------
+# --- TC4: --branch-type flag removed from worktree-start invocation --------
 if grep -qE '/worktree-start.*--branch-type' "$SKILL_MD"; then
-    pass "TC4: /worktree-start --branch-type present"
+    fail "TC4: /worktree-start still passes --branch-type (flag was removed in #1910)"
 else
-    fail "TC4: /worktree-start --branch-type not found"
+    pass "TC4: /worktree-start does not pass --branch-type"
+fi
+
+# --- TC5: headless invocation form -----------------------------------------
+if grep -qF '/worktree-start --headless refactor-prompts' "$SKILL_MD"; then
+    pass "TC5: /worktree-start --headless refactor-prompts present"
+else
+    fail "TC5: /worktree-start --headless refactor-prompts not found"
+fi
+
+# --- TC6: no shell substitution on the slash-command line ------------------
+# Slash-command arguments are passed verbatim to the skill, never through a shell,
+# so a `$(...)` in the argument list is a latent bug rather than a date.
+if grep -E '/worktree-start' "$SKILL_MD" | grep -qF '$('; then
+    fail "TC6: the /worktree-start line contains a \$( shell substitution"
+else
+    pass "TC6: the /worktree-start line contains no shell substitution"
 fi
 
 echo ""
