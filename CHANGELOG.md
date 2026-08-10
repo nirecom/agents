@@ -292,3 +292,7 @@ Changes: worker-dispatch: dispatched workers now inherit `GH_CONFIG_DIR` and `XD
 ### FEATURE: PR #1945 (2026-08-10)
 Background: feat: warn at commit time when a staged file's comment blocks grow too large (#1894)
 Changes: `git commit` now prints an advisory warning when a staged code file's comment blocks have grown past the length threshold — a long comment block is easy to add and hard to notice in review. The warning never blocks a commit and never rewrites a file. Tune it with `COMMENT_BLOCK_WARN_LINES` (default 10), or silence it with `COMMENT_BLOCK_WARN=off`. Run `bin/review-comment-block-size --all` for a whole-tree inventory of the same measurement.
+
+### FEATURE: PR #1949 (2026-08-11)
+Background: fix: resolve repository identity from origin remote instead of gh rep... (#1949)
+Changes: Fixed: repository identity is now read from the `origin` remote instead of `gh repo view`, so issue comments, board cards, and close-stage checks no longer risk landing on `upstream` when a fork defines both remotes. Non-github.com and unparsable remotes are now refused outright rather than resolved to a guess.
