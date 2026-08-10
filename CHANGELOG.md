@@ -280,3 +280,7 @@ Changes: Fixed: `/clarify-intent` completion could return a GitHub board-card UR
 ### FEATURE: PR #1902 (2026-08-10)
 Background: fix: rewrite run_tests workflow-gate classifier to close emitter-ambiguity and stdout byte-attribution gaps
 Changes: Fixed a false-negative in the `run_tests` workflow gate where a Bash command that merely mentioned a `tests/` path in an argument (without actually running tests) could be misclassified, and closed two related gaps where a compound/forged command could cause the gate to mark tests complete despite a real failure.
+
+### FEATURE: PR #1929 (2026-08-10)
+Background: fix(issue-create): unify the identity criterion on same_fix and make make-parent produce a real meta parent
+Changes: `/issue-create` now decides duplicate and parent-child relationships by one criterion — whether a single fix resolves both issues — so surveying the same pair twice no longer flips between `sub-of` and `sibling`.;`/issue-create`'s `make-parent` verdict now creates a genuine meta parent (`meta` label, `Group: ` title prefix, no implementation in the body) and refuses to attach siblings to a parent that is not one.
