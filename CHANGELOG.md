@@ -284,3 +284,7 @@ Changes: Fixed a false-negative in the `run_tests` workflow gate where a Bash co
 ### FEATURE: PR #1929 (2026-08-10)
 Background: fix(issue-create): unify the identity criterion on same_fix and make make-parent produce a real meta parent
 Changes: `/issue-create` now decides duplicate and parent-child relationships by one criterion — whether a single fix resolves both issues — so surveying the same pair twice no longer flips between `sub-of` and `sibling`.;`/issue-create`'s `make-parent` verdict now creates a genuine meta parent (`meta` label, `Group: ` title prefix, no implementation in the body) and refuses to attach siblings to a parent that is not one.
+
+### FEATURE: PR #1950 (2026-08-10)
+Background: fix(worker-dispatch): add XDG_CONFIG_HOME and GH_CONFIG_DIR to CHILD_ENV_ALLOWLIST
+Changes: worker-dispatch: dispatched workers now inherit `GH_CONFIG_DIR` and `XDG_CONFIG_HOME`, so a host that relocates the gh config directory no longer breaks gh-driven workers (`/worktree-end` doc-append, commit-push, the issue-close pair, issue-reconcile).
