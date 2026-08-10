@@ -80,7 +80,9 @@ if [ -n "${AGENTS_CONFIG_DIR:-}" ]; then
             ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
         if [ "$_ic_preflight_rc" -eq 1 ]; then
             # type:task absent → auto-sync labels before creating the issue.
-            if ! bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" \
+            # --no-delete: repairing one missing label must never delete the repo's other
+            # labels. Sibling of the make-parent `meta` repair in issue-create-dispatch.sh.
+            if ! bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" --no-delete \
                     ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
                     "$AGENTS_CONFIG_DIR/.github/labels.yml"; then
                 echo "Error: label sync failed — aborting issue creation" >&2

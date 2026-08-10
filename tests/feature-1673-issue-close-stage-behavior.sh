@@ -52,6 +52,15 @@ assert_contains() {
         *) fail "$name" "needle=$(printf '%q' "$needle") in=$(printf '%q' "$hay")" ;;
     esac
 }
+assert_not_contains() {
+    local name="$1" needle="$2" hay="$3"
+    case "$hay" in
+        # The needle is never echoed back on failure: this assertion exists for
+        # credentials, and the failure message is itself a log.
+        *"$needle"*) fail "$name" "forbidden substring present" ;;
+        *) pass "$name" ;;
+    esac
+}
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
@@ -122,20 +131,29 @@ CALLLOG="$TMPD/calls.jsonl"
 
 # set_chain <stdout> [exit-status] — written via node so no escaping is needed.
 #
-# The chain spawn is the SECOND child, not the first: the worker resolves the
-# repository the validated worktree actually belongs to (`gh repo view --json
-# nameWithOwner`) before it will run the chain, and refuses when the payload's
-# `owner_repo` names somewhere else. That probe is canned here to report the same
-# repo the payload claims, so these cases exercise the chain path; the mismatch
-# path has its own coverage in tests/feature-1673-issue-close-stage-schema.sh.
-set_chain() {
+# The chain spawn is the SECOND child: the worker first resolves the repo the
+# validated worktree belongs to and refuses if payload `owner_repo` differs.
+# #1899: that probe is now `git remote get-url origin` (a local read) instead
+# of `gh repo view --json nameWithOwner` (which can answer `upstream` on a
+# fork), so the canned rule returns an origin URL, not an owner/repo pair. The
+# probe here reports the same repo the payload claims, exercising the chain
+# path; the mismatch path is covered in feature-1673-issue-close-stage-schema.sh.
+#
+# write_canned <origin-url> <chain-stdout> [chain-exit-status] — origin URL is a
+# parameter because the probe's OUTPUT is itself a test input (see the
+# credential group below); set_chain pins it to the credential-free form.
+write_canned() {
     node -e '
 const fs = require("fs");
 fs.writeFileSync(process.argv[1], JSON.stringify([
-  { match: "repo view", stdout: "example-owner/example-repo\n", status: 0 },
-  { match: "stageChain", stdout: process.argv[2], status: Number(process.argv[3] || 0) },
+  { match: "remote get-url origin", stdout: process.argv[2] + "\n", status: 0 },
+  { match: "stageChain", stdout: process.argv[3], status: Number(process.argv[4] || 0) },
   { stdout: "", status: 0 },
-]));' "$(nodepath "$CANNED")" "$1" "${2:-0}"
+]));' "$(nodepath "$CANNED")" "$1" "$2" "${3:-0}"
+}
+
+set_chain() {
+    write_canned "https://github.com/example-owner/example-repo.git" "$1" "${2:-0}"
 }
 
 DOUT=""; DRC=0
@@ -153,8 +171,8 @@ dispatch_stage() {
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
         issue-close-stage "$MAIN" "$1" 2>/dev/null)" || DRC=$?
 }
-# call_field <field> [row-index] — row 0 is the `gh repo view` repo probe, row 1
-# the chain spawn. The index is explicit so an added or reordered child process
+# call_field <field> [row-index] — row 0 is the `git remote get-url origin` repo
+# probe (#1899; formerly `gh repo view`), row 1 the chain spawn. The index is explicit so an added or reordered child process
 # shows up as a want!=got instead of silently re-pointing an assertion.
 call_field() {
     node -e '
@@ -175,6 +193,19 @@ if (f === "script_base") {
 process.stdout.write(String(r[f] === null || r[f] === undefined ? "(null)" : r[f]));
 ' "$(nodepath "$CALLLOG")" "$1" "${2:-0}"
 }
+# artifact_text <path> — read the on-disk worker log. Read through node, not
+# `cat`: artifact_path comes back as a native absolute path, which on Windows is
+# a drive-letter form the shell would not open the same way node does.
+artifact_text() {
+    node -e '
+const fs = require("fs");
+try { process.stdout.write(fs.readFileSync(process.argv[1], "utf8")); }
+catch (e) { process.stdout.write("(unreadable: " + (e && e.code ? e.code : "unknown") + ")"); }
+' "$1"
+}
+# The renderer is status-triple-quoted, so the artifact_path slot arrives wrapped
+# in double quotes.
+unquote() { local v="$1"; v="${v#\"}"; v="${v%\"}"; printf '%s' "$v"; }
 
 PAYLOAD_JSON="{\"issue_number\":12,\"worktree_path\":\"$LINKED\",\"owner_repo\":\"example-owner/example-repo\",\"artifact_dir\":\"$PLANS\"}"
 
@@ -269,17 +300,61 @@ group_spawn_seam() {
     dispatch_stage "$p"
     # Exactly two children: the repo probe, then the chain. Nothing else.
     assert_eq "seam/two-child-processes" "2" "$(call_field count)"
-    # Row 0 — the repo probe. It must be a read-only `gh repo view`, and it must
-    # run in the worktree whose repository is being resolved.
-    assert_eq "seam/probe-command-is-gh" "gh" "$(call_field command 0)"
-    assert_eq "seam/probe-argv-is-repo-view" \
-        "repo view --json nameWithOwner --jq .nameWithOwner" "$(call_field args 0)"
+    # Row 0 — the repo probe. #1899: it must be a read-only, LOCAL git read of the
+    # ORIGIN remote (not `gh repo view`, which consults the API and can answer
+    # with `upstream` on a fork), and it must run in the worktree whose
+    # repository is being resolved. Naming `origin` explicitly in the argv is the
+    # load-bearing part: `git remote get-url` without it, or with a different
+    # remote, would reintroduce the ambiguity.
+    assert_eq "seam/probe-command-is-git" "git" "$(call_field command 0)"
+    assert_eq "seam/probe-argv-is-origin-url" \
+        "remote get-url origin" "$(call_field args 0)"
     assert_eq "seam/probe-cwd-is-linked-worktree" "$LINKED" "$(nodepath "$(call_field cwd 0)")"
     # Row 1 — the chain itself.
     assert_eq "seam/command-is-bash" "bash" "$(call_field command 1)"
     assert_eq "seam/script-is-stage-chain" "stageChain" "$(call_field script_base 1)"
     assert_eq "seam/argv-is-issue-and-repo" "12 example-owner/example-repo" "$(call_field args 1)"
     assert_eq "seam/cwd-is-linked-worktree" "$LINKED" "$(nodepath "$(call_field cwd 1)")"
+}
+
+# ===========================================================================
+# Group B2 — a token-bearing origin URL must not land in the on-disk log
+#
+# #1899 made the repo probe `git remote get-url origin`, whose output can carry
+# an access token in HTTPS userinfo (https://x-access-token:<token>@github.com/
+# owner/repo.git). That output is persisted to a log file the calling skill
+# reads back, so resolveCurrentRepo routes stdout/stderr through
+# redactUserinfo first. Assertion is on the FILE, not dispatcher stdout (which
+# carries only the status triple and would hide an unredacted entry).
+#
+# The credential below is a FAKE placeholder — 16 chars after `ghp_`, under the
+# 36 bin/scan-outbound.sh's github-token pattern needs. Same placeholder as
+# tests/fix-1899-parse-remote-url/redaction.sh.
+# ===========================================================================
+group_origin_credential_redaction() {
+    impl_ready "redact/setup" || return
+    local fake='ghp_EXAMPLEEXAMPLE'
+    local p art body
+    write_canned "https://x-access-token:${fake}@github.com/example-owner/example-repo.git" \
+        "$(printf 'STATUS=phase1_done\nSUMMARY=ok\nCOMMENT_ID=1\n')"
+    p="$(write_payload stage-redact "$PAYLOAD_JSON")"
+    dispatch_stage "$p"
+    # The credential is not a parse failure: the URL still names the payload's
+    # repo, so the run reaches the chain rather than bailing before the log write.
+    assert_eq "redact/status" "phase1_done" "$(field_of status)"
+
+    art="$(unquote "$(field_of artifact_path)")"
+    if [ -z "$art" ] || [ "$art" = "(none)" ]; then
+        fail "redact/artifact-written" "artifact_path=$art — nothing on disk to inspect"
+        return
+    fi
+    pass "redact/artifact-written"
+    body="$(artifact_text "$art")"
+    # The probe line must actually BE in the file. Without this, a log that never
+    # recorded the URL at all would satisfy the secret assertion vacuously.
+    assert_contains "redact/log-records-probe-output" \
+        "***@github.com/example-owner/example-repo.git" "$body"
+    assert_not_contains "redact/no-raw-token-on-disk" "$fake" "$body"
 }
 
 # ===========================================================================
@@ -316,6 +391,7 @@ group_status_mapping
 group_fail_closed
 group_quoting_resilience
 group_spawn_seam
+group_origin_credential_redaction
 group_no_eval
 
 echo ""

@@ -10,6 +10,9 @@
 #   - setup_mock / teardown_mock / run_resolver helpers (verbatim from original)
 #   - finish() — prints "Results: N passed, M failed" and exits
 #
+# Tests: bin/github-issues/lib/resolve-project.sh
+# Tags: workflow, github, issues, plans, bin, scope:issue-specific
+#
 # NOT a test file: no # Tests:/# Tags: frontmatter; excluded from the
 # dispatcher's SPLIT_GROUPS.
 #
@@ -68,7 +71,7 @@ case "$ARGS" in
         echo "error: gh repo view failed (no remote)" >&2
         exit 1
     fi
-    echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"
+    echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"
     exit 0
     ;;
   api\ graphql\ *projectsV2*)
@@ -77,7 +80,7 @@ case "$ARGS" in
         exit 1
     fi
     NODE_COUNT="${GH_MOCK_PROJECTS_NODE_COUNT:-1}"
-    PROJ_OWNER="${GH_MOCK_PROJECT_OWNER:-nirecom}"
+    PROJ_OWNER="${GH_MOCK_PROJECT_OWNER:-mock-owner}"
     PROJ_NUM="${GH_MOCK_PROJECT_NUM:-1}"
     PROJ_ID="${GH_MOCK_PROJECT_ID:-PVT_mock123}"
     case "$ARGS" in
@@ -153,6 +156,7 @@ MV_EOF
     fi
 
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    _init_repo_fixture
 }
 
 teardown_mock() {
@@ -160,6 +164,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
+    unset REPO_FIXTURE FIXTURE_ORIGIN_URL FIXTURE_UPSTREAM_URL 2>/dev/null || true
     unset MOCK_LOG WORKFLOW_PLANS_DIR \
           GH_MOCK_OWNER_REPO GH_MOCK_REPO_VIEW_FAIL \
           GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
@@ -175,9 +180,48 @@ teardown_mock() {
 }
 
 # Helper: run resolver in a subshell and capture state via env-export round-trip.
+# ---------------------------------------------------------------------------
+# Git fixture (#1899): resolve-project.sh now derives owner/repo from `origin`
+# only (not `gh repo view`, which can report `upstream` on a fork), so tests
+# run inside a real git repo rather than the live worktree. Fixture origin
+# mirrors GH_MOCK_OWNER_REPO by default; set FIXTURE_ORIGIN_URL to diverge
+# deliberately and prove origin (not the gh mock) drove resolution.
+# ---------------------------------------------------------------------------
+_init_repo_fixture() {
+    REPO_FIXTURE="$TMP/repo"
+    mkdir -p "$REPO_FIXTURE"
+    git -C "$REPO_FIXTURE" init -q
+    # MANDATORY per rules/test/fixture-isolation.md.
+    git -C "$REPO_FIXTURE" config core.hooksPath /dev/null
+    git -C "$REPO_FIXTURE" config user.email "fixture@example.com"
+    git -C "$REPO_FIXTURE" config user.name "Fixture"
+    export REPO_FIXTURE
+}
+
 run_resolver() {
     local stderr_file="${1:-/dev/null}"
+    # Remote sync is INLINE (not a helper) on purpose: call sites ship this
+    # function into a subshell with `declare -f run_resolver get_field`, so a
+    # helper defined elsewhere in this lib would not exist there.
+    # The `command -v git` guard matters for the "gh not in PATH" case, which
+    # strips PATH entirely: without it the sync would emit spurious stderr.
+    if [ -n "${REPO_FIXTURE:-}" ] && command -v git >/dev/null 2>&1; then
+        git -C "$REPO_FIXTURE" remote remove origin 2>/dev/null || true
+        if [ -n "${FIXTURE_ORIGIN_URL:-}" ]; then
+            git -C "$REPO_FIXTURE" remote add origin "$FIXTURE_ORIGIN_URL"
+        elif [ "${GH_MOCK_REPO_VIEW_FAIL:-0}" = "1" ]; then
+            : # no origin remote — the "repo identity unresolvable" fixture
+        else
+            git -C "$REPO_FIXTURE" remote add origin \
+                "https://github.com/${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}.git"
+        fi
+        git -C "$REPO_FIXTURE" remote remove upstream 2>/dev/null || true
+        if [ -n "${FIXTURE_UPSTREAM_URL:-}" ]; then
+            git -C "$REPO_FIXTURE" remote add upstream "$FIXTURE_UPSTREAM_URL"
+        fi
+    fi
     bash -c "
+        cd '${REPO_FIXTURE:-.}' || { echo 'RC=98'; exit 98; }
         source '$TARGET' >/dev/null 2>&1 || { echo 'RC=99'; exit 99; }
         if resolve_project_for_repo; then RC=0; else RC=\$?; fi
         printf 'RESOLVED_OWNER=%s\n'                  \"\${RESOLVED_OWNER:-}\"

@@ -276,3 +276,26 @@ Changes: Reduced workflow round-trip steps: outline/detail planning stages are n
 ### REFACTOR: Retire the BACKGROUND_WORK stop-guard sentinels in favour of NEXT_STEP_PAUSE (#1665) (2026-08-10)
 Background: The C4 premature-stop guard needed an explicit sentinel pair to stay quiet during long implementation turns, which is now covered automatically by the tracked write_code step.
 Changes: The WORKFLOW_BACKGROUND_WORK_START / _END sentinels and the per-session marker file they wrote are removed. The Stop guard now stays quiet automatically while the write_code step is in_progress (4-hour TTL), so no declaration is needed for implementation turns. For long-running work outside write_code, use <<WORKFLOW_NEXT_STEP_PAUSE: {reason}>> instead: it silences the Stop guard and next-step just as strongly, but it has no TTL, so the matching <<WORKFLOW_NEXT_STEP_RESUME: {reason}>> must be issued by hand when the work ends.
+### FEATURE: PR #1928 (2026-08-10)
+Background: fix: suppress gh CLI stdout leaks in issue-close-stage helper scripts
+Changes: Fixed: `/clarify-intent` completion could return a GitHub board-card URL instead of `PROCEED` when a session closed more than one issue, stalling the workflow at the completion-token check.;Fixed: parent issue body updates now report failure instead of passing silently — `parent-body-update.sh` exits non-zero with a warning when `gh issue edit` fails.
+
+### FEATURE: PR #1902 (2026-08-10)
+Background: fix: rewrite run_tests workflow-gate classifier to close emitter-ambiguity and stdout byte-attribution gaps
+Changes: Fixed a false-negative in the `run_tests` workflow gate where a Bash command that merely mentioned a `tests/` path in an argument (without actually running tests) could be misclassified, and closed two related gaps where a compound/forged command could cause the gate to mark tests complete despite a real failure.
+
+### FEATURE: PR #1929 (2026-08-10)
+Background: fix(issue-create): unify the identity criterion on same_fix and make make-parent produce a real meta parent
+Changes: `/issue-create` now decides duplicate and parent-child relationships by one criterion — whether a single fix resolves both issues — so surveying the same pair twice no longer flips between `sub-of` and `sibling`.;`/issue-create`'s `make-parent` verdict now creates a genuine meta parent (`meta` label, `Group: ` title prefix, no implementation in the body) and refuses to attach siblings to a parent that is not one.
+
+### FEATURE: PR #1950 (2026-08-10)
+Background: fix(worker-dispatch): add XDG_CONFIG_HOME and GH_CONFIG_DIR to CHILD_ENV_ALLOWLIST
+Changes: worker-dispatch: dispatched workers now inherit `GH_CONFIG_DIR` and `XDG_CONFIG_HOME`, so a host that relocates the gh config directory no longer breaks gh-driven workers (`/worktree-end` doc-append, commit-push, the issue-close pair, issue-reconcile).
+
+### FEATURE: PR #1945 (2026-08-10)
+Background: feat: warn at commit time when a staged file's comment blocks grow too large (#1894)
+Changes: `git commit` now prints an advisory warning when a staged code file's comment blocks have grown past the length threshold — a long comment block is easy to add and hard to notice in review. The warning never blocks a commit and never rewrites a file. Tune it with `COMMENT_BLOCK_WARN_LINES` (default 10), or silence it with `COMMENT_BLOCK_WARN=off`. Run `bin/review-comment-block-size --all` for a whole-tree inventory of the same measurement.
+
+### FEATURE: PR #1949 (2026-08-11)
+Background: fix: resolve repository identity from origin remote instead of gh rep... (#1949)
+Changes: Fixed: repository identity is now read from the `origin` remote instead of `gh repo view`, so issue comments, board cards, and close-stage checks no longer risk landing on `upstream` when a fork defines both remotes. Non-github.com and unparsable remotes are now refused outright rather than resolved to a guess.

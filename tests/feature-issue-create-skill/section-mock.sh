@@ -1,4 +1,6 @@
 # Mock factory: setup_mock, CANONICAL_BODY, teardown_mock
+# Tests: bin/github-issues/issue-create-dispatch.sh
+# Tags: scope:issue-specific
 # ---------------------------------------------------------------------------
 # Inline gh mock factory — creates a self-contained mock in $TMP/mock-bin/gh
 # per test so each test gets its own args log and env vars.
@@ -20,7 +22,10 @@ case "$ARGS" in
     echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
     exit 0 ;;
   label\ list\ *)
-    printf 'type:task\n'
+    # meta is included so make-parent's #1699 parent-eligibility guard sees the
+    # label as already present and never invokes sync-labels.sh (that failure
+    # path is pinned separately by tests/feat-1699-meta-parent-guard).
+    printf 'type:task\nmeta\n'
     exit 0 ;;
   issue\ create\ *)
     # Default: same NUM for every create (back-compat with single-create tests).
@@ -97,6 +102,39 @@ case "$ARGS" in
     fi
     eval "PNUM=\${GH_MOCK_PARENT_NUM_${INUM}:-}"
     echo "$PNUM"
+    exit 0 ;;
+  issue\ view\ *--json\ labels,title*)
+    # #1699 parent-eligibility guard (lib/require-meta-parent.sh): one lookup of
+    # the prospective parent's labels + title. Default fixture = an ELIGIBLE
+    # parent (meta label + "Group: " title) so existing sub-of / bulk-sub-of
+    # cases keep pinning what they always pinned. Per-issue override:
+    #   GH_MOCK_LABELS_<N>="a,b"   GH_MOCK_TITLE_<N>="..."
+    NUM=$(echo "$ARGS" | awk '{print $3}')
+    if [ "${GH_MOCK_VIEW_FAIL:-0}" = "1" ]; then
+        echo "error: could not fetch issue $NUM" >&2
+        exit 1
+    fi
+    eval "VLABELS=\${GH_MOCK_LABELS_${NUM}:-meta}"
+    eval "VTITLE=\${GH_MOCK_TITLE_${NUM}:-Group: mock parent}"
+    LJSON=""
+    IFS=',' read -ra LARR <<< "$VLABELS"
+    for L in "${LARR[@]}"; do
+        [ -z "$L" ] && continue
+        [ -n "$LJSON" ] && LJSON="${LJSON},"
+        LJSON="${LJSON}{\"name\":\"${L}\"}"
+    done
+    PAYLOAD="{\"labels\":[${LJSON}],\"title\":\"${VTITLE}\"}"
+    JQ_EXPR=""
+    PREV=""
+    for A in "$@"; do
+        [ "$PREV" = "--jq" ] && JQ_EXPR="$A"
+        PREV="$A"
+    done
+    if [ -n "$JQ_EXPR" ]; then
+        printf '%s\n' "$PAYLOAD" | jq -r "$JQ_EXPR"
+    else
+        printf '%s\n' "$PAYLOAD"
+    fi
     exit 0 ;;
   issue\ view\ *--json\ id*)
     # Extract issue number from args (positional after "issue view")
