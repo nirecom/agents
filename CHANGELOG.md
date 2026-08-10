@@ -299,3 +299,7 @@ Changes: `git commit` now prints an advisory warning when a staged code file's c
 ### FEATURE: PR #1949 (2026-08-11)
 Background: fix: resolve repository identity from origin remote instead of gh rep... (#1949)
 Changes: Fixed: repository identity is now read from the `origin` remote instead of `gh repo view`, so issue comments, board cards, and close-stage checks no longer risk landing on `upstream` when a fork defines both remotes. Non-github.com and unparsable remotes are now refused outright rather than resolved to a guess.
+
+### FEATURE: PR #1968 (2026-08-11)
+Background: feat: insert write_code as a tracked next-step step between review_tests and run_tests
+Changes: The workflow now tracks code-writing as its own step (`write_code`) between test review and test running, so a stalled implementation turn is visible in `next-step --list` instead of silently vanishing between `review_tests` and `run_tests`. Long implementation turns no longer need an explicit "background work" declaration — the Stop guard now stays quiet automatically while `write_code` is in progress.
