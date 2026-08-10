@@ -148,11 +148,9 @@ else
         mkdir -p "$T_PLANS" "$T_MOCKBIN" "$T_RESP" "$T_WIPD" \
             "$T_CFG/bin/github-issues" "$T_CFG/hooks/lib" \
             "$T_CFG/skills/workflow-init/scripts"
-        # #1899: the driver's META route resolves repository identity from the
-        # checkout's `origin` remote (no `gh repo view`, no hardcoded fallback),
-        # so the case CWD must be a git repo carrying a github.com origin that
-        # matches the gh mock's myorg/myrepo answers. core.hooksPath is disabled
-        # per rules/test/fixture-isolation.md.
+        # #1899: repo identity resolves from origin (not `gh repo view`), so
+        # CWD must be a git repo with a github.com origin matching the gh
+        # mock's myorg/myrepo. core.hooksPath disabled per fixture-isolation.md.
         git -C "$T_CASE" init -q >/dev/null 2>&1
         git -C "$T_CASE" config core.hooksPath /dev/null >/dev/null 2>&1
         git -C "$T_CASE" remote add origin "https://github.com/myorg/myrepo.git" >/dev/null 2>&1

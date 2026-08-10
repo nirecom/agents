@@ -207,12 +207,12 @@ case "$ARGS" in
   auth\ status*)
     echo "Token scopes: 'project', 'repo'"; exit 0 ;;
   repo\ view\ *--json\ owner,name*|repo\ view\ *)
-    echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+    echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *projectsV2*)
     # resolve-project.sh Query A — 1 linked project resolving to PVT_resolved.
     case "$ARGS" in
       *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"mock-owner"}\n'; exit 0 ;;
     esac
     ;;
   api\ graphql\ *projectItems*)
@@ -234,9 +234,9 @@ case "$ARGS" in
   project\ item-edit\ *)
     exit 0 ;;
   issue\ view\ *--json\ url*)
-    echo "${GH_MOCK_ISSUE_URL:-https://github.com/nirecom/agents/issues/42}"; exit 0 ;;
+    echo "${GH_MOCK_ISSUE_URL:-https://github.com/mock-owner/mock-repo/issues/42}"; exit 0 ;;
   issue\ view\ *)
-    echo "${GH_MOCK_ISSUE_URL:-https://github.com/nirecom/agents/issues/42}"; exit 0 ;;
+    echo "${GH_MOCK_ISSUE_URL:-https://github.com/mock-owner/mock-repo/issues/42}"; exit 0 ;;
   *)
     echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
 esac

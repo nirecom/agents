@@ -91,11 +91,10 @@ teardown_case() {
 }
 
 # --- git fixture (#1899) -----------------------------------------------------
-# The driver runs with cwd=$CASE_DIR. Repository identity is now derived from
-# that checkout's ORIGIN remote instead of `gh repo view`, so every case needs a
-# real git repo underneath it. Origin deliberately names a DIFFERENT repo than
-# the gh mock's `repo view` answer (mockorg/mockrepo) — that divergence is what
-# makes an accidental fallback to the API path visible.
+# Repo identity is derived from the checkout's ORIGIN remote, not `gh repo view`,
+# so every case needs a real git repo. Origin deliberately names a DIFFERENT repo
+# than the mock's `repo view` answer (mockorg/mockrepo), so an accidental
+# fallback to the API path is visible.
 CASE_ORIGIN_URL="https://github.com/originorg/originrepo.git"
 CASE_ORIGIN_OWNER_REPO="originorg/originrepo"
 

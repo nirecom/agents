@@ -4,40 +4,29 @@
 # Tags: worker-dispatch, issue-close-stage, origin-resolution, fail-closed, secret-redaction, security, table-driven, stub-seam, TL2, scope:issue-specific
 #
 # Issue #1899 — the issue-close-stage worker decides WHICH repository Phase 1
-# mutates. It used to ask `gh repo view --json nameWithOwner`, which answers from
-# the API and, on a fork carrying both `origin` and `upstream`, can answer with
-# the upstream repository. Steps D/F/G (sentinel comment, parent-body PATCH,
-# close) would then land on a repository the caller never named while the caller
-# reads `phase1_done` about the one it meant. The fix replaces that probe with a
-# local `git remote get-url origin` read, parsed by hooks/lib/parse-remote-url.js.
+# mutates. It used to ask `gh repo view --json nameWithOwner`, which on a fork
+# carrying both `origin` and `upstream` can answer with the upstream repository,
+# so Steps D/F/G land on the wrong repo while the caller reads `phase1_done` for
+# the one it meant. The fix replaces that probe with a local
+# `git remote get-url origin` read, parsed by hooks/lib/parse-remote-url.js.
 #
-# What THIS file adds on top of tests/feature-1673-issue-close-stage-behavior.sh:
-# that suite cans the probe to AGREE with the payload, so it measures the happy
-# path and the redaction of a well-formed token-bearing URL. It never drives the
-# guard itself. The guard is the entire security value of #1899, and its
-# defining property is negative — when the probe cannot produce a trustworthy
-# owner/repo, the stage chain must NOT run. A guard that merely reports `error`
-# while still spawning the chain would pass every status assertion and still
-# execute Phase 1 against the wrong repository.
+# tests/feature-1673-issue-close-stage-behavior.sh cans the probe to AGREE with
+# the payload (happy path + redaction only) and never drives the guard itself.
+# The guard's value is negative: when the probe can't produce a trustworthy
+# owner/repo, the chain must NOT run — reporting `error` while still spawning it
+# would pass every status assertion. So every BLOCK case here asserts the
+# CHILD-PROCESS COUNT (1 = only the probe ran), not just the status token.
 #
-# Every BLOCK case therefore asserts the CHILD-PROCESS COUNT: exactly one child
-# (the probe) and no second child (the chain). That is the observable form of
-# "no side effect reached GitHub", and it is the assertion that cannot be
-# satisfied by an accidentally-correct status token.
+# Group D is the secret half: an HTTPS origin can carry an access token in its
+# userinfo. On probe FAILURE the credential can reach an error message
+# (`parsed.message`, or git's stderr) rendered into both the dispatcher's
+# `summary` and the on-disk artifact — both surfaces are asserted absent-of-token.
+# Credentials are FAKE placeholders (`ghp_EXAMPLEEXAMPLE`, under
+# bin/scan-outbound.sh's token-pattern length), same as
+# tests/fix-1899-parse-remote-url/redaction.sh.
 #
-# Group D is the secret half. #1899 turned the probe's OUTPUT into a remote URL,
-# and an HTTPS origin can carry an access token in its userinfo. The behaviour
-# suite covers the SUCCESS path (a parsable token-bearing URL). The failure paths
-# are the riskier ones and were uncovered: on those the credential reaches an
-# ERROR MESSAGE — `parsed.message` carries the offending URL, and git's stderr is
-# pushed into the same log — and that message is rendered into the dispatcher's
-# `summary` line as well as the on-disk artifact. Both surfaces are asserted.
-# Credentials here are FAKE placeholders (`ghp_EXAMPLEEXAMPLE`, 16 chars after
-# the prefix, well under the 36 bin/scan-outbound.sh's token pattern needs), the
-# same placeholder tests/fix-1899-parse-remote-url/redaction.sh uses.
-#
-# TL2: the real dispatcher, the real payload/capability walls, the real worker
-# and the real parse-remote-url.js run; only the child-process seam is canned
+# TL2: real dispatcher, payload/capability walls, worker, and parse-remote-url.js
+# run; only the child-process seam is canned
 # (tests/feature-1643-worker-dispatch-lib/spawn-stub.js).
 # TL3 gap (what this does NOT catch): no real fork checkout with two remotes and
 # no real `git` binary produce the probe output here, so a real git whose

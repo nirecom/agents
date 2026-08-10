@@ -71,7 +71,7 @@ case "$ARGS" in
         echo "error: gh repo view failed (no remote)" >&2
         exit 1
     fi
-    echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"
+    echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"
     exit 0
     ;;
   api\ graphql\ *projectsV2*)
@@ -80,7 +80,7 @@ case "$ARGS" in
         exit 1
     fi
     NODE_COUNT="${GH_MOCK_PROJECTS_NODE_COUNT:-1}"
-    PROJ_OWNER="${GH_MOCK_PROJECT_OWNER:-nirecom}"
+    PROJ_OWNER="${GH_MOCK_PROJECT_OWNER:-mock-owner}"
     PROJ_NUM="${GH_MOCK_PROJECT_NUM:-1}"
     PROJ_ID="${GH_MOCK_PROJECT_ID:-PVT_mock123}"
     case "$ARGS" in
@@ -181,19 +181,11 @@ teardown_mock() {
 
 # Helper: run resolver in a subshell and capture state via env-export round-trip.
 # ---------------------------------------------------------------------------
-# Git fixture (#1899)
-#
-# resolve-project.sh derives owner/repo from the checkout it runs in. That used
-# to mean `gh repo view` — an API call that reports the UPSTREAM repository on a
-# fork carrying both `origin` and `upstream`. It now reads `origin` only, so the
-# resolver must run inside a real git repo rather than in the live worktree
-# (which would resolve the developer's actual origin and leak real identity into
-# assertions).
-#
-# The fixture's origin mirrors GH_MOCK_OWNER_REPO by default, so every existing
-# case keeps its knob. Set FIXTURE_ORIGIN_URL to diverge from the gh mock
-# deliberately — that divergence is what discriminates origin-based resolution
-# from API-based resolution.
+# Git fixture (#1899): resolve-project.sh now derives owner/repo from `origin`
+# only (not `gh repo view`, which can report `upstream` on a fork), so tests
+# run inside a real git repo rather than the live worktree. Fixture origin
+# mirrors GH_MOCK_OWNER_REPO by default; set FIXTURE_ORIGIN_URL to diverge
+# deliberately and prove origin (not the gh mock) drove resolution.
 # ---------------------------------------------------------------------------
 _init_repo_fixture() {
     REPO_FIXTURE="$TMP/repo"
@@ -221,7 +213,7 @@ run_resolver() {
             : # no origin remote — the "repo identity unresolvable" fixture
         else
             git -C "$REPO_FIXTURE" remote add origin \
-                "https://github.com/${GH_MOCK_OWNER_REPO:-nirecom/agents}.git"
+                "https://github.com/${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}.git"
         fi
         git -C "$REPO_FIXTURE" remote remove upstream 2>/dev/null || true
         if [ -n "${FIXTURE_UPSTREAM_URL:-}" ]; then

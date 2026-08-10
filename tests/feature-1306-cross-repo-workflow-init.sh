@@ -10,10 +10,9 @@
 # (per-issue routing), and clarify-intent SKILL.md CI-3b (cross-repo
 # detection SSOT).
 #
-# Layer: TL2 (broad integration with mock-gh / argument-recording stubs).
-# Tests against not-yet-created source files use SKIP guards.
-# Tests against existing files (board-card.sh, clarify-commit-scope.sh, etc.)
-# check current state and assert future contract via SKIP where not yet implemented.
+# Layer: TL2 (mock-gh / argument-recording stubs). Tests against
+# not-yet-created source files SKIP; tests against existing files assert the
+# future contract via SKIP where not yet implemented.
 #
 # TL3 gap (what this test does NOT catch):
 # - Real `gh` calls against live GitHub repos with cross-repo issues.
@@ -391,11 +390,8 @@ fi
 
 # ===========================================================================
 # T11: board-card.sh resolve_owner_repo — origin-only resolution (#1899).
-#
-# `gh repo view` asks the API which repository a checkout belongs to, and on a
-# fork carrying both `origin` and `upstream` it can answer `upstream`. Every
-# board-card write then lands on the wrong repository. resolve_owner_repo must
-# delegate to the shared origin resolver instead.
+# `gh repo view` can answer `upstream` on a fork, misdirecting board writes;
+# resolve_owner_repo must delegate to the shared origin resolver instead.
 # ===========================================================================
 if [ ! -f "$BOARD_CARD_LIB" ]; then
     skip "T11: board-card.sh not found"
@@ -416,10 +412,8 @@ fi
 
 # ===========================================================================
 # T11b: origin-vs-upstream regression pin (#1899) — runtime, not static.
-#
-# A fixture with BOTH remotes pointing at different repositories, plus a `gh`
-# stub that answers with the upstream identity. resolve_owner_repo must return
-# the ORIGIN repository. This is the exact shape of the reported defect.
+# Fixture has BOTH remotes on different repos, `gh` stub answers upstream;
+# resolve_owner_repo must return ORIGIN — the exact shape of the reported bug.
 # ===========================================================================
 if [ ! -f "$BOARD_CARD_LIB" ]; then
     skip "T11b: board-card.sh not found"

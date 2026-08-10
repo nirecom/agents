@@ -56,11 +56,9 @@ setup_case() {
     GH_LOG="$CASE_DIR/gh-calls.log"
     mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
-    # #1899: the driver's META route resolves repository identity from the
-    # checkout's `origin` remote (no `gh repo view`, no hardcoded fallback), so
-    # the case CWD must be a git repo carrying a github.com origin that matches
-    # the gh mock's mockorg/mockrepo answers. core.hooksPath is disabled per
-    # rules/test/fixture-isolation.md.
+    # #1899: repo identity resolves from origin (not `gh repo view`), so CWD
+    # must be a git repo with a github.com origin matching the gh mock's
+    # mockorg/mockrepo. core.hooksPath disabled per rules/test/fixture-isolation.md.
     git -C "$CASE_DIR" init -q >/dev/null 2>&1
     git -C "$CASE_DIR" config core.hooksPath /dev/null >/dev/null 2>&1
     git -C "$CASE_DIR" remote add origin "https://github.com/mockorg/mockrepo.git" >/dev/null 2>&1

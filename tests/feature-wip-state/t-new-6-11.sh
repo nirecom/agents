@@ -76,12 +76,12 @@ case "$ARGS" in
     echo "CLOSED"
     exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *projectsV2*)
     # resolve-project.sh Query A — resolve to a valid project node.
     case "$ARGS" in
       *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"mock-owner"}\n'; exit 0 ;;
     esac
     ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
@@ -129,7 +129,7 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) echo "OPEN"; exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *) exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
@@ -165,7 +165,7 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) exit 1 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *) exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
@@ -200,11 +200,11 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) echo "CLOSED"; exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *projectsV2*)
     case "$ARGS" in
       *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"mock-owner"}\n'; exit 0 ;;
     esac
     ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;

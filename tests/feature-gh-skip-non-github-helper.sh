@@ -129,25 +129,14 @@ assert_exit "ssh_prefix_notgithub"       "r13" "git""@notgithub.com:owner/repo.g
 assert_exit "no_remote_configured"       "r14" ""                                         2
 
 # ---------------------------------------------------------------------------
-# `--url <value>` mode (#1899)
+# `--url <value>` mode (#1899): lets a caller that already parsed a remote URL
+# classify those same bytes instead of re-reading `git remote get-url origin`
+# (two independent reads could diverge). origin-repo.sh is the first consumer.
 #
-# Why the mode exists: a caller that both PARSES a remote URL (for owner/repo)
-# and CLASSIFIES it (for the host) must not read `git remote get-url origin`
-# twice. Two independent reads can diverge — a credential helper, an `insteadOf`
-# rewrite, or an interleaved `git remote set-url` between them — and the
-# owner/repo the caller then hands to `gh api repos/<owner>/<repo>` under the
-# user's token would be one this classifier never approved. `--url` takes the
-# bytes the caller already holds, making parsed and classified provably
-# identical. bin/github-issues/lib/origin-repo.sh is the first consumer.
-#
-# Two claims are asserted below, and they are separate concerns:
-#   (a) PARITY — for the same URL, `--url` returns exactly what directory mode
-#       returns. The rows are the URL/rc pairs from the table above, so a future
-#       change to the host rules cannot land in one mode only (CPR-ORTH).
-#   (b) NO GIT READ — `--url` classifies the argument and nothing else. Running
-#       it inside a repo whose real origin classifies the OTHER way is what makes
-#       that observable; a residual `git remote get-url origin` would answer with
-#       the repo's URL and flip the rc.
+# Two separate claims:
+#   (a) PARITY — same URL, `--url` matches directory mode (rows reused, CPR-ORTH).
+#   (b) NO GIT READ — classifies only the argument; proven by running inside a
+#       repo whose real origin classifies the OTHER way.
 # ---------------------------------------------------------------------------
 
 # run_helper_url <dir-to-run-from> <arg...> -> prints exit code

@@ -37,7 +37,7 @@ R_NUM=$(get_field "$OUT" RESOLVED_PROJECT_NUM)
 R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
 R_FIELD=$(get_field "$OUT" RESOLVED_CONTENT_DATE_FIELD_ID)
 if [ "$RC" = "0" ] \
-   && [ "$R_OWNER" = "nirecom" ] \
+   && [ "$R_OWNER" = "mock-owner" ] \
    && [ "$R_NUM" = "1" ] \
    && [ "$R_ID" = "PVT_mock123" ] \
    && [ "$R_FIELD" = "PVTF_mock_content_date" ]; then
@@ -168,13 +168,9 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-ssh-remote: an SCP-form origin URL is parsed locally (#1899)
-#
-# Previously this asserted that gh's own SSH-URL parsing was consumed. Repo
-# identity now comes from `git remote get-url origin`, so the SCP form must be
-# parsed by us. FIXTURE_ORIGIN_URL sets the real remote; GH_MOCK_OWNER_REPO is
-# left at its default so the gh mock would answer something DIFFERENT — the
-# cache key proves which source won.
+# T-ssh-remote: an SCP-form origin URL is parsed locally, not by gh (#1899).
+# FIXTURE_ORIGIN_URL sets the real remote; GH_MOCK_OWNER_REPO stays at its
+# default (different value) so the cache key proves which source won.
 # ===========================================================================
 setup_mock
 export FIXTURE_ORIGIN_URL="git@github.com:ssh-org/ssh-repo.git"
@@ -192,12 +188,8 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-origin-vs-upstream: #1899 regression pin at the resolve-project layer
-#
-# A fork carrying both remotes. `gh repo view` would report the upstream repo;
-# the cache key must show the ORIGIN repo. The gh mock is left answering the
-# default (nirecom/agents), so a key of anything other than fork-org/fork-repo
-# means the resolver did not read origin.
+# T-origin-vs-upstream: #1899 regression pin. Fork carrying both remotes —
+# `gh repo view` would report upstream; the cache key must show origin.
 # ===========================================================================
 setup_mock
 export FIXTURE_ORIGIN_URL="https://github.com/fork-org/fork-repo.git"
@@ -220,15 +212,10 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-no-remote: no origin remote → return 1 + warn, and NO gh call (#1899)
-#
-# GH_MOCK_REPO_VIEW_FAIL=1 now also removes the fixture's origin remote (see
-# _lib.sh), so this covers the real failure source rather than a gh error.
-#
-# rc=1 alone does not prove the resolver bailed at the right moment: it would
-# also hold if the resolver queried GraphQL first and failed afterwards. Repo
-# identity is unresolvable here, so any owner it could send to the API is one it
-# invented — the run must cost zero API calls. Same GRAPHQL_CALLED probe as T5.
+# T-no-remote: no origin remote → return 1 + warn, and NO gh call (#1899).
+# GH_MOCK_REPO_VIEW_FAIL=1 also removes the fixture's origin remote (_lib.sh).
+# rc=1 alone doesn't prove it bailed early, not after a failed GraphQL call —
+# zero API calls is the real assertion (same GRAPHQL_CALLED probe as T5).
 # ===========================================================================
 setup_mock
 export GH_MOCK_REPO_VIEW_FAIL=1
@@ -245,10 +232,9 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-non-github-origin: origin on another forge → return 1, no gh call (#1899)
-#
-# The sibling of T-no-remote: origin parses but names a host whose repos this
-# resolver has no business addressing, so the same "zero API calls" bound holds.
+# T-non-github-origin: origin on another forge → return 1, no gh call (#1899).
+# Sibling of T-no-remote: origin parses but names a host this resolver has no
+# business addressing — same "zero API calls" bound.
 # ===========================================================================
 setup_mock
 export FIXTURE_ORIGIN_URL="https://gitlab.com/some-org/some-repo.git"

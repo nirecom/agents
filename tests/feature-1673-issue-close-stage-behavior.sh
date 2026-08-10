@@ -131,21 +131,17 @@ CALLLOG="$TMPD/calls.jsonl"
 
 # set_chain <stdout> [exit-status] — written via node so no escaping is needed.
 #
-# The chain spawn is the SECOND child, not the first: the worker resolves the
-# repository the validated worktree actually belongs to before it will run the
-# chain, and refuses when the payload's `owner_repo` names somewhere else.
+# The chain spawn is the SECOND child: the worker first resolves the repo the
+# validated worktree belongs to and refuses if payload `owner_repo` differs.
+# #1899: that probe is now `git remote get-url origin` (a local read) instead
+# of `gh repo view --json nameWithOwner` (which can answer `upstream` on a
+# fork), so the canned rule returns an origin URL, not an owner/repo pair. The
+# probe here reports the same repo the payload claims, exercising the chain
+# path; the mismatch path is covered in feature-1673-issue-close-stage-schema.sh.
 #
-# #1899: that probe used to be `gh repo view --json nameWithOwner`, which asks
-# the API and can answer with `upstream` on a fork. It is now
-# `git remote get-url origin` — a local, single-remote read — so the canned rule
-# matches the git argv and returns an origin URL rather than an owner/repo pair.
-# The probe is canned here to report the same repo the payload claims, so these
-# cases exercise the chain path; the mismatch path has its own coverage in
-# tests/feature-1673-issue-close-stage-schema.sh.
-#
-# write_canned <origin-url> <chain-stdout> [chain-exit-status] — the origin URL is
-# a parameter because the probe's OUTPUT is itself a test input (see the
-# credential group below); set_chain pins it to the ordinary credential-free form.
+# write_canned <origin-url> <chain-stdout> [chain-exit-status] — origin URL is a
+# parameter because the probe's OUTPUT is itself a test input (see the
+# credential group below); set_chain pins it to the credential-free form.
 write_canned() {
     node -e '
 const fs = require("fs");
@@ -324,19 +320,16 @@ group_spawn_seam() {
 # ===========================================================================
 # Group B2 — a token-bearing origin URL must not land in the on-disk log
 #
-# #1899 made the repo probe `git remote get-url origin`, so the probe's OUTPUT is
-# now a remote URL — and an HTTPS origin can carry an access token in its
-# userinfo (https://x-access-token:<token>@github.com/owner/repo.git). That
-# output is pushed into `log`, and writeLog persists `log` to a file the calling
-# skill reads back, so a raw push writes the credential to disk. resolveCurrentRepo
-# therefore routes both stdout and stderr through redactUserinfo first.
+# #1899 made the repo probe `git remote get-url origin`, whose output can carry
+# an access token in HTTPS userinfo (https://x-access-token:<token>@github.com/
+# owner/repo.git). That output is persisted to a log file the calling skill
+# reads back, so resolveCurrentRepo routes stdout/stderr through
+# redactUserinfo first. Assertion is on the FILE, not dispatcher stdout (which
+# carries only the status triple and would hide an unredacted entry).
 #
-# The assertion is on the FILE, not on dispatcher stdout: stdout carries only the
-# status triple, so an unredacted `log` entry is invisible there.
-#
-# The credential below is a FAKE placeholder — 16 chars after `ghp_`, well under
-# the 36 bin/scan-outbound.sh's github-token pattern needs, so it cannot read as
-# live. Same placeholder as tests/fix-1899-parse-remote-url/redaction.sh.
+# The credential below is a FAKE placeholder — 16 chars after `ghp_`, under the
+# 36 bin/scan-outbound.sh's github-token pattern needs. Same placeholder as
+# tests/fix-1899-parse-remote-url/redaction.sh.
 # ===========================================================================
 group_origin_credential_redaction() {
     impl_ready "redact/setup" || return

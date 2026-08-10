@@ -33,7 +33,7 @@ setup_mock
 CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'nirecom/agents\tcached-owner\t99\tPVT_cached\tPVTF_cached_field\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
+printf 'mock-owner/mock-repo\tcached-owner\t99\tPVT_cached\tPVTF_cached_field\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/t7-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -56,22 +56,19 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T7b: cache lookup with a "." in the key (regex metachar safety)
-# Updated for #1340: 10-column rows so schema guard accepts them as cache hits.
-# Updated for #1899: the "." lives in the REPO half only. A GitHub login cannot
-# contain a dot, and origin-repo.sh now enforces that charset, so an owner like
-# "nire.com" is rejected at resolution time and never reaches the cache lookup.
-# The repo half accepts [A-Za-z0-9._-], so the dot still exercises the intent:
-# the decoy row differs from the real key at exactly the metacharacter position,
-# and only a fixed-string (not regex) match can pick the correct row.
+# T7b: cache lookup with a "." in the key (regex metachar safety).
+# 10-column rows (#1340). The "." lives in the REPO half only — #1899's
+# origin-repo.sh rejects dotted owners before the cache lookup, since GitHub
+# logins can't contain one. The decoy row differs at exactly that
+# metacharacter position, so only a fixed-string match picks the right row.
 # ===========================================================================
 setup_mock
-export GH_MOCK_OWNER_REPO="nirecom/my.repo"
+export GH_MOCK_OWNER_REPO="mock-owner/my.repo"
 CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'nirecom/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
-printf 'nirecom/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\n' >> "$CACHE_FILE"
+printf 'mock-owner/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
+printf 'mock-owner/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\n' >> "$CACHE_FILE"
 STDERR_FILE="$TMP/t7b-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -95,7 +92,7 @@ setup_mock
 CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'nirecom/agents\tstale-owner\t100\tPVT_stale\tPVTF_stale\n' > "$CACHE_FILE"
+printf 'mock-owner/mock-repo\tstale-owner\t100\tPVT_stale\tPVTF_stale\n' > "$CACHE_FILE"
 rm -f "$CACHE_FILE"
 export GH_MOCK_PROJECT_ID="PVT_first_call"
 run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '/dev/null'" >/dev/null
@@ -103,7 +100,7 @@ export GH_MOCK_PROJECT_ID="PVT_second_call"
 rm -f "$CACHE_FILE"
 run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '/dev/null'" >/dev/null
 if [ -f "$CACHE_FILE" ]; then
-    ROW_COUNT=$(awk -F'\t' '$1=="nirecom/agents"' "$CACHE_FILE" | wc -l | tr -d ' ')
+    ROW_COUNT=$(awk -F'\t' '$1=="mock-owner/mock-repo"' "$CACHE_FILE" | wc -l | tr -d ' ')
     HAS_NEW=0
     grep -q "PVT_second_call" "$CACHE_FILE" 2>/dev/null && HAS_NEW=1
     HAS_OLD=0
@@ -125,7 +122,7 @@ setup_mock
 CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'nirecom/agents\tincomplete\n' > "$CACHE_FILE"
+printf 'mock-owner/mock-repo\tincomplete\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/t7d-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -153,7 +150,7 @@ STDERR_FILE="$TMP/t8-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
 if [ "$RC" = "0" ] && [ -f "$CACHE_FILE" ]; then
-    ROW=$(awk -F'\t' '$1=="nirecom/agents"' "$CACHE_FILE" | head -1)
+    ROW=$(awk -F'\t' '$1=="mock-owner/mock-repo"' "$CACHE_FILE" | head -1)
     COL_COUNT=$(printf '%s' "$ROW" | awk -F'\t' '{print NF}')
     COL1=$(printf '%s' "$ROW" | cut -f1)
     COL2=$(printf '%s' "$ROW" | cut -f2)
@@ -161,8 +158,8 @@ if [ "$RC" = "0" ] && [ -f "$CACHE_FILE" ]; then
     COL4=$(printf '%s' "$ROW" | cut -f4)
     COL5=$(printf '%s' "$ROW" | cut -f5)
     if [ "$COL_COUNT" = "10" ] \
-       && [ "$COL1" = "nirecom/agents" ] \
-       && [ "$COL2" = "nirecom" ] \
+       && [ "$COL1" = "mock-owner/mock-repo" ] \
+       && [ "$COL2" = "mock-owner" ] \
        && [ "$COL3" = "1" ] \
        && [ "$COL4" = "PVT_mock123" ] \
        && [ "$COL5" = "PVTF_mock_content_date" ]; then
@@ -187,7 +184,7 @@ rm -f "$CACHE_FILE"
 export GH_MOCK_PROJECT_NUM=20
 export GH_MOCK_PROJECT_ID="PVT_v2"
 run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '/dev/null'" >/dev/null
-ROW_COUNT=$(awk -F'\t' '$1=="nirecom/agents"' "$CACHE_FILE" 2>/dev/null | wc -l | tr -d ' ')
+ROW_COUNT=$(awk -F'\t' '$1=="mock-owner/mock-repo"' "$CACHE_FILE" 2>/dev/null | wc -l | tr -d ' ')
 HAS_V2=0
 grep -q "PVT_v2" "$CACHE_FILE" 2>/dev/null && HAS_V2=1
 if [ "$ROW_COUNT" = "1" ] && [ "$HAS_V2" = "1" ]; then

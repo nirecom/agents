@@ -1,22 +1,15 @@
 #!/bin/bash
 # tests/fix-1899-origin-repo-resolver/_lib.sh — shared scaffolding
 #
-# Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
-# run standalone. Provides the scaffolding common to all split files:
-#   - AGENTS_DIR + ORIGIN_LIB / BOARD_CARD_LIB / PRE_FLIGHT target paths
-#   - PASS / FAIL counters and pass / fail / assert_eq helpers
-#   - run_with_timeout wrapper
-#   - isolated TMP sandbox (HOME / CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR)
-#   - mk_repo git-fixture factory and the call_resolver harness
-#   - finish() — prints "Results: N passed, M failed" and exits
+# Sourced by each split file so they also run standalone. Provides: path
+# constants, pass/fail/assert_eq helpers, run_with_timeout, an isolated TMP
+# sandbox, the mk_repo/call_resolver fixture harness, and finish().
 #
 # Tests: bin/github-issues/lib/origin-repo.sh, bin/github-issues/lib/board-card.sh, skills/issue-close-finalize/scripts/pre-flight.sh
 # Tags: origin-resolution, github-issues, board-card, pre-flight, table-driven, security, path-traversal, authority-anchoring, TL2, scope:issue-specific
 #
-# NOT a test file: no # Tests:/# Tags: frontmatter; excluded from the
-# dispatcher's SPLIT_GROUPS.
-#
-# Idempotent — guarded so multiple sources do not redefine state.
+# NOT a test file (no frontmatter in first 10 lines; excluded from
+# dispatcher's SPLIT_GROUPS). Idempotent — guarded against re-sourcing.
 
 if [ -n "${_FIX1899_ORIGIN_LIB_SOURCED:-}" ]; then
     return 0

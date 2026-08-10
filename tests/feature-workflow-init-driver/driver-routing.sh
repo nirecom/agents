@@ -5,11 +5,8 @@
 #
 # R1-R11 — routing branch tests (TDD red phase: driver not yet implemented).
 #
-# L3 gap (what this test does NOT catch):
-# - A real `claude -p` session driving the workflow-init SKILL.md driver loop
-#   (ACTION= dispatch, AskUserQuestion rendering, --resume re-invocation).
-# - Real gh calls (issue view / sub_issues endpoint / Projects v2) on live GitHub.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# L3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
+# --resume) or live gh calls. Mitigated at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
