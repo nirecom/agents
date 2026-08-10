@@ -82,6 +82,20 @@ const REPLACEMENT_SENTINEL = {
 // their stdout and side effects stay byte-identical to today.
 const DECLARING_GATES = ["sentinel", "advance"];
 
+// Steps whose OUTCOME axis a settled declaration also settles (#1665 / R4).
+//
+// WHY (CPR-WPH): `run_tests` carries a second axis, `run_outcome`, written by the
+// PostToolUse hook from what it observed. Settling the STATUS without settling
+// the OUTCOME leaves the two axes describing different runs — a `skipped` step
+// keeping an older `run_outcome: "fail"` masks every downstream step forever.
+//
+// CPR-UNV: the general rule ("every sentinel/CLI-sourced status is `declared`")
+// is the truer one, but it changes the audit semantics of every step and is out
+// of scope for #1665. The exception is isolated behind this named constant
+// rather than spread through the branch below; generalising it is a separate
+// issue.
+const DECLARED_OUTCOME_STEPS = ["run_tests"];
+
 // ---- helpers ---------------------------------------------------------------
 
 // `kind` lets a caller that owns its own user-facing wording (the sentinel
@@ -292,6 +306,8 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   }
   // A forward operation settles a step by definition, and in_progress settles
   // nothing. Deliberately stricter than the MARK_STEP sentinel path.
+  // Example of that asymmetry (#1665): write_code reaches in_progress only via
+  // the MARK_STEP sentinel /write-code emits, never via --advance.
   if (isAdvance && status === "in_progress") {
     return fail(1, "record-step-verdict: --status in_progress is not a forward operation.");
   }
@@ -370,8 +386,26 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   if (typeof skipReason === "string" && skipReason !== "") extraFields.skip_reason = skipReason;
   if (opts.skipJudgment) extraFields.skip_judgment = opts.skipJudgment;
 
+  // A SETTLED transition settles the outcome too; an UNSETTLED one leaves it
+  // strictly alone: `pending` / `in_progress` carrying `run_outcome: "fail"` is
+  // the very evidence the re-open rests on, and RNT-9's
+  // WORKFLOW_MARK_STEP_run_tests_pending is a status-only idempotent
+  // re-affirmation that must not erase what the hook observed.
+  let declaredOutcome = false;
+  if (DECLARED_OUTCOME_STEPS.indexOf(step) !== -1) {
+    if (status === "complete") {
+      // A claim, not a measurement — hence the pinned `declared` provenance,
+      // which stays inside GENUINE_PROVENANCE so completion audits are unchanged.
+      extraFields.run_outcome = "pass";
+      declaredOutcome = true;
+    } else if (status === "skipped") {
+      extraFields.run_outcome = null;  // tombstone: no run, so no outcome
+    }
+  }
+
   const writeOpts = {};
   if (typeof opts.provenance === "string") writeOpts.provenance = opts.provenance;
+  if (declaredOutcome) writeOpts.provenance = "declared";
   if (typeof opts.origin === "string") writeOpts.origin = opts.origin;
 
   try {

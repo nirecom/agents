@@ -61,18 +61,31 @@ console.log("has_token=" + ("token" in e) + " wsid=" + e.wsid + " token_events_i
     assert_eq "N3/null-deletes" "has_token=false wsid=w1 token_events_in_stream=2" "$NODE_OUT"
 fi
 
-echo "== N4: step_annotations_cleared drops all prior annotations, keeps the status =="
+echo "== N4: step_annotations_cleared drops all prior annotations, keeps status + causal axis =="
 if run_case "N4/annotations-cleared"; then
+    # The clear branch REBUILDS the entry from scratch rather than deleting keys, so every
+    # piece of projection metadata has to be re-listed there by hand. #1665 adds a third one
+    # (updated_seq, the causal-order axis the write_code resume cascade compares against) —
+    # dropping it would silently erase that axis on every annotation clear, WORKFLOW_RESET_FROM
+    # included. The key set is compared strictly so an omission cannot pass, and the value is
+    # compared to the pre-clear reading so "preserved" means preserved, not "re-defaulted to
+    # null". seq_finite_before pins that the pre-clear value was a real number, otherwise
+    # undefined === undefined would false-green the preservation check.
     next_sid
     nodejs "$SID" "$PRE"'
 const E = require("./hooks/workflow-state/state-io/events");
 S.markStep(sid, "review_tests", "complete", { token: "t1", wsid: "w1", warnings_summary: "2 findings" });
+const before = cur().steps.review_tests.updated_seq;
 E.appendEvents(sid, [{ kind: "step_annotations_cleared", step: "review_tests",
                        provenance: "declared", origin: "test" }]);
 const e = cur().steps.review_tests;
-console.log("keys=" + Object.keys(e).sort().join(",") + " status=" + e.status);
+console.log("keys=" + Object.keys(e).sort().join(",") + " status=" + e.status +
+            " seq_finite_before=" + Number.isFinite(before) +
+            " seq_preserved=" + (e.updated_seq === before));
 '
-    assert_eq "N4/annotations-cleared" "keys=status,updated_at status=complete" "$NODE_OUT"
+    assert_eq "N4/annotations-cleared" \
+        "keys=status,updated_at,updated_seq status=complete seq_finite_before=true seq_preserved=true" \
+        "$NODE_OUT"
 fi
 
 echo "== N5: annotations after a clear are kept (the clear is not sticky) =="

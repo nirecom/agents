@@ -338,9 +338,14 @@ if run_case "X11/malformed-stream-not-trusted"; then
     #   unchanged=true         — readState is a READ. It must not rewrite the file it
     #                            just found to be corrupt.
     #
-    # CURRENTLY RED for most variants — live defect: projectState() never inspects `seq`
-    # or `provenance` at all and assigns `steps[step].status = e.status` verbatim, so the
-    # fold reports a trusted `complete` from a tampered stream.
+    # GREEN for every variant, and the reason matters: the guarantee does NOT come from
+    # projectState(). The fold still assigns `steps[step].status = e.status` verbatim and
+    # still never branches on `e.seq` or `e.provenance` — it never sees a tampered stream,
+    # because readState() runs assertStreamIntegrity() first (contiguous 1-based seq, valid
+    # provenance, valid status) and returns null when it throws. So the tamper check lives
+    # one layer up, and a refactor that folds without that gate would fail this case.
+    # (#1665 does not move that boundary: the `updated_seq` it projects is the fold POSITION
+    # `i + 1`, deliberately not `e.seq` — batch events carry no seq at fold time.)
     for VARIANT in missing_seq duplicate_seq out_of_order invalid_status invalid_provenance missing_provenance; do
         next_sid
         nodejs_env "VARIANT=$VARIANT" "$SID" "$PRE"'

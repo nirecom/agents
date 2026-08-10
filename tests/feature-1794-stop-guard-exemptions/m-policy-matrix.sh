@@ -2,6 +2,8 @@
 # cross-checked against each consumer's actual implementation. The matrix is
 # declarative-only, so nothing enforces it at runtime — these cases ARE the
 # enforcement. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# Tests: hooks/lib/stop-exemption-policy.js, hooks/stop-premature-stop-guard.js
+# Tags: stop-hook, exemption-matrix, regression-1794, scope:issue-specific, pwsh-not-required, TL1
 
 # ---------------------------------------------------------------------------
 # M1-a: the matrix key set and the C4_EXEMPTIONS id list are identical, in the
@@ -15,7 +17,7 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-const expected = ['workflow-off','next-step-paused','pre-workflow-init','background-work','delegated-reason'];
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','write-code-in-flight','delegated-reason'];
 const problems = [];
 if (matrix.join(',') !== table.join(',')) {
   problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
@@ -62,8 +64,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 # M1-c: the nextStep column is checked against the REAL bin/workflow/next-step
 #       for every marker-backed primitive. nextStep:true must quiet next-step
 #       (ACTION=paused); nextStep:false must leave it recommending a step.
-#       `pre-workflow-init` and `delegated-reason` have no session marker and
-#       are covered by M1-d instead.
+#       `pre-workflow-init`, `write-code-in-flight` and `delegated-reason` have
+#       no session marker: the first two are decided from session state and are
+#       covered by M1-d / M1-e, the third only from next-step's own output.
 #
 #       Every observation is positively anchored, so a broken setup cannot
 #       masquerade as a nextStep:false row:
@@ -78,11 +81,10 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 # ---------------------------------------------------------------------------
 run_M1c() {
     local tmp tn id suffix want reason got failures="" base_out
-    for id in workflow-off next-step-paused background-work; do
+    for id in workflow-off next-step-paused; do
         case "$id" in
             workflow-off)     suffix="workflow-off";     reason="workflow-off-quiet" ;;
             next-step-paused) suffix="next-step-paused"; reason="next-step-paused" ;;
-            background-work)  suffix="background-work";  reason="background-work-in-flight" ;;
         esac
         want=$("$RWT" 15 node -e "
 process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].nextStep));" 2>/dev/null)
@@ -102,11 +104,7 @@ process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].next
             continue
         fi
 
-        if [ "$suffix" = "background-work" ]; then
-            write_bg_marker "$tmp" "m1csid" "3600000"
-        else
-            : > "$tmp/m1csid.$suffix"
-        fi
+        : > "$tmp/m1csid.$suffix"
         # precondition: the marker really is on disk. Without this, a silently
         # failed seed would look exactly like a legitimate nextStep:false row.
         if [ ! -f "$tmp/m1csid.$suffix" ]; then
@@ -156,7 +154,7 @@ run_M1d() {
 const g = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const byId = Object.fromEntries(g.C4_EXEMPTIONS.map((e) => [e.id, e]));
 const problems = [];
-const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','background-work'];
+const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','write-code-in-flight'];
 for (const id of sessionRows) {
   if (!byId[id] || byId[id].phase !== 'session') problems.push(id + ':phase');
 }
@@ -179,6 +177,50 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
+# M1-e (#1665): the row that replaced `background-work`. It is state-derived,
+#       not marker-backed, so it needs its own driver: seed write_code at
+#       `in_progress` and read both columns off the REAL consumers.
+#         - c4:true      -> the real C4 hook exits silently
+#         - nextStep:false -> next-step keeps recommending a step (ACTION=invoke
+#           with a non-empty NEXT_SKILL), the deliberate difference from the
+#           removed row, whose nextStep column was true
+#       The control run (same session, write_code NOT in_progress) must block,
+#       so the observed silence is attributable to the in-flight status alone.
+# ---------------------------------------------------------------------------
+run_M1e() {
+    local tmp tn want problems=""
+    want=$("$RWT" 15 node -e "
+process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['write-code-in-flight'].nextStep));" 2>/dev/null)
+    [ "$want" = "false" ] || problems="$problems [matrix nextStep column is '${want:-<err>}', expected false]"
+
+    tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
+    seed_started "$tn" "m1esid"
+    # control: no in-flight write_code -> C4 must block
+    run_c4 "$tn" "m1esid"
+    [ "$C4_RC" -eq 2 ] || problems="$problems [control: C4 did not block without an in-flight write_code (rc=$C4_RC)]"
+
+    seed_write_code_in_flight "$tn" "m1esid"
+    run_c4 "$tn" "m1esid"
+    { [ "$C4_RC" -eq 0 ] && [ -z "$C4_OUT" ]; } ||
+        problems="$problems [c4:true broken — expected silent exit 0 (rc=$C4_RC, out=$C4_OUT)]"
+
+    run_next_step "$tn" "m1esid"
+    echo "$NS_OUT" | grep -q '^ACTION=paused$' &&
+        problems="$problems [nextStep:false broken — next-step went quiet: $(echo "$NS_OUT" | tr '\n' ' ')]"
+    echo "$NS_OUT" | grep -q '^ACTION=invoke$' ||
+        problems="$problems [expected ACTION=invoke, got $(echo "$NS_OUT" | tr '\n' ' ')]"
+    echo "$NS_OUT" | grep -qE '^NEXT_SKILL=.+$' ||
+        problems="$problems [ACTION=invoke with an empty NEXT_SKILL]"
+    rm -rf "$tmp" 2>/dev/null || true
+
+    if [ -z "$problems" ]; then
+        pass "M1-e: write-code-in-flight is c4:true / nextStep:false against the real hook and the real next-step"
+    else
+        fail "M1-e: write-code-in-flight columns diverge from the consumers;$problems"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # M2: firstExemption() semantics — phase filtering, first-match-wins order, and
 #     the fail-CLOSED throw contract (a throwing predicate is NOT exempt; its id
 #     lands in `degraded` and evaluation continues to the next row).
@@ -190,7 +232,7 @@ const { firstExemption } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-
 const problems = [];
 const none = {
   isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,
-  isBackgroundWorkInFlight: () => false,
+  isWriteCodeInFlight: () => false,
 };
 // nothing holds -> null, and a session-phase hit is invisible to the other phase
 if (firstExemption('session', { sid: 's' }, none) !== null) problems.push('empty-not-null');
@@ -200,15 +242,15 @@ if (firstExemption('next-step-output', { sid: 's', reason: 'pre_final_report_gat
 if (firstExemption('session', { sid: 's', reason: 'pre_final_report_gate' }, none) !== null) {
   problems.push('phase-leak-in');
 }
-// first-match-wins: workflow-off precedes background-work in the table
-const both = Object.assign({}, none, { isWorkflowOff: () => true, isBackgroundWorkInFlight: () => true });
+// first-match-wins: workflow-off precedes write-code-in-flight in the table
+const both = Object.assign({}, none, { isWorkflowOff: () => true, isWriteCodeInFlight: () => true });
 if (firstExemption('session', { sid: 's' }, both) !== 'workflow-off') problems.push('order');
 // a throwing predicate is not exempt; it is recorded as degraded and the scan continues
 const boom = Object.assign({}, none, {
-  isWorkflowOff: () => { throw new Error('boom'); }, isBackgroundWorkInFlight: () => true,
+  isWorkflowOff: () => { throw new Error('boom'); }, isWriteCodeInFlight: () => true,
 });
 const degraded = [];
-if (firstExemption('session', { sid: 's' }, boom, degraded) !== 'background-work') problems.push('throw-halts-scan');
+if (firstExemption('session', { sid: 's' }, boom, degraded) !== 'write-code-in-flight') problems.push('throw-halts-scan');
 if (degraded.join(',') !== 'workflow-off') problems.push('degraded=' + degraded.join(','));
 // a throwing predicate on its own never yields an exemption
 const onlyBoom = Object.assign({}, none, { isWorkflowOff: () => { throw new Error('boom'); } });
@@ -221,8 +263,10 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
     fi
 }
 
-# _m3_c2_with_marker <sid> <marker-suffix|none> — seed a started session with the
-# C2 scheduled-review alert armed, drop the named marker, run the real C2 hook.
+# _m3_c2_with_marker <sid> <marker-suffix|none|write-code-in-flight> — seed a
+# started session with the C2 scheduled-review alert armed, arm the named
+# exemption, run the real C2 hook. `write-code-in-flight` is state-derived
+# (#1665) and has no marker file, so it is armed through the state store.
 _m3_c2_with_marker() {
     local sid="$1" suffix="$2" tmp tn
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
@@ -230,7 +274,7 @@ _m3_c2_with_marker() {
     seed_sup_armed "$tn" "$sid"
     case "$suffix" in
         none) : ;;
-        background-work) write_bg_marker "$tmp" "$sid" "3600000" ;;
+        write-code-in-flight) seed_write_code_in_flight "$tn" "$sid" ;;
         *) : > "$tmp/$sid.$suffix" ;;
     esac
     run_c2 "$tn" "$sid"
@@ -238,25 +282,25 @@ _m3_c2_with_marker() {
 }
 
 # ---------------------------------------------------------------------------
-# M3-a: the C4-only marker primitive (background-work, c2:false) must NOT reach
-#       into C2: with the marker present and the
-#       scheduled-review alert armed, C2 still blocks, exactly as with no marker.
-#       `delegated-reason` (also c2:false) has no session marker and is
-#       unreachable from C2 by construction — it lives in the next-step-output
-#       phase, and C2 never runs next-step.
+# M3-a: the C4-only primitive (write-code-in-flight, c2:false) must NOT reach
+#       into C2: with write_code in flight and the scheduled-review alert armed,
+#       C2 still blocks, exactly as with nothing armed.
+#       `delegated-reason` (also c2:false) is unreachable from C2 by
+#       construction — it lives in the next-step-output phase, and C2 never
+#       runs next-step.
 # ---------------------------------------------------------------------------
 run_M3a() {
     local suffix failures=""
-    for suffix in none background-work; do
+    for suffix in none write-code-in-flight; do
         _m3_c2_with_marker "m3a-$suffix" "$suffix"
         if [ "$C2_RC" -ne 2 ] || ! echo "$C2_OUT" | grep -q '"decision":"block"'; then
             failures="$failures [$suffix: rc=$C2_RC]"
         fi
     done
     if [ -z "$failures" ]; then
-        pass "M3-a: c2:false holds for background-work — C2 still blocks with the marker present"
+        pass "M3-a: c2:false holds for write-code-in-flight — C2 still blocks while write_code is in flight"
     else
-        fail "M3-a: a C4-only marker suppressed C2;$failures"
+        fail "M3-a: a C4-only exemption suppressed C2;$failures"
     fi
 }
 

@@ -74,7 +74,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
   // fail-open: a marker-read failure just means the normal (noisy) verdict.
   try {
-    const { isNextStepPaused, isWorkflowOff, isBackgroundWorkInFlight } = require("../../../../hooks/lib/session-markers");
+    const { isNextStepPaused, isWorkflowOff } = require("../../../../hooks/lib/session-markers");
     if (isNextStepPaused(sid)) {
       emit(
         "paused",
@@ -93,16 +93,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
           "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
           "(a next-step resume sentinel does NOT clear workflow-OFF)",
         "workflow-off-quiet"
-      );
-      return;
-    }
-    if (isBackgroundWorkInFlight(sid)) {
-      emit(
-        "paused",
-        "",
-        "background work is in flight for this session. Take no new workflow action; wait for it " +
-          "to complete. End with: echo \"<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>\"",
-        "background-work-in-flight"
       );
       return;
     }
@@ -315,6 +305,31 @@ function computeVerdict(rawSid, _didAutoRepair) {
           "",
           "review_tests is complete but write_tests is not. Recovery: node " + ENTRYPOINT_PATH +
             " --reset review_tests (state is session-global; no worktree cd needed). Then re-run /write-tests.",
+          "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+        );
+        return;
+      }
+      if (step === "run_tests" && currentStep === "write_code") {
+        // Scoped recovery: a session that started before write_code existed
+        // (#1665) has no write_code key, so the projection defaults it to
+        // pending while run_tests is already complete. That is a migration
+        // artifact, not contamination — the generic reset hint would destroy a
+        // healthy session. The step leaves no on-disk artifact, so the MARK_STEP
+        // sentinel is the recovery.
+        //
+        // Since the v3 schema version (state-io/migrations/v2-to-v3.js) the
+        // MIGRATION cause no longer reaches here: a pre-write_code file is
+        // raised to v3 on read and the step is backfilled complete. This branch
+        // is kept for the residual, genuine inconsistency — write_code recorded
+        // pending on purpose (RESET_FROM, a manual --reset) while run_tests
+        // stands complete — which is still a state worth aborting on.
+        // No single quotes — emit() wraps NEXT_HINT/REASON in single quotes.
+        emit(
+          "abort",
+          "",
+          "run_tests is complete but write_code is not. This session predates the write_code step. " +
+            "Recovery: echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\" (state is session-global; no worktree cd needed). " +
+            "Then re-run next-step.",
           "inconsistent: " + step + " is complete but " + currentStep + " is pending"
         );
         return;

@@ -59,9 +59,9 @@ console.log("A:DONE");
 
     nodejs "$SID_1" "$PRE"'
 S.markStep(sid, "review_security", "complete", { marker: "from-B" });
-console.log("B:" + (rd().version === 2 ? "v2" : "v" + rd().version));
+console.log("B:" + (rd().version === 3 ? "v3" : "v" + rd().version));
 '
-    assert_eq "M1/B-migrated-and-appended" "B:v2" "$NODE_OUT"
+    assert_eq "M1/B-migrated-and-appended" "B:v3" "$NODE_OUT"
     : > "$TMPROOT/bar-b"
     wait "$A_PID" || true
     A_OUT="$(cat "$TMPROOT/m1-a.out")"
@@ -75,7 +75,7 @@ console.log("version=" + st.version +
             " B_event_present=" + marker +
             " review_security=" + cur().steps.review_security.status);
 '
-    assert_eq "M1/no-clobber" "version=2 B_event_present=true review_security=complete" "$NODE_OUT"
+    assert_eq "M1/no-clobber" "version=3 B_event_present=true review_security=complete" "$NODE_OUT"
 fi
 
 echo "== M2: reverse order (A persists first, then B appends) is equally lossless =="
@@ -92,7 +92,7 @@ const st = rd();
 console.log("after_persist=v" + v + " version=" + st.version +
             " B_event_present=" + st.events.some((e) => e.key === "marker"));
 '
-    assert_eq "M2/persist-then-append" "after_persist=v2 version=2 B_event_present=true" "$NODE_OUT"
+    assert_eq "M2/persist-then-append" "after_persist=v3 version=3 B_event_present=true" "$NODE_OUT"
 fi
 
 echo "== M3: migration is deterministic — both orderings agree on the migrated prefix =="

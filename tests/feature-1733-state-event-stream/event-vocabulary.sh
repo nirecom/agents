@@ -196,8 +196,8 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     nodejs "$SID" "$PRE$VOCAB_JS"'
 const bad = [];
-const want = ["invalidate_reason", "reset_reason", "skip_judgment", "skip_reason", "skip_verdict",
-  "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
+const want = ["invalidate_reason", "reset_reason", "run_outcome", "skip_judgment", "skip_reason",
+  "skip_verdict", "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
 want.forEach((k) => {

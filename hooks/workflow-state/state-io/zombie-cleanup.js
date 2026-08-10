@@ -63,8 +63,7 @@ function cleanupZombies(maxAgeDays = 7) {
       file.endsWith(".next-step-paused") ||
       file.endsWith(".off-emergency-invoked") ||
       file.endsWith(".off-clearance") ||
-      file.endsWith(".off-clearance.claimed") ||
-      file.endsWith(".background-work")
+      file.endsWith(".off-clearance.claimed")
     ) {
       try {
         const st = fs.statSync(filePath);

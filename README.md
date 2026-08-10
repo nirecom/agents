@@ -113,7 +113,7 @@ flowchart TD
 
 Inspect the step list and current session state with `bin/workflow/next-step --list`:
 
-**WF-CODE** (standard implementation — all 15 steps active):
+**WF-CODE** (standard implementation — all 16 steps active):
 ```
  1  workflow_init       Initialize session state and GitHub issue
  2  clarify_intent      Interview and write intent.md
@@ -123,15 +123,16 @@ Inspect the step list and current session state with `bin/workflow/next-step --l
  6  branching_complete  Create feature branch and worktree
  7  write_tests         Write tests for planned changes
  8  review_tests        Review test coverage adequacy
- 9  run_tests           Run test suite and security review
-10  review_security     Adversarial security code review
-11  docs                Update docs and changelog
-12  user_verification   User verifies the implementation
-13  cleanup             Remove worktree and merge branch
-14  pre_final_report_gate  Final report and session close
+ 9  write_code          Implement the planned changes
+10  run_tests           Run test suite and security review
+11  review_security     Adversarial security code review
+12  docs                Update docs and changelog
+13  user_verification   User verifies the implementation
+14  cleanup             Remove worktree and merge branch
+15  pre_final_report_gate  Final report and session close
 ```
 
-**WF-META** (meta-label issues — planning only; steps 7–13 auto-skipped):
+**WF-META** (meta-label issues — planning only; steps 7–14 auto-skipped):
 ```
  1  workflow_init       Initialize session state and GitHub issue
  2  clarify_intent      Interview and write intent.md
@@ -141,12 +142,13 @@ Inspect the step list and current session state with `bin/workflow/next-step --l
  6  branching_complete  Create feature branch and worktree
 [-] 7  write_tests      (auto-skipped)
 [-] 8  review_tests     (auto-skipped)
-[-] 9  run_tests        (auto-skipped)
-[-]10  review_security  (auto-skipped)
-[-]11  docs             (auto-skipped)
-[-]12  user_verification  (auto-skipped)
-[-]13  cleanup          (auto-skipped)
-14  pre_final_report_gate  Final report and session close
+[-] 9  write_code       (auto-skipped)
+[-]10  run_tests        (auto-skipped)
+[-]11  review_security  (auto-skipped)
+[-]12  docs             (auto-skipped)
+[-]13  user_verification  (auto-skipped)
+[-]14  cleanup          (auto-skipped)
+15  pre_final_report_gate  Final report and session close
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically

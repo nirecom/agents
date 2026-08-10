@@ -7,9 +7,12 @@
 //   extra-json     : merged into the top-level state object (e.g. plan_approvals)
 // Prints the full state JSON to stdout.
 
+// Mirrors state-io's VALID_STEPS. #1665 inserted write_code between review_tests and
+// run_tests; a step absent here can never be overridden, so it stays pending and can
+// become the current step ahead of the step a case is aiming at.
 const VALID_STEPS = [
   "workflow_init", "clarify_intent", "research", "outline", "detail",
-  "branching_complete", "write_tests", "review_tests", "run_tests",
+  "branching_complete", "write_tests", "review_tests", "write_code", "run_tests",
   "review_security", "docs", "user_verification", "cleanup",
   "pre_final_report_gate",
 ];

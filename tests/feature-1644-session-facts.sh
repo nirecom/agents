@@ -72,7 +72,7 @@ export CLAUDE_PROJECT_DIR="$(nrm "$FIXTURE_REPO")"
 cd "$FIXTURE_REPO" || exit 1
 
 # --- fixture builders -------------------------------------------------------
-STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 
 # fixture_state <sid> "<complete steps>" <cwd> <branch> [closes_issues-json]
 # v1-shaped raw fixture (no "version"/"events") -- normalizeStateVersion
