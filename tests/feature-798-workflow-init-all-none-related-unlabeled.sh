@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/workflow-init/SKILL.md, bin/workflow/workflow-init-driver
-# Tags: workflow-init, wip-state, all-none, label-check, related-issues
+# Tags: workflow-init, wip-state, all-none, label-check, related-issues, scope:issue-specific
 # Tests for issue #589/#798 — workflow-init WI-5 ALL_NONE / FORCE_PATH_B fallback.
 #
 # WI-5 ALL_NONE previously only checked whether the *primary* issue had the
@@ -13,6 +13,14 @@
 #   - force_path_b=true is set when WIP is freshly claimed (ALL_NONE case).
 #   - WI-8/route-decision enforces FORCE_PATH_B fallback.
 #   - wip_error branch routes to ask_user (no silent warn-and-continue).
+#
+# TL3 gap (what this test does NOT catch):
+# - Whether the real GitHub label API returns intent:clarified state consistent
+#   with what wip-check/route-decision observe when checked on a live issue.
+# - Whether a genuine multi-issue `gh issue view` batch call preserves the same
+#   per-issue label ordering these mocks assume.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -104,6 +112,14 @@ setup_drv() {
     WIPD="$CASE_DIR/wip"
     mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    # #1899: the driver's META route resolves repository identity from the
+    # checkout's `origin` remote (no `gh repo view`, no hardcoded fallback), so
+    # the case CWD must be a git repo carrying a github.com origin that matches
+    # the gh mock's mockorg/mockrepo answers. core.hooksPath is disabled per
+    # rules/test/fixture-isolation.md.
+    git -C "$CASE_DIR" init -q >/dev/null 2>&1
+    git -C "$CASE_DIR" config core.hooksPath /dev/null >/dev/null 2>&1
+    git -C "$CASE_DIR" remote add origin "https://github.com/mockorg/mockrepo.git" >/dev/null 2>&1
     cat > "$MOCKBIN/gh" <<GHEOF
 #!/bin/bash
 echo "\$*" >> "$CASE_DIR/gh.log"

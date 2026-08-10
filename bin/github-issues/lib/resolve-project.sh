@@ -14,7 +14,8 @@
 #
 # Returns rc=1 on:
 #   - gh not in PATH
-#   - gh repo view failed (no remote / not a github repo)
+#   - owner/repo unresolvable from the origin remote (no origin remote, origin
+#     is not github.com, or owner/repo is not extractable from its URL)
 #   - 0 linked Projects v2 to the repo
 #   - any gh api graphql failure
 #
@@ -78,19 +79,19 @@ resolve_project_for_repo() {
         return 1
     fi
 
-    # ---- Owner/repo from git remote (via gh) ----
+    # ---- Owner/repo from the ORIGIN remote (#1899) ----
     local script_dir owner_repo
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     # shellcheck source=board-card.sh
     . "$script_dir/board-card.sh"
 
     if ! owner_repo=$(resolve_owner_repo); then
-        echo "warn: resolve-project: gh repo view failed (no remote or not a GitHub repo)" >&2
+        echo "warn: resolve-project: could not resolve owner/repo from the origin remote (missing origin, or not a github.com repo)" >&2
         return 1
     fi
     owner_repo=$(printf '%s' "$owner_repo" | tr -d '\r' | head -1)
     if [ -z "$owner_repo" ]; then
-        echo "warn: resolve-project: gh repo view returned empty owner/repo" >&2
+        echo "warn: resolve-project: origin remote resolved to an empty owner/repo" >&2
         return 1
     fi
 

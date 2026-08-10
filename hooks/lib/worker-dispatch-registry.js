@@ -356,7 +356,7 @@ const workers = {
       issue_repo: { type: "repo-ref", required: false },
     },
     binaries: {
-      external: ["bash", "gh"],
+      external: ["bash", "gh", "git"],
       scripts: {
         stageChain: { anchor: "acd", rel: "skills/issue-close-stage/scripts/run-stage-chain.sh" },
       },

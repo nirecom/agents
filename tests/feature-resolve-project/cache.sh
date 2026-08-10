@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-resolve-project/cache.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
-# Tags: workflow, github, issues, plans, bin
+# Tags: workflow, github, issues, plans, bin, scope:issue-specific
 #
 # Cache tests: hit (10-col schema), dot-in-key fixed-string match, cache update
 # replaces old row, malformed row treated as miss, cache miss writes TSV row,
@@ -56,16 +56,22 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T7b: cache lookup with owner/repo containing "." (regex metachar safety)
+# T7b: cache lookup with a "." in the key (regex metachar safety)
 # Updated for #1340: 10-column rows so schema guard accepts them as cache hits.
+# Updated for #1899: the "." lives in the REPO half only. A GitHub login cannot
+# contain a dot, and origin-repo.sh now enforces that charset, so an owner like
+# "nire.com" is rejected at resolution time and never reaches the cache lookup.
+# The repo half accepts [A-Za-z0-9._-], so the dot still exercises the intent:
+# the decoy row differs from the real key at exactly the metacharacter position,
+# and only a fixed-string (not regex) match can pick the correct row.
 # ===========================================================================
 setup_mock
-export GH_MOCK_OWNER_REPO="nire.com/my.repo"
+export GH_MOCK_OWNER_REPO="nirecom/my.repo"
 CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'nireXcom/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
-printf 'nire.com/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\n' >> "$CACHE_FILE"
+printf 'nirecom/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
+printf 'nirecom/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\n' >> "$CACHE_FILE"
 STDERR_FILE="$TMP/t7b-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -76,7 +82,7 @@ if [ "$RC" = "0" ] \
    && [ "$R_OWNER" = "correct-owner" ] \
    && [ "$R_NUM" = "5" ] \
    && [ "$R_ID" = "PVT_correct" ]; then
-    pass "T7b: cache lookup with '.' in owner/repo uses fixed-string match"
+    pass "T7b: cache lookup with '.' in the key uses fixed-string match"
 else
     fail "T7b: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi

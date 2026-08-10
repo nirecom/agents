@@ -1,30 +1,29 @@
 #!/bin/bash
-# Tests: bin/parse-issue-tokens, hooks/lib/parse-closes-issues.js
-#        skills/workflow-init/scripts/filter-init-candidates.sh (cross-repo tokens),
-#        bin/github-issues/lib/board-card.sh (resolve_owner_repo BOARD_CARD_REPO_OVERRIDE),
-#        bin/github-issues/wip-state.sh (--repo arg),
-#        bin/workflow/workflow-init-driver (wip-check / closed-detection phases),
-#        skills/workflow-init/scripts/path-a-label-and-board.sh (--repo arg),
-#        bin/github-issues/clarify-commit-scope.sh (per-issue routing),
-#        skills/clarify-intent/SKILL.md CI-3b (cross-repo detection SSOT)
+# Tests: bin/parse-issue-tokens, hooks/lib/parse-closes-issues.js, skills/workflow-init/scripts/filter-init-candidates.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/wip-state.sh, bin/workflow/workflow-init-driver, skills/workflow-init/scripts/path-a-label-and-board.sh, bin/github-issues/clarify-commit-scope.sh, skills/clarify-intent/SKILL.md
 # Tags: workflow-init, cross-repo, parse-issue-tokens, board-card, clarify-intent, scope:issue-specific
 #
-# Feature 1306 — cross-repo issue routing for workflow-init.
+# Feature 1306 — cross-repo issue routing for workflow-init. Covers
+# filter-init-candidates.sh (cross-repo tokens), board-card.sh
+# (resolve_owner_repo / BOARD_CARD_REPO_OVERRIDE), wip-state.sh (--repo arg),
+# workflow-init-driver (wip-check / closed-detection phases),
+# path-a-label-and-board.sh (--repo arg), clarify-commit-scope.sh
+# (per-issue routing), and clarify-intent SKILL.md CI-3b (cross-repo
+# detection SSOT).
 #
-# Layer: L2 (broad integration with mock-gh / argument-recording stubs).
+# Layer: TL2 (broad integration with mock-gh / argument-recording stubs).
 # Tests against not-yet-created source files use SKIP guards.
 # Tests against existing files (board-card.sh, clarify-commit-scope.sh, etc.)
 # check current state and assert future contract via SKIP where not yet implemented.
 #
-# L3 gap:
+# TL3 gap (what this test does NOT catch):
 # - Real `gh` calls against live GitHub repos with cross-repo issues.
 # - Real worktree switching between sibling repos (agents + dotfiles).
 # - Real `wip-state.sh set` propagating BOARD_CARD_REPO_OVERRIDE through to the
 #   Projects v2 GraphQL query in a live environment.
 # - CI-3b AskUserQuestion flow collecting sibling worktree paths from the user
 #   in a full `claude -p` E2E session.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -391,19 +390,63 @@ else
 fi
 
 # ===========================================================================
-# T11: board-card.sh resolve_owner_repo — current behavior: calls gh repo view
-#       (CWD-based). Static check: function exists and uses gh repo view.
+# T11: board-card.sh resolve_owner_repo — origin-only resolution (#1899).
+#
+# `gh repo view` asks the API which repository a checkout belongs to, and on a
+# fork carrying both `origin` and `upstream` it can answer `upstream`. Every
+# board-card write then lands on the wrong repository. resolve_owner_repo must
+# delegate to the shared origin resolver instead.
 # ===========================================================================
 if [ ! -f "$BOARD_CARD_LIB" ]; then
     skip "T11: board-card.sh not found"
 else
     HAS_FUNC=$(grep -c 'resolve_owner_repo' "$BOARD_CARD_LIB" 2>/dev/null; true)
     HAS_GH=$(grep -c 'gh repo view' "$BOARD_CARD_LIB" 2>/dev/null; true)
-    if [ "$HAS_FUNC" -gt 0 ] && [ "$HAS_GH" -gt 0 ]; then
-        pass "T11: resolve_owner_repo() exists and calls 'gh repo view' (CWD-based path)"
+    HAS_ORIGIN=$(grep -c 'resolve_origin_owner_repo\|origin-repo.sh' "$BOARD_CARD_LIB" 2>/dev/null; true)
+    if [ "$HAS_FUNC" -eq 0 ]; then
+        fail "T11: resolve_owner_repo() missing from board-card.sh"
+    elif [ "$HAS_GH" -gt 0 ]; then
+        fail "T11: resolve_owner_repo() still calls 'gh repo view' ($HAS_GH occurrence(s)) — must resolve from origin"
+    elif [ "$HAS_ORIGIN" -eq 0 ]; then
+        fail "T11: resolve_owner_repo() does not delegate to the shared origin resolver"
     else
-        fail "T11: resolve_owner_repo() or 'gh repo view' missing (func=$HAS_FUNC gh=$HAS_GH)"
+        pass "T11: resolve_owner_repo() delegates to the origin-only resolver"
     fi
+fi
+
+# ===========================================================================
+# T11b: origin-vs-upstream regression pin (#1899) — runtime, not static.
+#
+# A fixture with BOTH remotes pointing at different repositories, plus a `gh`
+# stub that answers with the upstream identity. resolve_owner_repo must return
+# the ORIGIN repository. This is the exact shape of the reported defect.
+# ===========================================================================
+if [ ! -f "$BOARD_CARD_LIB" ]; then
+    skip "T11b: board-card.sh not found"
+else
+    TMP_T11B="$(mktemp -d 2>/dev/null || mktemp -d -t bct11b)"
+    git -C "$TMP_T11B" init -q 2>/dev/null
+    # MANDATORY per rules/test/fixture-isolation.md.
+    git -C "$TMP_T11B" config core.hooksPath /dev/null
+    git -C "$TMP_T11B" config user.email "fixture@example.com"
+    git -C "$TMP_T11B" config user.name "Fixture"
+    git -C "$TMP_T11B" remote add origin "https://github.com/fork-owner/fork-repo.git"
+    git -C "$TMP_T11B" remote add upstream "https://github.com/upstream-owner/upstream-repo.git"
+    mkdir -p "$TMP_T11B/stubbin"
+    printf '#!/bin/bash\nif [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ]; then echo "upstream-owner/upstream-repo"; exit 0; fi\nexit 0\n' \
+        > "$TMP_T11B/stubbin/gh"
+    chmod +x "$TMP_T11B/stubbin/gh"
+    OUT_T11B=$(PATH="$TMP_T11B/stubbin:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+        run_with_timeout 20 bash -c '
+            set -u
+            cd "$2" || exit 92
+            unset BOARD_CARD_REPO_OVERRIDE
+            . "$1"
+            resolve_owner_repo
+        ' _ "$BOARD_CARD_LIB" "$TMP_T11B" 2>/dev/null)
+    assert_eq "T11b: origin wins over upstream in resolve_owner_repo" \
+        "fork-owner/fork-repo" "$OUT_T11B"
+    rm -rf "$TMP_T11B" 2>/dev/null
 fi
 
 # ===========================================================================

@@ -1,4 +1,9 @@
 
+# tests/feature-wip-state/t-1082.sh — split test-case fragment, NOT a test file
+# on its own; sourced by tests/feature-wip-state.sh.
+# Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
+
 # ===========================================================================
 # T-1082-1: set <N> with CLAUDE_CODE_SESSION_ID set → uses own-sid, ignores JSONL.
 # Concurrent-session fix (#1082): CLAUDE_CODE_SESSION_ID has higher priority than
@@ -11,8 +16,10 @@ unset CLAUDE_ENV_FILE
 unset CLAUDE_SESSION_ID
 export CLAUDE_CODE_SESSION_ID="own-sid-1082"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-1082"
+# #1899: repo identity resolves from the origin remote, so the run CWD must be
+# a git repo with a github.com origin (no WORKTREE_NOTES.md — SID isolation).
 FAKE_CWD="$TMP/fake-cwd-1082"
-mkdir -p "$FAKE_CWD"
+make_origin_fixture "$FAKE_CWD"
 ENCODED_CWD=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD"
 # Foreign session JSONL is newer — would have won the old JSONL-only path.
@@ -46,8 +53,9 @@ export CLAUDE_CODE_SESSION_ID="own-sid-1082-check"
 EXPECTED_FP=$(printf '%s:%s' "own-sid-1082-check" "42" | sha256sum | cut -c1-8)
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-1082-check"
+# #1899: git repo + github.com origin so repo resolution succeeds from this CWD.
 FAKE_CWD="$TMP/fake-cwd-1082-check"
-mkdir -p "$FAKE_CWD"
+make_origin_fixture "$FAKE_CWD"
 ENCODED_CWD=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/foreign-sid-check.jsonl"

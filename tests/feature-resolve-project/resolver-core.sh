@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-resolve-project/resolver-core.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
-# Tags: workflow, github, issues, plans, bin
+# Tags: workflow, github, issues, plans, bin, scope:issue-specific
 #
 # Core resolver tests: single-project resolution, 0-project, multi-project,
 # no Content Date field, short-circuit via _ISSUE_CREATE_INTERNAL_*, pagination,
@@ -168,10 +168,16 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-ssh-remote: gh repo view returns org/repo (gh internally parses SSH URL)
+# T-ssh-remote: an SCP-form origin URL is parsed locally (#1899)
+#
+# Previously this asserted that gh's own SSH-URL parsing was consumed. Repo
+# identity now comes from `git remote get-url origin`, so the SCP form must be
+# parsed by us. FIXTURE_ORIGIN_URL sets the real remote; GH_MOCK_OWNER_REPO is
+# left at its default so the gh mock would answer something DIFFERENT — the
+# cache key proves which source won.
 # ===========================================================================
 setup_mock
-export GH_MOCK_OWNER_REPO="ssh-org/ssh-repo"
+export FIXTURE_ORIGIN_URL="git@github.com:ssh-org/ssh-repo.git"
 STDERR_FILE="$TMP/t-ssh-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -179,24 +185,82 @@ CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
 HAS_KEY=0
 [ -f "$CACHE_FILE" ] && grep -q "^ssh-org/ssh-repo" "$CACHE_FILE" 2>/dev/null && HAS_KEY=1
 if [ "$RC" = "0" ] && [ "$HAS_KEY" = "1" ]; then
-    pass "T-ssh-remote: owner/repo from gh repo view consumed correctly (ssh-org/ssh-repo)"
+    pass "T-ssh-remote: SCP-form origin URL parsed to ssh-org/ssh-repo"
 else
     fail "T-ssh-remote: rc=$RC has_key=$HAS_KEY cache=$(cat "$CACHE_FILE" 2>/dev/null)"
 fi
 teardown_mock
 
 # ===========================================================================
-# T-no-remote: gh repo view fails → return 1
+# T-origin-vs-upstream: #1899 regression pin at the resolve-project layer
+#
+# A fork carrying both remotes. `gh repo view` would report the upstream repo;
+# the cache key must show the ORIGIN repo. The gh mock is left answering the
+# default (nirecom/agents), so a key of anything other than fork-org/fork-repo
+# means the resolver did not read origin.
+# ===========================================================================
+setup_mock
+export FIXTURE_ORIGIN_URL="https://github.com/fork-org/fork-repo.git"
+export FIXTURE_UPSTREAM_URL="https://github.com/upstream-org/upstream-repo.git"
+STDERR_FILE="$TMP/t-origin-upstream-stderr.log"
+OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+RC=$(get_field "$OUT" RC)
+CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+CACHE_TXT="$(cat "$CACHE_FILE" 2>/dev/null)"
+if [ "$RC" = "0" ] && printf '%s' "$CACHE_TXT" | grep -q "^fork-org/fork-repo"; then
+    pass "T-origin-vs-upstream: cache keyed on origin, not upstream"
+else
+    fail "T-origin-vs-upstream: rc=$RC cache=$CACHE_TXT (expected key fork-org/fork-repo)"
+fi
+if printf '%s' "$CACHE_TXT" | grep -q "upstream-org/upstream-repo"; then
+    fail "T-origin-vs-upstream: upstream repo leaked into the resolve cache"
+else
+    pass "T-origin-vs-upstream: upstream repo never used as the cache key"
+fi
+teardown_mock
+
+# ===========================================================================
+# T-no-remote: no origin remote → return 1 + warn, and NO gh call (#1899)
+#
+# GH_MOCK_REPO_VIEW_FAIL=1 now also removes the fixture's origin remote (see
+# _lib.sh), so this covers the real failure source rather than a gh error.
+#
+# rc=1 alone does not prove the resolver bailed at the right moment: it would
+# also hold if the resolver queried GraphQL first and failed afterwards. Repo
+# identity is unresolvable here, so any owner it could send to the API is one it
+# invented — the run must cost zero API calls. Same GRAPHQL_CALLED probe as T5.
 # ===========================================================================
 setup_mock
 export GH_MOCK_REPO_VIEW_FAIL=1
 STDERR_FILE="$TMP/t-no-remote-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-if [ "$RC" = "1" ] && [ -s "$STDERR_FILE" ]; then
-    pass "T-no-remote: gh repo view fails → return 1 + warn"
+GRAPHQL_CALLED=0
+grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
+if [ "$RC" = "1" ] && [ -s "$STDERR_FILE" ] && [ "$GRAPHQL_CALLED" -eq 0 ]; then
+    pass "T-no-remote: no origin remote → return 1 + warn, no graphql"
 else
-    fail "T-no-remote: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "T-no-remote: rc=$RC graphql_called=$GRAPHQL_CALLED stderr=$(cat "$STDERR_FILE" 2>/dev/null) log=$(cat "$MOCK_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# T-non-github-origin: origin on another forge → return 1, no gh call (#1899)
+#
+# The sibling of T-no-remote: origin parses but names a host whose repos this
+# resolver has no business addressing, so the same "zero API calls" bound holds.
+# ===========================================================================
+setup_mock
+export FIXTURE_ORIGIN_URL="https://gitlab.com/some-org/some-repo.git"
+STDERR_FILE="$TMP/t-nongithub-stderr.log"
+OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+RC=$(get_field "$OUT" RC)
+GRAPHQL_CALLED=0
+grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
+if [ "$RC" = "1" ] && [ -s "$STDERR_FILE" ] && [ "$GRAPHQL_CALLED" -eq 0 ]; then
+    pass "T-non-github-origin: non-github origin → return 1 + warn, no graphql"
+else
+    fail "T-non-github-origin: rc=$RC graphql_called=$GRAPHQL_CALLED stderr=$(cat "$STDERR_FILE" 2>/dev/null) log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
 teardown_mock
 

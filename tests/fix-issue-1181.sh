@@ -66,13 +66,17 @@ else
 fi
 
 # ===========================================================================
-# T4: SKILL.md or route-decision.js contains OWNER_REPO resolution
+# T4: SKILL.md or route-decision.js contains owner/repo resolution.
+# #1899 replaced the `gh repo view --json nameWithOwner` lookup (which can name
+# `upstream` on a fork) with an origin-remote resolver, so `nameWithOwner` is no
+# longer the marker — accept either spelling, but require that some owner/repo
+# resolution is still present.
 # ===========================================================================
-if grep -qE "(nameWithOwner|OWNER_REPO|owner_repo)" "$ROUTE_DECISION_JS" 2>/dev/null || \
+if grep -qE "(nameWithOwner|OWNER_REPO|owner_repo|ownerRepo|resolveOwnerRepoFromOrigin|parseOriginOwnerRepo)" "$ROUTE_DECISION_JS" 2>/dev/null || \
    grep -qE "(nameWithOwner|OWNER_REPO)" "$WORKFLOW_INIT_SKILL"; then
-    pass "T4: OWNER_REPO resolution present in route-decision.js or SKILL.md"
+    pass "T4: owner/repo resolution present in route-decision.js or SKILL.md"
 else
-    fail "T4: OWNER_REPO resolution missing from both route-decision.js and SKILL.md"
+    fail "T4: owner/repo resolution missing from both route-decision.js and SKILL.md"
 fi
 
 # ===========================================================================
@@ -144,6 +148,14 @@ else
         mkdir -p "$T_PLANS" "$T_MOCKBIN" "$T_RESP" "$T_WIPD" \
             "$T_CFG/bin/github-issues" "$T_CFG/hooks/lib" \
             "$T_CFG/skills/workflow-init/scripts"
+        # #1899: the driver's META route resolves repository identity from the
+        # checkout's `origin` remote (no `gh repo view`, no hardcoded fallback),
+        # so the case CWD must be a git repo carrying a github.com origin that
+        # matches the gh mock's myorg/myrepo answers. core.hooksPath is disabled
+        # per rules/test/fixture-isolation.md.
+        git -C "$T_CASE" init -q >/dev/null 2>&1
+        git -C "$T_CASE" config core.hooksPath /dev/null >/dev/null 2>&1
+        git -C "$T_CASE" remote add origin "https://github.com/myorg/myrepo.git" >/dev/null 2>&1
         cat > "$T_MOCKBIN/gh" <<GHEOF
 #!/bin/bash
 echo "\$*" >> "$T_CASE/gh.log"

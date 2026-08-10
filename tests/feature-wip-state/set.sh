@@ -1,4 +1,9 @@
 
+# tests/feature-wip-state/set.sh — split test-case fragment, NOT a test file
+# on its own; sourced by tests/feature-wip-state.sh.
+# Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
+
 # ===========================================================================
 # Test 1: set <N> calls gh project item-edit with --single-select-option-id $WIP_STATE_IN_PROGRESS_OPTION_ID
 # ===========================================================================
@@ -77,13 +82,18 @@ teardown_mock
 # #1251: resolution goes through the script-relative bridge, which also tries
 # CLAUDE_CODE_SESSION_ID (P2), WORKTREE_NOTES.md (P6 — the worktree root HAS
 # one), and the JSONL scan (P7). Fully isolate all SID sources: unset env SIDs,
-# empty transcript base, and run from a non-git temp CWD.
+# empty transcript base, and run from a throwaway temp CWD that carries NO
+# WORKTREE_NOTES.md.
+# #1899: the CWD must nevertheless be a git repo with a github.com origin —
+# repo identity now comes from the origin remote, so a bare non-git dir would
+# fail during repo resolution before the session-id check is ever reached.
 # ===========================================================================
 setup_mock
 echo "" > "$CLAUDE_ENV_FILE"  # no CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/empty-transcripts"
-mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR" "$TMP/nongit-cwd"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+make_origin_fixture "$TMP/nongit-cwd"
 (cd "$TMP/nongit-cwd" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1)
 RC=$?
 unset CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true

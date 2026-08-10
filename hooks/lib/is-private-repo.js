@@ -2,38 +2,16 @@
 // Returns true if repo is private, false otherwise (fail-open on any error)
 
 const { execSync, spawnSync } = require("child_process");
-const path = require("path");
 const { parseGitCArg } = require("./parse-git-args");
-
-// Normalize path for shell commands (Windows backslashes → forward slashes)
-function shellPath(p) {
-  return p.split(path.sep).join("/");
-}
+const { extractHost, extractRepoId, parseOriginOwnerRepo } = require("./parse-remote-url");
 
 // Extract repo directory from a git command string (supports git -C <path>)
 function extractRepoDirFromCommand(command) {
   return parseGitCArg(command);
 }
 
-// Extract hostname from a git remote URL
-// Supports: git@host:path, https://host/path, ssh://user@host:port/path
-function extractHost(remoteUrl) {
-  if (!remoteUrl) return null;
-  // ssh://user@host:port/path or https://host/path
-  const urlMatch = remoteUrl.match(/^(?:ssh|https?):\/\/(?:[^@]+@)?([^/:]+)/);
-  if (urlMatch) return urlMatch[1];
-  // git@host:path (SCP-style)
-  const scpMatch = remoteUrl.match(/^[^@]+@([^:]+):/);
-  if (scpMatch) return scpMatch[1];
-  return null;
-}
-
-// Get owner/repo identifier from a git remote URL
-// Supports SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git)
-function extractRepoId(remoteUrl) {
-  const match = remoteUrl.match(/[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
-  return match ? match[1] : null;
-}
+// extractHost / extractRepoId now live in ./parse-remote-url.js (#1899) and are
+// re-exported below so existing callers of this module keep working.
 
 // Check if a repo is private using gh CLI
 // repoDir: path to the git repository
@@ -42,22 +20,31 @@ function isPrivateRepo(repoDir) {
   if (!repoDir) return false;
 
   try {
-    const remoteUrl = execSync(`git -C "${shellPath(repoDir)}" remote get-url origin`, {
+    // SECURITY: repoDir passed as array element — never shell-interpolated.
+    // Quoting it inside a shell string would still leave `$(...)`/backticks in
+    // the path live on POSIX shells, executing attacker-chosen commands.
+    const remote = spawnSync("git", ["-C", repoDir, "remote", "get-url", "origin"], {
       encoding: "utf8",
       timeout: 5000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
+    });
+    // Same contract as the previous execSync: a failed git → fail-open (false).
+    if (remote.error || remote.status !== 0) return false;
+    const remoteUrl = (remote.stdout || "").trim();
 
     if (!remoteUrl) return false;
 
-    const host = extractHost(remoteUrl);
-    // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private
-    if (host && host !== "github.com") return true;
+    // Host and repo id come from ONE parse of the same URL: a separately
+    // extracted repo id can name a repository the host check never validated,
+    // and `gh api repos/<that>` would then answer about an unrelated repo.
+    const parsed = parseOriginOwnerRepo(remoteUrl);
+    if (!parsed.ok) {
+      // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private, as before.
+      // Every other failure code (empty-url, unparsable-host, unparsable-owner-repo)
+      // fails open: there is no validated repo identity to ask gh about.
+      return parsed.code === "non-github-host";
+    }
 
-    const repoId = extractRepoId(remoteUrl);
-    if (!repoId) return false;
-
-    const result = execSync(`gh api repos/${repoId} --jq .private`, {
+    const result = execSync(`gh api repos/${parsed.ownerRepo} --jq .private`, {
       encoding: "utf8",
       timeout: 10000,
       stdio: ["pipe", "pipe", "pipe"],
