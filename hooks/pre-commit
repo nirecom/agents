@@ -53,6 +53,23 @@ _session_marker_off() {
     ' 2>/dev/null
 }
 
+# Repo-identity probe: does the repo rooted at $1 share the agents repo's git
+# common dir? A linked worktree of the agents repo therefore counts as the same
+# repo, while a foreign repo routed here by a global core.hooksPath does not.
+# Absolute paths are compared, so a relative spelling, a symlink or a case
+# difference cannot decide identity. rc=0 -> same repo; rc!=0 -> different.
+_is_agents_session_repo() {
+    _isr_repo_top="$1"
+    [ -n "$_isr_repo_top" ] || return 1
+    _isr_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _isr_agents_common="$(git -C "$_isr_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
+    _isr_repo_common="$(git -C "$_isr_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
+    [ -n "$_isr_agents_common" ] && [ -n "$_isr_repo_common" ] || return 1
+    _isr_agents_abs="$(cd "$_isr_cfg_dir" 2>/dev/null && cd "$_isr_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_isr_agents_common")"
+    _isr_repo_abs="$(cd "$_isr_repo_top" 2>/dev/null && cd "$_isr_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_isr_repo_common")"
+    [ "$_isr_agents_abs" = "$_isr_repo_abs" ]
+}
+
 if _is_enforce_worktree_on; then
     # ENFORCE_WORKTREE_EXCLUDE: unified path-coverage check via a committed Node
     # helper. Exit 0 → all staged files covered → skip the enforcement gate below.
@@ -237,15 +254,8 @@ _pe_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]; then
     _pe_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
     _pe_is_agents_repo=0
-    _pe_agents_common="$(git -C "$_pe_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
-    _pe_repo_common="$(git -C "$_pe_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
-    # Resolve to absolute paths before comparing (relative paths, symlinks, case).
-    if [ -n "$_pe_agents_common" ] && [ -n "$_pe_repo_common" ]; then
-        _pe_agents_abs="$(cd "$_pe_cfg_dir" 2>/dev/null && cd "$_pe_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_pe_agents_common")"
-        _pe_repo_abs="$(cd "$_pe_repo_top" 2>/dev/null && cd "$_pe_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_pe_repo_common")"
-        if [ "$_pe_agents_abs" = "$_pe_repo_abs" ]; then
-            _pe_is_agents_repo=1
-        fi
+    if _is_agents_session_repo "$_pe_repo_top"; then
+        _pe_is_agents_repo=1
     fi
 
     if [ "$_pe_is_agents_repo" = "1" ]; then
@@ -310,6 +320,32 @@ if [ -n "$_staged_tests" ]; then
     echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
     exit 1
   fi
+fi
+
+# ---------- comment-block size warning (issue #1894) ----------
+# Advisory only: this section never exits, so no verdict of its own can block a
+# commit. Two-condition AND guard, same shape as the issue #1642 backstop above:
+# a global core.hooksPath routes every repo on this machine through this hook,
+# so both repo identity and scanner availability are checked (CPR-UNV).
+_cb_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+_cb_script="${AGENTS_CONFIG_DIR:-$_cfg_dir}/bin/review-comment-block-size"
+if _is_agents_session_repo "$_cb_repo_top" && [ -x "$_cb_script" ]; then
+    if [ "${COMMENT_BLOCK_WARN:-on}" != "off" ]; then
+        # Pre-initialised: `|| _cb_rc=$?` leaves them unset on the success path,
+        # and `set -u` would then abort an otherwise clean commit.
+        _cb_out=""
+        _cb_rc=0
+        _cb_out="$("$_cb_script" --staged 2>&1)" || _cb_rc=$?
+        if [ "$_cb_rc" != "0" ]; then
+            echo "pre-commit: review-comment-block-size rc=$_cb_rc — comment-block check incomplete (advisory; commit continues)" >&2
+            if [ -n "$_cb_out" ]; then
+                printf '%s\n' "$_cb_out" >&2
+            fi
+        elif printf '%s\n' "$_cb_out" | grep -q '^WARN: '; then
+            printf '%s\n' "$_cb_out"
+            echo "pre-commit: comment-block warnings are advisory — commit continues."
+        fi
+    fi
 fi
 
 # Check if this repo is private via GitHub API (skip scanning if private)
