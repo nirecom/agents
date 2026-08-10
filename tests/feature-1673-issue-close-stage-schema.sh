@@ -97,7 +97,11 @@ group_registry() {
     assert_eq "registry/artifact_dir" "path-under-plansdir:opt" "$(rv f.artifact_dir)"
     assert_eq "registry/issue_repo" "repo-ref:opt" "$(rv f.issue_repo)"
     assert_eq "registry/argspec-standard" "enum-worker,anchor-main-root,path-plansdir" "$(rv argspec)"
-    assert_eq "registry/external-binaries" "bash,gh" "$(rv external)"
+    # #1899: repo identity is resolved with `git remote get-url origin` instead of
+    # `gh repo view`, so `git` joins the declared external binaries. The registry
+    # is the SSOT the dispatcher allow-lists against — an undeclared `git` would
+    # be refused at spawn time.
+    assert_eq "registry/external-binaries" "bash,gh,git" "$(rv external)"
     assert_eq "registry/script-keys" "stageChain" "$(rv script_keys)"
     assert_eq "registry/chain-anchor-acd" "acd" "$(rv chain_anchor)"
     assert_eq "registry/chain-rel" "skills/issue-close-stage/scripts/run-stage-chain.sh" "$(rv chain_rel)"

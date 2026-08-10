@@ -1,4 +1,9 @@
 
+# tests/feature-wip-state/t-new-6-11.sh — split test-case fragment, NOT a test
+# file on its own; sourced by tests/feature-wip-state.sh.
+# Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
+
 # ===========================================================================
 # T-new-6: set <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → exit 0
 # Regression for #440: VS Code Claude Code does not propagate CLAUDE_ENV_FILE
@@ -71,12 +76,12 @@ case "$ARGS" in
     echo "CLOSED"
     exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *projectsV2*)
     # resolve-project.sh Query A — resolve to a valid project node.
     case "$ARGS" in
       *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"mock-owner"}\n'; exit 0 ;;
     esac
     ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
@@ -124,7 +129,7 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) echo "OPEN"; exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *) exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
@@ -160,7 +165,7 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) exit 1 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *) exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
@@ -195,11 +200,11 @@ fi
 case "$ARGS" in
   issue\ view\ *--json\ state*) echo "CLOSED"; exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
-  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-mock-owner/mock-repo}"; exit 0 ;;
   api\ graphql\ *projectsV2*)
     case "$ARGS" in
       *"| length"*) echo "1"; exit 0 ;;
-      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"mock-owner"}\n'; exit 0 ;;
     esac
     ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
@@ -248,8 +253,10 @@ echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
 touch -t 202001010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
 touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
+# #1899: repo identity resolves from the origin remote, so the run CWD must be
+# a git repo with a github.com origin (no WORKTREE_NOTES.md — SID isolation).
 FAKE_CWD="$TMP/fake-cwd"
-mkdir -p "$FAKE_CWD"
+make_origin_fixture "$FAKE_CWD"
 EXPECTED_FP=$(printf '%s:%s' "newer-session-id" "42" | sha256sum | cut -c1-8)
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
 RC=$?
@@ -274,8 +281,9 @@ unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-empty"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+# #1899: git repo + github.com origin so repo resolution is not the failure cause.
 FAKE_CWD="$TMP/fake-cwd-empty"
-mkdir -p "$FAKE_CWD"
+make_origin_fixture "$FAKE_CWD"
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
 RC=$?
 if [ "$RC" -eq 2 ]; then
@@ -307,8 +315,9 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/win-session-id.jsonl"
 touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/win-session-id.jsonl"
 # Run from a DIFFERENT cwd whose encoding does NOT match.
+# #1899: git repo + github.com origin so repo resolution succeeds from this CWD.
 FAKE_CWD="$TMP/other-cwd-projdir"
-mkdir -p "$FAKE_CWD"
+make_origin_fixture "$FAKE_CWD"
 EXPECTED_FP=$(printf '%s:%s' "win-session-id" "99" | sha256sum | cut -c1-8)
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 99 >/dev/null 2>&1 )
