@@ -34,6 +34,8 @@ AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 VALIDATOR="$SCRIPT_DIR/lib/validate-review-verdict.js"
 CASCADE_SSOT="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
+# shellcheck source=../lib/codex-timeout.sh
+source "$AGENTS_DIR/bin/lib/codex-timeout.sh"
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -140,6 +142,7 @@ const survey = {
   children: Array.isArray(artifact.children) ? artifact.children : [],
   related: Array.isArray(artifact.related) ? artifact.related : [],
   reason: typeof artifact.reason === "string" ? artifact.reason : "",
+  same_fix: typeof artifact.same_fix === "boolean" ? artifact.same_fix : null,
 };
 
 const out = Object.assign({}, artifact);
@@ -165,12 +168,14 @@ if (status === "replaced" && review) {
   out.children = review.children;
   out.related = review.related;
   out.reason = review.reason;
+  out.same_fix = review.same_fix;
 } else {
   out.verdict = survey.verdict;
   out.target = survey.target;
   out.children = survey.children;
   out.related = survey.related;
   out.reason = survey.reason;
+  out.same_fix = survey.same_fix;
 }
 out.survey = survey;
 out.review = {
@@ -180,6 +185,7 @@ out.review = {
   target: review ? review.target : null,
   reason: review ? review.reason : "",
   worth_filing: review ? review.worth_filing : null,
+  same_fix: review && typeof review.same_fix === "boolean" ? review.same_fix : null,
 };
 fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 2) + "\n");
 ' "$(node_path "$ARTIFACT")" "$(node_path "$OUT")" 2>/dev/null; then
@@ -255,11 +261,12 @@ chmod 600 "$PROMPT_FILE" "$REVIEW_RAW_FILE" "$CODEX_ERR_FILE" 2>/dev/null || tru
     echo "A survey worker inspected the candidates below and reached a verdict."
     echo "Decide, from the same evidence, which verdict is correct."
     echo "Also decide whether the proposal is worth filing at all."
+    echo "Also answer same_fix — take it from the same_fix table in the cascade below; it is fixed by the verdict, never judged separately."
     echo ""
     echo "Allowed verdicts: none | reopen | sub-of | make-parent | sibling"
     echo "Every issue number you name must appear in the candidate list below."
     echo "End your output with a line reading exactly FINAL_VERDICT_JSON: followed by ONE JSON object and nothing else:"
-    echo '{"verdict":"<one of the above>","target":<number|null>,"children":[<numbers>],"related":[<numbers>],"worth_filing":true|false,"reason":"<one sentence, max 500 chars>"}'
+    echo '{"verdict":"<one of the above>","target":<number|null>,"children":[<numbers>],"related":[<numbers>],"worth_filing":true|false,"same_fix":true|false,"reason":"<one sentence, max 500 chars>"}'
     echo ""
     echo "worth_filing rules:"
     echo "- false when the proposal is substantially the same as an existing candidate or issue you identified."
@@ -315,11 +322,16 @@ const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
 const list = Array.isArray(a.candidates) ? a.candidates : [];
 const defang = (s) => String(s === undefined || s === null ? "" : s)
   .replace(/\[(PROPOSAL|CANDIDATES)(\s+)(START|END)\]/g, "($1$2$3)");
+// Every field below is attacker-controllable text fetched from GitHub. Labels in
+// particular are free-form, so a label literally named "[CANDIDATES END]" would close
+// the fence and let the rest of the block read as trusted instruction. Defang the whole
+// row, not just the prose fields; the issue number is coerced to a number outright.
 for (const c of list) {
+  const num = Number(c.number);
   process.stdout.write(
-    "#" + c.number + " [" + (c.state || "?") + "] " + defang(c.title) + "\n" +
-    "  labels: " + (Array.isArray(c.labels) ? c.labels.join(",") : "") + "\n" +
-    "  parent: " + (c.parent_number === null || c.parent_number === undefined ? "none" : "#" + c.parent_number) +
+    "#" + (Number.isFinite(num) ? num : "?") + " [" + (defang(c.state) || "?") + "] " + defang(c.title) + "\n" +
+    "  labels: " + (Array.isArray(c.labels) ? c.labels.map(defang).join(",") : "") + "\n" +
+    "  parent: " + (Number.isFinite(Number(c.parent_number)) ? "#" + Number(c.parent_number) : "none") +
     (c.parent_is_meta ? " (meta)" : "") + "\n" +
     // The cascade decides sub-of and make-parent on exactly these two facts plus the
     // parent line above. Omitting them would leave the reviewer guessing at the rules
@@ -330,17 +342,15 @@ for (const c of list) {
     "  body: " + defang(String(c.body || "").slice(0, 2000)) + "\n"
   );
 }
-process.stdout.write("relations_mode: " + (a.relations_mode || "") + "\n");' "$(node_path "$ARTIFACT")" 2>/dev/null
+process.stdout.write("relations_mode: " + defang(a.relations_mode) + "\n");' "$(node_path "$ARTIFACT")" 2>/dev/null
     echo "[CANDIDATES END]"
     echo ""
     echo "The survey worker's verdict was: $SURVEY_VERDICT"
 } > "$PROMPT_FILE"
 
-TIMEOUT_SECS="${CODEX_TIMEOUT_SECS:-}"
-if [[ -z "$TIMEOUT_SECS" && -x "$AGENTS_DIR/bin/get-config-var" ]]; then
-    TIMEOUT_SECS="$("$AGENTS_DIR/bin/get-config-var" CODEX_TIMEOUT_SECS 300 2>/dev/null || true)"
-fi
-[[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]] || TIMEOUT_SECS=300
+# Timeout resolution is owned by codex_timeout_resolve (bin/lib/codex-timeout.sh) — the
+# same value, and the same .env key, that every other codex invocation in the repo uses.
+TIMEOUT_SECS="$(codex_timeout_resolve)"
 
 CODEX_EXEC_ARGS=(exec --skip-git-repo-check)
 [[ "$WEB_SEARCH_ENABLED" == "1" ]] && CODEX_EXEC_ARGS+=(-c tools.web_search=true)
@@ -398,7 +408,8 @@ let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
     "target: " + num(r.target) + "\n" +
     "children: " + (ints(r.children).join(",") || "none") + "\n" +
     "related: " + (ints(r.related).join(",") || "none") + "\n" +
-    "worth_filing: " + (r.worth_filing === true ? "yes" : "no") + "\n"
+    "worth_filing: " + (r.worth_filing === true ? "yes" : "no") + "\n" +
+    "same_fix: " + (r.same_fix === true ? "yes" : "no") + "\n"
   );
 });' 2>/dev/null)"
 

@@ -35,6 +35,11 @@ const {
   confirmSentinelFor,
   recoveryFor,
 } = require("../../../../hooks/workflow-state/completion-approval");
+const {
+  recordStepVerdict,
+  RECORDED_VERDICT_PREFIX,
+  RECORDED_VERDICT_REASONS,
+} = require("../../../../hooks/workflow-state/record-step-verdict");
 const { STEP_TO_SKILL, STEP_HINT, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
@@ -69,7 +74,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
   // fail-open: a marker-read failure just means the normal (noisy) verdict.
   try {
-    const { isNextStepPaused, isWorkflowOff, isBackgroundWorkInFlight } = require("../../../../hooks/lib/session-markers");
+    const { isNextStepPaused, isWorkflowOff } = require("../../../../hooks/lib/session-markers");
     if (isNextStepPaused(sid)) {
       emit(
         "paused",
@@ -88,16 +93,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
           "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
           "(a next-step resume sentinel does NOT clear workflow-OFF)",
         "workflow-off-quiet"
-      );
-      return;
-    }
-    if (isBackgroundWorkInFlight(sid)) {
-      emit(
-        "paused",
-        "",
-        "background work is in flight for this session. Take no new workflow action; wait for it " +
-          "to complete. End with: echo \"<<WORKFLOW_BACKGROUND_WORK_END: {reason}>>\"",
-        "background-work-in-flight"
       );
       return;
     }
@@ -163,7 +158,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     if (
       rawEntry.status === "skipped" &&
       typeof rawEntry.skip_reason === "string" &&
-      rawEntry.skip_reason.startsWith("recorded-verdict:")
+      rawEntry.skip_reason.startsWith(RECORDED_VERDICT_PREFIX)
     ) {
       continue;
     }
@@ -249,11 +244,11 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // A valid skip_judgment allows resolving outline/detail=pending BEFORE the scan
   // fires an abort on "later step complete but current step pending".
   if (currentStep === "outline") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
+    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", RECORDED_VERDICT_REASONS.outline);
     if (v !== null) return v;
   }
   if (currentStep === "detail") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
+    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", RECORDED_VERDICT_REASONS.detail);
     if (v !== null) return v;
   }
 
@@ -310,6 +305,31 @@ function computeVerdict(rawSid, _didAutoRepair) {
           "",
           "review_tests is complete but write_tests is not. Recovery: node " + ENTRYPOINT_PATH +
             " --reset review_tests (state is session-global; no worktree cd needed). Then re-run /write-tests.",
+          "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+        );
+        return;
+      }
+      if (step === "run_tests" && currentStep === "write_code") {
+        // Scoped recovery: a session that started before write_code existed
+        // (#1665) has no write_code key, so the projection defaults it to
+        // pending while run_tests is already complete. That is a migration
+        // artifact, not contamination — the generic reset hint would destroy a
+        // healthy session. The step leaves no on-disk artifact, so the MARK_STEP
+        // sentinel is the recovery.
+        //
+        // Since the v3 schema version (state-io/migrations/v2-to-v3.js) the
+        // MIGRATION cause no longer reaches here: a pre-write_code file is
+        // raised to v3 on read and the step is backfilled complete. This branch
+        // is kept for the residual, genuine inconsistency — write_code recorded
+        // pending on purpose (RESET_FROM, a manual --reset) while run_tests
+        // stands complete — which is still a state worth aborting on.
+        // No single quotes — emit() wraps NEXT_HINT/REASON in single quotes.
+        emit(
+          "abort",
+          "",
+          "run_tests is complete but write_code is not. This session predates the write_code step. " +
+            "Recovery: echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\" (state is session-global; no worktree cd needed). " +
+            "Then re-run next-step.",
           "inconsistent: " + step + " is complete but " + currentStep + " is pending"
         );
         return;
@@ -385,19 +405,21 @@ function computeVerdict(rawSid, _didAutoRepair) {
       if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
       const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
       if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+      // The status write and the A-4 speculative verdict are one declaration, so
+      // the single writer performs both — the verdict can no longer be dropped
+      // by a caller that forgot the second call.
       try {
-        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj }, { origin: "next-step-recorded-verdict-skip" });
-        // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
-        // markStep so the read-modify-write preserves skip_reason/skip_judgment.
-        try {
-          const wfState2 = require("../../../../hooks/workflow-state");
-          if (typeof wfState2.recordSkipVerdict === "function") {
-            wfState2.recordSkipVerdict(sid, stepName, "pending", "next-step-recorded-verdict");
-          }
-        } catch (_) { /* fail-open */ }
+        const res = recordStepVerdict(sid, stepName, "skipped", {
+          gate: "recorded-verdict",
+          skipReason,
+          skipJudgment: sj,
+          skipVerdictSource: "next-step-recorded-verdict",
+          origin: "next-step-recorded-verdict-skip",
+        });
+        if (!res.ok) return null;
         return computeVerdict(rawSid, true);
       } catch (_) {
-        return null;   // markStep/verdict failed — fall through, NO recursion
+        return null;   // write/verdict failed — fall through, NO recursion
       }
     } catch (_) {
       return null;   // fail-open
@@ -419,6 +441,14 @@ function computeVerdict(rawSid, _didAutoRepair) {
           ? "WORKFLOW_OUTLINE_NOT_NEEDED"
           : "WORKFLOW_DETAIL_NOT_NEEDED";
       }
+    } catch (e) { /* fail-open: no hint */ }
+  }
+  // #1644: separate branch — the run_tests hint rests on a machine-verified
+  // staged-set fact, not on the isTrivial plan-prose signal above.
+  if (currentStep === "run_tests") {
+    try {
+      const { isDocsOnlyStaged } = require("../../../../hooks/workflow-gate/staged-evidence");
+      if (isDocsOnlyStaged(resolveRepoDir())) skipHint = "WORKFLOW_RUN_TESTS_NOT_NEEDED";
     } catch (e) { /* fail-open: no hint */ }
   }
 

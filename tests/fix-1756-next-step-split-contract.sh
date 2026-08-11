@@ -115,8 +115,12 @@ write_state() {
     local sid="$1" overrides="$2"
     node -e '
 const [sid, overrides, out] = process.argv.slice(1);
+// #1665: write_code sits between review_tests and run_tests. A step missing from this
+// list cannot be addressed by an override at all (the loop only visits STEPS), so it
+// would silently stay pending and steal the "current step" slot from the step a case
+// means to probe.
 const STEPS = ["workflow_init","clarify_intent","research","outline","detail",
-  "branching_complete","write_tests","review_tests","run_tests","review_security",
+  "branching_complete","write_tests","review_tests","write_code","run_tests","review_security",
   "docs","user_verification","cleanup","pre_final_report_gate"];
 const o = JSON.parse(overrides);
 const now = new Date().toISOString();
@@ -378,7 +382,7 @@ C15_REPO="$(setup_repo)"
 mkdir -p "$C15_REPO/docs"
 echo "# notes" > "$C15_REPO/docs/notes.md"
 git -C "$C15_REPO" add docs/notes.md
-write_state "$C15_SID" '{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"in_progress"},"user_verification":{"status":"pending"},"cleanup":{"status":"complete"}}'
+write_state "$C15_SID" '{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"in_progress"},"user_verification":{"status":"pending"},"cleanup":{"status":"complete"}}'
 ACTION=""; NEXT_SKILL=""; REASON=""; NEXT_HINT=""
 C15_OUT=$(CLAUDE_PROJECT_DIR="$(to_node_path "$C15_REPO")" run_next_step --session "$C15_SID")
 eval "$C15_OUT" 2>/dev/null || true

@@ -49,10 +49,11 @@ const EXTERNAL_COMMANDS = ["git", "gh", "docker", "bash", "node", "uv"];
 // Child-process env allowlist. AGENTS_CONFIG_DIR is NOT here on purpose: it is set
 // explicitly from the resolved ACD anchor and never inherited.
 //
-// Credentials are NOT here either. GH_TOKEN / GITHUB_TOKEN are declared by the one
-// worker that authenticates against GitHub (issue-reconcile). A global entry would
-// hand them to every worker's children — including, via the family-worktree script
-// anchor, code from the branch under review, which no one has read yet.
+// Credentials are NOT here either. GH_TOKEN / GITHUB_TOKEN are declared per worker
+// by each entry that authenticates against GitHub (issue-reconcile, commit-push,
+// issue-close-stage, issue-close-finalize). A global entry would hand them to every
+// worker's children — including, via the family-worktree script anchor, code from
+// the branch under review, which no one has read yet.
 const CHILD_ENV_ALLOWLIST = [
   "PATH",
   "Path",
@@ -65,6 +66,29 @@ const CHILD_ENV_ALLOWLIST = [
   "ComSpec",
   "TEMP",
   "TMP",
+  // --- Config-location vars ---
+  // Admission rule for the entries below, both clauses required:
+  //   (1) the variable names WHERE a tool reads its configuration, and
+  //   (2) the configuration it reaches is ALREADY reachable through a member
+  //       admitted earlier — it relocates a config root, it does not expose one.
+  // Clause (2) is what keeps this from being a blank cheque. XDG_CONFIG_HOME and
+  // APPDATA relocate roots that HOME / USERPROFILE already expose, so they qualify.
+  // A pointer at a config FILE the operator has not otherwise exposed does not:
+  // GIT_CONFIG_GLOBAL / GIT_CONFIG_SYSTEM reach core.sshCommand, core.hooksPath and
+  // credential.helper, which are command-execution and credential primitives for any
+  // child that runs git. SSH_AUTH_SOCK fails clause (1) outright — an agent socket is
+  // a live signing oracle, not a config location. Anything that carries a secret
+  // stays out (see the paragraph above this array) and goes into the
+  // envPassthrough of the single worker that needs it.
+  // Values are copied verbatim and the child's cwd is not the parent's, so a RELATIVE
+  // value resolves against a different directory in the child. Callers that relocate a
+  // config root must use an absolute path.
+  // This set is fenced in three layers:
+  //   structural  tests/feature-1643-worker-dispatch-schema.sh        Group E
+  //   behavioural tests/feature-1643-worker-dispatch-script-anchor.sh Group G
+  //   real gh     tests/TL3-worker-dispatch-child-env-gh-auth.sh
+  // Adding a member here means adding it to the CONFIG_PATH_VARS array of the
+  // first two.
   // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
   "APPDATA",
@@ -74,6 +98,18 @@ const CHILD_ENV_ALLOWLIST = [
   // ssh fails as "Could not read from remote repository" for every worker.
   "ProgramData",
   "PROGRAMDATA",
+  // gh resolves its config dir in a fixed order: GH_CONFIG_DIR, then
+  // XDG_CONFIG_HOME (<val>/gh, every OS), then APPDATA (<val>/GitHub CLI,
+  // Windows). A parent that moved gh's config with either of the two
+  // higher-priority vars and a child that inherits only APPDATA do not read the
+  // same hosts.yml: the child silently lands in a different config dir and fails
+  // auth exactly the way the missing APPDATA did. XDG_CONFIG_HOME is not
+  // gh-specific — passing it also makes a child's git/uv read the same XDG tree
+  // the parent does, which is the faithful behaviour, not a widening.
+  // Both name a directory, never a secret, so they belong here rather than in
+  // one worker's envPassthrough.
+  "XDG_CONFIG_HOME",
+  "GH_CONFIG_DIR",
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
@@ -356,7 +392,7 @@ const workers = {
       issue_repo: { type: "repo-ref", required: false },
     },
     binaries: {
-      external: ["bash", "gh"],
+      external: ["bash", "gh", "git"],
       scripts: {
         stageChain: { anchor: "acd", rel: "skills/issue-close-stage/scripts/run-stage-chain.sh" },
       },

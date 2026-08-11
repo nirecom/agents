@@ -9,12 +9,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-// execFileSync, never execSync: since #1733 these git calls receive a path that
-// came from TOOL INPUT (postuse-native-worktree-record passes tool_input.path),
-// and a shell would expand `$(...)` / backticks inside it. Argv form has no shell.
-const { execFileSync } = require("child_process");
 const { withStateLock } = require("./state-lock");
-const { normalizeCwd } = require("../../lib/path-normalize");
+const { getCurrentContext, resolveWorktreeContext } = require("./core/context");
 const {
   PROJECTION_KEYS,
   projectState,
@@ -34,6 +30,7 @@ const VALID_STEPS = [
   "branching_complete",
   "write_tests",
   "review_tests",
+  "write_code",
   "run_tests",
   "review_security",
   "docs",
@@ -45,7 +42,12 @@ const VALID_STEPS = [
 // SSOT for "the session is over". Anything appended after a terminal step is
 // out-of-band bookkeeping and closes no interval (see intervals.js).
 const TERMINAL_STEPS = ["final_report"];
-const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "review_security", "cleanup"];
+// run_tests (#1644) is skippable ONLY through a docs-only-verified door: both
+// write sides (not-needed-handlers.js and mark-step-handler.js) check
+// isDocsOnlyStaged fail-closed before recording it.
+// write_code (#1665) is deliberately absent: the implementation body itself has
+// no "not needed" door — a session that changes nothing never reaches it.
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "run_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // "settled" = the step needs no further action: it is either done ("complete")
@@ -81,9 +83,20 @@ function getStatePath(sessionId) {
   return path.join(getWorkflowDir(), sessionId + ".json");
 }
 
+// The schema version THIS release writes. SSOT for the single fact "the newest
+// on-disk form this code knows how to produce" (CPR-SSOT): createInitialState
+// and serializeStateForPersist both stamp it, and MAX_KNOWN_STATE_VERSION is
+// derived from it rather than restated. A per-stage migration output version
+// (e.g. `{ version: 2 }` in migrations/v1-to-v2.js) is a DIFFERENT fact — that
+// stage's own output form — and must stay a literal there.
+//
+// v3 (#1665) is what a file uses to DECLARE that the code which wrote it knew
+// about the `write_code` step; see migrations/v2-to-v3.js.
+const CURRENT_STATE_VERSION = 3;
+
 // The highest `version` this release can read and write. A file above it was
 // written by a newer release and is opaque here.
-const MAX_KNOWN_STATE_VERSION = 2;
+const MAX_KNOWN_STATE_VERSION = CURRENT_STATE_VERSION;
 
 // Thrown by readRawState when the file EXISTS but its bytes are not valid
 // JSON. Distinct from "no file" (readRawState returns null for that): a
@@ -141,15 +154,17 @@ function readRawState(sessionId) {
 // read — never migrated, never guessed at.
 function normalizeStateVersion(rawState) {
   if (!rawState || typeof rawState !== "object" || Array.isArray(rawState)) return rawState;
-  if (rawState.version === 2) return rawState;
+  if (rawState.version === 3) return rawState;
   if (typeof rawState.version === "number" && rawState.version > MAX_KNOWN_STATE_VERSION) {
     throw new FutureSchemaVersionError(rawState.version);
   }
   // `version` was added after the first releases: a file with no marker at all
   // (or a number below the current one) is v1 by content, so dispatch on
-  // "is it v2", never on "is it v1".
-  const { migrateV1ToV2 } = require("./migrations");
-  return migrateV1ToV2(rawState);
+  // "is it vN", never on "is it v1". The stages chain — a v1 file runs through
+  // every stage in order, a v2 file joins at the stage that raises it.
+  const { migrateV1ToV2, migrateV2ToV3 } = require("./migrations");
+  if (rawState.version === 2) return migrateV2ToV3(rawState);
+  return migrateV2ToV3(migrateV1ToV2(rawState));
 }
 
 // readState(sessionId) -> the persisted record with the derived projection
@@ -179,16 +194,27 @@ function normalizeStateVersion(rawState) {
 // therefore applied to the PROJECTION of a record that was v1 on disk, keyed on
 // the absence of the key in the v1 `steps` map.
 //
+// SCOPE BOUNDARY vs the v2→v3 migration stage: this block stays frozen at those
+// three v1-only steps and gains no new members. `write_code` (#1665) is missing
+// from v2 files too, and a read-time default cannot express "the writer did not
+// know this step existed" for a versioned file — that is what a schema version
+// is for, so it is resolved in migrations/v2-to-v3.js instead.
+//
 // Mutates `projection.steps` in place; must run BEFORE guardProjection.
 function applyLegacyV1ReadDefaults(rawState, projection) {
-  if (!rawState || rawState.version === 2) return projection;
+  // Keyed on "was v1 on disk": v1 predates the `version` field entirely, so any
+  // numeric version (2, 3, ...) is out of scope here.
+  if (!rawState || rawState.version >= 2) return projection;
   const legacy = rawState.steps;
   if (!legacy || typeof legacy !== "object" || Array.isArray(legacy)) return projection;
   const steps = projection && projection.steps;
   if (!steps) return projection;
 
   const setStatus = (step, status) => {
-    if (!steps[step]) steps[step] = { status: "pending", updated_at: null };
+    // Third hand-built step-entry site: its key set must match
+    // projection.js emptyStepEntry() exactly (CPR-ORTH; pinned by
+    // tests/feature-1665-seq-cascade/b-entry-shape-parity.sh).
+    if (!steps[step]) steps[step] = { status: "pending", updated_at: null, updated_seq: null };
     steps[step].status = status;
   };
 
@@ -246,7 +272,7 @@ function readState(sessionId) {
   return out;
 }
 
-// Rewrite an on-disk v1 file in its v2 form. Idempotent, and fails open when
+// Rewrite an on-disk legacy file in its current-version form. Idempotent, and fails open when
 // the lock cannot be taken — a state file that is being written right now is
 // already being brought forward by whoever holds the lock.
 function persistMigratedState(sessionId) {
@@ -255,8 +281,10 @@ function persistMigratedState(sessionId) {
       const raw = readRawState(sessionId);
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
       // Re-checked INSIDE the lock: a concurrent migrator may have won the race,
-      // and re-migrating v2 data would clobber events appended since.
-      if (raw.version === 2) return false;
+      // and re-migrating already-current data would clobber events appended since.
+      // The test is "is it ALREADY the newest form", so it tracks
+      // CURRENT_STATE_VERSION — a v2 file is now itself a migration subject.
+      if (raw.version === CURRENT_STATE_VERSION) return false;
       const state = normalizeStateVersion(raw);
       if (!state || !Array.isArray(state.events)) return false;
       writeStateLocked(sessionId, state);
@@ -349,7 +377,7 @@ function updateTopLevel(sessionId, patchFn) {
 
 function createInitialState(sessionId, ctx) {
   return {
-    version: 2,
+    version: CURRENT_STATE_VERSION,
     session_id: sessionId,
     created_at: new Date().toISOString(),
     // The context the session STARTED in. Later movement is recorded as
@@ -363,76 +391,24 @@ function createInitialState(sessionId, ctx) {
   };
 }
 
-// getCurrentContext(dir) -> { cwd, git_branch }.
-// With no argument the behaviour is exactly the pre-#1733 one (back-compat for
-// session-start.js and friends). With `dir` given, the POSIX drive-letter form
-// (`/c/...` from Git Bash / MSYS2) is normalized first, because `git -C` and the
-// fs APIs below cannot use it on win32 (rules/coding/nodejs.md).
-function getCurrentContext(dir) {
-  const base = normalizeCwd(dir) || dir || process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const cwd = path.resolve(base);
-  let git_branch = null;
-  try {
-    const out = execFileSync(
-      "git",
-      ["-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
-      { encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"] }
-    );
-    git_branch = out.trim() || null;
-    if (git_branch === "HEAD") git_branch = null;
-  } catch (e) {}
-  return { cwd, git_branch };
-}
-
-// resolveWorktreeContext(rawPath) -> the fields a `worktree` event needs.
-// `path_source` records HOW the path was obtained (CPR-SC): a path read from
-// tool input is evidence, a process cwd is a guess, and the two must never be
-// conflated downstream.
-//
-// A path is only trusted as `tool_input` when EVERY link of the chain holds:
-//   1. a non-empty string that normalizes to an ABSOLUTE path,
-//   2. that path exists and is a directory,
-//   3. `git -C <path> rev-parse --git-dir` succeeds.
-// Any failure falls through to the process-cwd fallback with worktree_path:null —
-// recording the hook's own cwd as "the worktree that was entered" would be a
-// confident-looking lie. FAILS OPEN on every branch: this never throws.
-function resolveWorktreeContext(rawPath) {
-  try {
-    if (typeof rawPath === "string" && rawPath.trim()) {
-      const normalized = normalizeCwd(rawPath.trim());
-      if (typeof normalized === "string" && path.isAbsolute(normalized)) {
-        const p = path.resolve(normalized);
-        if (fs.statSync(p).isDirectory()) {
-          execFileSync("git", ["-C", p, "rev-parse", "--git-dir"], {
-            encoding: "utf8",
-            timeout: 2000,
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          const ctx = getCurrentContext(p);
-          return { cwd: ctx.cwd, git_branch: ctx.git_branch, worktree_path: p, path_source: "tool_input" };
-        }
-      }
-    }
-  } catch (e) {
-    /* fall through to the fallback below */
-  }
-  const ctx = getCurrentContext();
-  return { cwd: ctx.cwd, git_branch: ctx.git_branch, worktree_path: null, path_source: "fallback-process-cwd" };
-}
+// getCurrentContext / resolveWorktreeContext: moved to ./core/context.js
+// (file-split.md) — re-exported below for state-io.js barrel compatibility.
 
 // markStep(sessionId, stepName, status, extraFields, opts)
 // Signature preserved from the pre-#1733 keyed-map implementation; the body is
 // now a single append. Each extra field becomes its own step_annotation event,
 // so a later annotation never has to rewrite the status record.
 function markStep(sessionId, stepName, status, extraFields = {}, opts = {}) {
-  const { appendEvents } = require("./events");
+  const { appendEvents, RESERVED_ANNOTATION_KEYS } = require("./events");
   const provenance = typeof opts.provenance === "string" ? opts.provenance : "observed";
   const origin = typeof opts.origin === "string" ? opts.origin : "mark-step";
   const events = [{ kind: "step_status", step: stepName, status, provenance, origin }];
   if (extraFields && typeof extraFields === "object") {
     for (const key of Object.keys(extraFields)) {
-      // started_at was retired with #1640; a caller cannot reintroduce it.
-      if (key === "started_at") continue;
+      // Structure keys are never annotations. Silently skipped rather than
+      // thrown: callers pass whole entry-shaped objects here, and the
+      // `started_at` precedent (retired with #1640) already set that contract.
+      if (RESERVED_ANNOTATION_KEYS.includes(key)) continue;
       events.push({
         kind: "step_annotation",
         step: stepName,
@@ -451,6 +427,7 @@ module.exports = {
   TERMINAL_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
+  CURRENT_STATE_VERSION,
   MAX_KNOWN_STATE_VERSION,
   CorruptStateFileError,
   FutureSchemaVersionError,

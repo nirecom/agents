@@ -1,7 +1,8 @@
 "use strict";
 
 const { spawnSync } = require("child_process");
-const { buildGhSpawn } = require("../spawn-env");
+const { buildGhSpawn, buildGitSpawn } = require("../spawn-env");
+const { parseOriginOwnerRepo } = require("../../../../../hooks/lib/parse-remote-url");
 
 /**
  * Phase: route-decision
@@ -36,10 +37,21 @@ function routeDecision(state) {
   });
 
   if (metaIssues.length === issues.length) {
-    // All meta → check sub-issues
+    // All meta → check sub-issues. Repository identity is resolved once, from
+    // the checkout's origin remote, and never per issue (#1899).
+    const origin = resolveOwnerRepoFromOrigin();
+    if (!origin.ok) {
+      return {
+        blocked: true,
+        reason: "origin_repo_unresolved",
+        nextHint:
+          "could not resolve the repository from the 'origin' remote: " +
+          origin.message +
+          ". Run workflow-init from a checkout whose 'origin' remote points at the github.com repository you mean.",
+      };
+    }
     for (const n of metaIssues) {
-      const ownerRepo = getOwnerRepo(state, n);
-      const subIssues = fetchSubIssues(ownerRepo, n);
+      const subIssues = fetchSubIssues(origin.ownerRepo, n);
       const openSubs = subIssues.filter((s) => (s.state || "").toLowerCase() === "open");
       if (openSubs.length > 0) {
         // Build question listing all open sub-issues
@@ -87,14 +99,19 @@ function routeDecision(state) {
   return { done: false };
 }
 
-function getOwnerRepo(state, issueN) {
-  // Use gh repo view to get the default repo name
-  const [cmd, args, opts] = buildGhSpawn(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);
+// Repository identity comes from the ORIGIN remote alone — no fallback. The API
+// answer can name `upstream` on a fork, and a hardcoded fallback silently points
+// every downstream write at a repository nobody asked for (#1899).
+function resolveOwnerRepoFromOrigin() {
+  const [cmd, args, opts] = buildGitSpawn(["remote", "get-url", "origin"]);
   const result = spawnSync(cmd, args, opts);
-  if (result.status === 0 && result.stdout) {
-    return result.stdout.trim();
+  if (result.status !== 0 || !result.stdout) {
+    return { ok: false, message: "no 'origin' remote is configured" };
   }
-  return "mockorg/mockrepo";
+  const url = String(result.stdout).split(/\r?\n/)[0].trim();
+  const parsed = parseOriginOwnerRepo(url);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+  return { ok: true, ownerRepo: parsed.ownerRepo };
 }
 
 function fetchSubIssues(ownerRepo, issueN) {

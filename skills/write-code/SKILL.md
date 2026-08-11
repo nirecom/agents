@@ -21,6 +21,7 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
 WCD-3. Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv>`), then derive the model: `level === "high" ? "opus" : "sonnet"`.
    If `NONE` (fail-open): read `skills/_shared/judge-task-complexity.md` and evaluate directly → derive `high`/`low` from the routing rule, then map to model: high→opus, low→sonnet. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
+WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
 WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model derived from level in step WCD-3>` — the model parameter receives `"opus"` or `"sonnet"`, never `"high"` or `"low"`) with a prompt containing:
    - Target files and planned edit summary from step WCD-2.
@@ -33,6 +34,9 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model deri
    - Prohibitions: no diffs shown in the conversation; no mid-edit confirmation prompts.
 
 WCD-5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
+
+WCD-5a. Run `skills/write-code/scripts/self-check-siblings.sh "<what changed>" "<why>"` — CPR-E2C sibling-sweep reminder.
+WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` — flag edited files with no matching test; fold into WCD-6.
 
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
@@ -74,4 +78,4 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 
 ## Completion
 
-None.
+Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash once WCD-6 passes; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.

@@ -27,7 +27,7 @@ See `docs/security-policy.md` for the full pattern list.
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
 - `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
-- `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, 1Password CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
+- `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, password-manager CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
 - `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks
   `WORKFLOW_*` sentinel echoes issued from subagents. Sentinels are reserved for the orchestrator
   (main conversation); subagents cannot drive the workflow state machine. Detection uses the
@@ -65,7 +65,7 @@ See `docs/security-policy.md` for the full pattern list.
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
-- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode` (excluded when `VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost`)) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash paths (e.g. `/c/git/agents`) to `C:/git/agents` before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
+- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode` (excluded when `VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost`)) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash drive-letter paths (as emitted by MSYS2/Git Bash `pwd`) to native Windows drive-letter form before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
@@ -76,11 +76,24 @@ See `docs/security-policy.md` for the full pattern list.
   `resolveEffectiveSegment()`), which resolves each segment's effective command through control-structure
   keywords and env-prefix assignments before matching path pattern (`tests/`) and known runner names — so a
   read-only command that merely names a test path inside a loop/condition header (e.g.
-  `for f in tests/*.sh; do head "$f"; done`) is no longer mis-detected (#1330). `complete` requires all of:
-  run-all.sh provenance, exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and
-  `write_tests` already satisfied). exit ≠ 0, or any test command lacking a valid contract (ad-hoc runner,
-  piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes, read-only
-  commands, and git non-exec subcommands (resolved past leading global options) excluded
+  `for f in tests/*.sh; do head "$f"; done`) is no longer mis-detected (#1330). Exec-position classification
+  (which command-IR segments count as candidate emitters at all) and emitter-identity/provenance resolution
+  are split into `hooks/workflow-run-tests/exec-model.js` and `hooks/workflow-run-tests/provenance-identity.js`
+  respectively (#1273) — the former decides *where in the command* a test runner could legitimately execute,
+  the latter decides *which segment's* output is attributable to a verified runner, flagging 2+ distinct
+  verified emitters as `ambiguous` (same emitter appearing twice is not ambiguous by itself). Independently,
+  `stdoutAttributed()` enforces byte-position invariants over the whole stdout string so a forged
+  `RUN_CONTRACT`/`log_tail` line prepended or appended around the real payload cannot be parsed as
+  authoritative: worker-dispatch payloads require `RUN_CONTRACT:` as the first line with exactly one
+  unindented `log_tail: |` marker; run-all payloads require `RUN_CONTRACT:` as the last non-empty line.
+  `complete` requires all of: run-all.sh provenance, unambiguous emitter attribution, stdout byte-attribution,
+  exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and `write_tests` already
+  satisfied). exit ≠ 0, any test command lacking a valid contract (ad-hoc runner, piped/compound run-all.sh,
+  no-match), ambiguous emitter attribution, or an unattributed stdout region, demotes `run_tests` to
+  `pending`. Sentinel echoes, read-only commands, and git non-exec subcommands (resolved past leading global
+  options) excluded. Any unrelated Bash call observed between an explicit completion sentinel and the next
+  workflow-state read can retrigger this demotion (continuous re-verification, not a bug) — re-emit the
+  completion sentinel immediately before checking workflow state if this happens.
 - `detect-worktree-conflict.js` (PostToolUse, matcher: `Bash|runInTerminal|runCommands`) — when a
   failed terminal command's stderr matches `fatal: '<branch>' is already used by worktree`, emits a
   single `additionalContext` guidance message (locate via `git worktree list`, finish with
@@ -91,7 +104,7 @@ See `docs/security-policy.md` for the full pattern list.
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
-  `additionalContext` containing session_id, all 15 step statuses, and a `NEXT ACTION:` line
+  `additionalContext` containing session_id, all 16 step statuses, and a `NEXT ACTION:` line
   from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups

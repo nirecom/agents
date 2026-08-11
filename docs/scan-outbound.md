@@ -160,6 +160,7 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 | `claude-global/hooks/commit-msg` | Git commit-msg hook (commit message) |
 | `claude-global/hooks/scan-outbound.js` | Claude Code PreToolUse hook |
 | `claude-global/hooks/lib/is-private-repo.js` | Shared module: dynamic private repo detection via `gh api` |
+| `claude-global/hooks/lib/parse-remote-url.js` | Shared module: resolves the `origin` remote URL to a github.com `owner/repo` in one parse (host and repo id never diverge); redacts URL userinfo before any echo |
 | `.private-info-allowlist` | Exception patterns |
 | `.private-info-blocklist` | Additional detection patterns (gitignored, symlinked from private repo) |
 | `bin/scan-offensive` | Offensive content detector: keyword tier + optional LLM tier (forward filter) / `--skill-mode` JSONL manifest (skill path) |

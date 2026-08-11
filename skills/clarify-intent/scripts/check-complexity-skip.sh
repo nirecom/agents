@@ -32,6 +32,13 @@ case "$SKIP_MODE" in
 esac
 
 if [[ "$SKIP_MODE" == "auto" ]]; then
+    node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+        --session "$SESSION_ID" \
+        --target outline \
+        --advance \
+        --c1 true \
+        --c2 true \
+        >/dev/null 2>&1 || true
     echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: skip-mode=auto all conditions met>>"
     echo "SENTINEL_EMITTED"
     exit 0
@@ -42,6 +49,7 @@ if [[ "$SO_C1" == "true" && "$SO_C2" == "true" ]]; then
     node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
         --session "$SESSION_ID" \
         --target outline \
+        --advance \
         --c1 true \
         --c2 true \
         >/dev/null 2>&1 || true

@@ -52,9 +52,9 @@ chmod +x "$MOCKDIR/codex"
 
 ART="$WORK/survey.json"
 cat > "$ART" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "Reviewer must not leak the repo name", "background": "BG", "changes": "CH" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey reason",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -65,7 +65,7 @@ cat > "$ART" <<'JSON'
   ] }
 JSON
 
-REVIEW_OK='{"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true}'
+REVIEW_OK='{"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false}'
 
 # run_review <case> [env assignments...] → RC / OUT / LAST / ARGV / PROMPT
 run_review() {

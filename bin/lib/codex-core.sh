@@ -5,6 +5,11 @@ export SYSTEM_OPS_APPROVED=1
 #
 # Provides: codex_core_init, codex_core_adversarial_preamble, codex_core_check_cli,
 #           codex_core_run, codex_core_log, codex_core_emit_failed
+#
+# Re-exports codex_timeout_resolve / CODEX_TIMEOUT_SECS_DEFAULT from lib/codex-timeout.sh
+# so a script that already sources this library needs no second source line.
+# shellcheck source=codex-timeout.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-timeout.sh"
 
 # codex_core_init <label>
 # Sets: CODEX_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -68,10 +73,8 @@ codex_core_run() {
   codex_out=""
   codex_exit=0
 
-  # Read timeout from .env via get-config-var; fall back to 300 s.
   local _timeout
-  _timeout="$(cd "${AGENTS_CONFIG_DIR:-.}" && get-config-var CODEX_TIMEOUT_SECS 300 2>/dev/null)"
-  _timeout="${_timeout:-300}"
+  _timeout="$(codex_timeout_resolve)"
   codex_out=$(timeout "$_timeout" codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
 
   case $codex_exit in

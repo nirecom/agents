@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # tests/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
 # Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2
@@ -317,8 +318,14 @@ expect_match "S11" "the Rules section names the resolver as the single source of
 
 # ---- #1689: the surgical recovery, and its price ---------------------------
 
-expect_match "S12" "RNT-9 still emits the completion sentinel on a pass" \
-  '<<WORKFLOW_MARK_STEP_run_tests_complete>>' "$RNT9"
+# `RECORDED=`/`<<WORKFLOW_MARK_STEP_run_tests_complete>>` is retired: the advance CLI now
+# settles a pass through `next-step --advance --step run_tests --status complete`, which
+# reports its own result as `ADVANCED=run_tests status=complete` (plus `ADVANCE_SCOPE=`) on
+# stdout at runtime -- see tests/feature-1644-run-tests-docs-only.sh D5b and
+# tests/feature-1644-advance-transaction/basic.sh A1a for the same shape asserted elsewhere.
+# This row pins the SKILL.md prose that drives that call.
+expect_match "S12" "RNT-9 settles a pass through the advance CLI (--step run_tests --status complete), not the retired MARK_STEP sentinel" \
+  '--advance[[:space:]]+--step[[:space:]]+run_tests[[:space:]]+--status[[:space:]]+complete' "$RNT9"
 expect_match "S13" "and the pending sentinel on failure" \
   '<<WORKFLOW_MARK_STEP_run_tests_pending>>' "$RNT9"
 

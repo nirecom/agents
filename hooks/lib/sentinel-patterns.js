@@ -49,6 +49,10 @@ const DETAIL_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ([^>]+)>>"
 const DETAIL_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DETAIL_NOT_NEEDED([: ].*)?>>"$/;
 const WRITE_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ([^>]+)>>"$/;
 const WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED([: ].*)?>>"$/;
+// run_tests docs-only skip (#1644): admissible only when the staged set is
+// human-facing docs, which both write-side doors verify fail-closed.
+const RUN_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: ([^>]+)>>"$/;
+const RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED([: ].*)?>>"$/;
 const REVIEW_SECURITY_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ([^>]+)>>"$/;
 const REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED([: ].*)?>>"$/;
 // Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
@@ -102,16 +106,6 @@ const NEXT_STEP_RESUME_RE_DQ =
   /^echo "<<WORKFLOW_NEXT_STEP_RESUME: ([^>]+)>>"$/;
 const NEXT_STEP_RESUME_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_NEXT_STEP_RESUME([: ].*)?>>"$/;
-// BACKGROUND_WORK_START/END (#1665): TTL-based quiet layer for next-step and the
-// C4 stop guard while background work is in flight. Reason mandatory.
-const BACKGROUND_WORK_START_RE_DQ =
-  /^echo "<<WORKFLOW_BACKGROUND_WORK_START: ([^>]+)>>"$/;
-const BACKGROUND_WORK_START_LOOKSLIKE_RE =
-  /^echo "<<WORKFLOW_BACKGROUND_WORK_START([: ].*)?>>"$/;
-const BACKGROUND_WORK_END_RE_DQ =
-  /^echo "<<WORKFLOW_BACKGROUND_WORK_END: ([^>]+)>>"$/;
-const BACKGROUND_WORK_END_LOOKSLIKE_RE =
-  /^echo "<<WORKFLOW_BACKGROUND_WORK_END([: ].*)?>>"$/;
 // CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
 // make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
 // surfaces the dialog. Stop hook `stop-confirm-plan-guard.js` (Layer 2) returns
@@ -169,6 +163,8 @@ function isSentinel(cmd) {
     DETAIL_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
     WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
+    RUN_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
+    RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
@@ -195,10 +191,6 @@ function isSentinel(cmd) {
     NEXT_STEP_PAUSE_LOOKSLIKE_RE.test(cmd) ||
     NEXT_STEP_RESUME_RE_DQ.test(cmd) ||
     NEXT_STEP_RESUME_LOOKSLIKE_RE.test(cmd) ||
-    BACKGROUND_WORK_START_RE_DQ.test(cmd) ||
-    BACKGROUND_WORK_START_LOOKSLIKE_RE.test(cmd) ||
-    BACKGROUND_WORK_END_RE_DQ.test(cmd) ||
-    BACKGROUND_WORK_END_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
@@ -231,6 +223,7 @@ function isStrictSentinel(cmd) {
     OUTLINE_NOT_NEEDED_RE_DQ.test(cmd) ||
     DETAIL_NOT_NEEDED_RE_DQ.test(cmd) ||
     WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
+    RUN_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
@@ -244,8 +237,6 @@ function isStrictSentinel(cmd) {
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
     NEXT_STEP_PAUSE_RE_DQ.test(cmd) ||
     NEXT_STEP_RESUME_RE_DQ.test(cmd) ||
-    BACKGROUND_WORK_START_RE_DQ.test(cmd) ||
-    BACKGROUND_WORK_END_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
@@ -309,6 +300,7 @@ module.exports = {
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
   DETAIL_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_LOOKSLIKE_RE,
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
+  RUN_TESTS_NOT_NEEDED_RE_DQ, RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
   DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
@@ -323,8 +315,6 @@ module.exports = {
   ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
   NEXT_STEP_PAUSE_RE_DQ, NEXT_STEP_PAUSE_LOOKSLIKE_RE,
   NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
-  BACKGROUND_WORK_START_RE_DQ, BACKGROUND_WORK_START_LOOKSLIKE_RE,
-  BACKGROUND_WORK_END_RE_DQ, BACKGROUND_WORK_END_LOOKSLIKE_RE,
   CONFIRM_INTENT_RE_DQ, CONFIRM_INTENT_LOOKSLIKE_RE,
   CONFIRM_OUTLINE_RE_DQ, CONFIRM_OUTLINE_LOOKSLIKE_RE,
   CONFIRM_DETAIL_RE_DQ, CONFIRM_DETAIL_LOOKSLIKE_RE,

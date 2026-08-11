@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore (pre-existing Japanese fixture string, unrelated to this session's diff)
 # tests/feat-1761-review-verdict-validate.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, validator, table-driven, scope:issue-specific, pwsh-not-required, TL1
@@ -55,9 +56,9 @@ trap 'rm -rf "$WORK"' EXIT
 #     "unresolved parent" can only ever appear as "no admissible relation data".
 # ---------------------------------------------------------------------------
 cat > "$WORK/batched.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -73,9 +74,9 @@ cat > "$WORK/batched.json" <<'JSON'
 JSON
 
 cat > "$WORK/unavail.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "unavailable", "relation_errors": [10, 20],
   "candidates": [
@@ -98,9 +99,9 @@ JSON
 #   badstate-array→ #10 carries a non-string (["open"])
 # ---------------------------------------------------------------------------
 cat > "$WORK/upper.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -116,9 +117,9 @@ cat > "$WORK/upper.json" <<'JSON'
 JSON
 
 cat > "$WORK/mixedcase.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -134,9 +135,9 @@ cat > "$WORK/mixedcase.json" <<'JSON'
 JSON
 
 cat > "$WORK/badstate.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -152,9 +153,9 @@ cat > "$WORK/badstate.json" <<'JSON'
 JSON
 
 cat > "$WORK/badstate-array.json" <<'JSON'
-{ "schema_version": 2,
+{ "schema_version": 3,
   "proposal": { "title": "T", "background": "B", "changes": "C" },
-  "verdict": "none", "target": null, "children": [], "related": [],
+  "verdict": "none", "same_fix": false, "target": null, "children": [], "related": [],
   "reason": "survey found nothing",
   "relations_mode": "batched", "relation_errors": [],
   "candidates": [
@@ -205,88 +206,88 @@ while IFS='|' read -r name artifact review want; do
     fi
 done <<'TABLE'
 # --- the three mandatory cases from S14 ---
-A1-subof-target-is-parent      | batched | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"parent is meta","worth_filing":true}     | valid
-A2-subof-target-unknown        | batched | {"verdict":"sub-of","target":777,"children":[],"related":[],"reason":"nope","worth_filing":true}             | invalid
-A3-subof-unavailable-outside   | unavail | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"no relations","worth_filing":true}      | invalid
+A1-subof-target-is-parent      | batched | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"parent is meta","worth_filing":true,"same_fix":false}     | valid
+A2-subof-target-unknown        | batched | {"verdict":"sub-of","target":777,"children":[],"related":[],"reason":"nope","worth_filing":true,"same_fix":false}             | invalid
+A3-subof-unavailable-outside   | unavail | {"verdict":"sub-of","target":99,"children":[],"related":[],"reason":"no relations","worth_filing":true,"same_fix":false}      | invalid
 # --- baseline valid forms (CPR-ORTH counterparts: the validator must not over-reject) ---
-A4-subof-target-in-cand        | batched | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true}         | valid
-A5-reopen-valid                | batched | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true}   | valid
+A4-subof-target-in-cand        | batched | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true,"same_fix":false}         | valid
+A5-reopen-valid                | batched | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true,"same_fix":true}   | valid
 # A6 names the two ORPHANS (#11, #12). Naming #10 here would be a re-parent, not an
 # aggregation — see B17. IC-C3's ">= 2 resolved parentless candidates" is a
 # precondition of the verdict, so the positive case has to satisfy it genuinely.
-A6-make-parent-valid           | batched | {"verdict":"make-parent","target":null,"children":[11,12],"related":[],"reason":"group","worth_filing":true} | valid
-A7-sibling-valid               | batched | {"verdict":"sibling","target":null,"children":[],"related":[10],"reason":"adjacent","worth_filing":true}     | valid
-A8-none-valid                  | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true}   | valid
-A9-subof-unavailable-in-cand   | unavail | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true}         | valid
+A6-make-parent-valid           | batched | {"verdict":"make-parent","target":null,"children":[11,12],"related":[],"reason":"group","worth_filing":true,"same_fix":false} | valid
+A7-sibling-valid               | batched | {"verdict":"sibling","target":null,"children":[],"related":[10],"reason":"adjacent","worth_filing":true,"same_fix":false}     | valid
+A8-none-valid                  | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false}   | valid
+A9-subof-unavailable-in-cand   | unavail | {"verdict":"sub-of","target":10,"children":[],"related":[],"reason":"same area","worth_filing":true,"same_fix":false}         | valid
 # IC-C1 admits an OPEN candidate: state is a tie-break input only, never an eligibility
 # test, so "the duplicate is still open" is a dispatch-time no-op and not a malformed
 # verdict. A5 is the closed counterpart; both must be accepted (CPR-ORTH).
-A10-reopen-open-candidate      | batched | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}       | valid
+A10-reopen-open-candidate      | batched | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true,"same_fix":true}       | valid
 # A candidate that already has a (non-meta) parent is still a legal sub-of TARGET —
 # what B19 rejects is naming that parent itself.
-A11-subof-target-is-parented-cand | batched | {"verdict":"sub-of","target":13,"children":[],"related":[],"reason":"same area","worth_filing":true}      | valid
+A11-subof-target-is-parented-cand | batched | {"verdict":"sub-of","target":13,"children":[],"related":[],"reason":"same area","worth_filing":true,"same_fix":false}      | valid
 # --- state casing (#1862): `gh issue view --json state` answers OPEN/CLOSED ---
 # The artifact is validated BEFORE any per-verdict logic, so an uppercase `state`
 # rejects the whole artifact — every verdict, including `none`, folds to invalid.
 # A14/A16 are therefore the load-bearing cases: they prove the defect sits in the
 # artifact gate, not in the reopen branch.
-A12-reopen-uppercase-closed-target | upper | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true} | valid
-A13-reopen-uppercase-open-target   | upper | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}    | valid
-A14-none-uppercase-artifact        | upper | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true} | valid
+A12-reopen-uppercase-closed-target | upper | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true,"same_fix":true} | valid
+A13-reopen-uppercase-open-target   | upper | {"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true,"same_fix":true}    | valid
+A14-none-uppercase-artifact        | upper | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false} | valid
 # A15/A16 use a THIRD casing ("Open"/"Closed") deliberately. They pin the SHAPE of the
 # fix, not just its symptom: expanding the literal allowlist (ISSUE_STATES + "OPEN",
 # "CLOSED") would turn A12-A14 green while leaving any other casing broken — a
 # special-case patch, not a general one (CPR-UNV). Only normalizing the casing
 # (`.toLowerCase()` behind a `typeof c.state === "string"` guard) satisfies all five.
-A15-reopen-mixedcase-closed-target | mixedcase | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true} | valid
-A16-none-mixedcase-artifact        | mixedcase | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true} | valid
+A15-reopen-mixedcase-closed-target | mixedcase | {"verdict":"reopen","target":11,"children":[],"related":[],"reason":"same root cause","worth_filing":true,"same_fix":true} | valid
+A16-none-mixedcase-artifact        | mixedcase | {"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false} | valid
 # --- malformed verdicts ---
-B1-unknown-verdict             | batched | {"verdict":"escalate","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}             | invalid
-B2-reopen-target-null          | batched | {"verdict":"reopen","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}               | invalid
-B3-reopen-target-outside       | batched | {"verdict":"reopen","target":99,"children":[],"related":[],"reason":"r","worth_filing":true}                 | invalid
-B4-make-parent-target-not-null | batched | {"verdict":"make-parent","target":10,"children":[10,11],"related":[],"reason":"r","worth_filing":true}       | invalid
-B5-children-outside-cand       | batched | {"verdict":"make-parent","target":null,"children":[10,777],"related":[],"reason":"r","worth_filing":true}    | invalid
-B6-children-empty              | batched | {"verdict":"make-parent","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}          | invalid
-B7-children-duplicated         | batched | {"verdict":"make-parent","target":null,"children":[10,10],"related":[],"reason":"r","worth_filing":true}     | invalid
-B8-sibling-related-empty       | batched | {"verdict":"sibling","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}              | invalid
-B9-sibling-related-duplicated  | batched | {"verdict":"sibling","target":null,"children":[],"related":[10,10],"reason":"r","worth_filing":true}         | invalid
-B10-sibling-target-not-null    | batched | {"verdict":"sibling","target":10,"children":[],"related":[10],"reason":"r","worth_filing":true}              | invalid
-B11-reopen-children-nonempty   | batched | {"verdict":"reopen","target":11,"children":[10],"related":[],"reason":"r","worth_filing":true}               | invalid
-B12-none-related-nonempty      | batched | {"verdict":"none","target":null,"children":[],"related":[10],"reason":"r","worth_filing":true}               | invalid
-B13-reason-empty               | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"","worth_filing":true}                  | invalid
-B14-reason-missing             | batched | {"verdict":"none","target":null,"children":[],"related":[],"worth_filing":true}                              | invalid
+B1-unknown-verdict             | batched | {"verdict":"escalate","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}             | invalid
+B2-reopen-target-null          | batched | {"verdict":"reopen","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":true}               | invalid
+B3-reopen-target-outside       | batched | {"verdict":"reopen","target":99,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":true}                 | invalid
+B4-make-parent-target-not-null | batched | {"verdict":"make-parent","target":10,"children":[10,11],"related":[],"reason":"r","worth_filing":true,"same_fix":false}       | invalid
+B5-children-outside-cand       | batched | {"verdict":"make-parent","target":null,"children":[10,777],"related":[],"reason":"r","worth_filing":true,"same_fix":false}    | invalid
+B6-children-empty              | batched | {"verdict":"make-parent","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}          | invalid
+B7-children-duplicated         | batched | {"verdict":"make-parent","target":null,"children":[10,10],"related":[],"reason":"r","worth_filing":true,"same_fix":false}     | invalid
+B8-sibling-related-empty       | batched | {"verdict":"sibling","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}              | invalid
+B9-sibling-related-duplicated  | batched | {"verdict":"sibling","target":null,"children":[],"related":[10,10],"reason":"r","worth_filing":true,"same_fix":false}         | invalid
+B10-sibling-target-not-null    | batched | {"verdict":"sibling","target":10,"children":[],"related":[10],"reason":"r","worth_filing":true,"same_fix":false}              | invalid
+B11-reopen-children-nonempty   | batched | {"verdict":"reopen","target":11,"children":[10],"related":[],"reason":"r","worth_filing":true,"same_fix":true}               | invalid
+B12-none-related-nonempty      | batched | {"verdict":"none","target":null,"children":[],"related":[10],"reason":"r","worth_filing":true,"same_fix":false}               | invalid
+B13-reason-empty               | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"","worth_filing":true,"same_fix":false}                  | invalid
+B14-reason-missing             | batched | {"verdict":"none","target":null,"children":[],"related":[],"worth_filing":true,"same_fix":false}                              | invalid
 # --- cascade PRECONDITIONS, not just shape (issue-verdict-cascade IC-C2 / IC-C3) ---
 # A well-shaped verdict whose precondition is unmet is still a verdict the caller must
 # not act on: each of these would silently perform a destructive or unsanctioned move.
 # B17: #10 already sits under #99. Aggregating it under a NEW parent is a re-parent,
 #      which IC-C3 never sanctions — and #11 being a legitimate orphan must not launder it.
-B17-make-parent-parented-child | batched | {"verdict":"make-parent","target":null,"children":[11,10],"related":[],"reason":"r","worth_filing":true}    | invalid
+B17-make-parent-parented-child | batched | {"verdict":"make-parent","target":null,"children":[11,10],"related":[],"reason":"r","worth_filing":true,"same_fix":false}    | invalid
 # B18: one orphan is not a class. B6 pins the empty case; this pins the singleton, which
 #      is the boundary a "children must be non-empty" reading would wrongly admit.
-B18-make-parent-single-child   | batched | {"verdict":"make-parent","target":null,"children":[11],"related":[],"reason":"r","worth_filing":true}       | invalid
+B18-make-parent-single-child   | batched | {"verdict":"make-parent","target":null,"children":[11],"related":[],"reason":"r","worth_filing":true,"same_fix":false}       | invalid
 # B19: #88 is a real parent of candidate #13, but parent_is_meta is false — only a meta
 #      parent is something a new issue may be filed under, so it never enters PARENTS.
-B19-subof-non-meta-parent      | batched | {"verdict":"sub-of","target":88,"children":[],"related":[],"reason":"r","worth_filing":true}                | invalid
+B19-subof-non-meta-parent      | batched | {"verdict":"sub-of","target":88,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}                | invalid
 # B20: both unavail candidates are `unresolved`, so their "no parent" is an UNKNOWN, not
 #      an observed absence. IC-C3 may not be evaluated at all against them.
-B20-make-parent-unresolved     | unavail | {"verdict":"make-parent","target":null,"children":[10,20],"related":[],"reason":"r","worth_filing":true}    | invalid
+B20-make-parent-unresolved     | unavail | {"verdict":"make-parent","target":null,"children":[10,20],"related":[],"reason":"r","worth_filing":true,"same_fix":false}    | invalid
 # --- state casing GUARDS: what must stay rejected once casing is normalized ---
 # B21: "MERGED" is not open or closed in ANY casing. Tolerating unknown words is the
 #      over-correction a case-insensitive fix invites, so it is pinned explicitly.
-B21-state-unknown-word         | badstate | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}               | invalid
+B21-state-unknown-word         | badstate | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}               | invalid
 # B22: a non-string `state`. This is the counter-case to a `String(c.state).toLowerCase()`
 #      implementation, which would stringify ["open"] into "open" and admit it. The
 #      validator coerces nothing elsewhere (see its header) — a wrong TYPE is a producer
 #      defect, not a value to repair, so it must be rejected on type before casing.
-B22-state-non-string-array     | badstate-array | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true}         | invalid
+B22-state-non-string-array     | badstate-array | {"verdict":"none","target":null,"children":[],"related":[],"reason":"r","worth_filing":true,"same_fix":false}         | invalid
 # --- JSON extraction cardinality (bin/lib/last-json-object.js) ---
 C1-zero-json-objects           | batched | I think the survey verdict is fine, no JSON here.                                        | invalid
-C2-prose-then-one-json         | batched | Reasoning...\nHere is my answer:\n{"verdict":"none","target":null,"children":[],"related":[],"reason":"ok","worth_filing":true} | valid
-C3-two-json-objects            | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"a","worth_filing":true}\n{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"b","worth_filing":true} | invalid
+C2-prose-then-one-json         | batched | Reasoning...\nHere is my answer:\n{"verdict":"none","target":null,"children":[],"related":[],"reason":"ok","worth_filing":true,"same_fix":false} | valid
+C3-two-json-objects            | batched | {"verdict":"none","target":null,"children":[],"related":[],"reason":"a","worth_filing":true,"same_fix":false}\n{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"b","worth_filing":true,"same_fix":false} | invalid
 TABLE
 
 # B15: reason over the 500-char limit (kept out of the table — the value is 501 chars).
-got=$(run_validate batched "{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"$LONG_REASON\",\"worth_filing\":true}")
+got=$(run_validate batched "{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"$LONG_REASON\",\"worth_filing\":true,\"same_fix\":false}")
 if [ "$got" = "<missing>" ]; then
     fail "B15-reason-501-chars" "RED-EXPECTED: validate-review-verdict.js not yet created (want=invalid)"
 else
@@ -294,7 +295,7 @@ else
 fi
 # B16: exactly 500 chars must remain valid (off-by-one boundary, CPR-ORTH counterpart).
 BOUNDARY_REASON=$(node -e "process.stdout.write('x'.repeat(500))" 2>/dev/null || printf 'x%.0s' $(seq 1 500))
-got=$(run_validate batched "{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"$BOUNDARY_REASON\",\"worth_filing\":true}")
+got=$(run_validate batched "{\"verdict\":\"none\",\"target\":null,\"children\":[],\"related\":[],\"reason\":\"$BOUNDARY_REASON\",\"worth_filing\":true,\"same_fix\":false}")
 if [ "$got" = "<missing>" ]; then
     fail "B16-reason-500-chars-boundary" "RED-EXPECTED: validate-review-verdict.js not yet created (want=valid)"
 else
@@ -366,6 +367,21 @@ else
         pass "D5-comment-markers-stripped-to-fixed-point"
     fi
 fi
+
+
+# --- sections ------------------------------------------------------------------------
+# tests/run-all.sh globs tests/*.sh — TOP-LEVEL ONLY, so a file under
+# tests/feat-1761-review-verdict-validate/ runs in CI only because of this block.
+# Subprocess rather than sourced: each section carries its own $WORK + `trap ... EXIT`
+# and its own PASS/FAIL counters. See tests/lib/section-runner.sh for why the two
+# wiring styles are not interchangeable.
+SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1761-review-verdict-validate"
+# shellcheck source=./lib/section-runner.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/section-runner.sh"
+
+run_section "malformed-artifact.sh" 240
+run_section "worth-filing-and-final-sentinel.sh" 240
+run_section "numeric-boundaries.sh" 240
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

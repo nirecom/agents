@@ -11,6 +11,27 @@
 # pass against the unmodified source and must keep passing after the fix.
 
 # ---------------------------------------------------------------------------
+# X0: the row-count and marker-column baselines below are derived from
+# VALID_STEPS_COUNT (see the dispatcher). Prove the probe actually resolved,
+# otherwise an empty value would compare equal to a crashed `--list` and
+# false-green X1 / L1 / L2 / L4 all at once.
+# ---------------------------------------------------------------------------
+case "$VALID_STEPS_COUNT" in
+    ''|*[!0-9]*) fail "X0: VALID_STEPS_COUNT probe -- expected a number, got [$VALID_STEPS_COUNT]";;
+    *) if [ "$VALID_STEPS_COUNT" -ge 15 ]; then pass "X0: VALID_STEPS_COUNT probe resolved ($VALID_STEPS_COUNT)"
+       else fail "X0: VALID_STEPS_COUNT implausibly small [$VALID_STEPS_COUNT]"; fi;;
+esac
+
+# marker_run <marker> <count> -> "|<marker>" repeated <count> times.
+# Only the LEADING marker positions are pinned by each fixture; the tail is
+# "every remaining step", so it is generated rather than spelled out.
+marker_run() {
+    local m="$1" n="$2" out="" i
+    for ((i = 0; i < n; i++)); do out="$out|$m"; done
+    printf '%s' "$out"
+}
+
+# ---------------------------------------------------------------------------
 # X1: exit-code baseline. Every other case reads stdout through a helper that
 # discards the exit status, so without this a crashing binary that still printed
 # a partial ACTION= line would look green. Both the verdict path and the --list
@@ -23,7 +44,7 @@ check_eq "X1: verdict path exits 0" "0" "$RC_CODE"
 check_contains "X1: verdict path still emits an ACTION line" "ACTION=" "$RC_OUT"
 run_next_step_rc --list --session "$X1_SID"
 check_eq "X1: --list path exits 0" "0" "$RC_CODE"
-check_eq "X1: --list emits all 15 step rows" "15" "$(printf '%s\n' "$RC_OUT" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "X1: --list emits one row per VALID_STEPS entry" "$VALID_STEPS_COUNT" "$(printf '%s\n' "$RC_OUT" | sed '/^$/d' | wc -l | tr -d ' ')"
 
 # ---------------------------------------------------------------------------
 # X2 (idempotency): computing a verdict is a READ. Running it twice over the
@@ -81,13 +102,13 @@ done
 L1_SID="$(new_sid l1)"
 write_state "$L1_SID" '{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"skipped","skip_reason":"not needed"},"outline":{"status":"complete"},"detail":{"status":"pending"}}'
 check_eq "L1: mixed complete/skipped/current/pending marker column" \
-    '[x]|[x]|[-]|[x]|[*]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]' \
+    "[x]|[x]|[-]|[x]|[*]$(marker_run '[ ]' $((VALID_STEPS_COUNT - 5)))" \
     "$(list_markers --list --session "$L1_SID")"
 
 L2_SID="$(new_sid l2)"
 write_state "$L2_SID" "{$HEAD_COMPLETE,$RV_OUTLINE,\"detail\":{\"status\":\"complete\"},$TAIL_COMPLETE}"
 check_eq "L2: terminal state renders skipped [-] beside complete [x]" \
-    '[x]|[x]|[x]|[-]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[ ]' \
+    "[x]|[x]|[x]|[-]$(marker_run '[x]' $((VALID_STEPS_COUNT - 5)))|[ ]" \
     "$(list_markers --list --session "$L2_SID")"
 
 L3_SID="$(new_sid l3)"
@@ -102,13 +123,13 @@ check_eq "L3: empty closes_issues + clarify_intent current → second marker is 
 run_next_step_rc --list
 L4_PLAIN="$RC_OUT"
 check_eq "L4: --list (no session) exits 0" "0" "$RC_CODE"
-check_eq "L4: --list (no session) renders 15 rows" \
-    "15" "$(printf '%s\n' "$L4_PLAIN" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "L4: --list (no session) renders one row per VALID_STEPS entry" \
+    "$VALID_STEPS_COUNT" "$(printf '%s\n' "$L4_PLAIN" | sed '/^$/d' | wc -l | tr -d ' ')"
 run_next_step_rc --list --session "missing-$(printf '%04x' $RANDOM)"
 L4_MISSING="$RC_OUT"
 check_eq "L4: --list with an unknown session exits 0" "0" "$RC_CODE"
-check_eq "L4: --list with an unknown session renders 15 rows" \
-    "15" "$(printf '%s\n' "$L4_MISSING" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "L4: --list with an unknown session renders one row per VALID_STEPS entry" \
+    "$VALID_STEPS_COUNT" "$(printf '%s\n' "$L4_MISSING" | sed '/^$/d' | wc -l | tr -d ' ')"
 check_eq "L4: --list with an unknown session falls back to the plain list" \
     "$L4_PLAIN" "$L4_MISSING"
 

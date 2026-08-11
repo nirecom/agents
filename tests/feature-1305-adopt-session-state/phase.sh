@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # AD-6 .. AD-11 — the /workflow-init `adopt-prior-state` phase: a ROUTE to the
 # CLI, never a second implementation of it.
+# Tests: bin/workflow/lib/workflow-init/phases/adopt-prior-state.js
+# Tags: adopt-session-state, phase, scope:common
+
+# Tests: tests/feature-1305-adopt-session-state.sh
+# Tags: scope:issue-specific
 
 echo ""
 echo "=== #1305 AD-6..AD-11: workflow-init adopt-prior-state phase ==="

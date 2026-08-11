@@ -15,6 +15,11 @@ const { run: spawnRun, scriptExists } = require("../spawn");
 
 const FAIL_LINE_RE = /^FAIL:\s+(.+?)\s+\(exit\s+-?\d+\)\s*$/;
 const RESULTS_LINE_RE = /^Results:\s*(.+?)\s*$/;
+// Deliberately the SAME shape (and the same leading-whitespace tolerance) as
+// hooks/workflow-run-tests.js's parser: this worker lifts the line OUT of the
+// output so the renderer can put exactly one copy where the hook will look, and
+// the two would silently disagree if they recognised different strings.
+const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)/;
 const MAX_FAILING = 10;
 const TAIL_LINES = 40;
 
@@ -43,6 +48,37 @@ function parseResults(lines) {
   return found;
 }
 
+/**
+ * The suite's RUN_CONTRACT, lifted out of its raw output.
+ *
+ * The EXACTLY-ONE rule is applied here rather than deferred to the hook: zero
+ * lines and two lines both mean "no trustworthy contract", and a worker that
+ * emitted one anyway would be manufacturing a verdict the suite never gave.
+ *
+ * @param {string[]} lines
+ * @returns {{pass: number, fail: number, skip: number, executed: number}|null}
+ */
+function parseRunContract(lines) {
+  const matches = [];
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const m = CONTRACT_LINE_RE.exec(String(line));
+    if (m !== null) matches.push(m);
+  }
+  if (matches.length !== 1) return null;
+  const [, p, f, s, e] = matches[0];
+  const nums = [p, f, s, e].map((n) => parseInt(n, 10));
+  if (nums.some((n) => !Number.isFinite(n))) return null;
+  return { pass: nums[0], fail: nums[1], skip: nums[2], executed: nums[3] };
+}
+
+// Contract lines are removed from the log source in ALL cases, including the
+// ambiguous two-line one: leaving a forged copy inside log_tail would launder it
+// into the transcript as fact. Removal is exactly one line per match, so the
+// failing test's own output — which sits directly above it — is untouched.
+function stripContractLines(lines) {
+  return lines.filter((l) => !CONTRACT_LINE_RE.test(String(l)));
+}
+
 function run(payload, ctx) {
   const { anchors, entry } = ctx;
   const started = Date.now();
@@ -57,6 +93,7 @@ function run(payload, ctx) {
       summary: "tests/run-all.sh was not found under the target worktree",
       failingTests: [],
       logTail: [],
+      runContract: null,
     };
   }
 
@@ -78,13 +115,15 @@ function run(payload, ctx) {
       summary: `could not start the test suite: ${e && e.message ? e.message : "unknown error"}`,
       failingTests: [],
       logTail: [],
+      runContract: null,
     };
   }
 
   const duration = elapsed();
   const lines = splitLines(res.stdout).concat(splitLines(res.stderr));
   const nonEmpty = lines.filter((l) => l.trim() !== "");
-  const logTail = nonEmpty.slice(-TAIL_LINES);
+  const runContract = parseRunContract(nonEmpty);
+  const logTail = stripContractLines(nonEmpty).slice(-TAIL_LINES);
   const failingTests = parseFailingTests(nonEmpty);
   const results = parseResults(nonEmpty);
 
@@ -96,6 +135,7 @@ function run(payload, ctx) {
       summary: `the suite exceeded its ${payload.timeout_seconds || 120}s budget`,
       failingTests,
       logTail,
+      runContract: null,
     };
   }
   if (res.spawnError !== null) {
@@ -106,6 +146,7 @@ function run(payload, ctx) {
       summary: `bash could not run the suite: ${res.spawnError}`,
       failingTests: [],
       logTail,
+      runContract: null,
     };
   }
 
@@ -126,7 +167,8 @@ function run(payload, ctx) {
     summary,
     failingTests: status === "pass" ? [] : failingTests,
     logTail,
+    runContract,
   };
 }
 
-module.exports = { run, parseFailingTests, parseResults };
+module.exports = { run, parseFailingTests, parseResults, parseRunContract };

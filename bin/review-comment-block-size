@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+# Comment-block size review — flags long runs of consecutive comment lines.
+# Usage: review-comment-block-size [--staged | --all]
+# Headers: "## Comment-block Size Review: PERFORMED (<mode>)" / ": SKIPPED — <reason>".
+# Exit: 0 = performed or skipped (findings never change rc); 3 = internal error.
+#       1 and 2 stay reserved for blocking reviewers and are never returned here.
+# Under-detects on purpose: only (run count, longest run) is compared, and --, ;,
+# % and python triple quotes are not recognised as comment markers.
+
+# Entrypoint only: CLI parsing, configuration, file selection and the report.
+# The rest lives in the sibling bin/review-comment-block-size.d/ modules
+# (rules/coding/file-split.md Pattern A) — named "<entrypoint>.d" rather than a
+# bare "<entrypoint>/" because this entrypoint is itself an extensionless file
+# of that exact name:
+#   report.sh   — control-byte escaping and the buffered finding report
+#   scan.sh     — the awk scanner core and its blob / file entry points
+#   baseline.sh — HEAD and in-progress-operation baseline resolution
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./review-comment-block-size.d/report.sh
+source "$SCRIPT_DIR/review-comment-block-size.d/report.sh"
+# shellcheck source=./review-comment-block-size.d/scan.sh
+source "$SCRIPT_DIR/review-comment-block-size.d/scan.sh"
+# shellcheck source=./review-comment-block-size.d/baseline.sh
+source "$SCRIPT_DIR/review-comment-block-size.d/baseline.sh"
+
+HDR="## Comment-block Size Review"
+
+emit_skip() {
+    printf '%s\n' "$HDR: SKIPPED — $1"
+    exit 0
+}
+
+# --- CLI -------------------------------------------------------------------
+_all=0
+_staged=0
+_bad=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --all) _all=1 ;;
+        --staged) _staged=1 ;;
+        *) _bad=1 ;;
+    esac
+    shift
+done
+
+if [[ "$_all" -eq 1 && "$_staged" -eq 1 ]]; then
+    emit_skip "--staged and --all are mutually exclusive"
+fi
+if [[ "$_bad" -eq 1 ]]; then
+    emit_skip "unrecognized argument"
+fi
+if [[ "$_all" -eq 0 && "$_staged" -eq 0 ]]; then
+    emit_skip "no mode selected (use --staged or --all)"
+fi
+
+_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$_top" ]] || ! cd "$_top" 2>/dev/null; then
+    emit_skip "not a git repository"
+fi
+
+# --- configuration ---------------------------------------------------------
+T="${COMMENT_BLOCK_WARN_LINES:-10}"
+{ [[ "$T" =~ ^[0-9]+$ ]] && [[ "$T" -gt 0 ]]; } || T=10
+
+_EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
+IFS=';' read -r -a _EXT_ARR <<< "$_EXTS"
+
+# Compiled-in performance guards, not configuration: an ambient variable able to
+# raise them would let this advisory check silently review nothing.
+_MAX_FILES=200
+_MAX_BYTES=1000000
+
+ext_ok() {
+    local p="$1" e
+    for e in ${_EXT_ARR[@]+"${_EXT_ARR[@]}"}; do
+        [[ -z "$e" ]] && continue
+        [[ "$p" == *".$e" ]] && return 0
+    done
+    return 1
+}
+
+path_ok() {
+    case "/$1" in
+        */node_modules/*|*/.git/*|*/_archive/*|*/_archived/*) return 1 ;;
+    esac
+    return 0
+}
+
+# --- staged mode -----------------------------------------------------------
+# Global, not a local: the EXIT trap below defers its expansion, and by the time
+# it fires run_staged has already returned.
+LIST_TMP=""
+
+run_staged() {
+    local rc=0 st src dst dst_e sz sn sm sruns bn bm i n
+    local -a srcs=() dsts=()
+    git rev-parse --verify --quiet HEAD >/dev/null 2>&1 && HEAD_OK=1
+    collect_inprogress_refs
+
+    LIST_TMP="$(mktemp)"
+    # Single-quoted on purpose: the body is re-parsed as shell source at exit, so
+    # an interpolated path carrying a quote would break it.
+    trap 'rm -f -- "$LIST_TMP"' EXIT
+    git -c core.quotePath=false diff -z --cached --name-status -M \
+        --diff-filter=ACMRT > "$LIST_TMP" 2>/dev/null || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        printf '%s\n' "$HDR: PERFORMED (staged mode, incomplete: 1 file(s) unreadable)"
+        printf '%s\n' "ERROR: (staged index) — git diff --cached failed (rc=$rc)"
+        exit 3
+    fi
+
+    while IFS= read -r -d '' st; do
+        case "$st" in
+            R*|C*)
+                IFS= read -r -d '' src || break
+                IFS= read -r -d '' dst || break
+                ;;
+            *)
+                IFS= read -r -d '' dst || break
+                src="$dst"
+                ;;
+        esac
+        ext_ok "$dst" || continue
+        path_ok "$dst" || continue
+        srcs+=("$src")
+        dsts+=("$dst")
+    done < "$LIST_TMP"
+
+    n="${#dsts[@]}"
+    if [[ "$n" -gt "$_MAX_FILES" ]]; then
+        emit_skip "too many staged files ($n)"
+    fi
+
+    for ((i = 0; i < n; i++)); do
+        dst="${dsts[$i]}"
+        src="${srcs[$i]}"
+        sz="$(git cat-file -s ":./$dst" 2>/dev/null || true)"
+        if [[ "$sz" =~ ^[0-9]+$ ]] && [[ "$sz" -gt "$_MAX_BYTES" ]]; then
+            TOOBIG=$((TOOBIG + 1))
+            continue
+        fi
+        esc "$dst"
+        dst_e="$ESC"
+        if ! scan_rev ":./$dst"; then
+            ERRC=$((ERRC + 1))
+            add_line "ERROR: $dst_e — staged blob unreadable"
+            continue
+        fi
+        SCANNED=$((SCANNED + 1))
+        sn="$SCAN_N"
+        sm="$SCAN_M"
+        sruns="$SCAN_RUNS"
+        if find_baseline "$src"; then
+            if ! scan_rev "$BASE_SPEC"; then
+                ERRC=$((ERRC + 1))
+                add_line "ERROR: $dst_e — baseline blob unreadable"
+                continue
+            fi
+            bn="$SCAN_N"
+            bm="$SCAN_M"
+            if [[ "$sn" -gt "$bn" || "$sm" -gt "$bm" ]]; then
+                add_line "WARN: $dst_e — longest comment run $bm → $sm lines (over-threshold runs $bn → $sn)"
+                SCAN_RUNS="$sruns"
+                emit_details
+                WARNC=$((WARNC + 1))
+            fi
+        elif [[ "$sm" -gt 0 ]]; then
+            add_line "WARN: $dst_e — longest comment run $sm lines (no baseline: absolute-state fallback)"
+            SCAN_RUNS="$sruns"
+            emit_details
+            WARNC=$((WARNC + 1))
+        fi
+    done
+    return 0
+}
+
+# --- all-scan mode ---------------------------------------------------------
+# One walk over tracked + untracked-but-not-ignored paths, judged on absolute
+# state. Symlinks are never followed: the target may sit outside the repo.
+run_all() {
+    local f f_e sz
+    local -a files=()
+    declare -A seen=()
+    while IFS= read -r -d '' f; do
+        [[ -n "$f" ]] || continue
+        [[ -n "${seen[$f]:-}" ]] && continue
+        seen["$f"]=1
+        ext_ok "$f" || continue
+        path_ok "$f" || continue
+        [[ -L "$f" ]] && continue
+        [[ -f "$f" ]] || continue
+        files+=("$f")
+    done < <(git -c core.quotePath=false ls-files -z --cached --others --exclude-standard 2>/dev/null)
+
+    for f in ${files[@]+"${files[@]}"}; do
+        sz="$(wc -c < "$f" 2>/dev/null | tr -d '[:space:]' || true)"
+        if [[ "$sz" =~ ^[0-9]+$ ]] && [[ "$sz" -gt "$_MAX_BYTES" ]]; then
+            TOOBIG=$((TOOBIG + 1))
+            continue
+        fi
+        esc "$f"
+        f_e="$ESC"
+        if ! scan_file "$f"; then
+            ERRC=$((ERRC + 1))
+            add_line "ERROR: $f_e — file unreadable"
+            continue
+        fi
+        SCANNED=$((SCANNED + 1))
+        if [[ "$SCAN_M" -gt 0 ]]; then
+            add_line "WARN: $f_e — longest comment run $SCAN_M lines ($SCAN_N runs over threshold)"
+            emit_details
+            WARNC=$((WARNC + 1))
+        fi
+    done
+    return 0
+}
+
+# --- report ----------------------------------------------------------------
+_desc=""
+_count_label=""
+if [[ "$_staged" -eq 1 ]]; then
+    run_staged
+    _desc="staged mode"
+    [[ -n "$LABEL" ]] && _desc="$_desc, $LABEL in progress"
+    _count_label="Staged code files scanned"
+else
+    run_all
+    _desc="all-scan mode"
+    _count_label="All code files scanned"
+fi
+[[ "$ERRC" -gt 0 ]] && _desc="$_desc, incomplete: $ERRC file(s) unreadable"
+
+# Display only — _EXT_ARR above keeps parsing the raw value.
+esc "$_EXTS"
+_EXTS_e="$ESC"
+
+printf '%s\n' "$HDR: PERFORMED ($_desc)"
+printf '%s\n' "$_count_label: $SCANNED (extensions: $_EXTS_e; threshold: >= $T consecutive comment lines)"
+[[ "$TOOBIG" -gt 0 ]] && printf '%s\n' "  skipped (too large): $TOOBIG"
+[[ -n "$BODY" ]] && printf '%s' "$BODY"
+if [[ "$WARNC" -gt 0 ]]; then
+    printf '%s\n' "  Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)."
+    printf '%s\n' "  WARN findings are advisory only — this check never blocks a commit."
+fi
+
+[[ "$ERRC" -gt 0 ]] && exit 3
+exit 0

@@ -27,9 +27,7 @@ const OFF_CLEARANCE_TOKEN_SUFFIXES = [
 // Session-override markers. session-markers.js authorizes purely on a marker's
 // existence, so one forged file grants full clearance. `off-emergency-invoked` is
 // the EMERGENCY-provenance marker, written only by the UserPromptSubmit hook, and
-// must be equally unforgeable. `background-work` is the Stop-guard exemption
-// marker — forging it silences the premature-stop guard for the whole session,
-// the same authorize-on-existence shape as the rest of the list. Kept in sync
+// must be equally unforgeable. Kept in sync
 // with hooks/lib/session-markers.js and
 // hooks/workflow-state/state-io/zombie-cleanup.js.
 const EMERGENCY_PROVENANCE_MARKER_KIND = "off-emergency-invoked";
@@ -40,7 +38,6 @@ const SESSION_MARKER_KINDS = [
   "issue-close-verified",
   "next-step-paused",
   EMERGENCY_PROVENANCE_MARKER_KIND,
-  "background-work",
 ];
 
 // M-3 (#1780): writeMarker() in workflow-mark/enforce-override-handlers/

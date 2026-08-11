@@ -23,7 +23,7 @@ const C4_EXEMPTIONS = [
   { id: "workflow-off",      phase: "session", test: (c, d) => d.isWorkflowOff(c.sid) },
   { id: "next-step-paused",  phase: "session", test: (c, d) => d.isNextStepPaused(c.sid) },
   { id: "pre-workflow-init", phase: "session", test: (c, d) => !d.isWorkflowStarted(c.sid) },
-  { id: "background-work",   phase: "session", test: (c, d) => d.isBackgroundWorkInFlight(c.sid) },
+  { id: "write-code-in-flight", phase: "session", test: (c, d) => d.isWriteCodeInFlight(c.sid) },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
 ];
@@ -34,11 +34,12 @@ const C4_EXEMPTIONS = [
 // require.main block's try/catch) — same handling as any other dependency
 // load failure.
 function buildExemptionDeps() {
-  const { isWorkflowOff, isNextStepPaused, isBackgroundWorkInFlight } =
+  const { isWorkflowOff, isNextStepPaused } =
     require("./lib/session-markers");
-  const { isWorkflowStarted } = require("./workflow-state");
+  const { isWorkflowStarted, isWriteCodeInFlight } = require("./workflow-state");
   return {
-    isWorkflowOff, isNextStepPaused, isWorkflowStarted, isBackgroundWorkInFlight,
+    isWorkflowOff, isNextStepPaused, isWorkflowStarted,
+    isWriteCodeInFlight,
   };
 }
 

@@ -5,7 +5,8 @@
 # I1-I9 — #1794 regression: isWorkflowStarted() must judge ADOPTION (did THIS
 # session record a step settlement of its own?), not the projected view. A heir
 # created by session-start inherits every step_status as provenance:"backfilled"
-# / origin:"session-inherit", yet projectState folds only status+updated_at, so
+# / origin:"session-inherit", yet projectState folds only status + updated_at +
+# updated_seq (none of which carries provenance), so
 # the derived view is indistinguishable from a genuine complete and C4/C2 fire on
 # a session that never ran /workflow-init.
 #

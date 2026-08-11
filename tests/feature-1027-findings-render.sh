@@ -142,7 +142,7 @@ const r = require('$RENDER_NODE');
 const findings = [
   { categories:['code'], severity:'warning', detail:'wd', reporter:'wr' },
 ];
-const opts = { sessionId: 'SID_TOKEN_X', workflowSessionId: 'WSID_TOKEN_Y', stateFilePath: '/p/state.json', supervisorPath: '/p/supervisor' };
+const opts = { sessionId: 'SID_TOKEN_X', workflowSessionId: 'WSID_TOKEN_Y', stateFilePath: '/tmp/state-r5.json', supervisorPath: '/tmp/supervisor-r5' };
 const v = r.formatLayer2Findings(findings, opts);
 if (typeof v !== 'string') process.exit(2);
 process.stdout.write(v);
@@ -151,8 +151,8 @@ process.stdout.write(v);
     if [ "$rc" = "0" ] && \
        echo "$out" | grep -qF "SID_TOKEN_X" && \
        echo "$out" | grep -qF "WSID_TOKEN_Y" && \
-       echo "$out" | grep -qF "/p/state.json" && \
-       echo "$out" | grep -qF "/p/supervisor"; then
+       echo "$out" | grep -qF "/tmp/state-r5.json" && \
+       echo "$out" | grep -qF "/tmp/supervisor-r5"; then
         pass "R5: sessionId, workflowSessionId, stateFilePath, supervisorPath appear verbatim"
     else
         fail "R5: opts fields not present in output (rc=$rc, out=$out)"

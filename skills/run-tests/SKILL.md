@@ -39,7 +39,7 @@ RNT-4. **Tier 3 — default skip.**
 
 RNT-5. **Empty-selection policy (no silent `--all` fallback).**
    If Tier 1 + Tier 2 = 0 tests:
-   - Docs-only change (all changed files match the docs allowlist): log `[run-tests] docs-only change; skipping tests` and skip.
+   - Docs-only change (all changed files match the docs allowlist): log `[run-tests] docs-only change; skipping tests`, then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --status skipped --skip-reason "<reason>" --next` and follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`, then stop.
    - Otherwise: log `[run-tests] no tests matched; user judgment required` and ask the user: skip / `--all` (explicit opt-in) / specify tests. Never auto-fallback to `--all` — that recreates the #673 hang.
 
 RNT-6. **Run tests.**
@@ -47,15 +47,23 @@ RNT-6. **Run tests.**
 
 RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `timeout_seconds` (omit for the 120s default).
 
-RNT-8. **Parse the YAML** the dispatch call printed on stdout.
+RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
 
-RNT-9. **Emit sentinel** as a separate Bash call:
-   - `status: pass` → `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
+RNT-9. **Settle the step** as a separate Bash call:
+   - `status: pass` → `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --status complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
    - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`
-   - Only when the failure can be shown to be a pre-existing failure unrelated to this diff, use `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` as a surgical recovery.
+     The hook is authoritative for `run_outcome`; this sentinel is a status-only idempotent re-affirmation and writes no outcome.
+   - Only when the failure can be shown to be a pre-existing failure unrelated to this diff, use `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --status complete --next` as a surgical recovery.
      Present the evidence in the same turn: the failing test name / the paths the failure touches / that those paths are outside the RNT-3 diff range / that the same failure reproduces on main.
      If the evidence cannot be presented, do not use this path -- stay `pending` and leave the judgment to the user.
      Never use `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF for this purpose. A single-step recovery does not need -- and must not use -- session-wide enforcement suspension.
+     This path overwrites `run_outcome` to `pass` with `declared` provenance (recorded by `record-step-verdict`).
+   - **Overwritten-sentinel recovery.** After emitting the `complete` sentinel, run `node bin/workflow/read-step-status --session <sid> --step run_tests` (read-only; never `bin/workflow/next-step`, whose `ACTION` / `NEXT_SKILL` would start the next workflow step from inside this skill). The query prints either `status=<value>` (a recorded fact) or the bare marker `NONE` (nothing recorded — no state file, unknown session, corrupt file, or a step this session never touched).
+     Re-emit `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` **once only** if all hold: `status: pass`, the RNT-8 `RUN_CONTRACT:` line exists with `FAIL=0` and `EXECUTED>0`, and the query printed exactly `status=pending` — a recorded demotion overwrote the sentinel.
+     `NONE` is NOT a demotion and must never be treated as equivalent to `status=pending`: it means the state could not be read, so there is no evidence the sentinel was overwritten and no evidence any of the recovery premises hold. Stop, report the `NONE` result as a blocked/ambiguous state-store condition, and let the user decide — never auto-recover from it.
+     Any other recorded status (`skipped`, or a value this skill does not recognise) is likewise outside the recovery path: stop and report it.
+     Show all three measured values in the same turn. If the second query is not `status=complete`, or the `RUN_CONTRACT:` line is absent, stay `pending` and leave the judgment to the user.
+     The query runs on every green run rather than behind a "demotion looked likely" proxy: one state-file read is cheaper than a proxy, and a proxy would be a second judgement axis.
 
 RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tail`.
 

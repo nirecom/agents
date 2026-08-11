@@ -4,12 +4,17 @@
 // (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, markStep, readState, appendEvents } = require("../workflow-state");
+const { VALID_STEPS } = require("../workflow-state");
 const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
-const {
-  UnapprovedCompletionError,
-  confirmSentinelFor,
-} = require("../workflow-state/completion-approval");
+const { confirmSentinelFor } = require("../workflow-state/completion-approval");
+// #1644: the declared-class single writer. It owns the state write itself, the
+// approval invariant and the workflow_init downstream reset; this handler keeps
+// only the sentinel-specific wording.
+const { recordStepVerdict } = require("../workflow-state/record-step-verdict");
+// #1644: MARK_STEP_* is settings.json `allow` (freely emittable), so once
+// run_tests became skippable this door must verify the docs-only fact itself.
+// Single owner of the predicate — never restate the allowlist here.
+const { isDocsOnlyStaged } = require("../workflow-gate/staged-evidence");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
@@ -56,6 +61,20 @@ function handle(ctx) {
       }
       // Evidence present — fall through to the common markStep path below.
     }
+    // run_tests may be skipped only on the docs-only route (mirrors the
+    // write_tests evidence gate above): reject when the fact is false, fall
+    // through to the common markStep path when it holds.
+    if (stepName === "run_tests" && status === "skipped") {
+      if (!isDocsOnlyStaged(repoCwd)) {
+        pushMessage(
+          `workflow-mark: run_tests NOT skipped — MARK_STEP skip is accepted only when ` +
+            `every staged file is human-facing docs. Run the tests (/run-tests), ` +
+            `or stage a docs-only set and emit: ` +
+            `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"`
+        );
+        return true;
+      }
+    }
     if (stepName === "docs") {
       pushMessage(
         `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
@@ -84,61 +103,30 @@ function handle(ctx) {
       return true;
     }
 
-    try {
-      // Deliberately NOT sanctioned: MARK_STEP_* is permissions.allow (freely
-      // emittable by the model), so completing an approval-gated step must go
-      // through the approval requirement, never around it (#1133).
-      markStep(sessionId, stepName, status);
-    } catch (e) {
-      if (e instanceof UnapprovedCompletionError) {
-        pushMessage(
-          `workflow-mark: ${stepName} NOT recorded — no user approval on record ` +
-            `(${e.code}). MARK_STEP cannot approve a plan stage. ` +
-            `Ask the user to approve, then emit: ` +
-            `echo "<<${confirmSentinelFor(stepName)}: {summary}>>" ` +
-            `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
-        );
-      } else {
-        pushMessage(
-          `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
-        );
-      }
-    }
-
-    // workflow_init completing signals a new workflow run on this session UUID.
-    // Reset all downstream steps to pending so stale state from a prior run
-    // cannot trigger next-step's inconsistency abort (#1068).
-    if (stepName === "workflow_init" && status === "complete") {
-      try {
-        if (readState(sessionId)) {
-          // Same batch shape as the RESET_FROM rollback (CPR-ORTH): an explicit
-          // annotation tombstone plus a declared pending status per step, appended
-          // rather than rewritten, so the prior run's history stays readable.
-          // Top-level fields (workflow_type, closes_issues, ...) are never rebuilt.
-          appendEvents(sessionId, () => {
-            const events = [];
-            for (const s of VALID_STEPS) {
-              if (s === "workflow_init") continue;
-              events.push({
-                kind: "step_annotations_cleared",
-                step: s,
-                provenance: "declared",
-                origin: "workflow-init-downstream-reset",
-              });
-              events.push({
-                kind: "step_status",
-                step: s,
-                status: "pending",
-                provenance: "declared",
-                origin: "workflow-init-downstream-reset",
-              });
-            }
-            return events;
-          });
-        }
-      } catch (e) {
-        pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${e.message}`);
-      }
+    // Deliberately NOT sanctioned: MARK_STEP_* is permissions.allow (freely
+    // emittable by the model), so completing an approval-gated step must go
+    // through the approval requirement, never around it (#1133).
+    // The workflow_init downstream reset (#1068) is co-owned by the same writer.
+    const res = recordStepVerdict(sessionId, stepName, status, {
+      gate: "sentinel",
+      provenance: "observed",
+      origin: "mark-step",
+      repoDir: repoCwd,
+    });
+    if (!res.ok && res.kind === "unapproved") {
+      pushMessage(
+        `workflow-mark: ${stepName} NOT recorded — no user approval on record ` +
+          `(${res.detail}). MARK_STEP cannot approve a plan stage. ` +
+          `Ask the user to approve, then emit: ` +
+          `echo "<<${confirmSentinelFor(stepName)}: {summary}>>" ` +
+          `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
+      );
+    } else if (!res.ok) {
+      pushMessage(
+        `workflow-mark: failed to write state — ${res.detail || res.message}. Step "${stepName}" NOT recorded.`
+      );
+    } else if (res.kind === "downstream-reset-failed") {
+      pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${res.detail}`);
     }
 
     return true;

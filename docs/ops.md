@@ -275,6 +275,7 @@ mtime repair without a full git sync.
 bin/measure-norm-docs                 # bytes/lines of always-loaded normative docs
 bin/measure-norm-docs --ref v1.2.3    # the same reading taken at a past commit/tag
 bin/count-subagents                   # subagent_type tallies for this repo's sessions
+bin/review-comment-block-size --all   # longest comment block per tracked/untracked code file
 ```
 
 `measure-norm-docs` counts root `CLAUDE.md` plus every `rules/**/*.md` without a `paths:`
@@ -293,6 +294,15 @@ has a `warning` field (`null` when clean) and the report has a top-level `errors
 a stored artifact is never mistaken for a complete measurement once separated from its exit
 status. Symlinks are excluded from both tools, and `--ref` values starting with `-` are
 rejected rather than passed through to `git`.
+
+`review-comment-block-size --all` lists every code file holding a run of consecutive comment
+lines at or over the threshold, judged on absolute state — that is what separates the
+inventory from the commit-time warning, which reports a staged file only when its comment
+blocks grew. It under-detects on purpose: `#`, `//`, and `/* … */` are the only comment
+forms it knows, so `--`, `;`, `%`, and Python docstrings read as code, and a first-line
+shebang is never counted. Files past the size or count caps are reported as skipped rather
+than dropped in silence, and the exit status never reflects findings — only whether the scan
+itself could run.
 
 Per-step elapsed time is read from the session state file's event stream via
 `computeIntervals` (`hooks/workflow-state/state-io/intervals.js`), which returns one row per

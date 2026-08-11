@@ -5,11 +5,9 @@
 #
 # Issue #1643 — argv arity / worker-name enum / payload schema of the worker
 # dispatcher, plus the hard requirement that free-text worker input (history
-# background / changes bodies) reaches the worker module BYTE-IDENTICAL.
-#
-# The whole point of passing the payload as a PLANS_DIR file (rather than inline
-# argv JSON) is that free text never traverses the guard's UNSAFE_ARG_VALUE_RE
-# reject set. Group C is the regression test for that property.
+# background/changes bodies) reaches the worker module BYTE-IDENTICAL. Payload
+# is passed as a PLANS_DIR file (not inline argv JSON) so free text never
+# traverses the guard's UNSAFE_ARG_VALUE_RE reject set — Group C fences that.
 #
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real skill (run-tests RNT-7 / update-docs UD-9) actually writing the
@@ -130,16 +128,12 @@ unknown-worker-path | ../../etc/passwd $MAIN_ROOT $PLANS/p.json                 
 TABLE
 }
 
-# ===========================================================================
-# Group B — payload structure / type validation → rejection status (exit 0)
-#
-# Every row here dispatches `test-runner`, whose renderer is test-runner-yaml.
-# That renderer's status vocabulary is pass | fail | timeout | runner-error and
-# skills/run-tests/SKILL.md RNT-9 branches on exactly those four — a validation
-# rejection therefore has to arrive as `runner-error`, not as the status-triple
-# workers' `failed`, which matches no branch and would leave the caller unable
-# to tell a rejected payload from a run it never heard about.
-# ===========================================================================
+# Group B — payload structure / type validation -> rejection status (exit 0).
+# Every row dispatches `test-runner` (renderer test-runner-yaml), whose status
+# vocabulary is pass|fail|timeout|runner-error — skills/run-tests/SKILL.md
+# RNT-9 branches on exactly those four, so a validation rejection must arrive
+# as `runner-error`, not `failed` (which matches no branch and hides a
+# rejected payload behind "a run it never heard about").
 status_of() {
     printf '%s\n' "$DOUT" | sed -n 's/^status: *//p' | head -1
 }
@@ -168,15 +162,12 @@ empty-file            |
 TABLE
 }
 
-# ===========================================================================
-# Group C — free-text passthrough must be BYTE-IDENTICAL
-#
-# Contract asserted here: bin/worker-dispatch/payload.js exports a loader
-# (loadPayload | parsePayload | readPayload) that returns the parsed object
-# (directly, or as `.payload`) for a PLANS_DIR-resident JSON file. The loader is
-# the only layer between the file bytes and the worker module, so a byte-compare
-# of the round-tripped field is the tightest available TL1 probe.
-# ===========================================================================
+# Group C — free-text passthrough must be BYTE-IDENTICAL. Asserts that
+# bin/worker-dispatch/payload.js exports a loader (loadPayload|parsePayload|
+# readPayload) returning the parsed object (directly, or as `.payload`) for a
+# PLANS_DIR-resident JSON file — the loader is the only layer between the file
+# bytes and the worker module, so a byte-compare of the round-tripped field is
+# the tightest available TL1 probe.
 ECHOBACK="$TMPD/echoback.js"
 cat > "$ECHOBACK" <<'ECHOJS'
 // Echo-back harness: prints the requested payload field raw on stdout.
@@ -212,8 +203,7 @@ group_c() {
 
         valfile="$TMPD/val-$name.txt"
         pfile="$PLANS_RAW/freetext-$name.json"
-        # Build the raw value and the payload JSON that embeds it, in Node, so
-        # the shell never touches the bytes.
+        # Build the raw value + payload JSON in Node so the shell never touches the bytes.
         node -e '
           const fs = require("fs");
           const kind = process.argv[1], valFile = process.argv[2], payFile = process.argv[3];
@@ -223,8 +213,8 @@ group_c() {
             case "cmd-subst":     v = "before $(rm -rf /) `id` after"; break;
             case "shell-chain":   v = "one; two && three | four > five"; break;
             case "newlines":      v = "line1\nline2\r\nline3"; break;
-            case "japanese":      v = "日本語の背景説明です。"; break;
-            case "over-4kb":      v = "あX".repeat(2600); break;
+            case "japanese":      v = "\u65E5\u672C\u8A9E\u306E\u80CC\u666F\u8AAC\u660E\u3067\u3059\u3002"; break;
+            case "over-4kb":      v = "\u3042X".repeat(2600); break;
             default: throw new Error("unknown kind " + kind);
           }
           fs.writeFileSync(valFile, v);
@@ -251,10 +241,8 @@ over-4kb      | over-4kb
 TABLE
 }
 
-# ===========================================================================
 # Group D — the SSOT registry must require nothing outside node builtins
-# (commit-ordering invariant: commit 1 must be requireable without bin/)
-# ===========================================================================
+# (commit-ordering invariant: commit 1 must be requireable without bin/).
 group_d() {
     if impl_missing "registry/builtins-only" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
         return
@@ -276,7 +264,7 @@ group_d() {
     ' "$REGISTRY_JS")"
     assert_eq "registry/builtins-only" "" "$nonbuiltin"
 
-    # The enum must actually carry the 6 workers this issue converts.
+    # Enum must actually carry the 6 workers this issue converts.
     local missing
     missing="$(node -e '
       const reg = require(process.argv[1]);
@@ -289,20 +277,19 @@ group_d() {
     assert_eq "registry/worker-enum-complete" "" "$missing"
 }
 
-# ===========================================================================
 # Group E — credential scope and the typed `test_args` field, asserted on the
-# SSOT registry itself (behavioural counterpart: the buildEnv group in
+# SSOT registry (behavioural counterpart: the buildEnv group in
 # tests/feature-1643-worker-dispatch-script-anchor.sh).
-#
-# CHILD_ENV_ALLOWLIST is applied to EVERY worker's children. A credential listed
-# there is handed to, among others, the family-worktree-anchored tests/run-all.sh
-# — i.e. to code from the branch under review, which no one has read yet. The
-# tokens therefore belong to `issue-reconcile`'s envPassthrough, the one worker
-# that authenticates against GitHub, and nowhere else.
-#
-# `test_args` is asserted here for the same reason it is typed: as `text[]` it
-# was free text that became argv for a script runner.
-# ===========================================================================
+# CHILD_ENV_ALLOWLIST applies to EVERY worker's children, including the
+# family-worktree-anchored tests/run-all.sh — i.e. unreviewed branch code —
+# so a credential there would leak; tokens belong only in `issue-reconcile`'s
+# envPassthrough. The allowlist also carries a POSITIVE contract this group
+# fences: a config-location var missing from it lands a child in a different
+# config dir than its parent and fails exactly like a missing credential
+# would (#1719). Admission-rule SSOT for that set is the comment block above
+# CHILD_ENV_ALLOWLIST in hooks/lib/worker-dispatch-registry.js — not restated
+# here. `test_args` is asserted here for the same reason it's typed: as
+# `text[]` it was free text that became argv for a script runner.
 group_e() {
     if impl_missing "credentials/tokens-not-global" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
         return
@@ -315,18 +302,14 @@ group_e() {
       const allow = Array.isArray(reg.CHILD_ENV_ALLOWLIST) ? reg.CHILD_ENV_ALLOWLIST : null;
       out("allowlist_is_array", allow ? 1 : 0);
       out("allowlist_tokens", allow ? TOKENS.filter((t) => allow.includes(t)).join(",") : "NOT_ARRAY");
-      // Non-vacuity: the allowlist must still be carrying its ordinary members,
-      // or "no tokens in it" would hold for an empty list too.
+      // Non-vacuity: "no tokens in it" must not hold merely because the list is empty.
       out("allowlist_has_path", allow && allow.includes("PATH") ? 1 : 0);
       const workers = reg.workers || {};
       const ir = (workers["issue-reconcile"] || {}).envPassthrough || [];
       out("reconcile_tokens", TOKENS.filter((t) => ir.includes(t)).sort().join(","));
-      // Workers that legitimately authenticate against GitHub. #1643 had exactly
-      // one; #1673 added the three forge workers, each of which drives `gh` for
-      // the operator. The list is closed on purpose — a token reaching the
-      // children of any OTHER worker is the leak this group exists to catch.
-      // (No apostrophes in this block: the whole script is a single-quoted shell
-      // word, and one would end it mid-JS.)
+      // Workers legitimately authenticating against GitHub, closed on purpose —
+      // a token reaching any OTHER workers children is the leak this catches.
+      // (No apostrophes here: this whole script is a single-quoted shell word.)
       const SANCTIONED = ["issue-reconcile", "commit-push", "issue-close-stage", "issue-close-finalize"];
       const declarers = [];
       const others = [];
@@ -338,8 +321,8 @@ group_e() {
         if (!SANCTIONED.includes(name)) for (const t of held) others.push(name + ":" + t);
       }
       out("other_workers_with_tokens", others.join(","));
-      // Asserted in both directions: a sanctioned worker that silently DROPS the
-      // tokens breaks `gh` auth just as surely as an extra one leaks them.
+      // Both directions: a sanctioned worker silently DROPPING tokens breaks
+      // `gh` auth just as surely as an extra one leaking them.
       out("token_declarers", declarers.slice().sort().join(","));
       out("sanctioned_expected", SANCTIONED.slice().sort().join(","));
       // Each sanctioned worker must declare BOTH tokens, not just one.
@@ -350,16 +333,29 @@ group_e() {
       const spec = (workers["test-runner"] || {}).payloadSpec || {};
       out("test_args_type", spec.test_args ? spec.test_args.type : "(absent)");
       out("test_args_max_items", spec.test_args ? spec.test_args.maxItems : "(absent)");
+      // Config-location vars; SSOT for the admission rule is the comment block
+      // above CHILD_ENV_ALLOWLIST in the registry.
+      const CONFIG_PATH_VARS = ["APPDATA", "ProgramData", "PROGRAMDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR"];
+      out("config_path_count", CONFIG_PATH_VARS.length);
+      out("config_path_missing", allow ? CONFIG_PATH_VARS.filter((v) => !allow.includes(v)).join(",") : "NOT_ARRAY");
+      // Data integrity, not security: a member listed twice means two people
+      // added it independently and neither noticed.
+      out("allowlist_dupes", allow ? allow.filter((v, i) => allow.indexOf(v) !== i).join(",") : "NOT_ARRAY");
+      // CHANGE DETECTOR ON PURPOSE: exact sorted membership + cardinality, so an
+      // unanticipated credential (AWS_SECRET_ACCESS_KEY, NPM_TOKEN, ...) quietly
+      // appended, or an existing member silently dropped, always turns this row
+      // red — the list may only move by a deliberate human edit to the expected
+      // value below. Cardinality guards against a dupe-driven length change
+      // hiding behind an identical sorted join.
+      out("allowlist_sorted", allow ? allow.slice().sort().join(",") : "NOT_ARRAY");
+      out("allowlist_count", allow ? allow.length : -1);
     ' "$REGISTRY_JS" 2>&1)" || out="REQUIRE_FAILED"
     ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
 
     assert_eq "credentials/allowlist-is-array" "1" "$(ev allowlist_is_array)"
     assert_eq "credentials/allowlist-still-carries-path" "1" "$(ev allowlist_has_path)"
-    # The fix: neither token may be global.
-    assert_eq "credentials/tokens-not-global" "" "$(ev allowlist_tokens)"
-    # …but issue-reconcile must still be able to authenticate.
-    assert_eq "credentials/reconcile-declares-both" "GH_TOKEN,GITHUB_TOKEN" "$(ev reconcile_tokens)"
-    # …and no one outside the sanctioned GitHub-authenticating set may claim them.
+    assert_eq "credentials/tokens-not-global" "" "$(ev allowlist_tokens)"        # the fix
+    assert_eq "credentials/reconcile-declares-both" "GH_TOKEN,GITHUB_TOKEN" "$(ev reconcile_tokens)"  # …but can still authenticate
     assert_eq "credentials/no-unsanctioned-worker-declares-a-token" "" "$(ev other_workers_with_tokens)"
     assert_eq "credentials/token-declarers-are-exactly-the-sanctioned-set" \
         "$(ev sanctioned_expected)" "$(ev token_declarers)"
@@ -367,6 +363,20 @@ group_e() {
 
     assert_eq "payload/test-args-is-rel-path-arg" "rel-path-arg[]" "$(ev test_args_type)"
     assert_eq "payload/test-args-max-items-64" "64" "$(ev test_args_max_items)"
+
+    # Whole config-location-variable class, not just gh-related vars — the
+    # allowlist is a "class" contract applied unconditionally to every worker.
+    assert_eq "config-paths/set-non-vacuous" "5" "$(ev config_path_count)"
+    assert_eq "config-paths/all-present-in-allowlist" "" "$(ev config_path_missing)"
+    assert_eq "allowlist/no-duplicate-entries" "" "$(ev allowlist_dupes)"
+
+    # Change-detection assert (intentional): pins the allowlist set itself so
+    # any unexpected add/remove turns red. Expected-value order follows JS's
+    # default sort (UTF-16 code units): uppercase before lowercase.
+    assert_eq "allowlist/exact-sorted-membership" \
+        "APPDATA,COMSPEC,ComSpec,GH_CONFIG_DIR,HOME,PATH,PATHEXT,PROGRAMDATA,Path,ProgramData,SYSTEMROOT,SystemRoot,TEMP,TMP,USERPROFILE,XDG_CONFIG_HOME" \
+        "$(ev allowlist_sorted)"
+    assert_eq "allowlist/exact-cardinality" "16" "$(ev allowlist_count)"
 }
 
 if command -v timeout >/dev/null 2>&1; then
