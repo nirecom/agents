@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/refactor-rules-progressive-disclosure.sh
-# Tests: rules/claude-config-source.md, rules/coding.md, rules/coding/file-split.md, rules/coding/nodejs.md, rules/coding/python.md, rules/docs.md, rules/docs/architecture.md, rules/docs/changelog.md, rules/docs/env-example.md, rules/docs/history.md, rules/docs/readme.md, rules/docs/todo.md, rules/installer.md, rules/prompt.md, rules/test.md, rules/test/claude-e2e.md, rules/test/installer.md, rules/test/macos-timeout.md, skills/_shared/test-design.md
+# Tests: hooks/lib/rules-injection-policy.js, rules/branch.md, rules/claude-config-source.md, rules/coding.md, rules/coding/file-split.md, rules/coding/nodejs.md, rules/coding/python.md, rules/core-principles.md, rules/docs-only-short-circuit.md, rules/docs.md, rules/docs/architecture.md, rules/docs/changelog.md, rules/docs/env-example.md, rules/docs/history.md, rules/docs/readme.md, rules/docs/todo.md, rules/git.md, rules/github-issues.md, rules/installer.md, rules/issue-close-verified.md, rules/mid-workflow-findings.md, rules/ops.md, rules/prompt.md, rules/shell-commands.md, rules/stop-guard-exemptions.md, rules/supervisor-reporting.md, rules/test.md, rules/test/claude-e2e.md, rules/test/fixture-isolation.md, rules/test/installer.md, rules/test/macos-timeout.md, rules/user-escalation.md, rules/workflow-off.md, rules/worktree.md, skills/_shared/test-design.md
 # Tags: frontmatter, rules, paths, progressive-disclosure, tests, scope:common
 #
 # Dispatcher for the refactor/rules-progressive-disclosure test group.
@@ -8,7 +8,7 @@
 # sourced below; this file owns the shared helpers and PASS/FAIL/SKIP totals.
 #
 # Groups:
-#   paths-frontmatter.sh — exact paths: file set, per-file item counts, no globs:
+#   paths-frontmatter.sh — conditional / on-demand / unconditional injection classes, no globs:
 #   helper-fixtures.sh   — table-driven fixtures for check_paths_frontmatter
 #   cleanup.sh           — stub deletion + hub files stay unconditional
 #   content-parity.sh    — headings, verbatim sentences, links, char-count

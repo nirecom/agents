@@ -267,6 +267,22 @@ Test writing runs in a `mode: "auto"` subagent restricted to test files only, re
 user confirmations from O(N) per-edit approvals to exactly two: test plan approval and
 final review.
 
+### On-demand rules loading
+
+A rule file with no `paths:` frontmatter is injected into *every* session, whether or not
+the session will ever act on it. Rules that only one skill needs — testing, documentation,
+and GitHub-issue conventions — instead declare the reserved never-match glob plus an
+`<!-- injection: on-demand-only -->` marker, and the owning skills Read them explicitly at
+the point of use. Session context shrinks by everything those files used to occupy.
+
+Two guards keep the convention honest: `bin/check-on-demand-rules.sh` runs from the
+pre-commit hook and fails the commit when a rule carries only one half of the notation or
+when a skill that needs a de-injected rule has no Read step, and the
+`instructions-loaded-audit.js` hook observes what a live session actually loaded and
+records a verdict when a rule went missing, arrived malformed, or leaked a path.
+
+See [docs/architecture/claude-code/rules-injection.md](docs/architecture/claude-code/rules-injection.md).
+
 ### GitHub Copilot support
 
 `CLAUDE.md` and `rules/` are read natively by Copilot when `chat.useClaudeMdFile: true`

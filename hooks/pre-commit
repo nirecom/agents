@@ -348,6 +348,72 @@ if _is_agents_session_repo "$_cb_repo_top" && [ -x "$_cb_script" ]; then
     fi
 fi
 
+# --- on-demand rules-injection notation gate (detail plan S2-7) -------------------
+# Why here: a rule that disables auto-injection does so with a reserved `paths:` glob
+# plus a marker comment. Nothing in the host loader validates that pairing, so the only
+# moment the drift can still be stopped cheaply is before the commit lands.
+#
+# Own agents-repo guard, deliberately independent of the prompt-extraction block above:
+# that one is additionally gated on .prompt-extraction-allowlist, and reusing its
+# variables would silently couple this gate to a file it has nothing to do with.
+#
+# Exit-code mapping (asserted by tests/cc-pre-commit-on-demand-rules.sh):
+#   1 (violations) and 2 (usage / broken invocation) -> block
+#   anything else, including a missing or non-executable checker -> warn and continue.
+# The fail-open half differs from the prompt-extraction backstop on purpose: this gate
+# guards a notation convention, not an outbound-content leak, so a checkout that
+# predates the checker must still be able to commit — but never silently.
+_od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$_od_repo_top" ]; then
+    _od_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _od_is_agents_repo=0
+    _od_agents_common="$(git -C "$_od_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
+    _od_repo_common="$(git -C "$_od_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
+    if [ -n "$_od_agents_common" ] && [ -n "$_od_repo_common" ]; then
+        _od_agents_abs="$(cd "$_od_cfg_dir" 2>/dev/null && cd "$_od_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_od_agents_common")"
+        _od_repo_abs="$(cd "$_od_repo_top" 2>/dev/null && cd "$_od_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_od_repo_common")"
+        [ "$_od_agents_abs" = "$_od_repo_abs" ] && _od_is_agents_repo=1
+    fi
+
+    if [ "$_od_is_agents_repo" = "1" ]; then
+        # NUL-delimited: without -z git applies quotePath to a name containing a
+        # newline or a non-ASCII byte, and the filename identity is destroyed before
+        # the checker ever sees it. mapfile -d '' keeps one name = one array element.
+        _od_staged=()
+        while IFS= read -r -d '' _od_f; do
+            case "$_od_f" in
+                rules/*.md|hooks/lib/rules-injection-policy.js) _od_staged+=("$_od_f") ;;
+            esac
+        done < <(git diff --cached --name-only -z 2>/dev/null || true)
+
+        # The checker runs on every agents-repo commit, not only when a rules file is
+        # staged: the notation contract is a property of the whole tree (a policy-only
+        # edit can break a rule it never touched, and some filenames git cannot even
+        # stage on this platform). The staged list is still passed so out-of-root paths
+        # are surfaced; an empty list is a valid invocation.
+        _od_checker="$_od_cfg_dir/bin/check-on-demand-rules.sh"
+        if [ ! -x "$_od_checker" ]; then
+            echo "pre-commit: check-on-demand-rules.sh missing or not executable at $_od_checker — on-demand rules notation gate skipped" >&2
+        else
+            _od_rc=0
+            _od_out="$("$_od_checker" --staged ${_od_staged[@]+"${_od_staged[@]}"} 2>&1)" || _od_rc=$?
+            case "$_od_rc" in
+                0) : ;;
+                1|2)
+                    printf '%s\n' "$_od_out"
+                    echo ""
+                    echo "Commit blocked: on-demand rules-injection notation violations (checker rc=$_od_rc)."
+                    echo "See docs/architecture/claude-code/rules-injection.md."
+                    exit 1
+                    ;;
+                *)
+                    echo "pre-commit: check-on-demand-rules.sh rc=$_od_rc — on-demand rules notation gate skipped" >&2
+                    ;;
+            esac
+        fi
+    fi
+fi
+
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then

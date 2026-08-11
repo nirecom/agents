@@ -126,8 +126,35 @@ function reportRetrospective(observation, sessionId) {
   }
 }
 
+// Rules-injection scope violations observed by the InstructionsLoaded audit hook.
+// severity by verdict: a missing annotation is a drift warning; a malformed
+// frontmatter or a leaked on-demand rule means the scope contract is broken now.
+const RULES_INJECTION_SEVERITY = {
+  "S-MISSING": "warning",
+  "S-MALFORMED": "error",
+  "S-LEAK": "error",
+};
+
+function reportRulesInjection(verdict, filePath, sessionId) {
+  try {
+    const severity = RULES_INJECTION_SEVERITY[verdict];
+    if (!severity) return;
+    safeAppend(sessionId, {
+      categories: ["workflow"],
+      severity,
+      // Both the subject and the verdict: an alarm without an address is not
+      // actionable, and an address without a verdict says nothing is wrong.
+      detail: `rules injection scope: ${verdict} for ${filePath || "<unknown>"}`,
+      reporter: "instructions-loaded-audit",
+    });
+  } catch (_) {
+    // swallow
+  }
+}
+
 module.exports = {
   reportBlock,
+  reportRulesInjection,
   reportFallback,
   reportSentinel,
   reportRetrospective,
