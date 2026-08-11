@@ -108,6 +108,13 @@ See `docs/security-policy.md` for the full pattern list.
   from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
+- `instructions-loaded-audit.js` (InstructionsLoaded) — classifies ONE loaded instruction
+  file per firing (the host dispatches per file, asynchronously, in separate processes)
+  and publishes a receipt under `<workflowDir>/<sid>.instructions-loaded/`. Verdicts:
+  `ok` / `S-MISSING` / `S-MALFORMED` / `S-LEAK` / `unreadable`; `S-MISSING`+ emit one
+  supervisor finding per verdict change. Always exits 0 with empty stdout (fail-open) —
+  blocking is the static checker's job (`bin/check-on-demand-rules.sh`). See
+  [rules-injection.md](rules-injection.md)
 - `stop-final-report-guard.js` (Stop) — two independent trigger lanes, so a skipped
   session-close is caught even when the session never reached the lane-A precondition:
   - **Lane A (format validation)** — fires when the Final Report env file exists; blocks

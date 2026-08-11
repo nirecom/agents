@@ -14,6 +14,8 @@ Close issue `<N>` as migrated (merged into another issue) or cancelled.
 
 ## Pre-flight
 
+Read `rules/github-issues.md` first — on-demand-only, never auto-injected.
+
 1. Parse `N`, `TYPE`, and (if migrated) `INTO` from the invocation arguments.
 2. Verify issue `N` is OPEN: `gh issue view N --json state --jq .state`. Not OPEN → report and exit 0.
 3. For `--type migrated`: verify issue `INTO` is OPEN. Not OPEN → report and exit 0.

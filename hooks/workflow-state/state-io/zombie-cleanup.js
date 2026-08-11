@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowDir, normalizeStateVersion } = require("./core");
+const { RECEIPT_DIR_SUFFIX } = require("../../lib/instructions-loaded-receipt");
 
 // Last moment this session showed a sign of life. Since #1733 that is `created_at`
 // plus the newest `events[].at` — reading the retired `steps[*].updated_at` would
@@ -52,6 +53,22 @@ function cleanupZombies(maxAgeDays = 7) {
       try {
         const st = fs.statSync(filePath);
         if (st.mtimeMs < tmpCutoff) fs.unlinkSync(filePath);
+      } catch (e) {}
+      continue;
+    }
+
+    // Receipt directories: one per session, holding one JSON entry per rule the
+    // loader reported. Nothing else reclaims them, and the growth is invisible
+    // because it lives under a dot-suffixed directory nobody lists. Suffix-exact
+    // so a neighbouring name (`<sid>.instructions-loaded-notes`) is never claimed,
+    // and removal is tolerant: unparseable or nested debris inside a stale
+    // directory is exactly what this sweep exists to clear.
+    if (file.endsWith(RECEIPT_DIR_SUFFIX)) {
+      try {
+        const st = fs.statSync(filePath);
+        if (st.isDirectory() && st.mtimeMs < cutoff) {
+          fs.rmSync(filePath, { recursive: true, force: true });
+        }
       } catch (e) {}
       continue;
     }

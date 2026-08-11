@@ -10,6 +10,8 @@ Inventory gitignored state, merge the PR, then remove the worktree safely.
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
 
+Read `rules/github-issues.md` before WE-4 — on-demand-only, never auto-injected; WE-4..WE-8 and WE-11 depend on it.
+
 ### Step WE-1 — Resolve <PLANS_DIR>
 `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` — run once; reuse. Canonical: `skills/_shared/resolve-plans-dir.md`.
 

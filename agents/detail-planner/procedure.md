@@ -17,7 +17,8 @@
    - Start with `docs/architecture.md` and `docs/todo.md` for orientation.
    - Then use Grep to pinpoint which source files are directly relevant — do not Glob-then-read-all.
    - Read at most 8 source files, prioritized by relevance.
-   - Do NOT re-read `rules/` — they are already in your system prompt.
+   - Rely on auto-injected `rules/` from your system prompt — they are already present.
+   - DO Read the on-demand rules, which are never injected: `rules/test.md` and `rules/docs.md` (see `docs/architecture/claude-code/rules-injection.md`).
    If you conclude that external knowledge is required and cannot be obtained by reading local files, use the NEEDS_RESEARCH escape hatch (see below) instead of guessing.
 3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
@@ -29,7 +30,7 @@
      from intent.md; (2) confirmed approach from outline.md and why it was chosen.
      If no prior-stage artifacts exist, write a one-paragraph Goal instead.
    - **Files to modify** — full paths, grouped by purpose
-   - **Steps** — ordered implementation steps (include test-writing step per `rules/test.md`)
+   - **Steps** — ordered implementation steps (include test-writing step per `rules/test.md`; Read it first — on-demand-only, never auto-injected)
    - **Risks & edge cases** — what could go wrong, cross-platform concerns, backward-compatibility issues
    - **Out of scope** — explicit non-goals to prevent scope creep (use outline.md non-goals as authoritative source if available)
    - **Research Findings (from this session)** *(include when research was run during this make-detail-plan invocation)* — list each finding with a short kebab-case tag, e.g. `- [node-esm-require] Node.js ESM modules cannot use require() — use import() instead`. Carry this section verbatim across all subsequent revision rounds.

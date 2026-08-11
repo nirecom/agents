@@ -15,9 +15,10 @@ RT-0. Resolve the session-bound linked worktree path:
   If `WORKTREE == "NOSTATE"`, set `WORKTREE=""` — the internal scripts handle the CWD-fallback path for that case.
 RT-0a. Read:
    - `rules/core-principles.md`
+   - `rules/test.md` — on-demand-only; never auto-injected, so this Read is mandatory
    - `skills/_shared/test-design.md`
-   セキュリティ/ガード/分類器修正対象の場合は `skills/_shared/test-design/protection-fix-tests.md` も読む。
-   パーサ/正規表現/allowlist 対象の場合は `skills/_shared/test-design/parser-regex-tests.md` も読む。
+   - `skills/_shared/test-design/protection-fix-tests.md` — additionally, for security / guard / classifier fix targets
+   - `skills/_shared/test-design/parser-regex-tests.md` — additionally, for parser / regex / allowlist targets
 RT-1. Identify staged test file(s) and source file(s):
   - Run: `STAGED="$("$AGENTS_CONFIG_DIR/skills/review-tests/scripts/select-staged-files.sh")"`
   - If exit 3 (linked worktree unresolvable): do NOT fall back to cwd;

@@ -18,6 +18,9 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
   - `--next` emits no `ACTION=` line when the settled step is not the session's current step (`ADVANCE_SCOPE=not-current-step`) — treat a missing `ACTION=` as "proceed to your own next step," not an error.
 - Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
 - Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_{step}: {reason}>>` only when holistic context justifies it.
+- `rules/test.md` is not auto-injected — Read it before writing, reviewing, or running tests.
+- `rules/docs.md` is not auto-injected — Read it before writing or updating documentation.
+- `rules/github-issues.md` is not auto-injected — Read it before any issue or PR operation.
 - For docs-only commits that shortcut the workflow, see `rules/docs-only-short-circuit.md`.
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
 - For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.

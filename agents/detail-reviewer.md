@@ -18,7 +18,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 ## Review Checklist
 
 - **Correctness & completeness** — will the steps achieve the goal? Missing files, tests, or doc updates?
-- **Rules compliance** — does the plan comply with project rules? Rules are already in your context — do not re-read them via the Read tool. Only Read a rule file if you need to verify a detail you cannot recall.
+- **Rules compliance** — does the plan comply with project rules? Rely on auto-injected rules already present in your context via the Read tool. Read `rules/test.md` and `rules/docs.md` when the plan touches tests or docs — they are on-demand-only and never auto-injected. Only Read another rule file if you need to verify a detail you cannot recall.
 - **Risks & edge cases** — unacknowledged risks, cross-platform impact, idempotency, failure modes
 - **Scope** — anything unnecessary that should be cut. If `approach.md` non-goals are available in context, treat them as authoritative — do not re-derive non-goals from first principles.
 - **SKILL.md compactness** — if the plan modifies any `**/SKILL.md`, verify the planned changes follow:

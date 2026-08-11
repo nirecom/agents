@@ -14,6 +14,7 @@ Initialize a target repo for GitHub Issues: sync its label set and create/link a
 
 ## Pre-flight
 
+- Read `rules/github-issues.md` — on-demand-only, never auto-injected; it owns the Labels section (`sync-labels.sh`, `.github/labels.yml`) and the Projects v2 `project` scope requirement.
 - `AGENTS_CONFIG_DIR` must be set.
 - `gh` must be authenticated with the `project` scope; if absent, tell the user to run `gh auth refresh -s project` and stop.
 - Run `bin/is-github-dotcom-remote` against the target repo; on rc=1, exit 0 with a notice.

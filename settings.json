@@ -314,6 +314,18 @@
         ]
       }
     ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/instructions-loaded-audit.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "matcher": "",

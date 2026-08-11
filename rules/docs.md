@@ -1,3 +1,9 @@
+---
+paths:
+  - ".on-demand-only/never-match"
+---
+<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->
+
 # Documentation Convention
 
 ## Standard Files

@@ -12,6 +12,8 @@ First step of every workflow session. Routes on GH issue context: Path A (`#N` +
 
 ## Procedure
 
+Read `rules/github-issues.md` before WI-2 — on-demand-only, never auto-injected; the `meta` label, `intent:clarified`, `closes_issues` insertion order, and the sub-issue open-state gate all come from it.
+
 ### Step WI-1 — Resolve <PLANS_DIR>
 
 Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.

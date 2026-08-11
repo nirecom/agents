@@ -8,6 +8,7 @@
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
 5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
 6. [Codex Review Reviewer](#7-codex-review-reviewer) — Codex-primary reviewer with Claude Code fallback, shared across four skills
+7. [Rules Injection Scope](claude-code/rules-injection.md) — unconditional / conditional / on-demand injection scopes, the reserved never-match notation, the tree-wide invariant checker, and the `InstructionsLoaded` audit hook
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 

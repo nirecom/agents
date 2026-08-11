@@ -21,6 +21,7 @@ Stop-event, SubagentStop, or PostCompact paths.
 | `hooks/postuse-native-worktree-record.js` | TL2 (`tests/feature-1610-stop-exit-worktree-warn.sh` Section R) | **P3 — add TL3** | State stamping is TL2-testable by payload injection, but the real EnterWorktree/ExitWorktree → PostToolUse → state-write path needs a live session (#1610). |
 | `hooks/supervisor-guard.js` | TL2-only (`tests/feature-719-supervisor-guard-hook.sh`, `tests/feature-883-supervisor-guard-wsid.sh`) | **OUT — defer** | No observable signal under `claude -p --output-format json`; re-evaluate after #937 phase 2. |
 | `hooks/preuse-auto-approve.js` | TL2 (`tests/feature-preuse-auto-approve.sh` — 24 cases: Monitor allow, EnterWorktree boundary matrix, AUTO_APPROVE_TOOLS toggle, symlink resolution) | **TL3 gap** | hook-registration gap: real PreToolUse firing and `permissionDecision` honor by the CC runtime unverifiable at TL2 (#1849). |
+| `hooks/instructions-loaded-audit.js` | TL2 (`tests/cc-instructions-loaded-audit.sh`, `tests/cc-instructions-loaded-quiescence.sh`, `tests/cc-instructions-loaded-registration.sh`) + TL3 gate (`tests/TL3-rules-injection-off-switch.sh` — RUN_TL3-gated) | **TL3 gated** | TL2 pins verdicts and the receipt/quiescence protocol by payload injection; only a real session proves the host fires `InstructionsLoaded` at all and that the reserved never-match glob really suppresses injection (#1652). |
 
 ## Implementation Order (#943)
 

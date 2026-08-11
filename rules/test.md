@@ -1,8 +1,18 @@
+---
+paths:
+  - ".on-demand-only/never-match"
+---
+<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->
+
 # Testing
 
 ## Test Writing
 
 Do not write or edit test files directly in the main conversation.
+
+## Test Fixture Isolation
+
+See [test/fixture-isolation.md](test/fixture-isolation.md) for keeping a test's side effects inside its own temp directory.
 
 ## Test Coverage Review
 

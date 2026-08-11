@@ -43,6 +43,8 @@ condition: sentinel, history entry, or both). Resolve by invoking
 
 ## Procedure
 
+Read `rules/github-issues.md` before CP-1 — on-demand-only, never auto-injected.
+
 CP-1. **Stage changes with `git add`** — explicitly add each file you intend to commit.
    Then run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh"` from the worktree root.
    rc=1 → list of unstaged tracked files is printed; either `git add` them, `git stash push -u -- <file>`, or pass `--wip` to skip this gate (`git -c workflow.wip=1 commit`).

@@ -17,6 +17,8 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
   `gh issue create --label "type:incident"` directly); issues for other repos or
   projects (use `gh issue create --repo OWNER/REPO` directly).
 
+Required reading: Read `rules/github-issues.md` before Pre-flight — it is on-demand-only and never auto-injected.
+
 ## Phase 0b — Project preflight
 
 Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/issue-setup`. Independent of Phase 0a (label auto-repair in `issue-create.sh`) — one's result never affects the other.

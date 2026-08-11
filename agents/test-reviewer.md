@@ -28,6 +28,7 @@ For parser/regex/allowlist targets, also read `skills/_shared/test-design/parser
 ## Procedure
 
 Read test file(s) and source file(s).
+Read `rules/test.md` — it is on-demand-only and never auto-injected; the TL1–TL4 layer judgement depends on it.
 Read `skills/_shared/test-design.md` for the checklist.
 For security/guard/classifier targets, also read `skills/_shared/test-design/protection-fix-tests.md`.
 For parser/regex/allowlist targets, also read `skills/_shared/test-design/parser-regex-tests.md`.

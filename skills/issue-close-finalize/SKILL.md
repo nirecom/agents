@@ -4,7 +4,7 @@ description: Phase 2 of the 2-phase issue-close split. Runs from the main worktr
 user-invocable: false
 ---
 
-Triage routes to the correct subset of steps; each step is idempotent and resumable. Per-session N: see `rules/github-issues.md` "Session model". Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`.
+Triage routes to the correct subset of steps; each step is idempotent and resumable. Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines per-session N. Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`.
 
 `--from-session` resolves `<N>` from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` `## Issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in Step ICF-B, not from a flag.
 

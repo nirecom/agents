@@ -12,6 +12,8 @@ Run the project test suite via the `test-runner` worker and emit the workflow se
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
 
+RNT-0. **Read `rules/test.md`.** It is on-demand-only and never auto-injected, so this Read is mandatory.
+
 RNT-1. **Resolve merge-base.**
    `bin/select-tests.sh --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
    exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bin/resolve-merge-base.sh --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
