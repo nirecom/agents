@@ -1,22 +1,14 @@
 "use strict";
 
-// Reads hooks/lib/rules-injection-policy.js AS DATA — never require()s it.
-//
-// WHY THIS MODULE EXISTS
-// ----------------------
-// rules-injection-policy.js is a contributor-editable declaration file. Every
-// consumer of it (the pre-commit static checker, the InstructionsLoaded audit
-// hook) runs on a branch that a pull request controls, so `require()`-ing the
-// policy would execute whatever that PR put in its module body, before review,
-// with the reviewer's ambient privileges. Merely checking out a branch and
+// Reads hooks/lib/rules-injection-policy.js AS DATA — never require()s it. WHY: rules-injection-policy.js is a
+// contributor-editable declaration file. Every consumer of it (the pre-commit static checker, the InstructionsLoaded
+// audit hook) runs on a branch that a pull request controls, so `require()`-ing the policy would execute whatever that
+// PR put in its module body, before review, with the reviewer's ambient privileges. Merely checking out a branch and
 // starting a session must never do that.
 //
-// So the policy is read as DATA: the source TEXT is scanned for the four
-// constant declarations and nothing else is evaluated. That is also why the
-// policy file is required to keep every declaration a plain one-line literal.
-//
-// This module itself is agents-owned code, not contributor-editable declaration
-// data, so consumers require() it normally.
+// So the policy is read as DATA: the source TEXT is scanned for the four constant declarations and nothing else is
+// evaluated. That is also why the policy file is required to keep every declaration a plain one-line literal. This
+// module itself is agents-owned code, not contributor-editable declaration data, so consumers require() it normally.
 
 const fs = require("fs");
 

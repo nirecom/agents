@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-// InstructionsLoaded audit hook.
+// InstructionsLoaded audit hook. Why: a rule that is meant to be read on demand disables auto-injection with a reserved
+// `paths:` glob. Nothing in the loader enforces that, so the only way to know what a session really injected is to
+// observe the load events. The host fires InstructionsLoaded once per file, asynchronously, in its own process — this
+// hook classifies that ONE file and publishes a receipt for it.
 //
-// Why: a rule that is meant to be read on demand disables auto-injection with a
-// reserved `paths:` glob. Nothing in the loader enforces that, so the only way
-// to know what a session really injected is to observe the load events. The host
-// fires InstructionsLoaded once per file, asynchronously, in its own process —
-// this hook classifies that ONE file and publishes a receipt for it.
-//
-// Division of labour: the static checker (bin/check-on-demand-rules.sh) is
-// fail-CLOSED and blocks commits. This hook is fail-OPEN and always exits 0 with
-// empty stdout: an observation tool that can break a live session is worse than
-// no observation at all.
+// Division of labour: the static checker (bin/check-on-demand-rules.sh) is fail-CLOSED and blocks commits. This hook is
+// fail-OPEN and always exits 0 with empty stdout: an observation tool that can break a live session is worse than no
+// observation at all.
 
 const fs = require("fs");
 const path = require("path");

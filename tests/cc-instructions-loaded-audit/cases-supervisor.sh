@@ -1,24 +1,16 @@
 # shellcheck shell=bash
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/supervisor-emit.js
 # Tags: rules-injection, instructions-loaded, supervisor, secret-leakage, canary, redaction, TL2, scope:common
-#
-# Secret containment on the SUPERVISOR path, under a RESOLVABLE workflow session.
-#
-# Why this file exists separately: resolveWorkflowSessionId() returns null in the main
-# fixture (no WORKTREE_NOTES.md Session-ID, empty plans dir), and with a null wsid the
-# hook skips supervisor emission entirely. Every leakage canary asserted there is
-# therefore satisfied by a code path that never runs — the strongest possible form of
-# false green, because the assertion text says "the canary did not leak" while the
-# truth is "nothing was written at all". The whole point of a leakage test is to run it
-# where the write happens.
-#
-# So this file builds a session that genuinely resolves (WORKTREE_NOTES.md Session-ID
-# in CWD = priority 1, plus a matching plan artifact), fires a VIOLATING payload whose
-# rule body and load_reason are stuffed with canaries, and then asserts both halves:
-#   - the emission really happened (state file + an actionable finding), and
-#   - no canary reached any receipt, any supervisor state, any artifact filename,
-#     or stderr.
-# Asserting only the second half would pass on a hook that emits nothing.
+
+# Secret containment on the SUPERVISOR path, under a RESOLVABLE workflow session. Why separately:
+# resolveWorkflowSessionId() returns null in the main fixture (no WORKTREE_NOTES.md Session-ID, empty
+# plans dir), so the hook skips supervisor emission entirely — every leakage canary asserted there
+# is satisfied by a code path that never runs, the strongest false green ("did not leak" really means
+# "nothing was written"). A leakage test must run where the write happens. So this file builds a session
+# that resolves (WORKTREE_NOTES.md Session-ID in CWD = priority 1, plus a matching plan artifact), fires a
+# VIOLATING payload whose rule body and load_reason are stuffed with canaries, and asserts both halves: the
+# emission happened (state file + actionable finding), and no canary reached any receipt, supervisor state,
+# artifact filename, or stderr — asserting only the second half would pass on a hook that emits nothing.
 
 echo ""
 echo "=== supervisor emission under a resolvable session (containment + actionability) ==="

@@ -2,20 +2,9 @@
 # Tests: hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, policy-reader, unescape, string-const, parser, table-driven, TL2, scope:common
 #
-# The two scalar parsers: unescapeLiteral() and readStringConst().
-#
-# CONTRACT NOTES pinned here (each is a real, load-bearing property, not a restatement):
-#   - unescapeLiteral is a BACKSLASH STRIPPER, not a JS escape decoder. `\n` in the
-#     source becomes the letter `n`, NOT a newline. That is correct for its one job
-#     (recovering a quoted path literal such as "rules/docs.md") and would be wrong for
-#     anything else, so the distinction is asserted rather than assumed.
-#   - readStringConst distinguishes "declared as the empty string" (returns "") from
-#     "not declared at all" (returns null). loadPolicyAsData's documented contract rests
-#     on that difference, so it is pinned directly.
-#   - The declaration regex is UNANCHORED and text-only. Two consequences are pinned as
-#     CURRENT BEHAVIOUR with an explicit note, because both are accepted limitations of
-#     parsing rather than evaluating, not bugs this suite should hide.
-#
+# The two scalar parsers: unescapeLiteral() and readStringConst(). CONTRACT: unescapeLiteral is a BACKSLASH STRIPPER, not a JS escape decoder — `\n` in the source becomes the letter `n`, NOT a newline. That's correct for its one job (recovering a quoted path literal such as "rules/docs.md") and would be wrong for anything else, so the distinction is asserted rather than assumed.
+# readStringConst distinguishes "declared as the empty string" (returns "") from "not declared at all" (returns null) — loadPolicyAsData's documented contract rests on that difference, so it is pinned directly.
+# The declaration regex is UNANCHORED and text-only. Two consequences are pinned as CURRENT BEHAVIOUR with an explicit note, because both are accepted limitations of parsing rather than evaluating, not bugs this suite should hide.
 # Assumes BASE, run_rows(), assert_rows(), pass(), fail() from the dispatcher.
 
 echo ""

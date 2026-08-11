@@ -1,14 +1,14 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, bin/check-on-demand-rules.sh
 # Tags: rules-injection, policy, ssot, set-equality, parse-dont-evaluate, canary, TL2, scope:common
-#
+
 # Declarative SSOT assertions. Length + pathname-shape checks are false-green prone
 # (any 17 well-shaped strings would satisfy them), so the allowlist is compared for
 # EXACT SET EQUALITY against the real rules/ tree, in both directions:
 #   EXPECTED_UNCONDITIONAL == { rules/**/*.md with no `paths:` frontmatter }
 #   ON_DEMAND_FILES        == { rules/**/*.md whose paths: is exactly the token }
 # so neither a forgotten registration nor a stale entry can survive.
-#
+
 # PARSE, DON'T EVALUATE (CPR-ORTH with P11 below, and with A2a in
 # tests/cc-on-demand-skill-ownership/cases-require-safety.sh): this harness used to obtain
 # its constants by require()-ing the contributor-editable policy path. That made the very
@@ -16,7 +16,7 @@
 # on whatever branch a reviewer had checked out. The constants now come through the
 # agents-owned reader (hooks/lib/rules-policy-reader.js), and P12 proves it with the same
 # canary shape P11 uses on the checker side.
-#
+
 # The two array declarations are read with readStringArrayConst rather than taken from
 # loadPolicyAsData, because loadPolicyAsData collapses "declaration absent / unparseable"
 # to []. Keeping the raw null lets P3/P4 stay live assertions ("the list was actually
@@ -152,10 +152,10 @@ fi
 # repository. That is arbitrary code execution reachable through an ordinary pull
 # request, and no other case in this suite would notice: a hostile module can export
 # exactly the right constants and still have done its work on the way there.
-#
+
 # The canary is a module body with an observable side effect (a file written next to
 # the fixture). The assertion is that the side effect did NOT happen.
-#
+
 # STATED PLAINLY, per the review ruling: if the implementation is expected to
 # `require()` this module, this case WILL fail, and that failure is not a bug in the
 # test. It is the standing record that the constant-shape contract — "the policy file

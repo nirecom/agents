@@ -1,21 +1,14 @@
 "use strict";
 
-// SSOT for the rules-injection scope policy (declaration only — no logic, no I/O).
+// SSOT for the rules-injection scope policy (declaration only — no logic, no I/O). Claude Code injects every
+// `rules/**/*.md` file that carries no conditional `paths:` frontmatter into every session unconditionally. A rule that
+// should only be read on demand disables that auto-injection by declaring a single reserved glob that can never match
+// any real path, and by carrying a marker comment in its body so a human reader knows the omission is deliberate.
 //
-// Claude Code injects every `rules/**/*.md` file that carries no conditional
-// `paths:` frontmatter into every session unconditionally. A rule that should
-// only be read on demand disables that auto-injection by declaring a single
-// reserved glob that can never match any real path, and by carrying a marker
-// comment in its body so a human reader knows the omission is deliberate.
-//
-// Consumers (never the other way round — this file requires nothing):
-//   - hooks/instructions-loaded-audit.js  (runtime verdicts)
-//   - bin/check-on-demand-rules.sh        (static pre-commit invariants; parses
-//                                          this file AS DATA, never require()s it)
-//
-// Because the static checker reads this file with a text parser, keep every
-// declaration below a plain literal on one line: no computed values, no
-// concatenation, no module-body side effects.
+// Consumers (never the other way round — this file requires nothing): hooks/instructions-loaded-audit.js (runtime
+// verdicts); bin/check-on-demand-rules.sh (static pre-commit invariants; parses this file AS DATA, never require()s
+// it). Because the static checker reads this file with a text parser, keep every declaration below a plain literal on
+// one line: no computed values, no concatenation, no module-body side effects.
 
 // The reserved `paths:` value. It contains a directory segment that cannot
 // exist, so the loader's glob matcher never selects the file.

@@ -2,25 +2,21 @@
 # tests/bin-check-on-demand-rules.sh
 # Tests: bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common
-#
-# TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail
-# plan "1-3") plus the declarative SSOT constants in hooks/lib/rules-injection-policy.js.
-# Layer: TL2 (real bash subprocess, real git fixture repos, real files).
-# Dispatcher only — the cases live in tests/bin-check-on-demand-rules/.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether hooks/pre-commit actually wires this checker in for staged rules/**/*.md
-#   (the checker can be perfect and still never run on a real commit).
-# - Whether the host rules loader really refuses to match ON_DEMAND_TOKEN; this file
-#   only proves the notation is internally consistent, never that injection stops.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
-#
-# CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh):
-# the fixtures ship their own hooks/lib/rules-injection-policy.js inside the tree under
-# check and also export RULES_INJECTION_POLICY. The checker must resolve its policy
-# values from one of those two (policy-of-the-tree-under-check), otherwise --all <root>
-# would grade a foreign tree against the agents repo's own constants.
+
+# TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail plan "1-3")
+# plus the SSOT constants in hooks/lib/rules-injection-policy.js. Dispatcher only — cases live in
+# tests/bin-check-on-demand-rules/.
+# TL3 gap (not caught here): whether hooks/pre-commit actually wires this checker in for staged
+# rules/**/*.md (checker can be perfect, still never run on a real commit); whether the host loader
+# really refuses ON_DEMAND_TOKEN — this file only proves the notation is internally consistent,
+# never that injection stops. Mitigated at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh, category hook-registration.
+
+# CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh): the fixtures ship their own
+# hooks/lib/rules-injection-policy.js inside the tree under check and also export
+# RULES_INJECTION_POLICY. The checker must resolve policy from one of those two
+# (policy-of-the-tree-under-check), else --all <root> grades a foreign tree against the agents repo's
+# own constants.
 
 set -u
 

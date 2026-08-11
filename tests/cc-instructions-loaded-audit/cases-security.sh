@@ -1,21 +1,15 @@
 # shellcheck shell=bash
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, security, injection, traversal, secret-redaction, table-driven, TL2, scope:common
-#
-# Every field of the payload arrives from the host, not from this repo. session_id
-# and file_path both flow into a filesystem path (<workflowDir>/<sid>.instructions-loaded/
-# <sha1(file_path)>.json), so a naive join lets a hostile value escape the pinned
-# directory; and the payload as a whole may carry credentials that must never be
-# persisted.
-#
-# CONTRACT NOTE (asserted here):
-#   - Every artifact the hook writes stays under CLAUDE_WORKFLOW_DIR. No traversal,
-#     absolute path, separator, or control character in session_id/file_path may
-#     produce a path outside it.
-#   - No payload VALUE other than file_path/load_reason is persisted. Key NAMES are
-#     retained in payload_keys; values are not.
-#   - Shell metacharacters are inert: the hook must never hand a payload value to a
-#     shell.
+
+# Every payload field arrives from the host, not this repo. session_id and file_path both flow
+# into a filesystem path (<workflowDir>/<sid>.instructions-loaded/<sha1(file_path)>.json), so a
+# naive join lets a hostile value escape the pinned directory — and the payload as a whole may
+# carry credentials that must never be persisted. CONTRACT NOTE (asserted here): every artifact
+# the hook writes stays under CLAUDE_WORKFLOW_DIR — no traversal, absolute path, separator, or
+# control character in session_id/file_path may produce a path outside it. No payload VALUE other
+# than file_path/load_reason is persisted; key NAMES survive in payload_keys. Shell metacharacters
+# are inert: the hook must never hand a payload value to a shell.
 
 echo ""
 echo "=== security: untrusted session_id / file_path ==="
@@ -159,16 +153,13 @@ fi
 echo ""
 echo "=== security: the two fields that ARE written to disk ==="
 
-# The cases above prove that unrecognized payload fields are dropped. That is the easy
-# half: dropping everything is trivially safe. The dangerous half is the two fields the
-# receipt is REQUIRED to keep — file_path and load_reason are persisted verbatim by
-# design, so anything credential-shaped that arrives in them lands on disk under
-# CLAUDE_WORKFLOW_DIR and survives the session. Both are host-supplied.
-#
-# CONTRACT NOTE (asserted here): a persisted field is not exempt from redaction. A
-# credential-shaped substring in file_path or load_reason must be masked in the
-# receipt, and the receipt must still be written (redaction must not degrade into
-# dropping the entry, which would silently shrink the TL3 EXPECTED_SET).
+# The cases above prove unrecognized payload fields are dropped — trivially safe. The dangerous
+# half is the two fields the receipt is REQUIRED to keep: file_path and load_reason are persisted
+# verbatim by design, so a credential-shaped value in either lands on disk under CLAUDE_WORKFLOW_DIR
+# and survives the session. Both are host-supplied. CONTRACT NOTE (asserted here): a persisted
+# field is not exempt from redaction — a credential-shaped substring in file_path or load_reason
+# must be masked, and the receipt must still be written (redaction must not degrade into dropping
+# the entry, which would silently shrink the TL3 EXPECTED_SET).
 
 # receipt_text <sid> <fp> -> raw bytes of the receipt file, or the empty string
 receipt_text() {
@@ -233,19 +224,15 @@ else
     fail "S-LEAK-SWEEP: canary found — content: ${sweep_content:-none} names: ${sweep_names:-none}"
 fi
 
-# --- S-LINK: the receipt directory is a NAME the hook derives from session_id, not a
-# handle it owns. Anything already sitting at that name is attacker-controllable in the
-# one scenario that matters: a repo (or a stale worktree, or a shared /tmp) where some
-# other process got there first and left a link pointing somewhere else. `mkdir -p` on
-# an existing link succeeds silently and every subsequent write lands at the link's
-# TARGET, so a hook that trusts the name writes receipt content — which S-LEAK-FP and
-# S-LEAK-LR have just established may carry redacted-but-sensitive material — into a
-# directory outside both pinned dirs, where no test and no cleanup ever looks.
-#
-# The observable contract asserted here is deliberately narrow and behavioural: after a
-# firing whose receipt directory name is a link to elsewhere, NO receipt artifact exists
-# at the link target. How the hook achieves that (lstat-and-refuse, O_NOFOLLOW, realpath
-# containment check, or writing nothing at all) is not constrained.
+# --- S-LINK: the receipt directory is a NAME the hook derives from session_id, not a handle it
+# owns. Anything already there is attacker-controllable in the one scenario that matters: a stale
+# worktree or shared /tmp where another process left a link pointing elsewhere first. `mkdir -p`
+# on an existing link succeeds silently, so a hook trusting the name writes receipt content —
+# which S-LEAK-FP/S-LEAK-LR established may carry redacted-but-sensitive material — through the
+# link's TARGET, outside both pinned dirs and unmonitored. The contract asserted here is narrow
+# and behavioural: after firing on a link-occupied name, NO receipt artifact exists at the link
+# target. Mechanism (lstat-and-refuse, O_NOFOLLOW, realpath containment, or writing nothing)
+# is not constrained. ---
 LINK_SID="linkleak"
 LINK_OUT="$BASE/outside-receipts"
 LINK_AT="$WFDIR/$LINK_SID.instructions-loaded"

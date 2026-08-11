@@ -75,23 +75,15 @@ e3="$(read_field "$E3_SID" "$E3_FP" verdict)"
 [ "$e3" = "ok" ] && pass "E3: file_path outside rules/**/*.md classifies ok" \
     || fail "E3: want ok for a non-rules path, got $e3"
 
-# --- U1/U2: the `unreadable` verdict, both error shapes. --------------------------------
-# Why this needs its own cases: the classifier decides from the file's ON-DISK
-# frontmatter, so it reads the file. Every verdict above assumes that read succeeds. When
-# it does not, the hook must neither guess a verdict nor take the session down — it has to
-# record `unreadable` and stay fail-open (exit 0, empty stdout), because an audit hook
-# that can fail a turn is worse than one that occasionally records "I could not tell".
-#
-# The two shapes reach the same catch by different syscall errors, and they are the two
-# that actually happen: a path under a rules root that does not exist (ENOENT — a rule
-# deleted or renamed between the loader's read and the hook's), and a DIRECTORY read as a
-# file (EISDIR on POSIX, ENOTDIR/EPERM on Windows — a rules subdirectory whose name ends
-# in .md, or a path assembled one segment short). CPR-ORTH: both are members of the same
-# class, so both get the same case rather than one standing in for the other.
-#
-# Each asserts all three halves of the contract — the verdict, exit 0, and empty stdout —
-# because an `unreadable` receipt written by a hook that also crashed the turn would be a
-# regression this file must not pass over.
+# --- U1/U2: the `unreadable` verdict, both error shapes. Why separate: the classifier reads the file's ON-DISK
+# frontmatter, so every verdict above assumes the read succeeds. When it doesn't, the hook must neither guess a
+# verdict nor take the session down — it records `unreadable` and stays fail-open (exit 0, empty stdout), because a
+# hook that can fail a turn is worse than one that occasionally can't tell. The two shapes reach the same catch via
+# different syscall errors, both real: a rules-root path that no longer exists (ENOENT — a rule deleted/renamed
+# between the loader's read and the hook's), and a DIRECTORY read as a file (EISDIR on POSIX, ENOTDIR/EPERM on
+# Windows — a subdirectory named .md, or a path assembled one segment short). CPR-ORTH: same class, so both get
+# a case. Each asserts all three halves — verdict, exit 0, empty stdout — because an `unreadable` receipt from
+# a hook that also crashed the turn would be a regression. ---
 unreadable_case() {
     local label="$1" sid="$2" abspath="$3" res rc sout got
     local fp

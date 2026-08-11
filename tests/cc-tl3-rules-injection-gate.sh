@@ -3,25 +3,9 @@
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, on-demand-rules, off-switch, gate-logic, inconclusive, decision-table, TL2, scope:common
 #
-# The TL3 off-switch gate concludes "the reserved glob suppressed injection" from an
-# ABSENCE of receipts. Absence is only evidence when the run that was supposed to
-# produce them actually completed: a subprocess killed at the timeout, or one that
-# exited non-zero before the loader ran, leaves byte-for-byte the same empty receipt
-# directory as a perfectly working off-switch. This file pins the rule that a
-# non-zero subprocess result yields G-INCONCLUSIVE, never G-PASS.
-#
-# The TL3 body itself is RUN_TL3-gated and skips (exit 77) on every ordinary run, so
-# its decision table would otherwise never execute in CI. The table lives in
-# tests/TL3-rules-injection-off-switch/helpers.sh (SSOT) and is sourced here — this
-# file drives it directly with synthesized rc / observation / quiescence inputs, no
-# claude subprocess and no filesystem.
-# Layer: TL2 (sources the real gate helpers; pure function calls).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether a real `claude -p` timeout actually surfaces as rc 124/137 on this host,
-#   and whether the receipt directory is genuinely empty at that moment.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# The TL3 off-switch gate concludes "the reserved glob suppressed injection" from an ABSENCE of receipts. Absence is only evidence when the run that was supposed to produce them actually completed: a subprocess killed at the timeout, or one that exited non-zero before the loader ran, leaves byte-for-byte the same empty receipt directory as a perfectly working off-switch. This file pins the rule that a non-zero subprocess result yields G-INCONCLUSIVE, never G-PASS.
+# The TL3 body itself is RUN_TL3-gated and skips (exit 77) on every ordinary run, so its decision table would otherwise never execute in CI. The table lives in tests/TL3-rules-injection-off-switch/helpers.sh (SSOT) and is sourced here — this file drives it directly with synthesized rc / observation / quiescence inputs, no claude subprocess and no filesystem. Layer: TL2 (sources the real gate helpers; pure function calls).
+# TL3 gap: whether a real `claude -p` timeout actually surfaces as rc 124/137 on this host, and whether the receipt directory is genuinely empty at that moment. Mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 

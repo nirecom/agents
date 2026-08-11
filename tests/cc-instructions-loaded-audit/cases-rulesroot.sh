@@ -1,24 +1,16 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/instructions-loaded-receipt.js, hooks/instructions-loaded-audit.js
 # Tags: rules-injection, instructions-loaded, rules-key, root-anchoring, table-driven, path-traversal, security, TL2, scope:common
-#
-# WHY (CPR-WPH): a rules file reaches the loader from five different roots, and only one
-# of them yields a repo-relative path that begins with `rules/`. The earlier
-# implementation recovered identity by TAIL MATCHING — "does a `rules/` segment appear
-# anywhere in this path". That is not identity. It turns /home/v/.ssh/rules/id_rsa.md
-# into the key `rules/id_rsa.md`, which (a) defeats the deliberate `out-of-root:<digest>`
-# redaction that keeps unrelated absolute paths out of the receipt, and (b) hands an
-# unrelated file to the policy comparison, which then reports a bogus error-severity
-# S-MISSING about a file nobody registered.
-#
-# toRulesKey() is now ROOT-ANCHORED: it resolves the path and derives a key only when
-# the result sits under one of the KNOWN rules roots, with segment-aware containment and
-# win32 case folding. This group is the table-driven pin on that predicate
-# (skills/_shared/test-design/parser-regex-tests.md), plus the end-to-end integration
-# cases that prove the predicate is what the hook actually consumes.
-#
-# Assumes BASE, WFDIR, REPO, HOOK, RECEIPT_LIB, node_path(), fire(), read_field(),
-# pass(), fail() from the dispatcher and helpers.sh.
+
+# WHY (CPR-WPH): a rule reaches the loader from five roots, but only one repo-relative path form
+# starts with `rules/`. The old approach TAIL-MATCHED (does `rules/` appear anywhere in the
+# path) — not identity: it turned /home/v/.ssh/rules/id_rsa.md into key `rules/id_rsa.md`,
+# defeating out-of-root:<digest> redaction and handing classify() a bogus error-severity
+# S-MISSING for an unregistered file. toRulesKey() is now ROOT-ANCHORED (segment-aware, win32
+# case-folded): a key is derived only under a KNOWN rules root. Table-driven pin on that predicate
+# (skills/_shared/test-design/parser-regex-tests.md) plus end-to-end cases proving the hook
+# consumes it. Assumes BASE, WFDIR, REPO, HOOK, RECEIPT_LIB, node_path(), fire(), read_field(),
+# pass(), fail() from dispatcher/helpers.sh.
 
 echo ""
 echo "=== rules-key root anchoring (table-driven) ==="

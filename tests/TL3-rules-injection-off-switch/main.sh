@@ -191,28 +191,12 @@ EOF
     echo "${RIL_FINAL:-G-INCONCLUSIVE}"
 fi
 
-# TL3 gap: this gate runs against a fixture config root, not against the real
-# ~/.claude/rules symlink (which points at the agents MAIN worktree, so feature-branch
-# frontmatter is invisible pre-merge). The post-merge visual confirmation is carried as
-# a ManualReminders entry. When the F1 fallback is taken, its "absent" claim rests on
-# the model's self-report and is not a filesystem observation.
-#
-# Division of labor (deliberate, not an oversight): this gate registers the
-# InstructionsLoaded hook in its OWN fixture settings.json and never consults the real
-# ~/.claude registration — doing so would break fixture isolation, and pre-merge the
-# ~/.claude/rules symlink resolves to the agents MAIN worktree where this branch's
-# frontmatter does not exist. Integrity of the PRODUCTION registration (settings.json
-# key, command string, timeout, and the install/assemble-settings.js emitter) is
-# therefore not this file's job: it is asserted against the repo's real files by
-# tests/cc-instructions-loaded-registration.sh.
-#
-# Also out of scope for this tier, recorded so the omissions are deliberate:
-# - Per-skill-family read behaviour (test / docs / issue): whether each owning skill
-#   really performs its explicit Read once auto-injection is off is whole-pipeline
-#   (TL4) territory — one live session per family against a de-injected config root.
-#   This gate proves the MECHANISM (the reserved glob suppresses injection); the
-#   per-family behaviour is carried as a post-merge WORKTREE_NOTES ManualReminders
-#   confirmation.
-# - Host honouring of `paths:`: no invocable seam exists for the loader, so the sibling
-#   static assertion in tests/cc-rules-injection-scope-conventions.sh proves only that
-#   the configuration is what we intended — never that the host obeys it.
+# TL3 gap: this gate runs against a fixture config root, not the real ~/.claude/rules symlink (pre-merge it resolves to
+# MAIN, so feature-branch frontmatter is invisible) — confirmed post-merge via ManualReminders. F1 fallback absence is
+# a model self-report, not a filesystem fact. Division of labor: this gate registers InstructionsLoaded in its OWN
+# fixture settings.json, never the real ~/.claude registration (breaks fixture isolation; pre-merge it points at MAIN
+# anyway) — PRODUCTION registration (settings.json key, command, timeout, emitter) is proven instead by
+# tests/cc-instructions-loaded-registration.sh. Also out of scope, deliberately: per-skill-family Read behaviour with
+# injection off is TL4 territory (one live session per family; this gate proves only the MECHANISM); and host honouring
+# of `paths:` has no invocable loader seam, so tests/cc-rules-injection-scope-conventions.sh's static assertion proves
+# only the intended config, never host obedience.

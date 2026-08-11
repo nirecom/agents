@@ -2,27 +2,16 @@
 # tests/cc-instructions-loaded-cleanup.sh
 # Tests: hooks/workflow-state/state-io/zombie-cleanup.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, receipts, cleanup, retention, idempotency, TL2, scope:common
-#
-# Receipts accumulate one directory per session, each holding one JSON file per rule
-# the loader reported. Nothing else deletes them: without a sweep the workflow
-# directory grows without bound for as long as the machine is used, and the growth is
-# invisible because it lives under a dot-suffixed directory nobody lists. The detail
-# plan therefore folds `<sid>.instructions-loaded/` into the existing 7-day
-# cleanupZombies sweep, alongside the session-scoped marker files.
-#
-# A retention sweep has two failure directions and both are damaging: too eager
-# destroys the evidence an in-flight off-switch gate is about to read (the gate
-# concludes from ABSENCE, so a deleted receipt reads as a clean pass — a false green
-# manufactured by the janitor), too lax is the unbounded growth it was added to stop.
-# This file pins both edges, the exact boundary between them, and the behaviour on
-# entries the sweep cannot parse.
-# Layer: TL2 (runs the real cleanupZombies against a fully pinned fixture directory).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the sweep is actually reached on a real session's cleanup path, and
-#   whether the host's mtime granularity matches the boundary asserted here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+
+# Receipts accumulate one directory per session, one JSON file per reported rule; nothing else deletes them,
+# so the workflow dir grows unbounded and invisibly (a dot-suffixed dir nobody lists). The detail plan folds
+# `<sid>.instructions-loaded/` into the existing 7-day cleanupZombies sweep, alongside session-scoped marker files. A
+# retention sweep has two damaging failure directions: too eager destroys evidence an in-flight off-switch gate needs
+# (the gate concludes from ABSENCE, so a deleted receipt reads as a false-green clean pass); too lax is the unbounded
+# growth it exists to stop. This file pins both edges, the boundary, and unparseable-entry behaviour. Layer: TL2
+# (real cleanupZombies, fully pinned fixture dir). TL3 gap: whether the sweep is reached on a real session's cleanup
+# path and whether host mtime granularity matches this boundary — mitigated at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: hook-registration).
 
 set -u
 

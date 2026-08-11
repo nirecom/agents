@@ -1,24 +1,18 @@
 # shellcheck shell=bash
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, instructions-loaded, frontmatter, parser, error-handling, table-driven, TL2, scope:common
-#
+
 # Frontmatter parser error surface. One malformed form is not coverage: a parser
 # that only guards against the single "unclosed flow sequence" shape passes that
 # case and still mis-classifies every other degenerate `paths:` spelling.
-#
+
 # CONTRACT NOTE (asserted here, to be honoured by hooks/instructions-loaded-audit.js):
-#   A frontmatter block is "present" only when the file OPENS with `---` and a
-#   closing `---` line follows. Within a present block:
-#     - `paths:` absent                      -> not on-demand; ok if listed, else S-MISSING
-#     - `paths:` present but not a non-empty
-#       list of glob strings (null / scalar /
-#       empty list / duplicated key)         -> S-MALFORMED
-#     - `paths:` a non-empty glob list       -> ok
-#   An unterminated block is NOT a block: the file is treated as having no
-#   frontmatter at all (S-MISSING when unlisted), never as a parse error.
-#   CRLF line endings and a leading UTF-8 BOM must not defeat the block anchor.
-#   An unreadable / nonexistent file must fail open: exit 0, empty stdout, and a
-#   receipt whose verdict is never a crash artifact.
+# A frontmatter block is "present" only when the file OPENS with `---` and a closing `---` follows. Within a present
+# block: `paths:` absent means not on-demand (ok if listed, else S-MISSING); `paths:` present but not a non-empty
+# glob-string list (null / scalar / empty list / duplicated key) is S-MALFORMED; a non-empty glob list is ok. An
+# unterminated block is NOT a block — the file is treated as having no frontmatter at all (S-MISSING when unlisted),
+# never a parse error. CRLF endings and a leading UTF-8 BOM must not defeat the block anchor. An unreadable /
+# nonexistent file must fail open: exit 0, empty stdout, a receipt whose verdict is never a crash artifact.
 
 echo ""
 echo "=== frontmatter parser error surface ==="

@@ -7,31 +7,22 @@
 # Assumes REQUIRED_TABLE, csv_sorted(), BASE, READER, AGENTS_DIR, POLICY, node_path(),
 # pass(), fail() from cases-required.sh and the entry file.
 
-# =====================================================================================
-# R: the independent detection axis (mentions, discovered from the tree)
-# =====================================================================================
-# Why this exists: N1-N4 above are anchored on REQUIRED_TABLE, and REQUIRED_TABLE is
-# hand-written. That makes the whole C1 block circular in one specific direction — it
-# can prove the tree matches the table, but it cannot notice that the TABLE is the thing
-# that went stale. A skill that starts depending on a de-injected rule and never gets a
-# Read step is invisible to N1: it is not in the table, so it is not in `want`; and it
-# has no Read step, so it is not in `got` either. Both sides agree, and the skill runs
-# without the rule that used to arrive automatically.
-#
-# So this axis starts from the TREE instead of the table: walk skills/*/SKILL.md and
-# agents/**/*.md, find every file that MENTIONS an on-demand rule at all, and require
-# each mentioning SKILL.md to be accounted for — either registered in REQUIRED_TABLE
-# (with a Read step actually present) or named in the allowlist below with a reason.
-#
-# The scanner is a second, deliberately separate implementation from the entry file's
-# owners.js: its Read window is WIDER (3 lines rather than 2), which biases it toward
-# "this file does read the rule". That asymmetry is on purpose — a shared implementation
-# would make the two axes fail together, and a wider window keeps this axis quiet unless
-# no Read verb appears anywhere near any mention, which is the real failure shape.
-#
-# agents/**/*.md are scanned and reported but never required: the round-2 ruling stands
-# that an agent doc is a consumer, not an owner. They appear here so a future mention in
-# an agent doc is visible in the report rather than silently dropped.
+# --- R: the independent detection axis (mentions, discovered from the tree) ---
+# Why this exists: N1-N4 above are anchored on REQUIRED_TABLE, which is hand-written — that makes the
+# whole C1 block circular in one direction: it can prove the tree matches the table, but not that the
+# TABLE itself went stale. A skill that starts depending on a de-injected rule and never gets a Read
+# step is invisible to N1 (not in the table, so not in `want`; no Read step, so not in `got` either)
+# — both sides agree, and the skill runs without the rule that used to arrive automatically.
+
+# So this axis starts from the TREE instead: walk skills/*/SKILL.md and agents/**/*.md, find every file
+# that MENTIONS an on-demand rule, and require each mentioning SKILL.md to be accounted for — registered
+# in REQUIRED_TABLE with a Read step present, or named in the allowlist below with a reason. The scanner is
+# a second, deliberately separate implementation from the entry file's owners.js: its Read window is WIDER
+# (3 lines vs 2), biasing it toward "this file does read the rule" — a shared implementation would make
+# both axes fail together, and the wider window keeps this axis quiet unless no Read verb appears anywhere
+# near a mention, the real failure shape. agents/**/*.md are scanned and reported but never required:
+# the round-2 ruling stands that an agent doc is a consumer, not an owner — they appear here so a future
+# mention in an agent doc is visible in the report rather than silently dropped.
 
 echo ""
 echo "=== R: independent mention axis (tree-first, not table-first) ==="

@@ -1,29 +1,28 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, bin/check-on-demand-rules.sh
 # Tags: rules-injection, on-demand-rules, marker-regex, near-miss, mutation-probe, table-driven, parse-dont-evaluate, canary, TL2, scope:common
-#
+
 # ON_DEMAND_MARKER_RE is the only thing standing between "this rule was deliberately
 # de-injected" and "this rule went missing". Testing it against the one canonical
 # marker string proves almost nothing: /on-demand/ passes that test, and so does
 # /injection/. What has to be pinned is the boundary — the near-misses a typo or a
 # copy-paste produces, and the placements a real file puts the comment in.
-#
+
 # CONTRACT NOTE (asserted here, and DELIBERATELY STRICTER than a bare \b suffix guard):
-#   - The comment opener `<!--` is part of the marker. The same words in prose are not
-#     a marker, or every doc that DESCRIBES the mechanism would silently self-annotate.
+#   - The comment opener `<!--` is part of the marker — the same words in prose are not a marker, or every doc that
+#     DESCRIBES the mechanism would silently self-annotate.
 #   - The `injection:` key is required; `<!-- on-demand-only -->` alone is not a marker.
-#   - Matching is case-sensitive and suffix-tight: neither `ON-DEMAND-ONLY` nor
-#     `on-demand-only-ish` nor `on-demand-onlyx` may match. `\b` alone does NOT close
-#     the hyphen case (`y` -> `-` IS a word boundary), so a correct implementation needs
-#     an explicit negative lookahead such as (?![-\w]).
-#   - The regex must be stateless: a `g` flag makes .test() alternate true/false across
-#     calls, so the same file would be marked on one pass and unmarked on the next.
-#
+#   - Matching is case-sensitive and suffix-tight: neither `ON-DEMAND-ONLY` nor `on-demand-only-ish` nor
+#     `on-demand-onlyx` may match. `\b` alone does NOT close the hyphen case (`y` -> `-` IS a word boundary), so a
+#     correct implementation needs an explicit negative lookahead such as (?![-\w]).
+#   - The regex must be stateless: a `g` flag makes .test() alternate true/false across calls, so the same file would
+#     be marked on one pass and unmarked on the next.
+
 # PARSE, DON'T EVALUATE (CPR-ORTH with P11/P12 in cases-policy.sh): this harness reads the
 # contributor-editable policy through the agents-owned reader (loadPolicyAsData) instead of
 # require()-ing it, so running this suite on a checked-out branch cannot run that branch's
 # module body. K6 is the canary that keeps that true.
-#
+
 # Consequence for the /g check: the reader REBUILDS the regex without /g, so RE.global is
 # always false once it has been through loadPolicyAsData — an assertion on that alone would
 # be a tautology. The declared flags are therefore ALSO recovered straight from the policy

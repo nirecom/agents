@@ -3,18 +3,8 @@
 # Tests: rules/test/fixture-isolation.md, rules/test.md, rules/test/claude-e2e.md
 # Tags: rules-injection, rules-scope, frontmatter, conventions, ssot, TL2, scope:common
 #
-# Detail plan S1 narrows rules/test/fixture-isolation.md from unconditional injection
-# to the same test-file trigger set its sibling rules/test/claude-e2e.md already uses,
-# and adds a pointer to it from rules/test.md so the content stays discoverable once
-# it no longer loads on every turn. Narrowing the scope WITHOUT the pointer silently
-# removes the rule from the agent's reach — the two halves must be asserted together.
-# Layer: TL2 (reads the real rule files in this worktree; no fixtures, no subprocess).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code's own path matcher actually resolves these globs against the
-#   files a session touches; only a live session's injection receipt shows that.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Detail plan S1 narrows rules/test/fixture-isolation.md from unconditional injection to the same test-file trigger set its sibling rules/test/claude-e2e.md already uses, and adds a pointer to it from rules/test.md so the content stays discoverable once it no longer loads on every turn. Narrowing the scope WITHOUT the pointer silently removes the rule from the agent's reach — the two halves must be asserted together. Layer: TL2 (reads the real rule files in this worktree; no fixtures, no subprocess).
+# TL3 gap: whether Claude Code's own path matcher actually resolves these globs against the files a session touches; only a live session's injection receipt shows that. Mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 

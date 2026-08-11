@@ -1,26 +1,12 @@
 #!/usr/bin/env bash
 # check-on-demand-rules.sh — static gate for the on-demand rules-injection notation.
-#
-# Why: a rule that must NOT be auto-injected disables injection by declaring the
-# reserved `paths:` glob `.on-demand-only/never-match`. Nothing in the host loader
-# validates that convention, so the notation can rot silently — a token without its
-# marker comment, a marker without its token, a near-miss spelling that matches
-# nothing while looking correct. This checker is the fail-CLOSED half of the pair
-# (the InstructionsLoaded audit hook is the fail-open observational half).
-#
-# Usage:
-#   check-on-demand-rules.sh --all [<root>]
-#   check-on-demand-rules.sh --staged [<staged-path>...]
-#
-# Both modes run the SAME tree-wide invariants; `--staged` additionally surfaces a
-# staged path that does not resolve inside the checked root. Staged paths are DATA:
-# they are never expanded, evaluated, or followed.
-#
-# Exit codes: 0 clean | 1 violations found | 2 usage or unreadable policy.
-#
-# The policy constants come from the tree UNDER CHECK (`$RULES_INJECTION_POLICY`, or
-# `<root>/hooks/lib/rules-injection-policy.js`), never from this repo's own copy, so
-# `--all <other-root>` grades that tree against its own declarations.
+# Why: a rule that must NOT auto-inject disables it via the reserved `paths:` glob `.on-demand-only/never-match`;
+# nothing validates this, so it can rot silently (token w/o marker, marker w/o token, near-miss spelling) — fail-CLOSED
+# half of the pair (InstructionsLoaded audit hook is fail-open). Usage: `--all [<root>]` | `--staged [<staged-path>...]`
+# — same invariants; `--staged` also flags a staged path outside the root (staged paths are DATA: never expanded,
+# evaluated, or followed). Exit: 0 clean | 1 violations | 2 usage/unreadable. Policy comes from the tree UNDER CHECK
+# (`$RULES_INJECTION_POLICY` or `<root>/hooks/lib/rules-injection-policy.js`), never this repo's copy — `--all
+# <other-root>` grades that tree against its own.
 
 set -euo pipefail
 

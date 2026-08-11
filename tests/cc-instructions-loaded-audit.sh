@@ -2,20 +2,20 @@
 # tests/cc-instructions-loaded-audit.sh
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, instructions-loaded, hook, classifier, table-driven, fail-open, security, TL2, scope:common
-#
+
 # TL2 coverage of the InstructionsLoaded audit hook (detail plan section 3-2..3-6):
 # single-file payload on stdin -> verdict classification -> atomic per-entry receipt.
 # Layer: TL2 (real node subprocess, real stdin payload, real receipt files).
 # Dispatcher only: fixtures live in cc-instructions-loaded-audit/helpers.sh and the
 # case groups in the sibling cases-*.sh files (rules/coding/file-split.md Pattern A).
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Whether the host actually dispatches an "InstructionsLoaded" event under that
 #   exact spelling, and what payload shape it really passes (file_path/load_reason).
 # - Whether settings.json registration makes the hook fire at all in a live session.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-#
+
 # Skipped-Because: EACCES / read-only coverage (chmod 0000 on a rule file, or a
 # read-only receipt directory) is NOT tested here. POSIX permission bits are not
 # reliably enforced on this Windows host — the developer account routinely bypasses

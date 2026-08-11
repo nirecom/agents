@@ -3,32 +3,11 @@
 # Tests: hooks/lib/rules-policy-reader.js, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, policy-reader, parser, regex, table-driven, parse-dont-evaluate, canary, mutation-probe, TL2, scope:common
 #
-# WHY (CPR-WPH): hooks/lib/rules-policy-reader.js is the ONLY thing that lets the
-# pre-commit checker and the InstructionsLoaded audit hook read a contributor-editable
-# declaration file without executing it. Every safety property those two consumers claim
-# — "a pull request cannot run code on a reviewer's machine merely by being checked out"
-# — rests on this module's four text parsers being both correct and non-evaluating.
-# Until now it had zero direct coverage: the consumers' canaries prove the body did not
-# run, but nothing proved the parsers actually recover the declarations, and nothing
-# pinned their edges (empty string vs absent, /g statelessness, a slash in a character
-# class, an unparseable declaration vs an unreadable file).
-#
-# This is a parser/regex target, so the table-driven pattern from
-# skills/_shared/test-design/parser-regex-tests.md is used throughout: each case group is
-# a JS `cases` table whose harness emits one ROW per case, and the case NAME is injected
-# into every assertion message on the bash side.
-#
-# Layer: TL2 (real node subprocess, real fixture policy files on disk; the parsers
-# themselves are pure, but loadPolicyAsData reads real bytes and the canary cases need a
-# real module body that a real require() would have executed).
-# Dispatcher only — the cases live in tests/unit-rules-policy-reader/.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real consumers (bin/check-on-demand-rules.sh, hooks/instructions-loaded-audit.js)
-#   actually route through this reader in a live pre-commit / live session, rather than
-#   reintroducing a require() of the policy path on some branch this file never sees.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# WHY (CPR-WPH): hooks/lib/rules-policy-reader.js is the ONLY thing that lets the pre-commit checker and the InstructionsLoaded audit hook read a contributor-editable declaration file without executing it. Every safety property those two consumers claim — "a pull request cannot run code on a reviewer's machine merely by being checked out" — rests on this module's four text parsers being both correct and non-evaluating.
+# Until now it had zero direct coverage: the consumers' canaries prove the body did not run, but nothing proved the parsers actually recover the declarations, and nothing pinned their edges (empty string vs absent, /g statelessness, a slash in a character class, an unparseable declaration vs an unreadable file).
+# This is a parser/regex target, so the table-driven pattern from skills/_shared/test-design/parser-regex-tests.md is used throughout: each case group is a JS `cases` table whose harness emits one ROW per case, and the case NAME is injected into every assertion message on the bash side.
+# Layer: TL2 (real node subprocess, real fixture policy files on disk; the parsers themselves are pure, but loadPolicyAsData reads real bytes and the canary cases need a real module body that a real require() would have executed). Dispatcher only — the cases live in tests/unit-rules-policy-reader/.
+# TL3 gap: whether the real consumers (bin/check-on-demand-rules.sh, hooks/instructions-loaded-audit.js) actually route through this reader in a live pre-commit / live session, rather than reintroducing a require() of the policy path on some branch this file never sees. Mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 

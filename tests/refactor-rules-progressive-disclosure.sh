@@ -3,35 +3,11 @@
 # Tests: hooks/lib/rules-injection-policy.js, rules/branch.md, rules/claude-config-source.md, rules/coding.md, rules/coding/file-split.md, rules/coding/nodejs.md, rules/coding/python.md, rules/core-principles.md, rules/docs-only-short-circuit.md, rules/docs.md, rules/docs/architecture.md, rules/docs/changelog.md, rules/docs/env-example.md, rules/docs/history.md, rules/docs/readme.md, rules/docs/todo.md, rules/git.md, rules/github-issues.md, rules/installer.md, rules/issue-close-verified.md, rules/mid-workflow-findings.md, rules/ops.md, rules/prompt.md, rules/shell-commands.md, rules/stop-guard-exemptions.md, rules/supervisor-reporting.md, rules/test.md, rules/test/claude-e2e.md, rules/test/fixture-isolation.md, rules/test/installer.md, rules/test/macos-timeout.md, rules/user-escalation.md, rules/workflow-off.md, rules/worktree.md, skills/_shared/test-design.md
 # Tags: frontmatter, rules, paths, progressive-disclosure, tests, scope:common
 #
-# Dispatcher for the refactor/rules-progressive-disclosure test group.
-# Test groups live in tests/refactor-rules-progressive-disclosure/ and are
-# sourced below; this file owns the shared helpers and PASS/FAIL/SKIP totals.
-#
-# Groups:
-#   paths-frontmatter.sh — conditional / on-demand / unconditional injection classes, no globs:
-#   helper-fixtures.sh   — table-driven fixtures for check_paths_frontmatter
-#   cleanup.sh           — stub deletion + hub files stay unconditional
-#   content-parity.sh    — headings, verbatim sentences, links, char-count
-#   memory.sh            — memory index consistency and merge check
-#
-# These tests validate POST-IMPLEMENTATION state.
-# Tests that reference .bak files or sub-files not yet created will SKIP or FAIL
-# appropriately — that is expected behavior before implementation is complete.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code actually injects a rule file with valid `paths:` frontmatter
-#   into the session context when a matching file is read or edited.
-# - Whether a conditional rule is correctly withheld when no matching path is touched
-#   in the session (over-injection / always-on regression).
-# - Whether user-scope conditional matching fires at all through the
-#   ~/.claude/rules symlink into this repo (host-specific symlink resolution).
-# This test only validates frontmatter FORMAT statically. The runtime injection
-# proof is obtained once, post-merge, by observing whether these files still appear
-# in a fresh session's injected context through the ~/.claude/rules symlink; the
-# branch state is not observable before merge because that symlink resolves to the
-# main worktree. It is deliberately not committed as a test.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Dispatcher for the refactor/rules-progressive-disclosure test group; test groups live in tests/refactor-rules-progressive-disclosure/ and are sourced below, this file owns the shared helpers and PASS/FAIL/SKIP totals. Groups: paths-frontmatter.sh (conditional/on-demand/unconditional injection classes, no globs), helper-fixtures.sh (table-driven fixtures for check_paths_frontmatter), cleanup.sh (stub deletion + hub files stay unconditional), content-parity.sh (headings, verbatim sentences, links, char-count), memory.sh (memory index consistency and merge check).
+# These tests validate POST-IMPLEMENTATION state — tests that reference .bak files or sub-files not yet created will SKIP or FAIL appropriately, which is expected before implementation is complete.
+# TL3 gap: whether Claude Code actually injects a rule file with valid `paths:` frontmatter into the session context when a matching file is read/edited; whether a conditional rule is correctly withheld when no matching path is touched (over-injection/always-on regression); whether user-scope conditional matching fires at all through the ~/.claude/rules symlink into this repo (host-specific symlink resolution).
+# This test only validates frontmatter FORMAT statically — the runtime injection proof is obtained once, post-merge, by observing whether these files still appear in a fresh session's injected context through the ~/.claude/rules symlink; branch state isn't observable before merge because that symlink resolves to the main worktree, so it's deliberately not committed as a test.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1

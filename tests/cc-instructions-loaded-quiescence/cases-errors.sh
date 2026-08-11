@@ -1,26 +1,21 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, quiescence, error-handling, boundary, table-driven, TL2, scope:common
-#
-# Error and boundary surface for waitForQuiescence(). The happy-path window cases
-# cannot distinguish "entry absent" from "entry present but unreadable", and they
-# never touch the degenerate option values a caller can legitimately compute
-# (W = clamp(2*S, ...) with S = 0, a one-member EXPECTED_SET, a deadline already
-# in the past).
-#
+
+# Error and boundary surface for waitForQuiescence(). The happy-path window cases cannot distinguish
+# "entry absent" from "entry present but unreadable", and never touch the degenerate option values
+# a caller can legitimately compute (W = clamp(2*S, ...) with S = 0, a one-member EXPECTED_SET,
+# a deadline already in the past).
+
 # CONTRACT NOTE (asserted here):
-#   - A settled *.json that cannot be parsed or read is NOT a member: Q1 stays
-#     unsatisfied. It must never throw and never be counted.
+#   - A settled *.json that cannot be parsed/read is NOT a member: Q1 stays unsatisfied; must never throw or be counted.
 #   - A corrupt entry republished correctly mid-run is picked up (recovery).
 #   - opts.expected is a SET: duplicates collapse; one member is a valid set.
-#   - Zero/negative windowSec, pollMs, or deadlines must terminate promptly and
-#     return a status; they must never spin (the driver's runaway guard reports
-#     RUNAWAY=yes instead of hanging the suite).
-#   - A deadline boundary is INCLUSIVE: arriving exactly at q1DeadlineSec satisfies
-#     Q1; the run still stops at totalDeadlineSec.
-#   - Stopping AT the combined deadline is INCOMPLETE, not OK: stability was never
-#     demonstrated, and only a demonstrated-stable OK may be used to prove absence
-#     downstream (see the TL3 gate).
+#   - Zero/negative windowSec, pollMs, or deadlines terminate promptly with a status, never spin
+#     (driver's runaway guard reports RUNAWAY=yes instead of hanging the suite).
+#   - A deadline boundary is INCLUSIVE: arriving exactly at q1DeadlineSec satisfies Q1; the run still stops at totalDeadlineSec.
+#   - Stopping AT the combined deadline is INCOMPLETE, not OK: stability was never demonstrated, and
+#     only a demonstrated-stable OK may prove absence downstream (see the TL3 gate).
 
 echo ""
 echo "=== quiescence error and boundary surface ==="

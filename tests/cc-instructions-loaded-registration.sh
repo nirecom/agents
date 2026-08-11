@@ -2,18 +2,14 @@
 # tests/cc-instructions-loaded-registration.sh
 # Tests: settings.json, install/assemble-settings.js, hooks/instructions-loaded-audit.js
 # Tags: rules-injection, instructions-loaded, hook-registration, settings, installer, TL2, scope:common
-#
-# A hook that is never registered never fires, and every behavioural test in this
-# series would still pass. This file asserts the wiring itself against the REPO's
-# real settings.json and the real installer merge — not a fixture copy.
-# Layer: TL2 (reads the real settings.json; runs the real assembler against a
-# redirected HOME with a pre-flight proving the redirection took effect).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the running Claude Code build dispatches an event under exactly the
-#   "InstructionsLoaded" spelling; a registration can be well-formed and still dead.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+
+# A hook that is never registered never fires, and every behavioural test in this series would
+# still pass. This file asserts the wiring itself against the REPO's real settings.json and the
+# real installer merge — not a fixture copy. Layer: TL2 (reads the real settings.json; runs
+# the real assembler against a redirected HOME, with a pre-flight proving the redirection took
+# effect). TL3 gap: whether the running Claude Code build dispatches an event under exactly the
+# "InstructionsLoaded" spelling — a registration can be well-formed and still dead. Mitigated
+# at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 

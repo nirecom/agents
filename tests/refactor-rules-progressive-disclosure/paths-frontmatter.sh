@@ -2,31 +2,10 @@
 # Tests: hooks/lib/rules-injection-policy.js, rules/branch.md, rules/claude-config-source.md, rules/coding.md, rules/coding/file-split.md, rules/coding/nodejs.md, rules/coding/python.md, rules/core-principles.md, rules/docs-only-short-circuit.md, rules/docs.md, rules/docs/architecture.md, rules/docs/changelog.md, rules/docs/env-example.md, rules/docs/history.md, rules/docs/readme.md, rules/docs/todo.md, rules/git.md, rules/github-issues.md, rules/installer.md, rules/issue-close-verified.md, rules/mid-workflow-findings.md, rules/ops.md, rules/prompt.md, rules/shell-commands.md, rules/stop-guard-exemptions.md, rules/supervisor-reporting.md, rules/test.md, rules/test/claude-e2e.md, rules/test/fixture-isolation.md, rules/test/installer.md, rules/test/macos-timeout.md, rules/user-escalation.md, rules/workflow-off.md, rules/worktree.md
 # Tags: frontmatter, rules, paths, on-demand-rules, rules-injection, scope:common
 # Part of tests/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
-# Test 1: the three rules-injection classes, asserted separately
-#   T1-A conditional rules — exact ordered pattern list + format validity
-#   T1-B on-demand rules   — paths: is EXACTLY [ON_DEMAND_TOKEN] (length is load-bearing)
-#   T1-C set equality      — enumerated paths:-carrying set == T1-A ∪ T1-B
-#   T1-D unconditional set — every EXPECTED_UNCONDITIONAL entry carries no paths: key
-#   T1-E token containment — the reserved token appears in no other rules file
-# Test 2: no remaining globs: frontmatter under rules/
-#
-# Why the classes are asserted separately rather than as one flat list: a conditional
-# rule and an on-demand rule carry opposite invariants. A conditional rule must keep
-# its exact globs; an on-demand rule must carry the reserved never-match token and
-# NOTHING else — `paths:` is OR-semantics, so a second element silently restores
-# injection. A single count-or-membership assertion over the union would pass through
-# both regressions.
-#
-# The policy SSOT (hooks/lib/rules-injection-policy.js) is read AS DATA by text-matching
-# its literal declarations. It is never require()d and never executed: it is a
-# contributor-editable file, and evaluating it from the test harness would run
-# arbitrary code on every developer's machine (same contract as bin/check-on-demand-rules.sh
-# and its P11 case in tests/bin-check-on-demand-rules.sh).
-#
-# Fail-closed: this group never SKIPs. If the rules/ rename has not landed the
-# contract FAILS naming the missing path — a checkout without the conversion
-# must not pass CI with zero assertions run. Likewise an empty or unparseable
-# SSOT array FAILS loudly instead of reducing T1-B/T1-D to zero assertions.
+# Test 1: the three rules-injection classes, asserted separately: T1-A conditional rules (exact ordered pattern list + format validity); T1-B on-demand rules (paths: is EXACTLY [ON_DEMAND_TOKEN], length is load-bearing); T1-C set equality (enumerated paths:-carrying set == T1-A ∪ T1-B); T1-D unconditional set (every EXPECTED_UNCONDITIONAL entry carries no paths: key); T1-E token containment (reserved token appears in no other rules file). Test 2: no remaining globs: frontmatter under rules/.
+# Why separate: a conditional rule and an on-demand rule carry opposite invariants — conditional must keep its exact globs; on-demand must carry the reserved never-match token and NOTHING else (`paths:` is OR-semantics, so a second element silently restores injection). A single count-or-membership assertion over the union would pass through both regressions.
+# The policy SSOT (hooks/lib/rules-injection-policy.js) is read AS DATA by text-matching its literal declarations — never require()d or executed, since it's contributor-editable and evaluating it from the harness would run arbitrary code on every developer's machine (same contract as bin/check-on-demand-rules.sh's P11 case in tests/bin-check-on-demand-rules.sh).
+# Fail-closed: this group never SKIPs. If the rules/ rename has not landed the contract FAILS naming the missing path — a checkout without the conversion must not pass CI with zero assertions run. Likewise an empty or unparseable SSOT array FAILS loudly instead of reducing T1-B/T1-D to zero assertions.
 
 # ---------------------------------------------------------------------------
 # Expected CONDITIONAL rules (T1-A):

@@ -1,26 +1,23 @@
 # shellcheck shell=bash
 # Tests: bin/check-on-demand-rules.sh
 # Tags: rules-injection, on-demand-rules, input-injection, untrusted-input, hardening, table-driven, TL2, scope:common
-#
+
 # `--staged <files>` is fed by hooks/pre-commit from `git diff --cached --name-only`,
 # i.e. from whatever filenames the working tree happens to contain. Those names are
 # attacker-influenced in any repo that accepts contributions, and the checker is a
 # bash script that will be handling them with globbing, word splitting and (if written
 # carelessly) `eval` / unquoted expansion in play. A checker that can be made to execute
 # a filename runs inside the pre-commit hook, with the developer's credentials.
-#
+
 # CONTRACT NOTE (asserted here):
-#   - Every hostile name is DATA. It may be reported, skipped, or rejected; it may never
-#     be executed, expanded, or followed outside the repo root.
-#   - The exit code stays inside the documented set {0,1,2}. A 126/127/139 or a bash
-#     diagnostic on stdout means the name reached the shell as code.
-#   - One argument is one path. A name containing a newline or a space must not be
-#     silently split into two paths — that is how a real file smuggles itself past a
-#     per-path check.
-#   - A path that does not resolve inside the checked root is SURFACED (exit 1 or 2),
-#     never silently accepted with exit 0. Absence of a name from the output cannot be
-#     asserted here — a checker that correctly REJECTS `../x.md` still echoes it in the
-#     diagnostic — so the observable contract is the verdict, not the wording.
+#   - Every hostile name is DATA — reported, skipped, or rejected, never executed, expanded, or followed outside the repo root.
+#   - Exit code stays inside {0,1,2}; a 126/127/139 or a bash diagnostic on stdout means the name reached the
+#     shell as code.
+#   - One argument is one path — a newline or space in a name must not silently split it into two, the way a
+#     real file smuggles itself past a per-path check.
+#   - A path outside the checked root is SURFACED (exit 1/2), never silently accepted with exit 0. Absence from
+#     the output is not assertable here — a checker that correctly REJECTS `../x.md` still echoes it — the
+#     observable contract is the verdict, not the wording.
 
 echo ""
 echo "=== --staged input injection (untrusted filenames) ==="
@@ -153,17 +150,13 @@ else
 fi
 
 # --- X23..X25: REAL violating files whose NAMES are hostile ------------------------
-# Everything above hands hostile strings to the checker as arguments for paths that do
-# not exist, which proves the argument handling is inert. It does not prove the checker
-# can still do its job on such a path — and that is the direction that actually bites:
-# a name split on whitespace turns into two nonexistent paths, the checker finds no
-# violation in either, exits 0, and the broken rule is committed. The failure is silent
-# and looks exactly like success, so it is asserted with a file that really is broken
-# and really is named this way.
-#
-# The identification must reproduce the name WHOLE. "rules/bad" plus "rule.md" is not
-# an identification of `rules/bad rule with spaces.md`; it is two wrong answers, and a
-# contributor cannot act on it.
+# Everything above hands hostile strings to the checker as arguments for paths that do not exist, proving
+# only that argument handling is inert — it does not prove the checker still works on such a path, which is
+# the direction that actually bites: a name split on whitespace turns into two nonexistent paths, the checker
+# finds no violation in either, exits 0, and the broken rule is committed silently, indistinguishable from
+# success. Asserted here with a file that really is broken and really is named this way. The identification
+# must reproduce the name WHOLE — "rules/bad" plus "rule.md" is not an identification of `rules/bad rule
+# with spaces.md`; it is two wrong answers, and a contributor cannot act on it.
 
 # x_real <label> <filename> — writes a genuinely broken rule under that name and
 # requires exit 1 with the exact name in the output.

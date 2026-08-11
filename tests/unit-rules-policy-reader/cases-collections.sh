@@ -2,20 +2,9 @@
 # Tests: hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, policy-reader, string-array, regex-const, stateless-regex, parser, table-driven, TL2, scope:common
 #
-# The two collection parsers: readStringArrayConst() and readRegexConst().
-#
-# CONTRACT NOTES pinned here:
-#   - readStringArrayConst distinguishes "declared empty" ([]) from "not declared" (null),
-#     the same way readStringConst distinguishes "" from null. loadPolicyAsData collapses
-#     both to [] on purpose, so the distinction can only be pinned at this level.
-#   - readRegexConst REBUILDS the literal with `new RegExp(source, flags)` and DROPS /g.
-#     A surviving /g makes .test() stateful through lastIndex, which would mark the same
-#     file annotated on one pass and bare on the next — the exact non-determinism the
-#     de-injection audit cannot tolerate. Both halves are asserted: the flag is gone, AND
-#     two consecutive .test() calls on one subject agree.
-#   - An unparseable regex SOURCE yields null rather than throwing, so a malformed policy
-#     degrades to "no marker regex" instead of taking the consumer down.
-#
+# The two collection parsers: readStringArrayConst() and readRegexConst(). CONTRACT: readStringArrayConst distinguishes "declared empty" ([]) from "not declared" (null), the same way readStringConst distinguishes "" from null — loadPolicyAsData collapses both to [] on purpose, so the distinction can only be pinned at this level.
+# readRegexConst REBUILDS the literal with `new RegExp(source, flags)` and DROPS /g — a surviving /g makes .test() stateful through lastIndex, marking the same file annotated on one pass and bare on the next, the exact non-determinism the de-injection audit cannot tolerate. Both halves are asserted: the flag is gone, AND two consecutive .test() calls on one subject agree.
+# An unparseable regex SOURCE yields null rather than throwing, so a malformed policy degrades to "no marker regex" instead of taking the consumer down.
 # Assumes BASE, run_rows(), assert_rows(), pass(), fail() from the dispatcher.
 
 echo ""

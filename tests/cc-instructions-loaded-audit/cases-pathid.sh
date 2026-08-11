@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, path-identity, normalization, cross-root, TL2, scope:common
-#
+
 # The TL3 gate runs the SAME fixture twice from two DIFFERENT roots (base/ and judge/)
 # and then compares the two receipt sets: the Q1 completeness barrier asks whether
 # every path observed in RUN-BASE also appeared in RUN-JUDGE. That comparison is only
@@ -10,7 +10,7 @@
 # be disjoint by construction: Q1 could never be satisfied, the gate would report
 # INCONCLUSIVE forever, or — worse, if only the target were compared by basename —
 # absence would be "proven" against a set that never had a chance to match.
-#
+
 # CONTRACT NOTE (asserted here):
 #   - The receipt's file_path is REPO-RELATIVE and POSIX-separated: no drive letter,
 #     no leading slash, no backslash, no ../ segment.

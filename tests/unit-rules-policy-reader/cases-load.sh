@@ -4,20 +4,9 @@
 #
 # loadPolicyAsData(): the composed entry point every consumer actually calls.
 #
-# WHY the canary (CPR-ORTH with P11 in tests/bin-check-on-demand-rules/cases-policy.sh and
-# A2a in tests/cc-on-demand-skill-ownership/cases-require-safety.sh): those two pin the
-# CONSUMERS. This group pins the READER ITSELF — the single place whose failure would make
-# both of them wrong at once. A fixture policy whose module body writes a file is loaded,
-# and the assertion is that the file was never created.
-#
-# The documented contract split is asserted directly:
-#   present-but-unparseable declaration -> null (scalars) / [] (arrays)
-#   unreadable file                     -> THROWS
-# A caller that cannot tell those two apart would read a mistyped policy path as a
-# legitimately empty policy and pass every per-rule assertion vacuously.
-#
-# Assumes BASE, READER_NODE, POLICY_NODE, node_path(), run_rows(), assert_rows(),
-# assert_eq(), pass(), fail() from the dispatcher.
+# WHY the canary (CPR-ORTH with P11 in tests/bin-check-on-demand-rules/cases-policy.sh and A2a in tests/cc-on-demand-skill-ownership/cases-require-safety.sh): those two pin the CONSUMERS; this group pins the READER ITSELF — the single place whose failure would make both of them wrong at once. A fixture policy whose module body writes a file is loaded, and the assertion is that the file was never created.
+# The documented contract split is asserted directly: present-but-unparseable declaration -> null (scalars) / [] (arrays); unreadable file -> THROWS. A caller that cannot tell those two apart would read a mistyped policy path as a legitimately empty policy and pass every per-rule assertion vacuously.
+# Assumes BASE, READER_NODE, POLICY_NODE, node_path(), run_rows(), assert_rows(), assert_eq(), pass(), fail() from the dispatcher.
 
 echo ""
 echo "=== loadPolicyAsData: fixtures, degraded declarations, and the parse-only canary ==="

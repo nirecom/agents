@@ -2,20 +2,16 @@
 # tests/cc-on-demand-skill-ownership.sh
 # Tests: hooks/lib/rules-injection-policy.js, rules/test.md, rules/docs.md, rules/github-issues.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, mapping, real-tree, mutation-probe, TL2, scope:common
-#
-# The primary wiring of the on-demand mechanism is NOT the frontmatter token — it is
-# the promise that some skill Reads the rule explicitly instead. A rule that is
-# de-injected and then owned by nobody is silently gone from the agent's reach, and
-# every notation-level check (bin/check-on-demand-rules.sh) still passes.
-# This file asserts the mapping itself over the REAL tree, and pins the detector with
-# synthetic mutation probes so the real-tree pass cannot be vacuous.
-# Layer: TL2 (walks the real skills/ and agents/ trees; fixtures only for the probes).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the owning skill's Read step actually executes in a live session, and
-#   whether the model honours it once the rule stops being auto-injected.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+
+# The primary wiring of the on-demand mechanism is NOT the frontmatter token — it's the
+# promise that some skill Reads the rule explicitly instead. A rule that's de-injected and
+# then owned by nobody is silently gone from the agent's reach, and every notation-level check
+# (bin/check-on-demand-rules.sh) still passes. This file asserts the mapping itself over the
+# REAL tree, and pins the detector with synthetic mutation probes so the real-tree pass cannot be
+# vacuous. Layer: TL2 (walks the real skills/ and agents/ trees; fixtures only for the probes). TL3
+# gap: whether the owning skill's Read step actually executes in a live session, and whether the
+# model honours it once the rule stops being auto-injected. Mitigated at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 

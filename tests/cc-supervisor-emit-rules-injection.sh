@@ -3,19 +3,8 @@
 # Tests: hooks/lib/supervisor-emit.js
 # Tags: rules-injection, supervisor, supervisor-emit, instructions-loaded, TL2, scope:common
 #
-# TL2 coverage of the new reportRulesInjection() export (detail plan section 3-5).
-# Unlike tests/feature-831-supervisor-emit.sh, which stubs appendFinding, this file
-# writes through the REAL supervisor-state-writer into a pinned fixture plans dir and
-# reads the persisted finding back — the plan's claim is about what actually lands in
-# the state file, and a stubbed writer cannot fail on a validateFinding rejection.
-# Layer: TL2 (real node subprocess, real state file in a fixture dir).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the audit hook actually calls reportRulesInjection with a resolvable wsid
-#   during a live session (wsid is null for non-workflow sessions by design).
-# - Whether the supervisor alert pipeline surfaces a "workflow"/error finding to the user.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# TL2 coverage of the new reportRulesInjection() export (detail plan section 3-5). Unlike tests/feature-831-supervisor-emit.sh, which stubs appendFinding, this file writes through the REAL supervisor-state-writer into a pinned fixture plans dir and reads the persisted finding back — the plan's claim is about what actually lands in the state file, and a stubbed writer cannot fail on a validateFinding rejection. Layer: TL2 (real node subprocess, real state file in a fixture dir).
+# TL3 gap: whether the audit hook actually calls reportRulesInjection with a resolvable wsid during a live session (wsid is null for non-workflow sessions by design), and whether the supervisor alert pipeline surfaces a "workflow"/error finding to the user. Mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 

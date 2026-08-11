@@ -1,17 +1,17 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/instructions-loaded-receipt.js, hooks/instructions-loaded-audit.js
 # Tags: rules-injection, instructions-loaded, rules-key, symlink, junction, path-traversal, security, pinned-gap, TL2, scope:common
-#
+
 # The symlink half of root anchoring. Sourced from cases-rulesroot.sh (file-split
 # Pattern A: that file is at the 300-line WARN), so $RR, $REPO, fire(), read_field(),
 # node_path(), pass() and fail() are already in scope.
-#
+
 # WHY (CPR-WPH): every reject row in cases-rulesroot.sh is LEXICAL — the path spells its
 # way out of the root (`../`, an adjacent name, a foreign absolute path). A symlink says
 # nothing of the kind. `<project>/rules/escape.md` is, character for character, a path
 # under a known rules root; only the filesystem knows it resolves somewhere else. So this
 # group asks the one question the table cannot: does containment survive a link?
-#
+
 # It does NOT. toRulesKey() resolves lexically by contract — path.resolve() only, never
 # realpath()/stat() — so a link under a rules root keeps a readable `rules/<tail>` key and
 # the linked-to file is read and classified as if it were a registered rule. That is the
@@ -19,7 +19,7 @@
 # current behaviour, with the ideal spelled out, rather than asserted the way it ought to
 # behave (this change is tests-only; the pin is the record, and the day the source starts
 # resolving links these cases fail and the change gets reviewed).
-#
+
 # Scope of the exposure, stated plainly so the pin is not read as bigger than it is: the
 # link has to already exist inside a rules root, which means an actor who can write into
 # the rules directory — and such an actor could put a real file there instead. What the

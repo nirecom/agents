@@ -1,10 +1,10 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/instructions-loaded-receipt.js, hooks/instructions-loaded-audit.js
 # Tags: rules-injection, instructions-loaded, receipt, atomicity, idempotency, fail-open, TL2, scope:common
-#
+
 # Receipt shape, atomic publish, idempotency on a repeated key, and the fail-open
 # contract.
-#
+
 # CONTRACT NOTE (asserted here): the receipt key is sha1(file_path), so a session
 # that loads the SAME file repeatedly collides on ONE key by design. Repeated and
 # concurrent firings must converge on exactly one valid settled receipt with no
@@ -92,7 +92,7 @@ fi
 
 # --- I3 (C9): repeated firings of the same finding must not multiply downstream.
 # The supervisor is the consumer; a per-firing emit would flood it.
-#
+
 # This case MUST run under a RESOLVABLE workflow session. Everywhere else in this file
 # WORKFLOW_PLANS_DIR is an empty fixture, so resolveWorkflowSessionId() returns null and
 # the emit is skipped by design (E7) — counting findings there yields zero no matter

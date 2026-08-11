@@ -1,30 +1,23 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/rules-injection-policy.js, rules/test.md, rules/docs.md, rules/github-issues.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, reject-context, false-positive, table-driven, TL2, scope:common
-#
-# Where a mention LIVES decides whether it is a promise or a description.
-#
-# The ownership detector is a line scanner: it looks for the rule path on a line and a
-# `Read` verb within a couple of lines of it. Three contexts routinely put both of those
-# next to each other while promising nothing:
-#   - a fenced code block (documentation SHOWING the step, e.g. a skill that explains
-#     how other skills load rules),
-#   - an HTML comment (a note to maintainers, invisible to the rendered document and to
-#     the model reading the skill),
-#   - a `#`-prefixed line (a markdown heading, or a shell comment inside an example).
-# If any of those counts as ownership, then M1 and the C1/R mappings can be satisfied by
-# a skill that never actually reads the rule — a false green in exactly the direction
-# this whole series exists to prevent.
-#
-# So the table below states, per context, what the detector WOULD have to answer for the
-# ownership claim to be honest (`ideal`), and what it answers TODAY (`pinned`). The
-# assertion is on `pinned`, and every row where the two differ prints an explicit GAP
-# line naming the unclosed hole. That is deliberate: the constraint on this change is
-# tests-only, so a detector gap is RECORDED here rather than fixed in the reporter, and
-# the pin makes the day someone closes it a visible, reviewed event (this file fails, and
-# the fix is to move `pinned` onto `ideal`).
-#
-# Assumes BASE, run_owners(), pass(), fail() from the entry file.
+
+# Where a mention LIVES decides whether it's a promise or a description. The ownership detector is
+# a line scanner: it looks for the rule path on a line and a `Read` verb within a couple of lines of
+# it. Three contexts routinely put both next to each other while promising nothing: a fenced code block
+# (documentation SHOWING the step, e.g. a skill that explains how other skills load rules), an HTML
+# comment (a note to maintainers, invisible to the rendered document and the model), or a `#`-prefixed
+# line (a markdown heading, or a shell comment inside an example). If any of those counts as ownership,
+# M1 and the C1/R mappings can be satisfied by a skill that never actually reads the rule — a false
+# green in exactly the direction this series exists to prevent.
+
+# So the table below states, per context, what the detector WOULD have to answer for the ownership
+# claim to be honest (`ideal`), and what it answers TODAY (`pinned`). The assertion is on `pinned`,
+# and every row where the two differ prints an explicit GAP line naming the unclosed hole. That
+# is deliberate: the constraint on this change is tests-only, so a detector gap is RECORDED
+# here rather than fixed in the reporter, and the pin makes the day someone closes it a visible,
+# reviewed event (this file fails, and the fix is to move `pinned` onto `ideal`). Assumes BASE,
+# run_owners(), pass(), fail() from the entry file.
 
 echo ""
 echo "=== reject-context: where a mention lives decides whether it is ownership ==="

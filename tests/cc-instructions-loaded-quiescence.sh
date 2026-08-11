@@ -2,22 +2,17 @@
 # tests/cc-instructions-loaded-quiescence.sh
 # Tests: hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, quiescence, table-driven, late-arrival, error-handling, TL2, scope:common
-#
-# TL2 coverage of waitForQuiescence() (detail plan section 4-3): the Q1 completeness
-# barrier and the Q2 stability window, driven by an injected clock so the whole file
-# runs in well under the 120s test budget.
-# Layer: TL2 (real files in a temp dir, no claude -p, no real sleeping).
-# Dispatcher only: the scenario driver lives in cc-instructions-loaded-quiescence/
-# driver.sh and the cases in the sibling cases-*.sh (rules/coding/file-split.md).
-#
-# TL3 gap (what this test does NOT catch):
-# - The real firing skew S of the host's asynchronous InstructionsLoaded dispatch,
-#   which is what W = clamp(2*S, 5s, 30s) is derived from at TL3.
-# - Whether a genuinely late target can arrive AFTER every sibling has quiesced on a
-#   real host; only tests/TL3-rules-injection-off-switch.sh can observe that.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+
+# TL2 coverage of waitForQuiescence() (detail plan section 4-3): the Q1 completeness barrier and the
+# Q2 stability window, driven by an injected clock so the whole file runs well under the 120s test
+# budget. Layer: TL2 (real files in a temp dir, no claude -p, no real sleeping). Dispatcher only:
+# the scenario driver lives in cc-instructions-loaded-quiescence/driver.sh, cases in the sibling
+# cases-*.sh (rules/coding/file-split.md). TL3 gap (not caught here): the real firing skew S of the host's
+# asynchronous InstructionsLoaded dispatch, which is what W = clamp(2*S, 5s, 30s) is derived from at TL3;
+# and whether a genuinely late target can arrive AFTER every sibling has quiesced on a real host — only
+# tests/TL3-rules-injection-off-switch.sh observes that. Mitigated at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-#
+
 # CONTRACT NOTE — waitForQuiescence(dir, opts) as encoded here:
 #   opts.expected          array of file_path strings = EXPECTED_SET - {target}
 #   opts.windowSec         Q2 stability window W

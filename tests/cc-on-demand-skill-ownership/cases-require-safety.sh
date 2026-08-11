@@ -1,19 +1,17 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/rules-policy-reader.js, hooks/lib/rules-injection-policy.js, tests/cc-on-demand-skill-ownership.sh
 # Tags: rules-injection, policy, require-safety, arbitrary-code-execution, security, canary, TL2, scope:common
-#
-# WHY (CPR-WPH): hooks/lib/rules-injection-policy.js is a contributor-editable
-# declaration file. This suite's ownership reporter reads it on every run, and the run
-# happens on whatever branch a reviewer has checked out. If the reporter obtained its
-# constants by require()-ing that path, merely checking out a pull request and running
-# the test suite would execute that PR's module body with the reviewer's full ambient
-# privileges — arbitrary code execution reachable through an ordinary pull request.
-#
+
+# WHY (CPR-WPH): hooks/lib/rules-injection-policy.js is a contributor-editable declaration file,
+# and this suite's ownership reporter reads it on every run — on whatever branch a reviewer has
+# checked out. If the reporter obtained its constants by require()-ing that path, merely checking out
+# a pull request and running the test suite would execute that PR's module body with the reviewer's
+# full ambient privileges — arbitrary code execution reachable through an ordinary pull request.
+
 # The checker side of the same contract is pinned by P11 in
-# tests/bin-check-on-demand-rules/cases-policy.sh. This group is its CPR-ORTH sibling
-# for the reporter side: same canary shape, same standing record.
-#
-# Assumes BASE, READER, run_owners(), node_path(), pass(), fail() from the entry file.
+# tests/bin-check-on-demand-rules/cases-policy.sh — this group is its CPR-ORTH sibling for the
+# reporter side: same canary shape, same standing record. Assumes BASE, READER, run_owners(),
+# node_path(), pass(), fail() from the entry file.
 
 echo ""
 echo "=== A: the ownership reporter reads the policy as DATA, never as a program ==="

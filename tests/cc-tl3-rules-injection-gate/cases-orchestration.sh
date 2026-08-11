@@ -2,24 +2,9 @@
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, off-switch, gate-logic, orchestration, sticky-verdict, TL2, scope:common
 #
-# Post-quiescence orchestration (C5). The gate's G4 classification checks and its G5
-# terminal re-read used to run as independent `if` blocks, each printing its own
-# verdict while the pending state stayed G-PASS-PENDING — so a FAILED G4 still left G5
-# free to print the pass token. A gate that reports a clean off-switch on a run which
-# already produced a failed assertion is worse than no gate: it is a green light bought
-# with a known defect.
-#
-# CONTRACT NOTE (asserted here, honoured by ril_post_quiescence in
-# TL3-rules-injection-off-switch/decisions.sh):
-#   - The verdict is MONOTONE. Once it leaves G-PASS-PENDING it never returns to it.
-#   - The bare token `G-PASS` appears in the output only when EVERY post-quiescence
-#     check held. `G-PASS-PENDING` is a different token and is not a pass.
-#   - Failure prose may not contain the bare token, so a downstream grep can trust it.
-#   - Q3 is cumulative: a terminal re-read shorter than the required span is
-#     G-INCONCLUSIVE, never a pass — a short look cannot tell "absent" from
-#     "has not arrived yet".
-#
-# Assumes pass(), fail() and the sourced gate helpers are already available.
+# Post-quiescence orchestration (C5). The gate's G4 classification checks and its G5 terminal re-read used to run as independent `if` blocks, each printing its own verdict while the pending state stayed G-PASS-PENDING — so a FAILED G4 still left G5 free to print the pass token. A gate that reports a clean off-switch on a run which already produced a failed assertion is worse than no gate: it is a green light bought with a known defect.
+# CONTRACT NOTE (asserted here, honoured by ril_post_quiescence in TL3-rules-injection-off-switch/decisions.sh): the verdict is MONOTONE — once it leaves G-PASS-PENDING it never returns. The bare token `G-PASS` appears only when EVERY post-quiescence check held; `G-PASS-PENDING` is a different token and is not a pass. Failure prose may not contain the bare token, so a downstream grep can trust it.
+# Q3 is cumulative: a terminal re-read shorter than the required span is G-INCONCLUSIVE, never a pass — a short look cannot tell "absent" from "has not arrived yet". Assumes pass(), fail() and the sourced gate helpers are already available.
 
 echo ""
 echo "=== C5: post-quiescence sticky verdict ==="

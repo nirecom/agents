@@ -2,25 +2,10 @@
 # Tests: hooks/lib/rules-injection-policy.js, rules/test.md, rules/docs.md, rules/github-issues.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, exact-mapping, mutation-probe, TL2, scope:common
 #
-# Exact rule -> consumer mapping (C1).
-#
-# M1 in the entry file asks "does at least one SKILL.md read this rule". That is a
-# reachability check, not an ownership check, and it is satisfied by ONE reader. The
-# rules being de-injected here are read by several skill families each: rules/test.md
-# governs the write/review/run test triple, rules/github-issues.md governs eight issue
-# and close-path skills. Under an at-least-one check, seven of those eight could drop
-# their Read step and the suite would stay green — every one of those skills would then
-# be running without the rule that used to arrive automatically, which is exactly the
-# silent-loss this series exists to prevent.
-#
-# So the required set is named explicitly (detail plan S3-D table) and compared for
-# EXACT SET EQUALITY, and each required reader is then shown to be individually
-# load-bearing by removing it and proving the comparison fails BY NAME.
-#
-# This does NOT re-open the round-2 ruling that an agent-only reference is not SKILL.md
-# ownership: the sets below are compared against SKILL_BY (SKILL.md readers only), and
-# agents/ references remain counted separately by the reporter.
-#
+# Exact rule -> consumer mapping (C1). The entry file's M1 check only proves "at least one SKILL.md reads this rule" (reachability, not ownership) — satisfied by ONE reader, even though rules/test.md covers the write/review/run triple and rules/github-issues.md covers eight issue/close-path skills.
+# Under at-least-one, 7 of those 8 could silently drop their Read step and the suite would stay green — exactly the silent-loss this series exists to prevent. So the required set is named explicitly (detail plan S3-D table) and checked by EXACT SET EQUALITY.
+# Each required reader is then proven individually load-bearing by removing it and showing the comparison fails BY NAME.
+# This does NOT reopen the round-2 ruling that an agent-only reference is not SKILL.md ownership: compared against SKILL_BY (SKILL.md readers only); agents/ references counted separately by the reporter.
 # Assumes REPORT, pass(), fail() from the entry file.
 
 echo ""

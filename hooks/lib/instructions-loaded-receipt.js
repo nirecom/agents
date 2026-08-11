@@ -1,20 +1,14 @@
 "use strict";
 
-// Receipt store for the InstructionsLoaded audit hook.
+// Receipt store for the InstructionsLoaded audit hook. The host dispatches InstructionsLoaded once per injected file,
+// asynchronously, in a separate process; with no shared memory or ordering guarantee, the only way to reconstruct
+// "what the session actually loaded" is for each process to publish one small file and a later reader to aggregate them.
 //
-// The host dispatches InstructionsLoaded once per injected file, asynchronously,
-// in a separate process. There is no shared memory and no ordering guarantee, so
-// the only way to reconstruct "what the session actually loaded" is for each
-// process to publish one small file and for a later reader to aggregate them.
-//
-// Layout: <workflowDir>/<session>.instructions-loaded/<sha1(file_path)>.json
-//   - one entry per loaded file; a repeated load collides on its own key by design
-//   - published atomically (temp name + rename) so a reader never sees a partial
-//     entry and a killed writer leaves no `.json` debris
-//
-// Nothing here decides a verdict — classification lives in
-// hooks/instructions-loaded-audit.js. This module owns paths, bytes, and the
-// quiescence protocol only.
+// Layout: <workflowDir>/<session>.instructions-loaded/<sha1(file_path)>.json — one entry per loaded file (a repeated
+// load collides on its own key by design), published atomically (temp name + rename) so a reader never sees a partial
+// entry and a killed writer leaves no `.json` debris.
+// Nothing here decides a verdict — classification lives in hooks/instructions-loaded-audit.js. This module owns paths,
+// bytes, and the quiescence protocol only.
 
 const fs = require("fs");
 const path = require("path");
@@ -90,16 +84,12 @@ function toRepoRelative(filePath, projectRoot) {
   return "out-of-root:" + sha1(posix).slice(0, 16);
 }
 
-// A rules file reaches the loader from several roots — <project>/.claude/rules/,
-// $CLAUDE_CONFIG_DIR/rules/, ~/.claude/rules/ — and only one of them yields a
-// repo-relative path that starts with `rules/`. The policy tables are keyed on
-// the `rules/<subpath>.md` form, so identity has to be recovered by asking which
-// KNOWN root the path lies under, not by pattern-matching its tail.
-//
-// A tail match ("does a `rules/` segment appear anywhere") is not identity: it
-// turns `~/.ssh/rules/id_rsa.md` into `rules/id_rsa.md`, which both defeats
-// the deliberate out-of-root digest redaction and feeds an unrelated file to the
-// policy comparison as a bogus S-MISSING.
+// A rules file reaches the loader from several roots — <project>/.claude/rules/, $CLAUDE_CONFIG_DIR/rules/,
+// ~/.claude/rules/ — and only one of them yields a repo-relative path that starts with `rules/`. The policy tables are
+// keyed on the `rules/<subpath>.md` form, so identity has to be recovered by asking which KNOWN root the path lies
+// under, not by pattern-matching its tail. A tail match ("does a `rules/` segment appear anywhere") is not identity: it
+// turns `~/.ssh/rules/id_rsa.md` into `rules/id_rsa.md`, which both defeats the deliberate out-of-root digest redaction
+// and feeds an unrelated file to the policy comparison as a bogus S-MISSING.
 
 // Windows compares paths case-insensitively; POSIX does not. The choice is made
 // once, here, rather than per call site.
@@ -312,15 +302,10 @@ function isCovered(entries, expected) {
 }
 
 /**
- * Block until the receipt directory is both COMPLETE and STABLE.
- *
- * Q1 (completeness barrier): every path in `expected` has a settled entry.
- * Q2 (stability window): the (entry set, newest fired_at) pair has not changed
- *     for `windowSec`.
- * Both are bounded — Q1 by `q1DeadlineSec`, the whole run by `totalDeadlineSec`.
- *
- * An empty `expected` is INCOMPLETE, never a vacuous OK: concluding from an
- * absence that was never given a chance to appear is the false green this
+ * Block until the receipt directory is both COMPLETE and STABLE. Q1 (completeness barrier): every path in `expected`
+ * has a settled entry. Q2 (stability window): the (entry set, newest fired_at) pair has not changed for `windowSec`.
+ * Both are bounded — Q1 by `q1DeadlineSec`, the whole run by `totalDeadlineSec`. An empty `expected` is INCOMPLETE,
+ * never a vacuous OK: concluding from an absence that was never given a chance to appear is the false green this
  * protocol exists to prevent.
  *
  * @returns {{status: "OK"|"INCOMPLETE", entries: object[]}}

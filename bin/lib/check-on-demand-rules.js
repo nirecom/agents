@@ -1,25 +1,14 @@
 "use strict";
 
-// Static checker for the on-demand rules-injection notation (C1..C5).
-// Invoked only from bin/check-on-demand-rules.sh — see that file for the CLI
-// contract and exit codes.
-//
-// argv: <mode> <root> <policyPath> [stagedPath...]
-//   mode: "--all" | "--staged"
-//
-// WHY THIS IS A NODE MODULE AND WHY IT NEVER require()s THE POLICY
-// ----------------------------------------------------------------
-// hooks/lib/rules-injection-policy.js is a contributor-editable file that this
-// checker reads on every pre-commit run. `require()`-ing it would execute
-// whatever a pull request put in its module body, before review, with the
-// reviewer's ambient privileges. So the policy is read as DATA: the source text
-// is scanned for the four constant declarations and nothing else is evaluated.
-// That is also why the policy file is required to keep every declaration a plain
-// one-line literal.
-//
-// The reader itself is agents-owned code shared with the InstructionsLoaded
-// audit hook — hooks/lib/rules-policy-reader.js. require()-ing THAT is correct:
-// only the policy declaration file is untrusted.
+// Static checker for the on-demand rules-injection notation (C1..C5). Invoked only from bin/check-on-demand-rules.sh —
+// see that file for the CLI contract and exit codes. argv: <mode> <root> <policyPath> [stagedPath...] — mode: "--all" |
+// "--staged".
+// WHY THIS NEVER require()s THE POLICY: hooks/lib/rules-injection-policy.js is a contributor-editable file read on
+// every pre-commit run; require()-ing it would execute whatever a PR put in its module body, before review, with the
+// reviewer's ambient privileges. So it is read as DATA — the source text is scanned for the four constant declarations
+// and nothing else is evaluated (hence every declaration must stay a plain one-line literal). The reader itself,
+// hooks/lib/rules-policy-reader.js, IS require()d normally — it is agents-owned code shared with the InstructionsLoaded
+// audit hook; only the policy declaration file is untrusted.
 
 const fs = require("fs");
 const path = require("path");

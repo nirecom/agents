@@ -2,14 +2,11 @@
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, off-switch, instructions-loaded, gate-decisions, TL3, scope:common
 #
-# Gate decision logic for TL3-rules-injection-off-switch — pure functions only
-# (no filesystem, no subprocess). Split out of helpers.sh to stay under the
-# 300-line WARN threshold in rules/coding/file-split.md; helpers.sh sources this
-# file, so every existing consumer of helpers.sh keeps these functions.
-#
-# Exercised at TL2 by tests/cc-tl3-rules-injection-gate.sh: the TL3 body is
-# RUN_TL3-gated and skips on every ordinary run, so without this seam the
-# decision table would never be executed.
+# Pure-function gate decision logic for TL3-rules-injection-off-switch (no filesystem,
+# no subprocess). Split out of helpers.sh to stay under the 300-line WARN threshold
+# (rules/coding/file-split.md); helpers.sh sources this file, so every consumer keeps
+# these functions. Exercised at TL2 by tests/cc-tl3-rules-injection-gate.sh, whose TL3
+# body is RUN_TL3-gated and skips on ordinary runs — without this seam it never runs.
 
 # ril_rc_label <rc> — human-readable cause for a non-zero subprocess exit.
 ril_rc_label() {
@@ -69,20 +66,13 @@ ril_gate_judge_verdict() {
 
 # ril_f1_verdict <rc> <model-output>
 # Echoes "F1-PASS <reason>" | "F1-FAIL <reason>" | "F1-INCONCLUSIVE <reason>".
-#
-# The F1 fallback asks the model itself whether two nonces are in its context, and is
-# reached only when the receipt-based route produced no observable payload at all. Its
-# answer is a self-report, so it is parsed STRICTLY: the subprocess must have exited 0,
-# and the output must contain exactly two `present`/`absent` tokens, in order
-# (control first, reserved-glob probe second). Anything else — an extra token, a
-# missing token, a crashed or timed-out probe — is INCONCLUSIVE, never a pass. A
-# substring search such as `present.*absent` would grade a refusal, an error message,
-# or an echoed prompt as a clean result.
-#
-# The vocabulary is deliberately disjoint from the gate's: no F1 outcome yields
-# G-PASS. F1 is diagnostic evidence about WHY the receipt route produced nothing; it
-# never clears the G1 failure that led here, because the model's self-report is not a
-# filesystem observation.
+# Fallback: asks the model whether two nonces are in context, reached only when the
+# receipt route yields no payload. Self-report, so parsed STRICTLY: subprocess must
+# exit 0 AND output must hold exactly two `present`/`absent` tokens in order (control
+# first, probe second) — extra/missing tokens or a crashed/timed-out probe is
+# INCONCLUSIVE, never a pass (unlike a loose `present.*absent` match, which would grade
+# a refusal or echo as clean). Vocabulary is disjoint from the gate's: no F1 outcome
+# yields G-PASS — it's diagnostic about WHY nothing came back, not a filesystem fact.
 ril_f1_verdict() {
     local rc="$1"
     local out="$2"
@@ -123,19 +113,12 @@ ril_f1_verdict() {
 }
 
 # --- post-quiescence orchestration (C5) -------------------------------------------
-# Everything after the quiescence wait — the G4 classification checks and the G5
-# terminal re-read — used to run as independent `if` blocks in main.sh, each printing
-# its own pass/fail while RIL_VERDICT stayed at G-PASS-PENDING. A failing G4 therefore
-# left G5 free to print the pass token: the gate reported a clean off-switch on a run
-# that had already produced a failed assertion. The fix is one sticky state machine,
-# and it lives here (not in main.sh) so the TL2 sibling can force each branch to fail.
-#
-# Contract:
-#   - the verdict is monotone: once it leaves G-PASS-PENDING it never returns;
-#   - the bare token `G-PASS` is produced ONLY when every post-quiescence check held;
-#   - no failure REASON may contain that bare token, so a downstream grep can trust it
-#     (failure prose says "the pending pass is retracted" instead).
-#
+# G4/G5 used to run as independent `if` blocks in main.sh, each printing pass/fail while RIL_VERDICT stayed
+# G-PASS-PENDING — a failing G4 left G5 free to print the pass token on an already-failed run. Fixed as one
+# sticky state machine here (not main.sh) so the TL2 sibling can force each branch to fail. Contract: verdict
+# is monotone (never re-enters G-PASS-PENDING); bare `G-PASS` appears ONLY when every check held; failure
+# REASON never contains that token (says "the pending pass is retracted" instead), so a grep for it can be
+# trusted.
 # ril_post_quiescence <pending> <ctrl_verdict> <target_verdict> <q3_seen:0|1> <q3_elapsed_sec> <q3_required_sec>
 # Emits `PASS <text>` / `FAIL <text>` / `NOTE <text>` lines, then `VERDICT=<token>`.
 ril_post_quiescence() {

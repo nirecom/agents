@@ -3,32 +3,11 @@
 # Tests: hooks/pre-commit, bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, on-demand-rules, pre-commit, hook-wiring, backstop, exit-codes, TL2, scope:common
 #
-# The static checker is only as good as its invocation. Every other file in this series
-# runs bin/check-on-demand-rules.sh directly, so all of them stay green if the hook that
-# is supposed to call it on every commit is never wired, is wired outside the agents-repo
-# guard, or swallows the checker's exit code. That is not a hypothetical gap: the whole
-# point of the checker is that a contributor who de-injects a rule without annotating it
-# is stopped BEFORE the commit lands, and nothing else in the pipeline does that.
-#
-# The hook is exercised for real — the actual hooks/pre-commit, in a throwaway repo that
-# is simultaneously the repo under commit and AGENTS_CONFIG_DIR, so the hook's
-# `_pe_is_agents_repo` guard resolves the same git common-dir for both and the on-demand
-# block is genuinely reached. This mirrors the established fixture in
-# tests/feature-1642-precommit-prompt-extraction.sh.
-#
-# Exit-code contract asserted here (detail plan S2-7):
-#   rc 1 (violations) and rc 2 (usage / broken invocation) -> commit BLOCKED
-#   anything else, including a missing or non-executable checker -> FAIL-OPEN
-# The fail-open half is deliberate and is the difference from the prompt-extraction
-# backstop next to it, which blocks on 126/127. It is asserted, not assumed, because a
-# silent behavioural drift in either direction is invisible from the checker's own tests.
-# Layer: TL2 (real hooks/pre-commit + real git, in isolated fixture repos).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether git actually invokes hooks/pre-commit through core.hooksPath in a real
-#   checkout on this host; the hook is executed directly here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# The static checker is only as good as its invocation: every other file in this series runs bin/check-on-demand-rules.sh directly, so all stay green if the hook that's supposed to call it on every commit is never wired, wired outside the agents-repo guard, or swallows its exit code — the whole point is stopping a de-injected rule BEFORE the commit lands.
+# The hook is exercised for real — actual hooks/pre-commit, in a throwaway repo that is simultaneously the repo under commit and AGENTS_CONFIG_DIR, so `_pe_is_agents_repo` resolves the same git common-dir for both and the on-demand block is genuinely reached (mirrors the fixture in tests/feature-1642-precommit-prompt-extraction.sh).
+# Exit-code contract (detail plan S2-7): rc 1 (violations) and rc 2 (usage/broken invocation) -> commit BLOCKED; anything else, including a missing or non-executable checker, -> FAIL-OPEN.
+# Fail-open is deliberate and differs from the prompt-extraction backstop next to it, which blocks on 126/127 — asserted, not assumed, since silent behavioural drift either way is invisible from the checker's own tests. Layer: TL2 (real hooks/pre-commit + real git, isolated fixture repos).
+# TL3 gap: whether git actually invokes hooks/pre-commit via core.hooksPath on this host (executed directly here); mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
