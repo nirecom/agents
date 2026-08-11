@@ -14,6 +14,8 @@ The user types at most `--deep` and `--dry-run`. Passes 2 and 3 are this skill's
 
 ## Procedure
 
+Read `rules/github-issues.md` before SI-1 — on-demand-only, never auto-injected; it owns the close paths, the `status:migrated` / `status:cancelled` labels, and meta-parent handling.
+
 SI-1. Run `bash "$AGENTS_CONFIG_DIR/bin/sweep-issues.sh"` forwarding the user's flags verbatim (pass 1).
 SI-2. Print stdout verbatim. Do not summarize or filter.
 SI-3. Stop here when the output carries no `<<<TIER2-GATE-SI3` block.

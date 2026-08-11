@@ -1,3 +1,12 @@
+---
+paths:
+  - "tests/**"
+  - "**/*.sh"
+  - "**/*.Tests.ps1"
+  - "test_*.py"
+  - "**/*.spec.*"
+---
+
 # Test Fixture Isolation
 
 Rules for keeping a test's side effects inside its own temp directory.

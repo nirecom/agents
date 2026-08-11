@@ -16,6 +16,7 @@ Usage: `/issue-reconcile`
 ## Pre-flight
 
 - `AGENTS_CONFIG_DIR` must be set.
+- Read `rules/github-issues.md` — on-demand-only, never auto-injected.
 
 ## Step 1: pre-resolve
 

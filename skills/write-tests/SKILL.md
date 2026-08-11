@@ -12,7 +12,7 @@ Write or update tests for the current task.
 WT-1. Read:
    - `rules/core-principles.md`
    - `skills/_shared/test-design.md`
-   - `rules/test.md`
+   - `rules/test.md` — on-demand-only; never auto-injected, so this Read is mandatory
    For parser / regex / allowlist targets, apply the Table-Driven Tests pattern from `test-design/parser-regex-tests.md`.
 WT-2. Identify which source file(s) need tests.
 WT-3. **Enumerate call paths**: For each source file from step WT-2, trace all integration

@@ -1,0 +1,117 @@
+# shellcheck shell=bash
+# Tests: hooks/instructions-loaded-audit.js, hooks/lib/rules-injection-policy.js
+# Tags: rules-injection, instructions-loaded, classifier, table-driven, TL2, scope:common
+#
+# Verdict classification: 4 verdicts x 3 load_reason variants, plus the named
+# edge cases the detail plan calls out by hand.
+
+echo ""
+echo "=== verdict classification (verdict x load_reason) ==="
+
+CASE_N=0
+while IFS='|' read -r name relpath lr want; do
+    [ -z "${name// /}" ] && continue
+    case "$name" in \#*) continue ;; esac
+    name="${name//[[:space:]]/}"; relpath="${relpath//[[:space:]]/}"
+    lr="${lr//[[:space:]]/}"; want="${want//[[:space:]]/}"
+    CASE_N=$((CASE_N + 1))
+    sid="tblsid$CASE_N"
+    fp="$(node_path "$REPO/$relpath")"
+    res="$(fire "$sid" "$fp" "$lr")"
+    rc="${res%%|*}"; sout="${res#*|}"
+    got="$(read_field "$sid" "$fp" verdict)"
+    if [ "$rc" != "0" ]; then
+        fail "$name: hook exited $rc (must always be 0)"
+    elif [ -n "$sout" ]; then
+        fail "$name: stdout must be empty, got '$sout'"
+    elif [ "$got" != "$want" ]; then
+        fail "$name: want verdict $want, got $got"
+    else
+        pass "$name (verdict=$got, stdout empty, exit 0)"
+    fi
+done <<'TABLE'
+ok-conditional-lr-absent   | rules/ok-conditional.md | OMIT               | ok
+ok-conditional-lr-null     | rules/ok-conditional.md | null               | ok
+ok-conditional-lr-glob     | rules/ok-conditional.md | "path_glob_match"  | ok
+missing-lr-absent          | rules/missing.md        | OMIT               | S-MISSING
+missing-lr-null            | rules/missing.md        | null               | S-MISSING
+missing-lr-glob            | rules/missing.md        | "path_glob_match"  | S-MISSING
+malformed-lr-absent        | rules/malformed.md      | OMIT               | S-MALFORMED
+malformed-lr-null          | rules/malformed.md      | null               | S-MALFORMED
+malformed-lr-glob          | rules/malformed.md      | "path_glob_match"  | S-MALFORMED
+leak-lr-absent             | rules/leak.md           | OMIT               | S-LEAK
+leak-lr-null               | rules/leak.md           | null               | S-LEAK
+leak-lr-glob               | rules/leak.md           | "path_glob_match"  | S-LEAK
+TABLE
+
+# --- E1 (independent, named): load_reason=path_glob_match must NOT downgrade S-LEAK.
+# This is the fail-open hole the detail plan calls out in 3-4: if the reserved real
+# path is ever created, the loader reports a "legitimate" glob match and an
+# AND-conditioned predicate would silently stop detecting the leak.
+E1_SID="e1leakglob"
+E1_FP="$(node_path "$REPO/rules/leak.md")"
+fire "$E1_SID" "$E1_FP" '"path_glob_match"' >/dev/null
+e1_verdict="$(read_field "$E1_SID" "$E1_FP" verdict)"
+e1_reason="$(read_field "$E1_SID" "$E1_FP" load_reason)"
+if [ "$e1_verdict" = "S-LEAK" ] && [ "$e1_reason" = "path_glob_match" ]; then
+    pass "E1: load_reason=path_glob_match still yields S-LEAK and is recorded as a diagnostic"
+else
+    fail "E1: want verdict=S-LEAK load_reason=path_glob_match, got verdict=$e1_verdict load_reason=$e1_reason"
+fi
+
+# --- E2: ok-listed (no paths: but in EXPECTED_UNCONDITIONAL) is NOT S-MISSING ---
+E2_SID="e2listed"
+E2_FP="$(node_path "$REPO/rules/ok-listed.md")"
+fire "$E2_SID" "$E2_FP" OMIT >/dev/null
+e2="$(read_field "$E2_SID" "$E2_FP" verdict)"
+[ "$e2" = "ok" ] && pass "E2: paths-less rule listed in EXPECTED_UNCONDITIONAL classifies ok" \
+    || fail "E2: want ok for a listed unconditional rule, got $e2"
+
+# --- E3: non-rules file_path is always ok ---
+E3_SID="e3nonrule"
+E3_FP="$(node_path "$REPO/docs/not-a-rule.md")"
+fire "$E3_SID" "$E3_FP" '"path_glob_match"' >/dev/null
+e3="$(read_field "$E3_SID" "$E3_FP" verdict)"
+[ "$e3" = "ok" ] && pass "E3: file_path outside rules/**/*.md classifies ok" \
+    || fail "E3: want ok for a non-rules path, got $e3"
+
+# --- U1/U2: the `unreadable` verdict, both error shapes. Why separate: the classifier reads the file's ON-DISK
+# frontmatter, so every verdict above assumes the read succeeds. When it doesn't, the hook must neither guess a
+# verdict nor take the session down — it records `unreadable` and stays fail-open (exit 0, empty stdout), because a
+# hook that can fail a turn is worse than one that occasionally can't tell. The two shapes reach the same catch via
+# different syscall errors, both real: a rules-root path that no longer exists (ENOENT — a rule deleted/renamed
+# between the loader's read and the hook's), and a DIRECTORY read as a file (EISDIR on POSIX, ENOTDIR/EPERM on
+# Windows — a subdirectory named .md, or a path assembled one segment short). CPR-ORTH: same class, so both get
+# a case. Each asserts all three halves — verdict, exit 0, empty stdout — because an `unreadable` receipt from
+# a hook that also crashed the turn would be a regression. ---
+unreadable_case() {
+    local label="$1" sid="$2" abspath="$3" res rc sout got
+    local fp
+    fp="$(node_path "$abspath")"
+    res="$(fire "$sid" "$fp" OMIT)"
+    rc="${res%%|*}"; sout="${res#*|}"
+    got="$(read_field "$sid" "$fp" verdict)"
+    if [ "$rc" != "0" ]; then
+        fail "$label: hook exited $rc — an audit hook must stay fail-open (exit 0) when it cannot read the file"
+    elif [ -n "$sout" ]; then
+        fail "$label: stdout must be empty, got '$sout'"
+    elif [ "$got" != "unreadable" ]; then
+        fail "$label: want verdict 'unreadable', got '$got'"
+    else
+        pass "$label (verdict=unreadable, stdout empty, exit 0)"
+    fi
+}
+
+# (a) ENOENT: a rules-root path that was never created.
+unreadable_case "U1: a nonexistent file under a rules root classifies unreadable" \
+    "u1enoent" "$REPO/rules/never-created.md"
+
+# (b) EISDIR / ENOTDIR: a DIRECTORY whose name ends in .md, so it passes the
+# rules/**/*.md shape test and only fails at the read.
+mkdir -p "$REPO/rules/a-directory.md"
+if [ -d "$REPO/rules/a-directory.md" ]; then
+    unreadable_case "U2: a directory read as a rule file classifies unreadable" \
+        "u2eisdir" "$REPO/rules/a-directory.md"
+else
+    fail "U2: could not create the directory fixture $REPO/rules/a-directory.md — the EISDIR shape is UNVERIFIED"
+fi

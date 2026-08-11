@@ -6,7 +6,7 @@ user-invocable: false
 
 Triage routes to the correct subset of steps; each step is idempotent and resumable.
 
-(Per-session N relation: see `rules/github-issues.md` "Session model".)
+Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines the per-session N relation.
 
 Usage: `/issue-close-stage <N>` or `/issue-close-stage --from-session`
 

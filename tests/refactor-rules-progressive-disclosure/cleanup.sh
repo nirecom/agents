@@ -28,8 +28,13 @@ for hub in rules/coding.md rules/docs.md; do
     fi
 done
 
-# (c) Hub files stay unconditional: no frontmatter block at all (line 1 != ---).
-for hub in rules/coding.md rules/docs.md; do
+# (c) rules/coding.md is an unconditional hub: no frontmatter block at all
+#     (line 1 != ---). rules/docs.md was deliberately de-injected by #1651 — its
+#     reserved-token frontmatter is asserted by T1-B, not here. The general
+#     "carries no paths: key" invariant for the whole unconditional set is
+#     derived from the policy SSOT in T1-D; this case keeps the stricter
+#     no-frontmatter-at-all shape for the coding hub specifically.
+for hub in rules/coding.md; do
     abs="$REPO_ROOT/$hub"
     if [ ! -f "$abs" ]; then
         fail "T9: $hub has no frontmatter" "file not found"
@@ -37,7 +42,7 @@ for hub in rules/coding.md rules/docs.md; do
     fi
     first_line="$(head -1 "$abs")"
     if [ "$first_line" = "---" ]; then
-        fail "T9: $hub has no frontmatter" "line 1 is '---' — hub file must stay unconditional"
+        fail "T9: $hub has no frontmatter" "line 1 is '---' — this hub is injected unconditionally and must carry no frontmatter block"
     else
         pass "T9: $hub has no frontmatter (stays unconditional)"
     fi

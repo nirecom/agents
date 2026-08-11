@@ -42,6 +42,10 @@ Existing violations in files not touched by the current change are out of scope 
 
 > Note: examples in this section illustrate the rule itself and are not subject to it.
 
+### 1.6 Rules injection scope
+
+See [docs/architecture/claude-code/rules-injection.md](../docs/architecture/claude-code/rules-injection.md) for choosing a `rules/*.md` file's injection scope and the on-demand notation.
+
 ## 2. Examples discipline
 
 ### 2.1 No redundant hook examples
