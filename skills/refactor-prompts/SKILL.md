@@ -4,7 +4,7 @@ description: Scan rules/skills/agents for redundant hook-enumeration examples an
 context: fork
 ---
 
-1. `/worktree-start --task-name "refactor-prompts-$(date +%Y%m%d)" --branch-type refactor`
+1. `/worktree-start --headless refactor-prompts`
 2. Capture scan output into a shell variable (no `/tmp` file):
    ```
    SCAN_JSON=$(bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh")

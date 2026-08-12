@@ -6,6 +6,8 @@
 # Issue #1610 — Tier 3 "session created a linked worktree but CWD is outside it"
 # gate (Section G) and the double-block / deferral contract between
 # workflow-gate.js and enforce-worktree.js (Section H).
+# Section P0 guards the guards: the four sources have shipped, so their absence is a
+# deletion, and it must turn this file RED rather than skipping every case green.
 #
 # TL3 gap (what this test does NOT catch):
 # - How Claude Code presents TWO PreToolUse hooks that both return decision:block
@@ -42,10 +44,86 @@ require_source() {
 
 np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
+# suite_status — this file's exit code, as a value. A named seam so the P0 self-test
+# below asserts the real decision instead of a copy of it.
+suite_status() { if [ "$FAIL" -gt 0 ]; then echo 1; else echo 0; fi; }
+
+# ---------------------------------------------------------------- Section P0 --
+# Source presence: a deleted source must turn this file RED, never green-with-SKIPs.
+#
+# Why: require_source() reports a missing file as SKIP ("source not implemented yet"),
+# and h_setup() collapses the same condition into H_READY=0 -> h_skip for every
+# Section H case. That wording was true while #1610 was unimplemented; all four files
+# below have shipped since. Today "missing" can only mean a deletion or a rename — and
+# on the SKIP path FAIL stays 0, so every G and H case silently stops running while the
+# suite still exits 0. Total loss of coverage for a shipped feature, reported as green.
+# This check is deliberately NOT routed through require_source(): the behaviour under
+# test is precisely "absence must not be a skip", so reusing the skipping helper to
+# guard it would be circular.
+SOURCE_FILES=("$GATE_HOOK" "$EW_HOOK" "$ENTRY_GATE" "$REMEDY")
+
+# run_source_presence_check <path>... — prints "MISSING <path>" per absent file; rc=0
+# only when every path exists. Parameterized so the self-test can drive it against a
+# deliberately absent path: no real repo file is ever moved, copied or deleted, so an
+# interrupted run cannot leave the checkout damaged.
+run_source_presence_check() {
+    local missing=0 p
+    for p in "$@"; do
+        if [ ! -f "$p" ]; then printf 'MISSING %s\n' "$p"; missing=$((missing + 1)); fi
+    done
+    [ "$missing" -eq 0 ]
+}
+
+# report_source_presence <path>... — one `fail` per missing file. `fail`, not `skip`:
+# that single choice is what makes the process exit code non-zero.
+report_source_presence() {
+    local out line
+    out="$(run_source_presence_check "$@")" && return 0
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        fail "P0: required #1610 source file is missing (deleted or renamed): ${line#MISSING }"
+    done <<< "$out"
+    return 1
+}
+
+if report_source_presence "${SOURCE_FILES[@]}"; then
+    pass "P0: all four #1610 source files are present on disk"
+fi
+
+# P0/self-test — proves the mechanism, not just its happy path. A path that is never
+# created stands in for a deleted source file.
+P0_ABSENT="$AGENTS_DIR/hooks/__t1610-source-presence-selftest-absent__.js"
+P0_PROBE="$(
+    PASS=0; FAIL=0; SKIP=0
+    report_source_presence "$P0_ABSENT" >/dev/null
+    printf '%s %s %s %s\n' "$PASS" "$FAIL" "$SKIP" "$(suite_status)"
+)"
+read -r p0_pass p0_fail p0_skip p0_status <<< "$P0_PROBE"
+if [ "$p0_fail" -eq 1 ] && [ "$p0_skip" -eq 0 ] && [ "$p0_pass" -eq 0 ] && [ "$p0_status" -eq 1 ]; then
+    pass "P0/self-test: a missing source file raises FAIL (never SKIP) and drives this file's exit code to 1"
+else
+    fail "P0/self-test: expected 1 FAIL / 0 SKIP / 0 PASS / status 1 for an absent source path (pass=$p0_pass fail=$p0_fail skip=$p0_skip status=$p0_status)"
+fi
+
+# P0/contrast — the gap being closed, stated as an assertion rather than a comment:
+# the pre-existing require_source() path answers the same absence with a SKIP and
+# leaves the suite green. P0 is the only thing standing between that and a false green.
+P0_CONTRAST="$(
+    PASS=0; FAIL=0; SKIP=0
+    require_source "$P0_ABSENT" "probe" >/dev/null
+    printf '%s %s %s\n' "$FAIL" "$SKIP" "$(suite_status)"
+)"
+read -r p0c_fail p0c_skip p0c_status <<< "$P0_CONTRAST"
+if [ "$p0c_fail" -eq 0 ] && [ "$p0c_skip" -eq 1 ] && [ "$p0c_status" -eq 0 ]; then
+    pass "P0/contrast: require_source() alone answers the same absence with SKIP and a green exit — which is why P0 exists"
+else
+    fail "P0/contrast: expected require_source() to skip and keep the suite green (fail=$p0c_fail skip=$p0c_skip status=$p0c_status)"
+fi
+
 for _bin in git node; do
     if ! command -v "$_bin" >/dev/null 2>&1; then
         skip "T1 whole file ($_bin not available)"
-        echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
+        echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit "$(suite_status)"
     fi
 done
 
@@ -63,7 +141,7 @@ git -C "$MAIN" commit -q --allow-empty --no-verify -m init
 git -C "$MAIN" worktree add -q -b feature/t1610-fixture "$LINKED"
 if [ ! -e "$LINKED/.git" ]; then
     skip "T1 whole file (git worktree fixture could not be created)"
-    echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
+    echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit "$(suite_status)"
 fi
 
 MAIN_N="$(np "$MAIN")"; LINKED_N="$(np "$LINKED")"
@@ -315,7 +393,7 @@ run_H() {
     fi
 
     check_lacks "H2a: enforce-worktree drops the stale /worktree-start remedy" \
-        "Run: /worktree-start <task-name>" "$ew_reason"
+        "Run: /worktree-start" "$ew_reason"
     check_has "H2b: enforce-worktree points at the shared protocol" \
         "skills/_shared/worktree-transition.md" "$ew_reason"
 
@@ -343,7 +421,7 @@ run_H() {
     ew5_reason="$(reason_of "$ew5")"; gate5_reason="$(reason_of "$gate5")"
     if printf '%s' "$ew5" | grep -qF '"decision":"block"'; then
         check_has "H5a: default branch keeps the current /worktree-start wording" \
-            "Run: /worktree-start <task-name>" "$ew5_reason"
+            "Run: /worktree-start" "$ew5_reason"
     else
         fail "H5a: expected enforce-worktree block for pending branching_complete (ew=$ew5)"
     fi
@@ -378,5 +456,4 @@ run_H
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
-[ "$FAIL" -gt 0 ] && exit 1
-exit 0
+exit "$(suite_status)"

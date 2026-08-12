@@ -201,10 +201,10 @@ test_ws_confirm_worktree_ask() {
     else
         fail "7d: a branch leaves statuses undisposed" "missing:$missing"
     fi
-    if grep -q 'non-interactive.*CONFIRM_WORKTREE. as OFF' "$WS_MD"; then
-        pass "7e: non-interactive mode is pinned to the OFF branch"
+    if grep -q 'headless.*CONFIRM_WORKTREE. as OFF' "$WS_MD"; then
+        pass "7e: headless mode is pinned to the OFF branch"
     else
-        fail "7e: non-interactive mode is not pinned to OFF"
+        fail "7e: headless mode is not pinned to OFF"
     fi
 }
 
