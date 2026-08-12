@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md, skills/update-docs/SKILL.md, skills/worktree-start/SKILL.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
-# Tags: worktree, start, outline, planning, detail
+# Tags: worktree, start, outline, planning, detail, TL2, scope:common
 # Static grep-based checks for the confirm-flags feature wiring.
 #
 # Verifies that the 4 gated skills reference the helper script, the matching
@@ -177,14 +177,20 @@ if require_file "$DETAIL_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 7. worktree-start step 2 still uses AskUserQuestion
+# 7. worktree-start WS-2 must NOT use AskUserQuestion
 # ---------------------------------------------------------------------------
-echo "=== worktree-start: AskUserQuestion still present ==="
+# Inverted by #1910: WS-2 (task name / branch type) used to be an interactive
+# confirmation step, and this check pinned the AskUserQuestion call that made it
+# one. The naming step is now fully automatic, and the only surviving mentions of
+# AskUserQuestion in that section are prohibitions — so a bare presence check
+# would pass on text asserting the exact opposite of its original intent. Pin the
+# prohibition itself instead.
+echo "=== worktree-start: AskUserQuestion prohibited for WS-2 naming ==="
 if require_file "$WORKTREE_SKILL"; then
-    if has_fixed "AskUserQuestion" "$WORKTREE_SKILL"; then
-        pass "worktree-start/SKILL.md still references AskUserQuestion"
+    if has_fixed 'Never call `AskUserQuestion` to choose a task name or branch type' "$WORKTREE_SKILL"; then
+        pass "worktree-start/SKILL.md prohibits AskUserQuestion for task name / branch type"
     else
-        fail "worktree-start/SKILL.md no longer references AskUserQuestion"
+        fail "worktree-start/SKILL.md MUST prohibit AskUserQuestion for task name / branch type (#1910)"
     fi
 fi
 

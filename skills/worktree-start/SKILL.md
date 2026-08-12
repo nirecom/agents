@@ -15,23 +15,19 @@ WS-1. Verify the task fits the worktree criteria in `rules/worktree.md` (fit tab
    If it does not fit, report why and stop — set `ENFORCE_WORKTREE=off` in agents config
    and work on main directly instead.
 
-WS-2. **Non-interactive mode** (skip the interactive flow when both flags are provided):
-   If `--task-name <name>` and `--branch-type <type>` are both supplied as arguments:
-   - Validate `<name>` matches `[a-zA-Z0-9_-]+`; if invalid, abort with error.
-   - Validate `<type>` is one of `feature` / `fix` / `refactor` / `docs` / `chore`; if invalid, abort with error.
-   - Adopt the provided values and skip `AskUserQuestion`.
-   - **Idempotency check**: run `git worktree list --porcelain`. If a worktree already exists at `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`, print that path to stdout and exit 0 (reuse — do not run `git worktree add`).
+WS-2. Derive the task name and branch type — always automatic, never asked of the user:
+   Run `bash "$AGENTS_CONFIG_DIR/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run.
+   Read `TASK_NAME=`, `BRANCH_TYPE=`, and `REPO_NAME=` from its stdout — `REPO_NAME` is the validated `<REPO_NAME>` path component; never infer it yourself. Non-zero exit → surface its stderr and stop; never substitute a name of your own and never ask the user for one.
+   **Reuse-safety check**: run `git worktree list --porcelain` and find the entry whose `worktree` line equals `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>` — normalize both sides before comparing: convert every backslash to a forward slash and every MSYS-style `/c/<rest>` path to its `C:/<rest>` form (or vice versa), then strip any trailing slash, then lowercase both sides when the filesystem is case-insensitive (Windows, and default macOS). No entry → continue to WS-3. An entry exists → an existing path is not proof it is safe to attach to, so reuse only when all three hold:
+   - Its `branch` line equals `refs/heads/<BRANCH_TYPE>/<TASK_NAME>`; a different branch is a naming collision, not a reusable worktree — surface both paths and branches to the user and stop.
+   - It carries neither a `locked` nor a `prunable` line; either means another process or a stale registration owns it — surface the reason and stop.
+   - `git -C "<path>" status --porcelain` (standalone command, no chaining) prints nothing; non-empty output is another session's in-flight work — never delete or reset it; report the dirty path and stop.
+     The derived task name is deterministic, so resolving the collision requires manual intervention outside this skill (wait for the other session, or remove/relocate that worktree by hand).
+   A non-zero exit from `git worktree list --porcelain` or `git -C "<path>" status --porcelain` means ownership cannot be verified — treat it the same as the three failing conditions above: surface the command's stderr and stop.
 
-   Otherwise (interactive): estimate the task name from the user's message. Task names must match `[a-zA-Z0-9_-]+`
-   (no slashes, dots, spaces, or shell metacharacters).
-   Estimate the branch type: `feature` / `fix` / `refactor` / `docs` / `chore`.
-   Ask the user to confirm both (or suggest corrections) with `AskUserQuestion`.
+   All three pass → print the path and branch to stdout, skip WS-3–WS-6 (already exists — do not run `git worktree add`), and continue at WS-7.
 
-WS-3. Compute the canonical worktree path and show it to the user for final confirmation:
-   ```
-   <WORKTREE_BASE_DIR>/<task-name>/<repo-name>
-   ```
-   Branch name: `<type>/<task-name>`
+WS-3. Worktree path: `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>`. Branch name: `<BRANCH_TYPE>/<TASK_NAME>`. Report both in chat — do not ask for approval.
 
 WS-4. Check for conflicts:
    ```
@@ -40,8 +36,8 @@ WS-4. Check for conflicts:
    Report any existing worktrees at the same path or on the same branch.
 
 WS-5. Create the parent directory (platform-aware):
-   - POSIX: `mkdir -p "<WORKTREE_BASE_DIR>/<task-name>"`
-   - PowerShell: `New-Item -ItemType Directory -Force -Path "<WORKTREE_BASE_DIR>\<task-name>"`
+   - POSIX: `mkdir -p "<WORKTREE_BASE_DIR>/<TASK_NAME>"`
+   - PowerShell: `New-Item -ItemType Directory -Force -Path "<WORKTREE_BASE_DIR>\<TASK_NAME>"`
 
    **Do NOT chain or pipe this command** (no `;`, `&&`, `||`, `|`, `$()`, backticks).
    `enforce-worktree.js` only grants its `New-Item -ItemType Directory` exemption to
@@ -51,13 +47,13 @@ WS-5. Create the parent directory (platform-aware):
 
 WS-6. Create the worktree (isolated command — same chaining caveat as step WS-5):
    ```
-   git worktree add <path> -b <type>/<task-name>
+   git worktree add <path> -b <BRANCH_TYPE>/<TASK_NAME>
    ```
 
-WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
+WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (Step WS-3 path), `branch` (`<BRANCH_TYPE>/<TASK_NAME>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
 
    Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
-   In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF — `AskUserQuestion` cannot be called in subagent contexts.
+   `--headless` at WS-2 signals either no workflow session or a subagent/fork context where `AskUserQuestion` is unreachable — treat `CONFIRM_WORKTREE` as OFF in both cases.
 
    Response handling when `CONFIRM_WORKTREE=OFF`:
    - `status: complete` → surface summary, proceed.
@@ -80,7 +76,9 @@ WS-9. Final report: worktree path, branch, which gitignored state was copied, an
 - Never write to `.env` files directly.
 - Never copy production secrets (`.env.production`, cloud credentials, deploy keys) to a worktree.
 - Always record copied state in `WORKTREE_NOTES.md` so `/worktree-end` can inventory it later.
-- Task name validation: reject names that fail `[a-zA-Z0-9_-]+` — do not proceed with invalid names.
+- Task-name validation lives in `scripts/derive-worktree-name.sh` (D5); it is the sole TASK_NAME validator (CPR-SSOT) and rejects any derived name failing `[a-zA-Z0-9][a-zA-Z0-9_-]*`, exiting non-zero. Never bypass it or hand-write a name.
+- `<REPO_NAME>` in the worktree path is validated by the same script (D0) and emitted as `REPO_NAME=`; use that value verbatim.
+- Never call `AskUserQuestion` to choose a task name or branch type — WS-2 is fully automatic in every context.
 - WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
   file or edit `.git/info/exclude` manually.
 - Report observations per rules/supervisor-reporting.md.

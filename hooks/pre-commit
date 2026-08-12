@@ -125,7 +125,7 @@ if _is_enforce_worktree_on; then
         _git_dir_abs="$(cd "$_git_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_dir" | tr '[:upper:]' '[:lower:]')"
         if [ -n "$_git_common_dir_abs" ] && [ -n "$_git_dir_abs" ] && [ "$_git_common_dir_abs" = "$_git_dir_abs" ]; then
             echo "ENFORCE_WORKTREE: commits from main worktree are blocked." >&2
-            echo "Work from a linked worktree. Run: /worktree-start <task-name>" >&2
+            echo "Work from a linked worktree. Run: /worktree-start" >&2
             echo "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." >&2
             exit 1
         fi
