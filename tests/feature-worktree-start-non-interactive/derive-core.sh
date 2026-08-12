@@ -208,7 +208,8 @@ fi
 # and the D5 output-validation block for TASK_NAME. Both are covered here, each with
 # the sanctioned near-matches that must still be accepted — the match is exact and
 # case-insensitive, so 'con-fix' and 'com10' are ordinary names.
-B23_SAFE_MSG='safe_component: the value is a Windows-reserved device name; rejecting it'
+B23_SAFE_MSG='safe_component: the value is a Windows-reserved device name (with or without an extension); rejecting it'
+B23_TRAILING_DOT_MSG='safe_component: the value ends with a trailing dot, which Windows collapses/rejects; rejecting it'
 B23_D5_MSG='derive-worktree-name: the derived task name is a Windows-reserved device name; refusing to emit it'
 
 # REPO_NAME arm. The --repo-dir is deliberately NOT created: a directory named `CON`
@@ -221,6 +222,13 @@ B23_REPO_ROWS=(
     'repo-CON|CON|1'
     'repo-NUL|NUL|1'
     'repo-COM1|COM1|1'
+    # …and the same names carrying an extension. `CON.txt`, `NUL.log` and
+    # `COM1.git` all resolve to the very same reserved device on Windows, so the
+    # guard matches the pre-extension stem — a bare-name-only match would let
+    # every one of these through to `git worktree add`.
+    'repo-CON.txt|CON.txt|1'
+    'repo-NUL.log|NUL.log|1'
+    'repo-COM1.git|COM1.git|1'
     'repo-con-fix|con-fix|0'
     'repo-com10|com10|0'
 )
@@ -252,9 +260,40 @@ for b23_row in "${B23_REPO_ROWS[@]}"; do
     fi
 done
 
+# Trailing dot — safe_component()'s other D0-only guard, and a different one: Windows
+# silently collapses a trailing dot off a path component, so the value is rejected
+# before the reserved-name check is ever reached. Asserted outside B23_REPO_ROWS
+# because the row loop pins the reserved-name line, which must NOT appear here — a
+# safe_component reserved-name diagnostic would mean the wrong guard fired. Same
+# present/absent message pairing the TASK_NAME arm below uses.
+B23_DOT_BASE='somename.'
+run_derive B23/repo-trailing-dot --intent "$ABSENT_INTENT" --headless repo-reserved-probe \
+    --repo-dir "$FIXTURE/b23-absent/$B23_DOT_BASE"
+if [ "$RC" -eq 1 ] && [ -z "$(task_name)" ] && [ -z "$(repo_name)" ] \
+    && printf '%s\n' "$ERR" | grep -qxF "$B23_TRAILING_DOT_MSG" \
+    && ! printf '%s\n' "$ERR" | grep -qxF "$B23_SAFE_MSG" \
+    && [[ "$ERR" == *'unusable as a path component'* ]]; then
+    pass "B23/repo-trailing-dot: safe_component() refuses a trailing-dot basename at D0 (rc=1, nothing emitted)"
+else
+    fail "B23/repo-trailing-dot: expected rc=1, no TASK_NAME/REPO_NAME, and the trailing-dot line alone (rc=$RC, out='$OUT', err='$ERR')"
+fi
+if [[ "$ERR" == *"$B23_DOT_BASE"* || "$OUT" == *"$B23_DOT_BASE"* ]]; then
+    fail "B23/repo-trailing-dot/no-echo: the rejected directory name was echoed back (out='$OUT', err='$ERR')"
+else
+    pass "B23/repo-trailing-dot/no-echo: the rejected directory name is never echoed"
+fi
+
 # TASK_NAME arm. The title is the whole naming source (no issue number, no --headless
 # disambiguator), so slugify(title) IS the derived TASK_NAME and D5 sees exactly the
 # reserved token. $CORE_REPO keeps D4's gh lookup off the table, as everywhere else.
+#
+# No trailing-dot / reserved-name-plus-extension rows here, and no equivalent D5 guard
+# to test: the two rows above are structurally unreachable through TASK_NAME. slugify()
+# rewrites every non-[a-z0-9] run to '-' (`sed -e 's/[^a-z0-9]\{1,\}/-/g'`) before the
+# value is ever handed to D5, so 'CON.txt' arrives as 'con-txt' and no dot survives to
+# reject. D5's own char-class check then forbids dots categorically — broader than, and
+# upstream of, the two dot-specific guards safe_component() needs at D0, which is why
+# CPR-ORTH is already satisfied without duplicating the narrower pair here.
 # label | intent title (== the derived TASK_NAME once slugified) | want rc
 B23_TASK_ROWS=(
     'task-CON|CON|1'

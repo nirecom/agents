@@ -43,21 +43,32 @@ fi
 # scan_clean() runs check-private-repo-name.js up to several times per run (D0,
 # D2, and D6's fallback cascade), and each call would otherwise re-issue the
 # same `gh repo list --visibility private` query. Resolve the list once here and
-# hand it down through the environment instead.
+# keep it in plain (non-exported) shell variables, handing it to its one
+# consumer over stdin at the scan_clean() call site instead: the complete list of
+# the user's private repository names must not sit in the environment of this
+# script and of every process it spawns thereafter (node, git, bash, the
+# scan-outbound.sh subprocess, ...), where process-inspection interfaces can read
+# it and it is inherited far beyond the single consumer that needs it.
 # PRIVATE_REPO_NAMES_CACHE_SET=1 means "the list is authoritative", so an empty
 # PRIVATE_REPO_NAMES_CACHE means "confirmed no private repos" rather than
 # "unknown" — the lister fails open to empty, matching the checker's own
 # fail-open contract, so a lookup failure degrades to "clean" exactly as it
 # already did per-call.
-# Do NOT rename these two variables: they are also the env-var contract the
-# test suite uses to insulate itself from live `gh` calls
-# (tests/feature-worktree-start-non-interactive/helpers.sh). A caller that has
-# already declared the list keeps it — populating it here unconditionally would
-# re-introduce the very gh call that contract exists to avoid.
+# Do NOT rename these two variables. INBOUND, they are still the env-var contract
+# the test suite uses to insulate itself from live `gh` calls
+# (tests/feature-worktree-start-non-interactive/helpers.sh exports both INTO this
+# script, and this script still reads both) — that contract is unchanged. Only
+# the OUTBOUND propagation changed: neither variable is exported onward, so do
+# not re-add an `export` here. Exporting only one of the pair would be worse
+# than exporting both: a
+# child seeing PRIVATE_REPO_NAMES_CACHE_SET=1 without the list would read
+# "authoritative empty list" and fail OPEN on every candidate, silently disabling
+# the gate. A caller that has already declared the list keeps it — populating it
+# here unconditionally would re-introduce the very gh call that contract exists
+# to avoid.
 if [ "${PRIVATE_REPO_NAMES_CACHE_SET:-}" != "1" ]; then
     PRIVATE_REPO_NAMES_CACHE="$(node "$AGENTS_CONFIG_DIR/bin/list-private-repo-names.js" 2>/dev/null)"
-    export PRIVATE_REPO_NAMES_CACHE
-    export PRIVATE_REPO_NAMES_CACHE_SET=1
+    PRIVATE_REPO_NAMES_CACHE_SET=1
 fi
 
 [ -n "$REPO_DIR" ] || REPO_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -89,9 +100,24 @@ slugify() {
 # logic as hooks/scan-outbound.js's dynamic WARN) since a git push never
 # re-scans branch names — a bare private repo name could otherwise leak into
 # one. That check fails open on lookup failure, matching its own contract.
+# The private-name list travels over stdin, not the environment, so it never
+# reaches any spawned process's environment at all (see the cache block above).
+# The candidate still travels as argv in both commands, which is what leaves each
+# pipeline's stdin free: scan-outbound.sh consumes the candidate from the first
+# printf, and the checker consumes the list from the second — the two pipelines
+# are independent. PRIVATE_REPO_NAMES_STDIN=1 is a one-shot prefix assignment on
+# the checker invocation alone, deliberately not an export.
+#
+# $1 = candidate. $2 = the name list to check it against; omit it to use the
+# script-level cache. The default is `${2-...}` (unset-only), never `${2:-...}`:
+# a caller that passes an EMPTY list means "authoritative empty list — nothing to
+# match against", and a `:-` default would silently swap in the full cache and
+# check against the very entries the caller had just excluded. The list is
+# expanded inline rather than parked in a helper variable: POSIX sh has no
+# `local`, so any such variable would be a global outliving the call.
 scan_clean() {
-    printf '%s\n' "$1" | bash "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh" --stdin worktree-name >/dev/null 2>&1 \
-        && node "$AGENTS_CONFIG_DIR/bin/check-private-repo-name.js" "$1" >/dev/null 2>&1
+    printf '%s\n' "$1" | bash "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh" --stdin worktree-name >/dev/null 2>&1 || return 1
+    printf '%s\n' "${2-${PRIVATE_REPO_NAMES_CACHE:-}}" | PRIVATE_REPO_NAMES_STDIN=1 node "$AGENTS_CONFIG_DIR/bin/check-private-repo-name.js" "$1" >/dev/null 2>&1
 }
 
 # --- D3a2: path-component guard ---------------------------------------------
@@ -112,13 +138,23 @@ safe_component() {
             [a-zA-Z0-9]*) ;;
             *) exit 1 ;;
         esac
-        # The value becomes a directory name, and the Windows reserved device
-        # names are shape-valid above yet cannot exist as a path component.
-        # Same guard TASK_NAME gets at D5 (CPR-ORTH). Exact match only
-        # (case-insensitive): 'console' and 'nul-fix' are perfectly fine.
+        # The value becomes a directory name. Windows silently strips/collapses
+        # a trailing dot from a path component, so reject it outright before
+        # any further reserved-name check (a trailing dot is never valid here,
+        # regardless of what precedes it).
+        case "$1" in
+            *.)
+                printf 'safe_component: the value ends with a trailing dot, which Windows collapses/rejects; rejecting it\n' >&2
+                exit 1 ;;
+        esac
+        # The Windows reserved device names are shape-valid above yet cannot
+        # exist as a path component -- including with an extension, since
+        # CON.txt/NUL.log/COM1.git all resolve to the same reserved device.
+        # Same guard TASK_NAME gets at D5 (CPR-ORTH). Match the pre-extension
+        # stem only (case-insensitive): 'console' and 'nul-fix' are fine.
         case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
-            con|prn|aux|nul|com[1-9]|lpt[1-9])
-                printf 'safe_component: the value is a Windows-reserved device name; rejecting it\n' >&2
+            con|prn|aux|nul|com[1-9]|lpt[1-9]|con.*|prn.*|aux.*|nul.*|com[1-9].*|lpt[1-9].*)
+                printf 'safe_component: the value is a Windows-reserved device name (with or without an extension); rejecting it\n' >&2
                 exit 1 ;;
         esac
     )
@@ -162,16 +198,97 @@ title_has_word() {
 # The fallback says why it fired (same pattern as D4): a silent switch of the
 # naming source is invisible in the emitted name. Fixed literal — git's own
 # error text may carry private info.
-REPO_NAME="$(basename "$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)"
+REPO_NAME="$(basename -- "$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)"
 if [ -z "$REPO_NAME" ]; then
     printf "derive-worktree-name: could not resolve a git toplevel for --repo-dir; falling back to the directory's own basename\n" >&2
-    REPO_NAME="$(basename "$REPO_DIR" 2>/dev/null)"
+    REPO_NAME="$(basename -- "$REPO_DIR" 2>/dev/null)"
 fi
 if ! safe_component "$REPO_NAME"; then
     printf 'derive-worktree-name: the repository directory name is unusable as a path component; refusing to emit it; the checkout directory name must start with [a-zA-Z0-9] and otherwise match [a-zA-Z0-9._-] with no other characters — rename the checkout directory or pass --repo-dir pointing at a differently-named copy\n' >&2
     exit 1
 fi
-if ! scan_clean "$REPO_NAME"; then
+
+# --- D0a: exclude this checkout's own remote identity from the private gate --
+# Whenever the repo this worktree belongs to is itself private, its own name is
+# necessarily in PRIVATE_REPO_NAMES_CACHE, so a scan_clean() call on that name
+# self-matches and fails closed -- unconditionally, on every invocation, making
+# /worktree-start permanently unusable in any private repo. That one name is
+# not a leak: it is already known to everyone with access to this repo's own
+# remote, and it is the one name that cannot leak *into* this repo.
+# That premise is about the REMOTE identity, so the exclusion is keyed on it.
+# REPO_NAME is only the local checkout directory's basename -- a user-chosen
+# name that can collide with an unrelated private repo (a public repo cloned
+# into, or --repo-dir pointed at, a directory named after a private one).
+# Keying on it would silently disarm the gate for that name across the run.
+# Remote parsing mirrors hooks/lib/is-private-repo.js extractRepoId(): the last
+# `owner/repo` pair with an optional trailing `.git`. The `.git` suffix is
+# stripped first because POSIX ERE has no lazy quantifier, so a greedy
+# last-pair match cannot exclude it the way that regex's `[^/]+?` does.
+# The bare repo segment is what the filter compares: the consumer
+# (bin/check-private-repo-name.js findPrivateName()) matches on the last
+# `/`-delimited segment, and cache lines arrive in both `repo` and `owner/repo`
+# form, so normalizing the same way is what stops an owner-qualified
+# self-entry from surviving and self-blocking anyway.
+# Accepted residual: bare-name matching also drops a *different* owner's
+# private repo that happens to share the bare name (filtering `myorg/repo`
+# removes `otherorg/repo` from these scoped calls too). Inherent rather than
+# fixable here -- the consumer only ever matches bare names, so an
+# owner-qualified filter could not tighten what the gate actually enforces.
+# No resolvable `origin` (a repo before its first push, a local-only repo, a
+# --repo-dir that is not a repo at all) leaves the "already known to the
+# remote's audience" premise unestablished, so the filter is skipped entirely
+# and the cache stays whole -- fail closed. Tradeoff: the self-block described
+# above can still occur, but only in that one case.
+# Scope: the filtered list lives in its own variable, is never exported, and is
+# never assigned over the script-level cache. It reaches the checker only by
+# being passed as scan_clean()'s second argument, at the two call sites that
+# check this repo's own name (D0 immediately below, and D2's repo-name
+# fallback) — so it is scoped to those two calls without ever entering any
+# process's environment.
+# TITLE and TASK_NAME keep seeing the unfiltered list: task names are shared
+# across repos (rules/worktree.md), so one derived here and later reused by
+# hand in a different repo must still be caught there.
+SELF_EXCLUDED_PRIVATE_NAMES="${PRIVATE_REPO_NAMES_CACHE:-}"
+if [ "${PRIVATE_REPO_NAMES_CACHE_SET:-}" = "1" ] && [ -n "${PRIVATE_REPO_NAMES_CACHE:-}" ]; then
+    SELF_REMOTE_URL="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null | tr -d '\r' | head -1)"
+    SELF_REMOTE_NAME="$(
+        export LC_ALL=C
+        printf '%s\n' "${SELF_REMOTE_URL%.git}" \
+            | sed -n -E 's#^.*[/:][^/]+/([^/]+)$#\1#p' \
+            | tr 'A-Z' 'a-z'
+    )"
+    if [ -n "$SELF_REMOTE_NAME" ]; then
+        # ENVIRON, not `awk -v repo=...`: -v assignment applies awk's own
+        # backslash-escape processing to the value, and SELF_REMOTE_NAME is
+        # derived from a git remote URL -- not fully trusted input (see the
+        # "adversarial remote URLs" note above). ENVIRON values are not
+        # subject to that processing. Exported only inside this subshell, so
+        # it never leaks into the caller's environment (same one-shot scope
+        # as LC_ALL=C below).
+        FILTERED_PRIVATE_NAMES="$(
+            export LC_ALL=C REPO_SELF_NAME="$SELF_REMOTE_NAME"
+            printf '%s\n' "$PRIVATE_REPO_NAMES_CACHE" \
+                | awk '{ line = tolower($0); n = split(line, parts, "/"); bare = parts[n]; if (bare != ENVIRON["REPO_SELF_NAME"]) print }'
+        )"
+        # A failed/partial awk run must not silently adopt truncated output --
+        # this list gates whether the repo's own name passes the private-name
+        # scan, and this file's invariant throughout is fail CLOSED on
+        # uncertainty. On failure, SELF_EXCLUDED_PRIVATE_NAMES simply keeps
+        # its unfiltered default from above (same fail-closed outcome as the
+        # "no resolvable origin" branch already documented above).
+        if [ $? -eq 0 ]; then
+            SELF_EXCLUDED_PRIVATE_NAMES="$FILTERED_PRIVATE_NAMES"
+        else
+            printf 'derive-worktree-name: self-exclusion filter failed; falling back to the unfiltered private-name list (fail closed)\n' >&2
+        fi
+    fi
+fi
+
+# Passed as scan_clean()'s second argument, not as an environment override: the
+# list is scoped to this one call by being an argument, so every other
+# scan_clean() call still sees the full private-name list (see the Scope note in
+# D0a) and no child process's environment ever carries either list.
+if ! scan_clean "$REPO_NAME" "$SELF_EXCLUDED_PRIVATE_NAMES"; then
     printf 'derive-worktree-name: the repository directory name failed the outbound scan; refusing to emit it\n' >&2
     exit 1
 fi
@@ -219,7 +336,13 @@ if [ -n "$INTENT" ]; then
         # As a fallback slug it also becomes a public branch name and can carry
         # private info (hostnames, client names), so it passes the same gate as
         # TITLE. A value that failed the scan is never echoed raw.
-        if scan_clean "$REPO_NAME"; then
+        # Same value, same self-excluded list passed the same way as D0
+        # (CPR-ORTH) — this call checks this repo's own name, not third-party
+        # text. It gates only whether the fallback slug may be *built*; the
+        # composed TASK_NAME is still re-scanned at D6 with no second argument,
+        # i.e. against the unfiltered cache, which is where a task name
+        # embedding the repo's own name is caught.
+        if scan_clean "$REPO_NAME" "$SELF_EXCLUDED_PRIVATE_NAMES"; then
             SLUG="$(slugify "$REPO_NAME")"
             printf "derive-worktree-name: title yielded no ASCII slug; falling back to repo name '%s'\n" "$REPO_NAME" >&2
         else
@@ -361,12 +484,16 @@ if ! scan_clean "$TASK_NAME"; then
         TASK_NAME="worktree-${DISAMBIG}"
         # Losing the issue prefix costs the caller its traceability, so say so.
         printf 'derive-worktree-name: the issue-prefixed fallback name also failed the outbound scan; dropping the issue prefix (task name no longer traceable to an issue)\n' >&2
-        # Scanned like every other emitted value rather than asserted clean:
-        # "every emitted name passed the scan" must hold on every path.
-        if ! scan_clean "$TASK_NAME"; then
-            printf 'derive-worktree-name: the non-descriptive fallback name failed the outbound scan; refusing to emit a name\n' >&2
-            exit 1
-        fi
+        # This last tier is deliberately NOT scanned. It is built only from the
+        # literal 'worktree-' and a numeric UTC timestamp, so it carries no
+        # caller-, title-, or remote-derived text — there is nothing in it a
+        # private-name or blocklist match could legitimately be about, and any
+        # match here would necessarily be an over-match on the bare token
+        # 'worktree' (or on the digits), not a real leak. The narrower invariant
+        # that now governs this path is "a name is ALWAYS constructible", and it
+        # outranks the older "every emitted name passed the scan": the only
+        # outcome a scan can produce at this tier is refusing to emit any name at
+        # all, which breaks unconditional auto-naming outright.
     fi
 fi
 

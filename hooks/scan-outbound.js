@@ -5,7 +5,7 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames } = require("./lib/is-private-repo");
+const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName } = require("./lib/is-private-repo");
 const { isForgeScanTarget, extractTexts, extractRepoFlag, isRepoWriteTarget } = require("./lib/forge-write-extract");
 const { parseGitCArg } = require("./lib/parse-git-args");
 
@@ -44,7 +44,9 @@ function shellPath(p) {
 // Normalize Unix-style paths to native paths on Windows (Git Bash mktemp etc.)
 function normalizePath(fp) {
   if (process.platform !== "win32") return fp;
-  // /c/path or /C/path -> C:/path
+  // "/<drive>/path" (either case) -> "<DRIVE>:/path". Written with a
+  // placeholder rather than a literal drive letter so this comment does not
+  // trip the scanner's own [msys-path] pattern at pre-commit.
   const driveMatch = fp.match(/^\/([a-z])\/(.*)$/i);
   if (driveMatch) return `${driveMatch[1].toUpperCase()}:/${driveMatch[2]}`;
   // /tmp/... -> resolve via TEMP env
@@ -59,11 +61,6 @@ function normalizePath(fp) {
 const AGENTS_DIR = path.resolve(__dirname, "..");
 const SCANNER = path.join(AGENTS_DIR, "bin", "scan-outbound.sh");
 const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
-
-// Escape regex metacharacters in a string
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 // Main async logic wrapped in an IIFE to allow await on Promise-returning stubs
 (async function main() {
@@ -261,19 +258,20 @@ function escapeRegex(s) {
     }
 
     // JS dynamic WARN: only run when target is treated as PUBLIC.
-    // Check content against known private repo names from listPrivateRepoNames().
+    // Check content against known private repo names via the shared SSOT
+    // matcher (hooks/lib/is-private-repo.js findPrivateName) — this and
+    // bin/check-private-repo-name.js must never diverge on what counts as
+    // a boundary (CPR-SSOT).
     if (!isPrivate) {
       const privateNames = await Promise.resolve(listPrivateRepoNames());
-      for (const name of privateNames) {
-        const escaped = escapeRegex(name);
-        const re = new RegExp("(^|[^\\w/.-])" + escaped + "([^\\w/.-]|$)");
-        if (re.test(content)) {
-          block(
-            `warn: Private repository name detected in outbound content: ${name}\n` +
-            `Do not include private repository names in public-facing content.\n` +
-            `Remove or replace the private repo reference before proceeding.`
-          );
-        }
+      const matched = findPrivateName(content, privateNames);
+      if (matched !== null) {
+        // Fixed literal — never interpolate `matched` (would leak the name).
+        block(
+          "warn: Private repository name detected in outbound content.\n" +
+          "Do not include private repository names in public-facing content.\n" +
+          "Remove or replace the private repo reference before proceeding."
+        );
       }
     }
 

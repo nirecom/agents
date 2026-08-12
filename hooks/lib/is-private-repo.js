@@ -113,4 +113,34 @@ function listPrivateRepoNames() {
   }
 }
 
-module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost, shouldScanAsPublicTarget, listPrivateRepoNames };
+// Escape regex metacharacters in a string.
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// SSOT for private-repo-name detection, shared by bin/check-private-repo-name.js
+// and hooks/scan-outbound.js so their matching semantics can never drift apart.
+// split('/').pop() normalizes both cached (bare) and live ('owner/repo') names.
+// The candidate may arrive slugified (every non-alnum run collapsed to a single
+// '-'), so a literal match on a punctuated repo name ('acme.internal') could
+// never fire against its slugified form ('acme-internal'). Match on alnum
+// tokens joined by a non-alnum separator class instead, so both the original
+// and any slugified form are caught. A name that yields no tokens (pure
+// punctuation, e.g. '..') is skipped: an empty token list would degrade into
+// a pattern that matches almost any two adjacent non-alnum characters.
+function findPrivateName(candidate, privateNames) {
+  for (const name of privateNames) {
+    const bare = name.split("/").pop();
+    if (!bare) continue;
+    const tokens = bare.split(/[^a-zA-Z0-9]+/).filter(Boolean).map(escapeRegex);
+    if (tokens.length === 0) continue;
+    const re = new RegExp(
+      "(^|[^a-zA-Z0-9])" + tokens.join("[^a-zA-Z0-9]+") + "([^a-zA-Z0-9]|$)",
+      "i"
+    );
+    if (re.test(candidate)) return bare;
+  }
+  return null;
+}
+
+module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost, shouldScanAsPublicTarget, listPrivateRepoNames, escapeRegex, findPrivateName };

@@ -21,9 +21,19 @@
 #                                contract; closes_issues[0] as the sole naming source
 #   scan-gate-and-locale.sh    — B16-B18: D3a/D0 scan gates, D3b timestamp
 #                                disambiguator, LC_ALL pinning
-#   d6-fallback-cascade.sh     — B19: the D6 rescan/prefix-drop/refuse cascade
-#   private-repo-gate.sh       — B21: the private-repo-name half of scan_clean() and
-#                                the one-shot PRIVATE_REPO_NAMES_CACHE seam
+#   d6-fallback-cascade.sh     — B19: the D6 rescan/prefix-drop cascade, and the
+#                                unconditional (deliberately unscanned) last tier
+#   private-repo-gate.sh       — B21: the private-repo-name half of scan_clean(), the
+#                                one-shot PRIVATE_REPO_NAMES_CACHE seam, and D0a's
+#                                exclusion of the current repo's own name
+#   self-exclusion-origin.sh   — B25: D0a keyed on the resolved ORIGIN identity —
+#                                table-driven HTTPS/SCP/ssh:// allow rows plus the
+#                                origin-differs / no-origin / unparseable-origin /
+#                                broken-filter fail-closed rejects
+#   env-nonexposure.sh         — B26: the private-name list never enters a child
+#                                process's environment (spy scanner + spy checker),
+#                                per-call-site list routing, and scan_clean()'s
+#                                authoritative-empty second argument
 # B10 (output-shape invariant) runs once per behavioral sub-file as B10/<group>.
 #
 # Every sub-file sources helpers.sh, whose setup_fixture() declares
@@ -39,9 +49,13 @@
 #   the documented idempotency and reuse-safety algorithms against real fixture repos,
 #   but the model following SKILL.md is what runs them in production — a SKILL.md
 #   wording change that the model reads differently is invisible here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration; plus a manual smoke
-# test outside CI.
+# Both gaps are now covered by tests/TL3-skill-worktree-start-auto-naming.sh (RUN_TL3-gated):
+# a live `claude -p` session executes WS-1..WS-6 from the real SKILL.md, an AskUserQuestion
+# PreToolUse probe proves no naming prompt occurs, and the created path/branch are compared
+# against derive-worktree-name.sh's own output for the same context.
+# Closest-to-action mitigation for hosts where RUN_TL3 is off: the gap is checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category:
+# skill-orchestration; plus a manual smoke test outside CI.
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUB_DIR="$TESTS_DIR/feature-worktree-start-non-interactive"
@@ -157,8 +171,10 @@ run_sub "$SUB_DIR/session-and-idempotency.sh" 13
 run_sub "$SUB_DIR/reuse-safety.sh"            30
 run_sub "$SUB_DIR/slugify-table.sh"           40
 run_sub "$SUB_DIR/scan-gate-and-locale.sh"    18
-run_sub "$SUB_DIR/d6-fallback-cascade.sh"     10
-run_sub "$SUB_DIR/private-repo-gate.sh"       11
+run_sub "$SUB_DIR/d6-fallback-cascade.sh"     15
+run_sub "$SUB_DIR/private-repo-gate.sh"       25
+run_sub "$SUB_DIR/self-exclusion-origin.sh"   40
+run_sub "$SUB_DIR/env-nonexposure.sh"          8
 
 echo ""
 echo "Results: $TOTAL_PASS passed, $TOTAL_FAIL failed"
