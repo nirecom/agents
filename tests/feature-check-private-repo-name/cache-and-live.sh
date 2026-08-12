@@ -4,11 +4,8 @@
 # Tags: private-repo, outbound-scan, security, classifier, table-driven, TL2, scope:common
 # P1-P7 — the matching semantics, the env-cache name source, the live (gh-backed) name
 # source, and the producer/consumer wire format.
-#
-# The stdin name source, which outranks both sources exercised here, has its own
-# sub-file (stdin-mode.sh) — the two are separate concerns and the precedence BETWEEN
-# them is asserted there, where both can be armed at once.
-# Part of the feature-check-private-repo-name suite — see the dispatcher.
+# The higher-precedence stdin source lives in stdin-mode.sh, which also owns the
+# precedence assertions. Part of the feature-check-private-repo-name suite.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 

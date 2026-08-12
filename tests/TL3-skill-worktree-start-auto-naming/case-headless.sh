@@ -3,10 +3,9 @@
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, headless, fork, claude-e2e, TL3, scope:common
 #
-# WSE-8..WSE-12 — forked/subagent invocation. No workflow session hosts the run
-# and AskUserQuestion is unreachable, so WS-2 must pass `--headless <label>`.
-# The derived name then carries the D3b UTC disambiguator, so the oracle can
-# only pin the slug prefix and the shape — not the exact timestamp.
+# WSE-8..WSE-12 — forked invocation: no session, AskUserQuestion unreachable,
+# so WS-2 must pass `--headless <label>`; name carries the D3b UTC
+# disambiguator, so assertions pin slug prefix + shape, not the timestamp.
 # Sourced by ../TL3-skill-worktree-start-auto-naming.sh after helpers.sh.
 
 echo ""

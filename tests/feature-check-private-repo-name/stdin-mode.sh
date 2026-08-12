@@ -4,27 +4,17 @@
 # Tags: private-repo, outbound-scan, security, classifier, stdin, table-driven, TL2, scope:common
 # S1-S6 [F3] — PRIVATE_REPO_NAMES_STDIN=1, the third and highest-precedence name source.
 #
-# Why it exists: the list is "every private repo the user owns", and reaching the checker
-# through PRIVATE_REPO_NAMES_CACHE meant it had to sit in the environment of the caller
-# and of every process that caller spawns, where any process-inspection interface on the
-# host can read it back. F3 adds a stdin source so the sole consumer receives the list
-# directly and nothing else on the machine ever sees it. The caller-side half of that
-# (derive-worktree-name.sh no longer exporting anything) is asserted in
-# tests/feature-worktree-start-non-interactive/env-nonexposure.sh; this file owns the
-# consumer-side half.
-#
-# The gate is a classifier, so both verdicts are covered on the new source too
-# (skills/_shared/test-design.md "Classifier / guard cases"): over-blocking here is not
-# a safe failure — it degrades every derived branch name to a non-descriptive fallback,
-# and under-blocking silently reopens the leak the gate exists to close.
-#
-# STDIN=1 declares the list AUTHORITATIVE, which is the whole reason it can be empty:
-# "confirmed no private repos" and "not asked yet" are different states, and only the
-# first may fail open quietly. Every empty-list row below is about that distinction.
-#
-# No real private repo name appears anywhere in this file — the fixtures are fictional
-# (`acme-org/acme-internal`, `secret-thing`) and nothing here reaches `gh` or the network.
-# Part of the feature-check-private-repo-name suite — see the dispatcher.
+# Why: PRIVATE_REPO_NAMES_CACHE put the full private-repo list in the caller's
+# environment, readable by any process-inspection interface. F3 hands it to the
+# sole consumer over stdin. This file owns the consumer half; the caller half
+# (no export) is in ../feature-worktree-start-non-interactive/env-nonexposure.sh.
+
+# Classifier, so both verdicts are covered on the new source: over-blocking
+# degrades every derived name, under-blocking reopens the leak.
+# STDIN=1 marks the list AUTHORITATIVE, so an empty list means "confirmed none",
+# not "not asked yet" — the empty-list rows pin that distinction.
+# Fixtures are fictional (`acme-org/acme-internal`, `secret-thing`); no `gh`, no
+# network. Part of the feature-check-private-repo-name suite.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 
@@ -119,18 +109,11 @@ for s2_row in "${S2_ROWS[@]}"; do
 done
 
 # ── S3: precedence — stdin outranks the env cache, in both directions ───────
-# Structural, not incidental: the stdin branch is placed above the env-cache block and
-# terminates with a bare `return`, because resolving stdin is asynchronous and without
-# it the synchronous env block would run first and win every time. Both directions are
-# asserted, since each fails differently:
-#   (a) stdin says "match", env cache says "nothing"  -> must reject. A missing branch
-#       (or one placed after the env block) would exit 0 and the gate would be dead for
-#       every caller that had migrated to stdin.
-#   (b) stdin says "nothing", env cache says "match"  -> must accept. This is the
-#       direction that proves precedence rather than mere presence: an implementation
-#       that consulted stdin and then *also* consulted the env cache would still pass
-#       (a) while failing here, and would resurrect the exact leak F3 removed by making
-#       the env variable load-bearing again.
+# The stdin branch must sit above the env-cache block and `return`, since stdin
+# resolves asynchronously. Both directions fail differently:
+#   (a) stdin match + env empty -> reject (else the gate is dead for stdin callers)
+#   (b) stdin empty + env match -> accept (proves precedence, not mere presence;
+#       consulting both would pass (a) and re-arm the leak F3 removed)
 s3_run() {  # $1 = stdin bytes, $2 = env cache value, $3 = candidate
     local errf="$TMP/s3-err.txt"
     OUT="$(printf '%s' "$1" | PRIVATE_REPO_NAMES_STDIN=1 PRIVATE_REPO_NAMES_CACHE_SET=1 \

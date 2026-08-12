@@ -2,6 +2,7 @@
 # tests/feature-worktree-start-non-interactive/d6-fallback-cascade.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/scan-outbound.sh
 # Tags: worktree, start, outbound-scan, fallback, TL2, scope:issue-specific
+
 # B19 — the D6 outbound-scan fallback cascade of derive-worktree-name.sh.
 #   B19a: the primary name is rejected; the rebuilt <issue>-worktree-<ts> is re-scanned.
 #   B19b: the rebuilt name is rejected too; the issue prefix is dropped and announced.
@@ -9,39 +10,29 @@
 #         the last tier is emitted unconditionally rather than re-scanned.
 #   B19d: the same breakage in its production shape, driven by the real private-name
 #         checker instead of the stand-in scanner.
-#
-# [F1] The cascade has exactly three tiers, and only the first two are scanned:
-#   tier 0  the slugified task name                    -> scanned
-#   tier 1  "${ISSUE:+${ISSUE}-}worktree-${DISAMBIG}"  -> scanned (it embeds $ISSUE)
+
+# [F1] Three tiers, first two scanned:
+#   tier 0  slugified task name                        -> scanned
+#   tier 1  "${ISSUE:+${ISSUE}-}worktree-${DISAMBIG}"  -> scanned (embeds $ISSUE)
 #   tier 2  "worktree-${DISAMBIG}"                     -> NOT scanned, always emitted
-# The older invariant "every emitted name passed the scan" was true of all three and
-# is deliberately no longer: tier 2 is built from the literal 'worktree-' plus a
-# numeric UTC timestamp and carries no caller-, title-, or remote-derived text, so a
-# scanner verdict on it could only ever be an over-match on the bare token 'worktree'
-# (or on digits). The only outcome a scan can produce at that tier is "emit no name at
-# all", which is exactly the unconditional auto-naming #1910 exists to deliver. The
-# narrower invariant "a name is ALWAYS constructible" supersedes it, and B19b/B19c/B19d
-# below are the guards that keep the deleted re-scan from creeping back in.
-# Split out of scan-gate-and-locale.sh (file-split WARN at >300 lines) — the scan-gate
-# file keeps the real-scanner cases (B16) and the locale pins (B18); this one owns the
-# stand-in-scanner seam that makes the D6 scan *sequence* observable.
-# Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
+# Tier 2 carries no caller/title/remote text, so a scan there could only over-match
+# and emit no name at all; the invariant is "a name is ALWAYS constructible"
+# (#1910), and B19b/B19c/B19d keep the deleted re-scan from creeping back.
+
+# Split out of scan-gate-and-locale.sh (>300 lines), which keeps B16/B18; this file
+# owns the stand-in-scanner seam. Part of the
+# feature-worktree-start-non-interactive suite — see the dispatcher.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 setup_fixture
 
 # --- B19 [F3]: the D6 fallback name is itself re-scanned --------------------
-# D6 rebuilds "<issue>-worktree-<ts>" when the emitted name fails the outbound scan.
-# The rebuilt value still embeds $ISSUE, so it must pass the gate too rather than be
-# assumed safe; a second failure drops the issue prefix entirely.
-#
-# B16 drives the real scanner, which can only reject values that carry a real
-# private-info pattern — it cannot make the *derived* name fail while the source text
-# passes. So D6 gets a stand-in AGENTS_CONFIG_DIR (the same seam B17 uses in
-# scan-gate-and-locale.sh) whose
-# scan-outbound.sh logs every value it is handed and rejects the ones matching a
-# per-case ERE. The log is what makes the scan *sequence* observable: asserting only
-# the final name cannot distinguish "re-scanned and accepted" from "assumed safe".
+# D6 rebuilds "<issue>-worktree-<ts>" when the name fails the scan; the rebuilt
+# value still embeds $ISSUE so it must be re-scanned, and a second failure drops
+# the prefix. The real scanner (B16) cannot fail a derived name whose source text
+# passes, so this file uses a stand-in AGENTS_CONFIG_DIR whose scan-outbound.sh
+# logs every value and rejects a per-case ERE — the log makes the scan *sequence*
+# observable ("re-scanned" vs "assumed safe").
 D6_CFG="$FIXTURE/d6-cfg"
 mkdir -p "$D6_CFG/bin" "$D6_CFG/hooks/lib"
 # parse-closes-issues resolves its lib as <cfg>/hooks/lib/, so both halves are copied;
@@ -142,17 +133,9 @@ if [[ "$ERR" == *'dropping the issue prefix'* && "$ERR" == *'no longer traceable
 else
     fail "B19b/stderr: expected the prefix-drop diagnostic naming the lost traceability (err='$ERR')"
 fi
-# [F1] B19b/tier2-not-scanned — the deliberate non-scan, asserted as such.
-# This case used to read "the prefix-less fallback was itself scanned last, immediately
-# before being emitted", under the invariant "every emitted name passed the scan". That
-# invariant no longer holds and must not (see the [F1] note in the file header): a scan
-# at tier 2 can only ever refuse to emit a name, and refusing is the one outcome
-# unconditional auto-naming cannot afford. So the assertion is inverted — the LAST value
-# handed to the scanner is the tier-1 candidate, and the emitted tier-2 name comes after
-# it, unscanned.
-# A re-introduced tier-2 scan would push the emitted name back into last place and turn
-# this red, which is the point: without it, the deleted re-scan could return unnoticed
-# and take the rc=1 breakage B19c/B19d guard back with it.
+# [F1] B19b/tier2-not-scanned — the deliberate non-scan, asserted as such: the last
+# value handed to the scanner is the tier-1 candidate, and the emitted tier-2 name
+# comes after it, unscanned. A re-introduced tier-2 scan turns this red.
 B19B_LAST="$(tail -1 "$D6_LOG")"
 if printf '%s' "$B19B_LAST" | grep -qE "^4242-worktree-$TS_RE\$" && [ "$B19B_LAST" != "$B19B_TN" ]; then
     pass "B19b/tier2-not-scanned: the last value scanned is the tier-1 candidate — the emitted tier-2 name is deliberately never handed to the scanner"
@@ -170,14 +153,9 @@ else
 fi
 
 # --- B19c [F1]: a scanner that rejects every `worktree` value must still yield a name
-# The regression guard for the exact functional breakage F1 fixed. Before it, this
-# input produced rc=1 with empty stdout and a 'refusing to emit a name' diagnostic:
-# tier 2 was re-scanned, the same ERE that rejected tiers 0 and 1 rejected it too, and
-# /worktree-start was left with no name at all — the auto-naming this issue exists to
-# deliver, defeated by an over-match on the literal token the fallback is built from.
-# Now tier 2 is emitted unconditionally, so the contract is rc=0 with a full
-# three-line stdout.
-# The ERE rejects both the title-derived slug and every `worktree` value, but neither
+# Regression guard for the breakage F1 fixed: re-scanning tier 2 made this input
+# rc=1 with no name at all. Contract now: rc=0 with full three-line stdout.
+# The ERE rejects the title slug and every `worktree` value, but neither
 # REPO_NAME (`d6-repo`) nor the raw title (`Zeta ...`, capitalized).
 : > "$D6_LOG"
 printf '%s\n' 'zeta|worktree' > "$D6_REJECT"
@@ -211,24 +189,16 @@ else
 fi
 
 # --- B19d [F1]: the same breakage in its production shape -------------------
-# B19c drives the failure through the stand-in scan-outbound.sh, which can reject
-# anything. The bug as actually reported came from the OTHER half of scan_clean() — the
-# private-repo-name checker — where a user owning a private repo literally named
-# `worktree` (or any name whose slug is that token) made every tier match and
-# /worktree-start unusable, permanently, in every repo. That is an over-match on a bare
-# token, exactly the class the tier-2 non-scan exists to be immune to, so it is worth
-# reproducing against the real matcher rather than only against a stub ERE.
-#
-# The declared list carries two entries: `worktree` (kills both scanned tiers) and the
-# fixture repo's own basename (kills the D2 repo-name fallback's product at D6, so the
-# cascade cannot recover through a descriptive name either). The repo's own entry is
-# reachable at all only because D0a excludes it from the two REPO_NAME gates — hence
-# the origin remote below; without it D0 would fail closed and the run would never get
-# near D6. The FULL list is what the title scan and the D6 tiers see, which is why the
-# repo-name-derived task name is still caught there (the same split B21h pins).
-#
-# The stand-in scan-outbound.sh stays in place with an empty reject ERE, so every
-# rejection below is attributable to the private-name checker alone.
+# Reproduces the reported bug against the real matcher, not a stub ERE: the other
+# half of scan_clean() — the private-repo-name checker — where a private repo named
+# `worktree` made every tier match and /worktree-start permanently unusable.
+
+# List entries: `worktree` (kills both scanned tiers) and the fixture repo's own
+# basename (kills the D2 repo-name fallback at D6). The latter is reachable only
+# because D0a excludes it from the REPO_NAME gates — hence the origin remote below.
+# The full list still reaches the title scan and D6 tiers (split pinned by B21h).
+# The stand-in scan-outbound.sh stays with an empty reject ERE, so every rejection
+# is attributable to the private-name checker alone.
 : > "$D6_LOG"
 : > "$D6_REJECT"
 D6_F1_REPO="$FIXTURE/d6-f1-repo"

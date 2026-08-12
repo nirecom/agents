@@ -4,28 +4,18 @@
 # Tags: worktree, start, private-repo, environment, leak, security, TL2, scope:issue-specific
 # B26 [F3] — the private-repo-name list must never enter a child process's environment.
 #
-# Why this needs its own group: the list is "every private repo the user owns", and it
-# used to be `export`ed by derive-worktree-name.sh so that scan_clean()'s checker could
-# read it. An exported variable is not scoped to the one consumer that needs it — it is
-# inherited by node, git, bash, the scan-outbound.sh subprocess and everything they
-# spawn in turn, where any process-inspection interface on the host can read it back.
-# F3 removes the export and hands the list to its single consumer over stdin instead.
-#
-# Nothing about the *verdicts* changes, which is exactly why this cannot be tested by
-# asserting on derived names: B21 and B25 pass identically under both mechanisms. The
-# property is about what the children can SEE, so it is asserted from inside them — a
-# stand-in AGENTS_CONFIG_DIR whose scan-outbound.sh and check-private-repo-name.js each
-# record, per invocation, the candidate they were handed, the name list actually
-# delivered to them, and whether either cache variable was present in their own
-# environment.
-#
-# The declared-cache contract the rest of this suite uses cannot be used here: exporting
-# PRIVATE_REPO_NAMES_CACHE into the script under test would put it in every child's
-# environment by the test's own doing, and the assertion would be false for a reason
-# that has nothing to do with the source. So these cases unset both variables and let
-# the script populate its cache itself from a stand-in lister — the production shape,
-# and the only one where the plain (non-exported) assignment inside the script is what
-# decides the outcome.
+# Why: derive-worktree-name.sh used to `export` the full private-repo list, so every
+# child (node, git, bash, scan-outbound.sh) inherited it and any process-inspection
+# interface could read it. F3 hands it to the single consumer over stdin.
+
+# Verdicts are unchanged (B21/B25 pass either way), so the property is asserted from
+# inside the children: a stand-in AGENTS_CONFIG_DIR whose scan-outbound.sh and
+# check-private-repo-name.js record, per call, the candidate, the list delivered,
+# and whether either cache variable was present in their environment.
+
+# The suite's declared-cache contract is unusable here — exporting the cache would
+# create the leak itself. These cases unset both variables and let the script
+# populate its cache from a stand-in lister (the production shape).
 # Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -201,18 +191,12 @@ else
 fi
 
 # --- B26c [F3]: an explicitly EMPTY list is authoritative, not a fallback ----
-# scan_clean()'s default is `${2-${PRIVATE_REPO_NAMES_CACHE:-}}` — unset-only. The
-# distinction is invisible until the self-exclusion filter empties the list completely,
-# which is precisely the single-private-repo case: the user owns exactly one private
-# repo, it is this one, D0a removes it, and D0 is then called with an empty second
-# argument meaning "authoritative empty list — nothing to match against". With a
-# `${2:-...}` default that empty argument would silently swap the FULL cache back in,
-# check the repo's own name against the very entry D0a had just excluded, and self-block
-# the repo at D0 — reinstating the bug D0a exists to fix, for every single-private-repo
-# user.
-# Route: through the script's own call sites, not by sourcing scan_clean() directly — a
-# harness calling the function in isolation would prove the default's shape but not that
-# any real call site can reach it, and reachability is the whole point here.
+# scan_clean()'s default is `${2-...}` (unset-only). It matters in the
+# single-private-repo case: D0a empties the list, so D0 gets an authoritative empty
+# argument; a `${2:-...}` default would swap the full cache back in and self-block
+# the repo — the bug D0a exists to fix.
+# Routed through the script's real call sites, not by sourcing scan_clean(), since
+# reachability is the point.
 printf '%s\n' 'spy-repo' > "$C_LIST"
 : > "$C_REJECT"
 c_run B26c

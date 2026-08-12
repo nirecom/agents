@@ -4,18 +4,13 @@
 # Tags: worktree, start, private-repo, outbound-scan, security, TL2, scope:issue-specific
 # B21 — the private-repo-name half of derive-worktree-name.sh's scan gate, and the
 # one-shot cache that feeds it.
-#
-# Why it needs its own coverage: bin/scan-outbound.sh only consults two static files,
-# so a private repo's bare name reaches a public branch name unless scan_clean() also
-# checks it against the user's private-repo list. That second check is the only thing
-# standing between an intent title and a pushed branch — and because the list is
-# resolved from the environment, "the gate ran" and "the gate had anything to compare
-# against" are separate facts. Both are pinned here.
-#
-# B21d-B21i cover D0a, the one name that must NOT be on that list: the current repo's
-# own. Left in, it makes the gate self-match at D0 and /worktree-start unusable in any
-# private repo — so the exclusion is as load-bearing as the gate itself, and equally
-# dangerous if it over-reaches.
+
+# Why: scan-outbound.sh consults only two static files, so a private repo's bare
+# name reaches a public branch unless scan_clean() also checks the private-repo
+# list. "The gate ran" and "the gate had anything to compare against" are separate
+# facts (the list comes from the environment); both are pinned here.
+# B21d-B21i cover D0a — the current repo's own name must be excluded, or the gate
+# self-matches at D0 in every private repo; over-reaching there is equally bad.
 # Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -170,21 +165,12 @@ else
 fi
 
 # --- B21d-B21i: D0a, the current repo's own name is excluded from the gate ---
-#
-# Why this needs its own group: the list the gate compares against is "every repo
-# the user owns that is private", which necessarily includes the repo /worktree-start
-# is being run in whenever that repo is itself private. REPO_NAME is then matched
-# against a list containing REPO_NAME, so D0's scan_clean("$REPO_NAME") fails closed
-# on the very first gate — unconditionally, for every invocation, in every private
-# repo. That is not a leak the gate is preventing: the repo's own name is already
-# known to everyone who can see this repo's remote, and it is the one name that
-# cannot leak *into* this repo from somewhere else.
-#
-# D0a therefore filters exactly one entry — the current repo's own bare name, compared
-# case-insensitively — out of the cache, once, before the first scan_clean() call. The
-# cases below pin both halves of that: it must remove the self-entry (B21d/B21e), and
-# it must remove nothing else (B21f/B21g/B21i). Every case drives the same declared
-# cache contract the rest of this suite uses; none reaches `gh`.
+# In a private repo the list contains REPO_NAME itself, so D0's
+# scan_clean("$REPO_NAME") would fail closed on every invocation — and the repo's
+# own name is no leak, it is already visible to anyone who can see the remote.
+# D0a filters exactly that one entry (bare name, case-insensitive) from the cache
+# once, before the first scan_clean(). Cases pin both halves: self-entry removed
+# (B21d/B21e), nothing else removed (B21f/B21g/B21i). Declared cache; no `gh`.
 SELF_REPO="$FIXTURE/selfname-repo"
 mkdir -p "$SELF_REPO"
 git -C "$SELF_REPO" init -q >/dev/null 2>&1
@@ -274,16 +260,11 @@ else
     pass "B21g/leak: the refusal never echoes the offending repo name"
 fi
 
-# B21h: the exclusion is a one-shot env-prefix on only the two REPO_NAME
-# scan_clean() call sites (D0, and D2's repo-name fallback) — not a blanket
-# export every later scan_clean() inherits. The D2 repo-name fallback is the
-# discriminating path for that pair: a title that yields no ASCII slug falls
-# back to slugify(REPO_NAME), which is built from the self-excluded list too.
-# But the composed TASK_NAME ("1910-selfname-repo") is scanned a third time at
-# D6 against the *unfiltered* cache (TITLE/TASK_NAME deliberately keep seeing
-# the full list — see D0a's Scope note), and that rescan still finds the
-# repo's own name embedded in it and rejects it, falling through to D6's
-# non-descriptive timestamp fallback.
+# B21h: the exclusion is scoped to the two REPO_NAME scan_clean() call sites (D0
+# and D2's repo-name fallback), not a blanket export. D2 is the discriminating
+# path: a title with no ASCII slug falls back to slugify(REPO_NAME). The composed
+# TASK_NAME is then rescanned at D6 against the *unfiltered* cache (see D0a's
+# Scope note), still matches, and falls through to D6's timestamp fallback.
 INTENT_B21H="$FIXTURE/b21h-intent.md"
 write_intent "$INTENT_B21H" '!!! @@@' '- #1910: self-name exclusion'
 PRIVATE_REPO_NAMES_CACHE='selfname-repo'

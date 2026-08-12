@@ -57,14 +57,10 @@ fi
 # --- B4: branch-type keyword table -----------------------------------------
 # title-fragment | expected branch type
 # Looped in the current shell (no pipeline subshell) so the B10 accumulator survives.
-#
-# Reuses $CORE_REPO (set up top-of-file) so D4's gh label lookup can never fire: this
-# table is about the title-keyword arm only, and the label arm has its own coverage in
-# derive-gh.sh. Without the pin every row would resolve the suite's own github.com
-# checkout and issue a live `gh issue view`.
-#
-# The last four rows pin the word-boundary contract: an unanchored substring match
-# would read "prefix" as fix, "documentary" as docs, and "choreography" as chore.
+# $CORE_REPO pins the repo so D4's gh label lookup never fires (label arm lives in
+# derive-gh.sh); without it each row would issue a live `gh issue view`.
+# The last four rows pin word boundaries: an unanchored match would read "prefix"
+# as fix, "documentary" as docs, "choreography" as chore.
 B4_ROWS=(
     'Refactor the prompt files|refactor'
     'Update the docs for worktree|docs'
@@ -135,14 +131,11 @@ fi
 # --- B15 [C5b]: --headless is unconditionally non-interactive ---------------
 # derive-worktree-name.sh never reads CONFIRM_WORKTREE; setting it to `on` must not
 # change the output shape or introduce a prompt. run-with-timeout turns any hang into
-# a failure instead of a stuck suite — this is the unit-level guarantee underneath
-# the WS-7 headless pinning rule asserted by TC9.
-#
-# The stdout contract is three lines since #1910 added the D0 REPO_NAME component:
-# TASK_NAME=, BRANCH_TYPE=, REPO_NAME=. REPO_NAME is resolved from the git worktree
-# the script runs in, so the invocation is pinned to $AGENTS_DIR (the checkout under
-# test) and the expectation is derived the same way rather than hardcoded — the case
-# stays correct in a differently-named checkout.
+# a failure instead of a stuck suite — the unit-level guarantee under TC9's WS-7
+# headless pinning rule.
+# Stdout contract is three lines since #1910: TASK_NAME=, BRANCH_TYPE=, REPO_NAME=.
+# REPO_NAME comes from the running worktree, so the call is pinned to $AGENTS_DIR
+# and the expectation derived the same way (correct in any checkout name).
 B15_ERR="$FIXTURE/b15-stderr.txt"
 B15_WANT_REPO="$(basename "$(git -C "$AGENTS_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$AGENTS_DIR")")"
 B15_OUT="$(cd "$AGENTS_DIR" && CONFIRM_WORKTREE=on bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 \
@@ -286,14 +279,10 @@ fi
 # TASK_NAME arm. The title is the whole naming source (no issue number, no --headless
 # disambiguator), so slugify(title) IS the derived TASK_NAME and D5 sees exactly the
 # reserved token. $CORE_REPO keeps D4's gh lookup off the table, as everywhere else.
-#
-# No trailing-dot / reserved-name-plus-extension rows here, and no equivalent D5 guard
-# to test: the two rows above are structurally unreachable through TASK_NAME. slugify()
-# rewrites every non-[a-z0-9] run to '-' (`sed -e 's/[^a-z0-9]\{1,\}/-/g'`) before the
-# value is ever handed to D5, so 'CON.txt' arrives as 'con-txt' and no dot survives to
-# reject. D5's own char-class check then forbids dots categorically — broader than, and
-# upstream of, the two dot-specific guards safe_component() needs at D0, which is why
-# CPR-ORTH is already satisfied without duplicating the narrower pair here.
+# No trailing-dot / name-plus-extension rows: slugify() collapses every non-[a-z0-9]
+# run to '-' before D5, so 'CON.txt' arrives as 'con-txt' and D5's char class forbids
+# dots outright — broader than D0's safe_component() pair, so CPR-ORTH holds without
+# duplicating them here.
 # label | intent title (== the derived TASK_NAME once slugified) | want rc
 B23_TASK_ROWS=(
     'task-CON|CON|1'

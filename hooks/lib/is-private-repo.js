@@ -119,15 +119,12 @@ function escapeRegex(s) {
 }
 
 // SSOT for private-repo-name detection, shared by bin/check-private-repo-name.js
-// and hooks/scan-outbound.js so their matching semantics can never drift apart.
-// split('/').pop() normalizes both cached (bare) and live ('owner/repo') names.
-// The candidate may arrive slugified (every non-alnum run collapsed to a single
-// '-'), so a literal match on a punctuated repo name ('acme.internal') could
-// never fire against its slugified form ('acme-internal'). Match on alnum
-// tokens joined by a non-alnum separator class instead, so both the original
-// and any slugified form are caught. A name that yields no tokens (pure
-// punctuation, e.g. '..') is skipped: an empty token list would degrade into
-// a pattern that matches almost any two adjacent non-alnum characters.
+// and hooks/scan-outbound.js. split('/').pop() normalizes bare and
+// 'owner/repo' forms alike. Matches on alnum tokens joined by a non-alnum
+// separator class (not a literal substring) so a slugified candidate
+// ('acme-internal') still matches a punctuated name ('acme.internal').
+// A name with no tokens (pure punctuation) is skipped — an empty token list
+// would match almost any two adjacent non-alnum characters.
 function findPrivateName(candidate, privateNames) {
   for (const name of privateNames) {
     const bare = name.split("/").pop();

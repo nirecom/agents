@@ -2,30 +2,17 @@
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, skill-orchestration, auto-naming, claude-e2e, TL3, run-e2e, scope:common
 #
-# Real-host seam test for the worktree-start skill's auto-naming path.
-# A live `claude -p` session reads the real SKILL.md and executes WS-1..WS-6
-# against a throwaway git repo. What only a real host can show:
-#   - the model never reaches for AskUserQuestion to pick a name or branch type
-#     (WS-2 is auto-derived in every context) — proven by a PreToolUse probe
-#     registered on AskUserQuestion, not by grepping SKILL.md prose;
-#   - the path and branch it actually creates equal what
-#     derive-worktree-name.sh itself emits for the same repo and session;
-#   - a second invocation reuses the registered worktree instead of adding a
-#     second one (WS-2 reuse-safety as executed, not as reimplemented).
-# Layer: TL3 (live claude -p, real skill file, real script, real git worktrees).
-#
-# Sub-files under TL3-skill-worktree-start-auto-naming/:
-#   helpers.sh      — fixture builder, AskUserQuestion probe, claude runner
-#   case-session.sh — WSE-1..WSE-7: no-argument invocation + idempotent re-run
-#   case-headless.sh— WSE-8..WSE-12: forked `--headless <label>` invocation
-#
-# TL3 gap (what this test does NOT catch):
-# - WS-7 (worktree-copy worker dispatch), WS-8 (EnterWorktree) and WS-9 are out
-#   of scope here: they need a real worker fleet and a real IDE-side tool. The
-#   run is explicitly stopped after WS-6.
-# - The derivation logic itself is exhaustively covered at TL2 by
-#   tests/feature-worktree-start-non-interactive.sh; this file only pins the
-#   model-executed seam and is gated on RUN_TL3, so TL2 stays the daily runner.
+# TL3: live `claude -p` runs the real worktree-start SKILL.md (WS-1..WS-6)
+# against a throwaway git repo. Pins what only a real host shows: no
+# AskUserQuestion for name/branch, created path+branch equal
+# derive-worktree-name.sh output, and a re-run reuses the worktree.
+
+# Sub-files: helpers.sh (fixture/probe/runner),
+# case-session.sh (WSE-1..7 no-arg + re-run), case-headless.sh (WSE-8..12).
+
+# TL3 gap: WS-7..WS-9 out of scope (need a real worker fleet / IDE tool);
+# derivation logic is covered at TL2 by
+# tests/feature-worktree-start-non-interactive.sh (the daily runner).
 set -euo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"

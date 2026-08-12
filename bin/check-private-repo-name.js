@@ -3,26 +3,20 @@
 // Check a candidate path/branch component against private repo bare names.
 // Usage: node check-private-repo-name.js <candidate>
 // Exit: 0 = clean/undetermined (fail-open); 1 = private name found (fail-closed).
-// Matching logic (findPrivateName/escapeRegex) is SSOT'd in
-// hooks/lib/is-private-repo.js — shared with hooks/scan-outbound.js so the two
-// gates can never diverge on what counts as a boundary.
-// Cache: PRIVATE_REPO_NAMES_CACHE_SET=1 reads PRIVATE_REPO_NAMES_CACHE instead
-// of calling gh (producer: bin/list-private-repo-names.js).
-// Stdin: PRIVATE_REPO_NAMES_STDIN=1 reads the newline-separated list from stdin
-// instead, so the full list never has to sit in the environment of the caller
-// and every process it spawns. Highest precedence of the three sources. Same
-// authoritative-empty semantics as the env cache above: STDIN=1 declares "this
-// list is authoritative", so empty stdin means "confirmed no private repos",
-// not "unknown".
+// Matching logic is SSOT'd in hooks/lib/is-private-repo.js (shared with
+// hooks/scan-outbound.js, so the two gates never diverge on what counts as
+// a boundary).
+// Name-list source precedence: stdin (PRIVATE_REPO_NAMES_STDIN=1, keeps the
+// full list out of every process's environment) > env cache
+// (PRIVATE_REPO_NAMES_CACHE_SET=1 + PRIVATE_REPO_NAMES_CACHE, producer:
+// bin/list-private-repo-names.js) > live gh lookup. Both STDIN=1 and
+// CACHE_SET=1 are authoritative — an empty list means "confirmed no
+// private repos", not "unknown".
 
 const path = require('path');
 
-// Partial disclosure via truncation is not a gap here: derive-worktree-name.sh
-// slugify() keeps only the first 5 tokens / 40 chars, so a truncated private
-// name could evade findPrivateName()'s whole-name match — but the raw
-// pre-slugify TITLE is always passed through scan_clean() first, and
-// slugify()'s output is always a token-prefix of a string that already passed
-// that scan.
+// Not a truncation gap: derive-worktree-name.sh slugify() output is always
+// a token-prefix of a TITLE that already passed scan_clean() pre-slugify.
 
 function finish(candidate, privateNames) {
   const matched = findPrivateName(candidate, privateNames);
@@ -56,16 +50,12 @@ function readStdin() {
   });
 }
 
-// Placed above the env-cache block so the source precedence (stdin > env cache >
-// live lookup) is structural rather than incidental.
+// Placed above the env-cache block so precedence (stdin > env cache > live
+// lookup) is structural. `return` is required: resolving stdin is async, so
+// without it the synchronous blocks below would run first regardless.
 if (process.env.PRIVATE_REPO_NAMES_STDIN === '1') {
-  // readStdin() is called inside the chain (not as an eager argument to
-  // Promise.resolve()) for the same reason the live-lookup chain at the bottom
-  // of this file is: a synchronous throw from it is then caught by .catch()
-  // too, honoring the fail-open contract instead of crashing the process.
-  // The bare `return` is what makes this branch terminal — resolving stdin is
-  // asynchronous, so without it the synchronous blocks below would run first
-  // and defeat the precedence this placement establishes.
+  // readStdin() called inside the chain (not eagerly) so a synchronous
+  // throw is also caught by .catch() — fail-open, never crash.
   Promise.resolve()
     .then(() => readStdin())
     .then((raw) => finish(candidate, raw.split('\n').filter(Boolean)))
@@ -80,9 +70,8 @@ if (process.env.PRIVATE_REPO_NAMES_CACHE_SET === '1') {
   );
 }
 
-// listPrivateRepoNames() is called inside the chain (not as an eager argument
-// to Promise.resolve()) so a synchronous throw from it is caught by .catch()
-// too, honoring this file's fail-open contract instead of crashing the process.
+// Called inside the chain (not eagerly) so a synchronous throw is also
+// caught by .catch() — fail-open, never crash.
 Promise.resolve()
   .then(() => listPrivateRepoNames())
   .then((privateNames) => finish(candidate, privateNames))

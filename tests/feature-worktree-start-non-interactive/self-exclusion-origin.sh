@@ -3,20 +3,14 @@
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/check-private-repo-name.js
 # Tags: worktree, start, private-repo, self-exclusion, origin-url, table-driven, security, TL2, scope:issue-specific
 # B25 — D0a's self-exclusion classifier, driven by the ORIGIN remote identity.
-#
-# Why this needs its own group beyond B21d-B21k: every allow-fixture there has the
-# checkout's local basename equal to the origin's repo segment, so an implementation
-# that filtered the cache by the LOCAL basename (REPO_NAME) instead of the resolved
-# origin name would pass all of them. That distinction is the whole security premise
-# of D0a — "this name is already known to the remote's audience" is a statement about
-# the remote, and keying it on a user-chosen directory name silently disarms the gate
-# for any private repo whose name a local directory happens to reuse.
-#
-# So this file supplies the discriminating rows: local basename == a cached private
-# name while origin points elsewhere (must still REJECT), plus the three fail-closed
-# shapes (no origin, unparseable origin, and a broken filtering step). The sanctioned
-# ALLOW rows are repeated across HTTPS, SCP-style and ssh:// spellings so the origin
-# URL parser is exercised on all three, not just the one B21 happened to use.
+
+# Why beyond B21d-B21k: there, local basename == origin repo segment in every allow
+# fixture, so filtering by LOCAL basename would pass them all. D0a's premise is about
+# the REMOTE ("already known to the remote's audience"), so keying it on a directory
+# name disarms the gate.
+# Discriminating rows here: local basename matches a cached private name while origin
+# differs (must REJECT), the three fail-closed shapes (no origin, unparseable origin,
+# broken filter), and ALLOW rows across HTTPS/SCP/ssh:// to exercise the URL parser.
 # Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
