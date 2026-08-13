@@ -4,11 +4,8 @@
 # Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml, hooks/lib/model-match.js, bin/model-match.js
 # Tags: scope:issue-specific
 # TL2 — no real GitHub API calls; tests script logic only.
-# TL3 gap (what this test does NOT catch):
-# - Actual GitHub API label creation (needs real token + network)
-# - Claude runtime model detection behavior (LLM prompt-level, not testable in shell)
-# Closest-to-action mitigation: manual verification at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# TL3 gap: real GitHub API label creation and Claude runtime model detection are
+# not shell-testable; manual check via check-verification-gate.sh (skill-orchestration).
 
 set -uo pipefail
 

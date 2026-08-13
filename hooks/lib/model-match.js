@@ -14,18 +14,12 @@ const MODEL_ID_RE = /The exact model ID is\s+([^\r\n]*?)\s*\.?\s*$/m;
 const MODEL_NAME_RE = /You are powered by the model(?: named[ \t]+|[ \t]+(?![ \t])(?!named(?:[ \t]|\.?\s*$)))([^\r\n]*?)\s*\.?\s*$/m;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 
-// Extract the model identifier from the system prompt's self-report sentence.
-// Two accepted name forms:
-//   `You are powered by the model named <name>. The exact model ID is <id>.`
-//   `You are powered by the model <name>.` (named-less short form, #1988)
-// The ID clause wins when present; otherwise the name (either form) is the
-// fallback. A bare `named` with no name after it still fails open → null: the
-// short-form guard rejects a name that is exactly the token `named` or that
-// starts `named <space>` — prose like "named DeepSeek" would otherwise false-
-// attribute reporter-model:ds4. But the guard is NOT a reserved-prefix ban: a
-// name like `named-model-v1` or `named-deepseek-v1` (no space after `named`) is
-// a legitimate short-form identifier and is extracted normally. (Real
-// reporter-model labels never begin with `named`.)
+// Extract the model identifier from the self-report sentence. Two name forms
+// are accepted: the named form (`named <name>. The exact model ID is <id>.`)
+// and the named-less short form (`<name>.`, #1988). The `named` guard in
+// MODEL_NAME_RE rejects only a name that IS the token `named` or starts
+// `named <space>` (prose like "named DeepSeek"), NOT hyphenated identifiers
+// like `named-model-v1`. Behaviour is verified in tests/feature-1611-model-match.sh.
 // Returns null when neither clause is present or the input is not a string.
 function extractModelIdFromSelfReport(text) {
   if (typeof text !== "string" || !text) return null;
