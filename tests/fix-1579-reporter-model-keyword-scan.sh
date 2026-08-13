@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore — pre-existing Japanese "Plan Step 3-3" comment at line 152, unrelated to this session's diff
 # tests/fix-1579-reporter-model-keyword-scan.sh
 # Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml, hooks/lib/model-match.js, bin/model-match.js
 # Tags: scope:issue-specific
@@ -164,6 +165,22 @@ assert_label_absent "T18b-text-derived-label-suppressed" \
     "reporter-model:ds4"
 
 echo ""
+echo "=== T18c named-less short form via --reporter-model-text (#1988) ==="
+
+# A backend may emit the short self-report "You are powered by the model <name>."
+# with no "named" clause and no ID sentence. The shared matcher must still derive
+# the label from the name.
+assert_label_present "T18c-self-report-short-form-opus" \
+    --title t --body "b" \
+    --reporter-model-text "You are powered by the model Opus 4.8." \
+    "reporter-model:opus"
+
+assert_label_present "T18d-self-report-short-form-ds4" \
+    --title t --body "b" \
+    --reporter-model-text "You are powered by the model DS4 Flash." \
+    "reporter-model:ds4"
+
+echo ""
 echo "=== T19 matcher subprocess failure degrades to no label (never aborts) ==="
 
 # The label table now lives in a JS module reached through `node`. On a host
@@ -224,6 +241,30 @@ else
     else
         fail "T15-drift" "script reporter-model labels missing from labels.yml: $MISSING"
     fi
+fi
+
+echo ""
+echo "=== T20 host-level skill wiring: SKILL.md documents both self-report forms ==="
+
+# C2 cross-module coverage (#1988): the dispatch tests call issue-create.sh
+# directly, so deleting the named-less short-form passthrough instruction from
+# skills/issue-create/SKILL.md stays green. Assert the caller contract documents
+# BOTH the named form and the named-less short form as --reporter-model-text.
+SKILL="$REPO_ROOT/skills/issue-create/SKILL.md"
+if ! grep -qF 'You are powered by the model named <name>. The exact model ID is <id>.' "$SKILL"; then
+    fail "T20-named-form-doc" "SKILL.md does not document the named self-report form"
+else
+    pass "T20-named-form-doc"
+fi
+if ! grep -qF 'You are powered by the model <name>.' "$SKILL"; then
+    fail "T20-short-form-doc" "SKILL.md does not document the named-less short self-report form (#1988)"
+else
+    pass "T20-short-form-doc"
+fi
+if ! grep -qF -- '--reporter-model-text "<sentence>"' "$SKILL"; then
+    fail "T20-passthrough-flag" "SKILL.md does not document the --reporter-model-text passthrough flag"
+else
+    pass "T20-passthrough-flag"
 fi
 
 echo ""

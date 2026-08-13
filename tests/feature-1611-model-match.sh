@@ -106,7 +106,26 @@ E10-embedded-in-prose  | M.extractModelIdFromSelfReport('Intro line.\nYou are po
 E11-period-inside-id   | M.extractModelIdFromSelfReport('You are powered by the model named Devstral. The exact model ID is devstral-v0.2.') | devstral-v0.2
 E12-period-id-two-dots | M.extractModelIdFromSelfReport('You are powered by the model named Qwen. The exact model ID is qwen3.5-coder.1.') | qwen3.5-coder.1
 E13-period-id-to-label | M.resolveReporterModelLabel(M.extractModelIdFromSelfReport('You are powered by the model named Devstral. The exact model ID is devstral-v0.2.')) | reporter-model:devstral
+E14-short-form-extract | M.extractModelIdFromSelfReport('You are powered by the model deepseek-v4-flash.')                                        | deepseek-v4-flash
+E15-short-form-to-label | M.resolveReporterModelLabel(M.extractModelIdFromSelfReport('You are powered by the model deepseek-v4-flash.'))           | reporter-model:ds4
+E16-named-no-name-null | M.extractModelIdFromSelfReport('You are powered by the model named.')                                                    | null
+E17-short-form-space-name | M.extractModelIdFromSelfReport('You are powered by the model Sonnet 4.6.')                                        | Sonnet 4.6
+E18-short-form-devstral | M.extractModelIdFromSelfReport('You are powered by the model devstral-v0.2.')                                          | devstral-v0.2
+E19-short-form-devstral-label | M.resolveReporterModelLabel(M.extractModelIdFromSelfReport('You are powered by the model devstral-v0.2.'))     | reporter-model:devstral
+E20-short-form-embedded | M.extractModelIdFromSelfReport('Intro line.\nYou are powered by the model deepseek-v4-flash.\nMore text.')                  | deepseek-v4-flash
+E21-short-form-whitespace-name | M.extractModelIdFromSelfReport('You are powered by the model .')                                                | null
+E22-short-form-single-char | M.extractModelIdFromSelfReport('You are powered by the model X.')                                                  | X
+E24-bare-named-double-space | M.extractModelIdFromSelfReport('You are powered by the model  named.')                                              | null
+E25-bare-named-prose-triple | M.extractModelIdFromSelfReport('You are powered by the model   named DeepSeek.')                                     | null
+E26-named-prefix-hyphen-extract | M.extractModelIdFromSelfReport('You are powered by the model named-model-v1.')                                  | named-model-v1
+E27-named-prefix-hyphen-label | M.resolveReporterModelLabel(M.extractModelIdFromSelfReport('You are powered by the model named-deepseek-v1.')) | reporter-model:ds4
+E28-named-prefix-extract | M.extractModelIdFromSelfReport('You are powered by the model named-deepseek-v1.')                               | named-deepseek-v1
 TABLE
+
+# C4 string-boundary: an extremely long short-form name (no hyphen) must round-trip.
+LONG_NAME="$(printf 'z%.0s' {1..300})"
+assert_eq "E23-short-form-long-name" "$LONG_NAME" \
+    "$(js_eval "M.extractModelIdFromSelfReport('You are powered by the model $LONG_NAME.')")"
 
 echo ""
 echo "=== normalizeModelId ==="
@@ -210,6 +229,16 @@ assert_eq "C11-extract-period-id" "0:devstral-v0.2" \
     "$(cli_out --extract-self-report "You are powered by the model named Devstral. The exact model ID is devstral-v0.2.")"
 assert_eq "C12-label-period-id"   "0:reporter-model:devstral" \
     "$(cli_out --reporter-label "devstral-v0.2")"
+assert_eq "C13-extract-short-form" "0:deepseek-v4-flash" \
+    "$(cli_out --extract-self-report "You are powered by the model deepseek-v4-flash.")"
+assert_eq "C14-extract-short-form-space" "0:Sonnet 4.6" \
+    "$(cli_out --extract-self-report "You are powered by the model Sonnet 4.6.")"
+assert_eq "C15-extract-short-form-embedded" "0:deepseek-v4-flash" \
+    "$(cli_out --extract-self-report $'Intro line.\nYou are powered by the model deepseek-v4-flash.\nMore text.')"
+assert_eq "C16-extract-named-prefix-hyphen" "0:named-deepseek-v1" \
+    "$(cli_out --extract-self-report "You are powered by the model named-deepseek-v1.")"
+assert_eq "C17-label-named-prefix-hyphen" "0:reporter-model:ds4" \
+    "$(cli_out --reporter-label "named-deepseek-v1")"
 
 echo ""
 echo "=== mutation evidence: neutralizing the extraction regex must break the parser ==="
@@ -228,6 +257,7 @@ if [ ! -f "$MODULE" ]; then
     fail "MU01-mutation-applies" "hooks/lib/model-match.js not found (not implemented yet)"
     fail "MU02-mutant-breaks-extraction" "no module to mutate"
     fail "MU03-mutant-breaks-fallback" "no module to mutate"
+    fail "MU04-short-form-mutation" "no module to mutate"
 else
     MUTANT="$MUT_DIR/model-match.mutant.js"
     sed -E 's#^([[:space:]]*const [A-Za-z_][A-Za-z0-9_]* = )/.*/[a-z]*;[[:space:]]*$#\1/(?!)/;#' \
@@ -256,6 +286,44 @@ else
         fail "MU03-mutant-breaks-fallback" "the mutant still extracted the name fallback — E03 does not depend on the regex"
     else
         pass "MU03-mutant-breaks-fallback (mutant returned '$MU03')"
+    fi
+
+    MU04="$(js_eval "M.extractModelIdFromSelfReport('You are powered by the model deepseek-v4-flash.')")"
+    if [ "$MU04" = "null" ]; then
+        pass "MU04-short-form-mutation (mutant returned exactly null — E14 depends on the regex)"
+    else
+        fail "MU04-short-form-mutation" "mutant returned '$MU04', expected exactly null — E14 does not depend on the regex (a THREW here would falsely pass the old != check)"
+    fi
+
+    # C5 isolation: neutralize ONLY MODEL_NAME_RE (the named + short-form rule),
+    # leaving MODEL_ID_RE and CONTROL_CHAR_RE intact. Proves the short-form path
+    # depends on this specific regex — not on the blanket all-regex neutralization.
+    MUTANT_SHORT="$MUT_DIR/model-match.short-only.mutant.js"
+    sed -E 's#^([[:space:]]*const MODEL_NAME_RE = )/.*/[a-z]*;[[:space:]]*$#\1/(?!)/;#' \
+        "$MODULE" > "$MUTANT_SHORT"
+    ISOLATED_LINES="$(diff "$MODULE" "$MUTANT_SHORT" 2>/dev/null | grep -c '^<' || true)"
+    if [ "${ISOLATED_LINES:-0}" -eq 1 ]; then
+        pass "MU05-short-mutation-isolated (exactly 1 line changed: MODEL_NAME_RE)"
+    else
+        fail "MU05-short-mutation-isolated" "expected exactly 1 changed line (MODEL_NAME_RE), got '${ISOLATED_LINES:-0}' — the short-form rule is not a standalone 'const MODEL_NAME_RE = /re/;' line"
+    fi
+
+    if command -v cygpath >/dev/null 2>&1; then MUTANT_SHORT_N="$(cygpath -m "$MUTANT_SHORT")"; else MUTANT_SHORT_N="$MUTANT_SHORT"; fi
+    export MM_MOD="$MUTANT_SHORT_N"
+
+    MU06="$(js_eval "M.extractModelIdFromSelfReport('You are powered by the model deepseek-v4-flash.')")"
+    if [ "$MU06" = "null" ]; then
+        pass "MU06-short-mutant-isolated (isolated short form returned exactly null — depends on MODEL_NAME_RE)"
+    else
+        fail "MU06-short-mutant-isolated" "isolated mutant returned '$MU06', expected exactly null — E14 does not depend on MODEL_NAME_RE"
+    fi
+
+    # Isolation control: MODEL_ID_RE must still work in the short-only mutant.
+    MU07="$(js_eval "M.extractModelIdFromSelfReport('You are powered by the model named Sonnet 4.6. The exact model ID is claude-sonnet-4-6.')")"
+    if [ "$MU07" = "claude-sonnet-4-6" ]; then
+        pass "MU07-isolation-control (exact-ID path still works — MODEL_ID_RE was not neutralized)"
+    else
+        fail "MU07-isolation-control" "isolated mutant lost exact-ID extraction ('$MU07') — isolation was not achieved"
     fi
 
     export MM_MOD="$ORIG_MM_MOD"
