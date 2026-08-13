@@ -11,13 +11,16 @@
 // declaration — tests/feature-1611-model-match.sh mutates exactly this shape to
 // prove the parser cases depend on the regexes.
 const MODEL_ID_RE = /The exact model ID is\s+([^\r\n]*?)\s*\.?\s*$/m;
-const MODEL_NAME_RE = /You are powered by the model named\s+([^\r\n]*?)\s*\.?\s*$/m;
+const MODEL_NAME_RE = /You are powered by the model(?: named[ \t]+|[ \t]+(?![ \t])(?!named(?:[ \t]|\.?\s*$)))([^\r\n]*?)\s*\.?\s*$/m;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 
-// Extract the model identifier from the system prompt's self-report sentence:
-// `You are powered by the model named <name>. The exact model ID is <id>.`
-// Falls back to <name> when the ID clause is absent. Returns null when neither
-// clause is present or the input is not a string.
+// Extract the model identifier from the self-report sentence. Two name forms
+// are accepted: the named form (`named <name>. The exact model ID is <id>.`)
+// and the named-less short form (`<name>.`, #1988). The `named` guard in
+// MODEL_NAME_RE rejects only a name that IS the token `named` or starts
+// `named <space>` (prose like "named DeepSeek"), NOT hyphenated identifiers
+// like `named-model-v1`. Behaviour is verified in tests/feature-1611-model-match.sh.
+// Returns null when neither clause is present or the input is not a string.
 function extractModelIdFromSelfReport(text) {
   if (typeof text !== "string" || !text) return null;
   const byId = MODEL_ID_RE.exec(text);

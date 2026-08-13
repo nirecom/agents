@@ -178,7 +178,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
     - The condition must be a confirmed instance, not a theoretical or deferred one — a hardening opportunity, a residual/follow-up finding explicitly deferred as non-blocking, or an unconfirmed "could happen" risk does not qualify.
   - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
   - All other cases → no severity label (no label = normal severity).
-- **reporter-model label (auto-detect, Phase 4)**: the system prompt contains a self-report sentence ("You are powered by the model named ..."); pass it verbatim as `--reporter-model-text "<sentence>"` in the `--` passthrough args. The dispatch script extracts the identifier and resolves the label through the shared matcher.
+- **reporter-model label (auto-detect, Phase 4)**: the system prompt contains a self-report sentence — either the named form `"You are powered by the model named <name>. The exact model ID is <id>."` or the named-less short form `"You are powered by the model <name>."` (#1988) — pass it verbatim as `--reporter-model-text "<sentence>"` in the `--` passthrough args. The dispatch script extracts the identifier and resolves the label through the shared matcher.
   - No self-report sentence present → omit the flag; never add a `reporter-model:*` label by hand.
 
 ## Behavioral notes
