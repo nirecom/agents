@@ -2,6 +2,16 @@
 # Tests: bin/review-code-codex
 # Tags: codex, review, merge-base, base-state, truncation, boundary, prompt-order, scope:issue-specific, pwsh-not-required, TL2
 #
+# TL3 gap (what this file does NOT catch):
+# - The real codex CLI: every row replaces codex with a shell mock, which is what makes the
+#   PROMPT observable at all. A prompt that is well-ordered and inside the line budget may
+#   still be too large for the live model's context, and the CLI's own argument handling is
+#   never exercised.
+# - A real merge-base resolution: --base-state is passed in as an argument, so the states here
+#   are asserted as inputs rather than as something the installed resolver produced.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: merge-base-suspect.
+#
 # Y (#1638) — THE REST OF THE STATES, THE EXACT TRUNCATION BOUNDARY, AND WHERE THE WARNING SITS
 # INSIDE THE PROMPT.
 #
@@ -61,7 +71,10 @@ MOCK_EOF
 y_run() { # <repo> [args...] ; prints stdout
     local repo="$1"
     shift
-    (cd "$repo" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@" 2>/dev/null) || true
+    # C2 (#1976 review gap): unset first, inside the subshell only, so a CODEX_REVIEW_MAX_DIFF_LINES
+    # the developer's or CI's shell happens to export cannot silently swap out the default/pinned
+    # budget these rows assume — process env otherwise wins over .env per hooks/lib/load-env.js.
+    (cd "$repo" && unset CODEX_REVIEW_MAX_DIFF_LINES && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@" 2>/dev/null) || true
 }
 
 # A repository whose `git diff main...HEAD` is EXACTLY <target> lines by `wc -l` — the same
