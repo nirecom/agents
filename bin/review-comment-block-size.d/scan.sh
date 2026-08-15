@@ -2,50 +2,31 @@
 #
 # bin/review-comment-block-size.d/scan.sh
 #
-# Sourced by bin/review-comment-block-size. The scanner core: the awk program
-# that finds over-threshold comment runs, plus the two entry points that feed
-# it a staged blob (scan_rev) or a worktree file (scan_file).
+# Sourced by bin/review-comment-block-size. Keeps the git plumbing and delegates
+# comment recognition to the Node core through the scan-cli.js adapter, so the
+# commit-time CLI and the Edit-time PreToolUse hook share one implementation
+# (CPR-SSOT — see hooks/lib/comment-block-scan.js).
 #
 # Must be `source`d, not executed directly — it reads $T from the caller and
 # publishes its results in SCAN_RUNS / SCAN_N / SCAN_M.
 
 # --- scanner core ----------------------------------------------------------
-# One pass, one state bit (inb = inside a /* ... */ block). Reads a blob or a
-# worktree file on stdin and prints "<start> <end> <len>" per over-threshold run.
-_AWK='
-BEGIN { inb = 0; run = 0; st = 0 }
-{
-    s = $0
-    sub(/\r$/, "", s)
-    sub(/^[ \t]+/, "", s)
-    c = 0
-    if (NR == 1 && substr(s, 1, 2) == "#!") {
-        c = 0
-    } else if (inb == 1) {
-        c = 1
-        if (index(s, "*/") > 0) { inb = 0 }
-    } else if (substr(s, 1, 2) == "/*") {
-        c = 1
-        if (index(substr(s, 3), "*/") == 0) { inb = 1 }
-    } else if (substr(s, 1, 2) == "//" || substr(s, 1, 1) == "#" || substr(s, 1, 2) == "*/") {
-        c = 1
-    } else if (substr(s, 1, 1) == "*" && (length(s) == 1 || substr(s, 2, 1) == " " || substr(s, 2, 1) == "\t")) {
-        c = 1
-    }
-    if (c == 1) {
-        if (run == 0) { st = NR }
-        run = run + 1
-    } else {
-        if (run >= T) { print st, st + run - 1, run }
-        run = 0
-    }
-}
-END { if (run >= T) { print st, st + run - 1, run } }
-'
+# scan-cli.js reads a blob or a worktree file on stdin and prints
+# "<start> <end> <len>" per run longer than the threshold.
+_SCAN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_NODE_SCAN="$_SCAN_DIR/scan-cli.js"
 
 SCAN_RUNS=""
 SCAN_N=0
 SCAN_M=0
+
+# scan_available — rc 0 when the Node core can actually be reached. The caller
+# turns a false here into a SKIPPED report rather than a silent all-clear.
+scan_available() {
+    command -v node >/dev/null 2>&1 || return 1
+    [[ -f "$_NODE_SCAN" ]] || return 1
+    return 0
+}
 
 scan_tally() {
     local _a _b _len
@@ -64,7 +45,7 @@ scan_tally() {
 scan_rev() {
     local rc=0
     SCAN_RUNS=""
-    SCAN_RUNS="$(git show "$1" 2>/dev/null | awk -v T="$T" "$_AWK")" || rc=$?
+    SCAN_RUNS="$(git show "$1" 2>/dev/null | node "$_NODE_SCAN" --threshold "$T" 2>/dev/null)" || rc=$?
     [[ "$rc" -ne 0 ]] && return 1
     scan_tally
     return 0
@@ -74,7 +55,7 @@ scan_rev() {
 scan_file() {
     local rc=0
     SCAN_RUNS=""
-    SCAN_RUNS="$(awk -v T="$T" "$_AWK" < "$1" 2>/dev/null)" || rc=$?
+    SCAN_RUNS="$(node "$_NODE_SCAN" --threshold "$T" < "$1" 2>/dev/null)" || rc=$?
     [[ "$rc" -ne 0 ]] && return 1
     scan_tally
     return 0

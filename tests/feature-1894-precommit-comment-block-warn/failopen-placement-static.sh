@@ -3,81 +3,108 @@
 # Tests: hooks/pre-commit, bin/review-comment-block-size, rules/coding/file-split.md
 # Tags: comment-block-size, pre-commit, hook, fail-open, ordering, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 2 of tests/feature-1894-precommit-comment-block-warn.sh — the properties
-# that are about the section's *placement and blast radius* rather than about
-# its guard: fail-open on a non-zero scanner rc, silence on a clean run, no
-# `set -u` abort on the success path, execution before the hook's unconditional
-# early exits, and no `exit` of its own.
+# Part 2 — placement and blast radius, rather than the guard.
+#
+# The conversion to a hard block splits this file's subject in two, and the split
+# is the point (CPR-SC): the section now owns `exit 1`, but ONLY for scanner
+# rc 1. Every other non-zero rc is an outage, not a verdict, and must leave the
+# commit alone with a diagnostic. So the cases below pin, separately:
+#   - the fail-open direction survives (rc 3, and an rc nobody named);
+#   - a clean run is still silent and still cannot abort under `set -u`;
+#   - the section still runs BEFORE the hook's unconditional early exits;
+#   - the section's `exit 1` does not swallow downstream verdicts;
+#   - statically, `exit 1` lives in the rc-1 branch and nowhere else in the
+#     section, and the section reads no session-marker state.
+#
+# Case prefix F (not P): part 1 owns P.
 #
 # Sourced by the dispatcher; every helper (run_precommit, make_repo, assert_*)
 # and every shared constant is defined there.
+
 # ============================================================================
-# P05 — scanner rc != 0 -> fail-open with a diagnostic, commit still succeeds
+# F1 — scanner rc 3 -> fail-open with a diagnostic, commit still succeeds
 # ============================================================================
-p05_fail_open_on_nonzero_rc() {
-    local repo; repo="$(make_repo p05 rc3 "$NON_GITHUB")"
+f1_fail_open_on_internal_error() {
+    local repo; repo="$(make_repo f1 rc3 "$NON_GITHUB")"
     stage_sample "$repo"
     run_precommit "$repo" "$repo"
-    assert_eq "P05/rc-unchanged" "0" "$RC"
-    assert_contains "P05/diagnostic-on-stderr" \
-        "pre-commit: review-comment-block-size rc=3 — comment-block check incomplete (advisory; commit continues)" \
-        "$ERR"
-    assert_contains "P05/captured-output-on-stderr" "$ERR_LINE" "$ERR"
+    assert_eq "F1/rc-unchanged" "0" "$RC"
+    assert_contains "F1/diagnostic-names-the-rc" "${FAILOPEN_NOTICE}3" "$ERR"
+    assert_contains "F1/diagnostic-says-commit-continues" "commit continues" "$ERR"
+    assert_contains "F1/captured-output-on-stderr" "$ERR_LINE" "$ERR"
+    # The one confusion this whole mapping exists to prevent: an outage must not
+    # be presented to the committer as a violation.
+    assert_absent "F1/not-reported-as-a-block" "$BLOCK_NOTICE" "$OUT$ERR"
+}
+
+f1b_fail_open_on_unnamed_rc() {
+    # rc 7 is in no branch of the contract. The `else` must be fail-open too, or
+    # a future scanner rc silently becomes a commit-blocking verdict.
+    local repo; repo="$(make_repo f1b rc7 "$NON_GITHUB")"
+    stage_sample "$repo"
+    run_precommit "$repo" "$repo"
+    assert_eq "F1b/rc-unchanged" "0" "$RC"
+    assert_contains "F1b/diagnostic-names-the-rc" "${FAILOPEN_NOTICE}7" "$ERR"
+    assert_absent "F1b/not-reported-as-a-block" "$BLOCK_NOTICE" "$OUT$ERR"
 }
 
 # ============================================================================
-# P06 / P07 — clean run: no output, and no `set -u` abort on the success path
+# F2 / F3 — clean run: no output, and no `set -u` abort on the success path
 # ============================================================================
-p06_clean_run_is_silent() {
-    local repo; repo="$(make_repo p06 clean "$NON_GITHUB")"
+f2_clean_run_is_silent() {
+    local repo; repo="$(make_repo f2 clean "$NON_GITHUB")"
     stage_sample "$repo"
     run_precommit "$repo" "$repo"
-    assert_eq "P06/rc" "0" "$RC"
-    assert_absent "P06/no-scanner-output-echoed" "$SCANNER_HEADER" "$OUT$ERR"
-    assert_absent "P06/no-advisory-notice" "comment-block warnings are advisory" "$OUT$ERR"
+    assert_eq "F2/rc" "0" "$RC"
+    assert_absent "F2/no-scanner-output-echoed" "$SCANNER_HEADER" "$OUT$ERR"
+    assert_absent "F2/no-advisory-notice" "comment-block warnings are advisory" "$OUT$ERR"
+    assert_absent "F2/no-failopen-diagnostic" "$FAILOPEN_NOTICE" "$OUT$ERR"
 }
 
-p07_rc_capture_is_preinitialised() {
+f3_rc_capture_is_preinitialised() {
     # Regression: `_cb_out="$(...)" || _cb_rc=$?` leaves _cb_rc unset on the
     # success path. Under `set -euo pipefail` the later read aborts the hook
-    # with "unbound variable" and blocks an otherwise clean commit.
-    local repo; repo="$(make_repo p07 clean "$NON_GITHUB")"
+    # with "unbound variable" and blocks an otherwise clean commit — which is a
+    # far worse failure now that blocking is a thing this section does at all.
+    local repo; repo="$(make_repo f3 clean "$NON_GITHUB")"
     stage_sample "$repo"
     run_precommit "$repo" "$repo"
-    assert_eq "P07/clean-commit-not-blocked" "0" "$RC"
-    assert_absent "P07/no-unbound-variable-abort" "unbound variable" "$ERR"
+    assert_eq "F3/clean-commit-not-blocked" "0" "$RC"
+    assert_absent "F3/no-unbound-variable-abort" "unbound variable" "$ERR"
 }
 
 # ============================================================================
-# P08 — placement: the section runs BEFORE the unconditional early exits
+# F4 — placement: the section runs BEFORE the unconditional early exits
 # ============================================================================
-p08_runs_before_early_exit() {
+f4_runs_before_early_exit() {
     # A non-GitHub remote is one of the hook's three unconditional `exit 0`
     # early-exits (the private-repo case is its sibling). If the section were
-    # inserted after them, this repo would never be scanned.
-    local repo; repo="$(make_repo p08 warn "$NON_GITHUB")"
+    # inserted after them, this repo would never be scanned — and every case in
+    # this suite that uses NON_GITHUB would be passing vacuously.
+    local repo; repo="$(make_repo f4 block "$NON_GITHUB")"
     stage_sample "$repo"
     run_precommit "$repo" "$repo"
-    assert_eq "P08/rc" "0" "$RC"
-    assert_contains "P08/scanned-despite-early-exit" "$WARN_LINE" "$OUT$ERR"
+    assert_eq "F4/blocks-despite-early-exit" "1" "$RC"
+    assert_contains "F4/scanned-despite-early-exit" "$BLOCK_LINE" "$OUT$ERR"
 }
 
 # ============================================================================
-# P09 — the section contains no `exit`: downstream stages keep their verdict
+# F5 — the section's exit does not swallow downstream verdicts
 # ============================================================================
-p09_section_has_no_exit() {
-    # No remote at all -> the hook skips the remote/visibility block entirely
-    # and reaches the ".env staged" rule, which blocks with exit 1. Seeing BOTH
-    # the advisory output and rc 1 proves the section neither exited early nor
-    # swallowed the downstream verdict.
-    local repo; repo="$(make_repo p09 warn none)"
+f5_downstream_rules_keep_their_verdict() {
+    # No remote at all -> the hook skips the remote/visibility block entirely and
+    # reaches the ".env staged" rule, which blocks with exit 1. With a rc-3
+    # scanner the comment-block section must fall through, so rc 1 here can only
+    # have come from the downstream rule: proof the section neither exited early
+    # nor masked what follows it.
+    local repo; repo="$(make_repo f5 rc3 none)"
     stage_sample "$repo"
     printf 'FIXTURE_ONLY=1\n' > "$repo/.env"
     git -C "$repo" add -f .env
     run_precommit "$repo" "$repo"
-    assert_contains "P09/advisory-output-emitted" "$WARN_LINE" "$OUT$ERR"
-    assert_eq "P09/downstream-exit-code-preserved" "1" "$RC"
-    assert_contains "P09/downstream-rule-fired" ".env file(s) staged for commit" "$OUT$ERR"
+    assert_contains "F5/failopen-diagnostic-emitted" "$FAILOPEN_NOTICE" "$OUT$ERR"
+    assert_eq "F5/downstream-exit-code-preserved" "1" "$RC"
+    assert_contains "F5/downstream-rule-fired" ".env file(s) staged for commit" "$OUT$ERR"
 }
 
 # ============================================================================
@@ -102,6 +129,13 @@ s1_static_placement() {
     else
         fail "S1: section is at line $first_ref, not after the frontmatter block at line ${frontmatter_ref:-?}"
     fi
+}
+
+# _cb_section — the hook text from the section's first line to the start of the
+# repo-visibility block (S1 pins that this range is the section's home). Echoed
+# on stdout; empty when either anchor is missing.
+_cb_section() {
+    awk '/review-comment-block-size/{f=1} f && /^# Check if this repo is private/{f=0} f' "$PRECOMMIT"
 }
 
 s2_static_initialisation() {
@@ -129,6 +163,90 @@ s2_static_initialisation() {
     else
         fail "S2: _is_agents_session_repo() has $calls call site(s), expected >= 2" \
              "Both the prompt-extraction backstop and the comment-block section must call it."
+    fi
+}
+
+# ============================================================================
+# S2c — statically: `exit 1` belongs to the rc-1 branch alone
+#
+# F1/F1b prove fail-open for the two rc values a test can stage. The static
+# check is what generalises it: a single `exit` inside the section, reachable
+# only from the rc-1 comparison. Without it, "rc 3 happens to fall through" and
+# "rc != 1 falls through by construction" look identical from the outside.
+# ============================================================================
+s2c_exit_is_confined_to_the_rc1_branch() {
+    local section; section="$(_cb_section)"
+    if [ -z "$section" ]; then
+        fail "S2c: could not locate the comment-block section in hooks/pre-commit (issue #1894)"
+        return
+    fi
+    local exits
+    exits="$(printf '%s\n' "$section" | grep -cE '^[[:space:]]*exit[[:space:]]' || true)"
+    if [ "$exits" = "1" ]; then
+        pass "S2c: the section contains exactly one exit"
+    else
+        fail "S2c: the section contains $exits exit statements, expected 1" \
+             "rc 1 is the only scanner result that may stop the commit."
+    fi
+    if printf '%s\n' "$section" | grep -qE '^[[:space:]]*exit[[:space:]]+1'; then
+        pass "S2c: that exit is exit 1"
+    else
+        fail "S2c: the section has no 'exit 1'" \
+             "The blocking verdict is what issue #1894 adds."
+    fi
+    if printf '%s\n' "$section" | grep -qE '^[[:space:]]*exit[[:space:]]+0'; then
+        fail "S2c: the section contains 'exit 0'" \
+             "An unconditional success exit here would skip every rule after it."
+    else
+        pass "S2c: the section never exits 0"
+    fi
+    # The exit must be downstream of an rc-1 test. Line numbers within the
+    # extracted section, so an rc comparison elsewhere in the hook cannot stand
+    # in for the missing one.
+    local rc1_line exit_line
+    rc1_line="$(printf '%s\n' "$section" | grep -nE '_cb_rc"?[[:space:]]*(=|-eq)[[:space:]]*"?1' | head -1 | cut -d: -f1)"
+    exit_line="$(printf '%s\n' "$section" | grep -nE '^[[:space:]]*exit[[:space:]]+1' | head -1 | cut -d: -f1)"
+    if [ -n "$rc1_line" ] && [ -n "$exit_line" ] && [ "$rc1_line" -lt "$exit_line" ]; then
+        pass "S2c: exit 1 follows an explicit _cb_rc = 1 comparison"
+    else
+        fail "S2c: exit 1 is not guarded by an _cb_rc = 1 comparison" \
+             "rc1_line=${rc1_line:-none} exit_line=${exit_line:-none}"
+    fi
+}
+
+# ============================================================================
+# S2d — the block has no bypass, by omission
+#
+# Recorded as an accepted tradeoff in the outline plan: this check is NOT
+# suspendable via WORKFLOW_OFF / WORKTREE_OFF. That property is only real while
+# the section never reads session-marker state, and the surrounding hook does
+# call _session_marker_off() for its other rules — so the absence has to be
+# asserted, not assumed.
+# ============================================================================
+s2d_section_reads_no_session_marker() {
+    local section; section="$(_cb_section)"
+    if [ -z "$section" ]; then
+        fail "S2d: could not locate the comment-block section in hooks/pre-commit (issue #1894)"
+        return
+    fi
+    local hits=""
+    local m
+    for m in _session_marker_off workflow-off worktree-off WORKFLOW_OFF WORKTREE_OFF; do
+        if printf '%s\n' "$section" | grep -qF -- "$m"; then hits="$hits $m"; fi
+    done
+    if [ -z "$hits" ]; then
+        pass "S2d: the section consults no session-marker state"
+    else
+        fail "S2d: the section references session-marker state:$hits" \
+             "The comment-block block is deliberately not suspendable (outline plan)."
+    fi
+    # Positive control: the marker helper does exist in this hook, so the
+    # absence above is a property of the section and not of the whole file.
+    if grep -q '_session_marker_off' "$PRECOMMIT"; then
+        pass "S2d/control: hooks/pre-commit does define _session_marker_off elsewhere"
+    else
+        fail "S2d/control: hooks/pre-commit no longer defines _session_marker_off" \
+             "Without it the absence assertion above proves nothing."
     fi
 }
 
@@ -262,13 +380,16 @@ TABLE
     fi
 }
 
-p05_fail_open_on_nonzero_rc
-p06_clean_run_is_silent
-p07_rc_capture_is_preinitialised
-p08_runs_before_early_exit
-p09_section_has_no_exit
+f1_fail_open_on_internal_error
+f1b_fail_open_on_unnamed_rc
+f2_clean_run_is_silent
+f3_rc_capture_is_preinitialised
+f4_runs_before_early_exit
+f5_downstream_rules_keep_their_verdict
 s1_static_placement
 s2_static_initialisation
+s2c_exit_is_confined_to_the_rc1_branch
+s2d_section_reads_no_session_marker
 s2b_old_inline_comparison_is_gone
 s3_file_split_rule_cross_reference
 s3b_file_split_rule_thresholds_survive

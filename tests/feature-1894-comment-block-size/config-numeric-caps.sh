@@ -49,7 +49,7 @@ done
 git -C "$NFR" add -A >/dev/null 2>&1
 
 run_cb "$NFR" -- --staged
-assert_eq "N1/at-cap-rc" "0" "$CB_RC"
+cb_expect_rc "N1/at-cap-rc"
 assert_eq "N1/at-cap-header-performed" \
     "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
 assert_contains "N1/at-cap-whole-index-scanned" "Staged code files scanned: 200" "$CB_OUT"
@@ -61,10 +61,15 @@ assert_eq "N1/at-cap-finding-still-emitted" "1" "$(cb_warn_count)"
 printf 'x_201=201\n' > "$NFR/f201.sh"
 git -C "$NFR" add -A >/dev/null 2>&1
 run_cb "$NFR" -- --staged
-assert_eq "N1/over-cap-rc" "0" "$CB_RC"
-assert_contains "N1/over-cap-header-skipped" "SKIPPED" "$(cb_header)"
-assert_contains "N1/over-cap-reason-names-the-count" "too many staged files (201)" "$CB_OUT"
-assert_eq "N1/over-cap-emits-no-findings" "0" "$(cb_warn_count)"
+cb_expect_rc "N1/over-cap-rc"
+# A blocking check must not silently pass a commit padded past this count with
+# trivial candidate files (the original silent-skip bypass, #1894 item 2): the
+# guard now scans in full and reports on stderr instead of skipping the run.
+assert_absent "N1/over-cap-header-not-skipped" "SKIPPED" "$(cb_header)"
+assert_contains "N1/over-cap-header-performed" \
+    "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
+assert_contains "N1/over-cap-reason-names-the-count" "staged file count (201) exceeds the 200 performance guard" "$CB_ERR"
+assert_eq "N1/over-cap-finding-still-emitted" "1" "$(cb_warn_count)"
 
 # ---------------------------------------------------------------------------
 # N2 — COMMENT_BLOCK_MAX_FILES is inert
@@ -75,16 +80,16 @@ assert_eq "N1/over-cap-emits-no-findings" "0" "$(cb_warn_count)"
 echo ""
 echo "=== N2: COMMENT_BLOCK_MAX_FILES no longer steers the verdict ==="
 run_cb "$NFR" "COMMENT_BLOCK_MAX_FILES=500" -- --staged
-assert_eq "N2/raise-rc" "0" "$CB_RC"
-assert_contains "N2/raise-cannot-lift-the-cap" "too many staged files (201)" "$CB_OUT"
-assert_eq "N2/raise-emits-no-findings" "0" "$(cb_warn_count)"
+cb_expect_rc "N2/raise-rc"
+assert_contains "N2/raise-cannot-lift-the-cap" "staged file count (201) exceeds the 200 performance guard" "$CB_ERR"
+assert_eq "N2/raise-finding-still-emitted" "1" "$(cb_warn_count)"
 
 SMR="$(new_repo capinert)"
 { cpad 2; ccm 12 note; } > "$SMR/a.sh"
 { cpad 2; ccm 12 note; } > "$SMR/b.sh"
 git -C "$SMR" add -A >/dev/null 2>&1
 run_cb "$SMR" "COMMENT_BLOCK_MAX_FILES=1" -- --staged
-assert_eq "N2/lower-rc" "0" "$CB_RC"
+cb_expect_rc "N2/lower-rc"
 assert_absent "N2/lower-cannot-skip-the-scan" "SKIPPED" "$(cb_header)"
 assert_absent "N2/lower-emits-no-file-cap-reason" "too many staged files" "$CB_OUT"
 assert_eq "N2/lower-both-files-still-reported" "2" "$(cb_warn_count)"
@@ -118,12 +123,12 @@ assert_eq "N3/fixture-index-blob-agrees-with-worktree" \
 # whole-scan abort fails the header and small.sh assertions below.
 for _mode in --staged --all; do
     run_cb "$BYR" -- "$_mode"
-    assert_eq "N3/${_mode#--}-rc" "0" "$CB_RC"
+    cb_expect_rc "N3/${_mode#--}-rc"
     assert_absent "N3/${_mode#--}-header-not-skipped" "SKIPPED" "$(cb_header)"
-    assert_contains "N3/${_mode#--}-file-at-the-cap-is-scanned" "WARN: under.sh" "$CB_OUT"
-    assert_absent "N3/${_mode#--}-file-past-the-cap-not-reported" "WARN: over.sh" "$CB_OUT"
+    assert_contains "N3/${_mode#--}-file-at-the-cap-is-scanned" "$CB_FIND: under.sh" "$CB_OUT"
+    assert_absent "N3/${_mode#--}-file-past-the-cap-not-reported" "$CB_FIND: over.sh" "$CB_OUT"
     assert_contains "N3/${_mode#--}-oversized-counted-once" "skipped (too large): 1" "$CB_OUT"
-    assert_contains "N3/${_mode#--}-rest-of-the-run-continues" "WARN: small.sh" "$CB_OUT"
+    assert_contains "N3/${_mode#--}-rest-of-the-run-continues" "$CB_FIND: small.sh" "$CB_OUT"
     assert_eq "N3/${_mode#--}-exactly-two-findings" "2" "$(cb_warn_count)"
 done
 
@@ -134,14 +139,14 @@ echo ""
 echo "=== N4: COMMENT_BLOCK_MAX_BYTES no longer steers the verdict ==="
 for _mode in --staged --all; do
     run_cb "$BYR" "COMMENT_BLOCK_MAX_BYTES=2000000" -- "$_mode"
-    assert_eq "N4/raise-${_mode#--}-rc" "0" "$CB_RC"
+    cb_expect_rc "N4/raise-${_mode#--}-rc"
     assert_contains "N4/raise-${_mode#--}-oversized-still-skipped" "skipped (too large): 1" "$CB_OUT"
-    assert_absent "N4/raise-${_mode#--}-oversized-still-unreported" "WARN: over.sh" "$CB_OUT"
+    assert_absent "N4/raise-${_mode#--}-oversized-still-unreported" "$CB_FIND: over.sh" "$CB_OUT"
     assert_eq "N4/raise-${_mode#--}-exactly-two-findings" "2" "$(cb_warn_count)"
 done
 for _mode in --staged --all; do
     run_cb "$SMR" "COMMENT_BLOCK_MAX_BYTES=1" -- "$_mode"
-    assert_eq "N4/lower-${_mode#--}-rc" "0" "$CB_RC"
+    cb_expect_rc "N4/lower-${_mode#--}-rc"
     assert_absent "N4/lower-${_mode#--}-nothing-skipped-as-too-large" "skipped (too large)" "$CB_OUT"
     assert_eq "N4/lower-${_mode#--}-both-files-still-reported" "2" "$(cb_warn_count)"
 done

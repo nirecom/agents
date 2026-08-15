@@ -322,32 +322,6 @@ if [ -n "$_staged_tests" ]; then
   fi
 fi
 
-# ---------- comment-block size warning (issue #1894) ----------
-# Advisory only: this section never exits, so no verdict of its own can block a
-# commit. Two-condition AND guard, same shape as the issue #1642 backstop above:
-# a global core.hooksPath routes every repo on this machine through this hook,
-# so both repo identity and scanner availability are checked (CPR-UNV).
-_cb_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-_cb_script="${AGENTS_CONFIG_DIR:-$_cfg_dir}/bin/review-comment-block-size"
-if _is_agents_session_repo "$_cb_repo_top" && [ -x "$_cb_script" ]; then
-    if [ "${COMMENT_BLOCK_WARN:-on}" != "off" ]; then
-        # Pre-initialised: `|| _cb_rc=$?` leaves them unset on the success path,
-        # and `set -u` would then abort an otherwise clean commit.
-        _cb_out=""
-        _cb_rc=0
-        _cb_out="$("$_cb_script" --staged 2>&1)" || _cb_rc=$?
-        if [ "$_cb_rc" != "0" ]; then
-            echo "pre-commit: review-comment-block-size rc=$_cb_rc — comment-block check incomplete (advisory; commit continues)" >&2
-            if [ -n "$_cb_out" ]; then
-                printf '%s\n' "$_cb_out" >&2
-            fi
-        elif printf '%s\n' "$_cb_out" | grep -q '^WARN: '; then
-            printf '%s\n' "$_cb_out"
-            echo "pre-commit: comment-block warnings are advisory — commit continues."
-        fi
-    fi
-fi
-
 # --- on-demand rules-injection notation gate (detail plan S2-7) -------------------
 # Why here: a rule that disables auto-injection does so with a reserved `paths:` glob
 # plus a marker comment. Nothing in the host loader validates that pairing, so the only
@@ -410,6 +384,73 @@ if [ -n "$_od_repo_top" ]; then
                     echo "pre-commit: check-on-demand-rules.sh rc=$_od_rc — on-demand rules notation gate skipped" >&2
                     ;;
             esac
+        fi
+    fi
+fi
+
+# ---------- comment-block size gate (issue #1894) ----------
+# Blocking, but only on the scanner's rc 1 — that value is the verdict "staged
+# code grew an over-threshold comment run". Every other non-zero rc is an
+# outage, not a violation, and must leave the commit alone with a diagnostic
+# (CPR-SC). Two-condition AND guard, same shape as the issue #1642 backstop
+# above: a global core.hooksPath routes every repo on this machine through this
+# hook, so both repo identity and scanner availability are checked (CPR-UNV).
+#
+# Deliberately not suspendable: this gate consults no per-session escape state,
+# by omission (outline plan accepted tradeoff).
+_cb_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+_cb_script="$_cfg_dir/bin/review-comment-block-size"
+if (unset AGENTS_CONFIG_DIR; _is_agents_session_repo "$_cb_repo_top") && [ -x "$_cb_script" ]; then
+    # Resolve strictly from $_cfg_dir (this hook's real installed location,
+    # from $0 — not settable by the invoker). The generic _load_env_only_value
+    # honours ambient AGENTS_CONFIG_DIR via _load_env_cfg_dir, which would let
+    # `AGENTS_CONFIG_DIR=<elsewhere> git commit` repoint COMMENT_BLOCK_ENFORCE
+    # at an attacker-controlled .env even after (a)/(b) above stop trusting it
+    # for identity and the scanner path.
+    _cb_envfile="$_cfg_dir/.env"
+    _cb_filter="$_cfg_dir/bin/env-os-filter"
+    _cb_env_value() {
+        local spec="$1" key def out=""
+        key="${spec%%:-*}"
+        if [ "$key" = "$spec" ]; then def=""; else def="${spec#*:-}"; fi
+        [ -r "$_cb_envfile" ] && out="$(_load_env_only_scan "$_cb_envfile" "$key" "$_cb_filter")"
+        [ -n "$out" ] || out="$def"
+        printf '%s' "$out"
+    }
+    # Read from the config dir's .env ONLY. Consulting the ambient value would
+    # make `COMMENT_BLOCK_ENFORCE=off git commit` a one-word bypass of the gate.
+    _cb_enforce="$(_cb_env_value "COMMENT_BLOCK_ENFORCE:-on")"
+    # --- BEGIN temporary: COMMENT_BLOCK_WARN* → COMMENT_BLOCK_MAX_LINES/ENFORCE migration ---
+    # The old names are INERT, not dual-read: honouring a stale COMMENT_BLOCK_WARN=off
+    # would let a setting written to silence a warning switch a block off.
+    _cb_obsolete="$(_cb_env_value "COMMENT_BLOCK_WARN")$(_cb_env_value "COMMENT_BLOCK_WARN_LINES")"
+    if [ -n "$_cb_obsolete" ]; then
+        echo "NOTE: COMMENT_BLOCK_WARN* is obsolete — use COMMENT_BLOCK_MAX_LINES / COMMENT_BLOCK_ENFORCE" >&2
+    fi
+    # --- END temporary: COMMENT_BLOCK_WARN* → COMMENT_BLOCK_MAX_LINES/ENFORCE migration ---
+    if [ "$_cb_enforce" = "off" ]; then
+        # A disabled blocking check that says nothing is indistinguishable from a
+        # check that keeps passing, which is how a gate quietly stops existing.
+        echo "pre-commit: comment-block size gate disabled by COMMENT_BLOCK_ENFORCE=off" >&2
+    else
+        # Pre-initialised: `|| _cb_rc=$?` leaves them unset on the success path,
+        # and `set -u` would then abort an otherwise clean commit.
+        _cb_out=""
+        _cb_rc=0
+        _cb_out="$("$_cb_script" --staged 2>&1)" || _cb_rc=$?
+        if [ "$_cb_rc" = "1" ]; then
+            printf '%s\n' "$_cb_out"
+            echo ""
+            echo "Commit blocked: staged code carries over-threshold comment blocks."
+            echo "Compress them, or see rules/coding/file-split.md (Pattern A)."
+            exit 1
+        elif [ "$_cb_rc" != "0" ]; then
+            echo "pre-commit: review-comment-block-size rc=$_cb_rc — comment-block check incomplete (commit continues)" >&2
+            if [ -n "$_cb_out" ]; then
+                printf '%s\n' "$_cb_out" >&2
+            fi
+        elif printf '%s\n' "$_cb_out" | grep -q ': SKIPPED'; then
+            echo "pre-commit: comment-block size check SKIPPED — scanner did not run (commit continues)" >&2
         fi
     fi
 fi

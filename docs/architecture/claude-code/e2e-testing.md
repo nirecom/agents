@@ -22,6 +22,7 @@ Stop-event, SubagentStop, or PostCompact paths.
 | `hooks/supervisor-guard.js` | TL2-only (`tests/feature-719-supervisor-guard-hook.sh`, `tests/feature-883-supervisor-guard-wsid.sh`) | **OUT — defer** | No observable signal under `claude -p --output-format json`; re-evaluate after #937 phase 2. |
 | `hooks/preuse-auto-approve.js` | TL2 (`tests/feature-preuse-auto-approve.sh` — 24 cases: Monitor allow, EnterWorktree boundary matrix, AUTO_APPROVE_TOOLS toggle, symlink resolution) | **TL3 gap** | hook-registration gap: real PreToolUse firing and `permissionDecision` honor by the CC runtime unverifiable at TL2 (#1849). |
 | `hooks/instructions-loaded-audit.js` | TL2 (`tests/cc-instructions-loaded-audit.sh`, `tests/cc-instructions-loaded-quiescence.sh`, `tests/cc-instructions-loaded-registration.sh`) + TL3 gate (`tests/TL3-rules-injection-off-switch.sh` — RUN_TL3-gated) | **TL3 gated** | TL2 pins verdicts and the receipt/quiescence protocol by payload injection; only a real session proves the host fires `InstructionsLoaded` at all and that the reserved never-match glob really suppresses injection (#1652). |
+| `hooks/block-comment-block-size.js` | TL2 (`tests/feature-1894-hook-comment-block.sh` — registration, matcher, decision-boundary, and no-bypass cases) | **TL3 gap** | hook-registration gap: real PreToolUse firing and `permissionDecision: "deny"` honor by the CC runtime — actually rejecting an Edit that grows a comment block past the threshold — is unverifiable at TL2 (#1894). |
 
 ## Implementation Order (#943)
 

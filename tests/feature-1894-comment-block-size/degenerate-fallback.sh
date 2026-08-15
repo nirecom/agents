@@ -28,12 +28,12 @@ init_repo "$UNBORN"
 { fpad 5; fcm 5 beta; } > "$UNBORN/small.sh"
 git -C "$UNBORN" add -A >/dev/null 2>&1
 run_cb "$UNBORN" -- --staged
-assert_eq "D1/rc" "0" "$CB_RC"
+cb_expect_rc "D1/rc"
 assert_eq "D1/header-plain-staged-mode" \
     "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
 assert_contains "D1/over-threshold-warns" \
-    "WARN: new.sh — longest comment run 12 lines (no baseline: absolute-state fallback)" "$CB_OUT"
-assert_absent "D1/sub-threshold-silent" "WARN: small.sh" "$CB_OUT"
+    "$CB_FIND: new.sh — longest comment run 12 lines (no baseline: absolute-state fallback)" "$CB_OUT"
+assert_absent "D1/sub-threshold-silent" "$CB_FIND: small.sh" "$CB_OUT"
 
 echo ""
 echo "=== D2: in-progress head is header-informational (all four heads) ==="
@@ -103,7 +103,7 @@ printf '%s\n%s\n' "$P1_SHA" "$P2_SHA" > "$MRG/.git/MERGE_HEAD"
 git -C "$MRG" add -A >/dev/null 2>&1
 run_cb "$MRG" -- --staged
 
-assert_eq "D3/rc" "0" "$CB_RC"
+cb_expect_rc "D3/rc"
 assert_eq "D3/header-merge-in-progress" \
     "## Comment-block Size Review: PERFORMED (staged mode, merge in progress)" "$(cb_header)"
 while IFS='|' read -r name path want; do
@@ -112,7 +112,7 @@ while IFS='|' read -r name path want; do
     name="${name//[[:space:]]/}"
     path="${path//[[:space:]]/}"
     want="${want//[[:space:]]/}"
-    if printf '%s\n' "$CB_OUT" | grep -q "^WARN: $path "; then got="yes"; else got="no"; fi
+    if printf '%s\n' "$CB_OUT" | grep -q "^$CB_FIND: $path "; then got="yes"; else got="no"; fi
     assert_eq "D3/$name" "$want" "$got"
 done <<'TABLE'
 first-parent-baseline-unchanged  | onparent.sh  | no
@@ -124,29 +124,29 @@ same-path-on-both-parents-count  | onboth2.sh   | yes
 new-on-every-parent-still-warns  | brandnew.sh  | yes
 TABLE
 assert_contains "D3/parent-baseline-transition" \
-    "WARN: onparent2.sh — longest comment run 12 → 18 lines" "$CB_OUT"
+    "$CB_FIND: onparent2.sh — longest comment run 12 → 18 lines" "$CB_OUT"
 # The decisive one: onparent4.sh exists on the SECOND merge parent only. A
 # reported 12 → 21 proves the baseline came from that parent — a first-parent
 # -only lookup would have found no blob and printed the absolute-state form.
 assert_contains "D3/second-parent-supplies-the-baseline" \
-    "WARN: onparent4.sh — longest comment run 12 → 21 lines" "$CB_OUT"
+    "$CB_FIND: onparent4.sh — longest comment run 12 → 21 lines" "$CB_OUT"
 assert_absent "D3/second-parent-not-treated-as-new" \
-    "WARN: onparent4.sh — longest comment run 21 lines (no baseline" "$CB_OUT"
+    "$CB_FIND: onparent4.sh — longest comment run 21 lines (no baseline" "$CB_OUT"
 assert_contains "D3/unconditional-absolute-fallback" \
-    "WARN: brandnew.sh — longest comment run 12 lines (no baseline: absolute-state fallback)" "$CB_OUT"
+    "$CB_FIND: brandnew.sh — longest comment run 12 lines (no baseline: absolute-state fallback)" "$CB_OUT"
 
 # --- which candidate wins when the SAME path lives on more than one parent ---
 # Documented order: HEAD:./<src> -> in-progress heads (MERGE_HEAD lines, in file
 # order) -> absolute-state fallback. onboth.sh is absent from HEAD, so the first
 # MERGE_HEAD line (p1) must supply the baseline.
 assert_contains "D3/both-parents-first-line-wins-on-length" \
-    "WARN: onboth.sh — longest comment run 12 → 20 lines" "$CB_OUT"
+    "$CB_FIND: onboth.sh — longest comment run 12 → 20 lines" "$CB_OUT"
 assert_absent "D3/both-parents-second-line-did-not-win" \
-    "WARN: onboth.sh — longest comment run 30 → 20 lines" "$CB_OUT"
+    "$CB_FIND: onboth.sh — longest comment run 30 → 20 lines" "$CB_OUT"
 assert_absent "D3/both-parents-not-degenerate" \
-    "WARN: onboth.sh — longest comment run 20 lines (no baseline" "$CB_OUT"
+    "$CB_FIND: onboth.sh — longest comment run 20 lines (no baseline" "$CB_OUT"
 assert_contains "D3/both-parents-first-line-wins-on-count" \
-    "WARN: onboth2.sh — longest comment run 12 → 12 lines (over-threshold runs 1 → 2)" "$CB_OUT"
+    "$CB_FIND: onboth2.sh — longest comment run 12 → 12 lines (over-threshold runs 1 → 2)" "$CB_OUT"
 assert_eq "D3/exactly-5-warn-lines" "5" "$(cb_warn_count)"
 
 echo ""
@@ -198,6 +198,6 @@ else
         "$CB_OUT"
     # Findings for the readable sibling survive the error.
     assert_contains "D5/sibling-finding-still-on-stdout" \
-        "WARN: goodstage.sh — longest comment run 14 lines (no baseline: absolute-state fallback)" \
+        "$CB_FIND: goodstage.sh — longest comment run 14 lines (no baseline: absolute-state fallback)" \
         "$CB_OUT"
 fi

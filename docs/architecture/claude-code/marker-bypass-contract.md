@@ -56,6 +56,7 @@ exceptions independently.
 | `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
+| `hooks/block-comment-block-size.js` | PreToolUse | **No** | **No** |
 
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and

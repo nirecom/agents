@@ -50,7 +50,7 @@ while IFS='|' read -r name payload; do
     } > "$INJ/payload.sh"
     git -C "$INJ" add -f payload.sh >/dev/null 2>&1
     run_cb "$INJ" -- --staged
-    assert_eq "H1/$name-rc" "0" "$CB_RC"
+    cb_expect_rc "H1/$name-rc"
     if [ -e "$marker" ]; then
         fail "H1/$name-not-executed" "the payload created $marker — blob text was evaluated"
         rm -f "$marker"
@@ -60,7 +60,7 @@ while IFS='|' read -r name payload; do
     # Paired positive: the run IS counted, so the assertion above cannot pass
     # merely because the file was never read.
     assert_contains "H1/$name-still-reported" \
-        "WARN: payload.sh — longest comment run 12 lines" "$CB_OUT"
+        "$CB_FIND: payload.sh — longest comment run 12 lines" "$CB_OUT"
 done <<'TABLE'
 dollar-paren    | $(touch @MARKER@)
 backtick        | `touch @MARKER@`
@@ -75,7 +75,7 @@ TABLE
 git -C "$INJ" add -f payload.sh >/dev/null 2>&1
 rm -f "$INJ_MARKER-all"
 run_cb "$INJ" -- --all
-assert_eq "H1/all-mode-rc" "0" "$CB_RC"
+cb_expect_rc "H1/all-mode-rc"
 if [ -e "$INJ_MARKER-all" ]; then
     fail "H1/all-mode-not-executed" "the payload created $INJ_MARKER-all"
     rm -f "$INJ_MARKER-all"
@@ -106,12 +106,12 @@ FORGE="$(new_repo hostileforge)"
 } > "$FORGE/forger.sh"
 git -C "$FORGE" add -A >/dev/null 2>&1
 run_cb "$FORGE" -- --staged
-assert_eq "H2/rc" "0" "$CB_RC"
+cb_expect_rc "H2/rc"
 # Exactly one finding: the real one. A forged line that reached stdout would
 # make this 2 or 3 and would name a file that does not exist in the repo.
 assert_eq "H2/exactly-one-finding" "1" "$(cb_warn_count)"
 assert_contains "H2/real-finding-reported" \
-    "WARN: forger.sh — longest comment run 12 lines" "$CB_OUT"
+    "$CB_FIND: forger.sh — longest comment run 12 lines" "$CB_OUT"
 assert_absent "H2/bare-forgery-not-echoed" "forged-bare.sh" "$CB_OUT"
 assert_absent "H2/in-comment-forgery-not-echoed" "forged-incomment.sh" "$CB_OUT"
 assert_absent "H2/forged-count-not-echoed" "99 lines" "$CB_OUT"
@@ -129,7 +129,7 @@ assert_absent "H2/forgery-not-on-stderr" "forged-bare.sh" "$CB_ERR"
 } > "$FORGE/forger.sh"
 git -C "$FORGE" add -A >/dev/null 2>&1
 run_cb "$FORGE" -- --staged
-assert_eq "H2/sub-threshold-rc" "0" "$CB_RC"
+cb_expect_rc "H2/sub-threshold-rc"
 assert_eq "H2/sub-threshold-no-warn-line" "0" "$(cb_warn_count)"
-assert_absent "H2/sub-threshold-no-footer" "advisory only" "$CB_OUT"
+assert_absent "H2/sub-threshold-no-footer" "Compress to a one-line summary" "$CB_OUT"
 assert_absent "H2/sub-threshold-forgery-absent" "forged-solo.sh" "$CB_OUT"

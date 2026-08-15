@@ -93,7 +93,7 @@ forge-error     | nl-e\nERROR: forged.sh — staged blob unreadable\nnl-f.sh
 TABLE
 
 run_cb "$INJP" -- --staged
-assert_eq "I1/staged-rc" "0" "$CB_RC"
+cb_expect_rc "I1/staged-rc"
 # (a) one WARN line per staged file — no more, no fewer.
 assert_eq "I1/staged-warn-count-equals-staged-files" "$I1_N" "$(cb_warn_count)"
 # (b) exactly one real header, and no ERROR line at all.
@@ -106,12 +106,12 @@ assert_no_ctrl_bytes "I1/staged-stderr-has-no-raw-control-byte" "$CB_ERR"
 # Positive escaping contract: \xHH, uppercase hex.
 case " $I1_STAGED" in
     *" plain-newline "*)
-        assert_contains "I1/newline-renders-as-\\x0A" 'WARN: two\x0Alines.sh' "$CB_OUT" ;;
+        assert_contains "I1/newline-renders-as-\\x0A" "$CB_FIND: two\x0Alines.sh" "$CB_OUT" ;;
     *) skip "I1/newline-renders-as-\\x0A: the plain-newline name could not be staged on this host" ;;
 esac
 case " $I1_STAGED" in
     *" esc "*)
-        assert_contains "I1/esc-renders-as-\\x1B" 'WARN: esc\x1Bfile.sh' "$CB_OUT" ;;
+        assert_contains "I1/esc-renders-as-\\x1B" "$CB_FIND: esc\x1Bfile.sh" "$CB_OUT" ;;
     *) skip "I1/esc-renders-as-\\x1B: the ESC name could not be staged on this host" ;;
 esac
 
@@ -128,8 +128,8 @@ echo "=== I2: literal backslash stays literal (F1 regression) ==="
 BSR="$(new_repo injbackslash)"
 if make_special "$BSR" 'back\slash.sh'; then
     run_cb "$BSR" -- --staged
-    assert_eq "I2/rc" "0" "$CB_RC"
-    assert_contains "I2/backslash-not-escaped" 'WARN: back\slash.sh' "$CB_OUT"
+    cb_expect_rc "I2/rc"
+    assert_contains "I2/backslash-not-escaped" "$CB_FIND: back\slash.sh" "$CB_OUT"
     assert_absent "I2/backslash-not-doubled" 'back\\slash.sh' "$CB_OUT"
     assert_no_ctrl_bytes "I2/stdout-has-no-raw-control-byte" "$CB_OUT"
 else
@@ -149,7 +149,7 @@ INJA="$(new_repo injall)"
 NL_ALL="$(printf 'two\nlines.sh')"
 if make_special "$INJA" "$NL_ALL"; then
     run_cb "$INJA" -- --all
-    assert_eq "I3/all-rc" "0" "$CB_RC"
+    cb_expect_rc "I3/all-rc"
     assert_eq "I3/all-warn-count" "2" "$(cb_warn_count)"
     assert_eq "I3/all-exactly-one-header" "1" "$(cb_count_re '^## Comment-block Size Review')"
     assert_eq "I3/all-no-error-line" "0" "$(cb_count_re '^ERROR:')"
@@ -181,10 +181,10 @@ while IFS='|' read -r name val; do
     val="${val# }"
     val="$(printf '%b' "$val")"
     run_cb "$INJE" "CODE_FILE_EXTENSIONS=$val" -- --staged
-    assert_eq "I4/$name-rc" "0" "$CB_RC"
+    cb_expect_rc "I4/$name-rc"
     # The only real finding is a.sh; anything else on a ^WARN: line is forged.
     assert_eq "I4/$name-warn-count-is-1" "1" "$(cb_warn_count)"
-    assert_contains "I4/$name-real-finding-survives" "WARN: a.sh" "$CB_OUT"
+    assert_contains "I4/$name-real-finding-survives" "$CB_FIND: a.sh" "$CB_OUT"
     assert_eq "I4/$name-exactly-one-header" "1" "$(cb_count_re '^## Comment-block Size Review')"
     assert_eq "I4/$name-no-error-line" "0" "$(cb_count_re '^ERROR:')"
     assert_no_ctrl_bytes "I4/$name-stdout-has-no-raw-control-byte" "$CB_OUT"
@@ -196,7 +196,14 @@ esc             | sh;\x1Bzz
 TABLE
 
 # Positive escaping contract, same renderer as I1.
-run_cb "$INJE" "CODE_FILE_EXTENSIONS=$(printf 'sh\nzz')" -- --staged
-assert_contains "I4/newline-renders-as-\\x0A" 'extensions: sh\x0Azz' "$CB_OUT"
+#
+# The \x0A case cannot be produced through the only channel CODE_FILE_EXTENSIONS
+# is read from: _load_env_only_scan (hooks/lib/load-env.sh) reads .env line by
+# line, so writing a value containing a raw newline byte splits it into two
+# physical lines — the second ("zz") has no "=" and is silently dropped rather
+# than appended to the value. CODE_FILE_EXTENSIONS can therefore never actually
+# carry an embedded newline through the config round-trip; the escaping
+# contract itself is still exercised by the \x1B case below.
+skip "I4/newline-renders-as-\\x0A: CODE_FILE_EXTENSIONS cannot carry a raw newline through the line-oriented .env round-trip"
 run_cb "$INJE" "CODE_FILE_EXTENSIONS=$(printf 'sh;\x1Bzz')" -- --staged
 assert_contains "I4/esc-renders-as-\\x1B" 'extensions: sh;\x1Bzz' "$CB_OUT"
