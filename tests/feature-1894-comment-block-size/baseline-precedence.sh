@@ -58,8 +58,8 @@ printf '%s\n' "$BPA_SIDE" > "$BPA/.git/CHERRY_PICK_HEAD"
 { bpad 5; bcm 18 side; } > "$BPA/b.sh"
 git -C "$BPA" add -A >/dev/null 2>&1
 run_cb "$BPA" -- --staged
-assert_eq "B1/rc" "0" "$CB_RC"
-assert_contains "B1/reported-at-all" "WARN: b.sh" "$CB_OUT"
+cb_expect_rc "B1/rc"
+assert_contains "B1/reported-at-all" "$CB_FIND: b.sh" "$CB_OUT"
 assert_contains "B1/baseline-number-comes-from-the-in-progress-blob" \
     "longest comment run 12 " "$CB_OUT"
 assert_eq "B1/staged-side-number" "18" "$(cb_longest)"
@@ -76,8 +76,8 @@ echo "=== B2: no growth against the in-progress baseline is silent ==="
 { bpad 5; bcm 12 side; } > "$BPA/b.sh"
 git -C "$BPA" add -A >/dev/null 2>&1
 run_cb "$BPA" -- --staged
-assert_eq "B2/rc" "0" "$CB_RC"
-assert_absent "B2/not-reported" "WARN: b.sh" "$CB_OUT"
+cb_expect_rc "B2/rc"
+assert_absent "B2/not-reported" "$CB_FIND: b.sh" "$CB_OUT"
 assert_eq "B2/no-warn-lines-at-all" "0" "$(cb_warn_count)"
 
 # Anti-vacuity for B2: with the pseudo-ref removed there is no baseline left, so
@@ -85,8 +85,8 @@ assert_eq "B2/no-warn-lines-at-all" "0" "$(cb_warn_count)"
 # not, B2's silence was never attributable to the in-progress baseline.
 bp_clear "$BPA"
 run_cb "$BPA" -- --staged
-assert_eq "B2/without-the-ref-rc" "0" "$CB_RC"
-assert_contains "B2/without-the-ref-the-same-index-warns" "WARN: b.sh" "$CB_OUT"
+cb_expect_rc "B2/without-the-ref-rc"
+assert_contains "B2/without-the-ref-the-same-index-warns" "$CB_FIND: b.sh" "$CB_OUT"
 assert_contains "B2/without-the-ref-it-is-the-absolute-state-shape" \
     "longest comment run 12 lines (no baseline: absolute-state fallback)" "$CB_OUT"
 
@@ -116,7 +116,7 @@ printf '%s\n' "$BPH_ALT" > "$BPH/.git/REVERT_HEAD"
 { bpad 5; bcm 20 head; } > "$BPH/c.sh"
 git -C "$BPH" add -A >/dev/null 2>&1
 run_cb "$BPH" -- --staged
-assert_eq "B3/rc" "0" "$CB_RC"
+cb_expect_rc "B3/rc"
 assert_eq "B3/warn-count-is-1" "1" "$(cb_warn_count)"
 assert_contains "B3/head-supplied-the-baseline" "longest comment run 12 " "$CB_OUT"
 assert_eq "B3/staged-side-number" "20" "$(cb_longest)"
@@ -151,7 +151,7 @@ printf '%s\n' "$BPS_ALT" > "$BPS/.git/REBASE_HEAD"
 { bpad 5; bcm 40 head; } > "$BPS/d.sh"
 git -C "$BPS" add -A >/dev/null 2>&1
 run_cb "$BPS" -- --staged
-assert_eq "B4/rc" "0" "$CB_RC"
+cb_expect_rc "B4/rc"
 assert_eq "B4/warn-count-is-1" "1" "$(cb_warn_count)"
 assert_contains "B4/head-supplied-the-baseline" "longest comment run 30 " "$CB_OUT"
 assert_eq "B4/staged-side-number" "40" "$(cb_longest)"

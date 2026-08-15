@@ -2,8 +2,10 @@
 # Comment-block size review — flags long runs of consecutive comment lines.
 # Usage: review-comment-block-size [--staged | --all]
 # Headers: "## Comment-block Size Review: PERFORMED (<mode>)" / ": SKIPPED — <reason>".
-# Exit: 0 = performed or skipped (findings never change rc); 3 = internal error.
-#       1 and 2 stay reserved for blocking reviewers and are never returned here.
+# Exit: 0 = performed with no blocking finding, or skipped; 1 = BLOCK findings in
+#       --staged mode (hooks/pre-commit turns this into a blocked commit);
+#       3 = internal error. --all never returns 1: its findings are advisory
+#       WARNs about the existing tree, not about what is being committed.
 # Under-detects on purpose: only (run count, longest run) is compared, and --, ;,
 # % and python triple quotes are not recognised as comment markers.
 
@@ -13,12 +15,14 @@
 # bare "<entrypoint>/" because this entrypoint is itself an extensionless file
 # of that exact name:
 #   report.sh   — control-byte escaping and the buffered finding report
-#   scan.sh     — the awk scanner core and its blob / file entry points
+#   scan.sh     — the Node scanner adapter and its blob / file entry points
 #   baseline.sh — HEAD and in-progress-operation baseline resolution
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../hooks/lib/load-env.sh
+source "$SCRIPT_DIR/../hooks/lib/load-env.sh"
 # shellcheck source=./review-comment-block-size.d/report.sh
 source "$SCRIPT_DIR/review-comment-block-size.d/report.sh"
 # shellcheck source=./review-comment-block-size.d/scan.sh
@@ -62,11 +66,34 @@ if [[ -z "$_top" ]] || ! cd "$_top" 2>/dev/null; then
 fi
 
 # --- configuration ---------------------------------------------------------
-T="${COMMENT_BLOCK_WARN_LINES:-10}"
+# Every value below comes from the config dir's .env and from nowhere else: this
+# tool now returns a blocking rc, so an ambient `COMMENT_BLOCK_ENFORCE=off` or a
+# raised threshold on the committer's shell would be a one-word bypass.
+_ENFORCE="$(_load_env_only_value "COMMENT_BLOCK_ENFORCE:-on")"
+if [[ "$_ENFORCE" == "off" ]]; then
+    emit_skip "COMMENT_BLOCK_ENFORCE=off"
+fi
+
+T="$(_load_env_only_value "COMMENT_BLOCK_MAX_LINES:-10")"
 { [[ "$T" =~ ^[0-9]+$ ]] && [[ "$T" -gt 0 ]]; } || T=10
 
-_EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
+_EXTS="$(_load_env_only_value "CODE_FILE_EXTENSIONS:-js;sh;py")"
 IFS=';' read -r -a _EXT_ARR <<< "$_EXTS"
+
+# The scan core is Node (hooks/lib/comment-block-scan.js, reached via
+# review-comment-block-size.d/scan-cli.js). `git commit` runs in login shells,
+# CI images and GUI clients whose PATH is not the developer's, so a missing
+# runtime is an ordinary state — and it must be a SKIP at rc 0, never an rc 3
+# "broken tool" and never a silent all-clear.
+if ! scan_available; then
+    emit_skip "node runtime unavailable"
+fi
+
+# Finding prefixes are per-mode and therefore written literally at each site
+# rather than through a shared variable: run_staged only ever runs in --staged
+# mode and run_all only in --all, so the prefix is a property of the site. The
+# distinction is the verdict itself — --staged judges what is being committed
+# and blocks; --all reports on the existing tree and only advises.
 
 # Compiled-in performance guards, not configuration: an ambient variable able to
 # raise them would let this advisory check silently review nothing.
@@ -131,7 +158,11 @@ run_staged() {
 
     n="${#dsts[@]}"
     if [[ "$n" -gt "$_MAX_FILES" ]]; then
-        emit_skip "too many staged files ($n)"
+        # A full-gate skip here would silently pass any commit padded past this
+        # count with trivial candidate files. This tool now returns a blocking
+        # verdict (rc=1), so — unlike an advisory check — it must not degrade to
+        # "skip and let the commit through" just because the count is large.
+        echo "pre-commit: comment-block size review — staged file count ($n) exceeds the $_MAX_FILES performance guard; scanning in full anyway" >&2
     fi
 
     for ((i = 0; i < n; i++)); do
@@ -162,13 +193,13 @@ run_staged() {
             bn="$SCAN_N"
             bm="$SCAN_M"
             if [[ "$sn" -gt "$bn" || "$sm" -gt "$bm" ]]; then
-                add_line "WARN: $dst_e — longest comment run $bm → $sm lines (over-threshold runs $bn → $sn)"
+                add_line "BLOCK: $dst_e — longest comment run $bm → $sm lines (over-threshold runs $bn → $sn)"
                 SCAN_RUNS="$sruns"
                 emit_details
                 WARNC=$((WARNC + 1))
             fi
         elif [[ "$sm" -gt 0 ]]; then
-            add_line "WARN: $dst_e — longest comment run $sm lines (no baseline: absolute-state fallback)"
+            add_line "BLOCK: $dst_e — longest comment run $sm lines (no baseline: absolute-state fallback)"
             SCAN_RUNS="$sruns"
             emit_details
             WARNC=$((WARNC + 1))
@@ -238,13 +269,15 @@ esc "$_EXTS"
 _EXTS_e="$ESC"
 
 printf '%s\n' "$HDR: PERFORMED ($_desc)"
-printf '%s\n' "$_count_label: $SCANNED (extensions: $_EXTS_e; threshold: >= $T consecutive comment lines)"
+printf '%s\n' "$_count_label: $SCANNED (extensions: $_EXTS_e; threshold: > $T consecutive comment lines)"
 [[ "$TOOBIG" -gt 0 ]] && printf '%s\n' "  skipped (too large): $TOOBIG"
 [[ -n "$BODY" ]] && printf '%s' "$BODY"
 if [[ "$WARNC" -gt 0 ]]; then
     printf '%s\n' "  Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)."
-    printf '%s\n' "  WARN findings are advisory only — this check never blocks a commit."
 fi
 
 [[ "$ERRC" -gt 0 ]] && exit 3
+# rc 1 is the blocking verdict, and only --staged may return it: --all judges the
+# existing tree, which nobody is committing right now.
+[[ "$_staged" -eq 1 && "$WARNC" -gt 0 ]] && exit 1
 exit 0
