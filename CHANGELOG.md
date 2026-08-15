@@ -307,3 +307,7 @@ Changes: The workflow now tracks code-writing as its own step (`write_code`) bet
 ### FEATURE: PR #1974 (2026-08-12)
 Background: feat(rules): scope rules injection by lifecycle and audit what sessions load
 Changes: Three rules files that used to occupy every session's context — the testing, documentation, and GitHub-issue conventions — are now read only when a skill actually needs them. Sessions that never touch tests, docs, or issues no longer carry them at all.;A pre-commit check now fails the commit when an on-demand rule is declared with only half the notation, or when a skill that needs a de-injected rule has no Read step, so the reduction cannot silently regress.;A new observation-only session hook records what instructions each session actually loaded and flags a rule that went missing, arrived malformed, or leaked a path. It never blocks a session.
+
+### FEATURE: PR #2023 (2026-08-16)
+Background: feat: block comment blocks over threshold at edit time and commit tim...
+Changes: Added a gate that blocks edits and commits with overly long comment blocks (tune via `COMMENT_BLOCK_MAX_LINES`/`COMMENT_BLOCK_ENFORCE`).
