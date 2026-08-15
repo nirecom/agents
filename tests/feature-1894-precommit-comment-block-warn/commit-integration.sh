@@ -2,20 +2,17 @@
 # tests/feature-1894-precommit-comment-block-warn/commit-integration.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, git-commit, hooks-path, block, leak, spoofing, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 3 — a REAL `git commit`, with git deciding whether to fire the hook and
-# whether the hook's exit code blocks the commit.
-#
-# The other parts invoke hooks/pre-commit as a script, which proves what the
-# hook prints but not what happens to the commit. Issue #1894's core requirement
-# is now "this check DOES block a commit", and blocking is only real in one
-# place: `git commit` leaving HEAD where it was. Both directions are asserted —
-# a gate that blocks everything is as broken as one that blocks nothing.
-#
-# init_repo pins core.hooksPath=/dev/null to keep the developer's installed
-# hooks out of every fixture; here the hook IS the subject, so each command
-# overrides that pin with `git -c core.hooksPath=<fixture-hooks-dir>`.
-#
+
+# Part 3 — a REAL `git commit`, with git deciding whether to fire the hook
+# and whether its exit code blocks the commit. Other parts invoke
+# hooks/pre-commit as a script, proving what it prints but not what happens
+# to the commit; Issue #1894's core requirement is "this check DOES block a
+# commit", real only when `git commit` leaves HEAD where it was — both
+# directions asserted, since blocking everything is as broken as blocking
+# nothing. init_repo pins core.hooksPath=/dev/null for every fixture, but
+# here the hook IS the subject, so each command overrides with `git -c
+# core.hooksPath=<fixture-hooks-dir>`.
+
 # Sourced by the dispatcher; all helpers and constants are defined there.
 
 # ============================================================================

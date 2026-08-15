@@ -2,33 +2,24 @@
 # tests/feature-1894-precommit-comment-block-warn/node-unavailable.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, pre-commit, node, degraded, skipped, fail-open, announce, scope:issue-specific, scope:feature-1894, layer:TL2
-#
+
 # Part 4 — what happens when the Node runtime the scan core now needs is not
-# there.
-#
-# Approach A moves the scan core into Node (hooks/lib/comment-block-scan.js,
-# reached through bin/review-comment-block-size.d/scan-cli.js). That buys one
-# implementation shared by the CLI and the Edit-time hook, and it costs a new
-# runtime dependency on a path that previously needed nothing but awk. A git
-# hook is exactly where that cost lands badly: `git commit` runs in login
-# shells, CI images and GUI clients whose PATH is not the developer's PATH, so
-# "node is missing" is an ordinary Tuesday, not an exotic failure.
-#
-# The contract for that state is deliberately three-part, and each part is a
-# separate way the feature could go wrong (CPR-SC):
-#   (a) the CLI SKIPS at rc 0 — not rc 3, which the hook would report as an
-#       internal error, and not a bare interpreter diagnostic;
-#   (b) the commit is NOT blocked — a missing runtime must never brick every
-#       commit on the machine (detail plan S2-5, the fail-open direction);
-#   (c) the skip is ANNOUNCED on stderr. This is the part that is easy to drop
-#       and impossible to notice: a blocking check that silently stops running
-#       looks exactly like a blocking check that keeps passing, and the whole
-#       point of issue #1894 was that a quiet advisory stopped being read.
-#
-# This file lives with the pre-commit suite rather than with the CLI suite
-# (where the task's outline placed it) because (b) can only be observed through
-# a real `git commit`, and run_commit / the hooks-dir fixtures exist only here.
-#
+# there. Approach A moves the scan core into Node
+# (hooks/lib/comment-block-scan.js via scan-cli.js), buying one shared
+# implementation but costing a runtime dependency on a path that previously
+# needed only awk — and a git hook is where that cost lands badly: `git
+# commit` runs in login shells, CI images, and GUI clients with a different
+# PATH, so "node is missing" is ordinary, not exotic.
+
+# Contract, three-part (CPR-SC), each a separate failure mode: (a) the CLI
+# SKIPS at rc 0, not rc 3 (internal error) or a bare interpreter diagnostic;
+# (b) the commit is NOT blocked — a missing runtime must never brick every
+# commit (detail plan S2-5, fail-open); (c) the skip is ANNOUNCED on
+# stderr — easy to drop, impossible to notice, and the whole point of issue
+# #1894 was that a quiet advisory stopped being read. Lives with the
+# pre-commit suite, not the CLI suite, because (b) needs a real `git commit`
+# and run_commit/hooks-dir fixtures exist only here.
+
 # Sourced by the dispatcher; all helpers and constants are defined there.
 
 # ---------------------------------------------------------------------------

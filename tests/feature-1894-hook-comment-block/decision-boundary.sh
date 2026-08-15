@@ -2,28 +2,18 @@
 # tests/feature-1894-hook-comment-block/decision-boundary.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js
 # Tags: comment-block-size, hook, pretooluse, boundary, absolute-judgment, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 1 — what the hook decides, and on what.
-#
-# Two rules produce every row here, and both were settled after a round of
-# review that found holes in the alternatives:
-#
-#   (1) The verdict is computed on the POST-edit file only. Comparing post
-#       against pre ("block only when it got worse") passes a file that already
-#       had a 12-line block and gains a second 11-line block somewhere else —
-#       `longest` is 12 before and 12 after, so nothing "worsened" while the
-#       file got materially worse (detail plan S3-2).
-#   (2) The comparator is `>`, not `>=`. COMMENT_BLOCK_MAX_LINES names the
-#       largest run that is still ALLOWED, so at the default 10 a 10-line run is
-#       silent and an 11-line run is a violation. Every boundary row below is
-#       paired — 10 approve next to 11 block — because a one-off in either
-#       direction is the single most likely implementation slip and a lone
-#       "11 blocks" row cannot see it.
-#
-# Rule (1) has a cost the suite pins on purpose: a file with a pre-existing
-# violation is unwritable until the violation is fixed, even for an edit that
-# never goes near it (D4). That is the accepted design, not an oversight.
-#
+
+# Part 1 — what the hook decides, and on what. Two rules, settled after
+# review found holes in the alternatives: (1) verdict is computed on the
+# POST-edit file only — "block only if it got worse" would pass a file that
+# already had a 12-line block and gains a second 11-line block elsewhere,
+# since `longest` stays 12 (detail plan S3-2). (2) comparator is `>`, not
+# `>=`: COMMENT_BLOCK_MAX_LINES is the largest ALLOWED run, so 10 is silent
+# and 11 blocks — boundary rows are paired (10 approve / 11 block) since a
+# one-off slip in either direction needs both to be caught. Rule (1)'s
+# accepted cost: a file with a pre-existing violation is unwritable until
+# fixed, even for an edit that never touches it (D4).
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

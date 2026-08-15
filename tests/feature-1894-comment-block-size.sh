@@ -2,57 +2,18 @@
 # tests/feature-1894-comment-block-size.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, parser, review-cli, staged, git, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Issue #1894 — bin/review-comment-block-size: the scanner that flags
-# over-threshold runs of consecutive comment lines.  Origin regression: PR #1893
-# landed a long comment block that no existing check noticed.
-#
-# Two properties changed with the WARN→BLOCK conversion, and both are pinned
-# throughout this suite (CPR-SC — they are independent axes):
-#   (a) DECISION BOUNDARY. The comparator is `run length > T`, not `>= T`:
-#       COMMENT_BLOCK_MAX_LINES names the largest run that is still ALLOWED, so
-#       at the default 10 a 10-line run is silent and an 11-line run is a
-#       finding.  Every "exactly T" case below asserts silence.
-#   (b) VERDICT PER MODE. `--staged` is the pre-commit path: findings print
-#       `BLOCK: ` and the CLI exits 1.  `--all` stays the advisory whole-tree
-#       inventory: findings print `WARN: ` and the CLI exits 0.  Case files must
-#       never hardcode either prefix — use $CB_FIND / cb_expect_rc, which
-#       run_cb sets from the mode it was handed.
-#
-# CONFIG RESOLUTION. The threshold, the extension list and the kill switch are
-# resolved from the config dir's .env ONLY — never from the ambient shell — so
-# that `COMMENT_BLOCK_MAX_LINES=999999 git commit` cannot lift the bar. run_cb
-# therefore routes those three variables into a fixture .env and pins
-# AGENTS_CONFIG_DIR at it, while ALSO removing them from the child environment.
-# config-hostility.sh drives the hostile direction explicitly (run_cb_ambient).
-#
-# Dispatcher: shared harness + fixtures live here; the cases live in
-# tests/feature-1894-comment-block-size/*.sh (rules/coding/file-split.md).
-#
-# Everything is driven through the CLI's contracted stdout, never through an
-# internal function, so the tests stay honest about the observable contract.
-#
-# TL3 gap (what this test does NOT catch):
-# - Anything about hooks/pre-commit: this file drives the CLI directly, and its
-#   fixtures pin core.hooksPath=/dev/null. The hook seam — including a real
-#   `git commit` firing the hook — is the sibling file
-#   tests/feature-1894-precommit-comment-block-warn.sh (part 3).
-# - Whether the installer PATH-exposes bin/review-comment-block-size so a bare
-#   `review-comment-block-size` resolves on a real machine.
-# - Real-world blob sizes / pack-file baselines: fixtures use loose objects only.
-# - Filenames containing a newline or a character NTFS rejects (`"`, `|`, `*`):
-#   those cases self-skip on Windows and are only exercised on POSIX hosts.
-#   Partial exception: injection-hardening.sh reaches the STAGED path on Windows
-#   too, by writing the entry straight into the index (git accepts control bytes
-#   the filesystem refuses). The --all walk needs a real file, so it still
-#   self-skips there.
-# - Symlink traversal (including a link whose target lies outside the repo):
-#   self-skips on hosts that cannot create symlinks without elevation, so the
-#   `--all` walk's refusal to follow links is unverified there.
-# - Temporary artifacts the scanner might write: the output/exit-code contract
-#   specifies no filesystem footprint, so nothing here pins one either way.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+
+# Issue #1894 scanner flags over-threshold comment runs (PR #1893 landed one
+# unnoticed). Comparator is `>T`, not `>=T` — exactly T stays silent. `--staged`
+# prints `BLOCK:`/exits 1; `--all` prints `WARN:`/exits 0 — use $CB_FIND /
+# cb_expect_rc, never hardcode a prefix. Threshold/extensions/kill-switch
+# resolve from the config dir's .env only, never ambient shell
+# (config-hostility.sh: run_cb_ambient). Dispatcher: harness here, cases in
+# tests/feature-1894-comment-block-size/*.sh, all via CLI stdout.
+
+# TL3 gap: hook integration, installer PATH, pack-file sizes, NTFS-illegal
+# names, symlinks, scanner footprint — see WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
@@ -207,18 +168,14 @@ render_spec() {
     set +f
 }
 
-# ---------------------------------------------------------------------------
 # _cb_invoke <repo> <use-base:0|1> <ambient-config:0|1> [VAR=VAL ...] -- [args]
-#
 # The one place that spawns the CLI. Splits the caller's VAR=VAL list on
-# CB_DOTENV_KEYS: config keys are written into $CB_CFG_DIR/.env (the only place
-# the CLI may read them from), everything else becomes a real child env var.
-#   use-base=1        also seed the .env with BASE_ENV first (caller wins).
-#   ambient-config=1  ALSO export the config keys into the child environment,
-#                     with the .env left holding the honest value — the hostile
-#                     direction, used to prove the ambient copy is ignored.
+# CB_DOTENV_KEYS: config keys go to $CB_CFG_DIR/.env (the only place the CLI
+# may read them from); everything else is a real child env var. use-base=1
+# also seeds the .env with BASE_ENV first (caller wins). ambient-config=1
+# ALSO exports the config keys into the child env, with .env left holding the
+# honest value — the hostile direction, proving the ambient copy is ignored.
 # Sets CB_OUT / CB_ERR / CB_RC, and CB_MODE / CB_FIND from the CLI mode.
-# ---------------------------------------------------------------------------
 CB_OUT=""
 CB_ERR=""
 CB_RC=0

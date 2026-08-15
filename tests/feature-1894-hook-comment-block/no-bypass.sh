@@ -2,31 +2,17 @@
 # tests/feature-1894-hook-comment-block/no-bypass.sh
 # Tests: hooks/block-comment-block-size.js, docs/architecture/claude-code/marker-bypass-contract.md
 # Tags: comment-block-size, hook, pretooluse, no-bypass, workflow-off, worktree-off, omission, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 5 — the property that is guaranteed by ABSENCE.
-#
-# Almost every other guard in this repo honours the session-scoped escape
-# hatches: WORKFLOW_OFF suspends the commit gate, the .env guard, the worktree
-# guard. This one does not, by explicit decision (outline plan lists "no
-# bypass path" as an accepted tradeoff, and intent.md requires that both
-# block paths be non-bypassable).
-#
-# That decision is implemented by omission — the hook simply never reads marker
-# state — which makes it the easiest property in the feature to lose. Nobody
-# deletes a bypass; someone ADDS one, in good faith, the first time the hook
-# blocks them at an inconvenient moment. So it is asserted twice, from both
-# ends (CPR-SC):
-#
-#   behavioural — with both markers physically present for the session, the
-#                 verdict does not move;
-#   static      — the hook source contains no reference to the marker helpers at
-#                 all, which is the only form of "cannot be bypassed" that
-#                 survives a future refactor of the marker layer itself.
-#
-# The static half needs a positive control, otherwise it degrades into "grep
-# found nothing" the day the helper is renamed — and a passing test that proves
-# nothing is worse than no test.
-#
+
+# Part 5 — a property guaranteed by ABSENCE. Almost every other guard here
+# honours the session-scoped escape hatches (WORKFLOW_OFF etc.); this one
+# doesn't (outline plan: accepted tradeoff; intent.md requires both block
+# paths non-bypassable). Implemented by omission — the hook never reads
+# marker state — which is easy to lose: someone ADDS a bypass in good faith
+# the first time it blocks them. Asserted twice (CPR-SC): behavioural (both
+# markers present, verdict doesn't move) and static (source references no
+# marker helpers — survives a future refactor). Static needs a positive
+# control, or it degrades into "grep found nothing" once renamed.
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 HK_SID="fixture-nobypass-0000"

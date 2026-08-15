@@ -1,24 +1,15 @@
 // hooks/lib/comment-block-scan.js
 //
-// SSOT (CPR-SSOT) for comment-run recognition. Ported 1:1 from the awk core that
-// bin/review-comment-block-size.d/scan.sh used to carry, so that the Edit-time
-// PreToolUse hook (hooks/block-comment-block-size.js) and the commit-time CLI
-// (bin/review-comment-block-size, via review-comment-block-size.d/scan-cli.js)
-// judge a file by exactly the same rules.
-//
-// Deliberate dual representation, not an oversight: the FILE-LEVEL filter rules
-// (which extensions count as code, which path segments are skipped) are written
-// both here and in bash inside bin/review-comment-block-size — `ext_ok()` and
-// `path_ok()` are the bash twins of hasScannableExtension / isExcludedPath. The
-// filter runs once per file while the scan core runs once per line, so keeping
-// the filter in bash costs nothing and avoids a node spawn per CLI invocation.
-// The drift net for that duplication is
-// tests/feature-1894-hook-comment-block/filter-parity.sh — change one side and
-// the other must move with it.
-//
-// Purity contract: this module is required from the Edit hot path. It reads no
-// configuration, touches no filesystem, and prints nothing. Every value it needs
-// arrives as an argument.
+// SSOT (CPR-SSOT) for comment-run recognition, ported 1:1 from the awk core
+// bin/review-comment-block-size.d/scan.sh used to carry, so the Edit-time
+// hook (hooks/block-comment-block-size.js) and the commit-time CLI
+// (bin/review-comment-block-size) judge files identically.
+
+// FILE-LEVEL filter rules (scannable extensions, excluded paths) are
+// deliberately duplicated in bash (mirrored by `ext_ok()`/`path_ok()`); the
+// drift net is tests/feature-1894-hook-comment-block/filter-parity.sh.
+// Purity contract: required from the Edit hot path — no config, no
+// filesystem, no output; every value arrives as an argument.
 "use strict";
 
 // Default threshold: a run of MORE than this many consecutive comment lines is
@@ -93,12 +84,10 @@ function stripLeadingBlanks(s) {
 /**
  * scanText(text, threshold) -> { runs, count, longest }
  *
- * One pass, one state bit (inside a block comment). A run is a maximal stretch
- * of consecutive comment lines; only runs strictly LONGER than `threshold` are
- * reported. `longest` is the longest reported run, or 0 when there are none.
- *
- * Under-detects on purpose, exactly as the awk core did: `--`, `;`, `%` and
- * Python triple quotes are not treated as comment markers.
+ * One pass, one state bit. A run is a maximal stretch of consecutive comment
+ * lines; only runs strictly LONGER than `threshold` are reported (`longest`
+ * is 0 when there are none). Under-detects on purpose, as the awk core did:
+ * `--`, `;`, `%`, and Python triple quotes are not comment markers.
  */
 function scanText(text, threshold) {
   const t = parseMaxLines(threshold);

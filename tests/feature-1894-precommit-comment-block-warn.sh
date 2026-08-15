@@ -2,56 +2,39 @@
 # tests/feature-1894-precommit-comment-block-warn.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, hook, git, block, guard, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
-#
+
 # Issue #1894 — the hooks/pre-commit comment-block section for
 # review-comment-block-size, converted from advisory WARN to a hard BLOCK.
-#
-# The file name still says "warn" on purpose: the retire policy keys on the
-# feature-<N> prefix and the suite's identity, not on the verdict it asserts.
-# Renaming it would detach it from its own history for no behavioural gain.
-#
-# What changed, and why the split below still holds: the section now OWNS an
-# exit code. rc 1 from the scanner means "staged content made a comment block
-# worse", and the hook must turn that into a blocked commit — while every OTHER
-# non-zero rc still has to fail OPEN, because a quality check that bricks every
-# commit on a broken Node install is disproportionate to the risk it manages
-# (detail plan S2-5). Distinguishing those two is the whole job, so they are
-# tested separately (CPR-SC):
-#   (1) the two-condition AND guard decides whether the section runs at all;
-#   (2) the section is placed BEFORE the hook's three unconditional early exits
-#       (non-GitHub remote / private repo / empty index), or it would never run
-#       for the repos that actually matter;
-#   (3) `exit 1` appears ONLY on the rc-1 branch — the rc-3 / unknown-rc branch
-#       must still fall through, and _cb_out/_cb_rc must stay pre-initialised so
-#       `set -euo pipefail` cannot abort the hook on the clean path;
-#   (3b) every SKIPPED result is announced on stderr. A silent skip is how a
-#       blocking check quietly stops existing (node missing, kill switch on, not
-#       a git repo), and it is the one failure mode nobody notices;
-#   (4) a REAL `git commit` carrying findings is now REJECTED (part 3), and a
-#       clean one still lands.
-#
-# The kill switch and the threshold are resolved from the config dir's .env
-# ONLY. `COMMENT_BLOCK_ENFORCE=off git commit` and
-# `COMMENT_BLOCK_MAX_LINES=999999 git commit` are exactly the bypasses this
-# issue closes, so run_precommit / run_commit write config into $cfg/.env and
-# keep those names OUT of the child environment; *_ambient does both, to drive
-# the hostile direction explicitly.
-#
-# Dispatcher: shared harness + fixtures live here; cases live in
-# tests/feature-1894-precommit-comment-block-warn/*.sh (rules/coding/file-split.md).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the installer deploys the updated hook into a real machine's
-#   core.hooksPath. Part 3 proves git fires the hook, but only for a fixture
-#   repo whose hooksPath this test points at itself.
-# - Real `gh api` repo-visibility resolution: the private-repo early exit is
-#   represented here by its non-GitHub-remote sibling, which needs no network.
-# - Interaction with the Claude Code PreToolUse hook chain (enforce-worktree,
-#   workflow-gate): fixtures pin ENFORCE_WORKTREE=off.
-# - Whether rules/coding/file-split.md renders as the installed rule a session
-#   actually loads: part 2's S3/S3b read the worktree file as text.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Filename still says "warn" on purpose: the retire policy keys on the
+# feature-<N> prefix and suite identity, not the verdict asserted; renaming
+# would detach it from its own history for no behavioural gain.
+
+# What changed: the section now OWNS an exit code. rc 1 means "staged
+# content made a comment block worse" and must block the commit; every OTHER
+# non-zero rc must fail OPEN (a broken Node install shouldn't brick every
+# commit — detail plan S2-5). Tested separately (CPR-SC): (1) the
+# two-condition AND guard gating the section; (2) placement BEFORE the
+# hook's three unconditional early exits, or it never runs for repos that
+# matter; (3) `exit 1` only on rc-1, with _cb_out/_cb_rc pre-initialised so
+# `set -euo pipefail` can't abort the clean path; (3b) every SKIPPED result
+# on stderr — a silent skip is how a blocking check quietly stops existing;
+# (4) a real `git commit` with findings is REJECTED (part 3).
+
+# Kill switch and threshold resolve from the config dir's .env ONLY —
+# `COMMENT_BLOCK_ENFORCE=off` / `COMMENT_BLOCK_MAX_LINES=999999` on `git
+# commit` are exactly the bypasses this issue closes, so run_precommit /
+# run_commit write config into $cfg/.env and keep those names out of the
+# child env; *_ambient does both, driving the hostile direction explicitly.
+# Dispatcher: harness here, cases in
+# tests/feature-1894-precommit-comment-block-warn/*.sh.
+
+# TL3 gap: installer deployment into a real core.hooksPath (part 3 only
+# proves git fires the hook for a self-pointed fixture repo); real `gh api`
+# repo-visibility resolution (represented by its non-GitHub-remote sibling);
+# interaction with the Claude Code PreToolUse chain (fixtures pin
+# ENFORCE_WORKTREE=off); whether rules/coding/file-split.md renders as the
+# installed rule a session loads. Mitigation: WORKFLOW_USER_VERIFIED
+# preflight (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
@@ -133,17 +116,13 @@ SENTINEL='SENTINEL-DO-NOT-LEAK-abc123'
 # scanner with the wrong mode (or not at all) cannot pass silently.
 STUB_PROLOGUE='_argv_log="$(dirname "$0")/../.scanner-argv"; { printf "%s\n" "$#"; if [ $# -gt 0 ]; then printf "%s\n" "$@"; fi; } > "$_argv_log"'
 
-# write_stub <path> <kind>
-#   block   -> contracted output containing ^BLOCK: lines, rc 1 (the verdict)
-#   clean   -> contracted output with no finding line, rc 0
-#   skipped -> SKIPPED header, rc 0 (node missing, kill switch, not a repo...)
-#   rc3     -> internal-error output, rc 3        (fail-open)
-#   rc7     -> an rc the contract does not name   (fail-open)
-#   real    -> thin wrapper around the worktree's real scanner
-#
-# rc is what the stubs exist to control: the hook's whole new job is mapping
-# scanner rc to commit rc, and a real scanner cannot be steered into every rc on
-# demand.
+# write_stub <path> <kind>: block -> ^BLOCK: output, rc 1 (the verdict);
+# clean -> no finding line, rc 0; skipped -> SKIPPED header, rc 0 (node
+# missing, kill switch, not a repo...); rc3 -> internal-error output, rc 3
+# (fail-open); rc7 -> an rc the contract doesn't name (fail-open); real ->
+# thin wrapper around the worktree's real scanner. rc is what the stubs
+# exist to control: mapping scanner rc to commit rc is the hook's whole new
+# job, and a real scanner can't be steered into every rc on demand.
 write_stub() {
     local path="$1" kind="$2"
     case "$kind" in

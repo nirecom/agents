@@ -2,30 +2,17 @@
 # tests/feature-1894-hook-comment-block/path-resolution.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/path-normalize.js
 # Tags: comment-block-size, hook, pretooluse, path-resolution, worktree, windows, regression, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 3 — which file the hook actually opens.
-#
-# Every verdict in this suite is computed from pre-edit content the hook reads
-# off disk, so "resolved the wrong path" does not surface as an error: the read
-# fails or returns something else, the hook fails open, and the gate silently
-# stops gating. That makes path resolution the quietest way for this feature to
-# die, and the reason it gets a case file rather than a line.
-#
-# Two failure modes are pinned, both of them regressions that a previous
-# revision of the plan actually contained:
-#
-#   - `path.resolve(process.cwd(), p)`. A PreToolUse hook's process.cwd() is
-#     wherever Claude Code was launched from — frequently the config directory,
-#     never reliably the repo being edited. resolveRepoCwd() exists precisely
-#     because of this and has an established priority order.
-#   - Ignoring `input.cwd` when it disagrees with CLAUDE_PROJECT_DIR. That
-#     disagreement is the linked-worktree signal, and every /worktree-start
-#     session edits from a linked worktree — i.e. the normal case for this repo,
-#     not an edge one.
-#
-# The dispatcher runs every hook invocation from $NEUTRAL_CWD, so a process.cwd()
-# based implementation cannot pass any case in this suite by luck.
-#
+
+# Part 3 — which file the hook actually opens. A wrong resolution never
+# surfaces as an error: the read fails or returns something else, the hook
+# fails open, and the gate silently stops gating — the quietest way this
+# feature can die. Two pinned failure modes, both prior plan regressions:
+# `path.resolve(process.cwd(), p)` (a PreToolUse hook's cwd is rarely the
+# repo being edited — resolveRepoCwd() exists for this); and ignoring
+# `input.cwd` when it disagrees with CLAUDE_PROJECT_DIR (the linked-worktree
+# signal, and the normal case here, not an edge one). Dispatcher runs from
+# $NEUTRAL_CWD, so a process.cwd()-based implementation can't pass by luck.
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

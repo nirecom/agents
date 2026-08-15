@@ -2,20 +2,15 @@
 # tests/feature-1894-comment-block-size/staged-regression.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, staged, git, regression, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 2 — the two-blob comparison that makes --staged a *regression* check
-# rather than an absolute-size check:
-#   finding iff  n_staged > n_head  OR  m_staged > m_head
-# (n = number of over-threshold runs, m = longest over-threshold run).
-# "Over-threshold" is now strictly `run > T`, so a run of exactly T contributes
-# to neither n nor m — see the dispatcher header for the comparator change.
-#
-# --staged is the BLOCKING mode: findings are prefixed `BLOCK: ` and the CLI
-# exits 1. The prefix is never hardcoded here — $CB_FIND carries it — so the
-# same case bodies keep working if a case is ever re-run under --all.
-#
-# All scenarios are staged into ONE index and judged by a single CLI run, so a
-# scenario that leaks into another file is visible as an unexpected finding.
+
+# Part 2 — the two-blob comparison that makes --staged a *regression* check,
+# not an absolute-size check: finding iff n_staged>n_head OR m_staged>m_head
+# (n = over-threshold run count, m = longest over-threshold run; strictly
+# `run > T`, so a run of exactly T contributes to neither). --staged is the
+# BLOCKING mode: findings prefix `BLOCK: `, CLI exits 1 — never hardcoded
+# here, $CB_FIND carries it, so cases keep working if re-run under --all.
+# All scenarios stage into ONE index and one CLI run, so a scenario leaking
+# into another file shows up as an unexpected finding.
 
 REG="$(new_repo reg)"
 

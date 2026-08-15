@@ -2,26 +2,17 @@
 # tests/feature-1894-hook-comment-block/filter-and-config.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/load-env.js, hooks/lib/comment-block-scan.js
 # Tags: comment-block-size, hook, pretooluse, dotenv, config, extensions, exclusions, spoofing, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 4 — what the hook scans, and who gets to change the rules.
-#
-# Two separate questions that happen to share a code path (CPR-SC):
-#
-#   Scope   — extensions and excluded directories. This is a hot-path filter:
-#             it runs on every Edit, so it is deliberately first, and its
-#             failure direction is "scanned something it shouldn't", which
-#             costs latency and false blocks in vendored trees.
-#   Control — where the numbers come from. Config is read from the config dir's
-#             .env and NOWHERE else. process.env is not consulted, because
-#             anything on the environment can be set by whatever launched
-#             Claude Code: `COMMENT_BLOCK_MAX_LINES=999999 claude` would
-#             otherwise disable the whole feature for the session with one word,
-#             and the resulting silence looks exactly like compliance.
-#
-# The spoof rows are the point of this file. Each has a matched pair — the .env
-# value with one meaning, the ambient value with the opposite one — so a hook
-# that read process.env has to move in at least one of them.
-#
+
+# Part 4 — what the hook scans, and who gets to change the rules. Two
+# questions sharing a code path (CPR-SC): Scope — extensions/excluded dirs,
+# a hot-path filter run on every Edit, deliberately first; failure direction
+# is "scanned something it shouldn't" (latency, false blocks in vendored
+# trees). Control — numbers come from the config dir's .env and NOWHERE
+# else; process.env is never consulted, since `COMMENT_BLOCK_MAX_LINES=999999
+# claude` could otherwise disable the feature silently for the session. The
+# spoof rows are the point: each has a matched .env/ambient pair with
+# opposite meanings, so a hook reading process.env has to move on one.
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

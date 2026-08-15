@@ -2,57 +2,33 @@
 # tests/feature-1894-hook-comment-block.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js, settings.json
 # Tags: comment-block-size, hook, pretooluse, edit-time, shift-left, no-bypass, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Issue #1894 — the Edit-time half of the block, and the half the issue was
-# actually filed for.
-#
-# Why an Edit-time hook exists at all: the pre-commit check already caught these
-# blocks, and roughly 40% of sessions ignored it anyway, so the user ended up
-# pointing at the same thing by hand. A commit-time gate arrives after the file
-# is written, reviewed and staged — the cheapest moment to fix a comment block
-# is the moment it is being written. This hook is the shift-left, and
-# hooks/pre-commit becomes its backstop.
-#
-# The two layers deliberately judge differently (detail plan S3-2, and CPR-SC —
-# two mechanisms, two jobs, so they are tested in two suites):
-#
-#   Edit-time (here)  : PURE ABSOLUTE value on the post-Edit file. A file that
-#                       still contains an over-threshold run is blocked, even if
-#                       this edit did not touch it and even if nothing got worse.
-#   pre-commit (there): baseline-relative. Only a WORSENING blocks, so touching
-#                       one line of a legacy file cannot fail a commit.
-#
-# The absolute rule is the one with teeth and the one with the sharp edge: it
-# means a file carrying an old violation is unwritable until the violation is
-# fixed. That is the accepted design (detail plan Risks #10), so the tests below
-# pin it as a REQUIREMENT rather than tolerating it as a quirk — a later
-# "usability fix" that quietly reintroduces worsening-only judgment has to fail
-# a named test, not slip through.
-#
-# Two properties get their own cases because they are properties of ABSENCE, and
-# absence is what rots silently:
-#   - no bypass. WORKFLOW_OFF / WORKTREE_OFF do not suspend this hook, and the
-#     way that is guaranteed is that the hook never reads marker state at all
-#     (no-bypass.sh, static + behavioural).
-#   - config comes from the config dir's .env, never from process.env, so
-#     an inline `COMMENT_BLOCK_MAX_LINES=999999` in front of whatever spawned
-#     Claude Code cannot lift the bar (filter-and-config.sh).
-#
-# Dispatcher: shared harness + fixtures live here; cases live in
-# tests/feature-1894-hook-comment-block/*.sh (rules/coding/file-split.md).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code actually routes a real Edit through this hook. Every
-#   case here feeds the hook a hand-built PreToolUse payload; registration.sh
-#   checks only that settings.json names the command under the right matcher,
-#   and the deployed ~/.claude/settings.json is assembled by the installer from
-#   base + extension, so a green suite still requires a reinstall to take effect.
-# - Real-world payload shapes emitted by editFiles / NotebookEdit clients: those
-#   are approved by design here, and the pre-commit layer is their only cover.
-# - Latency. The hook runs on every Edit, and "approve quickly" is a stated
-#   design goal that no assertion in this file measures.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+
+# Issue #1894 — Edit-time half of the block, the half the issue was actually
+# filed for. Pre-commit already caught these blocks but ~40% of sessions
+# ignored it, so the user ended up pointing it out by hand; the cheapest fix
+# point is the moment the block is written, not after it's staged. This hook
+# is the shift-left; hooks/pre-commit is its backstop.
+
+# The two layers deliberately judge differently (detail plan S3-2, CPR-SC):
+# Edit-time (here) is PURE ABSOLUTE on the post-Edit file — blocked even if
+# this edit didn't touch the violation and nothing got worse. pre-commit is
+# baseline-relative — only a WORSENING blocks. The absolute rule is the sharp
+# edge: a file with an old violation is unwritable until fixed (accepted,
+# detail plan Risks #10) — pinned as a REQUIREMENT so a later "usability fix"
+# reverting to worsening-only judgment fails a named test.
+
+# Two ABSENCE properties get their own cases: no bypass — WORKFLOW_OFF /
+# WORKTREE_OFF never suspend this hook because it never reads marker state
+# (no-bypass.sh); config comes from the config dir's .env, never
+# process.env, so an inline COMMENT_BLOCK_MAX_LINES can't lift the bar
+# (filter-and-config.sh). Dispatcher: harness here, cases in
+# tests/feature-1894-hook-comment-block/*.sh.
+
+# TL3 gap: whether Claude Code actually routes a real Edit through this hook
+# (cases feed a hand-built payload; registration.sh checks settings.json
+# only); real editFiles/NotebookEdit payload shapes; latency. Mitigation:
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category
+# hook-registration).
 
 set -u
 
@@ -126,17 +102,13 @@ mpath() {
 NEUTRAL_CWD="$TMPDIR_BASE/neutral"
 mkdir -p "$NEUTRAL_CWD"
 
-# ---------------------------------------------------------------------------
 # Payload builder. Hand-writing PreToolUse JSON in bash means quoting file
 # bodies that contain quotes, backslashes and newlines; a builder removes a
-# whole class of test-only bugs.
-#
+# whole class of test-only bugs. Usage:
 #   node payload.js <tool_name> <cwd|-> <file_path|-> [key=value ...]
-#
 # value forms: `@<path>` reads the file, `e<N>.<key>=` fills edits[N],
 # `replace_all=true|false` becomes a boolean, `!<key>=` sets a TOP-LEVEL
 # payload key rather than a tool_input key.
-# ---------------------------------------------------------------------------
 PAYLOAD_JS="$TMPDIR_BASE/payload.js"
 cat > "$PAYLOAD_JS" <<'PAYLOAD'
 const fs = require("fs");
@@ -271,19 +243,15 @@ assert_clean_exit() {
     assert_eq "$1" "0" "$HK_RC"
 }
 
-# ---------------------------------------------------------------------------
-# Side-effect / protection helpers (Codex round-1 C3)
-#
-# A PreToolUse hook advises the tool-use layer; it must never perform the write
-# itself. The verdict assertions above cannot see the difference between a hook
-# that judged a reconstructed buffer and one that judged the file after writing
-# it — and a hook that writes on the Edit hot path is a data-loss bug, not a
-# policy bug. So every verdict row also pins the on-disk state: a file that
-# existed stays byte-identical, and a file that did not exist stays absent.
-#
-# snap_file <path> — "absent" or "present:<cksum> <bytes>". Reads via stdin
-# redirection so the drive-letter (mpath) form works on Windows bash too.
-# ---------------------------------------------------------------------------
+# Side-effect / protection helpers (Codex round-1 C3). A PreToolUse hook
+# advises the tool-use layer; it must never perform the write itself. The
+# verdict assertions above can't distinguish a hook that judged a
+# reconstructed buffer from one that judged the file after writing it — and
+# writing on the Edit hot path is a data-loss bug, not a policy bug. So every
+# verdict row also pins on-disk state: existing files stay byte-identical,
+# absent files stay absent. snap_file <path> -> "absent" or
+# "present:<cksum> <bytes>"; reads via stdin redirection so drive-letter
+# (mpath) paths work on Windows bash too.
 snap_file() {
     local p="$1"
     if [ -e "$p" ]; then

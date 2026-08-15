@@ -2,22 +2,18 @@
 # tests/feature-1894-precommit-comment-block-warn/failopen-placement-static.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size, rules/coding/file-split.md
 # Tags: comment-block-size, pre-commit, hook, fail-open, ordering, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 2 — placement and blast radius, rather than the guard.
-#
-# The conversion to a hard block splits this file's subject in two, and the split
-# is the point (CPR-SC): the section now owns `exit 1`, but ONLY for scanner
-# rc 1. Every other non-zero rc is an outage, not a verdict, and must leave the
-# commit alone with a diagnostic. So the cases below pin, separately:
-#   - the fail-open direction survives (rc 3, and an rc nobody named);
-#   - a clean run is still silent and still cannot abort under `set -u`;
-#   - the section still runs BEFORE the hook's unconditional early exits;
-#   - the section's `exit 1` does not swallow downstream verdicts;
-#   - statically, `exit 1` lives in the rc-1 branch and nowhere else in the
-#     section, and the section reads no session-marker state.
-#
-# Case prefix F (not P): part 1 owns P.
-#
+
+# Part 2 — placement and blast radius, rather than the guard. The conversion
+# to a hard block splits this file's subject in two, deliberately (CPR-SC):
+# the section now owns `exit 1`, but ONLY for scanner rc 1 — every other
+# non-zero rc is an outage, not a verdict, and must leave the commit alone
+# with a diagnostic. Cases pin, separately: fail-open survives (rc 3, an
+# unnamed rc); a clean run stays silent and can't abort under `set -u`; the
+# section runs BEFORE the hook's unconditional early exits; `exit 1` doesn't
+# swallow downstream verdicts; statically, `exit 1` lives only in the rc-1
+# branch and the section reads no session-marker state. Case prefix F (not
+# P): part 1 owns P.
+
 # Sourced by the dispatcher; every helper (run_precommit, make_repo, assert_*)
 # and every shared constant is defined there.
 

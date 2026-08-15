@@ -2,23 +2,17 @@
 # tests/feature-1894-hook-comment-block/registration.sh
 # Tests: settings.json, hooks/block-comment-block-size.js
 # Tags: comment-block-size, hook, pretooluse, settings, registration, wiring, e2e, integration, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 6 — the wiring.
-#
-# Every other case in this suite invokes the hook directly, which proves the
-# hook works and says nothing about whether it ever runs. An unregistered hook
-# is a file that passes its tests and guards nothing, and the failure is silent
-# in the worst way: authors keep writing long comment blocks, the suite stays
-# green, and the only signal is the absence of a signal.
-#
-# G1-G4 read settings.json as data, which is what it is. G5 then EXECUTES the
-# command string it found there as a child process and validates the response
-# against the PreToolUse protocol — the integration half required for a
-# hook-registration change (rules/test.md). What remains beyond even that is
-# whether Claude Code itself routes an Edit into the hook (the TL3 gap the
-# dispatcher records, along with the fact that ~/.claude/settings.json is
-# assembled by the installer and therefore needs a reinstall to take effect).
-#
+
+# Part 6 — the wiring. Every other case invokes the hook directly, which
+# proves it works but says nothing about whether it ever runs; an
+# unregistered hook passes its tests and guards nothing, silently — authors
+# keep writing long blocks, the suite stays green. G1-G4 read settings.json
+# as data; G5 EXECUTES the command string it found as a child process and
+# validates the response against the PreToolUse protocol — the integration
+# half a hook-registration change requires (rules/test.md). Beyond that:
+# whether Claude Code itself routes an Edit into the hook (TL3 gap — also,
+# ~/.claude/settings.json is installer-assembled and needs a reinstall).
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 REG_JS="$TMPDIR_BASE/reg.js"
@@ -133,30 +127,20 @@ g4_target_exists_and_runs() {
     fi
 }
 
-# ============================================================================
 # G5 — the registered command line, run as a process, answers in the host
-#      protocol (Codex round-1 C1)
-#
-# G1-G3 read settings.json as data and every other case in this suite invokes
-# `node <path-to-hook>` that the TEST composed. Between those two sits the thing
-# that actually runs in production: the command STRING settings.json carries.
-# A registration that names a typo'd path, forgets `node`, or quotes badly is
-# green under both halves and dead in the field; so is a hook that answers with
-# a bare "block" line, a stray console.log before its JSON, or a non-zero exit
-# (Claude Code surfaces that as a hook error on every keystroke, not a verdict).
-#
-# This case therefore takes the command verbatim from settings.json, expands
-# only $AGENTS_CONFIG_DIR — to the worktree under test for the executable, while
-# the child still resolves its .env from the pinned fixture config dir — and
-# hands it a real PreToolUse payload on stdin through `bash -c`, so the host's
-# own tokenisation is exercised rather than an argv the test hand-assembled.
-# Both verdicts are proven, because a hook stuck on either one is still "valid
-# JSON" to a parser.
-#
-# TL3 gap: this proves the registered command is runnable and protocol-correct.
-# Whether Claude Code itself dispatches an Edit into it is still only checkable
-# on a real host (see the dispatcher header).
-# ============================================================================
+# protocol (Codex round-1 C1). G1-G3 read settings.json as data, and every
+# other case invokes `node <path-to-hook>` composed by the TEST; between
+# those sits what actually runs in production — the command STRING
+# settings.json carries. A typo'd path, missing `node`, or bad quoting is
+# green under both halves and dead in the field; so is a bare "block" line,
+# a stray console.log before JSON, or a non-zero exit (Claude Code surfaces
+# that as a hook error, not a verdict).
+
+# This case takes the command verbatim from settings.json, expands only
+# $AGENTS_CONFIG_DIR to the worktree under test, and hands it a real payload
+# on stdin through `bash -c`, exercising the host's own tokenisation. TL3
+# gap: proves the command is runnable and protocol-correct; whether Claude
+# Code dispatches an Edit into it is only checkable on a real host.
 E2E_JS="$TMPDIR_BASE/verdict.js"
 cat > "$E2E_JS" <<'E2EJS'
 // Validates one PreToolUse hook response. Prints "OK <decision> <reasonLen>"

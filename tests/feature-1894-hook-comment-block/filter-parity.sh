@@ -2,28 +2,17 @@
 # tests/feature-1894-hook-comment-block/filter-parity.sh
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size
 # Tags: comment-block-size, parity, drift, ssot, static-guard, dual-representation, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 7 — the drift net for a duplication that is deliberate.
-#
-# Approach A moved the SCAN CORE into Node so the CLI and the Edit-time hook
-# share one implementation. It did NOT move the file-level filter rules — which
-# extensions count as code, which path segments are skipped. Those stay written
-# twice: once in bash (`path_ok()` and the `CODE_FILE_EXTENSIONS` default in
-# bin/review-comment-block-size) and once in Node (EXCLUDED_PATH_SEGMENTS and
-# parseExtensions' default). That is a decision, not an oversight: the filter
-# runs once per FILE while the scan core runs once per LINE, so keeping it in
-# bash costs nothing on the hot path, and a runtime handshake would add a node
-# spawn to every CLI invocation to remove a duplication that changes maybe once
-# a year (detail plan C7).
-#
-# The cost of that decision is drift, and the plan is explicit that THIS FILE is
-# the only thing standing against it. If the two lists diverge, nothing fails at
-# runtime — a file gets scanned by the commit gate and skipped by the Edit gate,
-# or vice versa, and the two layers quietly disagree about what the rules are.
-# So the assertions below are deliberately literal and set-based rather than
-# "contains": a value added on one side only must fail here.
-#
-# Sourced by the dispatcher; all helpers are defined there.
+
+# Part 7 — drift net for a deliberate duplication. Approach A moved the SCAN
+# CORE into Node so the CLI and Edit-time hook share one implementation, but
+# NOT the file-level filter rules (scannable extensions, skipped path
+# segments): those stay written twice — bash (`path_ok()`, the
+# CODE_FILE_EXTENSIONS default) and Node (EXCLUDED_PATH_SEGMENTS,
+# parseExtensions' default) — since the filter runs once per FILE, the core
+# once per LINE, and a handshake would cost a node spawn per CLI call to
+# dedupe something that changes ~yearly (detail plan C7). This file is the
+# only drift net: divergence fails silently at runtime, so assertions here
+# are literal and set-based, not "contains".
 
 PARITY_JS="$TMPDIR_BASE/parity.js"
 cat > "$PARITY_JS" <<'PARJS'

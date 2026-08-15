@@ -1,20 +1,10 @@
 #!/usr/bin/env node
 // bin/review-comment-block-size.d/scan-cli.js
-//
-// Thin stdin/stdout adapter between the bash CLI (bin/review-comment-block-size,
-// via review-comment-block-size.d/scan.sh) and the scan core in
-// hooks/lib/comment-block-scan.js. It exists so the bash side keeps the git
-// plumbing while comment recognition lives in exactly one implementation.
-//
+// stdin/stdout adapter between the bash CLI and hooks/lib/comment-block-scan.js.
 // Usage:  node scan-cli.js --threshold <N>  < <blob-or-file>
-// Stdout: one "<start> <end> <len>" line per run longer than <N>; nothing when
-//         there are no findings. This is the same shape the awk core printed,
-//         so scan_tally() reads it unchanged.
-// Exit:   0 = scanned (with or without findings)
-//         2 = usage error (missing / non-numeric threshold, no arguments)
-//         1 is RESERVED for the blocking verdict at the CLI layer and must
-//           never be returned here — a bash caller treats any other non-zero rc
-//           as "scanner failed" and fails open.
+// Stdout: one "<start> <end> <len>" line per over-threshold run (shape scan_tally() expects).
+// Exit: 0 = scanned, 2 = usage error. 1 is reserved for the CLI-layer blocking
+// verdict — never return it here, or a bash caller reads it as "scanner failed".
 "use strict";
 
 const fs = require("fs");

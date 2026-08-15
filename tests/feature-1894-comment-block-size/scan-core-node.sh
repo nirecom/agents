@@ -2,29 +2,20 @@
 # tests/feature-1894-comment-block-size/scan-core-node.sh
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, parser, node, table-driven, ssot, parity, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Approach A moves the scan core out of awk and into Node, so that the Edit-time
-# PreToolUse hook can call it in-process while the bash CLI reaches it through a
-# thin stdin/stdout adapter. That makes hooks/lib/comment-block-scan.js the
-# implementation SSOT for comment recognition (CPR-SSOT), and this file is its
-# direct unit surface.
-#
-# Why it is separate from scanner-core.sh even though the case table is the
-# same: scanner-core.sh observes the core THROUGH the bash CLI, so a drift
-# introduced by the port shows up there only where the CLI happens to expose it
-# (one number per file, staged files only, over-threshold runs only). Here the
-# module is called directly, so the run list, the run boundaries and the
-# sub-threshold state are all observable. Both are needed — the pair is what
-# makes the awk to JS port checkable in either direction (CPR-E2E).
-#
-# TL3 gap (what this test does NOT catch):
-# - Real Edit-time latency: the whole point of putting the core in-process is to
-#   keep it off the hot path, and nothing here measures that.
-# - Whether the module stays require-able from BOTH consumers after packaging /
-#   installation (deployed $HOME/.claude copy vs worktree copy).
-# - Byte sequences a real editor writes that mktemp fixtures never produce
-#   (UTF-16 files, mixed CRLF/LF within one file at scale).
-# Closest-to-action mitigation: the bash-side parity table in scanner-core.sh
+
+# Approach A moves the scan core out of awk and into Node, so the Edit-time
+# PreToolUse hook calls it in-process while the bash CLI reaches it through a
+# thin stdin/stdout adapter — hooks/lib/comment-block-scan.js is the SSOT for
+# comment recognition (CPR-SSOT), and this file is its direct unit surface.
+# Separate from scanner-core.sh even though the case table matches: that file
+# observes the core THROUGH the bash CLI (one number/file, staged only,
+# over-threshold only); here the module is called directly, so run list,
+# boundaries and sub-threshold state are all observable — the pair makes the
+# awk-to-JS port checkable in either direction (CPR-E2E).
+
+# TL3 gap: real Edit-time latency (unmeasured here), require-ability from
+# both consumers post-packaging, and editor byte sequences mktemp fixtures
+# don't produce (UTF-16, mixed CRLF/LF at scale). Mitigation: scanner-core.sh
 # runs the same recognition rules through the real CLI on every run.
 
 echo ""

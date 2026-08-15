@@ -2,20 +2,17 @@
 # tests/feature-1894-precommit-comment-block-warn/guard-and-killswitch.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, guard, kill-switch, argv, worktree, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 1 — who decides whether the section runs at all.
-#
-# Two independent conditions must BOTH hold: (a) the repo being committed to is
-# the agents session repo, and (b) the scanner exists and is executable. Each
-# verdict is pinned on its own (CPR-ORTH), and every case also asserts the argv
-# the hook handed the scanner — "silent" must mean "not invoked", not "invoked
-# and happened to print nothing".
-#
-# Now that the section blocks, a third question joins them: whether the kill
-# switch can be flipped by whoever is running `git commit`. It must not be —
-# COMMENT_BLOCK_ENFORCE is read from the config dir's .env only, so P05 drives
-# both the honest path (.env) and the spoof (ambient shell variable).
-#
+
+# Part 1 — who decides whether the section runs at all. Two independent
+# conditions must BOTH hold: (a) the repo being committed to is the agents
+# session repo, and (b) the scanner exists and is executable — each pinned
+# separately (CPR-ORTH), with every case also asserting the argv handed to
+# the scanner, since "silent" must mean "not invoked", not "invoked and
+# printed nothing". A third question: whether the kill switch can be
+# flipped by whoever runs `git commit` — it must not be, COMMENT_BLOCK_ENFORCE
+# reads from the config dir's .env only, so P05 drives both the honest path
+# and the ambient spoof.
+
 # Sourced by the dispatcher; all helpers and constants are defined there.
 
 # ============================================================================

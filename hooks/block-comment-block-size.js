@@ -1,32 +1,15 @@
 #!/usr/bin/env node
 // PreToolUse hook: refuse an Edit/Write that leaves an over-threshold run of
-// consecutive comment lines in a code file (issue #1894).
-//
-// Why at Edit time: bin/review-comment-block-size already reports these runs at
-// commit time, and the report arrives after the file has been written, read back
-// and staged. The cheapest moment to compress a comment block is the moment it
-// is being written, so this hook is the shift-left and hooks/pre-commit is its
-// backstop.
-//
-// Judgment is the POST-edit file, in absolute terms: a file that still carries
-// an over-threshold run is refused even when this edit did not touch it and even
-// when nothing got worse. Comparing post against pre would pass a file that
-// already had a 12-line block and gains a second 11-line block elsewhere. The
-// commit-time layer judges baseline-relative instead, deliberately (CPR-SC).
-//
-// Two properties are guaranteed by omission, and both are load-bearing:
-//   - No escape hatch. This hook never consults session escape state of any
-//     kind; the guarantee is that it never asks (see tests/
-//     feature-1894-hook-comment-block/no-bypass.sh).
-//   - No config from the ambient environment. Every setting comes from the
-//     config dir's .env via readDefaultEnvFile(); anything on process.env was
-//     set by whatever launched Claude Code, so honouring it would make the
-//     whole feature a one-word disable.
-//
-// Fail-open everywhere: an unreadable file, an unreconstructable payload or an
-// unexpected shape approves. A wrong approve loses one shift-left catch that
-// the commit gate still makes; a wrong block stops an author writing a file for
-// a reason that is not true, with no override anywhere.
+// consecutive comment lines in a code file (issue #1894) — the shift-left
+// companion to hooks/pre-commit's backstop scan.
+// Judgment is the POST-edit file in absolute terms, not diff-relative: a file
+// that still carries an over-threshold run is refused even when this edit
+// didn't touch it (commit-time layer is baseline-relative instead, CPR-SC).
+// Deliberately reads no session escape-hatch state — never bypassable, see
+// tests/feature-1894-hook-comment-block/no-bypass.sh — and config comes only
+// from the config dir's .env, never process.env (ambient trust would make
+// the whole feature a one-word disable). Fails open on any unreadable file,
+// unreconstructable payload, or unexpected shape.
 "use strict";
 
 const fs = require("fs");

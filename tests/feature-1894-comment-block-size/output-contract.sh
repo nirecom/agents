@@ -2,25 +2,16 @@
 # tests/feature-1894-comment-block-size/output-contract.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, cli, exit-code, guards, idempotency, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 4 — the output/exit-code contract the pre-commit hook depends on.
-#
-# The rc contract after the WARN→BLOCK conversion:
-#   0 = performed with nothing to block, or skipped
-#   1 = --staged found at least one BLOCK finding  (NEW — this is the commit
-#       -blocking verdict hooks/pre-commit propagates)
-#   2 = reserved, never returned
-#   3 = internal error (ERRC > 0, or the scan could not run)
-#
-# rc 1 is the load-bearing change: hooks/pre-commit previously treated ANY
-# non-zero rc as "advisory check incomplete, continue", so a run that starts
-# returning 1 must be distinguishable from a run that returns 3, or a broken
-# scanner and a genuine violation become the same event to the committer.
-# --all keeps rc 0 with findings — it is the whole-tree inventory, not a gate.
-#
-# raw_cb (no BASE_ENV seed) is defined by the dispatcher, so the built-in
-# default branches here are exercised through the same .env routing as every
-# other invocation.
+
+# Part 4 — output/exit-code contract the pre-commit hook depends on. rc: 0 =
+# nothing to block or skipped; 1 = --staged found a BLOCK finding (NEW —
+# commit-blocking verdict hooks/pre-commit propagates); 2 = reserved, never
+# returned; 3 = internal error. rc 1 is load-bearing: hooks/pre-commit used
+# to treat any non-zero rc as "advisory incomplete, continue", so 1 must be
+# distinguishable from 3, or a broken scanner and a real violation look
+# identical to the committer. --all stays rc 0 with findings (inventory, not
+# a gate). raw_cb (no BASE_ENV seed) exercises the built-in default branches
+# through the same .env routing as every other invocation.
 
 opad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "code_$i=$i"; done; }
 ocm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }

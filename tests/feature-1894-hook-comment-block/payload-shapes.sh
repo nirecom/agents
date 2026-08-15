@@ -2,22 +2,18 @@
 # tests/feature-1894-hook-comment-block/payload-shapes.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/write-tools.js
 # Tags: comment-block-size, hook, pretooluse, payload, multiedit, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
-#
+
 # Part 2 — reconstructing the post-edit file from the payload.
-#
-# decision-boundary.sh assumes the hook knows what the file will look like after
-# the tool runs. Producing that is the hook's most failure-prone job: it has to
-# reimplement each tool's own semantics (first-match vs all-matches replacement,
-# sequential MultiEdit application) from a JSON payload, and it has to do so
-# before the tool has run, with no way to check its answer.
-#
-# So every branch of that reconstruction gets a row, and every row it CANNOT
-# reconstruct gets an approve row. The direction is not symmetric on purpose: a
-# hook that guesses wrong and approves loses a shift-left catch that pre-commit
-# still makes; a hook that guesses wrong and blocks stops an author from writing
-# a file for a reason that is not true, with no override anywhere. Uncertainty
-# resolves to approve (detail plan S3-1 steps 2, 8 and 11).
-#
+# decision-boundary.sh assumes the hook knows what the file looks like after
+# the tool runs; producing that is the most failure-prone job here — it must
+# reimplement each tool's semantics (first-match vs all-matches, sequential
+# MultiEdit) from JSON, before the tool runs, with no way to check its
+# answer. Every reconstructible branch gets a row; every branch it CANNOT
+# reconstruct gets an approve row — asymmetric on purpose: guessing wrong and
+# approving only loses a shift-left catch pre-commit still makes, guessing
+# wrong and blocking stops a valid write with no override. Uncertainty
+# resolves to approve (detail plan S3-1 steps 2, 8, 11).
+
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

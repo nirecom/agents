@@ -2,28 +2,25 @@
 # tests/feature-1894-comment-block-size/config-hostility.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, glob, extensions, scan-scope, tmpdir, quoting, trap, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 9 — the two environment values the scanner treats as syntax rather than
-# as data. Split out of injection-hardening.sh only to stay inside the 300-line
-# file-split WARN (rules/coding/file-split.md); same fail-before-fix batch.
-#
-# C1/C2 (F4): review finding F4 read ext_ok's `[[ "$p" == *".$e" ]]` as leaving
-# $e unquoted on the pattern side, i.e. as letting a configured extension act as
-# a glob and silently widen the scan to files nobody meant to hand to a scanner.
-# It does not: the double quotes open before the `.` and close after `$e`, and a
-# quoted region of a [[ ]] pattern is matched LITERALLY, so only the leading `*`
-# is a wildcard. These cases are therefore a REGRESSION PIN, not a fail-before-
-# fix: they pass against the unfixed scanner and start failing the moment the
-# quotes are dropped — which is precisely the edit a mis-aimed F4 fix would make.
-# Both directions are pinned for that reason (CPR-ORTH): a metacharacter must
-# not widen the scan, AND it must still match a name that literally contains it.
-#
-# C3 (F3): run_staged builds its cleanup trap by string interpolation —
-# `trap "rm -f '$list'" EXIT` — so a single quote anywhere in $TMPDIR turns the
-# trap body into unbalanced shell source. It is re-parsed at exit, i.e. after all
-# real work, which is exactly why it fails quietly: a stale temp file per commit
-# and a shell diagnostic on stderr that no assertion has ever looked for.
-#
+
+# Part 9 — env values the scanner treats as syntax rather than data. Split
+# out of injection-hardening.sh to stay inside the 300-line file-split WARN
+# (rules/coding/file-split.md); same fail-before-fix batch.
+
+# C1/C2 (F4): F4 read ext_ok's `[[ "$p" == *".$e" ]]` as leaving $e unquoted,
+# letting a configured extension act as a glob and widen the scan. It does
+# not — the quotes span `.` through `$e`, and a quoted [[ ]] pattern region
+# matches literally, so only the leading `*` is a wildcard. These are a
+# REGRESSION PIN, not fail-before-fix: they pass against the unfixed scanner
+# and break the moment the quotes are dropped, i.e. the mis-aimed fix (CPR-
+# ORTH: pin both that a metachar can't widen the scan and can still match
+# literally).
+
+# C3 (F3): run_staged's cleanup trap is string-interpolated —
+# `trap "rm -f '$list'" EXIT` — so a single quote in $TMPDIR unbalances it;
+# it's re-parsed at exit, after real work, so it fails quietly: a stale temp
+# file and an unchecked stderr diagnostic.
+
 # Sourced by the dispatcher; every helper and constant is defined there.
 
 cpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "c_$i=$i"; done; }
@@ -142,21 +139,14 @@ else
     skip "C3: this platform refuses a directory name containing a single quote — trap-quoting unverified"
 fi
 
-# ---------------------------------------------------------------------------
-# C6/C7 — ambient environment must never reach a verdict (S2-4 / C5)
-# ---------------------------------------------------------------------------
-# The two knobs that decide whether a commit is blocked are resolved from the
-# config dir's .env and from nowhere else. The reason is not tidiness: an author
-# who can turn the gate off by exporting a variable in the shell that runs
-# `git commit` has an undocumented bypass, and the pre-commit backstop is the
-# layer that is supposed to have none. run_cb / run_cb_ambient cannot express
-# this on their own — both write the caller's value into the .env as well — so
-# the two sides are set independently here: honest value in the file, hostile
-# value in the environment.
-#
-# Each hostile row is paired with a control that sets the SAME key through the
-# .env. Without the pair, a scanner that ignored the knob entirely would pass
-# the hostile row for the wrong reason.
+# C6/C7 — ambient environment must never reach a verdict (S2-4 / C5). The two
+# knobs deciding whether a commit is blocked resolve from the config dir's
+# .env and nowhere else: an author who can turn the gate off by exporting a
+# shell var has an undocumented bypass, and pre-commit is supposed to have
+# none. run_cb / run_cb_ambient can't express this alone (both also write to
+# .env), so honest value in the file / hostile value in the environment are
+# set independently here. Each hostile row is paired with a control on the
+# same key via .env, so a scanner that ignores the knob doesn't pass by luck.
 run_cb_split() {
     local repo="$1" dotenv="$2" ambient="$3"; shift 3
     [ "${1:-}" = "--" ] && shift
