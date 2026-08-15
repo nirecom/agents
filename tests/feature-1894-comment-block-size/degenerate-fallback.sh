@@ -3,19 +3,12 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, staged, git, merge, fallback, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 3 — baseline resolution when HEAD cannot supply one.
-#
-# Resolution order: HEAD:./<src> -> in-progress heads (MERGE_HEAD up to 8 lines,
-# CHERRY_PICK_HEAD, REVERT_HEAD, REBASE_HEAD) -> absolute-state fallback.
-#
-# Two properties are deliberately separated here (CPR-SC):
-#   * the fallback is UNCONDITIONAL — an in-progress merge never suppresses it;
-#   * an in-progress head is header-INFORMATIONAL, but its blob is still a real
-#     baseline when it has one.
-# When one path exists on more than one candidate, the ORDER above is the whole
-# observable — D3 stages such a path with candidates that disagree.
-# A blob that exists but cannot be read is an ERROR (rc 3), never degenerate —
-# on the baseline side (D4) and on the staged side (D5) alike.
+# Part 3 — baseline resolution when HEAD supplies none: HEAD:./<src> -> in-progress
+# heads (MERGE_HEAD/CHERRY_PICK_HEAD/REVERT_HEAD/REBASE_HEAD) -> absolute-state
+# fallback. Fallback is UNCONDITIONAL regardless of in-progress state (CPR-SC);
+# an in-progress head is header-informational but its blob is a real baseline.
+# Order matters when a path exists on multiple candidates (see D3). An unreadable
+# existing blob is always an ERROR (rc 3), never degenerate (D4 baseline, D5 staged).
 
 fpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "code_$i=$i"; done; }
 fcm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }

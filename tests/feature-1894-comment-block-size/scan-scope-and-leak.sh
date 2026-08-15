@@ -4,15 +4,10 @@
 # Tags: comment-block-size, scan-scope, gitignore, symlink, leak, empty-index, scope:issue-specific, scope:feature-1894, layer:TL2
 #
 # Part 6 — what the scanner is allowed to look at, and what it is allowed to
-# say about it.
-#
-# Two concerns share this file because both are about the boundary of the
-# report rather than its arithmetic (CPR-SC): which files enter the scan, and
-# which bytes are permitted to leave it.
-#
-# --all is the mode with a traversal of its own, so it gets the scope cases:
-# which files it walks (O11), how it treats modified / excluded / out-of-repo
-# entries (O13), and what it prints when nothing is eligible at all (O14).
+# say about it. Two concerns share this file: the report's boundary, not its
+# arithmetic (CPR-SC) — which files enter the scan, and which bytes may leave
+# it. --all has its own traversal, so it gets the scope cases: files walked
+# (O11), modified/excluded/out-of-repo handling (O13), nothing-eligible output (O14).
 
 lpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "l_$i=$i"; done; }
 lcm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }

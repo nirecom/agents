@@ -4,17 +4,10 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, paths, quoting, injection, unicode, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 5 — staged paths that are hostile to a shell.
-#
-# The scanner reads its file list with `git -c core.quotePath=false diff -z ...`
-# and re-reads blobs with `git show ":./<path>"` precisely so that a space, a
-# leading hyphen, a shell metacharacter or a non-ASCII byte in a filename stays
-# data instead of becoming syntax. Every one of those choices is invisible in
-# normal fixtures, so they get their own cases here: a path must be scanned
-# correctly, and must never be interpreted.
-#
-# `git show ":./<path>"` is also what makes a leading hyphen safe — the `:./`
-# prefix keeps the path from being read as an option.
+# Part 5 — staged paths hostile to a shell. The scanner reads its file list with
+# `git -c core.quotePath=false diff -z ...` and re-reads blobs via `git show
+# ":./<path>"`, keeping a space, leading hyphen, shell metacharacter, or non-ASCII
+# byte in a filename as data, never syntax; `:./` is what makes a leading hyphen safe.
 
 spad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "s_$i=$i"; done; }
 scm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }

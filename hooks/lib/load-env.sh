@@ -2,13 +2,8 @@
 # hooks/lib/load-env.sh
 #
 # Bash-side .env loader shared by git hooks. Mirrors hooks/lib/load-env.js.
-#
 # Source-only; defines exactly one function so a test can exercise it without
-# also executing an entrypoint's side effects.
-#
-#   . "$(dirname "$0")/lib/load-env.sh"
-#   _load_env_file
-#
+# entrypoint side effects. Usage: `. "$(dirname "$0")/lib/load-env.sh"; _load_env_file`.
 # Config dir resolution: $AGENTS_CONFIG_DIR, else $_cfg_dir when the sourcing
 # entrypoint already resolved one, else this file's grandparent directory.
 # Existing environment values always win over .env.

@@ -3,19 +3,9 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, injection, command-substitution, spoofing, leak, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 7 — hostile bytes INSIDE a scanned file.
-#
-# special-paths.sh covers hostile file NAMES; this file covers hostile file
-# CONTENT. They are different attack surfaces and different code (CPR-SC): a
-# name reaches the scanner as an argument to git, while content reaches it as
-# blob text that gets counted, sliced and — for the pre-commit hook — pattern
-# matched. Two properties follow, and neither is visible in normal fixtures:
-#
-#   (1) blob text is DATA. A comment body carrying `$(...)` or backticks must
-#       never be evaluated, however the scanner reads the blob.
-#   (2) blob text is not REPORT. A comment body carrying a line that looks like
-#       the scanner's own `WARN: ` output must not be able to pose as a finding.
-#
+# Part 7 — hostile bytes INSIDE a scanned file (special-paths.sh covers hostile
+# NAMES instead, CPR-SC). Two properties: blob text is DATA (never evaluate
+# `$(...)`/backticks) and not REPORT (a `WARN: `-mimicking comment must not pose as a finding).
 # Sourced by the dispatcher; every helper and constant is defined there.
 
 hpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "h_$i=$i"; done; }

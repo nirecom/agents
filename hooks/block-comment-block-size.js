@@ -1,15 +1,12 @@
 #!/usr/bin/env node
-// PreToolUse hook: refuse an Edit/Write that leaves an over-threshold run of
-// consecutive comment lines in a code file (issue #1894) — the shift-left
-// companion to hooks/pre-commit's backstop scan.
-// Judgment is the POST-edit file in absolute terms, not diff-relative: a file
-// that still carries an over-threshold run is refused even when this edit
-// didn't touch it (commit-time layer is baseline-relative instead, CPR-SC).
-// Deliberately reads no session escape-hatch state — never bypassable, see
-// tests/feature-1894-hook-comment-block/no-bypass.sh — and config comes only
-// from the config dir's .env, never process.env (ambient trust would make
-// the whole feature a one-word disable). Fails open on any unreadable file,
-// unreconstructable payload, or unexpected shape.
+// PreToolUse hook: refuse an Edit/Write leaving an over-threshold run of
+// consecutive comment lines in a code file (issue #1894) — shift-left
+// companion to hooks/pre-commit's backstop scan. Judgment is the POST-edit
+// file in absolute terms, not diff-relative (commit-time layer is baseline-
+// relative instead, CPR-SC). Never bypassable — no session escape-hatch state
+// read (tests/feature-1894-hook-comment-block/no-bypass.sh); config comes only
+// from the config dir's .env, never process.env. Fails open on any unreadable
+// file, unreconstructable payload, or unexpected shape.
 "use strict";
 
 const fs = require("fs");

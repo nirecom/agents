@@ -3,22 +3,10 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, injection, control-bytes, escaping, spoofing, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 8 — untrusted strings that the report PRINTS.
-#
-# hostile-content.sh covers bytes the scanner READS (blob text); special-paths.sh
-# covers names it PASSES TO GIT. This file covers the third surface (CPR-SC): the
-# two untrusted strings the report interpolates into its own stdout — the path
-# (F1) and $CODE_FILE_EXTENSIONS (F5).
-#
-# Why it matters: the scanner reads its file list with `git ... diff -z` /
-# `ls-files -z`, which emit raw path bytes and ignore core.quotePath by design.
-# A path is therefore attacker-controlled bytes with no escaping anywhere, and
-# the report's grammar is line-oriented (`^WARN: `, `^ERROR: `, the header) — the
-# same grammar hooks/pre-commit greps. A filename carrying LF can append a line
-# that reads as a finding; one carrying ESC can repaint a terminal. The contract
-# asserted here: every control byte leaves as \xHH with UPPERCASE hex, and a
-# literal backslash is NOT escaped (SP1's `back\slash.sh` must stay verbatim).
-#
+# Part 8 — untrusted strings the report PRINTS (third surface, CPR-SC): path (F1)
+# and $CODE_FILE_EXTENSIONS (F5) interpolated into stdout. `git ... -z` emits raw
+# bytes; the line-oriented grammar (`^WARN: `, `^ERROR: `) lets an LF forge a
+# finding and ESC repaint a terminal. Escaping: \xHH uppercase hex; literal `\` stays (SP1 pin).
 # Sourced by the dispatcher; every helper and constant is defined there.
 
 ipad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "i_$i=$i"; done; }
@@ -38,16 +26,12 @@ assert_no_ctrl_bytes() {
 cb_count_re() { printf '%s\n' "$CB_OUT" | grep -cE "$1" || true; }
 
 # stage_blob_path <repo> <path> — record an over-threshold blob in the index at
-# exactly the byte sequence <path>, without touching the filesystem.
-#
-# make_special (special-paths.sh) is the filesystem route and stays correct when
-# a case needs a real file (--all walks the worktree). Staged mode reads only the
-# index, so this route additionally covers hosts whose FILESYSTEM refuses a byte
-# that git's index accepts — on Windows/MSYS that is every control byte, and
-# without it the entire finding would self-skip there, i.e. never run at all.
-# The guard is deliberately the same one make_special uses: read the index back
-# NUL-delimited and require a byte-identical entry. Anything else (a remap, a
-# rejection, a quoted spelling) returns 1 so the caller SKIPs with a reason.
+# exactly the byte sequence <path>, without touching the filesystem. Unlike
+# make_special (special-paths.sh, the filesystem route), staged mode reads only
+# the index, so this additionally covers hosts whose FILESYSTEM refuses a byte
+# git's index accepts (every control byte on Windows/MSYS) — without it that
+# finding would never run there. Guard matches make_special's: read the index
+# back NUL-delimited and require a byte-identical entry, else SKIP with a reason.
 stage_blob_path() {
     local repo="$1" fn="$2" sha entry
     sha="$( { ipad 2; icm 12 note; } | git -C "$repo" hash-object -w --stdin 2>/dev/null )" || return 1
