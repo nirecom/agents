@@ -311,3 +311,7 @@ Changes: Three rules files that used to occupy every session's context — the t
 ### FEATURE: PR #2023 (2026-08-16)
 Background: feat: block comment blocks over threshold at edit time and commit tim...
 Changes: Added a gate that blocks edits and commits with overly long comment blocks (tune via `COMMENT_BLOCK_MAX_LINES`/`COMMENT_BLOCK_ENFORCE`).
+
+### FEATURE: PR #2024 (2026-08-16)
+Background: fix(review-code-codex): replace flat line-cap truncation with path-pr...
+Changes: `review-code-codex` no longer truncates at a flat line cap that could skip every intended change in a large diff — it now allocates the review budget per changed path so committed, uncommitted, and untracked changes all get proportional coverage.;Fixed an off-by-one in the `CODEX_REVIEW_MAX_DIFF_LINES` budget so the configured limit is applied exactly.
