@@ -2,32 +2,19 @@
 # tests/feature-1894-comment-block-size/output-contract.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, cli, exit-code, guards, idempotency, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Part 4 — the output/exit-code contract the pre-commit hook depends on.
-#
-# rc 0 = performed or skipped (findings never change it), rc 3 = internal error.
-# rc 1 and rc 2 are RESERVED and must never be returned: hooks/pre-commit treats
-# any non-zero rc as "advisory check incomplete", and a findings-driven rc 1
-# would turn an advisory notice into a permanent false alarm.
+
+# Part 4 — output/exit-code contract the pre-commit hook depends on. rc: 0 =
+# nothing to block or skipped; 1 = --staged found a BLOCK finding (NEW —
+# commit-blocking verdict hooks/pre-commit propagates); 2 = reserved, never
+# returned; 3 = internal error. rc 1 is load-bearing: hooks/pre-commit used
+# to treat any non-zero rc as "advisory incomplete, continue", so 1 must be
+# distinguishable from 3, or a broken scanner and a real violation look
+# identical to the committer. --all stays rc 0 with findings (inventory, not
+# a gate). raw_cb (no BASE_ENV seed) exercises the built-in default branches
+# through the same .env routing as every other invocation.
 
 opad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "code_$i=$i"; done; }
 ocm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }
-
-# raw_cb <repo> [VAR=VAL ...] -- [cli args ...]
-# Same as run_cb but WITHOUT the BASE_ENV pins. It still starts from
-# CB_ENV_RESET, so every config variable the caller does not name is genuinely
-# unset in the child — that is what makes the "variable absent" branches real
-# instead of "whatever the developer's .env holds".
-raw_cb() {
-    local repo="$1"; shift
-    local -a pre=("${CB_ENV_RESET[@]}")
-    while [ $# -gt 0 ] && [ "$1" != "--" ]; do pre+=("$1"); shift; done
-    [ "${1:-}" = "--" ] && shift
-    local errfile="$TMPDIR_BASE/cb.err"
-    CB_RC=0
-    CB_OUT="$( (cd "$repo" && run_with_timeout 60 env "${pre[@]}" bash "$SCRIPT" "$@") 2>"$errfile" )" || CB_RC=$?
-    CB_ERR="$(cat "$errfile" 2>/dev/null || true)"
-}
 
 OREPO="$(new_repo outc)"
 { opad 5; ocm 12 note; } > "$OREPO/one.sh"
@@ -50,7 +37,7 @@ while IFS='|' read -r name args; do
         *) got="$got_head" ;;
     esac
     assert_eq "O1/$name-header" "skipped" "$got"
-    assert_eq "O1/$name-rc" "0" "$CB_RC"
+    cb_expect_rc "O1/$name-rc"
 done <<'TABLE'
 no-args           |
 staged-and-all    | --staged --all
@@ -69,7 +56,7 @@ run_cb "$OREPO" -- --all
 assert_eq "O2/header" "## Comment-block Size Review: PERFORMED (all-scan mode)" "$(cb_header)"
 assert_contains "O2/finding-shape" \
     "longest comment run 15 lines (2 runs over threshold)" "$CB_OUT"
-assert_eq "O2/rc" "0" "$CB_RC"
+cb_expect_rc "O2/rc"
 rm -f "$OREPO/allscan.sh"
 
 # ---------------------------------------------------------------------------
@@ -120,10 +107,10 @@ assert_eq "O6/removed-knob-cannot-narrow" "1" "$(cb_warn_count)"
 
 # With nothing pinned the built-in default applies, and the removed variable
 # cannot stand in for it either.
-raw_cb "$EXTR" "COMMENT_BLOCK_WARN_LINES=10" -- --staged
+raw_cb "$EXTR" "COMMENT_BLOCK_MAX_LINES=10" -- --staged
 assert_eq "O6/built-in-default-includes-sh" "1" "$(cb_warn_count)"
 assert_contains "O6/built-in-default-listed-in-summary" "(extensions: js;sh;py;" "$CB_OUT"
-raw_cb "$EXTR" "COMMENT_BLOCK_FILE_EXTENSIONS=js" "COMMENT_BLOCK_WARN_LINES=10" -- --staged
+raw_cb "$EXTR" "COMMENT_BLOCK_FILE_EXTENSIONS=js" "COMMENT_BLOCK_MAX_LINES=10" -- --staged
 assert_eq "O6/removed-knob-cannot-replace-the-default" "1" "$(cb_warn_count)"
 
 # ---------------------------------------------------------------------------
@@ -142,19 +129,51 @@ assert_eq "O7/rc-identical" "$FIRST_RC" "$CB_RC"
 assert_eq "O7/index-untouched" "$IDX_BEFORE" "$IDX_AFTER"
 
 # ---------------------------------------------------------------------------
-# O8 — reserved exit codes are never used
+# O8 — the rc contract, asserted with literals
+#
+# This is the case that OWNS rc, so nothing here goes through cb_expect_rc:
+# deriving the expectation from the same run would let a mode that stopped
+# blocking pass silently. Every value in the contract gets a row, including the
+# two "not this one" directions (rc 2 never appears; rc 1 never appears without
+# findings and never appears in --all).
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== O8: rc 1 / rc 2 are reserved ==="
+echo "=== O8: exit-code contract (0 / 1 / 2-reserved / 3) ==="
+
+# staged + findings -> 1
 run_cb "$MANY" -- --staged
-case "$CB_RC" in
-    1|2) fail "O8/findings-run-rc-not-reserved" "rc=$CB_RC (findings must not change rc)" ;;
-    *) assert_eq "O8/findings-run-rc" "0" "$CB_RC" ;;
-esac
+if [ "$(cb_finding_count)" -gt 0 ]; then
+    pass "O8/premise-staged-run-has-findings"
+else
+    fail "O8/premise-staged-run-has-findings" "fixture produced no findings; rc row below is vacuous"
+fi
+assert_eq "O8/staged-with-findings-is-1" "1" "$CB_RC"
+
+# same tree, --all -> findings but rc 0 (advisory inventory, deliberately
+# asymmetric with --staged: CPR-SC, two modes with two different jobs)
+run_cb "$MANY" -- --all
+if [ "$(cb_finding_count)" -gt 0 ]; then
+    pass "O8/premise-all-run-has-findings"
+else
+    fail "O8/premise-all-run-has-findings" "fixture produced no findings; rc row below is vacuous"
+fi
+assert_eq "O8/all-with-findings-is-0" "0" "$CB_RC"
+
+# staged, no findings -> 0
+# A fresh new_repo() has nothing staged (its only commit is README.md at
+# creation time). OREPO is reused above with one.sh staged (a 12-line
+# comment run, over the default 10-line threshold) — so it is not a valid
+# fixture for this premise, and a dedicated clean repo is used instead.
+NOFIND="$(new_repo outc-nofind)"
+run_cb "$NOFIND" -- --staged
+assert_eq "O8/staged-without-findings-is-0" "0" "$CB_RC"
+
+# bad arguments: still not a blocking verdict, and never the reserved 2
 run_cb "$OREPO" -- --bogus
 case "$CB_RC" in
-    1|2) fail "O8/bad-args-rc-not-reserved" "rc=$CB_RC" ;;
-    *) assert_eq "O8/bad-args-rc" "0" "$CB_RC" ;;
+    1) fail "O8/bad-args-not-mistaken-for-a-block" "rc=1 — a usage error would block a commit" ;;
+    2) fail "O8/bad-args-not-reserved-rc2" "rc=2 is reserved and must never be returned" ;;
+    *) pass "O8/bad-args-rc-is-not-1-or-2" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -173,13 +192,13 @@ if (cd "$NOGIT" && git rev-parse --show-toplevel >/dev/null 2>&1); then
     skip "O12: \$TMPDIR itself lives inside a git repository — no non-repo CWD available"
 else
     run_cb "$NOGIT" -- --staged
-    assert_eq "O12/rc-is-0" "0" "$CB_RC"
+    cb_expect_rc "O12/rc-matches-mode"
     assert_eq "O12/header" \
         "## Comment-block Size Review: SKIPPED — not a git repository" "$(cb_header)"
     assert_eq "O12/no-warn-line" "0" "$(cb_warn_count)"
     # Symmetric counterpart for --all: the guard is about the CWD, not the mode.
     run_cb "$NOGIT" -- --all
-    assert_eq "O12/all-mode-rc-is-0" "0" "$CB_RC"
+    cb_expect_rc "O12/all-mode-rc-matches-mode"
     assert_eq "O12/all-mode-header" \
         "## Comment-block Size Review: SKIPPED — not a git repository" "$(cb_header)"
 fi

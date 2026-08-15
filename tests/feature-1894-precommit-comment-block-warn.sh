@@ -1,37 +1,40 @@
 #!/usr/bin/env bash
 # tests/feature-1894-precommit-comment-block-warn.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
-# Tags: comment-block-size, pre-commit, hook, git, advisory, guard, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Issue #1894 — the hooks/pre-commit WARN section for review-comment-block-size.
-#
-# Why this section is different from every other block in the hook: it is purely
-# advisory. It must never change any commit's exit code — not when it finds
-# something, not when the scanner itself falls over. That makes four properties
-# load-bearing, and they are tested separately (CPR-SC):
-#   (1) the two-condition AND guard decides whether the section runs at all;
-#   (2) the section is placed BEFORE the hook's three unconditional early exits
-#       (non-GitHub remote / private repo / empty index), or it would never run
-#       for the repos that actually matter;
-#   (3) the section contains no `exit`, and pre-initialises _cb_out/_cb_rc so
-#       `set -euo pipefail` cannot abort the hook on the success path;
-#   (4) a REAL `git commit` carrying findings still lands (part 3).
-#
-# Dispatcher: shared harness + fixtures live here; cases live in
-# tests/feature-1894-precommit-comment-block-warn/*.sh (rules/coding/file-split.md).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the installer deploys the updated hook into a real machine's
-#   core.hooksPath. Part 3 proves git fires the hook, but only for a fixture
-#   repo whose hooksPath this test points at itself.
-# - Real `gh api` repo-visibility resolution: the private-repo early exit is
-#   represented here by its non-GitHub-remote sibling, which needs no network.
-# - Interaction with the Claude Code PreToolUse hook chain (enforce-worktree,
-#   workflow-gate): fixtures pin ENFORCE_WORKTREE=off.
-# - Whether rules/coding/file-split.md renders as the installed rule a session
-#   actually loads: part 2's S3/S3b read the worktree file as text.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Tags: comment-block-size, pre-commit, hook, git, block, guard, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
+
+# Issue #1894 — the hooks/pre-commit comment-block section for
+# review-comment-block-size, converted from advisory WARN to a hard BLOCK.
+# Filename still says "warn" on purpose: the retire policy keys on the
+# feature-<N> prefix and suite identity, not the verdict asserted; renaming
+# would detach it from its own history for no behavioural gain.
+
+# What changed: the section now OWNS an exit code. rc 1 means "staged
+# content made a comment block worse" and must block the commit; every OTHER
+# non-zero rc must fail OPEN (a broken Node install shouldn't brick every
+# commit — detail plan S2-5). Tested separately (CPR-SC): (1) the
+# two-condition AND guard gating the section; (2) placement BEFORE the
+# hook's three unconditional early exits, or it never runs for repos that
+# matter; (3) `exit 1` only on rc-1, with _cb_out/_cb_rc pre-initialised so
+# `set -euo pipefail` can't abort the clean path; (3b) every SKIPPED result
+# on stderr — a silent skip is how a blocking check quietly stops existing;
+# (4) a real `git commit` with findings is REJECTED (part 3).
+
+# Kill switch and threshold resolve from the config dir's .env ONLY —
+# `COMMENT_BLOCK_ENFORCE=off` / `COMMENT_BLOCK_MAX_LINES=999999` on `git
+# commit` are exactly the bypasses this issue closes, so run_precommit /
+# run_commit write config into $cfg/.env and keep those names out of the
+# child env; *_ambient does both, driving the hostile direction explicitly.
+# Dispatcher: harness here, cases in
+# tests/feature-1894-precommit-comment-block-warn/*.sh.
+
+# TL3 gap: installer deployment into a real core.hooksPath (part 3 only
+# proves git fires the hook for a self-pointed fixture repo); real `gh api`
+# repo-visibility resolution (represented by its non-GitHub-remote sibling);
+# interaction with the Claude Code PreToolUse chain (fixtures pin
+# ENFORCE_WORKTREE=off); whether rules/coding/file-split.md renders as the
+# installed rule a session loads. Mitigation: WORKFLOW_USER_VERIFIED
+# preflight (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
@@ -90,9 +93,19 @@ export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-WARN_LINE='WARN: sample.js — longest comment run 10 → 23 lines (over-threshold runs 1 → 2)'
+BLOCK_LINE='BLOCK: sample.js — longest comment run 10 → 23 lines (over-threshold runs 1 → 2)'
 SCANNER_HEADER='## Comment-block Size Review: PERFORMED (staged mode)'
+SKIPPED_HEADER='## Comment-block Size Review: SKIPPED (node runtime unavailable)'
 ERR_LINE='ERROR: sample.js — baseline blob unreadable'
+# The committer-facing verdict. Matched as a prefix, not verbatim: the exact
+# sentence is the hook author's to word, but "Commit blocked" is the established
+# shape every other blocking section in this hook already uses (CPR-ORTH).
+BLOCK_NOTICE='Commit blocked'
+# The fail-open diagnostic. Any non-zero rc that is NOT 1 keeps the commit, and
+# must say so out loud.
+FAILOPEN_NOTICE='pre-commit: review-comment-block-size rc='
+# Retired with the conversion. Its survival anywhere would mean the section is
+# still advertising itself as advisory while returning a blocking exit code.
 ADVISORY_NOTICE='pre-commit: comment-block warnings are advisory — commit continues.'
 # Planted in the comment body of a scanned file. The output contract reports
 # paths, line ranges and counts only — never comment text — so this string must
@@ -103,26 +116,28 @@ SENTINEL='SENTINEL-DO-NOT-LEAK-abc123'
 # scanner with the wrong mode (or not at all) cannot pass silently.
 STUB_PROLOGUE='_argv_log="$(dirname "$0")/../.scanner-argv"; { printf "%s\n" "$#"; if [ $# -gt 0 ]; then printf "%s\n" "$@"; fi; } > "$_argv_log"'
 
-# write_stub <path> <kind>
-#   warn  -> contracted output containing ^WARN: lines, rc 0
-#   clean -> contracted output with no ^WARN: line, rc 0
-#   rc3   -> internal-error output, rc 3
-#   real  -> thin wrapper around the worktree's real scanner
+# write_stub <path> <kind>: block -> ^BLOCK: output, rc 1 (the verdict);
+# clean -> no finding line, rc 0; skipped -> SKIPPED header, rc 0 (node
+# missing, kill switch, not a repo...); rc3 -> internal-error output, rc 3
+# (fail-open); rc7 -> an rc the contract doesn't name (fail-open); real ->
+# thin wrapper around the worktree's real scanner. rc is what the stubs
+# exist to control: mapping scanner rc to commit rc is the hook's whole new
+# job, and a real scanner can't be steered into every rc on demand.
 write_stub() {
     local path="$1" kind="$2"
     case "$kind" in
-        warn)
+        block)
             cat > "$path" <<EOF
 #!/usr/bin/env bash
 $STUB_PROLOGUE
 echo "$SCANNER_HEADER"
 echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: >= 10 consecutive comment lines)"
-echo "$WARN_LINE"
+echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 consecutive comment lines)"
+echo "$BLOCK_LINE"
 echo "  L10-L32 (23 lines)"
 echo ""
-echo "  WARN findings are advisory only — this check never blocks a commit."
-exit 0
+echo "  Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)."
+exit 1
 EOF
             ;;
         clean)
@@ -131,7 +146,15 @@ EOF
 $STUB_PROLOGUE
 echo "$SCANNER_HEADER"
 echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: >= 10 consecutive comment lines)"
+echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 consecutive comment lines)"
+exit 0
+EOF
+            ;;
+        skipped)
+            cat > "$path" <<EOF
+#!/usr/bin/env bash
+$STUB_PROLOGUE
+echo "$SKIPPED_HEADER"
 exit 0
 EOF
             ;;
@@ -144,10 +167,23 @@ echo "$ERR_LINE"
 exit 3
 EOF
             ;;
+        rc7)
+            cat > "$path" <<EOF
+#!/usr/bin/env bash
+$STUB_PROLOGUE
+echo "$SCANNER_HEADER"
+exit 7
+EOF
+            ;;
         real)
+            # Execs the fixture's OWN copied scanner (make_repo renames the
+            # copy aside to .review-comment-block-size.real before calling
+            # this), never the worktree's $LOCAL_SCANNER — the fixture must
+            # stay self-contained now that hooks/pre-commit resolves every
+            # path from its own $0, not from AGENTS_CONFIG_DIR.
             { printf '#!/usr/bin/env bash\n'
               printf '%s\n' "$STUB_PROLOGUE"
-              printf 'exec bash "%s" "$@"\n' "$LOCAL_SCANNER"
+              printf 'exec bash "$(dirname "$0")/.review-comment-block-size.real" "$@"\n'
             } > "$path"
             ;;
     esac
@@ -186,34 +222,59 @@ CFG
 }
 
 # make_repo <name> <scanner-kind> [remote]
-#   scanner-kind: warn | clean | rc3 | real | none | noexec
+#   scanner-kind: block | clean | skipped | rc3 | rc7 | real | none | noexec
 #   remote: "none" (default) or a URL
+#
+# hooks/pre-commit resolves _cfg_dir from its own $0 (issue #1894 item 1: the
+# gate must ignore ambient AGENTS_CONFIG_DIR for identity + scanner-path
+# resolution). A fixture invoked via the worktree's real $PRECOMMIT can never
+# exercise that gate, so every fixture is its own self-contained mini-install:
+# a copy of hooks/ + bin/, with bin/review-comment-block-size swapped for the
+# kind under test.
 make_repo() {
     local name="$1" kind="$2" remote="${3:-none}"
     local dir="$TMPDIR_BASE/$name"
     init_repo "$dir"
-    mkdir -p "$dir/bin"
+    cp -r "$AGENTS_DIR/hooks" "$dir/hooks"
+    cp -r "$AGENTS_DIR/bin" "$dir/bin"
+    # A self-contained fixture is now indistinguishable from a real agents
+    # install to hooks/pre-commit's OTHER _cfg_dir-gated sections too (not
+    # just the comment-block-size gate this file targets) — in particular the
+    # on-demand rules-injection notation gate (hooks/pre-commit ~L325), which
+    # unconditionally re-validates the whole rules/ tree on every commit once
+    # it identifies the repo as itself. Without a copy it sees an empty
+    # rules/ and hard-blocks every fixture commit on INVALID_ON_DEMAND_PATHS.
+    cp -r "$AGENTS_DIR/rules" "$dir/rules"
     case "$kind" in
-        none) : ;;
+        none) rm -f "$dir/bin/review-comment-block-size" ;;
         noexec)
             printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/bin/review-comment-block-size"
             chmod 000 "$dir/bin/review-comment-block-size" 2>/dev/null || true
             ;;
+        real)
+            mv "$dir/bin/review-comment-block-size" "$dir/bin/.review-comment-block-size.real"
+            write_stub "$dir/bin/review-comment-block-size" real
+            ;;
         *) write_stub "$dir/bin/review-comment-block-size" "$kind" ;;
     esac
     echo "init" > "$dir/README.md"
-    git -C "$dir" add README.md
+    # hooks/bin/rules are committed (not left as untracked filesystem writes)
+    # so that a linked `git worktree add` fixture (P02b) sees them too — a
+    # linked worktree only reflects the committed tree, never the main
+    # worktree's untracked files.
+    git -C "$dir" add README.md hooks bin rules
     git -C "$dir" commit -q -m "initial"
     [ "$remote" != "none" ] && git -C "$dir" remote add origin "$remote"
     printf '%s' "$dir"
 }
 
-# make_hooks_dir <name> — a core.hooksPath directory whose pre-commit is the
-# worktree hook under test.
+# make_hooks_dir <name> <cfg> — a core.hooksPath directory whose pre-commit
+# execs <cfg>'s OWN copied hook (from make_repo), never the worktree's real
+# $PRECOMMIT — see make_repo's comment for why.
 make_hooks_dir() {
-    local dir="$TMPDIR_BASE/$1"
+    local dir="$TMPDIR_BASE/$1" cfg="$2"
     mkdir -p "$dir"
-    printf '#!/usr/bin/env bash\nexec bash "%s"\n' "$PRECOMMIT" > "$dir/pre-commit"
+    printf '#!/usr/bin/env bash\nexec bash "%s/hooks/pre-commit"\n' "$cfg" > "$dir/pre-commit"
     chmod +x "$dir/pre-commit"
     printf '%s' "$dir"
 }
@@ -229,49 +290,98 @@ stage_sample() {
 }
 
 # The three variables that can steer a verdict: the kill switch, the threshold
-# and the extension list. Every invocation starts from "all removed" and then
-# re-pins only what the case is about, so the ambient shell/.env can never
-# decide an outcome (test-design.md "Config-dependent branches").
+# and the extension list. Every invocation starts from "all removed" — including
+# the two obsolete COMMENT_BLOCK_WARN* names, which must not be honoured even
+# when present — and then re-pins only what the case is about, in the .env.
 CB_ENV_RESET=(
+    -u COMMENT_BLOCK_ENFORCE
+    -u COMMENT_BLOCK_MAX_LINES
+    -u CODE_FILE_EXTENSIONS
     -u COMMENT_BLOCK_WARN
     -u COMMENT_BLOCK_WARN_LINES
-    -u CODE_FILE_EXTENSIONS
 )
+# Names that must reach the code under test through $cfg/.env and nowhere else.
+PC_DOTENV_KEYS=" COMMENT_BLOCK_MAX_LINES COMMENT_BLOCK_ENFORCE CODE_FILE_EXTENSIONS COMMENT_BLOCK_WARN COMMENT_BLOCK_WARN_LINES "
+PC_BASE_ENV=(
+    "COMMENT_BLOCK_MAX_LINES=10"
+    "CODE_FILE_EXTENSIONS=js;sh;py"
+)
+
+# _pc_env <cfg> <ambient:0|1> [VAR=VAL ...] — writes $cfg/.env and echoes the
+# `env` arguments for the child. PC_BASE_ENV always lands in .env — it is the
+# repo's genuine config. Caller-supplied dotenv-scoped overrides are the two
+# DISTINCT channels under test, kept independently controllable: with
+# ambient=0 they represent an honest .env edit and are written there; with
+# ambient=1 they represent the committer's hostile shell override and go ONLY
+# into the ambient export, never touching .env — conflating the two would let
+# an "ambient" case silently rewrite the very config value it is supposed to
+# leave alone (the P05 ambient-cannot-disable premise). Everything else is a
+# plain child env var either way.
+PC_ENVS=()
+_pc_env() {
+    local cfg="$1" ambient="$2"; shift 2
+    PC_ENVS=("${CB_ENV_RESET[@]}")
+    local -a dot_keys=() dot_vals=()
+    local kv key i found
+    for kv in "${PC_BASE_ENV[@]}"; do
+        key="${kv%%=*}"
+        dot_keys+=("$key"); dot_vals+=("${kv#*=}")
+    done
+    for kv in ${@+"$@"}; do
+        key="${kv%%=*}"
+        if [ "${PC_DOTENV_KEYS#* "$key" }" != "$PC_DOTENV_KEYS" ]; then
+            if [ "$ambient" = "1" ]; then
+                PC_ENVS+=("$kv")
+            else
+                found=-1
+                for ((i = 0; i < ${#dot_keys[@]}; i++)); do
+                    [ "${dot_keys[$i]}" = "$key" ] && found=$i
+                done
+                if [ "$found" -ge 0 ]; then dot_vals[$found]="${kv#*=}"
+                else dot_keys+=("$key"); dot_vals+=("${kv#*=}"); fi
+            fi
+        else
+            PC_ENVS+=("$kv")
+        fi
+    done
+    : > "$cfg/.env"
+    for ((i = 0; i < ${#dot_keys[@]}; i++)); do
+        printf '%s=%s\n' "${dot_keys[$i]}" "${dot_vals[$i]}" >> "$cfg/.env"
+    done
+    PC_ENVS+=("AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off")
+}
 
 OUT=""
 ERR=""
 RC=0
 # run_precommit <repo> <agents-config-dir> [VAR=VAL ...]
-run_precommit() {
-    local repo="$1" cfg="$2"; shift 2
+run_precommit() { _pc_run "$1" "$2" 0 "${@:3}"; }
+# Same, with the config keys ALSO in the child environment (hostile direction).
+run_precommit_ambient() { _pc_run "$1" "$2" 1 "${@:3}"; }
+_pc_run() {
+    local repo="$1" cfg="$2" ambient="$3"; shift 3
     local errfile="$TMPDIR_BASE/pc.err"
+    _pc_env "$cfg" "$ambient" "$@"
     RC=0
     OUT="$( (cd "$repo" \
         && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
-        && run_with_timeout 60 env "${CB_ENV_RESET[@]}" \
-            "AGENTS_CONFIG_DIR=$cfg" \
-            "ENFORCE_WORKTREE=off" \
-            "COMMENT_BLOCK_WARN_LINES=10" \
-            "CODE_FILE_EXTENSIONS=js;sh;py" \
-            "$@" \
-            bash "$PRECOMMIT") 2>"$errfile" )" || RC=$?
+        && run_with_timeout 60 env "${PC_ENVS[@]}" \
+            bash "$cfg/hooks/pre-commit") 2>"$errfile" )" || RC=$?
     ERR="$(cat "$errfile" 2>/dev/null || true)"
 }
 
 # run_commit <repo> <agents-config-dir> <hooks-dir> <message> [VAR=VAL ...]
 # A real `git commit` — git decides whether to fire the hook and whether the
 # hook's exit code blocks the commit.
-run_commit() {
-    local repo="$1" cfg="$2" hooks="$3" msg="$4"; shift 4
+run_commit() { _pc_commit "$1" "$2" "$3" "$4" 0 "${@:5}"; }
+run_commit_ambient() { _pc_commit "$1" "$2" "$3" "$4" 1 "${@:5}"; }
+_pc_commit() {
+    local repo="$1" cfg="$2" hooks="$3" msg="$4" ambient="$5"; shift 5
+    _pc_env "$cfg" "$ambient" "$@"
     RC=0
     OUT="$( (cd "$repo" \
         && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
-        && run_with_timeout 60 env "${CB_ENV_RESET[@]}" \
-            "AGENTS_CONFIG_DIR=$cfg" \
-            "ENFORCE_WORKTREE=off" \
-            "COMMENT_BLOCK_WARN_LINES=10" \
-            "CODE_FILE_EXTENSIONS=js;sh;py" \
-            "$@" \
+        && run_with_timeout 60 env "${PC_ENVS[@]}" \
             git -c "core.hooksPath=$hooks" commit -q -m "$msg") 2>&1 )" || RC=$?
     ERR=""
 }
@@ -287,6 +397,8 @@ NON_GITHUB="https://git.example.com/acme/widgets.git"
 . "$CASE_DIR/failopen-placement-static.sh"
 # shellcheck source=feature-1894-precommit-comment-block-warn/commit-integration.sh
 . "$CASE_DIR/commit-integration.sh"
+# shellcheck source=feature-1894-precommit-comment-block-warn/node-unavailable.sh
+. "$CASE_DIR/node-unavailable.sh"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

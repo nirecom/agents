@@ -4,15 +4,10 @@
 # Tags: comment-block-size, scan-scope, gitignore, symlink, leak, empty-index, scope:issue-specific, scope:feature-1894, layer:TL2
 #
 # Part 6 — what the scanner is allowed to look at, and what it is allowed to
-# say about it.
-#
-# Two concerns share this file because both are about the boundary of the
-# report rather than its arithmetic (CPR-SC): which files enter the scan, and
-# which bytes are permitted to leave it.
-#
-# --all is the mode with a traversal of its own, so it gets the scope cases:
-# which files it walks (O11), how it treats modified / excluded / out-of-repo
-# entries (O13), and what it prints when nothing is eligible at all (O14).
+# say about it. Two concerns share this file: the report's boundary, not its
+# arithmetic (CPR-SC) — which files enter the scan, and which bytes may leave
+# it. --all has its own traversal, so it gets the scope cases: files walked
+# (O11), modified/excluded/out-of-repo handling (O13), nothing-eligible output (O14).
 
 lpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "l_$i=$i"; done; }
 lcm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }
@@ -32,7 +27,7 @@ run_cb "$LEAK" -- --staged
 assert_absent "O9/staged-mode-stdout-clean" "$SENTINEL" "$CB_OUT"
 assert_absent "O9/staged-mode-stderr-clean" "$SENTINEL" "$CB_ERR"
 # Paired positive, so the two assertions above cannot pass by scanning nothing.
-assert_contains "O9/staged-mode-still-reports-the-file" "WARN: leaky.sh" "$CB_OUT"
+assert_contains "O9/staged-mode-still-reports-the-file" "$CB_FIND: leaky.sh" "$CB_OUT"
 run_cb "$LEAK" -- --all
 assert_absent "O9/all-mode-stdout-clean" "$SENTINEL" "$CB_OUT"
 assert_absent "O9/all-mode-stderr-clean" "$SENTINEL" "$CB_ERR"
@@ -45,7 +40,7 @@ echo ""
 echo "=== O10: empty index / no in-scope extensions ==="
 EMPTY="$(new_repo emptyindex)"
 run_cb "$EMPTY" -- --staged
-assert_eq "O10/empty-index-rc" "0" "$CB_RC"
+cb_expect_rc "O10/empty-index-rc"
 assert_eq "O10/empty-index-no-warn" "0" "$(cb_warn_count)"
 case "$(cb_header)" in
     "## Comment-block Size Review:"*) pass "O10/empty-index-header-well-formed" ;;
@@ -56,7 +51,7 @@ esac
 { lpad 2; lcm 12 note; } > "$EMPTY/data.json"
 git -C "$EMPTY" add -A >/dev/null 2>&1
 run_cb "$EMPTY" -- --staged
-assert_eq "O10/out-of-scope-only-rc" "0" "$CB_RC"
+cb_expect_rc "O10/out-of-scope-only-rc"
 assert_eq "O10/out-of-scope-only-no-warn" "0" "$(cb_warn_count)"
 assert_contains "O10/out-of-scope-only-counted-zero" "Staged code files scanned: 0" "$CB_OUT"
 
@@ -77,14 +72,14 @@ git -C "$ALLR" commit -q -m "committed sources"
 mkdir -p "$ALLR/build"
 { lpad 2; lcm 12 generated; } > "$ALLR/build/generated.sh"
 run_cb "$ALLR" -- --all
-assert_eq "O11/rc" "0" "$CB_RC"
+cb_expect_rc "O11/rc"
 assert_contains "O11/committed-file-scanned" "committed.sh" "$CB_OUT"
 assert_absent "O11/gitignored-file-skipped" "ignored.sh" "$CB_OUT"
 assert_absent "O11/gitignored-dir-skipped" "generated.sh" "$CB_OUT"
 
 if ln -s committed.sh "$ALLR/link.sh" 2>/dev/null && [ -L "$ALLR/link.sh" ]; then
     run_cb "$ALLR" -- --all
-    assert_eq "O11/symlink-rc" "0" "$CB_RC"
+    cb_expect_rc "O11/symlink-rc"
     # Following the link would report the same block twice under two names.
     assert_absent "O11/symlink-not-followed" "link.sh" "$CB_OUT"
 else
@@ -115,10 +110,10 @@ git -C "$TRAV" commit -q -m "tracked sources"
 { lpad 2; lcm 14 grown; } > "$TRAV/modified.sh"
 { lpad 2; lcm 25 scratch; } > "$TRAV/scratch.sh"
 run_cb "$TRAV" -- --all
-assert_eq "O13/rc" "0" "$CB_RC"
+cb_expect_rc "O13/rc"
 assert_contains "O13/modified-tracked-file-uses-worktree-bytes" \
-    "WARN: modified.sh — longest comment run 14 lines" "$CB_OUT"
-assert_contains "O13/unmodified-tracked-file-still-scanned" "WARN: real.sh" "$CB_OUT"
+    "$CB_FIND: modified.sh — longest comment run 14 lines" "$CB_OUT"
+assert_contains "O13/unmodified-tracked-file-still-scanned" "$CB_FIND: real.sh" "$CB_OUT"
 # All three exclusion kinds are live in this one walk, so an implementation that
 # handles them in mutually exclusive branches cannot pass.
 assert_absent "O13/node-modules-excluded" "vendor.sh" "$CB_OUT"
@@ -133,7 +128,7 @@ OUTSIDE="$TMPDIR_BASE/outside-target.sh"
 { lpad 2; lcm 30 "$SENTINEL"; } > "$OUTSIDE"
 if ln -s "$OUTSIDE" "$TRAV/escape.sh" 2>/dev/null && [ -L "$TRAV/escape.sh" ]; then
     run_cb "$TRAV" -- --all
-    assert_eq "O13/escape-symlink-rc" "0" "$CB_RC"
+    cb_expect_rc "O13/escape-symlink-rc"
     assert_absent "O13/escape-symlink-not-reported" "escape.sh" "$CB_OUT"
     assert_absent "O13/escape-target-not-reported" "outside-target.sh" "$CB_OUT"
     assert_absent "O13/escape-target-body-not-leaked" "$SENTINEL" "$CB_OUT"
@@ -157,7 +152,7 @@ NOCODE="$(new_repo allnocode)"
 git -C "$NOCODE" add -A >/dev/null 2>&1
 git -C "$NOCODE" commit -q -m "docs only"
 run_cb "$NOCODE" -- --all
-assert_eq "O14/rc" "0" "$CB_RC"
+cb_expect_rc "O14/rc"
 assert_eq "O14/header" "## Comment-block Size Review: PERFORMED (all-scan mode)" "$(cb_header)"
 assert_eq "O14/no-warn-line" "0" "$(cb_warn_count)"
-assert_absent "O14/no-advisory-footer" "advisory only" "$CB_OUT"
+assert_absent "O14/no-advisory-footer" "Compress to a one-line summary" "$CB_OUT"

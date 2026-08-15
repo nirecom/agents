@@ -183,17 +183,21 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
-### Comment-block size warning
+### Comment-block size gate
 
-A long run of consecutive comment lines is easy to add and hard to notice in review, so
-`git commit` prints an advisory warning when a staged code file's longest comment block
-crosses the threshold. A staged file is compared against its committed version and reported
-only when its comment blocks got longer, so an already-long block never nags on an unrelated
-edit; a file with no committed version is judged on its own contents. The warning never
-blocks a commit and never rewrites a file, and it fires only for this repository even though
-the hook path is configured globally. Run `bin/review-comment-block-size --all` for the same
-report over the whole working tree. Set `COMMENT_BLOCK_WARN_LINES` (default 10) or
-`COMMENT_BLOCK_WARN=off` to tune or silence it — see `.env.example`.
+A long run of consecutive comment lines is easy to add and hard to notice in review, so it
+is blocked at two points: an `Edit`/`Write`/`MultiEdit` that grows a comment block past the
+threshold is rejected before it lands, and `git commit` blocks as a backstop for anything
+that reaches the staging area another way. A staged file is compared against its committed
+version and flagged only when its comment blocks got longer, so an already-long block never
+blocks an unrelated edit; a file with no committed version is judged on its own contents.
+Neither check rewrites a file, and both fire only for this repository even though the hook
+paths are configured globally. Run `bin/review-comment-block-size --all` for the same report
+over the whole working tree. Set `COMMENT_BLOCK_MAX_LINES` (default 10) to tune the threshold
+or `COMMENT_BLOCK_ENFORCE=off` to disable the gate — see `.env.example`. Both settings are
+read only from the repository's own `.env`; an ambient shell variable of the same name cannot
+raise the threshold or turn the gate off, and neither `WORKFLOW_OFF` nor `WORKTREE_OFF`
+suspends it (see `docs/architecture/claude-code/marker-bypass-contract.md`).
 
 ### VS Code worktree session visibility
 

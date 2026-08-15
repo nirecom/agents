@@ -2,39 +2,18 @@
 # tests/feature-1894-comment-block-size.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, parser, review-cli, staged, git, scope:issue-specific, scope:feature-1894, layer:TL2
-#
-# Issue #1894 — bin/review-comment-block-size: an advisory scanner that flags
-# over-threshold runs of consecutive comment lines.  Origin regression: PR #1893
-# landed a 10-line comment block that no existing check noticed, which is why
-# the decision boundary is `run length >= T` (9 = silent, 10 = flagged).
-#
-# Dispatcher: shared harness + fixtures live here; the cases live in
-# tests/feature-1894-comment-block-size/*.sh (rules/coding/file-split.md).
-#
-# Everything is driven through the CLI's contracted stdout, never through an
-# internal function, so the tests stay honest about the observable contract.
-#
-# TL3 gap (what this test does NOT catch):
-# - Anything about hooks/pre-commit: this file drives the CLI directly, and its
-#   fixtures pin core.hooksPath=/dev/null. The hook seam — including a real
-#   `git commit` firing the hook — is the sibling file
-#   tests/feature-1894-precommit-comment-block-warn.sh (part 3).
-# - Whether the installer PATH-exposes bin/review-comment-block-size so a bare
-#   `review-comment-block-size` resolves on a real machine.
-# - Real-world blob sizes / pack-file baselines: fixtures use loose objects only.
-# - Filenames containing a newline or a character NTFS rejects (`"`, `|`, `*`):
-#   those cases self-skip on Windows and are only exercised on POSIX hosts.
-#   Partial exception: injection-hardening.sh reaches the STAGED path on Windows
-#   too, by writing the entry straight into the index (git accepts control bytes
-#   the filesystem refuses). The --all walk needs a real file, so it still
-#   self-skips there.
-# - Symlink traversal (including a link whose target lies outside the repo):
-#   self-skips on hosts that cannot create symlinks without elevation, so the
-#   `--all` walk's refusal to follow links is unverified there.
-# - Temporary artifacts the scanner might write: the output/exit-code contract
-#   specifies no filesystem footprint, so nothing here pins one either way.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+
+# Issue #1894 scanner flags over-threshold comment runs (PR #1893 landed one
+# unnoticed). Comparator is `>T`, not `>=T` — exactly T stays silent. `--staged`
+# prints `BLOCK:`/exits 1; `--all` prints `WARN:`/exits 0 — use $CB_FIND /
+# cb_expect_rc, never hardcode a prefix. Threshold/extensions/kill-switch
+# resolve from the config dir's .env only, never ambient shell
+# (config-hostility.sh: run_cb_ambient). Dispatcher: harness here, cases in
+# tests/feature-1894-comment-block-size/*.sh, all via CLI stdout.
+
+# TL3 gap: hook integration, installer PATH, pack-file sizes, NTFS-illegal
+# names, symlinks, scanner footprint — see WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
@@ -104,21 +83,34 @@ unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # The three variables that can steer a verdict: the kill switch, the threshold
-# and the extension list. Every invocation starts from "all three removed from
-# the child environment" and then re-pins only what the case is about, so
-# neither the ambient shell nor the developer's .env can decide an outcome
-# (test-design.md "Config-dependent branches"). The file-count and byte-size
-# caps are compiled-in constants with no env knob — config-numeric-caps.sh
-# pins both their boundaries and their non-configurability.
+# and the extension list. Every invocation starts from "all of them removed from
+# the child environment" — including the two obsolete COMMENT_BLOCK_WARN* names,
+# which must not be readable by any path — and then re-pins only what the case is
+# about, through the fixture .env. Neither the ambient shell nor the developer's
+# real config dir can decide an outcome (test-design.md "Config-dependent
+# branches"). The file-count and byte-size caps are compiled-in constants with no
+# knob at all — config-numeric-caps.sh pins both their boundaries and their
+# non-configurability.
 CB_ENV_RESET=(
+    -u COMMENT_BLOCK_ENFORCE
+    -u COMMENT_BLOCK_MAX_LINES
+    -u CODE_FILE_EXTENSIONS
     -u COMMENT_BLOCK_WARN
     -u COMMENT_BLOCK_WARN_LINES
-    -u CODE_FILE_EXTENSIONS
 )
 BASE_ENV=(
-    "COMMENT_BLOCK_WARN_LINES=10"
+    "COMMENT_BLOCK_MAX_LINES=10"
     "CODE_FILE_EXTENSIONS=js;sh;py"
 )
+# The keys the CLI resolves from .env only. A VAR=VAL handed to run_cb whose key
+# is in this list lands in the fixture .env; anything else (TMPDIR, the inert
+# COMMENT_BLOCK_MAX_* knobs, ...) is passed as a genuine child environment
+# variable, because that is what those cases are about.
+CB_DOTENV_KEYS=" COMMENT_BLOCK_MAX_LINES COMMENT_BLOCK_ENFORCE CODE_FILE_EXTENSIONS COMMENT_BLOCK_WARN COMMENT_BLOCK_WARN_LINES "
+# The fixture config dir. Without it the CLI's .env resolution would fall back to
+# the installed agents repo and read the DEVELOPER's real .env.
+CB_CFG_DIR="$TMPDIR_BASE/agents-config"
+mkdir -p "$CB_CFG_DIR"
 # A comment body planted in fixture files. The output contract reports paths,
 # line ranges and counts only, so this string must never reach stdout/stderr.
 SENTINEL='SENTINEL-DO-NOT-LEAK-abc123'
@@ -176,25 +168,102 @@ render_spec() {
     set +f
 }
 
-# ---------------------------------------------------------------------------
-# run_cb <repo> [VAR=VAL ...] -- [cli args ...]
-# Sets CB_OUT (stdout), CB_ERR (stderr), CB_RC.
-# ---------------------------------------------------------------------------
+# _cb_invoke <repo> <use-base:0|1> <ambient-config:0|1> [VAR=VAL ...] -- [args]
+# The one place that spawns the CLI. Splits the caller's VAR=VAL list on
+# CB_DOTENV_KEYS: config keys go to $CB_CFG_DIR/.env (the only place the CLI
+# may read them from); everything else is a real child env var. use-base=1
+# also seeds the .env with BASE_ENV first (caller wins). ambient-config=1
+# ALSO exports the config keys into the child env, with .env left holding the
+# honest value — the hostile direction, proving the ambient copy is ignored.
+# Sets CB_OUT / CB_ERR / CB_RC, and CB_MODE / CB_FIND from the CLI mode.
 CB_OUT=""
 CB_ERR=""
 CB_RC=0
-run_cb() {
-    local repo="$1"; shift
-    local -a envs=("${CB_ENV_RESET[@]}" "${BASE_ENV[@]}")
-    while [ $# -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done
+CB_MODE="none"
+CB_FIND="WARN"
+_cb_invoke() {
+    local repo="$1" usebase="$2" ambient="$3"; shift 3
+    local -a envs=("${CB_ENV_RESET[@]}")
+    local -a kvs=()
+    local kv key
+    if [ "$usebase" = "1" ]; then kvs+=("${BASE_ENV[@]}"); fi
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do kvs+=("$1"); shift; done
     [ "${1:-}" = "--" ] && shift
+
+    # Later assignments win, so the .env is rebuilt from a last-wins pass rather
+    # than appended to: a duplicated key would leave the winner up to the CLI's
+    # own parser, which is not what any of these cases is about.
+    local -a dot_keys=() dot_vals=()
+    local i found
+    for kv in ${kvs[@]+"${kvs[@]}"}; do
+        key="${kv%%=*}"
+        if [ "${CB_DOTENV_KEYS#* "$key" }" != "$CB_DOTENV_KEYS" ]; then
+            found=-1
+            for ((i = 0; i < ${#dot_keys[@]}; i++)); do
+                [ "${dot_keys[$i]}" = "$key" ] && found=$i
+            done
+            if [ "$found" -ge 0 ]; then
+                dot_vals[$found]="${kv#*=}"
+            else
+                dot_keys+=("$key"); dot_vals+=("${kv#*=}")
+            fi
+            [ "$ambient" = "1" ] && envs+=("$kv")
+        else
+            envs+=("$kv")
+        fi
+    done
+    : > "$CB_CFG_DIR/.env"
+    for ((i = 0; i < ${#dot_keys[@]}; i++)); do
+        printf '%s=%s\n' "${dot_keys[$i]}" "${dot_vals[$i]}" >> "$CB_CFG_DIR/.env"
+    done
+    envs+=("AGENTS_CONFIG_DIR=$CB_CFG_DIR")
+
+    CB_MODE="none"
+    for kv in "$@"; do
+        case "$kv" in
+            --staged) CB_MODE="staged" ;;
+            --all) CB_MODE="all" ;;
+        esac
+    done
+    if [ "$CB_MODE" = "staged" ]; then CB_FIND="BLOCK"; else CB_FIND="WARN"; fi
+
     local errfile="$TMPDIR_BASE/cb.err"
     CB_RC=0
     CB_OUT="$( (cd "$repo" && run_with_timeout 60 env "${envs[@]}" bash "$SCRIPT" "$@") 2>"$errfile" )" || CB_RC=$?
     CB_ERR="$(cat "$errfile" 2>/dev/null || true)"
 }
 
+# run_cb <repo> [VAR=VAL ...] -- [cli args ...] — the default: config through
+# the fixture .env, and genuinely absent from the child environment.
+run_cb() { local r="$1"; shift; _cb_invoke "$r" 1 0 "$@"; }
+
+# raw_cb — same, WITHOUT the BASE_ENV seed, so every config key the caller does
+# not name is genuinely absent from the .env too (the built-in-default branches).
+raw_cb() { local r="$1"; shift; _cb_invoke "$r" 0 0 "$@"; }
+
+# run_cb_ambient — the hostile direction: the named config keys are exported
+# into the child environment AS WELL AS written to the .env. Any behaviour
+# difference against run_cb means an ambient value reached a verdict.
+run_cb_ambient() { local r="$1"; shift; _cb_invoke "$r" 1 1 "$@"; }
+
 cb_header() { printf '%s\n' "$CB_OUT" | head -1; }
+
+# assert_finding / assert_no_finding — a finding line, without hardcoding the
+# per-mode prefix. $CB_FIND is BLOCK after a --staged run and WARN after --all.
+assert_finding() { assert_contains "$1" "$CB_FIND: $2" "$3"; }
+assert_no_finding() { assert_absent "$1" "$CB_FIND: $2" "$3"; }
+
+# cb_expect_rc <name> — the rc contract, which is mode-dependent:
+#   --staged with at least one finding -> 1 (the commit-blocking verdict)
+#   everything else                    -> 0
+# Cases whose whole subject IS the rc (output-contract.sh O8, staged-regression
+# R0) assert the literal instead; this helper exists so the ~40 incidental
+# "and rc was still fine" assertions do not each have to restate the rule.
+cb_expect_rc() {
+    local name="$1" want=0
+    if [ "$CB_MODE" = "staged" ] && [ "$(cb_finding_count)" -gt 0 ]; then want=1; fi
+    assert_eq "$name" "$want" "$CB_RC"
+}
 
 # The staged-side run length reported by the first finding line, or "none".
 # Handles both contracted shapes:
@@ -209,13 +278,21 @@ cb_longest() {
     if [ -z "$n" ]; then printf 'unparsed:%s' "$line"; else printf '%s' "$n"; fi
 }
 
-cb_warn_count() { printf '%s\n' "$CB_OUT" | grep -c '^WARN: ' || true; }
+# The number of finding lines, whichever prefix the mode uses. Counting both
+# keeps a mis-prefixed report from passing as "no findings" — a report that
+# printed WARN: in staged mode would otherwise silently satisfy every
+# "exactly N findings" assertion in this suite while no longer blocking.
+cb_finding_count() { printf '%s\n' "$CB_OUT" | grep -cE '^(WARN|BLOCK): ' || true; }
+# Historical name kept for the case files; same meaning.
+cb_warn_count() { cb_finding_count; }
 
 # ============================================================================
 # Cases
 # ============================================================================
 # shellcheck source=./feature-1894-comment-block-size/scanner-core.sh
 . "$CASE_DIR/scanner-core.sh"
+# shellcheck source=./feature-1894-comment-block-size/scan-core-node.sh
+. "$CASE_DIR/scan-core-node.sh"
 # shellcheck source=./feature-1894-comment-block-size/staged-regression.sh
 . "$CASE_DIR/staged-regression.sh"
 # shellcheck source=./feature-1894-comment-block-size/degenerate-fallback.sh

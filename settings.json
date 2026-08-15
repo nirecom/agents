@@ -574,6 +574,16 @@
         ]
       },
       {
+        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-comment-block-size.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {

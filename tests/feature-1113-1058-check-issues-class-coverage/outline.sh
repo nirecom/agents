@@ -87,16 +87,17 @@ EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_O4" 2>&1) ||
 [[ $EXIT_CODE -eq 0 ]] && pass "TC-O4: Issues=0 → exit 0 (no requirement)" \
     || fail "TC-O4: Issues=0 → expected exit 0, got $EXIT_CODE (output: $OUT)"
 
-# TC-O5: Class members has only `- (none detected)` → not counted; fails if Issues≥1
+# TC-O5: Class members has only `- (none detected)` → documents a deliberate
+# zero-candidate finding (aggregate-class-members.md step 4) and satisfies coverage
 F_O5="$TMPDIR_BASE/outline-o5.md"
 make_outline_fixture "$F_O5" "- #103" "- (none detected)"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_O5" 2>&1) || EXIT_CODE=$?
 if [[ $GATE_EXISTS -eq 0 ]]; then
-    fail "TC-O5: '- (none detected)' not counted → CLI missing, cannot verify"
-elif [[ $EXIT_CODE -ne 0 ]]; then
-    pass "TC-O5: '- (none detected)' not counted → non-zero when Issues=1"
+    fail "TC-O5: '- (none detected)' alone → CLI missing, cannot verify"
+elif [[ $EXIT_CODE -eq 0 ]]; then
+    pass "TC-O5: '- (none detected)' alone → exit 0 (documented zero-candidate finding)"
 else
-    fail "TC-O5: '- (none detected)' must not count → expected non-zero, got 0"
+    fail "TC-O5: '- (none detected)' alone → expected exit 0, got $EXIT_CODE (output: $OUT)"
 fi
 
 # TC-O6: Issues with bare #N, repo#N, owner/repo#N → parse-closes-issues counts all
@@ -288,16 +289,17 @@ else
     fail "TC-MISSING-FILE: no file operand → expected non-zero, got 0"
 fi
 
-# TC-O6-NONE-SPACE: `- ( none detected )` with interior spaces still not counted
+# TC-O6-NONE-SPACE: `- ( none detected )` with interior spaces → documents a
+# deliberate zero-candidate finding (spaced variant) and satisfies coverage
 F_NONE_SPACE="$TMPDIR_BASE/outline-none-space.md"
 make_outline_fixture "$F_NONE_SPACE" "- #502" "- ( none detected )"
 EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_NONE_SPACE" 2>&1) || EXIT_CODE=$?
 if [[ $GATE_EXISTS -eq 0 ]]; then
     fail "TC-O6-NONE-SPACE: '- ( none detected )' → CLI missing, cannot verify"
-elif [[ $EXIT_CODE -ne 0 ]]; then
-    pass "TC-O6-NONE-SPACE: '- ( none detected )' (spaced) not counted → non-zero when Issues=1"
+elif [[ $EXIT_CODE -eq 0 ]]; then
+    pass "TC-O6-NONE-SPACE: '- ( none detected )' (spaced) → exit 0 (documented zero-candidate finding)"
 else
-    fail "TC-O6-NONE-SPACE: '- ( none detected )' must not count → expected non-zero, got 0"
+    fail "TC-O6-NONE-SPACE: '- ( none detected )' (spaced) → expected exit 0, got $EXIT_CODE (output: $OUT)"
 fi
 
 TOTAL=$((PASS + FAIL))

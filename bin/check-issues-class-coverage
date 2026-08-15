@@ -92,6 +92,14 @@ if [[ "$MODE" == "outline" ]]; then
   none_count=$(echo "$members_body" | grep -cE '^\-[[:space:]]+\([[:space:]]*none[[:space:]]+detected[[:space:]]*\)' || true)
   members_count=$(( ${members_total:-0} - ${none_count:-0} ))
 
+  # A section consisting solely of the "(none detected)" placeholder documents
+  # a deliberate zero-candidate finding (skills/clarify-intent/reference/aggregate-class-members.md
+  # step 4) and satisfies coverage on its own. An empty/absent section (members_total=0,
+  # none_count=0) still fails -- it documents nothing.
+  if [[ "${members_total:-0}" -gt 0 && "${none_count:-0}" -eq "${members_total:-0}" ]]; then
+    exit 0
+  fi
+
   if [[ "$members_count" -lt "$issues_count" ]]; then
     echo "check-issues-class-coverage: GATE FAIL [outline]: ## Issues has ${issues_count} entries but ## Class members has ${members_count} entries (expected >= ${issues_count}). Every closes_issues entry must have >= 1 Class members entry." >&2
     exit 1

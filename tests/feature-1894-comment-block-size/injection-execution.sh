@@ -109,11 +109,11 @@ if [ "$X_N" -eq 0 ]; then
     skip "X1: no executable-shaped filename could be staged on this host - the whole staged execution axis is unverified"
 else
     run_cb "$XR" -- --staged
-    assert_eq "X1/rc-is-zero" "0" "$CB_RC"
+    cb_expect_rc "X1/rc-matches-mode"
     assert_eq "X1/warn-count-matches-staged-count" "$X_N" "$(cb_warn_count)"
     while IFS='|' read -r name fn; do
         [ -z "$name" ] && continue
-        assert_contains "X1/$name-was-actually-scanned" "WARN: $fn" "$CB_OUT"
+        assert_contains "X1/$name-was-actually-scanned" "$CB_FIND: $fn" "$CB_OUT"
     done <<< "$X_STAGED"
     while IFS='|' read -r name mk; do
         [ -z "$name" ] && continue
@@ -137,11 +137,11 @@ if [ "$X_N" -eq 0 ]; then
     skip "X2: no executable-shaped filename exists in this worktree - the --all execution axis is unverified"
 else
     run_cb "$XR" -- --all
-    assert_eq "X2/rc-is-zero" "0" "$CB_RC"
+    cb_expect_rc "X2/rc-matches-mode"
     assert_eq "X2/warn-count-matches-file-count" "$X_N" "$(cb_warn_count)"
     while IFS='|' read -r name fn; do
         [ -z "$name" ] && continue
-        assert_contains "X2/$name-was-actually-scanned" "WARN: $fn" "$CB_OUT"
+        assert_contains "X2/$name-was-actually-scanned" "$CB_FIND: $fn" "$CB_OUT"
     done <<< "$X_STAGED"
     while IFS='|' read -r name mk; do
         [ -z "$name" ] && continue
@@ -174,12 +174,12 @@ else
         git -C "$XR" add -f -- ":(literal)$fn" >/dev/null 2>&1 || true
     done <<< "$X_STAGED"
     run_cb "$XR" -- --staged
-    assert_eq "X3/rc-is-zero" "0" "$CB_RC"
+    cb_expect_rc "X3/rc-matches-mode"
     assert_eq "X3/warn-count-matches-staged-count" "$X_N" "$(cb_warn_count)"
     assert_absent "X3/baseline-branch-was-really-taken" "no baseline" "$CB_OUT"
     while IFS='|' read -r name fn; do
         [ -z "$name" ] && continue
-        assert_contains "X3/$name-was-actually-scanned" "WARN: $fn" "$CB_OUT"
+        assert_contains "X3/$name-was-actually-scanned" "$CB_FIND: $fn" "$CB_OUT"
     done <<< "$X_STAGED"
     while IFS='|' read -r name mk; do
         [ -z "$name" ] && continue
@@ -214,10 +214,10 @@ while IFS='|' read -r name val; do
     mk="XPWNE-$$-$name"
     val="${val//@M@/$mk}"
     run_cb "$XE" "CODE_FILE_EXTENSIONS=$val" -- --staged
-    assert_eq "X4/$name-rc" "0" "$CB_RC"
+    cb_expect_rc "X4/$name-rc"
     assert_eq "X4/$name-header-is-staged-mode" \
         "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
-    assert_contains "X4/$name-sh-still-selects-a.sh" "WARN: a.sh" "$CB_OUT"
+    assert_contains "X4/$name-sh-still-selects-a.sh" "$CB_FIND: a.sh" "$CB_OUT"
     assert_eq "X4/$name-warn-count-is-1" "1" "$(cb_warn_count)"
     if marker_seen "$mk"; then
         fail "X4/$name-payload-did-not-run" "marker $mk was created - the value reached a shell"
@@ -233,8 +233,8 @@ TABLE
 
 # Same axis on the --all walk: the value steers ext_ok there too.
 run_cb "$XE" "CODE_FILE_EXTENSIONS=sh;\$(touch XPWNE-$$-all)" -- --all
-assert_eq "X4/all-rc" "0" "$CB_RC"
-assert_contains "X4/all-sh-still-selects-a.sh" "WARN: a.sh" "$CB_OUT"
+cb_expect_rc "X4/all-rc"
+assert_contains "X4/all-sh-still-selects-a.sh" "$CB_FIND: a.sh" "$CB_OUT"
 if marker_seen "XPWNE-$$-all"; then
     fail "X4/all-payload-did-not-run" "marker XPWNE-$$-all was created during the --all walk"
 else
