@@ -1,18 +1,8 @@
 # Part of tests/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, uncommitted, untracked, staged, fallback, scope:issue-specific, pwsh-not-required, TL2
-#
-# Cases 15-17, moved verbatim out of the parent when it passed the 500-line hard split limit.
-# They reuse TMPDIR_BASE, MOCK_BIN, SCRIPT, _timeout, fail and pass from the parent.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real codex CLI: codex is a shell mock, so what these rows observe is which diff the
-#   script assembled, never what the installed binary did with it.
-# - A real dirty working tree: the staged/unstaged/untracked states here are built by explicit
-#   git commands in a fixture, so index states a real editor or merge conflict can produce
-#   (partial staging, unmerged entries) are outside what is exercised.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# Cases 15-17, moved verbatim out of the parent at the 500-line hard split limit. Reuses TMPDIR_BASE, MOCK_BIN, SCRIPT, _timeout, fail, pass from the parent.
+# TL3 gap: codex is a shell mock, so these rows observe which diff the script assembled, never what the installed binary did with it; staged/unstaged/untracked states are built by explicit git commands, so index states a real editor or merge conflict produces (partial staging, unmerged entries) are unexercised. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
 # 15. Uncommitted-fallback: staged-only changes on a fresh branch are reviewed

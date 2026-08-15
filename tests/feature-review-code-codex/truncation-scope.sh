@@ -1,40 +1,18 @@
 # Part of tests/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, truncation, base-state, scope, verdict-family, scope:issue-specific, pwsh-not-required, TL2
-#
-# The X-series (#1638), moved verbatim out of the parent when it passed the 500-line hard split
-# limit. It reuses TMPDIR_BASE, REPO, MOCK_BIN, SCRIPT, _timeout, fail and pass from the parent,
-# and leaves BIG_REPO set for later parts.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real codex CLI: codex is a shell mock here, so a prompt that is correctly announced as
-#   truncated may still exceed the live model's context window, and the CLI's own argument and
-#   exit-code handling is unexercised.
-# - The installed merge-base resolver: the X rows pass --base-state as an argument rather than
-#   letting a real resolver derive it, so a state this repo could genuinely produce is never
-#   the thing under test.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# The X-series (#1638), moved verbatim out of the parent at the 500-line hard split limit. Reuses TMPDIR_BASE, REPO, MOCK_BIN, SCRIPT, _timeout, fail, pass from the parent; leaves BIG_REPO set for later parts.
+# TL3 gap: codex is a shell mock, so a prompt correctly announced as truncated may still exceed the live model's context window, and the real CLI's arg/exit-code handling is unexercised; X rows pass --base-state directly rather than letting a real resolver derive it. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
-# ---------------------------------------------------------------------------
-# X (#1638) — what the verdict does NOT cover.
-#
-# `## Codex Review: PERFORMED` says a review ran. It does not say the review saw the whole
-# change, and there are two independent ways it does not:
-#
-#   1. TRUNCATION. The prompt is capped at MAX_DIFF_LINES; beyond that the tail is dropped.
-#      Today that fact is an `echo "Warning: ..."` that goes to the caller's stderr, while
-#      the verdict — the line a reviewer actually reads — still says PERFORMED. A review of
-#      the first 5000 lines of a 280k-line diff reporting "nothing concerning" is not a
-#      finding about the change; it is a finding about the first 2% of it.
-#   2. AN UNTRUSTWORTHY RANGE. The diff was taken against a base someone else resolved. If
-#      that base is wrong, the review is complete and correct about the wrong thing.
-#
-# Both get a line on STDOUT, next to the verdict, under a DISTINCT label:
-# `## Codex Review Scope:` rather than `## Codex Review:`. That separation is deliberate and
-# X6 pins it — the verdict label is parsed by callers for PERFORMED/SKIPPED/FAILED, and
-# adding a fourth value to that family would silently break them.
-# ---------------------------------------------------------------------------
+# X (#1638) — `## Codex Review: PERFORMED` says a review ran, not that it saw the whole change.
+#   1. TRUNCATION: the prompt is capped at MAX_DIFF_LINES; the dropped tail was only an stderr
+#      warning while the verdict a reviewer reads still said PERFORMED — "nothing concerning"
+#      on the first 5000 lines of a 280k-line diff is a finding about 2% of it.
+#   2. AN UNTRUSTWORTHY RANGE: the diff was taken against a base someone else resolved; a wrong
+#      base makes the review complete and correct about the wrong thing.
+#   Both now get a line under the DISTINCT `## Codex Review Scope:` label rather than
+#   `## Codex Review:` — X6 pins this separation, since callers parse the verdict label for
+#   PERFORMED/SKIPPED/FAILED and a fourth value there would silently break them.
 
 # A repository whose committed diff is comfortably past the cap, so truncation is real
 # rather than simulated by an injected constant.

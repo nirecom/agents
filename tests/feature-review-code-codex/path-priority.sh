@@ -1,33 +1,8 @@
 # Part of tests/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, truncation, priority, path-ordering, budget, merge-base, scope:issue-specific, pwsh-not-required, TL2
-#
-# P (#1976 / #1750) — WHICH LINES SURVIVE THE CAP, AND WHO IS TOLD THEY DID NOT.
-#
-# X1-X7 and Y1-Y7 pin that a diff past the cap is ANNOUNCED. They say nothing about WHICH
-# 5000 lines were kept, and that is the part a reader's trust actually rests on. `head -n`
-# over a concatenated diff keeps whatever git happened to print first: a session that edited
-# three files can have all three fall past the cut because an unrelated committed file
-# occupied the budget, and the review that comes back "nothing concerning" never saw the
-# change under review at all (#1976). The same block also counts the diff one line short
-# (#1750), so the boundary it announces is not the boundary it enforces.
-#
-# The rows below are written against the behaviour #1976 specifies and NOT yet implemented:
-# a priority file set, per-path chunk extraction, stop-at-first-skip adoption, a configurable
-# budget, an EXCLUDED report for paths the committed range cannot cover, and a
-# PRIORITY-UNTRUSTED report for when the ordering itself rests on a contaminated baseline.
-# They are expected to fail until that lands — that is the point of writing them first.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real codex CLI's argument and stdin handling, and whether a prompt that is correctly
-#   ordered and inside the line budget still exceeds the live model's context window.
-# - A real contaminated baseline: P8 stubs resolve-merge-base.sh, so `warn` is asserted as an
-#   input rather than as something a real branching sentinel produced.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
-#
-# Sourced last, after base-state-scope.sh, so the exact-size fixtures Y1/Y2 built
-# (Y_AT_REPO / Y_OVER_REPO) and the 6000-line BIG_REPO can be reused instead of rebuilt.
+# P (#1976 / #1750): X/Y pin that a diff past the cap is ANNOUNCED, not WHICH lines survive — `head -n` over a concatenated diff can drop all three edited files behind an unrelated committed one (#1976) and counts the diff one line short (#1750). Rows below target the NOT-yet-implemented fix: priority file set, per-path chunks, stop-at-first-skip, configurable budget, EXCLUDED and PRIORITY-UNTRUSTED reports — expected to fail until it lands. Sourced last, after base-state-scope.sh, to reuse its Y1/Y2 fixtures and 6000-line BIG_REPO.
+# TL3 gap: real codex CLI arg/stdin handling and live model context limits are untested; P8 stubs resolve-merge-base.sh so `warn` is an asserted input, not a real branching sentinel. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # The fixture builders and the prompt/breakdown observation helpers, shared with the sibling
 # parts sourced at the bottom of this file. Sourced FIRST because every row below uses them.

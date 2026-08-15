@@ -1,37 +1,9 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/lib/codex-core.sh
 # Tags: codex, review, disclosure, excluded, error-handling, failure-injection, secret-leakage, logging, scope:issue-specific, pwsh-not-required, TL2
-#
-# F — WHEN THE COLLECTION PIPELINE CANNOT DO WHAT IT CLAIMED, AND WHERE THE EVIDENCE GOES.
-#
-# F1 covers disclosure on the ordinary mixed repo — a committed range under review while the
-# working tree also holds staged, unstaged and untracked changes that the range cannot cover.
-# Those files are the ones the author most likely believes were just reviewed, and the only
-# thing standing between that belief and a false all-clear is a line naming them.
-#
-# F2 covers the failure modes the rewrite introduces. `head -n` could not fail: it read a
-# string that was already in memory. A pipeline that shells out to `git diff --name-only`, then
-# once more per path, then again for config, has three new ways to come back with fewer files
-# than the repo actually changed — and the dangerous outcome is not a crash, it is PERFORMED
-# with a quietly shorter file list.
-#
-# F3 covers where the evidence lands. A degraded base state withholds untracked content from
-# the model, which is worthless if the same content is written to a JSONL log, printed on
-# stderr by a failure path, or left behind in a temp file.
-#
-# NOTE on wording: the finding this row set answers describes the disclosure as a
-# `Not in the review target` line. The approved design folds that line into
-# `## Codex Review Scope: EXCLUDED` as the single source of truth for "changed, not reviewed",
-# so the assertions below are written against EXCLUDED. The contract being tested — every
-# excluded path named, none of their content sent — is unchanged.
-#
-# TL3 gap (what this file does NOT catch):
-# - Real git failures. F2 injects them with a PATH shim, so a genuine repository corruption or
-#   permission error may surface differently from the shim's exit status.
-# - The real log directory: F3 redirects HOME at a fixture, so a logger that resolves an
-#   absolute path instead of $HOME would leak somewhere these rows never look.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# F1: disclosure on a mixed repo (committed range under review, plus staged/unstaged/untracked changes the range can't cover) — those files are what the author most likely believes was reviewed. F2: the rewrite's new failure modes (multiple `git diff` shell-outs vs the old in-memory `head -n`) can silently return fewer files than actually changed — PERFORMED with a quietly shorter list, not a crash. F3: withheld content must not leak via JSONL log, stderr, or temp files.
+# Wording note: assertions target `## Codex Review Scope: EXCLUDED` (the approved single-source line for "changed, not reviewed"), not the older `Not in the review target` phrasing — the contract tested is unchanged.
+# TL3 gap: F2's git failures are PATH-shim injected, not real corruption/permission errors; F3 redirects HOME at a fixture, so an absolute-path logger could leak elsewhere unseen. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
 # F1 — one repo holding all four kinds of change at once.

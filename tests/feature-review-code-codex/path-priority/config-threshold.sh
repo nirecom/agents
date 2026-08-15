@@ -1,33 +1,8 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/get-config-var, hooks/lib/load-env.js, .env.example
 # Tags: codex, review, config, env, threshold, precedence, edge-cases, scope:issue-specific, pwsh-not-required, TL2
-#
-# G — WHERE THE BUDGET COMES FROM, AND WHAT HAPPENS WHEN IT IS NONSENSE.
-#
-# Making the cap configurable is only half a feature: a repo owner who sets it in .env and
-# never sees it take effect has been given a setting that does nothing, and finds out by
-# receiving a review that silently dropped the files they widened the budget for.
-#
-# Rows that export the variable into the process prove only that a shell export reaches a
-# shell variable — they pass unchanged if the .env branch were deleted outright. So G1 sets
-# the value ONLY in a real .env under a throwaway AGENTS_CONFIG_DIR and never in the process
-# environment, which is the one arrangement that fails when the get-config-var lookup is
-# missing. G2 then pins which of the two wins when both are present, G3 pins the unset
-# default, and G4/G5 pin the boundaries the default is supposed to sit at.
-#
-# G6 is the input-validation sweep. The cap is the only number in this path that a human
-# types by hand, and every one of these values has been typed into a config file by someone:
-# empty, padded with spaces, a decimal, a signed integer, and integers past what shell
-# arithmetic can hold. None of them may produce an arithmetic error or an empty review.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real ~/.claude .env: every row here reads a fixture .env under a throwaway
-#   AGENTS_CONFIG_DIR, so a precedence bug that only appears against the installed config
-#   file is invisible.
-# - node's absence: get-config-var shells out to node, and a host without it takes a path
-#   these rows never reach.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# G: a configurable cap only helps if it actually takes effect. G1 sets the cap ONLY in a real .env (never the process env) so the row fails if the get-config-var lookup breaks; G2 pins process-env-over-.env precedence; G3 pins the unset default; G4/G5 pin the default's boundaries. G6 sweeps hand-typed input (empty, padded, decimal, signed, overflow) — none may produce an arithmetic error or an empty review.
+# TL3 gap: real ~/.claude .env precedence is untested (fixture .env only), and node's absence (get-config-var shells out to it) takes an unexercised path. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 G_MID="$(pp_new_repo pp-g-mid)"
 pp_gen "$G_MID/mid.txt" 200 "pp-g-mid-marker"
@@ -129,20 +104,10 @@ for g_bad in abc "5000; rm -rf /" "0" "-1"; do
     fi
 done
 
-# ---------------------------------------------------------------------------
-# G6 — the rest of the values a human can type. Every one must resolve deterministically to
-#      either a usable cap or the default: no arithmetic error, no crash, no empty review.
-#
-#      C4 (#1976 review gap): this used to run against a 200-line fixture, which passes no
-#      matter which of the three possible outcomes actually happened — "accepted as a literal
-#      huge cap" (all 200 lines fit anyway), "silently fell back to the 5000 default" (200
-#      still fits under 5000), and "crashed" (masked because pp_run discards stderr) all look
-#      identical on 200 lines. Re-run against G_BIG (6000 lines, > the 5000 default) instead,
-#      so "accepted as huge" (all 6000 sent, untruncated) and "fell back to 5000" (TRUNCATED
-#      naming 5000) are observably different outcomes, and use pp_exec (not pp_run) so stderr
-#      is captured instead of silently discarded — an arithmetic error is now visible rather
-#      than swallowed by the old runner's `2>/dev/null`.
-# ---------------------------------------------------------------------------
+# G6 — every hand-typeable value must resolve deterministically to a usable cap or the
+# default: no arithmetic error, no crash, no empty review. C4 (#1976 gap): run against G_BIG
+# (6000 lines), not 200, so "accepted as huge" (untruncated) and "fell back to 5000"
+# (TRUNCATED) are distinguishable; use pp_exec (not pp_run) so stderr is captured, not discarded.
 G_LONG="$(awk 'BEGIN { s = "9"; for (i = 0; i < 999; i++) s = s "9"; print s }')"
 for g_edge in "" "   " "12.5" "+50" "1e4" "0x1F" "9223372036854775807" "99999999999999999999" "$G_LONG"; do
     PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES="$g_edge")
@@ -171,19 +136,10 @@ for g_edge in "" "   " "12.5" "+50" "1e4" "0x1F" "9223372036854775807" "99999999
 done
 PP_ENV=()
 
-# ---------------------------------------------------------------------------
-# G8 (C3, #1976 review gap) — malformed values read from a REAL .env file, not just the
-#      process environment. G5 and G6 above inject malformed values only via PP_ENV
-#      (CODEX_REVIEW_MAX_DIFF_LINES exported before the script runs), which never proves
-#      get-config-var's .env-reading path (hooks/lib/load-env.js) actually parses a hostile
-#      value — a caller could win by validating in the shell before .env is ever read, and
-#      these rows would not catch it. Written straight into a real .env under a throwaway
-#      AGENTS_CONFIG_DIR, with the key deliberately absent from the process environment (the
-#      same G1 arrangement), so the .env-reading branch is the only branch that can make
-#      these rows pass. Measured on G_BIG (6000 lines) for the same reason G5 measures on
-#      the big fixture: on anything smaller, "fell back to 5000" and "fell back to no limit
-#      at all" look identical.
-# ---------------------------------------------------------------------------
+# G8 (C3, #1976 gap) — malformed values read from a REAL .env, not just PP_ENV (G5/G6 only
+# prove shell-export parsing). Written into a real .env with the key absent from the process
+# env (G1 arrangement), so only the .env-reading branch can pass. Measured on G_BIG for the
+# same reason as G5: on a smaller fixture "fell back to 5000" and "no limit" look identical.
 G8_CANARY="$TMPDIR_BASE/pp-g8-canary-marker"
 rm -f "$G8_CANARY"
 for g8_bad in "0" "-1" "99999999999999999999" "5000; rm -rf /" '$(whoami)' "0; touch $G8_CANARY" "abc"; do

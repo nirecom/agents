@@ -1,25 +1,8 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced FIRST, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, helpers, fixtures, budget, scope:issue-specific, pwsh-not-required, TL2
-#
-# The fixture builders and observation helpers every P-row shares. They live in their own part
-# because the rows that use them now span six files, and a helper defined halfway down one of
-# those files is a helper the next file cannot rely on having.
-#
-# The observation helpers are the important half. A row that greps the whole captured prompt
-# for a marker cannot tell "the file was reviewed" from "the file's name appeared in a caveat",
-# and a row that greps stdout for a label cannot tell "the budget was honoured" from "the whole
-# diff was sent and a line was printed about it". pp_diff_body_* and pp_scope_* exist so those
-# two questions can be asked separately and answered from captured content.
-#
-# TL3 gap (what these helpers do NOT catch):
-# - The real codex CLI's stdin handling and true context window: every helper here observes a
-#   shell mock's stdin, so a prompt that is well-formed and inside the line budget may still be
-#   rejected by the real model.
-# - The real filesystem's path encoding rules: pp_new_repo fixtures are created by whatever
-#   filesystem the runner is on, so a name this host refuses to create is never exercised.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# Fixture builders + observation helpers shared by every P-row, split out because the rows now span six files. pp_diff_body_*/pp_scope_* matter most: they separate "was reviewed" from "name appeared in a caveat" and "budget honoured" from "whole diff sent, one line printed".
+# TL3 gap: every helper observes a shell mock's stdin, so a prompt inside the line budget may still exceed the real model's context window; pp_new_repo fixtures use whatever path encoding this host's filesystem allows, so a refused name is never exercised. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 PP_CAPTURE="$TMPDIR_BASE/captured-path-priority.txt"
 PP_STDOUT="$TMPDIR_BASE/pp-stdout.txt"
@@ -167,19 +150,8 @@ pp_scope_count() { # <output> <Reviewed|Dropped>
     printf '%s\n' "$1" | grep -oE "^$2 \([0-9]+\)" | grep -oE "[0-9]+" | head -1 || true
 }
 
-# The paths a breakdown line actually lists, one per line, trimmed. The `… and N more`
-# continuation is dropped: it is a count, not a path, and a caller comparing sets of paths
-# must not be handed it as one.
-#
-# C5 (#1976 review gap): entries are separated by the two-character sequence ", " (a comma
-# followed by a space) — never a bare comma. A bare-comma split (the previous implementation)
-# corrupts any filename that legitimately contains a comma, fragmenting it into multiple
-# fake "paths" and making the observation helper itself the source of the failure rather than
-# whatever the script under test actually did (see S2a-comma in path-edges-and-security.sh,
-# whose fixture filename is `combo,comma,name.txt`). This is a documented format assumption,
-# not an observed fact about the not-yet-rewritten source: none of its commas are followed by
-# a space, so splitting on ", " leaves it intact while still separating ordinary
-# comma-free entries exactly as a bare-comma split would have.
+# The paths a breakdown line actually lists, one per line, trimmed. The `… and N more` continuation is dropped: it is a count, not a path, and a caller comparing sets of paths must not be handed it as one.
+# C5 (#1976 review gap): entries are separated by the two-character sequence ", " (comma + space) — never a bare comma. A bare-comma split (the previous implementation) corrupts any filename that legitimately contains a comma, fragmenting it into fake "paths" and making the observation helper itself the source of the failure (see S2a-comma in path-edges-and-security.sh, fixture `combo,comma,name.txt`). This is a documented format assumption, not an observed fact about the not-yet-rewritten source: none of its commas are followed by a space, so splitting on ", " leaves it intact.
 pp_scope_paths() { # <output> <Reviewed|Dropped>
     printf '%s\n' "$1" \
         | grep -E "^$2 \([0-9]+\):" \

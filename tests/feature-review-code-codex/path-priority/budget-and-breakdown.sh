@@ -1,25 +1,8 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, truncation, budget, breakdown, reviewed-dropped, scope:issue-specific, pwsh-not-required, TL2
-#
-# B — THE TWO CLAIMS THE TRUNCATION REPORT MAKES, CHECKED AGAINST WHAT WAS ACTUALLY SENT.
-#
-# "Truncated to N lines" and "K of T files were reviewed, these D were not" are the only
-# things a reader has to go on when a review comes back clean. Both are claims about material
-# the reader cannot see. Elsewhere in this suite they are checked by grepping for the label —
-# which an implementation that announces a cap of 5000 and forwards all 6007 lines, or one
-# that lists a path under Reviewed and never sent its chunk, passes without difficulty.
-#
-# The rows here read the captured prompt instead: B1 measures the diff body against every
-# configured cap, and B2 reconciles the Reviewed/Dropped breakdown against the content that
-# reached the model, path by path.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real codex CLI's own limits: a body inside the line budget can still exceed the live
-#   model's context window, and the line count these rows measure says nothing about tokens.
-# - Whether a human reading the Reviewed/Dropped breakdown draws the right conclusion from it.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# B checks the two claims the truncation report makes — "Truncated to N lines" and "K of T files reviewed, these D not" — against what was actually sent, by reading the captured prompt rather than grepping for the label (grepping alone passes an implementation that announces 5000 but forwards 6007, or lists a path Reviewed with its chunk never sent). B1 measures diff body vs every configured cap; B2 reconciles Reviewed/Dropped path by path.
+# TL3 gap: real codex CLI's own context-window limit is untested (line count != tokens), and whether a human reading the breakdown draws the right conclusion is unverified. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
 # B1 — the cap is enforced, not merely printed. Measured at several budgets on one oversized
@@ -54,16 +37,10 @@ else
     fail "B1-default: the default cap let $b_n lines of diff body through. Output: $PP_OUT"
 fi
 
-# ---------------------------------------------------------------------------
-# B2 — the breakdown is exact. Four files, a cap that admits precisely the first two, and
-#      stop-at-first-skip adoption in path order — so the expected split is known in advance
-#      rather than read back off the implementation's own answer.
-#
-#      Four separate things are asserted because they fail separately: the declared counts,
-#      the listed paths, the disjointness of the two lists, and whether the content behind
-#      each list actually matches. A path can be listed under Reviewed with its chunk never
-#      sent, which is the failure mode that costs a reader the most.
-# ---------------------------------------------------------------------------
+# B2 — the breakdown is exact: four files, a cap admitting precisely the first two, and
+# stop-at-first-skip adoption in path order, so the expected split is known in advance.
+# Four separate assertions (counts, listed paths, disjointness, content match) because they
+# fail separately — a path listed Reviewed with its chunk never sent costs a reader the most.
 B_MIX="$(pp_new_repo pp-b-mix)"
 pp_gen "$B_MIX/a-keep.txt" 10 "pp-b-a-marker"
 pp_gen "$B_MIX/b-keep.txt" 10 "pp-b-b-marker"

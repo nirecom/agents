@@ -1,33 +1,8 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, path-edges, deleted, renamed, filenames, injection, prompt-injection, security, scope:issue-specific, pwsh-not-required, TL2
-#
-# S — WHAT HAPPENS WHEN THE PATHS THEMSELVES ARE THE HARD PART.
-#
-# The rewrite replaces "take the whole diff and cut it" with "list the changed paths, then
-# ask git for each path's chunk one at a time". That trade buys ordering, and it takes on two
-# new liabilities the old code never had.
-#
-# The first is that a path from the name list need not exist on disk, or need not be the same
-# path on both sides of the range. A deleted file, a rename, and an empty file all pass through
-# `--name-only` and then have to survive a per-path `git diff -- "$path"` that a naive
-# implementation writes as if the file were sitting there unchanged (S1).
-#
-# The second is that every one of those paths is now interpolated into a command and printed
-# into a report that a model reads as instructions. A filename is attacker-controlled in any
-# repo that accepts contributions, and so is file content. S2 covers the command side — nothing
-# a filename says may execute, and nothing it says may forge a report line. S3 covers the
-# prompt side: the boundary that separates the trusted preamble from untrusted diff material
-# must be one the untrusted material cannot move.
-#
-# TL3 gap (what this file does NOT catch):
-# - Filenames this host's filesystem refuses to create. On NTFS a name containing a colon, a
-#   tab, or a newline cannot exist, so those rows report SKIP rather than a verdict and the
-#   coverage they represent exists only on POSIX runners.
-# - Whether the real model treats the delimited diff region as data. S3 asserts the prompt's
-#   structure, not the model's obedience to it.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# S — WHAT HAPPENS WHEN THE PATHS THEMSELVES ARE THE HARD PART. The rewrite replaces "take the whole diff and cut it" with "list changed paths, then ask git for each path's chunk", which buys ordering but adds two liabilities: (1) a listed path need not exist on disk or match on both sides — deleted/renamed/empty files must survive a naive per-path `git diff` (S1); (2) every path is interpolated into a command and printed into a report a model reads as instructions — S2 covers nothing a filename says may execute or forge a report line, S3 covers the trusted/untrusted prompt boundary the untrusted material cannot move.
+# TL3 gap: filenames this host's filesystem refuses (colon/tab/newline on NTFS) report SKIP, so that coverage exists only on POSIX runners; S3 asserts prompt structure, not whether the real model actually treats the delimited region as data. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
 # S1 — deleted, renamed and empty paths. Built into the BASE commit first, because a deletion
@@ -108,17 +83,8 @@ s_try_add() { # <repo> <name> ; creates the file and stages it, or returns 1
     return 0
 }
 
-# C2 (#1976 review gap): the canary payloads used to point `touch` at a path under
-# $S_CANARY_DIR — an absolute directory, i.e. one containing real `/` separators. A `/`
-# is not legal inside a single filesystem path COMPONENT, so a payload like
-# "sub$(touch $S_CANARY_DIR/pwned-subst).txt" is not one hostile filename — it is a string
-# that itself asks the filesystem to create a directory named "sub$(touch" first, which
-# fails, which makes s_try_add return 1, which makes the whole case get silently SKIPped.
-# The "canary absent" assertion below then passed for the wrong reason: the file was never
-# created at all, not because any injection was blocked. Every canary name below is now
-# slash-free — a bare filename, no directory component — so it can actually exist on disk,
-# and the canary is checked inside $S_EVIL itself (the cwd a `touch` in the payload would
-# actually run from), not a separate directory.
+# C2 (#1976 review gap): canary payloads used to point `touch` at a path under $S_CANARY_DIR — an absolute directory containing real `/` separators. A `/` is illegal inside a single path COMPONENT, so a payload like "sub$(touch $S_CANARY_DIR/pwned-subst).txt" isn't one hostile filename — it's a string that asks the filesystem to create a directory named "sub$(touch" first, which fails, so s_try_add returns 1 and the case gets silently SKIPped; the "canary absent" assertion then passed for the wrong reason (never created, not blocked).
+# Every canary name below is now slash-free — a bare filename, no directory component — so it can actually exist on disk, and the canary is checked inside $S_EVIL itself (the cwd a `touch` in the payload would actually run from), not a separate directory.
 s_names=(
     "-rf-lookalike.txt"
     "star*glob.txt"

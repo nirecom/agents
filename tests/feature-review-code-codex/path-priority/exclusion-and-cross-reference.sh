@@ -2,22 +2,8 @@
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, exclusion, stop-at-first-skip, cross-reference, path-encoding, scope:issue-specific, pwsh-not-required, TL2
 # lang-check: ignore — P15 fixture uses a non-ASCII filename intentionally, to test that git's octal-escaping of such names doesn't drop them from the priority set.
-#
-# P10-P16 (#1976 / #1750): the rows about WHICH paths are judged, not how many lines fit.
-# Split out of path-priority.sh at the 500-line hard limit. Fixture builders and observation
-# helpers come from path-priority/helpers.sh (sourced first by the parent part); PP_BIG comes
-# from path-priority.sh; TMPDIR_BASE, AGENTS_ROOT, MOCK_BIN, SCRIPT, _timeout, fail and pass
-# come from the suite entrypoint.
-#
-# TL3 gap (what this file does NOT catch):
-# - The real codex CLI's own argument and stdin handling, and whether a prompt that is
-#   well-ordered and under the line budget is still over the real model's context window.
-# - A real session's baseline contamination: P8/P12 stub resolve-merge-base.sh, so the warn
-#   value is asserted as an input, never as something a real branching sentinel produced.
-# - Filesystem-level path encoding on a non-Git-Bash host (native pwsh, APFS normalisation):
-#   P15 exercises whatever encoding this runner's filesystem happens to use.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# P10-P16 (#1976 / #1750): WHICH paths are judged, not how many lines fit. Split out of path-priority.sh at the 500-line hard limit; fixtures/helpers/shared vars come from path-priority/helpers.sh, path-priority.sh, and the suite entrypoint respectively.
+# TL3 gap: real codex CLI arg/stdin handling and live model context limits are untested; P8/P12 stub resolve-merge-base.sh so `warn` is an asserted input; P15's non-ASCII path encoding is only exercised as this runner's own filesystem happens to encode it. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
 # P10 — a path can be in the committed range AND still carry changes the committed range

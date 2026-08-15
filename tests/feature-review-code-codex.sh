@@ -1,21 +1,10 @@
 #!/bin/bash
 # Tests: bin/review-code-codex
 # Tags: codex, review, labels, github, bin, scope:common, pwsh-not-required, TL2
-# Tests for bin/review-code-codex
-# Verifies: SKIPPED/PERFORMED/FAILED status labels, JSONL logging,
-# exit-0 guarantee, security (no shell injection from diff content),
-# and idempotency.
-#
-# TL3 gap (what this suite does NOT catch):
-# - The real codex CLI: every case here substitutes a shell mock on PATH, so the script's
-#   actual argument, stdin and exit-code contract with the installed binary is unverified,
-#   as is whether a prompt inside the line budget fits the live model's context window.
-# - The installed environment's own config: cases pin AGENTS_CONFIG_DIR at fixtures, so a
-#   precedence or lookup bug that only appears against the real ~/.claude .env is invisible.
-# - The host filesystem's path rules: fixtures with hostile or non-ASCII filenames are created
-#   by whatever filesystem the runner is on, and names it refuses are reported SKIP, not run.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: merge-base-suspect.
+# Verifies: SKIPPED/PERFORMED/FAILED labels, JSONL logging, exit-0 guarantee, security, idempotency.
+# TL3 gap: real codex CLI is mocked (arg/stdin/exit-code contract unverified), real
+#   AGENTS_CONFIG_DIR precedence vs ~/.claude .env is untested, and host filesystem path
+#   rules are not exercised. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -66,18 +55,10 @@ run_in_repo() {
     (cd "$REPO" && PATH="$_path" HOME="$_home" _timeout bash "$SCRIPT" "$@") || true
 }
 
-# Status-preserving twin of run_in_repo, for the rows that assert the exit-0 contract.
-#
-# run_in_repo ends in `|| true`, so every caller sees status 0 no matter what the script did.
-# The three cases below were written as `OUTPUT=$(run_in_repo …) || EXIT_CODE=$?` — an
-# assertion that can only ever observe 0, and would keep passing if the script started exiting
-# 2 on every run. The exit-0 guarantee is the reason this script can be wired into a
-# quality-gate chain at all, so it is the one contract that must not be checked through a
-# runner that discards the status.
-#
-# The status also cannot be returned through a command substitution: the assignment would land
-# in the subshell and be thrown away. So stdout and stderr go to a file, and the real
-# subprocess status is left in RUN_STATUS for the caller.
+# Status-preserving twin of run_in_repo, for rows asserting the exit-0 contract.
+# run_in_repo's `|| true` masks the real exit status, so those rows need the actual code.
+# Command substitution can't carry status either (subshell), so stdout/stderr go to a
+# file and the real subprocess status is captured in RUN_STATUS for the caller.
 RUN_STATUS=0
 RUN_OUTPUT_FILE="$TMPDIR_BASE/run-output.txt"
 run_in_repo_status() { # <path> [args...] ; sets RUN_STATUS and OUTPUT
