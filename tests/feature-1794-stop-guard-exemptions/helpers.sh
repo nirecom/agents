@@ -11,6 +11,7 @@ WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
 PATTERNS_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
 POLICY_NODE="$_AGENTS_DIR_NODE/hooks/lib/stop-exemption-policy.js"
+PAUSE_MARKER_NODE="$_AGENTS_DIR_NODE/hooks/lib/next-step-pause-marker.js"
 GUARD_C4="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
 GUARD_C2="$AGENTS_DIR/hooks/supervisor-guard.js"
 MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
@@ -84,6 +85,26 @@ fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
 seed_write_code_in_flight() {
     CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', 'write_code', 'in_progress');" >/dev/null 2>&1
+}
+
+# seed_step_in_flight <tn> <sid> <step> — #2013 generalised the row: any step on
+# STEP_IN_FLIGHT_ALLOWLIST (research/detail/write_tests/review_tests) sitting at
+# `in_progress` inside the TTL exempts C4, not just write_code.
+seed_step_in_flight() {
+    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
+}
+
+# seed_pause_marker <tn> <sid> [reason] — writes a real, UNEXPIRED v2
+# NEXT_STEP_PAUSE marker via the actual writePauseMarker() writer (#1624).
+# `: > "<sid>.next-step-paused"` (empty file) used to be enough because v1
+# treated bare existence as active; v2 requires version/expires_at/for_step/
+# audit, so an empty file now reads as inactive (fail-CLOSED on legacy
+# markers). Routing through the real writer — rather than hand-assembling
+# JSON — keeps the fixture in lockstep with whatever the marker schema is.
+seed_pause_marker() {
+    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+require('$PAUSE_MARKER_NODE').writePauseMarker('$2', { reason: '${3:-test pause}', sentinel: 'WORKFLOW_NEXT_STEP_PAUSE' });" >/dev/null 2>&1
 }
 
 # age_file <path> <days> — backdate mtime so cleanupZombies() sees it as stale.

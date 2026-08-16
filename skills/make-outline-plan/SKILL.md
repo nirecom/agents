@@ -36,7 +36,7 @@ MOP-1. Locate the intent file:
    c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
    d. Evaluate the skip-outline 2-condition checklist. First run a separate Bash call to check 0-signal: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment (so_c1/so_c2 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>` (no `--next` — settles `outline` as skipped in the same call when both conditions are true; skip to Completion in that case).
 
-MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
+MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context. Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".

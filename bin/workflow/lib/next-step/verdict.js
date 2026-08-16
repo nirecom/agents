@@ -3,15 +3,12 @@
 // computeVerdict block (including its nested persistResolutions and
 // applyRecordedVerdictSkip, which self-recurses into computeVerdict).
 //
-// SIZE NOTE: this file knowingly exceeds the WARN threshold (300 lines) in
-// rules/coding/file-split.md. The HARD limit (500 lines) IS met. A second-stage
-// split of this block (diagnostics / recovery layer) is deliberately deferred to
-// a follow-up issue so that the #1756 split stays a mechanical code move.
+// SIZE NOTE: knowingly over the 300-line WARN threshold; the 500-line HARD
+// limit is met. Second-stage split deferred to a follow-up issue.
 //
-// #1794: the two markStep() auto-persist calls below carry explicit origins
-// (not ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart
-// from a genuine user-driven markStep. Labeling only — logic unchanged.
-// Detail: docs/architecture/claude-code/workflow.md#exemptions.
+// #1794: the markStep() auto-persist calls below carry explicit origins (not
+// ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart from a
+// user-driven markStep. Detail: docs/architecture/claude-code/workflow.md#exemptions.
 
 const fs = require("fs");
 const {
@@ -71,11 +68,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
 
   // Quiet layer (#1607): when the session is deliberately outside the workflow,
   // next-step reports ACTION=paused instead of nagging with the next step.
-  // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
-  // fail-open: a marker-read failure just means the normal (noisy) verdict.
+  // Since #1624 a pause is SCOPED to a step, so the marker is evaluated against
+  // the step the session is actually on. fail-open on a marker-read failure.
   try {
     const { isNextStepPaused, isWorkflowOff } = require("../../../../hooks/lib/session-markers");
-    if (isNextStepPaused(sid)) {
+    const { resolveCurrentEffectiveStep } = require("../../../../hooks/workflow-state/current-step");
+    if (isNextStepPaused(sid, resolveCurrentEffectiveStep(sid))) {
       emit(
         "paused",
         "",
@@ -310,19 +308,10 @@ function computeVerdict(rawSid, _didAutoRepair) {
         return;
       }
       if (step === "run_tests" && currentStep === "write_code") {
-        // Scoped recovery: a session that started before write_code existed
-        // (#1665) has no write_code key, so the projection defaults it to
-        // pending while run_tests is already complete. That is a migration
-        // artifact, not contamination — the generic reset hint would destroy a
-        // healthy session. The step leaves no on-disk artifact, so the MARK_STEP
-        // sentinel is the recovery.
-        //
-        // Since the v3 schema version (state-io/migrations/v2-to-v3.js) the
-        // MIGRATION cause no longer reaches here: a pre-write_code file is
-        // raised to v3 on read and the step is backfilled complete. This branch
-        // is kept for the residual, genuine inconsistency — write_code recorded
-        // pending on purpose (RESET_FROM, a manual --reset) while run_tests
-        // stands complete — which is still a state worth aborting on.
+        // Scoped recovery for the residual, genuine inconsistency: write_code
+        // recorded pending on purpose (RESET_FROM / a manual --reset) while
+        // run_tests stands complete. The pre-v3 MIGRATION cause no longer
+        // reaches here (v2-to-v3.js backfills write_code on read).
         // No single quotes — emit() wraps NEXT_HINT/REASON in single quotes.
         emit(
           "abort",

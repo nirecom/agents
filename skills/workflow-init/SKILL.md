@@ -57,6 +57,8 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 
 Dispatch the `survey-code` + `survey-history` subagents per `skills/_shared/subagent-concurrency.md` SC-P (independent — distinct artifact paths, neither reads the other's output). For each: prompt `session-id=<resolved>`, `context_path=<PLANS_DIR>/<session-id>-context.md`, `artifact_path=<PLANS_DIR>/<session-id>-survey-{code|history}.md`, instruct to read context_path + follow `skills/<survey-code|survey-history>/SKILL.md` Procedure, write to artifact_path, do NOT invoke make-outline-plan. Substitute `<PLANS_DIR>` with the absolute path resolved at WI-1.
 
+Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
+
 ### Step WI-11 — Post-check
 
 Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: emit `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-code>>` or `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-history>>`. Fall through to WI-12 on failure — do NOT abort. `clarify-intent` handles missing-or-invalid artifacts.

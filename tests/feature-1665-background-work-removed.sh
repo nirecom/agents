@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/feature-1665-background-work-removed.sh
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/lib/protected-basenames.js, hooks/stop-premature-stop-guard.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-state/state-io/zombie-cleanup.js, bin/workflow/lib/next-step/verdict.js, settings.json, rules/stop-guard-exemptions.md
-# Tags: stop-hook, exemption, session-marker, sentinel, removal, background-work, write-code-in-flight, regression-1665, scope:issue-specific, pwsh-not-required, TL1
+# Tags: stop-hook, exemption, session-marker, sentinel, removal, background-work, step-in-flight, regression-1665, scope:issue-specific, pwsh-not-required, TL1
 #
 # #1665 commit 4 — the `.background-work` primitive is REMOVED and its C4 role
-# is taken over by the state-derived `write-code-in-flight` exemption
-# (write_code status=in_progress within a 4h TTL, hooks/workflow-state/lifecycle.js).
+# is taken over by the state-derived `step-in-flight` exemption (renamed and
+# widened from `write-code-in-flight` by #2013; SSOT: rules/stop-guard-exemptions.md).
 #
 # Every case is paired with a counter-anchor on a sibling primitive that must
 # survive (`next-step-paused`, `workflow-off`, `pre-workflow-init`). A removal
@@ -124,7 +124,7 @@ run_G2() {
 }
 
 # ---------------------------------------------------------------------------
-# M1: EXEMPTION_MATRIX — `background-work` row gone, `write-code-in-flight` row
+# M1: EXEMPTION_MATRIX — `background-work` row gone, `step-in-flight` row
 #     present with the columns the plan fixes ({c4:true, c2:false,
 #     nextStep:false}); nextStep:false is the deliberate difference from the
 #     row it replaces. The three surviving siblings are asserted verbatim.
@@ -135,20 +135,20 @@ run_M1() {
 const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const problems = [];
 if ('background-work' in EXEMPTION_MATRIX) problems.push('background-work-row-still-present');
-const row = EXEMPTION_MATRIX['write-code-in-flight'];
+const row = EXEMPTION_MATRIX['step-in-flight'];
 if (!row) {
-  problems.push('write-code-in-flight-row-missing');
+  problems.push('step-in-flight-row-missing');
 } else {
-  if (row.c4 !== true) problems.push('write-code-in-flight:c4=' + row.c4);
-  if (row.c2 !== false) problems.push('write-code-in-flight:c2=' + row.c2);
-  if (row.nextStep !== false) problems.push('write-code-in-flight:nextStep=' + row.nextStep);
+  if (row.c4 !== true) problems.push('step-in-flight:c4=' + row.c4);
+  if (row.c2 !== false) problems.push('step-in-flight:c2=' + row.c2);
+  if (row.nextStep !== false) problems.push('step-in-flight:nextStep=' + row.nextStep);
 }
 for (const id of ['workflow-off','next-step-paused','pre-workflow-init','delegated-reason']) {
   if (!EXEMPTION_MATRIX[id]) problems.push('sibling-row-lost:' + id);
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1: EXEMPTION_MATRIX drops background-work, carries write-code-in-flight {c4:true,c2:false,nextStep:false}, keeps the 4 siblings"
+        pass "M1: EXEMPTION_MATRIX drops background-work, carries step-in-flight {c4:true,c2:false,nextStep:false}, keeps the 4 siblings"
     else
         fail "M1: matrix rows wrong; got '${out:-<err>}'"
     fi
@@ -170,20 +170,20 @@ const problems = [];
 if (ids.join(',') !== Object.keys(EXEMPTION_MATRIX).join(',')) {
   problems.push('drift table=' + ids.join(',') + ' matrix=' + Object.keys(EXEMPTION_MATRIX).join(','));
 }
-if (ids[ids.indexOf('pre-workflow-init') + 1] !== 'write-code-in-flight') {
+if (ids[ids.indexOf('pre-workflow-init') + 1] !== 'step-in-flight') {
   problems.push('slot=' + ids.join(','));
 }
-const row = g.C4_EXEMPTIONS.find((e) => e.id === 'write-code-in-flight');
+const row = g.C4_EXEMPTIONS.find((e) => e.id === 'step-in-flight');
 if (!row || row.phase !== 'session') problems.push('phase=' + (row && row.phase));
 const deps = g.buildExemptionDeps();
-if (typeof deps.isWriteCodeInFlight !== 'function') problems.push('deps-missing-isWriteCodeInFlight');
+if (typeof deps.anyStepInFlight !== 'function') problems.push('deps-missing-anyStepInFlight');
 if ('isBackgroundWorkInFlight' in deps) problems.push('deps-still-carry-isBackgroundWorkInFlight');
 for (const k of ['isWorkflowOff','isNextStepPaused','isWorkflowStarted']) {
   if (typeof deps[k] !== 'function') problems.push('sibling-dep-lost:' + k);
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M2: C4_EXEMPTIONS matches the matrix, write-code-in-flight took the vacated slot, deps swapped predicates"
+        pass "M2: C4_EXEMPTIONS matches the matrix, step-in-flight took the vacated slot, deps swapped predicates"
     else
         fail "M2: C4 consumer wiring wrong; got '${out:-<err>}'"
     fi

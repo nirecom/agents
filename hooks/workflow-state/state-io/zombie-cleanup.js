@@ -78,6 +78,7 @@ function cleanupZombies(maxAgeDays = 7) {
       file.endsWith(".worktree-off") ||
       file.endsWith(".issue-close-verified") ||
       file.endsWith(".next-step-paused") ||
+      file.endsWith(".stall-reported") ||
       file.endsWith(".off-emergency-invoked") ||
       file.endsWith(".off-clearance") ||
       file.endsWith(".off-clearance.claimed")

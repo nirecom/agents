@@ -7,19 +7,19 @@
 // Split out of enforce-override-handlers.js to keep that file under the size limit.
 
 const fs = require("fs");
-const path = require("path");
 const { validateSkipReason } = require("../skip-reason");
 const {
   NEXT_STEP_PAUSE_RE_DQ, NEXT_STEP_PAUSE_LOOKSLIKE_RE,
   NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
 } = require("../../lib/sentinel-patterns");
 const { getWorkflowDir } = require("../../workflow-state");
+const {
+  writePauseMarker,
+  removePauseMarker,
+  markerPathFor,
+} = require("../../lib/next-step-pause-marker");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
-
-function markerPathFor(sessionId) {
-  return path.join(getWorkflowDir(), `${sessionId}.next-step-paused`);
-}
 
 // handleNextStepPause(ctx): returns true iff the command was a PAUSE/RESUME
 // sentinel (handled or reported as malformed), false otherwise.
@@ -45,26 +45,25 @@ function handleNextStepPause(ctx) {
       signalFatal(`workflow-mark: invalid session_id format — NEXT_STEP_PAUSE sentinel NOT applied.`);
       return true;
     }
-    let reasonStored = null;
+    // The RAW reason is kept even when validation rejects it: the `[for=<step>]`
+    // scope tag lives inside it, and dropping the reason would silently widen a
+    // step-scoped pause to the whole session (#1624).
     const v = validateSkipReason(pauseMatch[1]);
-    if (v.ok) {
-      reasonStored = v.reason;
-    } else {
+    const reasonStored = v.ok ? v.reason : String(pauseMatch[1] || "").trim();
+    if (!v.ok) {
       pushMessage(`workflow-mark: NEXT_STEP_PAUSE reason rejected — ${v.msg} (pause still applied)`);
     }
     try {
-      const dir = getWorkflowDir();
-      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(getWorkflowDir(), { recursive: true });
+      const marker = writePauseMarker(sessionId, {
+        reason: reasonStored,
+        sentinel: "WORKFLOW_NEXT_STEP_PAUSE",
+      });
+      if (!marker) throw new Error("pause marker write refused");
       const markerPath = markerPathFor(sessionId);
-      const tmp = markerPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
-        JSON.stringify({ reason: reasonStored, set_at: new Date().toISOString() }),
-        { mode: 0o600 }
-      );
-      fs.renameSync(tmp, markerPath);
       pushMessage(
-        `workflow-mark: next-step paused for this session (marker: ${markerPath}). ` +
+        `workflow-mark: next-step paused for step '${marker.for_step}' ` +
+          `until ${marker.expires_at} (marker: ${markerPath}). ` +
           `Resume with: echo "<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>"`
       );
     } catch (e) {
@@ -98,12 +97,12 @@ function handleNextStepPause(ctx) {
     }
     try {
       const markerPath = markerPathFor(sessionId);
-      try {
-        fs.unlinkSync(markerPath);
+      const existed = fs.existsSync(markerPath);
+      // Idempotent: an already-absent marker is a silent no-op, and any stray
+      // .tmp from a half-finished rename is swept at the same time.
+      if (!removePauseMarker(sessionId)) throw new Error("pause marker removal refused");
+      if (existed) {
         pushMessage(`workflow-mark: next-step resumed (pause marker removed: ${markerPath}).`);
-      } catch (e) {
-        if (e.code !== "ENOENT") throw e;
-        // Idempotent: silent no-op when the marker is already absent.
       }
     } catch (e) {
       signalFatal(`workflow-mark: failed to clear next-step pause marker — ${e.message}. Resume NOT applied.`);

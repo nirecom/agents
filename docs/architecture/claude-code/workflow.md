@@ -586,6 +586,48 @@ that the session did, at some point, genuinely engage with the workflow —
 see `tests/feature-1794-stop-guard-exemptions/i-adoption-predicate.sh` (I11)
 for the locked-in truth table.
 
+### Delegated-step in-flight allow-list (`STEP_IN_FLIGHT_ALLOWLIST`, #2013)
+
+C4 fires when the session stops while `next-step` still says `ACTION=invoke`.
+That is exactly what a *dispatch* looks like from the outside: the main
+conversation hands the step to a subagent through the Agent / Task / Skill
+tools and then waits. Before #2013 the step had to be declared in flight by
+hand (`NEXT_STEP_PAUSE`), and a forgotten declaration nudged the session
+mid-dispatch.
+
+The declaration is now the dispatch itself. `hooks/postuse-step-in-flight-mark.js`
+(PostToolUse, matcher `Agent|Task|Skill`) resolves the session's current
+effective step and, if that step is on the allow-list, records it
+`in_progress`. `hooks/lib/step-in-flight-policy.js` is the SSOT for both the
+allow-list and the TTL:
+
+- `STEP_IN_FLIGHT_ALLOWLIST` — `research`, `detail`, `write_tests`,
+  `review_tests`: the steps whose SKILL.md procedure genuinely delegates to a
+  subagent. A step that runs in the main conversation is deliberately absent,
+  so an incidental dispatch there never silences the guard.
+- `STEP_IN_FLIGHT_TTL_MS` — 4 hours, the same window `write_code` uses.
+
+Boundary properties, and where each is enforced:
+
+- **Lookahead.** The first dispatch of a session can land during
+  `/workflow-init` WI-10, before any state file exists. The hook resolves an
+  absent state (or `workflow_init` still pending) to `research`, so the WI-10
+  window is covered — a bounded special case, not an "always research" rule.
+- **Subagents are excluded.** A dispatch made *from inside* a subagent carries
+  `agent_id`; the hook no-ops, so a nested dispatch cannot re-mark the step.
+- **Idempotent.** Re-marking an already `in_progress` step appends no event.
+- **Not an adoption origin.** The auto-mark never enters `ADOPTION_ORIGINS`
+  above: it is an automated PostToolUse detection, so it must not make an
+  inherited-only session look like it started the workflow itself.
+- **`write_code` stays its own predicate.** `isWriteCodeInFlight` is unchanged
+  and `write_code` is outside the allow-list; `anyStepInFlight` spans both for
+  consumers that mean "is any delegated unit of work running?".
+- **Expiry is not silence.** Past the TTL the record stops being honoured AND
+  becomes a reportable mechanism failure — see `hooks/lib/mechanism-failure.js`,
+  the UserPromptSubmit check `hooks/user-prompt-submit-mechanism-check.js`, and
+  the fail-fast block in C4 (#1979 / #1997). Each finding is reported once per
+  session, recorded in the `<sid>.stall-reported` ledger.
+
 ### Final Report
 
 `/session-close` SC-6 emits the Final Report directly into assistant text

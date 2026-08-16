@@ -4,6 +4,12 @@
 // cross-session state replay never counts as adoption. Rationale + full
 // origin list: docs/architecture/claude-code/workflow.md#exemptions (#1794).
 const { readState, isGenuineProvenance } = require("./state-io");
+const {
+  STEP_IN_FLIGHT_ALLOWLIST,
+  STEP_IN_FLIGHT_TTL_MS,
+  isStepInFlightCandidate,
+  isFreshInFlightEntry,
+} = require("../lib/step-in-flight-policy");
 
 // Event kinds that can represent a step settlement worth adopting. Currently
 // only step_status — other kinds don't carry a completion/skip fact.
@@ -67,37 +73,53 @@ function isWorkflowStarted(sid) {
 const WRITE_CODE_IN_FLIGHT_TTL_MS = 4 * 60 * 60 * 1000;
 
 // isWriteCodeInFlight(sid): true when THIS session's `write_code` step is
-// recorded `in_progress` and that record is younger than the TTL. Total
-// function — never throws.
-//
-// Deliberately scoped to `write_code` ALONE. `in_progress` already means "not
-// settled" everywhere else (core.js isSettledStatus, consumed by workflow-gate
-// / verdict / list) and that meaning is unchanged; C4 asks a different question
-// ("is someone actively working, so don't nudge"). Separating the two by
-// PREDICATE SCOPE rather than by redefining the status vocabulary keeps the
-// exception named and bounded — a blanket "any in_progress step" predicate
-// would silently extend the grace to e.g. `docs` (CPR-UNV).
-//
-// TIME AXIS: wall-clock `updated_at`, because the question is "how long has
-// this been running?" — elapsed time. `updated_seq` MUST NOT be used here: it
-// is a causal-ordering position with no duration meaning, and a stream position
-// can never expire.
-//
-// Fail-CLOSED, same failure shape as the retired marker reader it replaces: unreadable
-// state, missing step entry, wrong status, missing / non-string / unparseable
-// `updated_at`, or TTL exceeded all read as false. An unbounded quiet window
-// would silently disable C4 for the rest of the session.
+// recorded `in_progress` and younger than the TTL. Total — never throws.
+// Deliberately scoped to `write_code` ALONE, and kept as its own predicate even
+// after #2013 added the allowlist-scoped sibling below (CPR-UNV: the exception
+// stays named and bounded). Fail-CLOSED via isFreshInFlightEntry.
+// Detail: docs/architecture/claude-code/workflow.md#exemptions.
 function isWriteCodeInFlight(sid) {
   try {
     const state = readState(sid);
     const entry = state && state.steps && state.steps.write_code;
-    if (!entry || entry.status !== "in_progress") return false;
-    if (typeof entry.updated_at !== "string") return false;
-    const updatedAt = Date.parse(entry.updated_at);
-    if (Number.isNaN(updatedAt)) return false;
-    return Date.now() - updatedAt < WRITE_CODE_IN_FLIGHT_TTL_MS;
+    return isFreshInFlightEntry(entry, WRITE_CODE_IN_FLIGHT_TTL_MS);
   } catch (_e) {
     return false;
+  }
+}
+
+// isStepInFlight(sid, step): true when `step` is an ALLOWLISTED delegated step
+// (step-in-flight-policy.js is the SSOT) whose record is `in_progress` and
+// younger than the TTL. Sibling of isWriteCodeInFlight, not a generalisation:
+// write_code sits outside the allowlist, so the two disagree for a write_code
+// fixture (#2013). Total — never throws.
+function isStepInFlight(sid, step) {
+  try {
+    if (!isStepInFlightCandidate(step)) return false;
+    const state = readState(sid);
+    const entry = state && state.steps && state.steps[step];
+    return isFreshInFlightEntry(entry, STEP_IN_FLIGHT_TTL_MS);
+  } catch (_e) {
+    return false;
+  }
+}
+
+// anyStepInFlight(sid): the NAME of the step this session is currently waiting
+// on, or null — consumers report which dispatch they are deferring to. It spans
+// BOTH in-flight predicates because a consumer asking "is a unit of delegated
+// work running?" gets one answer, while the two predicates stay separately
+// addressable for callers that mean one of them specifically. Never throws.
+function anyStepInFlight(sid) {
+  try {
+    const state = readState(sid);
+    if (!state || !state.steps) return null;
+    for (const step of STEP_IN_FLIGHT_ALLOWLIST) {
+      if (isFreshInFlightEntry(state.steps[step], STEP_IN_FLIGHT_TTL_MS)) return step;
+    }
+    if (isFreshInFlightEntry(state.steps.write_code, WRITE_CODE_IN_FLIGHT_TTL_MS)) return "write_code";
+    return null;
+  } catch (_e) {
+    return null;
   }
 }
 
@@ -105,6 +127,8 @@ module.exports = {
   isWorkflowStarted,
   WRITE_CODE_IN_FLIGHT_TTL_MS,
   isWriteCodeInFlight,
+  isStepInFlight,
+  anyStepInFlight,
   hasSelfRecordedStepSettlement,
   ADOPTION_EVENT_KINDS,
   ADOPTION_ORIGINS,

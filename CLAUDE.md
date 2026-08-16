@@ -27,4 +27,4 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
 - When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).
 - `write-code` is not a tracked `next-step` step — invoke it manually once `write_tests`/`review_tests` complete, before `/run-tests`.
-- For keeping the Stop guard quiet during long-running work — automatic while `write_code` is in flight, `NEXT_STEP_PAUSE` otherwise — see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).
+- For keeping the Stop guard quiet during long-running work — automatic while a delegated step is in flight (`write_code`, or an Agent/Task/Skill dispatch auto-marked by PostToolUse), `NEXT_STEP_PAUSE` otherwise — see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).

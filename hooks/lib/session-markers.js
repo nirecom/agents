@@ -98,14 +98,14 @@ function issueCloseVerifiedNoticeText(hookName, sid) {
   );
 }
 
-// isNextStepPaused(sid): returns true iff <workflowDir>/<sid>.next-step-paused
-// exists (#1607 quiet layer). Fail-closed: any error → false.
-function isNextStepPaused(sid) {
+// isNextStepPaused(sid, currentStep): facade over the pause-marker module, which
+// owns the v2 scope/expiry contract (#1624; SSOT: lib/next-step-pause-marker.js).
+// A pause is honoured only when it is unexpired AND its for_step covers
+// `currentStep`. Fail-closed: any error → false.
+function isNextStepPaused(sid, currentStep = null) {
   try {
-    if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
-    const dir = getWorkflowDir();
-    const markerPath = path.join(dir, sid + ".next-step-paused");
-    return fs.existsSync(markerPath);
+    const { isPauseActive } = require("./next-step-pause-marker");
+    return isPauseActive(sid, currentStep);
   } catch (_e) {
     return false;
   }

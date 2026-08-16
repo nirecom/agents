@@ -10,6 +10,8 @@ Review test case completeness against source code via Codex (single round, no re
 
 ## Procedure
 
+Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
+
 RT-0. Resolve the session-bound linked worktree path:
   `WORKTREE="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path")"`
   If `WORKTREE == "NOSTATE"`, set `WORKTREE=""` — the internal scripts handle the CWD-fallback path for that case.
