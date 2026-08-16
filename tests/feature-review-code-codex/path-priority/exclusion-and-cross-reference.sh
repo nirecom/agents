@@ -137,9 +137,16 @@ PP_ENV=()
 #       as an afterthought.
 # ---------------------------------------------------------------------------
 PP_GATE_DIR="$TMPDIR_BASE/pp-gates-agents"
-mkdir -p "$PP_GATE_DIR/bin/lib"
+mkdir -p "$PP_GATE_DIR/bin/lib/concern-ledger"
 cp "$AGENTS_ROOT/bin/review-code-codex" "$PP_GATE_DIR/bin/review-code-codex"
 cp "$AGENTS_ROOT/bin/lib/codex-core.sh" "$PP_GATE_DIR/bin/lib/codex-core.sh"
+# run-quality-gates.sh calls review-code-codex through this ledger-aware wrapper (#1992/#1996)
+# rather than directly, so the fixture must carry the wrapper and its own dependencies too —
+# otherwise the gate reports "review-code-ledger: NOT FOUND" and the codex reviewer never runs.
+cp "$AGENTS_ROOT/bin/review-code-ledger" "$PP_GATE_DIR/bin/review-code-ledger"
+cp "$AGENTS_ROOT/bin/concern-ledger" "$PP_GATE_DIR/bin/concern-ledger"
+cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$PP_GATE_DIR/bin/lib/concern-ledger.sh"
+cp "$AGENTS_ROOT/bin/lib/concern-ledger/"*.sh "$PP_GATE_DIR/bin/lib/concern-ledger/"
 PP_GATES="$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
 
 pp_run_gates() { # <repo> ; prints the combined gate-runner output

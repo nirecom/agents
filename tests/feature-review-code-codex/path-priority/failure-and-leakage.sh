@@ -285,11 +285,16 @@ else
     fail "F4: .gitignore-excluded secret content leaked into:$f4_channels"
 fi
 
-# The row above is only meaningful if untracked files reach the model at all on this trusted
-# base state — otherwise F4's silence would just be P6's blanket-untracked-suppression finding
-# wearing a different marker name.
-if [ -f "$PP_CAPTURE" ] && grep -qF "PP-F-ORDINARY-MARKER" "$PP_CAPTURE"; then
-    pass "F4-guard: meanwhile the ordinary (non-ignored) untracked file's content still reached the prompt, so F4's silence about the secret is specific to .gitignore, not blanket untracked suppression"
+# The row above is only meaningful if the run actually took the intentional, disclosed
+# committed-diff exclusion path (E24, #1702) rather than some other failure/suppression that
+# would hide everything without naming it — otherwise F4's silence proves nothing specific.
+# This fixture's own .gitignore commit makes BASE...HEAD non-empty, so per E24 the ordinary
+# untracked file is excluded from the prompt body but still named on the EXCLUDED line. The
+# secret itself is a different case: `git ls-files --others --exclude-standard` never surfaces
+# a .gitignore'd path in the first place, so it never enters unc[]/unt[] and is never named on
+# the EXCLUDED line either — its absence there is expected, not a gap.
+if echo "$PP_OUT_TEXT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "ordinary-untracked.txt"; then
+    pass "F4-guard: the ordinary untracked file is named on the EXCLUDED line, so F4's silence about the secret reflects the intentional E24 disclosure path, not a blanket suppression or failure that would hide everything undisclosed"
 else
-    fail "F4-guard: the ordinary untracked file's content never reached the prompt either — F4's clean result proves nothing about .gitignore handling specifically. Output: $PP_OUT_TEXT"
+    fail "F4-guard: the EXCLUDED line does not name the ordinary untracked file, so F4's clean result does not prove the intentional E24 exclusion path was taken. Output: $PP_OUT_TEXT"
 fi
