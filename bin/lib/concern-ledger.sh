@@ -2,13 +2,9 @@
 # bin/lib/concern-ledger.sh
 # Shared concern-ledger library (schema v2) — #1992 / #1996.
 #
-# Why this exists: a review loop that renumbers its findings every round destroys
-# the only handle the author has on "the thing you told me about last time".
-# The ledger keeps the identity of a concern stable across rounds, so the success
-# metric of every consumer is ID continuity, not how alike two texts read.
-#
-# Identity is established by declared reference ID (B1) or by a frozen content
-# discriminator (B2) — never by position, cardinality, or how alike two texts look.
+# A review loop that renumbers findings every round breaks the author's
+# handle on "what you told me last time". Identity is by declared reference
+# ID (B1) or frozen content discriminator (B2) — never by position or text similarity.
 
 # Schema v2 (one entry per line, TEXT last so it may contain the separator):
 #   #concern-ledger-v2|<format>|<session-id>|cycle=<K>
@@ -21,15 +17,9 @@
 #   #producer|<name>|<completeness>|<exec-label>|<parse-label>|<round>
 #   <normalized delta records and #unparsed records>
 
-# This entrypoint holds what the rest of the repository reasons about directly:
-# the two identity decisions (bind, merge) and the derived file names. Everything
-# else lives in the sibling bin/lib/concern-ledger/ modules
-# (rules/coding/file-split.md Pattern A):
-#   core.sh     — normalization, SLOT/DISCRIM hashes, severity and completeness
-#   parse.sh    — ledger reading, the producer-report adapters, staging
-#   reduce.sh   — new state from the round's bind/merge decisions, cycle rollover
-#   render.sh   — the tally line and the prior-open-concerns block
-#   finalize.sh — the unresolved-concerns artifact and its verdict
+# This entrypoint holds the two identity decisions (bind, merge) and derived
+# file names. Sibling modules (rules/coding/file-split.md Pattern A):
+# core.sh/parse.sh/reduce.sh/render.sh/finalize.sh in bin/lib/concern-ledger/.
 
 CL_CATEGORY_VOCAB="correctness security contract performance style docs test maintainability portability concurrency usability other"
 
