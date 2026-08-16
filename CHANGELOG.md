@@ -323,3 +323,7 @@ Changes: Delegated workflow steps (research, detail, write_tests, review_tests) 
 ### FEATURE: PR #1944 (2026-08-16)
 Background: fix(worktree-start): auto-derive task name and branch type, remove interactive/non-interactive fallback branching
 Changes: `/worktree-start` no longer asks you to confirm a task name or branch type — both are now derived automatically from the session intent, so worktree creation never pauses for that input
+
+### FEATURE: PR #2050 (2026-08-16)
+Background: feat(enforce-worktree): sanctioned git merge --no-edit for diverged main worktree (#1982)
+Changes: `git merge --no-edit origin/<branch>` is now the sanctioned main-worktree recovery command when the branch diverges from its remote; Claude executes it directly (Rule 1 — autonomy-first). `git rebase` and `git reset --hard origin/<branch>` remain escalation-required per `rules/ops.md` "Diverged Main Worktree Recovery".
