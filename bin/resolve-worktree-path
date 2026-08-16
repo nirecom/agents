@@ -1,4 +1,22 @@
 #!/usr/bin/env bash
+":" //; : <<'AGENTS_NODE_GUARD'
+// #1532 node-misinvocation guard. bash never reads this region: the line above
+// is a no-op command plus a quoted here-document that swallows it. node parses
+// it as JavaScript, names the mistake and leaves 70 in process.exitCode. Every
+// write is fs.writeSync(2, ...) and the guard never calls process.exit, since
+// an asynchronous write followed by process.exit can be dropped. EAGAIN on a
+// non-blocking stderr is retried, any other error gives the diagnostic up --
+// the exit code survives either way. The block comment opened below is closed
+// only at end of file: the bash body must never close it early.
+const msg = process.argv[1] + ": this is a bash script, not a Node program." +
+  " Re-run it as: bash " + process.argv[1] + " [args...]\n";
+for (let i = 0; i < 100; i++) {
+  try { require("fs").writeSync(2, msg); break; }
+  catch (err) { if (err.code !== "EAGAIN") break; }
+}
+process.exitCode = 70;
+/*
+AGENTS_NODE_GUARD
 set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -28,3 +46,7 @@ BRIDGE_DIR="$NODE_DIR" node -e '
   }
   process.exit(0);
 '
+# End of the #1532 node-misinvocation guard envelope: ordinary comments for
+# bash. The last line closes the JavaScript block comment opened at the top;
+# nothing may follow the marker on that line.
+# */
