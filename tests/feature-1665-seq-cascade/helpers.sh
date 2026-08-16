@@ -5,14 +5,14 @@
 #
 # Shared harness for the #1665 commit-3 suite (seq projection + write-code resume
 # cascade). SOURCED by each case file; never run standalone.
-#
+
 # Isolation contract — rules/test/fixture-isolation.md:
 #   - CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are BOTH pinned (dual-pin).
 #   - CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID are unset before any node spawn.
 #   - CWD is a neutral temp dir, never the worktree.
 #   - Fixture repos get `git config core.hooksPath /dev/null`.
 #   - Paths handed to node are normalized with `cygpath -m`.
-#
+
 # NO SKIP PATH: exit 77 is reserved for "node is not installed". Every other
 # outcome is PASS or FAIL — an unimplemented feature must surface as a genuine
 # assertion failure, never as a skip.
@@ -57,6 +57,8 @@ M_INH="$AGENTS_DIR_N/hooks/workflow-state/inheritance/apply.js"; export M_INH
 M_LIFE="$AGENTS_DIR_N/hooks/workflow-state/lifecycle.js"; export M_LIFE
 M_POLICY="$AGENTS_DIR_N/hooks/lib/stop-exemption-policy.js"; export M_POLICY
 M_GUARD="$AGENTS_DIR_N/hooks/stop-premature-stop-guard.js"; export M_GUARD
+# #2013: the in-flight TTL moved out of lifecycle.js into the policy SSOT.
+M_STEP_POLICY="$AGENTS_DIR_N/hooks/lib/step-in-flight-policy.js"; export M_STEP_POLICY
 
 NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"

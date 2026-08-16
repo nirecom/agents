@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-tests-direct.js
-# Tags: workflow, hook, bin, macos, env
-# Test suite for claude-global/hooks/block-tests-direct.js PreToolUse hook.
-# Tests will FAIL until the hook is implemented — that is expected.
+# Tags: workflow, hook, bin, macos, env, write-tests-gate, exit-code, dir-names-pin, scope:common, TL2
+# Test suite for hooks/block-tests-direct.js PreToolUse hook.
+
+# CLAUDE_BLOCK_TESTS_DIR_NAMES — what value each case is testing. Cases that do
+# not pass it explicitly run with the variable UNSET (run_hook unsets it inside
+# its subshell), so an exported value in the developer's shell can never
+# redirect what the default-path cases (A*, B*, C15-C21, D*, E*, F*) exercise:
+# they assert the hook's own built-in default, `tests`. C22/C23 pin a custom
+# list to prove the override works; C24 pins the literal default so the built-in
+# and the documented default cannot drift apart silently.
+
+# Exit-code contract: this PreToolUse hook expresses its verdict in the stdout
+# JSON (decision approve/block), NOT in its exit status, so it must exit 0 in
+# BOTH directions. Every subprocess call below captures the real status and
+# asserts 0 — a swallowed `|| true` would hide a crash-after-printing.
 set -uo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK="$DOTFILES_DIR/claude-global/hooks/block-tests-direct.js"
+HOOK="$DOTFILES_DIR/hooks/block-tests-direct.js"
 ERRORS=0
 PASS_COUNT=0
 
@@ -24,9 +36,20 @@ run_with_timeout() {
 # ---------------------------------------------------------------------------
 # Temp dir / env file setup
 # ---------------------------------------------------------------------------
-TMPDIR_ROOT="$(node -e "const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');const d=path.join(os.tmpdir(),'btest-'+crypto.randomBytes(6).toString('hex'));fs.mkdirSync(d,{recursive:true});process.stdout.write(d);")"
+# Fixture isolation (rules/test/fixture-isolation.md): the parent Claude Code
+# session exports CLAUDE_SESSION_ID, so a hook spawned here would resolve the
+# LIVE session and read its real state instead of the fixture below.
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+
+# Two spellings of the same temp dir: the shell writes fixtures through the
+# POSIX path, node resolves the drive-letter form.
+TMPDIR_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t btest)"
+node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+TMPDIR_ROOT_N="$(node_path "$TMPDIR_ROOT")"
 CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
 CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
+WF_DIR_N="$TMPDIR_ROOT_N/workflow"
+ENV_FILE_N="$TMPDIR_ROOT_N/claude_env"
 mkdir -p "$CLAUDE_WORKFLOW_DIR"
 
 cleanup() {
@@ -61,10 +84,14 @@ make_env_file() {
     printf 'CLAUDE_SESSION_ID=%s\n' "$session_id" > "$CLAUDE_ENV_FILE"
 }
 
-# ---------------------------------------------------------------------------
-# Helper: run hook with given JSON, optional extra env vars (KEY=VAL format)
-# run_hook <json> [KEY=VAL ...]
-# ---------------------------------------------------------------------------
+# run_hook <json> [KEY=VAL ...]. Sets HOOK_RC (real exit status) and HOOK_OUT
+# (stdout). CLAUDE_BLOCK_TESTS_DIR_NAMES is unset first, so an unpinned caller
+# exercises the hook's built-in default, not an inherited value.
+# IMPORTANT: call bare, never as `result=$(run_hook ...)` — that forks
+# run_hook into a subshell, so `HOOK_RC=$?` assigns to the subshell's copy
+# and the caller's HOOK_RC keeps a stale value (D24-mutation pins this).
+HOOK_RC=0
+HOOK_OUT=""
 run_hook() {
     local json="$1"
     shift
@@ -73,17 +100,23 @@ run_hook() {
     local input_file
     input_file="$(mktemp "$TMPDIR_ROOT/hook_input.XXXXXX")"
     printf '%s' "$json" > "$input_file"
-    local result
-    result=$(
+    HOOK_OUT=$(
         (
-            export CLAUDE_ENV_FILE="$CLAUDE_ENV_FILE"
-            export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+            unset CLAUDE_BLOCK_TESTS_DIR_NAMES
+            export CLAUDE_ENV_FILE="$ENV_FILE_N"
+            export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
             for kv in "${extra_env[@]+"${extra_env[@]}"}"; do export "$kv"; done
             run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
         )
-    ) || true
+    )
+    HOOK_RC=$?
     rm -f "$input_file"
-    printf '%s' "$result"
+}
+
+# decision_of <hook-stdout> — the `decision` field, or the empty string when the
+# payload is not the JSON object the hook is supposed to print.
+decision_of() {
+    node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$1" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -99,39 +132,28 @@ pass() {
     PASS_COUNT=$((PASS_COUNT + 1))
 }
 
-assert_approve() {
-    local id="$1"
-    local desc="$2"
-    local json="$3"
-    shift 3
+# _assert_decision <want> <id> <desc> <json> [KEY=VAL ...]
+# Both directions assert the SAME exit-code contract (rc=0): the verdict lives in
+# the JSON, so `block` must not be expressed as a non-zero status either.
+_assert_decision() {
+    local want="$1" id="$2" desc="$3" json="$4"
+    shift 4
     local extra_env=("$@")
-    local result
-    result=$(run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}")
-    local decision
-    decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
-    if [ "$decision" = "approve" ]; then
+    local result decision problems=""
+    run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}"
+    result="$HOOK_OUT"
+    decision=$(decision_of "$result")
+    [ "$decision" = "$want" ] || problems="$problems [decision='${decision:-<none>}', expected ${want}]"
+    [ "$HOOK_RC" -eq 0 ] || problems="$problems [hook exited ${HOOK_RC}, a PreToolUse hook must exit 0 for a ${want} verdict]"
+    if [ -z "$problems" ]; then
         pass "${id}. ${desc}"
     else
-        fail "${id}. ${desc} — expected approve, got: ${result}"
+        fail "${id}. ${desc} —${problems} raw: ${result}"
     fi
 }
 
-assert_block() {
-    local id="$1"
-    local desc="$2"
-    local json="$3"
-    shift 3
-    local extra_env=("$@")
-    local result
-    result=$(run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}")
-    local decision
-    decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
-    if [ "$decision" = "block" ]; then
-        pass "${id}. ${desc}"
-    else
-        fail "${id}. ${desc} — expected block, got: ${result}"
-    fi
-}
+assert_approve() { _assert_decision approve "$@"; }
+assert_block() { _assert_decision block "$@"; }
 
 # ---------------------------------------------------------------------------
 # Session setup shortcut: set env file + state file together
@@ -160,9 +182,12 @@ setup_session "sess-a2" "pending"
 assert_block "A2" "Write + tests/foo.sh + pending + no agent_id → block" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-a2","agent_id":""}'
 
-# A3: Write + tests/foo.sh + in_progress → approve
+# A3 (#2013): in_progress is now an UNSETTLED state, not a settled one. The
+# PostToolUse auto-mark records write_tests in_progress on the first dispatch,
+# so approving on in_progress would open the direct-write path for the whole
+# step. Only `complete` / `skipped` (A4/A5) settle it.
 setup_session "sess-a3" "in_progress"
-assert_approve "A3" "Write + tests/foo.sh + in_progress → approve" \
+assert_block "A3" "Write + tests/foo.sh + in_progress → block (unsettled after the #2013 auto-mark)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-a3","agent_id":""}'
 
 # A4: Write + tests/foo.sh + complete → approve
@@ -207,18 +232,21 @@ b10_input_file="$(mktemp "$TMPDIR_ROOT/b10_input.XXXXXX")"
 printf '%s' "$b10_input" > "$b10_input_file"
 b10_result=$(
     (
-        unset CLAUDE_ENV_FILE
-        export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+        unset CLAUDE_ENV_FILE CLAUDE_BLOCK_TESTS_DIR_NAMES
+        export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
         run_with_timeout node "$HOOK" < "$b10_input_file" 2>/dev/null
     )
-) || true
+)
+b10_rc=$?
 rm -f "$b10_input_file"
-b10_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b10_result" 2>/dev/null || true)
-if [ "$b10_decision" = "approve" ]; then
-    pass "B10. no CLAUDE_ENV_FILE → approve (fail-open)"
-    PASS_COUNT=$((PASS_COUNT + 1))
+b10_decision=$(decision_of "$b10_result")
+b10_problems=""
+[ "$b10_decision" = "approve" ] || b10_problems="$b10_problems [decision='${b10_decision:-<none>}', expected approve]"
+[ "$b10_rc" -eq 0 ] || b10_problems="$b10_problems [hook exited ${b10_rc}, expected 0]"
+if [ -z "$b10_problems" ]; then
+    pass "B10. no CLAUDE_ENV_FILE → approve (fail-open), hook exits 0"
 else
-    fail "B10. no CLAUDE_ENV_FILE → expected approve, got: ${b10_result}"
+    fail "B10. no CLAUDE_ENV_FILE →${b10_problems} raw: ${b10_result}"
 fi
 
 # B11: CLAUDE_ENV_FILE set with session_id but no state file → approve (fail-open)
@@ -233,7 +261,11 @@ printf 'NOT VALID JSON {{{{' > "$CLAUDE_WORKFLOW_DIR/sess-b12.json"
 assert_approve "B12" "state file JSON corrupt → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b12","agent_id":""}'
 
-# B13: steps.write_tests key missing from state → approve (fail-open)
+# B13: a state file whose `steps` map is empty. readState projects the FULL
+# step list, materialising write_tests as `pending`, so the hook's `!status`
+# fail-open branch is unreachable through readState and the unsettled verdict
+# stands. The case pins that reality rather than the branch the hook still
+# carries; see the note filed with this suite.
 make_env_file "sess-b13"
 cat > "$CLAUDE_WORKFLOW_DIR/sess-b13.json" <<'EOF'
 {
@@ -242,7 +274,7 @@ cat > "$CLAUDE_WORKFLOW_DIR/sess-b13.json" <<'EOF'
   "steps": {}
 }
 EOF
-assert_approve "B13" "steps.write_tests missing → approve (fail-open)" \
+assert_block "B13" "empty steps map → block (projection materialises write_tests as pending)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b13","agent_id":""}'
 
 # B14: stdin malformed JSON → approve (fail-open)
@@ -252,18 +284,22 @@ b14_input_file="$(mktemp "$TMPDIR_ROOT/b14_input.XXXXXX")"
 printf '%s' 'NOT VALID JSON' > "$b14_input_file"
 b14_result=$(
     (
-        export CLAUDE_ENV_FILE="$CLAUDE_ENV_FILE"
-        export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+        unset CLAUDE_BLOCK_TESTS_DIR_NAMES
+        export CLAUDE_ENV_FILE="$ENV_FILE_N"
+        export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
         run_with_timeout node "$HOOK" < "$b14_input_file" 2>/dev/null
     )
-) || true
+)
+b14_rc=$?
 rm -f "$b14_input_file"
-b14_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b14_result" 2>/dev/null || true)
-if [ "$b14_decision" = "approve" ]; then
-    pass "B14. stdin malformed JSON → approve (fail-open)"
-    PASS_COUNT=$((PASS_COUNT + 1))
+b14_decision=$(decision_of "$b14_result")
+b14_problems=""
+[ "$b14_decision" = "approve" ] || b14_problems="$b14_problems [decision='${b14_decision:-<none>}', expected approve]"
+[ "$b14_rc" -eq 0 ] || b14_problems="$b14_problems [hook exited ${b14_rc}, expected 0]"
+if [ -z "$b14_problems" ]; then
+    pass "B14. stdin malformed JSON → approve (fail-open), hook exits 0"
 else
-    fail "B14. stdin malformed JSON — expected approve, got: ${b14_result}"
+    fail "B14. stdin malformed JSON —${b14_problems} raw: ${b14_result}"
 fi
 
 # ===========================================================================
@@ -319,6 +355,25 @@ assert_approve "C23" "tests/foo.sh + CLAUDE_BLOCK_TESTS_DIR_NAMES=spec,__tests__
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-c23","agent_id":""}' \
     "CLAUDE_BLOCK_TESTS_DIR_NAMES=spec,__tests__"
 
+# C24: the default value, pinned literally. Every unpinned case above runs with
+# CLAUDE_BLOCK_TESTS_DIR_NAMES unset and so asserts whatever the hook's built-in
+# default happens to be. This case states that default out loud — `tests` — and
+# proves the explicit spelling and the implicit one agree, so a change to the
+# built-in default becomes a visible failure here instead of a silent
+# reinterpretation of the whole suite.
+setup_session "sess-c24" "pending"
+assert_block "C24" "tests/foo.sh + CLAUDE_BLOCK_TESTS_DIR_NAMES=tests (default pinned explicitly) → block" \
+    '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-c24","agent_id":""}' \
+    "CLAUDE_BLOCK_TESTS_DIR_NAMES=tests"
+
+# C24b: the counter-anchor for C24 — with the default pinned, a directory that is
+# NOT in it still approves, so C24's block is attributable to `tests` being in
+# the list rather than to the hook blocking everything once the var is set.
+setup_session "sess-c24b" "pending"
+assert_approve "C24b" "spec/foo.js + CLAUDE_BLOCK_TESTS_DIR_NAMES=tests → approve (spec not in the default)" \
+    '{"tool_name":"Write","tool_input":{"file_path":"spec/foo.js"},"session_id":"sess-c24b","agent_id":""}' \
+    "CLAUDE_BLOCK_TESTS_DIR_NAMES=tests"
+
 # ===========================================================================
 # Section D — Idempotency
 # ===========================================================================
@@ -328,15 +383,19 @@ echo "=== Section D — Idempotency ==="
 # D24: same stdin twice → same decision both times
 setup_session "sess-d24" "pending"
 d24_json='{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-d24","agent_id":""}'
-d24_result1=$(run_hook "$d24_json")
-d24_result2=$(run_hook "$d24_json")
-d24_dec1=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d24_result1" 2>/dev/null || true)
-d24_dec2=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d24_result2" 2>/dev/null || true)
-if [ "$d24_dec1" = "$d24_dec2" ] && [ -n "$d24_dec1" ]; then
-    pass "D24. same stdin twice → same decision (${d24_dec1}) both times"
-    PASS_COUNT=$((PASS_COUNT + 1))
+run_hook "$d24_json"; d24_result1="$HOOK_OUT"; d24_rc1=$HOOK_RC
+run_hook "$d24_json"; d24_result2="$HOOK_OUT"; d24_rc2=$HOOK_RC
+d24_dec1=$(decision_of "$d24_result1")
+d24_dec2=$(decision_of "$d24_result2")
+d24_problems=""
+[ "$d24_dec1" = "$d24_dec2" ] && [ -n "$d24_dec1" ] ||
+    d24_problems="$d24_problems [decisions '${d24_dec1:-<none>}' then '${d24_dec2:-<none>}']"
+{ [ "$d24_rc1" -eq 0 ] && [ "$d24_rc2" -eq 0 ]; } ||
+    d24_problems="$d24_problems [exit codes ${d24_rc1} then ${d24_rc2}, both must be 0]"
+if [ -z "$d24_problems" ]; then
+    pass "D24. same stdin twice → same decision (${d24_dec1}) and exit 0 both times"
 else
-    fail "D24. idempotency — got '${d24_dec1}' then '${d24_dec2}'"
+    fail "D24. idempotency —${d24_problems}"
 fi
 
 # ===========================================================================
@@ -370,11 +429,10 @@ try {
 } catch(e) {
   process.stdout.write('ERROR: ' + e.message);
 }
-" -- "$HOOK_ABS" 2>/dev/null || true)
+" -- "$HOOK_ABS" 2>/dev/null)
 
 if [ "$e27_result" = "$EXPECTED_DENY_MESSAGE" ]; then
     pass "E27. DENY_MESSAGE exported and matches expected string"
-    PASS_COUNT=$((PASS_COUNT + 1))
 else
     fail "E27. DENY_MESSAGE drift — expected: '${EXPECTED_DENY_MESSAGE}' — got: '${e27_result}'"
 fi
@@ -394,6 +452,34 @@ assert_block "F28" "real state + write_tests=pending + no agent_id → block (in
 setup_session "sess-f29" "pending"
 assert_approve "F29" "real state + write_tests=pending + agent_id=sub-abc → approve (subagent, integration)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/integration.sh"},"session_id":"sess-f29","agent_id":"sub-abc"}'
+
+# ===========================================================================
+# Section G — Mutation test (HOOK_RC capture)
+# ===========================================================================
+echo ""
+echo "=== Section G — Mutation test (HOOK_RC capture) ==="
+
+# G30: a deliberately-bad "hook" that prints an approve verdict on stdout but
+# exits 1. Under the old `result=$(run_hook ...)` bug, HOOK_RC would be set
+# inside a subshell and this case would still read 0. Pinning HOOK_RC==1 here
+# proves run_hook's fix (HOOK_RC assigned in the caller's own scope) actually
+# detects a crash-after-printing hook.
+BAD_HOOK="$TMPDIR_ROOT/bad_hook.js"
+cat > "$BAD_HOOK" <<'EOF'
+process.stdout.write(JSON.stringify({decision: "approve"}));
+process.exit(1);
+EOF
+ORIG_HOOK="$HOOK"
+HOOK="$BAD_HOOK"
+run_hook '{"tool_name":"Write","tool_input":{"file_path":"src/foo.js"},"session_id":"sess-g30","agent_id":""}'
+g30_decision=$(decision_of "$HOOK_OUT")
+g30_rc="$HOOK_RC"
+HOOK="$ORIG_HOOK"
+if [ "$g30_decision" = "approve" ] && [ "$g30_rc" -eq 1 ]; then
+    pass "G30. bad hook (approve stdout, exit 1) → HOOK_RC correctly captured as 1"
+else
+    fail "G30. bad hook mutation test — decision='${g30_decision}' HOOK_RC=${g30_rc} (expected approve/1)"
+fi
 
 # ===========================================================================
 # Results

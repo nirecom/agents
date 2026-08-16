@@ -37,6 +37,9 @@ const SESSION_MARKER_KINDS = [
   "worktree-off",
   "issue-close-verified",
   "next-step-paused",
+  // The stall-reported ledger AUTHORIZES SUPPRESSION of a mechanism-failure
+  // report (#1997), so a forged one silences future reports.
+  "stall-reported",
   EMERGENCY_PROVENANCE_MARKER_KIND,
 ];
 

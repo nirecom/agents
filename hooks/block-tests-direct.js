@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PreToolUse hook: block direct writes to tests/ from the main conversation.
-// Subagents (agent_id present) and non-pending write_tests states pass through.
+// Subagents (agent_id present) and settled write_tests states pass through.
 // Fail-open: any error path approves rather than blocking.
 
 const fs = require("fs");
@@ -93,7 +93,10 @@ if (require.main === module) {
   // Step 5: check write_tests status — fail-open if key absent
   const status = state?.steps?.write_tests?.status;
   if (!status) approve(); // B13: key missing
-  if (status !== "pending") approve(); // A3/A4/A5: in_progress / complete / skipped
+  // Only a SETTLED step opens the direct-write path. Since #2013 the PostToolUse
+  // auto-mark records write_tests in_progress on the very first dispatch, so
+  // treating in_progress as settled would unblock tests/ for the whole step.
+  if (status !== "pending" && status !== "in_progress") approve(); // A4/A5
 
   // Step 6: allow subagents (agent_id populated only in subagent context)
   if (input.agent_id) approve(); // A9: non-empty agent_id

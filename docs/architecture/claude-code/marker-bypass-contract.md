@@ -57,6 +57,8 @@ exceptions independently.
 | `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 | `hooks/block-comment-block-size.js` | PreToolUse | **No** | **No** |
+| `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
+| `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
 
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
@@ -74,6 +76,14 @@ The private-info scanner (`scan-outbound.sh`) that runs later in the same hook i
 bypassed by markers — secret leakage protection is unconditional on the git side.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
+
+`hooks/postuse-step-in-flight-mark.js` and `hooks/user-prompt-submit-mechanism-check.js`
+(#2013 / #1979) read no marker at all. Neither one enforces anything: the first records the
+current step `in_progress` when a dispatch tool runs, the second reports a stalled step at
+the next user turn. There is nothing for a session override to suspend, so they are listed
+**No/No** rather than left out of the table (CPR-ORTH — absence would be indistinguishable
+from an oversight). The `.stall-reported` ledger they write is protected state, not a
+bypass: see `hooks/lib/protected-basenames.js`.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
