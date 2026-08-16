@@ -19,11 +19,23 @@ const DELEGATED_REASONS = new Set(["pre_final_report_gate"]);
 // phase="next-step-output" : decidable only after seeing next-step's output (REASON)
 // Each test is a pure function of (ctx, deps) — it must not close over module-scope
 // `let` bindings from the require.main block, or it throws ReferenceError (see #1794).
+// A pause is SCOPED to a step since #1624, so the marker can only be judged
+// against the step the session is actually on. Resolved here rather than
+// through `deps` so the row adds no new dependency to the table's contract.
+function currentStepOf(sid) {
+  try {
+    return require("./workflow-state/current-step").resolveCurrentEffectiveStep(sid);
+  } catch (_e) {
+    return null;
+  }
+}
+
 const C4_EXEMPTIONS = [
   { id: "workflow-off",      phase: "session", test: (c, d) => d.isWorkflowOff(c.sid) },
-  { id: "next-step-paused",  phase: "session", test: (c, d) => d.isNextStepPaused(c.sid) },
+  { id: "next-step-paused",  phase: "session",
+    test: (c, d) => d.isNextStepPaused(c.sid, currentStepOf(c.sid)) },
   { id: "pre-workflow-init", phase: "session", test: (c, d) => !d.isWorkflowStarted(c.sid) },
-  { id: "write-code-in-flight", phase: "session", test: (c, d) => d.isWriteCodeInFlight(c.sid) },
+  { id: "step-in-flight",    phase: "session", test: (c, d) => !!d.anyStepInFlight(c.sid) },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
 ];
@@ -36,10 +48,10 @@ const C4_EXEMPTIONS = [
 function buildExemptionDeps() {
   const { isWorkflowOff, isNextStepPaused } =
     require("./lib/session-markers");
-  const { isWorkflowStarted, isWriteCodeInFlight } = require("./workflow-state");
+  const { isWorkflowStarted, anyStepInFlight } = require("./workflow-state");
   return {
     isWorkflowOff, isNextStepPaused, isWorkflowStarted,
-    isWriteCodeInFlight,
+    anyStepInFlight,
   };
 }
 
@@ -60,6 +72,38 @@ function firstExemption(phase, ctx, deps, degraded) {
     if (hit) return e.id;
   }
   return null;
+}
+
+// Stalled-mechanism findings worth surfacing, or [] on any failure — the guard
+// stays fail-OPEN, so a broken detector must never manufacture a block.
+// `state-absent` is dropped here (see the call site).
+function mechanismStalls(sid) {
+  try {
+    const { detectStalledSteps } = require("./lib/mechanism-failure");
+    const found = detectStalledSteps(sid);
+    if (!Array.isArray(found)) return [];
+    return found.filter((f) => f && f.kind !== "state-absent");
+  } catch (_e) {
+    return [];
+  }
+}
+
+// Reports each finding at most once per session (the ledger owns idempotency),
+// then emits the decision:block payload naming the mechanism and the steps.
+function emitMechanismBlock(sid, stalls) {
+  try {
+    const { reportMechanismFailureOnce } = require("./lib/mechanism-failure");
+    for (const f of stalls) reportMechanismFailureOnce(sid, f);
+  } catch (_e) {}
+  const listed = stalls.map((f) => `${f.step} (${f.kind})`).join(", ");
+  const reason =
+    `[C4 mechanism-failure] The workflow mechanism is stalled: ${listed}. ` +
+    "The step is recorded in_progress but its record is stale or unusable, so " +
+    "next-step guidance cannot be trusted. Inspect the workflow state and settle " +
+    "the step before continuing. (Hook: stop-premature-stop-guard.js)";
+  try {
+    process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+  } catch (_e) {}
 }
 
 function readStdin() {
@@ -112,6 +156,18 @@ if (require.main === module) {
 
     const degraded = [];
     if (firstExemption("session", { sid: sessionId }, deps, degraded)) process.exit(0);
+
+    // #1997: a stalled MECHANISM is fail-fast, and it is decided before
+    // next-step runs — a session whose state is stuck often makes next-step
+    // report something unrelated (or nothing), so nudging past it would leave
+    // the failure invisible, which is the silence #1979 was made of.
+    // `state-absent` is excluded: no state at all is the ordinary
+    // no-workflow session, already covered by the pre-workflow-init exemption.
+    const stalls = mechanismStalls(sessionId);
+    if (stalls.length > 0) {
+      emitMechanismBlock(sessionId, stalls);
+      process.exit(2);
+    }
 
     // Locate next-step binary.
     const agentsDir = process.env.AGENTS_CONFIG_DIR

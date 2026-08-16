@@ -3,42 +3,21 @@
 # Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, bin/workflow/lib/next-step/verdict.js, hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, settings.json
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
-# Issues #1794 / #1665 — the Stop-guard exemption layer:
-#   #1794  isWorkflowStarted() + the C4_EXEMPTIONS / buildExemptionDeps /
-#          firstExemption restructuring, and the C2 pre-workflow-init gate
-#   #1665  commit 4 removed the `.background-work` marker primitive; its C4 role
-#          is now held by the state-derived `write-code-in-flight` row
-#          (write_code at in_progress inside a 4h TTL). The B/F/S/P case files
-#          that existed only to drive the marker went with it; what the removal
-#          must NOT touch is pinned by the surviving pre-workflow-init /
-#          workflow-off / next-step-paused rows, and the removal itself by
-#          tests/feature-1665-background-work-removed.sh.
-# X/T/Z cases are TL2 (real spawned hook and next-step processes against seeded
-# temp state dirs); M cases are TL1 plus a TL2 cross-check of the declarative
-# EXEMPTION_MATRIX against real behaviour.
-# Robustness rows: Z1 (sweep containment + resilience across the surviving
-# marker suffixes).
-# I1-I14 are the #1794 adoption regression: an inherited session (built here by
-# launching the real hooks/session-start.js against a donor state + transcript)
-# projects workflow_init=complete out of purely `backfilled`/`session-inherit`
-# events, so C4/C2 fire on a session that never ran /workflow-init. I4, I7 and
-# I12 are the paired counter-rows that keep the fix from over-suppressing, and I8
-# pins the C1 path where next-step's own auto-persist would otherwise launder an
-# inherited state into a genuine-looking one. I10/I10b/I11/I14 are the TL1
-# predicate tables (single-variable flips, real event shapes, event ordering, and
-# the fail-CLOSED malformed-input contract) and I13 is the idempotency pair.
+# Issues #1794 (isWorkflowStarted + C4_EXEMPTIONS/C2 pre-workflow-init gate) and
+# #1665 (background-work marker removal, replaced by state-derived
+# write-code-in-flight) — the Stop-guard exemption layer. X/T/Z are TL2 real
+# hook/next-step runs; M is TL1 plus a TL2 cross-check of EXEMPTION_MATRIX; Z1
+# is the marker-suffix sweep-containment/resilience row.
+
+# I1-I14 are the #1794 session-inheritance adoption regression (real
+# session-start.js against a donor state + transcript), with I4/I7/I8/I12 as
+# over-suppression guards and I10/I10b/I11/I13/I14 as the TL1 predicate and
+# idempotency tables.
 #
-# TL3 gap (what this test does NOT catch):
-# - Real Claude Code Stop hook invocation wiring (the settings.json Stop entries
-#   actually firing C2 and C4, and in which order)
-# - Real PostToolUse wiring for the sentinel commands that write the markers
-# - Live stop_hook_active propagation across a real auto-resume round trip
-# - A real SessionStart/PostCompact round trip driven by Claude Code itself: the
-#   I cases spawn hooks/session-start.js directly with a synthesized payload and
-#   a hand-written transcript JSONL, so a break in the settings.json SessionStart
-#   registration or in the real transcript format would go unseen here
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# TL3 gap: real Claude Code Stop/PostToolUse/SessionStart hook wiring and a real
+# stop_hook_active auto-resume round trip are not exercised here. Closest-to-action
+# mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh
+# category: hook-registration
 
 set -u
 
@@ -92,7 +71,7 @@ require_defined() {
 require_defined \
     pass fail skip \
     make_tmp node_path seed_started seed_preinit seed_raw_state seed_corrupt_state \
-    seed_sup_armed seed_sup_error seed_write_code_in_flight age_file \
+    seed_sup_armed seed_sup_error seed_write_code_in_flight seed_pause_marker age_file \
     run_c4 run_c2 run_mark run_next_step hostile_sid_probe no_new_finding \
     mk_fixture_repo inh_node seed_donor_and_inherit seed_recording_only \
     inh_wf inh_guard inh_probe inh_anchor write_hang_transcript pred_eval \
