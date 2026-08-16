@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# bin/concern-ledger — CLI front end for bin/lib/concern-ledger.sh (#1992/#1996).
+#
+# Every subcommand addresses the ledger by (plans-dir, session-id, format); the
+# on-disk paths are derived, never passed in, so no caller can drift from the
+# layout the loops and the summarizer agree on.
+#
+# Exit codes: 0 ok, 2 usage, 5 finalize could not produce the artifact.
+set -uo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/concern-ledger.sh
+. "$SELF_DIR/lib/concern-ledger.sh"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: concern-ledger <subcommand> [options]
+
+  slot            --path P --anchor A --category C
+  bind            --ledger L --delta D
+  render-prior    --plans-dir D --session-id S --format F
+  stage           --plans-dir D --session-id S --format F --round N
+                  --producer P --from-report FILE [--exec LABEL] [--parser MODE]
+  reduce          --plans-dir D --session-id S --format F --round N
+  tally           --plans-dir D --session-id S --format F
+  begin-round     --plans-dir D --session-id S --format F --round N
+  finalize        --plans-dir D --session-id S --format F --mode M --reason R
+                  --round N --cap C [--max-extensions N] [--extensions-used N]
+  check-finalized --plans-dir D --session-id S --format F [--round N]
+EOF
+    exit 2
+}
+
+SUB="${1:-}"; [ -n "$SUB" ] || usage; shift || true
+
+PLANS=""; SID=""; FORMAT=""; ROUND=""; PRODUCER=""; REPORT=""; EXEC=""
+PARSER="anchored"; MODE=""; REASON=""; CAP=""; MAXEXT="0"; USED="0"
+LEDGER_ARG=""; DELTA_ARG=""; APATH=""; AANCHOR=""; ACAT=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --plans-dir) PLANS="${2:-}"; shift 2 ;;
+        --session-id) SID="${2:-}"; shift 2 ;;
+        --format) FORMAT="${2:-}"; shift 2 ;;
+        --round) ROUND="${2:-}"; shift 2 ;;
+        --producer) PRODUCER="${2:-}"; shift 2 ;;
+        --from-report) REPORT="${2:-}"; shift 2 ;;
+        --exec) EXEC="${2:-}"; shift 2 ;;
+        --parser) PARSER="${2:-}"; shift 2 ;;
+        --mode) MODE="${2:-}"; shift 2 ;;
+        --reason) REASON="${2:-}"; shift 2 ;;
+        --cap) CAP="${2:-}"; shift 2 ;;
+        --max-extensions) MAXEXT="${2:-}"; shift 2 ;;
+        --extensions-used) USED="${2:-}"; shift 2 ;;
+        --ledger) LEDGER_ARG="${2:-}"; shift 2 ;;
+        --delta) DELTA_ARG="${2:-}"; shift 2 ;;
+        --path) APATH="${2:-}"; shift 2 ;;
+        --anchor) AANCHOR="${2:-}"; shift 2 ;;
+        --category) ACAT="${2:-}"; shift 2 ;;
+        -h|--help) usage ;;
+        *) printf 'concern-ledger: unknown option: %s\n' "$1" >&2; usage ;;
+    esac
+done
+
+[ -n "$SID" ] && export CL_SESSION_ID="$SID"
+
+need() { [ -n "$1" ] || { printf 'concern-ledger: %s is required\n' "$2" >&2; usage; }; }
+
+resolve_ledger() {
+    if [ -n "$LEDGER_ARG" ]; then printf '%s' "$LEDGER_ARG"; return; fi
+    need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format
+    cl_ledger_path "$PLANS" "$SID" "$FORMAT"
+}
+
+case "$SUB" in
+    slot)
+        cl_slot "$APATH" "$AANCHOR" "$ACAT"; printf '\n'
+        ;;
+    bind)
+        need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta
+        cl_bind "$LEDGER_ARG" "$DELTA_ARG"
+        ;;
+    render-prior)
+        cl_render_prior "$(resolve_ledger)"
+        ;;
+    begin-round)
+        need "$ROUND" --round; need "$FORMAT" --format
+        cl_begin_cycle "$(resolve_ledger)" "$FORMAT" "$ROUND"
+        ;;
+    stage)
+        need "$PLANS" --plans-dir; need "$SID" --session-id
+        need "$FORMAT" --format; need "$ROUND" --round
+        need "$PRODUCER" --producer; need "$REPORT" --from-report
+        TMPD="$(mktemp -d)" || exit 5
+        NORM="$TMPD/norm.txt"
+        export CL_PRODUCER="$PRODUCER"
+        case "$PARSER" in
+            numbered) PARSE="$(cl_parse_numbered "$REPORT" "$NORM")" ;;
+            cnref)    PARSE="$(cl_parse_cnref "$REPORT" "$(resolve_ledger)" "$NORM")" ;;
+            *)        PARSE="$(cl_parse_anchored "$REPORT" "$PRODUCER" "$NORM")" ;;
+        esac
+        if [ -z "$EXEC" ]; then
+            EXEC="$(grep -m1 -Eo '^## [A-Za-z ]+: (PERFORMED|SKIPPED|FAILED)' "$REPORT" 2>/dev/null | sed 's/.*: //')"
+            SCOPE="$(grep -m1 -Eo '^## [A-Za-z ]+ Scope: (TRUNCATED|BASE-[A-Z-]+)' "$REPORT" 2>/dev/null | sed 's/.*: //')"
+            case "$SCOPE" in TRUNCATED|BASE-*) [ "$EXEC" = "PERFORMED" ] && EXEC="$SCOPE" ;; esac
+            [ -z "$EXEC" ] && EXEC="PERFORMED"
+        fi
+        CL_STAGE_PREFIX="${SID}-" cl_stage "$PLANS" "$FORMAT" "$ROUND" "$PRODUCER" \
+            "$EXEC" "$PARSE" "$NORM" >/dev/null
+        rm -rf "$TMPD"
+        ;;
+    reduce)
+        need "$PLANS" --plans-dir; need "$SID" --session-id
+        need "$FORMAT" --format; need "$ROUND" --round
+        LED="$(resolve_ledger)"
+        cl_reduce "$LED" "$PLANS/${SID}-${FORMAT}-round-${ROUND}-delta-*.txt" "$ROUND" "$FORMAT" "$LED"
+        ;;
+    tally)
+        cl_tally "$(resolve_ledger)"; printf '\n'
+        ;;
+    finalize)
+        need "$PLANS" --plans-dir; need "$SID" --session-id
+        need "$FORMAT" --format; need "$ROUND" --round
+        [ -n "$MODE" ] || MODE="terminal"
+        [ -n "$REASON" ] || REASON="review loop ended without convergence"
+        [ -n "$CAP" ] || CAP="$ROUND"
+        [ -n "$LEDGER_ARG" ] && export CL_LEDGER_OVERRIDE="$LEDGER_ARG"
+        if cl_finalize "$PLANS" "$SID" "$FORMAT" "$MODE" "$REASON" "$ROUND" \
+                "$CAP" "$MAXEXT" "$USED"; then
+            printf '%s\n' "$(cl_json_path "$PLANS" "$SID" "$FORMAT")"
+        else
+            # Announced on both streams: the caller pipes stdout into its own
+            # report, while a human watching the terminal only sees stderr.
+            MSG="## Concern Ledger: FINALIZE-FAILED — ${CL_FINALIZE_ERROR:-could not write the unresolved-concerns artifact}"
+            if [ -n "${CL_RECOVERY:-}" ]; then
+                MSG="$MSG (recovered copy: $CL_RECOVERY)"
+            fi
+            printf '%s\n' "$MSG"
+            printf '%s\n' "$MSG" >&2
+            exit 5
+        fi
+        ;;
+    check-finalized)
+        need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format
+        cl_artifact_ok "$(cl_json_path "$PLANS" "$SID" "$FORMAT")" "$ROUND" || exit 1
+        ;;
+    *)
+        printf 'concern-ledger: unknown subcommand: %s\n' "$SUB" >&2
+        usage
+        ;;
+esac

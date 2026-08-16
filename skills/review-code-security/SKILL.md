@@ -20,17 +20,20 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-RCS-1. **Delegate scan to security-scanner**, issued together with the RCS-2 quality gates per `skills/_shared/subagent-concurrency.md` SC-P (independent — both are read-only over the merge-base diff and write no shared target):
+RCS-1. **Open the concern round** (Bash): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/open-concern-round.sh"` — prints `ROUND`, `PLANS_DIR`, `SESSION_ID`, and the `[PRIOR CONCERNS START]`…`[PRIOR CONCERNS END]` block both producers receive. `ROUND=0` means the ledger is unavailable: run RCS-2 and RCS-3, report the `NOT-STAGED` line, skip the ledger close-out in `## Completion`.
+
+RCS-2. **Delegate scan to security-scanner**, issued together with the RCS-3 quality gates per `skills/_shared/subagent-concurrency.md` SC-P (independent — both are read-only over the merge-base diff and write no shared target):
    ```
    Agent({ subagent_type: "security-scanner", prompt: JSON.stringify({
      topic: "security review", context: SCAN_TARGET,
-     artifact_dir: PLANS_DIR
+     artifact_dir: PLANS_DIR, prior_concerns: PRIOR_BLOCK
    }) })
    ```
+   Pass the RCS-1 block verbatim as `prior_concerns`; omit the key when RCS-1 printed none.
    On `failed` status: surface summary + artifact_path to user.
    Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
 
-RCS-2. **Quality gates** (Bash, issued with RCS-1 per SC-P): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs review-code-codex + 6 lint gates. Each gate is advisory; non-zero exit is a warning, not a blocker.
+RCS-3. **Quality gates** (Bash, issued with RCS-2 per SC-P): `CONCERN_LEDGER_ROUND=<ROUND> bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs the ledger-wrapped codex reviewer plus 7 lint gates; the wrapper stages the reviewer's own delta. Each gate is advisory; non-zero exit is a warning, not a blocker.
    When the output carries any `## <gate>: NOT FOUND` line, append `(N gates NOT FOUND)` to the `## Security Review:` line so the reader sees the sweep was incomplete.
 
 ## Patterns by Axis
@@ -74,9 +77,11 @@ RCS-2. **Quality gates** (Bash, issued with RCS-1 per SC-P): `bash "$AGENTS_CONF
 
 ## Completion
 
-After reporting findings:
-1. Run (as a standalone Bash command — no pipes, no && chaining):
-   `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`
+After reporting findings, once both RCS-2 and RCS-3 finish, close the ledger round via `skills/review-code-security/scripts/close-concern-round.sh`. Schema and severity vocabulary: `skills/_shared/concern-ledger.md`.
+
+1. Run: `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/close-concern-round.sh" <ROUND> <PLANS_DIR> <SESSION_ID> security-scanner <COMPLETE|PARTIAL|ABSENT> <artifact_path>` — stages the scanner's delta (mapping its `status:` onto the exec label), reduces, finalizes, and verifies via `check-finalized`, retrying finalize once on a transient failure. Append `(N unresolved concerns)`, derived from its `UNRESOLVED=` line, to the `## Security Review:` line.
+2. `CHECK=ok` → run (as a standalone Bash command — no pipes, no && chaining): `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`
+3. `CHECK=FINALIZE-FAILED` → do not emit the completion sentinel; report the `FINALIZE-FAILED` reason and the recovered-copy path instead.
 
 ## Relationship to Other Tools
 

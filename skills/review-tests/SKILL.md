@@ -33,6 +33,7 @@ RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-l
 - exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-4 COMPLETE; NEEDS_REVISION → RT-4 WARNINGS.
 - exit 4 → HALT with blocking error; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
+- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-4.
 RT-4. Emit workflow sentinel — two separate Bash calls, not chained:
 - RT-4a. `TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js" "${WORKTREE:-}")`
 - RT-4b. (adequate) `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
@@ -44,8 +45,8 @@ RT-4. Emit workflow sentinel — two separate Bash calls, not chained:
 The Test Case Categories checklist lives in `skills/_shared/test-design.md` — do not duplicate it here.
 WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/write-code` while `warnings_summary` is recorded.
 Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warning.
-On exit 4, emit neither sentinel and HALT.
-Invariant: RT-4 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4).
+On exit 4 or exit 7, emit neither sentinel and HALT.
+Invariant: RT-4 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4 and exit 7).
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
 To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
 Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
