@@ -238,3 +238,11 @@ Changes: #1651 Scoped rules injection by lifecycle. `rules/test.md`, `rules/docs
 ### FEATURE: PR #1991 — feature/1988-reporter-model-named-you-are (2026-08-13, 1c478c063d7bc34cf0476d3499826104deccb545, #1991)
 Background: fix(issue-create): extract reporter model from named-less self-report form (#1988)
 Changes: fix(issue-create): extract reporter model from named-less self-report form "You are powered by the model <name>." — extended MODEL_NAME_RE in hooks/lib/model-match.js, updated skills/issue-create/SKILL.md docs, added tests (feature-1611-model-match.sh, fix-1579-reporter-model-keyword-scan.sh) <!-- compose-doc-append-sentinel: branch=feature/1988-reporter-model-named-you-are pr=#1991 -->
+
+### FEATURE: PR #2023 — feature/1894-edit-pre-commit (2026-08-16, e8a34cd176b3d4c128b3da2eddc73d307837d82a, #2023)
+Background: feat: block comment blocks over threshold at edit time and commit tim...
+Changes: Added a gate that blocks comment blocks that grow past the configured threshold, both at Edit time (`hooks/block-comment-block-size.js`) and at commit time (`bin/review-comment-block-size` via pre-commit). Renamed the old warn-only settings (`COMMENT_BLOCK_WARN_LINES`/`COMMENT_BLOCK_WARN`) to `COMMENT_BLOCK_MAX_LINES`/`COMMENT_BLOCK_ENFORCE`, and the gate cannot be bypassed via `WORKFLOW_OFF`/`WORKTREE_OFF` session markers (#1894). <!-- compose-doc-append-sentinel: branch=feature/1894-edit-pre-commit pr=#2023 -->
+
+### FEATURE: PR #2024 — feature/1976-review-code-codex-diff (2026-08-16, 76f4318a591d48f55b61d1143db65e7f8f408fcc, #2024)
+Background: fix(review-code-codex): replace flat line-cap truncation with path-pr...
+Changes: fix(review-code-codex): stop truncating at a flat 5000-line cap that could review zero of the intended changes (#1976); add path-priority chunk collection with per-path budgets so committed/uncommitted/untracked changes are covered proportionally, with size, exclusion, and cross-reference safeguards;fix(review-code-codex): correct the off-by-one in CODEX_REVIEW_MAX_DIFF_LINES budget accounting so the configured line limit is honored exactly (#1750) <!-- compose-doc-append-sentinel: branch=feature/1976-review-code-codex-diff pr=#2024 -->

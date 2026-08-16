@@ -1,10 +1,10 @@
 #!/bin/bash
 # Tests: bin/review-code-codex
-# Tags: codex, review, labels, github, bin
-# Tests for bin/review-code-codex
-# Verifies: SKIPPED/PERFORMED/FAILED status labels, JSONL logging,
-# exit-0 guarantee, security (no shell injection from diff content),
-# and idempotency.
+# Tags: codex, review, labels, github, bin, scope:common, pwsh-not-required, TL2
+# Verifies: SKIPPED/PERFORMED/FAILED labels, JSONL logging, exit-0 guarantee, security, idempotency.
+# TL3 gap: real codex CLI is mocked (arg/stdin/exit-code contract unverified), real
+#   AGENTS_CONFIG_DIR precedence vs ~/.claude .env is untested, and host filesystem path
+#   rules are not exercised. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -55,14 +55,28 @@ run_in_repo() {
     (cd "$REPO" && PATH="$_path" HOME="$_home" _timeout bash "$SCRIPT" "$@") || true
 }
 
+# Status-preserving twin of run_in_repo, for rows asserting the exit-0 contract.
+# run_in_repo's `|| true` masks the real exit status, so those rows need the actual code.
+# Command substitution can't carry status either (subshell), so stdout/stderr go to a
+# file and the real subprocess status is captured in RUN_STATUS for the caller.
+RUN_STATUS=0
+RUN_OUTPUT_FILE="$TMPDIR_BASE/run-output.txt"
+run_in_repo_status() { # <path> [args...] ; sets RUN_STATUS and OUTPUT
+    local _path="${1}"; shift
+    RUN_STATUS=0
+    (cd "$REPO" && PATH="$_path" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@") \
+        >"$RUN_OUTPUT_FILE" 2>&1 || RUN_STATUS=$?
+    OUTPUT="$(cat "$RUN_OUTPUT_FILE")"
+}
+
 # ---------------------------------------------------------------------------
 # 1. SKIPPED — codex CLI not installed
 # Use only minimal system paths so codex (in fnm/nvm/npm dirs) is not found,
 # while bash, git, date, mktemp etc. remain accessible.
 # ---------------------------------------------------------------------------
 MINIMAL_PATH="/usr/local/bin:/usr/bin:/bin"
-EXIT_CODE=0
-OUTPUT=$(run_in_repo "$MINIMAL_PATH" --base main --no-log 2>&1) || EXIT_CODE=$?
+run_in_repo_status "$MINIMAL_PATH" --base main --no-log
+EXIT_CODE=$RUN_STATUS
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     fail "SKIPPED case: expected exit 0, got $EXIT_CODE"
@@ -110,8 +124,8 @@ exit 0
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
-EXIT_CODE=0
-OUTPUT=$(run_in_repo "$MOCK_BIN:$PATH" --base main --no-log 2>&1) || EXIT_CODE=$?
+run_in_repo_status "$MOCK_BIN:$PATH" --base main --no-log
+EXIT_CODE=$RUN_STATUS
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     fail "PERFORMED case: expected exit 0, got $EXIT_CODE"
@@ -141,8 +155,8 @@ exit 2
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
-EXIT_CODE=0
-OUTPUT=$(run_in_repo "$MOCK_BIN:$PATH" --base main --no-log 2>&1) || EXIT_CODE=$?
+run_in_repo_status "$MOCK_BIN:$PATH" --base main --no-log
+EXIT_CODE=$RUN_STATUS
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     fail "FAILED case: expected exit 0, got $EXIT_CODE"
@@ -394,260 +408,25 @@ else
     fail "Uncommitted-fallback: note message missing. Output: $OUTPUT"
 fi
 
-# ---------------------------------------------------------------------------
-# 15. Uncommitted-fallback: staged-only changes on a fresh branch are reviewed
-#     (the prior `git diff --cached` path must still work via `git diff HEAD`).
-# ---------------------------------------------------------------------------
-STAGED_REPO="$TMPDIR_BASE/staged-repo"
-mkdir -p "$STAGED_REPO"
-git -C "$STAGED_REPO" init -q
-git -C "$STAGED_REPO" config core.hooksPath "$STAGED_REPO/.git/no-such-hooks"
-git -C "$STAGED_REPO" config user.email "test@example.com"
-git -C "$STAGED_REPO" config user.name "Test"
-echo "init" > "$STAGED_REPO/README.md"
-git -C "$STAGED_REPO" add README.md
-git -C "$STAGED_REPO" commit -q -m "initial"
-git -C "$STAGED_REPO" checkout -q -b staged-branch
-echo "staged edit" >> "$STAGED_REPO/README.md"
-git -C "$STAGED_REPO" add README.md
+# Cases 15-17 (uncommitted / untracked collection) live in a sourced part: this file is past
+# the 500-line hard split limit, and they reuse TMPDIR_BASE, MOCK_BIN and _timeout above.
+# shellcheck source=./feature-review-code-codex/uncommitted-and-untracked.sh
+. "$AGENTS_ROOT/tests/feature-review-code-codex/uncommitted-and-untracked.sh"
 
-OUTPUT=$(cd "$STAGED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
-
-if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
-    pass "Uncommitted-fallback: staged-only changes reviewed (PERFORMED)"
-else
-    fail "Uncommitted-fallback: staged-only changes not reviewed. Output: $OUTPUT"
-fi
-
-# ---------------------------------------------------------------------------
-# 16. Untracked-only: brand-new file on a fresh branch is included in review
-#     (Gap 1 fix — git diff HEAD misses untracked files; git ls-files
-#     + git diff --no-index synthesises a pseudo-diff for each one).
-# ---------------------------------------------------------------------------
-UNTRACKED_REPO="$TMPDIR_BASE/untracked-repo"
-mkdir -p "$UNTRACKED_REPO"
-git -C "$UNTRACKED_REPO" init -q
-git -C "$UNTRACKED_REPO" config core.hooksPath "$UNTRACKED_REPO/.git/no-such-hooks"
-git -C "$UNTRACKED_REPO" config user.email "test@example.com"
-git -C "$UNTRACKED_REPO" config user.name "Test"
-echo "init" > "$UNTRACKED_REPO/README.md"
-git -C "$UNTRACKED_REPO" add README.md
-git -C "$UNTRACKED_REPO" commit -q -m "initial"
-git -C "$UNTRACKED_REPO" checkout -q -b untracked-branch
-# BASE...HEAD is empty (no commits past main); no tracked changes — only one untracked file
-echo "brand-new-content-xyz" > "$UNTRACKED_REPO/new-module.txt"
-
-CAPTURE_FILE16="$TMPDIR_BASE/captured-t16.txt"
-cat > "$MOCK_BIN/codex" << MOCK_EOF
-#!/usr/bin/env bash
-cat > "$CAPTURE_FILE16"
-echo "HIGH: noted"
-exit 0
-MOCK_EOF
-chmod +x "$MOCK_BIN/codex"
-
-OUTPUT=$(cd "$UNTRACKED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
-
-if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
-    pass "Untracked-only: review PERFORMED"
-else
-    fail "Untracked-only: review not PERFORMED. Output: $OUTPUT"
-fi
-
-if [[ -f "$CAPTURE_FILE16" ]] && grep -q "brand-new-content-xyz" "$CAPTURE_FILE16"; then
-    pass "Untracked-only: untracked file content present in codex prompt"
-else
-    fail "Untracked-only: untracked file content missing from prompt. File exists: $([ -f "$CAPTURE_FILE16" ] && echo yes || echo no)"
-fi
-
-# ---------------------------------------------------------------------------
-# 17. Committed+uncommitted: both committed diff and fresh uncommitted edits
-#     (including untracked files) are included in the review when BASE...HEAD
-#     is non-empty (Gap 2 fix — one-way gate was masking fresh uncommitted
-#     edits when committed diff already existed).
-# ---------------------------------------------------------------------------
-COMMITTED_REPO="$TMPDIR_BASE/committed-repo"
-mkdir -p "$COMMITTED_REPO"
-git -C "$COMMITTED_REPO" init -q
-git -C "$COMMITTED_REPO" config core.hooksPath "$COMMITTED_REPO/.git/no-such-hooks"
-git -C "$COMMITTED_REPO" config user.email "test@example.com"
-git -C "$COMMITTED_REPO" config user.name "Test"
-echo "init" > "$COMMITTED_REPO/README.md"
-git -C "$COMMITTED_REPO" add README.md
-git -C "$COMMITTED_REPO" commit -q -m "initial"
-git -C "$COMMITTED_REPO" checkout -q -b committed-branch
-echo "base content" > "$COMMITTED_REPO/tracked-file.txt"
-git -C "$COMMITTED_REPO" add tracked-file.txt
-git -C "$COMMITTED_REPO" commit -q -m "add tracked file"  # makes BASE...HEAD non-empty
-echo "uncommitted edit" >> "$COMMITTED_REPO/tracked-file.txt"  # unstaged change (tracked)
-echo "untracked-content-xyz" > "$COMMITTED_REPO/new-untracked.txt"  # untracked file
-
-CAPTURE_FILE17="$TMPDIR_BASE/captured-t17.txt"
-cat > "$MOCK_BIN/codex" << MOCK_EOF
-#!/usr/bin/env bash
-cat > "$CAPTURE_FILE17"
-echo "HIGH: noted"
-exit 0
-MOCK_EOF
-chmod +x "$MOCK_BIN/codex"
-
-OUTPUT=$(cd "$COMMITTED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
-
-if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
-    pass "Committed+uncommitted: review PERFORMED"
-else
-    fail "Committed+uncommitted: review not PERFORMED. Output: $OUTPUT"
-fi
-
-if [[ -f "$CAPTURE_FILE17" ]] && grep -q "\[COMMITTED DIFF (BASE\.\.\.HEAD)\]" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: committed diff section label present in prompt"
-else
-    fail "Committed+uncommitted: committed diff label missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
-fi
-
-if [[ -f "$CAPTURE_FILE17" ]] && grep -q "\[UNCOMMITTED CHANGES (working tree vs HEAD)\]" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: uncommitted changes section label present in prompt"
-else
-    fail "Committed+uncommitted: uncommitted changes label missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
-fi
-
-if [[ -f "$CAPTURE_FILE17" ]] && grep -q "untracked-content-xyz" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: untracked file content present in prompt"
-else
-    fail "Committed+uncommitted: untracked file content missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
-fi
-
-# ---------------------------------------------------------------------------
-# X (#1638) — what the verdict does NOT cover.
-#
-# `## Codex Review: PERFORMED` says a review ran. It does not say the review saw the whole
-# change, and there are two independent ways it does not:
-#
-#   1. TRUNCATION. The prompt is capped at MAX_DIFF_LINES; beyond that the tail is dropped.
-#      Today that fact is an `echo "Warning: ..."` that goes to the caller's stderr, while
-#      the verdict — the line a reviewer actually reads — still says PERFORMED. A review of
-#      the first 5000 lines of a 280k-line diff reporting "nothing concerning" is not a
-#      finding about the change; it is a finding about the first 2% of it.
-#   2. AN UNTRUSTWORTHY RANGE. The diff was taken against a base someone else resolved. If
-#      that base is wrong, the review is complete and correct about the wrong thing.
-#
-# Both get a line on STDOUT, next to the verdict, under a DISTINCT label:
-# `## Codex Review Scope:` rather than `## Codex Review:`. That separation is deliberate and
-# X6 pins it — the verdict label is parsed by callers for PERFORMED/SKIPPED/FAILED, and
-# adding a fourth value to that family would silently break them.
-# ---------------------------------------------------------------------------
-
-# A repository whose committed diff is comfortably past the cap, so truncation is real
-# rather than simulated by an injected constant.
-BIG_REPO="$TMPDIR_BASE/big-repo"
-mkdir -p "$BIG_REPO"
-git -C "$BIG_REPO" init -q
-git -C "$BIG_REPO" config core.hooksPath "$BIG_REPO/.git/no-such-hooks"
-git -C "$BIG_REPO" config user.email "test@example.com"
-git -C "$BIG_REPO" config user.name "Test"
-git -C "$BIG_REPO" config commit.gpgsign false
-echo "init" > "$BIG_REPO/README.md"
-git -C "$BIG_REPO" add README.md
-git -C "$BIG_REPO" commit -q -m "initial"
-git -C "$BIG_REPO" checkout -q -b feature-big
-awk 'BEGIN { for (i = 0; i < 6000; i++) print "generated line " i }' > "$BIG_REPO/big.txt"
-git -C "$BIG_REPO" add big.txt
-git -C "$BIG_REPO" commit -q -m "big commit"
-
-# The mock from case 4 is still on disk; make sure a PERFORMED verdict is what we get.
-cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
-#!/usr/bin/env bash
-echo "Nothing concerning found."
-exit 0
-MOCK_EOF
-chmod +x "$MOCK_BIN/codex"
-
-# --- X1: a diff past the cap declares the truncation where the verdict is read.
-X_OUT="$( (cd "$BIG_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>/dev/null) || true )"
-if echo "$X_OUT" | grep -q "## Codex Review Scope: TRUNCATED"; then
-    pass "X1: a diff past MAX_DIFF_LINES prints a TRUNCATED scope line on stdout"
-else
-    fail "X1: no '## Codex Review Scope: TRUNCATED' line. Output: $X_OUT"
-fi
-if echo "$X_OUT" | grep -q "INCOMPLETE"; then
-    pass "X1-wording: and says the coverage is INCOMPLETE, not merely that truncation happened"
-else
-    fail "X1-wording: the truncation line does not say coverage is incomplete. Output: $X_OUT"
-fi
-
-# --- X2: the other half. A diff under the cap must carry no such line, or the line stops
-#         meaning anything.
-X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>/dev/null) || true )"
-if echo "$X_OUT" | grep -q "## Codex Review Scope: TRUNCATED"; then
-    fail "X2: a small diff was reported TRUNCATED. Output: $X_OUT"
-else
-    pass "X2: a diff under the cap carries no TRUNCATED line"
-fi
-
-# --- X3: an untrustworthy base is declared next to the verdict.
-X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state SUSPECT --no-log 2>/dev/null) || true )"
-if echo "$X_OUT" | grep -q "## Codex Review Scope: BASE-SUSPECT"; then
-    pass "X3: --base-state SUSPECT prints a BASE-SUSPECT scope line"
-else
-    fail "X3: no '## Codex Review Scope: BASE-SUSPECT' line. Output: $X_OUT"
-fi
-
-# --- X4: and a trustworthy base — or no state at all, which is every existing caller —
-#         prints nothing. Without this row an unconditional line satisfies X3 forever and
-#         every ordinary review grows a scary caveat it did not earn.
-X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state RESOLVED --no-log 2>/dev/null) || true )"
-X_OUT2="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>/dev/null) || true )"
-if echo "$X_OUT" | grep -q "## Codex Review Scope: BASE-"; then
-    fail "X4: --base-state RESOLVED still printed a BASE- caveat. Output: $X_OUT"
-elif echo "$X_OUT2" | grep -q "## Codex Review Scope: BASE-"; then
-    fail "X4: an invocation with no --base-state printed a BASE- caveat. Output: $X_OUT2"
-else
-    pass "X4: a trustworthy state, and the no-flag default, both print no BASE- caveat"
-fi
-
-# --- X5: the state is interpolated into a line that is printed, so an unvalidated value is
-#         an injection point AND a way to fabricate a state that does not exist. It is
-#         normalised, not echoed, and the run still exits 0 like every other path here.
-X_RC=0
-X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state 'foo; touch /tmp/pwned-1638' --no-log 2>"$TMPDIR_BASE/x5err") || X_RC=$?; :)"
-X5_ERR="$(cat "$TMPDIR_BASE/x5err" 2>/dev/null || true)"
-if echo "$X_OUT" | grep -q "touch /tmp/pwned-1638"; then
-    fail "X5: the raw --base-state value was echoed into stdout. Output: $X_OUT"
-elif [ -e /tmp/pwned-1638 ]; then
-    rm -f /tmp/pwned-1638
-    fail "X5: the --base-state value was executed"
-elif ! echo "$X_OUT" | grep -q "^## Codex Review: "; then
-    # A usage error that aborts the run would satisfy "the value was not echoed" without
-    # normalising anything. The contract is that the review still happens.
-    fail "X5: the run produced no verdict — an invalid --base-state aborted it instead of being normalised. stdout: $X_OUT stderr: $X5_ERR"
-elif echo "$X5_ERR" | grep -qi "base-state"; then
-    pass "X5: an invalid --base-state is warned about, normalised, and never echoed — the review still runs"
-else
-    fail "X5: no warning about the invalid --base-state. stderr: $X5_ERR"
-fi
-
-# --- X6: the verdict family is untouched. `## Codex Review:` still carries exactly one of
-#         PERFORMED/SKIPPED/FAILED, and the new lines live under a different label so a
-#         caller grepping the verdict cannot pick them up.
-X_OUT="$( (cd "$BIG_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state SUSPECT --no-log 2>/dev/null) || true )"
-verdict_lines="$(echo "$X_OUT" | grep -c "^## Codex Review: " || true)"
-verdict_ok="$(echo "$X_OUT" | grep -cE "^## Codex Review: (PERFORMED|SKIPPED|FAILED)" || true)"
-scope_lines="$(echo "$X_OUT" | grep -c "^## Codex Review Scope: " || true)"
-if [ "$scope_lines" -lt 2 ]; then
-    # The premise: this invocation is both truncated AND base-suspect, so BOTH scope lines
-    # are owed. Without them the row would be asserting the ordinary verdict path and would
-    # prove nothing about the separation it exists to protect.
-    fail "X6: expected both scope lines (truncation + base state), found $scope_lines. Output: $X_OUT"
-elif [ "$verdict_lines" = "1" ] && [ "$verdict_ok" = "1" ]; then
-    pass "X6: with both scope lines present, the verdict line is still exactly one of PERFORMED/SKIPPED/FAILED"
-else
-    fail "X6: verdict family polluted — $verdict_lines '## Codex Review: ' lines, $verdict_ok well-formed. Output: $X_OUT"
-fi
+# The X-series truncation/base-state scope rows (#1638) live in a sourced part for the same
+# reason, and must run after the cases above to preserve the original execution order.
+# shellcheck source=./feature-review-code-codex/truncation-scope.sh
+. "$AGENTS_ROOT/tests/feature-review-code-codex/truncation-scope.sh"
 
 # The remaining merge-base scope rows live in a sourced part: this file is already past the
 # 500-line hard split limit, and they reuse REPO, MOCK_BIN and _timeout above.
 # shellcheck source=./feature-review-code-codex/base-state-scope.sh
 . "$AGENTS_ROOT/tests/feature-review-code-codex/base-state-scope.sh"
+
+# The #1976/#1750 path-priority rows come last: they reuse the exact-size fixtures the
+# boundary rows above built (Y_AT_REPO / Y_OVER_REPO) rather than rebuilding them.
+# shellcheck source=./feature-review-code-codex/path-priority.sh
+. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

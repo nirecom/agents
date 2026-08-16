@@ -17,7 +17,7 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-const expected = ['workflow-off','next-step-paused','pre-workflow-init','write-code-in-flight','delegated-reason'];
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason'];
 const problems = [];
 if (matrix.join(',') !== table.join(',')) {
   problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
@@ -61,23 +61,14 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
-# M1-c: the nextStep column is checked against the REAL bin/workflow/next-step
-#       for every marker-backed primitive. nextStep:true must quiet next-step
-#       (ACTION=paused); nextStep:false must leave it recommending a step.
-#       `pre-workflow-init`, `write-code-in-flight` and `delegated-reason` have
-#       no session marker: the first two are decided from session state and are
-#       covered by M1-d / M1-e, the third only from next-step's own output.
-#
-#       Every observation is positively anchored, so a broken setup cannot
-#       masquerade as a nextStep:false row:
-#         - the marker file must EXIST before next-step is asked anything
-#         - next-step must produce its 4-line contract (non-empty ACTION line)
-#         - nextStep:true rows must report the row's OWN REASON, not merely
-#           "some pause"
-#         - nextStep:false rows must report a real recommendation
-#           (ACTION=invoke + a non-empty NEXT_SKILL), not just "not paused"
-#         - the same session WITHOUT the marker must be ACTION=invoke, so the
-#           observed pause is attributable to the marker and nothing else
+# M1-c: the nextStep column, cross-checked against the REAL bin/workflow/next-step
+#       for every marker-backed primitive (pre-workflow-init/step-in-flight/
+#       delegated-reason have no session marker — covered by M1-d/M1-e instead).
+#       Each observation is positively anchored (marker on disk, a real
+#       ACTION= line, the row's own REASON when paused, a real ACTION=invoke +
+#       NEXT_SKILL when not, and an unmarked control run) so a broken setup
+#       cannot masquerade as a passing row. See git history for the fuller
+#       rationale this replaced.
 # ---------------------------------------------------------------------------
 run_M1c() {
     local tmp tn id suffix want reason got failures="" base_out
@@ -104,7 +95,11 @@ process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].next
             continue
         fi
 
-        : > "$tmp/m1csid.$suffix"
+        if [ "$id" = "next-step-paused" ]; then
+            seed_pause_marker "$tn" "m1csid"
+        else
+            : > "$tmp/m1csid.$suffix"
+        fi
         # precondition: the marker really is on disk. Without this, a silently
         # failed seed would look exactly like a legitimate nextStep:false row.
         if [ ! -f "$tmp/m1csid.$suffix" ]; then
@@ -154,7 +149,7 @@ run_M1d() {
 const g = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
 const byId = Object.fromEntries(g.C4_EXEMPTIONS.map((e) => [e.id, e]));
 const problems = [];
-const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','write-code-in-flight'];
+const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight'];
 for (const id of sessionRows) {
   if (!byId[id] || byId[id].phase !== 'session') problems.push(id + ':phase');
 }
@@ -177,46 +172,53 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
-# M1-e (#1665): the row that replaced `background-work`. It is state-derived,
-#       not marker-backed, so it needs its own driver: seed write_code at
-#       `in_progress` and read both columns off the REAL consumers.
+# M1-e (#1665, generalised by #2013): the row that replaced `background-work`.
+#       It is state-derived, not marker-backed, so it needs its own driver: seed
+#       an in_progress step and read both columns off the REAL consumers.
 #         - c4:true      -> the real C4 hook exits silently
 #         - nextStep:false -> next-step keeps recommending a step (ACTION=invoke
 #           with a non-empty NEXT_SKILL), the deliberate difference from the
 #           removed row, whose nextStep column was true
-#       The control run (same session, write_code NOT in_progress) must block,
-#       so the observed silence is attributable to the in-flight status alone.
+
+#       Both members are driven: write_code (the original #1665 case) and
+#       research (an allowlisted step, the #2013 case). The control run (same
+#       session, nothing in flight) must block, so the observed silence is
+#       attributable to the in-flight status alone.
 # ---------------------------------------------------------------------------
 run_M1e() {
-    local tmp tn want problems=""
+    local tmp tn want step problems=""
     want=$("$RWT" 15 node -e "
-process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['write-code-in-flight'].nextStep));" 2>/dev/null)
+process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['step-in-flight'].nextStep));" 2>/dev/null)
     [ "$want" = "false" ] || problems="$problems [matrix nextStep column is '${want:-<err>}', expected false]"
 
-    tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    seed_started "$tn" "m1esid"
-    # control: no in-flight write_code -> C4 must block
-    run_c4 "$tn" "m1esid"
-    [ "$C4_RC" -eq 2 ] || problems="$problems [control: C4 did not block without an in-flight write_code (rc=$C4_RC)]"
+    for step in write_code research; do
+        tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
+        seed_started "$tn" "m1esid"
+        # control: nothing in flight -> C4 must block
+        run_c4 "$tn" "m1esid"
+        [ "$C4_RC" -eq 2 ] || problems="$problems [$step control: C4 did not block with nothing in flight (rc=$C4_RC)]"
 
-    seed_write_code_in_flight "$tn" "m1esid"
-    run_c4 "$tn" "m1esid"
-    { [ "$C4_RC" -eq 0 ] && [ -z "$C4_OUT" ]; } ||
-        problems="$problems [c4:true broken — expected silent exit 0 (rc=$C4_RC, out=$C4_OUT)]"
+        seed_step_in_flight "$tn" "m1esid" "$step"
+        run_c4 "$tn" "m1esid"
+        { [ "$C4_RC" -eq 0 ] && [ -z "$C4_OUT" ]; } ||
+            problems="$problems [$step c4:true broken — expected silent exit 0 (rc=$C4_RC, out=$C4_OUT)]"
 
-    run_next_step "$tn" "m1esid"
-    echo "$NS_OUT" | grep -q '^ACTION=paused$' &&
-        problems="$problems [nextStep:false broken — next-step went quiet: $(echo "$NS_OUT" | tr '\n' ' ')]"
-    echo "$NS_OUT" | grep -q '^ACTION=invoke$' ||
-        problems="$problems [expected ACTION=invoke, got $(echo "$NS_OUT" | tr '\n' ' ')]"
-    echo "$NS_OUT" | grep -qE '^NEXT_SKILL=.+$' ||
-        problems="$problems [ACTION=invoke with an empty NEXT_SKILL]"
-    rm -rf "$tmp" 2>/dev/null || true
+        run_next_step "$tn" "m1esid"
+        echo "$NS_OUT" | grep -q '^ACTION=paused$' &&
+            problems="$problems [$step nextStep:false broken — next-step went quiet: $(echo "$NS_OUT" | tr '
+' ' ')]"
+        echo "$NS_OUT" | grep -q '^ACTION=invoke$' ||
+            problems="$problems [$step expected ACTION=invoke, got $(echo "$NS_OUT" | tr '
+' ' ')]"
+        echo "$NS_OUT" | grep -qE '^NEXT_SKILL=.+$' ||
+            problems="$problems [$step ACTION=invoke with an empty NEXT_SKILL]"
+        rm -rf "$tmp" 2>/dev/null || true
+    done
 
     if [ -z "$problems" ]; then
-        pass "M1-e: write-code-in-flight is c4:true / nextStep:false against the real hook and the real next-step"
+        pass "M1-e: step-in-flight is c4:true / nextStep:false for write_code AND an allowlisted step, against the real consumers"
     else
-        fail "M1-e: write-code-in-flight columns diverge from the consumers;$problems"
+        fail "M1-e: step-in-flight columns diverge from the consumers;$problems"
     fi
 }
 
@@ -232,7 +234,7 @@ const { firstExemption } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-
 const problems = [];
 const none = {
   isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,
-  isWriteCodeInFlight: () => false,
+  anyStepInFlight: () => null,
 };
 // nothing holds -> null, and a session-phase hit is invisible to the other phase
 if (firstExemption('session', { sid: 's' }, none) !== null) problems.push('empty-not-null');
@@ -242,15 +244,15 @@ if (firstExemption('next-step-output', { sid: 's', reason: 'pre_final_report_gat
 if (firstExemption('session', { sid: 's', reason: 'pre_final_report_gate' }, none) !== null) {
   problems.push('phase-leak-in');
 }
-// first-match-wins: workflow-off precedes write-code-in-flight in the table
-const both = Object.assign({}, none, { isWorkflowOff: () => true, isWriteCodeInFlight: () => true });
+// first-match-wins: workflow-off precedes step-in-flight in the table
+const both = Object.assign({}, none, { isWorkflowOff: () => true, anyStepInFlight: () => 'research' });
 if (firstExemption('session', { sid: 's' }, both) !== 'workflow-off') problems.push('order');
 // a throwing predicate is not exempt; it is recorded as degraded and the scan continues
 const boom = Object.assign({}, none, {
-  isWorkflowOff: () => { throw new Error('boom'); }, isWriteCodeInFlight: () => true,
+  isWorkflowOff: () => { throw new Error('boom'); }, anyStepInFlight: () => 'research',
 });
 const degraded = [];
-if (firstExemption('session', { sid: 's' }, boom, degraded) !== 'write-code-in-flight') problems.push('throw-halts-scan');
+if (firstExemption('session', { sid: 's' }, boom, degraded) !== 'step-in-flight') problems.push('throw-halts-scan');
 if (degraded.join(',') !== 'workflow-off') problems.push('degraded=' + degraded.join(','));
 // a throwing predicate on its own never yields an exemption
 const onlyBoom = Object.assign({}, none, { isWorkflowOff: () => { throw new Error('boom'); } });
@@ -263,10 +265,10 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
     fi
 }
 
-# _m3_c2_with_marker <sid> <marker-suffix|none|write-code-in-flight> — seed a
+# _m3_c2_with_marker <sid> <marker-suffix|none|step-in-flight> — seed a
 # started session with the C2 scheduled-review alert armed, arm the named
-# exemption, run the real C2 hook. `write-code-in-flight` is state-derived
-# (#1665) and has no marker file, so it is armed through the state store.
+# exemption, run the real C2 hook. `step-in-flight` is state-derived
+# (#1665/#2013) and has no marker file, so it is armed through the state store.
 _m3_c2_with_marker() {
     local sid="$1" suffix="$2" tmp tn
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
@@ -274,7 +276,8 @@ _m3_c2_with_marker() {
     seed_sup_armed "$tn" "$sid"
     case "$suffix" in
         none) : ;;
-        write-code-in-flight) seed_write_code_in_flight "$tn" "$sid" ;;
+        step-in-flight) seed_step_in_flight "$tn" "$sid" research ;;
+        next-step-paused) seed_pause_marker "$tn" "$sid" ;;
         *) : > "$tmp/$sid.$suffix" ;;
     esac
     run_c2 "$tn" "$sid"
@@ -282,7 +285,7 @@ _m3_c2_with_marker() {
 }
 
 # ---------------------------------------------------------------------------
-# M3-a: the C4-only primitive (write-code-in-flight, c2:false) must NOT reach
+# M3-a: the C4-only primitive (step-in-flight, c2:false) must NOT reach
 #       into C2: with write_code in flight and the scheduled-review alert armed,
 #       C2 still blocks, exactly as with nothing armed.
 #       `delegated-reason` (also c2:false) is unreachable from C2 by
@@ -291,14 +294,14 @@ _m3_c2_with_marker() {
 # ---------------------------------------------------------------------------
 run_M3a() {
     local suffix failures=""
-    for suffix in none write-code-in-flight; do
+    for suffix in none step-in-flight; do
         _m3_c2_with_marker "m3a-$suffix" "$suffix"
         if [ "$C2_RC" -ne 2 ] || ! echo "$C2_OUT" | grep -q '"decision":"block"'; then
             failures="$failures [$suffix: rc=$C2_RC]"
         fi
     done
     if [ -z "$failures" ]; then
-        pass "M3-a: c2:false holds for write-code-in-flight — C2 still blocks while write_code is in flight"
+        pass "M3-a: c2:false holds for step-in-flight — C2 still blocks while an allowlisted step is in flight"
     else
         fail "M3-a: a C4-only exemption suppressed C2;$failures"
     fi

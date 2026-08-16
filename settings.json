@@ -344,6 +344,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/record-off-skill-invocation.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/user-prompt-submit-mechanism-check.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -574,6 +579,16 @@
         ]
       },
       {
+        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-comment-block-size.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
@@ -681,6 +696,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-native-worktree-record.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-step-in-flight-mark.js\"",
             "timeout": 5
           }
         ]

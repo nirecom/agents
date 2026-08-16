@@ -1,38 +1,8 @@
 # Part of tests/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, merge-base, base-state, truncation, boundary, prompt-order, scope:issue-specific, pwsh-not-required, TL2
-#
-# Y (#1638) — THE REST OF THE STATES, THE EXACT TRUNCATION BOUNDARY, AND WHERE THE WARNING SITS
-# INSIDE THE PROMPT.
-#
-# X1-X6 pin one alarming state (SUSPECT), one trustworthy one (RESOLVED), the absent flag, an
-# injected value, and the verdict line's integrity. Three things they cannot see:
-#
-#   THE OTHER STATES (Y3-Y5). FALLBACK, UNRESOLVED and RECORDED are not decoration: each says
-#   something different to a reader deciding how much the review is worth. FALLBACK means the
-#   range is `HEAD~1`, so the review covers one commit of a branch that may have twenty.
-#   UNRESOLVED means there was no range at all and the review fell back to uncommitted changes.
-#   RECORDED means the base is a recorded fact and the review is worth exactly what it says.
-#   An implementation that special-cases `SUSPECT` satisfies X3 and X4 and then prints nothing
-#   for FALLBACK or UNRESOLVED — the two states where the reader is most likely to be looking
-#   at a review of almost nothing while the verdict says PERFORMED.
-#
-#   THE BOUNDARY (Y1-Y2). 6000 lines is over the cap and 2 lines are under it; neither can tell
-#   `>` from `>=`. The consequence of the wrong operator is small but it is the wrong KIND of
-#   small: a diff of exactly 5000 lines reviewed in full but announced as TRUNCATED teaches the
-#   reader to ignore the line, and a diff of 5001 truncated silently is a review that omitted
-#   a line nobody knows about. The fixtures below are built to an EXACT `git diff | wc -l`,
-#   which is the count the script itself uses, and the construction is verified rather than
-#   assumed — a fixture that missed by one would invert both rows.
-#
-#   WHERE THE WARNING SITS (Y6). This is the row that decides whether the caveat has any effect
-#   at all. The scope warning must precede the adversarial preamble in the prompt, because the
-#   preamble is what sets the model's task ("review this diff adversarially"). A caveat that
-#   arrives after the instruction — appended at the end, or attached to the diff — is read as
-#   part of the material rather than as a constraint on the job, and the model reviews the
-#   truncated diff as if it were the whole change. Nothing on stdout can reveal this: the scope
-#   LINE can be perfectly correct while the PROMPT carries the warning in the wrong place. Only
-#   the captured prompt shows it.
+# Y (#1638) covers what X1-X6 (SUSPECT/RESOLVED) cannot: the remaining base states FALLBACK/UNRESOLVED/RECORDED (Y3-Y5, each a different review-coverage caveat), the exact `>` vs `>=` truncation boundary (Y1-Y2, built to an exact `wc -l`), and whether the scope warning precedes the adversarial preamble (Y6) — a caveat appended after the instruction is read as material, not constraint.
+# TL3 gap: codex CLI is mocked (only enough to make PROMPT observable); merge-base states are injected via --base-state, not produced by the real resolver. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 Y_CAPTURE="$TMPDIR_BASE/captured-scope-prompt.txt"
 
@@ -61,7 +31,10 @@ MOCK_EOF
 y_run() { # <repo> [args...] ; prints stdout
     local repo="$1"
     shift
-    (cd "$repo" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@" 2>/dev/null) || true
+    # C2 (#1976 review gap): unset first, inside the subshell only, so a CODEX_REVIEW_MAX_DIFF_LINES
+    # the developer's or CI's shell happens to export cannot silently swap out the default/pinned
+    # budget these rows assume — process env otherwise wins over .env per hooks/lib/load-env.js.
+    (cd "$repo" && unset CODEX_REVIEW_MAX_DIFF_LINES && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@" 2>/dev/null) || true
 }
 
 # A repository whose `git diff main...HEAD` is EXACTLY <target> lines by `wc -l` — the same

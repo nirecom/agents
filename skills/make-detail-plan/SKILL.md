@@ -28,7 +28,7 @@ If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_s
 
 ### Step MDP-4 — Initial draft
 
-Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents.
+Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents. Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 ### Step MDP-4a — Sentinel detection (fallback notice)
 

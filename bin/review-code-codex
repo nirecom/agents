@@ -9,6 +9,8 @@
 #
 # May additionally emit, BEFORE the verdict and in a separate label family:
 #   ## Codex Review Scope: TRUNCATED — ...
+#   ## Codex Review Scope: EXCLUDED — ...
+#   ## Codex Review Scope: PRIORITY-UNTRUSTED — ...
 #   ## Codex Review Scope: BASE-<STATE> — ...
 # Separate family on purpose: callers grep `## Codex Review: ` for the verdict, and a caveat
 # that matched that pattern would break every one of them.
@@ -18,9 +20,11 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+
 # Source shared library
 # shellcheck source=lib/codex-core.sh
-source "$(dirname "$(realpath "$0")")/lib/codex-core.sh"
+source "$SCRIPT_DIR/lib/codex-core.sh"
 
 BASE="main"
 BASE_STATE="UNKNOWN"
@@ -84,58 +88,266 @@ codex_core_init "Codex Review"
 # Check codex CLI
 codex_core_check_cli
 
-# Get diff — treat git failure as FAILED (not SKIPPED) to avoid silent coverage gaps
-DIFF_ERR=$(mktemp /tmp/codex-diff-err-XXXXXX.txt)
-trap 'rm -f "$DIFF_ERR"' EXIT
-DIFF=$(git diff "${BASE}...HEAD" 2>"$DIFF_ERR") || {
-  DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
-  echo "## Codex Review: FAILED — git diff failed: ${DIFF_ERR_MSG}"
-  codex_core_log failed "git diff failed" 0
+# ---- truncation budget ------------------------------------------------------
+# Resolution order: process env -> bin/get-config-var (the repo's .env) -> built-in default.
+# Same form as resolve-merge-base.sh's own threshold resolution, with two extra guards: a
+# value longer than 18 digits would overflow shell arithmetic in the adoption loop, and a
+# value of zero is not a usable budget (it would review nothing while reporting a review).
+
+DEFAULT_MAX_DIFF_LINES=5000
+
+resolve_threshold() { # <var-name> <default>
+  local name="$1" def="$2" v=""
+  v="${!name:-}"
+  if [[ ! "$v" =~ ^[0-9]{1,18}$ ]]; then
+    v=""
+    # Absent in a standalone copy of this file — that is a supported degradation.
+    if [[ -x "$SCRIPT_DIR/get-config-var" ]]; then
+      v="$("$SCRIPT_DIR/get-config-var" "$name" "$def" 2>/dev/null)" || v=""
+    fi
+  fi
+  [[ "$v" =~ ^[0-9]{1,18}$ ]] || v="$def"
+  [[ "$v" =~ ^0+$ ]] && v="$def"
+  printf '%s' "$v"
+}
+
+MAX_DIFF_LINES="$(resolve_threshold CODEX_REVIEW_MAX_DIFF_LINES "$DEFAULT_MAX_DIFF_LINES")"
+
+# ---- repository root ---------------------------------------------------------
+# `git diff --name-only` / `git ls-files` (below) always print paths relative to the
+# repository top-level, but a plain `git diff -- "$path"` resolves that same string as a
+# pathspec relative to the *current working directory* unless told otherwise. Running every
+# git call in this section with `-C "$REPO_ROOT"` keeps enumeration and extraction consistent
+# regardless of which directory the script is invoked from — otherwise a call from a
+# subdirectory turns "sub/file.txt" into a pathspec resolved as "sub/sub/file.txt", which git
+# reports as an empty diff that then gets recorded as reviewed.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "## Codex Review: FAILED — not inside a git repository"
   exit 0
 }
 
-# Collect uncommitted diff (staged + unstaged + untracked) unconditionally.
-# When BASE...HEAD is non-empty, the committed and uncommitted diffs are both sent
-# (Gap 2 fix — see #430). When BASE...HEAD is empty, uncommitted acts as the fallback
-# (Gap 1 fix — untracked files are included via git ls-files + git diff --no-index).
+# ---- path-priority diff collection ------------------------------------------
+# Why per-path rather than one concatenated diff cut with `head -n`: git prints files in its
+# own order, so a raw line cut keeps whatever sorted first. A session that edited three files
+# can have all three fall past the cut because an unrelated committed file occupied the budget,
+# and the review that comes back "nothing concerning" never saw the change under review at all
+# (#1976). The changed paths are listed first, each path's chunk is asked for individually, the
+# list is ordered, and whole chunks are adopted until the budget stops adoption.
 
-# Phase 2: collect the uncommitted diff unconditionally (staged + unstaged)
-UNCOMMITTED_DIFF=$(git diff HEAD 2>"$DIFF_ERR") || {
-  DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
-  echo "## Codex Review: FAILED — git diff HEAD failed: ${DIFF_ERR_MSG}"
-  codex_core_log failed "git diff HEAD failed" 0
-  exit 0
+CP_DIFF=""
+CP_DIFF_LINES=0
+CP_TOTAL=0
+CP_ADOPTED=()
+CP_DROPPED=()
+CP_EXCLUDED=()
+CP_PARTIAL=""
+CP_FALLBACK=0
+CP_TRUNCATED=0
+CP_ERR=""
+CP_CHUNK=""
+CP_NAMES=()
+
+_cp_read_names() { # <NUL-delimited file> ; fills CP_NAMES
+  CP_NAMES=()
+  local p
+  while IFS= read -r -d '' p; do
+    [[ -n "$p" ]] && CP_NAMES+=("$p")
+  done < "$1"
 }
 
-# Phase 2b: append the untracked files' pseudo-diff -- but skip this when base-state is
-# degraded (SUSPECT/FALLBACK/UNRESOLVED). In a degraded state BASE=HEAD, so HEAD...HEAD is
-# always empty and this block would become the sole review target. Untracked files can
-# contain arbitrary content (not scanned for secrets etc. created as part of the reviewed
-# tree), so unconditionally sending their full text to an external LLM while degraded is an
-# information-leak risk. The tracked uncommitted diff (git diff HEAD) stays in the review
-# target even while degraded -- only the untracked files' raw content is skipped.
-# git diff --no-index exits 1 when files differ -> || true is required (under set -uo pipefail)
-# Prevent trailing-newline glue: insert a separator newline first when git diff HEAD has output
-case "$BASE_STATE" in
-  SUSPECT|FALLBACK|UNRESOLVED) : ;; # degraded — skip untracked collection, see comment above
-  *)
-    [[ -n "$UNCOMMITTED_DIFF" ]] && UNCOMMITTED_DIFF+=$'\n'
-    while IFS= read -r -d '' untracked_file; do
-      UNCOMMITTED_DIFF+=$(git diff --no-index /dev/null "$untracked_file" 2>/dev/null || true)
-      UNCOMMITTED_DIFF+=$'\n'
-    done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
-    ;;
-esac
+_cp_contains() { # <needle> [haystack...]
+  local needle="$1"; shift
+  local x
+  for x in "$@"; do
+    [[ "$x" == "$needle" ]] && return 0
+  done
+  return 1
+}
 
-# Phase 3: prefer the committed diff; uncommitted is only a fallback when there is no committed diff
-if [[ -z "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
-  # no committed diff, uncommitted diff present: fallback (Gap 1 fix -- preserves existing behavior)
-  echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged + untracked) instead."
-  DIFF="$UNCOMMITTED_DIFF"
+_cp_lines() { # <text> ; the #1750-correct line count (a final line with no newline counts)
+  [[ -n "$1" ]] || { printf '0'; return 0; }
+  printf '%s\n' "$1" | wc -l | tr -d '[:space:]'
+}
+
+# The path is passed as an argv element, never interpolated into a command string.
+# --no-renames throughout: with rename detection on, a pathspec-filtered diff resolves to the
+# new path alone and its chunk reads as a plain addition, so the reviewer never learns which
+# file the content came from. Turning detection off lists both sides as ordinary paths.
+_cp_chunk() { # <kind> <path> ; sets CP_CHUNK, returns 1 on a real git failure
+  local kind="$1" path="$2" rc=0
+  CP_CHUNK=""
+  case "$kind" in
+    committed)
+      CP_CHUNK=$(git -C "$REPO_ROOT" -c core.quotePath=false --literal-pathspecs diff --no-renames "${BASE}...HEAD" -- "$path" 2>/dev/null) || rc=$? ;;
+    uncommitted)
+      CP_CHUNK=$(git -C "$REPO_ROOT" -c core.quotePath=false --literal-pathspecs diff --no-renames HEAD -- "$path" 2>/dev/null) || rc=$? ;;
+    untracked)
+      # --no-index exits 1 both when the two files differ (the expected case here) and when
+      # "$path" has disappeared or become inaccessible since enumeration — the latter prints no
+      # stdout, so treating every rc==1 as "differs" silently records a vanished file as an
+      # empty-but-reviewed diff. Checking existence first (relative to REPO_ROOT, matching how
+      # the name was enumerated) tells the two cases apart; a path that no longer exists is a
+      # genuine failure, not a zero-line diff. The -- terminator stops a leading-dash filename
+      # (e.g. "--output=victim") from being parsed as a git option.
+      if [[ ! -e "$REPO_ROOT/$path" ]]; then
+        rc=1
+      else
+        CP_CHUNK=$(git -C "$REPO_ROOT" -c core.quotePath=false --literal-pathspecs diff --no-index -- /dev/null "$path" 2>/dev/null) || rc=$?
+        (( rc == 1 )) && rc=0
+      fi ;;
+  esac
+  if (( rc != 0 )); then
+    CP_CHUNK=""
+    return 1
+  fi
+  return 0
+}
+
+# Report-side path rendering: control characters are neutralised (a filename may contain a
+# newline, which would otherwise forge a report line), the list is capped, and entries are
+# separated by ", " so a filename's own comma cannot read as a delimiter.
+cp_format_paths() { # <cap> [path...]
+  local cap="$1"; shift
+  local total=$# n=0 out="" p
+  for p in "$@"; do
+    n=$(( n + 1 ))
+    (( n > cap )) && break
+    [[ -n "$out" ]] && out+=", "
+    out+="$(printf '%s' "$p" | tr '\n\r\t' '???')"
+  done
+  (( total > cap )) && out+=", … and $(( total - cap )) more"
+  printf '%s' "$out"
+}
+
+codex_priority_collect() { # <workdir>
+  local wd="$1" err="$1/git-err"
+  local -a committed=() unc=() unt=() ord_paths=() ord_kinds=()
+  local p i n total=0 stopped=0 first_over=-1
+
+  if ! git -C "$REPO_ROOT" -c core.quotePath=false diff --no-renames --name-only -z "${BASE}...HEAD" >"$wd/committed" 2>"$err"; then
+    CP_ERR="git diff failed: $(tr '\n' ' ' <"$err")"
+    return 1
+  fi
+  if ! git -C "$REPO_ROOT" -c core.quotePath=false diff --no-renames --name-only -z HEAD >"$wd/uncommitted" 2>"$err"; then
+    CP_ERR="git diff HEAD failed: $(tr '\n' ' ' <"$err")"
+    return 1
+  fi
+  : >"$wd/untracked"
+  # Untracked files are skipped while the base state is degraded (SUSPECT/FALLBACK/UNRESOLVED).
+  # In a degraded state BASE=HEAD, so BASE...HEAD is always empty and untracked content would
+  # become the sole review target. That content is arbitrary and unscanned, so shipping its full
+  # text to an external LLM while degraded is an information-leak risk. The tracked uncommitted
+  # diff stays in the target even while degraded — only untracked raw content is withheld.
+  case "$BASE_STATE" in
+    SUSPECT|FALLBACK|UNRESOLVED) : ;;
+    *)
+      if ! git -C "$REPO_ROOT" -c core.quotePath=false ls-files --others --exclude-standard -z >"$wd/untracked" 2>"$err"; then
+        CP_ERR="git ls-files failed: $(tr '\n' ' ' <"$err")"
+        return 1
+      fi ;;
+  esac
+
+  _cp_read_names "$wd/committed";   committed=( ${CP_NAMES[@]+"${CP_NAMES[@]}"} )
+  _cp_read_names "$wd/uncommitted"; unc=( ${CP_NAMES[@]+"${CP_NAMES[@]}"} )
+  _cp_read_names "$wd/untracked";   unt=( ${CP_NAMES[@]+"${CP_NAMES[@]}"} )
+
+  if [[ ${#committed[@]} -gt 0 ]]; then
+    # Two stable tiers inside the committed range: paths the session is STILL editing (they
+    # also carry an uncommitted or untracked change) come first, everything else keeps git's
+    # own order. Ordering is deterministic, so two runs of one tree order identically.
+    for p in "${committed[@]}"; do
+      if _cp_contains "$p" ${unc[@]+"${unc[@]}"} ${unt[@]+"${unt[@]}"}; then
+        ord_paths+=("$p"); ord_kinds+=("committed")
+      fi
+    done
+    for p in "${committed[@]}"; do
+      if ! _cp_contains "$p" ${unc[@]+"${unc[@]}"} ${unt[@]+"${unt[@]}"}; then
+        ord_paths+=("$p"); ord_kinds+=("committed")
+      fi
+    done
+    # E24 (#1702): a committed diff exists, so the whole uncommitted/untracked set is outside
+    # the review target. The rule itself is unchanged — the set is recorded only so the caller
+    # can disclose by name what the review does not cover.
+    CP_EXCLUDED=( ${unc[@]+"${unc[@]}"} ${unt[@]+"${unt[@]}"} )
+  else
+    for p in ${unc[@]+"${unc[@]}"}; do ord_paths+=("$p"); ord_kinds+=("uncommitted"); done
+    for p in ${unt[@]+"${unt[@]}"}; do ord_paths+=("$p"); ord_kinds+=("untracked"); done
+    [[ ${#ord_paths[@]} -gt 0 ]] && CP_FALLBACK=1
+  fi
+  CP_TOTAL=${#ord_paths[@]}
+
+  # Stop-at-first-skip adoption. A chunk that does not fit ends adoption outright: leapfrogging
+  # it to take a smaller chunk further down would report a review of "the small files" while the
+  # larger change it skipped is the one that mattered. The leftover budget is left unspent on
+  # purpose.
+  for (( i = 0; i < ${#ord_paths[@]}; i++ )); do
+    p="${ord_paths[$i]}"
+    if (( stopped )); then
+      CP_DROPPED+=("$p")
+      continue
+    fi
+    if ! _cp_chunk "${ord_kinds[$i]}" "$p"; then
+      CP_ERR="git diff failed while extracting the diff chunk for a changed path"
+      return 1
+    fi
+    n=$(_cp_lines "$CP_CHUNK")
+    if (( total + n <= MAX_DIFF_LINES )); then
+      if [[ -n "$CP_CHUNK" ]]; then
+        [[ -n "$CP_DIFF" ]] && CP_DIFF+=$'\n'
+        CP_DIFF+="$CP_CHUNK"
+      fi
+      total=$(( total + n ))
+      CP_ADOPTED+=("$p")
+    elif (( total == 0 )); then
+      # Nothing has been adopted yet and this path alone is past the whole budget. Stopping
+      # here would make the review empty, so the path is dropped and the scan continues; the
+      # anti-leapfrog rule only has to hold once adoption has actually begun. The first such
+      # path is remembered as the fallback in case no path ever fits.
+      (( first_over < 0 )) && first_over=$i
+      CP_TRUNCATED=1
+      CP_DROPPED+=("$p")
+    else
+      CP_TRUNCATED=1
+      stopped=1
+      CP_DROPPED+=("$p")
+    fi
+  done
+
+  # No path fit the budget at all: review the head of the first oversized one rather than
+  # nothing, and declare it partial. It is CP_DROPPED[0] — it was dropped before any other.
+  if [[ ${#CP_ADOPTED[@]} -eq 0 && $first_over -ge 0 ]]; then
+    p="${ord_paths[$first_over]}"
+    if ! _cp_chunk "${ord_kinds[$first_over]}" "$p"; then
+      CP_ERR="git diff failed while extracting the diff chunk for a changed path"
+      return 1
+    fi
+    CP_DIFF=$(printf '%s\n' "$CP_CHUNK" | head -n "$MAX_DIFF_LINES")
+    CP_ADOPTED+=("$p")
+    CP_PARTIAL="$p"
+    CP_DROPPED=( ${CP_DROPPED[@]+"${CP_DROPPED[@]:1}"} )
+  fi
+
+  CP_DIFF_LINES=$(_cp_lines "$CP_DIFF")
+  [[ ${#CP_DROPPED[@]} -gt 0 ]] && CP_TRUNCATED=1
+  return 0
+}
+
+# Collect — treat git failure as FAILED (not SKIPPED) to avoid silent coverage gaps.
+CP_WORKDIR=$(mktemp -d /tmp/codex-diff-XXXXXX)
+trap 'rm -rf "$CP_WORKDIR"' EXIT
+if ! codex_priority_collect "$CP_WORKDIR"; then
+  echo "## Codex Review: FAILED — ${CP_ERR}"
+  codex_core_log failed "${CP_ERR}" 0
+  exit 0
 fi
-# committed diff present: use the committed diff only (staged changes are not included)
-# both empty: the SKIPPED guard further below handles this case
-DIFF_LINES=$(printf '%s' "$DIFF" | wc -l)
+rm -rf "$CP_WORKDIR"
+
+DIFF="$CP_DIFF"
+DIFF_LINES="$CP_DIFF_LINES"
+
+if (( CP_FALLBACK )); then
+  echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged + untracked) instead."
+fi
 
 if [[ -z "$DIFF" ]]; then
   echo "## Codex Review: SKIPPED — empty diff (no committed changes vs ${BASE}, no uncommitted changes, no untracked files)"
@@ -143,19 +355,31 @@ if [[ -z "$DIFF" ]]; then
   exit 0
 fi
 
-# Truncate large diffs.
-#
-# The two ways this review's coverage can be incomplete are announced HERE, on stdout, above
-# the verdict — because "nothing concerning" read next to nothing else is indistinguishable
-# from "nothing concerning in the 12% I looked at". They are two separate lines: a truncated
-# diff and an untrustworthy base are different facts with different remedies (CPR-SC).
+# The ways this review's coverage can be incomplete are announced HERE, on stdout, above the
+# verdict — because "nothing concerning" read next to nothing else is indistinguishable from
+# "nothing concerning in the 12% I looked at". They are separate lines: an excluded file set, a
+# truncated diff, an untrustworthy base and an untrustworthy ordering are different facts with
+# different remedies (CPR-SC).
 SCOPE_WARNING=""
-MAX_DIFF_LINES=5000
-if (( DIFF_LINES > MAX_DIFF_LINES )); then
-  echo "## Codex Review Scope: TRUNCATED — diff is ${DIFF_LINES} lines (> ${MAX_DIFF_LINES}); only the first ${MAX_DIFF_LINES} lines were reviewed. Coverage is INCOMPLETE — a \"nothing concerning\" verdict is unverified beyond that point."
-  SCOPE_WARNING+="SCOPE CAVEAT: the diff below is TRUNCATED — it is the first ${MAX_DIFF_LINES} lines of a ${DIFF_LINES}-line diff. Your review therefore cannot be complete."$'\n'
-  DIFF=$(printf '%s' "$DIFF" | head -n "$MAX_DIFF_LINES")
-  DIFF_LINES=$MAX_DIFF_LINES
+
+if (( CP_TRUNCATED )); then
+  REVIEWED_COUNT=${#CP_ADOPTED[@]}
+  echo "## Codex Review Scope: TRUNCATED — the diff is past the ${MAX_DIFF_LINES}-line budget; ${REVIEWED_COUNT}/${CP_TOTAL} changed files were reviewed (${DIFF_LINES} lines sent). Coverage is INCOMPLETE — a \"nothing concerning\" verdict is unverified beyond that point."
+  SCOPE_WARNING+="SCOPE CAVEAT: the diff below is TRUNCATED — it carries ${REVIEWED_COUNT} of ${CP_TOTAL} changed files (${DIFF_LINES} lines, budget ${MAX_DIFF_LINES}). Your review therefore cannot be complete."$'\n'
+  echo "Reviewed (${REVIEWED_COUNT}): $(cp_format_paths 20 ${CP_ADOPTED[@]+"${CP_ADOPTED[@]}"})"
+  if [[ -n "$CP_PARTIAL" ]]; then
+    echo "Partially reviewed: $(cp_format_paths 1 "$CP_PARTIAL")"
+  fi
+  if [[ ${#CP_DROPPED[@]} -gt 0 ]]; then
+    echo "Dropped (${#CP_DROPPED[@]}): $(cp_format_paths 20 "${CP_DROPPED[@]}")"
+  fi
+fi
+
+# Printed after the truncation breakdown so the excluded set is named once, on its own line,
+# and never interleaves with the Reviewed/Dropped lists.
+if [[ ${#CP_EXCLUDED[@]} -gt 0 ]]; then
+  echo "## Codex Review Scope: EXCLUDED — ${#CP_EXCLUDED[@]} uncommitted/untracked file(s) excluded because a committed diff exists (see #1702): $(cp_format_paths 20 "${CP_EXCLUDED[@]}")"
+  SCOPE_WARNING+="SCOPE CAVEAT: ${#CP_EXCLUDED[@]} uncommitted/untracked file(s) were excluded from this review because a committed diff already exists for this range (see #1702) — they are not reflected in the diff below."$'\n'
 fi
 
 case "$BASE_STATE" in
@@ -164,6 +388,28 @@ case "$BASE_STATE" in
     SCOPE_WARNING+="SCOPE CAVEAT: the review range was derived from an untrustworthy merge-base (state ${BASE_STATE}, base ${BASE}). Files outside it may have changed without appearing below."$'\n'
     ;;
 esac
+
+# Priority ordering is only as trustworthy as the baseline it was computed against. A RECORDED
+# baseline that the resolver itself warns was created after the session's first commit makes
+# "the session's own files" a set derived from the wrong starting point — so when such a run
+# ALSO dropped files, the ordering behind that decision is worth distrusting. Fails silently in
+# every direction: a missing, broken or malformed resolver is not evidence of contamination.
+if (( CP_TRUNCATED )) && [[ "$BASE_STATE" == "RECORDED" ]]; then
+  MB_RESOLVER=""
+  if [[ -n "${AGENTS_CONFIG_DIR:-}" && -x "${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh" ]]; then
+    MB_RESOLVER="${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh"
+  elif [[ -x "$SCRIPT_DIR/resolve-merge-base.sh" ]]; then
+    MB_RESOLVER="$SCRIPT_DIR/resolve-merge-base.sh"
+  fi
+  if [[ -n "$MB_RESOLVER" ]]; then
+    MB_KV="$(bash "$MB_RESOLVER" -C . --format kv --no-fetch 2>/dev/null || true)"
+    MB_WARN="$(printf '%s\n' "${MB_KV:-}" | sed -n 's/^warn=//p' | head -n 1 || true)"
+    if [[ "${MB_WARN:-}" == "post-session-head" ]]; then
+      echo "## Codex Review Scope: PRIORITY-UNTRUSTED — the recorded merge-base warns post-session-head, so the file ordering the truncation above rests on may itself be wrong; see the '## merge-base: NOTE' line for why."
+      SCOPE_WARNING+="SCOPE CAVEAT: the merge-base this review was ordered against is itself flagged as recorded after the session started, so the files prioritised into the diff below may not be the session's own."$'\n'
+    fi
+  fi
+fi
 
 if [[ -n "$SCOPE_WARNING" ]]; then
   SCOPE_WARNING="${SCOPE_WARNING}State this incompleteness in the FIRST line of your findings, before any severity grouping.

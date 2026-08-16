@@ -4,17 +4,10 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, paths, quoting, injection, unicode, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 5 — staged paths that are hostile to a shell.
-#
-# The scanner reads its file list with `git -c core.quotePath=false diff -z ...`
-# and re-reads blobs with `git show ":./<path>"` precisely so that a space, a
-# leading hyphen, a shell metacharacter or a non-ASCII byte in a filename stays
-# data instead of becoming syntax. Every one of those choices is invisible in
-# normal fixtures, so they get their own cases here: a path must be scanned
-# correctly, and must never be interpreted.
-#
-# `git show ":./<path>"` is also what makes a leading hyphen safe — the `:./`
-# prefix keeps the path from being read as an option.
+# Part 5 — staged paths hostile to a shell. The scanner reads its file list with
+# `git -c core.quotePath=false diff -z ...` and re-reads blobs via `git show
+# ":./<path>"`, keeping a space, leading hyphen, shell metacharacter, or non-ASCII
+# byte in a filename as data, never syntax; `:./` is what makes a leading hyphen safe.
 
 spad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "s_$i=$i"; done; }
 scm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }
@@ -83,13 +76,13 @@ TABLE
 # One run over the whole hostile index: the scanner must not die, must not let
 # any name reach the shell as syntax, and must report every staged file.
 run_cb "$SPEC" -- --staged
-assert_eq "SP1/rc-is-zero" "0" "$CB_RC"
+cb_expect_rc "SP1/rc-matches-mode"
 assert_absent "SP1/no-shell-diagnostics-on-stderr" "command not found" "$CB_ERR"
 assert_absent "SP1/no-unexpected-token" "syntax error" "$CB_ERR"
 
 while IFS='|' read -r name fn; do
     [ -z "$name" ] && continue
-    assert_contains "SP1/$name-reported" "WARN: $fn" "$CB_OUT"
+    assert_contains "SP1/$name-reported" "$CB_FIND: $fn" "$CB_OUT"
 done <<< "$SP_STAGED"
 
 SP_COUNT="$(printf '%s' "$SP_STAGED" | grep -c . || true)"
@@ -100,7 +93,7 @@ assert_eq "SP1/warn-count-matches-staged-count" "$SP_COUNT" "$(cb_warn_count)"
 NLNAME="$(printf 'two\nlines.sh')"
 if make_special "$SPEC" "$NLNAME"; then
     run_cb "$SPEC" -- --staged
-    assert_eq "SP1/newline-in-name-rc" "0" "$CB_RC"
+    cb_expect_rc "SP1/newline-in-name-rc"
     assert_contains "SP1/newline-in-name-reported" "two" "$CB_OUT"
     git -C "$SPEC" rm -q -f --cached -- "$NLNAME" >/dev/null 2>&1 || true
 else
@@ -116,10 +109,10 @@ OPTR="$(new_repo optlookalike)"
 
 if make_special "$OPTR" "--all.sh"; then
     run_cb "$OPTR" -- --staged
-    assert_eq "SP2/rc-is-zero" "0" "$CB_RC"
+    cb_expect_rc "SP2/rc-matches-mode"
     assert_eq "SP2/header-is-staged-mode" \
         "## Comment-block Size Review: PERFORMED (staged mode)" "$(cb_header)"
-    assert_contains "SP2/option-lookalike-reported" "WARN: --all.sh" "$CB_OUT"
+    assert_contains "SP2/option-lookalike-reported" "$CB_FIND: --all.sh" "$CB_OUT"
 else
     skip "SP2: filesystem rejects the name --all.sh"
 fi

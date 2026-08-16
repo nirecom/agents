@@ -42,6 +42,7 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    - `source_files`: list of source file paths from step WT-2
    - `planned_cases`: list of planned test cases from step WT-4
    The subagent prompt MUST instruct: edit only test files, never modify source code.
+   Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
 While the subagent runs, the orchestrator MAY run the WT-7 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
