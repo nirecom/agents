@@ -319,3 +319,7 @@ Changes: `review-code-codex` no longer truncates at a flat line cap that could s
 ### FEATURE: PR #2035 (2026-08-16)
 Background: feat: PostToolUse auto-mark + NEXT_STEP_PAUSE v2 + stall detection (#2013 #1624 #1979 #1997)
 Changes: Delegated workflow steps (research, detail, write_tests, review_tests) are now automatically kept quiet while a subagent is running — no manual pause declaration needed; expired delegations surface as supervisor findings instead of silently jamming the session
+
+### FEATURE: PR #1944 (2026-08-16)
+Background: fix(worktree-start): auto-derive task name and branch type, remove interactive/non-interactive fallback branching
+Changes: `/worktree-start` no longer asks you to confirm a task name or branch type — both are now derived automatically from the session intent, so worktree creation never pauses for that input
