@@ -315,3 +315,7 @@ Changes: Added a gate that blocks edits and commits with overly long comment blo
 ### FEATURE: PR #2024 (2026-08-16)
 Background: fix(review-code-codex): replace flat line-cap truncation with path-pr...
 Changes: `review-code-codex` no longer truncates at a flat line cap that could skip every intended change in a large diff — it now allocates the review budget per changed path so committed, uncommitted, and untracked changes all get proportional coverage.;Fixed an off-by-one in the `CODEX_REVIEW_MAX_DIFF_LINES` budget so the configured limit is applied exactly.
+
+### FEATURE: PR #2035 (2026-08-16)
+Background: feat: PostToolUse auto-mark + NEXT_STEP_PAUSE v2 + stall detection (#2013 #1624 #1979 #1997)
+Changes: Delegated workflow steps (research, detail, write_tests, review_tests) are now automatically kept quiet while a subagent is running — no manual pause declaration needed; expired delegations surface as supervisor findings instead of silently jamming the session
