@@ -10,6 +10,7 @@ With `ENFORCE_WORKTREE=on` (default): the main worktree is reserved for merge/pu
 All writes must happen from a linked worktree. Use `/worktree-start` to create one.
 With `ENFORCE_WORKTREE=off`: direct main work is allowed (trivial changes only).
 Set this in agents config (`.env`) when the isolation cost exceeds the benefit.
+When the main worktree branch has genuinely diverged from its remote (ahead AND behind), `git merge --no-edit origin/<branch>` is the sanctioned non-destructive recovery command; `git rebase` and `git reset --hard` require user escalation — SSOT: `rules/ops.md` "Diverged Main Worktree Recovery".
 
 See `branch.md` for branch naming and the standard branch flow.
 See `docs/parallel-sessions.md` for the full lifecycle guide.
