@@ -13,6 +13,8 @@ Before presenting any command for the user to run, work through this checklist i
 | Can Claude Code execute this action directly via an appropriate tool? | Do it — do not ask. | Continue ↓ |
 | Are there ≥ 2 dependent steps that must run in sequence? | Bundle into a single script (Rule 3). | Present one command (Rule 2). |
 
+**Diverged main worktree:** `git merge --no-edit origin/<branch>` is sanctioned — Claude executes it directly (Rule 1); `git rebase` and `git reset --hard origin/<branch>` take the `rules/ops.md` decision path first. SSOT: `rules/ops.md` "Diverged Main Worktree Recovery".
+
 ## Rule 1 — Autonomy-First
 
 - Attempt execution via the appropriate tool(s) before asking the user.
