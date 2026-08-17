@@ -367,3 +367,5 @@ fi
 . "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/path-edges-and-security.sh"
 # shellcheck source=./path-priority/failure-and-leakage.sh
 . "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/failure-and-leakage.sh"
+# shellcheck source=./path-priority/concerns-file-parsing.sh
+. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/concerns-file-parsing.sh"

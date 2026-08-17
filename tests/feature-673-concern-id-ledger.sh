@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
-# Tags: worktree, codex, review, bin, env
+# Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop, bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/reduce.sh
+# Tags: worktree, codex, review, bin, env, scope:issue-specific
 # L1 unit tests for concern-ID ledger logic embedded in bin/run-codex-review-loop (issue #673)
 # Tests --round / --ledger semantics, ID assignment, and persistence across rounds.
 set -uo pipefail
@@ -403,6 +403,14 @@ C52: unresolved — new3"
     fail "13: outline-plan ledger not created at $LEDGER"
   fi
 }
+
+# ---------------------------------------------------------------------------
+# 14-17. v2 ledger schema, v1→v2 write-back, closed round-2 admission, and the
+# cycle boundary at round 1 (issue #1992). Split out to keep this file under the
+# file-split HARD limit.
+# ---------------------------------------------------------------------------
+# shellcheck source=tests/feature-673-concern-id-ledger/v2-ledger.sh
+. "$AGENTS_WORKTREE/tests/feature-673-concern-id-ledger/v2-ledger.sh"
 
 # ---------------------------------------------------------------------------
 # Summary
