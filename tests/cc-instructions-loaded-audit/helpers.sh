@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js
+# Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, instructions-loaded, fixtures, TL2, scope:common
 #
 # Fixture tree, environment pinning, and the fire()/read_field() drivers for
@@ -68,9 +68,9 @@ cat > "$REPO/hooks/lib/rules-injection-policy.js" <<POLICY_EOF
 "use strict";
 const ON_DEMAND_TOKEN = "$TOKEN";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/leak.md"];
+const ON_DEMAND_READERS = ["rules/leak.md|skills/leak-owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/ok-listed.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 POLICY_EOF
 export RULES_INJECTION_POLICY; RULES_INJECTION_POLICY="$(node_path "$REPO/hooks/lib/rules-injection-policy.js")"
 

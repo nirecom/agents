@@ -2,17 +2,17 @@
 # tests/feature-1665-background-work-removed.sh
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/lib/protected-basenames.js, hooks/stop-premature-stop-guard.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-state/state-io/zombie-cleanup.js, bin/workflow/lib/next-step/verdict.js, settings.json, rules/stop-guard-exemptions.md
 # Tags: stop-hook, exemption, session-marker, sentinel, removal, background-work, step-in-flight, regression-1665, scope:issue-specific, pwsh-not-required, TL1
-#
+
 # #1665 commit 4 — the `.background-work` primitive is REMOVED and its C4 role
 # is taken over by the state-derived `step-in-flight` exemption (renamed and
 # widened from `write-code-in-flight` by #2013; SSOT: rules/stop-guard-exemptions.md).
-#
+
 # Every case is paired with a counter-anchor on a sibling primitive that must
 # survive (`next-step-paused`, `workflow-off`, `pre-workflow-init`). A removal
 # that over-reaches — ripping out the whole marker family, the whole sentinel
 # table, the whole zombie-sweep arm — fails the counter-anchor, so "0 hits" can
 # never be reached by deleting the mechanism wholesale.
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code itself still routes a stale `<<WORKFLOW_BACKGROUND_WORK_START>>`
 #   typed by a user through the real PostToolUse chain (here only the pure
@@ -302,10 +302,11 @@ run_P1() {
 }
 
 # ---------------------------------------------------------------------------
-# R1 (R6 of the plan): the removal is ANNOUNCED, not silent. The rule file must
-#     name the replacement for the use case that is genuinely lost (non-write_code
-#     long-running work) and must warn about the one property that changes —
-#     NEXT_STEP_PAUSE has no TTL, so RESUME has to be issued by hand.
+# R1: the MINIMIZED shape of rules/stop-guard-exemptions.md (#2037). This case used to check that #1665's removal was ANNOUNCED; that announcement has done its job, and #2037 reduces the file to its steady state, so R1 now pins what the reduction must keep, add, and drop.
+# KEEP — the four facts a session acts on: both sentinels, the expiry caveat (the marker's TTL is a backstop and RESUME is still issued by hand; assuming the pause clears itself is the mistake a reader actually makes), and the write_code in-flight prong that needs no declaration.
+# ADD — a pointer to hooks/lib/stop-exemption-policy.js / EXEMPTION_MATRIX. Minimization removes the exemption inventory from the rule, so the rule must say where it lives; transcribing the matrix is what let it go stale (#2013's delegated-reason arm was never added), so this is a reference, never a copy (CPR-SSOT).
+# DROP — the prong-enumeration heading structure (already drifted "Two prongs" -> "Three prongs" since #2013, which is the staleness itself, so the count is matched loosely) and the #1665 migration note, scaffolding for a finished transition.
+# BG_RE stays the counter-anchor: the removed background-work primitive must not reappear under any of these rewrites.
 # ---------------------------------------------------------------------------
 run_R1() {
     local f="$RULES_DIR/stop-guard-exemptions.md" problems=""
@@ -313,15 +314,28 @@ run_R1() {
         fail "R1: rules/stop-guard-exemptions.md not found (looked in $RULES_DIR)"
         return
     fi
-    grep -q 'NEXT_STEP_PAUSE' "$f" || problems="$problems [no NEXT_STEP_PAUSE migration pointer]"
-    grep -q 'NEXT_STEP_RESUME' "$f" || problems="$problems [no NEXT_STEP_RESUME reminder]"
-    grep -qi 'TTL' "$f" || problems="$problems [no TTL note — the property change is unstated]"
-    grep -qi 'write_code\|write-code' "$f" || problems="$problems [no write_code in-flight exemption described]"
+    grep -q 'NEXT_STEP_PAUSE' "$f" || problems="$problems [no NEXT_STEP_PAUSE sentinel]"
+    grep -q 'NEXT_STEP_RESUME' "$f" || problems="$problems [no NEXT_STEP_RESUME sentinel]"
+    # The caveat, not one spelling of it: the rule must say the marker's expiry exists AND
+    # that RESUME is still the reader's job. Matching only the token "TTL" would fail the
+    # shipped wording ("expires 4h after it is set, but that is a backstop, so still emit
+    # the RESUME sentinel yourself"), which carries the caveat in full.
+    grep -qiE 'TTL|expire|4 ?h' "$f" \
+        || problems="$problems [no expiry note — a reader cannot tell whether the pause ends on its own]"
+    grep -qiE 'yourself|by hand|manual' "$f" \
+        || problems="$problems [expiry is mentioned but nothing says RESUME is issued by hand — a reader will assume the pause clears itself]"
+    grep -qi 'write_code\|write-code' "$f" || problems="$problems [no write_code in-flight prong described]"
+    grep -q 'stop-exemption-policy\.js\|EXEMPTION_MATRIX' "$f" \
+        || problems="$problems [no pointer to hooks/lib/stop-exemption-policy.js / EXEMPTION_MATRIX — the minimized rule no longer carries the inventory and never says where it lives]"
+    grep -qiE '^#+ .*prongs' "$f" \
+        && problems="$problems [a '... prongs' heading structure is back — it duplicates EXEMPTION_MATRIX; the count is matched loosely on purpose, since drifting from Two to Three prongs is exactly the staleness being removed]"
+    grep -qi 'Migration note' "$f" \
+        && problems="$problems [the #1665 migration note is back — the transition it announced is finished]"
     grep -qiE "$BG_RE" "$f" && problems="$problems [still documents the removed background-work primitive]"
     if [ -z "$problems" ]; then
-        pass "R1: rules/stop-guard-exemptions.md announces the removal and points at NEXT_STEP_PAUSE (+ the missing-TTL caveat)"
+        pass "R1: rules/stop-guard-exemptions.md is in its minimized shape — both sentinels, the expiry-plus-manual-RESUME caveat, the write_code prong, and a pointer to EXEMPTION_MATRIX, with no transition scaffolding"
     else
-        fail "R1: migration guidance incomplete;$problems"
+        fail "R1: minimized shape wrong;$problems"
     fi
 }
 

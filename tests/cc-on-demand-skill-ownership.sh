@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/cc-on-demand-skill-ownership.sh
-# Tests: hooks/lib/rules-injection-policy.js, rules/test.md, rules/docs.md, rules/github-issues.md
+# Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, rules/test.md, rules/docs.md, rules/github-issues.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, mapping, real-tree, mutation-probe, TL2, scope:common
 
 # The primary wiring of the on-demand mechanism is NOT the frontmatter token — it's the
@@ -39,7 +39,7 @@ done
 BASE="$(mktemp -d)"
 trap 'rm -rf "$BASE"' EXIT
 
-# --- the reporter: for each ON_DEMAND_FILES entry, who owns it and how ---
+# --- the reporter: for each on-demand rule (the ON_DEMAND_READERS key column), who owns it and how ---
 cat > "$BASE/owners.js" <<'OWNERS_EOF'
 "use strict";
 const fs = require("fs");
@@ -138,13 +138,14 @@ run_owners() {
 REPORT="$(run_owners "$AGENTS_DIR" "$POLICY")"
 OD_COUNT="$(printf '%s\n' "$REPORT" | grep '^OD_COUNT=' | head -1 | cut -d= -f2)"
 
-# --- M0: the allowlist must not be empty. An empty ON_DEMAND_FILES makes every
+# --- M0: the allowlist must not be empty. An empty on-demand set makes every
 # per-rule assertion below vacuously true, which is exactly the false-green this
-# file exists to prevent. The session's end state (detail plan S3-D) is 3 entries. ---
+# file exists to prevent. The count is whatever ON_DEMAND_READERS declares — the
+# declaration is the SSOT, so no number is hard-coded here. ---
 if [ "${OD_COUNT:-0}" -ge 1 ] 2>/dev/null; then
-    pass "M0: ON_DEMAND_FILES is non-empty ($OD_COUNT entries) so the mapping assertions are live"
+    pass "M0: the on-demand set is non-empty ($OD_COUNT entries) so the mapping assertions are live"
 else
-    fail "M0: ON_DEMAND_FILES has $OD_COUNT entries — the ownership assertions below would be vacuous (detail plan S3-D expects 3)"
+    fail "M0: ON_DEMAND_READERS declares $OD_COUNT row(s) — the ownership assertions below would be vacuous"
 fi
 
 # --- M1 (C4): every on-demand rule must be owned by a SKILL.md with an explicit Read
@@ -196,9 +197,9 @@ probe() {
 "use strict";
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/owned.md"];
+const ON_DEMAND_READERS = ["rules/owned.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 PROBE_POLICY
     printf '# the owned rule\n' > "$d/rules/owned.md"
     case "$variant" in
@@ -278,6 +279,26 @@ if [ -f "$RC_CASES" ]; then
     . "$RC_CASES"
 else
     fail "IMPLEMENTATION MISSING: $RC_CASES (reject-context cases)"
+fi
+
+# --- O: order axis — whether a Read placed AFTER the governed action still counts as
+# ownership. Orthogonal to the reject-context axis above (WHERE vs WHEN). ---
+OA_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-order-axis.sh"
+if [ -f "$OA_CASES" ]; then
+    # shellcheck source=/dev/null
+    . "$OA_CASES"
+else
+    fail "IMPLEMENTATION MISSING: $OA_CASES (ownership order-axis cases)"
+fi
+
+# --- HW: the rules whose owner is a HOOK rather than a SKILL.md. Same ownership question,
+# different delivery mechanism, so it is graded by invoking the hooks. ---
+HW_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-hook-wiring.sh"
+if [ -f "$HW_CASES" ]; then
+    # shellcheck source=/dev/null
+    . "$HW_CASES"
+else
+    fail "IMPLEMENTATION MISSING: $HW_CASES (hook-delivered rule wiring cases)"
 fi
 
 # --- C1: the exact rule -> required-consumer mapping. In the sibling folder to keep

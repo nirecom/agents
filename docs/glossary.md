@@ -27,7 +27,7 @@ definition, and related links.
 - **Definition**: A marker string of the form `<<WORKFLOW_...>>`. Hooks detect it
   to drive workflow state transitions and gate open/close — stage-complete marks,
   skip declarations, OFF switches, and the like.
-- **Related**: [rules/workflow-off.md](../rules/workflow-off.md)
+- **Related**: [skills/enforce-workflow-off/SKILL.md](../skills/enforce-workflow-off/SKILL.md)
 
 ### meta
 

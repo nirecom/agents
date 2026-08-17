@@ -1,64 +1,15 @@
 # Workflow Session Override (WORKFLOW_OFF)
 
-Session-scoped escape hatch that suspends workflow enforcement for the current Claude Code session. Subsumes `WORKFLOW_ENFORCE_WORKTREE_OFF`.
-
-## Sentinels
-
-| Sentinel | Permission | Effect |
-|---|---|---|
-| `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` | **ask** (requires user approval) | Creates `${sid}.workflow-off` marker; suspends enforcement |
-| `<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: {reason}>>` | **ask** (requires user approval) | Same marker, but bypasses the Phase1 clearance examination; emitted by `/enforce-workflow-off` because explicit user invocation is itself the human decision |
-| `<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>` | **allow** (auto-approved) | Removes marker; restores enforcement |
-
-The `{reason}` field is mandatory and non-empty. Bare sentinel form (no `: {reason}`) is rejected.
-
-`{reason}` must begin with the granted clearance category as a bracketed token: `[<category>] <free text>`.
-The bracketed category must equal the `category` on the clearance token minted by `bin/request-off-clearance`; any other spelling fails closed.
-
-## What is bypassed when WORKFLOW_OFF is active
-
-Inclusion criterion and full hook list: SSOT is the Honoring-hooks table in
-`docs/architecture/claude-code/marker-bypass-contract.md` — a hook absent from
-that table never reads the marker and is never bypassed. The table below is a
-curated excerpt for the hooks most relevant to everyday WORKFLOW_OFF usage;
-it must stay a subset of, and consistent with, that SSOT (CPR-ORTH).
-
-| Hook | Bypassed? |
-|---|---|
-| `block-dotenv.js` | Yes — `.env` file access allowed |
-| `block-history-direct.js` | Yes — append-only doc writes (docs/history.md, CHANGELOG.md, archives) allowed |
-| `block-memory-direct.js` | Yes — memory-directory writes allowed |
-| `block-credentials.js` | **No — credential-path access always blocked** |
-| `scan-outbound.js` | **No — outbound content scan always runs** |
-| `workflow-gate.js` | Yes — commit gate (step completion check) bypassed |
-| `enforce-issue-close.js` | Yes — bare `gh issue close` allowed |
-| `enforce-worktree.js` | Yes — main worktree writes allowed |
-| `hooks/pre-commit` | Yes — commits from main worktree allowed |
-| `enforce-system-ops.js` | **No — OS-level safety always enforced** |
+Session-scoped escape hatch that suspends workflow enforcement for the current session.
 
 ## When to use
 
 Appropriate for: trivial 1-file edits in private repos, `.env` adjustments, maintenance commits where full workflow overhead is disproportionate.
+Do NOT use for: changes that touch public APIs, security boundaries, or shared infrastructure — run the full workflow for those.
+Do NOT use to unblock a single hook-blocked sanctioned command: it disables enforcement session-wide and masks the root cause.
+Need only the worktree isolation lifted (WORKTREE_OFF)? Same skill — WORKFLOW_OFF subsumes WORKTREE_OFF, so one sentinel covers both.
 
-Do NOT use for: changes that touch public APIs, security boundaries, or shared infrastructure. Use the full workflow for those.
+Never bypassed by this marker: `block-credentials.js`, `scan-outbound.js`, `enforce-system-ops.js` — credential access, the outbound scan, and OS-level system-ops safety stay armed.
 
-## Sanctioned-command false-block recovery
-
-When `enforce-worktree.js` unexpectedly blocks a sanctioned command (e.g. a documented step in a skill's cascade script):
-
-1. Retry the command as-is. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed unconditionally by `isAllowedWorktreeCommand`.
-2. If still blocked, file an issue via `/issue-create` so the hook or skill can be fixed at the source.
-
-Setting WORKFLOW_OFF / WORKTREE_OFF to unblock a single command disables enforcement session-wide and masks the root cause. Treat it as a last resort only — acceptable when you are genuinely stuck and cannot continue otherwise.
-
-## Restoring enforcement
-
-Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"` to restore enforcement. This is auto-allowed (no approval needed). Enforcement also restores automatically in the next session — markers are session-scoped.
-
-## Scope
-
-WORKFLOW_OFF is session-scoped: only the current Claude Code session (identified by its session ID) is affected. Other concurrent sessions remain at full enforcement.
-
-WORKFLOW_OFF subsumes WORKTREE_OFF: when WORKFLOW_OFF is active, `enforce-worktree.js` is also bypassed. Emitting both sentinels is redundant — use WORKFLOW_OFF alone.
-
-WORKTREE_OFF-specific detail (its own sentinels, bypass scope, and when to prefer it) lives in `rules/worktree.md` "Session-scoped escape hatch (WORKTREE_OFF)".
+Sentinels, reason format, scope, and the mandatory restore step: `/enforce-workflow-off`.
+Which hooks the marker does and does not bypass: `docs/architecture/claude-code/marker-bypass-contract.md`.

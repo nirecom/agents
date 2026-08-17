@@ -40,7 +40,9 @@ inline-procedure skills/commit-push/SKILL.md 1
 inline-procedure skills/create-key/SKILL.md 1
 code-fence skills/deep-research/SKILL.md 1
 code-fence skills/issue-close-migrated/SKILL.md 1
+inline-procedure skills/issue-close-verified/SKILL.md 1
 code-fence skills/issue-create/SKILL.md 2
+inline-procedure skills/issue-create/SKILL.md 1
 code-fence skills/issue-reconcile/SKILL.md 1
 inline-procedure skills/issue-setup/SKILL.md 1
 inline-procedure skills/make-outline-plan/SKILL.md 1
@@ -54,6 +56,7 @@ code-fence skills/save-research/SKILL.md 1
 inline-procedure skills/save-research/SKILL.md 1
 code-fence skills/session-close/SKILL.md 3
 inline-procedure skills/session-close/SKILL.md 1
+inline-procedure skills/supervisor-report/SKILL.md 1
 code-fence skills/survey-code/SKILL.md 3
 inline-procedure skills/survey-code/SKILL.md 1
 inline-procedure skills/survey-history/SKILL.md 1

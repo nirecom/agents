@@ -134,26 +134,15 @@ if (require.main === module) {
   if (!command) approve();
 
   // SENTINEL CHAIN GUARD (closes #382): reject `<<WORKFLOW_*>> && <non-sentinel>` chains.
-  //
-  // Policy: predict the cases that workflow-mark.js (PostToolUse) will silently
-  // drop and surface them as PreToolUse errors. workflow-mark.js is unchanged
-  // (issue #382 non-goal): it splits on /\s*&&\s*/ and applies #110 all-or-nothing
-  // — every part must match isSentinel() or none of them are processed. So the
-  // drop-prediction is exactly:
-  //
-  //     drop-predict := (split has >1 part) AND (not every part isSentinel)
-  //                     AND (a real sentinel echo form is actually present)
-  //
-  // The last conjunct distinguishes a real sentinel chain from incidental
-  // `<<WORKFLOW_` substrings (e.g. `grep '<<WORKFLOW_' file && wc -l`).
-  //
-  // Quote convention parity: CHAIN_BOUNDARY_SENTINEL_*_RE mirror isSentinel() exactly —
-  //   - DQ form is accepted for every sentinel category.
-  //   - SQ form is accepted ONLY for MARK_STEP_* (matching MARKER_RE_SQ).
-  // If we accepted SQ for all categories, we would block chains like
-  // `echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x` (bare form retained as historical attack-vector example per #404) that workflow-mark.js
-  // treats as a non-sentinel (no SQ regex for USER_VERIFIED), creating a
-  // new asymmetry. Keeping the two recognizers symmetric eliminates that.
+  // Predicts what workflow-mark.js (PostToolUse) silently drops — it splits on /\s*&&\s*/ and
+  // applies #110 all-or-nothing, so every part must match isSentinel() or none are processed —
+  // and surfaces that as a PreToolUse error instead. drop-predict := (split has >1 part) AND
+  // (not every part isSentinel) AND (a real sentinel echo form is present); the last conjunct
+  // keeps incidental `<<WORKFLOW_` substrings (e.g. `grep '<<WORKFLOW_' file && wc -l`) out.
+  // Quote convention parity: CHAIN_BOUNDARY_SENTINEL_*_RE mirror isSentinel() exactly — DQ for
+  // every category, SQ only for MARK_STEP_* (matching MARKER_RE_SQ). Accepting SQ everywhere
+  // would block chains workflow-mark.js treats as non-sentinel (bare-form USER_VERIFIED,
+  // retained as a historical attack-vector example per #404), creating a new asymmetry.
   if (/<<WORKFLOW_/.test(command)) {
     const {
       isSentinel,
@@ -449,7 +438,7 @@ if (require.main === module) {
     research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     outline: '/make-outline-plan  OR if unnecessary: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     detail:  '/make-detail-plan   OR if unnecessary: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    branching_complete: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: {name}|worktree: {path}>>"',
+    branching_complete: 'Read rules/branch.md + rules/worktree.md (on-demand-only), then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: {name}|worktree: {path}>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>> on adequate coverage; re-editing tests/ after a passing review invalidates the pairing — re-run /review-tests)',
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run `bash tests/run-all.sh <files>` directly — the PostToolUse hook (workflow-run-tests.js) marks complete only from its RUN_CONTRACT line. Ad-hoc test commands (e.g. `pytest tests/`) no longer auto-complete: they demote run_tests to pending. When every staged file is human-facing documentation: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>" (rejected otherwise).',

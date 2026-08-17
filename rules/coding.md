@@ -1,3 +1,9 @@
+---
+paths:
+  - ".on-demand-only/never-match"
+---
+<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->
+
 # Coding Guidelines
 
 ## Public GitHub Rules
@@ -33,6 +39,8 @@ This records mode 100755 in the git index regardless of `core.fileMode` setting,
 See also `rules/core-principles.md` for the top-level design principles.
 
 ## Sub-rules (loaded conditionally via the `paths:` frontmatter key)
+
+Each sub-rule carries its own `paths:` globs, so it is still injected on a file match independently of this hub — de-injecting the hub does not de-inject them.
 
 - [coding/python.md](coding/python.md) — `uv` 使用必須、bare `python`/`pip` 禁止
 - [coding/nodejs.md](coding/nodejs.md) — `fnm`(Windows) / `nvm`(POSIX) 使用必須

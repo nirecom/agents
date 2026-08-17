@@ -5,6 +5,7 @@ user-invocable: false
 ---
 
 Triage routes to the correct subset of steps; each step is idempotent and resumable. Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines per-session N. Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`.
+Read `rules/coding.md` before the first close comment or parent-body update — on-demand-only, never auto-injected; its Public GitHub Rules govern that outbound text.
 
 `--from-session` resolves `<N>` from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` `## Issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in Step ICF-B, not from a flag.
 
@@ -19,7 +20,7 @@ Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Is
 
 ## Procedure
 
-When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ### Pre-flight (gate)
 `eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0`. Sets `OWNER_REPO`. Non-GitHub remotes exit 0. `AGENTS_CONFIG_DIR` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
@@ -96,4 +97,4 @@ Resolve the notes path: `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" 
 ## Rules
 
 - On fallback or step degradation (auto_close_path, admin_close_path, gh-failure warn-and-continue, synthetic history skip): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter issue-close-finalize` (session-id auto-resolves).
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

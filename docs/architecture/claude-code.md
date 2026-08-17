@@ -62,7 +62,7 @@ node "$AGENTS_CONFIG_DIR/bin/supervisor-report" \
   --detail "<description>" --reporter "<skill-name>"
 ```
 
-See `rules/supervisor-reporting.md` for category reference and usage guidance.
+See `rules/supervisor-reporting.md` for when to report, and `skills/supervisor-report/SKILL.md` for the category reference and the call procedure.
 
 **Finding schema (per finding in `layer1.findings[]`):**
 

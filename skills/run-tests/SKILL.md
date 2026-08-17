@@ -10,7 +10,7 @@ Run the project test suite via the `test-runner` worker and emit the workflow se
 
 ## Procedure
 
-When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 RNT-0. **Read `rules/test.md`.** It is on-demand-only and never auto-injected, so this Read is mandatory.
 
@@ -80,4 +80,4 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - The worker derives `--deadline max(30, timeout_seconds − 5)`, so the suite folds itself up before the dispatcher's budget expires; a deadline abort prints no `RUN_CONTRACT:` line and surfaces as `status: fail`.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

@@ -18,6 +18,7 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
   projects (use `gh issue create --repo OWNER/REPO` directly).
 
 Required reading: Read `rules/github-issues.md` before Pre-flight — it is on-demand-only and never auto-injected.
+Read `rules/coding.md` before writing any issue title or body — on-demand-only, never auto-injected; its Public GitHub Rules govern this outbound write.
 
 ## Phase 0b — Project preflight
 
@@ -52,6 +53,8 @@ IC-1. Resolve session intent:
    INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"
    ```
    Skip gate silently when `SESSION_ID` is empty or `INTENT_MD` does not exist.
+
+IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-injected; it owns the capture paths the IC-3 notice points the user at.
 
 IC-2. Parse `closes_issues` (pass path as script argument — never use `node -e`):
    ```bash

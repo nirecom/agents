@@ -53,9 +53,9 @@ cat > "$RS_EXEC/hooks/lib/rules-injection-policy.js" <<RS_EXEC_EOF
 require("fs").writeFileSync("$RS_CANARY_NODE", "executed");
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/owned.md"];
+const ON_DEMAND_READERS = ["rules/owned.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md", "rules/other.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 RS_EXEC_EOF
 RS_EXEC_REP="$(run_owners "$RS_EXEC" "$RS_EXEC/hooks/lib/rules-injection-policy.js")"
 
@@ -71,7 +71,7 @@ if [ "$(rs_top "$RS_EXEC_REP" OD_COUNT)" = "1" ] \
    && [ "$(rs_top "$RS_EXEC_REP" EU_COUNT)" = "2" ] \
    && [ "$(rs_field "$RS_EXEC_REP" RULE)" = "rules/owned.md" ] \
    && [ "$(rs_field "$RS_EXEC_REP" SKILL_READ)" = "1" ]; then
-    pass "A2b: ON_DEMAND_FILES(1) and EXPECTED_UNCONDITIONAL(2) were extracted by parsing, and the owner was still resolved"
+    pass "A2b: ON_DEMAND_READERS(1) and EXPECTED_UNCONDITIONAL(2) were extracted by parsing, and the owner was still resolved"
 else
     fail "A2b: parsing lost the declarations — OD_COUNT=$(rs_top "$RS_EXEC_REP" OD_COUNT) EU_COUNT=$(rs_top "$RS_EXEC_REP" EU_COUNT) RULE=$(rs_field "$RS_EXEC_REP" RULE) SKILL_READ=$(rs_field "$RS_EXEC_REP" SKILL_READ); report: $(printf '%s' "$RS_EXEC_REP" | tr '\n' ' ')"
 fi
@@ -85,9 +85,9 @@ cat > "$RS_THROW/hooks/lib/rules-injection-policy.js" <<'RS_THROW_EOF'
 throw new Error("policy module body executed");
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/owned.md"];
+const ON_DEMAND_READERS = ["rules/owned.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = [];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 RS_THROW_EOF
 RS_THROW_REP="$(run_owners "$RS_THROW" "$RS_THROW/hooks/lib/rules-injection-policy.js")"
 if [ "$(rs_top "$RS_THROW_REP" OD_COUNT)" = "1" ] \
@@ -147,10 +147,10 @@ cat > "$RS_DEGRADED/hooks/lib/rules-injection-policy.js" <<'RS_DEGRADED_EOF'
 "use strict";
 // Declarations computed at runtime: legal JS, but outside the one-line-literal shape
 // the policy file is required to keep, so a text parser cannot recover them.
-const parts = ["rules", "owned.md"];
-const ON_DEMAND_FILES = parts.map((p) => p);
-const EXPECTED_UNCONDITIONAL = ON_DEMAND_FILES.slice(0, 0);
-module.exports = { ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+const parts = ["rules/owned.md|skills/owner/SKILL.md"];
+const ON_DEMAND_READERS = parts.map((p) => p);
+const EXPECTED_UNCONDITIONAL = ON_DEMAND_READERS.slice(0, 0);
+module.exports = { ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 RS_DEGRADED_EOF
 RS_DEG_REP="$(run_owners "$RS_DEGRADED" "$RS_DEGRADED/hooks/lib/rules-injection-policy.js")"
 RS_DEG_ROWS="$(printf '%s\n' "$RS_DEG_REP" | grep -c '^RULE=' || true)"
