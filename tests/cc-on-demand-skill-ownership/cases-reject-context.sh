@@ -31,9 +31,9 @@ rc_fixture() {
 "use strict";
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/owned.md"];
+const ON_DEMAND_READERS = ["rules/owned.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 RC_POLICY
     printf '# the owned rule\n' > "$d/rules/owned.md"
     case "$variant" in

@@ -142,19 +142,31 @@ $MENTION_REPORT
 EOF
 
 # R3 guards R1/R2: with zero scanned mentions both loops above are vacuously clean.
-# 15 is the count of required readers N2 enumerates; the real tree also has agent-doc
-# mentions on top, so the floor is deliberately the table size and not the observed total.
-if [ "$R_SKILL_ROWS" -ge 15 ]; then
-    pass "R3: the mention scan found $R_ROWS mentioning doc(s), $R_SKILL_ROWS of them SKILL.md — R1/R2 are live"
+# The floor is READER_TOTAL — the number of required readers ON_DEMAND_READERS declares,
+# derived in cases-required.sh — rather than a literal, so the guard cannot rot into a
+# number smaller than the mapping it is supposed to cover (#2037). The real tree also has
+# agent-doc mentions on top, so the floor is the declared size, not the observed total.
+# READER_TOTAL == 0 is its own failure, not a floor of zero: an empty declaration would
+# otherwise let R3 certify "R1/R2 are live" while both loops iterated nothing.
+if [ "${READER_TOTAL:-0}" -lt 1 ]; then
+    fail "R3: ON_DEMAND_READERS declares zero required readers, so there is no floor to check — R1/R2 iterated $R_ROWS row(s) and proved nothing (see N0c)"
+elif [ "$R_SKILL_ROWS" -ge "$READER_TOTAL" ]; then
+    pass "R3: the mention scan found $R_ROWS mentioning doc(s), $R_SKILL_ROWS of them SKILL.md (floor $READER_TOTAL) — R1/R2 are live"
 else
-    fail "R3: only $R_SKILL_ROWS mentioning SKILL.md found (want >= 15) — the scanner did not walk the tree, so R1/R2 proved nothing; report: $(printf '%s' "$MENTION_REPORT" | tr '\n' ' ' | cut -c1-300)"
+    fail "R3: only $R_SKILL_ROWS mentioning SKILL.md found (want >= $READER_TOTAL, the declared reader count) — the scanner did not walk the tree, so R1/R2 proved nothing; report: $(printf '%s' "$MENTION_REPORT" | tr '\n' ' ' | cut -c1-300)"
 fi
 if [ "$R_BAD" = "0" ]; then
     pass "R1/R2: every SKILL.md mentioning a de-injected rule is registered and carries a Read step"
 fi
 
 # --- R4: the verdict logic must fire on the shapes it exists to catch. Driven with
-# synthetic rows so it is exercised even while the real tree is clean. ---
+# synthetic rows so it is exercised even while the real tree is clean. Since #2037 the
+# table is derived from ON_DEMAND_READERS, so R4 pins a SYNTHETIC table for its own
+# duration: a probe of the comparator must not restate the live declaration, or it stops
+# being a probe and starts reporting the same fact N1 already reports.
+R4_SAVED_TABLE="$REQUIRED_TABLE"
+REQUIRED_TABLE='rules/test.md|skills/write-tests/SKILL.md
+rules/docs.md|skills/update-docs/SKILL.md'
 R4_BAD=""
 r4() {
     local label="$1" want="$2" got
@@ -173,6 +185,7 @@ if [ -z "$R4_BAD" ]; then
 else
     fail "R4: the verdict logic misclassified a synthetic row —$R4_BAD"
 fi
+REQUIRED_TABLE="$R4_SAVED_TABLE"
 
 # --- R5: the scanner itself must be able to tell a mention-with-Read from a
 # mention-without-Read on a real tree. Without this, every R1/R2 row could be reading
@@ -187,9 +200,9 @@ r5() {
 "use strict";
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only\b/;
-const ON_DEMAND_FILES = ["rules/owned.md"];
+const ON_DEMAND_READERS = ["rules/owned.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 R5_POLICY
     printf '# the owned rule\n' > "$d/rules/owned.md"
     case "$variant" in
