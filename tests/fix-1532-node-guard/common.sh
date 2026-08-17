@@ -38,9 +38,9 @@ TARGETS="get-config-var confirm-off resolve-session-id resolve-worktree-path is-
 ENVELOPE_FIRST_LINE='":" //; : <<'\''AGENTS_NODE_GUARD'\'''
 ENVELOPE_DELIMITER='AGENTS_NODE_GUARD'
 ENVELOPE_TAIL_PREFIX='# End of the #1532 node-misinvocation guard envelope'
-HEAD_LINES=18
-TAIL_LINES=4
-ENVELOPE_LINES=22
+HEAD_LINES=12
+TAIL_LINES=2
+ENVELOPE_LINES=14
 GUARD_EXIT_CODE=70
 
 PASS=0

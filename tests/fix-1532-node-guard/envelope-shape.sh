@@ -12,7 +12,7 @@ G_TMP="$TESTTMP/envelope-shape"
 mkdir -p "$G_TMP"
 
 # ---- G1: the head and the tail are byte-identical in all five ---------------
-# The envelope names no script, so the 18 head lines and the 4 tail lines are the
+# The envelope names no script, so the 12 head lines and the 2 tail lines are the
 # same bytes everywhere. That is what makes "applied to four of five" and "one file
 # drifted" mechanically visible; without it the omission is invisible until a node
 # misinvocation happens in production.
@@ -32,7 +32,7 @@ g1_isomorphic() {
     return 0
   fi
   if [ -n "$absent" ]; then
-    fail "G1a: every target carries the #1532 guard envelope -- not inserted yet in:$absent (head line 2 must be exactly the guard's opening line and the 4th-from-last line must start with the tail marker)"
+    fail "G1a: every target carries the #1532 guard envelope -- not inserted yet in:$absent (head line 2 must be exactly the guard's opening line and the 2nd-from-last line must start with the tail marker)"
     return 0
   fi
   pass "G1a: every target carries the #1532 guard envelope"
@@ -65,6 +65,34 @@ g1_marker() { # <head-file> <label> <needle> present|absent
   local hf="$1" label="$2" needle="$3" want="$4" got="absent"
   grep -qF -- "$needle" "$hf" && got="present"
   check "G1d: the head block carries $label" "$want" "$got"
+}
+
+# ---- G1e/G1f: the geometry constants are pinned to the real files -----------
+# Every other row reads HEAD_LINES/TAIL_LINES/ENVELOPE_LINES and trusts them.
+# envelope_present() only checks line 2 and the tail marker, and G1b compares the
+# five head slices against EACH OTHER -- so a stale HEAD_LINES cuts the same wrong
+# slice in all five files and every row stays green while the constant lies.
+# G1e is the independent pin: line HEAD_LINES+1 must be the here-document
+# delimiter, which is the real end of the head block.
+g1e_head_boundary() {
+  local t f got
+  for t in $TARGETS; do
+    f="$(target_path "$t")"
+    if [ ! -f "$f" ]; then
+      fail "G1e[$t]: line $((HEAD_LINES + 1)) is the here-document delimiter -- file is missing"
+      continue
+    fi
+    got="$(sed -n "$((HEAD_LINES + 1))p" "$f")"
+    check "G1e[$t]: line $((HEAD_LINES + 1)) is exactly the here-document delimiter (this is what pins HEAD_LINES to the real end of the head block)" "$ENVELOPE_DELIMITER" "$got"
+  done
+}
+
+# G1f: ENVELOPE_LINES is used by bash-invariance.sh B0 as the stripped-twin line
+# delta, but nothing forced it to stay consistent with the two constants it is
+# derived from. Editing HEAD_LINES without ENVELOPE_LINES would otherwise pass here
+# and mis-measure there.
+g1f_envelope_total() {
+  check "G1f: ENVELOPE_LINES equals HEAD_LINES + TAIL_LINES" "$((HEAD_LINES + TAIL_LINES))" "$ENVELOPE_LINES"
 }
 
 # ---- G2: node parses every target as JavaScript -----------------------------
@@ -188,6 +216,8 @@ g6c_guard_target_matches_stem() {
 }
 
 g1_isomorphic
+g1e_head_boundary
+g1f_envelope_total
 g2_node_check
 g3_syntax_reservation
 g4_negative_control

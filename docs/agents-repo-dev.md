@@ -10,8 +10,8 @@ Background: an extensionless `bin/` bash script launched with `node` instead of
 bash used to collapse into a bare `SyntaxError` with rc=1 and empty stdout, which
 a caller could not tell apart from "the variable was simply unset" (#1532). So
 that the mistake is self-detected at run time, the affected scripts carry a
-polyglot envelope — valid bash and valid JavaScript at once — of 18 lines after
-the shebang plus 4 lines at end of file.
+polyglot envelope — valid bash and valid JavaScript at once — of 12 lines after
+the shebang plus 2 lines at end of file.
 
 Five scripts carry it: `bin/get-config-var`, `bin/confirm-off`,
 `bin/resolve-session-id`, `bin/resolve-worktree-path`, `bin/is-github-dotcom-remote`.
@@ -36,7 +36,12 @@ reservation) and `tests/fix-1532-node-guard-*.sh` (envelope shape, the diagnosti
 and byte-level invariance of the bash side).
 
 **When editing**: changing the head or tail means updating all five at once with
-an identical byte sequence (isomorphism check G1 fails otherwise). Extending the
+an identical byte sequence (isomorphism check G1 fails otherwise), and updating
+`HEAD_LINES` / `TAIL_LINES` / `ENVELOPE_LINES` in
+`tests/fix-1532-node-guard/common.sh` to the new measured geometry. The in-file
+comment is deliberately two lines and points here — this document is the only
+place the mechanism is explained, so it must not be restated in the five scripts.
+Extending the
 set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
 `tests/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
