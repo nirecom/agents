@@ -9,17 +9,19 @@ Before presenting any command for the user to run, work through this checklist i
 
 | Question | If YES | If NO |
 |---|---|---|
-| Is the command destructive (data loss, irreversible)? | Follow `rules/ops.md` decision path first. | Continue ↓ |
+| Is the command destructive (data loss, irreversible)? | Read `rules/ops.md`, then follow its decision path first. | Continue ↓ |
 | Can Claude Code execute this action directly via an appropriate tool? | Do it — do not ask. | Continue ↓ |
 | Are there ≥ 2 dependent steps that must run in sequence? | Bundle into a single script (Rule 3). | Present one command (Rule 2). |
+
+`rules/ops.md` is on-demand-only and never auto-injected: Read it every time a row here, a rule below, or the precedence table points at it.
 
 ## Rule 1 — Autonomy-First
 
 - Attempt execution via the appropriate tool(s) before asking the user.
 - Escalate only when the tool path is genuinely blocked.
 - Do NOT repeat the same ask. If repetition seems needed, find a different approach — not a re-packaging of the same blocked action.
-- **Exception — system-state-changing commands:** Commands in `rules/ops.md`
-  categories A–F are out of scope for Autonomy-First. Always escalate via Rule 2.
+- **Exception — system-state-changing commands:** Commands in categories A–F of
+  `rules/ops.md` (Read it) are out of scope for Autonomy-First. Always escalate via Rule 2.
   The `hooks/enforce-system-ops.js` hook enforces this. Inline `SYSTEM_OPS_APPROVED=1`
   in a model-issued Bash command does NOT bypass the hook.
 
@@ -36,8 +38,8 @@ Before presenting any command for the user to run, work through this checklist i
 - The script must abort on failure: `set -euo pipefail` (bash) or
   `$ErrorActionPreference = 'Stop'` (PowerShell).
 - Ask the user to report the output and exit code after running.
-- Destructive steps (listed in `rules/ops.md`) must NOT be bundled — they require the
-  `rules/ops.md` decision path first.
+- Destructive steps (listed in `rules/ops.md`) must NOT be bundled — Read that rule and
+  take its decision path first.
 - See `rules/shell-commands.md` for platform-aware script authoring.
 
 ## Precedence
