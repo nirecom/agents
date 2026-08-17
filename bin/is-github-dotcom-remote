@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+":" //; : <<'AGENTS_NODE_GUARD'
+// #1532 node-misinvocation guard -- keep intact; never write */ in this file.
+// Why it is shaped this way, and how to edit it: docs/agents-repo-dev.md
+const msg = process.argv[1] + ": this is a bash script, not a Node program." +
+  " Re-run it as: bash " + process.argv[1] + " [args...]\n";
+for (let i = 0; i < 100; i++) {
+  try { require("fs").writeSync(2, msg); break; }
+  catch (err) { if (err.code !== "EAGAIN") break; }
+}
+process.exitCode = 70;
+/*
+AGENTS_NODE_GUARD
 # Detects whether a git repo's origin remote is github.com.
 # Exit 0 = github.com, 1 = non-GitHub, 2 = unknown/error (fail-open)
 #
@@ -48,3 +60,5 @@ if [ "$host" = "github.com" ]; then
 else
     exit 1
 fi
+# End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md
+# */

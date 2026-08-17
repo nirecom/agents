@@ -315,3 +315,27 @@ Changes: Added a gate that blocks edits and commits with overly long comment blo
 ### FEATURE: PR #2024 (2026-08-16)
 Background: fix(review-code-codex): replace flat line-cap truncation with path-pr...
 Changes: `review-code-codex` no longer truncates at a flat line cap that could skip every intended change in a large diff — it now allocates the review budget per changed path so committed, uncommitted, and untracked changes all get proportional coverage.;Fixed an off-by-one in the `CODEX_REVIEW_MAX_DIFF_LINES` budget so the configured limit is applied exactly.
+
+### FEATURE: PR #2035 (2026-08-16)
+Background: feat: PostToolUse auto-mark + NEXT_STEP_PAUSE v2 + stall detection (#2013 #1624 #1979 #1997)
+Changes: Delegated workflow steps (research, detail, write_tests, review_tests) are now automatically kept quiet while a subagent is running — no manual pause declaration needed; expired delegations surface as supervisor findings instead of silently jamming the session
+
+### FEATURE: PR #1944 (2026-08-16)
+Background: fix(worktree-start): auto-derive task name and branch type, remove interactive/non-interactive fallback branching
+Changes: `/worktree-start` no longer asks you to confirm a task name or branch type — both are now derived automatically from the session intent, so worktree creation never pauses for that input
+
+### FEATURE: PR #2050 (2026-08-16)
+Background: feat(enforce-worktree): sanctioned git merge --no-edit for diverged main worktree (#1982)
+Changes: `git merge --no-edit origin/<branch>` is now the sanctioned main-worktree recovery command when the branch diverges from its remote; Claude executes it directly (Rule 1 — autonomy-first). `git rebase` and `git reset --hard origin/<branch>` remain escalation-required per `rules/ops.md` "Diverged Main Worktree Recovery".
+
+### FEATURE: PR #2038 (2026-08-17)
+Background: feat(concern-ledger): persist review findings across rounds and finalize on non-convergence
+Changes: Code and test review rounds now track findings with persistent IDs across rounds via a new concern ledger, so repeated or dropped findings stay visible instead of being silently renumbered.;When a review loop fails to converge, unresolved concerns are now finalized and written to a machine-readable artifact instead of being silently dropped.
+
+### FEATURE: PR #2055 (2026-08-17)
+Background: fix(bin): detect node misinvocation in five PATH-exposed bash entry p...
+Changes: `bin/get-config-var`, `bin/confirm-off`, `bin/resolve-session-id`, `bin/resolve-worktree-path`, and `bin/is-github-dotcom-remote` now detect being launched by `node` instead of `bash` and print a one-line diagnostic naming the correct `bash <path>` re-run command, exiting 70 instead of dying with an opaque `SyntaxError`. Behavior under `bash` is unchanged.;`tests/feature-confirm-flags-static.sh` no longer reports a permanently stale installer check, and its seven known-failing assertions are now classified through an expected-failure ledger, so a genuinely new regression is the only thing that turns the suite red.
+
+### FEATURE: PR #2066 (2026-08-18)
+Background: feat: stop run-all.sh self-inclusion, add calibrated parallel dispatch (#1836, #1832)
+Changes: tests/run-all.sh: fixed self-recursive re-launch under `--all`; added parallel test execution with auto-calibrated job count.

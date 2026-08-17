@@ -94,6 +94,15 @@ function resolveUpstream(repoRoot, remote) {
   } catch (e) { return null; }
 }
 
+// Merge branch strict-head guards (C2 — #1982): env assignments and launcher
+// chains preceding `git merge` are rejected because merge invokes the configured
+// editor (GIT_EDITOR/VISUAL/EDITOR/core.editor). rejectInterpreterAndChaining
+// catches bash/python/etc. as the command head but intentionally allows
+// `sudo git …` / `VAR=x git …`, safe for the editor-free cleanup subcommands
+// (stash/restore/checkout). For merge only, those forms are blocked too.
+const MERGE_ENV_PREFIX_RE = /^\s*[A-Za-z_][A-Za-z0-9_]*=\S*(?:\s+[A-Za-z_][A-Za-z0-9_]*=\S*)*\s+git\b/;
+const MERGE_LAUNCHER_RE = /^\s*(?:env|sudo|exec|command)\s+(?:(?:env|sudo|exec|command)\s+)*git\b/;
+
 /**
  * Allow `git push` from the main worktree when every file in every outgoing
  * commit is covered by ENFORCE_WORKTREE_EXCLUDE. Uses `git log --name-only`
@@ -170,16 +179,11 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
 
 /**
  * True when cmd is `git [merge|rebase|cherry-pick] (--abort|--continue|--skip)`
- * from the main worktree. Mid-operation aborts/continues/skips only mutate
- * in-progress state files (.git/MERGE_HEAD, .git/rebase-merge/, .git/sequencer/)
- * — never tracked files in linked worktrees — so no linked-worktree-count gate.
- *
- * Hard restrictions:
- *   - rejectInterpreterAndChaining / hasShellChaining → reject
- *   - Multiple -C flags → reject (parseGitCPath only reads the first)
- *   - -C path, if present, must resolve to repoRoot
- *   - Subcommand must be merge | rebase | cherry-pick at the git subcommand position
- *   - First non-whitespace token after the subcommand must be --abort | --continue | --skip
+ * from the main worktree. Mid-operation actions only mutate in-progress state
+ * files (.git/MERGE_HEAD, rebase-merge/, sequencer/) — never tracked files in
+ * linked worktrees — so no linked-worktree-count gate. Rejects: interpreters,
+ * shell chaining, RCE git flags, multiple -C, a -C not resolving to repoRoot,
+ * and any first token after the subcommand other than the three actions.
  */
 function isAllowedMidOperationAbort(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
@@ -214,31 +218,20 @@ function isAllowedMidOperationAbort(cmd, repoRoot) {
 }
 
 /**
- * True when cmd is an approved cleanup-class git command AND no linked
- * worktrees remain (confirming cleanup has completed).
- *
- * Approved commands (issue #297):
+ * True when cmd is an approved cleanup-class git command (#297):
  *   git [-C <repoRoot>] stash (push|pop|apply|drop|clear) [...]
- *   git [-C <repoRoot>] restore [--staged] <paths>        — no --source
- *   git [-C <repoRoot>] checkout -- <paths>               — `--` required; no -b/-B/-f
- *   git [-C <repoRoot>] checkout HEAD -- <paths>          — same
- *
- * Hard restrictions:
- *   - hasShellChaining → reject
- *   - -C flag, if present, must resolve to repoRoot (not another repo)
- *   - checkout: only path-restore forms (requires `--` separator; no branch flags)
- *   - stash: only push|pop|apply|drop|clear (not branch|show|store|create|list)
- *   - restore: no --source (would rewrite from arbitrary tree)
- *   - Linked-worktrees probe: spawnSync git worktree list --porcelain must return
- *     >= 1 entry; upper bound depends on prefix/subcommand —
- *       · skill-prefixed stash: no upper bound (ref-only, #1024)
- *       · skill-prefixed restore/checkout: <= 2 entries
- *       · no-prefix: exactly 1 entry
- *     Fail-closed on git error.
+ *   git [-C <repoRoot>] restore [--staged] <paths>   — no --source
+ *   git [-C <repoRoot>] checkout [HEAD] -- <paths>   — `--` required
+ *   git [-C <repoRoot>] merge --no-edit origin/<upstream-branch>  — #1982
+ * Rejects shell chaining, interpreters, RCE git flags, multiple -C, a -C not
+ * resolving to repoRoot. Per-subcommand rules are documented at their sites.
  */
 function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
   if (!repoRoot) return false;
+  // merge (below) invokes the configured editor, so RCE-capable git flags
+  // (-c, --upload-pack, --receive-pack) are rejected for the whole class.
+  if (rejectRceGitFlags(cmd)) return false;
   const skillPrefixed = hasWorktreeEndSkillPrefix(cmd);
   if (skillPrefixed) cmd = stripWorktreeEndSkillPrefix(cmd);
   if (rejectInterpreterAndChaining(cmd)) return false;
@@ -262,7 +255,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   // Find the git subcommand (skip `git`, optional `-C <path>`, optional global flags).
   const stripped = stripQuotedArgs(cmd);
   const subMatch = stripped.match(
-    /\bgit\b(?:\s+-C\s+\S+)?(?:\s+-\S+(?:\s+\S+)?)*\s+(stash|restore|checkout)\b([\s\S]*)$/
+    /\bgit\b(?:\s+-C\s+\S+)?(?:\s+-\S+(?:\s+\S+)?)*\s+(stash|restore|checkout|merge)\b([\s\S]*)$/
   );
   if (!subMatch) return false;
   const sub  = subMatch[1];
@@ -275,6 +268,27 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     if (!ALLOWED_STASH.has(firstToken) && !firstToken.startsWith("-")) return false;
   } else if (sub === "restore") {
     if (/\s--source(?:=|\s)/.test(cmd)) return false;
+  } else if (sub === "merge") {
+    // Sanctioned divergence-recovery merge (#1982): git merge --no-edit
+    // origin/<branch>. --no-edit is mandatory: diverged merges open the
+    // configured editor by default; requiring it prevents a hang in
+    // non-interactive calls and closes the editor RCE path. Strict command
+    // head (C2): `\bgit\b` in subMatch is non-anchored, so a command like
+    // `echo git merge …` passes subMatch and must be rejected here.
+    if (!/^\s*git(?:\s+-C\s+\S+)?\s+merge\b/.test(cmd)) return false;
+    if (MERGE_ENV_PREFIX_RE.test(cmd) || MERGE_LAUNCHER_RE.test(cmd)) return false;
+    // Strict form: --no-edit then exactly one origin/<branch> refspec. Rejects
+    // extra flags, --ff-only (ff predicate territory), --abort/--continue/--skip
+    // (isAllowedMidOperationAbort territory), colon refspecs, `+`, refs/ form.
+    const m = rest.trim().match(/^--no-edit\s+origin\/([A-Za-z0-9._\/-]+)$/);
+    if (!m) return false;
+    // C1: operand must match the current branch's upstream on origin (fail-closed).
+    const upstream = resolveUpstream(repoRoot, "origin");
+    if (!upstream || upstream !== ("origin/" + m[1])) return false;
+    // No linked-worktree count gate: merge is symmetric with the ff-only
+    // pull/merge predicate, which also bypasses it. Git refuses to overwrite
+    // files checked out in a linked worktree during a merge.
+    return true;
   } else { // checkout
     // Path-restore form: requires `--` separator before the file paths.
     if (!/\s--(?:\s|$)/.test(rest)) return false;
@@ -287,7 +301,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     if (before !== "" && before !== "HEAD") return false;
   }
 
-  // Runtime gate: no linked worktrees remain.
+  // Runtime gate: no linked worktrees remain. Fail-closed on git error.
   try {
     const r = spawnSync("git", ["worktree", "list", "--porcelain"], {
       cwd: repoRoot, encoding: "utf8", timeout: 2000,
@@ -305,19 +319,13 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
 
 /**
  * True when cmd is the canonical compose-doc-append-entry dispatch shape:
- *
  *   bash "<AGENTS_CONFIG_DIR>/bin/compose-doc-append-entry" [--flag value]...
- *
- * Hard restrictions (all reject): shell chaining | ; & $(…) `…` > < \n,
- * wrong interpreter, wrong script path, unset AGENTS_CONFIG_DIR.
- *
- * NOTE: rejectInterpreterAndChaining is intentionally NOT called — it rejects
- * any command starting with `bash` (in INTERP_NAMES). Safety is provided by
- * the raw argTail scan below, same style as isAllowedReadOnlyConfigCheck §163–165.
- * Consumer: the WE-21 manual recovery path in skills/worktree-end/scripts/cleanup-cascade.md.
- * The normal WE-21 route goes through bin/worker-dispatch.js instead, which runs this
- * script itself via spawn.js and so never reaches this matcher.
- * Coupling: if that recovery command changes shape, update this matcher.
+ * Rejects shell chaining, substitutions, redirects, wrong interpreter/script
+ * path, unset AGENTS_CONFIG_DIR. rejectInterpreterAndChaining is intentionally
+ * NOT called (it rejects any `bash …` head); safety comes from the raw argTail
+ * scan below, same style as isAllowedReadOnlyConfigCheck. Consumer: the WE-21
+ * manual recovery path in skills/worktree-end/scripts/cleanup-cascade.md — if
+ * that command's shape changes, update this matcher.
  */
 function isAllowedComposeDocAppend(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;

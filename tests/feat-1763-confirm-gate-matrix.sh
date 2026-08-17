@@ -6,16 +6,17 @@
 # - The skill actually raising AskUserQuestion when the script says "confirm: yes".
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# The confirm gate is the logical OR of four independent conditions:
+
+# The confirm gate is the logical OR of five independent conditions:
 #   G1  final verdict touches EXISTING issues            (destructive / restructuring)
 #       reopen | make-parent | sub-of | bulk-sub-of — all four re-parent or reopen
 #       something that already exists, and sub-of/bulk-sub-of can reopen every closed
 #       ancestor of the parent chain, so they are not the "additive" case (CPR-ORTH).
 #   G2  the review stage replaced the survey verdict     (survey != review)
-#   G3  the reviewer did not affirm the issue is worth filing — unless the answer never
-#       reached the gate at all (worth_filing absent/unreadable) AND severity is high
+#   G3  the reviewer did not affirm worth_filing (only a literal `true` clears it)
 #   G4  review_result is invalid or skipped              (unverified verdict)
+#   G5  the severity label is not exactly `severity:high` (#1973 inflow brake)
+
 # Contract: eval-confirm-gate.sh <final-json> <severity-label>   (exactly 2 arguments)
 #   <final-json>  = the review `--out` artifact (survey.verdict / review.status /
 #                   review.worth_filing all live there)
@@ -23,14 +24,14 @@
 #   stdout line 2: "reasons: G1,G3"  (empty list => "reasons: ")
 #   exit 0 when it classifies — the caller decides, the script only classifies.
 #   exit non-zero ONLY on a wrong argument count (see section A).
-#
+
 # G3's input changed (#1763): it used to read a provenance token minted by a hook, which
 # meant the gate had a second, out-of-band input and a whole token lifecycle behind it.
 # It now reads `review.worth_filing` — the reviewer's own boolean, carried in the same
 # artifact as everything else the gate reads. The gate therefore became a pure function
 # of two arguments, which is what the whole of this file relies on: no session state, no
 # replay environment, no marker files.
-#
+
 # The reading is deliberately fail-closed: only a literal boolean `true` counts as "the
 # reviewer affirmed it". Missing, null, stringified and numeric values all mean "no
 # affirmation reached me", which is the case G3 exists for.
@@ -114,35 +115,38 @@ assert_row() {
 }
 
 echo "=== truth table: verdict | survey | review_result | worth_filing | severity ==="
+# Every row that isolates a non-severity gate pins `severity:high`, because anything else
+# fires G5 alongside it and the row would stop testing one axis (#1973).
 # name                       verdict      survey       review    worth  severity        confirm reasons
-assert_row T01-none-clean    none         none         upheld    true   severity:low    no      ""
-assert_row T02-sibling-clean sibling      sibling      upheld    true   severity:low    no      ""
+assert_row T01-none-clean    none         none         upheld    true   severity:high   no      ""
+assert_row T02-sibling-clean sibling      sibling      upheld    true   severity:high   no      ""
 
 echo ""
 echo "--- G1: verdicts that touch existing issues always confirm ---"
-assert_row T04-reopen        reopen       reopen       upheld    true   severity:low    yes     "G1"
+assert_row T04-reopen        reopen       reopen       upheld    true   severity:high   yes     "G1"
 assert_row T05-make-parent   make-parent  make-parent  upheld    true   severity:high   yes     "G1"
 # sub-of and bulk-sub-of are in the same class: attaching under a parent can reopen every
 # closed ancestor of that parent chain, which is exactly the "changes something that
 # already exists" property G1 names. Treating them as additive would have let the one
 # verdict that silently reopens issues through without a question.
-assert_row T03-subof-clean   sub-of       sub-of       upheld    true   severity:medium yes     "G1"
-assert_row T19-bulk-subof    bulk-sub-of  bulk-sub-of  upheld    true   severity:low    yes     "G1"
+assert_row T03-subof-clean   sub-of       sub-of       upheld    true   severity:high   yes     "G1"
+assert_row T19-bulk-subof    bulk-sub-of  bulk-sub-of  upheld    true   severity:high   yes     "G1"
 
 echo ""
 echo "--- G2: the review stage replaced the survey verdict ---"
-assert_row T06-replaced      sibling      none         replaced  true   severity:low    yes     "G2"
-assert_row T07-replaced-subof sub-of      sibling      replaced  true   severity:medium yes     "G1,G2"
+assert_row T06-replaced      sibling      none         replaced  true   severity:high   yes     "G2"
+assert_row T07-replaced-subof sub-of      sibling      replaced  true   severity:high   yes     "G1,G2"
 
 echo ""
 echo "--- G3: the reviewer did not affirm worth_filing ---"
-assert_row T08-notworth-low     none      none         upheld    false  severity:low    yes     "G3"
-assert_row T09-notworth-medium  none      none         upheld    false  severity:medium yes     "G3"
-# The carve-out is narrow: severity:high stands in for a worth_filing the gate never
-# received — absent, null, or otherwise unreadable — where a high-severity proposal is
-# worth filing anyway and the question would buy nothing. It does NOT overrule a reviewer
-# who read the evidence and concluded worth_filing:false; that is an answer, not a gap,
-# and silently discarding it would file the duplicate the reviewer just identified.
+# T08/T09 keep their own severity because they are the severity axis crossed with G3:
+# a non-high finding fires both, and the pair must accumulate rather than mask.
+assert_row T08-notworth-low     none      none         upheld    false  severity:low    yes     "G3,G5"
+assert_row T09-notworth-medium  none      none         upheld    false  severity:medium yes     "G3,G5"
+# severity:high no longer stands in for a missing or negative worth_filing. Severity now
+# gates on its own axis (G5), so the reviewer's `false` and an answer that was lost in
+# transit both fire G3 whatever the severity — T10 is the proof the carve-out is gone.
+# Reinstating it would silently file the duplicate the reviewer just identified.
 assert_row T10-notworth-high    none      none         upheld    false  severity:high   yes     "G3"
 assert_row T11-worth-high       none      none         upheld    true   severity:high   no      ""
 
@@ -150,11 +154,11 @@ echo ""
 echo "--- G4: an unverified verdict always confirms ---"
 # worth_filing is pinned `true` here so that G4 is the only condition in play; T16/T22
 # below cover the realistic combination where a failed review carries no opinion either.
-assert_row T12-review-invalid none        none         invalid   true   severity:low    yes     "G4"
+assert_row T12-review-invalid none        none         invalid   true   severity:high   yes     "G4"
 assert_row T13-review-skipped none        none         skipped   true   severity:high   yes     "G4"
 # A review that never completed has no worth_filing to report — null is what the wrapper
 # writes — so the honest artifact fires both G3 and G4 at once.
-assert_row T22-skipped-null-worth none     none        skipped   null   severity:low    yes     "G3,G4"
+assert_row T22-skipped-null-worth none     none        skipped   null   severity:high   yes     "G3,G4"
 
 # T20/T21 — the no-Node degraded path in review-survey-verdict-codex.sh writes the final
 # artifact by COPYING the survey artifact, so what reaches the gate has no `review`
@@ -202,11 +206,23 @@ fs.writeFileSync(process.argv[1], JSON.stringify({
 fi
 
 echo ""
+echo "--- G5: severity below the autonomous-filing bar ---"
+# The #1973 inflow brake. `severity:low` (cosmetic / avoidable inconvenience / low-impact
+# improvement) and no-label-at-all (normal) are the two shapes the /issue-create flow
+# actually produces for a non-high finding, and both must ask the user — otherwise the
+# autonomous path files the long tail that made #1973 necessary. Only the exact string
+# `severity:high` clears G5, so anything else, including a label nobody defined, asks.
+# Each row is otherwise fully clean (none/none/upheld/true) so G5 is the only reason.
+assert_row T23-sev-low       none         none         upheld    true   severity:low    yes     "G5"
+assert_row T24-sev-absent    none         none         upheld    true   ""              yes     "G5"
+assert_row T25-sev-unknown   none         none         upheld    true   severity:medium yes     "G5"
+
+echo ""
 echo "--- OR semantics: overlapping conditions accumulate reasons ---"
-assert_row T14-G1-G2         reopen       none         replaced  true   severity:low    yes     "G1,G2"
-assert_row T15-G1-G3         make-parent  make-parent  upheld    false  severity:low    yes     "G1,G3"
-assert_row T16-G3-G4         none         none         skipped   false  severity:low    yes     "G3,G4"
-assert_row T17-all-four      reopen       none         invalid   false  severity:low    yes     "G1,G2,G3,G4"
+assert_row T14-G1-G2         reopen       none         replaced  true   severity:high   yes     "G1,G2"
+assert_row T15-G1-G3         make-parent  make-parent  upheld    false  severity:high   yes     "G1,G3"
+assert_row T16-G3-G4         none         none         skipped   false  severity:high   yes     "G3,G4"
+assert_row T17-all-five      reopen       none         invalid   false  severity:low    yes     "G1,G2,G3,G4,G5"
 assert_row T18-G1-G4-high    reopen       reopen       skipped   false  severity:high   yes     "G1,G3,G4"
 
 echo ""
@@ -218,7 +234,7 @@ echo "=== G3 fail-closed: anything that is not boolean true is not an affirmatio
 assert_failclosed() {  # <name> <worth-filing-json|__OMIT__>
     local name="$1" jf="$WORK/fc-$1.json"
     mk_json "$jf" none none upheld "$2"
-    run_gate "$jf" severity:low
+    run_gate "$jf" severity:high
     if [ "$CONFIRM" = "<missing>" ]; then
         fail "$name" "RED-EXPECTED: skills/issue-create/scripts/eval-confirm-gate.sh not yet created"
     elif [ "$RC" -ne 0 ]; then
@@ -239,7 +255,7 @@ assert_failclosed P6-worth-filing-space-str '"  "'
 assert_failclosed P7-worth-filing-object    '{"value":true}'
 # The counterpart that keeps P1-P7 from being satisfied by a gate that fires G3 always:
 # a real boolean true, same shape otherwise, must NOT fire it.
-assert_row P8-worth-filing-real-true none none upheld true severity:low no ""
+assert_row P8-worth-filing-real-true none none upheld true severity:high no ""
 
 echo ""
 echo "=== A: argument arity is enforced, not silently reinterpreted ==="
@@ -274,7 +290,7 @@ assert_arity_error A3-three-args "$WORK/arity.json" user-explicit severity:high
 
 # A4 is the control: the correct arity must still classify at exit 0, or A1-A3 would
 # pass against a script that rejects everything.
-run_gate "$WORK/arity.json" severity:low
+run_gate "$WORK/arity.json" severity:high
 if [ "$CONFIRM" = "<missing>" ]; then
     fail "A4-two-args-classifies" "RED-EXPECTED: eval-confirm-gate.sh not yet created"
 elif [ "$RC" -eq 0 ] && [ "$CONFIRM" = "no" ]; then
@@ -318,7 +334,7 @@ echo ""
 echo "=== SKILL.md documents the gate and delegates the decision to the script ==="
 if [ ! -f "$SKILL" ]; then
     fail "D1-skill-references-gate" "skills/issue-create/SKILL.md not found"
-    fail "D2-skill-documents-G1-G4" "skills/issue-create/SKILL.md not found"
+    fail "D2-skill-documents-G1-G5" "skills/issue-create/SKILL.md not found"
 else
     if grep -qF 'eval-confirm-gate.sh' "$SKILL"; then
         pass "D1-skill-references-gate"
@@ -326,11 +342,11 @@ else
         fail "D1-skill-references-gate" "RED-EXPECTED: SKILL.md does not call scripts/eval-confirm-gate.sh yet"
     fi
     MISSING=""
-    for g in G1 G2 G3 G4; do grep -qF "$g" "$SKILL" || MISSING="$MISSING $g"; done
+    for g in G1 G2 G3 G4 G5; do grep -qF "$g" "$SKILL" || MISSING="$MISSING $g"; done
     if [ -z "$MISSING" ]; then
-        pass "D2-skill-documents-G1-G4"
+        pass "D2-skill-documents-G1-G5"
     else
-        fail "D2-skill-documents-G1-G4" "RED-EXPECTED: gate condition(s) undocumented:$MISSING"
+        fail "D2-skill-documents-G1-G5" "RED-EXPECTED: gate condition(s) undocumented:$MISSING"
     fi
 fi
 

@@ -189,13 +189,13 @@ g8_summary_is_the_last_line() {
 
 # ---- G9: the consumer side of the NOT FOUND line ----------------------------
 
-# Static, and deliberately tolerant: it pins that RCS-2 carries the obligation and names the
+# Static, and deliberately tolerant: it pins that RCS-3 carries the obligation and names the
 # line the obligation has to surface on, not the wording used to say it. Adopted rather than
 # skipped because the runner's whole G8 contract is a message to this reader — with the
 # obligation unwritten, every row above can stay green while the report a human sees is
 # unchanged, which is precisely the shape of the incident being fixed.
-rcs2_block() {
-  awk '/^RCS-2\./{f=1} f && /^(RCS-[0-9]|## )/ && !/^RCS-2\./ {exit} f' "$SKILL_MD"
+rcs3_block() {
+  awk '/^RCS-3\./{f=1} f && /^(RCS-[0-9]|## )/ && !/^RCS-3\./ {exit} f' "$SKILL_MD"
 }
 
 g9_skill_consumes_not_found() {
@@ -204,28 +204,28 @@ g9_skill_consumes_not_found() {
     fail "G9: $SKILL_REL does not exist"
     return 0
   fi
-  block="$(rcs2_block)"
-  # Guards the vacuous pass: if RCS-2 is ever renumbered the parse would return nothing and
+  block="$(rcs3_block)"
+  # Guards the vacuous pass: if RCS-3 is ever renumbered the parse would return nothing and
   # both rows below would be asserting against an empty string.
-  check "G9a: the RCS-2 section was found in $SKILL_REL" \
+  check "G9a: the RCS-3 section was found in $SKILL_REL" \
     "yes" "$([ -n "$block" ] && echo yes || echo not-found)"
   [ -n "$block" ] || return 0
   if grep -qF -- "NOT FOUND" <<< "$block"; then
-    pass "G9b: RCS-2 obliges the consumer to act on a NOT FOUND gate"
+    pass "G9b: RCS-3 obliges the consumer to act on a NOT FOUND gate"
   else
-    fail "G9b: RCS-2 obliges the consumer to act on a NOT FOUND gate -- no 'NOT FOUND' in RCS-2: [$block]"
+    fail "G9b: RCS-3 obliges the consumer to act on a NOT FOUND gate -- no 'NOT FOUND' in RCS-3: [$block]"
   fi
   if grep -qF -- "Security Review" <<< "$block"; then
     pass "G9c: and names the reported line the reader actually sees"
   else
-    fail "G9c: and names the reported line the reader actually sees -- no 'Security Review' in RCS-2: [$block]"
+    fail "G9c: and names the reported line the reader actually sees -- no 'Security Review' in RCS-3: [$block]"
   fi
 }
 
 # SKIPPED: the review-code-security skill actually reading the summary and surfacing it.
 # Because: that requires a real skill invocation through claude -p, which this suite is not
 #          gated for (RUN_TL3) and which would reach the billed review-code-codex gate.
-# TL3 gap: whether the model honours the RCS-2 obligation in practice. G9 pins that the
+# TL3 gap: whether the model honours the RCS-3 obligation in practice. G9 pins that the
 #          obligation is written down; nothing here pins that it is obeyed.
 
 if exec_bit_works && no_exec_bit_observable; then

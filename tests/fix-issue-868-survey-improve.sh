@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tests: skills/issue-create/SKILL.md
-# Tags: issue-create, github, survey, rubric, coverage
+# Tags: issue-create, github, survey, rubric, coverage, scope:common
+# Serial: writes the fixed paths /tmp/df1-pos.txt and /tmp/reg661-output.txt, and re-runs the feature-661 suite
 # Tests for issue #868: survey coverage and verdict rubric improvements.
 #
 # L3 gap (what this test does NOT catch):
@@ -8,7 +9,7 @@
 # - Actual gh issue list API calls are made in the described order
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
-#
+
 # Test cases:
 #   VR-1..4  — verdict rubric assertions (regression row, rubric section, symptom rule, tie-break)
 #   PC-1..7  — pass configuration assertions (parallel symptom, Pass 2 symptom, Pass 3 widened, inspect cap)

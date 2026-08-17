@@ -18,6 +18,7 @@ RPS-2. Invoke `"$AGENTS_CONFIG_DIR/skills/review-plan-security/scripts/run-codex
 - exit 3 → silently launch `plan-security-reviewer` subagent; use its verdict for RPS-4.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback agent.
 - exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
+- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.
 RPS-3. Present concerns with per-axis severity and proposed mitigations before implementation proceeds.
 RPS-4. Summary — APPROVED: report no RISK items; NEEDS_REVISION: summarize mitigations.
 

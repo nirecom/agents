@@ -18,6 +18,8 @@ With `ENFORCE_WORKTREE=off`: direct main work is allowed (trivial changes only).
 Set this in agents config (`.env`) when the isolation cost exceeds the benefit.
 To lift enforcement for one session instead of globally, run `/enforce-workflow-off`.
 
+When the main worktree branch has genuinely diverged from its remote (ahead AND behind), `git merge --no-edit origin/<branch>` is the sanctioned non-destructive recovery command; `git rebase` and `git reset --hard` require user escalation — SSOT: `rules/ops.md` "Diverged Main Worktree Recovery".
+
 See `branch.md` for branch naming and the standard branch flow.
 See `docs/parallel-sessions.md` for the full lifecycle guide.
 

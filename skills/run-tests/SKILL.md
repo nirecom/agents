@@ -47,7 +47,7 @@ RNT-5. **Empty-selection policy (no silent `--all` fallback).**
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
 
-RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `timeout_seconds` (omit for the 120s default).
+RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`).
 
 RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
 
@@ -76,6 +76,8 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - Empty selection on non-doc changes requires user confirmation; no silent `--all` fallback.
 - Do not reimplement the merge-base resolution chain inside this skill (SSOT: bin/resolve-merge-base.sh).
 - Recovery for a pre-existing unrelated failure is limited to marking the single run_tests step complete. Never substitute a session-wide OFF sentinel.
+- Fall back to sequential execution with `"jobs": 1` in the payload; `test_args` cannot carry `-j 1` (its `rel-path-arg[]` type rejects a leading `-`).
+- The worker derives `--deadline max(30, timeout_seconds − 5)`, so the suite folds itself up before the dispatcher's budget expires; a deadline abort prints no `RUN_CONTRACT:` line and surfaces as `status: fail`.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
