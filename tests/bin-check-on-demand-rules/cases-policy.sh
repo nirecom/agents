@@ -6,7 +6,7 @@
 # (any 17 well-shaped strings would satisfy them), so the allowlist is compared for
 # EXACT SET EQUALITY against the real rules/ tree, in both directions:
 #   EXPECTED_UNCONDITIONAL == { rules/**/*.md with no `paths:` frontmatter }
-#   ON_DEMAND_FILES        == { rules/**/*.md whose paths: is exactly the token }
+#   ON_DEMAND_READERS keys == { rules/**/*.md whose paths: is exactly the token }
 # so neither a forgotten registration nor a stale entry can survive.
 
 # PARSE, DON'T EVALUATE (CPR-ORTH with P11 below, and with A2a in
@@ -17,10 +17,15 @@
 # agents-owned reader (hooks/lib/rules-policy-reader.js), and P12 proves it with the same
 # canary shape P11 uses on the checker side.
 
-# The two array declarations are read with readStringArrayConst rather than taken from
-# loadPolicyAsData, because loadPolicyAsData collapses "declaration absent / unparseable"
-# to []. Keeping the raw null lets P3/P4 stay live assertions ("the list was actually
-# recovered") instead of tautologies that hold for any policy file whatsoever.
+# The two declarations are read with readStringArrayConst / readPairArrayConst rather
+# than taken from loadPolicyAsData, because loadPolicyAsData collapses "declaration
+# absent / unparseable" to []. Keeping the raw null lets P3/P4 stay live assertions ("the
+# list was actually recovered") instead of tautologies that hold for any policy file.
+#
+# The on-demand half is the KEY column of ON_DEMAND_READERS (#2037), not a separate
+# ON_DEMAND_FILES literal: the rule name is declared exactly once, beside the skills
+# required to Read it. Reading the retired literal here instead would make P4/P6 red on
+# the very policy P13e demands (one where that literal is gone).
 
 echo ""
 echo "=== policy SSOT (exact set equality against the real rules/ tree) ==="
@@ -63,7 +68,10 @@ const eq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sor
 const diff = (a, b) => a.filter((x) => !b.includes(x));
 // null when the declaration could not be recovered from the source text at all.
 const eu = R.readStringArrayConst(src, 'EXPECTED_UNCONDITIONAL');
-const od = R.readStringArrayConst(src, 'ON_DEMAND_FILES');
+const odRows = typeof R.readPairArrayConst === 'function'
+  ? R.readPairArrayConst(src, 'ON_DEMAND_READERS')
+  : null;
+const od = odRows ? odRows.map((r) => r.key) : null;
 
 const out = [];
 out.push('TOKEN=' + p.ON_DEMAND_TOKEN);
@@ -102,9 +110,9 @@ check_p() {
 check_p "P1: ON_DEMAND_TOKEN is the canonical literal" TOKEN "$TOKEN"
 check_p "P2: ON_DEMAND_MARKER_RE matches the canonical marker comment" MARKER_MATCH yes
 check_p "P3: EXPECTED_UNCONDITIONAL is an array" EU_IS_ARRAY yes
-check_p "P4: ON_DEMAND_FILES is an array" OD_IS_ARRAY yes
+check_p "P4: ON_DEMAND_READERS is a recoverable pair array" OD_IS_ARRAY yes
 check_p "P5: EXPECTED_UNCONDITIONAL equals exactly the paths-less rules/**/*.md set" EU_EQ_PLAIN yes
-check_p "P6: ON_DEMAND_FILES equals exactly the token-annotated rules/**/*.md set" OD_EQ_ANNOTATED yes
+check_p "P6: the ON_DEMAND_READERS key column equals exactly the token-annotated rules/**/*.md set" OD_EQ_ANNOTATED yes
 check_p "P7: the two allowlists are disjoint" EU_DISJOINT_OD yes
 check_p "P8: no rule mixes the reserved token with other globs" MIXED_TOKEN_FILES 0
 
@@ -120,16 +128,16 @@ paths:
 ---
 $MARKER
 
-# Correctly annotated, deliberately absent from ON_DEMAND_FILES
+# Correctly annotated, deliberately absent from ON_DEMAND_READERS
 EOF
 rogue_rc="$(run_checker "$d" all)"
 rogue_out="$(cat "$(outfile_for "$d")" 2>/dev/null)"
 if [ "$rogue_rc" != "1" ]; then
-    fail "P9: an annotated rule missing from ON_DEMAND_FILES must exit 1, got $rogue_rc"
+    fail "P9: an annotated rule missing from ON_DEMAND_READERS must exit 1, got $rogue_rc"
 elif ! printf '%s' "$rogue_out" | grep -q 'rules/rogue.md'; then
     fail "P9: exit 1 but the diagnostic never names rules/rogue.md — output: $(printf '%s' "$rogue_out" | head -3 | tr '\n' ' ')"
 else
-    pass "P9: an annotated rule absent from ON_DEMAND_FILES is rejected"
+    pass "P9: an annotated rule absent from ON_DEMAND_READERS is rejected"
 fi
 
 # --- P10: the mirror image — a registered file that lost its annotation. ---
@@ -177,9 +185,9 @@ cat > "$d/hooks/lib/rules-injection-policy.js" <<POLICY_EXEC_EOF
 require("fs").writeFileSync("$CANARY_NODE", "executed");
 const ON_DEMAND_TOKEN = "$TOKEN";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
-const ON_DEMAND_FILES = ["rules/od.md"];
+const ON_DEMAND_READERS = ["rules/od.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 POLICY_EXEC_EOF
 exec_rc="$(run_checker "$d" all)"
 exec_out="$(cat "$(outfile_for "$d")" 2>/dev/null)"
@@ -208,9 +216,9 @@ cat > "$d/hooks/lib/rules-injection-policy.js" <<HARNESS_EXEC_EOF
 require("fs").writeFileSync("$H_CANARY_NODE", "executed");
 const ON_DEMAND_TOKEN = "$TOKEN";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
-const ON_DEMAND_FILES = ["rules/od.md"];
+const ON_DEMAND_READERS = ["rules/od.md|skills/owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 HARNESS_EXEC_EOF
 H_REPORT="$(pol_report "$d" "$d/hooks/lib/rules-injection-policy.js")"
 h_token="$(printf '%s\n' "$H_REPORT" | grep '^TOKEN=' | head -1 | cut -d= -f2-)"
@@ -223,3 +231,122 @@ else
     pass "P12: the harness read the policy as data — constants recovered, module body did not execute"
 fi
 unset H_REPORT h_token h_od
+
+# --- P13/P14: ON_DEMAND_READERS is the SSOT; ON_DEMAND_FILES is derived from it (#2037) ---
+# WHY: the rule name used to be written twice — once in ON_DEMAND_FILES, once in the
+# hand-written ownership table. It now lives once, as the KEY half of each ON_DEMAND_READERS
+# row, and the reader republishes ON_DEMAND_FILES as a derived value so existing consumers
+# keep working. A derivation bug (dropping a row, keeping the whole `key|readers` string as
+# the "file name", deriving from a stale second declaration) would leave every consumer
+# grading the tree against a set that no longer matches the declaration, and P5-P8 above
+# cannot see it: they compare the derived set to the tree, so both sides move together.
+# P14 pins the other half — a row whose separator is missing must surface as MALFORMED
+# (values === null) rather than being silently dropped from the derived set.
+cat > "$BASE/readers-derivation.js" <<'READERS_DERIV_EOF'
+"use strict";
+// argv: <reader> <policy-path>
+const fs = require("fs");
+const R = require(process.argv[2]);
+const src = fs.readFileSync(process.argv[3], "utf8");
+const out = [];
+const have = typeof R.readPairArrayConst === "function";
+out.push("HAVE_PAIR_READER=" + (have ? "yes" : "no"));
+const pairs = have ? R.readPairArrayConst(src, "ON_DEMAND_READERS") : null;
+out.push("READERS_DECLARED=" + (pairs === null ? "no" : "yes"));
+out.push("READERS_ROWS=" + (pairs ? pairs.length : -1));
+const derived = R.loadPolicyAsData(process.argv[3]).ON_DEMAND_FILES || [];
+out.push("DERIVED_COUNT=" + derived.length);
+const keys = pairs ? pairs.map((p) => p.key) : null;
+// SEQUENCE equality, not set equality: the derived list must be the key column itself.
+out.push("KEYS_EQ_DERIVED=" + (keys && JSON.stringify(keys) === JSON.stringify(derived) ? "yes" : "no"));
+out.push("EVERY_ROW_HAS_READERS=" +
+  (pairs && pairs.every((p) => Array.isArray(p.values) && p.values.length > 0) ? "yes" : "no"));
+// The retired declaration must be gone: while both exist, "derived" cannot be proven.
+out.push("OLD_FILES_DECL=" + (R.readStringArrayConst(src, "ON_DEMAND_FILES") === null ? "absent" : "present"));
+// P14: an element without the separator is MALFORMED, never silently dropped.
+const mal = have
+  ? R.readPairArrayConst('const ON_DEMAND_READERS = ["rules/a.md|skills/x/SKILL.md","rules/b.md"];', "ON_DEMAND_READERS")
+  : null;
+out.push("MALFORMED_KEPT=" + (mal && mal.length === 2 ? "yes" : "no"));
+out.push("MALFORMED_VALUES_NULL=" + (mal && mal.length === 2 && mal[1].values === null ? "yes" : "no"));
+console.log(out.join("\n"));
+READERS_DERIV_EOF
+
+RD_REPORT="$(node "$(node_path "$BASE/readers-derivation.js")" "$(node_path "$READER")" "$(node_path "$POLICY")" 2>&1)"
+rdfield() { printf '%s\n' "$RD_REPORT" | grep "^$1=" | head -1 | cut -d= -f2-; }
+check_rd() {
+    local label="$1" key="$2" want="$3" got
+    got="$(rdfield "$key")"
+    if [ "$got" = "$want" ]; then pass "$label"
+    else fail "$label — $key=$got (want $want); report: $(printf '%s' "$RD_REPORT" | tr '\n' ' ' | cut -c1-400)"; fi
+}
+
+check_rd "P13a: the reader exposes readPairArrayConst" HAVE_PAIR_READER yes
+check_rd "P13b: ON_DEMAND_READERS is declared in the real policy" READERS_DECLARED yes
+check_rd "P13c: derived ON_DEMAND_FILES is exactly the ON_DEMAND_READERS key column, in order" KEYS_EQ_DERIVED yes
+check_rd "P13d: every declared row names at least one reader" EVERY_ROW_HAS_READERS yes
+check_rd "P13e: the retired ON_DEMAND_FILES literal is gone, so the derived value cannot be shadowed by it" OLD_FILES_DECL absent
+check_rd "P14a: a row missing its separator is kept, not silently dropped" MALFORMED_KEPT yes
+check_rd "P14b: that row reports values === null (malformed), not [] (zero readers)" MALFORMED_VALUES_NULL yes
+
+# Non-vacuity: an empty declaration would make P13c trivially true (both sides []).
+RD_ROWS="$(rdfield READERS_ROWS)"
+if [ "${RD_ROWS:-0}" -ge 1 ] 2>/dev/null; then
+    pass "P13f: ON_DEMAND_READERS declares $RD_ROWS row(s), so the derivation comparison is live"
+else
+    fail "P13f: ON_DEMAND_READERS parsed to $RD_ROWS row(s) — P13c would hold for any policy whatsoever"
+fi
+unset RD_REPORT RD_ROWS
+
+# --- P15: the DEFAULT policy path. Every other harness in this suite exports
+# RULES_INJECTION_POLICY, so the documented `<root>/hooks/lib/rules-injection-policy.js`
+# fallback is never exercised — a checker that honoured only the env var would pass the
+# whole suite and then grade every real pre-commit run against nothing at all. ---
+d="$BASE/p15-fallback"
+rd_base "$d"
+P15_RC="$(run_checker_nopin "$d")"
+P15_OUT="$(cat "$(outfile_for "$d")" 2>/dev/null)"
+if [ "$P15_RC" = "0" ]; then
+    pass "P15a: with RULES_INJECTION_POLICY unset, a clean tree passes — the checker found the tree's own policy at the default path"
+else
+    fail "P15a: want rc=0 from the default-path fallback, got $P15_RC — output: $(printf '%s' "$P15_OUT" | head -6 | tr '\n' ' ' | cut -c1-400)"
+fi
+
+# Non-vacuity: rc=0 above would also be produced by a checker that read no policy and
+# graded nothing. The same tree with a violation its OWN policy defines must fail.
+d="$BASE/p15-fallback-dirty"
+rd_base "$d"
+rd_policy "$d" '["rules/od.md|skills/ghost/SKILL.md"]' '["rules/plain.md"]'
+P15B_RC="$(run_checker_nopin "$d")"
+P15B_OUT="$(cat "$(outfile_for "$d")" 2>/dev/null)"
+if [ "$P15B_RC" = "0" ]; then
+    fail "P15b: the default-path fallback returned rc=0 on a tree whose own policy names a nonexistent reader — P15a proves nothing if the checker grades nothing"
+elif printf '%s\n' "$P15B_OUT" | grep -q 'rules/od\.md'; then
+    pass "P15b: the default-path fallback graded the tree against the tree's OWN policy (rc=$P15B_RC, names rules/od.md)"
+else
+    fail "P15b: rc=$P15B_RC but the diagnostic never names rules/od.md — the failure may come from the agents repo's policy, not the fixture's; output: $(printf '%s' "$P15B_OUT" | head -6 | tr '\n' ' ' | cut -c1-400)"
+fi
+
+# --- P16: the reader matches a constant NAME unanchored (pinned in
+# tests/unit-rules-policy-reader/cases-collections.sh). The consequence the checker owns:
+# a policy whose real ON_DEMAND_READERS is absent must never be graded against a
+# same-suffixed decoy — that would silently declare every on-demand rule owned. ---
+d="$BASE/p16-decoy"
+rd_base "$d"
+cat > "$d/hooks/lib/rules-injection-policy.js" <<DECOY_EOF
+"use strict";
+const ON_DEMAND_TOKEN = "$TOKEN";
+const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
+const X_ON_DEMAND_READERS = ["rules/od.md|skills/owner/SKILL.md"];
+const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, EXPECTED_UNCONDITIONAL };
+DECOY_EOF
+P16_RC="$(run_checker "$d" all)"
+P16_OUT="$(cat "$(outfile_for "$d")" 2>/dev/null)"
+if [ "$P16_RC" = "0" ]; then
+    fail "P16: ON_DEMAND_READERS is not declared, yet the checker passed the tree (rc=0) — the same-suffixed X_ON_DEMAND_READERS was consumed as the declaration, so rules/od.md reads as owned by a table nobody wrote"
+elif printf '%s\n' "$P16_OUT" | grep -q 'rules/od\.md'; then
+    pass "P16: an absent ON_DEMAND_READERS fails closed and names the unregistered rule (rc=$P16_RC), rather than borrowing the decoy constant"
+else
+    fail "P16: rc=$P16_RC but the diagnostic never names rules/od.md — output: $(printf '%s' "$P16_OUT" | head -6 | tr '\n' ' ' | cut -c1-400)"
+fi

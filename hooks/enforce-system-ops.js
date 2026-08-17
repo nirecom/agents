@@ -200,6 +200,7 @@ process.stderr.write(
     `require explicit user approval — escalate via Rule 2 per rules/user-escalation.md.\n` +
     `If this is a legitimate installer flow, set SYSTEM_OPS_APPROVED=1 in the\n` +
     `environment that LAUNCHES Claude Code (inline prefix does NOT bypass this guard).\n` +
-    `See rules/installer.md and rules/ops.md.\n`
+    `Read rules/installer.md and rules/ops.md before proceeding — rules/ops.md is\n` +
+    `on-demand-only (never auto-injected), so this Read is the only way it arrives.\n`
 );
 process.exit(2);

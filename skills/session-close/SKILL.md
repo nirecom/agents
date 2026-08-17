@@ -194,5 +194,5 @@ Mark surfaced and complete:
 - `/issue-close-finalize` failures surface in outcome JSON; renderer still runs (non-blocking).
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
 - On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 - WF-META session (`workflow_type: wf-meta`) → never invoke `/issue-close-finalize`; SC-3 writes `skipped_wf_meta` outcome directly and skips to SC-6.

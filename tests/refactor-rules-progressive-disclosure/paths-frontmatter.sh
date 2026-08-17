@@ -90,7 +90,9 @@ if [ ! -f "$POLICY_FILE" ]; then
     EXPECTED_UNCONDITIONAL_LIST=""
 else
     ON_DEMAND_TOKEN="$(policy_string_const ON_DEMAND_TOKEN)"
-    ON_DEMAND_FILES_LIST="$(policy_string_array ON_DEMAND_FILES)"
+    # #2037: the rule name is the KEY half of each ON_DEMAND_READERS row, so the
+    # on-demand set is that column. There is no ON_DEMAND_FILES literal left to read.
+    ON_DEMAND_FILES_LIST="$(policy_string_array ON_DEMAND_READERS | cut -d"|" -f1)"
     EXPECTED_UNCONDITIONAL_LIST="$(policy_string_array EXPECTED_UNCONDITIONAL)"
 
     if [ -n "$ON_DEMAND_TOKEN" ]; then
@@ -101,9 +103,9 @@ else
 
     od_n="$(printf '%s\n' "$ON_DEMAND_FILES_LIST" | grep -c . || true)"
     if [ "$od_n" -gt 0 ]; then
-        pass "T1-0: ON_DEMAND_FILES parsed non-empty ($od_n entries) so T1-B is live"
+        pass "T1-0: ON_DEMAND_READERS parsed non-empty ($od_n entries) so T1-B is live"
     else
-        fail "T1-0: ON_DEMAND_FILES" "parsed as empty/unparseable — the T1-B assertions would be vacuous"
+        fail "T1-0: ON_DEMAND_READERS" "parsed as empty/unparseable — the T1-B assertions would be vacuous"
     fi
 
     eu_n="$(printf '%s\n' "$EXPECTED_UNCONDITIONAL_LIST" | grep -c . || true)"
@@ -148,7 +150,7 @@ while IFS= read -r rel; do
     [ -z "$rel" ] && continue
     abs="$REPO_ROOT/$rel"
     if [ ! -f "$abs" ]; then
-        fail "T1-B: $rel" "listed in ON_DEMAND_FILES but the file does not exist"
+        fail "T1-B: $rel" "listed in ON_DEMAND_READERS but the file does not exist"
         continue
     fi
     if reason="$(check_paths_frontmatter "$abs")"; then
@@ -237,7 +239,7 @@ if [ -n "$ON_DEMAND_TOKEN" ]; then
     TOK_EXTRA="$(comm -13 <(echo "$OD_SORTED") <(echo "$TOKEN_FILES") | tr '\n' ' ')"
     TOK_LOST="$(comm -23 <(echo "$OD_SORTED") <(echo "$TOKEN_FILES") | tr '\n' ' ')"
     if [ -z "${TOK_EXTRA// /}" ] && [ -z "${TOK_LOST// /}" ]; then
-        pass "T1-E: the reserved token appears in exactly the ON_DEMAND_FILES rules"
+        pass "T1-E: the reserved token appears in exactly the ON_DEMAND_READERS rules"
     else
         fail "T1-E: reserved-token containment" \
             "unregistered files carrying the token: [${TOK_EXTRA% }]; registered files without it: [${TOK_LOST% }]"

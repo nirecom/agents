@@ -42,25 +42,15 @@ test_N4_downstream_no_legacy_section_ref() {
 # ============================================================================
 
 # LINE-SCOPED LEGACY-ID ALLOWLIST
-# -------------------------------
-# A few lines in this repo must keep a literal old-scheme CPR-<N> ID, because
-# reproducing that ID IS their job: the negative assertion literal in
-# tests/refactor-design-principles/section-b.sh (B19 proves the stale pointer is
-# gone from the CPR-ORTH body — rewrite the literal and the case asserts nothing),
-# and the old->new correspondence documented in M1's rationale below. Sweeping
-# those lines would destroy the very checks that certify the sweep, so G1 has to
-# tolerate them without going blind.
-#
-# The exception is LINE-scoped on purpose. Excluding the three files wholesale via
-# a pathspec would be shorter and permanently wrong: G1 would then never see a
-# genuinely stale reference newly introduced ANYWHERE in those files. A line marker
-# trades no coverage at all — every unmarked line in the repo is still checked.
-#
-# When adding a marker is legitimate: only where the OLD ID is load-bearing — an
-# assertion literal, or a table documenting the old->new mapping. Prose that merely
-# cites a principle is never a candidate; cite it by its semantic code instead.
-# Marking a line just to silence G1 on an unswept reference is an abuse of it.
-# Enumerate every allowlisted line with:  git grep -n CPR-LEGACY-ID-OK
+# A few lines must keep a literal old-scheme CPR-<N> ID because reproducing it IS their
+# job — an assertion literal (tests/refactor-design-principles/section-b.sh B19) or the
+# old->new mapping table in M1's rationale below; sweeping them would destroy the checks
+# that certify the sweep. The exception is LINE-scoped, never file-scoped: a pathspec
+# exclusion would blind G1 to a genuinely stale reference newly added in those files,
+# whereas a line marker costs no coverage anywhere else.
+# Legitimate only where the OLD ID is load-bearing; prose that merely cites a principle
+# uses the semantic code instead. Marking a line to silence G1 on an unswept reference
+# is an abuse of it. Enumerate the allowlist with:  git grep -n CPR-LEGACY-ID-OK
 CPR_LEGACY_ID_MARKER='CPR-LEGACY-ID-OK'
 
 # Fail-closed: zero UNMARKED hits is the ONLY pass. Surviving unmarked lines mean
@@ -100,49 +90,31 @@ test_G1_no_residual_numeric_cpr() {
 # M: mapping cases — every reference site carries the CORRECT new code
 # ============================================================================
 
-# G1 and M1 are complementary; neither alone certifies a correct sweep. G1 proves the
-# OLD numeric IDs are ABSENT, M1 proves the NEW codes that replaced them are the RIGHT
-# ones — a sweep rewriting every CPR-4 to CPR-ORTH satisfies G1 and fails only here. [CPR-LEGACY-ID-OK]
-#
-# M1 asserts the exact per-file OCCURRENCE MULTISET, not mere presence: each expected
-# code must occur exactly N times AND every other semantic code must occur zero times.
-# Presence alone is too weak — a file whose two CPR-4 references became one CPR-E2C [CPR-LEGACY-ID-OK]
-# plus one CPR-ORTH still contains "a CPR-E2C" and would pass a presence check.
-#
+# G1 and M1 are complementary: G1 proves the OLD numeric IDs are ABSENT, M1 proves the
+# NEW codes that replaced them are the RIGHT ones. M1 asserts the exact per-file
+# OCCURRENCE MULTISET (each expected code exactly N times, every other code zero times),
+# because presence alone stays green when two references collapse onto one code.
+
 # Counts are measured against each file's pristine pre-sweep content
 # (CPR-1→UO, CPR-2→SSOT, CPR-3→SC, CPR-4→E2C, CPR-5→ORTH, CPR-6→E2E, CPR-8→UNV) [CPR-LEGACY-ID-OK]
 # — do not re-derive them.
-#
-# SCOPE — why this table lists 19 files and not all 164 that mention a CPR ID.
-# Extending it to every file was considered and rejected on the merits, twice:
-#   1. Cost/benefit. A 164-row table is a second copy of the sweep itself. It would
-#      be generated from the same pristine counts the sweep is generated from, so it
-#      re-asserts the sweep against its own input rather than against intent.
-#   2. Brittleness. Every one of 164 files would then have to update this table on
-#      any future CPR-reference edit. The failure that produces is a red test nobody
-#      reads, which is worse coverage than an honest 19.
-#   3. Residual risk is already covered. G1 proves NO numeric ID survives anywhere in
-#      the repo — all 164 files included. What the other 145 lack is only the
-#      "landed on the RIGHT code" check, and those are single-reference sites in
-#      docs/skills where a mis-map is locally obvious on review. The 19 listed here
-#      are the multi-reference and cross-code files, i.e. exactly the sites where a
-#      mis-map is invisible to G1 and to the eye.
-# rules/core-principles.md is deliberately NOT a row: it is the SSOT being edited,
-# its content is asserted structurally by N1/N2/N3/S1/S2/S3/S4, and an occurrence
-# count there would duplicate that with a weaker assertion.
-#
-# MAINTENANCE CONTRACT: this table encodes the prose reference sites of these files.
-# Any legitimate future edit that adds or removes a CPR reference in one of them MUST
-# update the corresponding count here, or M1 goes red. That brittleness is deliberate
-# — an exact multiset is the only thing that can catch a mis-mapping which still lands
-# on a syntactically valid code.
+
+# SCOPE: the table lists the multi-reference and cross-code files, not every file that
+# mentions a CPR ID. A full table would re-assert the sweep against its own input, force
+# every file to edit this list on any reference change, and add nothing G1 does not
+# already cover — the unlisted sites are single-reference ones where a mis-map is locally
+# obvious on review. rules/core-principles.md is deliberately NOT a row: it is the SSOT
+# being edited, and N1/N2/N3/S1/S2/S3/S4 assert its content structurally.
+
+# MAINTENANCE CONTRACT: any edit that adds or removes a CPR reference in a listed file
+# MUST update its count here, or M1 goes red. The brittleness is deliberate — an exact
+# multiset is the only thing that catches a mis-mapping onto a syntactically valid code.
 DOWNSTREAM_MAPPING="
 agents/supervisor.md|CPR-E2C=2 CPR-ORTH=2 CPR-E2E=2
 agents/detail-planner.md|CPR-E2C=2
 agents/detail-reviewer.md|CPR-ORTH=1
 agents/outline-reviewer.md|CPR-ORTH=1
 rules/prompt.md|CPR-SSOT=1
-rules/workflow-off.md|CPR-ORTH=1
 rules/coding/nodejs.md|CPR-ORTH=1
 skills/_shared/test-design.md|CPR-ORTH=1
 skills/survey-code/SKILL.md|CPR-E2C=1
@@ -153,8 +125,8 @@ skills/review-code-security/scripts/run-quality-gates.sh|CPR-SC=1
 install/win/dotfileslink.ps1|CPR-SSOT=1 CPR-ORTH=2
 install/linux/dotfileslink.sh|CPR-SSOT=1 CPR-ORTH=1
 install/path-exposed-commands.txt|CPR-SSOT=1 CPR-ORTH=1
-docs/architecture/claude-code/workflow.md|CPR-SSOT=2
-docs/architecture/claude-code/marker-bypass-contract.md|CPR-SSOT=1 CPR-ORTH=1
+docs/architecture/claude-code/workflow.md|CPR-SSOT=3 CPR-UNV=1
+docs/architecture/claude-code/marker-bypass-contract.md|CPR-SSOT=1 CPR-ORTH=2
 docs/architecture/claude-code/settings.md|CPR-SC=1 CPR-ORTH=1 CPR-UNV=1
 "
 

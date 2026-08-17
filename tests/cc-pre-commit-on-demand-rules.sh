@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/cc-pre-commit-on-demand-rules.sh
-# Tests: hooks/pre-commit, bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js
+# Tests: hooks/pre-commit, bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, on-demand-rules, pre-commit, hook-wiring, backstop, exit-codes, TL2, scope:common
 #
 # The static checker is only as good as its invocation: every other file in this series runs bin/check-on-demand-rules.sh directly, so all stay green if the hook that's supposed to call it on every commit is never wired, wired outside the agents-repo guard, or swallows its exit code — the whole point is stopping a de-injected rule BEFORE the commit lands.
@@ -64,7 +64,7 @@ mk_repo() {
     local name="$1" engine="$2"
     local dir="$TMPBASE/$name"
     init_repo "$dir"
-    mkdir -p "$dir/hooks/lib" "$dir/bin" "$dir/rules"
+    mkdir -p "$dir/hooks/lib" "$dir/bin" "$dir/rules" "$dir/skills/od-owner"
     # One-line shims: the real modules, reached from the fixture's own tree.
     printf 'module.exports = require("%s/hooks/workflow-state.js");\n' "$_AGENTS_DIR_NODE" \
         > "$dir/hooks/workflow-state.js"
@@ -83,12 +83,15 @@ mk_repo() {
 "use strict";
 const ON_DEMAND_TOKEN = "$TOKEN";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
-const ON_DEMAND_FILES = ["rules/od.md"];
+const ON_DEMAND_READERS = ["rules/od.md|skills/od-owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 POLICY_EOF
     printf -- '---\npaths:\n  - "%s"\n---\n%s\n\n# on demand\n' "$TOKEN" "$MARKER" > "$dir/rules/od.md"
     printf '# plain unconditional rule\n' > "$dir/rules/plain.md"
+    # The declared reader must EXIST, or READER_TARGET_MISSING fires and every case in
+    # this file inherits a violation that has nothing to do with pre-commit wiring.
+    printf '# od owner\n' > "$dir/skills/od-owner/SKILL.md"
 
     case "$engine" in
         real)

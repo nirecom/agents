@@ -4,7 +4,7 @@
 #
 # The two scalar parsers: unescapeLiteral() and readStringConst(). CONTRACT: unescapeLiteral is a BACKSLASH STRIPPER, not a JS escape decoder — `\n` in the source becomes the letter `n`, NOT a newline. That's correct for its one job (recovering a quoted path literal such as "rules/docs.md") and would be wrong for anything else, so the distinction is asserted rather than assumed.
 # readStringConst distinguishes "declared as the empty string" (returns "") from "not declared at all" (returns null) — loadPolicyAsData's documented contract rests on that difference, so it is pinned directly.
-# The declaration regex is UNANCHORED and text-only. Two consequences are pinned as CURRENT BEHAVIOUR with an explicit note, because both are accepted limitations of parsing rather than evaluating, not bugs this suite should hide.
+# The declaration regex is ANCHORED and text-only (#2037): the constant name must OPEN a `const`/`let`/`var` statement at the start of a line, so a bare assignment, a same-suffixed identifier, and a commented-out decoy are all "not declared" rather than winning the match. Both directions are pinned — the shapes that must lose, and the ordinary shapes (indented, `let`, `var`) that must still win, so the anchor cannot be tightened into a silent policy blackout either.
 # Assumes BASE, run_rows(), assert_rows(), pass(), fail() from the dispatcher.
 
 echo ""
@@ -62,19 +62,31 @@ const SCONST = [
   // parser and reads as "not declared". The policy file's header already requires plain
   // one-line quoted literals, so a backtick declaration is out of contract at source.
   ["sconst-backtick-quoted-is-invisible", "const ON_DEMAND_TOKEN = `abc`;", "NULL"],
-  // PINNED CURRENT BEHAVIOUR: the regex requires no `const` keyword and is unanchored,
-  // so a bare assignment is accepted and a LONGER identifier ending in the requested name
-  // also matches. Both follow from parsing text instead of evaluating a module; they are
-  // recorded here so a future tightening is a deliberate, visible change.
-  ["sconst-const-keyword-not-required", "ON_DEMAND_TOKEN = \"bare\";", "S:bare"],
-  ["sconst-name-matches-as-a-substring", "const X_ON_DEMAND_TOKEN = \"prefixed\";", "S:prefixed"],
-  // PINNED CURRENT BEHAVIOUR — KNOWN LIMITATION L3 (comment-hides-declaration).
-  // A commented-out declaration placed BEFORE the real one wins, because the parser has
-  // no notion of JS comments. This is an accepted limitation tracked as a follow-up; it
-  // is deliberately NOT fixed here (a source change is out of scope for this test file),
-  // and it is pinned so the day it changes, this row fails and the change is reviewed.
-  ["sconst-L3-comment-before-real-decl-wins",
-   "// const ON_DEMAND_TOKEN = \"decoy\";\nconst ON_DEMAND_TOKEN = \"real\";", "S:decoy"],
+  // THE ANCHORED-DECLARATION CONTRACT (#2037). The name must OPEN a const/let/var
+  // statement at the start of a line; a textual occurrence anywhere else is not a
+  // declaration. WHY it is not merely tidier: the policy file is contributor-editable
+  // data read by the pre-commit checker and the InstructionsLoaded audit, so under the
+  // old unanchored match anyone could park `// const MINIMIZED_MAX_BYTES = "999999"`
+  // above the live line and every consumer would silently read the decoy — a comment,
+  // which no reviewer reads as executable, would set the gate's own thresholds.
+  // The three rows below are the shapes that used to win and must now lose.
+  ["sconst-bare-assignment-is-not-a-declaration", "ON_DEMAND_TOKEN = \"bare\";", "NULL"],
+  ["sconst-same-suffixed-name-does-not-match", "const X_ON_DEMAND_TOKEN = \"prefixed\";", "NULL"],
+  ["sconst-commented-decoy-loses-to-the-real-declaration",
+   "// const ON_DEMAND_TOKEN = \"decoy\";\nconst ON_DEMAND_TOKEN = \"real\";", "S:real"],
+  // A decoy with no real declaration behind it must not be promoted either: the answer
+  // is "not declared", which is the fail-closed direction for every consumer.
+  ["sconst-commented-decoy-alone-is-not-declared",
+   "// const ON_DEMAND_TOKEN = \"decoy\";\n", "NULL"],
+  // ...and the anchor must not be over-tightened. Indentation and the `let`/`var`
+  // spellings are ordinary JS, so refusing them would turn a formatting change into a
+  // silent policy blackout — the same failure the anchor exists to prevent.
+  ["sconst-space-indented-declaration-still-matches",
+   "  const ON_DEMAND_TOKEN = \"indented\";", "S:indented"],
+  ["sconst-tab-indented-declaration-still-matches",
+   "\tconst ON_DEMAND_TOKEN = \"tabbed\";", "S:tabbed"],
+  ["sconst-let-spelling-matches", "let ON_DEMAND_TOKEN = \"letted\";", "S:letted"],
+  ["sconst-var-spelling-matches", "var ON_DEMAND_TOKEN = \"varred\";", "S:varred"],
 ];
 SCONST.forEach(([name, src, want]) => row(name, want, encS(R.readStringConst(src, "ON_DEMAND_TOKEN"))));
 
@@ -83,4 +95,4 @@ console.log(rows.join("\n"));
 SCALARS_EOF
 
 SC_REPORT="$(run_rows "$BASE/h-scalars.js")"
-assert_rows "S1" "$SC_REPORT" 26
+assert_rows "S1" "$SC_REPORT" 31

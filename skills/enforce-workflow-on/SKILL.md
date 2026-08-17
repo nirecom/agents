@@ -10,4 +10,4 @@ Generate a 1-line reason from the current context, then run:
 
 WORKFLOW_ENFORCE_WORKFLOW_ON has "allow" permission — auto-approved, no dialog.
 
-See `rules/workflow-off.md` for full details.
+See `/enforce-workflow-off` for the full sentinel set, the reason format, and what a marker does and does not bypass.

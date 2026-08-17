@@ -21,10 +21,13 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
 - `rules/test.md` is not auto-injected — Read it before writing, reviewing, or running tests.
 - `rules/docs.md` is not auto-injected — Read it before writing or updating documentation.
 - `rules/github-issues.md` is not auto-injected — Read it before any issue or PR operation.
-- For docs-only commits that shortcut the workflow, see `rules/docs-only-short-circuit.md`.
-- For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
-- For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
+- `rules/branch.md` is not auto-injected — Read it before naming a branch or recording branching.
+- `rules/worktree.md` is not auto-injected — Read it before creating, entering, or removing a worktree.
+- `rules/coding.md` is not auto-injected — Read it before writing or editing code.
+- `rules/ops.md` is not auto-injected — Read it before any destructive or system-state-changing operation.
+- For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md` (when it applies) and `/enforce-workflow-off` (how).
+- `rules/mid-workflow-findings.md` is not auto-injected — Read it for bugs, follow-ups, or next-task findings discovered mid-workflow.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
-- When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).
+- When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: [rules/supervisor-reporting.md](rules/supervisor-reporting.md) says when, `/supervisor-report` does it.
 - `write-code` is not a tracked `next-step` step — invoke it manually once `write_tests`/`review_tests` complete, before `/run-tests`.
-- For keeping the Stop guard quiet during long-running work — automatic while a delegated step is in flight (`write_code`, or an Agent/Task/Skill dispatch auto-marked by PostToolUse), `NEXT_STEP_PAUSE` otherwise — see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).
+- For keeping the Stop guard quiet during long-running work — automatic while a delegated step is in flight, `NEXT_STEP_PAUSE` otherwise — see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).

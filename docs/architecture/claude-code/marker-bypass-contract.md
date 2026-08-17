@@ -27,6 +27,9 @@ grep-derivable criterion (`grep -rl "isWorkflowOff\|isWorktreeOff" hooks/`), not
 enumerated guess: a hook absent from this table does not call either function and is
 never bypassed. This table is the SSOT (CPR-SSOT); no other document enumerates
 exceptions independently.
+Since #2037 removed the curated excerpt that `rules/workflow-off.md` used to carry, this
+table is not merely canonical but the **only** enumeration that exists — a rule file
+answering "which hooks does my marker bypass?" links here rather than restating a subset.
 
 | Hook | Layer | Honors `.workflow-off` | Honors `.worktree-off` |
 |---|---|---|---|

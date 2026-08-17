@@ -1,3 +1,9 @@
+---
+paths:
+  - ".on-demand-only/never-match"
+---
+<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->
+
 # Feature Branch Operations
 
 When `ENFORCE_WORKTREE=on` (default): always work from a **linked worktree** on a feature branch.

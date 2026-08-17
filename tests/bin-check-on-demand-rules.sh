@@ -63,6 +63,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-check-on-demand-ru
 . "$SCRIPT_DIR/cases-staged.sh"
 # shellcheck source=./bin-check-on-demand-rules/cases-policy.sh
 . "$SCRIPT_DIR/cases-policy.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-readers.sh
+. "$SCRIPT_DIR/cases-readers.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-minimized.sh
+. "$SCRIPT_DIR/cases-minimized.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-minimized-decl.sh
+. "$SCRIPT_DIR/cases-minimized-decl.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-decl-regexes.sh
+. "$SCRIPT_DIR/cases-decl-regexes.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-containment.sh
+. "$SCRIPT_DIR/cases-containment.sh"
 # shellcheck source=./bin-check-on-demand-rules/cases-marker.sh
 . "$SCRIPT_DIR/cases-marker.sh"
 # Injection cases run LAST: they deliberately hand the checker hostile paths and an

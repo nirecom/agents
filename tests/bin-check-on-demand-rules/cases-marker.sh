@@ -277,9 +277,9 @@ cat > "$d/hooks/lib/rules-injection-policy.js" <<MK_EXEC_EOF
 require("fs").writeFileSync("$MK_CANARY_NODE", "executed");
 const ON_DEMAND_TOKEN = "$TOKEN";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
-const ON_DEMAND_FILES = ["rules/od.md"];
+const ON_DEMAND_READERS = ["rules/od.md|skills/fx-owner/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/plain.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 MK_EXEC_EOF
 MK6_REPORT="$(mk_report "$d/hooks/lib/rules-injection-policy.js")"
 mk6_is_re="$(printf '%s\n' "$MK6_REPORT" | grep '^IS_REGEXP=' | head -1 | cut -d= -f2-)"

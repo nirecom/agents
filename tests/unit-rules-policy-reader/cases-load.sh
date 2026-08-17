@@ -27,9 +27,9 @@ cat > "$LP_DIR/policy-canary.js" <<LP_CANARY_EOF
 require("fs").writeFileSync("$LP_CANARY_NODE", "executed");
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
-const ON_DEMAND_FILES = ["rules/docs.md", "rules/test.md"];
+const ON_DEMAND_READERS = ["rules/docs.md|skills/update-docs/SKILL.md", "rules/test.md|skills/write-tests/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/git.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 LP_CANARY_EOF
 
 # --- fixture 2: declarations PRESENT but computed, so a text parser cannot recover them
@@ -38,25 +38,45 @@ cat > "$LP_DIR/policy-degraded.js" <<'LP_DEGRADED_EOF'
 const parts = ["rules", "docs.md"];
 const ON_DEMAND_TOKEN = [".on-demand-only", "never-match"].join("/");
 const ON_DEMAND_MARKER_RE = new RegExp("<!--\\s*injection:");
-const ON_DEMAND_FILES = parts.map((p) => p);
-const EXPECTED_UNCONDITIONAL = ON_DEMAND_FILES.slice(0, 0);
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+const ON_DEMAND_READERS = parts.map((p) => p);
+const EXPECTED_UNCONDITIONAL = ON_DEMAND_READERS.slice(0, 0);
+const MINIMIZED_UNCONDITIONAL = ON_DEMAND_READERS.slice();
+const MINIMIZED_MAX_BYTES = String(500 * 3);
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 LP_DEGRADED_EOF
 
-# --- fixture 3: KNOWN LIMITATION L3 at the composed level --------------------------
-# A commented-out declaration placed before the real one. The parser has no notion of JS
-# comments, so the DECOY wins. This is an accepted limitation tracked as a follow-up and
-# is deliberately NOT fixed here; it is pinned so the day the reader learns about comments
-# this row fails and the change is reviewed rather than absorbed silently.
+# --- fixture 3: the commented-decoy attack, at the composed level ------------------
+# WHY (CPR-WPH): this file is contributor-editable data that the pre-commit checker and
+# the session audit hook both read. A commented-out declaration parked ABOVE the real one
+# used to win, because the parser matched the first textual occurrence of the NAME — so a
+# line every reviewer skims past as "just a comment" silently became the value the gate
+# ran on (a bigger byte ceiling, a decoy token, a decoy reader table). The reader now
+# anchors on a real const/let/var declaration at line start, so the REAL declaration wins
+# and the decoy is invisible. Pinned at the composed level as well as in cases-scalars.sh
+# because loadPolicyAsData is what every consumer actually calls.
 cat > "$LP_DIR/policy-comment-decoy.js" <<'LP_DECOY_EOF'
 "use strict";
 // const ON_DEMAND_TOKEN = ".decoy-token/never-match";
-// const ON_DEMAND_FILES = ["rules/decoy.md"];
+// const ON_DEMAND_READERS = ["rules/decoy.md|skills/decoy/SKILL.md"];
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
-const ON_DEMAND_FILES = ["rules/real.md"];
+const ON_DEMAND_READERS = ["rules/real.md|skills/real/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = ["rules/git.md"];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 LP_DECOY_EOF
+
+# --- fixture 4: a reader row with NO `|` separator ----------------------------------
+# The composed level must preserve the malformed/empty distinction readPairArrayConst
+# draws: the row keeps its key (so the rule still appears in the derived flat list) but
+# carries values===null, which is what lets bin/lib/check-on-demand-rules.js NAME the
+# row that forgot its readers instead of dropping it.
+cat > "$LP_DIR/policy-malformed-row.js" <<'LP_MALFORMED_EOF'
+"use strict";
+const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
+const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
+const ON_DEMAND_READERS = ["rules/orphan.md"];
+const EXPECTED_UNCONDITIONAL = ["rules/git.md"];
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
+LP_MALFORMED_EOF
 
 cat > "$BASE/h-load.js" <<'LOAD_EOF'
 "use strict";
@@ -93,11 +113,17 @@ row("degraded-token-is-null", "NULL", encS(p2.ON_DEMAND_TOKEN));
 row("degraded-marker-is-null", "NULL", p2.ON_DEMAND_MARKER_RE === null ? "NULL" : "NOT_NULL");
 row("degraded-files-is-empty-array", "A:[]", encA(p2.ON_DEMAND_FILES));
 row("degraded-unconditional-is-empty-array", "A:[]", encA(p2.EXPECTED_UNCONDITIONAL));
+// MINIMIZED_UNCONDITIONAL keeps its THIRD state: null means "the class was never
+// recoverable", which is what makes bin/lib/check-on-demand-rules.js fail closed instead
+// of reading a computed declaration as an empty (and therefore unchecked) class.
+row("degraded-minimized-is-null", "NULL",
+    p2.MINIMIZED_UNCONDITIONAL === null ? "NULL" : encA(p2.MINIMIZED_UNCONDITIONAL));
+row("degraded-max-bytes-is-null", "NULL", encS(p2.MINIMIZED_MAX_BYTES));
 
-// --- L3 known limitation at the composed level -------------------------------------
+// --- the commented decoy must LOSE at the composed level ---------------------------
 const p3 = R.loadPolicyAsData(path.join(LP, "policy-comment-decoy.js"));
-row("L3-commented-token-shadows-real", "S:.decoy-token/never-match", encS(p3.ON_DEMAND_TOKEN));
-row("L3-commented-files-shadow-real", "A:[\"rules/decoy.md\"]", encA(p3.ON_DEMAND_FILES));
+row("decoy-commented-token-loses-to-real", "S:.on-demand-only/never-match", encS(p3.ON_DEMAND_TOKEN));
+row("decoy-commented-readers-lose-to-real", "A:[\"rules/real.md\"]", encA(p3.ON_DEMAND_FILES));
 
 // --- the REAL repo policy: the reader must recover the shipped declarations ---------
 // Non-circular: the values compared against are the canonical literals this repo's
@@ -114,6 +140,46 @@ row("real-lists-are-disjoint", "yes",
 row("real-every-entry-is-a-rules-md", "yes",
     p4.ON_DEMAND_FILES.concat(p4.EXPECTED_UNCONDITIONAL)
       .every((x) => /^rules\/[\w./-]+\.md$/.test(x)) ? "yes" : "no");
+
+// --- ROUND-TRIP: all SIX declared constants come back from the REAL policy ----------
+// WHY here and not only in the consumers: loadPolicyAsData is the single seam between the
+// shipped declaration file and every consumer of it. A declaration reformatted onto two
+// lines, or renamed, still passes JS syntax review and still exports correctly — and this
+// text parser would return null for it, silently blanking the class. The rows below are
+// the shipped-file round trip, so a reformat fails HERE, next to the parser, rather than
+// as a mystery clean verdict in pre-commit.
+row("real-readers-rows-nonzero", "yes", p4.ON_DEMAND_READERS.length > 0 ? "yes" : "no");
+row("real-readers-every-row-names-a-reader", "yes",
+    p4.ON_DEMAND_READERS.every((r) => Array.isArray(r.values) && r.values.length > 0) ? "yes" : "no");
+row("real-minimized-is-recoverable", "yes", p4.MINIMIZED_UNCONDITIONAL !== null ? "yes" : "no");
+row("real-minimized-rows-nonzero", "yes",
+    (p4.MINIMIZED_UNCONDITIONAL || []).length > 0 ? "yes" : "no");
+row("real-minimized-every-row-names-a-pointer", "yes",
+    (p4.MINIMIZED_UNCONDITIONAL || []).every((r) => Array.isArray(r.values) && r.values.length === 1)
+      ? "yes" : "no");
+// DERIVED, and still able to fail: the minimized class is declared a subset of
+// EXPECTED_UNCONDITIONAL and disjoint from the on-demand keys. Both sides are read from
+// DIFFERENT declarations, so moving a rule out of one without the other turns these red.
+row("real-minimized-subset-of-unconditional", "yes",
+    (p4.MINIMIZED_UNCONDITIONAL || []).every((r) => p4.EXPECTED_UNCONDITIONAL.includes(r.key))
+      ? "yes" : "no");
+row("real-minimized-disjoint-from-on-demand", "yes",
+    (p4.MINIMIZED_UNCONDITIONAL || []).every((r) => !p4.ON_DEMAND_FILES.includes(r.key))
+      ? "yes" : "no");
+// HARD-CODED on purpose (the two rows below): a value derived from the same parse would
+// assert the policy equals itself. MINIMIZED_MAX_BYTES is the agreed ceiling for the
+// escape hatches, and the key set is the settled membership of the class — both are
+// deliberate regression floors and must be updated in the same commit as the policy.
+row("real-max-bytes-literal", "S:1500", encS(p4.MINIMIZED_MAX_BYTES));
+row("real-minimized-keys",
+    "A:[\"rules/stop-guard-exemptions.md\",\"rules/supervisor-reporting.md\",\"rules/workflow-off.md\"]",
+    encA((p4.MINIMIZED_UNCONDITIONAL || []).map((r) => r.key)));
+
+// --- a malformed reader row survives the composition, it is not dropped -------------
+const p5 = R.loadPolicyAsData(path.join(LP, "policy-malformed-row.js"));
+row("malformed-row-keeps-its-key-in-derived-files", "A:[\"rules/orphan.md\"]", encA(p5.ON_DEMAND_FILES));
+row("malformed-row-values-are-null-not-empty", "NULL",
+    p5.ON_DEMAND_READERS[0].values === null ? "NULL" : encA(p5.ON_DEMAND_READERS[0].values));
 
 // --- unreadable file THROWS (the other half of the contract) -----------------------
 let missingVerdict = "NO_THROW";
@@ -138,7 +204,7 @@ console.log(rows.join("\n"));
 LOAD_EOF
 
 LP_REPORT="$(run_rows "$BASE/h-load.js" "$(node_path "$LP_DIR")" "$POLICY_NODE")"
-assert_rows "S3" "$LP_REPORT" 22
+assert_rows "S3" "$LP_REPORT" 35
 
 # --- S3-canary: the whole point. The fixture policy above was loaded FOUR times (once
 # for the value rows, twice more for idempotency). A require()-based reader would have
@@ -155,9 +221,9 @@ cat > "$LP_DIR/policy-throw.js" <<'LP_THROW_EOF'
 "use strict";
 throw new Error("policy module body executed");
 const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
-const ON_DEMAND_FILES = ["rules/thrown.md"];
+const ON_DEMAND_READERS = ["rules/thrown.md|skills/thrown/SKILL.md"];
 const EXPECTED_UNCONDITIONAL = [];
-module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_FILES, EXPECTED_UNCONDITIONAL };
+module.exports = { ON_DEMAND_TOKEN, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL };
 LP_THROW_EOF
 LP_THROW_RC=0
 LP_THROW_OUT="$( ( cd "$BASE" && node -e '
