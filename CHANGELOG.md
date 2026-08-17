@@ -327,3 +327,7 @@ Changes: `/worktree-start` no longer asks you to confirm a task name or branch t
 ### FEATURE: PR #2050 (2026-08-16)
 Background: feat(enforce-worktree): sanctioned git merge --no-edit for diverged main worktree (#1982)
 Changes: `git merge --no-edit origin/<branch>` is now the sanctioned main-worktree recovery command when the branch diverges from its remote; Claude executes it directly (Rule 1 — autonomy-first). `git rebase` and `git reset --hard origin/<branch>` remain escalation-required per `rules/ops.md` "Diverged Main Worktree Recovery".
+
+### FEATURE: PR #2038 (2026-08-17)
+Background: feat(concern-ledger): persist review findings across rounds and finalize on non-convergence
+Changes: Code and test review rounds now track findings with persistent IDs across rounds via a new concern ledger, so repeated or dropped findings stay visible instead of being silently renumbered.;When a review loop fails to converge, unresolved concerns are now finalized and written to a machine-readable artifact instead of being silently dropped.
