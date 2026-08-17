@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 # audit-tests.sh — Retire checker for issue-specific test files.
-#
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
-#                           [--format text|json] [--fix-headers]
+#                           [--format text|json] [--fix-headers] [--dup-groups]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error
-#
 # Writes by default: a flagless run DELETES candidates (git rm), and
 # --fix-headers rewrites headers in place. Pass --dry-run to report only.
-#
-# Scans top-level tests/feature-NNN-*.sh. A file becomes a CANDIDATE when every
-# path in its `# Tests:` header is gone (target survival) — the issue's state is
-# NOT part of that filter. Issue metadata is consulted only at deletion time:
-# a candidate whose issue is open, recently closed, or unreadable is reported
-# and kept (SKIP_DELETE_*). A file plus its sibling tests/<stem>/ folder is one
-# retire unit. Malformed and missing headers are reported as diagnostics.
+# --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory as TSV.
+# It rejects --apply, --fix-headers and --format json. See bin/lib/test-dup-group.sh.
+# Scans top-level tests/feature-NNN-*.sh; a CANDIDATE is a file whose every
+# `# Tests:` path is gone. Issue state gates deletion only (SKIP_DELETE_*).
 
 set -euo pipefail
 
@@ -26,12 +21,15 @@ source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
 source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+# shellcheck source=lib/test-dup-group.sh
+source "$SCRIPT_DIR/lib/test-dup-group.sh"
 
 STALE_MONTHS=3
 OFFLINE=0
 FORMAT=text
 FIX_HEADERS=0
 FIX_APPLY=0
+DUP_GROUPS=0
 sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
@@ -46,6 +44,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
+    --dup-groups) DUP_GROUPS=1; shift ;;
     --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
     --dry-run) sweep_write_mode_dry_run; shift ;;
     --format)
@@ -57,7 +56,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
       sweep_write_mode_usage_lines
       exit 0
       ;;
@@ -87,6 +86,15 @@ cd "$REPO_ROOT"
 if [[ ! -d tests ]]; then
   echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
   exit 2
+fi
+
+# Read-only inventory mode. Placed before gh init and cutoff computation: it
+# needs neither, so it stays offline-safe and timeout-free. No scope filter here
+# by design — the inventory is a corpus-wide fact (S3).
+if [[ "$DUP_GROUPS" -eq 1 ]]; then
+  tdg_mode_guard "$DUP_GROUPS" "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" || exit 2
+  tdg_run "$REPO_ROOT" && exit 0
+  exit 1
 fi
 
 TODAY="$(date +%Y-%m-%d)"

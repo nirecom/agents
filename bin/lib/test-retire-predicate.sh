@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
-# bin/lib/test-retire-predicate.sh
-#
+# bin/lib/test-retire-predicate.sh — source-only; not executable.
 # SSOT for the survival-first retire predicate shared by bin/audit-tests.sh and
-# bin/audit-tests-common.sh (#1833). Both scripts MUST reach candidacy and
-# deletion authority through these functions — an inline copy in either script
-# is the duplication this module exists to remove (CPR-SSOT).
-#
-# Two axes are kept explicitly apart (CPR-SC):
-#   1. SURVIVAL       — do the `# Tests:` targets still exist? Decides candidacy.
-#   2. ISSUE METADATA — is the referenced issue closed and stale? Decides only
-#                       whether an already-selected candidate may be deleted.
-#
-# Every path is resolved against an explicit <repo-root> argument, never against
-# the caller's CWD: classify_tests_header() tests `[[ -e ]]` relative to $PWD,
-# and with apply-by-default a wrong CWD would delete a live tests/ tree.
-#
-# Source-only; not executable.
+# bin/audit-tests-common.sh (#1833) — neither may inline a copy (CPR-SSOT).
+# Two axes stay explicitly apart (CPR-SC): SURVIVAL (do the `# Tests:` targets
+# still exist? decides candidacy) and ISSUE METADATA (is the issue closed and
+# stale? decides only whether a candidate may be deleted).
+# Every path resolves against an explicit <repo-root>, never the caller's CWD:
+# classify_tests_header() tests `[[ -e ]]` relative to $PWD, and with
+# apply-by-default a wrong CWD would delete a live tests/ tree.
 
 _TRP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-frontmatter-constants.sh
@@ -68,12 +60,9 @@ trp_scope_of() {
 # trp_issue_ref <filename> — explicit | ambiguous | none.
 # explicit  : `<feature|fix|feat>-<N>-` prefix — a real issue number.
 # ambiguous : any OTHER hyphen-delimited all-digit segment (`…-<N>-…` or a
-#             trailing `…-<N>`) — could be an issue number, could be a commit
-#             number or a sequence; fail closed regardless of digit count.
+#             trailing `…-<N>`); fail closed regardless of digit count.
 # none      : no hyphen-delimited all-digit segment at all. Digits fused into a
-#             word segment (`canary5`, `6git`, `layer3`) are part of the name,
-#             not a reference, so they do NOT make the name ambiguous.
-#
+#             word segment (`canary5`, `layer3`) are part of the name.
 # The boundary is DELIMITATION, not digit count: a length threshold would make
 # `feat-foo-7` (a real reference) indistinguishable from `feat-foo-bar` (none)
 # and delete it without ever checking issue state.
@@ -121,24 +110,17 @@ trp_survival_verdict() {
   TRP_TOKENS_ALL=()
   TRP_TOKENS_MISSING=()
 
-  local tests_line csv
-  tests_line="$(grep -m1 -E '^# Tests:' "$abs" 2>/dev/null || true)"
-  if [[ -z "$tests_line" ]]; then
+  # Tokenizing is the shared parser's job (CPR-SSOT); this predicate only decides
+  # survival. Run it BEFORE classify_tests_header, which re-parses and overwrites
+  # the TFM_* globals.
+  tfm_parse_tests_line "$abs"
+  if [[ "$TFM_PRESENT" -eq 0 || -z "$TFM_TESTS_CSV" ]]; then
     TRP_VERDICT="no-header"; printf '%s\n' "$TRP_VERDICT"; return 0
   fi
-  csv="${tests_line#\# Tests:}"
-  csv="$(printf '%s' "$csv" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-  if [[ -z "$csv" ]]; then
-    TRP_VERDICT="no-header"; printf '%s\n' "$TRP_VERDICT"; return 0
-  fi
-  TRP_TESTS_CSV="$csv"
+  TRP_TESTS_CSV="$TFM_TESTS_CSV"
 
-  local -a raw_tokens
-  local raw trimmed
-  IFS=',' read -r -a raw_tokens <<< "$csv"
-  for raw in "${raw_tokens[@]}"; do
-    trimmed="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    if [[ -z "$trimmed" ]]; then continue; fi
+  local trimmed
+  for trimmed in "${TFM_TOKENS[@]:+${TFM_TOKENS[@]}}"; do
     TRP_TOKENS_ALL+=("$trimmed")
   done
   if [[ "${#TRP_TOKENS_ALL[@]}" -eq 0 ]]; then

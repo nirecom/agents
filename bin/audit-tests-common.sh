@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
 # audit-tests-common.sh — Retire checker for common (non-issue-specific) tests.
-#
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
-#                                  [--fix-headers]
+#                                  [--fix-headers] [--dup-groups]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error
-#
-# Writes by default: a flagless run DELETES orphans (git rm). Pass --dry-run
-# to report only.
-#
-# Scans top-level tests/*.sh EXCEPT issue-specific tests/feature-<N>-*.sh
-# (those belong to bin/audit-tests.sh). A file is an ORPHAN when every path in
-# its `# Tests:` header is gone. Deletion is then gated on the issue reference
-# carried by the filename: none = delete, an explicit `<feature|fix|feat>-<N>-`
-# prefix = delete only once issue N is closed and stale, anything merely
-# number-shaped = held as ambiguous. A file plus its sibling tests/<stem>/
-# folder is one retire unit.
+# Writes by default: a flagless run DELETES orphans (git rm); --dry-run reports
+# only. --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory
+# as TSV, identical from either entrypoint (bin/lib/test-dup-group.sh).
+# Scans top-level tests/*.sh EXCEPT tests/feature-<N>-*.sh; an ORPHAN is a file
+# whose every `# Tests:` path is gone, gated on the filename's issue reference.
 
 set -euo pipefail
 
@@ -28,12 +21,15 @@ source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
 source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+# shellcheck source=lib/test-dup-group.sh
+source "$SCRIPT_DIR/lib/test-dup-group.sh"
 
 STALE_MONTHS=3
 OFFLINE=0
 FORMAT=text
 FIX_HEADERS=0
 FIX_APPLY=0
+DUP_GROUPS=0
 sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
@@ -48,6 +44,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
+    --dup-groups) DUP_GROUPS=1; shift ;;
     --apply) sweep_write_mode_apply; FIX_APPLY=1; shift ;;
     --dry-run) sweep_write_mode_dry_run; shift ;;
     --format)
@@ -59,7 +56,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
       sweep_write_mode_usage_lines
       exit 0
       ;;
@@ -89,6 +86,15 @@ cd "$REPO_ROOT"
 if [[ ! -d tests ]]; then
   echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
   exit 2
+fi
+
+# Read-only inventory mode. Placed before gh init and cutoff computation: it
+# needs neither, so it stays offline-safe and timeout-free. in_common_scope is
+# defined below and deliberately NOT applied — the inventory is corpus-wide (S3).
+if [[ "$DUP_GROUPS" -eq 1 ]]; then
+  tdg_mode_guard "$DUP_GROUPS" "$FIX_APPLY" "$FIX_HEADERS" "$FORMAT" || exit 2
+  tdg_run "$REPO_ROOT" && exit 0
+  exit 1
 fi
 
 TODAY="$(date +%Y-%m-%d)"

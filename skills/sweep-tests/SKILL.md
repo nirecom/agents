@@ -11,10 +11,11 @@ Retires test files whose `# Tests:` targets are gone. A flagless run deletes; `-
 
 STE-1. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — issue-specific scope.
 STE-2. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests-common.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — scope:common.
-STE-3. Print both outputs verbatim. Do not summarize or filter.
+STE-3. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" --dup-groups` — corpus-wide `# Tests:` duplicate-group inventory. Pass no other flag.
 
 ## Rules
 
+- Every STE-1..STE-3 output is printed verbatim; never summarize or filter one.
 - Candidacy is decided by target survival alone: a file qualifies once every `# Tests:` path is gone.
 - Issue state never selects a candidate — it gates deletion only.
 - Held deletions are reported as `SKIP_DELETE_ISSUE_ACTIVE`, `SKIP_DELETE_METADATA_UNAVAILABLE`, or `SKIP_DELETE_AMBIGUOUS_REF`; the file stays listed and on disk.
@@ -26,3 +27,7 @@ STE-3. Print both outputs verbatim. Do not summarize or filter.
 - `--fix-headers --dry-run` is report-only as well; no file is ever touched.
 - `--offline` skips GitHub API calls; candidates are still reported and deletion of issue-referencing files is held.
 - `--stale-months N` (default 3) moves the delete-time staleness boundary only.
+- `--dup-groups` is read-only; combining it with explicit `--apply`, `--fix-headers`, or `--format json` exits 2.
+- `--dup-groups` covers the whole corpus and emits the same TSV from either entrypoint, so call one.
+- Missing, duplicated, late, and format-invalid headers become `skip` rows by reason; they never join a group.
+- `key` and `files` are escaped; the decoding rule is in the `bin/lib/test-dup-group.sh` header.

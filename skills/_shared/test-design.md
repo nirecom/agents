@@ -130,6 +130,7 @@ headers within the first 10 lines, right after the shebang and filename comment:
 Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` continuation. Long lines are acceptable; parsers rely on single-line format.
 
 - Recognized `# Tags:` values (non-exhaustive): `pwsh-required` — this file exercises PowerShell-specific behavior and must be re-verified under pwsh before merge. `pwsh-not-required` — explicit opt-out for files that mention `powershell` only in comments or docs.
+- `dup-group-keep:<reason>` — this file shares a `# Tests:` group reported by `bin/audit-tests.sh --dup-groups` and stays separate on purpose. Reasons: `cross-hook`, `distinct-layer`, `size-hard-limit`.
 
 - `# Serial: <reason>` — optional third header, single line, placed immediately after `# Tags:`, with a non-empty reason. It declares that `tests/run-all.sh` must run this file alone rather than in a parallel lane (writes into the real repo tree, mutates global git config, depends on execution order, timing-sensitive measurement). It is the SSOT for that decision — the runner never guesses.
 - Write it within the first 10 lines; the runner accepts it within the first 20 (write conservatively, accept liberally). A `# Serial:` line at line 21 or later is never read, and the test runs in the parallel lane.

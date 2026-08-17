@@ -1,35 +1,19 @@
-#!/bin/bash
-# tests/fix-enforce-worktree-merge-gate.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: worktree, enforce, hook, bin, merge
-# Unit tests for isAllowedFastForwardMerge() — added in fix/enforce-worktree-merge-gate.
+# Tags: TL2, worktree, enforce, hook, merge, scope:common
+# Sourced by tests/main-enforce-worktree-guard.sh
+# Origin: tests/fix-enforce-worktree-merge-gate.sh (all cases).
+# Cases: the `<desc> -> allow|reject` family produced by assert_ff below.
 
-set -u
+# isAllowedFastForwardMerge() is called through require() rather than the CLI,
+# so this fragment keeps the export-name call form the original used — S6-3's
+# mutants preserve export names and signatures precisely so this still resolves.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
-else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
-fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    if command -v timeout >/dev/null 2>&1; then timeout 30 "$@"
-    else perl -e 'alarm 30; exec @ARGV' -- "$@"
-    fi
-}
-
+# The guard path travels as an argument, never spliced into the program text.
 ff_check() {
-    run_with_timeout node -e "
-      const { isAllowedFastForwardMerge } = require('$GUARD_JS');
-      console.log(isAllowedFastForwardMerge(process.argv[1]) ? 'allow' : 'reject');
-    " -- "$1" 2>/dev/null
+    run_with_timeout 30 node -e "
+      const { isAllowedFastForwardMerge } = require(process.argv[1]);
+      console.log(isAllowedFastForwardMerge(process.argv[2]) ? 'allow' : 'reject');
+    " -- "$GUARD_JS" "$1" 2>/dev/null
 }
 
 assert_ff() {
@@ -73,8 +57,6 @@ assert_ff "pull --ff-only with substitution" 'git pull --ff-only $(echo origin)'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fix #820 — interpreter-wrapper hardening (rejectInterpreterAndChaining)
-# These cases are RED until shared-cmd-utils.js exposes
-# rejectInterpreterAndChaining and isAllowedFastForwardMerge calls it.
 # ─────────────────────────────────────────────────────────────────────────────
 
 assert_ff "bash -c 'git pull --ff-only' (interp wrapper)"           "bash -c 'git pull --ff-only'"            "reject"
@@ -83,11 +65,9 @@ assert_ff "/bin/bash -c 'git merge --ff-only' (path-qualified)"     "/bin/bash -
 assert_ff "env bash -c 'git pull --ff-only' (launcher prefix)"      "env bash -c 'git pull --ff-only'"        "reject"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Fix #820 — RCE-flag hardening (rejectRceGitFlags)
-# These cases are RED until isAllowedFastForwardMerge calls rejectRceGitFlags.
-# Note: even the --receive-pack push form is rejected by the merge predicate
-# because the predicate must refuse any cmd carrying RCE-class git flags,
-# regardless of subcommand position.
+# Fix #820 — RCE-flag hardening (rejectRceGitFlags). Even the --receive-pack
+# push form is rejected here: the predicate must refuse any cmd carrying
+# RCE-class git flags, regardless of subcommand position.
 # ─────────────────────────────────────────────────────────────────────────────
 
 assert_ff "git -c core.sshCommand=curl pull --ff-only" 'git -c core.sshCommand=curl pull --ff-only' "reject"
@@ -95,19 +75,16 @@ assert_ff "git --upload-pack=cmd pull --ff-only"       'git --upload-pack=cmd pu
 assert_ff "git --receive-pack=cmd push (RCE flag)"     'git --receive-pack=cmd push'                "reject"
 
 # Regression pin — these legitimate ff-only forms must still ALLOW after the
-# helper guards are wired in. (Same cases as the original allow block but
-# explicitly grouped post-#820 to make a regression in the new helper visible.)
+# helper guards are wired in.
 assert_ff "regression: git pull --ff-only (post-#820)"               'git pull --ff-only'              "allow"
 assert_ff "regression: git merge --ff-only main (post-#820)"         'git merge --ff-only main'        "allow"
 assert_ff "regression: git pull --ff-only origin main (post-#820)"   'git pull --ff-only origin main'  "allow"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Class 1 — fd-dup I/O redirect fix (#1115, #982)
-# POSIX I/O fd-dup redirects (2>&1, 1>&2, >&2) contain an unquoted `&` that
-# hasShellChaining's `[|;&]` regex matches, so the chaining guard fires before
-# the ff-only allow can apply. These are RED before the shared-cmd-utils.js fix
-# sanitizes /\d*>&\d+|\d*>&-/g before the chaining test. &> / &>> (redirect-both)
-# must NOT be sanitized — they remain blocked.
+# Class 1 — fd-dup I/O redirect fix (#1115, #982). POSIX fd-dup redirects
+# (2>&1, 1>&2, >&2) contain an unquoted `&` that hasShellChaining's `[|;&]`
+# regex matches, so the chaining guard would fire before the ff-only allow
+# applies. &> / &>> (redirect-both) must NOT be sanitized — they stay blocked.
 # ─────────────────────────────────────────────────────────────────────────────
 assert_ff "merge --ff-only 2>&1 (fix #1115 — fd-dup must not block)" 'git merge --ff-only origin/main 2>&1' "allow"
 assert_ff "pull --ff-only 2>&1 (fix #1115 — fd-dup must not block)" 'git pull --ff-only 2>&1' "allow"
@@ -116,7 +93,3 @@ assert_ff "merge --ff-only >&2 (fix #1115 — fd-dup form >&N)" 'git merge --ff-
 # Security regression pins — chaining and &> must remain blocked after the fix
 assert_ff "merge --ff-only && push 2>&1 (chaining still blocked)" 'git merge --ff-only && git push 2>&1' "reject"
 assert_ff "merge --ff-only &> /tmp/log (&> not sanitized, still blocked)" 'git merge --ff-only &> /tmp/log' "reject"
-
-echo ""
-echo "Total: PASS=$PASS FAIL=$FAIL"
-exit $FAIL
