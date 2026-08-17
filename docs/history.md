@@ -270,3 +270,7 @@ Changes: #1532: Five PATH-exposed extensionless bash entry points (`bin/get-conf
 ### FEATURE: PR #2066 — feature/1836-tests-run-all-sh (2026-08-18, a5ac80e3d7d7df79575bc7fcc4e9098ab12c3cbe, #2066)
 Background: feat: stop run-all.sh self-inclusion, add calibrated parallel dispatch (#1836, #1832)
 Changes: fix(#1836): tests/run-all.sh --all no longer recursively re-launches itself from inside a suite run (self-inclusion guard, `is_self`).;feat(#1832): tests/run-all.sh gained calibrated parallel dispatch (`-j`/`RUN_ALL_JOBS`, corpus-based auto calibration, deterministic reap/fallback), cutting full-suite wall time. <!-- compose-doc-append-sentinel: branch=feature/1836-tests-run-all-sh pr=#2066 -->
+
+### FEATURE: PR #2062 — feature/2037-rules-2-rules-skill-subagent (2026-08-18, 633935d270ba2b4242d586b4dd67f335fe7c5e54, #2062)
+Background: feature/2037 rules 2 rules skill subagent
+Changes: #2037: Second-stage rules de-injection — converted 7 remaining unconditional rules (branch, coding, mid-workflow-findings, ops, worktree de-injected to on-demand; stop-guard-exemptions, supervisor-reporting, workflow-off minimized in place) to cut per-subagent-launch re-injection, added a path-containment helper to the on-demand-rules checker, split supervisor-reporting into a minimized rule plus a new skill, and closed 10 Codex-flagged test-coverage gaps. <!-- compose-doc-append-sentinel: branch=feature/2037-rules-2-rules-skill-subagent pr=#2062 -->
