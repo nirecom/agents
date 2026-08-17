@@ -20,24 +20,17 @@ const ON_DEMAND_TOKEN = ".on-demand-only/never-match";
 // and `-` is a word boundary.
 const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
 
-// Each on-demand-only rule, paired with the SKILL.md files that MUST carry an
-// explicit Read step for it: "rules/<x>.md|skills/<a>/SKILL.md,skills/<b>/SKILL.md".
-// Every entry must carry BOTH the reserved glob (as its single `paths:` element)
-// and the marker.
-
-// A multi-field declaration stays a flat array of pipe-separated one-line string
-// literals — object literals and nested arrays are out of contract for the text
-// parser. The rule name is written here and nowhere else; the flat list of
-// on-demand rules is DERIVED from this key column by the agents-owned reader
-// (hooks/lib/rules-policy-reader.js), which is the only place allowed to derive.
-// skills/commit-push and skills/worktree-end are NOT required readers of rules/branch.md: its
-// "How to Finish" section only points at those skills and carries no decision they act on.
-
-// A reader set follows what the rule GOVERNS, not who edits files: rules/coding.md carries the
-// Public GitHub Rules, so every skill that authors outbound text (issue body, PR body, commit
-// message, docs) reads it; rules/ops.md is read wherever a destructive or system-state operation
-// can arise, not only at worktree teardown.
+// Each on-demand-only rule, paired with the SKILL.md files that MUST carry an explicit Read step
+// for it: "rules/<x>.md|skills/<a>/SKILL.md,skills/<b>/SKILL.md" (a flat array of pipe-separated
+// one-line string literals — the text parser's contract, no objects/nesting). Every entry must
+// carry BOTH the reserved glob (as its single `paths:` element) and the marker. The rule name is
+// written here and nowhere else; the flat list of on-demand rules is DERIVED from this key column
+// by the agents-owned reader (hooks/lib/rules-policy-reader.js). A reader set follows what the rule
+// GOVERNS, not who edits files — e.g. every skill that authors outbound text reads rules/coding.md,
+// and rules/ops.md is read wherever a destructive/system-state operation can arise, not only at
+// worktree teardown.
 const ON_DEMAND_READERS = [
+  // commit-push/worktree-end are excluded here: branch.md's How-to-Finish section only points at them, it carries no decision they act on.
   "rules/branch.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md",
   "rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md",
   "rules/docs.md|skills/update-docs/SKILL.md",

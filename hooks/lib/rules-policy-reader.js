@@ -1,21 +1,13 @@
 "use strict";
 
-// Reads hooks/lib/rules-injection-policy.js AS DATA — never require()s it. WHY: rules-injection-policy.js is a
-// contributor-editable declaration file. Every consumer of it (the pre-commit static checker, the InstructionsLoaded
-// audit hook) runs on a branch that a pull request controls, so `require()`-ing the policy would execute whatever that
-// PR put in its module body, before review, with the reviewer's ambient privileges. Merely checking out a branch and
-// starting a session must never do that.
-//
-// So the policy is read as DATA: the source TEXT is scanned for the constant declarations the policy names — six of
-// them today (ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE, ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL,
-// MINIMIZED_UNCONDITIONAL, MINIMIZED_MAX_BYTES) — and nothing else is evaluated, which is why every declaration must
-// stay a plain one-line literal.
-
-// Declaration contract: each name must open a `const`/`let`/`var` statement at the start of its
-// line; an occurrence anywhere else (a comment, say) is not read as a declaration.
-
-// This module is agents-owned code, not contributor-editable data, so consumers require() it normally — and it is the
-// only place allowed to DERIVE one declaration from another, so the policy never repeats a fact it already states.
+// Reads hooks/lib/rules-injection-policy.js AS DATA — never require()s it, since that file is
+// contributor-editable and require()-ing it would execute a PR's module body pre-review. The source
+// text is scanned for six constant declarations (ON_DEMAND_TOKEN, ON_DEMAND_MARKER_RE,
+// ON_DEMAND_READERS, EXPECTED_UNCONDITIONAL, MINIMIZED_UNCONDITIONAL, MINIMIZED_MAX_BYTES), each
+// anchored to a real `const`/`let`/`var` statement at line start so a commented-out declaration can't
+// win. This module itself is agents-owned code, not contributor-editable, so consumers require() it
+// normally — and it is the only place allowed to DERIVE one declaration from another (e.g.
+// ON_DEMAND_FILES from ON_DEMAND_READERS), so the policy never repeats a fact it already states.
 
 const fs = require("fs");
 
