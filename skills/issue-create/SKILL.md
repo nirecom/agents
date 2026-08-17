@@ -115,11 +115,14 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 3d. Classify the gate: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
 3e. `confirm: yes` → AskUserQuestion before Phase 4, naming the fired conditions. `confirm: no` → proceed to Phase 4 without asking.
 
-The gate is the logical OR of four conditions; the script owns the decision, this list only supplies the question text:
+The gate is the logical OR of five conditions; the script owns the decision, this list only supplies the question text:
 - G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state)
 - G2 — the review stage replaced the survey verdict
-- G3 — the review did not confirm filing is worthwhile (`review.worth_filing` is not `true`) and severity is not `severity:high`
+- G3 — the review did not confirm filing is worthwhile (`review.worth_filing` is not `true`)
 - G4 — review status is anything other than `upheld` or `replaced` (verdict unverified)
+- G5 — severity is not `severity:high`
+
+Unattended filing therefore requires G1–G5 all clear: a `severity:high` finding that the codex review independently affirmed. `severity:low` and no-label findings always ask the user first — the inflow brake for #1973.
 
 Note: `sub-of` and `bulk-sub-of` are G1 because they may trigger ancestor reopen when the parent chain contains closed issues.
 Note: the artifact's `same_fix` is a different axis and is never a gate input — G1 asks how destructive the action is, `same_fix` asks whether one fix covers both.
