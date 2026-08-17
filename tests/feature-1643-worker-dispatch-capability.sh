@@ -2,26 +2,27 @@
 # tests/feature-1643-worker-dispatch-capability.sh
 # Tests: bin/worker-dispatch/capability.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/spawn.js, bin/worker-dispatch/anchor.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, capability, fsguard, spawn, security, attack-matrix, TL1, scope:issue-specific
-#
+
 # Issue #1643 — capability attack matrix. The guard never inspects the payload,
 # so capability.js / fsguard.js / spawn.js are the ONLY barrier between an
 # untrusted PLANS_DIR file and arbitrary write/exec. Every row below drives one
 # hostile payload field type from the detail plan's capability table and asserts
 # all three protection properties (protection-fix Pattern 1 — negative assertion
 # on the protected resource, not merely on the exit status):
+
 #   1. a rejection status in the worker's own renderer vocabulary
 #      (`failed` for the status-triple workers, `runner-error` for the
 #      test-runner YAML renderer — see expected_reject_status below)
 #   2. no effectful child process (nothing but the read-only anchor git probes)
 #   3. no filesystem write anywhere in the fixture tree
-#
+
 # Group V adds the complementary axis. A whole-dispatch row answers "did a
 # hostile payload reach a side effect", which is too coarse to enumerate the
 # accept/reject boundary of a charset-and-segment rule. So the two path-shaped
 # SCALAR types — `branch` (via isSafeBranch, which `derived-backup-dir` also
 # depends on) and `rel-path-arg[]` — are additionally driven table-row by
 # table-row straight through capability.checkField.
-#
+
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real linked-worktree family with NTFS junctions / bind mounts, where
 #     realpath resolution behaves differently from the temp fixtures here.
@@ -38,9 +39,9 @@ set -u
 # doubling the runtime of the suite, against a budget the suite was already
 # close to exhausting. Matches the placement in
 # tests/feature-1643-worker-dispatch-backup-secrets.sh.
-#
+
 # 180s is deliberately above the 120s default of rules/test.md but well under
-# the old 420s: the run is dominated by 18 real dispatches, and a guard that
+# the old 420s: the run is dominated by 21 real dispatches, and a guard that
 # fires only after several minutes turns a hang into a lost summary line (the
 # tail of a killed run's buffered stdout never reaches the log) instead of a
 # visible failure.
@@ -195,7 +196,7 @@ count_effectful_spawns() {
 
 # Byte snapshot of every protected surface (payload files excluded — the test
 # itself writes those, and PLANS_DIR is the one sanctioned write scope).
-#
+
 # One node process walks all eight roots. The obvious shell form — find | while
 # read | node -e per file — costs a process start per file per call, and this is
 # called twice per matrix row; on Windows (~100-150ms per node start) that alone
@@ -204,7 +205,7 @@ count_effectful_spawns() {
 # roots in the listed order, paths LC_ALL=C-sorted (byte order, hence the
 # Buffer.compare), regular files only, and only a top-level `.git/` pruned — a
 # linked worktree's `.git` *file* is a protected surface and stays in.
-#
+
 # Roots arrive on stdin as `label<TAB>path` pairs, not as argv: MSYS rewrites
 # path-shaped argv on the way into a native node.exe, so an argv form would
 # print the rewritten spelling (C:/... ) instead of the bash-side one and the
@@ -367,6 +368,9 @@ history-outside-repo   | issue-reconcile  | {"owner_repo":"nirecom/agents","hist
 artifact-outside-plans | issue-reconcile  | {"owner_repo":"nirecom/agents","history_md_path":"$MAIN/docs/history.md","history_dir_path":"$MAIN/docs/history","limit":10,"artifact_dir":"$OUTSIDE"}
 payload-binary-key     | test-runner      | {"cwd":"$MAIN","test_args":[],"timeout_seconds":15,"binary":"/bin/sh"}
 payload-env-keys       | test-runner      | {"cwd":"$MAIN","test_args":[],"timeout_seconds":15,"env":{"PATH":"$EVIL"}}
+payload-jobs-string    | test-runner      | {"cwd":"$MAIN","test_args":[],"timeout_seconds":15,"jobs":"4"}
+payload-jobs-zero      | test-runner      | {"cwd":"$MAIN","test_args":[],"timeout_seconds":15,"jobs":0}
+payload-jobs-huge      | test-runner      | {"cwd":"$MAIN","test_args":[],"timeout_seconds":15,"jobs":99999}
 cwd-outside-family-tr  | test-runner      | {"cwd":"$ALT","test_args":[],"timeout_seconds":15}
 owner-repo-injection   | issue-reconcile  | {"owner_repo":"nirecom/agents --json body","history_md_path":"$MAIN/docs/history.md","history_dir_path":"$MAIN/docs/history","limit":10,"artifact_dir":"$PLANS"}
 plans-dir-sibling      | session-close-gate | {"session_id":"s1","plans_dir":"$EVIL","artifact_dir":"$EVIL","outcome_json_path":"$EVIL/o.json"}
@@ -375,13 +379,13 @@ TABLE
 
 # ===========================================================================
 # Group V — validator rows for the two path-shaped SCALAR types
-#
+
 # The attack matrix above drives whole dispatches, which is the right shape for
 # "does a hostile payload reach a side effect" but far too coarse to enumerate a
 # charset/segment rule. These two types are ordinary parsers, so they get the
 # table-driven treatment from skills/_shared/test-design/parser-regex-tests.md:
 # one row per input class, accept/reject asserted per row.
-#
+
 #   branch      — `isSafeBranch`. The charset regex alone used to be the whole
 #                 test, and `../../../pwned` passes a charset test. Because
 #                 `derived-backup-dir` path.join()s the branch onto the backup
@@ -392,10 +396,11 @@ TABLE
 #                 (including .env) aside. Both layers are asserted: the `branch`
 #                 field rejects the input, AND no accepted derivation lands
 #                 outside the backup root.
+
 #   rel-path-arg— test-runner's `test_args`, which becomes argv for
 #                 tests/run-all.sh. As `text[]` an absolute path or a `..` climb
 #                 selected a script outside the validated family worktree.
-#
+
 # One node process evaluates the whole table so the per-row cost is a function
 # call, not a process start; values travel as JSON string bodies so a Windows
 # path or a control character survives the shell untouched.

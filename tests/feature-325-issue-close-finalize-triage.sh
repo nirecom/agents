@@ -1,15 +1,16 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-finalize-triage.sh
 # Tags: issue-close, stage, workflow, finalize, triage, scope:issue-specific
+# Serial: shell-injection guard asserts the fixed path /tmp/FT8_INJECT stays absent
 # Tests for issue #325 — /issue-close-finalize skill triage script.
 #
 # Phase 2 (`/issue-close-finalize`) runs from main worktree AFTER PR merge.
 # Steps H,J. API-only (no docs writes; doc-append happened in Phase 1).
-#
+
 # This script is a rename of bin/github-issues/issue-close-triage.sh with
 # one key behavior change: OPEN:(none) is now an ERROR (Phase 1 must run
 # first), instead of "proceed".
-#
+
 # Routing scenarios for issue-close-finalize-triage.sh:
 #   FT1: OPEN + no sentinel    → error (mentions /issue-close-stage) ← NEW
 #   FT2: OPEN + pending        → resume_e, E,F,G,H,J  (recovery for stuck)
@@ -20,7 +21,7 @@
 #   FT7: CLOSED + pending + no hist → stuck_append_sentinel, E,J
 #   FT8: non-numeric N         → error
 #   FT9: AGENTS_CONFIG_DIR unset → error
-#
+
 # RED: this suite fails clean while the script + shared lib are missing.
 
 set -u

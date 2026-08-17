@@ -2,13 +2,13 @@
 # tests/feature-1643-worker-dispatch-schema.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/payload.js, bin/worker-dispatch/registry.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, dispatcher, payload, schema, argv, free-text, TL1, scope:issue-specific
-#
+
 # Issue #1643 — argv arity / worker-name enum / payload schema of the worker
 # dispatcher, plus the hard requirement that free-text worker input (history
 # background/changes bodies) reaches the worker module BYTE-IDENTICAL. Payload
 # is passed as a PLANS_DIR file (not inline argv JSON) so free text never
 # traverses the guard's UNSAFE_ARG_VALUE_RE reject set — Group C fences that.
-#
+
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real skill (run-tests RNT-7 / update-docs UD-9) actually writing the
 #     payload file with the Write tool and invoking the CLI in one turn.
@@ -280,6 +280,7 @@ group_d() {
 # Group E — credential scope and the typed `test_args` field, asserted on the
 # SSOT registry (behavioural counterpart: the buildEnv group in
 # tests/feature-1643-worker-dispatch-script-anchor.sh).
+
 # CHILD_ENV_ALLOWLIST applies to EVERY worker's children, including the
 # family-worktree-anchored tests/run-all.sh — i.e. unreviewed branch code —
 # so a credential there would leak; tokens belong only in `issue-reconcile`'s
@@ -333,6 +334,12 @@ group_e() {
       const spec = (workers["test-runner"] || {}).payloadSpec || {};
       out("test_args_type", spec.test_args ? spec.test_args.type : "(absent)");
       out("test_args_max_items", spec.test_args ? spec.test_args.maxItems : "(absent)");
+      // #1832: `jobs` becomes argv for the same script runner, so it is typed and
+      // range-bounded rather than free text. No `default` on purpose — an absent
+      // field means "let the suite decide" (-j auto), not any one number.
+      out("jobs_type", spec.jobs ? spec.jobs.type : "(absent)");
+      out("jobs_min", spec.jobs ? spec.jobs.min : "(absent)");
+      out("jobs_max", spec.jobs ? spec.jobs.max : "(absent)");
       // Config-location vars; SSOT for the admission rule is the comment block
       // above CHILD_ENV_ALLOWLIST in the registry.
       const CONFIG_PATH_VARS = ["APPDATA", "ProgramData", "PROGRAMDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR"];
@@ -363,6 +370,10 @@ group_e() {
 
     assert_eq "payload/test-args-is-rel-path-arg" "rel-path-arg[]" "$(ev test_args_type)"
     assert_eq "payload/test-args-max-items-64" "64" "$(ev test_args_max_items)"
+
+    assert_eq "payload/jobs-is-int" "int" "$(ev jobs_type)"
+    assert_eq "payload/jobs-min-1" "1" "$(ev jobs_min)"
+    assert_eq "payload/jobs-max-1024" "1024" "$(ev jobs_max)"
 
     # Whole config-location-variable class, not just gh-related vars — the
     # allowlist is a "class" contract applied unconditionally to every worker.

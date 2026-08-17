@@ -1,8 +1,9 @@
 #!/bin/bash
 # Tests: bin/github-issues/find-pr-by-marker.sh
 # Tags: issue-close, workflow, pr, marker, github, scope:issue-specific
+# Serial: shell-injection guard asserts the fixed path /tmp/F6_INJECT stays absent
 # Tests for issue #325 — bin/github-issues/find-pr-by-marker.sh
-#
+
 # Maps issue N → (PR_NUMBER, MERGE_COMMIT) using:
 #   primary:  gh issue view --json closedByPullRequestsReferences
 #             (CLOSED state, sort_by mergedAt, last entry's PR + mergeCommit.oid)

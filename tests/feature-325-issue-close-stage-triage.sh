@@ -1,12 +1,13 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/issue-close-triage-lib.sh
-# Tags: issue-close, stage, workflow, finalize, triage
+# Tags: issue-close, stage, workflow, finalize, triage, scope:common
+# Serial: shell-injection guard asserts the fixed path /tmp/ST6_INJECT stays absent
 # Tests for issue #325 — /issue-close-stage skill triage script.
 #
 # Phase 1 (`/issue-close-stage`) runs inside the linked worktree BEFORE PR merge.
 # After issue #325 centralized history.md writes into Phase 2, Phase 1 steps
 # are B,D,F,G (Step E — doc-append — has been moved to Phase 2 entirely).
-#
+
 # Routing scenarios for issue-close-stage-triage.sh:
 #   ST1: OPEN + no sentinel        → proceed, B,D,F,G
 #   ST2: OPEN + pending            → resume_f, F,G
@@ -14,7 +15,7 @@
 #   ST5: CLOSED:*                  → error (mentions /issue-close-finalize)
 #   ST6: non-numeric N             → error (injection guard)
 #   ST7: AGENTS_CONFIG_DIR unset   → error
-#
+
 # Note: pre-#325 ST3 (`phase1_done` short-circuit when history.md already
 # contained an entry for #N) was removed — Phase 1 no longer touches
 # history.md, so the only signal that determines Phase 1 completion is

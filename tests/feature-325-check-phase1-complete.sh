@@ -1,11 +1,12 @@
 #!/bin/bash
 # Tests: bin/github-issues/check-phase1-complete.sh, bin/github-issues/issue-close-triage-lib.sh
-# Tags: issue-close, triage, workflow, phase1, gate
+# Tags: issue-close, triage, workflow, phase1, gate, scope:common
+# Serial: shell-injection guard asserts the fixed path /tmp/C7_INJECT stays absent
 # Tests for issue #325 — bin/github-issues/check-phase1-complete.sh
 #
 # Verifies that Phase 1 (sentinel posted) is complete before /commit-push
 # allows merge. Pre-flight guard.
-#
+
 # After issue #325, Phase 1 no longer writes docs/history.md (that work
 # moved to Phase 2). The only Phase 1 completion signal is the sentinel —
 # the previous "sentinel AND history entry" gate collapsed to sentinel-only.

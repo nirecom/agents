@@ -2,7 +2,8 @@
 # tests/fix-1679-write-detect-false-positives.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: enforce-worktree, classify, write-patterns, security, TL1, pwsh-not-required, scope:issue-specific
-#
+# Serial: static-detector false positive retained for declaration parity — the two `rm -rf /tmp/x` hits are inert heredoc table data, never executed
+
 # Issue #1679 — four write-detection heuristics false-positive on read-only
 # commands issued from the main worktree:
 #   (1) isExoticExecWriteIR / looksDynamic: ANY `$` or backtick in an eval /
@@ -11,17 +12,18 @@
 #   (2) isInterpreterCWriteIR: isReadOnlyInterpreterC's raw pre-checks
 #       (`$'`, `<<<`, `<<`, backtick) run BEFORE quote-stripping, so
 #       `bash -c 'echo "see <<EOF in docs"'` is blocked.
+
 #   (3) isCommandSubstWriteIR: recurses into `$(...)` without the outer Group-A
 #       gh context, so `gh issue comment N --body "$(cat <<'EOF' … EOF)"` is blocked.
 #   (4) WRITE_PATTERNS here-doc / here-string / pwsh-here entries are raw-regex
 #       scanned (STRIP_KINDS is empty), so quoted PROSE mentioning `<<'EOF'`,
 #       `<<<` or `@'…'@` is blocked.
-#
+
 # FP1679-* rows assert the POST-FIX contract → RED before the fix (expected).
 # FC1679-* rows are fail-closed security pins → GREEN before AND after the fix.
 # PR/SC/SS rows verify the three propagation consumers of these predicates.
 # GA rows verify the Group-A gh integration path end to end at the module layer.
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Whether classify.js/bash-write-targets.js is actually loaded by the real enforce-worktree.js hook process
 # - Whether the hook process's module resolution finds the same files as the direct require() calls here

@@ -9,6 +9,7 @@
 5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
 6. [Codex Review Reviewer](#7-codex-review-reviewer) — Codex-primary reviewer with Claude Code fallback, shared across four skills
 7. [Rules Injection Scope](claude-code/rules-injection.md) — unconditional / conditional / on-demand injection scopes, the reserved never-match notation, the tree-wide invariant checker, and the `InstructionsLoaded` audit hook
+8. [Test Runner Parallelism](claude-code/test-runner-parallelism.md) — `tests/run-all.sh` slot scheduler, the `# Serial:` lane, `-j` / `--deadline` / `RUN_ALL_*` surfaces, calibration cache, contract-line neutralization
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 
