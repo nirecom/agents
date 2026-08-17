@@ -29,7 +29,7 @@ _unusable_config_reason() {
     fi
     # Absolute in either dialect: POSIX, and the drive-letter form Git Bash and pwsh hand over.
     case "$dir" in
-        /*|[A-Za-z]:[/\\]*) ;;
+        [A-Za-z]:[/\\]*|/*) ;;
         *) echo "AGENTS_CONFIG_DIR is not an absolute path (would resolve inside the reviewed tree): $dir"; return 0 ;;
     esac
     if [[ ! -d "$dir" ]]; then
@@ -45,11 +45,11 @@ _unusable_config_reason() {
 # examined the wrong range and the costliest one self-reported an empty diff, which reads as a
 # clean pass. The values are set rather than echoed because the state and the base are
 # separate facts and a command substitution can only carry one.
-#
+
 # The resolution CHAIN itself is no longer here: bin/resolve-merge-base.sh owns it (SSOT,
 # #1638), because five callers each re-deriving the base is five different answers to the
 # same question. This function only asks, and translates the answer into a base and a report.
-#
+
 # The helper being absent, unrunnable, or wrong about its own arguments is NOT rounded into
 # FALLBACK: FALLBACK is a specific claim ("no merge-base against main, so HEAD~1"), and
 # stating it when we simply could not ask would be a report that lies. Those cases are
@@ -141,7 +141,7 @@ _resolve_merge_base() {
 # An absent executable now becomes a line in the report, in the same `## <name>: <verdict>`
 # family the gates themselves print, so a reviewer sees the hole instead of inferring a pass.
 # A gate that ran and complained stays advisory — that distinction is the point.
-#
+
 # Three states, three verdicts, because they are three different facts and only one of them
 # is absence. `-x` alone conflated them: the Windows shim the installer writes never
 # depended on the execute bit, and `core.fileMode=false`, a copied tree, and several mounts
@@ -208,10 +208,12 @@ if [[ "$MERGE_BASE_WARN" == "post-session-head" ]]; then
     echo "## merge-base: NOTE — the recorded baseline was created after this session started; commits made before the branching sentinel are outside the reviewed range (alt base: ${MERGE_BASE_ALT:-unknown})"
 fi
 
-# --base-state goes to review-code-codex ALONE. It is the only gate that emits a prose
+# --base-state goes to the codex reviewer ALONE. It is the only gate that emits a prose
 # verdict a reader can mistake for a full-coverage judgement, so it is the only one that has
 # to disclose an untrustworthy range. The other seven receive a resolved base and nothing more.
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-codex" --base "$MERGE_BASE" --base-state "$MERGE_BASE_STATE" --context "${AGENTS_CONFIG_DIR}/rules/core-principles.md"
+# The reviewer is reached through review-code-ledger, which forwards these arguments
+# unchanged and additionally carries the round's concerns in and the round's delta out.
+_run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-ledger" --base "$MERGE_BASE" --base-state "$MERGE_BASE_STATE" --context "${AGENTS_CONFIG_DIR}/rules/core-principles.md"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/review-prompt-size" --base "$MERGE_BASE"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/check-inline-procedures" --base "$MERGE_BASE"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-size" --base "$MERGE_BASE"

@@ -71,10 +71,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 17. Committed+uncommitted: both committed diff and fresh uncommitted edits
-#     (including untracked files) are included in the review when BASE...HEAD
-#     is non-empty (Gap 2 fix — one-way gate was masking fresh uncommitted
-#     edits when committed diff already existed).
+# 17. Committed+uncommitted: when a committed diff exists (BASE...HEAD non-empty),
+#     the whole uncommitted/untracked set is outside the review target — it is
+#     disclosed by name on the '## Codex Review Scope: EXCLUDED' line rather than
+#     sent to the reviewer (E24, #1702; see also P10 in path-priority/
+#     exclusion-and-cross-reference.sh, which asserts the same rule for a path
+#     that is both committed and separately staged). This supersedes the earlier
+#     dual-section design this test used to assert (separate labeled
+#     [COMMITTED DIFF]/[UNCOMMITTED CHANGES] blocks, both sent in full).
 # ---------------------------------------------------------------------------
 COMMITTED_REPO="$TMPDIR_BASE/committed-repo"
 mkdir -p "$COMMITTED_REPO"
@@ -109,20 +113,26 @@ else
     fail "Committed+uncommitted: review not PERFORMED. Output: $OUTPUT"
 fi
 
-if [[ -f "$CAPTURE_FILE17" ]] && grep -q "\[COMMITTED DIFF (BASE\.\.\.HEAD)\]" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: committed diff section label present in prompt"
+if [[ -f "$CAPTURE_FILE17" ]] && grep -q "base content" "$CAPTURE_FILE17"; then
+    pass "Committed+uncommitted: committed diff content present in prompt"
 else
-    fail "Committed+uncommitted: committed diff label missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
+    fail "Committed+uncommitted: committed diff content missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
 fi
 
-if [[ -f "$CAPTURE_FILE17" ]] && grep -q "\[UNCOMMITTED CHANGES (working tree vs HEAD)\]" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: uncommitted changes section label present in prompt"
+if echo "$OUTPUT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "tracked-file.txt"; then
+    pass "Committed+uncommitted: uncommitted edit to the committed file disclosed via EXCLUDED (E24, #1702)"
 else
-    fail "Committed+uncommitted: uncommitted changes label missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
+    fail "Committed+uncommitted: EXCLUDED line does not name tracked-file.txt. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "new-untracked.txt"; then
+    pass "Committed+uncommitted: untracked file disclosed via EXCLUDED (E24, #1702)"
+else
+    fail "Committed+uncommitted: EXCLUDED line does not name new-untracked.txt. Output: $OUTPUT"
 fi
 
 if [[ -f "$CAPTURE_FILE17" ]] && grep -q "untracked-content-xyz" "$CAPTURE_FILE17"; then
-    pass "Committed+uncommitted: untracked file content present in prompt"
+    fail "Committed+uncommitted: untracked file content leaked into the prompt despite being excluded"
 else
-    fail "Committed+uncommitted: untracked file content missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
+    pass "Committed+uncommitted: untracked file content correctly excluded from the prompt"
 fi

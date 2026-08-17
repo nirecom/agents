@@ -137,9 +137,20 @@ PP_ENV=()
 #       as an afterthought.
 # ---------------------------------------------------------------------------
 PP_GATE_DIR="$TMPDIR_BASE/pp-gates-agents"
-mkdir -p "$PP_GATE_DIR/bin/lib"
+mkdir -p "$PP_GATE_DIR/bin/lib/concern-ledger"
 cp "$AGENTS_ROOT/bin/review-code-codex" "$PP_GATE_DIR/bin/review-code-codex"
 cp "$AGENTS_ROOT/bin/lib/codex-core.sh" "$PP_GATE_DIR/bin/lib/codex-core.sh"
+# codex-core.sh sources codex-timeout.sh for codex_timeout_resolve; without it the resolved
+# timeout is empty and `timeout "" codex exec ...` fails with "invalid time interval ''",
+# which review-code-codex reports as FAILED rather than PERFORMED.
+cp "$AGENTS_ROOT/bin/lib/codex-timeout.sh" "$PP_GATE_DIR/bin/lib/codex-timeout.sh"
+# run-quality-gates.sh calls review-code-codex through this ledger-aware wrapper (#1992/#1996)
+# rather than directly, so the fixture must carry the wrapper and its own dependencies too —
+# otherwise the gate reports "review-code-ledger: NOT FOUND" and the codex reviewer never runs.
+cp "$AGENTS_ROOT/bin/review-code-ledger" "$PP_GATE_DIR/bin/review-code-ledger"
+cp "$AGENTS_ROOT/bin/concern-ledger" "$PP_GATE_DIR/bin/concern-ledger"
+cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$PP_GATE_DIR/bin/lib/concern-ledger.sh"
+cp "$AGENTS_ROOT/bin/lib/concern-ledger/"*.sh "$PP_GATE_DIR/bin/lib/concern-ledger/"
 PP_GATES="$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
 
 pp_run_gates() { # <repo> ; prints the combined gate-runner output
@@ -152,6 +163,18 @@ for pp_warn in post-session-head none; do
     pp_write_resolver_stub "$PP_GATE_DIR" "$pp_warn"
     pp_out="$(pp_run_gates "$PP_BIG")"
     [ "$pp_warn" = "post-session-head" ] && PP_GATE_OUT_WARN="$pp_out"
+    # An agreement of two silences is not agreement: if the ledger wrapper was never found, or
+    # the codex review never ran, both readers report "no" by default and P12 would pass on a
+    # row that proves nothing. Require the row to show the reviewer actually reached its verdict
+    # before trusting the NOTE/PRIORITY-UNTRUSTED comparison below.
+    if pp_has "$pp_out" "review-code-ledger: NOT FOUND"; then
+        fail "P12[warn=$pp_warn]: review-code-ledger was NOT FOUND, so the gate never ran the codex reviewer — this row cannot prove NOTE/PRIORITY-UNTRUSTED agreement. Output: $pp_out"
+        continue
+    fi
+    if ! pp_has "$pp_out" "^## Codex Review: PERFORMED"; then
+        fail "P12[warn=$pp_warn]: the codex review was not PERFORMED, so this row cannot prove NOTE/PRIORITY-UNTRUSTED agreement. Output: $pp_out"
+        continue
+    fi
     pp_note=no; pp_untrusted=no
     pp_has "$pp_out" "^## merge-base: NOTE" && pp_note=yes
     pp_has "$pp_out" "^## Codex Review Scope: PRIORITY-UNTRUSTED" && pp_untrusted=yes

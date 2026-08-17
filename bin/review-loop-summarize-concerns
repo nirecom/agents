@@ -69,23 +69,60 @@ if [[ -z "$RAW" || ! -f "$RAW" ]]; then
   RAW_MODE="missing"
 fi
 
+# Which schema the ledger speaks. Detected from the header line rather than from
+# the field count of the first entry: a v1 body may itself contain the field
+# separator, so counting columns would misread a wordy v1 concern as v2.
+# v1 rows are ID|SEVERITY|TEXT; v2 rows carry nine addressing columns before the
+# text and state their own lifecycle, so the two are rendered differently below.
+SCHEMA="v1"
+if [[ "$LEDGER_MODE" == "ok" ]]; then
+  IFS= read -r CL_HEADER < "$LEDGER" || CL_HEADER=""
+  case "$CL_HEADER" in '#concern-ledger-v2|'*) SCHEMA="v2" ;; esac
+fi
+
 # Parse ledger into three severity buckets + OTHER
 HIGH_ITEMS=()
 MED_ITEMS=()
 LOW_ITEMS=()
 OTHER_ITEMS=()
+UNPARSED_ITEMS=()
+ALT_ITEMS=()
 OTHER_WARN=0
 
+# Every bucket entry is normalised to id|sev|state|first|last|flags|body, body
+# last, so one accessor serves both schemas: the body is the only field that can
+# contain the separator, and `cut -f7-` puts it back together whatever it holds.
 if [[ "$LEDGER_MODE" == "ok" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     # Skip blank lines
     [[ -z "$line" ]] && continue
+
+    # v2 auxiliary lines: reviewer output that no parser could turn into a
+    # concern, and the alternate producer wordings folded into an existing one.
+    # Both are content the author has never seen, so they are collected rather
+    # than dropped — but they are not concerns and get their own sections.
+    if [[ "$SCHEMA" == "v2" ]]; then
+      case "$line" in
+        '#unparsed|'*)   UNPARSED_ITEMS+=("${line#\#unparsed|}");   continue ;;
+        '#merged-alt|'*) ALT_ITEMS+=("${line#\#merged-alt|}");      continue ;;
+      esac
+    fi
+
     # Skip lines not starting with C<digit>
     [[ "$line" =~ ^C[0-9] ]] || continue
 
     id="$(printf '%s' "$line" | cut -d'|' -f1)"
     sev="$(printf '%s' "$line" | cut -d'|' -f2)"
-    body="$(printf '%s' "$line" | cut -d'|' -f3-)"
+    if [[ "$SCHEMA" == "v2" ]]; then
+      state="$(printf '%s' "$line" | cut -d'|' -f3)"
+      first="$(printf '%s' "$line" | cut -d'|' -f4)"
+      last="$(printf '%s' "$line" | cut -d'|' -f5)"
+      flags="$(printf '%s' "$line" | cut -d'|' -f10)"
+      body="$(printf '%s' "$line" | cut -d'|' -f11-)"
+      body="${state}|${first}|${last}|${flags}|${body}"
+    else
+      body="||||$(printf '%s' "$line" | cut -d'|' -f3-)"
+    fi
 
     case "$sev" in
       HIGH)   HIGH_ITEMS+=("${id}|${sev}|${body}") ;;
@@ -128,13 +165,73 @@ lookup_resolution() {
   echo "unresolved|${reason}"
 }
 
+# The FLAGS column of another entry — the one thing a concern cannot say about
+# itself. A flag that names a partner (ambiguous, dup-suspect) is one half of a
+# relationship, and a reader shown only that half has to hunt for the other.
+entry_flags() {
+  [[ "$SCHEMA" == "v2" && -f "$LEDGER" ]] || { printf ''; return; }
+  grep -m1 -- "^${1}|" "$LEDGER" 2>/dev/null | cut -d'|' -f10
+}
+
+# flag_phrase <flags-column> [expand-partner]
+# Renders the FLAGS column as prose. The raw token is never echoed: `ambiguous:C5`
+# is machine addressing, and a cap-menu reader needs the relationship, not the
+# encoding.
+flag_phrase() {
+  local raw="$1" expand="${2:-0}"
+  [[ -z "$raw" || "$raw" == "-" ]] && { printf ''; return; }
+  local out="" tok name val phrase partner
+  local IFS=','
+  for tok in $raw; do
+    [[ -z "$tok" ]] && continue
+    name="${tok%%:*}"
+    val=""
+    [[ "$tok" == *:* ]] && val="${tok#*:}"
+    case "$name" in
+      merged-slot) phrase="${val:+${val} }producer wordings folded in" ;;
+      ambiguous)   phrase="ambiguous${val:+ with ${val}}" ;;
+      dup-suspect) phrase="dup-suspect${val:+ of ${val}}" ;;
+      no-anchor)   phrase="no anchor — matched on its wording alone" ;;
+      stale)       phrase="stale — not reported in the latest round" ;;
+      # The lifecycle already prints the state; a flag repeating it is noise.
+      reopened)    continue ;;
+      *)           phrase="${name}${val:+ ${val}}" ;;
+    esac
+    if [[ "$expand" == "1" && "$val" =~ ^C[0-9]+$ ]]; then
+      partner="$(flag_phrase "$(entry_flags "$val")" 0)"
+      [[ -n "$partner" ]] && phrase="${phrase}, which is ${partner}"
+    fi
+    out="${out:+${out}; }${phrase}"
+  done
+  printf '%s' "$out"
+}
+
 # Emit one concern entry (4-space indented body).
 emit_concern() {
   local entry="$1"
-  local id sev body
+  local id sev state first last flags body
   id="$(printf '%s' "$entry" | cut -d'|' -f1)"
   sev="$(printf '%s' "$entry" | cut -d'|' -f2)"
-  body="$(printf '%s' "$entry" | cut -d'|' -f3-)"
+  state="$(printf '%s' "$entry" | cut -d'|' -f3)"
+  first="$(printf '%s' "$entry" | cut -d'|' -f4)"
+  last="$(printf '%s' "$entry" | cut -d'|' -f5)"
+  flags="$(printf '%s' "$entry" | cut -d'|' -f6)"
+  body="$(printf '%s' "$entry" | cut -d'|' -f7-)"
+
+  # v2 answers "is this still open?" from the ledger itself, so the prior round's
+  # reviewer prose is not consulted: the STATE column is the reduced verdict of
+  # every producer in the round, while the RAW file is one producer's wording.
+  if [[ "$SCHEMA" == "v2" ]]; then
+    local span ann
+    if [[ "$first" == "$last" ]]; then span="r${first}"; else span="r${first}→r${last}"; fi
+    ann="$(flag_phrase "$flags" 1)"
+    if [[ -n "$ann" ]]; then
+      printf '  - **%s** [%s] (%s, %s) — %s — %s\n' "$id" "$sev" "$span" "$state" "$body" "$ann"
+    else
+      printf '  - **%s** [%s] (%s, %s) — %s\n' "$id" "$sev" "$span" "$state" "$body"
+    fi
+    return
+  fi
 
   local res
   res="$(lookup_resolution "$id")"
@@ -191,7 +288,30 @@ emit_concern() {
     done
   fi
 
-  if [[ "$RAW_MODE" != "ok" && "$LEDGER_MODE" == "ok" ]]; then
+  # v1 only: v2 never consults the prior round's raw file, so its absence is not
+  # a degradation worth reporting.
+  if [[ "$SCHEMA" == "v1" && "$RAW_MODE" != "ok" && "$LEDGER_MODE" == "ok" ]]; then
     echo "- (no reviewer output available for cap-reach round — first-round cap-reach or prior raw not persisted)"
+  fi
+
+  # Both sections are omitted when empty: a heading over nothing reads as a
+  # claim that the reviewer output parsed cleanly, which is not what an absent
+  # section means.
+  if [[ "${#UNPARSED_ITEMS[@]}" -gt 0 ]]; then
+    echo
+    echo "### Unparsed reviewer output (${#UNPARSED_ITEMS[@]} lines)"
+    for item in "${UNPARSED_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      printf '    %s\n' "$item"
+    done
+  fi
+
+  if [[ "${#ALT_ITEMS[@]}" -gt 0 ]]; then
+    echo
+    echo "### Merged alternates (${#ALT_ITEMS[@]} lines)"
+    for item in "${ALT_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      printf '  - **%s** — %s\n' "${item%%|*}" "${item#*|}"
+    done
   fi
 } | sanitize

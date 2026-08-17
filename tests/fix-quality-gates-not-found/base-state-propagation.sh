@@ -82,13 +82,13 @@ expect_base_state() { # <row-id> <log-dir> <want-state>
   check "$row-ran: every gate recorded its arguments" "$GATE_COUNT" \
     "$(find "$dir" -name '*.argv' 2>/dev/null | grep -c . || true)"
 
-  got="$(argv_flag_value "$dir/review-code-codex.argv" --base-state)"
+  got="$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
   check "$row: review-code-codex is told the merge-base state" "$want" "$got"
 
   for f in "$dir"/*.argv; do
     [ -f "$f" ] || continue
     name="$(basename "$f" .argv)"
-    [ "$name" = "review-code-codex" ] && continue
+    [ "$name" = "review-code-ledger" ] && continue
     if grep -qxF -- "--base-state" "$f"; then leaked="$leaked [$name]"; fi
   done
   check "$row-only: and no other gate is handed a flag it does not accept" "" "$leaked"
@@ -148,7 +148,7 @@ g10_suspect_state_is_passed() {
   # SUSPECT narrows the range to HEAD, and the state has to travel WITH the narrowed base:
   # a gate handed `--base HEAD --base-state RESOLVED` would report a clean review of nothing.
   check "G10c-base: and the narrowed base travels with it" "HEAD" \
-    "$(argv_flag_value "$dir/review-code-codex.argv" --base)"
+    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
 }
 
 g10_unresolved_state_is_passed() {
@@ -171,7 +171,7 @@ g10_recorded_state_is_passed() {
   run_runner "$cfg" "$repo" MERGE_BASE_MAX_DIFF_LINES=50 MERGE_BASE_MAX_DIFF_FILES=2
   expect_base_state "G10e-RECORDED" "$dir" "RECORDED"
   check "G10e-base: with the recorded base rather than the stale guess" "$base" \
-    "$(argv_flag_value "$dir/review-code-codex.argv" --base)"
+    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
 }
 
 # The helper is a separate file that can simply be absent. The runner still has to tell codex
@@ -184,7 +184,7 @@ g10_missing_helper_still_passes_a_state() {
   repo="$(make_repo)"
   rm -f "$cfg/bin/resolve-merge-base.sh"
   run_runner "$cfg" "$repo"
-  got="$(argv_flag_value "$dir/review-code-codex.argv" --base-state)"
+  got="$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
   if [ "$got" = "UNRESOLVED" ]; then
     pass "G10f: with no resolver installed, codex is still told the state the report claimed (UNRESOLVED)"
   else
@@ -227,9 +227,9 @@ g11_post_session_head_is_its_own_line() {
   # A note is not a demotion. If post-session-head were folded into the state the base would
   # be narrowed to HEAD and the review would silently cover less than the change.
   check "G11c: the state is unchanged by the note — the recorded base is still a fact" "RECORDED" \
-    "$(argv_flag_value "$dir/review-code-codex.argv" --base-state)"
+    "$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
   check "G11c-base: and the recorded base is still what the gates are scoped by" "$base" \
-    "$(argv_flag_value "$dir/review-code-codex.argv" --base)"
+    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
   check "G11d: a caveat is not a failure — the runner still exits 0" "0" "$RQG_RC"
 }
 

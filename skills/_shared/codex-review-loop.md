@@ -61,7 +61,7 @@ The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-cod
 
 `bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/<session-id>-<format>-concern-ledger.txt`. The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
 
-Each ledger line is pipe-delimited: `C<N>|<SEVERITY>|<full concern text>`. Full text is stored verbatim (no truncation).
+Schema, lifecycle states, binding tiers, and the category vocabulary: `skills/_shared/concern-ledger.md` (SSOT). Full concern text is stored verbatim (no truncation).
 
 - Round 1: assigns C1, C2, … to each concern; rewrites the forwarded reviewer output so concerns appear as `C<N>. [<SEV>] …`; writes ledger at the end of Round 1 processing.
 - Round 2+: validates each `C<N>:` reference against the ledger; drops unknown IDs from forwarded output and emits a stderr warning `run-codex-review-loop: discarded new concern IDs in round N: C5, C6`; tallies residual severity from ledger for unresolved concerns.
@@ -70,6 +70,8 @@ Each ledger line is pipe-delimited: `C<N>|<SEVERITY>|<full concern text>`. Full 
 The Round 2+ codex prompt in `bin/review-plan-codex` is switched to Cn-reference form via `--round 2 --ledger <path>`. Applies to both `--format detail-plan` and `--format outline-plan`.
 
 The ledger is deleted on terminal verdicts (APPROVED, ESCALATE) and persists across CONTINUE.
+
+Before the ledger is dropped on an ending that never converged (ESCALATE, or CONTINUE at the cap), the wrapper finalizes it into `<PLANS_DIR>/<session-id>-<format>-unresolved-concerns.json`. That write is fail-CLOSED: when it does not succeed the wrapper returns exit 7 instead of the would-be verdict, so no caller emits its completion sentinel over concerns nobody can read.
 
 Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, LAND→3, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
 
@@ -145,6 +147,7 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 | 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent**. Do NOT emit to chat. |
 | 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent at arg-assembly time, the wrapper auto-downgrades the effective round to 1 and rebuilds the ledger from this round's concerns (concern-ID continuity is lost; tracked by #748). |
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter review loop (no user dialog). |
+| 7 | **FINALIZE_FAILED** — the unresolved-concerns artifact could not be written | **HALT.** Surface the `## Concern Ledger: FINALIZE-FAILED` line (it names the recovered ledger copy) and the would-be verdict it replaced. Do NOT emit the step's completion sentinel and do NOT fall back to `REVIEWER_AGENT`. Re-run after fixing the cause; the ledger is intact. |
 
 **Note: Internal LAND (exit 3) ≠ Public exit 3** — internal exit 3 is LAND (absorbed to public exit 0); public exit 3 means codex CLI unavailable. These share the same number but belong to different contracts and are never confused because `run-codex-review-loop` converts before returning.
 
@@ -179,6 +182,7 @@ Planner's intended response (next round):
 - Public exit 3 → caller silently falls back to `REVIEWER_AGENT` subagent.
 - **Public exit 4 → caller HALTS with blocking error; no fallback.**
 - **Public exit 5 → caller increments `EXTENSIONS_USED` and re-enters review loop (AUTO_EXTEND path).**
+- **Public exit 7 → caller HALTS, withholds the completion sentinel, and reports the FINALIZE-FAILED line.**
 
 ## Rationale: why a wrapper and not prose
 

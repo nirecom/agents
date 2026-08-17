@@ -259,14 +259,76 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
   esac
 fi
 
-# --- BEGIN concern-ID ledger + verdict-script block (issue #673) ---
+# --- BEGIN concern-ID ledger + verdict-script block (issues #673 / #1992 / #1996) ---
+# The ledger itself lives in bin/lib/concern-ledger.sh, reached through
+# bin/concern-ledger. What stays here is what only this wrapper knows: the
+# reviewer's on-the-wire concern form, the auto-rejection of out-of-scope
+# findings, and the mapping from a tally to a verdict.
 FINAL_EXIT=0
 HIGH_N=0; MED_N=0; LOW_N=0
+CL_CLI=""
+CL_PRODUCER_NAME="review-plan-codex"
+
+# The reducer is a library shared with the code-review path, so its home is
+# resolved rather than assumed: an AGENTS_CONFIG_DIR that predates #1992 does
+# not carry it, and concern-ID continuity must not be lost to a stale or partial
+# deployment. Each candidate must hold *both* halves — CLI and library — so a
+# repository that merely happens to have a similarly named file cannot answer.
+# "Both halves" includes the library's sibling module directory: the entrypoint
+# is dispatch-only, so a root carrying just bin/lib/concern-ledger.sh is a
+# partial deployment that aborts on load — it must lose to a complete one.
+resolve_concern_ledger() {
+  local root
+  for root in "${AGENTS_CONFIG_DIR}" \
+              "$(dirname "$(dirname "$(realpath "$0" 2>/dev/null || printf '%s' "$0")")")" \
+              "${REPO_ROOT_ARG}" \
+              "$(git rev-parse --show-toplevel 2>/dev/null || true)"; do
+    [[ -n "$root" ]] || continue
+    if [[ -f "$root/bin/concern-ledger" && -f "$root/bin/lib/concern-ledger.sh" \
+          && -d "$root/bin/lib/concern-ledger" ]]; then
+      CL_CLI="$root/bin/concern-ledger"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ledger_cli <subcommand> [args...] — every ledger operation in this wrapper
+# addresses the same (plans-dir, session, format, ledger) tuple, so the
+# addressing is written once and no call site can drift from it.
+ledger_cli() {
+  local sub="$1"; shift
+  bash "$CL_CLI" "$sub" --plans-dir "$PLANS_DIR" --session-id "$SID" \
+    --format "$FORMAT" --ledger "$LEDGER" "$@"
+}
+
+# finalize_ledger <mode> <reason> <would-be-verdict>
+# The review has ended without converging, so the concerns that outlived it are
+# written out as a machine-readable artifact. A finalize that cannot write is
+# terminal for this wrapper: returning the verdict anyway would let the caller
+# mark the step complete over findings nobody can read (fail-CLOSED).
+finalize_ledger() {
+  local mode="$1" reason="$2" wouldbe="$3" out msg rc=0
+  out="$(ledger_cli finalize --mode "$mode" --reason "$reason" --round "$ROUND" \
+      --cap "$CAP" --max-extensions "$MAX_EXT" --extensions-used "$EXT_USED" 2>&1)" || rc=$?
+  [[ $rc -eq 0 ]] && return 0
+  msg="$(printf '%s\n' "$out" | grep -F '## Concern Ledger: FINALIZE-FAILED — ' | head -n 1)"
+  [[ -n "$msg" ]] || msg="## Concern Ledger: FINALIZE-FAILED — the unresolved-concerns artifact could not be written"
+  msg="$msg (would-be verdict: $wouldbe)"
+  cat "$TMP_OUT"
+  printf '%s\n' "$msg"
+  printf '%s\n' "$msg" >&2
+  exit 7
+}
 
 if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
+  resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}), the wrapper's own directory, or the current repository"
+  DELTA_SRC="${TMP_OUT}.delta"
+  : > "$DELTA_SRC" || die "cannot stage the round's concerns: $DELTA_SRC"
+
   if [[ "$ROUND" == "1" ]]; then
-    # Round 1: parse concerns, assign Cn IDs, build ledger.
-    LEDGER_CONTENT=""
+    # Round 1: the reviewer numbers its own findings; this loop assigns the
+    # concern IDs the later rounds refer back to.
     ID_COUNTER=0
     TRANSFORMED_CONTENT=""
     INBLOCK=0
@@ -297,13 +359,8 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
         fi
         ID_COUNTER=$((ID_COUNTER + 1))
         CN="C${ID_COUNTER}"
-        LEDGER_CONTENT+="${CN}|${SEV}|${TEXT}"$'\n'
+        printf '%s. [%s] %s\n' "$ID_COUNTER" "$SEV" "$TEXT" >> "$DELTA_SRC"
         TRANSFORMED_CONTENT+="${CN}. [${SEV}] ${TEXT}"$'\n'
-        case "$SEV" in
-          HIGH)   HIGH_N=$((HIGH_N + 1)) ;;
-          MEDIUM) MED_N=$((MED_N + 1)) ;;
-          LOW)    LOW_N=$((LOW_N + 1)) ;;
-        esac
       elif [[ "$INBLOCK" -eq 1 ]] && [[ "$line" =~ ^[0-9]+\.[[:space:]] ]]; then
         # Numbered line that did not match the full [HIGH|MEDIUM|LOW] format — format violation.
         echo "run-codex-review-loop: severity format violation in concern: $line" >&2
@@ -318,27 +375,23 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       exit 4
     fi
 
-    LEDGER_TMP="${LEDGER}.tmp.$$"
-    if ! printf '%s' "$LEDGER_CONTENT" > "$LEDGER_TMP"; then
-      echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
-      rm -f "$LEDGER_TMP"
-      exit 4
-    fi
-    mv "$LEDGER_TMP" "$LEDGER"
-
+    # A round 1 that arrives on top of a live ledger is a new cycle, not a
+    # collision: the previous cycle is archived rather than renumbered over.
+    ledger_cli begin-round --round 1 >/dev/null 2>&1 || true
+    PARSER="numbered"
     printf '%s' "$TRANSFORMED_CONTENT" > "$TMP_OUT"
 
   else
-    # Round 2+: validate against ledger.
+    # Round 2+: the reviewer may only speak about IDs the ledger already holds.
     [[ -f "$LEDGER" ]] || {
       echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER})" >&2
       exit 4
     }
 
     declare -A LEDGER_IDS
-    while IFS='|' read -r LID LSEV _; do
-      [[ -n "$LID" ]] || continue
-      LEDGER_IDS["$LID"]="$LSEV"
+    while IFS='|' read -r LID _; do
+      case "$LID" in ''|'#'*) continue ;; esac
+      LEDGER_IDS["$LID"]=1
     done < "$LEDGER"
 
     DISCARDED=()
@@ -361,13 +414,10 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
         STATUS="${BASH_REMATCH[2]}"
         if [[ -v LEDGER_IDS["$CID"] ]]; then
           RETAINED_CONTENT+="$line"$'\n'
-          # Tally as unresolved unless the disposition starts with "resolved"
+          # Only the lines that report a concern as still open become delta
+          # records; an entry nobody restates is closed out by its absence.
           if [[ ! "$STATUS" =~ ^resolved($|[[:space:]]) ]]; then
-            case "${LEDGER_IDS[$CID]}" in
-              HIGH)   HIGH_N=$((HIGH_N + 1)) ;;
-              MEDIUM) MED_N=$((MED_N + 1)) ;;
-              LOW)    LOW_N=$((LOW_N + 1)) ;;
-            esac
+            printf '%s\n' "$line" >> "$DELTA_SRC"
           fi
         else
           DISCARDED+=("$CID")
@@ -383,8 +433,37 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
         "$ROUND" "$DISCARDED_STR" >&2
     fi
 
+    PARSER="cnref"
     printf '%s' "$RETAINED_CONTENT" > "$TMP_OUT"
   fi
+
+  if ! ledger_cli stage --round "$ROUND" --producer "$CL_PRODUCER_NAME" \
+        --exec PERFORMED --parser "$PARSER" --from-report "$DELTA_SRC" >/dev/null 2>&1; then
+    echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
+    rm -f "$DELTA_SRC"
+    exit 4
+  fi
+  ledger_cli reduce --round "$ROUND" >/dev/null 2>&1 || true
+  rm -f "$DELTA_SRC"
+  if [[ ! -s "$LEDGER" ]]; then
+    echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
+    exit 4
+  fi
+
+  # The tally the verdict reads is the ledger's own view of what is still open,
+  # not a count of this round's bullets: an entry the reviewer stopped
+  # mentioning has been resolved, and one it re-raised is still one concern.
+  TALLY="$(ledger_cli tally 2>/dev/null || true)"
+  for _kv in $TALLY; do
+    case "$_kv" in
+      open_high=*)   HIGH_N="${_kv#*=}" ;;
+      open_medium=*) MED_N="${_kv#*=}" ;;
+      open_low=*)    LOW_N="${_kv#*=}" ;;
+    esac
+  done
+  [[ "$HIGH_N" =~ ^[0-9]+$ ]] || HIGH_N=0
+  [[ "$MED_N"  =~ ^[0-9]+$ ]] || MED_N=0
+  [[ "$LOW_N"  =~ ^[0-9]+$ ]] || LOW_N=0
 
   VERDICT_BIN="${AGENTS_CONFIG_DIR}/bin/review-loop-verdict"
   [[ -x "$VERDICT_BIN" ]] || {
@@ -407,8 +486,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       if declare -f codex_core_hard_cap_check > /dev/null 2>&1; then
         _LOG="$PLANS_DIR/$SID-plan.jsonl"
         if ! codex_core_hard_cap_check "$_LOG" "$SID" "$FORMAT" "$CAP" "$EXT_USED" "$MAX_EXT" > /dev/null 2>&1; then
-          cp "$LEDGER" "${LEDGER%.txt}-cap-snapshot.txt" 2>/dev/null || true
-          rm -f "$LEDGER"
+          finalize_ledger escalate "hard round cap reached without convergence" 2
           FINAL_EXIT=2
         else
           FINAL_EXIT=1
@@ -418,8 +496,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       fi
       ;;
     2)
-      cp "$LEDGER" "${LEDGER%.txt}-cap-snapshot.txt" 2>/dev/null || true
-      rm -f "$LEDGER"
+      finalize_ledger escalate "risk signal present at the budget ceiling" 2
       FINAL_EXIT=2
       ;;
     3)
@@ -440,6 +517,12 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       exit 4
       ;;
   esac
+
+  # The last round the caller is allowed to run has ended unresolved: there is
+  # no next round to carry the ledger, so this is where it is finalized.
+  if [[ "$FINAL_EXIT" == "1" ]] && (( ROUND >= CAP )); then
+    finalize_ledger terminal "round cap reached without convergence" 1
+  fi
 else
   rm -f "$LEDGER"
   FINAL_EXIT=0

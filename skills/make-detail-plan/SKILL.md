@@ -47,6 +47,8 @@ Detail-stage caller paths:
 
 Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt + surface stderr. Only exit 3 falls back silently.
 
+**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
+
 ROUND_NUMBER tracked at `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt` (see codex-review-loop.md SSOT).
 
 ### Step MDP-6 — Cap outcome dispatch

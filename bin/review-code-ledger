@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# bin/review-code-ledger — ledger-aware wrapper around bin/review-code-codex.
+#
+# Why a wrapper: the code reviewer and the security scanner are two producers of
+# the same shared review. If each one numbered its own findings, the author would
+# get a fresh list every round and no way to tell "this is the thing I already
+# told you about" from "this is new". The wrapper hands the reviewer the concerns
+# that are still open, then stages what came back into the shared ledger.
+#
+# Contract with its caller (run-quality-gates.sh): stdout is byte-for-byte the
+# reviewer's own output, and the exit status is always 0. Ledger bookkeeping is a
+# side effect, never something that can block or reshape a review.
+set -uo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SELF_DIR/.." && pwd)"
+# Spelled from the repository root rather than as a bare sibling name: this is the
+# one place the codex reviewer is launched from, and a reader auditing that claim
+# greps for the path, not for a name that could belong to anything on PATH.
+CODEX_BIN="$ROOT/bin/review-code-codex"
+CLI="$SELF_DIR/concern-ledger"
+FORMAT="review-security-shared"
+PRODUCER="review-code-codex"
+
+notice() { printf '## Concern Ledger: NOT-STAGED — %s\n' "$1"; }
+
+# --- session and plans directory -------------------------------------------
+SID="${SESSION_ID:-${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
+PLANS="${PLANS_DIR:-${WORKFLOW_PLANS_DIR:-${HOME:-}/.workflow-plans}}"
+
+RESOLVED=1
+REASON=""
+if [ -z "$SID" ]; then
+    RESOLVED=0; REASON="no session id in the environment"
+elif ! mkdir -p "$PLANS" 2>/dev/null; then
+    RESOLVED=0; REASON="the plans directory could not be created: $PLANS"
+fi
+
+# --- round ------------------------------------------------------------------
+# The wrapper joins the round it is told about and never advances it: the round
+# counter belongs to the loop, and a standalone review must not consume one.
+ROUND=""
+ROUND_FILE=""
+if [ "$RESOLVED" -eq 1 ]; then
+    ROUND_FILE="$PLANS/$SID-$FORMAT-round-number.txt"
+    if [ -n "${CONCERN_LEDGER_ROUND:-}" ]; then
+        ROUND="$CONCERN_LEDGER_ROUND"
+    elif [ -s "$ROUND_FILE" ]; then
+        ROUND="$(tr -cd '0-9' < "$ROUND_FILE")"
+    fi
+    case "$ROUND" in ''|*[!0-9]*) ROUND=1 ;; esac
+    [ -s "$ROUND_FILE" ] || printf '%s\n' "$ROUND" > "$ROUND_FILE" 2>/dev/null || true
+fi
+
+LEDGER=""
+[ "$RESOLVED" -eq 1 ] && LEDGER="$PLANS/$SID-$FORMAT-concern-ledger.txt"
+
+# --- hand the still-open concerns back to the reviewer ----------------------
+TMPD="$(mktemp -d)" || TMPD=""
+PRIOR_ARGS=()
+if [ "$RESOLVED" -eq 1 ] && [ -n "$TMPD" ] && [ "$ROUND" -ge 2 ] && [ -s "$LEDGER" ]; then
+    bash "$CLI" render-prior --plans-dir "$PLANS" --session-id "$SID" \
+        --format "$FORMAT" > "$TMPD/prior.txt" 2>/dev/null || : > "$TMPD/prior.txt"
+    [ -s "$TMPD/prior.txt" ] && PRIOR_ARGS=(--concerns-file "$TMPD/prior.txt")
+fi
+
+# A round 1 that meets a live ledger opens a new cycle rather than colliding with
+# the previous one's IDs.
+if [ "$RESOLVED" -eq 1 ] && [ "$ROUND" -eq 1 ] && [ -s "$LEDGER" ]; then
+    bash "$CLI" begin-round --plans-dir "$PLANS" --session-id "$SID" \
+        --format "$FORMAT" --round 1 >/dev/null 2>&1 || true
+fi
+
+# --- run the review ---------------------------------------------------------
+OUT="${TMPD:-${TMPDIR:-/tmp}}/review-out.txt"
+bash "$CODEX_BIN" "${PRIOR_ARGS[@]+"${PRIOR_ARGS[@]}"}" "$@" > "$OUT" 2>/dev/null
+cat "$OUT"
+
+if [ "$RESOLVED" -eq 0 ]; then
+    notice "$REASON"
+    [ -n "$TMPD" ] && rm -rf "$TMPD"
+    exit 0
+fi
+
+# --- stage and reduce -------------------------------------------------------
+if ! bash "$CLI" stage --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
+        --round "$ROUND" --producer "$PRODUCER" --from-report "$OUT" 2>/dev/null; then
+    notice "the reviewer output could not be staged"
+    [ -n "$TMPD" ] && rm -rf "$TMPD"
+    exit 0
+fi
+bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
+    --round "$ROUND" >/dev/null 2>&1 || true
+
+[ -n "$TMPD" ] && rm -rf "$TMPD"
+exit 0
