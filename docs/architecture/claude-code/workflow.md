@@ -258,7 +258,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `research` | `/survey-code` or `/deep-research` (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"` |
 | `outline` | `/make-outline-plan` (emits `WORKFLOW_MARK_STEP_outline_complete`) **or** skipped via `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` |
 | `detail` | `/make-detail-plan` (emits `WORKFLOW_MARK_STEP_detail_complete`) **or** skipped via `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>"` |
-| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
+| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after Read of `rules/branch.md` + `rules/worktree.md` (on-demand-only) |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
 | `write_code` | `/write-code` skill — emits `WORKFLOW_MARK_STEP_write_code_in_progress` before its subagent launch and `WORKFLOW_MARK_STEP_write_code_complete` after the post-action review. Not skippable: the implementation body has no not-needed door |
@@ -389,9 +389,13 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     fails open only on the 3s spawn timeout.
     Implementation: checkCodeSizeHardLimit() in hooks/workflow-gate/code-size-gate.js.
   loads ~/.claude/projects/workflow/<session_id>.json
-  docs-only short-circuit: if ALL staged files match the human-facing docs allowlist
-    (docs/*.md or root README/CHANGELOG/CONTRIBUTING/LICENSE.md),
-    only user_verification is checked; all other steps are bypassed
+  docs-only short-circuit: if ALL staged files match the human-facing docs allowlist,
+    only user_verification is checked; all other steps are bypassed.
+    Behaviour/prompt files are deliberately outside the allowlist even when they are
+    .md (root CLAUDE.md, any SKILL.md, subdirectory README.md) — editing them changes
+    behaviour, so they take the full workflow.
+    Allowlist SSOT: DOCS_ONLY_ALLOWLIST in hooks/workflow-gate/staged-evidence.js,
+    surfaced to scripts by bin/is-docs-only. Not restated here.
   for write_tests: also checks staged tests/ files (evidence override)
   for docs: also checks staged docs/*.md / *.md files (evidence override)
   cleanup step (#1112): skipped in linked-worktree context (isWorktreeContext → true);

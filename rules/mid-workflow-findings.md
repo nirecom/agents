@@ -1,3 +1,9 @@
+---
+paths:
+  - ".on-demand-only/never-match"
+---
+<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->
+
 # Mid-Workflow Finding Capture
 
 When you discover a bug unrelated to the current task, a related follow-up, or a next-task candidate while running the workflow:

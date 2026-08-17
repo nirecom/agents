@@ -11,6 +11,9 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
 
 ## Procedure
 
+Read `rules/branch.md` and `rules/worktree.md` before WS-1 — both on-demand-only, never auto-injected; WS-1 needs the worktree criteria and WS-2 derives the branch name and type from the naming convention.
+Read `rules/ops.md` before WS-5 — on-demand-only, never auto-injected; it owns the recovery-options-first decision path any directory or worktree removal a path collision tempts must pass through.
+
 WS-1. Verify the task fits the worktree criteria in `rules/worktree.md` (fit table).
    If it does not fit, report why and stop — set `ENFORCE_WORKTREE=off` in agents config
    and work on main directly instead.
@@ -81,4 +84,4 @@ WS-9. Final report: worktree path, branch, which gitignored state was copied, an
 - Never call `AskUserQuestion` to choose a task name or branch type — WS-2 is fully automatic in every context.
 - WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
   file or edit `.git/info/exclude` manually.
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

@@ -11,7 +11,7 @@ Read intent.md + outline.md before drafting.
 
 ## Procedure
 
-When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ### Step MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
@@ -106,10 +106,10 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
 - Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ## Completion
 
 1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --status complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
-2. Record branching: consult `rules/branch.md` + `rules/worktree.md`, run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
+2. Record branching: Read `rules/branch.md` and `rules/worktree.md` (both on-demand-only, never auto-injected), then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
 3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from step 1.

@@ -8,9 +8,11 @@ Inventory gitignored state, merge the PR, then remove the worktree safely.
 
 ## Procedure
 
-When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 Read `rules/github-issues.md` before WE-4 — on-demand-only, never auto-injected; WE-4..WE-8 and WE-11 depend on it.
+Read `rules/mid-workflow-findings.md` before WE-10 — on-demand-only, never auto-injected; WE-10 depends on its append CLI and severity tagging.
+Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the PR body, issue comments, and history entries written from here on.
 
 ### Step WE-1 — Resolve <PLANS_DIR>
 `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` — run once; reuse. Canonical: `skills/_shared/resolve-plans-dir.md`.
@@ -83,6 +85,7 @@ Call the native `ExitWorktree` tool after the WE-13 `cd` to release the extensio
 Protocol: `skills/_shared/worktree-transition.md`
 
 ### Steps WE-15..WE-22 — Cleanup cascade
+Read `rules/ops.md` before the first destructive step (it is on-demand-only and never auto-injected): it owns the recovery-options-first decision path every deletion here must pass through.
 Read `$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
 If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-16 and continue to WE-20.
 Cleanup-active marker (WE-14b create → WE-22a delete) brackets the window so the
@@ -90,7 +93,7 @@ supervisor OFF-block adaptive message fires only during WE-15..WE-22 — see cle
 
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
-- `git worktree remove --force` is prohibited; see `rules/ops.md`.
+- `git worktree remove --force` is prohibited; the decision path is in `rules/ops.md`, Read at the cleanup cascade step.
 - The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
 - `ExitWorktree` is called only at WE-13a — never before the WE-13 `cd`.
 - `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
