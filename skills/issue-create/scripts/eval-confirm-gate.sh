@@ -2,24 +2,12 @@
 # eval-confirm-gate.sh <final-json> <severity-label>
 #
 # Decide whether /issue-create must stop and ask the user before creating.
-# The gate is the logical OR of four independent conditions:
+# Gate = OR of G1..G5; only `severity:high` + codex-affirmed `worth_filing`
+# files unattended (#1973 inflow brake). Definitions: SKILL.md "Phase 3" (SSOT).
 #
-#   G1  the final verdict touches EXISTING issues            destructive / restructuring
-#       (`reopen`, `make-parent`, `sub-of`, `bulk-sub-of`)
-#   G2  the review stage replaced the survey verdict         two graders disagreed
-#   G3  the review did not confirm the proposal is worth      filing may be redundant
-#       filing (`review.worth_filing` is not `true`), and
-#       the severity is not high
-#   G4  the review did not produce a usable second opinion   the verdict is unverified
-#
-# stdout:  line 1  "confirm: yes" | "confirm: no"
-#          line 2  "reasons: G1,G3"   (no reason fires → "reasons: ")
-# exit:    0 whenever it classifies — this script classifies, the caller decides.
-#          non-zero ONLY on a wrong argument count.
-#
-# Every classifiable failure mode (unreadable artifact, an unusable worth_filing value)
-# lands on `confirm: yes`. Asking one extra question is recoverable; creating or
-# reopening an issue nobody asked for is not.
+# stdout: "confirm: yes|no" then "reasons: G1,G3" (none → "reasons: ")
+# exit:   0 whenever it classifies; non-zero ONLY on wrong argument count.
+# Every classifiable failure lands on `confirm: yes` — fail-closed by construction.
 
 set -uo pipefail
 
@@ -31,9 +19,7 @@ emit() {  # <yes|no> <reasons-csv>
 
 # Arity is a hard error, not something to fail-safe around. The gate previously took
 # three arguments (<final-json> <provenance> <severity>); an un-migrated caller would
-# hand the retired provenance value to $2, which is now the severity label, and every
-# issue would be classified against a severity that is really "user-explicit". Silence
-# would hide that mis-wiring for as long as the wrong answer happened to be `yes`.
+# hand the retired provenance value to $2, which is now the severity label.
 if [[ $# -ne 2 ]]; then
     echo "ERROR: eval-confirm-gate.sh takes exactly 2 arguments: <final-json> <severity-label> (got $#)" >&2
     exit 2
@@ -43,7 +29,6 @@ FINAL_JSON="$1"
 SEVERITY="$2"
 
 # A missing artifact means the pipeline before this point did not complete.
-# Nothing can be classified, so everything is confirmed.
 [[ -n "$FINAL_JSON" && -f "$FINAL_JSON" ]] || emit yes "G3"
 
 # Read the switches the artifact owns. Anything unparseable → "unreadable",
@@ -83,32 +68,28 @@ if [[ "$REVIEW_STATUS" == "replaced" || ( -n "$SURVEY_VERDICT" && "$SURVEY_VERDI
 fi
 
 # G3 — only the literal boolean `true`, extracted as such by the node reader above,
-# counts as the reviewer affirming that this issue is worth filing. Every other value
-# — absent, null, the STRING "true", a number — is "the reviewer's answer did not
-# reach us", which is the case the gate exists for. Fail-closed by construction: the
-# extractor emits the empty string for anything that is not a JSON boolean, so no
-# stringified value can be mistaken for an affirmation.
-#
-# A high-severity finding is worth an issue on its own, so severity:high stands in for
-# a MISSING affirmation — the same carve-out the old provenance-based G3 had. It must
-# NOT stand in for an explicit "false": the reviewer already looked at the evidence and
-# concluded filing is redundant, and a severity label cannot out-rank that conclusion.
-if [[ "$WORTH_FILING" == "true" ]]; then
-    :  # the reviewer confirmed this is not a duplicate and is worth filing
-elif [[ "$SEVERITY" == "severity:high" && "$WORTH_FILING" != "false" ]]; then
-    :  # worth_filing absent/unreadable — severity carve-out applies
-else
+# counts as the reviewer affirming this issue is worth filing. Every other value —
+# absent, null, the STRING "true", a number — means the answer did not reach us.
+# The former `severity:high` carve-out for a MISSING affirmation is retired (#1973):
+# high severity now gates on its own axis (G5) and no longer substitutes for review.
+if [[ "$WORTH_FILING" != "true" ]]; then
     REASONS+=("G3")
 fi
 
 # G4 — the review never produced a usable second opinion. Stated as an allowlist, not
 # a denylist: `upheld` and `replaced` are the only two statuses a completed review can
-# leave behind, so an absent, empty or unrecognised one means no review happened —
-# which is exactly what G4 is for.
+# leave behind, so an absent, empty or unrecognised one means no review happened.
 case "$REVIEW_STATUS" in
     upheld|replaced) ;;
     *) REASONS+=("G4") ;;
 esac
+
+# G5 — severity below the autonomous-filing bar. `severity:low` (cosmetic / deferrable)
+# and no-label (normal) both require the user's approval; only `severity:high` may file
+# unattended, and only when G1..G4 are all clear.
+if [[ "$SEVERITY" != "severity:high" ]]; then
+    REASONS+=("G5")
+fi
 
 if [[ ${#REASONS[@]} -eq 0 ]]; then
     emit no ""
