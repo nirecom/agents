@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tests: bin/review-plan-codex, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md, skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md
-# Tags: outline, planning, detail, codex, review
+# Tags: outline, planning, detail, codex, review, scope:common
+# Serial: injection guards assert the fixed paths /tmp/plan-injection-marker and /tmp/plan-injection-marker2 stay absent
 # Tests for bin/review-plan-codex
 # Verifies: SKIPPED/PERFORMED/FAILED status labels, JSONL logging,
 # exit-0 guarantee, security (no shell injection from plan content),
@@ -970,7 +971,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # A1–A6: --repo-root forwarding + MCP filesystem server integration (#723, #746)
-#
+
 # These tests verify that:
 #   - `bin/review-plan-codex` accepts `--repo-root <path>` and forwards an
 #     `-c mcp_servers.fs.*` config override to `codex exec`.
@@ -981,7 +982,7 @@ fi
 #   - The MCP addendum text is injected into the codex prompt (the TMPFILE)
 #     when `--repo-root` is provided.
 #   - `--full-auto` is used (not the removed `--ask-for-approval` flag).
-#
+
 # Pre-implementation note: these tests will fail until `bin/review-plan-codex`
 # and `bin/run-codex-review-loop` learn the `--repo-root` flag.
 # ---------------------------------------------------------------------------

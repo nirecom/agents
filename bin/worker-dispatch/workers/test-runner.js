@@ -1,12 +1,11 @@
 "use strict";
 // bin/worker-dispatch/workers/test-runner.js
 //
-// Stage 1 canary: the first of the six workers to move from an LLM subagent to a
-// plain script. Chosen because it is the only one whose correct behaviour
-// involves NO writes at all — its registry entry declares an empty writeScopes
-// set, so fsguard.js refuses any write it might attempt. That makes "the
-// dispatcher caused no side effects" a checkable property of the canary rather
-// than a claim, which is what a canary is for.
+// Stage 1 canary: the first worker moved from an LLM subagent to a plain script,
+// chosen because it is the only one that writes nothing at all — its registry
+// entry declares an empty writeScopes set, so fsguard.js refuses any write it
+// might attempt, which makes "the dispatcher caused no side effects" a checkable
+// property rather than a claim.
 //
 // Output shape is agents/test-runner.md's `## Output contract`, rendered by
 // emit.js (this module never touches stdout).
@@ -97,13 +96,19 @@ function run(payload, ctx) {
     };
   }
 
+  // Deadline lets the suite exit cleanly before the worker's own timeout (#1832).
+  // Lead args are derived/validated ints — never caller argv text.
+  const deadline = Math.max(30, (payload.timeout_seconds || 120) - 5);
+  const lead = ["--deadline", String(deadline)];
+  if (typeof payload.jobs === "number") lead.push("-j", String(payload.jobs));
+
   let res = null;
   try {
     res = spawnRun(entry, {
       anchors,
       command: "bash",
       script: "runAll",
-      args: payload.test_args || [],
+      args: lead.concat(payload.test_args || []),
       cwd: payload.cwd,
       timeoutMs: (payload.timeout_seconds || 120) * 1000,
     });

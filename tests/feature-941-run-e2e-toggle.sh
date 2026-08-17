@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Tests: .env.example, tests/feature-robust-workflow.sh, tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh
-# Tags: env-example, tl3-toggle, run-tl3
+# Tags: env-example, tl3-toggle, run-tl3, scope:common
+# Serial: captures into the fixed paths /tmp/941-rev.out and /tmp/941-c2..c5.out, and re-runs the feature-644 phase5 suite
 # Tests for issue #941 — migrate RUN_TL3 from ad-hoc env var to .env-keyed toggle.
-#
+
 # Test-first (TDD): the implementation has not yet been applied — these tests
 # are expected to FAIL initially (RED state). After implementation:
 #   1. .env.example gains a RUN_TL3 entry
 #   2. feature-robust-workflow.sh guard migrates to bin/get-config-var --is-off
 #   3. phase5-main-transcript-no-delegated-output.sh adds a RUN_TL3 guard
 # all six cases must PASS.
-#
+
 # L3 gap (what this test does NOT catch):
 # - Actual claude -p invocation when RUN_TL3=on (requires real Anthropic API + billing)
 # - feature-robust-workflow.sh E1 block execution end-to-end (heavy test suite, not run here)

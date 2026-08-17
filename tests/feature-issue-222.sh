@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tests: bin/github-issues/backfill-commit-comments.sh, bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/parent-body-update.sh, bin/github-issues/post-close-sentinels.sh, skills/issue-close-finalize/SKILL.md
-# Tags: issue-close, stage, workflow, finalize, triage
+# Tags: issue-close, stage, workflow, finalize, triage, scope:common
+# Serial: shell-injection guards assert the fixed paths /tmp/T8_INJECT and /tmp/P3_INJECT stay absent
 # Tests for issue #222 — /issue-close skill refactor + backfill script.
 #
 # After the refactor:
@@ -8,7 +9,7 @@
 #   - Step G moved into bin/github-issues/parent-body-update.sh
 #   - Step J moved into bin/github-issues/post-close-sentinels.sh
 #   - bin/github-issues/backfill-commit-comments.sh handles retroactive migration
-#
+
 # Suites:
 #   M-series — gh-mock infrastructure smoke checks
 #   T-series — issue-close-triage.sh routing for each (state × sentinel)
