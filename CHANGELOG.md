@@ -335,3 +335,7 @@ Changes: Code and test review rounds now track findings with persistent IDs acro
 ### FEATURE: PR #2055 (2026-08-17)
 Background: fix(bin): detect node misinvocation in five PATH-exposed bash entry p...
 Changes: `bin/get-config-var`, `bin/confirm-off`, `bin/resolve-session-id`, `bin/resolve-worktree-path`, and `bin/is-github-dotcom-remote` now detect being launched by `node` instead of `bash` and print a one-line diagnostic naming the correct `bash <path>` re-run command, exiting 70 instead of dying with an opaque `SyntaxError`. Behavior under `bash` is unchanged.;`tests/feature-confirm-flags-static.sh` no longer reports a permanently stale installer check, and its seven known-failing assertions are now classified through an expected-failure ledger, so a genuinely new regression is the only thing that turns the suite red.
+
+### FEATURE: PR #2066 (2026-08-18)
+Background: feat: stop run-all.sh self-inclusion, add calibrated parallel dispatch (#1836, #1832)
+Changes: tests/run-all.sh: fixed self-recursive re-launch under `--all`; added parallel test execution with auto-calibrated job count.
