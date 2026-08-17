@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tests: bin/review-code-codex
 # Tags: codex, review, labels, github, bin, scope:common, pwsh-not-required, TL2
+# Serial: injection guards assert the fixed paths /tmp/codex-injection-marker and /tmp/codex-injection-marker2 stay absent
 # Verifies: SKIPPED/PERFORMED/FAILED labels, JSONL logging, exit-0 guarantee, security, idempotency.
 # TL3 gap: real codex CLI is mocked (arg/stdin/exit-code contract unverified), real
 #   AGENTS_CONFIG_DIR precedence vs ~/.claude .env is untested, and host filesystem path
