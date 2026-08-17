@@ -93,7 +93,7 @@ supervisor OFF-block adaptive message fires only during WE-15..WE-22 — see cle
 
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
-- `git worktree remove --force` is prohibited; the decision path is in `rules/ops.md`, Read at the cleanup cascade step.
+- `git worktree remove --force` is prohibited; blocked at the `settings.json` deny layer, not by prose in `rules/ops.md`.
 - The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
 - `ExitWorktree` is called only at WE-13a — never before the WE-13 `cd`.
 - `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.

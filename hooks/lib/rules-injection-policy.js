@@ -26,9 +26,10 @@ const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
 // carry BOTH the reserved glob (as its single `paths:` element) and the marker. The rule name is
 // written here and nowhere else; the flat list of on-demand rules is DERIVED from this key column
 // by the agents-owned reader (hooks/lib/rules-policy-reader.js). A reader set follows what the rule
-// GOVERNS, not who edits files — e.g. every skill that authors outbound text reads rules/coding.md,
-// and rules/ops.md is read wherever a destructive/system-state operation can arise, not only at
-// worktree teardown.
+// GOVERNS, not who edits files — e.g. every skill that authors outbound text reads rules/coding.md.
+// rules/ops.md is narrower: its destructive-operation guidance is enforced by hooks/enforce-system-ops.js
+// and the settings.json deny list session-wide regardless of reads, so its reader list only needs the
+// skills that consult its non-hook-backed content (worktree recovery, key/secret generation).
 const ON_DEMAND_READERS = [
   // commit-push/worktree-end are excluded here: branch.md's How-to-Finish section only points at them, it carries no decision they act on.
   "rules/branch.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md",
