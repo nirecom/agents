@@ -2,7 +2,7 @@
 # tests/install-path-exposed-commands.sh
 # Tests: install/path-exposed-commands.txt, install/win/dotfileslink.ps1, install/linux/dotfileslink.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: install, dotfileslink, path, ssot, security-gate, scope:common, pwsh-not-required, TL2
-#
+
 # THE INCIDENT. skills/review-code-security/scripts/run-quality-gates.sh invokes eight
 # quality gates by BARE NAME, each terminated with `|| true`. Three of them —
 # check-inline-procedures, review-e2e-coverage, review-bare-python — have no ~/.local/bin
@@ -10,37 +10,44 @@
 # security review reports as though eight gates ran. All three exist under bin/ and pass
 # when invoked by full path. That is a FALSE GREEN on the gate that is supposed to catch
 # false greens.
-#
+
 # THE ROOT CAUSE is not the three missing shims. It is that "which bin/ command is exposed
 # on PATH" is written down twice — nineteen hand-written `Write-Launcher "$LocalBin\...`
 # blocks in install/win/dotfileslink.ps1 and the same commands again as `ln -sf` blocks in
 # install/linux/dotfileslink.sh — with no list and no loop anywhere. Adding a gate means
 # remembering two files in two languages, and forgetting is silent (CPR-SSOT single source of
 # truth; CPR-E2C fix the class, not the member).
-#
+
 # THE CONTRACT UNDER TEST. One declarative file, install/path-exposed-commands.txt, names
 # the PATH-exposed bin/ commands. Both installers LOOP over it — the Windows script reusing
 # its existing Write-Launcher helper and $links/foreach idiom, the Linux script its `ln -sf`
 # idiom — so a command added to the list reaches both platforms or neither, and a
 # half-added command becomes structurally impossible rather than merely unlikely.
-#
+
 # OUT OF SCOPE: the uv-based launchers (doc-append, doc-append-plain, repo-visibility).
 # They wrap a `.py` under a different name and generate a different launcher body; nothing
 # here demands they move into the list.
-#
+
 # LAYER. Static/structural only: it reads the installers as TEXT and never executes either
 # one. No pwsh, no WSL, no writes to ~/.local/bin — running a real installer would edit the
 # developer's own PATH, which is not something a test may do.
-#
+
 # SKIPPED: actually running install/win/dotfileslink.ps1 (or the Linux script) and asserting
 #          that all eleven commands then resolve on PATH and exit 0 when invoked bare.
 # Because: both installers write into the REAL ~/.local/bin and the real user profile;
 #          there is no prefix override to redirect them at a fixture tree, so running one
 #          from a test would mutate the developer's machine.
-# L3 gap:  everything between "the list is looped over" and "the command actually resolves"
-#          — Write-Launcher's file contents, the WSL `wsl bash -c` hop on Windows, the
-#          execute bit surviving `ln -sf`, and PATH ordering against a same-named binary
-#          elsewhere. Only a real install on a real machine covers those.
+
+# TL3 gap (what this test does NOT catch):
+# - Whether the launcher Write-Launcher writes actually resolves and runs: its file
+#   contents, and the `wsl bash -c` hop it inserts on Windows, are never executed here.
+# - Whether the execute bit survives `ln -sf` into a real ~/.local/bin on Linux/macOS.
+# - Whether an installed name wins PATH ordering against a same-named binary already
+#   present elsewhere on the machine.
+# - Whether an entry added to the list reaches PATH on BOTH platforms after a real
+#   install run -- only the loops' TEXT is read here, never their effect.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: installer.
 
 set -uo pipefail
 
@@ -61,7 +68,7 @@ check() { # <desc> <want> <got>
 }
 
 # ---- the derived invocation set (T1's input) --------------------------------
-#
+
 # Derived by PARSING the skill scripts, never by a hardcoded name list: a hardcoded copy
 # would be a THIRD transcription of the very fact this file exists to de-duplicate, and it
 # would go stale in exactly the way the two installers did.
@@ -287,7 +294,7 @@ t6_regression_pin() {
 }
 
 # ---- T7: positive control (canary) for derive_bare_invocations() -----------
-#
+
 # T1 only proves things about the CURRENT, real derived set -- which is now empty because
 # run-quality-gates.sh's eight gates all moved to full-path form. An empty set makes T1
 # vacuously green even if the parser's regex regressed and stopped matching real bare-name
@@ -322,6 +329,105 @@ EOF
     "0" "$(printf '%s\n' "$got" | grep -cx -- "$full_name" || true)"
 }
 
+# ---- T8: the confirm-flags helper is on the list (#1967) --------------------
+
+# Why this is a section of its own rather than a fourth name inside T6: T6 is the pin for
+# ONE incident -- three quality gates that ran as `command not found` while the review
+# reported eight-of-eight -- and folding an unrelated origin into it would blur what T6
+# tells a future reader (CPR-NRS).
+#
+# T8 comes from #1967 and closes a DIFFERENT gap: get-config-var is never invoked by bare
+# name from skills/**/scripts/*.sh, so it never enters T1's derived set, and it is none of
+# T6's three names. As of today, if it fell off the list, no row in this file would say so.
+
+# EXECUTED-ROW BUDGET (#1967, review round 6). A table-driven test whose table is empty --
+# or whose loop is never reached -- reports zero assertions and still exits 0, and every
+# static delegation grep in tests/feature-confirm-flags-static.sh section 9 keeps passing
+# over that shape because every string it looks for is still on the page.
+T8_ROWS=0
+T8_ROWS_EXPECTED=5   # 2 rows in T8_CASES + 3 rows in T8B_CASES
+
+# Global, incremented inside the loops, asserted from a SEPARATE function on the run list:
+# a count asserted at the end of T8's own body would be skipped by the same early `return`
+# that makes the loop unreachable, which is one of the two shapes it must catch.
+
+# The one predicate both T8 and T8b go through (CPR-SSOT): how many lines of <list-text> are
+# exactly <cmd>. Two hand-written greps is how the pin and its control drift apart.
+pinned_in_list() { # <list-text> <cmd>
+  printf '%s\n' "$1" | grep -cx -- "$2" || true
+}
+
+# The named list shapes the case tables below draw on. Every variant except missing-list is
+# built FROM the real list, so no case can quietly stop describing what
+# install/path-exposed-commands.txt actually holds. missing-list is the "someone deleted the
+# SSOT" shape, produced by pointing ssot_entries at a path that does not exist rather than by
+# hand-writing an empty string -- that way it exercises the real reader.
+t8_list_variant() { # <variant>
+  case "$1" in
+    present)      printf '%s\n' "$ENTRIES" ;;
+    duplicate)    printf '%s\n%s\n' "$ENTRIES" "get-config-var" ;;
+    removed)      printf '%s\n' "$ENTRIES" | grep -vx -- "get-config-var" || true ;;
+    empty-list)   printf '' ;;
+    missing-list) ( SSOT="$SSOT.no-such-file"; ssot_entries ) ;;
+    *) echo "HARNESS ERROR: unknown T8 list variant '$1'" >&2; exit 2 ;;
+  esac
+}
+
+# Table-driven, one row per named case (`case-id|variant|expected-count|label`), because the
+# claim under test is about the predicate across a RANGE of list shapes; bespoke one-shot
+# functions hide which shapes were never tried.
+t8_get_config_var_pinned() {
+  local id variant want label
+  if [ "$SSOT_PRESENT" -eq 0 ]; then
+    fail "T8[get-config-var]: the confirm-flags helper is on the list -- $SSOT_REL does not exist"
+    return 0
+  fi
+  while IFS='|' read -r id variant want label; do
+    [ -n "$id" ] || continue
+    T8_ROWS=$((T8_ROWS + 1))
+    check "T8[get-config-var/$id]: $label" \
+      "$want" "$(pinned_in_list "$(t8_list_variant "$variant")" "get-config-var")"
+  done <<'T8_CASES'
+present|present|1|the confirm-flags helper is on the list
+duplicate|duplicate|2|a second identical entry is counted, not collapsed (the predicate counts, it does not merely answer yes)
+T8_CASES
+}
+
+# The negative control for T8's predicate -- the role T7 plays for derive_bare_invocations().
+# Each row feeds pinned_in_list a list the entry is NOT on and requires 0: if the predicate
+# ever degenerates into something that answers 1 unconditionally, T8 keeps reporting green
+# while pinning nothing, and only these rows notice. Three shapes, because "removed" alone
+# would not catch a predicate that answers 1 for any input it cannot parse.
+t8b_pin_negative_control() {
+  local id variant want label
+  if [ "$SSOT_PRESENT" -eq 0 ]; then
+    fail "T8b[get-config-var]: the pin detects removal from the list -- $SSOT_REL does not exist"
+    return 0
+  fi
+  while IFS='|' read -r id variant want label; do
+    [ -n "$id" ] || continue
+    T8_ROWS=$((T8_ROWS + 1))
+    check "T8b[get-config-var/$id]: $label" \
+      "$want" "$(pinned_in_list "$(t8_list_variant "$variant")" "get-config-var")"
+  done <<'T8B_CASES'
+removed|removed|0|the pin detects removal from the list
+empty-list|empty-list|0|an empty list is reported as not pinned
+missing-list|missing-list|0|a list file that does not exist is reported as not pinned
+T8B_CASES
+}
+
+# ---- T8c: the two tables above actually executed their rows (#1967) ---------
+# The coverage-integrity assertion for T8/T8b. An empty case table, a heredoc whose
+# delimiter drifted, or an early `return` in front of either loop all leave both functions
+# reporting nothing at all -- which is indistinguishable from "everything passed" in a file
+# that only counts failures. Exact equality, not `> 0`: a row silently dropped from either
+# table is the same loss of coverage as the whole table going empty, and must be re-budgeted
+# deliberately by editing T8_ROWS_EXPECTED.
+t8c_row_budget() {
+  check "T8c[get-config-var]: T8 and T8b together executed every case row (0 would mean an empty or unreachable table reporting green)" \
+    "$T8_ROWS_EXPECTED" "$T8_ROWS"
+}
+
 t1_invocations_covered
 t2_entries_are_executable
 t3_installers_loop
@@ -329,6 +435,9 @@ t4_platform_symmetry
 t5_format
 t6_regression_pin
 t7_parser_canary
+t8_get_config_var_pinned
+t8b_pin_negative_control
+t8c_row_budget
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed, $SKIP skipped"
