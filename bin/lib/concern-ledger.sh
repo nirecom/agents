@@ -4,7 +4,7 @@
 #
 # A review loop that renumbers findings every round breaks the author's
 # handle on "what you told me last time". Identity is by declared reference
-# ID (B1) or frozen content discriminator (B2) — never by position or text similarity.
+# ID (B1) or frozen content discriminator (B2) — never by position or by resemblance-based text matching.
 
 # Schema v2 (one entry per line, TEXT last so it may contain the separator):
 #   #concern-ledger-v2|<format>|<session-id>|cycle=<K>
