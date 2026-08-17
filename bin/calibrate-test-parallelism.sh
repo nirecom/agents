@@ -130,6 +130,9 @@ TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
 CANDIDATES=()
 for _f in "$TESTS_DIR"/*.sh; do
     [ -f "$_f" ] || continue
+    # run-all.sh itself is never a test: measuring it here would recursively
+    # launch a full suite run during calibration (the exact hazard #1836 fixes).
+    [ "${_f##*/}" = "run-all.sh" ] && continue
     # `# Serial:` tests are excluded: they cannot overlap, so they measure the
     # same wall time at every width and only flatten the curve.
     if head -n 20 "$_f" 2>/dev/null | grep -q '^# Serial:'; then continue; fi
