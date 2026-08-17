@@ -339,3 +339,7 @@ Changes: `bin/get-config-var`, `bin/confirm-off`, `bin/resolve-session-id`, `bin
 ### FEATURE: PR #2066 (2026-08-18)
 Background: feat: stop run-all.sh self-inclusion, add calibrated parallel dispatch (#1836, #1832)
 Changes: tests/run-all.sh: fixed self-recursive re-launch under `--all`; added parallel test execution with auto-calibrated job count.
+
+### FEATURE: PR #2062 (2026-08-18)
+Background: feature/2037 rules 2 rules skill subagent
+Changes: Reduced the fixed prompt-injection footprint by moving 7 more rule files to on-demand loading, so subagent launches no longer re-inject content most sessions never need.
