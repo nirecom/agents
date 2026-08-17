@@ -4,35 +4,26 @@
 # Tags: tests, bin, parallel, hook, contract, security, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): invariant 2 says the parallel runner must keep marking run_tests
-# complete through hooks/workflow-run-tests.js. That hook does not merely look for a
-# RUN_CONTRACT line — it requires EXACTLY ONE in the whole of stdout, with nothing
-# but whitespace after it (stdoutAttributed, #1273 round 5). Serialised output made
-# that easy to satisfy by accident. A parallel runner replays child output verbatim,
-# so any test that prints a contract-shaped line now lands in the parent's stdout
-# and destroys the run's completion — a defect the current serial runner already
-# has, which parallelism only makes louder.
+# WHY (CPR-WPH): hooks/workflow-run-tests.js requires EXACTLY ONE RUN_CONTRACT
+# line in all of stdout (stdoutAttributed, #1273 round 5). A parallel runner
+# replays child output verbatim, so any child printing a contract-shaped line
+# now lands in the parent's stdout and destroys completion.
 
-# The fix under test is structural, in the parent: neutralize_stream rewrites any
-# child line matching the contract shape before replay, on BOTH stdout and stderr.
-# This file verifies the end of that chain against the real hook process rather
-# than a re-implementation of its rules, and fences it from the other side with two
-# counter-proofs that must NOT complete.
+# Fix under test: neutralize_stream rewrites any child line matching the
+# contract shape before replay, on BOTH stdout and stderr. Verified against the
+# real hook process, fenced by two counter-proofs that must NOT complete.
 
-# RED-FIRST: the parallel surface does not exist yet, so the positive row reports a
-# demotion instead of `complete`. The two counter-proof rows are green today and
-# stay green after the fix — they are regression fences, not evidence of the bug.
+# RED-FIRST: the parallel surface doesn't exist yet, so the positive row reports
+# a demotion instead of `complete`. The counter-proof rows are green today and
+# stay green after the fix — regression fences, not evidence of the bug.
 
-# ISOLATION: CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR are dual-pinned, the session
-# ids are fixtures, TESTS_DIR is a fixture and every invocation passes explicit
-# fixture positional arguments. Captured runner output is never echoed to this
-# script's own stdout — a replayed contract line would corrupt the parent suite.
+# ISOLATION: workflow dirs dual-pinned, session ids and TESTS_DIR are fixtures.
+# Captured runner output is never echoed to this script's own stdout — a
+# replayed contract line would corrupt the parent suite.
 
-# TL3 gap (what this TL2 test does NOT catch): whether a real Claude Code Bash tool
-# call delivers this stdout unmodified to the hook. tests/TL3-worker-dispatch-run-tests.sh
-# is the gated tier for the real-invocation shape. Closest-to-action mitigation:
-# bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight (category:
-# hook-registration).
+# TL3 gap (what this TL2 test does NOT catch): whether a real Claude Code Bash
+# tool call delivers stdout unmodified to the hook — tests/TL3-worker-dispatch-run-tests.sh
+# covers that. Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -186,9 +177,8 @@ case_trailing_garbage() {
 }
 
 # ===========================================================================
-# 3. Counter-proof (b) — with neutralisation disabled the run must NOT complete.
-#    The doctored runner is a `cp` inside the fixture that has its neutralisation
-#    call rewritten to `cat`; the real tests/run-all.sh is never edited.
+# 3. Counter-proof (b) — with neutralisation disabled, the run must NOT complete.
+#    Doctored runner: a fixture copy with neutralize_stream rewritten to `cat`.
 # ===========================================================================
 case_neutralization_disabled() {
     local sid="1832iiii-0000-4000-8000-000000000003" doctored f rc status msg out

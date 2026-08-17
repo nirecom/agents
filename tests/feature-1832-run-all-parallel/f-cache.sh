@@ -4,28 +4,16 @@
 # Tags: tests, bin, parallel, cache, security, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): `-j auto` reads a host-local calibration cache — the ONE piece of
-# state the runner takes from outside the repo, and therefore the one place a
-# corrupt or hostile write can steer it. The pinned contract is not "the cache
-# works" but "the cache can never execute, never leak the host id, never silently
-# mis-parse": a non-evaluating parser (no source / eval / . of the file, no quote,
-# escape or variable expansion of values), a fixed reason-token enum on every
-# rejection, and a conservative `-j 4` fallback plus the calibrator hint.
+# WHY (CPR-WPH): `-j auto` reads a host-local calibration cache, the one input from
+# outside the repo. Contract: never execute, never leak host id, never mis-parse silently.
 
-# RED-FIRST: bin/lib/run-all-parallelism.sh and the `-j auto` surface do not exist
-# yet. Library-gated rows report `implementation missing: <path>`; runner-only rows
-# report the absent notice. Both are intentional assertions, never crashes.
+# RED-FIRST: bin/lib/run-all-parallelism.sh and `-j auto` don't exist yet; missing-impl
+# rows are intentional assertions, not crashes.
 
-# ISOLATION: RUN_ALL_CACHE_DIR is pinned to a temp dir (the developer's real
-# ~/.claude/run-all is never read or written), TESTS_DIR is pinned to a fixture,
-# and every runner invocation passes explicit fixture positional arguments, so the
-# real suite can never be launched from here.
+# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR pinned to temp fixtures — the real
+# ~/.claude/run-all and test suite are never touched.
 
-# TL3 gap (what this TL2 test does NOT catch): a real multi-core host where the
-# calibrated `jobs` value actually changes wall time, and real $HOME/.claude/run-all
-# resolution on a host whose HOME differs from the CI account. Closest-to-action
-# mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight
-# (category: skill-orchestration).
+# TL3 gap: a real multi-core host and real $HOME resolution are not exercised here.
 
 set -u
 
@@ -171,8 +159,7 @@ case_lib_surface() {
 
 # ===========================================================================
 # 2. Valid cache is honoured; every invalidation class falls back to -j 4.
-#    Every row but `missing` mutates ONE field of an otherwise valid base, so
-#    the reported reason can only have come from that mutation.
+#    Each row mutates ONE field of a valid base, so the reason maps to it.
 # ===========================================================================
 case_cache_table() {
     local name kind want got pad i

@@ -3,23 +3,14 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY (CPR-WPH): sequentially there was at most one child to orphan; at -j N an
-# interrupt can strand N children plus whatever they spawned, and those keep
-# holding the CPU the developer just tried to free. So cleanup must be bounded
-# (signal, one grace second, unconditional KILL — never an unbounded `wait`) and
-# must not tax the ordinary path: a normal run may not pay the grace second.
+# WHY: at -j N an interrupt can strand N children plus their descendants. Cleanup is
+# bounded (signal, 1s grace, unconditional KILL) and adds no cost to the ordinary path.
 
-# SIGINT is the signal the feature is NAMED for — Ctrl-C — and it is not a
-# synonym for SIGTERM: a shell delivers it to the whole foreground group, a
-# `kill -INT <pid>` reaches only the runner, and a trap handler written for one
-# is routinely missing for the other. Both are therefore exercised against both
-# reapers, so no teardown path is covered by inference.
+# SIGINT != SIGTERM (different delivery scope, often different trap handling);
+# both are exercised against both reapers below.
 
-# CPR-UNV: a surviving grandchild is a leak on EVERY host. The job-control probe
-# below selects WHICH teardown path is under test — `kill -- -PGID` where job
-# control exists, an explicit descendant walk where it does not — and is never
-# allowed to downgrade a survivor to a note. A test that excuses orphans on the
-# host that most needs the descendant walk would never fail where it matters.
+# A surviving grandchild is a leak on every host. The probe below selects which
+# teardown path is under test (process-group kill vs descendant walk) — never a pass.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -107,9 +98,7 @@ done
 
 # --- (b) a child that ignores the signal is still killed, and 130 reported --
 
-# 130 is the runner's single interrupted-exit code for BOTH signals: the caller
-# distinguishes "the suite was cut short" from "the suite failed", never which
-# signal did the cutting.
+# 130 is the runner's single interrupted-exit code for both signals.
 
 stub_case() {               # stub_case <TERM|INT>
     local sig="$1" opt="" kids grand rc=""

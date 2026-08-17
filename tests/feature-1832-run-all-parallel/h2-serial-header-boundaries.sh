@@ -4,37 +4,23 @@
 # Tags: tests, bin, parallel, frontmatter, convention, boundary, table-driven, TL2, scope:issue-specific
 # Serial: observes real lane concurrency, so it must not share the host with another test
 
-# WHY (CPR-WPH): the `# Serial: <reason>` design deliberately uses TWO windows —
-# the WRITER convention accepts the header only in the first 10 lines, while the
-# RUNNER scans the first 20 (Postel: accept what a slightly-off author produced).
+# WHY (CPR-WPH): `# Serial: <reason>` uses TWO windows — WRITER accepts the
+# header only in the first 10 lines, RUNNER scans the first 20 (Postel: accept
+# a slightly late author). This file walks the boundary (1/9/10/11/20/21) plus
+# malformed shapes, asserting the lane the runner ACTUALLY used at runtime.
 
-# That asymmetry is the whole contract, and a test that only proves "serial when
-# the header is present" proves none of it. Sibling h-serial-header-convention.sh
-# pins one position (line 9); this file walks the boundary — 1, 9, 10, 11, 20, 21
-# — plus the malformed shapes, and for EVERY row asserts the lane the runner
-# actually used at runtime, not merely what a checker script says.
+# HOW: each row's fixture has two FILLER tests marking an in-flight file while
+# they sleep, plus a SUBJECT that counts in-flight markers it can see — parallel
+# sees peers, serial (runs alone) sees zero. `absent-control` is the fence: a
+# header-less file seeing zero peers means nothing ran concurrently at all.
 
-# HOW the runtime lane is observed, without timing luck: each row's fixture suite
-# holds two FILLER tests that create an in-flight marker file, sleep, and remove
-# it, plus the SUBJECT test which sleeps a shorter interval and then counts the
-# in-flight markers it can see. A subject that ran in the parallel lane sees its
-# peers; a subject the runner put in the serial lane — which by definition runs
-# alone — sees zero. The `absent-control` row is the fence: if even a header-less
-# file observes zero peers, the runner is not running anything concurrently and
-# every `serial` verdict in this table is worthless, so that row is re-asserted
-# on its own below.
-
-# RED-FIRST: `--print-plan` and the serial lane do not exist yet, so the plan
-# column is red for every row and the runtime column is red for every row whose
-# expected lane is `parallel`. Rows expecting `serial` are green today only
-# because nothing runs concurrently at all — the control row states exactly that,
-# so the false green cannot survive on its own.
+# RED-FIRST: `--print-plan` and the serial lane don't exist yet — plan/runtime
+# columns are red for every `parallel`-expecting row; `serial` rows are green
+# today only because nothing runs concurrently (the control row proves it).
 
 # TL3 gap (what this TL2 test does NOT catch): whether the 20-line reader window
-# is wide enough for the real corpus's frontmatter shapes, and how the lanes
-# behave under a loaded CI host rather than a 3-file fixture.
-# Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# fits real corpus frontmatter shapes, and lane behavior under a loaded CI host.
+# Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -66,14 +52,11 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS / RUN_ALL_DEADLINE / RUN_ALL_PROGRESS / RUN_ALL_REAP and
-# FEATURE_644_PHASE all change what the runner does. Inherited from the
-# developer's shell they would silently rewrite the verdicts below, so every
-# child invocation goes through senv().
+# WHY: RUN_ALL_JOBS/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
+# behavior; inherited values would rewrite verdicts, so every child goes through senv().
 
-# CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so all the
-# `-u NAME` flags MUST precede any pass-through assignment. senv() owns that
-# ordering; callers only supply NAME=VALUE pairs and the command.
+# CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
+# flags must precede pass-through assignments — senv() owns that ordering.
 senv() {
     env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
         -u FEATURE_644_PHASE "$@"
@@ -145,11 +128,8 @@ mk_row_root() {
 }
 
 # ===========================================================================
-# The pinned WRITER-side convention, as an executable definition.
-#   ok             canonical `# Serial: <non-empty reason>` in the first 10 lines
-#   out-of-window  canonical shape, but authored below line 10
-#   malformed      a near-miss shape the runner will never honour
-#   no-header      nothing resembling the declaration anywhere in the file
+# WRITER-side verdicts: ok (header in first 10 lines), out-of-window (canonical
+# shape below line 10), malformed (near-miss shape), no-header (nothing at all).
 # ===========================================================================
 writer_verdict() {
     local f="$1" n
@@ -173,11 +153,9 @@ plan_lane_of() {
 
 PEERS_SEEN=""
 RUNTIME_LANE=""
-# runtime_lane_of <root> — the lane the runner ACTUALLY used, from the subject's
-# own view of how many peers were in flight while it ran. Results land in the
-# globals RUNTIME_LANE / PEERS_SEEN rather than on stdout: a command
-# substitution would run this in a subshell and the peer count the control
-# fence needs would be discarded with it.
+# runtime_lane_of <root> — lane the runner ACTUALLY used, from the subject's own
+# peer count. Writes to globals RUNTIME_LANE/PEERS_SEEN (not stdout) since a
+# command substitution would run this in a subshell and discard them.
 runtime_lane_of() {
     local root="$1" peers
     rm -f "$root/obs"

@@ -4,29 +4,16 @@
 # Tags: tests, bin, parallel, cache, boundary, off-by-one, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): the sibling f-cache.sh proves each rejection CLASS exists, but a
-# class test cannot see an off-by-one — `jobs=2048 -> bad-jobs` holds equally for a
-# reader capped at 1024 and one capped at 1023. A one-sided probe can never tell
-# `<` from `<=`, so every numeric limit here is asserted from BOTH sides in one
-# table: the last accepted value and the first rejected value.
+# WHY (CPR-WPH): sibling f-cache.sh proves each rejection class exists but can't see
+# an off-by-one, so every numeric limit here is asserted from BOTH sides (last accepted, first rejected).
 
-# The count_bucket rows apply the same argument to the log2 formula: 511/512 and
-# 1023/1024 straddle powers of two, so the exact bucket integer on each side pins
-# floor(log2(n)) against its ceil, 1-based and linear rivals.
+# RED-FIRST: bin/lib/run-all-parallelism.sh and `-j auto` don't exist yet; missing-impl
+# rows are intentional assertions, not crashes.
 
-# RED-FIRST: bin/lib/run-all-parallelism.sh and the `-j auto` surface do not exist
-# yet. Library-gated rows report `implementation missing: <path>`; runner-only rows
-# report the absent notice. Both are intentional assertions, never crashes.
+# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR pinned to temp fixtures — the real
+# suite and ~/.claude/run-all are never reachable.
 
-# ISOLATION: RUN_ALL_CACHE_DIR and TESTS_DIR are pinned to temp fixtures and every
-# runner invocation passes an explicit fixture positional argument, so the real
-# suite and the developer's real ~/.claude/run-all are never reachable.
-
-# TL3 gap (what this TL2 test does NOT catch): whether a host that genuinely owns
-# 1024 job slots survives `-j 1024`, and whether a real tests/ tree crossing 512
-# files re-buckets on live hardware. Closest-to-action mitigation:
-# bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight
-# (category: skill-orchestration).
+# TL3 gap: a host genuinely owning 1024 job slots, and live re-bucketing past 512 files, are not exercised here.
 
 set -u
 
@@ -158,8 +145,7 @@ case_preamble() {
 
 # ===========================================================================
 # 2. count_bucket = floor(log2(count)) — asserted as a pure function.
-#    511 and 512 share a bucket under ceil and differ under floor: only the
-#    pair, never one side alone, separates the two formulas.
+#    511/512 separate floor from ceil; only the pair proves which formula runs.
 # ===========================================================================
 case_bucket_formula() {
     local name count want got
@@ -186,9 +172,7 @@ TABLE
 
 # ===========================================================================
 # 3. Numeric limits, both sides of every edge, through the real runner.
-#    padlines are `#` comment lines, which the key parser skips, so the only
-#    rule that can reject a padded row is the raw-line cap itself. linelen is
-#    the line's byte count excluding the newline.
+#    padlines are `#` lines (skipped by the parser); linelen excludes the newline.
 # ===========================================================================
 case_numeric_limits() {
     local name jobs padlines linelen want i pad

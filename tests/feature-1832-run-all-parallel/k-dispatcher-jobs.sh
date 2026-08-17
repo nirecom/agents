@@ -4,33 +4,19 @@
 # Tags: tests, bin, parallel, worker-dispatch, capability, security, TL1, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): the run-tests worker is the second caller of tests/run-all.sh, and
-# it is the one that owns a deadline. A dispatched suite that decides its own
-# parallelism cannot be tuned by the caller that knows the budget, so the worker
-# gains a `jobs` payload field and passes `-j <n>` — or `-j auto` when the caller
-# stays silent. `jobs` is an int-typed, range-bounded payload field for the same
-# reason `test_args` is rel-path-arg[] and not text[]: it becomes argv for a shell
-# script, and capability.js is the wall that keeps payload text from becoming
-# execution. This file drives the real dispatcher end to end so the wall and the
-# wiring are checked together rather than each against a mock of the other.
+# WHY: the run-tests worker owns a deadline, so it needs to tune the dispatched
+# suite's parallelism. Adds int-typed, range-bounded `jobs` payload field ->
+# `-j <n>` (or `-j auto` when absent); capability.js walls it off from free text.
 
-# RED-FIRST: `jobs` is not declared in the registry yet, so today the dispatcher
-# rejects it as an undeclared key. The rejection rows below are therefore GREEN
-# both before and after — they are the regression fence that keeps the field from
-# widening into free text. The behavioural rows (serialisation at jobs:1, overlap
-# at jobs:4, `-j auto` and `--deadline` in argv) are the intended failures.
+# RED-FIRST: `jobs` isn't in the registry yet, so rejection rows are green now
+# (regression fence); the behavioural rows (serialisation, overlap, argv) are the
+# intended failures.
 
-# ISOLATION: everything runs against a throwaway git family — a temp main root and
-# a registered linked worktree carrying its own tests/run-all.sh. HOME is pinned
-# into the fixture because RUN_ALL_CACHE_DIR is not in the dispatcher's child env
-# allowlist, so the cache root has to be moved by moving HOME. No invocation ever
-# names the real repository's tests/ directory.
+# ISOLATION: throwaway git family (temp main + linked worktree). HOME is pinned
+# because RUN_ALL_CACHE_DIR isn't in the dispatcher's child env allowlist.
 
-# TL3 gap (what this TL1 test does NOT catch): the wall-clock speedup a real
-# dispatched `--all` sweep gets on a CI host, and whether the deadline the worker
-# computes is actually reachable there. tests/TL3-worker-dispatch-run-tests.sh is
-# the gated tier. Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# TL3 gap: real wall-clock speedup and deadline reachability on a CI host —
+# tests/TL3-worker-dispatch-run-tests.sh is the gated tier.
 
 set -u
 

@@ -3,29 +3,20 @@
 # Tests: tests/run-all.sh
 # Tags: tests, bin, parallel, positional-args, globbing, injection, TL2, scope:issue-specific
 
-# WHY (CPR-WPH): the positional branch of tests/run-all.sh (`for pattern in "$@"`
-# / `for f in $pattern`) is the surface every skill and hook uses to run a subset
-# of the suite, and the parallelism work rewrites it. Nothing pins its behaviour
-# today, so a rewrite could quietly change which files run, in which order, or
-# how many times, and nothing would notice. This file is that pin.
+# WHY: the positional branch (`for pattern in "$@"` / `for f in $pattern`) is the
+# surface every skill/hook uses to run a subset of the suite; this file pins it
+# before the parallelism rewrite touches it.
 
-# The second reason is adversarial: `for f in $pattern` is UNQUOTED, so each
-# argument is subjected to word splitting and pathname expansion before it is
-# tested with `[ -f ]`. That is where a path containing a space stops working
-# and where an attacker-shaped filename would be re-interpreted if the shell
-# ever did more than split-and-glob. Both are covered below.
+# Adversarial reason: `for f in $pattern` is UNQUOTED, so args are word-split and
+# glob-expanded before `[ -f ]` — a path with a space breaks, and an
+# attacker-shaped filename could be re-interpreted. Both covered below.
 
-# FIXTURE SHAPE: the runner copy lives at <root>/bin/run-all.sh while the
-# fixture tests live at <root>/tests. Today's runner globs "$TESTS_DIR"/*.sh, so
-# a runner sitting inside its own tests dir matches itself and re-execs forever
-# (rc=124, zero output). Keeping the copy one directory up makes every case here
-# terminate regardless of which branch the runner takes.
+# FIXTURE SHAPE: runner copy lives at <root>/bin/run-all.sh, tests at
+# <root>/tests — one directory up so it can't glob-match and re-exec itself.
 
-# TL3 gap (what this TL2 test does NOT catch): how the real suite's 780+ files
-# behave when the same globs are expanded against them under load, and whether a
-# native-Windows shell (not Git Bash) splits these arguments the same way.
-# Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# TL3 gap: real suite's 780+ files under load, and native-Windows shell argument
+# splitting. Closest-to-action mitigation: bin/check-verification-gate.sh at
+# WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -58,12 +49,10 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# The five RUN_ALL_* / FEATURE_644_PHASE knobs all change what the runner does,
-# so a value inherited from the developer's shell would rewrite these verdicts.
-# senv() sits OUTERMOST on every child: bin/run-with-timeout.sh execs its argv
-# directly, so a shell function placed inside it would die with 127 instead of
-# sanitizing. GNU `env` stops parsing options at the first NAME=VALUE, so every
-# `-u` flag must come before any pass-through assignment.
+# The RUN_ALL_*/FEATURE_644_PHASE knobs change runner behavior, so an inherited
+# value would rewrite verdicts. senv() wraps every child (must be outermost —
+# run-with-timeout.sh execs argv directly). GNU `env` needs all `-u` flags before
+# any pass-through assignment.
 senv() {
     env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
         -u FEATURE_644_PHASE "$@"
@@ -136,11 +125,8 @@ case_multiple_patterns() {
     assert_eq "o-pos/multi/runs-in-argument-order" "t3 t1" "$(order_of)"
 }
 
-# OBSERVED, NOT DESIRED: overlapping patterns are NOT de-duplicated — the runner
-# loops each pattern independently, so a file named by two patterns runs twice
-# and is counted twice. Recorded here so the parallel rewrite cannot change it
-# by accident; whether dedupe would be better is a product decision, not a bug
-# this file asserts.
+# OBSERVED, NOT DESIRED: overlapping patterns are not de-duplicated — a file named
+# by two patterns runs twice. Pinned so the rewrite can't change it by accident.
 case_overlapping_patterns() {
     run_all "tests/t1.sh" "tests/t*.sh"
     assert_eq "o-pos/overlap/duplicate-not-deduped-executed-is-4" "4" "$(executed_of)"
@@ -151,11 +137,8 @@ case_overlapping_patterns() {
 # 2. Error / edge cases — patterns that match nothing
 # ===========================================================================
 
-# OBSERVED, MERELY CURRENT: an unmatched pattern is silent. With nullglob off
-# the glob stays literal, `[ -f ]` rejects it, and the run reports EXECUTED=0
-# with exit 0 — a typo in a test path is indistinguishable from a green run.
-# Asserted as-is because the rewrite must not change it silently, but a future
-# issue should make an unmatched pattern a non-zero exit.
+# OBSERVED, MERELY CURRENT: an unmatched pattern is silent (EXECUTED=0, exit 0) —
+# a typo looks like a green run. Pinned as-is; a future issue should fix it.
 case_unmatched_pattern() {
     run_all "tests/nomatch-zzz-*.sh"
     assert_eq "o-pos/unmatched/executed-is-0" "0" "$(executed_of)"
@@ -173,10 +156,8 @@ case_unmatched_pattern() {
 # 3. File/path edge case — a path containing a space
 # ===========================================================================
 
-# RED BY DESIGN (real defect, tests/run-all.sh:51): `for f in $pattern` is
-# unquoted, so "tests/with space.sh" is split into "tests/with" and "space.sh",
-# both of which fail `[ -f ]` and the file never runs. The assertion states the
-# correct behaviour — one file, EXECUTED=1 — so the rewrite has to fix it.
+# RED BY DESIGN (tests/run-all.sh:51): unquoted `for f in $pattern` splits
+# "tests/with space.sh" into two tokens and the file never runs.
 case_path_with_spaces() {
     mk_test "with space.sh" sp
     run_all "tests/with space.sh"
@@ -189,9 +170,8 @@ case_path_with_spaces() {
 # 4. Shell-metacharacter filenames
 # ===========================================================================
 
-# NTFS refuses : ? * | < > " outright, so creatability is probed rather than
-# assumed. Only names the filesystem genuinely rejects are skipped, and each
-# skip is reported by name so the coverage hole is visible instead of implied.
+# NTFS refuses : ? * | < > " outright, so creatability is probed; rejected
+# names are skipped and reported by name.
 try_mk() {
     local base="$1" id="$2"
     mk_test "$base" "$id" 2>/dev/null || true
@@ -233,14 +213,11 @@ case_metacharacters() {
 # 5. Input injection — a filename shaped like a command substitution
 # ===========================================================================
 
-# The security claim is the sentinel, not the count: word splitting and globbing
-# do NOT re-run command substitution on an already-expanded value, so the file
-# name must stay inert text. This row must stay green after the quoting fix too.
+# The security claim is the sentinel, not the count: word splitting/globbing must
+# not re-run command substitution on an already-expanded value.
 
-# The sentinel is a BARE name, never a path: a filename cannot contain '/', so
-# a path-shaped payload would be refused by the filesystem and prove nothing.
-# Whatever directory the injected `touch` would land in, it is inside the
-# fixture, and the sweep below looks everywhere under it.
+# The sentinel is a bare name (filenames can't contain '/'); the sweep below
+# looks everywhere under the fixture for it.
 sentinel_hits() { find "$TMPD" -name "$1" 2>/dev/null; }
 
 inject_case() {

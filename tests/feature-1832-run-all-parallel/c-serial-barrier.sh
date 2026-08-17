@@ -3,18 +3,11 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: a test that declares `# Serial: <reason>` grabs a shared resource, so the
-# scheduler must drain every in-flight job, run it alone, and only then resume
-# submitting. The barrier is also announced on stderr, so a run that stalls on
-# one file names the file that owns the machine.
+# WHY: `# Serial: <reason>` grabs a shared resource — the scheduler drains all in-flight
+# jobs, runs it alone, then resumes; the barrier is announced on stderr so a stall names its owner.
 
-# WHY the check is an INTERVAL test, not a window scan: "no other id appears
-# between the serial test's start and end" is false-green against the very
-# violation that matters most — an ordinary job that started BEFORE the serial
-# test and ended AFTER it leaves no event inside that window at all, so a
-# scheduler with no barrier whatsoever looks compliant. The barrier claim is
-# about ACTIVE INTERVALS, so the log is replayed into one interval per id and
-# every ordinary interval is tested for overlap with the serial one.
+# WHY interval test, not window scan: a job that started before and ended after the serial
+# test leaves no event inside the window, so a no-barrier scheduler looks compliant; overlap is checked over active intervals instead.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -25,12 +18,8 @@ export CLAUDE_WORKFLOW_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-# serial_violations <log> <serial-id> — ids of ordinary jobs whose active
-# interval overlaps the serial test's, one per line, sorted. Empty = barrier
-# respected. Append order is the clock; every event owns a distinct line, so
-# closed-interval overlap reduces to `js < se && ss < je`. An id that started
-# and never ended is treated as still running past the end of the log, so a
-# job killed mid-flight cannot hide inside a missing `end`.
+# serial_violations <log> <serial-id> — ordinary job ids whose active interval overlaps the
+# serial test's (empty = respected); unterminated jobs are treated as still running so a mid-flight kill can't hide.
 serial_violations() {
     awk -v sid="$2" '
         $1 == "start" { if (!($2 in s)) s[$2] = NR }
@@ -65,9 +54,7 @@ assert_eq() {
 }
 
 # ==========================================================================
-# C0. Counter-proof: the checker is exercised against synthetic logs whose
-# verdict is known by construction, so the anti-false-green property is
-# asserted rather than assumed. `;` separates log lines inside a row.
+# C0. Counter-proof: checker verdicts on synthetic logs with known-by-construction answers. `;` separates log lines per row.
 # ==========================================================================
 SID="srl"
 while IFS='|' read -r name body want; do
@@ -89,9 +76,8 @@ two-spanners   | start a; start b; start srl; end srl; end b; end a        | a b
 serial-absent  | start a; end a                                            | -
 TABLE
 
-# The row the whole rewrite exists for: on `span-contains` the discarded scan
-# is silent while the interval checker names the offender. Asserting BOTH sides
-# is what makes this a counter-proof instead of a second opinion.
+# span-contains is the case the rewrite exists for: the legacy scan is silent while the interval
+# checker names the offender — asserting both sides is what makes this a counter-proof.
 SPAN="$FX_TMP_ROOT/synth-span-contains.log"
 assert_eq "C0/legacy-is-blind-to-span" "" "$(legacy_window_scan "$SPAN" "$SID")"
 assert_eq "C0/rewrite-catches-span" "a" "$(serial_violations "$SPAN" "$SID")"
@@ -153,10 +139,8 @@ else
 fi
 
 # ==========================================================================
-# C4. The spanning fixture, run for real. Glob order is a-long, b-mid,
-# s-serial, z-tail: a scheduler with no barrier starts the 10s a-long first
-# and is still running it when the 1s s-serial comes and goes, which is
-# exactly the interval the discarded window scan could not see.
+# C4. Spanning fixture (glob order a-long/b-mid/s-serial/z-tail): a no-barrier scheduler is
+# still running the 10s a-long when the 1s s-serial starts and ends — exactly what the window scan couldn't see.
 # ==========================================================================
 SERIAL2_ID="s-serial"
 SPAN_ROOT="$(fx_new_root)"

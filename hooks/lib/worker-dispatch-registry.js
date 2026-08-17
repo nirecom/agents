@@ -1,32 +1,12 @@
 "use strict";
-// hooks/lib/worker-dispatch-registry.js
-//
-// SSOT (PURE DATA) for the plain-script worker dispatcher (#1643).
-//
-// Consumed by two independent entry points:
-//   - hooks/enforce-worktree/main-worktree-allows/*  (guard side: worker-name enum only)
-//   - bin/worker-dispatch/*                          (dispatcher side: full spec)
-
-//
-// HARD INVARIANT: this module requires NOTHING — not even a node builtin.
-// The guard must be able to load it with zero transitive surface, and commit
-// ordering requires it to be loadable before bin/worker-dispatch/ exists.
+// hooks/lib/worker-dispatch-registry.js — SSOT (PURE DATA) for the plain-script worker dispatcher (#1643).
+// Consumed by: hooks/enforce-worktree/main-worktree-allows/* (worker-name enum only) and bin/worker-dispatch/* (full spec).
+// HARD INVARIANT: zero deps, not even a node builtin — must load before bin/worker-dispatch/ exists;
 // tests/feature-1643-worker-dispatch-schema.sh asserts this by source scan.
-
-//
-// Entry shape:
-//   name         worker-name enum member (argv[2] of the canonical form)
-//   argSpec      argv positional types, declared per worker (never shared by
-//                reference) so #1673's close-family can diverge without a rewrite
-//   payloadSpec  field name -> capability type (see bin/worker-dispatch/capability.js)
-//   binaries     the ONLY binaries this worker may execute
-//   writeScopes  the ONLY scopes this worker may write into (empty = no writes)
-//   renderer     stdout renderer: status-triple | status-triple-quoted | test-runner-yaml
-
-//
-// The renderer distinction between quoted and unquoted status triples is part of
-// the output contract inherited from the agents/*.md workers this replaces —
-// calling skills parse those bytes. Do not "normalize" it.
+// Entry shape: name / argSpec (per-worker, not shared by reference, so #1673's close-family can diverge) /
+// payloadSpec (field -> capability type, see bin/worker-dispatch/capability.js) / binaries / writeScopes / renderer.
+// renderer: status-triple | status-triple-quoted | test-runner-yaml — quoting is inherited from the
+// agents/*.md workers this replaces and is parsed by callers; do not "normalize" it.
 
 const WORKER_NAMES = [
   "test-runner",
@@ -69,32 +49,16 @@ const CHILD_ENV_ALLOWLIST = [
   "ComSpec",
   "TEMP",
   "TMP",
-  // --- Config-location vars ---
-  // Admission rule for the entries below, both clauses required:
-  //   (1) the variable names WHERE a tool reads its configuration, and
-  //   (2) the configuration it reaches is ALREADY reachable through a member
-  //       admitted earlier — it relocates a config root, it does not expose one.
-
-  // Clause (2) is what keeps this from being a blank cheque. XDG_CONFIG_HOME and
-  // APPDATA relocate roots that HOME / USERPROFILE already expose, so they qualify.
-  // A pointer at a config FILE the operator has not otherwise exposed does not:
-  // GIT_CONFIG_GLOBAL / GIT_CONFIG_SYSTEM reach core.sshCommand, core.hooksPath and
-  // credential.helper, which are command-execution and credential primitives for any
-  // child that runs git. SSH_AUTH_SOCK fails clause (1) outright — an agent socket is
-  // a live signing oracle, not a config location. Anything that carries a secret
-  // stays out (see the paragraph above this array) and goes into the
-  // envPassthrough of the single worker that needs it.
-
-  // Values are copied verbatim and the child's cwd is not the parent's, so a RELATIVE
-  // value resolves against a different directory in the child. Callers that relocate a
-  // config root must use an absolute path.
-
-  // This set is fenced in three layers:
-  //   structural  tests/feature-1643-worker-dispatch-schema.sh        Group E
-  //   behavioural tests/feature-1643-worker-dispatch-script-anchor.sh Group G
-  //   real gh     tests/TL3-worker-dispatch-child-env-gh-auth.sh
-  // Adding a member here means adding it to the CONFIG_PATH_VARS array of the
-  // first two.
+  // --- Config-location vars --- admission requires BOTH: (1) var names WHERE a tool
+  // reads its config, (2) that config is ALREADY reachable via a member admitted earlier.
+  // XDG_CONFIG_HOME/APPDATA qualify; GIT_CONFIG_GLOBAL/SYSTEM and SSH_AUTH_SOCK (a live
+  // signing oracle) do not — secrets go into the envPassthrough of the worker that needs
+  // them, not here. Values are copied verbatim into a child with a different cwd, so a
+  // RELATIVE value resolves elsewhere — callers must use absolute paths. Fenced in three
+  // layers (structural: tests/feature-1643-worker-dispatch-schema.sh Group E; behavioural:
+  // tests/feature-1643-worker-dispatch-script-anchor.sh Group G; real gh:
+  // tests/TL3-worker-dispatch-child-env-gh-auth.sh) — add a member here => also add it to
+  // CONFIG_PATH_VARS in the first two.
 
   // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
@@ -144,9 +108,8 @@ const workers = {
       // family worktree — the one field that would contradict capability.js's rule
       // that a value which can name a file must be tied to an anchor.
       test_args: { type: "rel-path-arg[]", required: false, default: [], maxItems: 64 },
-      // A validated scalar the worker turns into argv, never caller argv text:
-      // rel-path-arg[] refuses a leading '-', so `-j` can only reach the suite as
-      // a typed field. No default — omitting it leaves the suite's own `-j auto`.
+      // Validated scalar becomes argv, never caller text. No default — omitted,
+      // the suite's own `-j auto` applies.
       jobs: { type: "int", required: false, min: 1, max: 1024 },
       // The ceiling bounds a runaway child, not a normal run. 3600 was below the
       // real cost of a full `--all` sweep with RUN_TL3=on (real `claude -p` seams),
@@ -296,22 +259,15 @@ const workers = {
     renderer: "status-triple",
   },
 
-  // -----------------------------------------------------------------------
-  // Stage 3 (#1673): the three forge workers. Same declare-first rule as stage 2
-  // — the capability surface is in force from the commit that declares it, and
-  // the MODULES table in bin/worker-dispatch/registry.js decides which names have
-  // an implementation yet.
-
-  //
-  // commit-push moves `git commit` / `git push` out of the Bash tool, which is
-  // also where hooks/workflow-gate.js (a PreToolUse hook) used to see them. The
-  // worker therefore drives that same gate as a child process, twice — once
-  // before commit, once before push — and the five workflow env vars below are
-  // what let the gate child resolve the SAME session state the hook would have.
-  // Handing it the wrong state directory makes it approve everything, so the
-  // worker sets all five explicitly via extraEnv rather than trusting
-  // inheritance; declaring them here only makes that assignment legal.
-  // -----------------------------------------------------------------------
+  // Stage 3 (#1673): the three forge workers, same declare-first rule as stage 2 — the
+  // capability surface is in force from the commit that declares it, ahead of MODULES
+  // in bin/worker-dispatch/registry.js gaining an implementation. commit-push moves
+  // `git commit`/`git push` out of the Bash tool (where hooks/workflow-gate.js used to
+  // see them) and drives that same gate as a child process twice — before commit and
+  // before push. The five workflow env vars below let the gate child resolve the SAME
+  // session state the hook would have; the wrong state directory makes it approve
+  // everything, so the worker sets all five explicitly via extraEnv rather than
+  // trusting inheritance — declaring them here only makes that assignment legal.
   "commit-push": {
     name: "commit-push",
     argSpec: [...STANDARD_ARG_SPEC],
@@ -373,23 +329,15 @@ const workers = {
     renderer: "status-triple-quoted",
   },
 
-  // -----------------------------------------------------------------------
-  // ISSUE_CLOSE_SKILL contract (applies to both close-family entries below).
-  //
-  // hooks/enforce-issue-close.js inspects the HEAD of a Bash-tool command only.
-  // A child process the dispatcher starts with spawnSync is not a command head,
-  // so it was never in that hook's field of view — this is a structural fact,
-  // not a new bypass.
-
-  //
-  // skills/issue-close-stage/scripts/run-stage-chain.sh and
-  // skills/issue-close-finalize/scripts/run-finalize-terminal.sh each
-  // `export ISSUE_CLOSE_SKILL=1` for themselves. The dispatcher therefore does
-  // NOT need it in envPassthrough — and MUST NOT add it: passing it here would
-  // hand the bypass to every child of these workers rather than to the two
-  // scripts that opt into it. tests/feature-1673-{issue-close-stage,finalize}-
-  // *-schema.sh assert its absence structurally.
-  // -----------------------------------------------------------------------
+  // ISSUE_CLOSE_SKILL contract (applies to both close-family entries below):
+  // hooks/enforce-issue-close.js inspects the HEAD of a Bash-tool command only, and a
+  // child process the dispatcher starts with spawnSync is not a command head — never in
+  // that hook's field of view, a structural fact rather than a new bypass. skills/issue-
+  // close-stage/scripts/run-stage-chain.sh and skills/issue-close-finalize/scripts/run-
+  // finalize-terminal.sh each `export ISSUE_CLOSE_SKILL=1` for themselves, so the
+  // dispatcher must NOT add it to envPassthrough — that would hand the bypass to every
+  // child of these workers rather than the two scripts that opt into it.
+  // tests/feature-1673-{issue-close-stage,finalize}-*-schema.sh assert its absence.
   "issue-close-stage": {
     name: "issue-close-stage",
     argSpec: [...STANDARD_ARG_SPEC],
@@ -415,18 +363,14 @@ const workers = {
     renderer: "status-triple-quoted",
   },
 
-  // The payloadSpec is FLAT because capability.js has no notion of "required only
-  // when phase=X". The per-phase required-field table lives in the worker
-  // module's checkRequired (doc-append's mode check is the precedent):
-  //   initial          issue_number, root_issue_number, owner_repo,
-  //                    state_file_path, main_worktree_path
-  //   loop_step        root_issue_number, owner_repo, state_file_path, g5_decision
-  //   finalize_terminal root_issue_number, owner_repo, state_file_path,
-  //                    session_id, outcome_file_path
-
-  //
-  // `merge_commit` is deliberately NOT a field: it comes out of run-initial.sh's
-  // stdout and the worker writes it into the state file. It is never an input.
+  // payloadSpec is FLAT — capability.js has no "required only when phase=X" notion, so
+  // the per-phase required-field table lives in the worker module's checkRequired
+  // (doc-append's mode check is the precedent): initial needs issue_number,
+  // root_issue_number, owner_repo, state_file_path, main_worktree_path; loop_step needs
+  // root_issue_number, owner_repo, state_file_path, g5_decision; finalize_terminal needs
+  // root_issue_number, owner_repo, state_file_path, session_id, outcome_file_path.
+  // `merge_commit` is deliberately NOT a field: it comes out of run-initial.sh's stdout
+  // and the worker writes it into the state file — never an input.
   "issue-close-finalize": {
     name: "issue-close-finalize",
     argSpec: [...STANDARD_ARG_SPEC],

@@ -3,10 +3,8 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: hooks/workflow-run-tests.js accepts a run-all verdict only when stdout
-# holds exactly one RUN_CONTRACT line and nothing but whitespace after it, and
-# the exit code is the second half of the same contract. Parallelism must not
-# move either. Every assertion below runs at `-j 4`.
+# WHY: hooks/workflow-run-tests.js needs exactly one RUN_CONTRACT stdout line plus a
+# matching exit code, unmoved by parallelism. Every assertion below runs at `-j 4`.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

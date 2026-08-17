@@ -4,49 +4,24 @@
 # Tags: tests, bin, parallel, calibrator, sentinel, no-auto-calibration, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): "a normal run never calibrates" keeps a five-second suite from
-# turning into a five-minute one on somebody's laptop, and the sibling
-# g-calibrator.sh proves it only with a grep for the calibrator's literal
-# filename. That grep passes against any implementation reaching the calibrator
-# indirectly — a variable, a wrapper, a `$(...)`, a renamed copy — so it is a
-# spelling check, not a behavioural proof.
+# WHY (CPR-WPH): sibling g-calibrator.sh only greps for the calibrator's literal
+# filename, which passes for any indirect invocation. This file proves
+# behaviourally that a normal run never calibrates, across every cache state
+# (absent/corrupt/host-stale/bucket-stale), even with RUN_CALIBRATION=1 forced.
 
-# This file proves it behaviourally: the real runner is driven in every cache
-# state that could tempt an implementation into self-healing (absent, corrupt,
-# host-stale, bucket-stale) with calibration sentinels armed, and the sentinels
-# must never fire while the run still finishes normally on the -j 4 fallback.
+# THE SENTINELS (layered, so no single evasion defeats them all): L1 measure-cmd
+# seam, L2 BASH_ENV script-path log, L3 PATH shim named like the calibrator,
+# L4 cache byte-diff.
 
-# THE SENTINELS — layered, so no single evasion defeats them all.
+# RED-FIRST: the calibrator, lib, and `-j auto` don't exist yet; rows report the
+# absent notice or `implementation missing: <path>` — both intentional.
 
-#   L1 seam  — RUN_ALL_CALIBRATION_MEASURE_CMD points at a recorder. The approved
-#              design routes EVERY calibration measurement through this command,
-#              so the recorder fires no matter how the calibrator was reached.
-#   L2 BASH_ENV — every non-interactive bash started anywhere under the run
-#              appends its own $0 to a log, catching `bash $var`, `bash $(...)`
-#              and renamed copies alike.
-#   L3 PATH  — a shim named calibrate-test-parallelism.sh sits first on PATH,
-#              catching a bare-name or exec-style invocation.
-#   L4 cache — the cache file is compared byte-for-byte afterwards, catching an
-#              in-process (sourced) calibrator that writes without spawning.
+# ISOLATION: cache dir and TESTS_DIR are pinned to temp fixtures; the real
+# ~/.claude/run-all is never reachable (closing case re-checks it).
 
-# To remove the explicit-run gate as an alibi, every state runs twice: once with
-# a neutral environment and once with RUN_CALIBRATION=1 already exported. Even
-# with calibration explicitly permitted, a normal run must not take it.
-
-# RED-FIRST: bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh and
-# the `-j auto` surface do not exist yet. The reason-token and fallback-notice rows
-# report the absent notice; the explicit-run-gate rows report
-# `implementation missing: <path>`. Both are intentional assertions, never crashes.
-
-# ISOLATION: RUN_ALL_CACHE_DIR and TESTS_DIR are pinned to temp fixtures and every
-# runner invocation passes an explicit fixture positional argument, so the real
-# suite is never launched and the developer's real ~/.claude/run-all is never
-# reachable. The closing case re-checks the real path.
-
-# TL3 gap (what this TL2 test does NOT catch): a calibration triggered by a real
-# CI wrapper outside tests/run-all.sh. Closest-to-action mitigation:
-# bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight
-# (category: skill-orchestration).
+# TL3 gap (what this TL2 test does NOT catch): calibration triggered by a real CI
+# wrapper outside tests/run-all.sh. Mitigation: bin/check-verification-gate.sh at
+# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
 
 set -u
 
@@ -250,9 +225,7 @@ TABLE
 }
 
 # ===========================================================================
-# 3. The BASH_ENV probe is load-bearing — an assertion that a log stayed empty
-#    is worthless if the log could never fill, so a decoy named like the
-#    calibrator is run through the same probe and must be recorded.
+# 3. Decoy proves the BASH_ENV probe is live (an empty log alone is not proof).
 # ===========================================================================
 case_probe_is_live() {
     local decoy

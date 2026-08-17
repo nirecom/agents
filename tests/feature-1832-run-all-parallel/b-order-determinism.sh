@@ -3,11 +3,8 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: the scheduler replays each child's captured output in SUBMISSION order,
-# not completion order, so the byte stream a reader (or a diff, or the hook)
-# sees is identical at any -j. The fixture makes completion order deliberately
-# disagree with submission order — descending sleeps — so an implementation that
-# streams children live, or replays them as they finish, cannot pass by accident.
+# WHY: output replays in submission order, not completion order, so stdout is identical at any -j.
+# Descending sleeps make completion order the reverse of submission order, ruling out live/completion-order replay.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -75,14 +72,8 @@ fi
 
 # --- stderr is buffered per test, exactly like stdout ----------------------
 
-# WHY: the design buffers BOTH streams per child, but stdout alone cannot
-# distinguish "buffered and replayed in submission order" from "buffered and
-# replayed in completion order" unless the two orders disagree. These six
-# dummies have STRICTLY descending sleeps, so completion order is the exact
-# reverse of submission order, and each writes a large uniquely-tagged stderr
-# block. A runner that lets children write straight to the inherited stderr
-# shreds the blocks into each other; a runner that replays as each child
-# finishes emits them backwards. Both are caught here and by nothing else.
+# WHY: stdout alone can't distinguish submission-order replay from completion-order replay unless the
+# orders disagree; descending sleeps force that disagreement, catching both live-write shredding and reverse replay.
 
 ERR_BLOCK=60
 IDS="e1 e2 e3 e4 e5 e6"

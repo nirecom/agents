@@ -71,14 +71,11 @@ case "${RUN_ALL_PROGRESS:-on}" in off|OFF|0|false) PROGRESS=0 ;; esac
 say() { [ "$PROGRESS" -eq 1 ] && printf '[run-all] %s\n' "$1" >&2; return 0; }
 
 # --- work list -------------------------------------------------------------
-# #1836: the runner is matched by its own "$TESTS_DIR"/*.sh glob, so it must be
-# removed from the list it builds or it re-enters the whole suite forever.
+# #1836: exclude self — the glob matches this script too.
 SELF_BASE="${BASH_SOURCE[0]##*/}"
 SELF_PATH=""
 
-# The basename test is the fast gate: a candidate that is not even called
-# run-all.sh cannot be this runner, so the canonicalising subshell is spent at
-# most once per sweep instead of once per file.
+# Basename check is a fast gate before the canonicalising subshell.
 is_self() {
   local d
   [ "${1##*/}" = "$SELF_BASE" ] || return 1
@@ -99,9 +96,8 @@ add_work() {
   return 0
 }
 
-# Empty IFS disables word splitting while leaving pathname expansion intact, so
-# a pattern keeps its spaces and a glob still expands — without eval or a
-# re-split that would tear "tests/dir with space/*.sh" apart.
+# Empty IFS keeps pathname expansion but disables word splitting, so a
+# pattern with spaces still globs correctly without eval.
 expand_pattern() {
   local IFS='' f
   for f in $1; do add_work "$f"; done
@@ -135,9 +131,8 @@ signal_tree() {
   return 0
 }
 
-# Bounded by construction: signal, ONE grace second, unconditional KILL. No
-# `wait` and no liveness polling, so a child that ignores the signal cannot
-# stall teardown — and an uninterrupted run pays none of it.
+# Bounded teardown: TERM, one grace second, then KILL — no polling, so a
+# stuck child cannot stall it.
 cleanup_all() {
   local i pid pids=""
   [ "$CLEANUP_DONE" -eq 1 ] && return 0
@@ -158,8 +153,7 @@ trap 'cleanup_all; exit 130' INT TERM
 trap 'cleanup_all' EXIT
 
 # --- serial lane (reader side) ---------------------------------------------
-# Reception is lenient on purpose: the reader window is the first 20 lines
-# (FNR<=20) while authors are held to the 10-line frontmatter window.
+# Reader window is lines 1-20 (lenient); authors are held to 10.
 SERIAL_COUNT=0
 scan_serial_batch() {
   awk 'FNR<=20 && /^# Serial:[ \t]*[^ \t]/ && !seen[FILENAME]++ { print FILENAME }' \
@@ -194,8 +188,7 @@ RESOLVED_J=4
 resolve_jobs() {
   local lib="${RUN_ALL_PARALLELISM_LIB:-$AGENTS_DIR/bin/lib/run-all-parallelism.sh}" reason=missing
   if [ "$JOBS_MODE" = "fixed" ]; then RESOLVED_J="$JOBS_FIXED"; return 0; fi
-  # The runner only ever READS the cache: it never writes it, never repairs a
-  # corrupt one, and never invokes the calibrator.
+  # Read-only: never writes, repairs, or invokes the calibrator.
   # shellcheck source=/dev/null
   if [ -f "$lib" ] && . "$lib" 2>/dev/null && command -v run_all_cache_read >/dev/null 2>&1; then
     RESOLVED_J="${RUN_ALL_FALLBACK_JOBS:-4}"
@@ -227,8 +220,7 @@ if [ "$PRINT_PLAN" -eq 1 ]; then
 fi
 
 # --- reaper ----------------------------------------------------------------
-# RUN_ALL_WAITN_PROBE is a test seam consulted ONLY while resolving `auto`; an
-# explicit RUN_ALL_REAP=waitn|fifo is obeyed as written.
+# RUN_ALL_WAITN_PROBE is a test seam used only when resolving `auto`.
 REAP="${RUN_ALL_REAP:-auto}"
 case "$REAP" in
   waitn|fifo) ;;
@@ -251,10 +243,8 @@ NEXT=0; REPORTED=0; HARVESTED=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0
 START_TS=$SECONDS
 
-# Only a line-initial contract marker is disarmed, and only by prefixing — the
-# child's own bytes survive verbatim after the prefix. Implemented with shell
-# builtins because on MSYS one fork per replayed stream costs more than the
-# whole run it is reporting.
+# Only a line-initial RUN_CONTRACT marker is disarmed, by prefixing.
+# Shell builtins only — a fork per line would outcost the run on MSYS.
 neutralize_stream() {
   local line
   [ -s "$1" ] || return 0
@@ -281,10 +271,8 @@ launch() {
   return 0
 }
 
-# The <i>.rc file is the single source of truth for "this job finished". Its
-# presence may be observed while the write is still in flight, so the status is
-# read only AFTER waiting on the pid — by then the child has exited and the
-# file is whole.
+# The <i>.rc file is the source of truth for job completion; read only
+# after waiting on the pid, so the file is guaranteed whole.
 harvest() {
   local i rc rest=()
   HARVESTED=0

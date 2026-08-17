@@ -3,35 +3,22 @@
 # Tests: tests/run-all.sh, bin/worker-dispatch/spawn.js, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, positional-args, argv, quoting, injection, table-driven, TL2, scope:issue-specific
 
-# WHY (CPR-WPH): a caller hands the suite a list of test paths as `test_args`,
-# the worker turns that JSON array into a shell:false argv, run-all.sh receives
-# it as "$@", and each element is finally expanded into the set of scripts to
-# launch. Every one of those hops can silently merge or tear an argument, and
-# the observable damage — a path with a space simply not running — looks exactly
-# like "that test passed". Sibling o-positional-args.sh counts executions; this
-# file compares the argv BYTES that reached the far end of the chain.
+# WHY: `test_args` JSON -> worker argv (shell:false) -> run-all.sh "$@" -> expanded
+# scripts. Any hop can silently merge/tear an argument (a spaced path just not
+# running looks like "that test passed"). Sibling o-positional-args.sh counts
+# executions; this file compares the argv BYTES at the far end of the chain.
 
-# HOW: the driver spawns bash with an argv array built from the same JSON shape
-# the worker payload carries, using spawnSync + shell:false exactly as
-# bin/worker-dispatch/spawn.js does — so no intermediate shell can re-quote
-# anything. Each fixture test then records its own `$#`, its own `$0` and every
-# `$n` on separate lines into a shared log, and the whole log is compared
-# byte-for-byte with the expected block. `$#` is load-bearing in its own right:
-# run-all.sh must never forward its own argv down to a child test.
+# HOW: driver spawns bash with spawnSync + shell:false exactly as
+# bin/worker-dispatch/spawn.js does, so nothing can re-quote. Each fixture test
+# records its own $#, $0 and every $n; compared byte-for-byte against expected.
 
-# RED BY DESIGN (pre-existing defect, tests/run-all.sh:51): `for f in $pattern`
-# is unquoted, so IFS tears any pattern containing a space. Every row whose
-# argument carries a space is therefore red until /write-code lands the fix.
-# The metacharacter rows are the opposite claim — word splitting and pathname
-# expansion never re-run command substitution — and must be green both before
-# and after that fix.
+# RED BY DESIGN (tests/run-all.sh:51): unquoted `for f in $pattern` tears any
+# spaced argument — red until /write-code lands the fix. Metacharacter rows are
+# the opposite claim (no command-substitution re-run) and must stay green.
 
-# TL3 gap (what this TL2 test does NOT catch): the dispatcher's registry, anchor
-# and env-allowlist plumbing between the payload and spawn.js — sibling
-# tests/feature-1643-worker-dispatch-test-runner-behavior.sh pins that hop — and
-# argv handling by a native-Windows shell rather than Git Bash.
-# Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# TL3 gap: dispatcher registry/anchor/env-allowlist plumbing (pinned by
+# tests/feature-1643-worker-dispatch-test-runner-behavior.sh) and native-Windows
+# shell argv handling. Mitigation: bin/check-verification-gate.sh preflight.
 
 set -u
 

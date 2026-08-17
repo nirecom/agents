@@ -3,11 +3,9 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: the deadline exists so a wedged suite cannot hold CI forever, but the
-# abort path is exactly where a false verdict is most dangerous. If a run that
-# was cut short still printed `RUN_CONTRACT:` or `Results:`, both downstream
-# parsers would read a partial suite as a complete one and report green. So the
-# abort is distinguished by its own exit code (3) and by silence on stdout.
+# WHY: an aborted run must not print `RUN_CONTRACT:`/`Results:` or downstream
+# parsers would read a partial suite as complete and report green. Distinguished
+# by exit code 3 and silence on stdout.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -117,13 +115,9 @@ fi
 
 # --- (e) mixed suite: some tests finish, one hangs past the deadline -------
 
-# (a) aborts a suite where NOTHING finished, so an implementation that only
-# suppresses the summary when the tally is empty passes it. The dangerous case
-# is the mixed one: three tests really did pass, so there is a genuine partial
-# tally to print — and printing it is exactly how an aborted run becomes
-# indistinguishable from a complete one downstream. The contract is therefore
-# held identical to (a): exit 3, no `RUN_CONTRACT:`, no `Results:`, and no
-# verdict claimed for a test that never finished.
+# The dangerous case: 3 tests really did pass, so there's a genuine partial tally
+# an implementation could wrongly print. Held to the same contract as (a): exit 3,
+# no RUN_CONTRACT/Results, no verdict for a test that never finished.
 
 MIX="$(fx_new_root)"
 fx_add_dummy "$MIX" f1 --lines 1

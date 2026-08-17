@@ -96,10 +96,8 @@ function run(payload, ctx) {
     };
   }
 
-  // The suite is told to give up before the worker's own budget expires, so it
-  // folds its own descendants up instead of being killed mid-run (#1832). Both
-  // lead options are derived or validated ints, never caller argv text, and they
-  // sit first because run-all.sh consumes leading options then positionals.
+  // Deadline lets the suite exit cleanly before the worker's own timeout (#1832).
+  // Lead args are derived/validated ints — never caller argv text.
   const deadline = Math.max(30, (payload.timeout_seconds || 120) - 5);
   const lead = ["--deadline", String(deadline)];
   if (typeof payload.jobs === "number") lead.push("-j", String(payload.jobs));

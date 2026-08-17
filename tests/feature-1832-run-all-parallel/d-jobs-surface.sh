@@ -3,25 +3,14 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY (CPR-WPH): `-j 1` is the documented escape hatch back to the old
-# sequential behaviour, so every spelling of the surface must mean the same
-# thing, CLI must beat env, and a typo must be refused loudly (exit 2, no
-# contract line) rather than silently running at some other width. A rejected
-# invocation that still printed a contract would let a run that never happened
-# claim a verdict — which is how a suite goes green without executing.
+# WHY (CPR-WPH): every spelling of -j/--jobs/RUN_ALL_JOBS must mean the same thing, CLI beats env,
+# and a typo is refused loudly (exit 2, no contract line) — a rejected run that still printed a contract could claim a verdict it never earned.
 
-# This is a parser, so the cases are a named table
-# (skills/_shared/test-design/parser-regex-tests.md): one row per spelling,
-# covering CLI and environment forms, unknown options, empty values, and both
-# sides of the numeric limits.
+# Named table of parser cases (skills/_shared/test-design/parser-regex-tests.md): CLI/env spellings, unknown options, empty values, numeric limits.
 
-# RED-FIRST: no option parsing exists yet — line 43 of tests/run-all.sh honours
-# `--all` only as $1, so `-j 4 --all` globs nothing and reports EXECUTED=0 with
-# exit 0. Every accepted row is therefore red on EXECUTED, and every refused row
-# is red on the exit code. Both are intentional.
+# RED-FIRST: no option parsing exists yet, so every accepted row is red on EXECUTED and every refused row is red on the exit code (both intentional).
 
-# NOTE for the implementer: no upper bound is specified for --deadline, so only
-# its lower/ill-formed side is pinned as refused; 86400 is pinned as accepted.
+# NOTE for the implementer: --deadline has no documented upper bound, so only its lower/ill-formed side is pinned refused; 86400 is pinned accepted.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -184,12 +173,8 @@ fi
 
 # --- D6: the positive side — progress ON, on stderr, for ORDINARY jobs -----
 
-# D5 only proves the OFF switch silences things; a runner that never emitted a
-# progress line for a non-serial job would pass it. The default (no
-# RUN_ALL_PROGRESS at all) is what users actually get, so it is measured here:
-# visible on stderr, never on stdout, never parser-shaped, and one line per
-# job actually run. stdout must stay byte-identical to the silenced run,
-# because stdout is the only channel a downstream parser reads.
+# D5 only proves OFF silences things; a runner that never emits progress would also pass it. The
+# default (unset RUN_ALL_PROGRESS) is measured here: stderr-only, never parser-shaped, stdout unchanged.
 
 PROG_OUT="$FX_TMP_ROOT/prog.out"
 PROG_ERR="$FX_TMP_ROOT/prog.err"

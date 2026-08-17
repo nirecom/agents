@@ -3,32 +3,13 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY (CPR-WPH): every case needs the same thing — a throwaway tree that looks
-# like a repo to tests/run-all.sh, filled with dummy tests whose timing, exit
-# code, output shape and signal behaviour are chosen per case. The runner reads
-# AGENTS_DIR as `dirname($0)/..`, so the copy lives at `<root>/bin/run-all.sh`
-# and the dummies at `<root>/tests/`. Keeping the copy OUT of the directory it
-# globs is deliberate: inside it, the runner runs itself and re-enters the whole
-# suite — the #1836 defect shape. NO CASE EVER POINTS IT AT THE REAL tests/.
+# Builds a throwaway tree that looks like a repo to tests/run-all.sh (dummies at
+# <root>/tests/, runner copy outside it — pointing at the real tests/ re-triggers #1836).
 
-# Public API — setup, fixtures, execution
-#   fx_init <case-name> / fx_new_root / fx_runner <root> / fx_tests_dir <root>
-#   fx_log <root> / fx_add_archive_sentinel <root> / fx_doctor_runner <r> <dest>
-#   fx_exec <root> <timeout> <out> <err> [args...]
-#   fx_exec_bg <root> <out> <err> [args...]   backgrounded; sets FX_BG_PID
-
-# Public API — assertions and probes
-#   fx_contract_line <file> / fx_contract_field <file> <PASS|FAIL|SKIP|EXECUTED>
-#   fx_count_contract <file...>       contract-shaped line count (hook regex)
-#   fx_recorded_pids <root> / fx_pid_alive <pid> / fx_wait_gone <secs> <pid>...
-#   fx_child_pids <pid> / fx_kill_tree <pid>   descendant-aware teardown
-#   fx_wait_file <secs> <path>
-#   fx_now_ms / fx_children_user_cs   wall clock ms / children user CPU (10ms)
-#   fx_mask / fx_show_tail <file> [n] contract-masked diagnostic printing
-#   fx_pass / fx_fail / fx_note / fx_check <rc> <msg> / fx_finish
-
-# Public API — peak-concurrency reconstruction (--peak dummies)
-#   fx_peak_log <root> / fx_peak_of <log> / fx_peak_starts <log>
+# Public API: fx_init, fx_new_root, fx_runner/fx_tests_dir/fx_log, fx_add_dummy, fx_add_archive_sentinel,
+# fx_doctor_runner, fx_exec/fx_exec_bg (bg sets FX_BG_PID); fx_contract_line/fx_contract_field/fx_count_contract,
+# fx_recorded_pids/fx_pid_alive/fx_wait_gone/fx_child_pids/fx_kill_tree, fx_wait_file, fx_now_ms/fx_children_user_cs,
+# fx_mask/fx_show_tail, fx_pass/fx_fail/fx_note/fx_check/fx_finish, fx_peak_log/fx_peak_of/fx_peak_starts (--peak dummies)
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     echo "SKIP: _lib.sh is a sourceable library, not a test" >&2
@@ -60,8 +41,7 @@ fx_finish() {
     exit 1
 }
 
-# Direct children of <pid>. Git Bash's ps rejects -o, so the plain columnar
-# form (PID PPID ...) is the fallback.
+# Git Bash's ps rejects -o; falls back to the plain columnar form (PID PPID ...).
 FX_PS_POSIX=0
 ps -eo pid=,ppid= >/dev/null 2>&1 && FX_PS_POSIX=1
 
@@ -74,8 +54,7 @@ fx_child_pids() {
     return 0
 }
 
-# Kills a pid AND its descendants, deepest first. Killing only the recorded pid
-# orphans whatever it was blocked on (the dummy's own `sleep`) — a real leak.
+# Kills a pid and all descendants, deepest first — killing only the recorded pid leaks the dummy's own sleep child.
 fx_kill_tree() {
     local pid="$1" kid
     case "$pid" in ''|*[!0-9]*) return 0 ;; esac
@@ -89,8 +68,7 @@ fx_kill_tree() {
     return 0
 }
 
-# Roots are discovered by globbing, never from a variable: `root="$(fx_new_root)"`
-# runs in a subshell, so any bookkeeping it assigned would be discarded.
+# Roots are discovered by globbing, not tracked in a variable — fx_new_root runs in a subshell.
 fx_cleanup() {
     local root pid
     for root in "${FX_TMP_ROOT:-/nonexistent}"/fx*; do
@@ -103,17 +81,11 @@ fx_cleanup() {
     return 0
 }
 
-# Fixture isolation (rules/test/fixture-isolation.md): the parallelism cache, the
-# workflow state dir and the plans dir all land inside the temp tree, and
-# inherited session ids are dropped so no hook resolves the live session.
+# Fixture isolation (rules/test/fixture-isolation.md): cache/workflow/plans dirs live in
+# the temp tree; inherited session ids are dropped so no hook resolves the live session.
 
-# The run-time controls a fixture must own outright. A value inherited from the
-# developer's shell or from CI silently rewrites what a case MEANS — a case that
-# believes it is measuring `-j 4` measures RUN_ALL_JOBS=2 instead, and a
-# phase-gated dummy flips PASS/SKIP under an inherited FEATURE_644_PHASE — so
-# fx_init snapshots and drops all of them. Anything set AFTER that point is
-# caller intent (a per-invocation `RUN_ALL_REAP=fifo fx_exec ...` prefix, or a
-# deliberate file-scope export) and reaches the child untouched.
+# fx_init snapshots and drops ambient control vars (e.g. inherited RUN_ALL_JOBS) so a case's
+# own intent isn't silently overridden; anything set AFTER fx_init is caller intent and reaches the child untouched.
 
 FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE"
 FX_DROPPED_CONTROLS=""
@@ -131,11 +103,8 @@ fx_drop_ambient_controls() {
     return 0
 }
 
-# `env` arguments that pin every control to caller intent for ONE child:
-# every control the caller set is passed through explicitly, every other one is
-# explicitly removed with `-u` so no later leak can reach the runner.
-# Two passes because `env` stops reading options at the first NAME=VALUE
-# operand: every `-u` has to be emitted before any pass-through assignment.
+# Builds `env` args pinning each control to caller intent: set vars pass through, unset ones get `-u`.
+# Two passes: env stops parsing options at the first NAME=VALUE, so all `-u` must come first.
 fx_control_args() {
     local v cur
     for v in $FX_CONTROL_VARS; do
@@ -183,15 +152,8 @@ fx_tests_dir() { echo "$1/tests"; }
 fx_log()       { echo "$1/overlap.log"; }
 
 # fx_add_dummy <root> <id> [opts] — writes one generated dummy test.
-#   --sleep <s> / --exit <n> / --lines <n> / --err-lines <n>
-#   --serial <reason>  a `# Serial: <reason>` frontmatter line
-#   --grandchild       spawn `sleep 300` and record its pid
-#   --contract <where> a RUN_CONTRACT-shaped line: stdout|stderr|indented
-#   --ignore-term      `trap '' TERM` + a bounded loop instead of sleep
-#   --ignore-int       `trap '' INT` + the same bounded loop
-#   --log              append `start <id>` / `end <id>` to the shared log
-#   --peak             lock-protected `+<id>` on entry / `-<id>` on exit
-#   --phase <n>        exit 77 unless FEATURE_644_PHASE >= n
+#   --sleep/--exit/--lines/--err-lines/--serial <reason>/--grandchild (spawns sleep 300)/--contract <stdout|stderr|indented>
+#   --ignore-term/--ignore-int (trap + bounded loop)/--log (start/end to shared log)/--peak (locked +/-<id>)/--phase <n> (needs FEATURE_644_PHASE>=n)
 fx_add_dummy() {
     local root="$1" id="$2"; shift 2
     local sleep_s=0 exit_code=0 lines=0 err_lines=0 serial="" grandchild=0 contract="" ignore_term=0 log=0
@@ -271,9 +233,8 @@ fx_add_archive_sentinel() {
         > "$1/tests/_archive/archive-sentinel.sh"
 }
 
-# Rewrites `neutralize_stream <file>` call sites to `cat <file>`. Returns 1 when
-# the runner has no such call site — the negative control cannot be built, which
-# is itself the finding (W-NEUTRALIZE absent).
+# Rewrites `neutralize_stream <file>` calls to `cat <file>`; returns 1 if the runner has
+# no such call site (itself the W-NEUTRALIZE-absent finding).
 fx_doctor_runner() {
     local root="$1" dest="$2"
     sed 's/^\([[:blank:]]*\)neutralize_stream \(.*\)$/\1cat \2/' "$(fx_runner "$root")" > "$dest"

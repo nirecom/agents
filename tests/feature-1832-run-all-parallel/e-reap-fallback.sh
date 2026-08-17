@@ -3,11 +3,8 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: `wait -n` is bash 4.3+, and on some builds it returns for a job that was
-# already reaped, so the scheduler needs a fallback. A fallback is only safe if
-# it is indistinguishable from the primary: same stdout, same verdict, same
-# blocking behaviour. The dangerous cheap fallback is a poll loop — it looks
-# correct and quietly burns a core, which is the opposite of this issue's goal.
+# WHY: `wait -n` (bash 4.3+) can miss already-reaped jobs on some builds; the
+# fifo fallback must match its stdout/verdict/blocking exactly — not degrade to a CPU-burning poll loop.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -59,9 +56,7 @@ else
 fi
 
 # --- E2/E3: the fallback blocks, it does not poll --------------------------
-# Four 2s sleeps at -j 4 finish in about 2s of WALL time while costing almost no
-# CPU. A poll loop passes the wall check and fails the CPU check, so the two
-# assertions are stated over the same run.
+# Same run: wall time proves parallelism, CPU time proves it blocks instead of polling.
 SPIN="$(fx_new_root)"
 fx_add_dummy "$SPIN" p1 --sleep 2
 fx_add_dummy "$SPIN" p2 --sleep 2
@@ -91,16 +86,9 @@ else
 fi
 
 # --- E4: liveness when many children finish at once, in EVERY reap mode ----
-
-# The `wait -n` job-table hazard: jobs that completed before the parent waited
-# can be dropped from the notification, leaving the in-flight set permanently
-# non-empty. Eight dummies with the same sleep make them all land together.
-
-# The burst is run under fifo and auto as well, because the symmetric hazard is
-# the fallback's own (CPR-ORTH): a FIFO whose writers collide on one burst loses
-# notifications exactly the way `wait -n` does, and a fifo-only implementation
-# that drops them would still pass a waitn-only case. All three must reap all
-# eight children and terminate on the SAME contract and the SAME exit code.
+# `wait -n` can drop notifications for jobs that finished before it was called; a FIFO
+# has the same hazard on colliding writers. All three modes (waitn/fifo/auto) must
+# reap all 8 simultaneous children on the same contract and exit code.
 
 LIVE="$(fx_new_root)"
 for i in 1 2 3 4 5 6 7 8; do
@@ -135,14 +123,8 @@ else
 fi
 
 # --- E5: `auto` must actually FALL BACK, not merely resolve ----------------
-
-# E1c only proves `auto` lands on a reaper that works on THIS host, where
-# `wait -n` exists — so an `auto` hard-wired to waitn passes it. The fallback
-# arm is the whole reason the fifo reaper was written, and it is unreachable
-# from a test unless the probe is steerable. The seam pinned here is
-# RUN_ALL_WAITN_PROBE: `0` = pretend `wait -n` is unavailable, `1` = pretend it
-# is available, unset = real detection; consulted ONLY while resolving `auto`.
-# The selection is made observable by one stderr line, `[run-all] reap: <mode>`.
+# RUN_ALL_WAITN_PROBE steers detection (0=unavailable, 1=available, unset=real) so the
+# fallback arm is reachable in tests; the chosen mode is logged as `[run-all] reap: <mode>`.
 
 reap_line() { sed -n 's/^\[run-all\] reap: \([a-z][a-z-]*\)[[:blank:]]*$/\1/p' "$1" | head -n 1; }
 reap_count() { grep -c '^\[run-all\] reap: ' "$1" 2>/dev/null; return 0; }
@@ -196,8 +178,7 @@ else
     fx_fail "E5e. want EXECUTED=6 and exactly one '[run-all] reap: ' line per run, got EXECUTED=$A1_EXEC/$A0_EXEC lines=$R_N1/$R_N0 (exit $A1_RC/$A0_RC)"
 fi
 
-# The fallback must still be parallel: 6 dummies totalling 9s of sleep finish
-# in roughly 4s at -j 3, so a fallback that quietly serialised would not fit.
+# The fallback must still be parallel, not silently serialize.
 FB0="$(fx_now_ms)"
 RUN_ALL_REAP=auto RUN_ALL_WAITN_PROBE=0 \
     fx_exec "$EQ" 90 "$FX_TMP_ROOT/fbt.out" "$FX_TMP_ROOT/fbt.err" -j 3 --all

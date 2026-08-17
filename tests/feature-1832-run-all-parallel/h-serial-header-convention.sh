@@ -4,34 +4,22 @@
 # Tags: tests, bin, parallel, frontmatter, convention, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): once the suite runs in parallel, "this test may not share the host
-# with another test" stops being tribal knowledge and becomes a machine-read fact.
-# The `# Serial: <reason>` frontmatter line is that fact's single source of truth,
-# so the convention has to be enforced from both ends. The WRITER side is a static
-# rule — inside the 10-line frontmatter window, positioned after `# Tags:` so it
-# never pushes `# Tests:` / `# Tags:` out of the head -10 window that
-# bin/check-table-driven.sh and tests/feature-689-frontmatter-convention.sh read,
-# and carrying a non-empty reason. The READER side is the runner, which scans a
-# deliberately more forgiving 20 lines: a missed declaration is the only fatal
-# failure mode, so reception is lenient and authorship is strict.
+# WHY (CPR-WPH): `# Serial: <reason>` is the SSOT for "must not share the host."
+# WRITER side: static rule, header in the first 10 lines, after `# Tags:`, non-empty
+# reason. READER side: the runner scans a more lenient 20 lines — a missed
+# declaration is the only fatal failure mode.
 
-# The two sides are then cross-checked: the set of scripts the runner classifies
-# `serial` in `--print-plan` must equal the set an independent awk scan finds. A
-# runner that silently dropped a declaration would pass either check alone.
+# Cross-check: the runner's `--print-plan` serial set must equal an independent awk
+# scan (a silently dropped declaration would pass either check alone). Boundary
+# positions (1/9/10/11/20/21) and malformed shapes are covered by the sibling
+# h2-serial-header-boundaries.sh.
 
-# Header POSITION boundaries (lines 1 / 9 / 10 / 11 / 20 / 21) and the malformed
-# shapes live in the sibling table-driven h2-serial-header-boundaries.sh, which
-# asserts the lane actually used at runtime for each of them.
+# RED-FIRST: `--print-plan`, the runner-side scan, the doc paragraph, and the S2-4
+# inventory don't exist yet — those rows are the intended failures.
 
-# RED-FIRST: the `--print-plan` surface, the runner-side scan, the doc paragraph and
-# the S2-4 inventory do not exist yet. Those rows are the intended failures. The
-# real-tree scan is read-only — it never launches anything against tests/.
-
-# TL3 gap (what this TL2 test does NOT catch): whether a test that lacks a
-# `# Serial:` line is actually safe to run in parallel. Only S2-4's empirical layers
-# 2 and 3 (tree-dirt snapshots and reverse-order full runs) can answer that.
-# Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# TL3 gap (what this TL2 test does NOT catch): whether a test lacking `# Serial:`
+# is actually safe in parallel — only S2-4's empirical layers can answer that.
+# Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -52,14 +40,12 @@ assert_eq() {
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS / RUN_ALL_DEADLINE / RUN_ALL_PROGRESS / RUN_ALL_REAP and
-# FEATURE_644_PHASE each change what the runner does, so a value inherited from
-# the developer's shell could rewrite the verdicts below. senv() sits OUTERMOST
-# on every child invocation — bin/run-with-timeout.sh execs its argv directly, so
-# a shell function placed inside it would die with 127 instead of sanitizing.
+# WHY: RUN_ALL_JOBS/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
+# behavior; inherited values would rewrite verdicts. senv() sits OUTERMOST since
+# bin/run-with-timeout.sh execs its argv directly (a shell function inside would die 127).
 
-# CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so all the
-# `-u NAME` flags MUST precede any pass-through assignment. senv owns that order.
+# CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
+# flags must precede pass-through assignments — senv owns that order.
 senv() {
     env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
         -u FEATURE_644_PHASE "$@"
@@ -81,9 +67,8 @@ export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # ===========================================================================
-# 1. Writer-side convention, enforced against the REAL tests/*.sh tree.
-#    Read-only scanning; the top-level glob mirrors the runner's own corpus
-#    rule (`"$TESTS_DIR"/*.sh` never descends into subdirectories).
+# 1. Writer-side convention, checked read-only against the REAL tests/*.sh tree
+#    (top-level glob only, mirrors the runner's own corpus rule).
 # ===========================================================================
 case_static_convention() {
     local f rel line_no tags_no reason count hits
@@ -123,30 +108,21 @@ case_static_convention() {
 # 1b. The initial static audit: every hazardous test must CARRY the header.
 # ===========================================================================
 
-# WHY (CPR-WPH): case 1 above only checks the shape of headers that already
-# exist, and `inventory-non-empty` is satisfied by a single declaration — the
-# dispatcher's own. Both stay green on a tree where every genuinely unsafe test
-# is still unclassified, which is the failure this case exists to prevent.
+# WHY (CPR-WPH): case 1 only checks headers that already exist; this case checks
+# that every hazardous test HAS one, using criteria pinned here (not borrowed)
+# so the audit can't be silently widened or narrowed elsewhere.
 
-# The classification rule agreed for S2-4 is *declaration combined with static
-# detection*: the header is the SSOT, and the detector decides who owes one.
-# The criteria are pinned right here rather than borrowed, so the audit cannot
-# be widened or narrowed by an edit somewhere else. Comment lines are skipped —
-# a hazard named in a comment is documentation, not an executed statement.
+# Classification: *declaration + static detection* — the header is the SSOT, the
+# detector decides who owes one. Comment lines are skipped (documentation, not code).
 
-#   H1 fixed shared temp path — a command whose FIRST token is a write verb and
-#      whose argument is a literal /tmp/<name> carrying no $$ / mktemp / $RANDOM.
-#      Two tests running at once share one /tmp namespace; a fixed name collides.
-#      The first-token rule is what keeps quoted hook payloads and heredoc table
-#      rows — which are input DATA, not statements — out of the hit set.
+#   H1 fixed shared temp path — first token a write verb, arg a literal /tmp/<name>
+#      with no $$/mktemp/$RANDOM (two tests would collide on one /tmp namespace).
 
-#   H2 real-tree write — a redirect or write verb whose destination begins with
-#      $AGENTS_DIR, the repo-wide name for the real worktree root. REPO_ROOT is
-#      deliberately NOT in this set: at least one test binds it to a fixture dir,
-#      so including it would demand a header from an already-isolated file.
+#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR. REPO_ROOT is
+#      excluded: some tests bind it to an already-isolated fixture dir.
 
-#   H3 global state mutation — an executed `git config --global` / `--system`.
-#      An exported GIT_CONFIG_GLOBAL is the opposite (a pin) and never matches.
+#   H3 global state mutation — an executed `git config --global`/`--system`
+#      (an exported GIT_CONFIG_GLOBAL is a pin, not a mutation, and never matches).
 HAZARD_PROG='
 {
   line = $0
@@ -172,10 +148,8 @@ case_hazard_audit() {
     else fail "h-serial/audit/detector-matched-something" \
         "the pinned H1-H3 criteria matched 0 lines across tests/*.sh — the detector is broken"; fi
 
-    # A header counts as VALID only when it is inside the writer's 10-line
-    # window and carries a non-empty reason; the runner's window is the wider
-    # 20 lines on purpose (write narrow, read wide), so a header at line 11-20
-    # would be honoured at runtime yet still break the writer's convention.
+    # Valid = inside the writer's 10-line window with a non-empty reason; the
+    # runner's window is wider (11-20 honoured at runtime, but breaks writer convention).
     valid_headers="$(grep -nE '^# Serial:[[:space:]]*[^[:space:]]' "$REAL_TESTS"/*.sh 2>/dev/null \
         | awk -F: '$2 <= 10 { print $1 }' | LC_ALL=C sort -u || true)"
 
@@ -250,11 +224,8 @@ case_print_plan() {
     out="$(run_with_timeout 60 env "TESTS_DIR=$FX" "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
         bash "$RUNNER" --print-plan --all 2>"$TMPD/plan-err.txt")" || rc=$?
 
-    # Pre-implementation caveat: today's runner does not know `--print-plan`, so
-    # it treats both arguments as unmatched patterns and runs nothing — which is
-    # why the next two rows are green for the wrong reason. They become load
-    # bearing once `reports-tests-dir` / `reports-jobs` below go green; those
-    # rows are the fence that keeps this pair from certifying an empty run.
+    # Pre-impl caveat: today's runner doesn't know `--print-plan`, so it runs
+    # nothing — these two rows are green for the wrong reason until reports-* below go green.
     assert_eq "h-serial/plan/exit-zero" "0" "$rc"
     if [ -e "$ran" ]; then
         fail "h-serial/plan/executes-nothing" "--print-plan executed fixture scripts"

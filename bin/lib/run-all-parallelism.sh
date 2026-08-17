@@ -1,23 +1,7 @@
 #!/usr/bin/env bash
-# bin/lib/run-all-parallelism.sh — SSOT for the run-all parallelism cache.
-#
-# Loaded with the dot operator by tests/run-all.sh and by
-# bin/calibrate-test-parallelism.sh; never executed directly. Defines constants
-# and functions only: no work, no output, no writes at load time.
-#
-# The cache file is the one input `-j auto` takes from outside the repository,
-# so the reader below can only ever compare strings. It uses `read -r` plus
-# `case` glob matching, never expands a value and never does arithmetic on an
-# unvalidated token: injection payloads are rejected as data.
-
-# Reason precedence (first match wins). Cheap structural checks run before
-# semantic ones; semantic checks go from most global to most local, because
-# schema governs what every other key means, host identity governs whether the
-# measurement belongs to this machine, count_bucket whether it belongs to this
-# workload, and only then is the payload width judged:
-#   missing > unreadable > malformed(shape) > unknown-key > duplicate-key
-#   > malformed(required key / value class) > schema-mismatch > host-mismatch
-#   > bucket-mismatch > bad-jobs
+# SSOT for the run-all parallelism cache. Sourced by tests/run-all.sh and
+# bin/calibrate-test-parallelism.sh; defines constants/functions only.
+# Cache values are compared as strings only — never expanded, never used in arithmetic.
 
 RUN_ALL_CACHE_SCHEMA=1
 RUN_ALL_FALLBACK_JOBS=4
@@ -76,12 +60,8 @@ run_all_id_digest() {
     printf '%s' "${out:0:16}"
 }
 
-# run_all_host_id — `<os>|<arch>|<digest-of-hostname>`.
-#
-# Stable across runs on one host (uname and hostname do not drift) and safe for
-# a public repo: the machine name is replaced by its digest, so no hostname,
-# user name or filesystem path ever reaches the cache file. Comparison-only —
-# callers must never display it.
+# run_all_host_id — `<os>|<arch>|<digest-of-hostname>`. Hostname is digested,
+# never stored raw. Comparison-only — never display it.
 run_all_host_id() {
     local os arch host
     os="$(uname -s 2>/dev/null || printf 'unknown')"
@@ -96,11 +76,7 @@ run_all_host_id() {
 
 # --- corpus bucketing -------------------------------------------------------
 
-# run_all_count_bucket <n> — floor(log2(n)).
-#
-# n=0 is outside the domain of log2, so it is pinned to bucket 0, the same as
-# n=1: an empty corpus and a one-test corpus are operationally identical, and 0
-# is the floor of the range, so no cache measured on a real corpus collides.
+# run_all_count_bucket <n> — floor(log2(n)); n=0 and n=1 both map to bucket 0.
 run_all_count_bucket() {
     local n="${1:-0}" b=0
     case "$n" in
@@ -131,15 +107,9 @@ run_all_corpus_bucket() {
 
 # --- the non-evaluating reader ----------------------------------------------
 
-# run_all_cache_read <file> [<expected-count-bucket>]
-#
-# Success: sets RUN_ALL_CACHE_JOBS / RUN_ALL_CACHE_MEASURED_AT, clears
-# RUN_ALL_CACHE_REASON, returns 0. Failure: sets RUN_ALL_CACHE_REASON to exactly
-# one enum token and returns 1.
-#
-# Expected bucket resolves as: argument 2, then RUN_ALL_EXPECT_BUCKET, then the
-# bucket of TESTS_DIR's corpus; when none is available the check is skipped
-# rather than guessed.
+# run_all_cache_read <file> [<expected-count-bucket>] — success sets
+# RUN_ALL_CACHE_JOBS/MEASURED_AT, returns 0; failure sets RUN_ALL_CACHE_REASON
+# to one enum token, returns 1. Bucket falls back: arg2 > RUN_ALL_EXPECT_BUCKET > TESTS_DIR corpus > skip.
 run_all_cache_read() {
     local file="${1:-}"
     local want_bucket=""

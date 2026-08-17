@@ -4,30 +4,18 @@
 # Tags: tests, bin, parallel, calibrator, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): the calibrator is the only writer of the parallelism cache and it
-# runs the real suite many times to get there. Two properties therefore matter more
-# than the measurement itself. (1) It must never be reachable from a normal run —
-# no code path in tests/run-all.sh executes it, and its own name must not read as a
-# test command to the run_tests classifier, or a calibration would silently mark the
-# workflow step. (2) Its inquiry sub-modes (--help / --dry-run / --print) must cost
-# nothing, and a real measurement must be opt-in via RUN_CALIBRATION=1.
+# WHY (CPR-WPH): the calibrator is the sole cache writer. Must never be reachable from
+# a normal run, must cost nothing on inquiry sub-modes, and a real measurement is
+# opt-in via RUN_CALIBRATION=1. Write side: exactly the reader's 7 keys, valid charsets,
+# zero contract-shaped output, and an unstable measurement writes nothing.
 
-# The write side is fenced just as hard: exactly the seven keys the reader accepts,
-# a schema equal to the library's SSOT constant, values inside the reader's char
-# classes, and — because the calibrator drives run-all repeatedly — ZERO
-# contract-shaped lines anywhere in its own output. An unstable measurement must
-# write nothing at all rather than persist a bad number.
+# RED-FIRST: bin/calibrate-test-parallelism.sh doesn't exist yet; rows needing it
+# report `implementation missing: <path>`.
 
-# RED-FIRST: bin/calibrate-test-parallelism.sh does not exist yet. Every row that
-# needs it reports `implementation missing: <path>`; that is the intended failure.
+# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR pinned to temp fixtures — the real
+# ~/.claude/run-all and suite are never touched.
 
-# ISOLATION: RUN_ALL_CACHE_DIR and TESTS_DIR are pinned to temp fixtures, so the
-# developer's real ~/.claude/run-all and the real suite are never touched.
-
-# TL3 gap (what this TL2 test does NOT catch): whether the knee-detection heuristic
-# picks a genuinely good `jobs` value on real hardware — only S2-9's manual full
-# runs can say that. Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# TL3 gap: whether the knee heuristic picks a genuinely good `jobs` on real hardware is not covered here.
 
 set -u
 
@@ -298,28 +286,14 @@ case_stability_gate() {
 # 6. Synthetic measurement curves — the knee is SELECTED, not guessed
 # ===========================================================================
 
-# WHY: a range check (1..1024) cannot tell an empirical calibrator apart from
-# `echo jobs=1`. The user rejected core-count heuristics precisely so that this
-# selection is measured, so the selection rule itself has to be pinned.
+# WHY: a range check alone can't tell an empirical calibrator from `echo jobs=1`, so the
+# selection rule itself is pinned: knee = smallest w with 100*min_median >= 95*median(w).
 
-# SEAM (must be implemented by bin/calibrate-test-parallelism.sh):
-# RUN_ALL_CALIBRATION_MEASURE_CMD replaces the real timed suite run. When set and
-# non-empty (and RUN_CALIBRATION=1), the calibrator runs
-# `bash "$RUN_ALL_CALIBRATION_MEASURE_CMD" <jobs>` once per measurement — warmups
-# included — and reads ONE non-negative integer, the elapsed milliseconds, from
-# its stdout. A non-zero exit is a failed sample. Nothing else about the approved
-# design changes: same cache format, same keys, same gates.
+# SEAM: RUN_ALL_CALIBRATION_MEASURE_CMD replaces the real timed run — the calibrator
+# runs it once per measurement and reads one elapsed-ms integer from stdout.
 
-# Throughput is therefore 1/elapsed, and the rule under assertion is:
-# knee = the smallest width w with 100 * min_median_elapsed >= 95 * median_elapsed(w).
-
-# make_stub <spec>; spec is "<width>:<ms>,<ms>,<ms> ..." — the Nth invocation of a
-# width returns the Nth value (last value repeats). Order-independent by design,
-# so a row's expectation holds whatever traversal order the calibrator picks.
-
-# The directory MUST come from mktemp, not a shell counter: these helpers are
-# called inside `$(...)`, so a counter increment would be lost with the subshell
-# and every row would inherit the previous row's occurrence state.
+# make_stub <spec>: "<width>:<ms>,<ms>,<ms> ..." — Nth call to a width returns the Nth value.
+# Uses mktemp (not a counter) since these run inside `$(...)` subshells.
 make_stub() {
     local d
     d="$(mktemp -d "$TMPD/stub.XXXXXX")"

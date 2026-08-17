@@ -4,20 +4,12 @@
 # Tags: tests, bin, parallel, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): every other case in this suite proves that a parallel run says
-# the right thing; none proves it RAN at the requested width. An implementation
-# that quietly maps every `-j N>1` — and every cached value — to 2 satisfies
-# "faster than -j 1" and "same stdout", so the width would never be measured
-# again after the day it was written. So each width is measured directly: the
-# dummies stamp a lock-protected `+id`/`-id` transition log, the timeline is
-# replayed, and the EXACT peak is pinned. Under-parallelising fails just as
-# loudly as over-parallelising, and each row also names its own upper bound so
-# a width that overshoots is distinguishable from one that undershoots.
+# WHY: other cases prove a parallel run says the right thing but not that it RAN
+# at the requested width. Dummies stamp a lock-protected transition log so the
+# EXACT peak is pinned; each row also names its own upper bound.
 
-# RED-FIRST: `-j` / `-j auto` and the parallel dispatcher do not exist yet, so
-# `tests/run-all.sh -j N --all` currently parses nothing (line 43 only honours
-# `--all` as $1), executes nothing and reports peak 0. Every row below is an
-# intentional assertion naming the width that is missing.
+# RED-FIRST: `-j` / `-j auto` and the parallel dispatcher don't exist yet, so
+# `-j N --all` currently parses/executes/reports nothing.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -124,15 +116,11 @@ fx_note "the nolib rows pin RUN_ALL_FALLBACK_JOBS=$FALLBACK_JOBS as the width us
 fx_note "defnolib4 is the -j-omitted default path with no library: it must resolve a width on its own, not run serially"
 
 # ==========================================================================
-# M-default. The real default path: a VALID cache, `-j` absent from argv
-# entirely, RUN_ALL_JOBS unset. Every row above names a width somewhere — as
-# a flag, as an env var, or as `-j auto` — so none of them covers the
-# invocation an ordinary user actually types. Two distinct cached widths are
-# measured because a single one is satisfied by any hardcoded constant.
+# M-default. The real default path: valid cache, no -j in argv, RUN_ALL_JOBS
+# unset. Two distinct cached widths are measured so no hardcoded constant passes.
 # ==========================================================================
 
-# Precondition, stated rather than assumed: the env layer really does remove
-# RUN_ALL_JOBS from the child, so "unset" is a property of the run, not a hope.
+# Precondition: the env layer really does remove RUN_ALL_JOBS from the child.
 CTL="$(fx_control_args)"
 case "$CTL" in
     *"-u RUN_ALL_JOBS"*) case "$CTL" in

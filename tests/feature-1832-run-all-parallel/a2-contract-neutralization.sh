@@ -3,14 +3,9 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY: two downstream parsers read the runner's output under an exactly-one rule.
-# hooks/workflow-run-tests.js scans the parent's STDOUT; the worker in
-# bin/worker-dispatch/workers/test-runner.js CONCATENATES stdout and stderr
-# first. A child test that prints a contract-shaped line therefore forges a
-# second match on either surface unless the parent neutralizes both replays.
-
-# The dummies cover the whole shape the two regexes accept: on stdout, on
-# stderr, and leading-whitespace-indented (both patterns carry `^[ \t]*`).
+# WHY: hooks/workflow-run-tests.js scans stdout only; the worker in test-runner.js scans
+# stdout+stderr concatenated — a contract-shaped child line forges a match on either surface
+# unless neutralized. Dummies cover stdout/stderr/indented (both regexes carry `^[ \t]*`).
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -69,8 +64,8 @@ grep -qF "${NEUTRAL_PREFIX}$(printf '\t')  ${PLAIN}" "$OUT4"
 fx_check $? "N-c3. an indented contract-shaped line keeps its leading tab+spaces after the prefix"
 
 # --- negative control ------------------------------------------------------
-# A doctored copy with the neutralization removed must fail (a) and (b). Built
-# by sed on the fixture's copy — the real runner is never edited.
+# A doctored copy (sed on the fixture's copy; the real runner is never edited) with
+# neutralization removed must fail (a) and (b).
 DOCTORED="$ROOT/bin/run-all-doctored.sh"
 if fx_doctor_runner "$ROOT" "$DOCTORED"; then
     D_OUT="$FX_TMP_ROOT/doctored.out"

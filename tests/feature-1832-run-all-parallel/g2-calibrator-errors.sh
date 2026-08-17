@@ -4,28 +4,17 @@
 # Tags: tests, bin, parallel, calibrator, error-matrix, injection, idempotency, TL2, scope:issue-specific
 # Serial: drives the calibrator, which the sibling g-calibrator.sh also drives
 
-# WHY (CPR-WPH): the calibrator is the SOLE writer of the parallelism cache, so a
-# half-validated argument is not a local mistake — it either persists a wrong
-# `jobs` for every later run or destroys a good cache on its way to failing. Every
-# rejection therefore has to hold four invariants at once, not just "exits 1".
+# WHY (CPR-WPH): the calibrator is the SOLE cache writer, so every rejection row
+# asserts 4 invariants: rejects cleanly (not skip/timeout), no RUN_CONTRACT: shape
+# leaks, no injection side effect, and the pre-existing cache survives byte-for-byte.
 
-# The four invariants asserted for each rejection row:
-#   1. exit is a rejection (non-zero, and neither 77 skip nor 124 timeout)
-#   2. zero RUN_CONTRACT:-shaped lines reach stdout or stderr
-#   3. no injection side effect — the sentinel file is never created
-#   4. the pre-existing valid cache survives byte-for-byte
+# RED-FIRST: bin/calibrate-test-parallelism.sh doesn't exist yet; every row
+# reports `implementation missing: <path>`.
 
-# RED-FIRST: bin/calibrate-test-parallelism.sh does not exist yet. Every row
-# reports `implementation missing: <path>`; that is the intended failure.
+# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR/measurement seam pinned to temp fixtures —
+# the real ~/.claude/run-all is never reachable.
 
-# ISOLATION: RUN_ALL_CACHE_DIR, TESTS_DIR and the measurement seam are pinned to
-# temp fixtures, so the developer's real ~/.claude/run-all is never reachable.
-
-# TL3 gap (what this TL2 test does NOT catch): whether a real filesystem-level
-# crash mid-write (power loss, ENOSPC) still leaves a parseable cache — only a
-# fault-injecting host can show that. Closest-to-action mitigation:
-# bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight
-# (category: skill-orchestration).
+# TL3 gap: a real filesystem crash mid-write (power loss, ENOSPC) is not covered here.
 
 set -u
 

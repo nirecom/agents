@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 # bin/calibrate-test-parallelism.sh — the ONLY writer of the parallelism cache.
-#
-# Explicit-run tool: no path in tests/run-all.sh reaches it. A real measurement
-# drives the suite many times, so it is gated behind RUN_CALIBRATION=1 while the
-# inquiry sub-modes (--help / --dry-run / --print) cost nothing. The suite's own
-# stdout is never re-emitted — it carries the RUN_CONTRACT line the PostToolUse
-# hook attributes, and a second copy would corrupt that attribution.
-#
-# Exit codes: 0 ok | 1 measurement unstable, or nothing to print | 2 usage,
-# validation or measurement failure | 77 not explicitly requested.
+# Explicit-run tool, gated behind RUN_CALIBRATION=1 (see usage below).
+# Exit codes: 0 ok | 1 unstable/nothing to print | 2 usage/validation error | 77 not requested.
 
 set -u
 
@@ -83,10 +76,8 @@ done
 [ "$#" -eq 0 ] || die "unexpected positional argument: $1"
 
 # --- 2. validate argument VALUES --------------------------------------------
-#
-# Every value is matched as text against a digit class before any arithmetic, so
-# `$(...)`, backticks, `;`, `&&` and embedded newlines are rejected as data and
-# never reach a shell. Nothing has been written or measured at this point.
+# Every value is checked against a digit class before arithmetic — rejects
+# injection via $(...), backticks, ;, && before anything is written or measured.
 
 is_uint "$SAMPLE" || die "--sample must be a positive integer, got: $SAMPLE"
 [ "$SAMPLE" -ge 1 ] || die "--sample must be >= 1, got: $SAMPLE"

@@ -3,22 +3,15 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, config, scope:issue-specific
 
-# WHY (CPR-WPH): `tests/run-all.sh` exports FEATURE_644_PHASE and the whole
-# feature-644 corpus decides PASS-vs-SKIP from it at its very first line. That
-# export is a property of the sequential runner's own process; a parallel
-# dispatcher that hands work to a worker, a subshell with a scrubbed
-# environment, or a `env -i`-style child silently turns every gated test into a
-# SKIP — and a suite that skips is still green. So the classification is pinned
-# at -j 1 AND at -j 4 for the same corpus, and the children are made to report
-# the value they actually observed rather than being trusted to have seen it.
+# WHY: FEATURE_644_PHASE gates PASS-vs-SKIP in the feature-644 corpus; a scrubbed
+# child env would silently SKIP everything and still look green. Pinned at both
+# -j 1 and -j 4, with children reporting the value they actually observed.
 
-# The default row is the sharp one: with FEATURE_644_PHASE unset in the caller,
-# the runner's own `${FEATURE_644_PHASE:-0}` default must still arrive at the
-# children as a literal 0, not as unset.
+# Default row: with FEATURE_644_PHASE unset, the runner's own `${...:-0}` default
+# must still arrive at children as a literal 0, not unset.
 
-# RED-FIRST: `-j` is not parsed yet (line 43 honours `--all` only as $1), so the
-# -j 4 rows currently measure the sequential path or nothing at all. Every row
-# is an intentional assertion naming the classification that is missing.
+# RED-FIRST: `-j` isn't parsed yet, so -j 4 rows currently measure the sequential
+# path or nothing at all.
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
