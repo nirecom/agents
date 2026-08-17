@@ -9,9 +9,11 @@ Edit source code for the current task.
 
 ## Procedure
 
-When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
-WCD-1. Read `rules/core-principles.md` and the target files identified from the plan.
+Read `rules/ops.md` before any destructive or system-state-changing command (including inside WCD-4 self-repair) — on-demand-only, never auto-injected; it owns the recovery-options-first decision path.
+
+WCD-1. Read `rules/core-principles.md`, `rules/coding.md` (on-demand-only: not auto-injected, so this Read is the only way it arrives), and the target files identified from the plan.
 
 WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then check via Bash:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
@@ -26,7 +28,7 @@ WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash imm
 WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model derived from level in step WCD-3>` — the model parameter receives `"opus"` or `"sonnet"`, never `"high"` or `"low"`) with a prompt containing:
    - Target files and planned edit summary from step WCD-2.
    - A-layer language essence block (see below).
-   - Directive: "Read `rules/coding/<lang>.md` before the first Edit for each language present."
+   - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
    - Lint/typecheck recipe table (see below).
    - Self-repair cap: 3 iterations; if still failing after 3, surface tool output verbatim.
    - Lint-tool absence policy: when a tool is unavailable, skip that check AND emit `<tool> not found — check skipped` in the final summary. Never omit this notice.
@@ -74,7 +76,7 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 - Mode-orthogonal: behavior is identical regardless of worktree mode. Do not show diffs in the conversation.
 - Never edit test files — `/write-tests` owns them.
 - Subagent self-repair cap: 3 iterations.
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ## Completion
 

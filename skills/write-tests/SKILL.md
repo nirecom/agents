@@ -68,4 +68,4 @@ If tests are genuinely not needed for this change:
 
 ## Rules
 
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

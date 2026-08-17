@@ -7,6 +7,7 @@ user-invocable: false
 Triage routes to the correct subset of steps; each step is idempotent and resumable.
 
 Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines the per-session N relation.
+Read `rules/coding.md` before the first `gh issue comment` or body update — on-demand-only, never auto-injected; its Public GitHub Rules govern that outbound text.
 
 Usage: `/issue-close-stage <N>` or `/issue-close-stage --from-session`
 
@@ -58,4 +59,4 @@ the PR is merged run `/issue-close-finalize --from-session`.
 
 ## Rules
 
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

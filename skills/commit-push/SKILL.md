@@ -44,6 +44,7 @@ condition: sentinel, history entry, or both). Resolve by invoking
 ## Procedure
 
 Read `rules/github-issues.md` before CP-1 — on-demand-only, never auto-injected.
+Read `rules/coding.md` before CP-2 — on-demand-only, never auto-injected; its Public GitHub Rules govern the commit message and PR body.
 
 CP-1. **Stage changes with `git add`** — explicitly add each file you intend to commit.
    Then run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh"` from the worktree root.
@@ -116,4 +117,4 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
 - `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step WE-4b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.
 - On fallback or step degradation (push retry, PR reuse, merge deferral): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter commit-push` (session-id auto-resolves).
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

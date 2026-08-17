@@ -13,6 +13,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 ## Procedure
 
 UD-0. **Read `rules/docs.md`.** It is on-demand-only and never auto-injected, so this Read is mandatory.
+   Read `rules/coding.md` here too — same on-demand-only status; its Public GitHub Rules govern every doc written in UD-4 and after.
 UD-1. **Gather recent changes**:
    - Run `git diff` and `git diff --cached` to capture uncommitted and staged changes (current session's work, not yet in git log)
    - Run `git log --oneline -20` for committed history

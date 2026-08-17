@@ -32,4 +32,4 @@ SV-5. Return result: `VERDICT=<confirm|veto> TARGET=<target>`.
 - Never emit workflow sentinels — verdict is recorded via CLI only.
 - `veto` when uncertain — a false `confirm` can skip a stage that was necessary.
 - Do NOT read source code or implementation files; evaluate design artifacts only.
-- Report observations per rules/supervisor-reporting.md.
+- Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
