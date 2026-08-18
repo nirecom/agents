@@ -343,3 +343,7 @@ Changes: tests/run-all.sh: fixed self-recursive re-launch under `--all`; added p
 ### FEATURE: PR #2062 (2026-08-18)
 Background: feature/2037 rules 2 rules skill subagent
 Changes: Reduced the fixed prompt-injection footprint by moving 7 more rule files to on-demand loading, so subagent launches no longer re-inject content most sessions never need.
+
+### FEATURE: PR #2067 (2026-08-18)
+Background: feat(#2065): add --dup-groups inventory; consolidate enforce-worktree...
+Changes: `/sweep-tests` gains a duplicate-group inventory: `bin/audit-tests.sh --dup-groups` lists test files that share a `# Tests:` target group, so redundant per-issue test files stop accumulating unnoticed. Read-only — it reports, it never rewrites or deletes.;Test files that share a target group on purpose can now say so with a `dup-group-keep:<reason>` tag (`cross-hook`, `distinct-layer`, `size-hard-limit`) instead of being re-flagged on every sweep.;The 13 test files covering the worktree-enforcement hook are now one suite (`tests/main-enforce-worktree-guard.sh`) with the same 229 cases. Five of those cases used to write supervisor findings into the developer's real `~/.workflow-plans/` directory; they no longer do.
