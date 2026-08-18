@@ -22,8 +22,11 @@ check "H1. outline=pending + detail=complete (no evidence) → ACTION=abort" \
 # back-door around the approval gate.
 check_contains "H1b. scoped hint steers to the CONFIRM_OUTLINE approval sentinel" \
   "WORKFLOW_CONFIRM_OUTLINE" "${NEXT_HINT:-}"
-check_not_contains "H1c. scoped hint does NOT offer --mark outline complete as recovery" \
-  "--mark outline complete" "${NEXT_HINT:-}"
+# The hint no longer emits a trailing `complete` token, so the needle is
+# shortened to `--mark outline` — the old full-phrase needle would have become
+# structurally unmatchable and let this guard go vacuously green.
+check_not_contains "H1c. scoped hint does NOT offer --mark outline as recovery" \
+  "--mark outline" "${NEXT_HINT:-}"
 
 echo ""
 echo "=== H2: H1 hint does NOT contain /workflow-init ==="
@@ -35,19 +38,12 @@ eval "$OUT" 2>/dev/null || true
 check_not_contains "H2. outline=pending + detail=complete scoped hint does NOT contain /workflow-init" \
   "/workflow-init" "${NEXT_HINT:-}"
 
-# ===========================================================================
-# === B1-B2: Generic hint bifurcation by hasCompletionEvidence ===
-# ===========================================================================
-# Uses REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING fixture (non-outline/detail pair)
-# to test hint bifurcation for run_tests.
-#
-# After #1215 fix: run_tests is sentinel-only; hasStagedTestChanges applies ONLY to
-# write_tests. B1 verifies that staged tests/ present STILL yields run_tests
-# evidence=false (the core #1215 regression). The staged-test setup is KEPT so B1
-# records: "staged tests/ exist, yet run_tests evidence is false" — removing setup
-# would reduce B1 to a no-repo state identical to B2, losing the regression value.
+# === B1-B2: hint bifurcation by hasCompletionEvidence (REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING fixture) ===
+# run_tests is sentinel-only: hasStagedTestChanges applies only to write_tests, so
+# staged tests/ must still NOT count as run_tests evidence. B1 keeps a staged test
+# file to prove that non-effect; B2 (no staged tests) is the control.
 #   B1: staged test file → hasCompletionEvidence("run_tests")=false → /workflow-init hint (NOT --mark)
-#   B2: no staged tests → hasCompletionEvidence("run_tests")=false → /workflow-init hint
+#   B2: no staged tests  → hasCompletionEvidence("run_tests")=false → /workflow-init hint
 
 echo ""
 echo "=== B1: non-scoped pair + staged tests + run_tests evidence=false → hint has /workflow-init not --mark ==="

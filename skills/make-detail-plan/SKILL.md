@@ -112,6 +112,6 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 
 ## Completion
 
-1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --status complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
+1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
 2. Record branching: Read `rules/branch.md` and `rules/worktree.md` (both on-demand-only, never auto-injected), then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
 3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from step 1.

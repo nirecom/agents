@@ -3,12 +3,13 @@
 // Owns ALL argument validation: unknown options, missing values, step-name
 // validation for --reset/--mark, and the --session format check.
 
-const { VALID_STEPS, VALID_STATUSES } = require("../../../../hooks/workflow-state");
-
-// `--advance --status` accepts the three SETTLING statuses. in_progress settles
-// nothing, so it is rejected here rather than silently recorded — deliberately
-// stricter than the MARK_STEP sentinel path, and never a new bypass route.
-const ADVANCE_STATUSES = VALID_STATUSES.filter((s) => s !== "in_progress");
+const { VALID_STEPS } = require("../../../../hooks/workflow-state");
+// Settling-status vocabulary (value-less --complete/--skipped/--pending, #1947)
+// is shared with bin/workflow/set-workflow-type — single owner, no local copy.
+const {
+  ADVANCE_STATUSES, matchStatusFlag, formatStatusFlagList,
+  formatStatusRejection, warnDeprecatedStatusValue,
+} = require("./advance-args");
 
 function printUsage() {
   process.stdout.write(
@@ -25,14 +26,17 @@ function printUsage() {
     "                    ending with the terminal final_report row), with status markers\n" +
     "                    when --session is provided.\n" +
     "  --reset <step>    Reset a workflow step to pending (recovery tool).\n" +
-    "  --mark <step> complete   Mark a workflow step as complete (recovery tool).\n" +
+    "  --mark <step>     Mark a workflow step as complete (recovery tool).\n" +
+    "                    --complete is accepted and redundant.\n" +
     "  --advance         Record a step verdict in this same call (forward operation).\n" +
-    "                    Requires --step <step> and --status <complete|skipped|pending>;\n" +
-    "                    --skip-reason <text> is required with --status skipped.\n" +
+    "                    Requires --step <step> and one of " + formatStatusFlagList() + ";\n" +
+    "                    --skip-reason <text> is required with --skipped.\n" +
     "                    Exclusive with --list / --reset / --mark.\n" +
     "  --next            With --advance: also emit the ACTION block, but only when\n" +
     "                    the settled step was the session's current step.\n" +
-    "  -h, --help        Show this help.\n"
+    "  -h, --help        Show this help.\n" +
+    "\n" +
+    "Deprecated but accepted: --status <status>, --mark <step> complete.\n"
   );
 }
 
@@ -41,6 +45,9 @@ function parseArgs(argv) {
     list: false, session: undefined, reset: undefined, mark: undefined,
     advance: false, next: false,
     advanceStep: undefined, advanceStatus: undefined, skipReason: undefined,
+    // Diagnostic only: the literal token the caller typed for the status, so a
+    // refusal can name the spelling in front of them.
+    advanceStatusFlag: undefined,
   };
   const needValue = (i, flag) => {
     if (i + 1 >= argv.length) {
@@ -48,6 +55,23 @@ function parseArgs(argv) {
       process.exit(1);
     }
     return argv[i + 1];
+  };
+  // Old form frozen, new form strict: `--status a --status b` is pre-existing
+  // last-wins behaviour external callers may depend on, but any supply pair
+  // involving a value-less flag is a shape only expressible since #1947, has no
+  // priority rule between its two sources, and so fails closed.
+  const setStatus = (out2, statusValue, sourceToken) => {
+    const newFormInvolved =
+      matchStatusFlag(sourceToken) !== null || matchStatusFlag(out2.advanceStatusFlag) !== null;
+    if (out2.advanceStatus !== undefined && newFormInvolved) {
+      process.stderr.write(
+        "next-step: advance status given more than once (" + out2.advanceStatusFlag +
+        " and " + sourceToken + ") — pass exactly one\n"
+      );
+      process.exit(1);
+    }
+    out2.advanceStatus = statusValue;
+    out2.advanceStatusFlag = sourceToken;
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -69,8 +93,8 @@ function parseArgs(argv) {
       out.reset = stepName;
       i++;
     } else if (a === "--mark") {
-      if (i + 2 >= argv.length) {
-        process.stderr.write("next-step: --mark requires <step> and <status> arguments\n");
+      if (i + 1 >= argv.length) {
+        process.stderr.write("next-step: --mark requires a <step> argument\n");
         process.exit(1);
       }
       const stepName = argv[i + 1];
@@ -78,13 +102,25 @@ function parseArgs(argv) {
         process.stderr.write("next-step: invalid step for --mark: " + stepName + "\n");
         process.exit(1);
       }
-      const statusToken = argv[i + 2];
-      if (statusToken !== "complete") {
-        process.stderr.write("next-step: --mark status must be 'complete'\n");
-        process.exit(1);
-      }
       out.mark = stepName;
-      i += 2;
+      // One-token lookahead (same shape as record-skip-judgment's parseFlagBool):
+      // step names never start with `--`, and the only legacy status token --mark
+      // ever accepted is the literal `complete`, so the reading is unambiguous.
+      const statusToken = argv[i + 2];
+      if (statusToken !== undefined && !statusToken.startsWith("--")) {
+        if (statusToken !== "complete") {
+          process.stderr.write("next-step: --mark status must be 'complete'\n");
+          process.exit(1);
+        }
+        process.stderr.write(
+          "next-step: the trailing 'complete' token on --mark is deprecated — use --mark " +
+          stepName + " (a bare \"complete\" argv token trips worktree-isolation " +
+          "command classifiers)\n"
+        );
+        i += 2;
+      } else {
+        i += 1;
+      }
     } else if (a === "--advance") {
       out.advance = true;
     } else if (a === "--next") {
@@ -93,7 +129,9 @@ function parseArgs(argv) {
       out.advanceStep = needValue(i, "--step");
       i++;
     } else if (a === "--status") {
-      out.advanceStatus = needValue(i, "--status");
+      const v = needValue(i, "--status");
+      setStatus(out, v, "--status");
+      warnDeprecatedStatusValue("next-step", v);
       i++;
     } else if (a === "--skip-reason") {
       out.skipReason = needValue(i, "--skip-reason");
@@ -105,6 +143,9 @@ function parseArgs(argv) {
       }
       out.session = argv[i + 1];
       i++;
+    } else if (matchStatusFlag(a) !== null) {
+      // Placed AFTER every exact-match branch above so no existing flag is shadowed.
+      setStatus(out, matchStatusFlag(a), a);
     } else {
       process.stderr.write("next-step: unknown option: " + a + "\n");
       process.exit(1);
@@ -132,7 +173,7 @@ function validateAdvanceArgs(out) {
   if (out.next && !out.advance) die("--next is only meaningful with --advance");
   if (!out.advance) {
     if (out.advanceStep !== undefined) die("--step is only meaningful with --advance");
-    if (out.advanceStatus !== undefined) die("--status is only meaningful with --advance");
+    if (out.advanceStatus !== undefined) validateStatusWithoutAdvance(out, die);
     if (out.skipReason !== undefined) die("--skip-reason is only meaningful with --advance");
     return;
   }
@@ -143,18 +184,33 @@ function validateAdvanceArgs(out) {
   if (VALID_STEPS.indexOf(out.advanceStep) === -1) {
     die("invalid step for --advance: " + out.advanceStep);
   }
-  if (out.advanceStatus === undefined) die("--advance requires --status <status>");
+  if (out.advanceStatus === undefined) {
+    die("--advance requires a status: " + formatStatusFlagList() + " (deprecated: --status <status>)");
+  }
   if (ADVANCE_STATUSES.indexOf(out.advanceStatus) === -1) {
     // Named explicitly so the refusal reads as a status rejection, never as an
     // unknown-flag error: --status in_progress is a real flag with a real answer.
-    die(
-      "--advance --status " + out.advanceStatus + " is not a forward operation " +
-      "(accepted: " + ADVANCE_STATUSES.join(", ") + ")"
-    );
+    die(formatStatusRejection(out.advanceStatus));
   }
   if (out.advanceStatus === "skipped" && (out.skipReason === undefined || out.skipReason === "")) {
-    die("--advance --status skipped requires --skip-reason <text>");
+    die("--advance --skipped requires --skip-reason <text>");
   }
+}
+
+// A status supplied without --advance. --mark is the single exception: it is the
+// recovery tool reached mid-breakage, and `--mark <step> --complete` is what the
+// new vocabulary invites a caller to type, so it is accepted as redundant rather
+// than stranding them. --skipped/--pending stay refused — --mark only completes.
+function validateStatusWithoutAdvance(out, die) {
+  const flag = out.advanceStatusFlag;
+  if (out.mark !== undefined && matchStatusFlag(flag) !== null) {
+    if (out.advanceStatus === "complete") return;
+    die(
+      "--mark only marks a step complete; " + flag + " is not applicable " +
+      "(use --advance --step " + out.mark + " " + flag + ")"
+    );
+  }
+  die(flag + " is only meaningful with --advance (or --mark <step> --complete)");
 }
 
 module.exports = { printUsage, parseArgs };

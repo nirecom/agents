@@ -262,7 +262,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
 | `write_code` | `/write-code` skill — emits `WORKFLOW_MARK_STEP_write_code_in_progress` before its subagent launch and `WORKFLOW_MARK_STEP_write_code_complete` after the post-action review. Not skippable: the implementation body has no not-needed door |
-| `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --status skipped` |
+| `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --skipped` |
 | `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |
@@ -482,9 +482,11 @@ Priority order for recovery:
 1. **Session resume**: `session-start.js` re-injects next-step verdict automatically — no action needed.
 2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
 3. **Auto-repair**: next-step calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
-4. **`--mark <step> complete`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
+4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
 6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
+
+Argv note (#1947): the settling status is passed as a value-less flag — `--complete` / `--skipped` / `--pending` on `--advance`, and no trailing token at all on `--mark`. A bare `complete` argv token is misread as the bash builtin by the worktree-isolation command classifier, which blocks the whole call. The old `--status <value>` spelling, and the trailing status token on `--mark`, still work and warn on stderr; the persisted status strings are unchanged.
 
 ## Sentinel notation
 
