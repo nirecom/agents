@@ -2,14 +2,14 @@
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, golden, frontmatter, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-# Proof that the S1-2 parser extraction is behavior-preserving: a byte-identical
-# diff of the OLD implementation's output against the new one over one fixture
-# covering buckets (a)-(j) of S1-0. The expected side is a fact about what the
-# old code printed and must never be rewritten to match a new implementation —
-# a mismatch is an S1 design defect, not a test defect. Until S1-0 runs there is
-# no captured artifact, so those rows SKIP with a reason instead of false-greening.
+# Proof that the S1-2 parser extraction is behavior-preserving: the OLD
+# implementation's stdout, stderr and exit status, each byte-compared on its own
+# against the new one over one fixture covering buckets (a)-(j) of S1-0. The
+# expected side is a fact about what the old code emitted and must never be
+# rewritten to match a new implementation — a mismatch is an S1 design defect,
+# not a test defect. A golden that is absent is a FAIL, never a SKIP.
 
-GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-}"
+GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-$AGENTS_ROOT/tests/fixtures/feature-2065-dup-group-golden}"
 GC_CAPTURE_DIR="$TMPDIR_BASE/golden-capture"
 mkdir -p "$GC_CAPTURE_DIR"
 
@@ -82,15 +82,20 @@ normalize_golden() {
     sed -e "s|$(re_escape "$1")|<TMP>|g" -e 's/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/<DATE>/g'
 }
 
-# gc_capture <name> <script> [args...] — runs a command form and stores its
-# normalized stdout+stderr under $GC_CAPTURE_DIR/<name>.txt.
+# gc_capture <name> <script> [args...] — stores three independent observations
+# under $GC_CAPTURE_DIR: normalized <name>.out and <name>.err, plus <name>.rc. The
+# streams go straight to files, never through `$(...)`, so trailing newlines
+# survive and a line that migrates between the two streams cannot hide.
 gc_capture() {
     local name="$1"; shift
     local script="$1"; shift
-    run_in_repo "$GC_REPO" "$script" "$@"
-    { printf '%s\n' "$OUT"; printf '%s\n' "$ERR"; } \
-        | normalize_golden "$GC_REPO" > "$GC_CAPTURE_DIR/$name.txt"
-    printf '%s' "$RC" > "$GC_CAPTURE_DIR/$name.rc"
+    (
+        cd "$GC_REPO" || exit 2
+        GH_TIMEOUT=30 run_with_timeout bash "$script" "$@"
+    ) >"$GC_CAPTURE_DIR/$name.out.raw" 2>"$GC_CAPTURE_DIR/$name.err.raw"
+    printf '%s' "$?" > "$GC_CAPTURE_DIR/$name.rc"
+    normalize_golden "$GC_REPO" < "$GC_CAPTURE_DIR/$name.out.raw" > "$GC_CAPTURE_DIR/$name.out"
+    normalize_golden "$GC_REPO" < "$GC_CAPTURE_DIR/$name.err.raw" > "$GC_CAPTURE_DIR/$name.err"
 }
 
 gc_capture g1-audit-fixheaders   "$AUDIT"        --fix-headers --dry-run
@@ -102,15 +107,17 @@ gc_capture g6-common-text        "$AUDIT_COMMON" --dry-run --offline --format te
 
 for gc_name in g1-audit-fixheaders g2-audit-json g3-audit-text \
                g4-common-fixheaders g5-common-json g6-common-text; do
-    if [[ -n "$GC_GOLDEN_DIR" && -f "$GC_GOLDEN_DIR/$gc_name.txt" ]]; then
-        if diff -u "$GC_GOLDEN_DIR/$gc_name.txt" "$GC_CAPTURE_DIR/$gc_name.txt" > "$GC_CAPTURE_DIR/$gc_name.diff" 2>&1; then
-            pass "GC[$gc_name] output is byte-identical to the S1-0 golden capture"
+    for gc_obs in out err rc; do
+        gc_want="$GC_GOLDEN_DIR/$gc_name.$gc_obs"
+        gc_got="$GC_CAPTURE_DIR/$gc_name.$gc_obs"
+        if [[ ! -f "$gc_want" ]]; then
+            fail "GC[$gc_name.$gc_obs] golden missing at $gc_want — the committed oracle is damaged; restore it with git checkout"
+        elif cmp -s "$gc_want" "$gc_got"; then
+            pass "GC[$gc_name.$gc_obs] is byte-identical to the pre-extraction golden capture"
         else
-            fail "GC[$gc_name] diverged from the S1-0 golden capture — S1 changed existing behavior: $(head -20 "$GC_CAPTURE_DIR/$gc_name.diff" | tr '\n' '|')"
+            fail "GC[$gc_name.$gc_obs] diverged from the pre-extraction golden capture — S1 changed existing behavior: $(diff -u "$gc_want" "$gc_got" 2>&1 | head -20 | tr '\n' '|')"
         fi
-    else
-        skip "GC[$gc_name] no S1-0 golden capture available (set DUP_GROUPS_GOLDEN_DIR, or paste the captured literals in at write-code time); replay written to $GC_CAPTURE_DIR/$gc_name.txt"
-    fi
+    done
 done
 
 # Non-golden leakage guards, runnable today and required to stay green after S1:
@@ -118,15 +125,15 @@ done
 # surface on the --fix-headers report or the retire report — not even for the
 # duplicate-header (i) and late-header (j) fixtures that provoke them.
 
-GC_FIXHDR="$(cat "$GC_CAPTURE_DIR/g1-audit-fixheaders.txt" "$GC_CAPTURE_DIR/g4-common-fixheaders.txt")"
+GC_FIXHDR="$(cat "$GC_CAPTURE_DIR"/g1-audit-fixheaders.{out,err} "$GC_CAPTURE_DIR"/g4-common-fixheaders.{out,err})"
 assert_eq "GC7 --fix-headers report carries no structural verdict token" \
     "0" "$(printf '%s\n' "$GC_FIXHDR" | grep -ciE 'duplicate_header|late_header' || true)"
 
-GC_RETIRE="$(cat "$GC_CAPTURE_DIR/g3-audit-text.txt" "$GC_CAPTURE_DIR/g6-common-text.txt")"
+GC_RETIRE="$(cat "$GC_CAPTURE_DIR"/g3-audit-text.{out,err} "$GC_CAPTURE_DIR"/g6-common-text.{out,err})"
 assert_eq "GC8 retire text report carries no structural verdict token" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -ciE 'duplicate_header|late_header' || true)"
 
-GC_JSON="$(cat "$GC_CAPTURE_DIR/g2-audit-json.txt" "$GC_CAPTURE_DIR/g5-common-json.txt")"
+GC_JSON="$(cat "$GC_CAPTURE_DIR"/g2-audit-json.{out,err} "$GC_CAPTURE_DIR"/g5-common-json.{out,err})"
 assert_eq "GC9 retire JSON diagnostics use only the two pre-existing kinds" \
     "0" "$(printf '%s\n' "$GC_JSON" | grep -o '"kind":"[a-z_]*"' | grep -cvE '"kind":"(malformed_header|no_tests_header)"' || true)"
 
