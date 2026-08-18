@@ -295,11 +295,12 @@ a stored artifact is never mistaken for a complete measurement once separated fr
 status. Symlinks are excluded from both tools, and `--ref` values starting with `-` are
 rejected rather than passed through to `git`.
 
-`review-comment-block-size --all` lists every code file holding a run of consecutive comment
-lines at or over the threshold, judged on absolute state — that is what separates the
-inventory from the commit-time warning, which reports a staged file only when its comment
-blocks grew. It under-detects on purpose: `#`, `//`, and `/* … */` are the only comment
-forms it knows, so `--`, `;`, `%`, and Python docstrings read as code, and a first-line
+`review-comment-block-size --all` lists every code file holding a comment block longer than
+the threshold, judged on absolute state — that is what separates the inventory from the
+commit-time warning, which reports a staged file only when its comment blocks grew. A blank
+line or a lone no-op token (`;`, `:`, `{}`, `()`, `,`) bridges a block instead of splitting
+it. It under-detects on purpose: `#`, `//`, and `/* … */` are the only comment
+forms it knows, so `--`, `%`, and Python docstrings read as code, and a first-line
 shebang is never counted. Files past the size or count caps are reported as skipped rather
 than dropped in silence, and the exit status never reflects findings — only whether the scan
 itself could run.

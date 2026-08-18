@@ -139,5 +139,5 @@ assert_absent "R5/no-footer-without-findings" "Compress to a one-line summary" "
 # rc=1 is caused by findings and not by the mode itself.
 assert_eq "R5/rc-is-0-without-findings" "0" "$CB_RC"
 assert_contains "R5/summary-line" \
-    "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 consecutive comment lines)" \
+    "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 comment lines per block)" \
     "$CB_OUT"

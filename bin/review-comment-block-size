@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
-# Comment-block size review — flags long runs of consecutive comment lines.
-# Usage: review-comment-block-size [--staged | --all]
-# Headers: "## Comment-block Size Review: PERFORMED (<mode>)" / ": SKIPPED — <reason>".
-# Exit: 0 = performed with no blocking finding, or skipped; 1 = BLOCK findings in
-#       --staged mode (hooks/pre-commit turns this into a blocked commit);
-#       3 = internal error. --all never returns 1: its findings are advisory
-#       WARNs about the existing tree, not about what is being committed.
-# Under-detects on purpose: only (run count, longest run) is compared, and --, ;,
-# % and python triple quotes are not recognised as comment markers.
+# Comment-block size review — flags comment blocks carrying more than the
+# threshold's worth of comment lines. Usage: review-comment-block-size [--staged | --all]
+# Exit: 0 = performed or skipped; 1 = BLOCK (--staged only, blocks the commit);
+#       3 = internal error. --all never returns 1 — its findings are advisory.
+# Under-detects on purpose: --, ;, % and python triple quotes are not recognised.
 
 # Entrypoint only: CLI parsing, configuration, file selection and the report.
-# The rest lives in the sibling bin/review-comment-block-size.d/ modules
-# (rules/coding/file-split.md Pattern A) — named "<entrypoint>.d" rather than a
-# bare "<entrypoint>/" because this entrypoint is itself an extensionless file
-# of that exact name:
-#   report.sh   — control-byte escaping and the buffered finding report
-#   scan.sh     — the Node scanner adapter and its blob / file entry points
-#   baseline.sh — HEAD and in-progress-operation baseline resolution
+# Rest lives in sibling bin/review-comment-block-size.d/ modules (Pattern A):
+# report.sh (escaping + report), scan.sh (Node scanner adapter), baseline.sh
+# (HEAD / in-progress baseline resolution).
 
 set -uo pipefail
 
@@ -269,7 +261,7 @@ esc "$_EXTS"
 _EXTS_e="$ESC"
 
 printf '%s\n' "$HDR: PERFORMED ($_desc)"
-printf '%s\n' "$_count_label: $SCANNED (extensions: $_EXTS_e; threshold: > $T consecutive comment lines)"
+printf '%s\n' "$_count_label: $SCANNED (extensions: $_EXTS_e; threshold: > $T comment lines per block)"
 [[ "$TOOBIG" -gt 0 ]] && printf '%s\n' "  skipped (too large): $TOOBIG"
 [[ -n "$BODY" ]] && printf '%s' "$BODY"
 if [[ "$WARNC" -gt 0 ]]; then

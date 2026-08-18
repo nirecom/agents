@@ -49,7 +49,6 @@ shebang-plus-11-flagged       | #!/bin/sh #a*11 x=1             | 11
 hashbang-not-on-line1-counts  | x=1 #!/bin/sh #a*10             | 11
 leading-whitespace-stripped   | ^^//a*11 x=1                    | 11
 mixed-markers-one-run         | //a*5 #b*6 x=1                  | 11
-blank-terminates-outside-block| //a*6 _ //a*6 x=1               | none
 run-flushed-at-eof            | x=1 //a*11                      | 11
 block-open-close              | /*a *b*9 */ x=1                 | 11
 block-blank-inside-continues  | /*a *b*4 _ *c*4 */ x=1          | 11
@@ -67,7 +66,57 @@ percent-unsupported           | %a*11 x=1                       | none
 python-triple-quote-unsupported| """*11 x=1                     | none
 no-comments-at-all            | x=1*20                          | none
 single-line-file              | //a                             | none
+# Neutral lines (blank / whitespace-only, and the frozen no-op token list)
+# BRIDGE a run instead of terminating it: they neither reset nor increment the
+# counter. Real code — including `;;`, a bash case-branch terminator — still
+# flushes, so both verdicts of the ternary classifier are covered (CPR-ORTH).
+blank-bridges-outside-block   | //a*6 _ //a*6 x=1               | 12
+bridge-at-threshold-silent    | //a*5 _ //a*5 x=1               | none
+bridge-one-over-threshold     | //a*5 _ //a*6 x=1               | 11
+multi-bridge-accumulates      | //a*4 _ //a*4 _ //a*4 x=1       | 12
+wide-blank-gap-bridges        | //a*6 _*5 //a*6 x=1             | 12
+noop-semicolon-bridges        | //a*6 ; //a*6 x=1               | 12
+noop-colon-bridges            | //a*6 : //a*6 x=1               | 12
+noop-brace-pair-bridges       | //a*6 {} //a*6 x=1              | 12
+noop-paren-pair-bridges       | //a*6 () //a*6 x=1              | 12
+noop-comma-bridges            | //a*6 , //a*6 x=1               | 12
+noop-token-with-padding-bridges| //a*6 ^^;^^ //a*6 x=1          | 12
+# A bridge joins a run, not a marker style: `//` on one side and `#` on the
+# other is still ONE run. And inside a /* */ block, `inBlock` is checked before
+# neutrality, so a lone `;` there is a counted comment line (10 would be silent).
+mixed-marker-bridges          | //a*6 _ #b*6 x=1                | 12
+noop-token-inside-block-still-counts| /*a *b*4 ; *b*4 */ x=1    | 11
+noop-token-with-code-still-breaks| //a*6 ;x //a*6 x=1           | none
+double-semicolon-is-code-not-neutral| //a*6 ;; //a*6 x=1        | none
+lone-brace-is-code-not-neutral| //a*6 } //a*6 x=1               | none
+code-still-terminates         | //a*6 x=1 //a*6                 | none
+blank-only-file-no-run        | _*20 x=1                        | none
 TABLE
+
+# formfeed / NBSP: neutrality is matched via `\s` (ECMAScript WhiteSpace), not
+# an ASCII space/tab class, so the two non-ASCII members are pinned directly.
+# render_spec's token DSL is whitespace-split and cannot carry a literal \f or
+# U+00A0, so these two rows bypass it and build the probe with printf.
+cb_bridge_probe() {
+    # <name> <separator-bytes-as-printf-format>
+    local name="$1" sep="$2" i
+    {
+        for ((i = 1; i <= 6; i++)); do echo "//a"; done
+        printf '%b' "$sep"
+        for ((i = 1; i <= 6; i++)); do echo "//a"; done
+        echo "x=1"
+    } > "$CORE_REPO/probe.sh"
+    git -C "$CORE_REPO" add -f probe.sh >/dev/null 2>&1
+    run_cb "$CORE_REPO" "COMMENT_BLOCK_MAX_LINES=10" -- --staged
+    assert_eq "C1/$name" "12" "$(cb_longest)"
+}
+cb_bridge_probe "formfeed-only-line-bridges" '\f\n'
+cb_bridge_probe "nbsp-only-line-bridges" '\xc2\xa0\n'
+# The two axes combined: a no-op token padded with NON-ASCII whitespace. The
+# token test is `trim() === tok`, and JS trim() strips the whole Unicode
+# WhiteSpace class, so NBSP/FF padding must bridge exactly like spaces do.
+cb_bridge_probe "nbsp-padded-noop-token-bridges" '\xc2\xa0;\xc2\xa0\n'
+cb_bridge_probe "formfeed-padded-noop-token-bridges" '\f;\f\n'
 
 # ---------------------------------------------------------------------------
 # C2 — COMMENT_BLOCK_MAX_LINES branches (config-dependent, pinned per case)
@@ -105,9 +154,18 @@ echo "=== C3: run location detail lines ==="
 render_spec "x=1 //a*12 x=1" > "$CORE_REPO/probe.sh"
 git -C "$CORE_REPO" add -f probe.sh >/dev/null 2>&1
 run_cb "$CORE_REPO" -- --staged
-assert_contains "C3/detail-range" "  L2-L13 (12 lines)" "$CB_OUT"
+assert_contains "C3/detail-range" "  L2-L13 (12 comment lines)" "$CB_OUT"
 assert_contains "C3/hint-line" \
     "Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)." "$CB_OUT"
+
+# A bridged block: the reported range spans 13 lines (L2-L14) but only 12 of
+# them are comment lines. The count and the range width diverge, which is why
+# the unit is spelled out — "(12 lines)" against an L2-L14 range would read as
+# an off-by-one bug rather than as a bridged block.
+render_spec "x=1 //a*6 _ //a*6 x=1" > "$CORE_REPO/probe.sh"
+git -C "$CORE_REPO" add -f probe.sh >/dev/null 2>&1
+run_cb "$CORE_REPO" -- --staged
+assert_contains "C3/bridged-range-vs-len" "  L2-L14 (12 comment lines)" "$CB_OUT"
 
 # ---------------------------------------------------------------------------
 # C4 — file-shape edge cases

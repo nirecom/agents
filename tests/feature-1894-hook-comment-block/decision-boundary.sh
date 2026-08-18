@@ -232,6 +232,34 @@ d8_hash_comments_in_a_shell_file() {
     assert_file_absent "D8/approved-shell-file-stays-absent" "$REPO/d8.sh"
 }
 
+# ============================================================================
+# D9 / D10 / D11 — the display contract of the refusal message
+#
+# Bridging makes a block's comment-line count differ from its L<a>-L<b> width,
+# so buildReason() must stop claiming "consecutive" in the summary and must
+# spell the unit out in the detail line. Paired with C3 in scanner-core.sh
+# (CPR-ORTH): pinning one consumer alone lets the other keep the old wording.
+# ============================================================================
+d9_reason_wording_matches_the_bridged_contract() {
+    local f="$REPO_M/d9.js"
+    # Same shape as C3/bridged-range-vs-len: one blank line bridges 6 + 6
+    # comment lines into a single 12-line block spanning 13 lines (L2-L14).
+    { echo "var x = 1;"; cmt 6 a; echo ""; cmt 6 b; echo "var y = 2;"; } > "$TMPDIR_BASE/d9.body"
+    mkpayload Write "$REPO_M" "$f" "content=@$TMPDIR_BASE/d9.body"
+    hk_run
+    # The block verdict is a premise, not the subject: without bridging this is
+    # two runs of 6, nothing is refused, and the wording rows pass vacuously.
+    assert_decision "D9/premise-blocked" "block"
+    assert_file_absent "D9/blocked-write-created-nothing" "$REPO/d9.js"
+    assert_absent "D9/summary-drops-consecutive" "consecutive" "$HK_OUT"
+    assert_contains "D10/summary-names-the-per-block-limit" \
+        "carrying more than 10 comment lines per block." "$HK_OUT"
+    assert_contains "D11/detail-line-spells-the-unit" "L2-L14 (12 comment lines)" "$HK_OUT"
+    # The retired format, pinned by absence: "(12 lines)" against an L2-L14
+    # range reads as an off-by-one bug rather than as a bridged block.
+    assert_absent "D11/retired-bare-lines-unit" "(12 lines)" "$HK_OUT"
+}
+
 d1_existing_plus_added_crosses_the_line
 d2_boundary_pair_on_write
 d4_untouched_existing_violation_still_blocks
@@ -240,3 +268,4 @@ d6_new_file_boundary_pair
 d7_block_reason_is_actionable
 d7b_reason_caps_the_detail_lines
 d8_hash_comments_in_a_shell_file
+d9_reason_wording_matches_the_bridged_contract

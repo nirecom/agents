@@ -134,10 +134,10 @@ function buildReason(fileName, runs, threshold) {
   const shown = runs.slice(0, MAX_DETAIL_RANGES);
   const lines = [
     `Comment-block size: ${fileName} would carry ${runs.length} comment block(s) ` +
-      `longer than ${threshold} consecutive lines.`,
+      `carrying more than ${threshold} comment lines per block.`,
   ];
   for (const r of shown) {
-    lines.push(`  L${r.start}-L${r.end} (${r.len} lines)`);
+    lines.push(`  L${r.start}-L${r.end} (${r.len} comment lines)`);
   }
   const rest = runs.length - shown.length;
   if (rest > 0) lines.push(`  ... and ${rest} more`);
