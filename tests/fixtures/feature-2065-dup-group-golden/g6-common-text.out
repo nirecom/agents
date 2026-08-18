@@ -1,0 +1,12 @@
+# audit-tests-common.sh report — <DATE>
+# Scope: top-level tests/*.sh excluding issue-specific feature-<N>-*.sh
+# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only
+# Cutoff: <DATE> (stale-months: 3)
+# Mode: OFFLINE (orphans are still reported; deletion of issue-referencing files is held)
+
+ORPHAN: tests/common-missing.sh
+  Tests: bin/gone2.sh
+  Missing paths: bin/gone2.sh
+  Deletion unit: tests/common-missing.sh
+
+  (dry-run; nothing was written — omit --dry-run to apply)

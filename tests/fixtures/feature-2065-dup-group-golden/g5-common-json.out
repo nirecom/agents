@@ -1,0 +1,1 @@
+{"generated":"<DATE>","cutoff":"<DATE>","stale_months":3,"offline":1,"diagnostics":[],"orphans":[{"file":"tests/common-missing.sh","tests_paths":["bin/gone2.sh"],"missing_paths":["bin/gone2.sh"],"sibling":"","sibling_file_count":0,"delete_gate":"ok-no-issue-ref"}]}
