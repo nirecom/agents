@@ -137,3 +137,6 @@ console.log('OK');
     fi
 fi
 rm -rf "$BR_TMP_W3" "$BR_SHIM_DIR"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "block-reporting.sh"

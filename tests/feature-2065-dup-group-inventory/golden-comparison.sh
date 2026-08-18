@@ -2,15 +2,12 @@
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, golden, frontmatter, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
-# S1-2 claims the parser extraction is behavior-preserving. The primary proof is
-# a byte-identical diff of the OLD implementation's output against the new one
-# over one deterministic fixture covering buckets (a)-(j) of S1-0.
-
-# The expected side is a fact about what the old code printed. It must never be
-# rewritten to match a new implementation: a mismatch is an S1 design defect,
-# not a test defect. Until S1-0 runs (it is a write-code-time step) there is no
-# captured artifact, so those rows SKIP with a reason instead of false-greening.
+# Proof that the S1-2 parser extraction is behavior-preserving: a byte-identical
+# diff of the OLD implementation's output against the new one over one fixture
+# covering buckets (a)-(j) of S1-0. The expected side is a fact about what the
+# old code printed and must never be rewritten to match a new implementation —
+# a mismatch is an S1 design defect, not a test defect. Until S1-0 runs there is
+# no captured artifact, so those rows SKIP with a reason instead of false-greening.
 
 GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-}"
 GC_CAPTURE_DIR="$TMPDIR_BASE/golden-capture"

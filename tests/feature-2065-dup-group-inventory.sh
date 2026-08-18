@@ -3,26 +3,12 @@
 # Tests: bin/lib/test-dup-group.sh, bin/lib/test-frontmatter-fix.sh, bin/lib/test-frontmatter-constants.sh, bin/lib/test-retire-predicate.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, scope:issue-specific, audit-tests, dup-groups, frontmatter, parser, tsv, escaping
 # Dispatcher: shared harness only. Cases live in the sibling folder of the same name.
-
-# TL2 contract test for #2065 — the shared `# Tests:` parser extraction (S1) and
-# the read-only `--dup-groups` grouping mode (S2/S3) on both audit entrypoints.
-
-# Fail-before-fix (historical): written against an absent implementation —
-# bin/lib/test-dup-group.sh did not exist and neither CLI knew `--dup-groups`,
-# so every grouping case failed. That source layer has since landed and the
-# suite is green. Guard cases still assert the SPECIFIC guard message rather
-# than merely exit 2, so a regression to "unknown argument" exit 2 cannot green
-# them for the wrong reason.
-
-# All fixtures are throwaway git repos under $TMPDIR_BASE; the real tests/ tree
-# is never an input and is never written to.
-
-# TL3 gap (what this test does NOT catch):
-# - Real /sweep-tests skill orchestration invoking the new mode.
-# - Real nightly sweep.yml runner behavior over the live corpus.
-# - Filesystems permitting TAB/NEWLINE filenames (NTFS refuses; those cases SKIP).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# TL2 contract for #2065: the shared `# Tests:` parser extraction (S1) and the
+# read-only `--dup-groups` mode (S2/S3) on both audit entrypoints. Guard cases
+# assert the SPECIFIC guard message, so a regression to "unknown argument" exit 2
+# cannot green them for the wrong reason.
+# TL3 gap — skill/nightly-sweep orchestration over the live corpus: checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 
 set -uo pipefail
 

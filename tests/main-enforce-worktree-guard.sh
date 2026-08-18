@@ -2,16 +2,22 @@
 # tests/main-enforce-worktree-guard.sh
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, pre-commit, scope:common
-#
-# Single dispatcher for the hooks/enforce-worktree.js integration suite.
-# It owns the shared harness (fixtures, payload builders, assertions) and
-# sources one fragment per behavioural axis from
-# tests/main-enforce-worktree-guard/. Consolidates 13 former standalone
-# tests/*.sh files (#2065).
+# Single dispatcher for the hooks/enforce-worktree.js integration suite: owns the
+# shared harness and sources one fragment per behavioural axis from
+# tests/main-enforce-worktree-guard/, consolidating 13 former standalone
+# tests/*.sh files (#2065). Fragments are sourced into THIS shell, so names
+# defined here are the shared contract and every fragment-local helper or
+# variable must carry a short per-fragment prefix.
 
-# Fragments are sourced into THIS shell, so every fragment-local helper and
-# variable carries a short per-fragment prefix. Names defined here are the
-# shared contract; anything else must be prefixed.
+# TL3 gap (what this suite does NOT catch):
+# - The guard firing as a REAL PreToolUse hook inside a live claude -p session.
+#   Every case here runs `node hooks/enforce-worktree.js` as a subprocess fed
+#   hand-built stdin, so it stays green when settings.json drops the registration
+#   or one of its tool names, and when the host's real payload shape diverges
+#   from the JSON the payload builders below assume. Registration is asserted
+#   statically in tests/fix-1780-round4-write-tool-parity.sh section R.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: hook-registration.
 
 set -uo pipefail
 
@@ -255,6 +261,14 @@ export BASELINE_REPO
 # ── fragments ───────────────────────────────────────────────────────────────
 FRAGMENT_DIR="$AGENTS_DIR/tests/main-enforce-worktree-guard"
 
+# Completion ledger: every fragment's LAST line is `frag_done <its own basename>`.
+# The `.` exit status cannot stand in for this — a bare `return` yields the status
+# of the last command run, so a fragment that bails after its function definitions
+# still sources "successfully" while its whole case family silently disappears.
+FRAG_DONE=""
+frag_done() { FRAG_DONE="${FRAG_DONE}$1
+"; }
+
 # shellcheck source=tests/main-enforce-worktree-guard/merge-gate.sh
 . "$FRAGMENT_DIR/merge-gate.sh"
 # shellcheck source=tests/main-enforce-worktree-guard/hooks-bypass-detection.sh
@@ -279,6 +293,37 @@ FRAGMENT_DIR="$AGENTS_DIR/tests/main-enforce-worktree-guard"
 . "$FRAGMENT_DIR/repo-resolution.sh"
 # shellcheck source=tests/main-enforce-worktree-guard/exclude-and-session-scope.sh
 . "$FRAGMENT_DIR/exclude-and-session-scope.sh"
+
+# ── fragment-set integrity ──────────────────────────────────────────────────
+# The `. "$FRAGMENT_DIR/…"` lines above are the only wiring a fragment has, so a
+# dropped line removes a whole behavioural family with the suite still green.
+FRAG_PRESENT="$(ls -1 "$FRAGMENT_DIR" 2>/dev/null | grep '\.sh$' | sort)"
+FRAG_SOURCED="$(sed -n 's|^\. "\$FRAGMENT_DIR/\(.*\.sh\)"$|\1|p' "${BASH_SOURCE[0]}" | sort)"
+
+frag_only_in_first() {
+    comm -23 <(printf '%s\n' "$1" | grep -v '^$') <(printf '%s\n' "$2" | grep -v '^$') \
+        | tr '\n' ' ' | sed 's/ *$//'
+}
+FRAG_UNSOURCED="$(frag_only_in_first "$FRAG_PRESENT" "$FRAG_SOURCED")"
+FRAG_ABSENT="$(frag_only_in_first "$FRAG_SOURCED" "$FRAG_PRESENT")"
+
+if [ -z "$FRAG_UNSOURCED" ] && [ -z "$FRAG_ABSENT" ]; then
+    pass "FRAG1 every fragment file is sourced and every sourced fragment exists"
+else
+    fail "FRAG1 fragment set mismatch — present-but-unsourced: [${FRAG_UNSOURCED:-none}] sourced-but-missing: [${FRAG_ABSENT:-none}]"
+fi
+
+# FRAG1 only proves the two NAME lists agree; it passes while a fragment returns
+# early or fails to source. The ledger is what proves each one reached its end.
+FRAG_DONE_SORTED="$(printf '%s' "$FRAG_DONE" | sort)"
+FRAG_UNFINISHED="$(frag_only_in_first "$FRAG_SOURCED" "$FRAG_DONE_SORTED")"
+FRAG_UNEXPECTED="$(frag_only_in_first "$FRAG_DONE_SORTED" "$FRAG_SOURCED")"
+
+if [ -z "$FRAG_UNFINISHED" ] && [ -z "$FRAG_UNEXPECTED" ]; then
+    pass "FRAG2 every sourced fragment ran through to its completion marker"
+else
+    fail "FRAG2 fragment completion mismatch — sourced-but-unfinished: [${FRAG_UNFINISHED:-none}] marked-but-not-sourced: [${FRAG_UNEXPECTED:-none}]"
+fi
 
 echo ""
 # Deliberately not the `PASS: `/`FAIL: `/`SKIP: ` prefixes — those are reserved

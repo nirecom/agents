@@ -136,6 +136,6 @@ add_src "$CC_TAG_REPO" "bin/cc-x.sh"
 add_test_file "$CC_TAG_REPO" "cc-keep.sh" "bin/cc-x.sh" "TL2, scope:common, dup-group-keep:cross-hook"
 commit_repo "$CC_TAG_REPO" "keep-tag fixture"
 git -C "$CC_TAG_REPO" add -A >/dev/null 2>&1
-run_in_repo "$CC_TAG_REPO" "$FM_CHECK" --staged
+run_in_repo "$CC_TAG_REPO" "$FM_CHECK" --staged tests/cc-keep.sh
 assert_eq "CC9 a dup-group-keep: tagged file passes the staged frontmatter gate" \
     "0" "$RC"

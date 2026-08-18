@@ -4,19 +4,10 @@
 # Origin: tests/fix-enforce-worktree-bundle-a.sh (Bug 1 + Bug 2 + regression,
 # EXCLUDE security, idempotency). Its extraction/security cases for compound
 # commands and staged filenames live in target-extraction.sh.
-
-# Two guard properties that both decide on the resolved WRITE TARGET rather than
-# on the CWD, which is why they share a fragment:
-#   Bug 1 — ENFORCE_WORKTREE_EXCLUDE must be honoured in PreToolUse, so a file
-#           pre-commit would let through is not blocked one layer earlier.
-#   Bug 2 — Edit/Write/MultiEdit and Bash file targets get a session-scope check,
-#           so a write into a repo outside the session is not blocked merely
-#           because CWD happens to sit in a main checkout.
-
-# Multi-target tools are all-or-nothing: one non-excluded or in-session target
-# in a MultiEdit or a redirect list blocks the whole call.
-
-# Fragment-local helpers carry an `es_` prefix: fragments share one shell.
+# Both axes decide on the resolved WRITE TARGET, not CWD: Bug 1 — EXCLUDE must be
+# honoured in PreToolUse so a file pre-commit would pass is not blocked a layer
+# earlier; Bug 2 — a session-scope check keeps a write into a repo outside the
+# session from being blocked merely because CWD sits in a main checkout.
 
 es_edits_json() {
     local base="$1" a="$2" b="$3"
@@ -250,3 +241,6 @@ if [ "$es_a" = "$es_b" ]; then
 else
     fail "Edit guard not idempotent (a=$es_a b=$es_b)"
 fi
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "exclude-and-session-scope.sh"

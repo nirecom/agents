@@ -81,3 +81,6 @@ elif echo "$SB_OUT" | grep -q '"decision":"block"'; then
 else
     fail "C: traversal sid wrongly bypassed: $SB_OUT"
 fi
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "sanctioned-bypass.sh"

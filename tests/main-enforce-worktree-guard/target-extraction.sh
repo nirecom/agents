@@ -6,14 +6,8 @@
 #         tests/fix-enforce-worktree-bundle-a.sh (extraction security cases;
 #         its EXCLUDE/session-scope cases are in exclude-and-session-scope.sh).
 # Cases: R1-R7, R_Q*, R_LONG, R_EMPTY, R_DD, R_TRAVERSAL, T1-T4, SECURITY:*.
-
 # One axis: which write targets a Bash command string yields, and whether every
-# extracted target falls outside session scope (allow) or any one lands inside
-# it (block). `rm` covers the positional/flag/quoting shapes; the supervisor bin
-# invocations cover the redirect shape, including a `$AGENTS_CONFIG_DIR`-rooted
-# command whose target is /tmp.
-#
-# Fragment-local helpers carry a `te_` prefix: fragments share one shell.
+# extracted target falls outside session scope (allow) or any one lands in (block).
 
 TE_MAIN_WT="$(main_worktree_dir)"
 TE_MAIN_WT_NODE="$(to_node_path "$TE_MAIN_WT")"
@@ -177,3 +171,6 @@ te_out="$(run_bash_guard "echo x > $te_non/README.md" "$te_in" ENFORCE_WORKTREE=
 assert_decision allow "$te_out" \
     "SECURITY: simple redirect to non-session still allows" \
     "SECURITY: simple redirect should still allow after compound fix"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "target-extraction.sh"

@@ -3,15 +3,9 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-hooks-bypass.sh (all cases).
 # Cases: U1-U39 (unit, hasGitHooksBypass) and I1-I13 (hook + linked worktree).
-
-# Illegitimate bypass attempts only — the sanctioned routes live in
-# sanctioned-bypass.sh, at opposite polarity, so a regression in one cannot
-# mask the other. hasGitHooksBypass(cmd) must be true for any command
-# disabling hooks via `-c core.hooksPath=`, `--config-env`,
-# `GIT_CONFIG_PARAMETERS`, or `GIT_CONFIG_COUNT/KEY_N/VALUE_N`; the PreToolUse
-# hook then blocks it even from a linked worktree.
-#
-# Fragment-local helpers carry an `hb_` prefix: fragments share one shell.
+# Illegitimate bypass attempts only; sanctioned routes live in sanctioned-bypass.sh
+# at opposite polarity, so a regression in one cannot mask the other. Every form
+# that disables hooks must be caught and blocked even from a linked worktree.
 
 # Returns "bypass", "clean", or "UNDEFINED" if the export is missing.
 # The guard path travels as an argument, never spliced into the program text.
@@ -187,3 +181,6 @@ else
     hb_expect_allow "I13: git status (read) allows" \
         'git status' "$HB_WT"
 fi
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "hooks-bypass-detection.sh"

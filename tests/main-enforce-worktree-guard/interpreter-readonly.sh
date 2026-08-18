@@ -3,19 +3,12 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-push-fix-interp.sh (all cases).
 # Cases: the `Fix 2: …` allow/block family below.
+# isReadOnlyInterpreterC(cmd): `bash -c` / `pwsh -Command` is allowed only when the
+# outer command has no shell chaining AND every inner segment classifies read-only;
+# anything unparseable fails closed. Repo resolution: orphan-cwd-fail-closed.sh.
 
-# isReadOnlyInterpreterC(cmd): an interpreter invocation (`bash -c`,
-# `pwsh -Command`, …) is allowed only when the outer command has no shell
-# chaining AND every segment of the inner body classifies read-only. Anything
-# the parser cannot read reliably — unquoted bodies, ANSI-C quoting,
-# here-strings — fails closed.
-#
-# Repository resolution is NOT the axis here; that is orphan-cwd-fail-closed.sh.
-# Fragment-local helpers carry an `ir_` prefix: fragments share one shell.
-
-# Args: expect(allow|block) fixture-name command pass-label fail-label.
-# The pass and fail labels differ verbatim per the origin file — they are the
-# case identifiers, and two of the block cases fail on current HEAD.
+# Args: expect(allow|block) fixture-name command pass-label fail-label. The labels
+# are case identifiers, verbatim per origin; two block cases fail on current HEAD.
 ir_run_case() {
     local expect="$1" name="$2" cmd="$3" pass_label="$4" fail_label="$5"
     local repo; repo="$(setup_main_checkout "$name")"
@@ -70,3 +63,6 @@ ir_run_case block "interp-herestr" "bash <<< 'echo hi'" \
 ir_run_case block "interp-pwsh-rm" "pwsh -Command \"Remove-Item foo\"" \
     "Fix 2: pwsh -Command 'Remove-Item …' blocks" \
     "Fix 2: pwsh -Command 'Remove-Item …' should block"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "interpreter-readonly.sh"

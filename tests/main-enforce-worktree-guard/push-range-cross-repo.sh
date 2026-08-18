@@ -3,17 +3,11 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-push-fix-range.sh (cross-repo cases, #653).
 # Cases: the `Fix 1 (cross-repo): …` family. Same-repo: push-range-basic.sh.
-
-# Same function as push-range-basic.sh, different caller shape: CWD is repo A
-# and the command is `git -C <B> push`. The range must be evaluated against B,
-# not A — a resolver that silently falls back to CWD would let B's src commits
-# through.
-
-# Every case sets ENFORCE_WORKTREE_ADDITIONAL_REPOS=<B>. Without it B is outside
-# sessionRoots, the hook early-allows at the `git -C` scope check, and the BLOCK
-# cases would pass for the wrong reason.
-
-# Fragment-local helpers carry an `xr_` prefix: fragments share one shell.
+# Same function as push-range-basic.sh, different caller shape: CWD is repo A and
+# the command is `git -C <B> push`. The range must be evaluated against B — a
+# resolver silently falling back to CWD would let B's src commits through. Every
+# case sets ENFORCE_WORKTREE_ADDITIONAL_REPOS=<B>; without it B is outside
+# sessionRoots, the hook early-allows, and the BLOCK cases would pass wrongly.
 
 XR_EXCLUDE="ENFORCE_WORKTREE_EXCLUDE=**/docs/**"
 
@@ -74,3 +68,6 @@ xr_out="$(xr_run "$xr_a" "$xr_b" "git -C \"$(to_node_path "$xr_b")\" push")"
 assert_decision block "$xr_out" \
     "Fix 1 (cross-repo): no-upstream push blocks (fail-closed)" \
     "Fix 1 (cross-repo): no-upstream push should block"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "push-range-cross-repo.sh"

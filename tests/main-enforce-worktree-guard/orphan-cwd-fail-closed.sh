@@ -3,15 +3,11 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-525-orphan-cwd-bash-c-bypass.sh (all cases).
 # Cases: T1.1-T1.7.
-
-# The axis here is what the guard defaults to when repository resolution FAILS
-# (repoRoot null: non-git CWD or parse failure) on a Bash tool call — it must
-# fail closed. Command-body classification is a different input axis and lives
-# in interpreter-readonly.sh.
-#
-# These cases use run_bash_guard_clean (env -i), not run_bash_guard: an
-# inherited ENFORCE_WORKTREE_* or session variable would change the very
-# default under test.
+# The axis is what the guard defaults to when repository resolution FAILS
+# (repoRoot null: non-git CWD or parse failure) on a Bash call — it must fail
+# closed. Command-body classification is a different axis: interpreter-readonly.sh.
+# These cases use run_bash_guard_clean (env -i), not run_bash_guard: an inherited
+# ENFORCE_WORKTREE_* or session variable would change the very default under test.
 
 oc_setup_orphan_dir() {
   local dir="$TMPDIR_BASE/$1"
@@ -92,3 +88,6 @@ if guard_blocks "$oc_out"; then
 else
   fail "T1.7: orphan + bash-c cd <main> && cd <orphan> && git push should BLOCK (got: $oc_out)"
 fi
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "orphan-cwd-fail-closed.sh"

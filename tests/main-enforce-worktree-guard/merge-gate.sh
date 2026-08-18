@@ -93,3 +93,6 @@ assert_ff "merge --ff-only >&2 (fix #1115 — fd-dup form >&N)" 'git merge --ff-
 # Security regression pins — chaining and &> must remain blocked after the fix
 assert_ff "merge --ff-only && push 2>&1 (chaining still blocked)" 'git merge --ff-only && git push 2>&1' "reject"
 assert_ff "merge --ff-only &> /tmp/log (&> not sanitized, still blocked)" 'git merge --ff-only &> /tmp/log' "reject"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "merge-gate.sh"

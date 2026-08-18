@@ -3,17 +3,11 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/refactor-branching-complete-rename-worktree.sh (all cases).
 # Cases: WL-1..WL-14, NI-1..NI-7.
-
 # Worktree lifecycle commands are the one write-shaped family the guard must
 # ALLOW from the main checkout — creating the linked worktree is how a session
-# escapes it. The allow is target-scoped: `git worktree add` / `New-Item
-# -ItemType Directory` pointing outside the repo pass, pointing inside do not,
-# and any shell chaining voids the allow.
-
-# Assertions compare stdout to exactly `{}` rather than grepping for a block:
-# an approve-with-extras reply would mean the allow arrived by another path.
-
-# Fragment-local helpers carry a `wl_` prefix: fragments share one shell.
+# escapes it. The allow is target-scoped: pointing outside the repo passes,
+# inside does not, and any shell chaining voids it. Assertions compare stdout to
+# exactly `{}` so an approve-with-extras reply cannot green it by another path.
 
 WL_REPO="$(setup_main_checkout "wl-repo")"
 WL_EXT_PATH="$TMPDIR_BASE/wl-worktrees/my-task/repo"
@@ -202,3 +196,6 @@ if wl_is_blocked "New-Item -ItemType Directory -Path \"$WL_NI_EXT\"; Remove-Item
 else
     fail "NI-7. Chained New-Item should be blocked"
 fi
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "worktree-lifecycle.sh"

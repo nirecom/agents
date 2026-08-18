@@ -3,22 +3,12 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-extra-repos-dir-scan.sh (all cases).
 # Cases: N1-N5, E1-E4, IDEM1, SEC1, INT1, INT2, ALIAS1.
+# getSessionRepoRoots(): an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry that is not a
+# git repo root has its depth-1 subdirs scanned, so `C:\git` stands in for every
+# repo under it. `[NEW]`/`[EXISTING]` suffixes are case identifiers — never trim.
 
-# getSessionRepoRoots(): an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry that is not
-# itself a git repo root has its immediate subdirectories (depth 1) scanned for
-# git repos, so a user can write `C:\git` instead of listing every repo. The
-# session anchor in each case is a linked worktree of an UNRELATED repo, so a
-# target only resolves in scope when the scan actually fires.
-
-# `[NEW]` cases exercise the dir-scan path and were authored red; `[EXISTING]`
-# cases pin unchanged error/regression behaviour. Both suffixes are part of the
-# case identifier — do not trim them.
-
-# Fragment-local helpers carry an `rr_` prefix: fragments share one shell.
-
-# Unlike the shared two-state guard_decision, this family needs a third state:
-# 0=allow, 1=block, 2=malformed/empty (hook crash, no JSON, timeout). Scoring a
-# crash as an allow would turn every dir-scan case green for the wrong reason.
+# Needs a third state beyond the shared two-state guard_decision: 0=allow, 1=block,
+# 2=malformed/empty (crash, no JSON, timeout) — a crash must not score as an allow.
 rr_decision() {
     local out="$1"
     if [ -z "$out" ]; then return 2; fi
@@ -271,3 +261,6 @@ else
     fail "ALIAS1: EXTRA_REPOS deprecated alias — missing 'is deprecated' warning on stderr (expected red) [NEW]"
 fi
 rm -f "$rr_stderr"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "repo-resolution.sh"

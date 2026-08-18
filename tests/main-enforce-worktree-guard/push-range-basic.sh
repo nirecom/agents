@@ -3,18 +3,11 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-push-fix-range.sh (same-repo cases).
 # Cases: the `Fix 1: …` family. Cross-repo cases: push-range-cross-repo.sh.
-
 # isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns): `git push` from the
 # main checkout is allowed only when every file in every outgoing commit of the
-# `<upstream>..HEAD` RANGE is covered by ENFORCE_WORKTREE_EXCLUDE. Scanning the
-# net HEAD diff instead would miss a file added and then deleted within the
-# range, which is what the `deleted in N+1` case pins.
-
-# Any refspec shape the resolver cannot map to one unambiguous upstream range —
-# colon refspecs, refs/heads prefixes, `+` force markers, multiple refspecs,
-# `-u origin` with no branch, no upstream at all — must fail closed.
-
-# Fragment-local helpers carry a `pr_` prefix: fragments share one shell.
+# `<upstream>..HEAD` RANGE is excluded — scanning the net HEAD diff would miss a
+# file added then deleted within the range (the `deleted in N+1` case). Any
+# refspec not mapping to one unambiguous upstream range must fail closed.
 
 PR_EXCLUDE="ENFORCE_WORKTREE_EXCLUDE=**/docs/**"
 
@@ -143,3 +136,6 @@ pr_out="$(run_bash_guard "git push" "$pr_repo" ENFORCE_WORKTREE=on "$PR_EXCLUDE"
 assert_decision block "$pr_out" \
     "Fix 1: 'git push' with no upstream blocks (fail-closed)" \
     "Fix 1: 'git push' with no upstream should block"
+
+# Completion marker (dispatcher FRAG2) — must remain the last line.
+frag_done "push-range-basic.sh"
