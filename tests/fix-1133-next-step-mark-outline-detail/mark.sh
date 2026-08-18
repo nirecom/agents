@@ -57,19 +57,53 @@ run_next_step_rc --session "$SID" --mark
 check_nonzero "M3. --mark (no step argument) → nonzero exit" "$RC"
 
 echo ""
-echo "=== M4: --mark outline (missing status token) → nonzero exit + stderr ==="
+echo "=== M4: --mark branching_complete (value-less form, non-gated step) → exit 0 + complete ==="
+# The trailing `complete` token is optional by design, so "missing status
+# token" is no longer an error. A NON-gated step is
+# used because outline/detail are already complete in this fixture, which makes
+# the approval gate a no-op (completion-approval.js skips before === "complete").
+# PRECONDITION: branching_complete must be PENDING, or M4a would assert a status
+# the fixture already carried and pass without the CLI doing anything.
 
 SID="m4-$$"
 write_state "$SID" "$(NORMAL_BRANCHING_COMPLETE_CURRENT $SID)"
-run_next_step_rc --session "$SID" --mark outline
-check_nonzero "M4. --mark outline (no status) → nonzero exit" "$RC"
+check "M4-pre. branching_complete is pending before --mark" \
+  "pending" "$(read_state_status "$SID" "branching_complete")"
+run_next_step_rc --session "$SID" --mark branching_complete
+check "M4. --mark branching_complete (value-less form) → exit 0" "0" "$RC"
+check "M4a. --mark branching_complete (value-less form) → state shows complete" \
+  "complete" "$(read_state_status "$SID" "branching_complete")"
+
+echo ""
+echo "=== M4b: --mark research bogus → nonzero exit + stderr (bad trailing token still refused) ==="
+
+SID="m4b-$$"
+write_state "$SID" "$(NORMAL_BRANCHING_COMPLETE_CURRENT $SID)"
+run_next_step_rc --session "$SID" --mark research bogus
+check_nonzero "M4b. --mark research bogus → nonzero exit" "$RC"
 if [ -n "${STDERR:-}" ]; then
-  echo "PASS: M4b. --mark outline (no status) → stderr error emitted"
+  echo "PASS: M4b2. --mark research bogus → stderr error emitted"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: M4b. --mark outline (no status) → expected stderr error, got empty"
+  echo "FAIL: M4b2. --mark research bogus → expected stderr error, got empty"
   FAIL=$((FAIL + 1))
 fi
+
+echo ""
+echo "=== M4c: --mark outline (value-less form, gated, no approval) → nonzero + outline stays pending ==="
+# PRECONDITION: outline must be PENDING. On a state where outline is already
+# complete the approval invariant is skipped entirely and this case would be
+# vacuously green, so the fixture is OUTLINE_PENDING_DETAIL_COMPLETE and the
+# -pre assert pins it.
+
+SID="m4c-$$"
+write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
+check "M4c-pre. outline is pending before --mark" \
+  "pending" "$(read_state_status "$SID" "outline")"
+run_next_step_rc --session "$SID" --mark outline
+check_nonzero "M4c. --mark outline (value-less form) w/o approval → nonzero exit" "$RC"
+check "M4c2. --mark outline (value-less form) w/o approval → state still outline=pending" \
+  "pending" "$(read_state_status "$SID" "outline")"
 
 echo ""
 echo "=== M5: --mark outline invalid_status → nonzero exit + stderr ==="

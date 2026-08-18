@@ -337,7 +337,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         genericHint =
           "Compaction gap: " + step + " is complete but " + currentStep + " is pending. " +
           "Artifact for " + currentStep + " exists. Recovery: node " + ENTRYPOINT_PATH +
-          " --mark " + currentStep + " complete (session-global; no cd needed).";
+          " --mark " + currentStep + " (session-global; no cd needed).";
       } else {
         genericHint =
           "Stale state from a prior workflow run or cross-task contamination detected. " +

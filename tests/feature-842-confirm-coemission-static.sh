@@ -1,18 +1,18 @@
 #!/bin/bash
 # Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md
 # Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common
-# Static grep-based checks verifying that #842 structural wiring is in place:
-#   - make-outline-plan Completion emits WORKFLOW_MARK_STEP_outline_complete before calling make-detail-plan
-#   - make-detail-plan ON path emits WORKFLOW_MARK_STEP_detail_complete after confirm
-#   - Each caller invokes the skills/_shared/confirm-plan.md protocol
-#   - stop-confirm-plan-guard.js Layer 2 references CONFIRM_<STAGE>_RE_DQ for all three stages
-#   - sentinel-patterns.js no longer carries the legacy "workflow-mark.js injects" comment
-#
-# L3 gap (what this test does NOT catch):
-# - whether CONFIRM_<STAGE> sentinel + co-emitted Skill actually prevents a stall in a live session
-#   (hook registration wiring — only verifiable via live claude -p run)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Static grep-based checks verifying structural wiring: make-outline-plan
+# Completion emits WORKFLOW_MARK_STEP_outline_complete before calling
+# make-detail-plan; make-detail-plan's ON path emits
+# WORKFLOW_MARK_STEP_detail_complete after confirm; each caller invokes the
+# skills/_shared/confirm-plan.md protocol; stop-confirm-plan-guard.js Layer 2
+# references CONFIRM_<STAGE>_RE_DQ for all three stages; sentinel-patterns.js
+# no longer carries the legacy "workflow-mark.js injects" comment.
+
+# L3 gap: whether the CONFIRM_<STAGE> sentinel + co-emitted Skill actually
+# prevents a stall in a live session (hook registration wiring) is only
+# verifiable via a live `claude -p` run — see WORKFLOW_USER_VERIFIED preflight
+# (hook-registration category).
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -53,10 +53,10 @@ echo "=== 3. make-outline-plan/SKILL.md: Completion co-emission ==="
 NEXT_STEP_STEPS="$REPO_ROOT/bin/workflow/lib/next-step/steps.js"
 NEXT_STEP_ADVANCE_SHARED="$REPO_ROOT/bin/workflow/lib/next-step/advance-shared.js"
 if require_file "$OUTLINE_SKILL"; then
-    if has_fixed 'next-step" --advance --step outline --status complete --next' "$OUTLINE_SKILL"; then
+    if has_fixed 'next-step" --advance --step outline --complete --next' "$OUTLINE_SKILL"; then
         pass "make-outline-plan/SKILL.md completes outline via next-step --advance --next"
     else
-        fail "make-outline-plan/SKILL.md missing next-step --advance --step outline --status complete --next call"
+        fail "make-outline-plan/SKILL.md missing next-step --advance --step outline --complete --next call"
     fi
 
     if has_fixed "WORKFLOW_MARK_STEP_outline_complete" "$OUTLINE_SKILL"; then

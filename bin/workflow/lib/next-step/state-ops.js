@@ -40,7 +40,7 @@ function runMark(session, step) {
   const res = recordStepVerdict(sid, step, "complete", { gate: "mark" });
   if (!res.ok && res.kind === "unapproved") {
     process.stderr.write(
-      "next-step: --mark " + step + " complete refused — " + res.detail + ".\n" +
+      "next-step: --mark " + step + " refused — " + res.detail + ".\n" +
       "  " + step + " requires recorded user approval; --mark cannot grant it.\n" +
       "  Ask the user to approve, then emit: echo \"<<" +
         confirmSentinelFor(step) + ": {summary}>>\"\n"

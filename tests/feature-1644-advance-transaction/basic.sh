@@ -7,7 +7,7 @@ run_basic_cases() {
   echo ""
   echo "=== A1: --advance records; --next adds ADVANCED= + an ACTION block ==="
   at_research a1a
-  run_ns --session a1a --advance --step research --status complete
+  run_ns --session a1a --advance --step research --complete
   check "A1a: --advance alone exits 0" 0 "$NS_RC"
   check_contains "A1a: stdout carries ADVANCED=research status=complete" \
     "ADVANCED=research status=complete" "$NS_OUT"
@@ -19,7 +19,7 @@ run_basic_cases() {
   check "A1a: --advance alone emits no ACTION line" 0 "$(action_line_count)"
 
   at_research a1b
-  run_ns --session a1b --advance --step research --status complete --next
+  run_ns --session a1b --advance --step research --complete --next
   check "A1b: --advance --next exits 0" 0 "$NS_RC"
   check_contains "A1b: stdout carries ADVANCED=research" "ADVANCED=research" "$NS_OUT"
   check "A1b: exactly one ACTION line" 1 "$(action_line_count)"
@@ -27,6 +27,8 @@ run_basic_cases() {
 
   echo ""
   echo "=== A5: repeating the same --advance is idempotent (already=true) ==="
+  # Deliberately on the legacy `--status complete` spelling, to prove idempotency
+  # also holds on the backward-compatible path (the value-less flag is covered above).
   at_research a5
   run_ns --session a5 --advance --step research --status complete
   local first_entry; first_entry="$(step_entry a5 research)"
