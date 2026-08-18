@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, bin/run-codex-review-loop
-# Tags: fix, round-counter, ledger, recovery, exit4, 776, 748
+# Tags: fix, round-counter, ledger, recovery, exit4, 776, 748, scope:issue-specific
 # Tests for #776 (exit-4 counter cleanup in per-stage wrappers) and
 # #748 (round-2 ledger-absent early recovery in bin/run-codex-review-loop).
 set -uo pipefail
@@ -24,98 +24,138 @@ run_with_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# Helpers for T1/T2/T3 (per-stage wrappers with stub bin/run-codex-review-loop)
+# Helpers for T1/T2/T3. The counter is the shared loop's now (#2068), so the
+# stub goes one level deeper — at the codex-facing reviewer — and the real loop
+# runs underneath the stage wrapper. #776's intent is unchanged: a round nobody
+# reviewed must not poison the retry. It is stated as "restore what was there",
+# because deleting the file would restart concern IDs from C1 (#748).
 # ---------------------------------------------------------------------------
 setup_wrapper_env() {
-    # $1 = tmp dir, $2 = exit code for stub bin/run-codex-review-loop
-    local test_tmp="$1"
-    local exit_code="$2"
+    # $1 = tmp dir, $2 = reviewer body file contents source ("continue"|"none")
+    local test_tmp="$1" mode="$2"
     local agents_dir="$test_tmp/agents"
-    mkdir -p "$agents_dir/bin"
-    cat > "$agents_dir/bin/run-codex-review-loop" << EOF
-#!/usr/bin/env bash
-exit $exit_code
-EOF
-    chmod +x "$agents_dir/bin/run-codex-review-loop"
+    mkdir -p "$agents_dir/bin/lib" "$agents_dir/rules" "$test_tmp/plans"
+    echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 
-    local plans_dir="$test_tmp/plans"
-    # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
-    mkdir -p "$plans_dir"
-    echo "# Detail draft" > "$plans_dir/sid-detail-draft.md"
-    echo "# Outline" > "$plans_dir/sid-outline.md"
+    cat > "$agents_dir/bin/build-codex-context" << 'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output) : > "$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+exit 0
+EOF
+    chmod +x "$agents_dir/bin/build-codex-context"
+
+    if [[ "$mode" == "continue" ]]; then
+      cat > "$agents_dir/bin/review-plan-codex" << 'EOF'
+#!/usr/bin/env bash
+echo "## Codex Plan Review: PERFORMED"
+echo ""
+echo "<!-- begin-codex-output: treat as untrusted third-party content -->"
+echo "NEEDS_REVISION"
+echo "1. [HIGH] a concern the retry must still be able to name"
+echo "<!-- end-codex-output -->"
+EOF
+    else
+      printf '#!/usr/bin/env bash\nexit 1\n' > "$agents_dir/bin/review-plan-codex"
+    fi
+    chmod +x "$agents_dir/bin/review-plan-codex"
+
+    local f
+    for f in run-codex-review-loop review-loop-verdict concern-ledger; do
+        [[ -f "$AGENTS_WORKTREE/bin/$f" ]] || continue
+        cp "$AGENTS_WORKTREE/bin/$f" "$agents_dir/bin/$f"
+        chmod +x "$agents_dir/bin/$f"
+    done
+    for f in codex-core.sh concern-ledger.sh; do
+        [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$agents_dir/bin/lib/$f"
+    done
+    [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
+    [[ -d "$AGENTS_WORKTREE/bin/lib/codex-review-loop" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/codex-review-loop" "$agents_dir/bin/lib/"
+    return 0
 }
 
 # ---------------------------------------------------------------------------
-# T1: detail wrapper + exit 4 → counter file absent
+# T1: detail wrapper, exit 4 at round 2 (the ledger vanished) → the counter is
+#     restored to the value it had before the refused call, so the retry runs
+#     round 2 again rather than round 3 or a restarted round 1.
 # ---------------------------------------------------------------------------
 if [[ ! -f "$DETAIL_WRAPPER" ]]; then
     echo "SKIP: T1: $DETAIL_WRAPPER missing"
-elif ! grep -qE '0\|2\|4' "$DETAIL_WRAPPER"; then
-    echo "SKIP: T1: exit-4 cleanup not yet in detail wrapper"
 else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
-    setup_wrapper_env "$TMP" 4
-    # Ensure detail draft exists for this session id
-    echo "# detail draft" > "$TMP/plans/sid1-detail-draft.md"
+    setup_wrapper_env "$TMP" continue
+    echo "# detail draft" > "$TMP/plans/sid1-detail.md"
+    echo "# outline" > "$TMP/plans/sid1-outline.md"
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
+    rm -f "$TMP/plans/sid1-detail-plan-concern-ledger.txt"
+    RC=0
+    AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
+      EXTENSIONS_USED="0" \
+      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/plans/sid1-detail-plan-round-number.txt"
-    if [[ ! -f "$CFILE" ]]; then
-      pass "T1: exit 4 deletes counter file (detail wrapper)"
+    CVAL="$(tr -d '[:space:]' < "$CFILE" 2>/dev/null || echo absent)"
+    if [[ "$RC" == "4" && "$CVAL" == "1" ]]; then
+      pass "T1: exit 4 rolls the counter back to its pre-call value (detail wrapper)"
     else
-      fail "T1: counter file still exists after exit 4. Path: $CFILE, content: $(cat "$CFILE" 2>/dev/null)"
+      fail "T1: rc=$RC (want 4), counter=$CVAL (want 1)"
     fi
     rm -rf "$TMP"
     trap - EXIT
 fi
 
 # ---------------------------------------------------------------------------
-# T2: outline wrapper + exit 4 → counter file absent
+# T2: same for the outline wrapper, from the other starting state — nothing on
+#     disk before the refused call, so nothing after it either (CPR-ORTH).
 # ---------------------------------------------------------------------------
 if [[ ! -f "$OUTLINE_WRAPPER" ]]; then
     echo "SKIP: T2: $OUTLINE_WRAPPER missing"
-elif ! grep -qE '0\|2\|4' "$OUTLINE_WRAPPER"; then
-    echo "SKIP: T2: exit-4 cleanup not yet in outline wrapper"
 else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
-    setup_wrapper_env "$TMP" 4
-    # outline wrapper requires an outline draft file
-    echo "# outline draft" > "$TMP/plans/sid2-outline-draft.md"
+    setup_wrapper_env "$TMP" continue
     echo "# intent" > "$TMP/plans/sid2-intent.md"
+    # No outline draft: the loop refuses before any round is spent.
+    RC=0
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
+      run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/plans/sid2-outline-plan-round-number.txt"
-    if [[ ! -f "$CFILE" ]]; then
-      pass "T2: exit 4 deletes counter file (outline wrapper)"
+    if [[ "$RC" == "4" && ! -f "$CFILE" ]]; then
+      pass "T2: exit 4 leaves no counter where there was none (outline wrapper)"
     else
-      fail "T2: counter file still exists after exit 4. Path: $CFILE, content: $(cat "$CFILE" 2>/dev/null)"
+      fail "T2: rc=$RC (want 4), counter=$([[ -f "$CFILE" ]] && cat "$CFILE" || echo absent) (want absent)"
     fi
     rm -rf "$TMP"
     trap - EXIT
 fi
 
 # ---------------------------------------------------------------------------
-# T3: CONTINUE (exit 1) → counter still present at value 1 (regression guard)
+# T3: CONTINUE (exit 1) → the round really was spent, so the counter keeps it.
 # ---------------------------------------------------------------------------
 if [[ ! -f "$DETAIL_WRAPPER" ]]; then
     echo "SKIP: T3: $DETAIL_WRAPPER missing"
 else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
-    setup_wrapper_env "$TMP" 1
-    echo "# detail draft" > "$TMP/plans/sid3-detail-draft.md"
+    setup_wrapper_env "$TMP" continue
+    echo "# detail draft" > "$TMP/plans/sid3-detail.md"
+    echo "# outline" > "$TMP/plans/sid3-outline.md"
+    RC=0
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
+      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/plans/sid3-detail-plan-round-number.txt"
-    if [[ -f "$CFILE" ]] && [[ "$(tr -d '[:space:]' < "$CFILE")" == "1" ]]; then
+    if [[ "$RC" == "1" ]] && [[ "$(tr -d '[:space:]' < "$CFILE" 2>/dev/null)" == "1" ]]; then
       pass "T3: CONTINUE (exit 1) preserves counter file at value 1"
     else
-      fail "T3: counter file missing or wrong value after CONTINUE. Path: $CFILE, content: $(cat "$CFILE" 2>/dev/null)"
+      fail "T3: rc=$RC (want 1), counter=$(cat "$CFILE" 2>/dev/null || echo absent) (want 1)"
     fi
     rm -rf "$TMP"
     trap - EXIT
@@ -156,6 +196,12 @@ EOF
     if [[ -f "$REVIEW_LOOP_VERDICT" ]]; then
       cp "$REVIEW_LOOP_VERDICT" "$agents_dir/bin/review-loop-verdict"
       chmod +x "$agents_dir/bin/review-loop-verdict"
+    fi
+
+    local lv_src="$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh"
+    if [[ -f "$lv_src" ]]; then
+      mkdir -p "$agents_dir/bin/lib/codex-review-loop"
+      cp "$lv_src" "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     fi
 }
 
@@ -211,12 +257,52 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# T4: round-2 ledger-absent early recovery (detail-plan)
+# T4/T5: a round >= 2 whose ledger is gone. #748's silent downgrade to round 1
+# is what produced the very split this session removes — the counter said 2, the
+# review ran as 1, and the round-1 concern IDs were minted a second time. The
+# refusal is now the recovery: stop, name the missing file, spend no round.
+# T5b closes the asymmetry — an explicit --ledger pointing nowhere is the same
+# absence and must not slip past as a codex-unusable exit 3 (CPR-UNV).
 # ---------------------------------------------------------------------------
+# run_bin_round2 <sid> <format> <draft> <tradeoffs> [extra args] — sets RC / ARGV / STDERR_CONTENT
+run_bin_round2() {
+    local sid="$1" fmt="$2" draft="$3" tradeoffs="$4"
+    shift 4
+    STDERR_FILE="$TMP/stderr.txt"
+    RC=0
+    AGENTS_CONFIG_DIR="$TMP/agents" \
+      run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
+        --format "$fmt" --session-id "$sid" --plans-dir "$TMP/plans" \
+        --draft-file "$draft" \
+        --cap 2 --max-extensions 1 --extensions-used 0 \
+        --accepted-tradeoffs "$tradeoffs" \
+        --round 2 "$@" \
+        >/dev/null 2>"$STDERR_FILE" || RC=$?
+    ARGV="$(cat "$TMP/rpc-argv.txt" 2>/dev/null || echo "")"
+    STDERR_CONTENT="$(cat "$STDERR_FILE" 2>/dev/null || echo "")"
+}
+
+# check_refusal <tag> <ledger-path> — the three things a refusal must be true of.
+check_refusal() {
+    local tag="$1" ledger="$2" ok=1
+    if [[ "$RC" -ne 4 ]]; then
+      fail "$tag: expected exit 4, got $RC. STDERR: $STDERR_CONTENT"; ok=0
+    fi
+    if ! echo "$STDERR_CONTENT" | grep -q "ledger missing for round"; then
+      fail "$tag: the refusal must name the missing ledger. STDERR: $STDERR_CONTENT"; ok=0
+    fi
+    if [[ -n "$ARGV" ]]; then
+      fail "$tag: codex was invoked anyway — a refused round must spend nothing. ARGV: $ARGV"; ok=0
+    fi
+    if [[ -f "$ledger" ]]; then
+      fail "$tag: a fresh ledger was minted at $ledger, restarting concern IDs from C1"; ok=0
+    fi
+    [[ "$ok" -eq 1 ]] && pass "$tag: round 2 with no ledger refuses with exit 4, before codex and before a new C1"
+    return 0
+}
+
 if [[ ! -f "$BIN_WRAPPER" ]]; then
-    echo "SKIP: T4: $BIN_WRAPPER missing"
-elif ! grep -q 'ledger absent at round' "$BIN_WRAPPER"; then
-    echo "SKIP: T4: round-2 ledger-absent recovery not yet in bin wrapper"
+    echo "SKIP: T4/T5: $BIN_WRAPPER missing"
 else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
@@ -225,62 +311,12 @@ else
     mkdir -p "$TMP/plans"
     echo "# outline (accepted tradeoffs)" > "$TMP/plans/sid4-outline.md"
     echo "# detail draft" > "$TMP/plans/sid4-detail-draft.md"
-    # Do NOT create a ledger file
-
-    STDERR_FILE="$TMP/stderr.txt"
-    AGENTS_CONFIG_DIR="$TMP/agents" \
-      run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
-        --format detail-plan --session-id sid4 --plans-dir "$TMP/plans" \
-        --draft-file "$TMP/plans/sid4-detail-draft.md" \
-        --cap 2 --max-extensions 1 --extensions-used 0 \
-        --accepted-tradeoffs "$TMP/plans/sid4-outline.md" \
-        --round 2 \
-        >/dev/null 2>"$STDERR_FILE"
-    RC=$?
-
-    ARGV="$(cat "$TMP/rpc-argv.txt" 2>/dev/null || echo "")"
-    STDERR_CONTENT="$(cat "$STDERR_FILE" 2>/dev/null || echo "")"
-    LEDGER_FILE="$TMP/plans/sid4-detail-plan-concern-ledger.txt"
-
-    T4_OK=1
-    if [[ "$RC" -ne 0 && "$RC" -ne 1 && "$RC" -ne 2 ]]; then
-      fail "T4: RC expected 0|1|2, got $RC. STDERR: $STDERR_CONTENT"
-      T4_OK=0
-    fi
-    if ! echo "$ARGV" | grep -q -- "--round 1"; then
-      fail "T4: argv should contain --round 1, got: $ARGV"
-      T4_OK=0
-    fi
-    if echo "$ARGV" | grep -q -- "--ledger"; then
-      fail "T4: argv should NOT contain --ledger, got: $ARGV"
-      T4_OK=0
-    fi
-    if [[ ! -f "$LEDGER_FILE" ]]; then
-      fail "T4: ledger file not created at $LEDGER_FILE"
-      T4_OK=0
-    elif ! grep -q "C1|HIGH|" "$LEDGER_FILE" || ! grep -q "C2|MEDIUM|" "$LEDGER_FILE"; then
-      fail "T4: ledger missing expected entries. Content: $(cat "$LEDGER_FILE")"
-      T4_OK=0
-    fi
-    if ! echo "$STDERR_CONTENT" | grep -q "ledger absent at round"; then
-      fail "T4: STDERR should mention 'ledger absent at round'. Got: $STDERR_CONTENT"
-      T4_OK=0
-    fi
-    if [[ "$T4_OK" -eq 1 ]]; then
-      pass "T4: round-2 ledger-absent recovery (detail-plan) — downgrade to round 1, no --ledger, ledger created, warning emitted"
-    fi
+    echo "1" > "$TMP/plans/sid4-detail-plan-round-number.txt"
+    run_bin_round2 sid4 detail-plan "$TMP/plans/sid4-detail-draft.md" "$TMP/plans/sid4-outline.md"
+    check_refusal "T4 (detail-plan)" "$TMP/plans/sid4-detail-plan-concern-ledger.txt"
     rm -rf "$TMP"
     trap - EXIT
-fi
 
-# ---------------------------------------------------------------------------
-# T5: round-2 ledger-absent early recovery (outline-plan)
-# ---------------------------------------------------------------------------
-if [[ ! -f "$BIN_WRAPPER" ]]; then
-    echo "SKIP: T5: $BIN_WRAPPER missing"
-elif ! grep -q 'ledger absent at round' "$BIN_WRAPPER"; then
-    echo "SKIP: T5: round-2 ledger-absent recovery not yet in bin wrapper"
-else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
     setup_bin_env "$TMP"
@@ -288,50 +324,14 @@ else
     mkdir -p "$TMP/plans"
     echo "# intent (accepted tradeoffs)" > "$TMP/plans/sid5-intent.md"
     echo "# outline draft" > "$TMP/plans/sid5-outline-draft.md"
-    # Do NOT create a ledger file
+    echo "1" > "$TMP/plans/sid5-outline-plan-round-number.txt"
+    run_bin_round2 sid5 outline-plan "$TMP/plans/sid5-outline-draft.md" "$TMP/plans/sid5-intent.md"
+    check_refusal "T5 (outline-plan)" "$TMP/plans/sid5-outline-plan-concern-ledger.txt"
 
-    STDERR_FILE="$TMP/stderr.txt"
-    AGENTS_CONFIG_DIR="$TMP/agents" \
-      run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
-        --format outline-plan --session-id sid5 --plans-dir "$TMP/plans" \
-        --draft-file "$TMP/plans/sid5-outline-draft.md" \
-        --cap 2 --max-extensions 1 --extensions-used 0 \
-        --accepted-tradeoffs "$TMP/plans/sid5-intent.md" \
-        --round 2 \
-        >/dev/null 2>"$STDERR_FILE"
-    RC=$?
-
-    ARGV="$(cat "$TMP/rpc-argv.txt" 2>/dev/null || echo "")"
-    STDERR_CONTENT="$(cat "$STDERR_FILE" 2>/dev/null || echo "")"
-    LEDGER_FILE="$TMP/plans/sid5-outline-plan-concern-ledger.txt"
-
-    T5_OK=1
-    if [[ "$RC" -ne 0 && "$RC" -ne 1 && "$RC" -ne 2 ]]; then
-      fail "T5: RC expected 0|1|2, got $RC. STDERR: $STDERR_CONTENT"
-      T5_OK=0
-    fi
-    if ! echo "$ARGV" | grep -q -- "--round 1"; then
-      fail "T5: argv should contain --round 1, got: $ARGV"
-      T5_OK=0
-    fi
-    if echo "$ARGV" | grep -q -- "--ledger"; then
-      fail "T5: argv should NOT contain --ledger, got: $ARGV"
-      T5_OK=0
-    fi
-    if [[ ! -f "$LEDGER_FILE" ]]; then
-      fail "T5: ledger file not created at $LEDGER_FILE"
-      T5_OK=0
-    elif ! grep -q "C1|HIGH|" "$LEDGER_FILE"; then
-      fail "T5: ledger missing C1|HIGH entry. Content: $(cat "$LEDGER_FILE")"
-      T5_OK=0
-    fi
-    if ! echo "$STDERR_CONTENT" | grep -q "ledger absent at round"; then
-      fail "T5: STDERR should mention 'ledger absent at round'. Got: $STDERR_CONTENT"
-      T5_OK=0
-    fi
-    if [[ "$T5_OK" -eq 1 ]]; then
-      pass "T5: round-2 ledger-absent recovery (outline-plan) — downgrade to round 1, no --ledger, ledger created, warning emitted"
-    fi
+    rm -f "$TMP/rpc-argv.txt"
+    run_bin_round2 sid5 outline-plan "$TMP/plans/sid5-outline-draft.md" "$TMP/plans/sid5-intent.md" \
+      --ledger "$TMP/plans/does-not-exist-ledger.txt"
+    check_refusal "T5b (--ledger pointing at nothing)" "$TMP/plans/does-not-exist-ledger.txt"
     rm -rf "$TMP"
     trap - EXIT
 fi
@@ -351,6 +351,7 @@ else
     echo "# detail draft" > "$TMP/plans/sid6-detail-draft.md"
     LEDGER_FILE="$TMP/plans/sid6-detail-plan-concern-ledger.txt"
     printf 'C1|HIGH|prior concern\n' > "$LEDGER_FILE"
+    echo "1" > "$TMP/plans/sid6-detail-plan-round-number.txt"
 
     STDERR_FILE="$TMP/stderr.txt"
     AGENTS_CONFIG_DIR="$TMP/agents" \

@@ -5,24 +5,6 @@ set -euo pipefail
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
-ROUND_FILE="${PLANS_DIR}/${SESSION_ID}-security-plan-round-number.txt"
-if [[ -f "$ROUND_FILE" ]]; then
-  ROUND_NUMBER=$(( $(<"$ROUND_FILE") + 1 ))
-else
-  ROUND_NUMBER=1
-fi
-printf '%s\n' "$ROUND_NUMBER" > "$ROUND_FILE"
-
-cleanup_counter() {
-  local rc=$1
-  case "$rc" in
-    0|1|2|4) rm -f "$ROUND_FILE" ;;
-    # single-round terminal format: exit 1 is terminal (no re-loop), so clear too.
-    # exit 5 (AUTO_EXTEND) does not occur here (MAX_EXTENSIONS=0).
-  esac
-  return "$rc"
-}
-
 args=(
   --format security-plan
   --session-id "$SESSION_ID"
@@ -30,7 +12,6 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-detail.md"
   --cap 1 --max-extensions 0 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-outline.md"
-  --round "$ROUND_NUMBER"
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
@@ -44,5 +25,4 @@ if [[ -s "$RISK_FILE" ]]; then
 fi
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
-cleanup_counter "$RC" || true
 exit "$RC"
