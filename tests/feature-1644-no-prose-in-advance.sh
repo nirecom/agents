@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/lib/next-step/advance.js, bin/workflow/lib/next-step/advance-shared.js, hooks/workflow-state/record-step-verdict.js
 # Tags: tl1, static, workflow, advance, no-prose, scope:issue-specific
-
-# #1644 — the forward operation must decide from RECORDED FACTS only.
 #
-# Why: intent.md / outline.md are model-authored prose. If the advance path read
-# them, a step could be settled because the plan text sounded convincing rather
-# than because a condition was recorded — the same failure mode #1286 removed
-# from the skip gate. State files and config files are the only admissible
-# inputs here.
-# Written BEFORE the implementation: RED until the three modules exist.
+# The forward operation must decide from RECORDED FACTS only: intent.md / outline.md
+# are model-authored prose, and reading them would let a step settle because the
+# plan text sounded convincing rather than because a condition was recorded — the
+# same failure mode the skip gate itself was fixed to avoid. State files and config
+# files are the only admissible inputs here.
 
 set -uo pipefail
 
@@ -20,9 +17,9 @@ PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-# advance-args.js joined the class in #1947: both next-step and set-workflow-type
-# require it, so it inherits the same ban. It holds argv vocabulary only today —
-# this pin forbids plan-reading logic from ever growing there.
+# advance-args.js is required by both next-step and set-workflow-type, so it
+# inherits the same ban: it holds argv vocabulary only today, and this pin
+# forbids plan-reading logic from ever growing there.
 TARGETS="
 bin/workflow/lib/next-step/advance.js
 bin/workflow/lib/next-step/advance-shared.js

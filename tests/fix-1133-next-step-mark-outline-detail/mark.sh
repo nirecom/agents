@@ -58,8 +58,8 @@ check_nonzero "M3. --mark (no step argument) → nonzero exit" "$RC"
 
 echo ""
 echo "=== M4: --mark branching_complete (value-less form, non-gated step) → exit 0 + complete ==="
-# #1947 inverted this case on purpose: the trailing `complete` token is now
-# optional, so "missing status token" is no longer an error. A NON-gated step is
+# The trailing `complete` token is optional by design, so "missing status
+# token" is no longer an error. A NON-gated step is
 # used because outline/detail are already complete in this fixture, which makes
 # the approval gate a no-op (completion-approval.js skips before === "complete").
 # PRECONDITION: branching_complete must be PENDING, or M4a would assert a status

@@ -4,27 +4,18 @@
 # Tags: workflow, next-step, file-split, entrypoint-path, module-wiring, TL1, TL2, scope:common
 
 # #1756 (SD-2): bin/workflow/next-step is split into bin/workflow/lib/next-step/*.js.
-# Two contracts must hold after the split:
-#   H-1  the recovery commands printed to the user must name the ENTRYPOINT
-#        (bin/workflow/next-step), not the internal module that happens to build
-#        the string. A bare __filename inside lib/ resolves to a non-executable
-#        internal module path.
-#   Wiring  every require() in the moved code must still resolve. Four of the five
-#        lazy requires sit inside try/catch fail-open blocks, so a wrong path is
-#        swallowed at runtime and the feature dies silently — only a static check
-#        can catch it.
+# Contract H-1: recovery commands must name the ENTRYPOINT (bin/workflow/next-step),
+# not an internal lib module whose bare __filename resolves to a non-executable path.
+# Contract Wiring: every require() in the moved code must still resolve -- most lazy
+# requires sit inside try/catch fail-open blocks, so a broken path dies silently and
+# only a static check catches it.
 
-# RED: C1-C8, C13, C14 fail against the unsplit sources (lib/next-step/ does not
-# exist yet and the entrypoint is still ~700 lines). C9-C12 are behavior contracts
-# that must hold both before and after the split.
+# RED: C1-C8, C13, C14 fail against the unsplit sources. C9-C12 are behavior
+# contracts that must hold both before and after the split.
 
-# TL3 gap (what this test does NOT catch):
-# - Real CLAUDE_SESSION_ID propagation from a live `claude -p` session into the
-#   next-step invocation.
-# - A real user copy-pasting the recovery command into their own shell (quoting /
-#   PATH resolution of `node` in the host terminal).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: real CLAUDE_SESSION_ID propagation and a user pasting the recovery
+# command into their own shell are not checked here -- see WORKFLOW_USER_VERIFIED
+# preflight (skill-orchestration category).
 
 set -u
 
@@ -367,17 +358,13 @@ else
 fi
 
 # --- C15/C16: the THIRD recovery path — the generic evidence-backed --mark hint ---
-# Reachability (derived from bin/workflow/next-step, not guessed):
-#   The generic hint at the `hasEvidence && !isApprovalGatedStep(currentStep)`
-#   branch needs a currentStep that (a) hasCompletionEvidence() accepts and
-#   (b) reconcileEffectiveState did NOT already resolve to complete. Evidence
-#   resolution in effective-state.js only fires on steps whose status is exactly
-
-#   "pending", while the currentStep walk selects anything that is neither
-#   complete nor skipped. `docs: in_progress` therefore stays current AND carries
-#   evidence (a staged *.md file), which is the reachable shape. `docs` is not an
-#   approval-gated step, so the --mark form (not the CONFIRM sentinel form) is
-#   emitted. A later complete step (cleanup) supplies the inconsistency.
+# Reachability: the generic hint fires when currentStep both accepts
+# hasCompletionEvidence() and was not already resolved to complete by
+# reconcileEffectiveState. Evidence resolution only fires on steps whose status is
+# exactly "pending", while the currentStep walk accepts anything neither complete
+# nor skipped -- so `docs: in_progress` stays current while carrying evidence (a
+# staged *.md file). docs is not approval-gated, so the --mark form (not CONFIRM)
+# is emitted; a later complete step (cleanup) supplies the inconsistency.
 C15_SID="c15-$(printf '%04x%04x' $RANDOM $RANDOM)"
 C15_REPO="$(setup_repo)"
 mkdir -p "$C15_REPO/docs"
@@ -388,9 +375,8 @@ ACTION=""; NEXT_SKILL=""; REASON=""; NEXT_HINT=""
 C15_OUT=$(CLAUDE_PROJECT_DIR="$(to_node_path "$C15_REPO")" run_next_step --session "$C15_SID")
 eval "$C15_OUT" 2>/dev/null || true
 check_eq "C15: docs in_progress with evidence + later complete → ACTION=abort" "abort" "${ACTION:-}"
-# #1947 shortened the needle: the hint no longer carries a trailing `complete`
-# token, so `--mark docs complete` became structurally unmatchable and this row
-# would have gone vacuously red (and, after a careless "fix", vacuously green).
+# The hint carries no trailing `complete` token, so the needle asserts
+# `--mark docs` alone -- a full-phrase needle would be structurally unmatchable.
 check_contains "C15b: NEXT_HINT offers the generic --mark docs recovery" "--mark docs" "${NEXT_HINT:-}"
 
 C15_PATH_RAW="$(printf '%s' "${NEXT_HINT:-}" | sed -n 's|.*Recovery: node \(.*\) --mark docs.*|\1|p')"

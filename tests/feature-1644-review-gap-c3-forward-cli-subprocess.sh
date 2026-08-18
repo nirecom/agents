@@ -2,29 +2,18 @@
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/record-skip-judgment, bin/workflow/record-complexity-and-skip, bin/workflow/set-workflow-type, bin/workflow/record-skip-verdict, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, forward-cli, subprocess, idempotency, event-stream, scope:issue-specific, pwsh-not-required
 
-# #1644 review gap C3 (HIGH) — the forward operation observed through a REAL
-# subprocess boundary on all four advance-class CLIs.
+# Observes the forward operation through a REAL subprocess boundary on all four
+# advance-class CLIs. Existing cases assert only the folded PROJECTION, which is
+# identical whether a repeat call appended a duplicate event or nothing at all --
+# idempotency is a statement about the raw append-only event stream, so these
+# cases read it directly via the shared state-probe `eventcount` mode. Already
+# covered elsewhere and deliberately not repeated here: ADVANCE_SCOPE verdicts
+# (feature-1644-advance-transaction/projection.sh A15), same-CLI already=true
+# (.../basic.sh A5), sibling-CLI already=true (feature-1644-sibling-cli-advance.sh S15).
 
-# Why this layer: every existing #1644 case asserts the folded PROJECTION, which
-# is identical whether a repeated call appended a duplicate event or appended
-# nothing at all. Idempotency is a statement about the append-only stream
-# (#1733), so it is only falsifiable against the raw `events` array — that is
-# what these cases read, via the shared state-probe `eventcount` mode.
-
-# Deliberately NOT re-covered here (already owned elsewhere):
-# - next-step ADVANCE_SCOPE both verdicts -> feature-1644-advance-transaction/projection.sh A15
-# - next-step already=true on repeat      -> .../basic.sh A5
-# - sibling already=true on repeat        -> feature-1644-sibling-cli-advance.sh S15
-
-# TL3 gap (what this test does NOT catch):
-# - Whether a live Claude Code session's settings.json permissions.allow admits
-#   these argv forms without an approval dialog.
-# - Whether the migrated SKILL.md steps actually issue the single --advance call
-#   shape rather than the legacy CLI-then-next-step pair.
-# - Whether concurrent sessions racing on the same state file still converge
-#   (the lock is exercised here only single-threaded).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: live settings.json permission-dialog admission, the migrated SKILL.md
+# steps' actual call shape, and concurrent-session convergence are not checked
+# here -- see WORKFLOW_USER_VERIFIED preflight (skill-orchestration category).
 
 set -uo pipefail
 
@@ -115,10 +104,9 @@ at_research c31a
 run_cli node "$NS" --session c31a --advance --step research --complete
 check "C3-1a: --complete exits 0" 0 "$RC"
 check "C3-1a: stdout carries the advance line" "ADVANCED=research status=complete" "$OUT"
-# EXACT match, not a substring: "the canonical form pollutes nothing on stderr"
-# is the regression guard. #1947 migrated this case to the canonical --complete
-# form precisely so the assertion could stay exact; the legacy form's
-# deprecation line is asserted separately by C3-1a-legacy below.
+# EXACT match, not a substring: the canonical value-less form pollutes nothing
+# on stderr, which is the regression guard. The legacy form's own deprecation
+# line is asserted separately by C3-1a-legacy below.
 check "C3-1a: stderr is empty on success" "" "$ERR"
 check "C3-1a: research is complete" '"complete"' "$(step_status c31a research)"
 C31A_OUT="$OUT"

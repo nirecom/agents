@@ -246,17 +246,18 @@ check_contains "F1c: the repeated --skipped reports already=true" "already=true"
 check "F1c: the repeated --skipped leaves the projected entry unchanged" "$F1C2_FIRST" "$(step_entry f1c2 research)"
 check "F1c: the repeated --skipped appends no step_status event" "$F1C2_EV" "$(step_events f1c2 research)"
 
-# --pending is observable only as a TRANSITION, so complete it first.
+# --pending routes through the reset gate (GATE_FOR_STATUS in advance-shared.js),
+# which keeps its pre-#1644 always-rewrite behaviour on purpose (see the "gates
+# deliberately keep their pre-#1644 re-write behaviour" note in
+# record-step-verdict.js) — unlike --complete/--skipped it is NOT idempotent.
 at_research f1c3
 run_cli node "$NS" --session f1c3 --advance --step research --complete
 run_cli node "$NS" --session f1c3 --advance --step research --pending
 check "F1c: --pending after --complete exits 0" 0 "$RC"
-F1C3_FIRST="$(step_entry f1c3 research)"; F1C3_EV="$(step_events f1c3 research)"
 run_cli node "$NS" --session f1c3 --advance --step research --pending
 check "F1c: the second --pending exits 0" 0 "$RC"
-check_contains "F1c: the repeated --pending reports already=true" "already=true" "$OUT"
-check "F1c: the repeated --pending leaves the projected entry unchanged" "$F1C3_FIRST" "$(step_entry f1c3 research)"
-check "F1c: the repeated --pending appends no step_status event" "$F1C3_EV" "$(step_events f1c3 research)"
+check_not_contains "F1c: the repeated --pending does not claim already=true (reset gate always rewrites)" "already=true" "$OUT"
+check "F1c: the repeated --pending still projects as pending" '"pending"' "$(step_status f1c3 research)"
 
 echo ""
 echo "=== F2: --skipped, with and without --skip-reason ==="

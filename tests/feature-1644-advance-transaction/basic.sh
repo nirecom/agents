@@ -27,9 +27,8 @@ run_basic_cases() {
 
   echo ""
   echo "=== A5: repeating the same --advance is idempotent (already=true) ==="
-  # Deliberately left on the deprecated `--status complete` form (#1947): A1a/A1b
-  # cover the canonical value-less flag, so keeping one case on the legacy spelling
-  # is what proves idempotency still holds for the backward-compatible path.
+  # Deliberately on the legacy `--status complete` spelling, to prove idempotency
+  # also holds on the backward-compatible path (the value-less flag is covered above).
   at_research a5
   run_ns --session a5 --advance --step research --status complete
   local first_entry; first_entry="$(step_entry a5 research)"
