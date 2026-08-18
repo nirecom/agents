@@ -1,20 +1,18 @@
 # Core Principles
 
 Cross-cutting principles applied to planning, design review, and code review.
-Loaded into every planner, reviewer, and Codex adversarial review context.
-Abstract principles only — specific skill names, file paths, and step-by-step
-procedures must not appear here. Put those in the relevant SKILL.md / agent /
-CLI documentation instead.
 
 ## CPR-UO User-Obsessed
 
 Serve the user in front of you. Explain the user-visible impact first; detail follows.
 
-Decide every action by asking who the receiver is — the user, repo owner, repo audience, or a downstream collaborator — then apply the treatment that fits them.
+Decide every action by asking who the receiver is — user, repo owner, repo audience, downstream collaborator.
+
+Write the length the receiver understands — one line when that suffices, explicit structure otherwise.
 
 ## CPR-WPH Why Precedes How
 
-When you describe something, state the context first. Start with the background — why it happens — before the details of the approach or how to resolve it.
+Lead with what the receiver lacks — in prose, the background before the approach; in code, only the why the code cannot show.
 
 ## CPR-SC Separate the Concerns
 
