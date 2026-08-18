@@ -1,15 +1,12 @@
 // hooks/lib/comment-block-scan.js
 //
-// SSOT (CPR-SSOT) for comment-run recognition, ported 1:1 from the awk core
+// SSOT (CPR-SSOT) for comment-run recognition, ported from the awk core
 // bin/review-comment-block-size.d/scan.sh used to carry, so the Edit-time
-// hook (hooks/block-comment-block-size.js) and the commit-time CLI
-// (bin/review-comment-block-size) judge files identically.
-
-// FILE-LEVEL filter rules (scannable extensions, excluded paths) are
-// deliberately duplicated in bash (mirrored by `ext_ok()`/`path_ok()`); the
-// drift net is tests/feature-1894-hook-comment-block/filter-parity.sh.
-// Purity contract: required from the Edit hot path — no config, no
-// filesystem, no output; every value arrives as an argument.
+// hook and the commit-time CLI judge files identically.
+//
+// FILE-LEVEL filter rules are duplicated in bash; drift net is
+// tests/feature-1894-hook-comment-block/filter-parity.sh. Purity contract:
+// no config, no filesystem, no output — every value arrives as an argument.
 "use strict";
 
 // Default threshold: a run of MORE than this many consecutive comment lines is
@@ -23,6 +20,12 @@ const DEFAULT_EXTENSIONS = ["js", "sh", "py"];
 // Path segments never scanned: vendored trees and archived code.
 // Bash twin: the `path_ok()` case arm in bin/review-comment-block-size.
 const EXCLUDED_PATH_SEGMENTS = ["node_modules", ".git", "_archive", "_archived"];
+
+// Neutral bridging tokens: a line consisting of only one of these (after
+// trim) does not break a comment run, but does not count toward its length
+// either. `;;` is deliberately excluded — it is a real bash `case` terminator.
+const NEUTRAL_NOOP_TOKENS = Object.freeze([";", ":", "{}", "()", ","]);
+const NEUTRAL_NOOP_SET = new Set(NEUTRAL_NOOP_TOKENS);
 
 // parseMaxLines mirrors the bash guard `[[ $T =~ ^[0-9]+$ ]] && [[ $T -gt 0 ]]`.
 // Anything else — empty, negative, float, hex, exponent, padded — is not a
@@ -81,13 +84,21 @@ function stripLeadingBlanks(s) {
   return i === 0 ? s : s.slice(i);
 }
 
+// isBlankLine — a line that is empty or all whitespace (space, tab, form-feed,
+// NBSP, etc. — the ECMAScript WhiteSpace class via `\s`). Such a line bridges
+// a comment run without counting toward its length.
+function isBlankLine(s) {
+  return /^\s*$/.test(s);
+}
+
 /**
  * scanText(text, threshold) -> { runs, count, longest }
  *
- * One pass, one state bit. A run is a maximal stretch of consecutive comment
- * lines; only runs strictly LONGER than `threshold` are reported (`longest`
- * is 0 when there are none). Under-detects on purpose, as the awk core did:
- * `--`, `;`, `%`, and Python triple quotes are not comment markers.
+ * Classifies each line as comment / neutral / code. A run is comment lines
+ * bridged across neutral lines (blank, or a lone NEUTRAL_NOOP_TOKENS entry);
+ * any code line resets it. Only runs strictly LONGER than `threshold` are
+ * reported (`longest` is 0 when none). Under-detects on purpose, as the awk
+ * core did: `--`, `%`, and Python triple quotes are not comment markers.
  */
 function scanText(text, threshold) {
   const t = parseMaxLines(threshold);
@@ -105,12 +116,12 @@ function scanText(text, threshold) {
 
   let inBlock = false;
   let run = 0;
-  let start = 0;
+  let first = 0;
+  let last = 0;
 
   const flush = () => {
     if (run > t) {
-      const end = start + run - 1;
-      runs.push({ start, end, len: run });
+      runs.push({ start: first, end: last, len: run });
       if (run > longest) longest = run;
     }
     run = 0;
@@ -123,31 +134,39 @@ function scanText(text, threshold) {
     s = stripLeadingBlanks(s);
 
     const head2 = s.slice(0, 2);
-    let isComment = false;
+    let kind;
     if (lineNo === 1 && head2 === "#!") {
       // A shebang is not a comment block, but only on line 1.
-      isComment = false;
+      kind = "code";
     } else if (inBlock) {
-      isComment = true;
+      kind = "comment";
       if (s.indexOf("*/") !== -1) inBlock = false;
+    } else if (isBlankLine(s) || NEUTRAL_NOOP_SET.has(s.trim())) {
+      // Block-internal lines are decided above, before this bridging check —
+      // a no-op token inside `/* ... */` must still count as a comment line.
+      kind = "neutral";
     } else if (head2 === "/*") {
-      isComment = true;
+      kind = "comment";
       if (s.slice(2).indexOf("*/") === -1) inBlock = true;
     } else if (head2 === "//" || s.charAt(0) === "#" || head2 === "*/") {
-      isComment = true;
+      kind = "comment";
     } else if (
       s.charAt(0) === "*" &&
       (s.length === 1 || s.charAt(1) === " " || s.charAt(1) === "\t")
     ) {
-      isComment = true;
+      kind = "comment";
+    } else {
+      kind = "code";
     }
 
-    if (isComment) {
-      if (run === 0) start = lineNo;
+    if (kind === "comment") {
+      if (run === 0) first = lineNo;
       run++;
-    } else {
+      last = lineNo;
+    } else if (kind === "code") {
       flush();
     }
+    // kind === "neutral" bridges the run without touching it.
   }
   flush();
 
@@ -157,6 +176,7 @@ function scanText(text, threshold) {
 module.exports = {
   DEFAULT_MAX_LINES,
   EXCLUDED_PATH_SEGMENTS,
+  NEUTRAL_NOOP_TOKENS,
   hasScannableExtension,
   isExcludedPath,
   parseExtensions,

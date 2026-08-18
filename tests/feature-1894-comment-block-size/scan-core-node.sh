@@ -3,20 +3,16 @@
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, parser, node, table-driven, ssot, parity, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Approach A moves the scan core out of awk and into Node, so the Edit-time
-# PreToolUse hook calls it in-process while the bash CLI reaches it through a
-# thin stdin/stdout adapter — hooks/lib/comment-block-scan.js is the SSOT for
-# comment recognition (CPR-SSOT), and this file is its direct unit surface.
-# Separate from scanner-core.sh even though the case table matches: that file
-# observes the core THROUGH the bash CLI (one number/file, staged only,
-# over-threshold only); here the module is called directly, so run list,
-# boundaries and sub-threshold state are all observable — the pair makes the
-# awk-to-JS port checkable in either direction (CPR-E2E).
+# hooks/lib/comment-block-scan.js is the recognition SSOT (CPR-SSOT), shared by
+# the Edit-time hook (in-process) and the bash CLI (stdin/stdout adapter); this
+# file is its direct unit surface. scanner-core.sh duplicates the case table on
+# purpose: it sees the core THROUGH the CLI (one number per file), while the run
+# list, boundaries and sub-threshold state are only visible here (CPR-E2E).
 
-# TL3 gap: real Edit-time latency (unmeasured here), require-ability from
-# both consumers post-packaging, and editor byte sequences mktemp fixtures
-# don't produce (UTF-16, mixed CRLF/LF at scale). Mitigation: scanner-core.sh
-# runs the same recognition rules through the real CLI on every run.
+# TL3 gap: real Edit-time latency, require-ability from both consumers
+# post-packaging, and editor byte sequences mktemp fixtures don't produce
+# (UTF-16, mixed CRLF/LF at scale). Mitigation: scanner-core.sh runs the same
+# rules through the real CLI on every run.
 
 echo ""
 echo "=== N0: module contract ==="
@@ -26,9 +22,8 @@ NS_CLI="$AGENTS_DIR/bin/review-comment-block-size.d/scan-cli.js"
 NS_DIR="$TMPDIR_BASE/nodescan"
 mkdir -p "$NS_DIR"
 
-# Node on Windows chokes on backslash paths inside a JS string literal, and the
-# driver receives this path as argv rather than as source text — but the same
-# normalization is applied for both, per rules/test/fixture-isolation.md.
+# Node on Windows chokes on backslash paths; normalize per
+# rules/test/fixture-isolation.md.
 ns_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
@@ -59,6 +54,8 @@ if (mode === 'exports') {
     out(M.isExcludedPath(process.argv[4]) ? 'yes' : 'no');
 } else if (mode === 'segments') {
     out(M.EXCLUDED_PATH_SEGMENTS.join('|'));
+} else if (mode === 'noopTokens') {
+    out(M.NEUTRAL_NOOP_TOKENS.join('|'));
 } else {
     // Scanning modes all share one read + one scan.
     const t = Number(process.argv[4]);
@@ -66,10 +63,9 @@ if (mode === 'exports') {
     const r = M.scanText(text, t);
     if (mode === 'longest') {
         // Mirrors cb_longest in the dispatcher: the number the report would
-        // show, or "none" when nothing is over threshold. Deliberately does NOT
-        // assume whether `longest` is filtered by the threshold — the two
-        // readings are indistinguishable here, and pinning the wrong one would
-        // make this file assert an implementation detail instead of a contract.
+        // show, or "none" when nothing is over threshold — without assuming
+        // whether `longest` is itself threshold-filtered (indistinguishable
+        // here, and pinning the wrong reading would assert an internal).
         out(r.count > 0 ? r.longest : 'none');
     } else if (mode === 'count') {
         out(r.count);
@@ -80,7 +76,10 @@ if (mode === 'exports') {
         const bad = [];
         if (r.count !== r.runs.length) bad.push('count!=runs.length');
         if (r.runs.some((x) => x.len <= t)) bad.push('run<=threshold-present');
-        if (r.runs.some((x) => x.end - x.start + 1 !== x.len)) bad.push('span!=len');
+        // Neutral lines bridge a run without being counted, so the span is no
+        // longer equal to len — only never SMALLER than it, and never inverted.
+        if (r.runs.some((x) => x.end < x.start)) bad.push('end<start');
+        if (r.runs.some((x) => x.end - x.start + 1 < x.len)) bad.push('span<len');
         if (r.runs.some((x) => x.start < 1)) bad.push('start<1');
         if (r.count > 0 && r.longest <= t) bad.push('longest<=threshold-with-findings');
         if (r.count === 0 && r.longest > t) bad.push('longest>threshold-without-findings');
@@ -91,9 +90,8 @@ if (mode === 'exports') {
 }
 DRIVER
 
-# ns <mode> [args...] -> stdout of the driver; NS_RC carries the exit code and
-# NS_ERR the stderr, so a missing module is reported once, in full, rather than
-# as N assertion diffs against an empty string.
+# ns <mode> [args...] -> stdout of the driver; NS_RC/NS_ERR carry the exit code
+# and stderr, so a missing module is reported once instead of as N empty diffs.
 NS_RC=0
 NS_ERR=""
 ns() {
@@ -103,9 +101,8 @@ ns() {
     run_with_timeout 30 node "$NS_DIR/driver.js" "$NS_MOD_P" "$mode" "$@" 2>"$errf" || NS_RC=$?
     NS_ERR="$(cat "$errf" 2>/dev/null || true)"
 }
-# Same, but printing the driver's stdout so it can be used inside $( ).
-# NOTE: command substitution runs in a subshell, so NS_RC does NOT survive an
-# `$(nsv ...)`. Assertions about the exit code must call ns_rc below instead.
+# Same, printing stdout for use inside $( ). NOTE: that subshell drops NS_RC —
+# assertions about the exit code must call ns_rc below instead.
 nsv() { ns "$@" >"$NS_DIR/out.txt"; cat "$NS_DIR/out.txt"; }
 
 # ns_rc <mode> [args...] -> echoes the exit code, in the same subshell-safe way.
@@ -132,15 +129,19 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
         pass "N0/module-is-requirable"
     fi
     NS_EXPORTS="$(nsv exports)"
-    for _sym in DEFAULT_MAX_LINES EXCLUDED_PATH_SEGMENTS hasScannableExtension \
-                isExcludedPath parseExtensions parseMaxLines scanText; do
+    for _sym in DEFAULT_MAX_LINES EXCLUDED_PATH_SEGMENTS NEUTRAL_NOOP_TOKENS \
+                hasScannableExtension isExcludedPath parseExtensions \
+                parseMaxLines scanText; do
         assert_contains "N0/exports-$_sym" "$_sym" "$NS_EXPORTS"
     done
     assert_eq "N0/default-max-lines" "10" "$(nsv default)"
+    # The no-op token list is frozen: exact-trim members only, in this order.
+    # `;;` is deliberately absent — it terminates a bash `case` branch, so it is
+    # real code, not a no-op (the negative half of the pair, CPR-ORTH).
+    assert_eq "N0/noop-token-list" ";|:|{}|()|," "$(nsv noopTokens)"
 
-    # Purity: the module is required from the Edit-time hot path, so it must not
-    # read config, touch the filesystem, or print. Asserted statically because a
-    # runtime probe would only catch the branches this suite happens to reach.
+    # Purity: required from the Edit-time hot path, so no config read, no fs, no
+    # print. Static because a runtime probe sees only the branches reached here.
     if [ -f "$NS_MOD" ]; then
         assert_absent "N0/no-process-env" "process.env" "$(cat "$NS_MOD")"
         assert_absent "N0/no-console" "console." "$(cat "$NS_MOD")"
@@ -149,9 +150,8 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
         fail "N0/module-file-exists" "not found: $NS_MOD"
     fi
 
-    # C3: every scanText call site passes the threshold explicitly. A call that
-    # relies on a default would silently re-introduce the ambient-config bypass
-    # this issue closes, and no behavioural test can see it.
+    # C3: every scanText call site passes the threshold explicitly — a defaulted
+    # call re-opens the ambient-config bypass, invisibly to behavioural tests.
     for _f in "$NS_CLI" "$AGENTS_DIR/hooks/block-comment-block-size.js"; do
         if [ -f "$_f" ]; then
             if grep -n 'scanText(' "$_f" | grep -qv ','; then
@@ -166,12 +166,9 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
     done
 fi
 
-# ---------------------------------------------------------------------------
 # N1 — recognition-rule parity with scanner-core.sh, at the module boundary
-#
 # Same rows as the CLI-level C1 table, same `run > T` boundary: T=10 means a
 # 10-line run is allowed and 11 is the first finding.
-# ---------------------------------------------------------------------------
 echo ""
 echo "=== N1: comment-line rule / run-length boundary (T=10, flag iff run > 10) ==="
 if [ "$NS_HAVE_NODE" = "1" ]; then
@@ -191,7 +188,6 @@ shebang-plus-11-flagged       | #!/bin/sh #a*11 x=1             | 11
 hashbang-not-on-line1-counts  | x=1 #!/bin/sh #a*10             | 11
 leading-whitespace-stripped   | ^^//a*11 x=1                    | 11
 mixed-markers-one-run         | //a*5 #b*6 x=1                  | 11
-blank-terminates-outside-block| //a*6 _ //a*6 x=1               | none
 run-flushed-at-eof            | x=1 //a*11                      | 11
 block-open-close              | /*a *b*9 */ x=1                 | 11
 block-blank-inside-continues  | /*a *b*4 _ *c*4 */ x=1          | 11
@@ -209,16 +205,55 @@ percent-unsupported           | %a*11 x=1                       | none
 python-triple-quote-unsupported| """*11 x=1                     | none
 no-comments-at-all            | x=1*20                          | none
 single-line-file              | //a                             | none
+# Neutral-line bridging — kept row-for-row identical to C1 in scanner-core.sh
+# (CPR-ORTH: the CLI-level and module-level tables are the two directions of
+# the same contract, so one must never gain a row the other lacks).
+blank-bridges-outside-block   | //a*6 _ //a*6 x=1               | 12
+bridge-at-threshold-silent    | //a*5 _ //a*5 x=1               | none
+bridge-one-over-threshold     | //a*5 _ //a*6 x=1               | 11
+multi-bridge-accumulates      | //a*4 _ //a*4 _ //a*4 x=1       | 12
+wide-blank-gap-bridges        | //a*6 _*5 //a*6 x=1             | 12
+noop-semicolon-bridges        | //a*6 ; //a*6 x=1               | 12
+noop-colon-bridges            | //a*6 : //a*6 x=1               | 12
+noop-brace-pair-bridges       | //a*6 {} //a*6 x=1              | 12
+noop-paren-pair-bridges       | //a*6 () //a*6 x=1              | 12
+noop-comma-bridges            | //a*6 , //a*6 x=1               | 12
+noop-token-with-padding-bridges| //a*6 ^^;^^ //a*6 x=1          | 12
+# A bridge joins a run, not a marker style: `//` on one side and `#` on the
+# other is still ONE run. And inside a /* */ block, `inBlock` is checked before
+# neutrality, so a lone `;` there is a counted comment line (10 would be silent).
+mixed-marker-bridges          | //a*6 _ #b*6 x=1                | 12
+noop-token-inside-block-still-counts| /*a *b*4 ; *b*4 */ x=1    | 11
+noop-token-with-code-still-breaks| //a*6 ;x //a*6 x=1           | none
+double-semicolon-is-code-not-neutral| //a*6 ;; //a*6 x=1        | none
+lone-brace-is-code-not-neutral| //a*6 } //a*6 x=1               | none
+code-still-terminates         | //a*6 x=1 //a*6                 | none
+blank-only-file-no-run        | _*20 x=1                        | none
 TABLE
+
+# The two \s members render_spec cannot carry as a token; same pair as C1.
+ns_bridge_probe() {
+    local name="$1" sep="$2" i
+    {
+        for ((i = 1; i <= 6; i++)); do echo "//a"; done
+        printf '%b' "$sep"
+        for ((i = 1; i <= 6; i++)); do echo "//a"; done
+        echo "x=1"
+    } > "$NS_DIR/probe.txt"
+    assert_eq "N1/$name" "12" "$(nsv longest 10 "$(ns_path "$NS_DIR/probe.txt")")"
+}
+ns_bridge_probe "formfeed-only-line-bridges" '\f\n'
+ns_bridge_probe "nbsp-only-line-bridges" '\xc2\xa0\n'
+# The two axes combined: a no-op token padded with NON-ASCII whitespace. The
+# token test is `trim() === tok`, and JS trim() strips the whole Unicode
+# WhiteSpace class, so NBSP/FF padding must bridge exactly like spaces do.
+ns_bridge_probe "nbsp-padded-noop-token-bridges" '\xc2\xa0;\xc2\xa0\n'
+ns_bridge_probe "formfeed-padded-noop-token-bridges" '\f;\f\n'
 fi
 
-# ---------------------------------------------------------------------------
-# N2 — run boundaries and count
-#
-# Only reachable at the module boundary: the CLI reports one longest run per
-# file, so an off-by-one in `start`/`end` or a mis-split into two runs is
-# invisible there and would surface as a wrong L<a>-L<b> detail line for users.
-# ---------------------------------------------------------------------------
+# N2 — run boundaries and count. Module-boundary-only: the CLI reports one
+# longest run per file, so an off-by-one in `start`/`end` or a mis-split into
+# two runs is invisible there and surfaces as a wrong L<a>-L<b> line for users.
 echo ""
 echo "=== N2: run boundaries, count, and structural invariants ==="
 if [ "$NS_HAVE_NODE" = "1" ]; then
@@ -244,19 +279,37 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
     # property of the text.
     assert_eq "N2/same-text-lower-threshold-count" "1" "$(nsv count 5 "$_p")"
     assert_eq "N2/same-text-lower-threshold-invariants" "ok" "$(nsv invariants 5 "$_p")"
+
+    # Span accounting under bridging. `end` is no longer derivable from
+    # `start + len - 1`, so first/last are pinned explicitly here — the CLI
+    # shows one number per file and cannot see either boundary.
+    _p="$(ns_probe "x=1 //a*6 _ //a*6 x=1")"
+    assert_eq "N2/bridged-run-span" "2-14:12" "$(nsv runs 10 "$_p")"
+    assert_eq "N2/bridged-run-count" "1" "$(nsv count 10 "$_p")"
+    assert_eq "N2/bridged-run-invariants" "ok" "$(nsv invariants 10 "$_p")"
+
+    # Neutral lines AFTER the last comment line bridge nothing, so they must
+    # not extend `end` — the failure mode the explicit `last` tracking exists
+    # to prevent (a run reported as L1-L14 for 11 comment lines).
+    _p="$(ns_probe "//a*11 _*3")"
+    assert_eq "N2/trailing-neutral-excluded-from-span" "1-11:11" "$(nsv runs 10 "$_p")"
+
+    # A bridged run followed by a plain one: the flush must reset first/last as
+    # well as the counter, or the second run inherits the first one's start.
+    _p="$(ns_probe "//a*6 ; //a*6 x=1 //b*12")"
+    assert_eq "N2/bridged-and-plain-runs" "1-13:12,15-26:12" "$(nsv runs 10 "$_p")"
+    assert_eq "N2/bridged-and-plain-invariants" "ok" "$(nsv invariants 10 "$_p")"
 fi
 
-# ---------------------------------------------------------------------------
 # N3 — parseMaxLines (the threshold-parsing SSOT shared with the bash side)
-# ---------------------------------------------------------------------------
 echo ""
 echo "=== N3: parseMaxLines ==="
 if [ "$NS_HAVE_NODE" = "1" ]; then
 while IFS='|' read -r raw want; do
     [ -z "${raw//[[:space:]]/}" ] && [ -z "${want//[[:space:]]/}" ] && continue
     [[ "$raw" =~ ^[[:space:]]*# ]] && continue
-    # Trailing whitespace only (needed for column alignment before the `|`) —
-    # the " 7 | 10" row's leading space is the case under test and must survive.
+    # Strip trailing (alignment) whitespace only — the " 7 | 10" row's LEADING
+    # space is the case under test and must survive.
     raw="${raw%"${raw##*[![:space:]]}"}"
     want="${want//[[:space:]]/}"
     [ "$raw" = "@empty" ] && raw=""
@@ -277,13 +330,8 @@ abc      | 10
 TABLE
 fi
 
-# ---------------------------------------------------------------------------
-# N4 — extension and exclusion rules
-#
-# These are an INDEPENDENT re-expression of the bash ext_ok / path_ok (C7), not
-# a shared implementation, so they get their own table rather than inheriting
-# the CLI-level one.
-# ---------------------------------------------------------------------------
+# N4 — extension and exclusion rules. An INDEPENDENT re-expression of the bash
+# ext_ok / path_ok (C7), so it gets its own table rather than inheriting one.
 echo ""
 echo "=== N4: parseExtensions / hasScannableExtension / isExcludedPath ==="
 if [ "$NS_HAVE_NODE" = "1" ]; then
@@ -338,133 +386,7 @@ archive/old.sh                  | no
 TABLE
 fi
 
-# ---------------------------------------------------------------------------
-# N5 — byte- and line-level edge cases the awk core handled implicitly
-#
-# The port changes who owns line splitting: awk's record separator became
-# text.split(/\n/). Every case below is a shape where the two could disagree
-# without any recognition rule being wrong.
-# ---------------------------------------------------------------------------
-echo ""
-echo "=== N5: line-splitting and byte-level edges ==="
-if [ "$NS_HAVE_NODE" = "1" ]; then
-    # Empty file: no runs, no crash, and no phantom trailing line.
-    : > "$NS_DIR/probe.txt"
-    _p="$(ns_path "$NS_DIR/probe.txt")"
-    assert_eq "N5/empty-file-longest" "none" "$(nsv longest 10 "$_p")"
-    assert_eq "N5/empty-file-count" "0" "$(nsv count 10 "$_p")"
-
-    # A file that is a single newline: one empty line, still no run.
-    printf '\n' > "$NS_DIR/probe.txt"
-    assert_eq "N5/lone-newline" "none" "$(nsv longest 10 "$_p")"
-
-    # No trailing newline: the final run must still be flushed. awk got this for
-    # free; split() does not.
-    { for i in $(seq 1 10); do echo "#c$i"; done; printf '#c11'; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/no-trailing-newline-flushes" "11" "$(nsv longest 10 "$_p")"
-    assert_eq "N5/no-trailing-newline-span" "1-11:11" "$(nsv runs 10 "$_p")"
-
-    # Trailing newline must NOT add a phantom 12th line to the run.
-    { for i in $(seq 1 11); do echo "#c$i"; done; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/trailing-newline-no-phantom-line" "1-11:11" "$(nsv runs 10 "$_p")"
-
-    # CRLF: the \r must be stripped before marker recognition, or "*/" and "* "
-    # stop matching and a block silently runs to EOF.
-    { for i in $(seq 1 11); do printf '// c%s\r\n' "$i"; done; printf 'x=1\r\n'; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/crlf-longest" "11" "$(nsv longest 10 "$_p")"
-    assert_eq "N5/crlf-span" "1-11:11" "$(nsv runs 10 "$_p")"
-
-    # CRLF inside a block comment: the close marker carries the \r.
-    { printf '/*a\r\n'; for i in $(seq 1 9); do printf '* c%s\r\n' "$i"; done; printf '*/\r\n'; printf 'x=1\r\n'; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/crlf-block-closes" "11" "$(nsv longest 10 "$_p")"
-
-    # A leading UTF-8 BOM sits in front of the first marker. Whatever the module
-    # decides, it must decide it for line 1 only — the run must not vanish.
-    { printf '\xEF\xBB\xBF'; for i in $(seq 1 12); do echo "#c$i"; done; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/bom-does-not-swallow-the-run" "ok" "$(nsv invariants 10 "$_p")"
-    if [ "$(nsv count 10 "$_p")" -ge 1 ]; then
-        pass "N5/bom-run-still-detected"
-    else
-        fail "N5/bom-run-still-detected" "BOM on line 1 suppressed a 12-line run entirely"
-    fi
-
-    # Invalid UTF-8 bytes: readFileSync('utf8') turns them into U+FFFD. Every
-    # marker is ASCII, so the verdict must be unaffected — and above all the
-    # module must not throw on a binary-ish file.
-    { for i in $(seq 1 11); do printf '# c%s \xC3\x28\xFF\n' "$i"; done; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/invalid-utf8-longest" "11" "$(nsv longest 10 "$_p")"
-    assert_eq "N5/invalid-utf8-no-throw" "0" "$(ns_rc longest 10 "$_p")"
-
-    # NUL bytes mid-line: same requirement.
-    { for i in $(seq 1 11); do printf '# c%s\000tail\n' "$i"; done; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/nul-bytes-longest" "11" "$(nsv longest 10 "$_p")"
-
-    # Lone CR as the only separator (classic-Mac endings): NOT a line break for
-    # split(/\n/), so this is one very long line and cannot be an 11-line run.
-    { for i in $(seq 1 11); do printf '# c%s\r' "$i"; done; printf '\n'; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/lone-cr-is-not-a-line-break" "none" "$(nsv longest 10 "$_p")"
-
-    # One enormous line: guards against a quadratic or stack-recursive splitter.
-    # 2 MB on a single line, wrapped in a run that must still be found.
-    {
-        for i in $(seq 1 5); do echo "#c$i"; done
-        printf '# '
-        head -c 2000000 /dev/zero | tr '\0' 'x'
-        printf '\n'
-        for i in $(seq 1 5); do echo "#d$i"; done
-    } > "$NS_DIR/probe.txt"
-    assert_eq "N5/huge-single-line-longest" "11" "$(nsv longest 10 "$_p")"
-    assert_eq "N5/huge-single-line-no-timeout" "0" "$(ns_rc longest 10 "$_p")"
-
-    # Whitespace-only lines terminate a top-level run (they are not comments),
-    # but a line of only tabs must behave exactly like a line of only spaces.
-    { for i in $(seq 1 6); do echo "#c$i"; done; printf '\t\t\n'; for i in $(seq 1 6); do echo "#d$i"; done; } > "$NS_DIR/probe.txt"
-    assert_eq "N5/tab-only-line-terminates-run" "none" "$(nsv longest 10 "$_p")"
-fi
-
-# ---------------------------------------------------------------------------
-# N6 — scan-cli.js: the bash-facing adapter
-#
-# The bash CLI parses this stdout with the exact reader it used for awk, so the
-# line format is a contract, not an implementation detail.
-# ---------------------------------------------------------------------------
-echo ""
-echo "=== N6: scan-cli.js stdout/rc contract ==="
-if [ "$NS_HAVE_NODE" = "1" ]; then
-    # Sets NS_OUT / NS_ERR / NS_RC in the CURRENT shell — never call it inside
-    # $( ), or the exit code is lost with the subshell.
-    NS_OUT=""
-    ns_cli() {
-        local t="$1" f="$2" errf="$NS_DIR/clierr.txt"
-        NS_RC=0
-        run_with_timeout 30 node "$NS_CLI_P" --threshold "$t" <"$f" \
-            >"$NS_DIR/cliout.txt" 2>"$errf" || NS_RC=$?
-        NS_OUT="$(cat "$NS_DIR/cliout.txt" 2>/dev/null || true)"
-        NS_ERR="$(cat "$errf" 2>/dev/null || true)"
-    }
-
-    render_spec "x=1 //a*11 x=1 //b*5 x=1 //c*12" > "$NS_DIR/cli.txt"
-    ns_cli 10 "$NS_DIR/cli.txt"
-    assert_eq "N6/rc-zero-with-findings" "0" "$NS_RC"
-    assert_eq "N6/line-format" "2-12:11,20-31:12" \
-        "$(printf '%s\n' "$NS_OUT" | awk 'NF{printf "%s%s-%s:%s", (n++?",":""), $1, $2, $3}')"
-    assert_eq "N6/nothing-on-stderr" "" "$NS_ERR"
-
-    render_spec "//a*10 x=1" > "$NS_DIR/cli.txt"
-    ns_cli 10 "$NS_DIR/cli.txt"
-    assert_eq "N6/rc-zero-without-findings" "0" "$NS_RC"
-    assert_eq "N6/no-output-without-findings" "" "${NS_OUT//[[:space:]]/}"
-
-    # rc 2 is the usage error. rc 1 is RESERVED for the blocking verdict and
-    # this adapter must never return it — a bash caller that treated 1 as
-    # "scanner failed" would fail open on every future block.
-    : > "$NS_DIR/cli.txt"
-    ns_cli "" "$NS_DIR/cli.txt"
-    assert_eq "N6/missing-threshold-is-rc2" "2" "$NS_RC"
-    ns_cli "abc" "$NS_DIR/cli.txt"
-    assert_eq "N6/non-numeric-threshold-is-rc2" "2" "$NS_RC"
-
-    NS_RC=0
-    run_with_timeout 30 node "$NS_CLI_P" </dev/null >/dev/null 2>&1 || NS_RC=$?
-    assert_eq "N6/no-args-is-rc2" "2" "$NS_RC"
-fi
+# N5 (line-splitting / byte edges) and N6 (scan-cli.js stdout contract) live in
+# the sibling folder — rules/coding/file-split.md Pattern A, 500-line HARD limit.
+# shellcheck source=./scan-core-node/byte-and-cli-edges.sh
+. "$(dirname "${BASH_SOURCE[0]}")/scan-core-node/byte-and-cli-edges.sh"

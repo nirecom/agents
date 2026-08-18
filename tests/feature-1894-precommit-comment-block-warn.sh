@@ -132,9 +132,9 @@ write_stub() {
 $STUB_PROLOGUE
 echo "$SCANNER_HEADER"
 echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 consecutive comment lines)"
+echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 comment lines per block)"
 echo "$BLOCK_LINE"
-echo "  L10-L32 (23 lines)"
+echo "  L10-L32 (23 comment lines)"
 echo ""
 echo "  Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)."
 exit 1
@@ -146,7 +146,7 @@ EOF
 $STUB_PROLOGUE
 echo "$SCANNER_HEADER"
 echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 consecutive comment lines)"
+echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 comment lines per block)"
 exit 0
 EOF
             ;;
