@@ -347,3 +347,7 @@ Changes: Reduced the fixed prompt-injection footprint by moving 7 more rule file
 ### FEATURE: PR #2067 (2026-08-18)
 Background: feat(#2065): add --dup-groups inventory; consolidate enforce-worktree...
 Changes: `/sweep-tests` gains a duplicate-group inventory: `bin/audit-tests.sh --dup-groups` lists test files that share a `# Tests:` target group, so redundant per-issue test files stop accumulating unnoticed. Read-only — it reports, it never rewrites or deletes.;Test files that share a target group on purpose can now say so with a `dup-group-keep:<reason>` tag (`cross-hook`, `distinct-layer`, `size-hard-limit`) instead of being re-flagged on every sweep.;The 13 test files covering the worktree-enforcement hook are now one suite (`tests/main-enforce-worktree-guard.sh`) with the same 229 cases. Five of those cases used to write supervisor findings into the developer's real `~/.workflow-plans/` directory; they no longer do.
+
+### FEATURE: PR #2071 (2026-08-19)
+Background: fix(comment-block-scan): bridge blank/no-op lines instead of resetting comment-run detection
+Changes: Fixed: a single blank line (or a lone `;`, `:`, `{}`, `()`, `,`) could no longer be used to split a long comment block and dodge the comment-block-size gate on `Edit`/`Write` and `git commit`.
