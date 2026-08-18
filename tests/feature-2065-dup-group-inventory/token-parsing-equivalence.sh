@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/lib/test-dup-group.sh, bin/lib/test-retire-predicate.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, parser, trimming, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # S1-2 collapses two divergent tokenizers (`csv# ` strips one leading space;
 # `trp_survival_verdict` sed-trims fully) into one. The observable consequence is
 # that both consumers must agree on trimming, and that format validity stays the
@@ -82,16 +81,14 @@ assert_eq "TP5 the run produced no shell error on stderr" \
     "0" "$(printf '%s\n' "$TP_ERR" | grep -ciE 'unbound variable|syntax error' || true)"
 assert_eq "TP6 duplicates exist in this fixture so the exit code is 0" "0" "$TP_RC"
 
-# TP7 — codex C2 is resolved: tfm_parse_tests_line raises TFM_EMPTY_ELEMENT for
-# any empty CSV element and tdg_classify maps that flag to malformed_header
-# unconditionally, ahead of the per-token format loop. The hole is a malformed
-# value, not a shorter one, so the file must also join no group axis — otherwise
-# feature-9103-empty-mid.sh would seed the same full key as the canonical
+# TP7 — tfm_parse_tests_line raises TFM_EMPTY_ELEMENT for any empty CSV element
+# and tdg_classify maps it to malformed_header ahead of the per-token format
+# loop. The hole is a malformed value, not a shorter one, so the file must join
+# no group axis — otherwise it would seed the same full key as the canonical
 # spelling and hand a reviewer a group nobody can act on.
-# Discrimination note: only `trailing-comma` and `double-trailing` fail against
-# the pre-fix splitter — bash's `IFS=',' read -a` already kept mid and leading
-# empties and dropped only the trailing one. The other rows are companions that
-# pin the priority chain and the sentinel's positional drop, not the regression.
+# Only `trailing-comma` and `double-trailing` fail against the pre-fix splitter
+# (`IFS=',' read -a` kept mid and leading empties); the rest are companions that
+# pin the priority chain and the sentinel's positional drop.
 while IFS='|' read -r tp_name tp_file tp_want; do
     [[ -z "${tp_name//[[:space:]]/}" || "$tp_name" =~ ^[[:space:]]*# ]] && continue
     tp_name="${tp_name//[[:space:]]/}"
@@ -149,3 +146,5 @@ TP_SURV_TABLE
 # `alive`, TP9a-c would compare two equally-wrong values and stay green.
 assert_eq "TP9d the canonical spelling's survival verdict is alive" \
     "alive" "$TP_SURV_BASELINE"
+
+grp_done "token-parsing-equivalence.sh"

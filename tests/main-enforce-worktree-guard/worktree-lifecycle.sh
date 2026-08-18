@@ -126,7 +126,7 @@ case "$(uname -s 2>/dev/null)" in
                 fail "WL-13. POSIX-drive external path should be allowed"
             fi
         else
-            pass "WL-13. skipped (could not derive POSIX paths)"
+            skip "WL-13. skipped (could not derive POSIX paths)"
         fi
 
         if [ -n "$WL_UNIX_REPO" ] && [ -n "$WL_UNIX_INREPO" ]; then
@@ -136,12 +136,12 @@ case "$(uname -s 2>/dev/null)" in
                 fail "WL-14. POSIX-drive in-repo path should be blocked (pre-fix bug)"
             fi
         else
-            pass "WL-14. skipped (could not derive POSIX paths)"
+            skip "WL-14. skipped (could not derive POSIX paths)"
         fi
         ;;
     *)
-        pass "WL-13. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
-        pass "WL-14. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
+        skip "WL-13. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
+        skip "WL-14. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
         ;;
 esac
 

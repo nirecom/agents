@@ -3,12 +3,10 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/feature-workflow-off-bypass-enforce-worktree.sh (all cases).
 # Cases: A, B, C.
-
 # The SANCTIONED bypass route: a `<workflowDir>/<sid>.workflow-off` marker makes
 # the hook early-return (approve) and emit the workflow-off notice on stderr.
-# This is the WORKFLOW-level switch, distinct from `<sid>.worktree-off`, and it
-# shares isWorkflowOff(sid) with the other PR2 hooks. Attempts to FORGE a bypass
-# live in hooks-bypass-detection.sh — opposite polarity, deliberately separate.
+# WORKFLOW-level switch, distinct from `<sid>.worktree-off`. Attempts to FORGE a
+# bypass live in hooks-bypass-detection.sh — opposite polarity, kept separate.
 
 sb_fresh_workflow_dir() {
     local d="$TMPDIR_BASE/wf-$RANDOM-$$"

@@ -137,3 +137,5 @@ assert_eq "GC10 duplicate-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-dup-header\.sh' || true)"
 assert_eq "GC11 late-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-late-header\.sh' || true)"
+
+grp_done "golden-comparison.sh"

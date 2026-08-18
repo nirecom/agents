@@ -2,8 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, harness, scope:issue-specific
 # Sourced first by tests/feature-2065-dup-group-inventory.sh — no cases here.
-
-# TSV readers
 # Column contract (S2): axis <TAB> key <TAB> count <TAB> files, preceded by a
 # `#`-prefixed column-name comment that consumers skip. Keys and file names are
 # escaped, so they travel through the environment rather than `awk -v` (which
@@ -141,3 +139,5 @@ skip_members_all() {
 
 # re_escape — quote a literal for use inside a sed address/pattern.
 re_escape() { printf '%s' "$1" | sed 's/[][\\.*^$+?(){}|/]/\\&/g'; }
+
+grp_done "harness-tsv-reader.sh"

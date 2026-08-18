@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, coverage, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # Earlier fragments exercise the verdicts one family at a time. This one puts
 # all five in a single corpus, because the classifier is a priority chain: a
 # reason that is correct in isolation can still be shadowed when its neighbours
@@ -87,3 +86,5 @@ assert_eq "VC4b the two well-formed files form the only group" \
 assert_eq "VC4c the corpus has exactly one full row" \
     "1" "$(axis_row_count "$VC_OUT" full)"
 assert_eq "VC5 the corpus contains a group, so the exit code is 0" "0" "$VC_RC"
+
+grp_done "verdict-coverage.sh"

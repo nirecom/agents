@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, contract, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # The inventory is a corpus-wide fact, so it must not inherit either
 # entrypoint's audience filter: the same TSV from both, no scope filtering, and
 # a scan range of `tests/*.sh` only — nested fragments carry their own headers
@@ -139,3 +138,18 @@ git -C "$CC_TAG_REPO" add -A >/dev/null 2>&1
 run_in_repo "$CC_TAG_REPO" "$FM_CHECK" --staged tests/cc-keep.sh
 assert_eq "CC9 a dup-group-keep: tagged file passes the staged frontmatter gate" \
     "0" "$RC"
+
+# CC10 — the same exit-code contract from BOTH entrypoints. CC7 pins it for
+# bin/audit-tests.sh alone, so audit-tests-common.sh could return the wrong
+# status while its TSV stayed byte-identical and nothing would notice.
+for cc_script in "$AUDIT" "$AUDIT_COMMON"; do
+    cc_tag="$(basename "$cc_script")"
+    run_dup "$CC_REPO" "$cc_script"
+    assert_eq "CC10a[$cc_tag] a corpus with groups exits 0" "0" "$RC"
+    run_dup "$CC_NONE" "$cc_script"
+    assert_eq "CC10b[$cc_tag] a corpus with no groups exits 1" "1" "$RC"
+    run_dup "$CC_SKIPONLY" "$cc_script"
+    assert_eq "CC10c[$cc_tag] a skip-only corpus exits 1" "1" "$RC"
+done
+
+grp_done "contract-cases.sh"

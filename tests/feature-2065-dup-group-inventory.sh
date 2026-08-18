@@ -146,6 +146,14 @@ run_no_repo() {
     rm -f "$outf" "$errf"
 }
 
+# Completion ledger: every case file's LAST line is `grp_done <its own basename>`.
+# The `.` exit status cannot stand in for this — a bare `return` yields the status
+# of the last command run, so a file that bails after its fixture setup still
+# sources "successfully" while its whole case family silently disappears.
+GRP_DONE=""
+grp_done() { GRP_DONE="${GRP_DONE}$1
+"; }
+
 # ── Assertion harness (TSV reader, escape codec, verdict extractors) ────────
 # shellcheck source=feature-2065-dup-group-inventory/harness-tsv-reader.sh
 . "$GROUP_DIR/harness-tsv-reader.sh"
@@ -191,6 +199,37 @@ fi
 . "$GROUP_DIR/escaping-hostile-names.sh"
 # shellcheck source=feature-2065-dup-group-inventory/verdict-coverage.sh
 . "$GROUP_DIR/verdict-coverage.sh"
+
+# ── Case-file set integrity ─────────────────────────────────────────────────
+# The `. "$GROUP_DIR/…"` lines above are the only wiring a case file has, so a
+# dropped line removes a whole behavioural family with the suite still green.
+GRP_PRESENT="$(ls -1 "$GROUP_DIR" 2>/dev/null | grep '\.sh$' | sort)"
+GRP_SOURCED="$(sed -n 's|^\. "\$GROUP_DIR/\(.*\.sh\)"$|\1|p' "${BASH_SOURCE[0]}" | sort)"
+
+grp_only_in_first() {
+    comm -23 <(printf '%s\n' "$1" | grep -v '^$') <(printf '%s\n' "$2" | grep -v '^$') \
+        | tr '\n' ' ' | sed 's/ *$//'
+}
+GRP_UNSOURCED="$(grp_only_in_first "$GRP_PRESENT" "$GRP_SOURCED")"
+GRP_ABSENT="$(grp_only_in_first "$GRP_SOURCED" "$GRP_PRESENT")"
+
+if [[ -z "$GRP_UNSOURCED" && -z "$GRP_ABSENT" ]]; then
+    pass "GRP1 every case file is sourced and every sourced case file exists"
+else
+    fail "GRP1 case file set mismatch — present-but-unsourced: [${GRP_UNSOURCED:-none}] sourced-but-missing: [${GRP_ABSENT:-none}]"
+fi
+
+# GRP1 only proves the two NAME lists agree; it passes while a case file returns
+# early or fails to source. The ledger is what proves each one reached its end.
+GRP_DONE_SORTED="$(printf '%s' "$GRP_DONE" | sort)"
+GRP_UNFINISHED="$(grp_only_in_first "$GRP_SOURCED" "$GRP_DONE_SORTED")"
+GRP_UNEXPECTED="$(grp_only_in_first "$GRP_DONE_SORTED" "$GRP_SOURCED")"
+
+if [[ -z "$GRP_UNFINISHED" && -z "$GRP_UNEXPECTED" ]]; then
+    pass "GRP2 every sourced case file ran through to its completion marker"
+else
+    fail "GRP2 case file completion mismatch — sourced-but-unfinished: [${GRP_UNFINISHED:-none}] marked-but-not-sourced: [${GRP_UNEXPECTED:-none}]"
+fi
 
 echo ""
 echo "─────────────────────────────────────────"

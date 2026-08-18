@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, grouping, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # The inventory has two axes because the two questions differ: `full` finds
 # files whose whole target set is identical (candidates for a merge), `token`
 # finds files that merely share their primary target (candidates for a review).
@@ -82,3 +81,5 @@ assert_eq "NC4b the full-group member list holds exactly the two fixtures" \
 
 # NC5 — this fixture has duplicates, so the mode reports success.
 assert_eq "NC5 exit code is 0 when at least one group exists" "0" "$NC_RC"
+
+grp_done "normal-cases.sh"

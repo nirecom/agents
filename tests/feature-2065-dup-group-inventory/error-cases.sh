@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, dup-groups, cli, guards, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # Two distinct failure families, kept apart on purpose (CPR-SC): malformed
 # CONTENT is data the mode must classify and keep running on, while a bad
 # COMMAND LINE is an operator error the mode must refuse outright with rc 2.
@@ -75,3 +74,5 @@ for ec_script in "$AUDIT" "$AUDIT_COMMON"; do
     assert_eq "EC4b[$ec_tag] the message names the repo-root resolution failure" \
         "1" "$(printf '%s\n' "$ERR" | grep -c 'not inside a git repository' || true)"
 done
+
+grp_done "error-cases.sh"

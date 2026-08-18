@@ -3,7 +3,6 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/feature-885-enforce-worktree-context-populate.sh (all cases).
 # Cases: W1-W3.
-
 # What the block path REPORTS, not whether it blocks: done() must populate
 # extras={reason, context} when reporting via reportBlock(), and must NOT
 # populate co_blocked_by — the writer back-annotates that field.

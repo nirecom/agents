@@ -3,7 +3,6 @@
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-merge-gate.sh (all cases).
 # Cases: the `<desc> -> allow|reject` family produced by assert_ff below.
-
 # isAllowedFastForwardMerge() is called through require() rather than the CLI,
 # so this fragment keeps the export-name call form the original used — S6-3's
 # mutants preserve export names and signatures precisely so this still resolves.

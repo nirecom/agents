@@ -2,7 +2,6 @@
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, dup-groups, cli, flags, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # `sweep_write_mode_init` sets APPLY=1 BEFORE argv parsing, so `$APPLY` means
 # "not --dry-run", never "the user passed --apply". A guard written against
 # `$APPLY` inverts the mode: bare --dup-groups would exit 2 and only
@@ -51,3 +50,5 @@ for fd_script in "$AUDIT" "$AUDIT_COMMON"; do
     assert_eq "FD3b[$fd_tag] --dup-groups --apply explains that --apply is not applicable" \
         "1" "$(printf '%s\n' "$ERR" | grep -c -- '--dup-groups is read-only; --apply is not applicable' || true)"
 done
+
+grp_done "flag-defaults.sh"

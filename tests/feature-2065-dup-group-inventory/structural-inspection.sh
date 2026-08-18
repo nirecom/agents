@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/lib/test-frontmatter-constants.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, frontmatter, structure, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # `grep -m1 '^# Tests:'` reads neither the line number nor the occurrence count,
 # so a second header line is silently dropped and a header at line 11+ is
 # silently accepted. Both are structural malformations that must become skip
@@ -124,3 +123,5 @@ commit_repo "$SI_GATE_REPO" "frontmatter gate fixture"
 run_in_repo "$SI_GATE_REPO" "$FM_CHECK" --all "$SI_GATE_REPO"
 assert_eq "SI5 check-test-frontmatter.sh --all still accepts duplicate/late headers" \
     "0" "$RC"
+
+grp_done "structural-inspection.sh"

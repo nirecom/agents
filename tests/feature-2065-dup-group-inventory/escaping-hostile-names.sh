@@ -2,7 +2,6 @@
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, escaping, security, scope:issue-specific
 # Sourced by tests/feature-2065-dup-group-inventory.sh
-
 # TSV has exactly two structural characters (TAB, LF) and this format adds a
 # third (the `,` that joins members), so all three plus the escape character
 # itself must be encoded per element. Backslash is escaped first, otherwise the
@@ -115,3 +114,5 @@ assert_eq "EH6c an empty tests/ directory produces no shell error" \
 
 assert_eq "EH7 the hostile-name run produced no shell error" \
     "0" "$(printf '%s\n' "$EH_ERR" | grep -ciE 'unbound variable|syntax error' || true)"
+
+grp_done "escaping-hostile-names.sh"

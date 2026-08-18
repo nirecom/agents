@@ -1,23 +1,14 @@
 #!/bin/bash
 # tests/main-enforce-worktree-guard.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: TL2, worktree, enforce, hook, bin, git, pre-commit, scope:common
-# Single dispatcher for the hooks/enforce-worktree.js integration suite: owns the
-# shared harness and sources one fragment per behavioural axis from
-# tests/main-enforce-worktree-guard/, consolidating 13 former standalone
-# tests/*.sh files (#2065). Fragments are sourced into THIS shell, so names
-# defined here are the shared contract and every fragment-local helper or
-# variable must carry a short per-fragment prefix.
-
-# TL3 gap (what this suite does NOT catch):
-# - The guard firing as a REAL PreToolUse hook inside a live claude -p session.
-#   Every case here runs `node hooks/enforce-worktree.js` as a subprocess fed
-#   hand-built stdin, so it stays green when settings.json drops the registration
-#   or one of its tool names, and when the host's real payload shape diverges
-#   from the JSON the payload builders below assume. Registration is asserted
-#   statically in tests/fix-1780-round4-write-tool-parity.sh section R.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
+# Tags: TL2, worktree, enforce, hook, bin, git, pre-commit, scope:common, enforce-worktree, workflow, supervisor, orphan-cwd, bash-c, fail-closed, context-populate, block-extras, axis-a, env, shell, windows, tests, merge, cross-repo, issue-525, feature-885
+# Fragments in tests/main-enforce-worktree-guard/ are sourced into THIS shell,
+# so every fragment-local name needs a short per-fragment prefix.
+# TL3 gap: cases feed hand-built stdin to `node hooks/enforce-worktree.js`, so a
+# dropped settings.json registration or a diverged host payload shape stays
+# green. Covered elsewhere: tests/fix-1780-round4-write-tool-parity.sh section R
+# (static registration) and bin/check-verification-gate.sh category
+# hook-registration.
 
 set -uo pipefail
 
