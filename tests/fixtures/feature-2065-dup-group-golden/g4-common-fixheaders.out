@@ -1,0 +1,1 @@
+C: tests/common-missing.sh: bin/gone2.sh (path missing, no rename)

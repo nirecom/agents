@@ -71,18 +71,72 @@ _is_root_like_token() {
   esac
 }
 
-# classify_tests_header <file> — classifies each `# Tests:` token into buckets.
-# Sets globals:
-#   CHR_HAS_A / CHR_HAS_B / CHR_HAS_C : any A(format-bad)/B(renamed)/C(missing) token
-#   CHR_ALL_C           : 1 when every token is format-OK + missing + no-rename (delete candidate)
-#   CHR_MULTI_PAREN     : 1 when any token has 2+ paren groups
-#   CHR_TOKENS_OK       : format-OK, path exists
-#   CHR_TOKENS_FIX_A    : format-bad, normalizes to an existing path
-#   CHR_TOKENS_FIX_B    : format-OK, renamed  ("old:new")
-#   CHR_TOKENS_FIX_AB   : format-bad, renamed ("old:new")
-#   CHR_TOKENS_C        : format-OK, missing, no rename
-#   CHR_TOKENS_C_A      : format-bad, missing, no rename
-#   CHR_TOKENS_MRR      : format-bad, normalizes to empty (manual review)
+# tfm_parse_tests_line <file> — SSOT tokenizer for the `# Tests:` header. Takes
+# the FIRST matching line (unchanged rule) and sets TFM_PRESENT,
+# TFM_TESTS_CSV (trimmed), TFM_TOKENS[] (comma-split, trimmed, empties dropped),
+# TFM_EMPTY_ELEMENT (1 when the CSV held an empty element: `a,,b`, `,a`, `a,`),
+# TFM_HEADER_COUNT (`^# Tests:` line count) and TFM_HEADER_LINENO (first match,
+# 0 when absent). The last three are structural metadata read only by --dup-groups.
+tfm_parse_tests_line() {
+  local file="$1"
+  TFM_PRESENT=0
+  TFM_TESTS_CSV=""
+  TFM_TOKENS=()
+  TFM_EMPTY_ELEMENT=0
+  TFM_HEADER_COUNT=0
+  TFM_HEADER_LINENO=0
+
+  local matches
+  matches="$(grep -n -E '^# Tests:' "$file" 2>/dev/null || true)"
+  [[ -z "$matches" ]] && return 0
+
+  TFM_HEADER_COUNT="$(printf '%s\n' "$matches" | grep -c '' || true)"
+  local first="${matches%%$'\n'*}"
+  TFM_HEADER_LINENO="${first%%:*}"
+  TFM_PRESENT=1
+
+  local csv="${first#*:}"
+  csv="${csv#\# Tests:}"
+  csv="$(printf '%s' "$csv" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  TFM_TESTS_CSV="$csv"
+  [[ -z "$csv" ]] && return 0
+
+  local -a raw_tokens
+  local raw trimmed
+  # `IFS=',' read -a` drops a TRAILING empty field while keeping mid/leading
+  # ones, so `a.sh,` would parse as one clean token and hide the hole. Append a
+  # sentinel element, split, then discard it: every empty field then survives,
+  # whatever its position and however many there are.
+  IFS=',' read -r -a raw_tokens <<< "$csv,#"
+  unset 'raw_tokens[${#raw_tokens[@]}-1]'
+  for raw in "${raw_tokens[@]}"; do
+    trimmed="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    if [[ -z "$trimmed" ]]; then
+      TFM_EMPTY_ELEMENT=1
+      continue
+    fi
+    TFM_TOKENS+=("$trimmed")
+  done
+  return 0
+}
+
+# tfm_token_format_ok <token> — the ONLY format-validity predicate. The regex
+# alone is not enough: root-like spellings pass it yet are meaningless as paths.
+tfm_token_format_ok() {
+  [[ "$1" =~ $FRONTMATTER_TOKEN_VALID_RE ]] || return 1
+  _is_root_like_token "$1" && return 1
+  return 0
+}
+
+# classify_tests_header <file> — buckets each `# Tests:` token. Sets globals:
+#   CHR_HAS_A / CHR_HAS_B / CHR_HAS_C : any A(format-bad)/B(renamed)/C(missing)
+#   CHR_ALL_C         : 1 when every token is format-OK + missing + no-rename
+#   CHR_MULTI_PAREN   : 1 when any token has 2+ paren groups
+#   CHR_TOKENS_OK     : format-OK, path exists
+#   CHR_TOKENS_FIX_A  : format-bad, normalizes to an existing path
+#   CHR_TOKENS_FIX_B / CHR_TOKENS_FIX_AB : renamed, format-OK / -bad ("old:new")
+#   CHR_TOKENS_C / CHR_TOKENS_C_A : missing + no rename, format-OK / -bad
+#   CHR_TOKENS_MRR    : format-bad, normalizes to empty (manual review)
 classify_tests_header() {
   local file="$1"
   CHR_TOKENS_OK=()
@@ -98,23 +152,16 @@ classify_tests_header() {
   CHR_ALL_C=0
   CHR_MULTI_PAREN=0
 
-  local tests_line
-  tests_line="$(grep -m1 -E '^# Tests:' "$file" 2>/dev/null || true)"
-  [[ -z "$tests_line" ]] && return 0
+  tfm_parse_tests_line "$file"
+  [[ "$TFM_PRESENT" -eq 1 ]] || return 0
+  [[ -n "$TFM_TESTS_CSV" ]] || return 0
+  [[ "${#TFM_TOKENS[@]}" -gt 0 ]] || return 0
 
-  local csv="${tests_line#\# Tests:}"
-  csv="${csv# }"
-  [[ -z "$csv" ]] && return 0
-
-  local raw_tokens raw_tok tok a_flag eff norm
-  IFS=',' read -r -a raw_tokens <<< "$csv"
-  for raw_tok in "${raw_tokens[@]}"; do
-    tok="$(printf '%s' "$raw_tok" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    [[ -z "$tok" ]] && continue
-
+  local tok a_flag eff norm
+  for tok in "${TFM_TOKENS[@]}"; do
     a_flag=0
     eff="$tok"
-    if [[ ! "$tok" =~ $FRONTMATTER_TOKEN_VALID_RE ]] || _is_root_like_token "$tok"; then
+    if ! tfm_token_format_ok "$tok"; then
       a_flag=1
       CHR_HAS_A=1
       norm="$(normalize_token "$tok")"
@@ -201,21 +248,15 @@ _fix_headers_report() {
 # _rebuild_tests_value <file> — prints the corrected `# Tests:` CSV value.
 _rebuild_tests_value() {
   local file="$1"
-  local tests_line csv
-  tests_line="$(grep -m1 -E '^# Tests:' "$file" 2>/dev/null || true)"
-  csv="${tests_line#\# Tests:}"
-  csv="${csv# }"
-  local toks tok trimmed out=()
-  IFS=',' read -r -a toks <<< "$csv"
-  for tok in "${toks[@]}"; do
-    trimmed="$(printf '%s' "$tok" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    [[ -z "$trimmed" ]] && continue
+  tfm_parse_tests_line "$file"
+  local trimmed out=()
+  for trimmed in "${TFM_TOKENS[@]:+${TFM_TOKENS[@]}}"; do
     local eff
     if [[ "$trimmed" =~ $FRONTMATTER_TOKEN_VALID_RE ]]; then
-      if [[ -e "$trimmed" ]] && ! _is_root_like_token "$trimmed"; then
-        eff="$trimmed"
-      elif [[ -e "$trimmed" ]]; then
-        eff=""
+      if [[ -e "$trimmed" ]]; then
+        # Regex-valid AND existing: only the root-like spellings are dropped,
+        # which is exactly what tfm_token_format_ok separates out.
+        if tfm_token_format_ok "$trimmed"; then eff="$trimmed"; else eff=""; fi
       else
         local rn; rn="$(find_renamed_path "$trimmed")"
         if [[ -n "$rn" ]]; then eff="$rn"; else eff="$trimmed"; fi

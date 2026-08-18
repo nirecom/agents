@@ -1,0 +1,17 @@
+# audit-tests.sh report — <DATE>
+# Scope: top-level tests/feature-<N>-*.sh (issue-specific)
+# Criteria: every '# Tests:' target is missing — issue state gates deletion only
+# Cutoff: <DATE> (stale-months: 3)
+# Mode: OFFLINE (candidates are still reported; deletion of issue-referencing files is held)
+
+MALFORMED_HEADER: tests/feature-9003-badfmt.sh
+MALFORMED_HEADER: tests/feature-9004-rootlike.sh
+CANDIDATE: tests/feature-9005-missing.sh
+  Issue: #9005 (unknown, closed: n/a)
+  Last-commit: <DATE> (dispatcher: <DATE> | sibling: n/a)
+  Sibling folder: (none)
+  Deletion unit: tests/feature-9005-missing.sh
+SKIP_DELETE_METADATA_UNAVAILABLE: tests/feature-9005-missing.sh
+
+NO_TESTS_HEADER: tests/feature-9007-noheader.sh
+  (dry-run; nothing was written — omit --dry-run to apply)

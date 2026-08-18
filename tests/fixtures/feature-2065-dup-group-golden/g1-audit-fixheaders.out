@@ -1,0 +1,10 @@
+MANUAL_REVIEW_REQUIRED: tests/feature-9003-badfmt.sh: bin/*.sh
+FIX_A: tests/feature-9003-badfmt.sh: bin/alive1.sh
+FIX_A: tests/feature-9003-badfmt.sh: bin/a (path missing)
+MANUAL_REVIEW_REQUIRED: tests/feature-9004-rootlike.sh: .
+MANUAL_REVIEW_REQUIRED: tests/feature-9004-rootlike.sh: ..
+MANUAL_REVIEW_REQUIRED: tests/feature-9004-rootlike.sh: /
+MANUAL_REVIEW_REQUIRED: tests/feature-9004-rootlike.sh: ./
+MANUAL_REVIEW_REQUIRED: tests/feature-9004-rootlike.sh: ../
+C: tests/feature-9005-missing.sh: bin/gone.sh (path missing, no rename)
+FIX_B: tests/feature-9006-renamed.sh: bin/old.sh -> bin/new.sh
