@@ -185,10 +185,12 @@ To add private patterns, copy `.private-info-blocklist.example` to `.private-inf
 
 ### Comment-block size gate
 
-A long run of consecutive comment lines is easy to add and hard to notice in review, so it
+A long run of comment lines is easy to add and hard to notice in review, so it
 is blocked at two points: an `Edit`/`Write`/`MultiEdit` that grows a comment block past the
 threshold is rejected before it lands, and `git commit` blocks as a backstop for anything
-that reaches the staging area another way. A staged file is compared against its committed
+that reaches the staging area another way. A blank line or a lone no-op token (`;`, `:`,
+`{}`, `()`, `,`) bridges a comment block rather than splitting it, so inserting one does not
+reset the count. A staged file is compared against its committed
 version and flagged only when its comment blocks got longer, so an already-long block never
 blocks an unrelated edit; a file with no committed version is judged on its own contents.
 Neither check rewrites a file, and both fire only for this repository even though the hook

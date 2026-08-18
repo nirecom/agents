@@ -1,11 +1,8 @@
 #!/bin/bash
-#
-# bin/review-comment-block-size.d/scan.sh
-#
-# Sourced by bin/review-comment-block-size; keeps the git plumbing and
-# delegates comment recognition to the Node core via scan-cli.js (CPR-SSOT
-# with hooks/lib/comment-block-scan.js) so the commit-time CLI and the
-# Edit-time hook share one implementation. Must be `source`d, not executed
+# bin/review-comment-block-size.d/scan.sh — sourced by bin/review-comment-block-size;
+# keeps the git plumbing and delegates comment recognition to the Node core via
+# scan-cli.js (CPR-SSOT with hooks/lib/comment-block-scan.js) so the commit-time CLI
+# and the Edit-time hook share one implementation. Must be `source`d, not executed
 # directly — reads $T from the caller, publishes SCAN_RUNS / SCAN_N / SCAN_M.
 
 # --- scanner core ----------------------------------------------------------
