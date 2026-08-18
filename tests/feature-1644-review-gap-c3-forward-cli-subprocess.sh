@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/record-skip-judgment, bin/workflow/record-complexity-and-skip, bin/workflow/set-workflow-type, bin/workflow/record-skip-verdict, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, forward-cli, subprocess, idempotency, event-stream, scope:issue-specific, pwsh-not-required
-#
+
 # #1644 review gap C3 (HIGH) — the forward operation observed through a REAL
 # subprocess boundary on all four advance-class CLIs.
-#
+
 # Why this layer: every existing #1644 case asserts the folded PROJECTION, which
 # is identical whether a repeated call appended a duplicate event or appended
 # nothing at all. Idempotency is a statement about the append-only stream
 # (#1733), so it is only falsifiable against the raw `events` array — that is
 # what these cases read, via the shared state-probe `eventcount` mode.
-#
+
 # Deliberately NOT re-covered here (already owned elsewhere):
 # - next-step ADVANCE_SCOPE both verdicts -> feature-1644-advance-transaction/projection.sh A15
 # - next-step already=true on repeat      -> .../basic.sh A5
 # - sibling already=true on repeat        -> feature-1644-sibling-cli-advance.sh S15
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Whether a live Claude Code session's settings.json permissions.allow admits
 #   these argv forms without an approval dialog.
@@ -112,11 +112,24 @@ action_lines() { printf '%s\n' "$OUT" | grep -c '^ACTION=' || true; }
 echo "=== C3-1: next-step --advance status matrix through a real subprocess ==="
 # complete
 at_research c31a
-run_cli node "$NS" --session c31a --advance --step research --status complete
-check "C3-1a: --status complete exits 0" 0 "$RC"
+run_cli node "$NS" --session c31a --advance --step research --complete
+check "C3-1a: --complete exits 0" 0 "$RC"
 check "C3-1a: stdout carries the advance line" "ADVANCED=research status=complete" "$OUT"
+# EXACT match, not a substring: "the canonical form pollutes nothing on stderr"
+# is the regression guard. #1947 migrated this case to the canonical --complete
+# form precisely so the assertion could stay exact; the legacy form's
+# deprecation line is asserted separately by C3-1a-legacy below.
 check "C3-1a: stderr is empty on success" "" "$ERR"
 check "C3-1a: research is complete" '"complete"' "$(step_status c31a research)"
+C31A_OUT="$OUT"
+
+# C3-1a-legacy: the deprecated --status form still works, on its own session id.
+at_research c31alegacy
+run_cli node "$NS" --session c31alegacy --advance --step research --status complete
+check "C3-1a-legacy: the deprecated --status complete form still exits 0" 0 "$RC"
+check "C3-1a-legacy: its stdout is byte-identical to the canonical form" "$C31A_OUT" "$OUT"
+check_contains "C3-1a-legacy: the deprecation notice goes to stderr" "deprecated" "$ERR"
+check "C3-1a-legacy: research is complete" '"complete"' "$(step_status c31alegacy research)"
 
 # skipped (research is in SKIPPABLE_STEPS and needs no CLI-side approval route)
 at_research c31b

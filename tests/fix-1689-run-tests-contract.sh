@@ -3,16 +3,16 @@
 # tests/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
 # Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2
-#
+
 # Issues #1638 / #1689 — the two halves of skills/run-tests/SKILL.md that are PROMPT rather than
 # code, and therefore have no other test.
-#
+
 # WHY A PROMPT NEEDS A TEST AT ALL. Everything this skill does at runtime is done by an LLM
 # reading these instructions. There is no function to call and no exit code to assert, so a
 # sentence that goes missing in a later edit fails silently and permanently: the model simply
 # does the old thing, or invents something. The two sentences at stake here are the ones whose
 # absence caused the issues in the first place.
-#
+
 #   #1638 — RNT-1 CARRIED ITS OWN merge-base CHAIN. Five lines of prose reimplementing
 #   `origin/main` → `main` → `HEAD~1`. That is a second implementation of a fact that now has an
 #   owner (bin/resolve-merge-base.sh), and it is the copy that produced the 280k-line range: it
@@ -20,26 +20,26 @@
 #   REPLACEMENT — one reference to the resolver — and, just as importantly, pin the REMOVAL: as
 #   long as the old chain is still written here, a model reading the file can follow either one,
 #   and CPR-SSOT is violated whatever the resolver does.
-#
+
 #   #1689 — RNT-9 HAD NO NON-COERCIVE RECOVERY. When the suite fails for a reason the diff did
 #   not cause (a pre-existing failure on main), the only documented outcomes were `pending`
 #   forever or reaching for a session-wide OFF sentinel — which suspends every guard in the
 #   workflow to get past one step. So the rows pin the surgical alternative AND its price:
 #   evidence, in the same turn, that the failure is unrelated. A recovery mechanism documented
 #   without its evidence requirement is just permission to mark a failing suite complete.
-#
+
 # S10-S10t additionally cover #1779: RNT-3's Tier 2 range on a branch that has not committed yet,
 # and the three things reading unreviewed files costs — the prompt-injection framing (S10i/S10j),
 # the credential-leak guard on content nobody vetted (S10o-S10q), and argument-safe enumeration of
 # filenames the model hands back to git (S10r-S10t).
-#
+
 # WHAT THESE ROWS DELIBERATELY DO NOT DO. They do not check wording. Every assertion is on a
 # token that is load-bearing for the reader — a script name, a flag, a sentinel literal, an exit
 # code — because those are what a model must reproduce exactly, and they survive rewording and
 # translation. Prose-level regexes accept both English and Japanese for the same reason: the
 # repository's prompts are English today, and a row that fails on a faithful translation would
 # be testing the author's language rather than the contract.
-#
+
 # TL3 gap (what this test does NOT catch):
 # - whether a model actually FOLLOWS the instruction. Every row here matches text in a file; RNT-3
 #   and RNT-9 are executed by an LLM, and a contract that is present, correctly worded and
@@ -47,6 +47,7 @@
 # - whether the instruction is reachable in context. The rows read the whole section from disk; a
 #   model reads it after the file has been truncated, summarised or compacted, and a token that is
 #   present at line 40 of SKILL.md is not necessarily a token the model saw.
+
 # - whether the commands the prose names produce the intended result in a real repository. `git
 #   diff HEAD --name-only`, `git ls-files --others --exclude-standard` and `git diff --no-index`
 #   are asserted as literals here; nothing runs them, so a form that is correct English and wrong
@@ -224,7 +225,7 @@ expect_match "S10j" "and never as instructions to act on" \
 # goes with WHICH verdict — and a model that guesses wrong reproduces #1779 (true → committed
 # range) or breaks every ordinary branch (false → working tree). The three rows below pin the
 # mapping itself.
-#
+
 # They match over the section with newlines collapsed to spaces, inside an 80-character window.
 # The window is what makes it a mapping assertion rather than another presence assertion: the
 # verdict and its range have to sit in the same clause. Both orders are accepted because
@@ -253,7 +254,7 @@ expect_match "S10n" "the untracked enumeration excludes gitignored paths by flag
   'ls-files[[:space:]]+--others[[:space:]]+--exclude-standard|ls-files[[:space:]]+--exclude-standard[[:space:]]+--others' "$RNT3"
 
 # ---- the degraded range reads files nobody vetted: secrets ------------------
-#
+
 # S10i/S10j settle how the content is TREATED once it is in context (data, never instructions).
 # They say nothing about WHICH files get there, and on a zero-commit branch the untracked set is
 # the least-vetted set in the repository: `.env` written five minutes ago, a downloaded service
@@ -263,7 +264,7 @@ expect_match "S10n" "the untracked enumeration excludes gitignored paths by flag
 # the model's context, from where it reaches the transcript, the tool log and any summary the run
 # produces. That is OWASP ASVS V8 secret leakage (skills/_shared/test-design.md), and it is a one
 # -way door: a credential that reached a log is a credential to rotate.
-#
+
 # Three rows, because the contract has three parts and each fails differently on its own:
 #   S10o  the class is named at all — a guard that never says what it is guarding against is
 #         read as generic caution and skipped.
@@ -287,13 +288,13 @@ expect_no_match "S10q" "and the guard does not become a blanket ban on untracked
   '(never|do not|don.t|must not)[[:space:]]+(read|open|include)[^.]{0,40}untracked|skip[[:space:]]+all[[:space:]]+untracked' "$RNT3"
 
 # ---- the degraded range enumerates filenames: argument injection ------------
-#
+
 # Tier 1 gets this checked behaviourally — tests/feature-689-select-tests/zero-commit-hostile-
 # paths.sh (S27) puts a leading-dash, a newline and a space into real filenames and runs the real
 # selector over them. Tier 2 has no code to run, so the same three hazards have to be pinned as
 # instructions, and they are not cosmetic here: RNT-3 is the only step that takes an enumerated
 # path and hands it back to git as an ARGUMENT (`git diff --no-index -- /dev/null <path>`).
-#
+
 #   S10r  newline-delimited enumeration splits `a\nb.sh` into two paths that do not exist. The
 #         fix is one flag, and it is the flag a reader drops as noise.
 #   S10s  a file named `-o` or `--output=x` is read by git as an option unless the invocation is
@@ -319,13 +320,15 @@ expect_match "S11" "the Rules section names the resolver as the single source of
 # ---- #1689: the surgical recovery, and its price ---------------------------
 
 # `RECORDED=`/`<<WORKFLOW_MARK_STEP_run_tests_complete>>` is retired: the advance CLI now
-# settles a pass through `next-step --advance --step run_tests --status complete`, which
-# reports its own result as `ADVANCED=run_tests status=complete` (plus `ADVANCE_SCOPE=`) on
-# stdout at runtime -- see tests/feature-1644-run-tests-docs-only.sh D5b and
+# settles a pass through `next-step --advance --step run_tests --complete` (#1947 made the
+# value-less status flag canonical; the deprecated `--status complete` spelling still works,
+# so pinning the new form is what stops a silent regression to the old one), which reports its
+# own result as `ADVANCED=run_tests status=complete` (plus `ADVANCE_SCOPE=`) on stdout at
+# runtime -- see tests/feature-1644-run-tests-docs-only.sh D5b and
 # tests/feature-1644-advance-transaction/basic.sh A1a for the same shape asserted elsewhere.
 # This row pins the SKILL.md prose that drives that call.
-expect_match "S12" "RNT-9 settles a pass through the advance CLI (--step run_tests --status complete), not the retired MARK_STEP sentinel" \
-  '--advance[[:space:]]+--step[[:space:]]+run_tests[[:space:]]+--status[[:space:]]+complete' "$RNT9"
+expect_match "S12" "RNT-9 settles a pass through the advance CLI (--step run_tests --complete), not the retired MARK_STEP sentinel" \
+  '--advance[[:space:]]+--step[[:space:]]+run_tests[[:space:]]+--complete' "$RNT9"
 expect_match "S13" "and the pending sentinel on failure" \
   '<<WORKFLOW_MARK_STEP_run_tests_pending>>' "$RNT9"
 

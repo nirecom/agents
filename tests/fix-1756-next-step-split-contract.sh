@@ -2,7 +2,7 @@
 # filename: tests/fix-1756-next-step-split-contract.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, file-split, entrypoint-path, module-wiring, TL1, TL2, scope:common
-#
+
 # #1756 (SD-2): bin/workflow/next-step is split into bin/workflow/lib/next-step/*.js.
 # Two contracts must hold after the split:
 #   H-1  the recovery commands printed to the user must name the ENTRYPOINT
@@ -13,11 +13,11 @@
 #        lazy requires sit inside try/catch fail-open blocks, so a wrong path is
 #        swallowed at runtime and the feature dies silently — only a static check
 #        can catch it.
-#
+
 # RED: C1-C8, C13, C14 fail against the unsplit sources (lib/next-step/ does not
 # exist yet and the entrypoint is still ~700 lines). C9-C12 are behavior contracts
 # that must hold both before and after the split.
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Real CLAUDE_SESSION_ID propagation from a live `claude -p` session into the
 #   next-step invocation.
@@ -372,6 +372,7 @@ fi
 #   branch needs a currentStep that (a) hasCompletionEvidence() accepts and
 #   (b) reconcileEffectiveState did NOT already resolve to complete. Evidence
 #   resolution in effective-state.js only fires on steps whose status is exactly
+
 #   "pending", while the currentStep walk selects anything that is neither
 #   complete nor skipped. `docs: in_progress` therefore stays current AND carries
 #   evidence (a staged *.md file), which is the reachable shape. `docs` is not an
@@ -387,7 +388,10 @@ ACTION=""; NEXT_SKILL=""; REASON=""; NEXT_HINT=""
 C15_OUT=$(CLAUDE_PROJECT_DIR="$(to_node_path "$C15_REPO")" run_next_step --session "$C15_SID")
 eval "$C15_OUT" 2>/dev/null || true
 check_eq "C15: docs in_progress with evidence + later complete → ACTION=abort" "abort" "${ACTION:-}"
-check_contains "C15b: NEXT_HINT offers the generic --mark docs recovery" "--mark docs complete" "${NEXT_HINT:-}"
+# #1947 shortened the needle: the hint no longer carries a trailing `complete`
+# token, so `--mark docs complete` became structurally unmatchable and this row
+# would have gone vacuously red (and, after a careless "fix", vacuously green).
+check_contains "C15b: NEXT_HINT offers the generic --mark docs recovery" "--mark docs" "${NEXT_HINT:-}"
 
 C15_PATH_RAW="$(printf '%s' "${NEXT_HINT:-}" | sed -n 's|.*Recovery: node \(.*\) --mark docs.*|\1|p')"
 C15_PATH="$(printf '%s' "$C15_PATH_RAW" | tr '\\' '/')"
@@ -400,7 +404,7 @@ else
 fi
 
 if [ -n "$C15_PATH" ] && [ -f "$C15_PATH" ]; then
-    run_with_timeout 120 node "$C15_PATH" --session "$C15_SID" --mark docs complete >/dev/null 2>&1
+    run_with_timeout 120 node "$C15_PATH" --session "$C15_SID" --mark docs >/dev/null 2>&1
     C16_RC=$?
     check_eq "C16: executing the printed --mark recovery command exits 0" "0" "$C16_RC"
     check_eq "C16b: docs is complete after the recovery command" \
@@ -415,7 +419,7 @@ fi
 # byte-identical to the post-first-run snapshot (not just the target step).
 if [ -n "$C15_PATH" ] && [ -f "$C15_PATH" ] && [ "${C16_RC:-1}" = "0" ]; then
     C17_MAP_BEFORE="$(steps_status_map "$C15_SID")"
-    run_with_timeout 120 node "$C15_PATH" --session "$C15_SID" --mark docs complete >/dev/null 2>&1
+    run_with_timeout 120 node "$C15_PATH" --session "$C15_SID" --mark docs >/dev/null 2>&1
     C17_RC=$?
     C17_MAP_AFTER="$(steps_status_map "$C15_SID")"
     check_eq "C17: re-running the same --mark recovery command exits 0" "0" "$C17_RC"

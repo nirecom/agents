@@ -2,19 +2,19 @@
 # tests/feature-1665-seq-cascade/g-scope-propagation.sh
 # Tests: hooks/workflow-state/effective-state.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/list.js, bin/workflow/lib/next-step/advance-shared.js, hooks/workflow-gate.js
 # Tags: workflow-state, write-code-resume, cascade, propagation, next-step, workflow-gate, scope:issue-specific, pwsh-not-required, TL2
-#
+
 # G — R5 propagation scope: the cascade lives INSIDE reconcileEffectiveState, so
 # every consumer of that function inherits it for free. This case drives the
 # three user-visible consumers as real subprocesses and asserts they all agree.
-#
+
 # WHY it must be one implementation and not three: if `next-step` reopened
 # write_code but the gate still saw it complete, a session could commit code that
 # no one re-reviewed after the failing test run — the exact hole #1665 closes.
-#
+
 # Classifier coverage (CPR-ORTH): each assertion is paired with a control session
 # whose only difference is run_outcome=pass, so an over-blocking implementation
 # fails just as loudly as an under-blocking one.
-#
+
 # TL3 gap (what this test does NOT catch):
 # - Whether workflow-gate.js is actually registered as a PreToolUse hook in the
 #   deployed settings.json (this case spawns the hook script directly).
@@ -92,7 +92,7 @@ assert_contains "G5 gate names write_code as incomplete" "write_code" "$GATE_FAI
 assert_not_contains "G6 control: passing run leaves write_code out of the block list" "write_code" "$GATE_PASS"
 
 # ------------------------------------------------------ G7: advance-shared.js
-ADV="$("$RWT" 120 node "$NEXT_STEP" --advance --step run_tests --status complete --next --session "$SID_ADV" 2>&1)"
+ADV="$("$RWT" 120 node "$NEXT_STEP" --advance --step run_tests --complete --next --session "$SID_ADV" 2>&1)"
 assert_contains "G7 advance-shared resolves the current step through the cascade" "ADVANCE_SCOPE=not-current-step" "$ADV"
 
 finish

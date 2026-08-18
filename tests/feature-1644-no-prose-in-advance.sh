@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/lib/next-step/advance.js, bin/workflow/lib/next-step/advance-shared.js, hooks/workflow-state/record-step-verdict.js
 # Tags: tl1, static, workflow, advance, no-prose, scope:issue-specific
-#
+
 # #1644 — the forward operation must decide from RECORDED FACTS only.
 #
 # Why: intent.md / outline.md are model-authored prose. If the advance path read
@@ -20,9 +20,13 @@ PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
+# advance-args.js joined the class in #1947: both next-step and set-workflow-type
+# require it, so it inherits the same ban. It holds argv vocabulary only today —
+# this pin forbids plan-reading logic from ever growing there.
 TARGETS="
 bin/workflow/lib/next-step/advance.js
 bin/workflow/lib/next-step/advance-shared.js
+bin/workflow/lib/next-step/advance-args.js
 hooks/workflow-state/record-step-verdict.js
 "
 
@@ -89,8 +93,8 @@ NO_NEXT_FILES=(
   "skills/make-outline-plan/SKILL.md"
 )
 NO_NEXT_TEXT=(
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --status complete'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step workflow_init --status complete'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step workflow_init --complete'
   '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
   'node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 true --c2 true'
   '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
@@ -123,10 +127,10 @@ WITH_NEXT_FILES=(
   "skills/run-tests/SKILL.md"
 )
 WITH_NEXT_TEXT=(
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --status complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --status complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --status complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --status skipped --skip-reason "<reason>" --next'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --complete --next'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --complete --next'
+  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next'
 )
 
 for i in "${!WITH_NEXT_FILES[@]}"; do

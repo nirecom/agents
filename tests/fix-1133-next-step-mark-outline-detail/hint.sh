@@ -22,8 +22,11 @@ check "H1. outline=pending + detail=complete (no evidence) → ACTION=abort" \
 # back-door around the approval gate.
 check_contains "H1b. scoped hint steers to the CONFIRM_OUTLINE approval sentinel" \
   "WORKFLOW_CONFIRM_OUTLINE" "${NEXT_HINT:-}"
-check_not_contains "H1c. scoped hint does NOT offer --mark outline complete as recovery" \
-  "--mark outline complete" "${NEXT_HINT:-}"
+# Needle shortened by #1947: the hint no longer emits a trailing `complete`
+# token, so the old `--mark outline complete` needle became structurally
+# unmatchable and this guard would have gone vacuously green.
+check_not_contains "H1c. scoped hint does NOT offer --mark outline as recovery" \
+  "--mark outline" "${NEXT_HINT:-}"
 
 echo ""
 echo "=== H2: H1 hint does NOT contain /workflow-init ==="
@@ -41,6 +44,7 @@ check_not_contains "H2. outline=pending + detail=complete scoped hint does NOT c
 # Uses REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING fixture (non-outline/detail pair)
 # to test hint bifurcation for run_tests.
 #
+
 # After #1215 fix: run_tests is sentinel-only; hasStagedTestChanges applies ONLY to
 # write_tests. B1 verifies that staged tests/ present STILL yields run_tests
 # evidence=false (the core #1215 regression). The staged-test setup is KEPT so B1

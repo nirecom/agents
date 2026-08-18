@@ -7,7 +7,7 @@
 #   - Each caller invokes the skills/_shared/confirm-plan.md protocol
 #   - stop-confirm-plan-guard.js Layer 2 references CONFIRM_<STAGE>_RE_DQ for all three stages
 #   - sentinel-patterns.js no longer carries the legacy "workflow-mark.js injects" comment
-#
+
 # L3 gap (what this test does NOT catch):
 # - whether CONFIRM_<STAGE> sentinel + co-emitted Skill actually prevents a stall in a live session
 #   (hook registration wiring — only verifiable via live claude -p run)
@@ -53,10 +53,10 @@ echo "=== 3. make-outline-plan/SKILL.md: Completion co-emission ==="
 NEXT_STEP_STEPS="$REPO_ROOT/bin/workflow/lib/next-step/steps.js"
 NEXT_STEP_ADVANCE_SHARED="$REPO_ROOT/bin/workflow/lib/next-step/advance-shared.js"
 if require_file "$OUTLINE_SKILL"; then
-    if has_fixed 'next-step" --advance --step outline --status complete --next' "$OUTLINE_SKILL"; then
+    if has_fixed 'next-step" --advance --step outline --complete --next' "$OUTLINE_SKILL"; then
         pass "make-outline-plan/SKILL.md completes outline via next-step --advance --next"
     else
-        fail "make-outline-plan/SKILL.md missing next-step --advance --step outline --status complete --next call"
+        fail "make-outline-plan/SKILL.md missing next-step --advance --step outline --complete --next call"
     fi
 
     if has_fixed "WORKFLOW_MARK_STEP_outline_complete" "$OUTLINE_SKILL"; then
