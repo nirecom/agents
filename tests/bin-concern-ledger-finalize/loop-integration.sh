@@ -46,6 +46,8 @@ STUB
     done
     # concern-ledger.sh is a dispatcher that sources its sibling module dir.
     [ -d "$AGENTS_ROOT/bin/lib/concern-ledger" ] && cp -r "$AGENTS_ROOT/bin/lib/concern-ledger" "$MOCKD/bin/lib/"
+    # run-codex-review-loop sources its split-out ledger helpers from this dir.
+    [ -d "$AGENTS_ROOT/bin/lib/codex-review-loop" ] && cp -r "$AGENTS_ROOT/bin/lib/codex-review-loop" "$MOCKD/bin/lib/"
 }
 
 # mk_reviewer <body> — the review-plan-codex stub. It deliberately does not

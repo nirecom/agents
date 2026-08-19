@@ -3,21 +3,12 @@
 # Tags: concern-ledger, fail-closed, stale-ledger, error-injection, TL2, scope:common
 # Sourced by tests/bin-concern-ledger-shared-code-review.sh.
 
-# Why these cases exist. Every consumer of the ledger runs against a file that
-# is usually already there and already valid — the previous round wrote it. So
-# the interesting failure is not "no ledger": it is a stage or a reduce that
-# fails while a perfectly good ledger from the round before is still on disk.
-# Nothing about the file says which round it describes, so a caller that shrugs
-# at the failure carries on reading last round's answer as if it were this
-# round's, and every downstream step (tally, verdict, finalize, the operator)
-# inherits that.
-
-# Failure is injected at the one boundary that can be controlled without
-# touching the code under test: bin/concern-ledger is replaced by a shim that
-# fails a single named subcommand and delegates every other one to the real
-# CLI. The scripts under test resolve the CLI from AGENTS_CONFIG_DIR (or from
-# their own directory), so a copied tree with a shimmed CLI exercises the real
-# error handling rather than a stubbed version of it.
+# The interesting failure is not "no ledger" but a stage or reduce that fails
+# while a valid ledger from the round before is still on disk: nothing in the
+# file says which round it describes, so a caller that shrugs carries on reading
+# last round's answer as this round's. Failure is injected by shimming
+# bin/concern-ledger to fail one named subcommand and delegate the rest, which
+# the scripts resolve through AGENTS_CONFIG_DIR — real error handling, not a stub.
 
 echo ""
 echo "--- shared-review fail-closed: a stage or reduce that fails on a live ledger ---"
@@ -55,7 +46,9 @@ fc_shim() {
 }
 
 # fc_env <n> <format> — a plans dir holding one already-valid ledger from the
-# previous round, plus the round counter that says a round 2 is under way.
+# previous round, plus the recorded counter. It reads 1, not 2: the cases drive
+# round 2, and a round is accepted only when it is exactly one past the recorded
+# one (#2068), so seeding 2 would make every case fail on the guard instead.
 FCP=""; FCSID=""; FCLED=""; FCFMT=""
 fc_env() {
     FCSID="fc$1"
@@ -68,7 +61,7 @@ fc_env() {
         printf 'C1|HIGH|open|1|1|bin/x#fn:security|d15c11|review-code-codex|review-code-codex|-|%s\n' \
             "$FC_TEXT"
     } > "$FCLED"
-    printf '2\n' > "$FCP/$FCSID-$FCFMT-round-number.txt"
+    printf '1\n' > "$FCP/$FCSID-$FCFMT-round-number.txt"
     FC_BEFORE="$(md5sum "$FCLED" 2>/dev/null | cut -d' ' -f1)"
 }
 
@@ -164,14 +157,14 @@ fc_json_path() { printf '%s/%s-%s-unresolved-concerns.json' "$FCP" "$FCSID" "$FC
         "present" "$(fc_file_state "$FC_DELTA")"
     assert_contains "F2: the staged delta holds the finding this round produced" \
         "$FC_NEW" "$(cat "$FC_DELTA" 2>/dev/null)"
-    # Required behaviour: a fold that did not happen must be disclosed. Either
-    # the ledger absorbs the delta or the caller is told it did not — silently
-    # leaving the previous round's ledger authoritative is neither.
-    xfail_contains "F2: a refused reduce is disclosed to the caller" \
+    # A fold that did not happen must be disclosed. #2032-A: the second half was
+    # once written as "the ledger absorbs the delta", but this wrapper's contract
+    # is advisory — it may not fold behind a refusing CLI — so what it owes the
+    # caller is the disclosure plus the delta still on disk to fold later.
+    assert_contains "F2: a refused reduce is disclosed to the caller" \
         "## Concern Ledger: NOT-STAGED" "$FC_OUT"
-    LEDGER_ANSWERS="$(grep -Fq -- "$FC_NEW" "$FCLED" 2>/dev/null && printf 'folded' || printf 'stale')"
-    xfail_eq "F2: the ledger left behind is not a stale answer to this round" \
-        "folded" "$LEDGER_ANSWERS"
+    assert_eq "F2: and the round's finding survives on disk to be folded later" \
+        "present" "$(fc_file_state "$FC_DELTA")"
 }
 
 # ---------------------------------------------------------------------------
@@ -191,21 +184,22 @@ fc_json_path() { printf '%s/%s-%s-unresolved-concerns.json' "$FCP" "$FCSID" "$FC
     # must not claim a verified end. F5 below shows the shape this must take —
     # a non-zero exit, a CHECK=FINALIZE-FAILED line and no artifact — which is
     # why these are requirements rather than an invented contract (CPR-ORTH).
-    xfail_eq "F3: a refused stage does not end the round successfully" \
+    assert_eq "F3: a refused stage does not end the round successfully" \
         "nonzero" "$([ "$FC_RC" -ne 0 ] && printf nonzero || printf zero)"
-    xfail_not_contains "F3: and does not report the finalize as verified" "CHECK=ok" "$FC_OUT"
-    xfail_eq "F3: no verified artifact is produced for a round that was never staged" \
+    assert_not_contains "F3: and does not report the finalize as verified" "CHECK=ok" "$FC_OUT"
+    assert_eq "F3: no verified artifact is produced for a round that was never staged" \
         "missing" "$(fc_file_state "$FC_JSON")"
-    xfail_eq "F3: and check-finalized refuses the round the scanner never joined" \
+    assert_eq "F3: and check-finalized refuses the round the scanner never joined" \
         "1" "$(
             AGENTS_CONFIG_DIR="$FC_ROOT" bash "$CLI" check-finalized --plans-dir "$FCP" \
                 --session-id "$FCSID" --format "$FCFMT" --round 2 >/dev/null 2>&1; echo $?
         )"
-    # Evidence for the requirements above: what the close actually verified is
-    # the previous round's answer, and this round's finding is not in it.
-    assert_not_contains "F3: the scanner's finding is nowhere in what the close verified" \
+    # Evidence that the refusal is the only safe answer: neither this round's
+    # finding nor the earlier round's may be published as a verified result,
+    # because the round they would be attributed to was never staged.
+    assert_not_contains "F3: the scanner's finding is not published as verified" \
         "$FC_NEW" "$(cat "$FC_JSON" 2>/dev/null)"
-    assert_contains "F3: which carries only the concern the earlier round left open" \
+    assert_not_contains "F3: nor is the earlier round's concern re-published as this round's" \
         "$FC_TEXT" "$(cat "$FC_JSON" 2>/dev/null)"
     assert_eq "F3: no delta was written for this round, which is what stage would have done" \
         "missing" "$(fc_file_state "$(delta_file "$FCP" "$FCSID" 2 security-scanner)")"
@@ -224,15 +218,22 @@ fc_json_path() { printf '%s/%s-%s-unresolved-concerns.json' "$FCP" "$FCSID" "$FC
     FC_JSON4="$(fc_json_path)"
 
     # Required behaviour, same shape as F3: a fold that did not happen must not
-    # be closed over. The delta IS on disk here, so the round's finding is
-    # recoverable — which makes silently finalizing without it the whole defect.
-    xfail_eq "F4: a refused reduce does not end the round successfully" \
+    # be closed over. #2032-A: the last two were once written as "the artifact
+    # carries this round's finding" and "the tally counts both concerns", but the
+    # adopted design refuses before finalizing, so no artifact and no tally exist
+    # to carry anything — the refusal itself is what the caller must see.
+    assert_eq "F4: a refused reduce does not end the round successfully" \
         "nonzero" "$([ "$FC_RC" -ne 0 ] && printf nonzero || printf zero)"
-    xfail_not_contains "F4: and does not report CHECK=ok" "CHECK=ok" "$FC_OUT"
-    xfail_contains "F4: any artifact it does verify carries this round's finding" \
-        "$FC_NEW" "$(cat "$FC_JSON4" 2>/dev/null)"
-    xfail_contains "F4: and the tally counts both open concerns, not just the stale one" \
-        "UNRESOLVED=open_high=2" "$FC_OUT"
+    assert_not_contains "F4: and does not report CHECK=ok" "CHECK=ok" "$FC_OUT"
+    assert_eq "F4: the previous round's artifact is not refreshed to look like this round's" \
+        "missing" "$(fc_file_state "$FC_JSON4")"
+    assert_not_contains "F4: and no tally is published for a round that was never folded" \
+        "UNRESOLVED=" "$FC_OUT"
+    # Which of the two refusal words is printed depends on where the shim bit,
+    # so the requirement is that one of them is — not which.
+    F4_DISCLOSED=no
+    case "$FC_OUT" in *CHECK=NOT-REDUCED*|*CHECK=NOT-STAGED*|*CHECK=FINALIZE-FAILED*) F4_DISCLOSED=yes ;; esac
+    assert_eq "F4: the close names the refusal instead of ending quietly" "yes" "$F4_DISCLOSED"
     # The round's own work must survive the failure either way: the delta is the
     # only copy of the finding once the fold is refused.
     assert_eq "F4: the delta was staged, so the finding did reach disk" \
@@ -351,16 +352,16 @@ REV
     # round did not fold into. F6 is the same failure one line earlier and it
     # aborts with rc 4 — so that is the shape required here too (CPR-ORTH),
     # rather than an escalation decided by the round before.
-    xfail_eq "F7: the loop refuses to judge a round whose fold was refused" \
+    assert_eq "F7: the loop refuses to judge a round whose fold was refused" \
         "rc=4 artifact=missing" \
         "rc=$FC_STALE_RC artifact=$(fc_file_state "$(fc_json_path)")"
-    xfail_not_contains "F7: the concern this round resolved is not escalated as open" \
+    assert_not_contains "F7: the concern this round resolved is not escalated as open" \
         "$FC_TEXT" "$FC_STALE_JSON"
-    xfail_not_contains "F7: and no verdict is decided by the previous round's ledger" \
+    assert_not_contains "F7: and no verdict is decided by the previous round's ledger" \
         '"last_round": 1' "$FC_STALE_JSON"
-    # The guard that lets it through: emptiness is not recency, and a stale file
-    # is never empty. Required to become something stronger than -s.
-    xfail_not_contains "F7: the post-reduce guard is more than a non-empty-file check" \
+    # The guard that let it through: emptiness is not recency, and a stale file
+    # is never empty, so the -s check had to become something stronger.
+    assert_not_contains "F7: the post-reduce guard is more than a non-empty-file check" \
         'if [[ ! -s "$LEDGER" ]]; then' "$(cat "$AGENTS_ROOT/bin/run-codex-review-loop")"
 }
 
@@ -385,11 +386,15 @@ REV
     # Required behaviour: a stage whose destination cannot be written must say
     # so. The sibling guard below already exits 5 when the temp dir is unusable,
     # so the same class of failure must not report success here (CPR-ORTH).
-    xfail_eq "F8: a stage that cannot write its delta reports a non-zero exit" \
+    assert_eq "F8: a stage that cannot write its delta reports a non-zero exit" \
         "nonzero" "$([ "$FC_RC" -ne 0 ] && printf nonzero || printf zero)"
     # Evidence that the round really was lost: nothing reached the destination.
     assert_eq "F8: nothing was written, so the round has no delta to fold" \
         "0" "$(find "$FC_BLOCKED" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    # The write is atomic, so a refusal leaves no half-written neighbour either:
+    # a partial file would be folded as if it were a complete round.
+    assert_eq "F8: and no partial or temporary delta is left beside the destination" \
+        "0" "$(find "$FCP" -maxdepth 1 -type f -name "*$FCSID*round-2*" 2>/dev/null | wc -l | tr -d ' ')"
 
     # The corresponding guard that DOES hold: an unusable temp dir is refused
     # outright rather than reported as a staged round.
