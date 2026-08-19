@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/review-loop-verdict
-# Tags: worktree, bin, env, config, loop
+# Tags: worktree, bin, env, config, loop, scope:issue-specific
 # L1 unit tests for bin/review-loop-verdict (issue #673, extended #1248)
 # Verdict matrix + argument validation + budget/risk-signal flags.
 set -uo pipefail
@@ -58,14 +58,14 @@ run_verdict "CONTINUE" 1 "3: round=1 high=1 medium=0 low=0 → CONTINUE" 1 1 0 0
 run_verdict "CONTINUE" 1 "4: round=1 high=1 medium=1 low=1 → CONTINUE" 1 1 1 1
 run_verdict "APPROVED" 0 "5: round=2 high=0 medium=0 low=1 → APPROVED" 2 0 0 1
 run_verdict "APPROVED" 0 "6: round=2 high=0 medium=1 low=0 → APPROVED" 2 0 1 0
-run_verdict "LAND" 3 "7: round=2 high=1 medium=0 low=0 → LAND (no budget info)" 2 1 0 0
-run_verdict "LAND" 3 "8: round=2 high=1 medium=1 low=1 → LAND (no budget info)" 2 1 1 1
+run_verdict "HIGH_UNRESOLVED" 6 "7: round=2 high=1 medium=0 low=0 → HIGH_UNRESOLVED (no budget info)" 2 1 0 0
+run_verdict "HIGH_UNRESOLVED" 6 "8: round=2 high=1 medium=1 low=1 → HIGH_UNRESOLVED (no budget info)" 2 1 1 1
 run_verdict "APPROVED" 0 "9: round=3 high=0 medium=0 low=0 → APPROVED" 3 0 0 0
-run_verdict "LAND" 3 "10: round=3 high=1 medium=0 low=0 → LAND (no budget info)" 3 1 0 0
+run_verdict "HIGH_UNRESOLVED" 6 "10: round=3 high=1 medium=0 low=0 → HIGH_UNRESOLVED (no budget info)" 3 1 0 0
 run_verdict "APPROVED" 0 "11: round=3 high=0 medium=1 low=0 → APPROVED" 3 0 1 0
 
-# Extra: round=4 high>0 → LAND (no budget info → conservative ceiling)
-run_verdict "LAND" 3 "11b: round=4 high=2 medium=0 low=0 → LAND (no budget info)" 4 2 0 0
+# Extra: round=4 high>0 → HIGH_UNRESOLVED (no budget info → conservative ceiling)
+run_verdict "HIGH_UNRESOLVED" 6 "11b: round=4 high=2 medium=0 low=0 → HIGH_UNRESOLVED (no budget info)" 4 2 0 0
 # round=2 high=0 medium=0 low=0 → APPROVED (all zero)
 run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 
@@ -76,17 +76,17 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 # A: budget-remaining=1 (budget>0) → AUTO_EXTEND (exit 5)
 run_verdict "AUTO_EXTEND" 5 "A: round=2 high=1 --budget-remaining 1 → AUTO_EXTEND" 2 1 0 0 --budget-remaining 1
 
-# B: budget-remaining=0 (exhausted), no risk-signal → LAND (exit 3)
-run_verdict "LAND" 3 "B: round=2 high=1 --budget-remaining 0 → LAND" 2 1 0 0 --budget-remaining 0
+# B: budget-remaining=0 (exhausted), no risk-signal → HIGH_UNRESOLVED (exit 6)
+run_verdict "HIGH_UNRESOLVED" 6 "B: round=2 high=1 --budget-remaining 0 → HIGH_UNRESOLVED" 2 1 0 0 --budget-remaining 0
 
 # C: budget-remaining=0 WITH risk-signal → ESCALATE (exit 2)
 run_verdict "ESCALATE" 2 "C: round=2 high=1 --budget-remaining 0 --risk-signal → ESCALATE" 2 1 0 0 --budget-remaining 0 --risk-signal "security concern"
 
-# D: round=3 high=1 budget=0 no risk → LAND (exit 3)
-run_verdict "LAND" 3 "D: round=3 high=1 --budget-remaining 0 → LAND" 3 1 0 0 --budget-remaining 0
+# D: round=3 high=1 budget=0 no risk → HIGH_UNRESOLVED (exit 6)
+run_verdict "HIGH_UNRESOLVED" 6 "D: round=3 high=1 --budget-remaining 0 → HIGH_UNRESOLVED" 3 1 0 0 --budget-remaining 0
 
-# E: no flags at all (budget unknown = ceiling conservative) → LAND (exit 3)
-run_verdict "LAND" 3 "E: round=2 high=1 no flags → LAND (budget unknown=ceiling)" 2 1 0 0
+# E: no flags at all (budget unknown = ceiling conservative) → HIGH_UNRESOLVED (exit 6)
+run_verdict "HIGH_UNRESOLVED" 6 "E: round=2 high=1 no flags → HIGH_UNRESOLVED (budget unknown=ceiling)" 2 1 0 0
 
 # F: risk-signal present but no budget flag → ESCALATE (exit 2, risk overrides unknown budget)
 run_verdict "ESCALATE" 2 "F: round=2 high=1 --risk-signal no budget → ESCALATE" 2 1 0 0 --risk-signal "x"

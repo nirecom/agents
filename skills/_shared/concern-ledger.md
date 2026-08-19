@@ -68,6 +68,10 @@ A producer is a reviewer or scanner whose findings enter the ledger. Each writes
 - `<anchor>` is the enclosing function, heading, or symbol — stable across edits that shift line numbers.
 - Zero findings → the single line `(none)`. An omitted section is not "nothing found".
 
+`stage --from-report` rejects empty files — an empty report is indistinguishable from a failure to produce one. When a round has zero open concerns, the caller writes the sentinel line `<!-- concern-ledger: no open concerns in round <N> -->` to the report before staging; the parser skips this line as 0 records.
+
+Delta existence does NOT imply the producer reviewed the round. Only the `#producer` header field 3 (completeness) = `COMPLETE` indicates a complete review. `check-staged` enforces this before `reduce`.
+
 Each staged round also records how complete that producer's pass was:
 
 | Label | Meaning | Reported as |
@@ -120,6 +124,8 @@ An entry may only be resolved by absence when every declared producer for the fo
 
 A review that silently drops findings because a scanner crashed is the failure this rule exists to prevent.
 
+`stage` writes atomically via tmp→rename; partial writes are never left on disk.
+
 ## Finalize
 
 When a review ends without converging, `concern-ledger finalize` writes the still-open concerns to `<session-id>-<format>-unresolved-concerns.json` (schema `unresolved-concerns/v1`, terminated by an `"eof"` marker) and snapshots the ledger.
@@ -137,6 +143,7 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 | `begin-round --round N` | Open a new cycle when round 1 meets a live ledger |
 | `render-prior` | The still-open concerns, as the block a producer is handed |
 | `stage --producer P --from-report F` | Parse one producer's report into this round's delta |
+| `check-staged --round N` | Report producers that have not completely staged this round; stdout: `<producer>:<reason>` (reasons: `missing` / `round-mismatch:<R>` / `incomplete:<LABEL>` / `producer-mismatch:<NAME>`); exit 1 when any unsatisfied, exit 0 when all satisfied. |
 | `reduce --round N` | Bind, merge, and re-state the ledger from the round's deltas |
 | `tally` | `open_high=… open_medium=… open_low=… reopened=… resolved=…` |
 | `finalize --mode M --reason R --round N` | Write the unresolved-concerns artifact |

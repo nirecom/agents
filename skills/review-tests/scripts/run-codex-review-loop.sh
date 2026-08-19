@@ -5,14 +5,13 @@ set -euo pipefail
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
-ROUND_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-round-number.txt"
 # #1361: terminal marker written after a non-success terminal exit. Line 1 = terminal
 # rc, line 2 = staged-tests fingerprint at that moment (same computeStagedTestsToken
 # SSOT the gate uses for stale-review detection).
 TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-terminal.txt"
 # Dedicated exit code for "re-invoked after a terminal exit with tests unchanged".
-# Does not collide with bin/run-codex-review-loop's codes (0-5).
-EXIT_REINVOKE_AFTER_TERMINAL=6
+# Does not collide with bin/run-codex-review-loop's codes (0-7).
+EXIT_REINVOKE_AFTER_TERMINAL=8
 
 # Print the current staged-tests fingerprint on stdout. Returns non-zero when it
 # cannot be computed (node/require/git failure, or no staged tests → empty token).
@@ -48,7 +47,7 @@ elif [[ -z "$COMMIT_TARGET" ]]; then
 fi
 REPO_ROOT_VAL="$COMMIT_TARGET"
 
-# --- #1361 re-invoke guard (before ROUND_FILE init so ROUND_NUMBER is never reset) ---
+# --- #1361 re-invoke guard ---
 if [[ -f "$TERMINAL_FILE" ]]; then
   PREV_RC="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
   PREV_FP="$(sed -n '2p' "$TERMINAL_FILE" 2>/dev/null || true)"
@@ -69,24 +68,14 @@ if [[ -f "$TERMINAL_FILE" ]]; then
   rm -f "$TERMINAL_FILE"
 fi
 
-if [[ -f "$ROUND_FILE" ]]; then
-  ROUND_NUMBER=$(( $(<"$ROUND_FILE") + 1 ))
-else
-  ROUND_NUMBER=1
-fi
-printf '%s\n' "$ROUND_NUMBER" > "$ROUND_FILE"
-
-cleanup_counter() {
+arm_terminal_guard() {
   local rc=$1 fp
-  case "$rc" in
-    0|1|2|4) rm -f "$ROUND_FILE" ;;
-    # single-round terminal format: exit 1 is terminal (no re-loop), so clear too.
-    # exit 5 (AUTO_EXTEND) does not occur here (MAX_EXTENSIONS=0).
-  esac
   case "$rc" in
     # Non-success terminal codes only: exit 0 (COMPLETE) must not arm the guard,
     # or a clean follow-up review would be wrongly blocked. exit 4 is unchanged.
-    1|2)
+    # exit 6 (HIGH_UNRESOLVED) is terminal with unresolved HIGH concerns — guard
+    # applies for same reason as exit 2 (CPR-ORTH).
+    1|2|6)
       fp=""
       fp="$(compute_staged_tests_fingerprint "$REPO_ROOT_VAL")" || fp=""
       printf '%s\n%s\n' "$rc" "$fp" > "$TERMINAL_FILE" || true
@@ -102,7 +91,6 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
   --cap 1 --max-extensions 0 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-outline.md"
-  --round "$ROUND_NUMBER"
   --repo-root "$REPO_ROOT_VAL"
 )
 
@@ -132,5 +120,5 @@ if [[ -s "$PROTECTION_TESTS" ]]; then args+=(--context "$PROTECTION_TESTS"); fi
 if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); fi
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
-cleanup_counter "$RC" || true
+arm_terminal_guard "$RC" || true
 exit "$RC"

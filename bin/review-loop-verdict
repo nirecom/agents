@@ -10,9 +10,10 @@
 #   0 — APPROVED
 #   1 — CONTINUE
 #   2 — ESCALATE
-#   3 — LAND (silent land; run-codex-review-loop maps this to public exit 0)
+#   3 — (reserved; no longer used)
 #   4 — argument error
 #   5 — AUTO_EXTEND
+#   6 — HIGH_UNRESOLVED (high concerns remain at the budget ceiling; never absorbed as approved)
 set -euo pipefail
 
 die() {
@@ -58,7 +59,7 @@ is_nonneg_int "$LOW"   || die "low must be a non-negative integer: $LOW"
 #   3. round >= 2 && high > 0 && budget > 0 -> AUTO_EXTEND
 #   4. round >= 2 && high > 0 && budget == 0 || budget empty:
 #        risk signal present             -> ESCALATE
-#        no risk signal                  -> LAND
+#        no risk signal                  -> HIGH_UNRESOLVED
 #   5. round >= 2 && high == 0 && med>0  -> APPROVED   (MEDIUM downgrades at cap)
 
 if [[ "$HIGH" -eq 0 && "$MED" -eq 0 ]]; then
@@ -82,8 +83,8 @@ if [[ "$HIGH" -gt 0 ]]; then
     printf 'ESCALATE\n'
     exit 2
   fi
-  printf 'LAND\n'
-  exit 3
+  printf 'HIGH_UNRESOLVED\n'
+  exit 6
 fi
 
 # round >= 2 && high == 0 && med > 0

@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
-#
-# bin/lib/concern-ledger/core.sh
-#
-# Sourced by bin/lib/concern-ledger.sh. The value layer: text normalization,
-# the two content hashes that identity is built on (SLOT and DISCRIM), severity
-# ordering, and the three-valued completeness label.
-#
-# Must be `source`d, not executed directly.
+# bin/lib/concern-ledger/core.sh — value layer (text normalization, SLOT/DISCRIM hashes, severity, completeness); sourced by bin/lib/concern-ledger.sh.
 
 # ---------------------------------------------------------------------------
 # String helpers
@@ -114,6 +107,7 @@ _cl_label_rank() {
 _cl_label_min() {
     if [ "$(_cl_label_rank "$1")" -le "$(_cl_label_rank "$2")" ]; then printf '%s' "$1"; else printf '%s' "$2"; fi
 }
+_cl_delta_header() { head -1 "$1" 2>/dev/null; }
 
 # cl_exec_completeness <exec-label> — the 3-valued projection of the reviewer's
 # own execution marker. Already-projected values pass through unchanged.

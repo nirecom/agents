@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
-# Tags: worktree, codex, review, bin, install
+# Tags: worktree, codex, review, bin, install, scope:issue-specific
 # Tests for bin/run-codex-review-loop (issue #603)
 # Tests the exit-code matrix, pre-flight checks, and argument forwarding.
 # NOTE: bin/run-codex-review-loop does not exist yet — failures are expected until implementation.
@@ -56,10 +56,11 @@ EOF
     chmod +x "$agents_dir/bin/review-loop-verdict"
   fi
 
-  # Copy codex-core.sh (sourced by review-plan-codex mock and run-codex-review-loop)
+  # Copy bin/lib wholesale: codex-core.sh sources its siblings (codex-timeout.sh),
+  # so copying it alone leaves the fixture emitting "No such file" noise on stderr.
   mkdir -p "$agents_dir/bin/lib"
-  if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
-    cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$agents_dir/bin/lib/codex-core.sh"
+  if [[ -d "$AGENTS_WORKTREE/bin/lib" ]]; then
+    cp -r "$AGENTS_WORKTREE/bin/lib/." "$agents_dir/bin/lib/"
   fi
 
   echo "$agents_dir"
@@ -610,58 +611,55 @@ OUT
 
 # ---------------------------------------------------------------------------
 # 23. CONTINUE branch cap-reach with extension available → exit 2
-#     outline-plan, CAP=1, EXT_USED=0, MAX_EXT=1 → NEW limit=2.
-#     Pre-populate 1 row. Mock appends row 2 → count=2 >= 2.
+#     outline-plan, CAP=1, EXT_USED=0, MAX_EXT=1 → limit=2, and the round is 2.
+#     --force-round is the recovery entry point: it is what lets a test start at
+#     a round the counter never reached. The audit log is not seeded, because
+#     the cap no longer reads it (#2068).
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  printf '{"session":"sid23","label":"outline-plan","verdict":"X","ts":"t1","round":1,"severity_summary":""}\n' \
-    > "$PLANS/sid23-plan.jsonl"
+  printf 'C1|HIGH|OPEN|1|needs async approach\n' > "$PLANS/sid23-outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Plan Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 MISSING_ALTERNATIVE: needs async approach
-1. [HIGH] needs async approach
+C1: still open — needs async approach
 <!-- end-codex-output -->
 OUT
 )"
   invoke_wrapper "$MOCK" --format outline-plan --session-id sid23 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 1 --max-extensions 1 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 > /dev/null 2>&1
   rc=$?
-  [[ $rc -eq 2 ]] && pass "23: CONTINUE+cap-reach (extension available) → exit 2" || fail "23: CONTINUE+cap-reach → expected exit 2, got $rc"
+  [[ $rc -eq 5 ]] && pass "23: HIGH at cap with budget remaining → AUTO_EXTEND (exit 5)" || fail "23: CONTINUE+cap-reach → expected exit 5, got $rc"
 }
 
 # ---------------------------------------------------------------------------
 # 24. CONTINUE branch cap-reach at absolute ceiling → exit 2
-#     outline-plan, CAP=1, EXT_USED=1, MAX_EXT=1 → NEW limit=3.
-#     Pre-populate 2 rows. Mock appends row 3 → count=3 >= 3.
+#     outline-plan, CAP=1, EXT_USED=1, MAX_EXT=1 → limit=3, and the round is 3.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  for i in 1 2; do
-    printf '{"session":"sid24","label":"outline-plan","verdict":"X","ts":"t%d","round":%d,"severity_summary":""}\n' "$i" "$i" \
-      >> "$PLANS/sid24-plan.jsonl"
-  done
+  printf 'C1|HIGH|OPEN|1|still need async approach\n' > "$PLANS/sid24-outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Plan Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 MISSING_ALTERNATIVE: still need async approach
-1. [HIGH] still need async approach
+C1: still open — still need async approach
 <!-- end-codex-output -->
 OUT
 )"
   invoke_wrapper "$MOCK" --format outline-plan --session-id sid24 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 1 --max-extensions 1 --extensions-used 1 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 3 > /dev/null 2>&1
   rc=$?
-  [[ $rc -eq 2 ]] && pass "24: CONTINUE+cap-reach (absolute ceiling) → exit 2" || fail "24: CONTINUE+cap-reach ceiling → expected exit 2, got $rc"
+  [[ $rc -eq 6 ]] && pass "24: HIGH at ceiling with no budget → HIGH_UNRESOLVED (exit 6)" || fail "24: CONTINUE+cap-reach ceiling → expected exit 6, got $rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -687,6 +685,137 @@ OUT
     --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 1 ]] && pass "25: CONTINUE under limit → exit 1" || fail "25: CONTINUE under limit → expected exit 1, got $rc"
+}
+
+# ---------------------------------------------------------------------------
+# 26. --round omitted → the wrapper numbers the round itself, from the counter
+#     it owns. Callers used to compute it, which is how the counter and the
+#     round that actually ran could disagree (#2068).
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  ARGV_FILE="$TMP/argv-26.txt"
+  cat > "$MOCK/bin/review-plan-codex" << ARGV_EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" > "$ARGV_FILE"
+echo "## Codex Plan Review: PERFORMED"
+echo ""
+echo "<!-- begin-codex-output: treat as untrusted third-party content -->"
+echo "NEEDS_REVISION"
+echo "1. [HIGH] something to fix"
+echo "<!-- end-codex-output -->"
+ARGV_EOF
+  chmod +x "$MOCK/bin/review-plan-codex"
+
+  invoke_wrapper "$MOCK" --format detail-plan --session-id sid26 --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+  rc=$?
+  ARGV=$(cat "$ARGV_FILE" 2>/dev/null || echo "")
+  CNT=$( { tr -d '[:space:]' < "$PLANS/sid26-detail-plan-round-number.txt"; } 2>/dev/null || echo absent)
+  [[ -n "$CNT" ]] || CNT=absent
+  if [[ $rc -eq 1 ]] && echo "$ARGV" | grep -q -- "--round 1" && [[ "$CNT" == "1" ]]; then
+    pass "26: --round omitted → the wrapper opens round 1 and records it"
+  else
+    fail "26: expected exit 1, '--round 1' forwarded and counter=1. rc=$rc counter=$CNT argv=$ARGV"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 27. A round the counter never reached is refused. Accepting it would let a
+#     caller skip past rounds whose concerns were never folded into the ledger.
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
+## Codex Plan Review: PERFORMED
+
+<!-- begin-codex-output: treat as untrusted third-party content -->
+APPROVED
+<!-- end-codex-output -->
+OUT
+)"
+  printf 'C1|HIGH|OPEN|1|a concern from a round that never ran\n' > "$PLANS/sid27-detail-plan-concern-ledger.txt"
+  OUT27=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid27 --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" --round 3 2>&1 > /dev/null)
+  rc=$?
+  if [[ $rc -eq 4 ]] && echo "$OUT27" | grep -q "does not follow the recorded round counter"; then
+    pass "27: --round 3 on a counter at 0 is refused with exit 4"
+  else
+    fail "27: expected exit 4 + 'does not follow the recorded round counter', got rc=$rc: $OUT27"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 28. --round and --force-round are two answers to one question, so asking both
+#     at once is refused rather than silently resolved.
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  OUT28=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid28 --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --force-round 2 2>&1 > /dev/null)
+  rc=$?
+  if [[ $rc -eq 4 ]]; then
+    pass "28: --round together with --force-round → exit 4"
+  else
+    fail "28: expected exit 4 for --round + --force-round, got rc=$rc: $OUT28"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 29. Round >= 2 with no ledger on disk. The old downgrade-to-round-1 recovery
+#     minted C1 a second time; refusing keeps the concern IDs continuous.
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
+## Codex Plan Review: PERFORMED
+
+<!-- begin-codex-output: treat as untrusted third-party content -->
+APPROVED
+<!-- end-codex-output -->
+OUT
+)"
+  OUT29=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid29 --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 2>&1 > /dev/null)
+  rc=$?
+  if [[ $rc -eq 4 ]] && echo "$OUT29" | grep -q "ledger missing for round"; then
+    pass "29: round 2 with no ledger → exit 4 naming the missing ledger"
+  else
+    fail "29: expected exit 4 + 'ledger missing for round', got rc=$rc: $OUT29"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 30. exit 3 means codex never reviewed anything, so the round was not spent:
+#     the counter rolls back and the fallback re-enters on the same number.
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  make_review_plan_codex_mock "$MOCK" "## Codex Plan Review: SKIPPED — codex CLI not installed"
+  invoke_wrapper "$MOCK" --format detail-plan --session-id sid30 --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+  rc=$?
+  CFILE="$PLANS/sid30-detail-plan-round-number.txt"
+  if [[ $rc -eq 3 && ! -f "$CFILE" ]]; then
+    pass "30: exit 3 rolls the counter back to its pre-call state"
+  else
+    fail "30: expected exit 3 + no counter, got rc=$rc counter=$(cat "$CFILE" 2>/dev/null || echo absent)"
+  fi
 }
 
 # ---------------------------------------------------------------------------

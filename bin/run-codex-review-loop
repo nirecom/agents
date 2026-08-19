@@ -14,7 +14,9 @@
 #       missing binaries, unrecognized status header, etc.)
 #       -> caller MUST halt with blocking error; do NOT fall back.
 #   5 — AUTO_EXTEND (budget available; caller increments EXTENSIONS_USED and re-enters)
+#   6 — HIGH_UNRESOLVED (high-severity concerns remain at the budget ceiling)
 set -uo pipefail
+REDUCE_COMMITTED=false
 
 die() {
   echo "run-codex-review-loop: script error: $1" >&2
@@ -47,6 +49,7 @@ MAX_EXT=""
 EXT_USED="0"
 TRADEOFFS=""
 ROUND=""
+FORCE_ROUND=""
 LEDGER_OVERRIDE=""
 EXTRA_CTX=()
 REPO_ROOT_ARG=""
@@ -94,6 +97,9 @@ while [[ $# -gt 0 ]]; do
     --risk-signal)
       require_value "--risk-signal" "${2:-}"
       RISK_SIGNAL="$2"; shift 2 ;;
+    --force-round)
+      require_value "--force-round" "${2:-}"
+      FORCE_ROUND="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -105,8 +111,12 @@ done
 [[ -n "$CAP" ]]       || die "--cap is required"
 [[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
 [[ -n "$TRADEOFFS" ]] || die "--accepted-tradeoffs is required"
-[[ -n "$ROUND" ]] || { echo "run-codex-review-loop: --round is required" >&2; exit 4; }
-[[ "$ROUND" =~ ^[1-9][0-9]*$ ]] || { echo "run-codex-review-loop: --round must be a positive integer" >&2; exit 4; }
+if [[ -n "${ROUND:-}" ]] && [[ -n "${FORCE_ROUND:-}" ]]; then
+  echo "run-codex-review-loop: --round and --force-round are mutually exclusive" >&2; exit 4
+fi
+if [[ -n "$ROUND" ]]; then
+  [[ "$ROUND" =~ ^[1-9][0-9]*$ ]] || { echo "run-codex-review-loop: --round must be a positive integer" >&2; exit 4; }
+fi
 
 case "$FORMAT" in
   detail-plan|outline-plan|security-plan|test-review) ;;
@@ -139,6 +149,112 @@ else
   LEDGER="$PLANS_DIR/$SID-$FORMAT-concern-ledger.txt"
 fi
 
+# --- Round counter management: SSOT for ROUND allocation (P2-2b/c) ---
+ROUND_FILE="$PLANS_DIR/$SID-$FORMAT-round-number.txt"
+LAST_ROUND_FILE="$PLANS_DIR/$SID-$FORMAT-last-round.txt"
+ROUND_LOCK="$ROUND_FILE.lock"
+ROUND_LOCK_HELD=0
+
+acquire_round_lock() {
+  local i=0
+  until mkdir "$ROUND_LOCK" 2>/dev/null; do
+    i=$(( i + 1 ))
+    if (( i > 100 )); then
+      echo "run-codex-review-loop: another review round is in flight for ${SID}/${FORMAT} (lock: ${ROUND_LOCK}); refusing to allocate a duplicate round number" >&2
+      exit 4
+    fi
+    sleep "${LOCK_SLEEP:-0.1}" 2>/dev/null || sleep 1
+  done
+  ROUND_LOCK_HELD=1
+}
+release_round_lock() {
+  (( ROUND_LOCK_HELD == 1 )) && rmdir "$ROUND_LOCK" 2>/dev/null || true
+  ROUND_LOCK_HELD=0
+}
+acquire_round_lock_besteffort() {
+  mkdir "$ROUND_LOCK" 2>/dev/null && ROUND_LOCK_HELD=1 || true
+  return 0
+}
+
+read_round_file() {
+  local raw
+  raw="$(cat "$ROUND_FILE" 2>/dev/null)" || return 1
+  [[ "$raw" =~ ^[0-9]+$ ]] || return 1
+  (( ${#raw} <= 3 )) || return 1
+  printf '%s' "$((10#$raw))"
+}
+
+write_round_file() {
+  local v="$1" tmp="$ROUND_FILE.tmp.$$"
+  printf '%s\n' "$v" > "$tmp" || die "cannot write round counter: $ROUND_FILE"
+  mv -f "$tmp" "$ROUND_FILE" || { rm -f "$tmp"; die "cannot publish round counter: $ROUND_FILE"; }
+}
+
+_srn_terminate() {
+  printf '%s\n' "$ROUND" > "$LAST_ROUND_FILE" || true
+  rm -f "$ROUND_FILE"
+}
+_srn_rollback() {
+  if [[ "${REDUCE_COMMITTED:-false}" == "true" ]]; then
+    _srn_terminate
+    return
+  fi
+  if [[ -n "${ROUND_PREV:-}" ]]; then
+    if (( ROUND_FILE_EXISTED == 1 )); then
+      write_round_file "$ROUND_PREV" || true
+    else
+      rm -f "$ROUND_FILE"
+    fi
+  fi
+}
+settle_round_counter() {
+  local rc="$1"
+  [[ -n "${ROUND_FILE:-}" ]] || return 0
+  acquire_round_lock_besteffort
+  case "$rc" in
+    0|2|6) _srn_terminate ;;
+    1)     case "${FORMAT:-}" in security-plan|test-review) (( ROUND >= CAP )) && _srn_terminate ;; esac ;;
+    5)     : ;;
+    *)     _srn_rollback ;;
+  esac
+  release_round_lock
+}
+
+FINAL_RC=4
+trap 'settle_round_counter "$FINAL_RC"; release_round_lock; rm -f "${TMP_OUT:-}"' EXIT
+
+acquire_round_lock
+
+ROUND_FILE_EXISTED=0
+ROUND_PREV=0
+if [[ -n "${FORCE_ROUND:-}" ]] && [[ -f "$ROUND_FILE" ]]; then
+  ROUND_FILE_EXISTED=1
+  if ! ROUND_PREV="$(read_round_file)"; then
+    ROUND_PREV=0
+    echo "run-codex-review-loop: round counter could not be parsed (${ROUND_FILE}); treating as 0 for --force-round recovery" >&2
+  fi
+elif [[ -f "$ROUND_FILE" ]]; then
+  ROUND_FILE_EXISTED=1
+  if ! ROUND_PREV="$(read_round_file)"; then
+    echo "run-codex-review-loop: round counter is corrupt: ${ROUND_FILE} (content is not a bare integer 1-999); inspect it and re-run with --force-round <N> once the correct round is known" >&2
+    exit 4
+  fi
+fi
+
+if [[ -n "${FORCE_ROUND:-}" ]]; then
+  ROUND="$FORCE_ROUND"
+  echo "run-codex-review-loop: --force-round ${ROUND} overrides the recorded round counter (recorded: ${ROUND_PREV}) — recovery/test use only" >&2
+elif [[ -z "${ROUND:-}" ]]; then
+  ROUND=$(( ROUND_PREV + 1 ))
+elif (( ROUND != ROUND_PREV + 1 )); then
+  echo "run-codex-review-loop: --round ${ROUND} does not follow the recorded round counter (recorded: ${ROUND_PREV}, expected: $(( ROUND_PREV + 1 ))); use --force-round for recovery" >&2
+  exit 4
+fi
+write_round_file "$ROUND"
+ROUND_WRITTEN="$ROUND"
+release_round_lock
+# --- End round counter management ---
+
 # test-review: always rebuild context to avoid stale compacted-conversation bleed (#1376)
 if [[ "$FORMAT" == "test-review" ]]; then
   if [[ -f "$MARKER" ]]; then
@@ -167,18 +283,11 @@ ARGS=(
 )
 
 if [[ "$ROUND" -ge 2 ]]; then
-  if [[ -f "$LEDGER" ]]; then
-    ARGS+=(--ledger "$LEDGER")
-  elif [[ -z "$LEDGER_OVERRIDE" ]]; then
-    echo "run-codex-review-loop: ledger absent at round ${ROUND} — downgrading effective round to 1 (concern-ID continuity lost; see #748/#776)" >&2
-    ROUND=1
-    for i in "${!ARGS[@]}"; do
-      if [[ "${ARGS[$i]}" == "--round" ]]; then
-        ARGS[$((i+1))]="1"
-        break
-      fi
-    done
+  if [[ ! -f "$LEDGER" ]]; then
+    echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER}); refusing to restart concern IDs from C1 (see #748/#776/#2068)" >&2
+    exit 4
   fi
+  ARGS+=(--ledger "$LEDGER")
 fi
 
 if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
@@ -199,7 +308,6 @@ if [[ "${CODEX_MCP_FS:-}" != "off" ]] && [[ -n "$REPO_ROOT_ARG" ]]; then
 fi
 
 TMP_OUT=$(mktemp) || die "mktemp failed"
-trap 'rm -f "$TMP_OUT"' EXIT
 
 bash "$REVIEWER" "${ARGS[@]}" > "$TMP_OUT"
 RV=$?
@@ -269,57 +377,8 @@ HIGH_N=0; MED_N=0; LOW_N=0
 CL_CLI=""
 CL_PRODUCER_NAME="review-plan-codex"
 
-# The reducer is a library shared with the code-review path, so its home is
-# resolved rather than assumed: an AGENTS_CONFIG_DIR that predates #1992 does
-# not carry it, and concern-ID continuity must not be lost to a stale or partial
-# deployment. Each candidate must hold *both* halves — CLI and library — so a
-# repository that merely happens to have a similarly named file cannot answer.
-# "Both halves" includes the library's sibling module directory: the entrypoint
-# is dispatch-only, so a root carrying just bin/lib/concern-ledger.sh is a
-# partial deployment that aborts on load — it must lose to a complete one.
-resolve_concern_ledger() {
-  local root
-  for root in "${AGENTS_CONFIG_DIR}" \
-              "$(dirname "$(dirname "$(realpath "$0" 2>/dev/null || printf '%s' "$0")")")" \
-              "${REPO_ROOT_ARG}" \
-              "$(git rev-parse --show-toplevel 2>/dev/null || true)"; do
-    [[ -n "$root" ]] || continue
-    if [[ -f "$root/bin/concern-ledger" && -f "$root/bin/lib/concern-ledger.sh" \
-          && -d "$root/bin/lib/concern-ledger" ]]; then
-      CL_CLI="$root/bin/concern-ledger"
-      return 0
-    fi
-  done
-  return 1
-}
-
-# ledger_cli <subcommand> [args...] — every ledger operation in this wrapper
-# addresses the same (plans-dir, session, format, ledger) tuple, so the
-# addressing is written once and no call site can drift from it.
-ledger_cli() {
-  local sub="$1"; shift
-  bash "$CL_CLI" "$sub" --plans-dir "$PLANS_DIR" --session-id "$SID" \
-    --format "$FORMAT" --ledger "$LEDGER" "$@"
-}
-
-# finalize_ledger <mode> <reason> <would-be-verdict>
-# The review has ended without converging, so the concerns that outlived it are
-# written out as a machine-readable artifact. A finalize that cannot write is
-# terminal for this wrapper: returning the verdict anyway would let the caller
-# mark the step complete over findings nobody can read (fail-CLOSED).
-finalize_ledger() {
-  local mode="$1" reason="$2" wouldbe="$3" out msg rc=0
-  out="$(ledger_cli finalize --mode "$mode" --reason "$reason" --round "$ROUND" \
-      --cap "$CAP" --max-extensions "$MAX_EXT" --extensions-used "$EXT_USED" 2>&1)" || rc=$?
-  [[ $rc -eq 0 ]] && return 0
-  msg="$(printf '%s\n' "$out" | grep -F '## Concern Ledger: FINALIZE-FAILED — ' | head -n 1)"
-  [[ -n "$msg" ]] || msg="## Concern Ledger: FINALIZE-FAILED — the unresolved-concerns artifact could not be written"
-  msg="$msg (would-be verdict: $wouldbe)"
-  cat "$TMP_OUT"
-  printf '%s\n' "$msg"
-  printf '%s\n' "$msg" >&2
-  exit 7
-}
+# shellcheck source=bin/lib/codex-review-loop/ledger-verdict.sh
+. "$(dirname "$0")/lib/codex-review-loop/ledger-verdict.sh"
 
 if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
   resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}), the wrapper's own directory, or the current repository"
@@ -437,23 +496,35 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
     printf '%s' "$RETAINED_CONTENT" > "$TMP_OUT"
   fi
 
+  CL_NO_OPEN_CONCERNS="<!-- concern-ledger: no open concerns in round ${ROUND} -->"
+  if [[ ! -s "$DELTA_SRC" ]]; then
+    printf '%s\n' "$CL_NO_OPEN_CONCERNS" > "$DELTA_SRC" \
+      || die "cannot write concern sentinel: $DELTA_SRC"
+  fi
+
   if ! ledger_cli stage --round "$ROUND" --producer "$CL_PRODUCER_NAME" \
         --exec PERFORMED --parser "$PARSER" --from-report "$DELTA_SRC" >/dev/null 2>&1; then
     echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
     rm -f "$DELTA_SRC"
     exit 4
   fi
-  ledger_cli reduce --round "$ROUND" >/dev/null 2>&1 || true
+  REDUCE_RC=0
+  TALLY="$(ledger_cli reduce --round "$ROUND" 2>/dev/null)" || REDUCE_RC=$?
   rm -f "$DELTA_SRC"
-  if [[ ! -s "$LEDGER" ]]; then
-    echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
+  if (( REDUCE_RC != 0 )) || [[ -z "$TALLY" ]] || [[ ! -f "$LEDGER" ]]; then
+    echo "run-codex-review-loop: round ${ROUND} could not be folded into the ledger (reduce rc=${REDUCE_RC}); refusing to judge it from the previous round's tally" >&2
+    exit 4
+  fi
+  REDUCE_COMMITTED=true
+
+  if [[ -f "$LEDGER" ]] && ! grep -qE '^C[0-9]+\|' "$LEDGER"; then
+    echo "run-codex-review-loop: ledger exists but contains no valid concern entries after reduce (round ${ROUND}); refusing to judge from a header-only ledger" >&2
     exit 4
   fi
 
   # The tally the verdict reads is the ledger's own view of what is still open,
   # not a count of this round's bullets: an entry the reviewer stopped
   # mentioning has been resolved, and one it re-raised is still one concern.
-  TALLY="$(ledger_cli tally 2>/dev/null || true)"
   for _kv in $TALLY; do
     case "$_kv" in
       open_high=*)   HIGH_N="${_kv#*=}" ;;
@@ -484,8 +555,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       ;;
     1)
       if declare -f codex_core_hard_cap_check > /dev/null 2>&1; then
-        _LOG="$PLANS_DIR/$SID-plan.jsonl"
-        if ! codex_core_hard_cap_check "$_LOG" "$SID" "$FORMAT" "$CAP" "$EXT_USED" "$MAX_EXT" > /dev/null 2>&1; then
+        if ! codex_core_hard_cap_check "$ROUND" "$CAP" "$EXT_USED" "$MAX_EXT" > /dev/null 2>&1; then
           finalize_ledger escalate "hard round cap reached without convergence" 2
           FINAL_EXIT=2
         else
@@ -499,11 +569,9 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       finalize_ledger escalate "risk signal present at the budget ceiling" 2
       FINAL_EXIT=2
       ;;
-    3)
-      # LAND: silent land — absorbed as approved
-      rm -f "$LEDGER"
-      FINAL_EXIT=0
-      ;;
+    6) finalize_ledger terminal \
+         "high-severity concerns remain unresolved at the budget ceiling" 6
+       FINAL_EXIT=6 ;;
     4)
       echo "run-codex-review-loop: review-loop-verdict argument error (round=$ROUND high=$HIGH_N med=$MED_N low=$LOW_N)" >&2
       exit 4
@@ -530,4 +598,5 @@ fi
 # --- END concern-ID ledger + verdict-script block ---
 
 cat "$TMP_OUT"
+FINAL_RC="$FINAL_EXIT"
 exit "$FINAL_EXIT"

@@ -1,19 +1,8 @@
 #!/usr/bin/env bash
-# Stage the round's producer delta, reduce the ledger, finalize, and verify
-# the finalized artifact — the four bin/concern-ledger calls that always run
-# together once both RCS-2 producers (security-scanner, quality gates) have
-# finished this round.
-
-# Why one script and not four inline SKILL.md steps: rules/prompt.md §1.3
-# caps an inline procedure at 3 steps. stage/reduce/finalize/check-finalized
-# is one atomic close-out the caller never wants split mid-sequence, and a
-# failed check-finalized needs a same-script retry of finalize rather than a
-# second round-trip through the orchestrator.
-
-# Usage: close-concern-round.sh <round> <plans-dir> <session-id> <producer> <exec-label> <report-path>
-# Stdout contract: the finalize artifact path, then `UNRESOLVED=<tally line>`,
-# then `CHECK=ok` or `CHECK=FINALIZE-FAILED`.
-# Exit 0 on a verified finalize, 1 when check-finalized still fails after one retry.
+# close-concern-round.sh — stage + check-staged + reduce + finalize + verify for one RCS-2 round.
+# Usage: <round> <plans-dir> <session-id> <producer> <exec-label> <report-path>
+# Stdout: finalize artifact path, UNRESOLVED=<tally>, CHECK=ok|FINALIZE-FAILED|NOT-STAGED.
+# Exit 0 on verified finalize; 1 on check-staged gate failure or finalize failure after retry.
 set -uo pipefail
 
 FORMAT="review-security-shared"
@@ -28,8 +17,16 @@ PRODUCER="${4:?producer required}"
 EXEC="${5:?exec label required}"
 REPORT="${6:?from-report path required}"
 
-bash "$CLI" stage --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
-    --round "$ROUND" --producer "$PRODUCER" --exec "$EXEC" --from-report "$REPORT"
+if ! bash "$CLI" stage --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
+        --round "$ROUND" --producer "$PRODUCER" --exec "$EXEC" --from-report "$REPORT"; then
+    printf 'CHECK=NOT-STAGED — this round was not staged; refusing to close it as verified\n'
+    exit 1
+fi
+if ! MISSING="$(bash "$CLI" check-staged --plans-dir "$PLANS" --session-id "$SID" \
+                    --format "$FORMAT" --round "$ROUND" 2>/dev/null)"; then
+    printf 'CHECK=NOT-STAGED — round %s is not complete: %s\n' "$ROUND" "${MISSING:-unknown}"
+    exit 1
+fi
 bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" --round "$ROUND"
 
 finalize_and_check() {

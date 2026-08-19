@@ -147,32 +147,27 @@ dp_two_rounds() {
     assert_contains "12b: the artifact is marked non-converged" '"converged": false' "$D_JSON"
     assert_contains "12b: the artifact records the escalate mode" '"mode": "escalate"' "$D_JSON"
 
-    # (iii) The remaining branch, and the one that has no artifact: at the
-    #       ceiling with no risk signal the verdict is LAND, which the wrapper
-    #       maps to public exit 0 and which deletes the ledger. An open HIGH
-    #       concern therefore leaves the loop with no machine-readable record at
-    #       all — the one termination #1996's artifact does not cover.
-
-    #       The requirement is the same for all three branches: a cap round that
-    #       ends with a concern still open must leave that concern finalized
-    #       (CPR-ORTH — 12b(ii) already does it for the escalate branch, and a
-    #       no-risk LAND is not a reason for the record to disappear). So the
-    #       assertions below demand an artifact, not the deletion that happens.
+    # (iii) The remaining branch. At the ceiling with no risk signal the round
+    #       ends on a concern nobody resolved, which used to be reported as
+    #       public exit 0 with the ledger deleted — no machine-readable record of
+    #       the HIGH at all (#2068). It terminates as HIGH_UNRESOLVED now, and
+    #       the requirement is the one all three branches share: a cap round that
+    #       ends with a concern open must leave that concern finalized (CPR-ORTH).
     dp_two_rounds 0
-    assert_eq "12b: at the ceiling with no risk signal, the cap round lands" \
-        "0" "$R2_RC"
+    assert_eq "12b: at the ceiling with no risk signal, detail-plan terminates as HIGH_UNRESOLVED" \
+        "6" "$R2_RC"
     # The concern really was still open when the loop landed it — otherwise
     # "nothing was written" would just be a correct convergence. Plain assert:
     # it is the precondition that makes the requirements below meaningful.
     assert_eq "12b: the round-2 staging file still carried the open concern" \
         "1" "$(grep -c "^C1|HIGH|" \
                 "$(delta_file "$LPLANS" "$SIDC" detail-plan 2 review-plan-codex)" 2>/dev/null || true)"
-    xfail_eq "12b: an unresolved cap termination retains the concern in an artifact" \
+    assert_eq "12b: an unresolved cap termination retains the concern in an artifact" \
         "artifact=present" "artifact=$(file_state "$DJ")"
-    xfail_eq "12b: and check-finalized accepts the cap round it terminated" \
+    assert_eq "12b: and check-finalized accepts the cap round it terminated" \
         "0" "$(rc_of check-finalized --plans-dir "$LPLANS" --session-id "$SIDC" \
                 --format detail-plan --round 2)"
-    xfail_contains "12b: the landed concern's own text survives into that artifact" \
+    assert_contains "12b: the terminated concern's own text survives into that artifact" \
         "$CD_TEXT" "$(json_of "$DJ")"
 }
 

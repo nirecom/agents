@@ -712,12 +712,21 @@ fi
 # ---------------------------------------------------------------------------
 DETAIL_SKILL="$AGENTS_ROOT/skills/make-detail-plan/SKILL.md"
 SHARED_LOOP="$AGENTS_ROOT/skills/_shared/codex-review-loop.md"
+EXIT_CODES_DOC="$AGENTS_ROOT/skills/_shared/codex-review-loop/exit-codes.md"
 ERRS27=0
 
 check_shared() {
   local pattern="$1"
   if ! grep -qF -- "$pattern" "$SHARED_LOOP"; then
     fail "codex-review-loop.md missing: $pattern"
+    ERRS27=$((ERRS27 + 1))
+  fi
+}
+
+check_exit_codes() {
+  local pattern="$1"
+  if ! grep -qF -- "$pattern" "$EXIT_CODES_DOC"; then
+    fail "codex-review-loop/exit-codes.md missing: $pattern"
     ERRS27=$((ERRS27 + 1))
   fi
 }
@@ -729,8 +738,8 @@ check_shared "If only the outline file exists"
 check_shared "If neither exists"
 check_shared 'Source: <PLANS_DIR>/<session-id>-intent.md'
 check_shared 'Source: <PLANS_DIR>/<session-id>-outline.md'
-check_shared "HALT with blocking error"
-check_shared "Do **NOT** fall back"
+check_exit_codes "HALT with blocking error"
+check_exit_codes "Do **NOT** fall back"
 
 if ! grep -qF 'run-codex-review-loop' "$DETAIL_SKILL"; then
   fail "make-detail-plan SKILL.md: must invoke bin/run-codex-review-loop"
@@ -972,19 +981,8 @@ fi
 # ---------------------------------------------------------------------------
 # A1–A6: --repo-root forwarding + MCP filesystem server integration (#723, #746)
 
-# These tests verify that:
-#   - `bin/review-plan-codex` accepts `--repo-root <path>` and forwards an
-#     `-c mcp_servers.fs.*` config override to `codex exec`.
-#   - `REPO_ROOT` is exported in the codex process environment.
-#   - `bin/run-codex-review-loop` accepts `--repo-root <path>` (defaulting to
-#     `git rev-parse --show-toplevel`) and forwards it to `review-plan-codex`.
-#   - The `CODEX_MCP_FS=off` kill-switch suppresses `--repo-root` forwarding.
-#   - The MCP addendum text is injected into the codex prompt (the TMPFILE)
-#     when `--repo-root` is provided.
-#   - `--full-auto` is used (not the removed `--ask-for-approval` flag).
-
-# Pre-implementation note: these tests will fail until `bin/review-plan-codex`
-# and `bin/run-codex-review-loop` learn the `--repo-root` flag.
+# Verify --repo-root forwarding, CODEX_MCP_FS=off kill-switch, and MCP addendum
+# injection (see #723, #746 for full contract; --full-auto, not --ask-for-approval).
 # ---------------------------------------------------------------------------
 
 # Pre-check: skip A1-A5 if the source files have not been updated yet.

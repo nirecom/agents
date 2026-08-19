@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/review-plan-codex
-# Tags: codex, review, bin, env, config
+# Tags: codex, review, bin, env, config, scope:issue-specific
 # Integration tests for bin/review-plan-codex with new round-counter / cap args
 # (--cap, --max-extensions, --extensions-used, --session-id, --log-dir,
 #  --accepted-tradeoffs).
@@ -104,21 +104,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. --cap 2 --extensions-used 2 --max-extensions 2, 4 pre-existing rows.
-#    NEW behavior: pre-review gate removed. limit=1+2+2=5. Codex runs and appends
-#    row 5 → count=5 >= 5 → post-verdict cap fires with "absolute ceiling reached".
+# 2. The ceiling is decided from --round, not from how tall plan.jsonl grew
+#    (#2068). limit = 1 + cap + extensions-used = 5, and round 5 is the last one
+#    the budget allows, so the cap fires — on a log dir holding nothing at all.
 # ---------------------------------------------------------------------------
 LOG_DIR2="$TMPDIR_BASE/log2"
 mkdir -p "$LOG_DIR2"
-ROUND_LOG2="$LOG_DIR2/sess002-plan.jsonl"
-for i in 1 2 3 4; do
-    printf '{"session":"sess002","label":"detail-plan","verdict":"X","ts":"t%d","round":%d,"severity_summary":""}\n' "$i" "$i" >> "$ROUND_LOG2"
-done
+# Round >= 2 carries the ledger of what earlier rounds left open.
+LEDGER_FILE="$TMPDIR_BASE/ledger.txt"
+printf 'C1|HIGH|OPEN|1|an open concern from an earlier round\n' > "$LEDGER_FILE"
 
 # Codex is now expected to run; emit APPROVED for the verdict.
 make_mock_codex "APPROVED"
 
-OUT=$(run_with_log "$LOG_DIR2" "sess002" --cap 2 --extensions-used 2 --max-extensions 2 --no-log)
+OUT=$(run_with_log "$LOG_DIR2" "sess002" --round 5 --ledger "$LEDGER_FILE" --cap 2 --extensions-used 2 --max-extensions 2 --no-log)
 
 if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
     pass "ceiling: PERFORMED present (codex was invoked — pre-review gate removed)"
@@ -127,26 +126,23 @@ else
 fi
 
 if echo "$OUT" | grep -qi "absolute ceiling reached"; then
-    pass "ceiling: post-verdict cap fires with 'absolute ceiling reached'"
+    pass "ceiling: round 5 of a limit-5 budget reaches 'absolute ceiling reached'"
 else
     fail "ceiling: expected 'absolute ceiling reached'. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
-# 3. --cap 2 --extensions-used 0 --max-extensions 2, 2 pre-existing rows.
-#    NEW behavior: limit=1+2+0=3. Codex runs, appends row 3 → count=3 >= 3 →
-#    post-verdict cap fires with "extension available".
+# 3. limit = 1 + 2 + 0 = 3, so round 3 reaches the cap with extension budget
+#    still unspent. The counterpart matters more than the hit: a log already
+#    holding four audit rows must NOT push round 1 over any cap, because a retry
+#    or a second producer moves the line count without moving the round.
 # ---------------------------------------------------------------------------
 LOG_DIR3="$TMPDIR_BASE/log3"
 mkdir -p "$LOG_DIR3"
-ROUND_LOG3="$LOG_DIR3/sess003-plan.jsonl"
-for i in 1 2; do
-    printf '{"session":"sess003","label":"detail-plan","verdict":"X","ts":"t%d","round":%d,"severity_summary":""}\n' "$i" "$i" >> "$ROUND_LOG3"
-done
 
 make_mock_codex "APPROVED"
 
-OUT=$(run_with_log "$LOG_DIR3" "sess003" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
+OUT=$(run_with_log "$LOG_DIR3" "sess003" --round 3 --ledger "$LEDGER_FILE" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
 
 if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
     pass "at-limit: PERFORMED present (codex invoked before post-verdict cap)"
@@ -155,9 +151,26 @@ else
 fi
 
 if echo "$OUT" | grep -qi "extension available"; then
-    pass "at-limit: post-verdict cap fires with 'extension available'"
+    pass "at-limit: round 3 of a limit-3 budget reports 'extension available'"
 else
     fail "at-limit: expected 'extension available'. Output: $OUT"
+fi
+
+LOG_DIR3B="$TMPDIR_BASE/log3b"
+mkdir -p "$LOG_DIR3B"
+ROUND_LOG3B="$LOG_DIR3B/sess003b-plan.jsonl"
+for i in 1 2 3 4; do
+    printf '{"session":"sess003b","label":"detail-plan","verdict":"X","ts":"t%d","round":1,"severity_summary":""}\n' "$i" >> "$ROUND_LOG3B"
+done
+
+make_mock_codex "APPROVED"
+
+OUT=$(run_with_log "$LOG_DIR3B" "sess003b" --round 1 --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
+
+if echo "$OUT" | grep -qiE "absolute ceiling reached|extension available"; then
+    fail "audit rows: a 4-row log wrongly capped round 1 — line count is not the round. Output: $OUT"
+else
+    pass "audit rows: four log rows do not cap round 1 (the log is an audit record, not the counter)"
 fi
 
 # ---------------------------------------------------------------------------

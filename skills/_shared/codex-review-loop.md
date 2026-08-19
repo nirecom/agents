@@ -55,7 +55,9 @@ Exit 4 = HALT — same as Contract B; no fallback.
 
 ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
-The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on public exit 0 (APPROVED or LAND absorbed) or public exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 5 (AUTO_EXTEND) — and on exit 4 (FATAL_ERROR, per #776: cleanup-on-exit-4 keeps retry path clean).
+`bin/run-codex-review-loop` owns the counter at `<PLANS_DIR>/<session-id>-<format>-round-number.txt`; stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats; exit 1 for single-round formats) and `<PLANS_DIR>/<session-id>-<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for multi-round formats) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
+
+`--force-round <N>` overrides the recorded counter for recovery and test use only — it announces itself on stderr and bypasses the sequence check. No shipped skill caller uses it; the flag is reserved for manual recovery from a corrupt counter and for test harnesses that need to start at an arbitrary round.
 
 ## Concern-ID Ledger
 
@@ -69,11 +71,11 @@ Schema, lifecycle states, binding tiers, and the category vocabulary: `skills/_s
 
 The Round 2+ codex prompt in `bin/review-plan-codex` is switched to Cn-reference form via `--round 2 --ledger <path>`. Applies to both `--format detail-plan` and `--format outline-plan`.
 
-The ledger is deleted on terminal verdicts (APPROVED, ESCALATE) and persists across CONTINUE.
+The ledger is deleted on APPROVED (exit 0) and ESCALATE (exit 2), and persists across CONTINUE (exit 1). HIGH_UNRESOLVED (exit 6) does not delete the ledger — it is finalized with mode=terminal and remains on disk.
 
 Before the ledger is dropped on an ending that never converged (ESCALATE, or CONTINUE at the cap), the wrapper finalizes it into `<PLANS_DIR>/<session-id>-<format>-unresolved-concerns.json`. That write is fail-CLOSED: when it does not succeed the wrapper returns exit 7 instead of the would-be verdict, so no caller emits its completion sentinel over concerns nobody can read.
 
-Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, LAND→3, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
+Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, HIGH_UNRESOLVED→6, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
 
 ## Per-round protocol
 
@@ -124,69 +126,18 @@ planner-cap budget: `limit = 1 + cap + extensions_used`. On exit 1
 
 ## Exit code → orchestrator action (SSOT) {#exit-code--orchestrator-action-ssot}
 
-Two contracts govern exit codes. The internal contract (between `review-loop-verdict` and `run-codex-review-loop`) is never visible to SKILL callers; the public contract (between `run-codex-review-loop` and the SKILL orchestrator) is the authoritative interface.
+Quick reference (public exit codes — Contract B):
 
-**Contract A — Internal verdict exit code** (`review-loop-verdict` → `run-codex-review-loop`, internal only):
-
-| Internal exit | Verdict | `run-codex-review-loop` action |
+| Exit | Name | Orchestrator action |
 |---|---|---|
-| 0 | APPROVED | Delete ledger → public exit 0 |
-| 1 | CONTINUE | hard-cap-gate recheck → public exit 1 (or escalated 2) |
-| 2 | ESCALATE | Copy ledger to cap-snapshot + delete → public exit 2 |
-| 3 | LAND | Delete ledger → **public exit 0** (silent land = absorbed as approved) |
-| 4 | Arg error | public exit 4 |
-| 5 | AUTO_EXTEND | Keep ledger → **public exit 5** |
+| 0 | APPROVED | Write/confirm phase. |
+| 1 | CONTINUE | Capture RAW → append round log → re-invoke planner. |
+| 2 | ESCALATE | Present concern summary → stop loop. |
+| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback. |
+| 4 | HALT | Surface stderr verbatim; do not fall back. |
+| 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter loop. |
+| 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |
+| 7 | FINALIZE_FAILED | HALT; surface `## Concern Ledger: FINALIZE-FAILED` line; do not emit sentinel. |
+| 8 | review-tests re-invoked after terminal | HALT; no staged-tests change detected since last terminal exit. |
 
-**Contract B — Public wrapper exit code** (`run-codex-review-loop` → SKILL caller):
-
-| Public exit | Meaning | Orchestrator action |
-|---|---|---|
-| 0 | APPROVED or silent LAND | Return to caller for the write/confirm phase. |
-| 1 | NON_APPROVED_VERDICT (CONTINUE) | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT`. |
-| 2 | ESCALATE (risk signal + ceiling) | Present concern summary → stop loop. Invoke `review-loop-summarize-concerns` per MOP-6 / MDP-6. |
-| 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent**. Do NOT emit to chat. |
-| 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent at arg-assembly time, the wrapper auto-downgrades the effective round to 1 and rebuilds the ledger from this round's concerns (concern-ID continuity is lost; tracked by #748). |
-| 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter review loop (no user dialog). |
-| 7 | **FINALIZE_FAILED** — the unresolved-concerns artifact could not be written | **HALT.** Surface the `## Concern Ledger: FINALIZE-FAILED` line (it names the recovered ledger copy) and the would-be verdict it replaced. Do NOT emit the step's completion sentinel and do NOT fall back to `REVIEWER_AGENT`. Re-run after fixing the cause; the ledger is intact. |
-
-**Note: Internal LAND (exit 3) ≠ Public exit 3** — internal exit 3 is LAND (absorbed to public exit 0); public exit 3 means codex CLI unavailable. These share the same number but belong to different contracts and are never confused because `run-codex-review-loop` converts before returning.
-
-**Critical distinction (public exits 3 vs 4):** exit 3 and exit 4 look superficially similar (neither produced a usable verdict) but require opposite responses. Exit 3 is "codex was given a fair chance and could not perform" → graceful degradation to the local reviewer is correct. Exit 4 is "the wrapper / config / parser is broken" → the local reviewer fallback would let the broken pipeline keep running silently. Fix the underlying problem (set the env var, install the missing binary, restore `core-principles.md`, etc.) and re-run.
-
-SKILL.md callers MUST NOT reproduce this table — they reference it by link.
-
-### d.1. Raw-codex persistence (on exit 1)
-
-Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from
-the captured wrapper stdout and write to `RAW_FILE` (`<N>` = prior round-log count + 1).
-
-### e. Symmetric round log + planner-response trailer
-
-Append to `CONCERNS_LOG`:
-
-```
-## Round <N> (<ISO-timestamp>)
-Verdict: <NON_APPROVED_VERDICT>
-Concerns (verbatim from codex):
-<numbered concern lines>
-
-Planner's intended response (next round):
-<extracted verbatim from PLANNER_AGENT's ROUND_RESPONSE trailer>
-```
-
-## Outcomes
-
-- Public exit 0 → return to caller for the write/confirm phase (APPROVED or silent LAND).
-- Public exit 1 → caller increments revision-round counter; re-invokes `PLANNER_AGENT`.
-- Public exit 2 → caller presents concern summary and stops the loop (ESCALATE path).
-- Public exit 3 → caller silently falls back to `REVIEWER_AGENT` subagent.
-- **Public exit 4 → caller HALTS with blocking error; no fallback.**
-- **Public exit 5 → caller increments `EXTENSIONS_USED` and re-enters review loop (AUTO_EXTEND path).**
-- **Public exit 7 → caller HALTS, withholds the completion sentinel, and reports the FINALIZE-FAILED line.**
-
-## Rationale: why a wrapper and not prose
-
-The previous version of this protocol relied on prose ordering instructions. An orchestrator
-that skipped step c (invoking `REVIEWER_AGENT` directly without ever calling `review-plan-codex`)
-was not detected. The wrapper makes the codex path the only sanctioned mechanical entry point;
-a `REVIEWER_AGENT` invocation is justified ONLY by exit 3, and exit 4 specifically forbids it.
+Full tables (Contract A, Contract B), RAW persistence rules, RAW naming, per-round log protocol, Outcomes, and Rationale: [`skills/_shared/codex-review-loop/exit-codes.md`](codex-review-loop/exit-codes.md).

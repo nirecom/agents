@@ -4,17 +4,11 @@
 # Sourced by tests/bin-concern-ledger-shared-code-review.sh, after
 # fail-closed.sh, whose FC_ROOT shimmed tree and fc_shim helper are reused.
 
-# Why this file exists. full-chain-integration.sh runs open -> gates -> close
-# through real subprocesses and proves the three scripts agree when nothing goes
-# wrong. That is only half a contract: the other half is what the same chain
-# does when one of its four ledger calls refuses, because that is the branch on
-# which a caller must NOT be told the review is complete.
-
-# So every case below drives the same real scripts — no static greps, no stubbed
-# orchestrator — with exactly one ledger subcommand made to fail, and asks the
-# question the caller asks: may I mark this step done? The answer has to be
-# legible from the exit status and stdout alone, since that is all the skill
-# text has to work from.
+# full-chain-integration.sh proves open -> gates -> close agree when nothing goes
+# wrong; this file covers the branch where one ledger call refuses and a caller
+# must NOT be told the review is complete. Every case drives the same real
+# scripts with exactly one subcommand made to fail, and asks: may I mark this
+# step done? The answer must be legible from exit status and stdout alone.
 
 echo ""
 echo "--- shared-review chain: the failure branches of open -> gates -> close ---"
@@ -157,13 +151,81 @@ cfb_body() {
     fc_shim none
     cfb_close "$E2_ROUND" "$CFB_REPORT"
     E2_JSON="$(cat "$(cfb_json)" 2>/dev/null)"
-    assert_contains "E2: the scanner's own concern still reaches the artifact" \
-        "$CFB_SCAN" "$E2_JSON"
-    xfail_eq "E2: a round that lost a producer is not closed as verified" \
+    assert_eq "E2: a round that lost a producer is not closed as verified" \
         "nonzero" "$([ "$CFB_CLOSE_RC" -ne 0 ] && printf nonzero || printf zero)"
-    xfail_contains "E2: and the reviewer's concern is not silently dropped from it" \
-        "$CFB_CODEX" "$E2_JSON"
+    # #2032-A: the second requirement was once "the reviewer's concern is in the
+    # artifact". It cannot be — that concern never staged — so what the close
+    # owes the author is the name of the producer the round is missing.
+    assert_contains "E2: and the refusal names the producer the round never got" \
+        "review-code-codex" "$CFB_CLOSE"
+    assert_eq "E2: no artifact is published for a round one producer never joined" \
+        "missing" "$(file_state "$(cfb_json)")"
+    assert_not_contains "E2: so the scanner's concern is not published as a whole round" \
+        "$CFB_SCAN" "$E2_JSON"
 }
+
+# ---------------------------------------------------------------------------
+# E4. Existence is not completeness. A delta file on disk answers "did anything
+#     get written", which is the wrong question: a SKIPPED reviewer, a delta
+#     carried over from the round before, and a file another producer wrote all
+#     satisfy it while leaving the round without the review it claims. Each row
+#     breaks one of those and asks the close-out for the producer and the reason.
+# ---------------------------------------------------------------------------
+cfb_ledger() { printf '%s/%s-%s-concern-ledger.txt' "$CFB_P" "$CFB_SID" "$FORMAT"; }
+
+# cfb_ledger_state — digest plus byte length, so a same-length rewrite is caught.
+cfb_ledger_state() {
+    local f
+    f="$(cfb_ledger)"
+    if [ ! -f "$f" ]; then printf 'missing'; return; fi
+    printf '%s/%s' "$(md5sum "$f" 2>/dev/null | cut -d' ' -f1)" "$(wc -c < "$f" | tr -d ' ')"
+}
+
+while IFS='|' read -r E4_TAG E4_REASON E4_WHY; do
+    case "$E4_TAG" in ''|\#*) continue ;; esac
+
+    cfb_env "4$E4_TAG"
+    fc_shim none
+    cfb_open
+    cfb_body "4$E4_TAG"
+    E4_ROUND=1
+    E4_DELTA="$(delta_file "$CFB_P" "$CFB_SID" 1 review-code-codex)"
+
+    case "$E4_TAG" in
+        a) : ;;
+        b) printf '## Codex Review: SKIPPED\n' > "$TMPDIR_BASE/cfb-e4-$E4_TAG.txt"
+           AGENTS_CONFIG_DIR="$FC_ROOT" bash "$CLI" stage --plans-dir "$CFB_P" \
+               --session-id "$CFB_SID" --format "$FORMAT" --round 1 \
+               --producer review-code-codex --exec SKIPPED \
+               --from-report "$TMPDIR_BASE/cfb-e4-$E4_TAG.txt" >/dev/null 2>&1 || true ;;
+        c) cfb_gates 1 "$CFB_BODY"
+           cp "$E4_DELTA" "$(delta_file "$CFB_P" "$CFB_SID" 2 review-code-codex)"
+           E4_ROUND=2 ;;
+        d) cfb_gates 1 "$CFB_BODY"
+           sed -i 's/^#producer|review-code-codex|/#producer|review-code-other|/' "$E4_DELTA" ;;
+    esac
+
+    E4_BEFORE="$(cfb_ledger_state)"
+    cfb_close "$E4_ROUND" "$CFB_REPORT"
+
+    assert_eq "E4 ($E4_TAG): $E4_WHY" "1" "$CFB_CLOSE_RC"
+    assert_contains "E4 ($E4_TAG): and the close says the round was not staged" \
+        "NOT-STAGED" "$CFB_CLOSE"
+    assert_contains "E4 ($E4_TAG): naming the producer and why it does not count" \
+        "$E4_REASON" "$CFB_CLOSE"
+    assert_not_contains "E4 ($E4_TAG): no CHECK=ok is printed for it" "CHECK=ok" "$CFB_CLOSE"
+    assert_eq "E4 ($E4_TAG): and no artifact is published for the refused round" \
+        "missing" "$(file_state "$(cfb_json)")"
+    # The refusal comes before the fold, so the canonical ledger cannot have
+    # absorbed a round that was then rejected.
+    assert_eq "E4 ($E4_TAG): the canonical ledger is byte-for-byte what it was" \
+        "$E4_BEFORE" "$(cfb_ledger_state)"
+done <<'INCOMPLETE'
+a|review-code-codex:missing|a round whose reviewer never staged is not closable
+b|review-code-codex:incomplete:ABSENT|a SKIPPED reviewer staged a delta but no review
+c|review-code-codex:round-mismatch:1|last round's delta does not answer for this round
+d|review-code-codex:producer-mismatch:review-code-other|a delta another producer wrote is not this producer's
+INCOMPLETE
 
 # ---------------------------------------------------------------------------
 # E3. Exit 7 on the sibling formats. finalize.sh case 6(e) drives the wrapper's

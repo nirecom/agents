@@ -27,8 +27,8 @@ rejected_or() { [ "$1" -ne 0 ] && printf 'rejected' || printf 'accepted'; }
 {
     new_box
     RC="$(stage_with "sub/nested" review-security-shared prod)"
-    assert_eq "3: a '/' session ID names a directory that does not exist" \
-        "rc=0 landed=nowhere concern=no" \
+    assert_eq "3: a '/' session ID fails closed when its parent directory does not exist" \
+        "rc=5 landed=nowhere concern=no" \
         "rc=$RC landed=$(landed) concern=$(holds_concern)"
 }
 
@@ -42,7 +42,7 @@ rejected_or() { [ "$1" -ne 0 ] && printf 'rejected' || printf 'accepted'; }
     RC="$(stage_with "$ABS" review-security-shared prod)"
     # Required behaviour: success is a claim that the round reached disk. When
     # the delta destination cannot be written the CLI must not make that claim.
-    xfail_eq "3: an absolute session ID is rejected rather than silently losing the round" \
+    assert_eq "3: an absolute session ID is rejected rather than silently losing the round" \
         "verdict=rejected concern-on-disk=no" \
         "verdict=$(rejected_or "$RC") concern-on-disk=$(holds_concern)"
     assert_eq "3: and in no case does it write outside the plans dir" \

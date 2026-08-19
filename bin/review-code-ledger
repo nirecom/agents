@@ -89,8 +89,10 @@ if ! bash "$CLI" stage --plans-dir "$PLANS" --session-id "$SID" --format "$FORMA
     [ -n "$TMPD" ] && rm -rf "$TMPD"
     exit 0
 fi
-bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
-    --round "$ROUND" >/dev/null 2>&1 || true
+if ! bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
+        --round "$ROUND" >/dev/null 2>&1; then
+    notice "the round's concerns were staged but could not be folded into the ledger (round $ROUND)"
+fi
 
 [ -n "$TMPD" ] && rm -rf "$TMPD"
 exit 0

@@ -3,12 +3,12 @@
 # dialog. Reads a concern ledger and a prior-round RAW_FILE. Never writes to disk.
 #
 # IMPORTANT CONTRACT NOTES:
-#   - This helper consumes ROUND_NUMBER-1's RAW_FILE (not the cap-reach round's).
-#   - The cap-reach round's RAW_FILE is never written: codex-review-loop.md §d.1
-#     persists RAW_FILE only on exit 1 (CONTINUE), not on exit 2 (cap reach).
-#   - When ROUND_NUMBER==1, the prior-round file does not exist on disk and the
-#     helper's degraded RAW mode applies — this is the documented expected
-#     outcome (first-round cap-reach). Do not "fix" by changing the persistence
+#   - This helper reads the terminal round's own RAW_FILE: codex-review-loop.md
+#     §d.1 persists RAW for exit 1 (CONTINUE), exit 2 (ESCALATE), and exit 6
+#     (HIGH_UNRESOLVED). Pass that persisted file via --raw.
+#   - When the RAW file is absent (e.g. first-round cap-reach on exit 2 before
+#     §d.1 updated), the degraded RAW_MODE=missing fallback applies — this is
+#     the documented expected outcome. Do not "fix" by changing the persistence
 #     contract.
 #   - No jq dependency.
 #

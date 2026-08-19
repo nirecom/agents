@@ -3,19 +3,12 @@
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh, hooks/workflow-state/state-io.js, hooks/workflow-mark/review-tests-handler.js
 # Tags: review-tests, review-loop, terminal-guard, fingerprint, staged-tests, scope:issue-specific, pwsh-not-required, TL2
 #
-# #1361: after run-codex-review-loop.sh returns a terminal exit code (1/2), a caller
-# that re-invokes the script (tests UNCHANGED) must be blocked (exit 6) instead of
-# silently restarting ROUND=1. The real reset seam is the staged-tests fingerprint
-# (same computeStagedTestsToken SSOT as the gate's stale-review check), NOT the dead
-# invalidateReviewTests() function. A fingerprint MISMATCH (tests re-edited) auto-clears
-# the terminal marker; a fingerprint COMPUTATION FAILURE keeps the marker (fail-CLOSED).
-#
-# TL3 gap (what this test does NOT catch):
-# - The script firing under a real /review-tests Skill invocation with the real
-#   bin/run-codex-review-loop (codex subprocess) and a real session-bound worktree.
-# - Real resolve-worktree-path session-state resolution (here stubbed to NOSTATE).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# #1361: after a terminal exit (1/2/6), a caller that re-invokes the script with
+# tests UNCHANGED must be blocked (exit 8) instead of silently restarting ROUND=1.
+# The reset seam is the staged-tests fingerprint (computeStagedTestsToken SSOT):
+# a MISMATCH auto-clears the marker, a COMPUTATION FAILURE keeps it (fail-CLOSED).
+# TL3 gap: a real /review-tests invocation with the real shared wrapper and a
+# session-bound worktree — checked at the WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -98,12 +91,14 @@ run_case_a() {
     else
         fail "(a1) RED-EXPECTED (guard absent): terminal marker not written after exit 2"
     fi
-    # re-invoke with tests UNCHANGED → must be blocked with exit 6
+    # re-invoke with tests UNCHANGED → must be blocked with exit 8. The guard's
+    # own code moved off 6 because 6 is HIGH_UNRESOLVED for every format now
+    # (#2068); 8 is unused by the shared wrapper's contract.
     rc2=$(run_loop "$plans" "$fake" "$repo" 2)
-    if [ "$rc2" = "6" ]; then
-        pass "(a2) re-invoke with unchanged tests → exit 6 (REINVOKE_AFTER_TERMINAL)"
+    if [ "$rc2" = "8" ]; then
+        pass "(a2) re-invoke with unchanged tests → exit 8 (REINVOKE_AFTER_TERMINAL)"
     else
-        fail "(a2) RED-EXPECTED (guard absent): re-invoke after terminal exit gave rc=$rc2, want 6"
+        fail "(a2) RED-EXPECTED (guard absent): re-invoke after terminal exit gave rc=$rc2, want 8"
     fi
     rm -rf "$plans" "$fake" "$repo" 2>/dev/null || true
 }
@@ -132,11 +127,11 @@ run_case_c() {
     echo "echo changed" >> "$repo/tests/foo.sh"
     git -C "$repo" add tests/foo.sh 2>/dev/null
     rc2=$(run_loop "$plans" "$fake" "$repo" 1)
-    # CPR-ORTH sanctioned-pass counterpart of (a2): a genuine restart must NOT be blocked (exit != 6)
-    if [ "$rc2" != "6" ]; then
-        pass "(c) tests re-edited (fingerprint mismatch) → NOT blocked (rc=$rc2 != 6)"
+    # CPR-ORTH sanctioned-pass counterpart of (a2): a genuine restart must NOT be blocked (exit != 8)
+    if [ "$rc2" != "8" ]; then
+        pass "(c) tests re-edited (fingerprint mismatch) → NOT blocked (rc=$rc2 != 8)"
     else
-        fail "(c) legitimate restart wrongly blocked with exit 6 (over-blocking)"
+        fail "(c) legitimate restart wrongly blocked with exit 8 (over-blocking)"
     fi
     rm -rf "$plans" "$fake" "$repo" 2>/dev/null || true
 }
@@ -169,7 +164,7 @@ process.stdout.write('OK');
     rm -rf "$plans" 2>/dev/null || true
 }
 
-# ===================== (e) fingerprint COMPUTATION FAILURE keeps marker + exit 6 ==========
+# ===================== (e) fingerprint COMPUTATION FAILURE keeps marker + exit 8 ==========
 run_case_e() {
     local plans fake repo term rc2
     plans=$(make_tmp)
@@ -179,12 +174,35 @@ run_case_e() {
     term="$plans/sid1361$TERMINAL_SUFFIX"
     # pre-seed a terminal marker as if a prior terminal exit happened
     printf '2\ndeadbeefcafebabe\n' > "$term"
-    # re-invoke with STUB_RC=2 (so a naive pass-through would be 2, not 6)
+    # re-invoke with STUB_RC=2 (so a naive pass-through would be 2, not 8)
     rc2=$(run_loop "$plans" "$fake" "$repo" 2)
-    if [ "$rc2" = "6" ] && [ -f "$term" ]; then
-        pass "(e) fingerprint compute failure → exit 6 + marker retained (fail-CLOSED)"
+    if [ "$rc2" = "8" ] && [ -f "$term" ]; then
+        pass "(e) fingerprint compute failure → exit 8 + marker retained (fail-CLOSED)"
     else
-        fail "(e) RED-EXPECTED (fail-CLOSED guard absent): rc=$rc2 (want 6), marker present=$([ -f "$term" ] && echo yes || echo no)"
+        fail "(e) RED-EXPECTED (fail-CLOSED guard absent): rc=$rc2 (want 8), marker present=$([ -f "$term" ] && echo yes || echo no)"
+    fi
+    rm -rf "$plans" "$fake" "$repo" 2>/dev/null || true
+}
+
+# ===================== (f) exit 6 (HIGH_UNRESOLVED) is a terminal too =====================
+# A round ending on an unresolved HIGH ends the loop as surely as an escalate
+# does, so the guard must arm on it: without the marker a caller could restart at
+# round 1 over the very concern the exit was about (#2068, CPR-ORTH with (a)).
+run_case_f() {
+    local plans fake repo term rc1 rc2
+    plans=$(make_tmp); fake=$(build_fake_config yes); repo=$(build_repo)
+    term="$plans/sid1361$TERMINAL_SUFFIX"
+    rc1=$(run_loop "$plans" "$fake" "$repo" 6)   # terminal HIGH_UNRESOLVED
+    if [ -f "$term" ]; then
+        pass "(f1) terminal exit 6 writes ${term##*/} like the other terminals"
+    else
+        fail "(f1) RED-EXPECTED: exit 6 left no terminal marker, so a restart is unguarded"
+    fi
+    rc2=$(run_loop "$plans" "$fake" "$repo" 6)
+    if [ "$rc2" = "8" ]; then
+        pass "(f2) and re-invoking over unchanged tests is blocked with exit 8"
+    else
+        fail "(f2) RED-EXPECTED: re-invoke after an exit-6 terminal gave rc=$rc2, want 8"
     fi
     rm -rf "$plans" "$fake" "$repo" 2>/dev/null || true
 }
@@ -194,6 +212,7 @@ run_case_b
 run_case_c
 run_case_d
 run_case_e
+run_case_f
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

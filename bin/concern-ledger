@@ -5,7 +5,7 @@
 # on-disk paths are derived, never passed in, so no caller can drift from the
 # layout the loops and the summarizer agree on.
 #
-# Exit codes: 0 ok, 2 usage, 5 finalize could not produce the artifact.
+# Exit codes: 0 ok, 2 usage/invalid argument, 5 artifact could not be produced.
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +27,7 @@ usage: concern-ledger <subcommand> [options]
   finalize        --plans-dir D --session-id S --format F --mode M --reason R
                   --round N --cap C [--max-extensions N] [--extensions-used N]
   check-finalized --plans-dir D --session-id S --format F [--round N]
+  check-staged    --plans-dir D --session-id S --format F --round N
 EOF
     exit 2
 }
@@ -66,31 +67,70 @@ done
 
 need() { [ -n "$1" ] || { printf 'concern-ledger: %s is required\n' "$2" >&2; usage; }; }
 
+# need_addr — require the 3-part address unless --ledger was given directly.
+need_addr() { [ -n "$LEDGER_ARG" ] && return 0; need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format; }
+
+# validate_round — domain-check --round when supplied. exit 2 on bad value.
+validate_round() {
+    [ -n "$ROUND" ] || return 0
+    case "$ROUND" in
+        ''|*[!0-9]*) printf 'concern-ledger: --round must be a positive integer 1-999 (got: %s)\n' "$ROUND" >&2; exit 2 ;;
+    esac
+    if [ "${#ROUND}" -gt 3 ] || [ "$ROUND" -lt 1 ]; then
+        printf 'concern-ledger: --round must be a positive integer 1-999 (got: %s)\n' "$ROUND" >&2; exit 2
+    fi
+    ROUND="$((10#$ROUND))"
+}
+
+# validate_report — for stage: --from-report must exist and be non-empty.
+validate_report() {
+    [ "$SUB" = "stage" ] || return 0
+    if [ ! -f "$REPORT" ]; then
+        printf 'concern-ledger: --from-report does not exist: %s\n' "$REPORT" >&2; exit 2
+    fi
+    if [ ! -s "$REPORT" ]; then
+        printf 'concern-ledger: --from-report is empty: %s\n' "$REPORT" >&2; exit 2
+    fi
+}
+
+# validate_args <sub> — check required args before dispatch; runs outside any
+# subshell so exit 2 reaches the caller (#2057).
+validate_args() {
+    case "$1" in
+        slot)     need "$APATH" --path; need "$AANCHOR" --anchor; need "$ACAT" --category ;;
+        bind)     need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta ;;
+        render-prior|tally|check-finalized) need_addr ;;
+        begin-round|reduce) need_addr; need "$ROUND" --round ;;
+        stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
+        check-staged) need_addr; need "$ROUND" --round ;;
+        finalize) need_addr; need "$ROUND" --round ;;
+        *) printf 'concern-ledger: unknown subcommand: %s\n' "$1" >&2; usage ;;
+    esac
+    validate_round
+    validate_report
+}
+
 resolve_ledger() {
     if [ -n "$LEDGER_ARG" ]; then printf '%s' "$LEDGER_ARG"; return; fi
-    need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format
     cl_ledger_path "$PLANS" "$SID" "$FORMAT"
 }
+
+validate_args "$SUB"
 
 case "$SUB" in
     slot)
         cl_slot "$APATH" "$AANCHOR" "$ACAT"; printf '\n'
         ;;
     bind)
-        need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta
         cl_bind "$LEDGER_ARG" "$DELTA_ARG"
         ;;
     render-prior)
         cl_render_prior "$(resolve_ledger)"
         ;;
     begin-round)
-        need "$ROUND" --round; need "$FORMAT" --format
         cl_begin_cycle "$(resolve_ledger)" "$FORMAT" "$ROUND"
         ;;
     stage)
-        need "$PLANS" --plans-dir; need "$SID" --session-id
-        need "$FORMAT" --format; need "$ROUND" --round
-        need "$PRODUCER" --producer; need "$REPORT" --from-report
         TMPD="$(mktemp -d)" || exit 5
         NORM="$TMPD/norm.txt"
         export CL_PRODUCER="$PRODUCER"
@@ -105,13 +145,15 @@ case "$SUB" in
             case "$SCOPE" in TRUNCATED|BASE-*) [ "$EXEC" = "PERFORMED" ] && EXEC="$SCOPE" ;; esac
             [ -z "$EXEC" ] && EXEC="PERFORMED"
         fi
+        STAGE_RC=0
         CL_STAGE_PREFIX="${SID}-" cl_stage "$PLANS" "$FORMAT" "$ROUND" "$PRODUCER" \
-            "$EXEC" "$PARSE" "$NORM" >/dev/null
+            "$EXEC" "$PARSE" "$NORM" >/dev/null || STAGE_RC=$?
         rm -rf "$TMPD"
+        if [ "$STAGE_RC" -ne 0 ]; then
+            exit 5
+        fi
         ;;
     reduce)
-        need "$PLANS" --plans-dir; need "$SID" --session-id
-        need "$FORMAT" --format; need "$ROUND" --round
         LED="$(resolve_ledger)"
         cl_reduce "$LED" "$PLANS/${SID}-${FORMAT}-round-${ROUND}-delta-*.txt" "$ROUND" "$FORMAT" "$LED"
         ;;
@@ -119,8 +161,6 @@ case "$SUB" in
         cl_tally "$(resolve_ledger)"; printf '\n'
         ;;
     finalize)
-        need "$PLANS" --plans-dir; need "$SID" --session-id
-        need "$FORMAT" --format; need "$ROUND" --round
         [ -n "$MODE" ] || MODE="terminal"
         [ -n "$REASON" ] || REASON="review loop ended without convergence"
         [ -n "$CAP" ] || CAP="$ROUND"
@@ -141,11 +181,51 @@ case "$SUB" in
         fi
         ;;
     check-finalized)
-        need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format
         cl_artifact_ok "$(cl_json_path "$PLANS" "$SID" "$FORMAT")" "$ROUND" || exit 1
         ;;
-    *)
-        printf 'concern-ledger: unknown subcommand: %s\n' "$SUB" >&2
-        usage
+    check-staged)
+        STAGED_MISSING=""
+        _producers="$(cl_declared_producers "$FORMAT" 2>/dev/null)"
+        if [ -z "$_producers" ]; then
+            _any_ok=0
+            _fallback_msg="(no format):missing"
+            for _f in "$PLANS/$SID-$FORMAT-round-$ROUND-delta-"*.txt; do
+                [ -f "$_f" ] || continue
+                _hdr="$(_cl_delta_header "$_f")"
+                IFS='|' read -r _ _prod _comp _ _ _rnd _ <<< "$_hdr"
+                if [ "$_rnd" = "$ROUND" ]; then
+                    if [ "$_comp" = "COMPLETE" ]; then
+                        _any_ok=1; break
+                    else
+                        _fallback_msg="(no format):incomplete:$_comp"
+                    fi
+                fi
+            done
+            [ "$_any_ok" -eq 0 ] && STAGED_MISSING="$_fallback_msg"
+        else
+            for _prod in $_producers; do
+                _delta="$(cl_delta_path "$PLANS" "$SID" "$FORMAT" "$ROUND" "$_prod" 2>/dev/null)"
+                if [ ! -f "$_delta" ] || [ ! -s "$_delta" ]; then
+                    STAGED_MISSING="$STAGED_MISSING $_prod:missing"; continue
+                fi
+                _hdr="$(_cl_delta_header "$_delta")"
+                IFS='|' read -r _ _hprod _comp _ _ _rnd _ <<< "$_hdr"
+                if [ "$_rnd" != "$ROUND" ]; then
+                    STAGED_MISSING="$STAGED_MISSING $_prod:round-mismatch:$_rnd"; continue
+                fi
+                if [ "$_comp" != "COMPLETE" ]; then
+                    STAGED_MISSING="$STAGED_MISSING $_prod:incomplete:$_comp"; continue
+                fi
+                if [ "$_hprod" != "$_prod" ]; then
+                    STAGED_MISSING="$STAGED_MISSING $_prod:producer-mismatch:$_hprod"
+                fi
+            done
+        fi
+        STAGED_MISSING="$(printf '%s' "$STAGED_MISSING" | sed 's/^ *//')"
+        if [ -n "$STAGED_MISSING" ]; then
+            printf '%s\n' "$STAGED_MISSING"
+            exit 1
+        fi
+        exit 0
         ;;
 esac
