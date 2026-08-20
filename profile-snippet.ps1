@@ -97,11 +97,8 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
             # publickey auth outright instead of just skipping the interactive prompt.
             # The Windows-native path keeps agent access while still enforcing BatchMode.
             $env:GIT_SSH_COMMAND = '"C:\Windows\System32\OpenSSH\ssh.exe" -o BatchMode=yes'
-            # Start-Process -ArgumentList joins array elements with plain spaces before
-            # handing them to the OS process-creation API — the array form alone does NOT
-            # quote elements containing spaces. $SessionDir must therefore be wrapped in
-            # literal double quotes so it stays one git argv entry even when it contains a
-            # space (e.g. "C:\Users\First Last\.claude\projects").
+            # Quoted so a space-containing $SessionDir stays one git argv entry
+            # (Start-Process -ArgumentList doesn't quote array elements itself).
             $_fetchSs = Start-Process -FilePath git -ArgumentList @('-C', "`"$SessionDir`"", 'fetch') -NoNewWindow -PassThru -RedirectStandardError $_fetchErrFile
         } finally {
             $env:GIT_TERMINAL_PROMPT = $_gitPromptPrev
@@ -159,7 +156,11 @@ function codes {
     }
     $global:LASTEXITCODE = $_preLastExitCode
     $codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
-    $cmd = "code.cmd --new-window $codeArgs"
+    # Clear gateway env vars in the CHILD pwsh only (not $env: here, which
+    # would also wipe the caller's shell) — prevents a leftover code-ccgw.ps1
+    # session from misrouting a native `codes` launch. #2083
+    $_envClear = 'Remove-Item Env:ANTHROPIC_* -ErrorAction SilentlyContinue; Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue; '
+    $cmd = "$_envClear" + "code.cmd --new-window $codeArgs"
     if ($_ssOn) { $cmd += "; & $(_codesQuote $waitScript) $(_codesQuote $name); & $(_codesQuote $syncScript) push -Quiet" }
     Start-Process pwsh -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command", $cmd -WindowStyle Hidden
 }
