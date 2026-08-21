@@ -2,27 +2,13 @@
 
 const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("../strip-quoted-args");
 
-// Strip double-quoted content; handle single-quoted spans carefully.
-// Used by spanAware+stripDQOnly patterns so heredoc delimiters like <<'EOF'
-// remain visible — full stripQuotedArgs removes 'EOF' as an SQ span, losing
-// the <<'word' shape that the here-doc pattern requires (#1679 S-1).
-//
-// SQ handling strategy (#1679 HIGH-1 + FP1679-E):
-//
-// Problem 1 (HIGH-1): in `echo 'a"b' ; python <<EOF`, the `"` inside `'a"b'`
-// must NOT open a phantom DQ span that swallows the subsequent `<<EOF`.
-//
-// Problem 2 (FP1679-E): in `bash -c 'echo "see <<EOF in docs"'`, the `<<EOF`
-// is inside an SQ span (a body argument, not a real heredoc) and must NOT be
-// visible to the here-doc pattern.
-//
-// Solution: detect whether a `'` is a heredoc delimiter or a regular SQ span.
-//   - If the accumulated result (trimmed) ends with `<<` or `<<-`, the `'` is
-//     a heredoc delimiter (`<<'word'`) — preserve SQ content verbatim so the
-//     here-doc regex can see the word.
-//   - Otherwise it is a regular SQ span — strip the content (keep delimiters).
-//     This prevents body arguments from leaking <<EOF patterns AND prevents a
-//     `"` inside an SQ span from opening a phantom DQ span.
+// Strip DQ content; SQ spans need special handling (#1679 HIGH-1, FP1679-E).
+// Used by spanAware+stripDQOnly so heredoc delimiters like <<'EOF' stay visible
+// (full stripQuotedArgs removes 'EOF' as SQ, losing the <<'word' shape).
+// SQ strategy: if accumulated result ends with << or <<- the ' is a heredoc
+// delimiter — preserve content so the heredoc regex sees the word. Otherwise
+// it is a regular SQ span — strip content to prevent <<EOF leakage and phantom
+// DQ spans from a " inside an SQ argument (#1679 HIGH-1 + FP1679-E).
 function stripDoubleQuotedContent(cmd) {
   let result = "";
   let i = 0;
@@ -63,7 +49,7 @@ function stripDoubleQuotedContent(cmd) {
 }
 const { isStrictSentinel } = require("../sentinel-patterns");
 const { parse } = require("../command-ir");
-const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
+const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, isKnownDispatchPath, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
 const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR } = require("../bash-write-targets");
 
 // Returns true when cmd invokes a known dispatcher via bash/sh/zsh/dash.
@@ -75,12 +61,7 @@ const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWrite
 function isKnownDispatchInvocation(cmd) {
   const m = cmd.match(/\b(?:bash|sh|zsh|dash)\b\s+["']?([^"'\s]+)["']?/);
   if (!m) return false;
-  const path = m[1].replace(/\\/g, "/");
-  // Reject path traversal (CWE-22 sibling of isOsTempPath guard)
-  if (/(?:^|\/)\.\.(?:\/|$)/.test(path)) return false;
-  if (/^\/(?:tmp|var\/tmp|dev\/shm)\//i.test(path)) return false;
-  if (/^[A-Za-z]:\/(?:Users\/[^/]+\/AppData\/Local\/Temp|Windows\/Temp|Temp)\//i.test(path)) return false;
-  return KNOWN_DISPATCH_SUFFIXES.some((suf) => path.endsWith(suf));
+  return isKnownDispatchPath(m[1]);
 }
 
 function isSentinelEchoSafe(cmd) {
@@ -120,8 +101,10 @@ function isQuotedWriteCommandWord(cmd) {
  * Never throws.
  * @param {string|import('../command-ir').IR} cmdOrIr
  */
-function classify(cmd) {
+function classify(cmd, opts) {
   try {
+    // #2064: caller-supplied dispatch provenance (never re-derived here).
+    const cleared = !!(opts && opts.dispatchCleared === true);
     // IR shim: if an IR object is passed, use it directly; re-parse skipped.
     if (cmd !== null && typeof cmd === "object" && "rawText" in cmd) {
       if (cmd.parseFailure === true) return "write";
@@ -188,6 +171,9 @@ function classify(cmd) {
       // for the gh segment while the posix-redir is caught by isPosixRedirWriteIR.
       if (GH_GROUP_A_REGEX.test(cmd) || isKnownDispatchInvocation(cmd)) {
         if (isSafeHeredocOnly(cmd)) return "read";
+        // #2064 arm A: dispatch-cleared fragment whose only write evidence is a
+        // truncated cat opener. Redirect evidence is checked here explicitly.
+        if (cleared && !isPosixRedirWriteIR(ir) && isTruncatedCatHeredocOnly(cmd, ir)) return "read";
         return "write";
       }
       // Non-Group-A: a co-located posix write redirect makes this a real file
@@ -198,6 +184,8 @@ function classify(cmd) {
       if (isPosixRedirWriteIR(ir)) return "write";
       // Safe cat-only heredoc without redirect: stdin/stdout data, not a file write.
       if (isSafeHeredocOnly(cmd)) return "read";
+      // #2064 arm B: same two-layer condition as arm A; redirect already excluded above.
+      if (cleared && isTruncatedCatHeredocOnly(cmd, ir)) return "read";
       return "write";
     }
     // #371 + #596 fix: for Group A gh commands or known dispatcher invocations,
@@ -255,6 +243,29 @@ function isSafeHeredocOnly(cmd) {
       }
     }
     return found; // if no heredoc found, this check is N/A — return false to be conservative
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * #2064 layer 2. True only when the fragment's sole write evidence is a
+ * TRUNCATED heredoc opener left behind by stripHeredocBody (body + terminator
+ * already removed), and every opener is a quoted-delimiter `cat` opener.
+ * Never parses: `ir` must be the caller's already-parsed IR. Missing ir → false.
+ * Fail-closed: any unexpected condition returns false.
+ */
+function isTruncatedCatHeredocOnly(cmd, ir) {
+  try {
+    if (!cmd || typeof cmd !== "string") return false;
+    if (!ir || ir.parseFailure === true) return false;
+    if (!Array.isArray(ir.segments) || ir.segments.length !== 1) return false;
+    const openers = cmd.match(/<<-?\s*(?:'\w+'|"\w+"|\w+)/g);
+    if (!openers || openers.length === 0) return false;
+    // Count openers that are BOTH quoted-delimiter AND immediately preceded by `cat`.
+    const catQuoted = cmd.match(/(?:^|[\s;|&(])cat\s+<<-?\s*(?:'\w+'|"\w+")/g);
+    if (!catQuoted) return false;
+    return catQuoted.length === openers.length;
   } catch (e) {
     return false;
   }
@@ -329,7 +340,7 @@ function isReadOnlyInterpreterC(cmd) {
               const isPwsh = base === "pwsh" || base === "powershell";
               const isCFlag = isPwsh
                 ? (al === "-c" || al === "-command")
-                : (al === "-c" || (a.startsWith("-") && !a.startsWith("--") && /c/.test(a.slice(1))));
+                : (al === "-c" || (a.startsWith("-") && !a.startsWith("--") && a.slice(1).includes("c")));
               if (isCFlag && i + 1 < irFb.argv.length) { body = irFb.argv[i + 1]; break; }
             }
           }
@@ -350,26 +361,15 @@ function isReadOnlyInterpreterC(cmd) {
     const NESTED_INTERP_RE = /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|pwsh|powershell)(?:\.exe)?\s+(?:-\w*c|-Command)\b/i;
     if (segments.some((s) => NESTED_INTERP_RE.test(s))) return false;
 
-    // #820: refuse single-segment bare `git <verb>` wrappers. These hide a git
-    // command from the main-worktree-allows predicates (merge / cleanup /
-    // push) so the wrapper-aware rejectInterpreterAndChaining helper can do
-    // its job. Legitimate multi-step bodies (cd ... && git status && echo OK)
-    // still demote to read.
+    // #820: refuse single-segment bare `git <verb>` wrappers — hides command
+    // from main-worktree-allows predicates; multi-step bodies still demote.
     if (segments.length === 1 && /^git\b/.test(segments[0])) return false;
 
-    // #1400/#1401 (GAP 1+2): after rm/cp/mv/posix-redir/pwsh/git leave
-    // WRITE_PATTERNS, classify() of an inner body like `rm /f` or `git commit`
-    // returns "read", so the segments.every(read) check below would demote the
-    // wrapper to read and fast-allow it. This is REGRESSION PREVENTION only — it
-    // is NOT the full interpreter-c IR target-extraction migration (canary-6a).
-    //
-    // Fail-closed for ALL writes: parse EACH inner segment to IR and refuse to
-    // demote to read when ANY inner segment is a write. The IR predicates see
-    // through env-prefix (`FOO=1 rm f`) and wrappers (`command git commit`) — a
-    // first-token string scan cannot. Covers the multi-segment case
-    // (`git status && git commit` — a LATER segment is the write) because every
-    // segment is checked, not just the first. The #820 single-segment bare-git
-    // guard above is a subset of isGitWriteIR here (kept for defense-in-depth).
+    // #1400/#1401 (GAP 1+2): REGRESSION PREVENTION — not the full canary-6a migration.
+    // classify() on an inner body returns "read" for rm/cp/mv/git, demoting the
+    // wrapper; parse each segment to IR and fail-closed when any inner segment is a
+    // write. IR predicates see through env-prefix and wrappers (#820 guard is a
+    // subset of isGitWriteIR here, kept for defense-in-depth).
     const innerSegIsWrite = (s) => {
       let segIr;
       try { segIr = parse(s); } catch (_) { return true; } // unparseable → fail-closed
@@ -416,4 +416,4 @@ function classifyDetailed(cmd) {
   return { kind, matchedNames };
 }
 
-module.exports = { classify, classifyDetailed, isReadOnlyInterpreterC, isSafeHeredocOnly };
+module.exports = { classify, classifyDetailed, isReadOnlyInterpreterC, isSafeHeredocOnly, isTruncatedCatHeredocOnly };

@@ -94,6 +94,18 @@ const KNOWN_DISPATCH_SUFFIXES = [
   "bin/github-issues/issue-create.sh",
 ];
 
+// SSOT for "is this path a known dispatcher script?" (logic moved verbatim from
+// classify.js isKnownDispatchInvocation). Surface and IR paths share this check.
+function isKnownDispatchPath(pathStr) {
+  if (!pathStr || typeof pathStr !== "string") return false;
+  const path = pathStr.replace(/\\/g, "/");
+  // Reject path traversal (CWE-22 sibling of isOsTempPath guard)
+  if (/(?:^|\/)\.\.(?:\/|$)/.test(path)) return false;
+  if (/^\/(?:tmp|var\/tmp|dev\/shm)\//i.test(path)) return false;
+  if (/^[A-Za-z]:\/(?:Users\/[^/]+\/AppData\/Local\/Temp|Windows\/Temp|Temp)\//i.test(path)) return false;
+  return KNOWN_DISPATCH_SUFFIXES.some((suf) => path.endsWith(suf));
+}
+
 // WRITE_PATTERNS names that are merely quoting/heredoc shapes — they signal a
 // multi-line string argument, not file I/O.
 const QUOTING_ONLY_NAMES = new Set([
@@ -175,6 +187,24 @@ function resolveGhSubArgv(ghArgv) {
   return ghArgv.slice(i);
 }
 
+// Resolve the effective gh argv for one segment (direct, env-prefix, or VAR=val-prefix).
+// argv in IR excludes cmd0 — it starts with the first argument after the command name.
+function resolveGhSegmentArgv(seg) {
+  if (!seg || typeof seg.cmd0 !== "string") return null;
+  if (seg.cmd0 === "gh") return seg.argv; // argv already excludes cmd0
+  if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
+    // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
+    const synthSeg = { cmd0: seg.argv[0], argv: seg.argv.slice(1) };
+    if (resolveEffectiveCommand(synthSeg) === "gh") return resolveEffectiveArgv(synthSeg);
+    return null;
+  }
+  if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
+    // `VAR=val gh ...` form (inline env assignment as cmd0)
+    if (resolveEffectiveCommand(seg) === "gh") return resolveEffectiveArgv(seg);
+  }
+  return null;
+}
+
 // isGhWriteIR: IR-owned gh write detector. The kind:"gh" WRITE_PATTERNS group
 // has been removed (#1296); isGhWriteIR is now the sole SSOT for gh write detection.
 function isGhWriteIR(ir) {
@@ -182,23 +212,7 @@ function isGhWriteIR(ir) {
   if (!ir.segments || ir.segments.length === 0) return false;
 
   for (const seg of ir.segments) {
-    // Resolve the effective gh argv for this segment (direct, env-prefix, or VAR=val-prefix).
-    // argv in IR excludes cmd0 — it starts with the first argument after the command name.
-    let ghArgv = null;
-    if (seg.cmd0 === "gh") {
-      ghArgv = seg.argv; // argv already excludes cmd0
-    } else if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
-      // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
-      const synthSeg = { cmd0: seg.argv[0], argv: seg.argv.slice(1) };
-      if (resolveEffectiveCommand(synthSeg) === "gh") {
-        ghArgv = resolveEffectiveArgv(synthSeg);
-      }
-    } else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
-      // `VAR=val gh ...` form (inline env assignment as cmd0)
-      if (resolveEffectiveCommand(seg) === "gh") {
-        ghArgv = resolveEffectiveArgv(seg);
-      }
-    }
+    const ghArgv = resolveGhSegmentArgv(seg);
     if (!ghArgv || ghArgv.length === 0) continue;
 
     // Skip leading gh global flags (and their values) so sub0/sub1 read from the
@@ -242,4 +256,4 @@ function isGhWriteIR(ir) {
   return false;
 }
 
-module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR, isGitWriteIR, resolveGitSubArgv };
+module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, isKnownDispatchPath, resolveGhSegmentArgv, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR, isGitWriteIR, resolveGitSubArgv, resolveGhSubArgv };
