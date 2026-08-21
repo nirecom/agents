@@ -351,3 +351,7 @@ Changes: `/sweep-tests` gains a duplicate-group inventory: `bin/audit-tests.sh -
 ### FEATURE: PR #2071 (2026-08-19)
 Background: fix(comment-block-scan): bridge blank/no-op lines instead of resetting comment-run detection
 Changes: Fixed: a single blank line (or a lone `;`, `:`, `{}`, `()`, `,`) could no longer be used to split a long comment block and dodge the comment-block-size gate on `Edit`/`Write` and `git commit`.
+
+### FEATURE: PR #2086 (2026-08-22)
+Background: fix(enforce-worktree): thread dispatch provenance into fragment re-parse
+Changes: Fixed: `enforce-worktree` no longer blocks repository-write-free `gh` and dispatcher commands from the main worktree when a here-doc opener lands on its own line through backslash continuation (#2064). Write detection is tightened at the same time: `eval` / `xargs` / `find -exec` hidden inside command substitutions or on newline-injected lines, and writes on a later line of a quoted multi-line body, are now caught; a shell option can no longer pass an arbitrary script off as a sanctioned dispatcher.
