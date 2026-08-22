@@ -20,7 +20,7 @@ Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolu
 
 ### Step WI-2 — Driver loop
 
-The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, Aggregate WIP check (all N: all_same / all_none / any_other), CLOSED detection, label extraction, route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).
+The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, CLOSED detection, label extraction, meta classification (meta strip / open sub-issue guard), Aggregate WIP check (all N: all_same / all_none / any_other), route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).
 
 Invocation: `node "$AGENTS_CONFIG_DIR/bin/workflow/workflow-init-driver" <raw-tokens> 2>/dev/null`
 (`<raw-tokens>` = issue number tokens like `#15` or `#15 #22` — not the full user prompt)
