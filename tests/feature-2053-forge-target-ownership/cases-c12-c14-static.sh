@@ -12,6 +12,112 @@
 
 run_block_c12_c14() {
     echo ""
+    echo "=== R3-NUL: no guard module carries a raw NUL byte ==="
+
+    # WHY: prove-ownership.js once joined its fingerprint parts on a literal
+    # 0x00 byte. At runtime that is identical to "\u0000", but git classifies
+    # a file containing it as binary and prints "Binary files ... differ"
+    # instead of a diff, blinding every diff-based reviewer to the whole file.
+    # The behavioral fingerprint cases stay green either way — which is why
+    # this defect needs a BYTE-level check. Scoped to the whole guard directory
+    # (CPR-E2C): the class is "a raw NUL anywhere in this implementation".
+
+    local GUARD="$AGENTS_DIR/hooks/confirm-forge-target-ownership"
+    local js_count=0
+    if [ -d "$GUARD" ]; then js_count="$(ls "$GUARD"/*.js 2>/dev/null | wc -l | tr -d ' ')"; fi
+    if [ "${js_count:-0}" -lt 1 ]; then
+        fail "R3-NUL-0 the guard implementation directory holds .js modules" \
+             "no .js modules found under $GUARD"
+    else
+        pass "R3-NUL-0 the guard implementation directory holds .js modules ($js_count)"
+        local offenders
+        offenders="$(nul_scan "$(npath "$GUARD")")"
+        if [ -z "$offenders" ]; then
+            pass "R3-NUL-1 no .js module under the guard directory contains a 0x00 byte"
+        else
+            fail "R3-NUL-1 no .js module under the guard directory contains a 0x00 byte" \
+                 "raw NUL byte(s) found — git treats these as binary and hides them from every diff review: $(printf '%s' "$offenders" | tr '\n' ' ')"
+        fi
+    fi
+
+    # The scanner itself must be able to fail, or R3-NUL-1 is a false green.
+    local probe="$BASE/nul-probe.js"
+    printf 'const sep = "a\000b";\n' > "$probe"
+    local probe_hit
+    probe_hit="$(nul_scan "$(npath "$probe")")"
+    if printf '%s' "$probe_hit" | grep -q 'nul-probe.js:'; then
+        pass "R3-NUL-2 the scanner flags a planted raw NUL byte (mutation probe)"
+    else
+        fail "R3-NUL-2 the scanner flags a planted raw NUL byte (mutation probe)" \
+             "a file containing 0x00 was not reported: ${probe_hit:-<no output>}"
+    fi
+    printf 'const sep = "a\\u0000b";\n' > "$probe"
+    probe_hit="$(nul_scan "$(npath "$probe")")"
+    assert_eq "R3-NUL-3 the escaped backslash-u0000 form is not flagged" "" "$probe_hit"
+    rm -f "$probe"
+
+    # R3-NUL-4: nul_scan only walks .js files, so a raw NUL planted in one of
+    # THIS suite's own .sh files — this file included — would pass R3-NUL-1
+    # silently. Scope matches the class, not just the guard's own language.
+    local TESTDIR="$AGENTS_DIR/tests/feature-2053-forge-target-ownership"
+    local sh_offenders
+    sh_offenders="$(nul_scan_sh "$(npath "$TESTDIR")")"
+    if [ -z "$sh_offenders" ]; then
+        pass "R3-NUL-4 no .sh file under this feature's own test directory contains a 0x00 byte"
+    else
+        fail "R3-NUL-4 no .sh file under this feature's own test directory contains a 0x00 byte" \
+             "raw NUL byte(s) found — git treats these as binary and hides them from every diff review: $(printf '%s' "$sh_offenders" | tr '\n' ' ')"
+    fi
+
+    # nul_scan_sh must be able to fail too, or R3-NUL-4 is a false green — same
+    # reasoning as the R3-NUL-2/R3-NUL-3 mutation probes for nul_scan itself.
+    local sh_probe="$BASE/nul-probe.sh"
+    printf 'echo "a\000b"\n' > "$sh_probe"
+    local sh_probe_hit
+    sh_probe_hit="$(nul_scan_sh "$(npath "$sh_probe")")"
+    if printf '%s' "$sh_probe_hit" | grep -q 'nul-probe.sh:'; then
+        pass "R3-NUL-5 nul_scan_sh flags a planted raw NUL byte (mutation probe)"
+    else
+        fail "R3-NUL-5 nul_scan_sh flags a planted raw NUL byte (mutation probe)" \
+             "a .sh file containing 0x00 was not reported: ${sh_probe_hit:-<no output>}"
+    fi
+    printf 'echo "a\\u0000b"\n' > "$sh_probe"
+    sh_probe_hit="$(nul_scan_sh "$(npath "$sh_probe")")"
+    assert_eq "R3-NUL-6 the escaped backslash-u0000 form is not flagged by nul_scan_sh" "" "$sh_probe_hit"
+    rm -f "$sh_probe"
+
+    echo ""
+    echo "=== R3-FP: authFingerprint has no un-separated component boundary ==="
+
+    # WHY C1: parts.join uses a real NUL separator between fields (see R3-NUL
+    # above). If a future edit ever concatenated the parts WITHOUT that
+    # separator, two different (GH_CONFIG_DIR, GH_HOST) pairs whose text
+    # straddles the boundary differently would hash to the identical
+    # fingerprint, and a proof earned under one profile/host would silently
+    # authorize the other. config="ab",host="c" and config="a",host="bc"
+    # concatenate to the same "abc" without a separator but must not fingerprint
+    # the same WITH one.
+    local FP_MOD
+    FP_MOD="$(npath "$AGENTS_DIR/hooks/confirm-forge-target-ownership/prove-ownership.js")"
+    local fp_a fp_b
+    fp_a="$(env -i PATH="$PATH" GH_CONFIG_DIR="ab" GH_HOST="c" \
+        node -e 'process.stdout.write(require(process.argv[1]).authFingerprint());' "$FP_MOD" 2>/dev/null)"
+    fp_b="$(env -i PATH="$PATH" GH_CONFIG_DIR="a" GH_HOST="bc" \
+        node -e 'process.stdout.write(require(process.argv[1]).authFingerprint());' "$FP_MOD" 2>/dev/null)"
+    if [ -z "$fp_a" ] || [ -z "$fp_b" ]; then
+        fail "R3-FP-1 authFingerprint is callable with a controlled auth context" \
+             "empty output (a=${fp_a:-<empty>} b=${fp_b:-<empty>})"
+    else
+        pass "R3-FP-1 authFingerprint is callable with a controlled auth context"
+        if [ "$fp_a" = "$fp_b" ]; then
+            fail "R3-FP-2 a GH_CONFIG_DIR/GH_HOST boundary shift changes the fingerprint" \
+                 "config='ab',host='c' and config='a',host='bc' collided: $fp_a"
+        else
+            pass "R3-FP-2 a GH_CONFIG_DIR/GH_HOST boundary shift changes the fingerprint"
+        fi
+    fi
+
+    echo ""
     echo "=== C12: skills/issue-create/SKILL.md no longer routes around the guard ==="
 
     local SKILL="$AGENTS_DIR/skills/issue-create/SKILL.md"
@@ -197,4 +303,48 @@ run_block_c12_c14() {
         fail "R2-C10-3 a stalled probe reaches the host as an ask, not as a kill" \
              "finished within ${reg_timeout}s but decided '$live_dec' (rc=$live_rc)"
     fi
+}
+
+# nul_scan <dir-or-file...> — prints one "<path>:<byte-offset>" line per .js file
+# whose bytes contain 0x00, and nothing when every file is clean. It reads raw
+# buffers, so no text encoding can hide the byte from it.
+nul_scan() {
+    node -e '
+        const fs = require("fs"), path = require("path");
+        const walk = (p, out) => {
+            if (fs.statSync(p).isDirectory()) {
+                for (const e of fs.readdirSync(p).sort()) walk(path.join(p, e), out);
+                return out;
+            }
+            if (!p.endsWith(".js")) return out;
+            const i = fs.readFileSync(p).indexOf(0);
+            if (i !== -1) out.push(p.replace(/\\/g, "/") + ":" + i);
+            return out;
+        };
+        const out = [];
+        for (const a of process.argv.slice(1)) walk(a, out);
+        process.stdout.write(out.join("\n"));
+    ' "$@" 2>&1
+}
+
+# nul_scan_sh <dir-or-file...> — same raw-byte walk as nul_scan, scoped to
+# .sh files instead of .js. A sibling, not a parameterized nul_scan, so the
+# R3-NUL-2/3 mutation probes above stay pinned to the one behavior they cover.
+nul_scan_sh() {
+    node -e '
+        const fs = require("fs"), path = require("path");
+        const walk = (p, out) => {
+            if (fs.statSync(p).isDirectory()) {
+                for (const e of fs.readdirSync(p).sort()) walk(path.join(p, e), out);
+                return out;
+            }
+            if (!p.endsWith(".sh")) return out;
+            const i = fs.readFileSync(p).indexOf(0);
+            if (i !== -1) out.push(p.replace(/\\/g, "/") + ":" + i);
+            return out;
+        };
+        const out = [];
+        for (const a of process.argv.slice(1)) walk(a, out);
+        process.stdout.write(out.join("\n"));
+    ' "$@" 2>&1
 }
