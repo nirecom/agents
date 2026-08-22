@@ -2,7 +2,7 @@
 # tests/feature-1701-workflow-gate-code-size.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
-# Serial: #1799 case 5/14 flaky under -j8 parallel load; 18 consecutive clean D2+D3' runs could not reproduce it — low-cost permanent guard, see WORKTREE_NOTES.md
+# Serial: #1799 case 5/14 ("WIP commit + staged 501-line .js -> still blocked") was reported flaky under -j8 parallel load; 18 consecutive clean reruns across two diagnostic passes could not reproduce it, so no root cause was isolated. This header is a mitigation (route to run-all.sh's serial lane on the suspicion the flake was load-related), not a confirmed fix — if it recurs even serialized, that rules out load and root-cause investigation should resume.
 #
 # Issue #1701 — Gate 2 hard-blocks `git commit` on a STAGED code file over the 500-line HARD limit (rules/coding/file-split.md), delegating to hooks/workflow-gate/code-size-gate.js -> bash bin/review-code-size --staged.
 # TL3 gap: whether the PreToolUse hook fires for a real git commit and whether settings.json registers it for the Bash tool — checked at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category hook-registration).
