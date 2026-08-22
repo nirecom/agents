@@ -347,7 +347,12 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
         SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
     fi
 
-    if ! uv run "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
+    # --no-project: cwd here is the branch-under-review worktree and GH_TOKEN /
+    # GITHUB_TOKEN are live in this env (#1744). Without it `uv run` walks up from
+    # cwd looking for a pyproject.toml/workspace and can build a branch-supplied
+    # project — arbitrary code execution with the tokens present. doc-append.py is
+    # stdlib-only, so project discovery buys nothing.
+    if ! uv run --no-project "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
             --category "$CATEGORY" \
             --subject "$SUBJECT" \
             --date "$TODAY" \
@@ -386,7 +391,7 @@ if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
             CHLOG_COMMIT_SUBJECT="docs(changelog): record PR #${PR_NUMBER}"
         fi
 
-        if ! uv run "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
+        if ! uv run --no-project "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
                 --category "$CATEGORY" \
                 --subject "$SUBJ_CHANGELOG" \
                 --date "$TODAY" \
@@ -415,7 +420,7 @@ HISTORY_FILES_ARGS=()
 if [[ "$WANT_HISTORY" -eq 1 ]]; then
     H_LINES=$(wc -l < "$HISTORY_STAGING")
     if (( H_LINES >= 500 )); then
-        if ! uv run "$AGENTS_CONFIG_DIR/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
+        if ! uv run --no-project "$AGENTS_CONFIG_DIR/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
             echo "compose-doc-append-entry: doc-rotate.py failed" >&2
             exit 1
         fi
