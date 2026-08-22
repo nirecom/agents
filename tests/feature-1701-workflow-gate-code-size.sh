@@ -2,17 +2,10 @@
 # tests/feature-1701-workflow-gate-code-size.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
+# Serial: #1799 case 5/14 flaky under -j8 parallel load; 18 consecutive clean D2+D3' runs could not reproduce it — low-cost permanent guard, see WORKTREE_NOTES.md
 #
-# Issue #1701 — Gate 2: workflow-gate.js must hard-block `git commit` when a
-# STAGED code file exceeds the 500-line HARD limit (rules/coding/file-split.md).
-# Gate 2 delegates to hooks/workflow-gate/code-size-gate.js, which shells out to
-# `bash bin/review-code-size --staged`.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the PreToolUse hook actually fires when Claude Code issues a git commit Bash command
-# - Whether settings.json correctly registers hooks/workflow-gate.js for the Bash tool commit command
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Issue #1701 — Gate 2 hard-blocks `git commit` on a STAGED code file over the 500-line HARD limit (rules/coding/file-split.md), delegating to hooks/workflow-gate/code-size-gate.js -> bash bin/review-code-size --staged.
+# TL3 gap: whether the PreToolUse hook fires for a real git commit and whether settings.json registers it for the Bash tool — checked at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
@@ -25,11 +18,7 @@ fi
 HOOK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-gate.js"
 GATE_MODULE="${AGENTS_DIR}/hooks/workflow-gate/code-size-gate.js"
 
-# ---------------------------------------------------------------------------
-# Pre-implementation skip gate.
-# Gate 2 lives in hooks/workflow-gate/code-size-gate.js. Until that module
-# exists there is nothing to assert — exit 77 (run-all.sh treats it as SKIP).
-# ---------------------------------------------------------------------------
+# Pre-implementation skip gate: Gate 2 lives in hooks/workflow-gate/code-size-gate.js — until that module exists there is nothing to assert, so exit 77 (run-all.sh treats it as SKIP).
 if [ ! -f "$GATE_MODULE" ]; then
     echo "SKIP: hooks/workflow-gate/code-size-gate.js not present yet (issue #1701 not implemented)"
     exit 77
@@ -56,8 +45,7 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# Plans-dir isolation (#1799): supervisor-emit must never write into the developer's real ~/.workflow-plans/ — pinned alongside CLAUDE_WORKFLOW_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -109,17 +97,9 @@ write_workflow_off_marker() {
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.workflow-off"
 }
 
-# ---------------------------------------------------------------------------
-# Config-dir fixtures.
-#
-# AGENTS_CONFIG_DIR drives two independent decisions (CPR-SC — keep them apart):
-#   1. isAgentsSessionRepo()      — compares git common-dirs. A NON-git config
-#      dir makes the helper fail closed (true), so Gate 2 stays armed for the
-#      temp repo under test.
-#   2. resolveAgentsConfigDir()   — which checkout owns bin/review-code-size.
-#      The env candidate is adopted only when it carries BOTH markers
-#      (hooks/enforce-worktree.js + bin/). A marker-less dir therefore falls
-#      through to the module anchor = the real agents checkout.
+# Config-dir fixtures. AGENTS_CONFIG_DIR drives two independent decisions (CPR-SC):
+#   1. isAgentsSessionRepo() — a NON-git config dir fails closed (true), keeping Gate 2 armed for the temp repo under test.
+#   2. resolveAgentsConfigDir() — env candidate adopted only with BOTH markers (hooks/enforce-worktree.js + bin/); a marker-less dir falls through to the module anchor (the real agents checkout).
 # ---------------------------------------------------------------------------
 
 # Plain dir: no markers -> real bin/review-code-size is used, Gate 2 armed.
