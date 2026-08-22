@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const CHECKPOINT_VERSION = 1;
+const CHECKPOINT_VERSION = 2; // #2087
 
 function checkpointPath(plansDir, sessionId) {
   return path.join(plansDir, `${sessionId}-wi-checkpoint.json`);
@@ -22,6 +22,10 @@ function makeInitialState() {
     // #1305 adopt-prior-state: the offered donor and the user's answer.
     adopt_candidate: null,
     adopt_decision: null,
+    // #2087: {number, ownerRepo} offered by the pending meta_select ask.
+    meta_select_offered: [],
+    // #2087: meta parents not covered by the pending meta_select ask.
+    meta_select_pending: [],
   };
 }
 
@@ -59,7 +63,8 @@ function readCheckpoint(ckptPath) {
     return { error: "malformed", message: `Malformed checkpoint JSON: ${e.message}` };
   }
   if (data.version !== CHECKPOINT_VERSION) {
-    return { error: "version_mismatch", message: `Checkpoint version ${data.version} != expected ${CHECKPOINT_VERSION}` };
+    // data rides along so the caller can recover the stale session's issue numbers.
+    return { error: "version_mismatch", message: `Checkpoint version ${data.version} != expected ${CHECKPOINT_VERSION}`, data };
   }
   return { ok: true, data };
 }

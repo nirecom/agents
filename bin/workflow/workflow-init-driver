@@ -21,9 +21,10 @@ const { emitDone, emitAskUser, emitBlocked } = require("./lib/workflow-init/dire
 const { adoptPriorState, ADOPT_PRIOR_STATE_ASK_ID } = require("./lib/workflow-init/phases/adopt-prior-state");
 const { detectIssues } = require("./lib/workflow-init/phases/detect-issues");
 const { fetchIssues } = require("./lib/workflow-init/phases/fetch-issues");
+const { labelExtract } = require("./lib/workflow-init/phases/label-extract");
+const { metaClassify } = require("./lib/workflow-init/phases/meta-classify");
 const { wipCheck } = require("./lib/workflow-init/phases/wip-check");
 const { closedDetection } = require("./lib/workflow-init/phases/closed-detection");
-const { labelExtract } = require("./lib/workflow-init/phases/label-extract");
 const { routeDecision } = require("./lib/workflow-init/phases/route-decision");
 const { writeContext } = require("./lib/workflow-init/phases/write-context");
 
@@ -252,13 +253,28 @@ function applyAnswer(ckptData, answer, tokens) {
     };
   }
 
-  // meta_select + #M → issues=[M], clear repo_map, force re-fetch
+  // meta_select + #M -> issues=[M, ...pending metas], re-enters at fetch-issues (#2087).
   if (ask_id === "meta_select") {
     const m = answer.match(/^#?(\d+)$/);
     if (m) {
       const selectedN = parseInt(m[1], 10);
-      state.issues = [selectedN];
-      state.repo_map = {};
+      // Accept only a number actually offered — fail closed like the other ask_ids.
+      const offered = Array.isArray(state.meta_select_offered) ? state.meta_select_offered : [];
+      const matched = offered.find((o) => o && o.number === selectedN);
+      if (!matched) {
+        return {
+          invalid: true,
+          message:
+            `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected one of the offered sub-issues: ` +
+            offered.map((o) => (o && o.number != null ? o.number : String(o))).join(", "),
+        };
+      }
+      // Re-append unselected meta parents so they're re-classified next pass.
+      const pending = Array.isArray(state.meta_select_pending) ? state.meta_select_pending : [];
+      state.issues = [selectedN, ...pending.filter((n) => n !== selectedN)];
+      state.meta_select_pending = [];
+      // repo_map is positional; selected issue's repo goes at index 0.
+      state.repo_map = matched.ownerRepo ? { 0: matched.ownerRepo } : {};
       state.issue_json_cache[selectedN] = null;
       // Reset wip_results for the selected issue so it's re-checked
       state.wip_results = {};
@@ -281,9 +297,13 @@ const PHASE_ORDER = [
   "adopt-prior-state",
   "detect-issues",
   "fetch-issues",
-  "wip-check",
+  // #2087: closed-detection ahead of meta-classify and wip-check, so a closed
+  // issue is resolved before either phase acts on it.
   "closed-detection",
+  // #2087: meta-classify ahead of wip-check, so meta issues are never wip-checked.
   "label-extract",
+  "meta-classify",
+  "wip-check",
   "route-decision",
   "write-context",
 ];
@@ -316,12 +336,14 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
       result = detectIssues(state, tokens, agentsConfigDir);
     } else if (phase === "fetch-issues") {
       result = fetchIssues(state);
+    } else if (phase === "label-extract") {
+      result = labelExtract(state);
+    } else if (phase === "meta-classify") {
+      result = metaClassify(state);
     } else if (phase === "wip-check") {
       result = wipCheck(state, agentsConfigDir, sessionId);
     } else if (phase === "closed-detection") {
       result = closedDetection(state);
-    } else if (phase === "label-extract") {
-      result = labelExtract(state);
     } else if (phase === "route-decision") {
       result = routeDecision(state);
     } else if (phase === "write-context") {
@@ -382,9 +404,32 @@ function main() {
 
     if (ckptResult.error) {
       if (ckptResult.error === "version_mismatch") {
-        // Version mismatch → ignore checkpoint, restart from first phase using positional tokens
+        // Abort outranks recovery — don't let a restart silently discard it.
+        if (answer === "abort") {
+          emitBlocked(resumePath, "user_aborted");
+          return;
+        }
+        // Recover the stale checkpoint's issue numbers as #N tokens when the
+        // invocation itself supplied none, so a restart doesn't swallow the session.
+        const staleState = ckptResult.data && ckptResult.data.state;
+        const staleIssues =
+          staleState && Array.isArray(staleState.issues)
+            ? staleState.issues.filter((n) => Number.isInteger(n) && n > 0)
+            : [];
+        const restartTokens = tokens.length > 0 ? tokens : staleIssues.map((n) => `#${n}`);
         const freshState = makeInitialState();
-        runPipeline(freshState, "detect-issues", tokens, wipSid, ckptFile);
+        // Replay a pending adopt-prior-state answer instead of discarding it.
+        if (
+          ckptResult.data &&
+          ckptResult.data.ask_id === ADOPT_PRIOR_STATE_ASK_ID &&
+          (answer === "fresh" || answer === "adopt")
+        ) {
+          freshState.adopt_decision = answer;
+          freshState.adopt_candidate = (staleState && staleState.adopt_candidate) || null;
+          runPipeline(freshState, "adopt-prior-state", restartTokens, wipSid, ckptFile);
+          return;
+        }
+        runPipeline(freshState, "detect-issues", restartTokens, wipSid, ckptFile);
         return;
       }
       // Missing/malformed checkpoint → diagnostic error
