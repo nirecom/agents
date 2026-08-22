@@ -1,25 +1,21 @@
 #!/bin/bash
-# Tests: skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/route-decision.js, tests/feature-issue-create-skill/section-dispatch-bulk.sh
+# Tests: skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, tests/feature-issue-create-skill/section-dispatch-bulk.sh
 # Tags: workflow-init, meta-routing, scope:issue-specific
 #
-# L3 gap (what this test does NOT catch):
-# - Real gh API calls to GitHub's sub_issues endpoint
-# - AskUserQuestion UI rendering and actual user interaction in a live session
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Issue #1181 — workflow-init WI-8 sub-issue guard for Path META. The guard
+# replaced the retired list-open-sub-issues.sh and, since #2087, lives in the
+# driver's meta-classify phase: open sub-issues emit ACTION=ask_user
+# ASK_ID=meta_select.
 #
-# Tests for issue #1181 — workflow-init WI-8 sub-issue guard for Path META.
-#
-# The sub-issue guard is now implemented in the driver's route-decision phase
-# (bin/workflow/lib/workflow-init/phases/route-decision.js), which replaces
-# the retired list-open-sub-issues.sh script. When meta issues have open
-# sub-issues, the driver emits ACTION=ask_user ASK_ID=meta_select.
+# TL3 gap (NOT caught here): real gh sub_issues API calls, AskUserQuestion UI and
+# live interaction — mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category skill-orchestration).
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
 ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
+META_CLASSIFY_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
 DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
 SECTION_BULK="$AGENTS_DIR/tests/feature-issue-create-skill/section-dispatch-bulk.sh"
 
@@ -46,14 +42,15 @@ else
 fi
 
 # ===========================================================================
-# T2: driver route-decision.js contains sub_issues API reference
+# T2: driver meta-classify.js contains sub_issues API reference (#2087 moved it
+# out of route-decision.js)
 # ===========================================================================
-if [ ! -f "$ROUTE_DECISION_JS" ]; then
-    fail "T2: route-decision.js missing"
-elif grep -q "sub_issues" "$ROUTE_DECISION_JS"; then
-    pass "T2: route-decision.js references sub_issues API (WI-8 open sub-issue guard)"
+if [ ! -f "$META_CLASSIFY_JS" ]; then
+    fail "T2: meta-classify.js missing at $META_CLASSIFY_JS"
+elif grep -q "sub_issues" "$META_CLASSIFY_JS"; then
+    pass "T2: meta-classify.js references sub_issues API (WI-8 open sub-issue guard)"
 else
-    fail "T2: route-decision.js missing sub_issues API reference"
+    fail "T2: meta-classify.js missing sub_issues API reference"
 fi
 
 # ===========================================================================
@@ -66,17 +63,17 @@ else
 fi
 
 # ===========================================================================
-# T4: SKILL.md or route-decision.js contains owner/repo resolution.
+# T4: SKILL.md or meta-classify.js contains owner/repo resolution.
 # #1899 replaced the `gh repo view --json nameWithOwner` lookup (which can name
 # `upstream` on a fork) with an origin-remote resolver, so `nameWithOwner` is no
 # longer the marker — accept either spelling, but require that some owner/repo
-# resolution is still present.
+# resolution is still present. #2087 moved the resolver to meta-classify.js.
 # ===========================================================================
-if grep -qE "(nameWithOwner|OWNER_REPO|owner_repo|ownerRepo|resolveOwnerRepoFromOrigin|parseOriginOwnerRepo)" "$ROUTE_DECISION_JS" 2>/dev/null || \
+if grep -qE "(nameWithOwner|OWNER_REPO|owner_repo|ownerRepo|resolveOwnerRepoFromOrigin|parseOriginOwnerRepo)" "$META_CLASSIFY_JS" 2>/dev/null || \
    grep -qE "(nameWithOwner|OWNER_REPO)" "$WORKFLOW_INIT_SKILL"; then
-    pass "T4: owner/repo resolution present in route-decision.js or SKILL.md"
+    pass "T4: owner/repo resolution present in meta-classify.js or SKILL.md"
 else
-    fail "T4: owner/repo resolution missing from both route-decision.js and SKILL.md"
+    fail "T4: owner/repo resolution missing from both meta-classify.js and SKILL.md"
 fi
 
 # ===========================================================================
@@ -89,35 +86,40 @@ else
 fi
 
 # ===========================================================================
-# T6: route-decision.js routes NO_OPEN to Path META (all sub-issues closed/absent)
+# T6: meta-classify.js routes NO_OPEN to Path META (all sub-issues closed/absent).
+# #2087 moved the no-open-sub-issues → META decision out of route-decision.js
+# into the meta-classify phase, which is now the owner; route-decision.js is
+# still accepted as the fallback owner (same OR-across-two-files shape as T4).
 # ===========================================================================
-if [ ! -f "$ROUTE_DECISION_JS" ]; then
-    fail "T6: route-decision.js missing"
-elif grep -qiE "(META|meta_decision|path.*META)" "$ROUTE_DECISION_JS"; then
-    pass "T6: route-decision.js routes to Path META when no open sub-issues"
+if [ ! -f "$META_CLASSIFY_JS" ]; then
+    fail "T6: meta-classify.js missing"
+elif grep -qiE "(META|meta_decision|path.*META)" "$META_CLASSIFY_JS"; then
+    pass "T6: meta-classify.js routes to Path META when no open sub-issues"
+elif [ -f "$ROUTE_DECISION_JS" ] && grep -qiE "(META|meta_decision|path.*META)" "$ROUTE_DECISION_JS"; then
+    pass "T6: route-decision.js routes to Path META when no open sub-issues (pre-#2087 owner)"
 else
-    fail "T6: route-decision.js missing META path routing"
+    fail "T6: META path routing missing from both meta-classify.js and route-decision.js"
 fi
 
 # ===========================================================================
-# T7: SKILL.md or route-decision.js handles ERROR / ask_user for WI-8 meta guard
+# T7: SKILL.md or meta-classify.js handles ERROR / ask_user for WI-8 meta guard
 # ===========================================================================
 if grep -qiE "(ask_user|AskUserQuestion|meta_select)" "$WORKFLOW_INIT_SKILL" || \
-   grep -qiE "(ask_user|meta_select)" "$ROUTE_DECISION_JS" 2>/dev/null; then
+   grep -qiE "(ask_user|meta_select)" "$META_CLASSIFY_JS" 2>/dev/null; then
     pass "T7: meta guard ask_user / meta_select handling present"
 else
-    fail "T7: missing ask_user / meta_select handling in SKILL.md or route-decision.js"
+    fail "T7: missing ask_user / meta_select handling in SKILL.md or meta-classify.js"
 fi
 
 # ===========================================================================
 # T8: meta_select ask_id present in driver (replaces WORKFLOW_ABORTED_META_SUBISSUE_SELECTION)
 # ===========================================================================
-if [ ! -f "$ROUTE_DECISION_JS" ]; then
-    fail "T8: route-decision.js missing"
-elif grep -q "meta_select" "$ROUTE_DECISION_JS"; then
-    pass "T8: route-decision.js contains meta_select ask_id (replaces WORKFLOW_ABORTED_META_SUBISSUE_SELECTION)"
+if [ ! -f "$META_CLASSIFY_JS" ]; then
+    fail "T8: meta-classify.js missing at $META_CLASSIFY_JS"
+elif grep -q "meta_select" "$META_CLASSIFY_JS"; then
+    pass "T8: meta-classify.js contains meta_select ask_id (replaces WORKFLOW_ABORTED_META_SUBISSUE_SELECTION)"
 else
-    fail "T8: route-decision.js missing meta_select ask_id"
+    fail "T8: meta-classify.js missing meta_select ask_id"
 fi
 
 # ===========================================================================
@@ -286,12 +288,14 @@ FEOF
 fi  # end driver-present block
 
 # ===========================================================================
-# T12: section-dispatch-bulk.sh WF-META-DOC2 assertion updated for route-decision.js
+# T12: section-dispatch-bulk.sh WF-META-DOC2 assertion updated for meta-classify.js
+# (#2087 moved the guard out of route-decision.js into the meta-classify phase,
+# so the owning file the sibling test names must have moved with it)
 # ===========================================================================
 if [ ! -f "$SECTION_BULK" ]; then
     fail "T12: section-dispatch-bulk.sh missing"
-elif grep -q "WF-META-DOC2" "$SECTION_BULK" && grep -q "route-decision.js" "$SECTION_BULK"; then
-    pass "T12: section-dispatch-bulk.sh WF-META-DOC2 references route-decision.js (updated assertion)"
+elif grep -q "WF-META-DOC2" "$SECTION_BULK" && grep -q "meta-classify.js" "$SECTION_BULK"; then
+    pass "T12: section-dispatch-bulk.sh WF-META-DOC2 references meta-classify.js (updated assertion)"
 elif grep -q "WF-META-DOC2" "$SECTION_BULK"; then
     pass "T12: section-dispatch-bulk.sh contains WF-META-DOC2 assertion (sub-issue guard present)"
 else

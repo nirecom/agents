@@ -1,33 +1,9 @@
 #!/bin/bash
 # tests/feature-workflow-init-driver/_lib.sh — shared helper library, NOT a test file.
-# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
-# Tags: workflow-init, driver, routing, directive-contract, origin-resolution, scope:issue-specific
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, directive-contract, meta-classify, origin-resolution, scope:issue-specific
 # Source from sibling tests: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-#
-# TDD red phase: the SUT (bin/workflow/workflow-init-driver) does not exist yet.
-# Injection seams the driver implementation MUST honor (write-code contract):
-#
-# CONTRACT: `gh` is spawned via bare PATH lookup (never an absolute path) — the
-#   harness intercepts it with a PATH-prepended mock; fixtures live in $RESP and
-#   every invocation appends one line to $GH_LOG (call-count assertions C2/C6/C7).
-# CONTRACT: wip-state.sh is resolved as $AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh
-#   when AGENTS_CONFIG_DIR is set (repo-root-relative fallback only when unset).
-#   The harness points AGENTS_CONFIG_DIR at a per-case mock config root.
-# CONTRACT: the checkpoint JSON (<sid>-wi-checkpoint.json) and context.md are
-#   written under the directory given by the WORKFLOW_PLANS_DIR env var when set.
-# CONTRACT: CLAUDE_SESSION_ID env provides the session id deterministically; the
-#   mock config root also ships bin/resolve-session-id echoing $CLAUDE_SESSION_ID
-#   in case the driver unconditionally spawns that primitive.
-# CONTRACT: NON_GITHUB=1 env activates the WI-2 non-GitHub gate.
-# CONTRACT: positional CLI args are the raw issue tokens (`#N`, `repo#N`,
-#   `owner/repo#N`) from the user's invocation; zero tokens = zero-issue pipeline
-#   (Path C). intent.md does NOT exist at workflow-init time — never read it.
-# CONTRACT: on checkpoint version mismatch the driver ignores the checkpoint and
-#   restarts from the first phase, re-detecting issues from the positional tokens
-#   supplied on that same invocation.
-#
-# WID_DRIVER_OVERRIDE is a harness-self-check seam only (runs the suite against a
-# stand-in driver outside the repo); it is NOT part of the driver contract.
+# Injection seams the driver MUST honor (SSOT): ./HARNESS-CONTRACT.md
 
 set -u
 
@@ -152,6 +128,10 @@ fi
 if [ "$cmd" = "api" ]; then
     if [[ "${2:-}" =~ issues/([0-9]+)/sub_issues ]]; then
         M="${BASH_REMATCH[1]}"
+        # Forced-failure seam, symmetric with issue-view-<N>.rc: a non-zero exit
+        # simulates a real API failure (rate limit, 404, network).
+        rc=0; [ -f "$RESP/sub-issues-$M.rc" ] && rc="$(cat "$RESP/sub-issues-$M.rc")"
+        if [ "$rc" != "0" ]; then echo "mock-gh: forced sub_issues failure for issue $M" >&2; exit "$rc"; fi
         if [ -f "$RESP/sub-issues-$M.json" ]; then cat "$RESP/sub-issues-$M.json"; else echo "[]"; fi
         exit 0
     fi
@@ -232,6 +212,7 @@ mock_issue() {  # <N> <STATE> [labels-csv] [title]
 }
 mock_issue_rc() { echo "$2" > "$RESP/issue-view-$1.rc"; }        # <N> <rc>
 mock_sub_issues() { printf '%s\n' "$2" > "$RESP/sub-issues-$1.json"; }  # <N> <json>
+mock_sub_issues_rc() { echo "$2" > "$RESP/sub-issues-$1.rc"; }          # <N> <rc>
 set_wip() { echo "$2" > "$WIPD/state-$1"; }                      # <N> same|none|other
 set_wip_check_rc() { echo "$1" > "$WIPD/check-rc"; }             # <rc> (all N)
 set_wip_set_rc() { echo "$1" > "$WIPD/set-rc"; }                 # <rc> (all N)
@@ -266,6 +247,10 @@ wip_set_calls() {  # print 'set <N>' lines recorded by the wip-state mock
     if [ -f "$WIPD/calls.log" ]; then grep '^set ' "$WIPD/calls.log" || true; else printf ''; fi
 }
 
+wip_calls() {  # print every verb line recorded by the wip-state mock
+    if [ -f "$WIPD/calls.log" ]; then cat "$WIPD/calls.log"; else printf ''; fi
+}
+
 ckpt_get() {  # <ckpt-path> <dot.path> — prints value; <missing>/<unreadable> on error
     if [ -z "$1" ] || [ ! -f "$1" ]; then printf '<unreadable>'; return 0; fi
     node -e '
@@ -281,6 +266,18 @@ else process.stdout.write(String(v));
 
 pct_decode() {  # <encoded> — prints decoded string; rc!=0 when malformed
     node -e 'try{process.stdout.write(decodeURIComponent(process.argv[1]))}catch(e){process.exit(3)}' "$1"
+}
+
+# OPTIONS_DISPLAY is ONE percent-encoded directive value whose options are joined
+# with a literal "|". Decode FIRST, then split: splitting the encoded form would
+# miss a "|" that an untrusted sub-issue title smuggled in, which is the exact
+# forged-option failure driver-meta-classify.sh M15 / driver-untrusted-title.sh
+# M24 exist to catch.
+opts_field_count() {  # <encoded-OPTIONS_DISPLAY>
+    node -e 'process.stdout.write(String(decodeURIComponent(process.argv[1] || "").split("|").length));' "$1"
+}
+opts_field() {  # <encoded-OPTIONS_DISPLAY> <0-based-index> — '<none>' when absent
+    node -e 'const a = decodeURIComponent(process.argv[1] || "").split("|"); const i = Number(process.argv[2]); process.stdout.write(a[i] === undefined ? "<none>" : a[i]);' "$1" "$2"
 }
 
 # --- assertions ----------------------------------------------------------------

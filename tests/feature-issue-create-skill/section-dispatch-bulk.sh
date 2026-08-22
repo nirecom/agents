@@ -1,13 +1,9 @@
-# DV-BULK1-5, DV-BULK-EDGE1-3, DV-BULK-DOC1-2, WF-META-DOC1 tests
+# DV-BULK1-5, DV-BULK-EDGE1-3, DV-BULK-DOC1-2, WF-META-DOC1-2 tests
+# Tests: skills/issue-create/SKILL.md, skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/meta-classify.js
+# Tags: issue-create, bulk-sub-of, workflow-init, meta-classify, docs, scope:issue-specific
 
-# ===========================================================================
 # DV-BULK series (#1155): verdict=bulk-sub-of — create N children from a TSV
-# manifest and attach each under --parent. Multi-URL stdout, manifest order.
-#
-# These exercise the dispatch arm that does not yet exist on the current code,
-# so DV-BULK1/2 are RED until implementation; DV-BULK3/4/5 (usage errors) and
-# the DOC cases are RED until the verdict/whitelist/docs land.
-# ===========================================================================
+# manifest, attach each under --parent; multi-URL stdout in manifest order.
 
 # ---------------------------------------------------------------------------
 # DV-BULK1: --parent 100 --manifest <2-line TSV> → 2 issue create + 2 sub_issues
@@ -245,28 +241,41 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# WF-META-DOC1: skills/workflow-init/SKILL.md PM path contains a sub-issue
-#               creation mandate. The mandate must signal sub-issue/bulk creation
-#               or "全件" coverage — bare "PM4" already exists for an unrelated
-#               outline step, so it alone must NOT satisfy this check.
+# WF-META-DOC1: the Path META section of skills/workflow-init/SKILL.md carries an
+#   EXECUTABLE bulk sub-issue mandate. Scoped to that section and to the flags that
+#   make it executable: a whole-document grep for bulk|sub-issue passes on any
+#   unrelated mention elsewhere in the file, and on a PM step that names the skill
+#   without the flags that give the call its bulk-under-parent semantics.
 # ---------------------------------------------------------------------------
+PATH_META_SECTION=""
+if [ -f "$WORKFLOW_INIT_MD" ]; then
+    PATH_META_SECTION="$(awk '/^#### Path META/{f=1;print;next} /^#### /{f=0} f' "$WORKFLOW_INIT_MD")"
+fi
 if [ ! -f "$WORKFLOW_INIT_MD" ]; then
     fail "WF-META-DOC1: skills/workflow-init/SKILL.md missing"
-elif grep -qE "bulk|sub-issue|全件" "$WORKFLOW_INIT_MD"; then
-    pass "WF-META-DOC1: workflow-init SKILL.md PM path has sub-issue creation mandate"
+elif [ -z "$PATH_META_SECTION" ]; then
+    fail "WF-META-DOC1: no '#### Path META' section in workflow-init SKILL.md"
 else
-    fail "WF-META-DOC1: workflow-init SKILL.md missing sub-issue creation mandate — RED until implementation"
+    WF_META_MISSING=""
+    for flag in "--skip-survey" "--verdict bulk-sub-of" "--parent" "--manifest"; do
+        printf '%s\n' "$PATH_META_SECTION" | grep -qF -- "$flag" || WF_META_MISSING="$WF_META_MISSING '$flag'"
+    done
+    if [ -z "$WF_META_MISSING" ]; then
+        pass "WF-META-DOC1: Path META mandates bulk sub-issue creation with all four flags"
+    else
+        fail "WF-META-DOC1: Path META bulk mandate incomplete — missing:$WF_META_MISSING"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
-# WF-META-DOC2: driver route-decision.js contains sub_issues API call
-#               (list-open-sub-issues.sh absorbed into driver route-decision phase)
+# WF-META-DOC2: driver meta-classify.js contains the sub_issues API call
+#               (#2087 moved the guard out of route-decision into its own phase)
 # ---------------------------------------------------------------------------
-ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
-if [ ! -f "$ROUTE_DECISION_JS" ]; then
-    fail "WF-META-DOC2: driver route-decision.js missing at $ROUTE_DECISION_JS"
-elif grep -q "sub_issues" "$ROUTE_DECISION_JS"; then
-    pass "WF-META-DOC2: driver route-decision.js references sub_issues API (open sub-issue guard)"
+META_CLASSIFY_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
+if [ ! -f "$META_CLASSIFY_JS" ]; then
+    fail "WF-META-DOC2: driver meta-classify.js missing at $META_CLASSIFY_JS"
+elif grep -q "sub_issues" "$META_CLASSIFY_JS"; then
+    pass "WF-META-DOC2: driver meta-classify.js references sub_issues API (open sub-issue guard)"
 else
-    fail "WF-META-DOC2: driver route-decision.js missing sub_issues API reference"
+    fail "WF-META-DOC2: driver meta-classify.js missing sub_issues API reference"
 fi

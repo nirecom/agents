@@ -2,17 +2,13 @@
 # tests/feature-workflow-init-driver/driver-malformed-tokens.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/directive.js
 # Tags: workflow-init, driver, validation, scope:issue-specific
-#
-# Validation guard for raw-token CLI arguments:
-#   Stage 1: /[\r\n]/ → invalid_token_newline
-#   Stage 2: !ISSUE_TOKEN_CLI_GUARD_RE || !/^[^#]*#\d+$/ → invalid_token_format
-#   Stage 3: tok.length > MAX_TOKEN_LEN → invalid_token_format
-#
-# L3 gap (what this test does NOT catch):
-# - A real `claude -p` session driving the workflow-init SKILL.md driver loop
-#   (ACTION= dispatch, AskUserQuestion rendering, --resume re-invocation).
-# - Real gh calls (issue view / sub_issues endpoint / Projects v2) on live GitHub.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+
+# Raw-token CLI guard: newline → invalid_token_newline; shape (ISSUE_TOKEN_CLI_GUARD_RE
+# plus the /^[^#]*#\d+$/ end-anchor) and length (MAX_TOKEN_LEN) → invalid_token_format.
+# Stage definitions are inline in bin/workflow/workflow-init-driver.
+
+# TL3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
+# --resume) and no live gh calls. Mitigated at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
@@ -67,6 +63,10 @@ teardown_case
 # Table-driven to minimise repetition per test-design.md parser/regex pattern.
 
 OVER64="$(printf '#%065d' 0)"  # '#' + 65 zeros → length 66 > MAX_TOKEN_LEN(64)
+# Length boundary, both sides (MLEN64 asserts the accept side). Both tokens are otherwise
+# well-formed 'repo#N', so length is the only variable between them.
+AT64="$(printf 'a%.0s' $(seq 61))#15"   # 61 chars + '#15' = exactly MAX_TOKEN_LEN
+AT65="$(printf 'a%.0s' $(seq 62))#15"   # one over: the first rejected length
 
 # Array: (description | token)  — IFS='|'
 INVALID_FMT_CASES=(
@@ -77,6 +77,13 @@ INVALID_FMT_CASES=(
     "trailing non-digit junk after owner/repo#N|owner/repo#15x"
     "empty string|"
     "over MAX_TOKEN_LEN|$OVER64"
+    "one char over MAX_TOKEN_LEN|$AT65"
+    "two '#' markers in one token|#15#16"
+    "shell metacharacters after #N|#15; rm -rf /"
+    "command substitution before #N|\$(whoami)#15"
+    "backtick substitution before #N|\`id\`#15"
+    "path traversal before #N|../../etc/passwd#15"
+    "url-shaped token|https://github.com/o/r/issues/15"
 )
 
 fmt_i=0
@@ -149,6 +156,21 @@ if [ "$got_a" = "blocked" ] && { [ "$got_r" = "invalid_token_format" ] || [ "$go
     fail "M8: 'owner/repo#15' blocked by validation guard (false positive)"
 else
     pass "M8: 'owner/repo#15' not blocked by validation guard"
+fi
+teardown_case
+
+# MLEN64: exactly MAX_TOKEN_LEN — the accept side of the length boundary ==========
+# Paired with the 'one char over' reject row: an off-by-one in the `>` comparison
+# would reject this legitimate token, and only the pair can catch that direction.
+setup_case wid-mlen64
+mock_issue 15 OPEN "type:task"
+set_wip 15 same
+run_driver "$AT64"
+got_a="$(get_kv ACTION)" || true; got_r="$(get_kv REASON)" || true
+if [ "$got_a" = "blocked" ] && { [ "$got_r" = "invalid_token_format" ] || [ "$got_r" = "invalid_token_newline" ]; }; then
+    fail "MLEN64: a token of exactly ${#AT64} chars was blocked (off-by-one at MAX_TOKEN_LEN)"
+else
+    pass "MLEN64: a token of exactly ${#AT64} chars passes the validation guard"
 fi
 teardown_case
 

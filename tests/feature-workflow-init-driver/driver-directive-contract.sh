@@ -3,16 +3,12 @@
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/phases/write-context.js
 # Tags: workflow-init, driver, directive-contract, security, scope:issue-specific
 #
-# D1-D6 — directive output contract; S1-S4 — security/idempotency edge cases
-# (S1 CWE-78 shell injection, S2 idempotency, S3 CWE-77 sentinel strip,
-# S4 CWE-22 session-id path traversal).
+# D1-D6 directive output contract; S1-S4 security/idempotency (S1 CWE-78 shell
+# injection, S2 idempotency, S3 CWE-77 sentinel strip, S4 CWE-22 path traversal).
 #
-# L3 gap (what this test does NOT catch):
-# - A real `claude -p` session parsing the KV output through the SKILL.md driver
-#   loop and rendering OPTIONS_DISPLAY via a real AskUserQuestion UI.
-# - Real gh / Projects v2 calls on live GitHub.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: no real `claude -p` SKILL.md driver loop parsing the KV output or
+# rendering OPTIONS_DISPLAY via AskUserQuestion, and no live gh calls. Mitigated at
+# WORKFLOW_USER_VERIFIED preflight: bin/check-verification-gate.sh — skill-orchestration.
 
 set -u
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -88,6 +84,10 @@ assert_nonempty_kv "D5: blocked response carries REASON=" REASON
 teardown_case
 
 # --- D6: QUESTION round-trips single quotes, pipes, and spaces --------------------
+# One documented exception to "round-trips": describe() substitutes a title's "|" with
+# "/" before the OPTIONS_DISPLAY join, because "|" is that value's own field delimiter.
+# #42's title is therefore verbatim in QUESTION but "Second/child here" in the options.
+# Why the substitution is load-bearing: driver-meta-classify.sh M15.
 setup_case wid-d6
 mock_issue 720 OPEN "meta"
 set_wip 720 same
@@ -116,8 +116,9 @@ if [ -n "$OPTS" ]; then DEC_OPTS="$(pct_decode "$OPTS")" || DEC_OPTS=""; fi
 case "$DEC_OPTS" in
     *"#41: Fix 'quoted' arg here"*)
         case "$DEC_OPTS" in
-            *'#42: Second|child here'*) pass "D6: decoded OPTIONS_DISPLAY round-trips both titles (pipe + space survive)" ;;
-            *) fail "D6: decoded OPTIONS_DISPLAY lost the pipe/space title: '$DEC_OPTS'" ;;
+            *'#42: Second/child here'*) pass "D6: decoded OPTIONS_DISPLAY carries both titles, #42's '|' substituted with '/'" ;;
+            *'#42: Second|child here'*) fail "D6: a raw '|' from a title survived into OPTIONS_DISPLAY (forgeable option): '$DEC_OPTS'" ;;
+            *) fail "D6: decoded OPTIONS_DISPLAY lost the second title: '$DEC_OPTS'" ;;
         esac ;;
     *) fail "D6: decoded OPTIONS_DISPLAY missing #41 title: '$DEC_OPTS'" ;;
 esac

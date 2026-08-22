@@ -5,10 +5,8 @@ const path = require("path");
 const { buildBashScriptSpawn } = require("../spawn-env");
 
 /**
- * Phase: wip-check
- * Check WIP state for each issue, then set WIP for unowned issues.
- *
- * WIP evaluation order (CRITICAL — fixes ALL_NONE-before-ALL_SAME bug):
+ * Phase: wip-check — check WIP state for each issue, then set WIP for unowned ones.
+ * Evaluation order (CRITICAL — fixes ALL_NONE-before-ALL_SAME bug):
  * 1. error_ns non-empty → ask_user ASK_ID=wip_error
  * 2. any wip=other → ask_user ASK_ID=wip_conflict
  * 3. all wip=none → run set for ALL N → if set rc=2 → ask_user ASK_ID=wip_rc2; else continue; set force_path_b=true
@@ -17,7 +15,10 @@ const { buildBashScriptSpawn } = require("../spawn-env");
  */
 function wipCheck(state, agentsConfigDir, sessionId) {
   const wipScript = path.join(agentsConfigDir, "bin", "github-issues", "wip-state.sh");
-  const issues = state.issues;
+  // Meta-labelled issues are never wip-checked (#2087).
+  const issues = state.issues.filter(
+    (n) => !(state.label_sets[n] || []).includes("meta")
+  );
 
   // Initialize wip_results for issues not yet checked
   for (const n of issues) {
