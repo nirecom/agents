@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-confirm-plan-guard, hook, TL3, run-e2e, scope:permanent
+# Tags: stop-confirm-plan-guard, hook, TL3, run-e2e, scope:common
 #
 # Issue #943 — per-hook seam TL3 test: stop-confirm-plan-guard.js (Stop).
-# A per-turn marker fixture is placed in CLAUDE_WORKFLOW_DIR; a live `claude -p`
+# A per-turn marker fixture is placed in the sandbox that the runner pins via the
+# CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR pair (#1799); a live `claude -p`
 # session triggers the Stop hook, which reads and deletes the marker via
 # readAndDeleteTurnMarkers(). Assert marker present before, absent after.
 # Layer: TL3 (live claude -p session, real Stop firing, real turn marker).

@@ -3,24 +3,12 @@
 # Tests: hooks/block-history-direct.js, settings.json
 # Tags: hook, settings, config, append-only, docs, scope:issue-specific, TL2
 #
-# Issue #1611 — append-only document protection must cover the whole family
-# (canonical docs/history.md + CHANGELOG.md AND rotated archives under
-# docs/history/*.md, changelog/*.md, docs/changelog/*.md), through BOTH the
-# tool-write path (Edit/Write/MultiEdit/editFiles) and the shell path
-# (Bash/runInTerminal/runCommands).
-#
-# T1-P — predicate: feed real JSON to the real hook, assert decision.
-# T1-R — registration parity: the settings.json PreToolUse matcher set that
-#        registers block-history-direct.js must cover every tool name the
-#        hook's own `switch` handles. Tool names are grepped out of the hook
-#        source, never hardcoded here (no double bookkeeping).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code actually dispatches the PreToolUse event to this hook
-#   in a live session (only a real `claude -p` run proves the wiring fires).
-# - Whether a blocked decision surfaces to the model as a usable refusal.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Issue #1611 — append-only protection must cover the whole family (canonical
+# docs/history.md + CHANGELOG.md and rotated archives under docs/history/*.md,
+# changelog/*.md, docs/changelog/*.md) via both the tool-write and shell paths.
+# T1-P asserts real-hook decisions; T1-R greps the hook's own `switch` and
+# asserts settings.json registers every tool name it handles.
+# TL3 gap: live dispatch and refusal surfacing — bin/check-verification-gate.sh.
 
 set -uo pipefail
 
@@ -67,6 +55,10 @@ json_escape() {
 # can never flip a verdict asserted here.
 ISOLATED_WORKFLOW_DIR="$(mktemp -d)"
 trap 'rm -rf "$ISOLATED_WORKFLOW_DIR"' EXIT
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+ISOLATED_PLANS_DIR="$ISOLATED_WORKFLOW_DIR/plans"
+mkdir -p "$ISOLATED_PLANS_DIR"
 
 # run_hook <stdin-json> → prints "approve" | "block" | "other"
 run_hook() {
@@ -74,6 +66,7 @@ run_hook() {
     out="$(printf '%s' "$1" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
         "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+    "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
         node "$HOOK" 2>/dev/null)"
     case "$out" in
         *'"decision":"block"'*)   printf 'block' ;;
@@ -175,6 +168,7 @@ echo "=== T1-P/c: fail-open ==="
 got="$(printf '%s' 'not json at all {{{' | run_with_timeout 30 \
     env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
     "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+    "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
     node "$HOOK" 2>/dev/null | grep -c '"decision":"approve"' || true)"
 assert_eq "P19-invalid-json-approves" "1" "$got"
 

@@ -1,17 +1,12 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-enforce-issue-close.sh
 # Tests: hooks/enforce-issue-close.js
-# Tags: issue-close, enforce, hook, workflow, bin
+# Tags: issue-close, enforce, hook, workflow, bin, scope:common
 #
-# PR2: hooks/enforce-issue-close.js must early-return (exit 0) when
-# <workflowDir>/<sid>.workflow-off marker exists for the calling session.
-#
-# Contract (existing hook behavior):
-#   - bare `gh issue close N` from Bash → blocked (exit 2 with reason to stderr).
-#   - ISSUE_CLOSE_SKILL=1 inherited env → bypass (exit 0).
-# New contract (this PR):
-#   - workflow-off marker present + valid sid → bypass (exit 0).
-#   - traversal sid → bypass does NOT apply.
+# PR2: enforce-issue-close.js early-returns (exit 0) when the calling session has
+# a <workflowDir>/<sid>.workflow-off marker. Existing contract: bare
+# `gh issue close N` blocks (exit 2, reason on stderr); ISSUE_CLOSE_SKILL=1
+# bypasses. New: marker + valid sid → bypass; traversal sid → no bypass.
 
 set -u
 
@@ -37,6 +32,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -96,6 +97,7 @@ run_hook() {
         env -u CLAUDE_ENV_FILE -u ISSUE_CLOSE_SKILL \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>"$errfile")" || HOOK_RC=$?
     HOOK_ERR="$(cat "$errfile" 2>/dev/null)"
     rm -f "$errfile"

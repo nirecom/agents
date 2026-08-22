@@ -2,19 +2,13 @@
 # tests/feature-enforce-worktree-session-override.sh
 # Tests: hooks/enforce-worktree.js, hooks/workflow-mark.js
 # Tags: worktree, enforce, hook, workflow, bin, scope:issue-specific
-#
 # Integration tests for the session-scoped ENFORCE_WORKTREE escape hatch.
-#
-# Feature contract:
-#   - workflow-mark.js (PostToolUse) intercepts:
-#       echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"
-#       echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>"
-#     and writes a marker file:
-#       <workflowDir>/<sessionId>.worktree-off
-#     The marker JSON contains "set_at" and (optionally) "reason".
-#   - enforce-worktree.js (PreToolUse) checks for that marker file right
-#     after isEnforceWorktreeOn(). If present AND the session ID matches,
-#     writes from the main worktree are allowed for that session only.
+# Contract: workflow-mark.js (PostToolUse) intercepts a
+# <<WORKFLOW_ENFORCE_WORKTREE_OFF[: reason]>> echo and writes
+# <workflowDir>/<sessionId>.worktree-off (JSON with "set_at", optional "reason");
+# enforce-worktree.js (PreToolUse) checks for that marker right after
+# isEnforceWorktreeOn() and, when it exists AND the session ID matches, allows
+# writes from the main worktree for that session only.
 
 set -u
 
@@ -131,6 +125,8 @@ setup_fake_env_file() {
 MARK_OUT=""
 # run_workflow_mark <stdin-json> <workflow-dir> [extra env var ...]
 # Returns workflow-mark.js exit code; captures stdout+stderr into MARK_OUT.
+# env(1) is last-wins, so the isolation pins come AFTER "$@": a caller-supplied
+# extra must never be able to redirect the fixture dirs (#1799).
 run_workflow_mark() {
     local payload="$1"; shift
     local wfdir="$1"; shift
@@ -138,9 +134,9 @@ run_workflow_mark() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+        "$@" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "$@" \
         node "$MARK_JS" 2>&1)" || rc=$?
     return $rc
 }
@@ -149,18 +145,14 @@ GUARD_OUT=""
 GUARD_RC=0
 # run_enforce_worktree <stdin-json> <workflow-dir> <repo-in-scope> [extra env var ...]
 # Captures stdout+stderr into GUARD_OUT and exit code into GUARD_RC.
-# Returns 0 if allowed, 1 if blocked, 2 if the hook crashed (non-zero exit).
-#
-# The hook always exits 0 in normal operation (both allow and block paths call
-# done() which exits 0 — block emits {"decision":"block"} JSON). A non-zero
-# exit code therefore signals a crash/timeout/startup failure, not a deny.
-# Tests must distinguish "intentionally allowed" from "crashed but no block
-# string in output" — codex review HIGH#2.
-#
-# <repo-in-scope> is the temp repo to register via ENFORCE_WORKTREE_ADDITIONAL_REPOS
-# so the guard's session-scope check sees the temp repo and falls through to
-# the main-checkout block (otherwise the temp repo is "out of session scope"
-# and the guard short-circuits to allow).
+# Returns 0 if allowed, 1 if blocked, 2 if the hook crashed (non-zero exit): the hook
+# always exits 0 in normal operation — the block path calls done() too and emits
+# {"decision":"block"} JSON — so a non-zero exit is a crash/timeout, not a deny, and
+# tests must not read "crashed with no block string" as "intentionally allowed"
+# (codex review HIGH#2).
+# <repo-in-scope> is the temp repo registered via ENFORCE_WORKTREE_ADDITIONAL_REPOS so
+# the guard's session-scope check sees it and falls through to the main-checkout block;
+# otherwise the repo is "out of session scope" and the guard short-circuits to allow.
 run_enforce_worktree() {
     local payload="$1"; shift
     local wfdir="$1"; shift
@@ -171,9 +163,9 @@ run_enforce_worktree() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
+        "$@" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "$@" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
     if [ "$GUARD_RC" -ne 0 ]; then
         return 2

@@ -1,18 +1,13 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-scan-outbound.sh
 # Tests: hooks/scan-outbound.js
-# Tags: scan, filter, outbound, hook, workflow
+# Tags: scan, filter, outbound, hook, workflow, scope:common
 #
-# PR2: hooks/scan-outbound.js must NOT bypass the private-info security scan
-# even when <workflowDir>/<sid>.workflow-off marker exists for the session.
-#
-# Contract:
-#   - Without marker: hook runs normally (may approve or block depending on
-#     content + public-repo detection — we don't assert behavior, only that
-#     it doesn't crash).
-#   - With marker + valid sid: private-info scan still runs and blocks (no
-#     bypass for security scans).
-#   - With invalid (traversal) sid: bypass MUST NOT apply.
+# PR2: scan-outbound.js must NOT bypass the private-info security scan even when
+# the session has a <workflowDir>/<sid>.workflow-off marker. Contract: without a
+# marker the hook just runs without crashing (verdict depends on content +
+# public-repo detection, not asserted); with marker + valid sid the scan still
+# runs and blocks; with a traversal sid the bypass MUST NOT apply.
 
 set -u
 
@@ -38,6 +33,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -97,6 +98,7 @@ run_hook() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }
 

@@ -4,44 +4,11 @@
 # Tags: merge-base, ssot, baseline, anomaly-detection, scope:issue-specific, pwsh-not-required, TL2
 #
 # Issue #1638 — merge-base resolution picked a pre-history-rewrite commit and every consumer
-# (select-tests.sh, run-quality-gates.sh, review-code-codex) inherited a 280k-line diff without
-# anything on stdout saying the range was wrong. The fix is a single shared resolver that
-# reports a STATE alongside the base, plus a recorded baseline written at branching time so the
-# common case stops guessing at all.
-#
-# WHAT IS PINNED HERE, and why each half matters:
-#   R1-R4   the recorded baseline (layer 1) and the three identity checks that must demote it.
-#           A baseline adopted from another branch or another session is worse than no baseline.
-#   R5-R7   layer 2: RESOLVED / FALLBACK / UNRESOLVED. UNRESOLVED is separated from FALLBACK
-#           precisely because a root-commit repo has no HEAD~1 and handing one to the gates is
-#           the regression #1638 caused in the first place.
-#   R8-R10  the anomaly detector, both axes, and the asymmetry: it never runs on layer 1.
-#   R11     post_session_head is a NOTE, not a demotion — the base is still a fact.
-#   R12-R13 the two output contracts consumers parse.
-#   R14-R17 the writer: write-once for the automatic path, and one deliberate override for the
-#           user-approved path, with validation that keeps a bad sha out of the state file.
-#   R18     --explain is diagnostics; it must not contaminate the machine-readable stdout.
-#   R19     the degradation contract — the helper is a self-contained CLI, so a fixture that
-#           copies the single file (tests/fix-quality-gates-not-found/) still exercises it.
-#   R20-R27 #1779: a branch with ZERO commits resolves to base == HEAD, so `<base>...HEAD` is
-#           empty no matter how much work is staged. base_is_head reports that fact, and the
-#           three working-tree counts give the consumers something to fall back to. Tracked and
-#           untracked are counted separately because `git diff HEAD` cannot see the latter.
-#           R24-R27 pin the counters at their edges: zero printed as zero rather than `-`, a
-#           change that exists only in the index, an exact count rather than "at least one",
-#           and a gitignored file excluded from the census entirely.
-#
-# ISOLATION. Every fixture repository is local with NO remote, and every invocation passes
-# --no-fetch, so no row can reach the network. CLAUDE_WORKFLOW_DIR is redirected to a temp
-# directory so the developer's real session state is never read or written.
-#
-# TL3 gap (what this test does NOT catch):
-# - a real `git fetch origin main` against a real remote whose default branch has moved:
-#   every fixture here is fetch-free by construction.
-# - the branching-handler actually calling recordMergeBaseBaseline inside a live Claude Code
-#   session (hook registration is not exercised; only the module contract is).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# inherited a 280k-line diff with nothing on stdout saying the range was wrong. R1-R27 pin, in
+# order: the recorded baseline and the checks that demote it; layer-2 RESOLVED/FALLBACK/
+# UNRESOLVED; the anomaly detector (never run on layer 1); the two parsed output contracts; the
+# write-once writer and its user-approved override; the degradation contract; #1779's base ==
+# HEAD case. ISOLATION: local remote-free fixtures, --no-fetch, workflow + plans dirs on temp.
 
 set -uo pipefail
 
@@ -70,6 +37,10 @@ TMPROOT="$(mktemp -d)"
 trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
 WFDIR="$TMPROOT/workflow"
 mkdir -p "$WFDIR"
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+PLANSDIR="$TMPROOT/plans"
+mkdir -p "$PLANSDIR"
 
 # ---- fixtures ---------------------------------------------------------------
 
@@ -214,7 +185,8 @@ NODEEOF
 NODE_RC=0
 node_state() { # <subcommand> <sid> [args...] ; prints stdout, sets NODE_RC
   NODE_RC=0
-  env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" node "$STATE_JS" "$@" 2>/dev/null || NODE_RC=$?
+  env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
+    node "$STATE_JS" "$@" 2>/dev/null || NODE_RC=$?
 }
 
 # Writes a baseline record straight into the state file, so the layer-1 rows control every
@@ -241,7 +213,10 @@ run_helper() { # <repo> <sid|-> [extra helper args...]
   [ "$sid" = "-" ] || args+=(--session "$sid")
   args+=("$@")
   HB_RC=0
-  env "CLAUDE_WORKFLOW_DIR=$WFDIR" ${HELPER_ENV[@]+"${HELPER_ENV[@]}"} \
+  # env(1) is last-wins: the isolation pins follow HELPER_ENV so a caller-supplied
+  # row can never unpin the fixture workflow/plans dirs.
+  env ${HELPER_ENV[@]+"${HELPER_ENV[@]}"} \
+    "CLAUDE_WORKFLOW_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
     bash "$HELPER" "${args[@]}" >"$o" 2>"$e" || HB_RC=$?
   HB_OUT="$(cat "$o")"
   HB_ERR="$(cat "$e")"
