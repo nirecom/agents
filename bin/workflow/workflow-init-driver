@@ -253,21 +253,12 @@ function applyAnswer(ckptData, answer, tokens) {
     };
   }
 
-  // meta_select + #M → issues=[M, ...pending metas], repo_map carries the
-  // selected sub-issue's own repository, force re-fetch.
-  // Re-enters at fetch-issues on purpose (#2087): under the current PHASE_ORDER
-  // that re-runs label-extract → meta-classify for the newly selected issue
-  // (it may itself be a meta issue) BEFORE wip-check ever touches it.
+  // meta_select + #M -> issues=[M, ...pending metas], re-enters at fetch-issues (#2087).
   if (ask_id === "meta_select") {
     const m = answer.match(/^#?(\d+)$/);
     if (m) {
       const selectedN = parseInt(m[1], 10);
-      // Security review MEDIUM: accept only a number actually offered in the
-      // meta_select options, not any numeric answer — mirrors the fail-closed
-      // posture of the other ask_id branches above (reopen/remove/continue are
-      // fixed vocabularies; this is the equivalent for a data-driven option set).
-      // Entries are {number, ownerRepo}: the number alone does not identify an
-      // issue across repositories.
+      // Accept only a number actually offered — fail closed like the other ask_ids.
       const offered = Array.isArray(state.meta_select_offered) ? state.meta_select_offered : [];
       const matched = offered.find((o) => o && o.number === selectedN);
       if (!matched) {
@@ -278,14 +269,11 @@ function applyAnswer(ckptData, answer, tokens) {
             offered.map((o) => (o && o.number != null ? o.number : String(o))).join(", "),
         };
       }
-      // The meta parents not selected are re-appended, not dropped: the
-      // fetch-issues re-entry re-runs label-extract → meta-classify over the
-      // whole set, so each is either resolved or asked about on the next pass.
+      // Re-append unselected meta parents so they're re-classified next pass.
       const pending = Array.isArray(state.meta_select_pending) ? state.meta_select_pending : [];
       state.issues = [selectedN, ...pending.filter((n) => n !== selectedN)];
       state.meta_select_pending = [];
-      // repo_map is POSITIONAL (detect-issues.js keys it by index into the
-      // parsed token list), so the selected issue's repo belongs at index 0.
+      // repo_map is positional; selected issue's repo goes at index 0.
       state.repo_map = matched.ownerRepo ? { 0: matched.ownerRepo } : {};
       state.issue_json_cache[selectedN] = null;
       // Reset wip_results for the selected issue so it's re-checked
@@ -309,17 +297,10 @@ const PHASE_ORDER = [
   "adopt-prior-state",
   "detect-issues",
   "fetch-issues",
-  // #2087: closed-detection runs as soon as the issue JSON it reads is cached,
-  // ahead of BOTH meta-classify and wip-check. A closed issue must be resolved
-  // — reopened or removed — before any phase acts on state.issues: otherwise a
-  // closed meta parent is consumed by meta_select (which replaces state.issues)
-  // before the closed gate ever sees it, and a closed ordinary issue can raise a
-  // wip_conflict ask or claim WIP ownership the user is about to drop anyway.
+  // #2087: closed-detection ahead of meta-classify and wip-check, so a closed
+  // issue is resolved before either phase acts on it.
   "closed-detection",
-  // #2087: label-extract + meta-classify precede wip-check so that issues about
-  // to be stripped (mixed) or replaced by a sub-issue selection (all-meta) are
-  // never wip-checked — that produced a spurious wip_conflict ask and could
-  // override another session's WIP ownership.
+  // #2087: meta-classify ahead of wip-check, so meta issues are never wip-checked.
   "label-extract",
   "meta-classify",
   "wip-check",
@@ -423,22 +404,13 @@ function main() {
 
     if (ckptResult.error) {
       if (ckptResult.error === "version_mismatch") {
-        // Abort outranks recovery: a stale checkpoint still carries the user's
-        // decision to stop, so honor it before restarting anything. Restarting
-        // would re-fetch issues, re-enter wip-check, and rewrite the checkpoint
-        // — silently discarding the abort. As with the sibling abort path below,
-        // do NOT mutate the checkpoint.
+        // Abort outranks recovery — don't let a restart silently discard it.
         if (answer === "abort") {
           emitBlocked(resumePath, "user_aborted");
           return;
         }
-        // Version mismatch → ignore checkpoint, restart from first phase using
-        // positional tokens. The documented resume flow (skills/workflow-init/
-        // SKILL.md WI-2) invokes `--resume <CHECKPOINT> --answer '<token>'` with
-        // no positional issue tokens, so `tokens` is normally empty here — restart
-        // it into `detect-issues` on nothing and Path C silently swallows the
-        // session. Recover the stale checkpoint's own issue numbers as `#N`
-        // tokens when the invocation itself supplied none (security review HIGH).
+        // Recover the stale checkpoint's issue numbers as #N tokens when the
+        // invocation itself supplied none, so a restart doesn't swallow the session.
         const staleState = ckptResult.data && ckptResult.data.state;
         const staleIssues =
           staleState && Array.isArray(staleState.issues)
@@ -446,11 +418,7 @@ function main() {
             : [];
         const restartTokens = tokens.length > 0 ? tokens : staleIssues.map((n) => `#${n}`);
         const freshState = makeInitialState();
-        // The adopt offer is raised by the FIRST phase, before any issue has been
-        // detected — so a stale checkpoint pending on it carries an answer that a
-        // detect-issues restart would throw away, re-offering the same question
-        // (or, non-interactively, never again). Replay it into adopt-prior-state
-        // instead, with the donor the stale checkpoint recorded.
+        // Replay a pending adopt-prior-state answer instead of discarding it.
         if (
           ckptResult.data &&
           ckptResult.data.ask_id === ADOPT_PRIOR_STATE_ASK_ID &&

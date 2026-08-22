@@ -15,10 +15,7 @@ const { buildBashScriptSpawn } = require("../spawn-env");
  */
 function wipCheck(state, agentsConfigDir, sessionId) {
   const wipScript = path.join(agentsConfigDir, "bin", "github-issues", "wip-state.sh");
-  // Meta-labelled issues are never wip-checked (#2087): meta-classify leaves
-  // state.issues untouched for an all-meta META session (write-context needs
-  // the issue as the session's subject), so this phase filters them out of
-  // its own working set instead of relying on state.issues being emptied.
+  // Meta-labelled issues are never wip-checked (#2087).
   const issues = state.issues.filter(
     (n) => !(state.label_sets[n] || []).includes("meta")
   );

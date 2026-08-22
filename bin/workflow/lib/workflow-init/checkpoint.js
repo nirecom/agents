@@ -3,15 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const CHECKPOINT_VERSION = 2; // #2087: PHASE_ORDER changed (meta-classify inserted
-// before wip-check). A v1 checkpoint may have been written mid-pipeline under the
-// OLD order, where the meta strip had not run yet when an ask_id like wip_conflict
-// was raised; resuming it under the new order's hardcoded per-ask_id startPhase
-// would skip meta-classify and misroute a meta issue as an ordinary one. The bump
-// forces readCheckpoint() to return version_mismatch for every v1 checkpoint, which
-// workflow-init-driver already handles safely: ignore it and restart from
-// detect-issues using the positional issue tokens on the same invocation
-// (workflow-init-driver:384-388).
+const CHECKPOINT_VERSION = 2; // #2087
 
 function checkpointPath(plansDir, sessionId) {
   return path.join(plansDir, `${sessionId}-wi-checkpoint.json`);
@@ -30,13 +22,9 @@ function makeInitialState() {
     // #1305 adopt-prior-state: the offered donor and the user's answer.
     adopt_candidate: null,
     adopt_decision: null,
-    // #2087 meta-classify: {number, ownerRepo} of each sub-issue actually
-    // offered by the pending meta_select ask, so applyAnswer can reject an
-    // answer outside that set and resolve the choice in its own repository.
+    // #2087: {number, ownerRepo} offered by the pending meta_select ask.
     meta_select_offered: [],
-    // #2087 meta-classify: the meta parents NOT covered by the pending
-    // meta_select ask; re-appended to state.issues on answer so they are
-    // re-classified rather than dropped by first-parent-wins.
+    // #2087: meta parents not covered by the pending meta_select ask.
     meta_select_pending: [],
   };
 }
@@ -75,10 +63,7 @@ function readCheckpoint(ckptPath) {
     return { error: "malformed", message: `Malformed checkpoint JSON: ${e.message}` };
   }
   if (data.version !== CHECKPOINT_VERSION) {
-    // `data` rides along on the mismatch so a caller can recover the stale
-    // session's own issue numbers instead of discarding them outright (security
-    // review HIGH: the documented --resume/--answer flow carries no positional
-    // issue tokens, so a bare restart-from-detect-issues silently loses them).
+    // data rides along so the caller can recover the stale session's issue numbers.
     return { error: "version_mismatch", message: `Checkpoint version ${data.version} != expected ${CHECKPOINT_VERSION}`, data };
   }
   return { ok: true, data };
