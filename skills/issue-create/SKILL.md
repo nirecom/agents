@@ -13,9 +13,10 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
 ## Scope
 
 - **In scope**: task issues (`type:task`) for the current repository.
-- **Out of scope**: incident issues (use the web UI incident template or
-  `gh issue create --label "type:incident"` directly); issues for other repos or
-  projects (use `gh issue create --repo OWNER/REPO` directly).
+- **Out of scope**: incident issues (use the web UI incident template or a
+  `--label "type:incident"` invocation of your own); issues for other repos or
+  projects, which take the cross-repo path below.
+- Cross-repo work: confirm the ownership of the target repository before filing the issue — an issue lands publicly in whichever repo `gh` resolves, and that resolution follows the working directory when no target is named.
 
 Required reading: Read `rules/github-issues.md` before Pre-flight — it is on-demand-only and never auto-injected.
 Read `rules/coding.md` before writing any issue title or body — on-demand-only, never auto-injected; its Public GitHub Rules govern this outbound write.

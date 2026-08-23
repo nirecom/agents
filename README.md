@@ -201,6 +201,17 @@ read only from the repository's own `.env`; an ambient shell variable of the sam
 raise the threshold or turn the gate off, and neither `WORKFLOW_OFF` nor `WORKTREE_OFF`
 suspends it (see `docs/architecture/claude-code/marker-bypass-contract.md`).
 
+### Forge write target-ownership guard
+
+A Claude Code PreToolUse hook (`hooks/confirm-forge-target-ownership.js`) asks for
+confirmation before a `gh issue create` / `gh api` write whose target repository is not
+proven to belong to the authenticated account — silence requires positive proof (matching
+login or admin permission on the repo), never a guess. An unresolvable `--repo` selector
+(e.g. an ambiguous short-flag cluster) is treated the same as an unproven target: it asks
+rather than silently trusting the current checkout. Never blocks outright, and never
+suspended by `WORKFLOW_OFF` or `WORKTREE_OFF`. See
+[docs/architecture/claude-code/settings.md](docs/architecture/claude-code/settings.md).
+
 ### VS Code worktree session visibility
 
 The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in its

@@ -484,6 +484,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/confirm-forge-target-ownership.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js\"",
             "timeout": 5
           }
