@@ -1,24 +1,13 @@
 "use strict";
-// bin/worker-dispatch/workers/doc-append.js
+// bin/worker-dispatch/workers/doc-append.js — Stage 2 worker replacing
+// agents/doc-append-worker.md: one CLI, three modes, selected by a table
+// instead of by an agent that had to be told not to mangle the argv.
 //
-// Stage 2 worker: replaces agents/doc-append-worker.md.
-//
-// One CLI call, three shapes. The agent's whole job was choosing between them
-// from a mode field and then not mangling the argv — which is exactly the kind
-// of work a table does better, and the reason its prompt had to spend six lines
-// forbidding redirection and pipes. Here there is no shell to redirect into.
-//
-// Two gates the agent got for free from the Bash tool and a script does not:
-//
-//   1. hooks/check-japanese-in-docs.js reads the doc-append COMMAND, so it can
-//      only see arguments that pass through the Bash tool. A payload file is
-//      invisible to it. The same check therefore runs here, calling the same two
-//      libraries the hook calls, so the public-repo English-only rule cannot
-//      drift between the two call sites.
-//   2. Conditional required fields (commits for history, a merge target for
-//      compose, test-gap for a BUGFIX history entry) are per-mode and cannot be
-//      expressed in the registry's flat payloadSpec, so they are checked here
-//      before anything is spawned.
+// Two gates the Bash tool gave that agent for free and a script must redo here:
+// (1) the public-repo English-only check, calling the same libraries
+// hooks/check-japanese-in-docs.js calls — that hook sees only the COMMAND, so a
+// payload file is invisible to it; (2) per-mode conditional required fields,
+// which the registry's flat payloadSpec cannot express, checked before spawn.
 
 const path = require("path");
 
@@ -119,7 +108,10 @@ function buildArgs(payload, ctx) {
   // `uv run <script>` rather than the doc-append PATH launcher: the launcher is
   // installed by the dotfiles repo and may be absent, while the script is always
   // present under the resolved ACD anchor.
-  const args = ["run", resolveScript(ctx.entry, "docAppend", ctx.anchors)];
+  // --no-project: cwd is the branch worktree, so without it `uv run` walks up
+  // for a pyproject.toml/workspace and can execute a branch-supplied PEP 517
+  // build backend. doc-append.py is stdlib-only — discovery buys nothing.
+  const args = ["run", "--no-project", resolveScript(ctx.entry, "docAppend", ctx.anchors)];
   args.push(mode === "history" ? "docs/history.md" : "CHANGELOG.md");
   args.push("--category", str(payload, "category"));
   args.push("--subject", str(payload, "subject"));
@@ -159,6 +151,10 @@ function run(payload, ctx) {
       anchors,
       command: plan.command,
       args: plan.args,
+      // GH_TOKEN/GITHUB_TOKEN reach only compose mode's gh calls (#1744) -- the
+      // history/changelog `uv run` runs from the family worktree and must not
+      // see either token (HIGH review finding on #1812/#1744).
+      envScope: payload.mode === "compose" ? ["GH_TOKEN", "GITHUB_TOKEN"] : [],
       cwd,
       timeoutMs: CLI_TIMEOUT_MS,
     });

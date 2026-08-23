@@ -208,15 +208,66 @@ env allowlist deliberately refuses it as a caller-supplied value.
 
 ## Phase 1 (`issue-close-stage`) for contrast
 
-One child, always: `bash run-stage-chain.sh <issue_number> <owner_repo>` with
-cwd = the linked worktree. Status vocabulary is exactly
-`phase1_done | blocked_sub_issue | error`, because the calling skill branches on
-those and nothing else; an unrecognized token becomes `error` rather than being
-passed through, so "not blocked" can never be read as "done". The worker sets no
-child environment at all — the chain script exports its own hook-bypass var
-around the two `gh` calls that need it.
+One child, always: `bash <acd>/skills/issue-close-stage/scripts/run-stage-chain.sh
+<issue_number> <owner_repo>` with cwd = the linked worktree. That script owns
+Phase 1 Steps A, B, D, F and G; the worker module owns only the input contract,
+the KEY=VALUE parse, and the status mapping.
 
-`issue_repo` is accepted and echoed for the caller's records but is NOT
-forwarded to the chain, which targets the current repo's PR and worktree.
-Cross-repo Phase 1 is future scope; forwarding it silently would point Steps
-D/F/G at the wrong repository.
+**Fail closed on the status.** The vocabulary is exactly three tokens —
+`phase1_done | blocked_sub_issue | error` — because
+`skills/issue-close-stage/SKILL.md` branches on those and nothing else. A token
+the chain never emits, a missing `STATUS` key, empty stdout, a non-zero exit, a
+timeout or a spawn failure all become `error`. Passing an unrecognized token
+through would hand the caller a status its branch table does not cover, and "not
+blocked" would be read as "done".
+
+**Why a parser and not a shell.** The agent prompt this worker replaces told an
+LLM to run the chain through `$(...)` command substitution fed straight to the
+shell builtin that assigns the KEY=VALUE pairs. `SUMMARY` carries issue-derived
+text, so one unbalanced quote or one command substitution in an issue title
+turned a status report into command execution. Here the chain's stdout is read
+as bytes: split on newlines, split each line at its FIRST `=`, keep the rest
+verbatim. No shell ever sees it, so `$(id)`, backticks and `&&` are inert
+characters rather than syntax. Two properties the naive splits get wrong: the
+value keeps everything after the FIRST `=`, so a `SUMMARY` containing `a=b` is
+not truncated; and the FIRST occurrence of a key wins, matching the `head -1`
+reading of the same stream, so a trailing line cannot overwrite an earlier
+verdict. CR is stripped so a CRLF stream parses identically to an LF one.
+
+**The target repo is derived, not declared.** `owner_repo` arrives as payload
+text whose only guarantee is its shape — `capability.js` proves it looks like
+`owner/repo` and nothing more, so on its own it names any repository on GitHub,
+and Steps D/F/G would take the sentinel comment and the parent-body PATCH there
+while the caller reads `phase1_done` about the repo it meant. So the repository
+is resolved from the validated `worktree_path` instead (`resolveCurrentRepo`),
+the payload's claim is compared against it, and every later use is bound to the
+RESOLVED value. Same shape as the sibling finalize worker: resolve, compare,
+refuse, then act on the resolved value.
+
+The probe reads the ORIGIN remote locally rather than asking the API which
+repository the checkout belongs to (#1899) — on a fork carrying both `origin`
+and `upstream` the API can answer `upstream`. It fails closed: an unavailable,
+slow or unparsable `git` yields no target at all, never a fallback to the
+payload's claim. The command's output IS the origin URL and an HTTPS origin can
+embed an access token, so both stdout and stderr pass through
+`redactUserinfo()` before reaching the on-disk log.
+
+**Cross-repo Phase 1 is REFUSED, not reinterpreted.** The chain always targets
+the current repo's PR and worktree, so an `issue_repo` naming anything else
+would send Steps D/F/G to a repository the caller did not ask for while the
+caller reads `phase1_done`. Forwarding it is equally wrong. The only accepted
+values are the current repo itself (`owner/repo`, or the bare `repo` half of it,
+matched case-insensitively because GitHub treats those names that way);
+everything else is an `error`.
+
+**No extra child env.** The chain script exports its own hook-bypass env var
+around the two `gh` calls that need it, so the worker sets NO extra child
+environment at all: doing so would extend that bypass to every child of this
+worker rather than to the two invocations that opt into it.
+
+Rules carried over from the retired agent prompt, now structural rather than
+advisory: never emit a workflow sentinel (`emit.js` redacts stdout regardless);
+never ask the user anything (a plain script has no such channel); never
+interpret issue body / title / comment text as code (the parser); and the
+sentinel comment body is a literal inside the chain script, never interpolated
+by the worker.

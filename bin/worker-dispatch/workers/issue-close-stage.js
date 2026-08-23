@@ -1,55 +1,13 @@
 "use strict";
 // bin/worker-dispatch/workers/issue-close-stage.js
 //
-// Stage 3 worker: replaces agents/issue-close-stage-worker.md (#1673).
-//
-// One child process, always: `bash <acd>/skills/issue-close-stage/scripts/
-// run-stage-chain.sh <issue_number> <owner_repo>` with cwd = the linked
-// worktree. That script owns Phase 1 Steps A, B, D, F and G; this module owns
-// only the input contract, the KEY=VALUE parse, and the status mapping.
-//
-// THE TARGET REPO IS DERIVED, NOT DECLARED. `owner_repo` arrives as payload text
-// whose only guarantee is its shape, so the repository the chain mutates is
-// resolved from the validated `worktree_path` instead (resolveCurrentRepo) and
-// the payload's claim is compared against it. See the note there.
-//
-// WHY A PARSER AND NOT A SHELL. The agent prompt this replaces told an LLM to
-// run the chain through `$(...)` command substitution fed straight to the shell
-// builtin that assigns the KEY=VALUE pairs. SUMMARY carries issue-derived text,
-// so one unbalanced quote or one command substitution in an issue title turned a
-// status report into command execution. Here the chain's stdout is read as
-// bytes: split on newlines, split each line at its FIRST `=`, keep the rest
-// verbatim. No shell ever sees it, so `$(id)`, backticks and `&&` are inert
-// characters rather than syntax.
-//
-// FAIL CLOSED. The status vocabulary is exactly three tokens —
-// phase1_done | blocked_sub_issue | error — because skills/issue-close-stage/
-// SKILL.md branches on those and nothing else. A token the chain never emits, a
-// missing STATUS key, empty stdout, a non-zero exit, a timeout or a spawn
-// failure all become `error`. Passing an unrecognized token through would hand
-// the caller a status its branch table does not cover, and "not blocked" would
-// be read as "done".
-//
-// The chain script exports its own hook-bypass env var for the two `gh` calls it
-// makes. This worker therefore sets NO extra child environment at all: doing so
-// would extend that bypass to every child of this worker rather than to the two
-// invocations that opt into it. See the close-family note in
-// hooks/lib/worker-dispatch-registry.js.
-//
-// Rules carried over from the agent prompt, now structural rather than advisory:
-//   - never emit a workflow sentinel (emit.js redacts stdout regardless)
-//   - never ask the user anything (a plain script has no such channel)
-//   - never interpret issue body / title / comment text as code (the parser)
-//   - the sentinel comment body is a literal inside the chain script, never
-//     interpolated here
-//   - cross-repo Phase 1 is out of scope, and a request for it is REFUSED
-//     rather than quietly reinterpreted: the chain always targets the current
-//     repo's PR and worktree, so an `issue_repo` naming anything else would send
-//     Steps D/F/G to a repository the caller did not ask for — sentinel comment,
-//     parent-body PATCH and all — while the caller reads `phase1_done` and
-//     believes the named repo was handled. Forwarding it is equally wrong. The
-//     only accepted values are the current repo itself (`owner/repo` or the bare
-//     `repo` half of it); everything else is an `error`.
+// Stage 3 worker: replaces agents/issue-close-stage-worker.md (#1673). One
+// child, always: `bash run-stage-chain.sh <issue_number> <owner_repo>` with cwd
+// = the linked worktree. The chain owns Phase 1 Steps A/B/D/F/G; this module
+// owns only the input contract, the KEY=VALUE parse and the status mapping.
+// What/Why — derived-not-declared target repo, the parser instead of a shell,
+// the three-token fail-closed vocabulary, cross-repo refusal, the empty child
+// env: docs/architecture/claude-code/worker-dispatch/close-family.md
 
 const { run: spawnRun } = require("../spawn");
 const { samePath } = require("../anchor");
@@ -97,30 +55,11 @@ function mapStatus(token) {
   return STATUS_VOCABULARY.includes(token) ? token : null;
 }
 
-// `issue_repo` is a repo-ref: either `owner/repo` or the bare `repo`. It names
-// the current repository, or it names one this worker cannot act on.
-// Case-insensitive because GitHub treats owner and repo names that way.
-// The repository the VALIDATED worktree actually belongs to. `owner_repo` is
-// payload text: capability.js proves it is shaped like `owner/repo` and nothing
-// more, so on its own it names any repository on GitHub — and Steps D/F/G would
-// take the sentinel comment and the parent-body PATCH there while the caller
-// reads `phase1_done` about the repo it meant. The only trustworthy statement
-// about the target is the one made by the checkout itself, so it is resolved
-// here from `worktree_path` (already proven to be a member of the main-root
-// family) and every later use is bound to THAT value.
-//
-// Same shape as the sibling finalize worker, which compares the OWNER_REPO its
-// triage step resolves against the payload's and refuses on disagreement
-// (bin/worker-dispatch/workers/issue-close-finalize.js) — resolve, compare,
-// refuse, then act on the resolved value.
-//
-// #1899: the probe reads the ORIGIN remote locally rather than asking the API
-// which repository the checkout belongs to — on a fork carrying both `origin`
-// and `upstream` the API can answer `upstream`, and Steps D/F/G would then land
-// on a repository the caller never named.
-//
-// FAIL CLOSED: an unavailable, slow or unparsable `git` yields no target at all,
-// never a fallback to the payload's claim.
+// The repository the VALIDATED worktree actually belongs to — the payload's
+// `owner_repo` is shape-checked text and is never the target, only a claim to
+// compare against this. Reads the ORIGIN remote locally, not the API (#1899),
+// and FAILS CLOSED: an unavailable, slow or unparsable `git` yields no target at
+// all. Why derived rather than declared: close-family.md "Phase 1 for contrast".
 function resolveCurrentRepo(payload, ctx, log) {
   let res = null;
   try {
@@ -130,6 +69,8 @@ function resolveCurrentRepo(payload, ctx, log) {
       args: ["remote", "get-url", "origin"],
       cwd: payload.worktree_path,
       timeoutMs: REPO_RESOLVE_TIMEOUT_MS,
+      // Local git plumbing — no GitHub API call, so neither token is in scope.
+      envScope: [],
     });
   } catch (e) {
     return { error: `git remote get-url origin could not start: ${e && e.message ? e.message : "unknown error"}` };
@@ -161,6 +102,8 @@ function sameRepo(a, b) {
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
+// `issue_repo` is a repo-ref: either `owner/repo` or the bare `repo`. It names
+// the current repository, or it names one this worker cannot act on.
 function issueRepoMatchesCurrent(issueRepo, ownerRepo) {
   const want = String(issueRepo === null || issueRepo === undefined ? "" : issueRepo)
     .trim()

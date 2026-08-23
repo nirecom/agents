@@ -50,6 +50,9 @@ mod.run = function stubbedRun(entry, opts) {
       args,
       cwd: opts.cwd,
       extraEnv: opts.extraEnv || null,
+      // Recorded as-is so an OMITTED envScope (full declared set) stays
+      // distinguishable from an explicit `[]` (no declared var at all).
+      envScope: opts.envScope === undefined ? null : opts.envScope,
     }) + "\n"
   );
 

@@ -61,7 +61,7 @@ issue-close-finalize | 1
 test-runner       | 0
 worktree-copy     | 0
 worktree-backup   | 0
-doc-append        | 0
+doc-append        | 1
 session-close-gate | 0
 TABLE
 

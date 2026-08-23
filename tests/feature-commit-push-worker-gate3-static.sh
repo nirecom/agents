@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-commit-push-worker-gate3-static.sh
-# Tests: bin/worker-dispatch/workers/commit-push.js, skills/commit-push/SKILL.md
-# Tags: static, agent, skill, commit-push, gate3, unstaged-tracked
+# Tests: bin/worker-dispatch/workers/commit-push/procedure.js, skills/commit-push/SKILL.md
+# Tags: static, agent, skill, commit-push, gate3, unstaged-tracked, scope:common
 #
 # Static contract test for Gate 3 (commit-push pre-flight staging check).
 # #1673 moved the worker from the agents/commit-push-worker.md subagent prompt to
@@ -12,7 +12,10 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKER_MD="${AGENTS_DIR}/bin/worker-dispatch/workers/commit-push.js"
+# commit-push.js is now dispatch-only (rules/coding/file-split.md Pattern A); the
+# run() spine that owns Gate 3 lives in the sibling procedure.js, so tests 1-3
+# scan that single file — test 2's line-number ordering needs one source.
+WORKER_MD="${AGENTS_DIR}/bin/worker-dispatch/workers/commit-push/procedure.js"
 CP_SKILL_MD="${AGENTS_DIR}/skills/commit-push/SKILL.md"
 
 PASS=0
@@ -28,9 +31,9 @@ test_1_worker_has_cli_literal() {
         return
     fi
     if grep -qF 'check-unstaged-tracked.sh' "$WORKER_MD"; then
-        pass "1: commit-push.js contains check-unstaged-tracked.sh"
+        pass "1: procedure.js contains check-unstaged-tracked.sh"
     else
-        fail "1: commit-push.js missing check-unstaged-tracked.sh literal"
+        fail "1: procedure.js missing check-unstaged-tracked.sh literal"
     fi
 }
 
@@ -70,7 +73,7 @@ test_3_status_enum_values() {
     grep -qF 'staging_incomplete' "$WORKER_MD" && has_inc=1
     grep -qF 'staging_check_failed' "$WORKER_MD" && has_chk=1
     if [ "$has_inc" -eq 1 ] && [ "$has_chk" -eq 1 ]; then
-        pass "3: commit-push.js has staging_incomplete AND staging_check_failed in status enum"
+        pass "3: procedure.js has staging_incomplete AND staging_check_failed in status enum"
     else
         fail "3: missing status values" "staging_incomplete=$has_inc staging_check_failed=$has_chk"
     fi

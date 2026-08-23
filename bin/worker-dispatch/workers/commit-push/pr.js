@@ -85,6 +85,7 @@ function prTitle(payload, ctx) {
         anchors: ctx.anchors,
         command: "gh",
         args,
+      envScope: ["GH_TOKEN", "GITHUB_TOKEN"],
         cwd: payload.worktree_path,
         timeoutMs: GH_TIMEOUT_MS,
       });
@@ -162,6 +163,7 @@ function scanOutbound(payload, ctx, content, log) {
       command: "bash",
       script: "scanOutbound",
       args: ["--stdin", SCAN_LABEL],
+      envScope: [],
       cwd: payload.worktree_path,
       timeoutMs: GH_TIMEOUT_MS,
       input: content,
@@ -191,6 +193,7 @@ function ensurePullRequest(payload, ctx, log) {
       anchors: ctx.anchors,
       command: "gh",
       args: ["pr", "view", "--json", "state,url"],
+      envScope: ["GH_TOKEN", "GITHUB_TOKEN"],
       cwd: payload.worktree_path,
       timeoutMs: GH_TIMEOUT_MS,
     });
@@ -247,6 +250,7 @@ function ensurePullRequest(payload, ctx, log) {
       anchors: ctx.anchors,
       command: "gh",
       args: ["pr", "create", "--head", payload.branch, "--title", title, "--body-file", "-"],
+      envScope: ["GH_TOKEN", "GITHUB_TOKEN"],
       cwd: payload.worktree_path,
       timeoutMs: GH_TIMEOUT_MS,
       input: body,
