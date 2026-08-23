@@ -1,25 +1,13 @@
 // hooks/lib/bash-write-patterns/patterns.js
 // Pattern-based Bash command classifier: classify(cmd) -> "read" | "write"
-//
-// Design: fail-safe — when in doubt, returns "write" (false positive is preferred).
-// This is a UX guard, not a security boundary. Use ENFORCE_WORKTREE=off to bypass.
-//
-// Accepted false-negatives (detected as "read" even though they write):
-//   - Python/Ruby/Perl file writes via language constructs: open(), File.write, etc.
-//   - Binary write tools: dd, xxd, etc.
-//   - Writes through variables expanded at shell runtime: cmd=$(cat) > file
-//
-// Accepted false-positives (detected as "write" even though they don't write files):
-//   - echo "a > b" with quoted '>' inside the argument
-// Note: FD-to-FD redirects (cmd 2>&1, cmd 1>&2) are correctly classified as read —
-// the posix-redirect lookahead excludes `>&<digit>` (see line 28).
-// Note: echo "<<WORKFLOW_...>>" is NOT a false-positive — the here-doc anchor fix excludes it.
-// Note: redirects to /dev/null (e.g. 2>/dev/null) are excluded from write — null-sink
-//       discards output and is common in read-only commands like `git status 2>/dev/null`.
-//       The lookahead uses (?=\s|[;|&)]|$) not \b — `)` accepts 2>/dev/null inside $(...) (#359);
-//       /dev/null/foo remains a write because `/` is not in the terminator set.
-//       Windows NUL is intentionally NOT excluded: this pattern is for POSIX bash commands
-//       only. PowerShell null-sink uses Out-Null/> $null and is handled by pwsh-specific patterns.
+// Design: fail-safe — when in doubt, returns "write". A UX guard, not a security
+// boundary; ENFORCE_WORKTREE=off bypasses. Accepted false-negatives: language-level
+// file writes (open()/File.write), binary tools (dd, xxd), writes through runtime
+// variable expansion. Accepted false-positive: echo "a > b". FD-to-FD redirects
+// (2>&1) classify as read — the posix-redirect lookahead excludes `>&<digit>`.
+// echo "<<WORKFLOW_...>>" is excluded by the here-doc anchor fix. Redirects to
+// /dev/null are read (the terminator set excludes `/`, so /dev/null/foo is a write);
+// Windows NUL is deliberately not excluded — pwsh null-sinks have their own patterns.
 
 "use strict";
 const { resolveEffectiveCommand, resolveEffectiveArgv } = require("./segment-utils");
@@ -40,44 +28,27 @@ const WRITE_PATTERNS = [
   // here-string: <<<
   // stripDQOnly:true: same rationale as here-doc (SQ spans must not be stripped).
   { name: "here-string", kind: "posix", regex: /<<</, spanAware: true, stripDQOnly: true },
-  // PowerShell write cmdlets (kind pwsh) retired (#1400): now owned by isPwshWriteIR.
-  // PowerShell write aliases (kind pwsh-alias) retired (#1402 canary-7): now owned by
-  // isPwshWriteIR (IR-based) via PWSH_CMDLET_RE in bash-write-targets.js.
-  // PowerShell encoded / bypass
-  // encoded-command / ps-stop-parsing (kind pwsh-encoded) retired (#1402 canary-7):
-  // isEncodedCommandWriteIR (bash-write-targets/encoded.js) is the fail-closed SSOT.
-  // Scoped to pwsh/powershell interpreters (not arbitrary -enc flags).
-  // PowerShell here-strings
-  // here-doc/here-string here-* entries are RETAINED (not retired #1402): they are
-  // QUOTING_ONLY markers required by the Group A override + isSafeHeredocOnly gate.
-  // isHereWriteIR (bash-write-targets/here.js) is the IR-side read/write companion.
-  // spanAware:true: @'…'@ / @"…"@ syntax inside a DQ arg is prose, not a here-string.
+  // PowerShell write cmdlets (kind pwsh) and aliases (kind pwsh-alias) retired
+  // (#1400 / #1402 canary-7): isPwshWriteIR owns them via PWSH_CMDLET_RE in
+  // bash-write-targets.js. encoded-command / ps-stop-parsing (kind pwsh-encoded)
+  // retired too: isEncodedCommandWriteIR (bash-write-targets/encoded.js) is the
+  // fail-closed SSOT, scoped to pwsh/powershell interpreters (not arbitrary -enc).
+  // PowerShell here-strings: the here-* entries are RETAINED (not retired #1402) as
+  // QUOTING_ONLY markers required by the Group A override + isSafeHeredocOnly gate;
+  // isHereWriteIR (bash-write-targets/here.js) is the IR-side companion. spanAware:
+  // true — @'…'@ / @"…"@ inside a DQ arg is prose, not a here-string.
   { name: "pwsh-here-single", kind: "pwsh-here", regex: /@'[\s\S]*?'@/, spanAware: true },
   { name: "pwsh-here-double", kind: "pwsh-here", regex: /@"[\s\S]*?"@/, spanAware: true },
   // Destructive file operations (kind file-op) retired (#1402 canary-7):
-  // isExtendedFileOpWriteIR (bash-write-targets/file-op.js) is the SSOT.
-  // Flag-gated verbs (sed -i, perl -i, tar -x, dd of=) require explicit flags.
-  // pkg-mgr (npm/pnpm/yarn/pip/uv/cargo/go) retired to IR (#1411 canary-6a).
-  // isPkgMgrWriteIR in hooks/lib/bash-write-targets/pkg-mgr.js is the SSOT.
-  // git mutating subcommands (kind git) retired from WRITE_PATTERNS (#1401):
-  // the 18 git write forms + config-injection are now owned by isGitWriteIR
-  // (IR-based SSOT). git write reaches the enforce-worktree main-worktree-allows
-  // predicates via the collect→scope pipeline as a {resolveVia:"self"} target.
-  // gh mutating subcommands.
-  // Only commands that modify repo content or are destructive are kept here (Group B).
-  // Coordination commands (Group A: gh pr create/edit/close/comment/review,
-  // gh issue create/edit/close/comment, gh repo create/edit/rename/archive)
-  // are intentionally NOT classified as write — they only touch GitHub-side
-  // metadata and do not change repo content, so they require neither worktree
-  // enforcement nor session-scope check.
-  // The kind:"gh" WRITE_PATTERNS group has been retired (#1296). gh write
-  // detection is now owned solely by isGhWriteIR (IR-based SSOT) below.
-  // interpreter-c (bash/sh/zsh/pwsh -c/-Command/-EncodedCommand) retired to IR (#1411 canary-6a).
-  // isInterpreterCWriteIR in hooks/lib/bash-write-targets.js is the SSOT.
-  // git-c-config-flag (kind git) retired (#1401): config-injection reachability
-  // is now owned by isGitWriteIR (C3) — it returns true for `-c k=v` / --config-env
-  // regardless of subcommand, so the fast-allow gate does not exit before
-  // hasGitHooksBypass / rejectRceGitFlags run on the raw command.
+  // isExtendedFileOpWriteIR (bash-write-targets/file-op.js) is the SSOT; flag-gated
+  // verbs (sed -i, perl -i, tar -x, dd of=) require explicit flags. pkg-mgr retired
+  // to isPkgMgrWriteIR (#1411 canary-6a). git verbs retired to isGitWriteIR (#1401),
+  // reaching enforce-worktree via the collect→scope pipeline as {resolveVia:"self"};
+  // git-c-config-flag too (C3 returns true for `-c k=v` / --config-env regardless of
+  // subcommand). gh Group A (pr/issue/repo coordination) is deliberately NOT write —
+  // GitHub-side metadata only; the kind:"gh" group is retired (#1296) and isGhWriteIR
+  // below is the sole SSOT. interpreter-c retired to isInterpreterCWriteIR (#1411
+  // canary-6a) in hooks/lib/bash-write-targets.js.
 ];
 
 // gh "Group A" coordination commands: pr/issue/repo lifecycle that touch
@@ -113,21 +84,15 @@ const QUOTING_ONLY_NAMES = new Set([
 ]);
 
 // Pattern kinds where classify() tests the stripped (quote-removed) command.
-// - posix-redir (posix-redirect, tee): redirect chars inside quoted args
-//   (e.g. `grep -nE "pattern > match" file`, #460) and `tee` in quoted prose
-//   (e.g. `doc-append --subject "tee output"`) must not false-positive.
-// - git (#692): git verbs inside quoted args (e.g. `grep -n "git push" file`)
-//   must not false-positive. The git-commit / git-push / git-merge / etc.
-//   regexes use `\bgit\b.*\bverb\b` which span quoted prose without stripping.
-// gh: NOT in STRIP_KINDS — the kind:"gh" WRITE_PATTERNS group was retired (#1296);
-//   gh write detection is now owned solely by isGhWriteIR (IR-based SSOT below),
-//   which operates on parsed argv tokens and is unaffected by quote-stripping.
-// AT-DP1 (#416): "pkg-mgr" has been removed from STRIP_KINDS because the
-// pkg-mgr WRITE_PATTERNS entries were retired to isPkgMgrWriteIR (#1411 canary-6a).
-// STRIP_KINDS: file-op/pwsh-alias/pwsh-encoded retired (#1402 canary-7). here-*
-// entries stay in WRITE_PATTERNS as QUOTING_ONLY markers but are kind:"posix"/
-// "pwsh-here" (never in STRIP_KINDS — original-cmd scan preserved). The Set is
-// now empty; classify() no longer strips quoted args for any write-path kind.
+// - posix-redir (posix-redirect, tee): redirect chars inside quoted args (#460)
+//   and `tee` in quoted prose must not false-positive.
+// - git (#692): git verbs inside quoted args must not false-positive, since the
+//   `\bgit\b.*\bverb\b` regexes span quoted prose without stripping.
+// gh is NOT in STRIP_KINDS — the kind:"gh" group was retired (#1296) and
+// isGhWriteIR works on parsed argv, unaffected by quote-stripping. "pkg-mgr"
+// (AT-DP1 #416), file-op, pwsh-alias and pwsh-encoded were removed likewise; the
+// here-* entries are kind "posix"/"pwsh-here" and never strip. The Set is now
+// empty, so classify() no longer strips quoted args for any write-path kind.
 const STRIP_KINDS = new Set();
 
 // Write command words that, when quoted at command-position, must still be
@@ -152,25 +117,21 @@ const UNSAFE_REASON_CHARS = /\$[({[]|[`"]/;
 
 // resolveGhSubArgv: skip leading gh GLOBAL FLAGS so the subcommand is read from
 // its effective position, not shifted by a preceding flag.
-//
 // #1296 retire bypass class: the retired regex `\bgh\b.*\bpr\b.*\bmerge\b` was
 // order-tolerant, so `gh -R owner/repo pr merge 123` still matched. The IR
-// replacement below uses strict positional matching (sub0/sub1), so a global
-// flag before the subcommand (e.g. `gh -R o/r pr merge`) shifted argv → sub0="-R"
-// → detection returned false → the gh mutation fast-allowed with NO session-scope
-// enforcement against an arbitrary `-R owner/repo` target. Skipping the leading
-// global flags here closes that out-of-session-repo bypass.
-//
-// Value-taking global flags consume a following token (or use the attached =value
-// form): -R/--repo (owner/repo), --hostname (host). Any other leading `-`token is
-// treated as a lone boolean flag (skip just it) — we do NOT consume a following
-// value for unknown flags, to avoid over-skipping the subcommand.
+// replacement uses strict positional matching (sub0/sub1), so a global flag before
+// the subcommand shifted argv → sub0="-R" → detection returned false → the gh
+// mutation fast-allowed with NO session-scope enforcement against an arbitrary
+// `-R owner/repo` target. Value-taking global flags consume a following token (or
+// the attached =value form): -R/--repo, --hostname. Any other leading `-` token is
+// a lone boolean flag (skip just it), to avoid over-skipping the subcommand.
 const GH_VALUE_TAKING_GLOBAL_FLAGS = new Set(["-R", "--repo", "--hostname"]);
 function resolveGhSubArgv(ghArgv) {
   let i = 0;
   while (i < ghArgv.length) {
     const tok = ghArgv[i];
     if (typeof tok !== "string" || tok[0] !== "-") break; // first non-flag = effective subcommand
+    if (tok === "--") break; // end-of-options: nothing after it is a global flag
     const eq = tok.indexOf("=");
     const flagName = eq === -1 ? tok : tok.slice(0, eq);
     if (eq !== -1) {

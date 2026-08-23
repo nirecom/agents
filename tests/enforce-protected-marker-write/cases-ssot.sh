@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/protected-basenames.js, hooks/lib/session-markers.js
+# Tags: session-marker, protected-basename, ssot, forge-state, scope:common
 # Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Section X - M-3 (.tmp symmetry) and CROSS-FILE DRIFT DETECTION.
 #
-# hooks/lib/protected-basenames.js is the SSOT for "which basenames hold clearance
-# state" (CPR-SSOT), but it is only a real SSOT while its consumers agree with it. The
-# marker list is protected precisely BECAUSE hooks/lib/session-markers.js grants
-# authorization on a marker's mere existence; if a future kind is added there and
-# not here, that kind becomes forgeable the moment it starts granting anything, and
-# no test written against a HARDCODED list would notice. So the checks below derive
-# both sides from the source files and compare them.
-#
-# M-3 is the same argument one level down: the sanctioned writer creates a marker
-# by writing `<marker>.tmp` and renaming. If only the final name is protected, the
-# intermediate is a free write and the attacker just supplies the `mv` - which is
-# why the token list has always carried `.off-clearance.tmp`, and why the marker
-# list must carry `.tmp` for every kind (CPR-ORTH symmetry).
+# protected-basenames.js is the SSOT for clearance-state basenames; the checks
+# below derive both sides from source rather than a hardcoded list, so a kind
+# added to session-markers.js but not here would be silently forgeable. M-3:
+# the sanctioned writer uses `<marker>.tmp` + rename, so .tmp must be
+# protected for every kind too (CPR-ORTH symmetry).
 
 run_X_ssot() {
     local probe="$SANDBOX/ssot-probe.js" out line
@@ -49,7 +43,7 @@ const tokPairs = p.OFF_CLEARANCE_TOKEN_SUFFIXES
 out.push(`tokentmp-pairing=${tokPairs}`);
 // The marker list must be exactly {.kind, .kind.tmp} for every kind - no more, no
 // less. A stray entry means a hand-edit crept into a derived list.
-const want = p.SESSION_MARKER_KINDS.reduce((a, k) => a.concat(["." + k, "." + k + ".tmp"]), []);
+const want = [...p.SESSION_MARKER_KINDS, ...p.FORGE_OWNERSHIP_STATE_KINDS].reduce((a, k) => a.concat(["." + k, "." + k + ".tmp"]), []);
 out.push(`markerlist-exact=${JSON.stringify([...p.PROTECTED_MARKER_SUFFIXES].sort()) === JSON.stringify(want.sort())}`);
 // The mention gate must stay off the DOCUMENTATION of the escape hatch (the
 // Section N failure mode, asserted here at regex level too).

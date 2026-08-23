@@ -1,50 +1,34 @@
 #!/usr/bin/env bash
 # tests/enforce-protected-marker-write.sh
-# Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/bash-target-context.js, hooks/lib/command-parser.js, hooks/lib/path-containment.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/lib/session-markers.js
-# Tags: off-clearance, session-marker, protected-basename, glob, ads, pretooluse, block-write, classifier, security, redirect-operator, parse-failure, eval, command-substitution, here-string, heredoc, stdin-program, pipe, process-substitution, interpreter, interpreter-identity, argv-operand, flag-cluster, brace-expansion, ansi-c-quoting, workflow-dir, symlink, case-fold, fail-direction, on-unknown, path-containment, cwd-tracking, pushd, popd, dir-stack, command-wrapper, scope:common, pwsh-not-required, TL2, hook-registration
+# Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/bash-target-context.js, hooks/block-clearance-token-write/bash-target-context/classify.js, hooks/lib/command-parser.js, hooks/lib/path-containment.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/lib/session-markers.js
+# Tags: off-clearance, session-marker, protected-basename, glob, ads, pretooluse, block-write, classifier, security, redirect-operator, parse-failure, eval, command-substitution, here-string, heredoc, stdin-program, pipe, process-substitution, interpreter, interpreter-identity, argv-operand, flag-cluster, brace-expansion, ansi-c-quoting, workflow-dir, symlink, case-fold, fail-direction, on-unknown, path-containment, cwd-tracking, pushd, popd, dir-stack, command-wrapper, gh, ownership, forge-state, scope:common, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook inside a live claude -p session
 #   (here it is a node subprocess fed synthetic stdin), i.e. that settings.json's
 #   Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands matcher actually
 #   routes those tool calls to it. X6 asserts the registration STATICALLY only.
-# - Real NTFS alternate-data-stream semantics (that `x::$DATA` lands on `x`). The
-#   OS behaviour is the premise; only the hook's treatment of the spelling is here.
-# - Real shell glob expansion at redirect time. Same split: the expansion is the
-#   premise, the hook's could-expand-to matcher is what is asserted.
+
+# - Real NTFS alternate-data-stream semantics and real shell glob expansion at
+#   redirect time: the OS/shell behaviour is the premise, and only the hook's
+#   treatment of the spelling is asserted here.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
+
 # WHAT THIS FILE DEFENDS (#1780 security-scanner round 8: H-1..H-4, M-1, M-3)
-#
 # hooks/lib/session-markers.js authorizes purely on a marker file's EXISTENCE, so
-# ONE forged `<sid>.workflow-off` (or `.worktree-off` / `.issue-close-verified` /
-# `.next-step-paused` / `.off-emergency-invoked`) grants the session full clearance.
-# The guard against that must therefore be:
-#
-#   H-1  LOCATION-INDEPENDENT. enforce-worktree.js is a worktree-LOCATION guard
-#        whose tail allows every write from a linked worktree on a feature branch
-#        — the normal working mode — so a marker gate placed only there is inert
-#        exactly where the work happens. Section L runs the whole matrix with the
-#        process CWD inside a REAL linked worktree on a REAL feature branch.
-#   H-3  GLOB-AWARE. `?` / `[..]` / `*` spellings that COULD expand onto a
-#        protected basename must block; ordinary bulk globs must not (Section G).
-#   H-4  ADS-AWARE. A trailing NTFS stream spec must not shield the base file,
-#        while a Windows drive letter must survive untouched (Section A).
-#   M-1  SHAPE-COMPLETE. file_path / path / edits[].file_path / edits[].path all
-#        reach the same classifier (Section S).
-#   M-3  TMP-SYMMETRIC. The write-then-rename `.tmp` intermediate is protected for
-#        markers exactly as it already was for the token (Section X).
-#
+# ONE forged `<sid>.workflow-off` (or any sibling kind) grants the session full
+# clearance. The guard against that must be location-independent (H-1, Section L),
+# glob-aware (H-3, Section G), ADS-aware (H-4, Section A), shape-complete
+# (M-1, Section S) and .tmp-symmetric (M-3, Section X).
+
 # Every block case is paired with its CPR-ORTH sanctioned counterpart: a guard that
 # over-blocks ordinary work is a different, equally real defect (Section N).
-#
+
 # ASSERTION CONTRACT (same strictness as tests/enforce-off-clearance-write.sh):
 # the hook ALWAYS exits 0 and ALWAYS prints a JSON decision. An allow is only an
 # allow when the process exited 0 AND affirmatively said so; a crash, a timeout,
 # empty stdout or unparseable stdout each get their own verdict token and can
 # never be confused with "approve". See classify() below.
-# ---------------------------------------------------------------------------
 
 set -u
 
@@ -238,6 +222,8 @@ PARTS_DIR="$AGENTS_DIR/tests/enforce-protected-marker-write"
 . "$PARTS_DIR/cases-round13-onunknown.sh"
 # shellcheck source=./enforce-protected-marker-write/cases-round14-cwd-tracking.sh
 . "$PARTS_DIR/cases-round14-cwd-tracking.sh"
+# shellcheck source=./enforce-protected-marker-write/cases-forge-ownership-state.sh
+. "$PARTS_DIR/cases-forge-ownership-state.sh"
 
 run_L_marker_matrix        # H-1: every kind x {bare,.tmp} x {Edit,Write,MultiEdit,Bash}
 run_L_location_invariance  # H-1: identical verdict from linked / main / non-repo CWD
@@ -287,6 +273,8 @@ run_R14_cwd_inverse        # round-14: popd / `cd -` are real INVERSES, not one-
 run_R14_cwd_wrapper        # round-14: `command cd` / `builtin cd` are unwrapped one level
 run_R14_cwd_nonmoves       # round-14 CPR-ORTH: `pushd -n` / `pushd +N` must NOT move the tracked cwd
 run_R14_cwd_unknown_origin # round-14 CPR-UNV: origin unknown => pop fails CLOSED, bounded to the pop path
+run_O_forge_ownership_state # 2053: the three gh-ownership state files join the protected set
+run_O8_forge_state_side_effects # 2053 round-2 C5: Pattern 1 — the write is prevented, not just judged
 
 cleanup_tmp "$SANDBOX"
 if [ -n "$FIXTURE" ] && [ -d "$FIXTURE" ]; then
