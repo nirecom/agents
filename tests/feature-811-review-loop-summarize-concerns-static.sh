@@ -3,17 +3,12 @@
 # Tests: skills/_shared/cap-menu-dispatch.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md
 # Tags: feature, cap-menu, static-protocol, scope:issue-specific, pwsh-not-required
 #
-# Static grep-based checks for #811 protocol wiring:
-#   - cap-menu-dispatch.md step c.5 invokes the summarize-concerns helper
-#   - Parameters table carries LEDGER_FILE and RAW_FILE with ROUND_NUMBER-1 semantics
-#   - MOP-6 / MDP-6 cap-menu Step Parameters carry LEDGER_FILE + RAW_FILE
-#   - MOP-6 / MDP-6 chat-output Rules carry a (d) bullet exempting the concern summary
-#   - cap-menu-dispatch.md does NOT introduce a new 3+ line fenced code block
-#
-# L3 gap (what this test does NOT catch):
-# - The helper invocation actually fires from cap-menu-dispatch.md step c.5 in a real review loop
-# - The stdout actually reaches the main conversation rendered as Markdown
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Static grep checks for #811 protocol wiring: the summarize-concerns helper is
+# invoked, LEDGER_FILE / RAW_FILE reach the cap-menu steps, the concern summary
+# is exempted from the chat-output rules, and no new fenced block appears.
+# L3 gap: whether the helper really fires in a live loop and its stdout reaches
+# the conversation — checked at the WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh, category skill-orchestration.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -79,15 +74,22 @@ if require_file "$CAP_DISPATCH"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. cap-menu-dispatch.md Parameters-table RAW_FILE row carries
-#    "most recently persisted" / ROUND_NUMBER-1 semantics
+# 3. The RAW_FILE round is read, not computed. "ROUND_NUMBER minus one" was an
+#    inference about a counter the reader does not own; the loop that owns it
+#    now states the answer — last-round.txt at a terminal, round-number.txt
+#    while the loop continues (#2068).
 # ---------------------------------------------------------------------------
-echo "=== 3. cap-menu-dispatch.md: RAW_FILE row carries ROUND_NUMBER-1 semantics ==="
+echo "=== 3. cap-menu-dispatch.md: RAW_FILE row names the file that holds the round ==="
 if require_file "$CAP_DISPATCH"; then
-    if has 'RAW_FILE.*(most recently persisted|ROUND_NUMBER-1)' "$CAP_DISPATCH"; then
-        pass "cap-menu-dispatch.md RAW_FILE row carries ROUND_NUMBER-1 / most-recently-persisted semantics"
+    if has 'RAW_FILE.*(last-round|round-number)' "$CAP_DISPATCH"; then
+        pass "cap-menu-dispatch.md RAW_FILE row reads the round from last-round/round-number"
     else
-        fail "RAW_FILE row must specify ROUND_NUMBER-1 (most recently persisted); see detail-plan §RAW_FILE state at cap-reach"
+        fail "RAW_FILE row must read the round from last-round.txt / round-number.txt"
+    fi
+    if has_fixed "round_number-1" "$CAP_DISPATCH"; then
+        fail "cap-menu-dispatch.md still computes round_number-1 — a second opinion on the round"
+    else
+        pass "cap-menu-dispatch.md no longer computes round_number-1"
     fi
 fi
 
@@ -106,17 +108,22 @@ if require_file "$OUTLINE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5. MOP-6 RAW_FILE uses <round_number-1> token (or 'previous round' near RAW_FILE)
+# 5. Same contract at the outline skill's own copy of the instruction: name the
+#    file that holds the round instead of subtracting one from a live counter,
+#    which pointed at the wrong raw file whenever the counter had moved on.
 # ---------------------------------------------------------------------------
-echo "=== 5. make-outline-plan/SKILL.md: MOP-6 RAW_FILE uses <round_number-1> ==="
+echo "=== 5. make-outline-plan/SKILL.md: MOP-6 RAW_FILE reads the recorded round ==="
 if require_file "$OUTLINE_SKILL"; then
     WIN=$(awk '/MOP-6/{found=1; count=0} found && count<=10 {print; count++}' "$OUTLINE_SKILL")
-    if echo "$WIN" | grep -F -q -- "<round_number-1>"; then
-        pass "MOP-6 references <round_number-1> token"
-    elif echo "$WIN" | grep -E -q 'RAW_FILE.*previous round|previous round.*RAW_FILE'; then
-        pass "MOP-6 references 'previous round' adjacent to RAW_FILE"
+    if echo "$WIN" | grep -E -q -- 'last-round|round-number'; then
+        pass "MOP-6 reads the RAW_FILE round from last-round/round-number"
     else
-        fail "MOP-6 missing <round_number-1> token or 'previous round' adjacent to RAW_FILE within 10-line window"
+        fail "MOP-6 missing a last-round.txt / round-number.txt reference within its 10-line window"
+    fi
+    if echo "$WIN" | grep -F -q -- "round_number-1"; then
+        fail "MOP-6 still computes round_number-1 — the reader must not second-guess the counter"
+    else
+        pass "MOP-6 no longer computes round_number-1"
     fi
 fi
 
@@ -134,17 +141,21 @@ if require_file "$DETAIL_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 7. MDP-6 RAW_FILE uses <round_number-1> token (or 'previous round' near RAW_FILE)
+# 7. The detail skill is the symmetric case (CPR-ORTH): one skill left on the
+#    subtraction is one skill still reading the wrong round's raw file.
 # ---------------------------------------------------------------------------
-echo "=== 7. make-detail-plan/SKILL.md: MDP-6 RAW_FILE uses <round_number-1> ==="
+echo "=== 7. make-detail-plan/SKILL.md: MDP-6 RAW_FILE reads the recorded round ==="
 if require_file "$DETAIL_SKILL"; then
     WIN=$(awk '/MDP-6/{found=1; count=0} found && count<=10 {print; count++}' "$DETAIL_SKILL")
-    if echo "$WIN" | grep -F -q -- "<round_number-1>"; then
-        pass "MDP-6 references <round_number-1> token"
-    elif echo "$WIN" | grep -E -q 'RAW_FILE.*previous round|previous round.*RAW_FILE'; then
-        pass "MDP-6 references 'previous round' adjacent to RAW_FILE"
+    if echo "$WIN" | grep -E -q -- 'last-round|round-number'; then
+        pass "MDP-6 reads the RAW_FILE round from last-round/round-number"
     else
-        fail "MDP-6 missing <round_number-1> token or 'previous round' adjacent to RAW_FILE within 10-line window"
+        fail "MDP-6 missing a last-round.txt / round-number.txt reference within its 10-line window"
+    fi
+    if echo "$WIN" | grep -F -q -- "round_number-1"; then
+        fail "MDP-6 still computes round_number-1 — the reader must not second-guess the counter"
+    else
+        pass "MDP-6 no longer computes round_number-1"
     fi
 fi
 

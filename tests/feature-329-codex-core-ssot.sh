@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/codex-core.sh
-# Tags: bin, env, config, codex, tests
-# Tests for new SSOT helpers added to bin/lib/codex-core.sh (issue #329).
-#
-# Covered functions:
-#   codex_core_severity_tokens
-#   codex_core_check_jq
-#   codex_core_round_log_append
-#   codex_core_round_count
-#   codex_core_hard_cap_check
-#   codex_core_validate_severity
-#
-# Tests will FAIL until the functions are implemented — this defines the contract.
+# Tags: bin, env, config, codex, tests, scope:issue-specific
+# SSOT helpers in codex-core.sh (#329): severity_tokens, check_jq, round_log_append, round_count, hard_cap_check, validate_severity.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -219,77 +209,53 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. hard_cap_check under limit → returns 0, no output
+# 11-14. The hard cap is decided from the round number the caller is on, not
+#        from how many lines plan.jsonl happens to hold (#2068). The log is an
+#        append-only audit record: a retry, a lost write or a second producer
+#        moves its line count without moving the round. So these cases pass the
+#        round directly and write no log at all — a judgement that still needed
+#        one would fail here, which is the point.
 # ---------------------------------------------------------------------------
-LOG7="$TMPDIR_BASE/log7.jsonl"
-run_core "codex_core_round_log_append '$LOG7' 'sessA' 'detail-plan' 'APPROVED' '' >/dev/null" >/dev/null 2>&1
-# count=1, cap=2, extensions_used=0 → NEW limit=3 (1+2+0), under limit
-RES=$(run_core_rc "codex_core_hard_cap_check '$LOG7' 'sessA' 'detail-plan' 2 0 2")
-RC=$(extract_rc "$RES")
-OUT=$(extract_out "$RES")
-if [[ "$RC" == "0" ]]; then
-    pass "hard_cap_check under limit → returns 0"
-else
-    fail "hard_cap_check under limit: expected rc=0, got rc=$RC, output: $OUT"
-fi
+while IFS='|' read -r HC_ROUND HC_CAP HC_USED HC_MAX HC_RC HC_NEEDLE HC_WHY; do
+    case "$HC_ROUND" in ''|\#*) continue ;; esac
 
-# ---------------------------------------------------------------------------
-# 12. hard_cap_check at limit, ext_used < max_ext → rc=2, "extension available"
-# ---------------------------------------------------------------------------
-LOG8="$TMPDIR_BASE/log8.jsonl"
-run_core "
-codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'A' '' >/dev/null
-codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'B' '' >/dev/null
-codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'C' '' >/dev/null
-" >/dev/null 2>&1
-# count=3, cap=2, ext_used=0, max_ext=2 → NEW limit=3 (1+2+0) → at limit
-RES=$(run_core_rc "codex_core_hard_cap_check '$LOG8' 'sessA' 'detail-plan' 2 0 2")
-RC=$(extract_rc "$RES")
-OUT=$(extract_out "$RES")
-if [[ "$RC" == "2" ]]; then
-    pass "hard_cap_check at limit with extensions → returns 2"
-else
-    fail "hard_cap_check at limit: expected rc=2, got rc=$RC, output: $OUT"
-fi
-if echo "$OUT" | grep -qi "extension available"; then
-    pass "hard_cap_check at limit: message contains 'extension available'"
-else
-    fail "hard_cap_check at limit: missing 'extension available'. Output: $OUT"
-fi
+    RES=$(run_core_rc "codex_core_hard_cap_check '$HC_ROUND' '$HC_CAP' '$HC_USED' '$HC_MAX' 'detail-plan'")
+    RC=$(extract_rc "$RES")
+    OUT=$(extract_out "$RES")
 
-# ---------------------------------------------------------------------------
-# 13. hard_cap_check at ceiling → "absolute ceiling reached"
-# ---------------------------------------------------------------------------
-LOG9="$TMPDIR_BASE/log9.jsonl"
-run_core "
-for i in 1 2 3 4 5; do
-  codex_core_round_log_append '$LOG9' 'sessA' 'detail-plan' 'A' '' >/dev/null
-done
-" >/dev/null 2>&1
-# count=5, cap=2, ext_used=2, max_ext=2 → NEW limit=5 (1+2+2), at ceiling
-RES=$(run_core_rc "codex_core_hard_cap_check '$LOG9' 'sessA' 'detail-plan' 2 2 2")
-RC=$(extract_rc "$RES")
-OUT=$(extract_out "$RES")
-if [[ "$RC" == "2" ]]; then
-    pass "hard_cap_check at ceiling → returns 2"
-else
-    fail "hard_cap_check at ceiling: expected rc=2, got rc=$RC, output: $OUT"
-fi
-if echo "$OUT" | grep -qi "absolute ceiling reached"; then
-    pass "hard_cap_check at ceiling: message contains 'absolute ceiling reached'"
-else
-    fail "hard_cap_check at ceiling: missing 'absolute ceiling reached'. Output: $OUT"
-fi
+    if [[ "$RC" == "$HC_RC" ]]; then
+        pass "hard_cap_check(round=$HC_ROUND cap=$HC_CAP used=$HC_USED): $HC_WHY"
+    else
+        fail "hard_cap_check(round=$HC_ROUND cap=$HC_CAP used=$HC_USED): expected rc=$HC_RC, got rc=$RC, output: $OUT"
+    fi
+    if [[ -n "$HC_NEEDLE" ]]; then
+        if echo "$OUT" | grep -qi -- "$HC_NEEDLE"; then
+            pass "hard_cap_check(round=$HC_ROUND): says '$HC_NEEDLE'"
+        else
+            fail "hard_cap_check(round=$HC_ROUND): missing '$HC_NEEDLE'. Output: $OUT"
+        fi
+    fi
+done <<'HARDCAP'
+1|2|0|2|0||round 1 of a limit-3 loop is under the cap
+3|2|0|2|2|extension available|reaching the cap with budget left offers the extension
+5|2|2|2|2|absolute ceiling reached|the extended limit is the end of the line
+0|2|0|2|0||a round before the first is not at any cap
+HARDCAP
 
-# ---------------------------------------------------------------------------
-# 14. hard_cap_check no log file → count=0 → rc=0
-# ---------------------------------------------------------------------------
+# The old signature took a log path first. It is gone rather than adapted, so a
+# stale caller must be told, not silently judged as "round 0" (CPR-UNV).
 RES=$(run_core_rc "codex_core_hard_cap_check '$TMPDIR_BASE/never.jsonl' 'sessA' 'detail-plan' 2 0 2")
 RC=$(extract_rc "$RES")
-if [[ "$RC" == "0" ]]; then
-    pass "hard_cap_check no log file → returns 0"
+OUT=$(extract_out "$RES")
+if [[ "$RC" == "3" ]]; then
+    pass "hard_cap_check with the old log-path signature is refused with rc=3"
 else
-    fail "hard_cap_check no log file: expected rc=0, got rc=$RC"
+    fail "hard_cap_check old signature: expected rc=3, got rc=$RC, output: $OUT"
+fi
+if echo "$OUT" | grep -qi "round"; then
+    pass "hard_cap_check old signature: the refusal names the argument that changed"
+else
+    fail "hard_cap_check old signature: refusal did not explain itself. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------

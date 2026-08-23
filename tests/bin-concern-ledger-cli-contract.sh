@@ -3,30 +3,12 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, cli, edge-cases, error-cases, config-branch, sha-tool, table-driven, scope:common, pwsh-not-required
 #
-# Two test-design categories that the rest of this suite leaves uncovered, kept
-# together because they share one question: what does the CLI do when the values
-# it is handed are legal-looking but wrong?
-
-# The first half is the argument surface. Every subcommand takes a round, a cap
-# and a set of paths, and a caller that computes one of them wrongly — an empty
-# variable, an off-by-one, a report file that was never written — must be told
-# so. The failure to avoid is a CLI that accepts 'round 0' or a missing report
-# and reports success, because the orchestrator above it reads that success as
-# "this round was reviewed".
-
-# The second half is the one configuration branch in the library:
-# CL_SHA_TOOL picks among four digest backends. SLOT is the identity a concern
-# is tracked by across rounds, so a backend that yields a different digest — or
-# an uppercase one — silently makes every concern new again.
-
-# TL2. The real bin/concern-ledger over real files in a throwaway sandbox.
-
-# TL3 gap (mitigation category: environment)
-#   Not covered here: a host on which sha256sum/shasum/openssl genuinely are
-#   absent. Case 4 forces each backend by pinning CL_SHA_TOOL, which exercises
-#   the selected branch but not the auto-detection ladder's fallthrough.
-#   Mitigation: the cksum branch — the ladder's last resort, and the only one
-#   reached on a bare host — is pinned explicitly alongside the others.
+# What does the CLI do when its arguments are legal-looking but wrong? One that
+# accepts 'round 0' or a missing report and reports success is read by the
+# orchestrator above it as "this round was reviewed". Second half: CL_SHA_TOOL,
+# where SLOT is the address a concern keeps across rounds, so a backend yielding
+# a different digest re-files every concern. TL2, real CLI in a sandbox; TL3 gap
+# (environment) is a host lacking sha256sum, mitigated by pinning cksum.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,11 +17,6 @@ LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 
 PASS=0
 FAIL=0
-
-# Cases 1-3 are known gaps in the same argument-validation family #2032 already
-# tracks. Sourced after FAIL exists, which the helpers increment on an XPASS.
-# shellcheck source=./lib/xfail.sh
-. "$AGENTS_ROOT/tests/lib/xfail.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 assert_eq() {
@@ -114,20 +91,23 @@ while IFS='~' read -r VAL WANT PIN; do
     PIN="${PIN#"${PIN%%[![:space:]]*}"}"; PIN="${PIN%"${PIN##*[![:space:]]}"}"
     [ -n "$WANT" ] || continue
     case "$VAL" in \#*) continue ;; esac
-    if [ "$PIN" = "pinned" ]; then
-        xfail_eq "1: --round '$VAL' is $WANT" "$WANT" "$(stage_round "$VAL")"
+    # The third column used to mark rows as known gaps (#2057). Every row is a
+    # requirement now, so a row that still says otherwise is itself a failure.
+    if [ "$PIN" != "ok" ]; then
+        echo "FAIL: 1: --round '$VAL' is still marked '$PIN' rather than a requirement"
+        FAIL=$((FAIL + 1))
     else
         assert_eq "1: --round '$VAL' is $WANT" "$WANT" "$(stage_round "$VAL")"
     fi
 done <<'ROUNDS'
 1~accepted~ok
-0~rejected~pinned
--1~rejected~pinned
-1.5~rejected~pinned
-one~rejected~pinned
+0~rejected~ok
+-1~rejected~ok
+1.5~rejected~ok
+one~rejected~ok
  ~rejected~ok
-2x~rejected~pinned
-99999999999999999999~rejected~pinned
+2x~rejected~ok
+99999999999999999999~rejected~ok
 ROUNDS
 
 # ---------------------------------------------------------------------------
@@ -148,9 +128,9 @@ stage_report() {
 }
 mkdir -p "$TMPDIR_BASE/plans-rp-a" "$TMPDIR_BASE/plans-rp-b" "$TMPDIR_BASE/plans-rp-c"
 
-xfail_eq "2: a report path that does not exist is rejected" \
+assert_eq "2: a report path that does not exist is rejected" \
     "rejected" "$(stage_report "$MISSING_REPORT" a)"
-xfail_eq "2: an empty report is rejected rather than staged as a silent no-op" \
+assert_eq "2: an empty report is rejected rather than staged as a silent no-op" \
     "rejected" "$(stage_report "$EMPTY_REPORT" b)"
 assert_eq "2: and a real report on the same code path still stages" \
     "accepted" "$(stage_report "$REPORT" c)"
@@ -169,7 +149,7 @@ assert_eq "3: no subcommand at all is rejected" "rejected" \
 assert_eq "3: an unknown option is rejected" "rejected" \
     "$(bash "$CLI" tally --plans-dir "$PLANS" --session-id "$SID" \
         --format "$FORMAT" --nonsense >/dev/null 2>&1; verdict "$?")"
-xfail_eq "3: a required option left empty is rejected, not defaulted" "rejected" \
+assert_eq "3: a required option left empty is rejected, not defaulted" "rejected" \
     "$(bash "$CLI" tally --plans-dir "$PLANS" --session-id "" \
         --format "$FORMAT" >/dev/null 2>&1; verdict "$?")"
 assert_eq "3: check-finalized on a session with no artifact is rejected" "rejected" \
@@ -235,7 +215,64 @@ assert_eq "4: an unrecognised CL_SHA_TOOL still yields a well-formed slot" "ok" 
 assert_eq "4: and it is the documented cksum fallback, not a fifth behaviour" \
     "$(slot_with cksum "bin/x.sh" "fn" "security")" "$BOGUS"
 
-xfail_summary
+# ---------------------------------------------------------------------------
+# 5. The empty report has exactly one legitimate answer. Rejecting empties is
+#    only a universal rule if there is no flag that suspends it: a caller with
+#    nothing open must say so in the report rather than send an empty file and
+#    ask the CLI to accept it (CPR-UNV).
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- cli 5: the one legitimate way to stage a round with nothing open ---"
+
+assert_eq "5: the CLI offers no public option for accepting an empty report" \
+    "absent" "$(grep -Fq 'allow-empty' "$CLI" && printf present || printf absent)"
+
+SENTINEL_REPORT="$TMPDIR_BASE/sentinel-report.txt"
+{
+    printf '## Review: PERFORMED\n\n'
+    printf '<!-- concern-ledger: no open concerns in round 1 -->\n'
+} > "$SENTINEL_REPORT"
+SENT_PLANS="$TMPDIR_BASE/plans-sentinel"
+mkdir -p "$SENT_PLANS"
+SENT_RC=0
+bash "$CLI" stage --plans-dir "$SENT_PLANS" --session-id sent1 --format "$FORMAT" \
+    --round 1 --producer review-code-codex --from-report "$SENTINEL_REPORT" \
+    >/dev/null 2>&1 || SENT_RC=$?
+SENT_DELTA="$SENT_PLANS/sent1-$FORMAT-round-1-delta-review-code-codex.txt"
+
+assert_eq "5: a report that states nothing is open is accepted" "0" "$SENT_RC"
+assert_eq "5: and the round it staged is on disk like any other" \
+    "present" "$([ -f "$SENT_DELTA" ] && printf present || printf missing)"
+assert_eq "5: carrying no concern records, since none were open to carry" \
+    "0" "$(grep -cvE '^#|^$' "$SENT_DELTA" 2>/dev/null | tr -d ' ')"
+
+# ---------------------------------------------------------------------------
+# 6. check-staged has to be reachable before it can be a gate: close-concern-
+#    round.sh calls it on itself, so an unregistered subcommand would make the
+#    gate fail on every round for the wrong reason. Then the gate's own point —
+#    a delta exists, but the producer it names never reviewed anything.
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- cli 6: check-staged is dispatched, and judges completeness ---"
+
+CS_PLANS="$TMPDIR_BASE/plans-checkstaged"
+mkdir -p "$CS_PLANS"
+CS_REPORT="$TMPDIR_BASE/cs-report.txt"
+printf '## Review: SKIPPED\n' > "$CS_REPORT"
+bash "$CLI" stage --plans-dir "$CS_PLANS" --session-id cs1 --format "$FORMAT" \
+    --round 1 --producer review-code-codex --exec SKIPPED --from-report "$CS_REPORT" \
+    >/dev/null 2>&1 || true
+
+CS_OUT="$(bash "$CLI" check-staged --plans-dir "$CS_PLANS" --session-id cs1 \
+    --format "$FORMAT" --round 1 2>/dev/null)"
+CS_RC=$?
+
+assert_eq "6: check-staged is a real subcommand, not a usage error" \
+    "dispatched" "$([ "$CS_RC" -eq 0 ] || [ "$CS_RC" -eq 1 ] && printf dispatched || printf "usage:$CS_RC")"
+assert_eq "6: a round whose only producer skipped its review is not complete" "1" "$CS_RC"
+assert_eq "6: and the reason names the completeness it found, not just 'missing'" \
+    "found" "$(printf '%s' "$CS_OUT" | grep -Fq 'incomplete:ABSENT' && printf found || printf "got:$CS_OUT")"
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 if [ "$FAIL" -eq 0 ]; then

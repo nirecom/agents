@@ -1,18 +1,10 @@
 "use strict";
 // bin/worker-dispatch/spawn.js
 //
-// Fixed-binary execution.
-//
-// Three properties hold for every child process this dispatcher ever starts:
-//   1. shell:false with an argv array. No string is ever handed to a shell, so
-//      quoting, `$(...)`, backticks and `;`/`&&`/`|` in payload text are inert
-//      by construction rather than by escaping.
-//   2. The binary comes from the registry's fixed table — an external command
-//      the worker declared, or a script resolved from an anchor plus a hardcoded
-//      relative path. The payload never names an executable.
-//   3. The child env is an allowlist. AGENTS_CONFIG_DIR is set explicitly from
-//      the resolved ACD anchor and is never inherited, so a poisoned parent env
-//      cannot redirect a child at a planted checkout.
+// Fixed-binary execution: shell:false argv, a binary from the registry's fixed
+// table, and an allowlisted child env. What/Why (the three invariants, anchors,
+// envScope, stdin `input`):
+// docs/architecture/claude-code/worker-dispatch/spawn.md
 
 const fs = require("fs");
 const path = require("path");
@@ -25,15 +17,12 @@ const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 32 * 1024 * 1024;
 
 // `familyCwd` must already have passed assertCwdInFamily — anchorRoot trusts it.
+// `family-worktree` is the one anchor that resolves into unreviewed code, and the
+// only one that can serve a worker whose job IS to run the branch under review.
+// Why that widening is safe and bounded: see spawn.md "Anchors".
 function anchorRoot(anchorName, anchors, familyCwd) {
   if (anchorName === "acd") return anchors.acd;
   if (anchorName === "main-root") return anchors.mainRoot;
-  // The one anchor that deliberately resolves into unreviewed code, and the only
-  // one that can serve a worker whose job IS to execute the branch under review.
-  // tests/run-all.sh derives its test directory from its own location, so a
-  // main-root-anchored script runs main's suite no matter what cwd it is given —
-  // i.e. it silently verifies the wrong tree. Widening is bounded: the root is
-  // the validated family worktree, never an arbitrary path from the payload.
   if (anchorName === "family-worktree") return familyCwd || null;
   return null;
 }
@@ -61,8 +50,20 @@ function assertCommandAllowed(entry, command) {
   }
 }
 
-function buildEnv(entry, anchors, extraEnv) {
-  const declared = Array.isArray(entry.envPassthrough) ? entry.envPassthrough : [];
+// envScope narrows entry.envPassthrough to what one call needs (e.g. SSH_AUTH_SOCK
+// only for commit-push's push/fetch steps). Omitted -> unchanged full-set behavior.
+//
+// A present-but-not-an-array envScope THROWS rather than falling back to the full
+// set: a typo such as `envScope: "SSH_AUTH_SOCK"` would otherwise silently widen
+// the call back to full passthrough — every credential the entry declares reaching
+// a child the author meant to starve, at a call site that reads as if it were
+// scoped. Only omission means "no narrowing intended". See spawn.md "envScope".
+function buildEnv(entry, anchors, extraEnv, envScope) {
+  if (envScope !== undefined && !Array.isArray(envScope)) {
+    throw new Error("child env scope must be an array of env var names");
+  }
+  const full = Array.isArray(entry.envPassthrough) ? entry.envPassthrough : [];
+  const declared = envScope === undefined ? full : full.filter((name) => envScope.includes(name));
   const allowed = registryData.CHILD_ENV_ALLOWLIST.concat(declared);
   const env = {};
   for (const name of allowed) {
@@ -89,17 +90,12 @@ function assertCwdInFamily(cwd, anchors) {
   return abs;
 }
 
-// run(entry, { anchors, command, script, args, cwd, timeoutMs, extraEnv, input })
+// run(entry, { anchors, command, script, args, cwd, timeoutMs, extraEnv, envScope, input })
 // Returns { status, signal, timedOut, spawnError, stdout, stderr }.
 //
-// `input` is the ONLY way payload-derived free text reaches a child: a commit
-// message given as argv would still be inert (shell:false), but it would also be
-// visible in the process table and subject to the platform command-line length
-// limit. Sending it on stdin — `git commit -F -` — avoids both.
-//
-// Opting in is per-call and the default is unchanged: with `input` omitted the
-// child gets stdio[0] = "ignore" exactly as before, so the six pre-existing
-// workers see byte-for-byte identical behaviour.
+// `input` is the ONLY way payload-derived free text reaches a child, and opting in
+// is per-call: with `input` omitted the child gets stdio[0] = "ignore" exactly as
+// before. Why stdin rather than argv: spawn.md "Why `input` (stdin) exists".
 function run(entry, opts) {
   const anchors = opts.anchors;
   assertCommandAllowed(entry, opts.command);
@@ -124,7 +120,7 @@ function run(entry, opts) {
 
   const spawnOpts = {
     cwd,
-    env: buildEnv(entry, anchors, opts.extraEnv),
+    env: buildEnv(entry, anchors, opts.extraEnv, opts.envScope),
     shell: false,
     encoding: "utf8",
     timeout,

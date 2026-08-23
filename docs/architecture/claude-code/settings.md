@@ -170,6 +170,67 @@ See `docs/security-policy.md` for the full pattern list.
   - **Classified "read" (guard never fires)**: `gh pr create/edit/close/comment/review`,
     `gh issue edit/close/comment`, `gh repo create/edit/rename/archive` — metadata-only,
     never changes tracked repo content.
+  **Dispatch provenance (#2064)** — write predicates re-parse command fragments (one segment,
+  one newline-split line, one `$(…)` body) *after* quoted spans and heredoc bodies have been
+  stripped, so a dispatcher call whose `--body "$(cat <<'EOF'` opener survives the strip as a
+  bare, unterminated opener looked like a heredoc write. That false positive blocked
+  repository-write-free `/issue-create` dispatches from the main worktree.
+  `hooks/lib/bash-write-patterns/dispatch-provenance.js` supplies the lost context in two layers:
+  layer 1 inspects the INTACT top-level IR and returns `{dispatchCleared:true}` only when some
+  segment is a known dispatcher / gh Group-A invocation AND no segment — nor any command
+  substitution nested inside it, to depth 4 — trips a narrow write predicate; layer 2 threads
+  that verdict as a `ctx` argument into every fragment re-parse, where the truncated opener is
+  then read as a stripping artifact rather than a write. The clearance is deliberately narrow:
+  it sets aside the truncated-opener artifact only, so `… && rm -rf repo` or an `eval 'touch f'`
+  hidden in the same command still classifies as a write. Fail-closed throughout — parse
+  failure, an empty IR, or a lazy require that does not resolve yields `null` (no provenance,
+  prior behavior kept). Threading a `ctx` also closed a pre-existing gap: `innerCommandIsWrite`
+  now includes both `isExoticExecWriteIR` and `isNewlineInjectedWriteIR` in its OR-chain, so an
+  `eval` / `xargs` / `find -exec` write — and a write on a later line of a quoted multi-line
+  body such as `eval 'echo hi<NL>rm -rf docs'` — is detected where it previously escaped every
+  per-segment predicate. An inner body IS a command string, so an unquoted newline separates
+  commands there exactly as at top level; the recursion terminates on `isNewlineInjectedWriteIR`'s
+  own `/[\r\n]/` and `lines.length < 2` guards.
+
+  That symmetry needed one artifact accounted for. `stripHeredocBody` runs before the split, so a
+  here-doc opener still standing on a split line has already had its body and delimiter taken away;
+  cutting the fragment then strands that opener from its own `)` (`echo $(cat <<'EOF'` + `)`), and
+  the lone opener reads as a here-doc write — an ordinary dispatcher body fail-closed back into a
+  write. `isSplitArtifactHeredocLine` skips such a line, under three conditions that together keep
+  every case where the here-doc is the payload rather than the artifact: the command must carry
+  dispatch clearance, the opener must be a `cat` opener with a `\w+` quoted delimiter sitting at
+  the very END of the line, and the line minus that opener must pass the FULL write predicate chain
+  (`innerCommandIsWrite`). `classify()` alone is NOT sufficient there: it is WRITE_PATTERNS-only and
+  reads `rm -rf docs;` and `git commit -m x` as `read`, so appending `; cat <<'X'` to such a payload
+  inside a sanctioned dispatch substitution would have evaded detection entirely.
+
+  The standing rule these repairs converged on, after three successive narrowings each opened a
+  new fail-open (restricted split → opener stripping → a `classify()`-judged remainder): a
+  condition that DEMOTES a write in this guard must be judged by the full write predicate chain
+  (`innerCommandIsWrite`), never by a single classifier, and every narrowing must be measured
+  against the counter-shape where the demoted token IS the payload before it lands. `classify()`
+  is WRITE_PATTERNS-only — it does not see file-ops, git writes, or package-manager writes — so it
+  is a widening signal (it never demotes) and must never be the sole gate on a demotion.
+
+  Nothing is rewritten before judging, and that is deliberate. Erasing opener tokens in place —
+  the shape this repair first took — also erases the write signal of `cat <<'X' | bash`, whose
+  payload IS the here-doc; the trailing-position test is what separates the two. The other two
+  conditions carry their own counter-example: `cat <<'EOF' >/tmp/pwn` and `rm -rf docs; cat <<'EOF'`
+  are both still judged, and a delimiter outside `\w+` (`<<'END-MARK'`) stays fail-closed.
+
+  The split itself stays INCLUSIVE of expanding frames. Suppressing it inside them instead — via
+  `{ includeCmdSubstBody: false }` — is NOT safe: for an UNQUOTED expanding frame the IR keeps no
+  substitution fragment behind, because a newline-crossing `$(` opener is not preserved as one
+  token, so `isCommandSubstWriteIR` has nothing to recurse into and this raw split is the only
+  detector that ever reaches a write injected into an unquoted substitution, a bare subshell, or a
+  process substitution.
+
+  Which token counts as the invoked script is part of the clearance boundary. `segmentDispatchKind`
+  resolves it left to right and accepts a leading `-` token only when it is a known value-less shell
+  option (`SHELL_BOOLEAN_OPTS`) or the `--` terminator; a value-taking or unknown option makes the
+  segment unresolvable and no provenance is raised. Reading the script as "the first non-dash token"
+  would let `bash --rcfile <dispatch-path> /tmp/evil.sh` present an attacker-chosen script as a
+  sanctioned dispatch and inherit the clearance.
   `ENFORCE_WORKTREE_ADDITIONAL_REPOS`: semicolon-separated list of additional repo roots
   or parent directories treated as in-scope for gh write scope checks. If an entry
   is not itself a git repo, its immediate subdirectories are scanned (depth 1)

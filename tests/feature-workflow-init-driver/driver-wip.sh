@@ -3,13 +3,12 @@
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: workflow-init, driver, wip-check, scope:issue-specific
 #
-# WP1-WP7 — WIP aggregation branch tests (TDD red phase: driver not yet implemented).
+# WP1-WP7 — WIP aggregation branch tests; WP8-WP9 — #2087 phase-order effects
+# (meta-issue label filter, closed-gate precedence).
 #
-# L3 gap (what this test does NOT catch):
-# - Real wip-state.sh writes propagating to a live Projects v2 board (GraphQL).
-# - A real `claude -p` session dispatching on the driver's ask_user directives.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: no live Projects v2 board writes, no real `claude -p` ask_user
+# round-trip. Mitigated at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -105,6 +104,86 @@ set_wip_set_rc 2
 run_driver '#408'
 assert_kv "WP7: wip-state set rc=2 → ACTION=ask_user" ACTION ask_user
 assert_kv "WP7: wip-state set rc=2 → ASK_ID=wip_rc2" ASK_ID wip_rc2
+teardown_case
+
+# --- probe harness (mirrors driver-meta-classify.sh's probe()) -----------------
+# wipCheck(state, agentsConfigDir, sessionId) spawns the mocked wip-state.sh, so
+# $CFG/$SID ride the extra argv. See driver-meta-classify.sh for the base pattern.
+WIP_MOD="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+probe() {  # <module-path> [extra argv...]; snippet on stdin → PROBE_OUT/PROBE_RC/PROBE_ERR
+    local mod="$1"; shift
+    cat > "$CASE_DIR/probe.js"
+    PROBE_OUT="$(cd "$CASE_DIR" && node "$CASE_DIR/probe.js" "$mod" "$@" 2>"$CASE_DIR/probe.err")"
+    PROBE_RC=$?
+    PROBE_ERR=""
+    [ -f "$CASE_DIR/probe.err" ] && PROBE_ERR="$(cat "$CASE_DIR/probe.err")"
+}
+assert_probe() {  # <label> <expected-exact-line>
+    if printf '%s\n' "$PROBE_OUT" | grep -qxF -- "$2"; then
+        pass "$1"
+    else
+        fail "$1: want line '$2'; got '$(printf '%s' "$PROBE_OUT" | tr '\n' ';')' (rc=$PROBE_RC err='$(printf '%s' "$PROBE_ERR" | head -c 200)')"
+    fi
+}
+
+# --- WP8a: mixed input, meta filtered locally — #250 (meta) untouched, #251 set --
+# detail.md Step 9/2: state.issues carries BOTH (post-meta-classify META shape,
+# see M5) — wip-check filters #250 via state.label_sets, never touching it.
+setup_case wid-wp8a
+probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
+const { wipCheck } = require(process.argv[2]);
+const state = { issues: [250, 251], label_sets: { 250: ["meta"], 251: ["type:task"] }, wip_results: {} };
+const r = wipCheck(state, process.argv[3], process.argv[4]) || {};
+console.log("ask=" + JSON.stringify(!!r.ask));
+console.log("force_path_b=" + JSON.stringify(!!state.force_path_b));
+NODE
+if wip_calls | grep -qE '^(check|set) 250$'; then
+    fail "WP8a: wip-state.sh touched the meta-labelled issue #250: $(wip_calls | tr '\n' ';')"
+else
+    pass "WP8a: wip-state.sh never invoked for the meta-labelled issue #250"
+fi
+if wip_set_calls | grep -q '^set 251$'; then
+    pass "WP8a: wip-state set invoked for the non-meta issue #251"
+else
+    fail "WP8a: missing set call for #251; calls=[$(wip_calls | tr '\n' ';')]"
+fi
+teardown_case
+
+# --- WP8b: all-meta input — filtered local set is EMPTY → no-op, no force_path_b --
+# Mirrors driver-routing.sh R14/R15: an all-meta state.issues (never stripped,
+# see M5) must not reach wip-state.sh and must not raise force_path_b (M11/M20).
+setup_case wid-wp8b
+probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
+const { wipCheck } = require(process.argv[2]);
+const state = { issues: [250], label_sets: { 250: ["meta"] }, wip_results: {} };
+const r = wipCheck(state, process.argv[3], process.argv[4]) || {};
+console.log("ask=" + JSON.stringify(!!r.ask));
+console.log("force_path_b=" + JSON.stringify(!!state.force_path_b));
+NODE
+if [ -n "$(wip_calls)" ]; then
+    fail "WP8b: wip-state.sh touched an all-meta issue set: $(wip_calls | tr '\n' ';')"
+else
+    pass "WP8b: wip-state.sh never invoked for an all-meta issue set"
+fi
+assert_probe "WP8b: force_path_b stays false for an all-meta working set" "force_path_b=false"
+teardown_case
+
+# --- WP9: a pending CLOSED gate suppresses wip-check entirely (#2087) -------------
+# closed-detection now precedes wip-check in PHASE_ORDER. An issue whose very
+# membership in the session is still unresolved must not have its WIP inspected —
+# and must certainly not have ownership claimed — while the user is still being
+# asked whether to reopen or drop it. #460 is owned by ANOTHER session, so under
+# the old order this run answered wip_conflict instead of the closed gate.
+setup_case wid-wp9
+mock_issue 460 CLOSED "type:task"
+set_wip 460 other
+run_driver '#460'
+assert_kv "WP9: a closed issue asks the closed gate, not wip_conflict" ASK_ID closed_reopen_460
+if [ -n "$(wip_calls)" ]; then
+    fail "WP9: wip-state.sh ran while the closed gate was still pending: $(wip_calls | tr '\n' ';')"
+else
+    pass "WP9: wip-state.sh never invoked while the closed gate was pending"
+fi
 teardown_case
 
 finish

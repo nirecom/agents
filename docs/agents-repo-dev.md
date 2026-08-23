@@ -45,3 +45,37 @@ Extending the
 set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
 `tests/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
+
+## Consolidated test suites: one dispatcher, sourced fragments
+
+Background: a hook that accumulates cases over many issues ends up with one test
+file per issue, and each file carries its own private copy of the same harness —
+fixture builders, payload assembly, decision helpers. Thirteen files targeted
+`hooks/enforce-worktree.js` that way. The duplication costs tokens on every read
+and makes a harness fix a thirteen-place edit.
+
+The shape that replaces it: a dispatcher `tests/<name>.sh` owns the harness and
+sources fragments from `tests/<name>/`. `tests/main-enforce-worktree-guard.sh`
+is the reference implementation.
+
+**Fragments are deliberately not runnable on their own.** `tests/run-all.sh`
+globs `tests/*.sh`, and `*` does not cross `/`, so a fragment is invisible to the
+runner while the dispatcher is not. That is the mechanism that keeps each case
+counted exactly once. A fragment has no harness of its own and fails immediately
+if invoked directly.
+
+**Fragment-local helpers and variables carry a short prefix** (`hb_`, `wl_`,
+`br_`, …). Every fragment is sourced into the same shell, so an unprefixed name
+silently overwrites a sibling's.
+
+**The gate when consolidating is case-identifier preservation.** Capture the
+`PASS: ` / `FAIL: ` / `SKIP: ` lines before and after and compare them as
+multisets; they must match. Normalize embedded temp paths first — an identifier
+that interpolates a per-run temp directory never matches verbatim. A case that
+changes wording is a case that silently stopped being the case it was.
+
+**Deciding not to consolidate is a recordable decision.**
+`bin/audit-tests.sh --dup-groups` lists files sharing a `# Tests:` group; tag a
+file that stays separate on purpose with `dup-group-keep:<reason>` (`cross-hook`,
+`distinct-layer`, `size-hard-limit`). Scope and tag vocabulary:
+`skills/_shared/test-design.md`.

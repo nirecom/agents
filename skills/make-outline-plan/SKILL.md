@@ -84,9 +84,9 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
-   **Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
+   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-outline-plan-round-number.txt`); re-delegate to planner and loop back to MOP-5.
 
-   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
+   **Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
 
 MOP-6. **Cap outcome dispatch.**
 
@@ -94,9 +94,11 @@ MOP-6. **Cap outcome dispatch.**
 
    **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-   **Exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
+   **exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
 
-   `<RAW_FILE>` = `<PLANS_DIR>/<session-id>-outline-codex-round-<round_number-1>-raw.md`; `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt) - 1 ))`.
+   **exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, then re-run `/clarify-intent`.
+
+   `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<PLANS_DIR>/<session-id>-outline-plan-last-round.txt`.
 
 MOP-7. On `APPROVED`:
    Retrieve `CONV_LANG=$(bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG 2>/dev/null || true)`.
@@ -133,11 +135,11 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
   (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the MOP-7 turn-final prose rationale summary
-  (d) the concern summary block rendered by the MOP-6 ESCALATE path when exit 2 fires — exactly one block per cap-reach event.
+  (d) the concern summary block rendered by the MOP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - Write every orchestrator-authored outline.md body — both the MOP-3 minimal single-approach file and the MOP-8 chosen-approach file — in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
-- `next-step --advance --step detail` is NOT called here; only `make-detail-plan` completes `detail`. This skill completes `outline` via MOP-C1's `next-step --advance --step outline --status complete --next` call.
+- `next-step --advance --step detail` is NOT called here; only `make-detail-plan` completes `detail`. This skill completes `outline` via MOP-C1's `next-step --advance --step outline --complete --next` call.
 - **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only.
@@ -145,4 +147,4 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 ## Completion
 
-MOP-C1. Evaluate the skip-detail 3-condition checklist. First run a separate Bash call: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment against outline.md (sd_c1–sd_c3 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call BEFORE completing outline (no `--next` — this settles `detail`, not `outline`): `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`. When all conditions are true, also launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`detail`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`, outline_path=`<PLANS_DIR>/$SESSION_ID-outline.md`. Then, as a separate Bash call, complete `outline` and consume its `ACTION=` block: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --status complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
+MOP-C1. Evaluate the skip-detail 3-condition checklist. First run a separate Bash call: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment against outline.md (sd_c1–sd_c3 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call BEFORE completing outline (no `--next` — this settles `detail`, not `outline`): `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`. When all conditions are true, also launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`detail`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`, outline_path=`<PLANS_DIR>/$SESSION_ID-outline.md`. Then, as a separate Bash call, complete `outline` and consume its `ACTION=` block: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.

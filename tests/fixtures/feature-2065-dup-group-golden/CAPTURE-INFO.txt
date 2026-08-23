@@ -1,0 +1,14 @@
+captured_at_utc=2026-08-18T07:49:56Z
+agents_root=C:/git/worktrees/2065-audit-tests-tests-hooks-enforce/agents
+commit=f7a32df40b3565744be1e187136b6e83f0d049de
+branch=feature/2065-audit-tests-tests-hooks-enforce
+source=git archive f7a32df4 bin | tar -x -C "$TMP" (whole bin/ subtree into a throwaway
+       temp dir, never the live checkout; bin/lib/* is also f7a32df4), old impl driven
+       through AUDIT_TESTS_BIN / AUDIT_TESTS_COMMON_BIN
+observations=three per command form, each byte-compared on its own:
+       <name>.out = raw stdout, <name>.err = raw stderr, <name>.rc = exit status
+       stdout and stderr are NEVER merged: a report line that migrates from one
+       stream to the other must fail the comparison
+       trailing newlines are significant — the streams are redirected straight to
+       files, never through command substitution, on both the capture and the replay
+normalization=<TMP> fixture root, <DATE> any ISO yyyy-mm-dd (identical transform on both sides)

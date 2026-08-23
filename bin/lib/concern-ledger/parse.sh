@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
-#
-# bin/lib/concern-ledger/parse.sh
-#
-# Sourced by bin/lib/concern-ledger.sh. Everything that turns bytes into
-# records: reading a v1 or v2 ledger, the three producer-report parse adapters,
-# and staging one producer's round output.
-#
-# Must be `source`d, not executed directly.
+# bin/lib/concern-ledger/parse.sh — parse adapters and delta staging; sourced by bin/lib/concern-ledger.sh (not executed directly).
 
 # ---------------------------------------------------------------------------
 # Reading
@@ -224,6 +217,13 @@ cl_stage() {
     ex="$(cl_exec_completeness "$exec")"
     comp="$(_cl_label_min "$ex" "$parse")"
     dest="$dir/${CL_STAGE_PREFIX:-}${fmt}-round-${round}-delta-${prod}.txt"
+    if [ -e "$dest" ] && [ ! -f "$dest" ]; then
+        printf 'concern-ledger: stage destination is not a plain file: %s\n' "$dest" >&2
+        return 1
+    fi
+    local tmp rc
+    tmp="$dest.tmp.$$"
+    rc=0
     {
         printf '#producer|%s|%s|%s|%s|%s\n' "$prod" "$comp" "$ex" "$parse" "$round"
         if [ -f "$norm" ]; then
@@ -243,7 +243,17 @@ cl_stage() {
                 printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$r" "$s" "$sl" "$di" "$ca" "$prod" "$an" "$tx"
             done < "$norm"
         fi
-    } > "$dest"
+    } > "$tmp" || rc=$?
+    if [ "$rc" -ne 0 ] || [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        printf 'concern-ledger: stage could not write the delta: %s\n' "$dest" >&2
+        return 1
+    fi
+    if ! mv -f "$tmp" "$dest"; then
+        rm -f "$tmp"
+        printf 'concern-ledger: stage could not publish the delta: %s\n' "$dest" >&2
+        return 1
+    fi
     printf '%s\n' "$dest"
 }
 

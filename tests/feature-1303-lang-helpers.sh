@@ -3,22 +3,12 @@
 # Tests: hooks/lib/lang-config.js, hooks/lib/conv-lang.js, hooks/lang-inject.js
 # Tags: hook-injection, conv-lang, plan-lang, lang-helpers, scope:issue-specific, pwsh-not-required
 #
-# L1 unit tests for:
-#   - getPlanLangInjection() (new export in lang-config.js)
-#   - getConvLangInjection() regression + new "between tool calls" wording
-#   - isPlanning() logic embedded in hooks/lang-inject.js
-#
-# Table-driven for getPlanLangInjection and getConvLangInjection.
-# isPlanning tested via node -e + real state fixture files.
-#
-# Env vars passed directly to node processes (not via .env files) to avoid the
-# block-dotenv.js hook that guards .env file reads in this session.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether UserPromptSubmit hook actually fires in a live claude -p session
-# - Whether additionalContext is surfaced to the model in a real session
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# L1 unit tests for getPlanLangInjection() (new lang-config.js export),
+# getConvLangInjection() (regression + new "between tool calls" wording) and the
+# isPlanning() logic in hooks/lang-inject.js. Injection helpers are table-driven;
+# isPlanning runs via node -e against real state fixtures. Env vars go straight to
+# node, never via .env files, so block-dotenv.js does not fire. L3 gap: live
+# UserPromptSubmit firing / additionalContext surfacing — check-verification-gate.sh.
 
 set -uo pipefail
 
@@ -160,7 +150,11 @@ call_is_planning() {
     local sid="$1" wf_dir="$2"
     local wf_dir_node; wf_dir_node="$(to_node_path "$wf_dir")"
     local state_io_node; state_io_node="$(to_node_path "$AGENTS_DIR/hooks/workflow-state")"
+    # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
+    mkdir -p "$wf_dir/plans"
+    local plans_dir_node; plans_dir_node="$(to_node_path "$wf_dir/plans")"
     CLAUDE_WORKFLOW_DIR="$wf_dir_node" \
+    WORKFLOW_PLANS_DIR="$plans_dir_node" \
         run_with_timeout 10 node -e "
 const { readState } = require('$state_io_node');
 const state = readState('$sid');

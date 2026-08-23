@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
-# Tags: workflow-init, driver, routing, wip-check, directive-contract, checkpoint-resume, origin-resolution, scope:common
-# L3 gap (what this test does NOT catch):
-# - A real `claude -p` session driving the workflow-init SKILL.md driver loop
-#   (ACTION= dispatch, AskUserQuestion rendering, --resume re-invocation).
-# - Real gh / wip-state.sh / Projects v2 calls on live GitHub.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, wip-check, directive-contract, checkpoint-resume, meta-classify, origin-resolution, scope:common
+# TL3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
+# --resume re-invocation) and no live gh / wip-state.sh / Projects v2 calls.
+# Mitigated at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
-#
+
 # Dispatch + aggregate entrypoint for the feature-workflow-init-driver split
 # suite. All logic lives in tests/feature-workflow-init-driver/ per
 # rules/coding/file-split.md Pattern A. Each split group also runs standalone.
 
 set -uo pipefail
 
-# Timeout guard
+# Timeout guard. 300s, not 120s: 10 split groups each spawn a node process per
+# driver run, and the aggregate wall clock crossed 120s once the untrusted-title
+# and answer-validation groups joined.
 if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     export _TIMEOUT_WRAPPED=1
     if command -v timeout >/dev/null 2>&1; then
-        exec timeout 120 bash "$0" "$@"
+        exec timeout 300 bash "$0" "$@"
     else
-        exec perl -e 'alarm 120; exec @ARGV' -- bash "$0" "$@"
+        exec perl -e 'alarm 300; exec @ARGV' -- bash "$0" "$@"
     fi
 fi
 
@@ -28,9 +28,17 @@ SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-workflow-init-d
 
 SPLIT_GROUPS=(
     "driver-routing.sh"
+    "driver-closed-first.sh"
+    "driver-meta-classify.sh"
+    "driver-untrusted-title.sh"
+    "driver-meta-repo-identity.sh"
     "driver-wip.sh"
+    "driver-wip-continuation.sh"
+    "driver-malformed-tokens.sh"
     "driver-directive-contract.sh"
     "driver-checkpoint-resume.sh"
+    "driver-adopt-resume.sh"
+    "driver-answer-validation.sh"
 )
 
 TOTAL_PASS=0

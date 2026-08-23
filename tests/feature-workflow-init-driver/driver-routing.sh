@@ -1,11 +1,11 @@
 #!/bin/bash
 # tests/feature-workflow-init-driver/driver-routing.sh
-# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
-# Tags: workflow-init, driver, routing, directive-contract, origin-resolution, fail-closed, scope:issue-specific
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, directive-contract, meta-classify, origin-resolution, fail-closed, scope:issue-specific
 #
-# R1-R11 — routing branch tests (TDD red phase: driver not yet implemented).
+# R1-R14 — routing branch tests (TDD red phase: driver not yet implemented).
 #
-# L3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
+# TL3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
 # --resume) or live gh calls. Mitigated at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -231,21 +231,14 @@ fi
 teardown_case
 
 # --- R5f: origin carries a credential AND is unparsable → blocked, no leak ------
-# Why this arm exists on top of R5b-R5e: `git remote get-url origin` can hand back
-# an HTTPS URL whose userinfo is an access token
-# (https://x-access-token:<token>@github.com/...). On the all-meta route that URL
-# reaches parseOriginOwnerRepo(), whose failure `.message` is spliced verbatim
-# into route-decision's nextHint, which the driver prints as NEXT_HINT= and may
-# persist alongside the checkpoint. R5b-R5e all use credential-free origins, so
-# the whole echo-back chain was never checked against a secret-bearing input.
-#
-# parse-remote-url.js redacts the userinfo before building any message
-# (redactUserinfo → "***@"); this case is the regression pin that proves it holds
-# through the real driver on a real git fixture, not merely by reading the code.
-# The token is a FAKE placeholder — the same `ghp_EXAMPLEEXAMPLE` shape
-# tests/fix-1899-parse-remote-url/redaction.sh and Group D of
-# tests/fix-1899-issue-close-stage-origin-guard.sh use (16 chars after the
-# prefix, well under what bin/scan-outbound.sh's token pattern matches).
+# Why this arm on top of R5b-R5e: origin can be an HTTPS URL whose userinfo is an
+# access token, and the parse failure `.message` is spliced verbatim into
+# NEXT_HINT= and may persist alongside the checkpoint. R5b-R5e all use
+# credential-free origins, so that echo-back chain was never checked against a
+# secret-bearing input. parse-remote-url.js redacts the userinfo (redactUserinfo
+# → "***@") before building any message; this pins that it holds through the real
+# driver on a real git fixture. The token is a FAKE `ghp_EXAMPLEEXAMPLE`
+# placeholder, matching tests/fix-1899-parse-remote-url/redaction.sh.
 setup_case wid-r5f
 R5F_TOKEN='ghp_EXAMPLEEXAMPLE'
 # github.com host (so the host check passes) but no owner/repo in the path, so the
@@ -361,6 +354,92 @@ assert_kv "R11: ALL_NONE unclarified → ACTION=done" ACTION done
 assert_kv "R11: ALL_NONE unclarified → PATH_DECISION=B" PATH_DECISION B
 CKPT_R11="$(get_kv CHECKPOINT)" || true
 assert_ckpt "R11: checkpoint records force_path_b=true" "$CKPT_R11" state.force_path_b "true"
+teardown_case
+
+# --- R12: #2087 — a meta issue is stripped BEFORE it is wip-checked ---------------
+# #220 is owned by another session. Under the old phase order wip-check ran first
+# and raised wip_conflict for an issue that classification was about to discard;
+# it could even take WIP ownership of it. Classification must come first, so #220
+# never reaches wip-state.sh at all — neither `check` nor `set`.
+setup_case wid-r12
+mock_issue 220 OPEN "meta"
+mock_issue 221 OPEN "type:task"
+set_wip 220 other
+set_wip 221 same
+run_driver '#220' '#221'
+assert_kv "R12: mixed meta/non-meta with a conflicted meta issue → ACTION=done" ACTION done
+assert_kv "R12: remainder routed → PATH_DECISION=B" PATH_DECISION B
+CKPT_R12="$(get_kv CHECKPOINT)" || true
+assert_ckpt "R12: meta issue stripped from checkpoint state.issues" "$CKPT_R12" state.issues "[221]"
+if wip_calls | grep -qE '(^| )220( |$)'; then
+    fail "R12: wip-state.sh touched the stripped meta issue #220: $(wip_calls | tr '\n' ';')"
+else
+    pass "R12: wip-state.sh never invoked for the stripped meta issue #220"
+fi
+teardown_case
+
+# --- R13: #2087 — an all-meta issue is classified BEFORE it is wip-checked --------
+setup_case wid-r13
+mock_issue 230 OPEN "meta"
+set_wip 230 other
+mock_sub_issues 230 '[{"number":231,"title":"Open child of 230","state":"open"}]'
+run_driver '#230'
+assert_kv "R13: meta with an open child → ACTION=ask_user" ACTION ask_user
+assert_kv "R13: ask is meta_select, not wip_conflict" ASK_ID meta_select
+if wip_calls | grep -qE '(^| )230( |$)'; then
+    fail "R13: wip-state.sh touched meta issue #230 before classification: $(wip_calls | tr '\n' ';')"
+else
+    pass "R13: wip-state.sh never invoked for meta issue #230"
+fi
+teardown_case
+
+# --- R14: an all-meta session never reaches wip-check at all -----------------------
+# 4th-audit BLOCK correction: state.issues is NOT stripped for META (write-context.js
+# needs the meta issue as the session's subject downstream). Instead wip-check.js
+# filters meta-labelled issues out of its own working set via state.label_sets, so
+# #240 is never checked, never owned, and the ALL_NONE branch cannot fire — force_path_b
+# stays false. wip is deliberately left UNSET here (mock `check` would answer 'none' →
+# ALL_NONE → `set`), so a driver that still ran wip-check over the meta issue would
+# visibly flip force_path_b to true.
+setup_case wid-r14
+mock_issue 240 OPEN "meta"
+mock_sub_issues 240 '[]'
+run_driver '#240'
+assert_kv "R14: all-meta with no open children → ACTION=done" ACTION done
+assert_kv "R14: all-meta with no open children → PATH_DECISION=META" PATH_DECISION META
+CKPT_R14="$(get_kv CHECKPOINT)" || true
+assert_ckpt "R14: state.issues stays populated for META (write-context needs it)" "$CKPT_R14" state.issues "[240]"
+assert_ckpt "R14: force_path_b stays false (wip-check filters the meta issue out)" "$CKPT_R14" state.force_path_b "false"
+if wip_calls | grep -qE '(^| )240( |$)'; then
+    fail "R14: wip-state.sh touched the meta-filtered issue #240: $(wip_calls | tr '\n' ';')"
+else
+    pass "R14: wip-state.sh never invoked for the meta-filtered issue #240"
+fi
+teardown_case
+
+# --- R15: same no-op outcome from the opposite starting WIP state ------------------
+# R14 enters with wip UNSET (the state that would have produced ALL_NONE →
+# force_path_b). R15 enters with ownership ALREADY ours, the other side of the
+# wip-check input space, and must land on the identical outcome: META, state.issues
+# still populated, no WIP ownership taken, force_path_b false. Together they pin
+# that wip-check's label_sets filter makes the meta issue a no-op regardless of
+# what wip-state.sh would have answered — not that one particular mock reply
+# happened to produce the right verdict.
+setup_case wid-r15
+mock_issue 250 OPEN "meta"
+set_wip 250 same
+mock_sub_issues 250 '[]'
+run_driver '#250'
+assert_kv "R15: all-meta, WIP already ours → ACTION=done" ACTION done
+assert_kv "R15: all-meta, force_path_b not triggered → PATH_DECISION=META" PATH_DECISION META
+CKPT_R15="$(get_kv CHECKPOINT)" || true
+assert_ckpt "R15: state.issues stays populated for META (write-context needs it)" "$CKPT_R15" state.issues "[250]"
+assert_ckpt "R15: force_path_b stays false from the pre-owned WIP state too" "$CKPT_R15" state.force_path_b "false"
+if [ -n "$(wip_set_calls)" ]; then
+    fail "R15: WIP ownership taken for an all-meta session: $(wip_set_calls | tr '\n' ';')"
+else
+    pass "R15: no WIP ownership taken for an all-meta session"
+fi
 teardown_case
 
 finish

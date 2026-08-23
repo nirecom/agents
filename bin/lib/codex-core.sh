@@ -140,11 +140,15 @@ codex_core_check_jq() {
 
 # Appends one JSONL row. Returns 0 on success, 1 on any write failure (fail-closed).
 codex_core_round_log_append() {
-  local log_path="$1" session_id="$2" label="$3" verdict="$4" sev_summary="${5:-}"
+  local log_path="$1" session_id="$2" label="$3" verdict="$4" sev_summary="${5:-}" round="${6:-}"
   local parent; parent=$(dirname "$log_path")
   mkdir -p "$parent" 2>/dev/null || return 1
   local current_round
-  current_round=$(( $(codex_core_round_count "$log_path" "$session_id" "$label") + 1 ))
+  if [[ -n "$round" ]]; then
+    current_round="$round"
+  else
+    current_round=$(( $(codex_core_round_count "$log_path" "$session_id" "$label") + 1 ))
+  fi
   jq -nc \
     --arg session "$session_id" \
     --arg label   "$label" \
@@ -156,6 +160,7 @@ codex_core_round_log_append() {
   return 0
 }
 
+# Audit-log row count — for fallback use in round_log_append only. NOT for gate decisions (#2068).
 # Prints the number of rows in log_path matching (session_id, label). Prints 0 if file missing.
 codex_core_round_count() {
   local log_path="$1" session_id="$2" label="$3"
@@ -165,20 +170,25 @@ codex_core_round_count() {
     "$log_path" 2>/dev/null || echo 0
 }
 
-# codex_core_hard_cap_check <log> <session> <label> <cap> <extensions_used> <max_extensions>
-# limit = 1 + cap + extensions_used. Returns 2 when round_count >= limit.
+# codex_core_hard_cap_check <round> <cap> <extensions_used> <max_extensions> [label]
+# Sole authority for round-cap judgement. Does not read plan.jsonl (line count is an audit record, not the round number — #2068).
+# limit = 1 + cap + extensions_used. Returns 2 when round >= limit.
+# Returns 3 when <round> is not an integer (signature changed in #2068; pass the round number, not a log path).
 codex_core_hard_cap_check() {
-  local log_path="$1" session_id="$2" label="$3" cap="$4" extensions_used="$5" max_extensions="$6"
-  local count limit ceiling_note
-  count=$(codex_core_round_count "$log_path" "$session_id" "$label")
+  local round="$1" cap="$2" extensions_used="$3" max_extensions="$4" label="${5:-}"
+  if ! [[ "$round" =~ ^[0-9]+$ ]]; then
+    echo "codex_core_hard_cap_check: <round> must be an integer (signature changed in #2068; pass the round number, not a log path): $round" >&2
+    return 3
+  fi
+  local limit ceiling_note
   limit=$(( 1 + cap + extensions_used ))
-  if (( count >= limit )); then
+  if (( round >= limit )); then
     if (( extensions_used >= max_extensions )); then
       ceiling_note="absolute ceiling reached"
     else
       ceiling_note="extension available"
     fi
-    echo "## ${CODEX_LABEL:-$label}: FAILED — round cap reached (${count}/${limit} rounds, cap=${cap} extensions_used=${extensions_used} max_extensions=${max_extensions}; ${ceiling_note})"
+    echo "## ${CODEX_LABEL:-$label}: FAILED — round cap reached (${round}/${limit} rounds, cap=${cap} extensions_used=${extensions_used} max_extensions=${max_extensions}; ${ceiling_note})"
     return 2
   fi
   return 0

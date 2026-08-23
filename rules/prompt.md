@@ -29,7 +29,12 @@ SKILL.md calls the CLI; it does not inline the steps.
 
 Remove every word that does not change meaning or add constraint. Prefer the shorter form.
 
-### 1.5 No inline code blocks in prompt files
+### 1.5 Abstract principles stay abstract
+
+`rules/core-principles.md` holds abstract principles only — specific skill names, file paths, and step-by-step procedures must not appear there.
+Put those in the relevant SKILL.md / agent / CLI documentation instead.
+
+### 1.6 No inline code blocks in prompt files
 
 Code blocks (3+ contiguous lines fenced with ```) are PROHIBITED in `rules/*.md`,
 `skills/*/SKILL.md`, and `agents/*.md` for NEW additions and edits.
@@ -42,7 +47,7 @@ Existing violations in files not touched by the current change are out of scope 
 
 > Note: examples in this section illustrate the rule itself and are not subject to it.
 
-### 1.6 Rules injection scope
+### 1.7 Rules injection scope
 
 See [docs/architecture/claude-code/rules-injection.md](../docs/architecture/claude-code/rules-injection.md) for choosing a `rules/*.md` file's injection scope and the on-demand notation.
 

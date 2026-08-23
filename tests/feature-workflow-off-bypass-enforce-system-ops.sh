@@ -1,17 +1,13 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-enforce-system-ops.sh
 # Tests: hooks/enforce-system-ops.js
-# Tags: system-ops, enforce, hook, workflow, bin
+# Tags: system-ops, enforce, hook, workflow, bin, scope:common
 #
-# PR2 invariant: hooks/enforce-system-ops.js must NEVER be bypassed by the
-# workflow-off marker. System-state-changing operations require explicit user
-# approval per rules/user-escalation.md (Rule 0) and rules/ops.md categories
-# A-F. The workflow-off escape hatch must NOT widen this surface.
-#
-# Contract:
-#   - winget install: blocks regardless of marker presence.
-#   - npm install -g: blocks regardless of marker presence.
-#   - Non-system commands (e.g. `npm install` per-repo) pass regardless.
+# PR2 invariant: enforce-system-ops.js must NEVER be bypassed by the workflow-off
+# marker — system-state-changing ops need explicit user approval (rules/ops.md
+# categories A-F, rules/user-escalation.md Rule 0). Contract: `winget install`
+# and `npm install -g` block regardless of marker presence; non-system commands
+# (e.g. per-repo `npm install`) pass regardless.
 
 set -u
 
@@ -37,6 +33,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -94,6 +96,7 @@ run_hook() {
         env -u CLAUDE_ENV_FILE -u SYSTEM_OPS_APPROVED \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>"$errfile")" || HOOK_RC=$?
     HOOK_ERR="$(cat "$errfile" 2>/dev/null)"
     rm -f "$errfile"

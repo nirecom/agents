@@ -47,9 +47,9 @@ Detail-stage caller paths:
 
 Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt + surface stderr. Only exit 3 falls back silently.
 
-**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
+**exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt`); re-delegate to planner and loop back to MDP-5.
 
-ROUND_NUMBER tracked at `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt` (see codex-review-loop.md SSOT).
+**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
 
 ### Step MDP-6 — Cap outcome dispatch
 
@@ -57,9 +57,11 @@ Apply only when the per-stage wrapper script (Step MDP-5) returns a non-zero non
 
 **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MDP-5 (no user confirmation). This is the budget-available path — `bin/review-loop-verdict` already verified budget > 0. `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-**Exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --ledger <PLANS_DIR>/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
+**exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
 
-`<RAW_FILE>` = `<PLANS_DIR>/<session-id>-codex-round-<round_number-1>-raw.md`; `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-detail-plan-round-number.txt) - 1 ))`.
+**exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, do not proceed to MDP-7.
+
+`<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<PLANS_DIR>/<session-id>-detail-plan-last-round.txt`.
 
 Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/cap-escalation-message.sh"` for message order.
 
@@ -102,7 +104,7 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 
 - Read intent/outline before planning — never plan from assumptions.
 - Outline's Delivery plan must be surfaced in MDP-2 before planner subagent runs (required).
-- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE path when exit 2 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
+- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
 - Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
@@ -112,6 +114,6 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 
 ## Completion
 
-1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --status complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
+1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
 2. Record branching: Read `rules/branch.md` and `rules/worktree.md` (both on-demand-only, never auto-injected), then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
 3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from step 1.

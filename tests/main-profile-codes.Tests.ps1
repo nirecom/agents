@@ -35,6 +35,44 @@ Describe "codes function (profile-snippet.ps1)" {
                 -Because "session-sync push must follow window polling"
         }
 
+        It "clears ANTHROPIC_* and NODE_EXTRA_CA_CERTS in the child command before code.cmd (#2083)" {
+            # A prior code-ccgw.ps1 call in the same shell session leaves
+            # ANTHROPIC_*/NODE_EXTRA_CA_CERTS as process-scoped env vars, and
+            # Start-Process inherits the caller's environment by default. The
+            # clear must therefore be part of the command string handed to the
+            # child pwsh, and must run before code.cmd is launched.
+            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+
+            $anthropicIdx = $codesBlock.IndexOf('Remove-Item Env:ANTHROPIC_*')
+            $nodeCertsIdx = $codesBlock.IndexOf('Remove-Item Env:NODE_EXTRA_CA_CERTS')
+            $codeCmdIdx   = $codesBlock.IndexOf('code.cmd --new-window')
+
+            $anthropicIdx | Should -BeGreaterThan -1 `
+                -Because "the ANTHROPIC_* wildcard clear must be present in the codes function"
+            $nodeCertsIdx | Should -BeGreaterThan -1 `
+                -Because "NODE_EXTRA_CA_CERTS is not covered by the ANTHROPIC_* wildcard and needs its own explicit clear"
+            $codeCmdIdx | Should -BeGreaterThan -1 `
+                -Because "the code.cmd launch must still be present"
+            $anthropicIdx | Should -BeLessThan $codeCmdIdx `
+                -Because "the ANTHROPIC_* clear must precede the code.cmd launch, not merely appear somewhere in the function"
+            $nodeCertsIdx | Should -BeLessThan $codeCmdIdx `
+                -Because "the NODE_EXTRA_CA_CERTS clear must precede the code.cmd launch"
+        }
+
+        It "does not clear the gateway env vars in the caller's own scope (`$env: is process-scoped)" {
+            # The rejected fix was `$env:ANTHROPIC_BASE_URL = $null` inside
+            # codes. `$env:` is process-scoped, not function-scoped, so that
+            # would also wipe the vars from the user's interactive shell. The
+            # clear must only ever appear as text inside the command string
+            # built for the child pwsh.
+            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+
+            $codesBlock | Should -Not -Match '\$env:ANTHROPIC' `
+                -Because "assigning/removing `$env:ANTHROPIC_* directly in codes would mutate the caller's shell, not just the child"
+            $codesBlock | Should -Not -Match '\$env:NODE_EXTRA_CA_CERTS' `
+                -Because "assigning/removing `$env:NODE_EXTRA_CA_CERTS directly in codes would mutate the caller's shell, not just the child"
+        }
+
         It "resolves workspace name for title matching" {
             $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
             $codesBlock | Should -Match '\.code-workspace' `
@@ -407,6 +445,173 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
             # child pwsh. This pattern must never appear.
             $joined | Should -Not -Match "test';\s*malicious-marker" `
                 -Because "an undoubled quote before the separator would break out of the quoted token and execute the payload as a new statement"
+        }
+    }
+
+    Context "Gateway env-var isolation (security, #2083)" {
+        # ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY are credentials that cross a
+        # process boundary here: Start-Process inherits the caller's environment,
+        # so a `codes` launched in a shell that earlier ran code-ccgw.ps1 would
+        # silently hand the local-gateway credentials and CA bundle to VS Code.
+        # Two halves of the same contract are asserted below — the child command
+        # must clear them, and the caller's own process must be left untouched.
+        It "clears the inherited gateway env vars in the child command before code.cmd runs" {
+            $script:Sandbox = New-MirrorSandbox
+            $env:SESSION_SYNC = 'off'
+            $saved = @{
+                Base   = $env:ANTHROPIC_BASE_URL
+                Token  = $env:ANTHROPIC_AUTH_TOKEN
+                Key    = $env:ANTHROPIC_API_KEY
+                Certs  = $env:NODE_EXTRA_CA_CERTS
+            }
+            try {
+                $env:ANTHROPIC_BASE_URL    = 'http://dummy-gateway.invalid:4000'
+                $env:ANTHROPIC_AUTH_TOKEN  = 'dummy-token-2083'
+                $env:ANTHROPIC_API_KEY     = 'dummy-key-2083'
+                $env:NODE_EXTRA_CA_CERTS   = 'C:\dummy\ca.pem'
+
+                Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes
+
+                $joined = Get-CodesLaunchArgs
+                $joined | Should -Not -BeNullOrEmpty
+
+                $anthropicIdx = $joined.IndexOf('Remove-Item Env:ANTHROPIC_*')
+                $nodeCertsIdx = $joined.IndexOf('Remove-Item Env:NODE_EXTRA_CA_CERTS')
+                $codeCmdIdx   = $joined.IndexOf('code.cmd')
+
+                $anthropicIdx | Should -BeGreaterThan -1 `
+                    -Because "the constructed child command must clear the inherited ANTHROPIC_* vars"
+                $nodeCertsIdx | Should -BeGreaterThan -1 `
+                    -Because "NODE_EXTRA_CA_CERTS is outside the ANTHROPIC_* wildcard and needs its own clear"
+                $anthropicIdx | Should -BeLessThan $codeCmdIdx `
+                    -Because "the clear must genuinely run before code.cmd in the one -Command string, not merely appear in it"
+                $nodeCertsIdx | Should -BeLessThan $codeCmdIdx `
+                    -Because "the CA-bundle clear must genuinely run before code.cmd"
+
+                # The dummy values must never be baked into the child command:
+                # the fix clears variable names, it does not forward values.
+                $joined | Should -Not -Match 'dummy-token-2083' `
+                    -Because "the auth token must not be interpolated into the child command string"
+                $joined | Should -Not -Match 'dummy-key-2083' `
+                    -Because "the API key must not be interpolated into the child command string"
+            } finally {
+                foreach ($pair in @(
+                    @{ Name = 'ANTHROPIC_BASE_URL';   Value = $saved.Base },
+                    @{ Name = 'ANTHROPIC_AUTH_TOKEN'; Value = $saved.Token },
+                    @{ Name = 'ANTHROPIC_API_KEY';    Value = $saved.Key },
+                    @{ Name = 'NODE_EXTRA_CA_CERTS';  Value = $saved.Certs })) {
+                    if ($null -eq $pair.Value) {
+                        Remove-Item "Env:$($pair.Name)" -ErrorAction SilentlyContinue
+                    } else { Set-Item "Env:$($pair.Name)" -Value $pair.Value }
+                }
+            }
+        }
+
+        It "leaves the calling process's own gateway env vars untouched" {
+            # The load-bearing regression guard. The rejected implementation
+            # (`$env:ANTHROPIC_BASE_URL = $null` inside codes) would clear the
+            # child correctly but, because `$env:` is process-scoped, would also
+            # wipe the caller's interactive shell. This test process IS the
+            # caller, so these assertions fail on that regression.
+            $script:Sandbox = New-MirrorSandbox
+            $env:SESSION_SYNC = 'off'
+            $saved = @{
+                Base   = $env:ANTHROPIC_BASE_URL
+                Token  = $env:ANTHROPIC_AUTH_TOKEN
+                Key    = $env:ANTHROPIC_API_KEY
+                Certs  = $env:NODE_EXTRA_CA_CERTS
+            }
+            try {
+                $env:ANTHROPIC_BASE_URL    = 'http://dummy-gateway.invalid:4000'
+                $env:ANTHROPIC_AUTH_TOKEN  = 'dummy-token-2083'
+                $env:ANTHROPIC_API_KEY     = 'dummy-key-2083'
+                $env:NODE_EXTRA_CA_CERTS   = 'C:\dummy\ca.pem'
+
+                Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes
+
+                # Sanity: the launch really happened, so the assertions below
+                # are about a codes() that ran, not a no-op.
+                Get-CodesLaunchArgs | Should -Not -BeNullOrEmpty
+
+                $env:ANTHROPIC_BASE_URL | Should -BeExactly 'http://dummy-gateway.invalid:4000' `
+                    -Because "codes must not mutate the caller's own environment"
+                $env:ANTHROPIC_AUTH_TOKEN | Should -BeExactly 'dummy-token-2083' `
+                    -Because "clearing the caller's credentials would break a code-ccgw session the user is still working in"
+                $env:ANTHROPIC_API_KEY | Should -BeExactly 'dummy-key-2083' `
+                    -Because "clearing the caller's credentials would break a code-ccgw session the user is still working in"
+                $env:NODE_EXTRA_CA_CERTS | Should -BeExactly 'C:\dummy\ca.pem' `
+                    -Because "the CA bundle belongs to the caller's shell and must survive a codes launch"
+            } finally {
+                foreach ($pair in @(
+                    @{ Name = 'ANTHROPIC_BASE_URL';   Value = $saved.Base },
+                    @{ Name = 'ANTHROPIC_AUTH_TOKEN'; Value = $saved.Token },
+                    @{ Name = 'ANTHROPIC_API_KEY';    Value = $saved.Key },
+                    @{ Name = 'NODE_EXTRA_CA_CERTS';  Value = $saved.Certs })) {
+                    if ($null -eq $pair.Value) {
+                        Remove-Item "Env:$($pair.Name)" -ErrorAction SilentlyContinue
+                    } else { Set-Item "Env:$($pair.Name)" -Value $pair.Value }
+                }
+            }
+        }
+
+        It "clears the gateway env vars even when the session-sync gate is ON (orthogonality)" {
+            # The clear is unconditional: it must not be entangled with the
+            # SESSION_SYNC branch that appends the wait/push tail to $cmd.
+            $script:Sandbox = New-MirrorSandbox
+            $env:SESSION_SYNC = 'on'
+            $savedBase = $env:ANTHROPIC_BASE_URL
+            try {
+                $env:ANTHROPIC_BASE_URL = 'http://dummy-gateway.invalid:4000'
+
+                Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes
+
+                $joined = Get-CodesLaunchArgs
+                $joined | Should -Not -BeNullOrEmpty
+                $joined | Should -Match 'Remove-Item Env:ANTHROPIC_\*' `
+                    -Because "the clear must not be gated on SESSION_SYNC"
+                $joined | Should -Match 'Remove-Item Env:NODE_EXTRA_CA_CERTS' `
+                    -Because "the clear must not be gated on SESSION_SYNC"
+                $joined | Should -Match 'session-sync\.ps1' `
+                    -Because "the gate-on push must still be wired alongside the clear"
+                $env:ANTHROPIC_BASE_URL | Should -BeExactly 'http://dummy-gateway.invalid:4000' `
+                    -Because "the caller's environment stays untouched on the gate-on path too"
+            } finally {
+                if ($null -eq $savedBase) {
+                    Remove-Item Env:ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue
+                } else { $env:ANTHROPIC_BASE_URL = $savedBase }
+            }
+        }
+
+        It "clears the gateway env vars even when none are set in the caller (idempotency)" {
+            # -ErrorAction SilentlyContinue makes the clear a safe no-op when
+            # the vars were never set — the overwhelmingly common case. A
+            # conditional implementation that only emits the clear when it sees
+            # the vars set at launch time would leave a shell that acquires them
+            # later unprotected, so the clear must be unconditional.
+            $script:Sandbox = New-MirrorSandbox
+            $env:SESSION_SYNC = 'off'
+            $saved = @{
+                Base  = $env:ANTHROPIC_BASE_URL
+                Certs = $env:NODE_EXTRA_CA_CERTS
+            }
+            try {
+                Remove-Item Env:ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue
+                Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue
+
+                { Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes } |
+                    Should -Not -Throw `
+                    -Because "clearing unset variables must be a silent no-op"
+
+                $joined = Get-CodesLaunchArgs
+                $joined | Should -Not -BeNullOrEmpty
+                $joined | Should -Match 'Remove-Item Env:ANTHROPIC_\* -ErrorAction SilentlyContinue' `
+                    -Because "the clear is unconditional and must swallow the not-found error"
+                $joined | Should -Match 'Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue' `
+                    -Because "the clear is unconditional and must swallow the not-found error"
+            } finally {
+                if ($null -ne $saved.Base)  { $env:ANTHROPIC_BASE_URL = $saved.Base }
+                if ($null -ne $saved.Certs) { $env:NODE_EXTRA_CA_CERTS = $saved.Certs }
+            }
         }
     }
 

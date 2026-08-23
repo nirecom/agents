@@ -519,7 +519,7 @@ esac
 log_persist_or_fail() {
   local verdict="$1" sev_summary="${2:-}"
   if ! codex_core_round_log_append \
-      "$ROUND_LOG" "$EFF_SESSION_ID" "$LOOP_LABEL" "$verdict" "$sev_summary"; then
+      "$ROUND_LOG" "$EFF_SESSION_ID" "$LOOP_LABEL" "$verdict" "$sev_summary" "$ROUND"; then
     echo "## ${CODEX_LABEL}: FAILED — round log persistence failure (cap enforcement disabled, refusing to proceed): $ROUND_LOG"
     exit 0
   fi
@@ -566,8 +566,8 @@ case $codex_exit in
     echo "<!-- end-codex-output -->"
     codex_core_log performed "" "$INPUT_LINES"
     if [[ -n "$ARG_SESSION_ID" ]]; then
-      codex_core_hard_cap_check "$ROUND_LOG" "$EFF_SESSION_ID" "$LOOP_LABEL" \
-        "$CAP" "$EXTENSIONS_USED" "$MAX_EXTENSIONS" || true
+      codex_core_hard_cap_check "$ROUND" \
+        "$CAP" "$EXTENSIONS_USED" "$MAX_EXTENSIONS" "$LOOP_LABEL" || true
     fi
     ;;
   124)

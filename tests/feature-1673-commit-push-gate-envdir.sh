@@ -1,35 +1,27 @@
 #!/usr/bin/env bash
 # tests/feature-1673-commit-push-gate-envdir.sh
-# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js, hooks/workflow-state/state-io/core.js, bin/worker-dispatch/workers/commit-push.js
+# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js, hooks/workflow-state/state-io/core.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, env-propagation, state-dir, fail-quiet, TL2, scope:issue-specific
 #
-# Issue #1673 Risk 3 — the quiet failure.
-#
-# getWorkflowDir() reads exactly one variable, CLAUDE_WORKFLOW_DIR, and falls
-# back to <HOME>/.claude/projects/workflow. spawn.js's buildEnv hands a child
-# only CHILD_ENV_ALLOWLIST plus the entry's envPassthrough, and CLAUDE_WORKFLOW_DIR
-# is in neither by default. A worker that forgets it does not crash: the gate
-# child looks in the wrong directory, finds no state for the session, and answers
-# whatever an absent state implies. That verdict is then reported as if the gate
-# had been consulted.
-#
-# So the propagation is pinned from both ends:
-#   Group 1 — the declaration exists, and buildEnv actually carries the variable
-#             into the child env (with the negative: an undeclared name is
-#             refused, so the declaration is what makes it possible).
-#   Group 2 — the REAL gate binary changes its verdict based on the directory it
-#             is pointed at. The negative case runs the identical payload with
-#             the variable stripped and asserts the verdict differs — if it did
-#             not, this whole file would be measuring nothing.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - The commit-push worker actually assembling the value (the worker module is
-#     scanned here, not run against a real session state directory).
-#     tests/TL3-worker-dispatch-commit-push.sh covers the real seam.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673 Risk 3 — the quiet failure. getWorkflowDir() reads exactly one
+# variable, CLAUDE_WORKFLOW_DIR, falling back to <HOME>/.claude/projects/workflow;
+# spawn.js's buildEnv hands a child only CHILD_ENV_ALLOWLIST plus the entry's
+# envPassthrough, and CLAUDE_WORKFLOW_DIR is in neither by default. A worker that
+# forgets it does not crash: the gate child looks in the wrong directory, finds no
+# state, and answers whatever an absent state implies — reported as a gate verdict.
 
 set -u
+
+# Pinned from both ends: Group 1 the declaration plus buildEnv carrying the
+# variable into the child env (negative: an undeclared name is refused, which is
+# what makes the declaration load-bearing); Group 2 the REAL gate binary changing
+# its verdict with the directory it is pointed at; Group 3 the worker source.
+# TL3 gap (what this TL2 test does NOT catch):
+# - The commit-push worker actually assembling the value (the worker module is
+#   scanned here, not run against a real session state directory).
+#   tests/TL3-worker-dispatch-commit-push.sh covers the real seam.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_ENVDIR_INNER:-}" ]; then
     _CP1673_ENVDIR_INNER=1 timeout 240 bash "$0" "$@"
@@ -42,6 +34,9 @@ SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
 ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
 GATE_JS="$AGENTS_DIR/hooks/workflow-gate.js"
 WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+# commit-push.js is dispatch-only (rules/coding/file-split.md Pattern A); the D1
+# gate env is assembled in the sibling gate.js, so Group 3 scans both.
+WORKER_GATE_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push/gate.js"
 
 PASS=0
 FAIL=0
@@ -145,20 +140,15 @@ group_declaration() {
 }
 
 # ===========================================================================
-# Group 2 — the real gate reads the directory it is pointed at
-#
-# `git push origin main` hits the MERGE GATE, which runs unconditionally and
-# reads user_verification straight out of the session state file. That makes it
-# the shortest path from "which directory did the child look in" to an
-# observable verdict.
+# Group 2 — the real gate reads the directory it is pointed at: `git push
+# origin main` hits the MERGE GATE, which runs unconditionally and reads
+# user_verification straight out of the session state file — the shortest
+# path from "which directory did the child look in" to an observable verdict.
 # ===========================================================================
-# gate_decision <scenario> <user_verification-status> <propagate:1|0>
-#   → prints approve | block | (unknown)
-#
-# Each scenario gets its own state AND plans directory. A gate block writes a
-# supervisor finding, and a later run in the same directories is then blocked by
-# the pre-merge warning flush instead of by the step status under test — an
-# order dependency that would silently invert the meaning of these rows.
+# gate_decision <scenario> <status> <propagate:1|0> → approve|block|(unknown).
+# Each scenario gets its own state AND plans directory: a gate block writes a
+# supervisor finding, so a later run in the same directories would be blocked
+# by the pre-merge warning flush instead of by the step status under test.
 gate_decision() {
     local scenario="$1" status="$2" propagate="$3" out rc=0 payload
     local sdir="$TMPD/sc-$scenario/state" pdir="$TMPD/sc-$scenario/plans"
@@ -216,19 +206,24 @@ group_real_gate() {
 # Group 3 — the worker resolves the value instead of relying on inheritance
 # ===========================================================================
 group_worker_source() {
-    if [ ! -f "$WORKER_JS" ]; then
-        fail "worker/sets-claude-workflow-dir" "implementation missing: bin/worker-dispatch/workers/commit-push.js"
-        fail "worker/computes-default-state-dir" "implementation missing: bin/worker-dispatch/workers/commit-push.js"
+    local src missing="" blob
+    for src in "$WORKER_JS" "$WORKER_GATE_JS"; do
+        [ -f "$src" ] || missing="$missing $src"
+    done
+    if [ -n "$missing" ]; then
+        fail "worker/sets-claude-workflow-dir" "implementation missing:$missing"
+        fail "worker/computes-default-state-dir" "implementation missing:$missing"
         return
     fi
-    if grep -qF 'CLAUDE_WORKFLOW_DIR' "$WORKER_JS"; then
+    blob="$(cat "$WORKER_JS" "$WORKER_GATE_JS")"
+    if printf '%s\n' "$blob" | grep -qF 'CLAUDE_WORKFLOW_DIR'; then
         pass "worker/sets-claude-workflow-dir"
     else
         fail "worker/sets-claude-workflow-dir" "the worker never names CLAUDE_WORKFLOW_DIR"
     fi
     # envPassthrough also permits inheritance; the plan requires the worker to
     # compute the documented default when the parent env has nothing.
-    if grep -qE 'projects.{1,4}workflow' "$WORKER_JS"; then
+    if printf '%s\n' "$blob" | grep -qE 'projects.{1,4}workflow'; then
         pass "worker/computes-default-state-dir"
     else
         fail "worker/computes-default-state-dir" \

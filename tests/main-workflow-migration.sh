@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state.js
-# Tags: workflow, hook, bin, env, config
+# Tags: workflow, hook, bin, env, config, scope:common
 # TDD tests for the readState() migration in claude-global/hooks/workflow-state.js
 # Migration (not yet implemented) transforms old state files:
 #   - verify key → renamed to run_tests
@@ -22,7 +22,10 @@ pass() { echo "PASS: $1"; }
 
 TMPDIR_BASE=$(mktemp -d)
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
-mkdir -p "$WORKFLOW_DIR"
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ write_state_file() {
 # Returns empty string on error.
 call_read_state() {
     local sid="$1"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" node -e "
 process.env.CLAUDE_WORKFLOW_DIR = process.argv[1];
 const { readState } = require(process.argv[2]);
 const state = readState(process.argv[3]);

@@ -311,7 +311,7 @@ group_e() {
       // Workers legitimately authenticating against GitHub, closed on purpose —
       // a token reaching any OTHER workers children is the leak this catches.
       // (No apostrophes here: this whole script is a single-quoted shell word.)
-      const SANCTIONED = ["issue-reconcile", "commit-push", "issue-close-stage", "issue-close-finalize"];
+      const SANCTIONED = ["issue-reconcile", "commit-push", "issue-close-stage", "issue-close-finalize", "doc-append"];
       const declarers = [];
       const others = [];
       for (const name of Object.keys(workers)) {

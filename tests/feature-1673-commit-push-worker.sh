@@ -1,32 +1,14 @@
 #!/usr/bin/env bash
 # tests/feature-1673-commit-push-worker.sh
-# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md
+# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md
 # Tags: worker-dispatch, commit-push, registry, capability, payload, status-vocabulary, env-passthrough, TL1, scope:issue-specific
 #
-# Issue #1673 — the commit-push worker's declared capability surface.
-#
-# The registry entry is the only thing standing between a payload field and a
-# forge call (git push / gh pr create). Every assertion here is on the DECLARED
-# contract, evaluated through the real capability validator, so a widened type or
-# a dropped `required` shows up as a want!=got rather than as a runtime surprise
-# on someone's main branch.
-#
-# Three properties are asserted that no behavioural test can reach:
-#   - `gate_blocked` (D1) exists in BOTH the worker and the SKILL branch table;
-#     a status the caller cannot branch on is a silently swallowed block.
-#   - ISSUE_CLOSE_SKILL is absent from envPassthrough — structurally, not by
-#     grepping for the string, so the explanatory comment stays legal.
-#   - the five D1 env vars appear as extraEnv keys in the worker source. They are
-#     declared in envPassthrough, which also permits silent inheritance; an
-#     inherited CLAUDE_WORKFLOW_DIR points the gate child at another session's
-#     state and it answers "approve" to everything.
-#
-# TL3 gap (what this TL1 test does NOT catch):
-#   - Whether the real hooks/workflow-gate.js accepts the synthetic PreToolUse
-#     payload the worker builds (tests/TL3-worker-dispatch-commit-push.sh).
-#   - Whether the declared binaries exist and accept the assembled argv.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673 — the commit-push worker's DECLARED capability surface: registry
+# entry, payload types, env surface, the five D1 extraEnv vars and the status
+# vocabulary, asserted through the real capability validator or against the
+# worker source rather than by behaviour. Contract, rationale, and the TL3 gap
+# (real workflow-gate acceptance — tests/TL3-worker-dispatch-commit-push.sh):
+# docs/architecture/claude-code/worker-dispatch/commit-push.md
 
 set -u
 
@@ -40,7 +22,24 @@ REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 CAPABILITY_JS="$AGENTS_DIR/bin/worker-dispatch/capability.js"
 ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
 WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+# commit-push.js is dispatch + re-export only (rules/coding/file-split.md
+# Pattern A); the literals groups D and E scan live in the sibling folder, so
+# both groups read the WHOLE implementation and a literal moving between these
+# files is not a behaviour change.
+WORKER_DIR="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push"
+WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js")
 SKILL_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
+
+# A shrunken file list would report an absent literal as a missing feature and,
+# worse, turn the ISSUE_CLOSE_SKILL row green because the file that could hold
+# it was never opened. Missing files are named, not silently skipped.
+worker_srcs_missing() {
+    local f out=""
+    for f in "${WORKER_SRCS[@]}"; do
+        [ -f "$f" ] || out="$out ${f#"$AGENTS_DIR/"}"
+    done
+    echo "$out" | xargs
+}
 
 PASS=0
 FAIL=0
@@ -256,7 +255,7 @@ group_c() {
     ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
 
     assert_eq "env/declared-set" \
-        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
         "$(ev declared)"
     # run-stage-chain.sh / run-finalize-terminal.sh export it themselves; the
     # dispatcher must not be the one handing it out.
@@ -274,15 +273,18 @@ group_c() {
 # failure mode this group exists to make loud.
 # ===========================================================================
 group_d() {
-    if [ ! -f "$WORKER_JS" ]; then
-        fail "extraEnv/five-d1-vars" "implementation missing: bin/worker-dispatch/workers/commit-push.js"
-        fail "extraEnv/no-issue-close-skill" "implementation missing: bin/worker-dispatch/workers/commit-push.js"
+    local absent
+    absent="$(worker_srcs_missing)"
+    if [ -n "$absent" ]; then
+        fail "extraEnv/five-d1-vars" "implementation missing: $absent"
+        fail "extraEnv/no-issue-close-skill" "implementation missing: $absent"
         return
     fi
-    local out
+    local out nodesrcs=()
+    for f in "${WORKER_SRCS[@]}"; do nodesrcs+=("$(nodepath "$f")"); done
     out="$(node -e '
       const fs = require("fs");
-      const src = fs.readFileSync(process.argv[1], "utf8");
+      const src = process.argv.slice(1).map((f) => fs.readFileSync(f, "utf8")).join("\n");
       // Collect the key names of every `extraEnv: { ... }` object literal.
       const keys = new Set();
       let blocks = 0;
@@ -305,7 +307,7 @@ group_d() {
       }
       process.stdout.write("blocks=" + blocks + "\n");
       process.stdout.write("keys=" + Array.from(keys).sort().join(",") + "\n");
-    ' "$WORKER_JS" 2>&1)" || out="blocks=0
+    ' "${nodesrcs[@]}" 2>&1)" || out="blocks=0
 keys=SCAN_FAILED"
     local blocks keys missing
     blocks="$(printf '%s\n' "$out" | sed -n 's/^blocks=//p' | head -1)"
@@ -340,7 +342,8 @@ keys=SCAN_FAILED"
 STATUSES="staging_incomplete staging_check_failed gate_blocked bootstrap_pending pushed pr_created pr_reused push_failed conflict"
 
 group_e() {
-    local s
+    local s absent
+    absent="$(worker_srcs_missing)"
     for s in $STATUSES; do
         if [ ! -f "$SKILL_MD" ]; then
             fail "skill-vocab/$s" "missing skills/commit-push/SKILL.md"
@@ -349,9 +352,9 @@ group_e() {
         else
             fail "skill-vocab/$s" "status not present in the SKILL.md branch table"
         fi
-        if [ ! -f "$WORKER_JS" ]; then
-            fail "worker-vocab/$s" "implementation missing: bin/worker-dispatch/workers/commit-push.js"
-        elif grep -qF -- "$s" "$WORKER_JS"; then
+        if [ -n "$absent" ]; then
+            fail "worker-vocab/$s" "implementation missing: $absent"
+        elif grep -qF -- "$s" "${WORKER_SRCS[@]}" >/dev/null; then
             pass "worker-vocab/$s"
         else
             fail "worker-vocab/$s" "status never produced by the worker source"

@@ -141,19 +141,12 @@ function isFileOpWriteIR(ir) {
 }
 
 // Extract the inner command strings of every `$(...)` / backtick substitution in
-// a raw text fragment -> { ok, subs }.
-//
-// Boundaries come from the shared quote-span scanner (hooks/lib/quote-spans), not
-// from a local paren counter. The previous depth-counting walker closed a `$(`
-// frame at the first `)` it met, but `)` is also the PATTERN TERMINATOR of a
-// `case` statement — so `"$(case x in x) rm -f README.md;; esac)"` yielded the
-// inner text `case x in x` and the `rm` never reached innerCommandIsWrite at all
-// (#1569). Single-quoted text is literal to the shell, and the scanner opens no
-// substitution frame inside it, so `echo '$(rm f)'` stays a non-write for free.
-//
-// Every cmdsubst/backtick span is returned, nested ones included: over-reporting
-// only widens detection, while a missed span silently demotes a write to a read.
-// ok:false (unparseable fragment) is the caller's fail-closed signal.
+// a raw fragment -> { ok, subs }. Boundaries come from the shared quote-span
+// scanner (hooks/lib/quote-spans), never a local paren counter: `)` also
+// terminates a `case` pattern, which truncated the span and lost the write
+// (#1569). Single-quoted text opens no substitution frame, so `echo '$(rm f)'`
+// stays a read. Nested spans are returned too — over-reporting only widens
+// detection, a missed span silently demotes a write. ok:false = fail-closed.
 function extractCommandSubstitutions(raw) {
   if (!raw || typeof raw !== "string") return { ok: true, subs: [] };
   const sr = scanSpans(raw);
@@ -166,25 +159,29 @@ function extractCommandSubstitutions(raw) {
   return { ok: true, subs };
 }
 
-// True when a write (posix redirect / tee / pwsh cmdlet / rm-cp-mv / git write)
-// is hidden inside a `$(...)` or backtick command substitution — including when
-// the substitution is wrapped in double quotes (`echo "$(rm f)"`), a shape the
-// IR parser keeps as a single argv token and therefore does NOT split into its
-// own segment. The retired rm/cp/mv/redirect/pwsh/git WRITE_PATTERNS entries
-// used to catch these via whole-string regex; this predicate restores that
-// coverage under the IR architecture (#514 protection).
-//
-// gh writes are deliberately NOT flagged here: gh writes to GitHub, not the
-// local worktree — mirroring classify()'s local-write contract (#1296).
-// Fail-safe: guard !ir / parseFailure; a lazy require of isGitWriteIR avoids a
-// module-load cycle (patterns.js → classify.js → this file).
+// isCommandSubstWriteIR: a write hidden inside a `$(...)` / backtick substitution,
+// including the double-quoted shape (`echo "$(rm f)"`) that the IR keeps as a
+// single argv token and never splits into its own segment (#514). gh writes are
+// NOT flagged — they write to GitHub, not the worktree (#1296).
+// #2064: deriveProv derives dispatch provenance from an intact IR. The lazy
+// require keeps the module cycle broken (patterns.js → classify.js → this file);
+// a failed load yields null, i.e. no provenance = fail-closed.
+function deriveProv(ir) {
+  try {
+    const { deriveDispatchProvenance } = require("./bash-write-patterns/dispatch-provenance");
+    return typeof deriveDispatchProvenance === "function" ? deriveDispatchProvenance(ir) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Shared: parse an inner command string and report whether it is a local write
 // (posix redirect / pwsh cmdlet / rm-cp-mv / git write). gh writes are NOT
 // flagged (GitHub-side, not local — mirrors classify()'s contract, #1296).
 // Recurse into further-nested command substitutions. Fail-closed: unparseable /
 // parseFailure inner command → treated as a write (never a silent demotion).
 // `recurse` re-enters isCommandSubstWriteIR to catch a write one level deeper.
-function innerCommandIsWrite(inner, recurse) {
+function innerCommandIsWrite(inner, recurse, ctx) {
   if (!inner || !inner.trim()) return false;
   const { parse } = require("./command-ir");
   let isGitWriteIR;
@@ -195,20 +192,25 @@ function innerCommandIsWrite(inner, recurse) {
   let isPkgMgrWriteIR;
   try { ({ isPkgMgrWriteIR } = require("./bash-write-targets/pkg-mgr")); } catch (_) { isPkgMgrWriteIR = () => false; }
   // isHereWriteIR always false (here-shape read boundary); not in OR chain.
-  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr) || isPkgMgrWriteIR(innerIr) || isInterpreterCWriteIR(innerIr) || isEncodedCommandWriteIR(innerIr) || isExtendedFileOpWriteIR(innerIr)) return true;
+  // isNewlineInjectedWriteIR IS in it: an inner body is itself a command string,
+  // so an unquoted newline separates commands there exactly as at top level
+  // (`eval 'echo hi\nrm -rf docs'`). Its own `/[\r\n]/` + `lines.length < 2`
+  // guards terminate the mutual recursion.
+  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr) || isPkgMgrWriteIR(innerIr) || isInterpreterCWriteIR(innerIr) || isEncodedCommandWriteIR(innerIr) || isExtendedFileOpWriteIR(innerIr) || isExoticExecWriteIR(innerIr, ctx) || isNewlineInjectedWriteIR(innerIr, ctx)) return true;
   // Fail-closed widening: classify() sees interpreter-c wrappers (`sh -c '…'`)
   // and any WRITE_PATTERNS-flagged write that the narrow IR predicates above do
   // not individually cover. classify() never demotes a write to read, so adding
   // it here only widens detection (never a silent demotion).
   let classify;
   try { ({ classify } = require("./bash-write-patterns")); } catch (_) { classify = null; }
-  if (classify && classify(innerIr) === "write") return true;
-  return recurse ? recurse(innerIr) : false;
+  if (classify && classify(innerIr, ctx) === "write") return true;
+  return recurse ? recurse(innerIr, ctx) : false;
 }
 
-function isCommandSubstWriteIR(ir) {
+function isCommandSubstWriteIR(ir, ctx) {
   if (!ir || ir.parseFailure === true) return false;
   if (!ir.segments) return false;
+  const prov = ctx !== undefined ? ctx : deriveProv(ir);
   for (const seg of ir.segments) {
     // Scan only the RAW forms — they preserve quote characters so
     // extractCommandSubstitutions can exclude single-quoted (literal) spans.
@@ -222,7 +224,7 @@ function isCommandSubstWriteIR(ir) {
       // write (fail-closed).
       if (!ok) return true;
       for (const inner of subs) {
-        if (innerCommandIsWrite(inner, isCommandSubstWriteIR)) return true;
+        if (innerCommandIsWrite(inner, isCommandSubstWriteIR, prov)) return true;
       }
     }
   }
@@ -230,18 +232,16 @@ function isCommandSubstWriteIR(ir) {
 }
 
 // True when a write is hidden on a later line of a NEWLINE-separated command.
-// In bash an unquoted newline is a command separator equivalent to `;`, but the
-// IR segment splitter (splitSegmentsWithSeparators) does NOT split on newline —
-// so `echo x\nrm foo` parses as a single `echo` segment with `rm`/`foo` as argv
-// tokens, and no per-segment predicate sees the `rm`. The retired rm/redirect/…
-// WRITE_PATTERNS regexes used to catch this (their `[\s;|&]` prefix matched a
-// newline); this predicate restores that coverage. Heredoc bodies are stripped
-// first (stripHeredocBody) so a newline INSIDE a heredoc body is not mistaken
-// for a command separator (the body is data, not commands). Quoted newlines
-// (inside '...' / "...") are left to the per-line parse, which fail-closes on
-// unclosed quotes. gh writes are NOT flagged (local-write contract, #1296).
-function isNewlineInjectedWriteIR(ir) {
+// An unquoted newline separates commands in bash, but splitSegmentsWithSeparators
+// does not split on it, so `echo x\nrm foo` is a single `echo` segment and no
+// per-segment predicate sees the `rm`. Heredoc bodies are stripped first — their
+// newlines are data, not separators; quoted newlines are left to the per-line
+// parse; gh writes are NOT flagged (local-write contract, #1296).
+function isNewlineInjectedWriteIR(ir, ctx) {
   if (!ir || ir.parseFailure === true) return false;
+  // Derive BEFORE stripHeredocBody: only the intact ir still carries the
+  // dispatcher path token and the complete heredoc.
+  const prov = ctx !== undefined ? ctx : deriveProv(ir);
   const raw = ir.rawText;
   if (!raw || typeof raw !== "string") return false;
   if (!/[\r\n]/.test(raw)) return false;
@@ -252,23 +252,62 @@ function isNewlineInjectedWriteIR(ir) {
   let foldedDq;
   try { foldedDq = stripDqPreservingCmdSubst(folded); } catch (_) { foldedDq = folded; }
   // Span-aware: a newline inside a quote is argument text, not a line break.
+  // The split stays INCLUSIVE of expanding frames (`$( )`, backticks, bare
+  // subshells, process substitutions): the IR keeps no fragment for an unquoted
+  // newline-crossing opener, so this raw split is the only detector a write
+  // injected inside such a frame ever reaches (#2064).
   const { ok: splitOk, lines } = spanAwareNewlineSplit(foldedDq);
   if (!splitOk) return true; // unparseable spans → fail closed
   if (lines.length < 2) return false;
+  const cleared = !!(prov && prov.dispatchCleared === true);
   for (const line of lines) {
-    if (innerCommandIsWrite(line, isCommandSubstWriteIR)) return true;
+    if (cleared && isSplitArtifactHeredocLine(line, prov)) continue;
+    if (innerCommandIsWrite(line, isCommandSubstWriteIR, prov)) return true;
   }
   return false;
+}
+
+// A quote-delimited `cat` heredoc opener sitting at the very END of a line,
+// with nothing after it to consume the heredoc.
+// The `\w+` delimiter shape is classify()'s own (isTruncatedCatHeredocOnly):
+// anything outside it stays fail-closed rather than widening the demotion here.
+const TRAILING_CAT_HEREDOC_RE = /(?:^|[\s;|&(])cat[ \t]+<<-?[ \t]*(?:'\w+'|"\w+")[ \t]*$/;
+
+// True when a split line's only write evidence is a heredoc opener this split
+// created: stripHeredocBody already took the body and delimiter, so a trailing
+// `cat <<'EOF'` cut away from its own `)` carries no content (#2064). Callers
+// consult it only under dispatch clearance; two further conditions keep the
+// signal intact wherever the heredoc IS the payload — the opener must be last
+// (`cat <<'X' | bash`, `cat <<'EOF' >/tmp/pwn` are not), and the line minus
+// that opener must pass the FULL write predicate chain. classify() alone is
+// not enough: it is WRITE_PATTERNS-only and reads `rm -rf docs;` as read.
+// Rationale: docs/architecture/claude-code/settings.md.
+function isSplitArtifactHeredocLine(line, ctx) {
+  try {
+    const m = TRAILING_CAT_HEREDOC_RE.exec(line);
+    if (!m) return false;
+    return !innerCommandIsWrite(line.slice(0, m.index), isCommandSubstWriteIR, ctx);
+  } catch (e) {
+    return false; // fail closed: judge the line
+  }
 }
 
 // Exotic exec (eval / xargs / find action clauses) lives in
 // bash-write-targets/exotic-exec.js. Its predicates need parent-owned helpers,
 // which are injected here rather than required back (no module cycle).
-function isExoticExecWriteIR(ir) {
-  return exoticExecWriteIR(ir, { innerCommandIsWrite, isCommandSubstWriteIR, resolveRawArgvAfterEnvPrefix });
+function isExoticExecWriteIR(ir, ctx) {
+  // Closure-injected deps keep exotic-exec.js untouched and its 3-key
+  // fail-closed typeof contract intact (arity unchanged: 2-arg / 1-arg).
+  const prov = ctx !== undefined ? ctx : deriveProv(ir);
+  return exoticExecWriteIR(ir, {
+    innerCommandIsWrite: (inner, recurse) => innerCommandIsWrite(inner, recurse, prov),
+    isCommandSubstWriteIR: (innerIr) => isCommandSubstWriteIR(innerIr, prov),
+    resolveRawArgvAfterEnvPrefix,
+  });
 }
 
 module.exports = {
+  extractCommandSubstitutions,
   extractRedirectTargets,
   extractTeeTargets,
   extractPwshWriteTargets,

@@ -34,7 +34,7 @@ const EXTERNAL_COMMANDS = ["git", "gh", "docker", "bash", "node", "uv"];
 //
 // Credentials are NOT here either. GH_TOKEN / GITHUB_TOKEN are declared per worker
 // by each entry that authenticates against GitHub (issue-reconcile, commit-push,
-// issue-close-stage, issue-close-finalize). A global entry would hand them to every
+// doc-append, issue-close-stage, issue-close-finalize). A global entry would hand them to every
 // worker's children — including, via the family-worktree script anchor, code from
 // the branch under review, which no one has read yet.
 const CHILD_ENV_ALLOWLIST = [
@@ -49,16 +49,13 @@ const CHILD_ENV_ALLOWLIST = [
   "ComSpec",
   "TEMP",
   "TMP",
-  // --- Config-location vars --- admission requires BOTH: (1) var names WHERE a tool
-  // reads its config, (2) that config is ALREADY reachable via a member admitted earlier.
-  // XDG_CONFIG_HOME/APPDATA qualify; GIT_CONFIG_GLOBAL/SYSTEM and SSH_AUTH_SOCK (a live
-  // signing oracle) do not — secrets go into the envPassthrough of the worker that needs
-  // them, not here. Values are copied verbatim into a child with a different cwd, so a
-  // RELATIVE value resolves elsewhere — callers must use absolute paths. Fenced in three
-  // layers (structural: tests/feature-1643-worker-dispatch-schema.sh Group E; behavioural:
-  // tests/feature-1643-worker-dispatch-script-anchor.sh Group G; real gh:
-  // tests/TL3-worker-dispatch-child-env-gh-auth.sh) — add a member here => also add it to
-  // CONFIG_PATH_VARS in the first two.
+  // Config-location vars: admission requires (1) var names WHERE a tool reads its config,
+  // (2) that config ALREADY reachable via a member admitted earlier — values are copied
+  // verbatim into a child with a different cwd, so callers must use absolute paths.
+  // GIT_CONFIG_GLOBAL/SYSTEM and SSH_AUTH_SOCK (a live signing oracle) do not qualify;
+  // secrets go into the envPassthrough of the worker that needs them, not here. Fenced by
+  // tests/feature-1643-worker-dispatch-{schema,script-anchor}.sh and
+  // tests/TL3-worker-dispatch-child-env-gh-auth.sh — add a member here => also add it there.
 
   // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
@@ -213,7 +210,9 @@ const workers = {
         composeEntry: { anchor: "acd", rel: "bin/compose-doc-append-entry" },
       },
     },
-    envPassthrough: [],
+    // composeEntry shells out to `gh` for issue/PR metadata lookups — without a
+    // token passthrough every gh call in the child fails unauthenticated.
+    envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
     writeScopes: ["family-worktree", "plans-dir"],
     renderer: "status-triple-quoted",
   },
@@ -230,8 +229,10 @@ const workers = {
       artifact_dir: { type: "path-under-plansdir", required: false },
     },
     binaries: { external: ["gh"], scripts: {} },
-    // The only worker that talks to the GitHub API, and therefore the only one
-    // whose children see a token.
+    // One of several workers that talk to the GitHub API (doc-append's compose
+    // mode and commit-push's PR step also declare GH_TOKEN/GITHUB_TOKEN) --
+    // every gh call this worker makes needs the token, so the full declared set
+    // reaches every child unscoped.
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
     writeScopes: ["plans-dir"],
     renderer: "status-triple",
@@ -314,16 +315,29 @@ const workers = {
         workflowGate: { anchor: "acd", rel: "hooks/workflow-gate.js" },
       },
     },
+    // This entry declares the union every child of this worker MAY see; the
+    // worker itself narrows per call via spawn.js's envScope (HIGH review
+    // finding on #1812/#1744) — SSH_AUTH_SOCK reaches only the push, fetch and
+    // bootstrap-probe steps (no pull step exists since the C13 fetch+rebase
+    // split), the six gate vars only the workflow-gate child, GH_TOKEN/
+    // GITHUB_TOKEN only the gh steps in commit-push/pr.js. `git commit` and the
+    // shell preflights (which a repo's core.hooksPath could redirect) see none
+    // of it. SSH_AGENT_PID is omitted: the SSH client authenticates off
+    // SSH_AUTH_SOCK alone, and the PID only exposes the agent's lifecycle handle.
     envPassthrough: [
       "GH_TOKEN",
       "GITHUB_TOKEN",
       "ENFORCE_WORKTREE",
-      // The five the gate child needs to answer as the PreToolUse hook would:
+      // The other five the gate child needs to answer as the PreToolUse hook
+      // would (this one plus ENFORCE_WORKTREE above make GATE_ENV_SCOPE's six):
       "CLAUDE_WORKFLOW_DIR",   // state-io's only state-directory variable
       "WORKFLOW_PLANS_DIR",    // detail-plan read for the scope-drift verdict
       "WORKFLOW_SESSION_ID",   // supervisor-state resolution fallback
       "CLAUDE_PROJECT_DIR",    // getCurrentContext()'s cwd resolution
       "DEFAULT_BRANCHES",      // merge-detect.js's protected-branch set
+      // `git push` over SSH needs the parent's running agent, not a token —
+      // without this the child has no signing oracle and every SSH push fails.
+      "SSH_AUTH_SOCK",
     ],
     writeScopes: ["family-worktree", "plans-dir"],
     renderer: "status-triple-quoted",
