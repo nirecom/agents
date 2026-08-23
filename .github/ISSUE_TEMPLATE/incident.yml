@@ -1,6 +1,5 @@
 name: Incident
 description: A bug, outage, or production problem
-title: "<short subject>"
 labels: ["type:incident"]
 body:
   - type: markdown
@@ -11,6 +10,10 @@ body:
         `INCIDENT` entry to `docs/history.md` using the Cause/Fix fields
         below, and `/issue-close-finalize <N>` (Phase 2, from the main
         worktree) closes the issue.
+
+        **Title**: one short line naming the symptom — e.g. `git push blocked
+        from linked worktree`. Cause and Fix below are required; write the
+        actual content, not a placeholder.
   - type: textarea
     id: cause
     attributes:
@@ -18,7 +21,6 @@ body:
       description: Root cause. What went wrong and why?
       placeholder: |
         Cause: ...
-      value: "Cause: "
     validations:
       required: true
   - type: textarea
@@ -28,6 +30,5 @@ body:
       description: How was it resolved? Mitigation, follow-up.
       placeholder: |
         Fix: ...
-      value: "Fix: "
     validations:
       required: true

@@ -36,7 +36,7 @@ ARGS="$*"
 # Helper: emit the bare state string for `--json state --jq .state`.
 mock_state_for_scenario() {
   case "$SCENARIO" in
-    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended|open_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at|meta_admin_close_path|meta_child_open|meta_zero_children|meta_no_repo)
+    issue_task|issue_incident|issue_incident_post_fix|issue_task_post_fix|issue_incident_no_fields|issue_incident_empty_labels|issue_task_empty_labels|issue_no_labels|open_with_pending|open_with_appended|open_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at|meta_admin_close_path|meta_child_open|meta_zero_children|meta_no_repo)
       echo "OPEN" ;;
     closed_no_sentinel|closed_no_sentinel_open_subissue|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel|closed_with_stale_pending|closed_multi_reference)
       echo "CLOSED" ;;
@@ -407,6 +407,60 @@ case "$SCENARIO" in
     case "$ARGS" in
       "issue view 42 --json number,title,body,closedAt,labels")
         echo '{"number":42,"title":"Outage","body":"Cause: bug\nFix: patched","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:incident"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_incident_post_fix)
+    # The shape GitHub Issue Forms actually submits AFTER #2098 removes the
+    # body `value:` prefills: an `### <Label>` heading followed by bare user
+    # text, with no inline `Cause: ` / `Fix: ` label on the value line.
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Login outage","body":"### Cause\n\nthe login token expired\n\n### Fix\n\nrefresh the token on 401","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:incident"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_task_post_fix)
+    # CPR-ORTH counterpart of issue_incident_post_fix for task.yml's
+    # Background/Changes pair (non-INCIDENT branch).
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Setup guide drift","body":"### Background\n\nthe docs drifted\n\n### Changes\n\nrewrote the setup guide","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_incident_no_fields)
+    # INCIDENT issue whose body carries neither a Cause nor a Fix field —
+    # exercises the "(no <Field> recorded)" marker path end-to-end (#2098).
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Outage no fields","body":"just prose with no labeled fields","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:incident"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_incident_empty_labels)
+    # The literal #2094 shape: the template's `value:` prefill satisfied
+    # `required`, so the labels ARE present but carry no value, and the
+    # top-level `title:` prefill was submitted with text appended to it.
+    # extract_field's regex MATCHES these lines yet captures nothing — a
+    # different path from issue_incident_no_fields (no label at all).
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"<short subject>fix issues","body":"### Cause\n\nCause: \n\n### Fix\n\nFix: ","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:incident"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_task_empty_labels)
+    # CPR-ORTH counterpart of issue_incident_empty_labels for task.yml's
+    # Background/Changes pair (non-INCIDENT branch).
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"<short title>update stuff","body":"### Background\n\nBackground: \n\n### Changes\n\nChanges: ","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
         exit 0
         ;;
     esac
