@@ -2,19 +2,13 @@
 # Tests: hooks/block-tests-direct.js
 # Tags: workflow, hook, bin, macos, env, write-tests-gate, exit-code, dir-names-pin, scope:common, TL2
 # Test suite for hooks/block-tests-direct.js PreToolUse hook.
-
-# CLAUDE_BLOCK_TESTS_DIR_NAMES — what value each case is testing. Cases that do
-# not pass it explicitly run with the variable UNSET (run_hook unsets it inside
-# its subshell), so an exported value in the developer's shell can never
-# redirect what the default-path cases (A*, B*, C15-C21, D*, E*, F*) exercise:
-# they assert the hook's own built-in default, `tests`. C22/C23 pin a custom
-# list to prove the override works; C24 pins the literal default so the built-in
-# and the documented default cannot drift apart silently.
-
-# Exit-code contract: this PreToolUse hook expresses its verdict in the stdout
-# JSON (decision approve/block), NOT in its exit status, so it must exit 0 in
-# BOTH directions. Every subprocess call below captures the real status and
-# asserts 0 — a swallowed `|| true` would hide a crash-after-printing.
+# CLAUDE_BLOCK_TESTS_DIR_NAMES: cases that do not pass it run with it UNSET
+# (run_hook unsets it in its subshell), so a developer's exported value cannot
+# redirect the default-path cases (A*, B*, C15-C21, D*, E*, F*) that assert the
+# built-in default `tests`; C22/C23 prove the override, C24 pins the literal
+# default against drift. Exit-code contract: the verdict lives in the stdout JSON,
+# not the exit status, so the hook must exit 0 in BOTH directions — every
+# subprocess call captures the real status and asserts 0.
 set -uo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -50,7 +44,10 @@ CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
 CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
 WF_DIR_N="$TMPDIR_ROOT_N/workflow"
 ENV_FILE_N="$TMPDIR_ROOT_N/claude_env"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+PLANS_DIR_N="$TMPDIR_ROOT_N/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$TMPDIR_ROOT/plans"
 
 cleanup() {
     rm -rf "$TMPDIR_ROOT"
@@ -105,6 +102,7 @@ run_hook() {
             unset CLAUDE_BLOCK_TESTS_DIR_NAMES
             export CLAUDE_ENV_FILE="$ENV_FILE_N"
             export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+            export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
             for kv in "${extra_env[@]+"${extra_env[@]}"}"; do export "$kv"; done
             run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
         )
@@ -234,6 +232,7 @@ b10_result=$(
     (
         unset CLAUDE_ENV_FILE CLAUDE_BLOCK_TESTS_DIR_NAMES
         export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+        export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b10_input_file" 2>/dev/null
     )
 )
@@ -287,6 +286,7 @@ b14_result=$(
         unset CLAUDE_BLOCK_TESTS_DIR_NAMES
         export CLAUDE_ENV_FILE="$ENV_FILE_N"
         export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+        export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b14_input_file" 2>/dev/null
     )
 )

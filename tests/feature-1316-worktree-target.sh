@@ -3,26 +3,12 @@
 # Tests: bin/compute-staged-tests-token.js, skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: review-tests, worktree-target, staged-tests-token, parallel-sessions, scope:issue-specific
 #
-# Issue #1316 — commit-target worktree resolution for /review-tests Step 4a.
-# The staged-tests token and the codex review loop must both resolve to the
-# SESSION's linked worktree (state.cwd), never to process.cwd()/main. Otherwise
-# parallel sessions mint a token for the wrong worktree and the pre-commit gate
-# blocks forever on stale-token.
-#
-# EXPECTED: cases 1-3, 6 will FAIL until source implementation is complete
-#           (resolveRepoDir() does not yet consult readState(SESSION_ID).cwd).
-#           Regression guards (cases 4, 5) detect the OLD unsafe fallback to
-#           process.cwd() — they FAIL now (demonstrating the bug) and PASS after
-#           the fix removes the process.cwd() fallback.
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Whether the real pre-commit gate (hooks/pre-commit) fingerprints the same
-#   worktree in a live parallel-session commit — only a real two-worktree
-#   `git commit` on a true host reproduces the fingerprint handshake.
-# - Whether SESSION_ID propagates from the live Claude Code session env into
-#   the compute-staged-tests-token.js process (env chain is indirect on Windows).
-# Closest-to-action mitigation: token consistency is re-checked at commit time
-# by the pre-commit stale-token gate (review-tests-checker.js).
+# Issue #1316 — the staged-tests token and the codex review loop must resolve to
+# the SESSION's linked worktree (state.cwd), never process.cwd()/main; otherwise
+# parallel sessions mint a token for the wrong worktree and pre-commit blocks on
+# stale-token. Cases 1-3, 6 fail until resolveRepoDir() consults state.cwd;
+# cases 4-5 guard the old process.cwd() fallback. L3 gap: live two-worktree
+# fingerprint handshake and SESSION_ID propagation — see review-tests-checker.js.
 
 set -uo pipefail
 
@@ -67,6 +53,10 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # Isolate workflow state so we never touch the real session store.
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
 mkdir -p "$CLAUDE_WORKFLOW_DIR"
+# Dual-pin (#1799, rules/test/fixture-isolation.md): without this the supervisor
+# emitter still resolves the developer's real ~/.workflow-plans/ and appends there.
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
 
 # ---------------------------------------------------------------------------
 # Precondition gate
@@ -396,18 +386,11 @@ else
     fail "8: REGRESSION — non-git state.cwd fell back to CWD and emitted main token [$got8]"
 fi
 
-# NOTE: Special-char and space paths are not fixture-tested on Windows due to
-# Git Bash path normalization edge cases. The contract is covered by cases 7-8
-# (path validation gate). Paths with unusual characters would fail the same
-# existence/git-repo checks.
-# L3 gap: real worktree list check (git worktree list --porcelain parsing for
-# "is linked vs main") requires a multi-worktree git repo which cannot be easily
-# simulated with isolated fixture repos; only reproducible in the live host.
-
-# SKIPPED: worktree path with spaces
-# Because: Windows git worktree add with spaces in path requires extra quoting
-#   that is complex to fixture reliably across environments
-# L3 gap: worktree paths with spaces should be verified in a real ENFORCE_WORKTREE=on environment
+# NOTE: Special-char and space paths are not fixture-tested on Windows (Git Bash
+# path normalization); cases 7-8 cover the same existence/git-repo gate. Windows
+# `git worktree add` with spaces needs quoting that is not reliably fixturable.
+# L3 gap: linked-vs-main detection (git worktree list --porcelain) and
+# space-bearing worktree paths need a real multi-worktree ENFORCE_WORKTREE=on host.
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

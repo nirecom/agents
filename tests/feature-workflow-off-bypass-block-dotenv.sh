@@ -1,19 +1,13 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-block-dotenv.sh
 # Tests: hooks/block-dotenv.js
-# Tags: dotenv, secrets, hook, workflow, bin
+# Tags: dotenv, secrets, hook, workflow, bin, scope:common
 #
-# PR2: hooks/block-dotenv.js must early-return (approve) when
-# <workflowDir>/<sid>.workflow-off marker exists for the calling session.
-#
-# Contract:
-#   - With NO marker, Read on .env still blocks (baseline regression).
-#   - With marker present + valid sid, Read on .env approves (bypass active).
-#   - With invalid sid (traversal), bypass MUST NOT apply (still blocks).
-#   - Idempotent: two consecutive calls with marker both approve.
-#
-# TDD note: tests "marker present → approve" will fail until block-dotenv.js
-# adds the isWorkflowOff(sid) early-return.
+# PR2: block-dotenv.js early-returns (approve) when the calling session has a
+# <workflowDir>/<sid>.workflow-off marker. Contract: no marker → Read on .env
+# still blocks; marker + valid sid → approve, idempotently; traversal sid →
+# bypass MUST NOT apply. TDD note: the "marker → approve" cases fail until
+# block-dotenv.js adds the isWorkflowOff(sid) early-return.
 
 set -u
 
@@ -39,6 +33,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -101,6 +101,7 @@ run_hook() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }
 

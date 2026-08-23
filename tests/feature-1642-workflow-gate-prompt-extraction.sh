@@ -3,18 +3,12 @@
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/prompt-extraction-gate.js, bin/check-prompt-extraction
 # Tags: workflow-gate, hook, gate3, prompt-extraction, scope:issue-specific, scope:feature-1642, layer:TL2
 #
-# Issue #1642 — Gate 3: workflow-gate.js must hard-block `git commit` when a
-# STAGED prompt file carries an un-allowlisted extraction violation.
-# Gate 3 delegates to hooks/workflow-gate/prompt-extraction-gate.js, which shells
-# out to `bash bin/check-prompt-extraction --staged`.
-#
-# Fail-closed contract: every infrastructure error blocks. Timeout is the ONLY
-# fail-open path (mirrors Gate 2 / code-size-gate.js — CPR-ORTH).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the PreToolUse hook actually fires when Claude Code issues a git commit
-# - Whether settings.json registers hooks/workflow-gate.js for the Bash tool
-# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
+# Issue #1642 — Gate 3 hard-blocks `git commit` when a STAGED prompt file carries
+# an un-allowlisted extraction violation, via prompt-extraction-gate.js ->
+# `bash bin/check-prompt-extraction --staged`. Fail-closed: every infrastructure
+# error blocks; timeout is the ONLY fail-open path (CPR-ORTH with Gate 2).
+# TL3 gap: hook firing / settings.json registration are not covered here —
+# mitigated by bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -72,6 +66,11 @@ run_with_timeout() {
 to_node_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
 }
+
+# #1799 plans-dir isolation fixture: keeps supervisor-emit writes inside the
+# sandbox instead of the developer's real ~/.workflow-plans/ tree.
+mkdir -p "$TMPDIR_BASE/plans"
+FIXTURE_PLANS_DIR="$(to_node_path "$TMPDIR_BASE/plans")"
 
 fresh_workflow_dir() {
     local d="$TMPDIR_BASE/wf-$RANDOM-$$"
@@ -174,11 +173,14 @@ HOOK_RC=0
 run_hook() {
     local payload="$1" wfdir="$2" cfg="$3"; shift 3
     HOOK_RC=0
+    # env(1) is last-wins: AGENTS_CONFIG_DIR is an overridable parameter so it
+    # precedes "$@"; the isolation pins follow "$@" so callers cannot unpin them.
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$cfg" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "$@" \
+        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }
 

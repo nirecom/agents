@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-pre-commit.sh
 # Tests: hooks/enforce-worktree.js, hooks/pre-commit
-# Tags: worktree, enforce, hook, git, pre-commit
+# Tags: worktree, enforce, hook, git, pre-commit, scope:common
 #
 # End-to-end test for hooks/pre-commit session-marker bypass (issue #550).
 #
@@ -33,6 +33,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -113,6 +119,7 @@ test_B_workflow_off_marker_bypasses() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile")" || rc=$?
     if [ "$rc" = "0" ]; then
         pass "B: .workflow-off marker → pre-commit bypassed"
@@ -132,6 +139,7 @@ test_C_worktree_off_marker_bypasses() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile")" || rc=$?
     if [ "$rc" = "0" ]; then
         pass "C: .worktree-off marker → pre-commit bypassed"
@@ -153,6 +161,7 @@ test_D_no_markers_no_session_id_blocks_gracefully() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_TRANSCRIPT_BASE_DIR=$empty_transcript" \
         bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ] && echo "$out" | grep -q "commits from main worktree are blocked"; then
@@ -179,6 +188,7 @@ test_E_no_node_falls_through_to_enforcement() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
     # Without node, marker check (which requires node) cannot succeed → falls through to enforcement → exit 1.
@@ -201,6 +211,7 @@ test_F_bad_agents_config_dir_falls_through() {
         "AGENTS_CONFIG_DIR=/nonexistent/path" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -229,6 +240,7 @@ test_G_enforce_worktree_notice_regression() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         node "$AGENTS_DIR/hooks/enforce-worktree.js" 2>&1)" || rc=$?

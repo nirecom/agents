@@ -2,31 +2,13 @@
 # tests/enforce-clearance-token-write.sh
 # Tests: hooks/block-clearance-token-write.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, block-write, vector2, classifier, scope:issue-specific, pwsh-not-required, TL2, hook-registration
-# TL3 gap (what this test does NOT catch):
-# - The hook actually firing on a real host: this file invokes the classifier directly,
-#   so it cannot fail when the PreToolUse registration is missing or misspelled.
-#   N3 below asserts the registration statically; only a real `claude -p` turn proves
-#   the guard is reached before the tool runs (tests/TL3-hook-clearance-token-write.sh).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
-#
-# #1608 anti-cheat (best-effort): block direct writes to the clearance-token path
-# (<workflowDir>/<sid>.off-clearance). Mirrors block-memory-direct.js + adds a vector2
-# interpreter-body heuristic (node -e / python -c writing to the token dir).
-#
-# The guard briefly also covered the issue-provenance markers and .session-transcript.
-# That mechanism is deleted (#1763), so those suffixes are no longer reserved: section R
-# pins them as writable again. A reserved name with nothing behind it is not harmless —
-# it blocks ordinary files whose names happen to collide, for a token that can never
-# exist, and it leaves a reader believing a protection is in force when it protects
-# nothing.
-#
-# KNOWN-BYPASS (accepted limitation — detail plan "Anti-cheat 信頼モデル(確定)"):
-#   Dynamic path construction (variable concat / base64 / alternate interpreter),
-#   editing the examiner script / codex / this hook itself are NOT detectable.
-#   The TRUE gate is Phase2 human approval + audit, NOT this best-effort block.
-# Classifier symmetry (test-design.md L36): every block case is paired with a
-# sanctioned unrelated-path APPROVE case so the hook does not over-block.
+# TL3 gap: the hook firing on a real host — this file invokes the classifier directly, so
+# N3 only asserts PreToolUse registration statically; a real turn proves it
+# (tests/TL3-hook-clearance-token-write.sh), gap-checked by bin/check-verification-gate.sh.
+# #1608 anti-cheat (best-effort): block direct writes to <workflowDir>/<sid>.off-clearance,
+# mirroring block-memory-direct.js plus a vector2 interpreter-body heuristic. The
+# issue-provenance / .session-transcript suffixes are unreserved since #1763 (section R).
+# KNOWN-BYPASS: dynamic paths, editing the hook — Phase2 human approval is the TRUE gate.
 
 set -u
 
@@ -48,7 +30,9 @@ HOOK_PRESENT=no; [ -f "$HOOK" ] && HOOK_PRESENT=yes
 run_hook() {
     local tn="$1" input="$2"
     [ "$HOOK_PRESENT" = "yes" ] || { printf ''; return; }
-    CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
+    mkdir -p "$tn/plans"
+    CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null
 }
 mk_bash_input() { "$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'wsid',tool_input:{command:process.argv[1]}}))" "$1"; }
