@@ -355,3 +355,7 @@ Changes: Fixed: a single blank line (or a lone `;`, `:`, `{}`, `()`, `,`) could 
 ### FEATURE: PR #2086 (2026-08-22)
 Background: fix(enforce-worktree): thread dispatch provenance into fragment re-parse
 Changes: Fixed: `enforce-worktree` no longer blocks repository-write-free `gh` and dispatcher commands from the main worktree when a here-doc opener lands on its own line through backslash continuation (#2064). Write detection is tightened at the same time: `eval` / `xargs` / `find -exec` hidden inside command substitutions or on newline-injected lines, and writes on a later line of a quoted multi-line body, are now caught; a shell option can no longer pass an arbitrary script off as a sanctioned dispatcher.
+
+### FEATURE: PR #2113 (2026-08-23)
+Background: fix(#1812/#1744): widen worker-dispatch envScope for SSH push and gh ...
+Changes: Fixed `commit-push` worker child processes not inheriting `SSH_AUTH_SOCK`, which could cause `git push`/`fetch` failures against SSH-signed or SSH-only remotes.;Fixed `doc-append` worker child processes missing the environment `gh` calls need, which could cause history/changelog entry writes to fail.
