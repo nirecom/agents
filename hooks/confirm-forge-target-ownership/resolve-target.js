@@ -146,7 +146,10 @@ function cwdTarget(cwd, budget) {
   }
   const facts = repoFacts(parsed.ownerRepo, budget);
   if (!facts) return unresolved("the implicit target " + parsed.ownerRepo + " could not be inspected");
-  if (facts.fork === true) {
+  // Only a CONFIRMED `fork: false` clears this rung. An unreadable or absent
+  // fork field is not a promise that the checkout is upstream — and if it is a
+  // fork, the issue lands in someone else's repository.
+  if (facts.fork !== false) {
     const parent = facts.parent || "its upstream";
     return unresolved("the checkout " + parsed.ownerRepo + " is a fork, so an issue filed here may land in " + parent);
   }
@@ -172,11 +175,25 @@ function reconcileAmbient(ambient, cwd, budget, cwdAllowed) {
   return { kind: "explicit", ownerRepo: derived.ownerRepo };
 }
 
+// `gh api` has no --repo flag at all, so a selector on an api call cannot be
+// the target: the endpoint PATH is. Letting the selector outrank it is how a
+// write to the endpoint's repository goes silent behind a selector naming one
+// the caller happens to own — so agreement stands, and divergence asks.
+function reconcileApi(apiTarget, selectorVerdict) {
+  if (!selectorVerdict) return { kind: "explicit", ownerRepo: apiTarget };
+  if (selectorVerdict.kind === "unresolved") return selectorVerdict;
+  if (selectorVerdict.ownerRepo.toLowerCase() !== apiTarget.toLowerCase()) {
+    return unresolved("a repo selector names " + selectorVerdict.ownerRepo +
+      " but the gh api endpoint targets " + apiTarget);
+  }
+  return { kind: "explicit", ownerRepo: apiTarget };
+}
+
 // The precedence ladder, highest first.
 function resolveTarget(opts) {
   const selectorVerdict = resolveSelectors(opts.selectors || [], opts.rawText || "");
+  if (opts.apiTarget) return reconcileApi(opts.apiTarget, selectorVerdict);
   if (selectorVerdict) return selectorVerdict;
-  if (opts.apiTarget) return { kind: "explicit", ownerRepo: opts.apiTarget };
   if (opts.apiInScope) return unresolved("the gh api endpoint does not name a repository the guard can read");
   const repoEnv = opts.ghRepo;
   if (repoEnv && repoEnv.present) {

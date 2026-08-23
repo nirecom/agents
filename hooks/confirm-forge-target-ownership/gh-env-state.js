@@ -200,19 +200,21 @@ function loadSessionGhEnv(sid) {
   return out;
 }
 
-// Returns { persisted, failed }. The two are NOT complements. A session with no
-// state directory at all has nowhere to remember anything — nothing was
-// attempted, nothing was lost, and every invocation re-asks by construction, so
-// that is `persisted: false, failed: false`. `failed: true` is the case the
-// caller must react to: the write was attempted and did not land, so this
-// invocation would otherwise finish as though the GH_REPO / GH_HOST it just
-// resolved had been durably recorded when it was not.
+// Returns { persisted, failed }. The two are NOT complements. `failed: true` is
+// the case the caller must react to: the exported GH_REPO / GH_HOST did not land,
+// so a later bare `gh issue create` resolves from the checkout while gh follows
+// the override the guard forgot. Having no state directory reaches that same end
+// by another road, so it fails on the same terms: whenever there was a value to
+// remember. Only "nothing to record" is `persisted: false, failed: false` —
+// nothing attempted, nothing lost.
 function saveSessionGhEnv(sid, record) {
   const clean = {};
   for (const name of GH_ENV_NAMES) {
     if (record && record[name]) clean[name] = record[name];
   }
-  if (sessionStatePath(sid, "gh-env") === null) return { persisted: false, failed: false };
+  if (sessionStatePath(sid, "gh-env") === null) {
+    return { persisted: false, failed: Object.keys(clean).length > 0 };
+  }
   const ok = Object.keys(clean).length === 0
     ? removeState(sid, "gh-env")
     : writeJsonState(sid, "gh-env", clean);

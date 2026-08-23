@@ -8,25 +8,9 @@
 // unrecognized flag makes the whole scan ambiguous — the guard cannot know
 // whether it swallowed the following token, so it refuses to classify.
 const { isGhApiWriteFromFlags } = require("../lib/forge-write-extract");
-
-const GH_API_VALUE_FLAGS = new Set([
-  "-X", "--method",
-  "-H", "--header",
-  "-f", "--field",
-  "-F", "--raw-field",
-  "--input",
-  "--hostname",
-  "--cache",
-  "-q", "--jq",
-  "-t", "--template",
-  "--preview",
-]);
-
-const GH_API_BOOL_FLAGS = new Set([
-  "--paginate", "--slurp", "--silent",
-  "-i", "--include",
-  "--verbose",
-]);
+// The same declaration of gh's flag arity the repo-selector scan walks, so the
+// two readers of one argv can never disagree about which flags eat a token.
+const { GH_API_VALUE_FLAGS, GH_API_BOOL_FLAGS } = require("../lib/gh-flag-vocab");
 
 const PAYLOAD_FIELD_FLAGS = new Set(["-f", "--field", "-F", "--raw-field"]);
 

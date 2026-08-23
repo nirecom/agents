@@ -149,15 +149,18 @@ function loadDirty(sid) {
 
 // Only the CAUSE is recorded — never a token value, never command text. The
 // state dir is readable by anything running as the user (OWASP ASVS V8).
-// Returns { persisted, failed } like saveSessionGhEnv, and for the same reason:
-// a dirty record that does not land reads back as "auth never moved", and the
-// next invocation would prove ownership against a login that no longer acts.
-// No state dir at all is `failed: false` — nothing was attempted, and every
-// invocation re-asks by construction.
+// Returns { persisted, failed } like saveSessionGhEnv: a dirty record that does
+// not land reads back as "auth never moved", and the next invocation proves
+// ownership against a login that no longer acts. No state dir is NOT
+// automatically failed:false — that holds for a cached proof, which is re-probed
+// when absent, but not for the guard's only memory that the identity moved. So
+// it fails whenever there was a cause to remember, and not when there was none.
 function saveDirty(sid, causes) {
   const unique = [];
   for (const c of causes) if (typeof c === "string" && unique.indexOf(c) === -1) unique.push(c);
-  if (sessionStatePath(sid, "gh-auth-dirty") === null) return { persisted: false, failed: false };
+  if (sessionStatePath(sid, "gh-auth-dirty") === null) {
+    return { persisted: false, failed: unique.length > 0 };
+  }
   const ok = unique.length === 0
     ? removeState(sid, "gh-auth-dirty")
     : writeJsonState(sid, "gh-auth-dirty", { causes: unique, setAt: Date.now() });

@@ -132,12 +132,17 @@ run_block_c13() {
         "$FX_OWNED" "ask" "bash -c \"cd $FX_FOREIGN && gh issue create --title x\"" \
         "reason"
 
-    # 6. The nested-body depth cap is shared too: raising it to zero must make an
-    #    ordinary single-level body unresolvable.
-    mut_case "C13-6 nested-scan depth cap (confirm-forge-target-ownership/nested-commands.js)" \
+    # 6. Nested-body resolution is shared too: a nestedBodyOf that never resolves
+    #    a body must stop the guard from reading the wrapped write. Both halves
+    #    still ask — the opaque-head fallback catches the now-unreadable wrapper
+    #    independently — so the evidence the module is reached is the REASON
+    #    moving from the named foreign repo to unrecognized-wrapper-head
+    #    (observe=reason).
+    mut_case "C13-6 nested-body resolution (confirm-forge-target-ownership/nested-commands.js)" \
         "confirm-forge-target-ownership/nested-commands.js" \
         'module.exports.nestedBodyOf = function () { return { kind: "none" }; };' \
-        "$FX_OWNED" "ask" "bash -c \"gh issue create --repo $FOREIGN/x\""
+        "$FX_OWNED" "ask" "bash -c \"gh issue create --repo $FOREIGN/x\"" \
+        "reason"
 
     # The mutation harness itself must be able to fail: if cp/append/dispatch
     # were broken, every row above would report the same "verdict stayed" text

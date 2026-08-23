@@ -40,6 +40,18 @@ function isIssueCreate(words) {
   return words[0] === "issue" && typeof words[1] === "string" && ISSUE_CREATE_VERBS.has(words[1]);
 }
 
+// gh's own top-level command vocabulary. A first word OUTSIDE it is not a gh
+// command at all — it is a user-defined alias (`gh alias set ...`), and an alias
+// expands to text this guard never sees, including `issue create --repo` for
+// someone else's repository. So an unknown word is unresolved, never safe.
+const GH_TOP_LEVEL_COMMANDS = new Set([
+  "alias", "api", "attestation", "auth", "browse", "cache", "codespace",
+  "completion", "config", "extension", "gist", "gpg-key", "help", "issue",
+  "label", "org", "pr", "preview", "project", "release", "repo", "ruleset",
+  "run", "search", "secret", "ssh-key", "status", "variable", "version",
+  "workflow",
+]);
+
 const ANSIC_ARG_INERT_HEADS = new Set([
   "echo", "printf", "cat", "head", "tail", "wc", "sort", "uniq", "tr", "cut",
   "basename", "dirname", "grep", "egrep", "fgrep", "rg", "test", "[",
@@ -135,7 +147,12 @@ function ghScopeOf(effCmd0, effArgv, effArgvRaw, fullText) {
     // the words go to it exactly as gh received them — no private rewrite here.
     if (isForgeScanTarget("gh " + words.join(" "))) return { kind: "issue-create" };
   }
-  if (words[0] !== "api") return null;
+  if (words[0] !== "api") {
+    // A leading dash is a flag the subcommand resolver could not consume, not a
+    // verb: only a bare word can name an alias that expands to a forge write.
+    if (words.length === 0 || words[0].startsWith("-")) return null;
+    return GH_TOP_LEVEL_COMMANDS.has(words[0]) ? null : { kind: "unrecognized-verb" };
+  }
   const at = argv.indexOf("api");
   if (at < 0) return null;
   const rest = argv.slice(at + 1);
@@ -220,4 +237,5 @@ module.exports = {
   unrecognizedWrapperHead,
   NON_REPO_ROOTS,
   ANSIC_ARG_INERT_HEADS,
+  GH_TOP_LEVEL_COMMANDS,
 };

@@ -66,9 +66,18 @@ function execArgv(argv) {
   return interp ? [interp, resolved].concat(argv.slice(1)) : [resolved].concat(argv.slice(1));
 }
 
+// The probe must authenticate against the SAME forge the decision is about. An
+// ambient GH_HOST naming an enterprise instance would otherwise have gh answer
+// "who am I" for a forge the write never targets, and that answer would be read
+// as proof about github.com.
+function probeEnv(ctx) {
+  const host = ctx && typeof ctx.host === "string" && ctx.host !== "" ? ctx.host : GITHUB_HOST;
+  return Object.assign({}, process.env, { GH_HOST: host });
+}
+
 // One spawn, bounded by whatever is left of the invocation's budget. `spawn` is
 // injectable so the proof path can be exercised without a real gh on PATH.
-function runProbe(argv, budget, capMs, options) {
+function runProbe(argv, budget, capMs, options, ctx) {
   const timeout = probeTimeout(budget, capMs);
   if (timeout === null) return null;
   const injected = budget && typeof budget.spawn === "function";
@@ -76,7 +85,7 @@ function runProbe(argv, budget, capMs, options) {
   const started = Date.now();
   try {
     const opts = Object.assign(
-      { encoding: "utf8", timeout, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
+      { encoding: "utf8", timeout, windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: probeEnv(ctx) },
       options || {}
     );
     const real = injected ? argv : execArgv(argv);
@@ -122,9 +131,14 @@ function classifyRepoFacts(res) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   const perms = parsed.permissions;
   const parent = parsed.parent;
+  // `fork` is TRI-state on purpose. Coercing a missing or non-boolean field to
+  // `false` turns "the response never said" into "this is not a fork", which is
+  // exactly the answer that lets an issue land in an upstream repository without
+  // a prompt. Unknown stays unknown; the caller decides what to do about it.
+  const forkField = parsed.fork;
   return {
     admin: !!(perms && typeof perms === "object" && perms.admin === true),
-    fork: parsed.fork === true,
+    fork: forkField === true ? true : (forkField === false ? false : null),
     parent: parent && typeof parent === "object" && typeof parent.full_name === "string" ? parent.full_name : null,
   };
 }
@@ -135,13 +149,13 @@ function memoOf(budget, slot) {
   return budget[slot];
 }
 
-function probeRepoFacts(target, budget) {
+function probeRepoFacts(target, budget, ctx) {
   const t = normalizeTarget(target);
   if (!t) return null;
   const key = t.owner + "/" + t.repo;
   const memo = memoOf(budget, "_repoFactsMemo");
   if (memo && Object.prototype.hasOwnProperty.call(memo, key)) return memo[key];
-  const res = runProbe(["gh", "api", "repos/" + t.owner + "/" + t.repo], budget, REPO_PROBE_CAP_MS);
+  const res = runProbe(["gh", "api", "repos/" + t.owner + "/" + t.repo], budget, REPO_PROBE_CAP_MS, null, ctx);
   const facts = classifyRepoFacts(res);
   if (memo) memo[key] = facts;
   return facts;
@@ -149,11 +163,11 @@ function probeRepoFacts(target, budget) {
 
 // Dual signature by design: repoFacts({status, stdout}) classifies a response
 // the caller already has, repoFacts(target, budget) goes and gets one.
-function repoFacts(a, b) {
+function repoFacts(a, b, ctx) {
   if (a && typeof a === "object" && !Array.isArray(a) && (typeof a.status === "number" || typeof a.stdout === "string")) {
     return classifyRepoFacts(a);
   }
-  return probeRepoFacts(a, b);
+  return probeRepoFacts(a, b, ctx);
 }
 
 function tokenDigest(value) {
@@ -239,7 +253,7 @@ function ghLogin(budget, ctx) {
     if (memo) memo.login = cached;
     return cached;
   }
-  const res = runProbe(["gh", "api", "user", "--jq", ".login"], budget, LOGIN_PROBE_CAP_MS);
+  const res = runProbe(["gh", "api", "user", "--jq", ".login"], budget, LOGIN_PROBE_CAP_MS, null, ctx);
   let login = null;
   if (res && (res.status === 0 || res.status === 200)) {
     const trimmed = res.stdout.trim();
@@ -259,7 +273,7 @@ function proveOwned(target, budget, ctx) {
   }
   const key = (t.owner + "/" + t.repo).toLowerCase();
   if (cachedProven(ctx, key)) return true;
-  const facts = probeRepoFacts(t, budget);
+  const facts = probeRepoFacts(t, budget, ctx);
   if (!(facts && facts.admin === true)) return false;
   cacheProven(ctx, key);
   return true;

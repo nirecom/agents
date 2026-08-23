@@ -28,7 +28,11 @@ function mentionsForgeWrite(text) {
   if (typeof text !== "string" || text === "") return false;
   if (!/\bgh\b/.test(text)) return false;
   if (/\bapi\b/.test(text)) return true;
-  return /\bissue\b/.test(text) && /\bcreate\b/.test(text);
+  // `new` is gh's own alias for `create`, on `pr` exactly as on `issue` — the
+  // verb set here is the one hooks/lib/forge-write-extract.js already shares
+  // between the two nouns, so a spelling that slips past this predicate cannot
+  // be one the shared vocabulary would have caught.
+  return /\b(?:issue|pr)\b/.test(text) && /\b(?:create|new)\b/.test(text);
 }
 
 function spansOf(text) {

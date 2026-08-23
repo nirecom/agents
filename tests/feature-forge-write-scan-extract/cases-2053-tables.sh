@@ -73,8 +73,12 @@ run_2053_tables() {
     # The index is what lets a caller apply gh's last-occurrence-wins rule and
     # what lets the guard say WHICH token it objected to.
     local IDX='String(m.extractRepoSelectors(ARGV)[0].index)'
+    # --web is a KNOWN BOOLEAN for issue create, so it does not swallow the
+    # next token: -R at index 3 still reads as a selector. (A value-taking flag
+    # here — --title -R a/b — is the misread pattern the vocab fix closes, and
+    # is pinned separately as "no selector" rather than as an index.)
     _d "a selector carries its argv index" '"3"' \
-        '["issue","create","--title","-R","a/b"]' "$IDX"
+        '["issue","create","--web","-R","a/b"]' "$IDX"
     _d "the index is of the flag token, not the value" '"0"' \
         '["--repo","a/b","issue","create"]' "$IDX"
 

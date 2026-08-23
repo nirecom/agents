@@ -3,6 +3,7 @@
 // repo create|edit). `gh api` write commands also covered. `gh repo rename|archive|delete` excluded.
 
 const { stripQuotedArgs, stripInlineBodyArg } = require("./strip-quoted-args");
+const { vocabularyFor } = require("./gh-flag-vocab");
 
 // `new` is GitHub CLI's own built-in alias for `create` on both `pr` and
 // `issue`: the two spellings run the SAME command, so a vocabulary that knows
@@ -173,78 +174,94 @@ function extractRepoFlag(command) {
 
 // Every `--repo` / `-R` occurrence in argv, left to right, as
 // [{ index, value, form }]; `index` is the FLAG token, `value: null` means the
-// flag was named but carries no resolvable value. pflag short-option CLUSTERS
-// count too (`-wR owner/repo`; an unproven prefix like `-eR` gives value: null).
+// flag was named but carries no resolvable value. Short CLUSTERS count too, and
+// a token gh reads as some OTHER flag's VALUE is no selector at all.
 function extractRepoSelectors(argv) {
   const out = [];
   if (!Array.isArray(argv)) return out;
+  const vocab = vocabularyFor(argv);
+  let pending = null; // what the PREVIOUS flag does with this token
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
-    if (typeof tok !== "string") continue;
+    if (typeof tok !== "string") { pending = null; continue; }
+    // A known value-taking flag consumes this token whatever it spells: it is
+    // gh's title, body or jq expression, never a target.
+    if (pending === "value") { pending = null; continue; }
+    const unknownPrefix = pending === "maybe";
+    pending = null;
     if (tok === "--") break; // everything after is an operand, not a flag
-    let form = null;
-    let value;
-    if (tok === "--repo" || tok === "-R") {
-      form = tok === "-R" ? "short-separated" : "long-separated";
-      const next = i + 1 < argv.length ? argv[i + 1] : null;
-      if (typeof next === "string" && next !== "--" && next[0] !== "-") {
-        value = next;
-        i += 1;
-      } else {
-        value = null;
-      }
-    } else if (tok.startsWith("--repo=")) {
-      form = "long-attached";
-      value = tok.slice("--repo=".length);
-    } else if (tok.startsWith("-R=")) {
-      form = "short-equals";
-      value = tok.slice("-R=".length);
-    } else if (tok.startsWith("-R") && tok.length > 2) {
-      form = "short-attached";
-      value = tok.slice(2);
-    } else {
-      const cluster = clusterRepoFlag(tok, argv, i);
-      if (cluster) {
-        form = cluster.form;
-        value = cluster.value;
-        if (cluster.consumedNext) i += 1;
-      }
+    const sel = repoSelectorAt(tok, argv, i, vocab);
+    if (sel) {
+      // With an unplaceable flag in front, whether gh reads this token as that
+      // flag's value or as a selector of its own is unknowable — and either
+      // answer taken silently resolves the wrong repository. Report it named
+      // but unreadable, which is an ask.
+      out.push({ index: i, value: unknownPrefix ? null : sel.value, form: sel.form });
+      if (!unknownPrefix && sel.consumedNext) i += 1;
+      continue;
     }
-    if (form === null) continue;
-    out.push({ index: form === "short-separated" || form === "long-separated"
-      ? (value === null ? i : i - 1) : i, value, form });
+    if (tok === "" || tok[0] !== "-" || tok === "-") continue; // an operand
+    pending = pendingAfterFlag(tok, vocab);
   }
   return out;
 }
 
-// Short flags of gh's issue / pr / repo / api commands that provably take NO
-// value, so pflag keeps walking the cluster past them. Deliberately tiny: a
-// letter is listed only when it is boolean in EVERY one of those commands. `-d`
-// (`--draft` on pr create but `--description` on repo create), `-f`
-// (`--fill` vs gh api's `--field`), `-c`, `-s`, `-r`, `-h` and `-q` all take a
-// value somewhere in that set, so none of them can be walked past.
-const GH_BOOL_SHORT_FLAGS = new Set([
-  "w", // --web
-  "i", // --include (gh api)
-]);
+// What the flag token `tok` does to the token that FOLLOWS it: consume it as a
+// value, leave it alone, or "maybe" — a flag the vocabulary cannot place, whose
+// arity the guard must not assume in either direction.
+function pendingAfterFlag(tok, vocab) {
+  if (tok[1] === "-") {
+    if (tok.indexOf("=") > 0) return null; // --name=value is self-contained
+    if (vocab.longValue.has(tok)) return "value";
+    return vocab.longBool.has(tok) ? null : "maybe";
+  }
+  // pflag walks a short cluster character by character; the first value-taking
+  // character takes the REST of the token, and reaches the next argv token only
+  // when it sits last.
+  for (let k = 1; k < tok.length; k += 1) {
+    const last = k === tok.length - 1;
+    if (vocab.shortValue.has(tok[k])) return last ? "value" : null;
+    if (!vocab.shortBool.has(tok[k])) return last ? "maybe" : null;
+  }
+  return null;
+}
 
-// pflag walks a short cluster character by character; when it reaches `R` the
-// remainder of the token is the value (a leading `=` is dropped), and an `R` in
-// last position takes the next argv token instead. But it only ever REACHES the
-// `R` when every character before it is a flag that takes no value: a
-// value-taking flag earlier in the cluster swallows the rest of the token as ITS
-// value, so the `R` is data, not a selector. But "cannot prove the prefix" is
-// not "no selector": dropping the token would leave the write to be judged
-// against the cwd, the most trusting answer there is. So an unproven prefix
-// reports the `R` with `value: null` — an unreadable selector, i.e. an ask.
-function clusterRepoFlag(tok, argv, i) {
+// The five spellings of a repo selector, plus the cluster form. Returns null
+// when the token names no selector at all.
+function repoSelectorAt(tok, argv, i, vocab) {
+  if (tok === "--repo" || tok === "-R") {
+    const form = tok === "-R" ? "short-separated" : "long-separated";
+    const next = i + 1 < argv.length ? argv[i + 1] : null;
+    if (typeof next === "string" && next !== "--" && next[0] !== "-") {
+      return { form, value: next, consumedNext: true };
+    }
+    return { form, value: null, consumedNext: false };
+  }
+  if (tok.startsWith("--repo=")) {
+    return { form: "long-attached", value: tok.slice("--repo=".length), consumedNext: false };
+  }
+  if (tok.startsWith("-R=")) {
+    return { form: "short-equals", value: tok.slice("-R=".length), consumedNext: false };
+  }
+  if (tok.startsWith("-R") && tok.length > 2) {
+    return { form: "short-attached", value: tok.slice(2), consumedNext: false };
+  }
+  return clusterRepoFlag(tok, argv, i, vocab);
+}
+
+// pflag only ever REACHES an `R` inside a cluster when every character before it
+// takes no value: a value-taking one swallows the rest of the token as ITS
+// value, so the `R` is data. A character the vocabulary cannot place proves
+// neither, and dropping the token would leave the write judged against the cwd
+// — the most trusting answer there is — so it reports `value: null`, an ask.
+function clusterRepoFlag(tok, argv, i, vocab) {
   if (typeof tok !== "string" || tok.length < 3 || tok[0] !== "-" || tok[1] === "-") return null;
   const at = tok.indexOf("R", 1);
   if (at < 0) return null;
   for (let k = 1; k < at; k += 1) {
-    if (!GH_BOOL_SHORT_FLAGS.has(tok[k])) {
-      return { form: "short-attached", value: null, consumedNext: false };
-    }
+    if (vocab.shortBool.has(tok[k])) continue;
+    if (vocab.shortValue.has(tok[k])) return null; // the R is that flag's value
+    return { form: "short-attached", value: null, consumedNext: false };
   }
   const rest = tok.slice(at + 1);
   if (rest !== "") {
