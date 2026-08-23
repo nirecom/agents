@@ -217,10 +217,8 @@ _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/extract-field.sh
 source "$_SCRIPT_DIR/lib/extract-field.sh"
 
-# require_field <VARNAME> <Field>: assign the extracted value, or abort.
-# A plain `VAR=$(...)` discards the substitution status, so without this a
-# parse failure (rc=3) would reach doc-append and mutate history. A
-# `(no <Field> recorded)` marker is a success and still flows through.
+# require_field <VARNAME> <Field>: assign, or abort — a plain `VAR=$(...)` would
+# discard a parse-failure (rc=3) and let it reach doc-append as if unrecorded.
 require_field() {
     local __value
     if ! __value=$(extract_field_or_marker "$2"); then
@@ -239,14 +237,8 @@ else
 fi
 
 # --- History Notes synthesis (#412) ---
-# When --history-notes-file is provided, extract bullet items from the
-# `## History Notes` section (filtering `- (none)` placeholders). CI-only
-# ISSUE_CLOSE_HISTORY_NOTES_NONINTERACTIVE=1 makes /issue-close-finalize Step E.1
-# skip the inline-notes prompt; not user-facing, never in .env.example.
-# When the file
-# has no such heading (e.g. mktemp inline path from /issue-close-finalize), the
-# whole file is treated as notes. Joined with "; " and appended to Changes
-# (or Fix for INCIDENT) as a "History Notes: ..." suffix.
+# Extracts `## History Notes` bullets from --history-notes-file (or, absent that
+# heading, the whole file); joined with "; " and appended as "History Notes: ...".
 if [ -n "$HISTORY_NOTES_FILE" ] && [ -f "$HISTORY_NOTES_FILE" ]; then
     if grep -qE '^## History Notes[[:space:]]*$' "$HISTORY_NOTES_FILE"; then
         NOTES_BLOCK=$(awk '
