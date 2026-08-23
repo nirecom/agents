@@ -1,6 +1,5 @@
 name: Task
 description: A unit of work to be done
-title: "<short title>"
 labels: ["type:task"]
 body:
   - type: markdown
@@ -11,6 +10,10 @@ body:
         `FEATURE` entry to `docs/history.md` using the Background/Changes
         fields below, and `/issue-close-finalize <N>` (Phase 2, from the main
         worktree) closes the issue.
+
+        **Title**: one short line naming the work — e.g. `unify issue template
+        sections`. Background and Changes below are required; write the actual
+        content, not a placeholder.
   - type: textarea
     id: background
     attributes:
@@ -18,7 +21,6 @@ body:
       description: Why is this work needed? Context, constraints, motivation.
       placeholder: |
         Background: ...
-      value: "Background: "
     validations:
       required: true
   - type: textarea
@@ -28,7 +30,6 @@ body:
       description: What will change? Files, behavior, user-visible effects.
       placeholder: |
         Changes: ...
-      value: "Changes: "
     validations:
       required: true
   - type: textarea

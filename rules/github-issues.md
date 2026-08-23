@@ -80,6 +80,7 @@ An issue that already carries implementation work is not a meta parent, and labe
 - **Phase 2 (`/issue-close-finalize`)**: run from main worktree after PR merge — parent update (Step G), close (Step H), resolved-by + appended sentinels (Step J), WIP clear (Step K).
 - Merge SHA: resolved via `find-pr-by-marker.sh` using `<!-- issue-close-pr-of: <N> -->` marker added by `/commit-push`.
 - `docs/history.md`: written by `/worktree-end` Step WE-21 from `WORKTREE_NOTES.md` bullets. `issue-to-history.sh` retained for `/issue-reconcile` and out-of-band repair only.
+- `(no <Field> recorded)` marker spec and repair recipe: see the comment above `extract_field_or_marker()` in `bin/github-issues/lib/extract-field.sh`.
 
 **Flow 1 — standard (Phase 1 then Phase 2):**
 1. Run `/issue-close-stage <N>` from linked worktree (WF-CODE-9), before `/commit-push`.
