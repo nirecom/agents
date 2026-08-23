@@ -359,3 +359,7 @@ Changes: Fixed: `enforce-worktree` no longer blocks repository-write-free `gh` a
 ### FEATURE: PR #2113 (2026-08-23)
 Background: fix(#1812/#1744): widen worker-dispatch envScope for SSH push and gh ...
 Changes: Fixed `commit-push` worker child processes not inheriting `SSH_AUTH_SOCK`, which could cause `git push`/`fetch` failures against SSH-signed or SSH-only remotes.;Fixed `doc-append` worker child processes missing the environment `gh` calls need, which could cause history/changelog entry writes to fail.
+
+### FEATURE: PR #2089 (2026-08-23)
+Background: feat: add forge-target-ownership guard for gh issue/api writes (#2053)
+Changes: Claude Code now asks for confirmation before filing a GitHub issue or making a `gh api` write to a repository it cannot prove you own, instead of silently trusting the current checkout.
