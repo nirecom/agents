@@ -15,6 +15,7 @@ without an existing `#N`. To create an issue mid-workflow without starting
 a fresh session, use `/issue-create` from within Claude Code. For incidents
 or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
 `task.yml`) on the GitHub web UI.
+The templates carry no prefilled `value:`, so `validations: required` genuinely blocks an empty submission (#2098) — every field must actually be filled in.
 
 ### Close a task — *Operations*
 

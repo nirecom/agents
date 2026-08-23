@@ -1,38 +1,15 @@
 #!/bin/bash
-# STANDALONE TOOL — not invoked by any skill or workflow routing.
-# Use manually for /issue-reconcile backfill or out-of-band history repair.
-# Normal close-path history.md writes are owned by /worktree-end Step WE-21
-# (compose-doc-append-entry reading WORKTREE_NOTES.md ## History Notes). #690
-#
+# STANDALONE TOOL — no skill or workflow routes here; run it by hand for
+# /issue-reconcile backfill or out-of-band history repair. Close-path
+# docs/history.md writes belong to /worktree-end Step WE-21 (#690).
+
 # Convert a (typically closed) GitHub issue into a docs/history.md entry.
-#
-# Usage:
-#   bin/github-issues/issue-to-history.sh <issue-number> [--commit <hash>]
-#       [--history-notes-file <path>] [--target <abs-path>]
-#       [--allow-backdate] [--no-auto-rotate]
-#       [--non-github-mode --title <title> --body-file <path> --closed-date <YYYY-MM-DD>]
-#
-# --allow-backdate forwards the same flag to doc-append, lifting the
-# ascending-date guard so an issue closed long ago can still be recorded.
-# Required for /issue-reconcile backfill.
-#
-# When --target <abs-path> is provided, doc-append writes to that path instead
-# of docs/history.md. Used by step-e.sh to append to a staging file fetched
-# from the GitHub Contents API (see bin/lib/github-contents-write.sh).
-#
-# Requires AGENTS_CONFIG_DIR (the docs/ root). The script cd's there before
-# writing so consumer repos can pass their own value to target the right
-# history.md.
-#
-# Idempotent: if `#<N>:` already appears in docs/history.md or docs/history/,
-# exits 0 without re-appending. (GitHub mode only — non-github-mode skips.)
-#
-# Environment variables:
-#   ISSUE_CLOSE_HISTORY_NOTES_NONINTERACTIVE=1
-#       CI-only override: when set, /issue-close-finalize Step E.1 skips the
-#       AskUserQuestion prompt for inline History Notes. NOT a user-facing
-#       configuration — do not add to .env.example. Set inline by CI runners
-#       only.
+# Usage: issue-to-history.sh <issue-number> [--commit <hash>]
+#   [--history-notes-file <path>] [--target <abs-path>] [--allow-backdate]
+#   [--no-auto-rotate] [--non-github-mode --title <t> --body-file <f>
+#   --closed-date <YYYY-MM-DD>]
+# Each flag, AGENTS_CONFIG_DIR and the idempotency guard are documented at
+# their use site below.
 
 set -uo pipefail
 
@@ -112,6 +89,8 @@ while [ $# -gt 0 ]; do
 done
 
 # --- Environment check ---
+# AGENTS_CONFIG_DIR is the docs/ root; the script cd's there before writing so
+# a consumer repo can target its own history.md.
 if [ -z "${DRY_RUN:-}" ] && [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
     echo "Error: AGENTS_CONFIG_DIR is not set. /issue-close-stage and /issue-close-finalize must be run from a session that has it configured." >&2
     exit 1
@@ -232,21 +211,39 @@ fi # end DRY_RUN / non-github-mode / github-mode
 # --- Extract Background/Changes or Cause/Fix from body ---
 # Recognizes inline (Field: value), H2 (## Field), and H3 (### Field) shapes,
 # case-insensitive. Newlines are normalized to spaces for doc-append single-line args.
+# An unextractable field becomes a `(no <Field> recorded)` marker; the title and the
+# body's first line are never reused as a stand-in (#2098).
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/extract-field.sh
 source "$_SCRIPT_DIR/lib/extract-field.sh"
 
+# require_field <VARNAME> <Field>: assign the extracted value, or abort.
+# A plain `VAR=$(...)` discards the substitution status, so without this a
+# parse failure (rc=3) would reach doc-append and mutate history. A
+# `(no <Field> recorded)` marker is a success and still flows through.
+require_field() {
+    local __value
+    if ! __value=$(extract_field_or_marker "$2"); then
+        echo "Error: issue #${ISSUE_NUM}: could not extract ${2} from the issue body; aborting before doc-append (history unchanged)" >&2
+        exit 1
+    fi
+    printf -v "$1" '%s' "$__value"
+}
+
 if [ "$CATEGORY" = "INCIDENT" ]; then
-    CAUSE=$(extract_field_with_fallback Cause "$TITLE" "$BODY")
-    FIX=$(extract_field_with_fallback Fix "$TITLE" "$BODY")
+    require_field CAUSE Cause
+    require_field FIX Fix
 else
-    BACKGROUND=$(extract_field_with_fallback Background "$TITLE" "$BODY")
-    CHANGES=$(extract_field_with_fallback Changes "$TITLE" "$BODY")
+    require_field BACKGROUND Background
+    require_field CHANGES Changes
 fi
 
 # --- History Notes synthesis (#412) ---
 # When --history-notes-file is provided, extract bullet items from the
-# `## History Notes` section (filtering `- (none)` placeholders). When the file
+# `## History Notes` section (filtering `- (none)` placeholders). CI-only
+# ISSUE_CLOSE_HISTORY_NOTES_NONINTERACTIVE=1 makes /issue-close-finalize Step E.1
+# skip the inline-notes prompt; not user-facing, never in .env.example.
+# When the file
 # has no such heading (e.g. mktemp inline path from /issue-close-finalize), the
 # whole file is treated as notes. Joined with "; " and appended to Changes
 # (or Fix for INCIDENT) as a "History Notes: ..." suffix.
@@ -283,6 +280,8 @@ else
     ARGS+=(--commits "#${ISSUE_NUM}")
 fi
 
+# Forwarded verbatim: lifts doc-append's ascending-date guard so an issue
+# closed long ago can still be recorded (required for /issue-reconcile backfill).
 if [ "$ALLOW_BACKDATE" -eq 1 ]; then
     ARGS+=(--allow-backdate)
 fi
@@ -297,6 +296,8 @@ if [ -n "${DRY_RUN:-}" ]; then
     exit 0
 fi
 
+# --target redirects the append to a staging file (step-e.sh, fetched via the
+# GitHub Contents API) instead of docs/history.md.
 if ! doc-append "${TARGET:-$HISTORY_FILE}" "${ARGS[@]}"; then
     echo "Error: doc-append failed" >&2
     exit 1
