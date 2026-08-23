@@ -2,43 +2,13 @@
 # tests/fix-1780-round12-cli-lifecycle.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, mint, examination, cli-contract, session-id, exit-codes, workflow-dir, audit, security, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - The real codex examiner. Every verdict here comes from a PATH stub, so the
-#   examiner's own prompt-following, latency and JSON discipline are out of scope;
-#   what is asserted is the SCRIPT's contract around whatever comes back.
-# - A real 180s wall-clock timeout. The timeout branch is driven by a stub that
-#   exits 124/142 (the two codes bin/run-with-timeout.sh can produce), not by
-#   actually waiting three minutes.
-# - Real 0600 enforcement. Git Bash on Windows reports emulated permissions, so
-#   the mode assertion is deliberately absent here (it lives in
-#   tests/fix-1780-round4-mint-schema.sh S10, which skips on this platform).
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1658 / #1608 / #1780 round-12)
-#
-# bin/request-off-clearance is the ONLY thing standing between "the model wants
-# the workflow switched off" and a token that lets an OFF sentinel reach the
-# human approval prompt. Its sibling suites all enter through one happy path
-# (SESSION_ID set, args valid, examiner present) and assert what happens AFTER
-# the verdict. Everything BEFORE the verdict — argument validation, the
-# required-env gate, sid resolution, the canonical workflow-dir resolution, and
-# the exit code / channel each failure mode reports on — was asserted nowhere,
-# even though those are precisely the paths that decide WHETHER a token can be
-# minted and WHERE it lands.
-#
-# The three properties this file pins, each on its own (CPR-SC):
-#   A  REFUSALS ARE TOTAL. Every rejected invocation exits non-zero, mints
-#      nothing, and — for the argument/env/sid gates — never even reaches the
-#      examiner. An exit-0 refusal or a silently-minted token is the whole bug.
-#   B  THE SID DECIDES THE FILENAME. The token is session-scoped; if sid
-#      resolution picks a different source than the shim's, the token is minted
-#      where nothing will look for it (#1658 in its bash form).
-#   C  CHANNELS AND CODES ARE PART OF THE CONTRACT. stdout carries the verdict
-#      narrative; stderr carries operator alarms. A caller that cannot tell
-#      ALLOW from REJECT from "examiner broken" cannot fail closed.
-# ---------------------------------------------------------------------------
+# TL3 gap: the real codex examiner (every verdict here is a PATH stub), a real 180s
+# wall-clock timeout (driven by a stub exiting 124/142), and real 0600 enforcement
+# (Git Bash emulates permissions; that lives in fix-1780-round4-mint-schema.sh S10).
+# WHAT THIS FILE DEFENDS (#1658 / #1608 / #1780 round-12): everything BEFORE the
+# examiner's verdict in bin/request-off-clearance — argument validation, required-env
+# gate, sid resolution, workflow-dir resolution, and each failure's exit code/channel.
+# Properties (CPR-SC): A refusals total, B sid decides the filename, C codes contract.
 
 set -u
 
@@ -50,17 +20,16 @@ offclr_require_script
 
 # ===========================================================================
 # A - ARGUMENT VALIDATION. Table-driven per skills/_shared/test-design/parser-regex-tests.md:
-# one row per malformed invocation, all asserted the same way, so a new
-# validation rule is one row and a dropped rule is one visible failure.
-#
-# Each row asserts THREE things at once, because any one of them alone is
-# satisfiable by a broken script: the exit code (callers branch on it), the
-# stderr diagnostic (operators read it), and — the security-relevant one — that
-# the examiner was NEVER INVOKED. A script that validates after shelling out has
-# already spent a codex call and, worse, already interpolated unvalidated input
-# into a prompt.
+# one row per malformed invocation, so a new validation rule is one row and a
+# dropped rule is one visible failure. Each row asserts THREE things at once,
+# because any one alone is satisfiable by a broken script: the exit code, the
+# stderr diagnostic, and — the security-relevant one — that the examiner was
+# NEVER INVOKED. A script that validates after shelling out has already spent a
+# codex call and already interpolated unvalidated input into a prompt.
 # ===========================================================================
 run_A_argument_validation() {
+    # The harness pins CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR together for
+    # every run_req below, so nothing reaches the real ~/.workflow-plans (#1799).
     local tmp tn probe rows row args want_rc want_err label invoked
     # rows: <label>|<want_rc>|<stderr regex>|<args...>
     rows='no arguments at all|2|--target must be workflow or worktree|
@@ -274,14 +243,13 @@ run_B_env_and_sid() {
 
 # ===========================================================================
 # C - THE ALLOW PATH, END TO END through the canonical getWorkflowDir().
-#
 # #1658's whole point is that the mint location is resolved by the SAME
 # getWorkflowDir() the shim reads, not by a bash-side re-implementation. So the
-# assertion is not "a token exists somewhere" but "the token is at the exact
-# path the script announced, inside the pinned CLAUDE_WORKFLOW_DIR, and nowhere
-# else" — plus the operator-facing surface (exit code, clean stderr, the
-# category-binding instruction, and the correctly UPPERCASED sentinel name for
-# each target).
+# assertion is not "a token exists somewhere" but "the token is at the exact path
+# the script announced, inside the sandbox the harness pins via the
+# CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR pair (#1799), and nowhere else" — plus
+# the operator-facing surface (exit code, clean stderr, the category-binding
+# instruction, and the correctly UPPERCASED sentinel name for each target).
 # ===========================================================================
 run_C_allow_surface() {
     local tmp tn target upper announced
@@ -331,13 +299,12 @@ run_C_allow_surface() {
 # ===========================================================================
 # D - EVERY NON-ALLOW OUTCOME. Table-driven over the five ways the examination
 # can end without a grant, asserting the trio a caller actually branches on:
-# exit code, the narrative channel, and (always) zero tokens.
-#
-# They are separate rows and not one "it rejected" assertion because they are
-# operationally different events: a REJECT is a decision, a timeout/crash is a
-# broken examiner, and only the latter may point the operator at the EMERGENCY
-# sentinel. Collapsing them would let a broken examiner read as a policy
-# decision — or, worse, let a policy REJECT advertise the emergency bypass.
+# exit code, the narrative channel, and (always) zero tokens. They are separate
+# rows and not one "it rejected" assertion because they are operationally
+# different events: a REJECT is a decision, a timeout/crash is a broken examiner,
+# and only the latter may point the operator at the EMERGENCY sentinel.
+# Collapsing them would let a broken examiner read as a policy decision — or,
+# worse, let a policy REJECT advertise the emergency bypass.
 # ===========================================================================
 run_D_refusal_matrix() {
     local tmp tn label ok

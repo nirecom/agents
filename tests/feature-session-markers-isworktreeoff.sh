@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-session-markers-isworktreeoff.sh
 # Tests: hooks/lib/session-markers, hooks/lib/session-markers.js
-# Tags: worktree, hook, bin, tests
+# Tags: worktree, hook, bin, tests, scope:common
 #
 # Unit test for hooks/lib/session-markers.js — isWorktreeOff() and
 # worktreeOffNoticeText() functions (issue #550).
@@ -33,6 +33,11 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+FIXTURE_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$FIXTURE_PLANS_DIR"
+
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
@@ -63,6 +68,7 @@ call_is_worktree_off() {
     run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
               const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
@@ -89,6 +95,7 @@ call_notice_text() {
     NOTICE_OUT="$(run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
               const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
@@ -189,6 +196,8 @@ test_F_notice_does_not_throw_on_bad_workflow_dir() {
     local sid="testsess006"
     # Set CLAUDE_WORKFLOW_DIR to a value that won't crash join() but is invalid.
     # The contract is: worktreeOffNoticeText NEVER throws — returns a string.
+    # The empty value IS the test input here, so it is deliberately not dual-pinned
+    # (#1799); this path only formats text and never writes a plans-dir record.
     NOTICE_RC=0
     NOTICE_OUT="$(run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
