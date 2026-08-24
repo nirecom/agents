@@ -5,6 +5,30 @@ Shell commands, curl, PowerShell, QNAP, Docker HTTP checks, host shell defaults.
 When providing shell commands (curl, docker, etc.):
 - Always write commands on a single line — do NOT use backslash `\` line continuation
 
+## Command-Line Issuance Discipline
+
+Governs what Claude issues through the Bash tool. Scope is the FORM of the command, not its purpose — diagnosis, implementation, git, and file operations are equally in scope.
+
+Default procedure: anything not expressible as one standalone command goes into a scratchpad script, invoked as a single `bash <absolute-path>` call. Never put the compound form on the command line itself.
+
+Self-check before every Bash tool call: match the `command` string against the literals below.
+
+| Prohibited literal | Form |
+|---|---|
+| `&&` / `;` | command chaining |
+| `\|` | pipe |
+| `` ` `` / `$(...)` | command substitution, variable capture |
+| `{ ... }` | grouping |
+| `<<` | heredoc |
+| `>` / `>>` | redirect |
+| `FOO=1 BAR=2 cmd` | leading environment-variable prefixes |
+
+Exempt: one standalone command with its own flags and arguments (one `grep`, one `cat`, one `git status`). The target is the compound, not the argument count.
+
+A Bash call interrupted or rejected with no stated reason means the command line was too long or carried a prohibited literal — fold it into the default procedure and reissue without asking why.
+
+Command examples inside skill and rules documents specify WHAT to run, never HOW to issue it. Fold a compound example into the default procedure at issue time.
+
 ## Host Shell Defaults
 
 | Host | Default shell | Notes |
