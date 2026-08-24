@@ -363,3 +363,7 @@ Changes: Fixed `commit-push` worker child processes not inheriting `SSH_AUTH_SOC
 ### FEATURE: PR #2089 (2026-08-23)
 Background: feat: add forge-target-ownership guard for gh issue/api writes (#2053)
 Changes: Claude Code now asks for confirmation before filing a GitHub issue or making a `gh api` write to a repository it cannot prove you own, instead of silently trusting the current checkout.
+
+### FEATURE: PR #2123 (2026-08-24)
+Background: fix(#2098): drop issue-template prefills and mark genuinely absent fields
+Changes: Issue forms no longer arrive pre-filled. Every required field on the incident and task templates must now actually be completed by the submitter, so an issue can no longer be opened with placeholder text alone.;When an issue genuinely has no Background, Changes, Cause, or Fix, the generated history entry now says `(no <Field> recorded)` instead of a value silently invented from the issue title or body.
