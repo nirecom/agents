@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 # bin/run-codex-review-loop
-# Wrapper that enforces step b (context build) + step c (review-plan-codex)
-# + step d (verdict parse) of skills/_shared/codex-review-loop.md.
+# Wrapper for steps b (context build) + c (review-plan-codex) + d (verdict
+# parse) of skills/_shared/codex-review-loop.md.
 #
-# Exit codes (see skills/_shared/codex-review-loop.md for SSOT table):
-#   0 — APPROVED (or silent LAND absorbed as approved)
-#   1 — NON_APPROVED_VERDICT (NEEDS_REVISION / MISSING_ALTERNATIVE:)
-#   2 — ESCALATE (risk signal present at budget ceiling)
-#   3 — codex CLI unusable (SKIPPED / FAILED-other / verdict malformed)
-#       -> caller silently falls back to REVIEWER_AGENT subagent
-#   4 — wrapper / config / parser failure (unset AGENTS_CONFIG_DIR,
-#       missing core-principles.md, missing arg, missing option value,
-#       missing binaries, unrecognized status header, etc.)
-#       -> caller MUST halt with blocking error; do NOT fall back.
-#   5 — AUTO_EXTEND (budget available; caller increments EXTENSIONS_USED and re-enters)
-#   6 — HIGH_UNRESOLVED (high-severity concerns remain at the budget ceiling)
+# Exit codes (SSOT table: skills/_shared/codex-review-loop.md):
+#   0 APPROVED (or silent LAND)  1 NON_APPROVED_VERDICT  2 ESCALATE
+#   3 codex CLI unusable -> caller falls back to REVIEWER_AGENT subagent
+#   4 wrapper/config/parser failure -> caller MUST halt, no fallback
+#   5 AUTO_EXTEND (caller increments EXTENSIONS_USED, re-enters)
+#   6 HIGH_UNRESOLVED (high-severity concerns remain at budget ceiling)
 set -uo pipefail
 REDUCE_COMMITTED=false
 

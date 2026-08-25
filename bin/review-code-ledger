@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 # bin/review-code-ledger — ledger-aware wrapper around bin/review-code-codex.
-# Why a wrapper: the code reviewer and the security scanner are two producers of
-# one shared review. If each numbered its own findings, the author would get a
-# fresh list every round and no way to tell "this is the thing I already told you
-# about" from "new". It hands the reviewer what is open, then stages the reply.
-# Contract with its caller (run-quality-gates.sh): stdout is byte-for-byte the
-# reviewer's own output, and the exit status is 0 for every degradation it can
-# absorb. Degrading is part of that contract, not an escape from it — a failure
-# announces itself with one NOT-STAGED line and still exits 0; _run_gate
-# swallows a non-zero exit, so returning one deletes the review from the report.
-# The one exception is a failed cycle archive: see the begin-round call below.
+# Shares one concern ledger across producers (code reviewer, security scanner)
+# so findings keep stable IDs across rounds instead of a fresh list each time.
+# Contract with run-quality-gates.sh: stdout is byte-for-byte the reviewer's
+# own output, exit status is always 0 (a failure degrades to one NOT-STAGED
+# line — see docs/architecture/concern-ledger.md), except a failed cycle
+# archive (see the begin-round call below).
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
