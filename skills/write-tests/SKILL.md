@@ -42,6 +42,8 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    - `source_files`: list of source file paths from step WT-2
    - `planned_cases`: list of planned test cases from step WT-4
    The subagent prompt MUST instruct: edit only test files, never modify source code.
+   The subagent prompt MUST instruct: Read `rules/shell-commands.md` before the first Bash command — general-purpose dispatch does not inherit auto-injected rules.
+   The subagent prompt MUST instruct: Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
