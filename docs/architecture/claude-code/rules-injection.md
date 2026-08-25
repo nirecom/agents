@@ -27,6 +27,32 @@ someone remembered to write frontmatter.
 | Conditional | `paths:` with real globs | when a matching file is touched |
 | On demand | `paths:` with the reserved token, plus the marker comment | never automatically; the owning skill Reads it explicitly |
 
+## The second axis: subagent dispatch shape
+
+Scope decides which rules a session loads. Dispatch shape decides whether a subagent
+launched from that session inherits them at all — a rule can be unconditional and still
+be absent from the context that needs it.
+
+Two shapes exist. **Named dispatch** sets `subagent_type` to an agent backed by an
+`agents/*.md` system prompt; that context receives the `EXPECTED_UNCONDITIONAL` rule
+bodies verbatim, exactly as the main conversation does. **General-purpose dispatch**
+omits `subagent_type` and runs with `mode: "default"`; it does not.
+
+`skills/write-code/SKILL.md` (WCD-4) and `skills/write-tests/SKILL.md` (WT-6) are the only
+general-purpose dispatch sites in the repo. Writing code and writing tests need an
+iterative Edit-plus-Bash self-repair loop over existing files. Nothing about the named-agent
+shape prevents granting `Edit` — it is a configuration choice, not a platform limit — but no
+named agent is configured with it today: the widest ones, `detail-planner` and
+`outline-planner`, stop at `Read, Glob, Grep, Bash, WebFetch, Write`. Until a named agent is
+given that access, general-purpose dispatch is the only shape that supports the loop.
+
+Those two sites must therefore name, as an explicit Read directive in the subagent prompt,
+every unconditional rule the subagent depends on — `rules/shell-commands.md` and its
+Command-Line Issuance Discipline being the standing case, since a subagent that has never
+seen it issues compound command lines and only learns they are denied. The remedy is not a
+new mechanism: it is the same explicit-Read pattern the on-demand rules already use, as
+`agents/detail-planner.md` does for `rules/coding.md`.
+
 ## The on-demand notation
 
 Two things together, both required:
