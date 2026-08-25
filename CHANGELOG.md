@@ -367,3 +367,7 @@ Changes: Claude Code now asks for confirmation before filing a GitHub issue or m
 ### FEATURE: PR #2123 (2026-08-24)
 Background: fix(#2098): drop issue-template prefills and mark genuinely absent fields
 Changes: Issue forms no longer arrive pre-filled. Every required field on the incident and task templates must now actually be completed by the submitter, so an issue can no longer be opened with placeholder text alone.;When an issue genuinely has no Background, Changes, Cause, or Fix, the generated history entry now says `(no <Field> recorded)` instead of a value silently invented from the issue title or body.
+
+### FEATURE: PR #2137 (2026-08-25)
+Background: fix(#2132): fold ask-inducing composite command lines in clarify-intent/workflow-init SKILL.md
+Changes: Fixed prompt instructions in the `clarify-intent` and `workflow-init` skills that told Claude to compose a `$(...) | tail -1` shell pipeline in one Bash call — split into a single plain call. (#2132)
