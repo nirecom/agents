@@ -63,6 +63,20 @@ That write is fail-closed. If the artifact cannot be produced, `bin/run-codex-re
 
 `check-finalized` verifies the artifact independently of the process that wrote it: it exists and is non-empty, its round matches, its schema string is present, and its terminator marker is intact. A partial write from a crash or a full disk fails the check rather than passing as a valid, mostly-empty artifact.
 
+## Why discovery walks a directory instead of expanding a glob
+
+Staging and finalize both need every file a producer left behind for a round — a pattern like `<plans-dir>/<sid>-<fmt>-round-<n>-delta-*.txt`. That pattern used to go straight to shell pathname expansion (`compgen -G` / a bare glob). On a plans dir with a Windows-shaped path — `C:\Users\...` — the backslashes in the directory component read as glob escape characters, not path separators, and the expansion silently matched nothing. Staged deltas existed on disk; the ledger reduced as if none had been staged, and the round exited 4 with a header-only ledger.
+
+`_cl_list_pattern_files` (`bin/lib/concern-ledger/core.sh`) replaces that expansion. It splits the pattern into a directory and a basename with the shared `_sp_dirname`/`_sp_basename` helpers, treats the directory as a literal path handed to `find -- <dir> -maxdepth 1 -mindepth 1 -name <base>`, and only pattern-matches the basename. A directory component is never re-interpreted as glob syntax, so a Windows path in it is just a path. The directory is also opened with a trailing separator so a symlinked plans dir is walked rather than silently treated as its own only (and immediately excluded) entry — the same failure shape as the original bug, reached through a different door. Results are NUL-delimited and sorted under a fixed `LC_ALL=C`, since a byte-order guarantee independent of the caller's locale is part of what the discovery contract now promises.
+
+## Why every path builder validates its tokens first
+
+`#2025` found the same gap on the write side: every function that derived a path under the plans dir — from a session ID, round number, producer name, or format — built that path first and asked no questions about the pieces. A token containing `..`, a `/` or `\`, a shell metacharacter, or a leading `-` (read as an option by the next command in the pipeline) could turn a derived path into a traversal or an injection, and each writer would have had to notice this on its own.
+
+`_cl_reject_bad_tokens` (`bin/lib/concern-ledger/core.sh`) closes that gap once, at the shared boundary every path builder passes through, using the allowlist in `sp_valid_token` (`bin/lib/safe-plans-path.sh`): plain `[A-Za-z0-9._-]` characters only, no bare `.`, no leading `-`. A token that fails is refused before any path string is built, with a diagnostic naming the caller — refusing at the point of construction means no writer downstream can forget the check exists. `bin/concern-ledger`'s CLI subcommands (`check-staged` among them) run the same `validate_glob_tokens` gate on their arguments before they ever reach a path builder.
+
+Writing the resulting file safely is a separate question from naming it safely, and `bin/lib/safe-plans-path.sh` is the shared answer: `sp_publish_stdin`/`sp_publish_copy` write to a private, exclusively-created temp file beside the destination and `rename(2)` it into place, so a symlink or a directory pre-placed at the destination name is refused rather than followed or written through; `sp_within_dir` / `sp_contained_publish_*` / `sp_contained_rm` add physical containment — resolving every symlink in the parent directory once and comparing the resolved paths — for the callers (`CL_LEDGER_OVERRIDE` among them) whose destination is not a name this library generated itself. Five separate callers used to each own a copy of "is this destination still inside the directory I meant to write to"; now there is one.
+
 ## Two producers, one ledger
 
 `/review-code-security` is the first format with more than one producer. The codex reviewer reaches the ledger through `bin/review-code-ledger`, a wrapper whose stdout is byte-for-byte the reviewer's own output and whose exit status is always 0 — ledger bookkeeping must never be able to block or reshape a review. The security scanner is staged by the skill from the report it writes.
@@ -74,7 +88,8 @@ Both are handed the same rendered block of still-open concerns before they run, 
 | Path | Role |
 |---|---|
 | `bin/lib/concern-ledger.sh` | Library entrypoint — the two identity decisions (bind, merge) and every derived file name |
-| `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, rendering, finalize |
+| `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, rendering, finalize, discovery (`_cl_list_pattern_files`), token validation |
+| `bin/lib/safe-plans-path.sh` | Shared primitive for every write under the plans dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |
 | `bin/concern-ledger` | CLI front end; the only sanctioned entry point |
 | `bin/review-code-ledger` | Ledger-aware wrapper around the codex code reviewer |
 | `bin/run-codex-review-loop` | Plan/test review loops; owns the exit-7 contract |

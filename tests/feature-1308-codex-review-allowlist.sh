@@ -2,25 +2,10 @@
 # Tests: bin/run-codex-review-loop, bin/review-plan-codex, skills/review-plan-security/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh, agents/plan-security-reviewer.md, agents/test-reviewer.md, skills/review-plan-security/SKILL.md, skills/review-tests/SKILL.md
 # Tags: codex, review, allowlist, scope:issue-specific
 # Tests for issue #1308: add security-plan and test-review format tokens to Codex review loop.
-#
-# Expected failures BEFORE implementation (pre-impl):
-#   Cases 1-6:  new formats not yet in run-codex-review-loop allowlist/verdict table
-#   Cases 10-11: review-plan-codex does not accept security-plan / test-review yet
-#   Cases 13-16: source code does not yet contain security-plan / test-review tokens
-#   Cases 17-20: CAP/MAX_EXTENSIONS defaults not yet set for new formats
-#   Cases 21-22: wrapper scripts not yet created
-#   Cases 23-25: wrapper scripts not yet created (cannot check --format / --context)
-#   Cases 26-27: agent files not yet created
-#
-# Expected to PASS even before implementation:
-#   Cases 7-9:   regression — existing formats (detail-plan, outline-plan) still work
-#   Case 12:     regression — bad-format still rejected by review-plan-codex
-#
-# Total expected pre-impl failures: ~19 of 32 cases.
-#
-# L3 gap: these are L2 subprocess tests using mock Codex binaries.
-#          A true L3 test would invoke a real `codex` CLI session; that requires a
-#          live Codex environment and is out of scope for per-PR CI (#1308 scoped to L2).
+# Cases 1-6,10-11,13-27 expect pre-impl failure (new formats/tokens/wrappers/agents
+# not yet added); cases 7-9,12 are regressions expected to pass pre-impl.
+# L3 gap: L2 subprocess tests using mock Codex binaries; a real `codex` CLI
+# session is out of scope for per-PR CI (#1308 scoped to L2).
 
 set -uo pipefail
 
@@ -73,10 +58,24 @@ EOF
   fi
 
   # Copy codex-core.sh (sourced by review-plan-codex mock and run-codex-review-loop)
-  mkdir -p "$agents_dir/bin/lib"
+  mkdir -p "$agents_dir/bin/lib" "$agents_dir/bin/lib/codex-review-loop"
   if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$agents_dir/bin/lib/codex-core.sh"
   fi
+  if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
+    cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
+  fi
+
+  # Copy safe-plans-path.sh + the concern-ledger CLI/library bundle (mandatory
+  # dependencies of run-codex-review-loop's preflight; see #2088/#2025)
+  cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+  cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
+  chmod +x "$agents_dir/bin/concern-ledger"
+  cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
+  mkdir -p "$agents_dir/bin/lib/concern-ledger"
+  cp "$AGENTS_WORKTREE"/bin/lib/concern-ledger/*.sh "$agents_dir/bin/lib/concern-ledger/"
+  cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
+     "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
 
   echo "$agents_dir"
 }
@@ -177,6 +176,9 @@ invoke_real_review_plan_codex() {
   chmod +x "$mock_dir/bin/review-plan-codex"
   if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$mock_dir/bin/lib/codex-core.sh"
+  fi
+  if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
+    cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$mock_dir/bin/lib/codex-timeout.sh"
   fi
   AGENTS_CONFIG_DIR="$mock_dir" run_with_timeout "$mock_dir/bin/review-plan-codex" \
     --format "$fmt" \

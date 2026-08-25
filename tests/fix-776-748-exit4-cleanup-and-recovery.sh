@@ -25,10 +25,10 @@ run_with_timeout() {
 
 # ---------------------------------------------------------------------------
 # Helpers for T1/T2/T3. The counter is the shared loop's now (#2068), so the
-# stub goes one level deeper — at the codex-facing reviewer — and the real loop
-# runs underneath the stage wrapper. #776's intent is unchanged: a round nobody
-# reviewed must not poison the retry. It is stated as "restore what was there",
-# because deleting the file would restart concern IDs from C1 (#748).
+# stub goes one level deeper — at the codex-facing reviewer — under the real
+# stage wrapper. #776's intent: a round nobody reviewed must not poison the
+# retry, stated as "restore what was there" since deleting the file would
+# restart concern IDs from C1 (#748).
 # ---------------------------------------------------------------------------
 setup_wrapper_env() {
     # $1 = tmp dir, $2 = reviewer body file contents source ("continue"|"none")
@@ -70,7 +70,7 @@ EOF
         cp "$AGENTS_WORKTREE/bin/$f" "$agents_dir/bin/$f"
         chmod +x "$agents_dir/bin/$f"
     done
-    for f in codex-core.sh concern-ledger.sh; do
+    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$agents_dir/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
@@ -165,14 +165,10 @@ fi
 # Helpers for T4/T5/T6 (bin/run-codex-review-loop with full mock chain)
 # ---------------------------------------------------------------------------
 setup_bin_env() {
-    # $1 = tmp dir
-    # Returns nothing (caller knows the paths). Builds a complete mock
-    # AGENTS_CONFIG_DIR with:
-    #   - rules/core-principles.md
-    #   - bin/build-codex-context (no-op touching --output)
-    #   - bin/run-codex-review-loop (copied from worktree)
-    #   - bin/review-loop-verdict (copied from worktree)
-    # Caller must drop the recording shim for review-plan-codex separately.
+    # $1 = tmp dir. Builds a mock AGENTS_CONFIG_DIR: rules/core-principles.md,
+    # a no-op bin/build-codex-context, and bin/run-codex-review-loop +
+    # bin/review-loop-verdict copied from the worktree. Caller must drop the
+    # recording shim for review-plan-codex separately.
     local test_tmp="$1"
     local agents_dir="$test_tmp/agents"
     mkdir -p "$agents_dir/bin" "$agents_dir/rules"
@@ -197,6 +193,10 @@ EOF
       cp "$REVIEW_LOOP_VERDICT" "$agents_dir/bin/review-loop-verdict"
       chmod +x "$agents_dir/bin/review-loop-verdict"
     fi
+
+    mkdir -p "$agents_dir/bin/lib"
+    [[ -f "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" ]] && \
+      cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
 
     local lv_src="$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh"
     if [[ -f "$lv_src" ]]; then
@@ -258,11 +258,9 @@ EOF
 
 # ---------------------------------------------------------------------------
 # T4/T5: a round >= 2 whose ledger is gone. #748's silent downgrade to round 1
-# is what produced the very split this session removes — the counter said 2, the
-# review ran as 1, and the round-1 concern IDs were minted a second time. The
-# refusal is now the recovery: stop, name the missing file, spend no round.
-# T5b closes the asymmetry — an explicit --ledger pointing nowhere is the same
-# absence and must not slip past as a codex-unusable exit 3 (CPR-UNV).
+# minted round-1 concern IDs a second time; refusal is now the recovery: stop,
+# name the missing file, spend no round. T5b: an explicit --ledger pointing
+# nowhere is the same absence and must not slip past as exit 3 (CPR-UNV).
 # ---------------------------------------------------------------------------
 # run_bin_round2 <sid> <format> <draft> <tradeoffs> [extra args] — sets RC / ARGV / STDERR_CONTENT
 run_bin_round2() {

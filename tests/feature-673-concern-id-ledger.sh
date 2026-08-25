@@ -62,10 +62,21 @@ EOF
       chmod +x "$agents_dir/bin/review-loop-verdict"
     fi
 
-    mkdir -p "$agents_dir/bin/lib"
+    mkdir -p "$agents_dir/bin/lib" "$agents_dir/bin/lib/codex-review-loop"
     if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$agents_dir/bin/lib/codex-core.sh"
     fi
+    if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
+      cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
+    fi
+    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
+    chmod +x "$agents_dir/bin/concern-ledger"
+    cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
+    mkdir -p "$agents_dir/bin/lib/concern-ledger"
+    cp "$AGENTS_WORKTREE"/bin/lib/concern-ledger/*.sh "$agents_dir/bin/lib/concern-ledger/"
+    cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
+       "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     echo "$agents_dir"
 }
 
@@ -100,6 +111,10 @@ invoke() {
     local agents_dir="$1"; shift
     AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
+
+# Cases entering at round 2 use --force-round 2, not --round 2: a fresh fixture
+# has no round-counter file, so a bare --round 2 is rejected (exit 4). Round
+# sequencing itself is covered by tests/feature-673-round-counter.sh.
 
 # ---------------------------------------------------------------------------
 # 1. Round 1 with Cn-prefix concerns already → ledger written, IDs preserved
@@ -159,10 +174,10 @@ C1: unresolved — still alpha
 C99: unresolved — new injected"
   STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id sid3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true
   STDOUT_OUT=$(invoke "$MOCK" --format detail-plan --session-id sid3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>/dev/null) || true
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" 2>/dev/null) || true
 
   ok=1
   if ! echo "$STDERR_OUT" | grep -q "C99"; then
@@ -189,7 +204,7 @@ C99: unresolved — new injected"
   make_review_codex_mock "$MOCK" "APPROVED"
   invoke "$MOCK" --format detail-plan --session-id sid4 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1
   rc=$?
   if [[ $rc -eq 0 ]]; then
     pass "4: round 2 APPROVED → exit 0"
@@ -213,7 +228,7 @@ C51: unresolved — also new"
   rc=0
   invoke "$MOCK" --format detail-plan --session-id sid5 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
   # All concerns stripped → tally is (0,0,0) → APPROVED (exit 0)
   if [[ $rc -eq 0 ]]; then
     pass "5: round 2 all new IDs stripped → APPROVED (exit 0)"
@@ -265,9 +280,11 @@ esac
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1. [HIGH] alpha"
   rc=0
+  # --force-round so the exit 4 under test is the missing-ledger refusal, not the
+  # round-counter rejection a bare --round 2 would raise first.
   invoke "$MOCK" --format detail-plan --session-id sid7 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 4 ]]; then
     pass "7: round 2 missing ledger → exit 4"
   else
@@ -298,7 +315,8 @@ C1. [HIGH] alpha"
 }
 
 # ---------------------------------------------------------------------------
-# 9. Missing --round flag → exit 4
+# 9. Missing --round flag → defaults to the recorded counter + 1 (here: round 1)
+#    Not an error: absent counter file → ROUND_PREV 0 → enters at round 1.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -310,10 +328,13 @@ C1. [HIGH] alpha"
   invoke "$MOCK" --format detail-plan --session-id sid9 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 4 ]]; then
-    pass "9: missing --round → exit 4"
+  # Composite: exit 0 alone would not show *which* round it ran; the settled
+  # last-round file names it.
+  SETTLED=$(cat "$PLANS/sid9-detail-plan-last-round.txt" 2>/dev/null)
+  if [[ $rc -eq 0 && "$SETTLED" == "1" ]]; then
+    pass "9: missing --round → defaults to round 1, exit 0"
   else
-    fail "9: missing --round → expected exit 4, got $rc"
+    fail "9: missing --round → expected exit 0 at round 1, got exit $rc at round '$SETTLED'"
   fi
 }
 
@@ -352,7 +373,7 @@ C51: unresolved — new2
 C52: unresolved — new3"
   STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id sid11 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true
   ok=1
   for id in C50 C51 C52; do
     if ! echo "$STDERR_OUT" | grep -q "$id"; then
@@ -406,7 +427,7 @@ C52: unresolved — new3"
 
 # ---------------------------------------------------------------------------
 # 14-17. v2 ledger schema, v1→v2 write-back, closed round-2 admission, and the
-# cycle boundary at round 1 (issue #1992). Split out to keep this file under the
+# cycle boundary at round 1 (#1992). Split out to keep this file under the
 # file-split HARD limit.
 # ---------------------------------------------------------------------------
 # shellcheck source=tests/feature-673-concern-id-ledger/v2-ledger.sh

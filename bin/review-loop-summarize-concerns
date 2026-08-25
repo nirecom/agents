@@ -1,24 +1,13 @@
 #!/usr/bin/env bash
 # Pure helper: emit a Markdown concern-summary block to stdout for the cap-menu
 # dialog. Reads a concern ledger and a prior-round RAW_FILE. Never writes to disk.
+# --raw expects the terminal round's own RAW_FILE, persisted by
+# codex-review-loop.md §d.1 for exit 1/2/6. If absent (e.g. first-round
+# cap-reach on exit 2 before §d.1 ran), RAW_MODE=missing is the expected
+# degraded fallback — not a bug. No jq dependency.
 #
-# IMPORTANT CONTRACT NOTES:
-#   - This helper reads the terminal round's own RAW_FILE: codex-review-loop.md
-#     §d.1 persists RAW for exit 1 (CONTINUE), exit 2 (ESCALATE), and exit 6
-#     (HIGH_UNRESOLVED). Pass that persisted file via --raw.
-#   - When the RAW file is absent (e.g. first-round cap-reach on exit 2 before
-#     §d.1 updated), the degraded RAW_MODE=missing fallback applies — this is
-#     the documented expected outcome. Do not "fix" by changing the persistence
-#     contract.
-#   - No jq dependency.
-#
-# Usage:
-#   review-loop-summarize-concerns --budget-remaining N
-#                                  [--ledger PATH] [--raw PATH] [--label TEXT]
-#
-# Exit codes:
-#   0  — summary emitted to stdout (including degraded modes)
-#   2  — argument error
+# Usage: review-loop-summarize-concerns --budget-remaining N [--ledger PATH] [--raw PATH] [--label TEXT]
+# Exit codes: 0 summary emitted (incl. degraded modes), 2 argument error
 set -uo pipefail
 
 BUDGET_REMAINING=""
@@ -46,11 +35,16 @@ MSG_LEDGER_MISSING="  - (concern ledger not available)"
 MSG_LEDGER_EMPTY="  - (concern ledger is empty)"
 
 # Sentinel sanitiser: strip workflow / detail-skippable sentinels before stdout.
-# Uses sed regex; never eval user content.
+# Uses sed regex; never eval user content. Loops to a fixed point so a nested
+# decoy can't reassemble after one pass, and the reason class is `.*` (not
+# `[^>]*`) to stay a superset of hooks/lib/sentinel-patterns.js's greedy
+# RESET_FROM_LOOKSLIKE_RE (#2025 security-scanner F1 — same fix as
+# bin/lib/concern-ledger/core.sh's _cl_defang_untrusted, CPR-E2C).
 sanitize() {
   sed -E \
-    -e 's/<<WORKFLOW_[A-Z_]+[^>]*>>//g' \
-    -e 's/<<DETAIL_SKIPPABLE_BY_PLANNER:[^>]*>>//g'
+    -e ':lp' \
+    -e 's/<<(WORKFLOW_[A-Z_]+.*|DETAIL_SKIPPABLE_BY_PLANNER:.*)>>//g' \
+    -e 'tlp'
 }
 
 # Determine ledger mode

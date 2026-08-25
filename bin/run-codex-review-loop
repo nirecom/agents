@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 # bin/run-codex-review-loop
-# Wrapper that enforces step b (context build) + step c (review-plan-codex)
-# + step d (verdict parse) of skills/_shared/codex-review-loop.md.
+# Wrapper for steps b (context build) + c (review-plan-codex) + d (verdict
+# parse) of skills/_shared/codex-review-loop.md.
 #
-# Exit codes (see skills/_shared/codex-review-loop.md for SSOT table):
-#   0 — APPROVED (or silent LAND absorbed as approved)
-#   1 — NON_APPROVED_VERDICT (NEEDS_REVISION / MISSING_ALTERNATIVE:)
-#   2 — ESCALATE (risk signal present at budget ceiling)
-#   3 — codex CLI unusable (SKIPPED / FAILED-other / verdict malformed)
-#       -> caller silently falls back to REVIEWER_AGENT subagent
-#   4 — wrapper / config / parser failure (unset AGENTS_CONFIG_DIR,
-#       missing core-principles.md, missing arg, missing option value,
-#       missing binaries, unrecognized status header, etc.)
-#       -> caller MUST halt with blocking error; do NOT fall back.
-#   5 — AUTO_EXTEND (budget available; caller increments EXTENSIONS_USED and re-enters)
-#   6 — HIGH_UNRESOLVED (high-severity concerns remain at the budget ceiling)
+# Exit codes (SSOT table: skills/_shared/codex-review-loop.md):
+#   0 APPROVED (or silent LAND)  1 NON_APPROVED_VERDICT  2 ESCALATE
+#   3 codex CLI unusable -> caller falls back to REVIEWER_AGENT subagent
+#   4 wrapper/config/parser failure -> caller MUST halt, no fallback
+#   5 AUTO_EXTEND (caller increments EXTENSIONS_USED, re-enters)
+#   6 HIGH_UNRESOLVED (high-severity concerns remain at budget ceiling)
 set -uo pipefail
 REDUCE_COMMITTED=false
 
@@ -123,6 +117,19 @@ case "$FORMAT" in
   *) die "--format must be detail-plan, outline-plan, security-plan, or test-review" ;;
 esac
 
+# Validated here, not at the ledger CLI: this wrapper builds and *creates*
+# $PLANS_DIR/$SID-... itself — the context file, the built-marker, the round
+# counter, the last-round file and the round lock — long before any concern-
+# ledger code runs, so guarding only the CLI leaves this prefix open (#2025 C9).
+# $FORMAT needs no check: it is already an allowlist above. die = exit 4, whose
+# contract is "halt, do not fall back to a subagent" — a bad session id is a
+# configuration fault, not a reviewer that misbehaved.
+SAFE_TOKEN_LIB="$AGENTS_CONFIG_DIR/bin/lib/safe-plans-path.sh"
+[[ -f "$SAFE_TOKEN_LIB" ]] || die "required library missing: $SAFE_TOKEN_LIB"
+# shellcheck source=/dev/null
+source "$SAFE_TOKEN_LIB" || die "required library failed to load: $SAFE_TOKEN_LIB"
+sp_valid_token "$SID" || die "--session-id must match [A-Za-z0-9._-]+ and contain no '..' or separators (got: $SID)"
+
 [[ -f "$DRAFT" ]]     || die "draft file does not exist: $DRAFT"
 [[ -d "$PLANS_DIR" ]] || die "plans dir does not exist: $PLANS_DIR"
 
@@ -176,6 +183,16 @@ acquire_round_lock_besteffort() {
   return 0
 }
 
+# A converged review has no further use for its ledger, but $LEDGER can be
+# $LEDGER_OVERRIDE — an arbitrary --ledger path with no containment check of
+# its own. Deleting it unconditionally would let an out-of-bounds override
+# unlink a file outside $PLANS_DIR, the same destructive-operation class
+# cl_finalize already guards with sp_contained_rm (#2025 C6/C8). An override
+# that resolves outside $PLANS_DIR is left in place rather than deleted.
+cleanup_ledger() {
+  sp_contained_rm "$LEDGER" "$PLANS_DIR" 2>/dev/null || true
+}
+
 read_round_file() {
   local raw
   raw="$(cat "$ROUND_FILE" 2>/dev/null)" || return 1
@@ -185,13 +202,16 @@ read_round_file() {
 }
 
 write_round_file() {
-  local v="$1" tmp="$ROUND_FILE.tmp.$$"
-  printf '%s\n' "$v" > "$tmp" || die "cannot write round counter: $ROUND_FILE"
-  mv -f "$tmp" "$ROUND_FILE" || { rm -f "$tmp"; die "cannot publish round counter: $ROUND_FILE"; }
+  # Published through the shared primitive: the old "$ROUND_FILE.tmp.$$" was a
+  # predictable name in a shared directory, and mv onto a directory succeeds
+  # by moving the temp inside it (#2025 C6).
+  local v="$1"
+  printf '%s\n' "$v" | sp_publish_stdin "$ROUND_FILE" || die "cannot publish round counter: $ROUND_FILE"
 }
 
 _srn_terminate() {
-  printf '%s\n' "$ROUND" > "$LAST_ROUND_FILE" || true
+  # Best-effort as before, but published rather than redirected into (C6).
+  printf '%s\n' "$ROUND" | sp_publish_stdin "$LAST_ROUND_FILE" || true
   rm -f "$ROUND_FILE"
 }
 _srn_rollback() {
@@ -267,7 +287,8 @@ if [[ ! -f "$MARKER" ]]; then
   if ! bash "$BUILDER" --plans-dir "$PLANS_DIR" --session-id "$SID" --output "$CONTEXT_OUT"; then
     die "build-codex-context failed"
   fi
-  : > "$MARKER" || die "cannot create marker: $MARKER"
+  # An empty publish, not a truncating redirect: $MARKER is predictable (C6).
+  : | sp_publish_stdin "$MARKER" || die "cannot create marker: $MARKER"
 fi
 
 ARGS=(
@@ -381,9 +402,14 @@ CL_PRODUCER_NAME="review-plan-codex"
 . "$(dirname "$0")/lib/codex-review-loop/ledger-verdict.sh"
 
 if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
-  resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}), the wrapper's own directory, or the current repository"
-  DELTA_SRC="${TMP_OUT}.delta"
-  : > "$DELTA_SRC" || die "cannot stage the round's concerns: $DELTA_SRC"
+  resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}) or beside the wrapper ($(dirname "$(dirname "$0")")); set AGENTS_CONFIG_DIR to your agents checkout"
+  # Exclusively created beside TMP_OUT, not the predictable "${TMP_OUT}.delta":
+  # that name is derivable from a mktemp in the shared $TMPDIR, and the `: >`
+  # that followed it would have written through a symlink pre-placed there,
+  # truncating whatever it pointed at (#2025 C6). Same prescription as every
+  # other member of that class in this codebase.
+  DELTA_SRC="$(sp_mktemp_beside "$TMP_OUT")" \
+    || die "cannot stage the round's concerns beside: $TMP_OUT"
 
   if [[ "$ROUND" == "1" ]]; then
     # Round 1: the reviewer numbers its own findings; this loop assigns the
@@ -436,7 +462,14 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
 
     # A round 1 that arrives on top of a live ledger is a new cycle, not a
     # collision: the previous cycle is archived rather than renumbered over.
-    ledger_cli begin-round --round 1 >/dev/null 2>&1 || true
+    # Fail closed. Swallowing this rc left the ledger un-archived and still
+    # live, and the stage/reduce below then folded round 1 into the previous
+    # cycle's entries — the cycle history destroyed silently, at rc 0.
+    if ! ledger_cli begin-round --round 1 >/dev/null; then
+      echo "run-codex-review-loop: the previous concern cycle could not be archived (round 1 on a live ledger at ${LEDGER}); refusing to reduce round 1 into it" >&2
+      rm -f "$DELTA_SRC"
+      exit 4
+    fi
     PARSER="numbered"
     printf '%s' "$TRANSFORMED_CONTENT" > "$TMP_OUT"
 
@@ -550,7 +583,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
 
   case "$VERDICT_RC" in
     0)
-      rm -f "$LEDGER"
+      cleanup_ledger
       FINAL_EXIT=0
       ;;
     1)
@@ -592,7 +625,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
     finalize_ledger terminal "round cap reached without convergence" 1
   fi
 else
-  rm -f "$LEDGER"
+  cleanup_ledger
   FINAL_EXIT=0
 fi
 # --- END concern-ID ledger + verdict-script block ---
