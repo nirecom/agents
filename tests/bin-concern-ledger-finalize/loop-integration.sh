@@ -5,8 +5,7 @@
 # Detail-plan TL2 cases 6(e), 10, 11: wrapper exit-7 propagation, terminal-finalize
 # trigger symmetry across formats, and re-entry after a terminal finalize.
 # Exercised via a mock AGENTS_CONFIG_DIR (idiom of tests/feature-603-run-codex-review-loop.sh):
-# the reviewer is stubbed; bin/run-codex-review-loop, bin/review-loop-verdict,
-# bin/concern-ledger, bin/lib/concern-ledger.sh are real under test.
+# the reviewer is stubbed; the loop/verdict/ledger scripts under test are real.
 
 echo ""
 echo "--- finalize 6e/10/11: wrapper exit 7, trigger symmetry, re-entry ---"
@@ -41,7 +40,7 @@ STUB
         cp "$AGENTS_ROOT/bin/$f" "$MOCKD/bin/$f"
         chmod +x "$MOCKD/bin/$f"
     done
-    for f in codex-core.sh concern-ledger.sh; do
+    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
         [ -f "$AGENTS_ROOT/bin/lib/$f" ] && cp "$AGENTS_ROOT/bin/lib/$f" "$MOCKD/bin/lib/$f"
     done
     # concern-ledger.sh is a dispatcher that sources its sibling module dir.
@@ -94,9 +93,8 @@ L_TEXT="the wrapper must finalize the ledger when the cap round ends unresolved"
 #     security-plan / test-review run at CAP=1, so their round 1 *is* the last
 #     round; detail-plan at CAP=2 still has a round left.
 # ---------------------------------------------------------------------------
-# The three observations are folded into one composite value at the end: taken
-# alone, "detail-plan wrote no artifact" is satisfied by an implementation that
-# never finalizes anything at all.
+# Folded into one composite value: alone, "detail-plan wrote no artifact" would
+# pass for an implementation that never finalizes anything at all.
 TRIGGER_OBS=""
 while IFS='|' read -r fmt cap; do
     fmt="$(trim "$fmt")"; cap="$(trim "$cap")"

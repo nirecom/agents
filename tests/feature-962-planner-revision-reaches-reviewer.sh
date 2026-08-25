@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
 # Tests: bin/review-plan-codex, bin/run-codex-review-loop, bin/lib/codex-core.sh
 # Tags: codex, review, bin, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Real codex CLI invocation and timing behavior
-# - End-to-end reviewer output quality
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# L3 gap: no real codex CLI/timing or end-to-end reviewer output check — covered
+# at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh
+# (category: skill-orchestration).
 #
-# Issue #962: cap-check must fire AFTER reviewer verdict, not BEFORE.
-# With OLD code, count=cap pre-existing rows prevent reviewer from running again.
-# With NEW code, limit = 1 + cap + extensions_used; reviewer always gets at least
-# one round per cap budget, and cap-check moves post-verdict.
+# #962: cap-check must fire AFTER reviewer verdict, not BEFORE — OLD code let
+# count=cap pre-existing rows block a re-run; NEW sets
+# limit = 1 + cap + extensions_used so the reviewer always gets one round.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,10 +56,21 @@ EOF
       chmod +x "$agents_dir/bin/review-loop-verdict"
     fi
 
-    mkdir -p "$agents_dir/bin/lib"
+    mkdir -p "$agents_dir/bin/lib" "$agents_dir/bin/lib/codex-review-loop"
     if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$agents_dir/bin/lib/codex-core.sh"
     fi
+    if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
+      cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
+    fi
+    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
+    chmod +x "$agents_dir/bin/concern-ledger"
+    cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
+    mkdir -p "$agents_dir/bin/lib/concern-ledger"
+    cp "$AGENTS_WORKTREE"/bin/lib/concern-ledger/*.sh "$agents_dir/bin/lib/concern-ledger/"
+    cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
+       "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     echo "$agents_dir"
 }
 
@@ -117,10 +125,15 @@ invoke() {
     AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
+# --force-round 2: a fresh fixture has no round counter, so a bare --round 2 is
+# rejected before the gate under test runs (sequencing: feature-673-round-counter.sh).
+
 # ---------------------------------------------------------------------------
 # 1. Canonical #962: outline-plan CAP=1, round 2, 1 pre-existing row.
-#    OLD: old_limit=1, count=1 >= 1 → blocked before reviewer runs.
-#    NEW: new_limit=1+1+0=2, count=1 < 2 → reviewer runs → ESCALATE (HIGH at round 2).
+#    OLD: old_limit=1, count=1 >= 1 → blocked before the reviewer runs.
+#    NEW: the reviewer runs; verdict comes from the ledger tally — round 2 +
+#    HIGH residual + budget remaining is AUTO_EXTEND (exit 5). #962 pins that
+#    a verdict is reached, not which one.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -134,24 +147,24 @@ invoke() {
 C1: unresolved"
   CAPTURED=$(invoke "$MOCK" --format outline-plan --session-id t1 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 1 --max-extensions 1 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>/dev/null)
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" 2>/dev/null)
   rc=$?
   if echo "$CAPTURED" | grep -q 'begin-codex-output'; then
     pass "1: reviewer invoked at round 2 (begin-codex-output present)"
   else
     fail "1: reviewer was NOT invoked (begin-codex-output missing). Output: $CAPTURED"
   fi
-  if [[ $rc -eq 2 ]]; then
-    pass "1: round 2 + HIGH residual → exit 2 (ESCALATE)"
+  if [[ $rc -eq 5 ]]; then
+    pass "1: round 2 + HIGH residual under remaining budget → exit 5 (AUTO_EXTEND)"
   else
-    fail "1: expected exit 2 (ESCALATE), got $rc"
+    fail "1: expected exit 5 (AUTO_EXTEND), got $rc"
   fi
 }
 
 # ---------------------------------------------------------------------------
 # 2. Symmetric fix: detail-plan CAP=2, round 2, 2 pre-existing rows.
 #    OLD: old_limit=2, count=2 >= 2 → blocked.
-#    NEW: new_limit=1+2+0=3, count=2 < 3 → reviewer runs → ESCALATE.
+#    NEW: reviewer runs; same verdict path as case 1 → AUTO_EXTEND (exit 5).
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -167,17 +180,17 @@ C1: unresolved"
 C1: unresolved"
   CAPTURED=$(invoke "$MOCK" --format detail-plan --session-id t2 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER2" 2>/dev/null)
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER2" 2>/dev/null)
   rc=$?
   if echo "$CAPTURED" | grep -q 'begin-codex-output'; then
     pass "2: reviewer invoked at round 2 with 2 pre-existing rows (detail-plan)"
   else
     fail "2: reviewer was NOT invoked. Output: $CAPTURED"
   fi
-  if [[ $rc -eq 2 ]]; then
-    pass "2: round 2 + HIGH residual → exit 2 (ESCALATE)"
+  if [[ $rc -eq 5 ]]; then
+    pass "2: detail-plan round 2 + HIGH residual under budget → exit 5 (AUTO_EXTEND)"
   else
-    fail "2: expected exit 2 (ESCALATE), got $rc"
+    fail "2: expected exit 5 (AUTO_EXTEND), got $rc"
   fi
 }
 
@@ -208,10 +221,11 @@ C1: unresolved"
 }
 
 # ---------------------------------------------------------------------------
-# 4. CONTINUE branch post-verdict cap gate: pre-existing 1 row + mock appends row 2.
-#    outline-plan CAP=1, MAX_EXT=1, EXT_USED=0 → NEW limit=2.
-#    Reviewer runs (count=1 before mock append < 2), mock appends row 2 → count=2 >= 2.
-#    Result: CONTINUE branch cap gate fires post-verdict → exit 2.
+# 4. The plan.jsonl row count does not steer the cap gate. Same fixture as case 3
+#    plus one pre-existing round-log row (mock appends a second) — under the old
+#    row-counting gate this would reach limit=2 and force exit 2. Since #2068 the
+#    sole cap authority is the round number: round 1 < limit 2 → CONTINUE, exit 1,
+#    identical to case 3.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -230,10 +244,10 @@ C1: unresolved"
   else
     fail "4: reviewer was NOT invoked (likely blocked by old pre-review gate). Output: $CAPTURED"
   fi
-  if [[ $rc -eq 2 ]]; then
-    pass "4: CONTINUE branch post-verdict cap-reach → exit 2"
+  if [[ $rc -eq 1 ]]; then
+    pass "4: a pre-existing round-log row does not move the cap gate → exit 1 (CONTINUE)"
   else
-    fail "4: expected exit 2 (CONTINUE branch cap gate), got $rc"
+    fail "4: expected exit 1 (round number, not log rows, is the cap authority), got $rc"
   fi
 }
 

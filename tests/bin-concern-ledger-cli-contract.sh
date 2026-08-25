@@ -3,12 +3,11 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, cli, edge-cases, error-cases, config-branch, sha-tool, table-driven, scope:common, pwsh-not-required
 #
-# What does the CLI do when its arguments are legal-looking but wrong? One that
-# accepts 'round 0' or a missing report and reports success is read by the
-# orchestrator above it as "this round was reviewed". Second half: CL_SHA_TOOL,
-# where SLOT is the address a concern keeps across rounds, so a backend yielding
-# a different digest re-files every concern. TL2, real CLI in a sandbox; TL3 gap
-# (environment) is a host lacking sha256sum, mitigated by pinning cksum.
+# Covers CLI argument validation (bad round/report values must be rejected, not
+# silently accepted as "reviewed") and CL_SHA_TOOL: SLOT is a concern's stable
+# address across rounds, so a digest backend change must not re-file concerns.
+# TL2, real CLI in a sandbox; TL3 gap: a host lacking sha256sum, mitigated by
+# pinning cksum.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,6 +26,18 @@ assert_eq() {
         echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"
         FAIL=$((FAIL + 1))
     fi
+}
+
+# assert_eq with a guard: an expectation that could not be computed is itself a
+# failure, so '' == '' can never pass while the thing under test is missing.
+assert_eq_nz() {
+    local name="$1" want="$2" got="$3"
+    if [ -z "$want" ]; then
+        echo "FAIL: $name — the expected value could not be computed (empty)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    assert_eq "$name" "$want" "$got"
 }
 
 # Fixture isolation (rules/test/fixture-isolation.md).
@@ -111,10 +122,8 @@ one~rejected~ok
 ROUNDS
 
 # ---------------------------------------------------------------------------
-# 2. The report path. A report that does not exist and a report that exists but
-#    is empty are different failures and must not collapse into one: the first
-#    is a caller bug, the second is a reviewer that produced nothing. Neither
-#    may look like a completed stage.
+# 2. The report path. Missing vs empty are distinct failures (caller bug vs a
+#    reviewer that produced nothing); neither may look like a completed stage.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 2: the --from-report path ---"
@@ -157,16 +166,13 @@ assert_eq "3: check-finalized on a session with no artifact is rejected" "reject
         --session-id nobody --format "$FORMAT" >/dev/null 2>&1; verdict "$?")"
 
 # ---------------------------------------------------------------------------
-# 4. CL_SHA_TOOL. SLOT is the address a concern keeps across rounds, so the
-#    digest backend is a config-dependent branch in the strict sense: pick the
-#    wrong one and every concern is re-filed under a new address next round.
+# 4. CL_SHA_TOOL. SLOT is a concern's stable address across rounds, so picking
+#    the wrong digest backend re-files every concern under a new address.
 # ---------------------------------------------------------------------------
 
-# Two properties, deliberately separate (CPR-SC). Within one backend the digest
-# must be stable and lowercase hex — that is what makes SLOT usable as a key at
-# all. Across backends the digests may legitimately differ, since they are
-# different hash functions; what must NOT differ is whether two distinct
-# concerns collide.
+# Within one backend the digest must be stable lowercase hex; across backends
+# digests may differ (different hash functions), but two distinct concerns
+# must never collide.
 echo ""
 echo "--- cli 4: the CL_SHA_TOOL digest backend ---"
 
@@ -216,10 +222,8 @@ assert_eq "4: and it is the documented cksum fallback, not a fifth behaviour" \
     "$(slot_with cksum "bin/x.sh" "fn" "security")" "$BOGUS"
 
 # ---------------------------------------------------------------------------
-# 5. The empty report has exactly one legitimate answer. Rejecting empties is
-#    only a universal rule if there is no flag that suspends it: a caller with
-#    nothing open must say so in the report rather than send an empty file and
-#    ask the CLI to accept it (CPR-UNV).
+# 5. Rejecting empty reports is universal only if no flag suspends it: a caller
+#    with nothing open must say so in the report, not send an empty file (CPR-UNV).
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 5: the one legitimate way to stage a round with nothing open ---"
@@ -247,10 +251,8 @@ assert_eq "5: carrying no concern records, since none were open to carry" \
     "0" "$(grep -cvE '^#|^$' "$SENT_DELTA" 2>/dev/null | tr -d ' ')"
 
 # ---------------------------------------------------------------------------
-# 6. check-staged has to be reachable before it can be a gate: close-concern-
-#    round.sh calls it on itself, so an unregistered subcommand would make the
-#    gate fail on every round for the wrong reason. Then the gate's own point —
-#    a delta exists, but the producer it names never reviewed anything.
+# 6. check-staged must be reachable (close-concern-round.sh calls it on itself)
+#    and must catch a delta whose named producer never actually reviewed.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 6: check-staged is dispatched, and judges completeness ---"
@@ -272,6 +274,100 @@ assert_eq "6: check-staged is a real subcommand, not a usage error" \
 assert_eq "6: a round whose only producer skipped its review is not complete" "1" "$CS_RC"
 assert_eq "6: and the reason names the completeness it found, not just 'missing'" \
     "found" "$(printf '%s' "$CS_OUT" | grep -Fq 'incomplete:ABSENT' && printf found || printf "got:$CS_OUT")"
+
+# 7. #2088 at the CLI boundary. This case is green before the fix as well as
+#    after it: its job is to give the backslash plans dir an execution path
+#    through a real subcommand, so a later change to path handling cannot
+#    quietly stop working on Windows-spelled directories.
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- cli 7: check-staged finds staged deltas through a backslash plans dir ---"
+
+# The no-producer branch is one of two MUST class members for #2088 (the other
+# is cl_reduce in bin/lib/concern-ledger/reduce.sh). These cases already pass on
+# the pre-fix glob, so a revert is caught instead by
+# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh (sourced
+# below), which pins the subcommand body against reverted mutants.
+
+# bs_plans <base> — a plans dir path containing a backslash: cygpath -w on
+# Windows (the shape #2088 was reported in), or a literal backslash in the
+# filename elsewhere. Constructible on every platform.
+bs_plans() {
+    local base="$1" d
+    if command -v cygpath >/dev/null 2>&1; then
+        d="$base/plansdir"; mkdir -p "$d"; cygpath -w "$d"
+    else
+        d="$base/plans\\evil"; mkdir -p "$d"; printf '%s' "$d"
+    fi
+}
+
+# cs_stage <plans> <sid> <round> <producer> <exec> — one staged delta.
+cs_stage() {
+    bash "$CLI" stage --plans-dir "$1" --session-id "$2" --format "$FORMAT" \
+        --round "$3" --producer "$4" --exec "$5" --from-report "$REPORT" >/dev/null 2>&1
+}
+
+# cs_check <plans> <sid> <round> → "rc=<n> out=<stdout>"
+cs_check() {
+    local out rc
+    out="$(bash "$CLI" check-staged --plans-dir "$1" --session-id "$2" \
+        --format "$FORMAT" --round "$3" 2>/dev/null)"
+    rc=$?
+    printf 'rc=%s out=%s' "$rc" "$out"
+}
+
+BS="$(bs_plans "$TMPDIR_BASE/bs")"
+assert_eq "7: the fixture really is a backslash-bearing plans dir (precondition)" \
+    "has-backslash" \
+    "$(case "$BS" in *\\*) printf has-backslash ;; *) printf 'no-backslash:%s' "$BS" ;; esac)"
+
+# FORMAT declares no producers, so check-staged takes the branch that scans the
+# plans dir with a glob — the one #2088 degrades.
+assert_eq_nz "7: with no producers declared, check-staged takes the plans-dir scan branch" \
+    "none-declared" \
+    "$([ -z "$(bash -c 'set +u; source "$0" >/dev/null 2>&1; cl_declared_producers "$1"' \
+        "$LIB" "$FORMAT" 2>/dev/null)" ] && printf none-declared || printf declared)"
+
+cs_stage "$BS" bs1 1 review-code-codex PERFORMED
+BS1="$(cs_check "$BS" bs1 1)"
+assert_eq_nz "7: a COMPLETE delta is found through the backslash path" "rc=0 out=" "$BS1"
+
+cs_stage "$BS" bs2 1 review-code-codex SKIPPED
+BS2="$(cs_check "$BS" bs2 1)"
+assert_eq "7: an incomplete delta is reported as incomplete, not as missing" \
+    "rc=1 reason=incomplete" \
+    "$(printf '%s' "$BS2" | grep -Fq 'incomplete:' && printf 'rc=1 reason=incomplete' || printf '%s' "$BS2")"
+
+BS3="$(cs_check "$BS" bs3 1)"
+assert_eq_nz "7: a round with nothing staged is missing, through the backslash path too" \
+    "rc=1 out=(no format):missing" "$BS3"
+
+# Two producers, one incomplete and one COMPLETE: the scan must keep looking
+# after the incomplete one instead of stopping at it.
+cs_stage "$BS" bs4 1 security-scanner SKIPPED
+cs_stage "$BS" bs4 1 review-code-codex PERFORMED
+assert_eq_nz "7: one COMPLETE producer is enough even when a sibling is incomplete" \
+    "rc=0 out=" "$(cs_check "$BS" bs4 1)"
+
+# A delta staged for a different round must not satisfy this round.
+cs_stage "$BS" bs5 2 review-code-codex PERFORMED
+assert_eq_nz "7: a delta from another round does not satisfy this one" \
+    "rc=1 out=(no format):missing" "$(cs_check "$BS" bs5 1)"
+
+# Parity: the ordinary spelling must give byte-identical answers. Asserted after
+# the backslash results are already computed, so the comparison pins agreement
+# rather than restating one side.
+OKP="$TMPDIR_BASE/plans-ok-spelled"
+mkdir -p "$OKP"
+cs_stage "$OKP" ok1 1 review-code-codex PERFORMED
+assert_eq_nz "7: the ordinary spelling answers the COMPLETE case identically" \
+    "$(cs_check "$OKP" ok1 1)" "$BS1"
+cs_stage "$OKP" ok2 1 review-code-codex SKIPPED
+assert_eq_nz "7: and the incomplete case identically" \
+    "$(cs_check "$OKP" ok2 1)" "$(printf '%s' "$BS2" | sed 's/bs2/ok2/')"
+
+# shellcheck source=./bin-concern-ledger-cli-contract/check-staged-discovery.sh
+. "$AGENTS_ROOT/tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
