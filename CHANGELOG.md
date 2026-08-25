@@ -371,3 +371,7 @@ Changes: Issue forms no longer arrive pre-filled. Every required field on the in
 ### FEATURE: PR #2137 (2026-08-25)
 Background: fix(#2132): fold ask-inducing composite command lines in clarify-intent/workflow-init SKILL.md
 Changes: Fixed prompt instructions in the `clarify-intent` and `workflow-init` skills that told Claude to compose a `$(...) | tail -1` shell pipeline in one Bash call — split into a single plain call. (#2132)
+
+### FEATURE: PR #2135 (2026-08-25)
+Background: fix(#2088): make concern-ledger glob discovery resilient to backslash...
+Changes: Fixed a bug where the codex review loop's concern ledger could get stuck header-only (exit 4) on Windows-shaped plans-directory paths.;Hardened concern-ledger file writes against path-traversal and symlink/pre-placement attacks.
