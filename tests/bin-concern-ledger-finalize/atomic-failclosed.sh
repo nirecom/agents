@@ -128,10 +128,12 @@ exit 0')"
         "## Concern Ledger: FINALIZE-FAILED — " "$LAST_OUT"
     assert_contains "6c: the failure is announced on stderr too" \
         "## Concern Ledger: FINALIZE-FAILED — " "$ERRTEXT"
-    assert_contains "6c: the announcement names the recovered copy" \
+    assert_not_contains "6c: stdout is the durable report channel — no absolute host path there" \
         "(recovered copy: " "$LAST_OUT"
+    assert_contains "6c: the recovered copy is named on stderr instead" \
+        "(recovered copy: " "$ERRTEXT"
 
-    RECOVERED="$(printf '%s\n' "$LAST_OUT" | sed -n 's/.*(recovered copy: \([^)]*\)).*/\1/p' | head -n 1)"
+    RECOVERED="$(printf '%s\n' "$ERRTEXT" | sed -n 's/.*(recovered copy: \([^)]*\)).*/\1/p' | head -n 1)"
     assert_match "6c: the recovered copy is given as an absolute path" \
         '^(/|[A-Za-z]:)' "$RECOVERED"
     assert_contains "6c: the recovered copy carries the unresolved concern" \

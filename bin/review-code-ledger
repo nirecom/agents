@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # bin/review-code-ledger — ledger-aware wrapper around bin/review-code-codex.
-#
 # Why a wrapper: the code reviewer and the security scanner are two producers of
-# the same shared review. If each one numbered its own findings, the author would
-# get a fresh list every round and no way to tell "this is the thing I already
-# told you about" from "this is new". The wrapper hands the reviewer the concerns
-# that are still open, then stages what came back into the shared ledger.
-#
+# one shared review. If each numbered its own findings, the author would get a
+# fresh list every round and no way to tell "this is the thing I already told you
+# about" from "new". It hands the reviewer what is open, then stages the reply.
 # Contract with its caller (run-quality-gates.sh): stdout is byte-for-byte the
-# reviewer's own output, and the exit status is always 0. Ledger bookkeeping is a
-# side effect, never something that can block or reshape a review.
+# reviewer's own output, and the exit status is 0 for every degradation it can
+# absorb. Degrading is part of that contract, not an escape from it — a failure
+# announces itself with one NOT-STAGED line and still exits 0; _run_gate
+# swallows a non-zero exit, so returning one deletes the review from the report.
+# The one exception is a failed cycle archive: see the begin-round call below.
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,16 +24,42 @@ PRODUCER="review-code-codex"
 
 notice() { printf '## Concern Ledger: NOT-STAGED — %s\n' "$1"; }
 
-# --- session and plans directory -------------------------------------------
+# --- session, shared primitives, and plans directory ------------------------
 SID="${SESSION_ID:-${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
 PLANS="${PLANS_DIR:-${WORKFLOW_PLANS_DIR:-${HOME:-}/.workflow-plans}}"
+SAFE_TOKEN_LIB="$SELF_DIR/lib/safe-plans-path.sh"
 
+# The private temp dir is created here, with the other preconditions, because it
+# is one: everything this wrapper does beyond running the reviewer needs it. The
+# old `${TMPD:-${TMPDIR:-/tmp}}` fallback turned a mktemp failure into a write to
+# a fully predictable shared path instead (#2025 C6), so there is no fallback —
+# an absent TMPD degrades like an absent session id.
+TMPD="$(mktemp -d 2>/dev/null)" || TMPD=""
+
+# This wrapper pastes $SID into plans-dir file names itself rather than going
+# through the ledger's path builders, so the token is validated here too (#2025
+# C9). A missing or unloadable library is an unavailability like any other: the
+# exit-0 contract outranks every check below it.
 RESOLVED=1
 REASON=""
+# The path travels separately from $REASON: notice() writes to stdout, which is
+# the review report the author keeps, and an absolute path there records the OS
+# account name and the checkout layout in it. Named on stderr instead.
+REASON_PATH=""
 if [ -z "$SID" ]; then
     RESOLVED=0; REASON="no session id in the environment"
+elif [ ! -f "$SAFE_TOKEN_LIB" ]; then
+    RESOLVED=0; REASON="the safe-path library is missing"; REASON_PATH="$SAFE_TOKEN_LIB"
+# shellcheck source=./lib/safe-plans-path.sh
+elif ! source "$SAFE_TOKEN_LIB"; then
+    RESOLVED=0; REASON="the safe-path library failed to load"; REASON_PATH="$SAFE_TOKEN_LIB"
+elif ! sp_valid_token "$SID"; then
+    RESOLVED=0; REASON="the session id is not a safe file-name token"
+elif [ -z "$TMPD" ]; then
+    RESOLVED=0
+    REASON="no writable temporary directory (mktemp -d failed); prior concerns were not replayed and this round was not staged"
 elif ! mkdir -p "$PLANS" 2>/dev/null; then
-    RESOLVED=0; REASON="the plans directory could not be created: $PLANS"
+    RESOLVED=0; REASON="the plans directory could not be created"; REASON_PATH="$PLANS"
 fi
 
 # --- round ------------------------------------------------------------------
@@ -46,19 +72,30 @@ if [ "$RESOLVED" -eq 1 ]; then
     if [ -n "${CONCERN_LEDGER_ROUND:-}" ]; then
         ROUND="$CONCERN_LEDGER_ROUND"
     elif [ -s "$ROUND_FILE" ]; then
+        # A read, not a write: out of the publish class below, and a symlink
+        # here can only mislead this run's numbering, never damage a file.
         ROUND="$(tr -cd '0-9' < "$ROUND_FILE")"
     fi
     case "$ROUND" in ''|*[!0-9]*) ROUND=1 ;; esac
-    [ -s "$ROUND_FILE" ] || printf '%s\n' "$ROUND" > "$ROUND_FILE" 2>/dev/null || true
+    # Published, not redirected into: $ROUND_FILE is a fully predictable path in
+    # a shared directory, and a symlink left there would otherwise be followed
+    # out of the plans dir (C6). Same prescription as the sibling wrapper
+    # skills/review-code-security/scripts/open-concern-round.sh — the two writes
+    # are the same write and must stay in step. sp_publish_stdin is guaranteed
+    # loaded here: a library that would not load already set RESOLVED=0, which
+    # skips this whole block, so do not move the source below this point.
+    [ -s "$ROUND_FILE" ] || printf '%s\n' "$ROUND" | sp_publish_stdin "$ROUND_FILE" 2>/dev/null || true
 fi
 
 LEDGER=""
 [ "$RESOLVED" -eq 1 ] && LEDGER="$PLANS/$SID-$FORMAT-concern-ledger.txt"
 
 # --- hand the still-open concerns back to the reviewer ----------------------
-TMPD="$(mktemp -d)" || TMPD=""
 PRIOR_ARGS=()
 if [ "$RESOLVED" -eq 1 ] && [ -n "$TMPD" ] && [ "$ROUND" -ge 2 ] && [ -s "$LEDGER" ]; then
+    # A plain redirect on purpose, and out of the publish class: $TMPD is this
+    # process's own mktemp -d (0700), not a shared directory, so no one else can
+    # pre-place anything under it. The name only looks predictable.
     bash "$CLI" render-prior --plans-dir "$PLANS" --session-id "$SID" \
         --format "$FORMAT" > "$TMPD/prior.txt" 2>/dev/null || : > "$TMPD/prior.txt"
     [ -s "$TMPD/prior.txt" ] && PRIOR_ARGS=(--concerns-file "$TMPD/prior.txt")
@@ -66,18 +103,36 @@ fi
 
 # A round 1 that meets a live ledger opens a new cycle rather than colliding with
 # the previous one's IDs.
+# Fail closed, ahead of the review: a cycle that could not be archived is still
+# live, and staging round 1 on top of it folds this round into the previous
+# cycle's entries and loses them. That outranks the exit-0 contract — a review
+# whose bookkeeping destroys the last one is worse than a review not run.
 if [ "$RESOLVED" -eq 1 ] && [ "$ROUND" -eq 1 ] && [ -s "$LEDGER" ]; then
-    bash "$CLI" begin-round --plans-dir "$PLANS" --session-id "$SID" \
-        --format "$FORMAT" --round 1 >/dev/null 2>&1 || true
+    if ! bash "$CLI" begin-round --plans-dir "$PLANS" --session-id "$SID" \
+            --format "$FORMAT" --round 1 >/dev/null; then
+        notice "the previous review cycle could not be archived; refusing to reduce round 1 into it"
+        [ -n "$TMPD" ] && rm -rf "$TMPD"
+        exit 1
+    fi
 fi
 
 # --- run the review ---------------------------------------------------------
-OUT="${TMPD:-${TMPDIR:-/tmp}}/review-out.txt"
-bash "$CODEX_BIN" "${PRIOR_ARGS[@]+"${PRIOR_ARGS[@]}"}" "$@" > "$OUT" 2>/dev/null
-cat "$OUT"
+# With no temp dir there is nowhere to capture the output that staging would
+# read, so the reviewer streams straight to stdout and nothing is written at all.
+# The review still reaches the author in full; only the bookkeeping is lost, and
+# the NOT-STAGED line below says so.
+OUT=""
+if [ -n "$TMPD" ]; then
+    OUT="$TMPD/review-out.txt"
+    bash "$CODEX_BIN" "${PRIOR_ARGS[@]+"${PRIOR_ARGS[@]}"}" "$@" > "$OUT" 2>/dev/null
+    cat "$OUT"
+else
+    bash "$CODEX_BIN" "$@" 2>/dev/null
+fi
 
 if [ "$RESOLVED" -eq 0 ]; then
     notice "$REASON"
+    [ -n "$REASON_PATH" ] && printf 'review-code-ledger: %s: %s\n' "$REASON" "$REASON_PATH" >&2
     [ -n "$TMPD" ] && rm -rf "$TMPD"
     exit 0
 fi

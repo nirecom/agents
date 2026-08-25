@@ -3,20 +3,13 @@
 # Tags: worktree, codex, review, bin, env, scope:issue-specific
 # Sourced by tests/feature-673-concern-id-ledger.sh (appended cases 14-18).
 
-# Cases 1-13 of the parent file pin the *behaviour* of the plan-format loop and
-# must keep passing unchanged — that equivalence is the acceptance condition for
-# the reducer swap. The cases here pin what the swap adds on top: the on-disk
-# ledger becomes the v2 schema, a v1 ledger is read and written back as v2, the
-# round-2 admission policy stays closed with its current wording, and a round 1
-# that meets a live ledger archives the previous cycle instead of discarding the
-# round's concerns.
+# Cases 1-13 of the parent pin the plan-format loop's behaviour and must keep passing
+# unchanged — that equivalence is the acceptance condition for the reducer swap. These
+# cases pin what the swap adds: the v2 on-disk schema, a v1 ledger read and written back
+# as v2, the closed round-2 admission policy, and round 1 on a live ledger archiving the
+# previous cycle. Parent helpers are reused; assert_eq is defined here.
 
-# The parent's helpers (setup_mock_env / setup_plans_dir / make_review_codex_mock
-# / invoke / pass / fail) are reused; assert_eq is defined here because the
-# parent has no assertion helper.
-
-# Fixture isolation for everything below this point: the loop and anything it
-# spawns must not resolve the developer's real workflow state.
+# Fixture isolation below: the loop must not resolve the developer's real state.
 V2_ISO="$(mktemp -d)"
 mkdir -p "$V2_ISO/workflow" "$V2_ISO/plans"
 export CLAUDE_WORKFLOW_DIR="$V2_ISO/workflow"
@@ -116,9 +109,11 @@ has_row() {
   printf 'C1|HIGH|original alpha\nC2|MEDIUM|original beta\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
 C1: unresolved — original alpha is still open"
+  # --force-round: a hand-seeded fixture has no round counter, so a bare --round 2
+  # is rejected before the migration path this case is about ever runs.
   invoke "$MOCK" --format detail-plan --session-id sid15 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || true
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || true
 
   assert_eq "15: the v1 input is written back with a v2 header" \
     "#concern-ledger-v2|detail-plan|sid15|cycle=1" "$(v2_header "$LEDGER")"
@@ -154,7 +149,7 @@ C99: unresolved — an identifier the reviewer invented"
   ERRFILE="$TMP/stderr.txt"
   invoke "$MOCK" --format detail-plan --session-id sid16 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" \
+    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" \
     >/dev/null 2>"$ERRFILE" || true
 
   WARNED=no

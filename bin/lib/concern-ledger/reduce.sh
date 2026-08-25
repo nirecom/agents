@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-#
 # bin/lib/concern-ledger/reduce.sh
-#
-# Sourced by bin/lib/concern-ledger.sh. The state layer: it consumes the bind
-# and merge decisions made in the entrypoint and writes the ledger back — new
-# IDs, carried entries, the fail-closed absence rule, flags, the tally, the
-# prior-concerns block handed to producers, and the cycle boundary.
-#
-# Must be `source`d, not executed directly.
+# Sourced by bin/lib/concern-ledger.sh (never executed directly). The state
+# layer: it consumes the bind and merge decisions made in the entrypoint and
+# writes the ledger back — new IDs, carried entries, the fail-closed absence
+# rule, flags, the tally, the prior-concerns block handed to producers, and
+# the cycle boundary.
 
 # ---------------------------------------------------------------------------
 # Reduce
@@ -36,6 +33,8 @@ _cl_next_id() {
 }
 
 # cl_reduce <in-ledger> <staging-glob> <round> <format> <out-ledger>
+# <staging-glob> is a directory plus a basename pattern; it is never expanded
+# by the shell, and its directory component is taken literally.
 cl_reduce() {
     local inl="$1" glob="$2" round="$3" fmt="$4" outl="$5"
     local tmpd f hdr prod comp line
@@ -47,12 +46,31 @@ cl_reduce() {
     # --- collect this round's staging files, in declared producer order -------
     local -a files=() ordered=() staged=()
     local -A fcomp=() fname=()
-    # compgen -G expands the whole pattern as one token, so a space in the
-    # plans-dir path (e.g. a $HOME with a space) does not word-split it away
-    # from the glob suffix the way an unquoted `for f in $glob` would.
-    while IFS= read -r f; do
+    # Discovery does not go through pathname expansion: the plans-dir may be a
+    # Windows path whose backslashes a glob would eat as escapes (#2088).
+    # The helper runs in a process-substitution subshell, so its refusal cannot
+    # come back as an exit status; the armed channel is what carries it. Refusing
+    # here is not caution but the whole point: a round this reducer could not
+    # read is not a round nobody reported, and the absence rule below would
+    # otherwise write off every open concern as stale and drop the round's new
+    # findings, at rc 0 with a tally attached (#2025 C6).
+    if ! _cl_discovery_arm; then
+        printf 'concern-ledger: reduce: could not open the discovery channel; refusing round %s rather than read it unverifiably\n' \
+            "$round" >&2
+        rm -rf "$tmpd"
+        return 1
+    fi
+    while IFS= read -r -d '' f; do
         staged+=("$f")
-    done < <(compgen -G "$glob" 2>/dev/null || true)
+    done < <(_cl_list_pattern_files "$glob")
+    if _cl_discovery_failed; then
+        _cl_discovery_disarm
+        printf 'concern-ledger: reduce: refusing round %s — its staging files could not be listed, and an unread round is not an empty one; the ledger is left unchanged\n' \
+            "$round" >&2
+        rm -rf "$tmpd"
+        return 1
+    fi
+    _cl_discovery_disarm
     for f in "${staged[@]:-}"; do
         [ -n "$f" ] || continue
         [ -f "$f" ] || continue
@@ -61,6 +79,13 @@ cl_reduce() {
         [ "$(printf '%s' "$hdr" | cut -d'|' -f6)" = "$round" ] || continue
         prod="$(printf '%s' "$hdr" | cut -d'|' -f2)"
         comp="$(printf '%s' "$hdr" | cut -d'|' -f3)"
+        # Last-wins, but never silently: the CLI puts the producer in the file
+        # name, so two files claiming one producer can only be hand-placed, and
+        # failing the round over a stray file would be #2088's own outage.
+        if [ -n "${fname[$prod]:-}" ]; then
+            printf 'concern-ledger: duplicate staging file for producer=%s round=%s; using the LC_ALL=C-last one: %s (ignored: %s)\n' \
+                "$prod" "$round" "$f" "${fname[$prod]}" >&2
+        fi
         fcomp[$prod]="$comp"
         fname[$prod]="$f"
         files+=("$prod")
@@ -264,8 +289,18 @@ cl_reduce() {
             done < "$tmpd/alt.txt"
         fi
     } > "$out"
-    mkdir -p "$(dirname "$outl")" 2>/dev/null || true
-    mv "$out" "$outl" || { rm -rf "$tmpd"; return 1; }
+    # _sp_dirname, not dirname(1): for a backslash-spelled out-ledger, dirname
+    # answers "." and this would create a directory next to the caller instead,
+    # leaving sp_publish_copy's temp with no parent to be created in.
+    mkdir -p "$(_sp_dirname "$outl")" 2>/dev/null || true
+    # Not `mv`: $outl is a fully predictable name, and mv onto a directory (or a
+    # symlink to one) puts the new ledger *inside* it and returns 0 — reduce
+    # would then tally an unchanged ledger and report success, which is the
+    # silent loss of #2088 wearing different clothes. $out also lives in a
+    # mktemp -d that may be on another filesystem, where mv degrades to
+    # copy+unlink and stops being atomic. sp_publish_copy fixes both, and
+    # disposes of its own temp, so the cleanup below is unchanged.
+    sp_publish_copy "$out" "$outl" || { rm -rf "$tmpd"; return 1; }
     cl_tally "$outl"
     rm -rf "$tmpd"
     return 0
@@ -281,18 +316,31 @@ cl_begin_cycle() {
     _cl_load_ledger "$f" 1
     local sid="${CL_HDR_SID:-${CL_SESSION_ID:-unknown}}" cyc="${CL_HDR_CYCLE:-1}"
     local next=$((cyc + 1))
+    # Every write below goes through a publish primitive. The old shapes needed
+    # no '$$' to be unsafe: $f and the archive name beside it are both fully
+    # predictable, so a plain `cp` and a plain redirect followed whatever
+    # symlink was left there (#2025 C6, round 4 #2).
     case "$fmt" in
         review-security-shared)
-            local tmp="$f.tmp.$$"
             {
                 printf '#concern-ledger-v2|%s|%s|cycle=%s\n' "$fmt" "$sid" "$next"
                 grep -v '^#concern-ledger-v2|' "$f" 2>/dev/null || true
-            } > "$tmp" && mv "$tmp" "$f"
+            } | sp_publish_stdin "$f" || return 1
             ;;
         *)
-            cp "$f" "${f%.txt}-cycle${cyc}.txt" 2>/dev/null || true
-            printf '#concern-ledger-v2|%s|%s|cycle=%s\n' "$fmt" "$sid" "$next" > "$f"
+            # Archive first, and refuse to advance the cycle if it fails: the
+            # header rewrite below is what makes the old entries unreachable, so
+            # writing it over an archive that was never taken destroys them.
+            sp_publish_copy "$f" "${f%.txt}-cycle${cyc}.txt" || return 1
+            printf '#concern-ledger-v2|%s|%s|cycle=%s\n' "$fmt" "$sid" "$next" \
+                | sp_publish_stdin "$f" || return 1
             ;;
     esac
+    # All three callers must honour this rc. A failure here leaves the previous
+    # cycle live, and a round 1 reduced into it folds this round's concerns into
+    # the old entries and loses them — which is why the review wrappers stop on
+    # it rather than degrading, the one hole in their exit-0 contracts.
 }
 
+
+:  # load-success rc for the entrypoint's source check

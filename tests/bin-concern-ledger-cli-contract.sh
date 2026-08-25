@@ -29,6 +29,18 @@ assert_eq() {
     fi
 }
 
+# assert_eq with a guard: an expectation that could not be computed is itself a
+# failure, so '' == '' can never pass while the thing under test is missing.
+assert_eq_nz() {
+    local name="$1" want="$2" got="$3"
+    if [ -z "$want" ]; then
+        echo "FAIL: $name — the expected value could not be computed (empty)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    assert_eq "$name" "$want" "$got"
+}
+
 # Fixture isolation (rules/test/fixture-isolation.md).
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
@@ -272,6 +284,102 @@ assert_eq "6: check-staged is a real subcommand, not a usage error" \
 assert_eq "6: a round whose only producer skipped its review is not complete" "1" "$CS_RC"
 assert_eq "6: and the reason names the completeness it found, not just 'missing'" \
     "found" "$(printf '%s' "$CS_OUT" | grep -Fq 'incomplete:ABSENT' && printf found || printf "got:$CS_OUT")"
+
+# 7. #2088 at the CLI boundary. This case is green before the fix as well as
+#    after it: its job is to give the backslash plans dir an execution path
+#    through a real subcommand, so a later change to path handling cannot
+#    quietly stop working on Windows-spelled directories.
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- cli 7: check-staged finds staged deltas through a backslash plans dir ---"
+
+# The no-producer branch is one of the two MUST class members for #2088 (the
+# other is bin/lib/concern-ledger/reduce.sh's cl_reduce). Every case below
+# already passes on the pre-fix raw glob — bash globs tolerate a backslash the
+# way #2088's compgen -G did not — so a revert is caught not here but in
+# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh, sourced
+# below, which pins the subcommand body against reverted mutants of it.
+
+# bs_plans <base> — a plans dir reachable through a path holding a backslash. On
+# Windows that is cygpath -w of a real directory (the shape #2088 was reported
+# in); elsewhere a backslash is a legal filename character, so one goes into the
+# name. Constructible on every platform, so this case never skips.
+bs_plans() {
+    local base="$1" d
+    if command -v cygpath >/dev/null 2>&1; then
+        d="$base/plansdir"; mkdir -p "$d"; cygpath -w "$d"
+    else
+        d="$base/plans\\evil"; mkdir -p "$d"; printf '%s' "$d"
+    fi
+}
+
+# cs_stage <plans> <sid> <round> <producer> <exec> — one staged delta.
+cs_stage() {
+    bash "$CLI" stage --plans-dir "$1" --session-id "$2" --format "$FORMAT" \
+        --round "$3" --producer "$4" --exec "$5" --from-report "$REPORT" >/dev/null 2>&1
+}
+
+# cs_check <plans> <sid> <round> → "rc=<n> out=<stdout>"
+cs_check() {
+    local out rc
+    out="$(bash "$CLI" check-staged --plans-dir "$1" --session-id "$2" \
+        --format "$FORMAT" --round "$3" 2>/dev/null)"
+    rc=$?
+    printf 'rc=%s out=%s' "$rc" "$out"
+}
+
+BS="$(bs_plans "$TMPDIR_BASE/bs")"
+assert_eq "7: the fixture really is a backslash-bearing plans dir (precondition)" \
+    "has-backslash" \
+    "$(case "$BS" in *\\*) printf has-backslash ;; *) printf 'no-backslash:%s' "$BS" ;; esac)"
+
+# FORMAT declares no producers, so check-staged takes the branch that scans the
+# plans dir with a glob — the one #2088 degrades.
+assert_eq_nz "7: with no producers declared, check-staged takes the plans-dir scan branch" \
+    "none-declared" \
+    "$([ -z "$(bash -c 'set +u; source "$0" >/dev/null 2>&1; cl_declared_producers "$1"' \
+        "$LIB" "$FORMAT" 2>/dev/null)" ] && printf none-declared || printf declared)"
+
+cs_stage "$BS" bs1 1 review-code-codex PERFORMED
+BS1="$(cs_check "$BS" bs1 1)"
+assert_eq_nz "7: a COMPLETE delta is found through the backslash path" "rc=0 out=" "$BS1"
+
+cs_stage "$BS" bs2 1 review-code-codex SKIPPED
+BS2="$(cs_check "$BS" bs2 1)"
+assert_eq "7: an incomplete delta is reported as incomplete, not as missing" \
+    "rc=1 reason=incomplete" \
+    "$(printf '%s' "$BS2" | grep -Fq 'incomplete:' && printf 'rc=1 reason=incomplete' || printf '%s' "$BS2")"
+
+BS3="$(cs_check "$BS" bs3 1)"
+assert_eq_nz "7: a round with nothing staged is missing, through the backslash path too" \
+    "rc=1 out=(no format):missing" "$BS3"
+
+# Two producers, one incomplete and one COMPLETE: the scan must keep looking
+# after the incomplete one instead of stopping at it.
+cs_stage "$BS" bs4 1 security-scanner SKIPPED
+cs_stage "$BS" bs4 1 review-code-codex PERFORMED
+assert_eq_nz "7: one COMPLETE producer is enough even when a sibling is incomplete" \
+    "rc=0 out=" "$(cs_check "$BS" bs4 1)"
+
+# A delta staged for a different round must not satisfy this round.
+cs_stage "$BS" bs5 2 review-code-codex PERFORMED
+assert_eq_nz "7: a delta from another round does not satisfy this one" \
+    "rc=1 out=(no format):missing" "$(cs_check "$BS" bs5 1)"
+
+# Parity: the ordinary spelling must give byte-identical answers. Asserted after
+# the backslash results are already computed, so the comparison pins agreement
+# rather than restating one side.
+OKP="$TMPDIR_BASE/plans-ok-spelled"
+mkdir -p "$OKP"
+cs_stage "$OKP" ok1 1 review-code-codex PERFORMED
+assert_eq_nz "7: the ordinary spelling answers the COMPLETE case identically" \
+    "$(cs_check "$OKP" ok1 1)" "$BS1"
+cs_stage "$OKP" ok2 1 review-code-codex SKIPPED
+assert_eq_nz "7: and the incomplete case identically" \
+    "$(cs_check "$OKP" ok2 1)" "$(printf '%s' "$BS2" | sed 's/bs2/ok2/')"
+
+# shellcheck source=./bin-concern-ledger-cli-contract/check-staged-discovery.sh
+. "$AGENTS_ROOT/tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

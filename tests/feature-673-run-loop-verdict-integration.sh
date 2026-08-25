@@ -68,6 +68,12 @@ EOF
       cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
          "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     fi
+    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
+    chmod +x "$agents_dir/bin/concern-ledger"
+    cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
+    mkdir -p "$agents_dir/bin/lib/concern-ledger"
+    cp "$AGENTS_WORKTREE"/bin/lib/concern-ledger/*.sh "$agents_dir/bin/lib/concern-ledger/"
     echo "$agents_dir"
 }
 

@@ -1,34 +1,13 @@
 #!/usr/bin/env bash
 # Tests: bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: codex, review, regression, scope:issue-specific
-#
 # Regression test for #1734: bin/review-plan-codex's truncation warning
-# ("Warning: plan is N lines, truncating to 5000 for codex.") was printed to
-# stdout instead of stderr. bin/run-codex-review-loop parses the first
-# non-blank stdout line as the status header (awk 'NF{print; exit}') — when
-# the warning lands on stdout it gets misread as the header, causing a false
-# "unrecognized status header" die() -> exit 4 (HALT) instead of proceeding
-# with the review, whenever the plan/draft exceeds MAX_PLAN_LINES=5000 lines.
-#
-# TL3 gap: this test drives bin/review-plan-codex and bin/run-codex-review-loop
-# directly (real bash scripts, real codex-core.sh, real review-loop-verdict)
-# but substitutes a mock `codex` binary and a stub build-codex-context — it
-# does not exercise the real codex CLI or a real workflow session. A genuine
-# TL3/TL4 gap remains: an end-to-end run of make-detail-plan against the real
-# codex CLI with an oversized draft, which only a live environment can cover.
-#
-# Mitigation: this test exercises the exact real bash code paths that the
-# real codex CLI/session would invoke — only the codex binary itself and the
-# context-builder are substituted; the stdout/stderr channel behavior under
-# test (the truncation-warning routing that #1734 regressed) is fully
-# exercised by real code, not mocked.
-#
-# Verification-gate category (rules/test.md Risk categories, SSOT
-# bin/check-verification-gate.sh): skill-orchestration — this gap is
-# precisely "did you run the skill end-to-end (not just unit-tested its
-# scripts)?", since bin/review-plan-codex and bin/run-codex-review-loop are
-# invoked by the review-plan-codex / make-detail-plan skills and only a live
-# skill run against the real codex CLI closes the remaining gap.
+# leaked onto stdout instead of stderr, so run-codex-review-loop's header
+# parser misread it as the status header and died with exit 4 (HALT)
+# whenever the plan exceeded MAX_PLAN_LINES=5000.
+# TL3 gap (skill-orchestration, rules/test.md / bin/check-verification-gate.sh):
+# real bash scripts, mock `codex` binary + stub build-codex-context; a live
+# end-to-end run against the real codex CLI remains the only closer.
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -110,15 +89,27 @@ fi
 # Case B: full pipeline via bin/run-codex-review-loop
 # ---------------------------------------------------------------------------
 B_CFG="$TMPDIR_BASE/agents-config"
-mkdir -p "$B_CFG/bin/lib" "$B_CFG/rules"
+mkdir -p "$B_CFG/bin/lib" "$B_CFG/bin/lib/codex-review-loop" "$B_CFG/rules"
 
 cp "$RUN_LOOP" "$B_CFG/bin/run-codex-review-loop"
 chmod +x "$B_CFG/bin/run-codex-review-loop"
 cp "$REVIEWER" "$B_CFG/bin/review-plan-codex"
 chmod +x "$B_CFG/bin/review-plan-codex"
 cp "$CODEX_CORE" "$B_CFG/bin/lib/codex-core.sh"
+cp "$AGENTS_ROOT/bin/lib/codex-timeout.sh" "$B_CFG/bin/lib/codex-timeout.sh"
 cp "$VERDICT_BIN" "$B_CFG/bin/review-loop-verdict"
 chmod +x "$B_CFG/bin/review-loop-verdict"
+
+# safe-plans-path.sh + concern-ledger CLI/library bundle (mandatory
+# dependencies of run-codex-review-loop's preflight; see #2088/#2025)
+cp "$AGENTS_ROOT/bin/lib/safe-plans-path.sh" "$B_CFG/bin/lib/safe-plans-path.sh"
+cp "$AGENTS_ROOT/bin/concern-ledger" "$B_CFG/bin/concern-ledger"
+chmod +x "$B_CFG/bin/concern-ledger"
+cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$B_CFG/bin/lib/concern-ledger.sh"
+mkdir -p "$B_CFG/bin/lib/concern-ledger"
+cp "$AGENTS_ROOT"/bin/lib/concern-ledger/*.sh "$B_CFG/bin/lib/concern-ledger/"
+cp "$AGENTS_ROOT/bin/lib/codex-review-loop/ledger-verdict.sh" \
+   "$B_CFG/bin/lib/codex-review-loop/ledger-verdict.sh"
 
 # Stub build-codex-context: just touches --output (mirrors sibling suite pattern)
 cat > "$B_CFG/bin/build-codex-context" << 'STUB_EOF'
@@ -259,26 +250,13 @@ else
   fail "Case C2 (5001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"
 fi
 
-# ---------------------------------------------------------------------------
 # Test design self-check (skills/_shared/test-design.md categories):
-#   - normal: Case A (direct) + Case B (pipeline) — both covered above.
-#   - error: N/A — this is a single-bug regression test targeting one code
-#     path (stdout/stderr channel of the truncation warning); the existing
-#     sibling suites (feature-review-plan-codex.sh, feature-603-run-codex-
-#     review-loop.sh) already cover argument/error-path validation for both
-#     scripts and are not duplicated here.
-#   - edge: Case C covers the exact off-by-one boundary — 5000 lines (at
-#     the cap: no truncation, no warning on either stream) paired with 5001
-#     lines (one over the cap: truncation triggers, warning on stderr only).
-#     Case A's 5100-line case covers the well-over-cap case additionally.
-#   - idempotency: N/A — the fixed behavior (stderr routing) is stateless
-#     per invocation; no idempotency-relevant state is introduced by this fix.
-#   - security: N/A — no new input-handling or trust-boundary surface;
-#     the fix only changes the output stream (stdout vs stderr) of an
-#     existing message.
-#   - classifier: N/A — no allowlist/regex/parser table is introduced.
-#   - config-dependent: N/A — no environment- or config-driven branch.
-# ---------------------------------------------------------------------------
+#   normal: Case A (direct) + Case B (pipeline). edge: Case C covers the
+#   5000/5001-line boundary (Case A's 5100 covers well-over-cap). error/
+#   idempotency/security/classifier/config-dependent: N/A — single-bug
+#   regression on the stdout/stderr routing of one message; no new input-
+#   handling, state, or branch is introduced (argument/error-path validation
+#   is already covered by feature-review-plan-codex.sh / feature-603-*).
 
 # ---------------------------------------------------------------------------
 # Summary

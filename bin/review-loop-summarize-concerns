@@ -46,11 +46,16 @@ MSG_LEDGER_MISSING="  - (concern ledger not available)"
 MSG_LEDGER_EMPTY="  - (concern ledger is empty)"
 
 # Sentinel sanitiser: strip workflow / detail-skippable sentinels before stdout.
-# Uses sed regex; never eval user content.
+# Uses sed regex; never eval user content. Loops to a fixed point so a nested
+# decoy can't reassemble after one pass, and the reason class is `.*` (not
+# `[^>]*`) to stay a superset of hooks/lib/sentinel-patterns.js's greedy
+# RESET_FROM_LOOKSLIKE_RE (#2025 security-scanner F1 — same fix as
+# bin/lib/concern-ledger/core.sh's _cl_defang_untrusted, CPR-E2C).
 sanitize() {
   sed -E \
-    -e 's/<<WORKFLOW_[A-Z_]+[^>]*>>//g' \
-    -e 's/<<DETAIL_SKIPPABLE_BY_PLANNER:[^>]*>>//g'
+    -e ':lp' \
+    -e 's/<<(WORKFLOW_[A-Z_]+.*|DETAIL_SKIPPABLE_BY_PLANNER:.*)>>//g' \
+    -e 'tlp'
 }
 
 # Determine ledger mode

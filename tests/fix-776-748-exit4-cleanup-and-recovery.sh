@@ -70,7 +70,7 @@ EOF
         cp "$AGENTS_WORKTREE/bin/$f" "$agents_dir/bin/$f"
         chmod +x "$agents_dir/bin/$f"
     done
-    for f in codex-core.sh concern-ledger.sh; do
+    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$agents_dir/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
@@ -197,6 +197,10 @@ EOF
       cp "$REVIEW_LOOP_VERDICT" "$agents_dir/bin/review-loop-verdict"
       chmod +x "$agents_dir/bin/review-loop-verdict"
     fi
+
+    mkdir -p "$agents_dir/bin/lib"
+    [[ -f "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" ]] && \
+      cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
 
     local lv_src="$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh"
     if [[ -f "$lv_src" ]]; then

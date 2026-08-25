@@ -5,12 +5,23 @@
 # on-disk paths are derived, never passed in, so no caller can drift from the
 # layout the loops and the summarizer agree on.
 #
-# Exit codes: 0 ok, 2 usage/invalid argument, 5 artifact could not be produced.
+# Exit codes: 0 ok, 1 the verdict subcommands' "not satisfied", 2 usage/invalid
+# argument, 3 check-staged could not read the round at all (distinct from 1, so
+# a loop can tell a broken listing from a round nobody has staged yet — #2025
+# C6), 5 artifact could not be produced (includes: the library could not be
+# loaded).
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This script does not run under `set -e`, so the load needs its own check: a
+# half-loaded library turns every cl_* call into "command not found" and the
+# round's findings disappear with a success status (#2025 C9).
 # shellcheck source=bin/lib/concern-ledger.sh
-. "$SELF_DIR/lib/concern-ledger.sh"
+if ! . "$SELF_DIR/lib/concern-ledger.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' \
+        "$SELF_DIR/lib/concern-ledger.sh" >&2
+    exit 5
+fi
 
 usage() {
     cat >&2 <<'EOF'
@@ -100,9 +111,10 @@ validate_args() {
         slot)     need "$APATH" --path; need "$AANCHOR" --anchor; need "$ACAT" --category ;;
         bind)     need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta ;;
         render-prior|tally|check-finalized) need_addr ;;
-        begin-round|reduce) need_addr; need "$ROUND" --round ;;
+        begin-round)    need_addr; need "$ROUND" --round ;;
+        reduce)   need_addr; need "$ROUND" --round; validate_glob_tokens reduce ;;
         stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
-        check-staged) need_addr; need "$ROUND" --round ;;
+        check-staged) need_addr; need "$ROUND" --round; validate_glob_tokens check-staged ;;
         finalize) need_addr; need "$ROUND" --round ;;
         *) printf 'concern-ledger: unknown subcommand: %s\n' "$1" >&2; usage ;;
     esac
@@ -110,9 +122,31 @@ validate_args() {
     validate_report
 }
 
+# validate_glob_tokens — reduce/check-staged paste SID/FORMAT into a delta-file
+# glob directly (#2088's discovery mechanism), bypassing the validated path
+# builders (cl_ledger_path etc.) that --ledger otherwise lets need_addr skip
+# (#2025 C11). Required even with --ledger set: the glob is built from SID/
+# FORMAT regardless of which ledger address form was used.
+validate_glob_tokens() {
+    _cl_reject_bad_tokens "$1" "$SID" "$FORMAT" || exit 2
+}
+
+# The path builders refuse an unsafe token by printing nothing and returning 2
+# (#2025 C3). An empty path is never harmless here: pasted into a redirect or a
+# reader it silently addresses the working directory instead, so every derived
+# path is checked for emptiness at the point it is taken.
 resolve_ledger() {
-    if [ -n "$LEDGER_ARG" ]; then printf '%s' "$LEDGER_ARG"; return; fi
-    cl_ledger_path "$PLANS" "$SID" "$FORMAT"
+    local p
+    if [ -n "$LEDGER_ARG" ]; then printf '%s' "$LEDGER_ARG"; return 0; fi
+    p="$(cl_ledger_path "$PLANS" "$SID" "$FORMAT")" || return 2
+    [ -n "$p" ] || return 2
+    printf '%s' "$p"
+}
+
+# bad_path <what> — the refusal message. The check itself stays in the main
+# shell at each site: an `exit` inside "$( )" would only leave the subshell.
+bad_path() {
+    printf 'concern-ledger: could not derive %s from the given arguments\n' "$1" >&2
 }
 
 validate_args "$SUB"
@@ -125,10 +159,14 @@ case "$SUB" in
         cl_bind "$LEDGER_ARG" "$DELTA_ARG"
         ;;
     render-prior)
-        cl_render_prior "$(resolve_ledger)"
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        cl_render_prior "$LED"
         ;;
     begin-round)
-        cl_begin_cycle "$(resolve_ledger)" "$FORMAT" "$ROUND"
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        cl_begin_cycle "$LED" "$FORMAT" "$ROUND"
         ;;
     stage)
         TMPD="$(mktemp -d)" || exit 5
@@ -136,7 +174,11 @@ case "$SUB" in
         export CL_PRODUCER="$PRODUCER"
         case "$PARSER" in
             numbered) PARSE="$(cl_parse_numbered "$REPORT" "$NORM")" ;;
-            cnref)    PARSE="$(cl_parse_cnref "$REPORT" "$(resolve_ledger)" "$NORM")" ;;
+            cnref)
+                LED="$(resolve_ledger)"
+                [ -n "$LED" ] || { bad_path "the ledger path"; rm -rf "$TMPD"; exit 2; }
+                PARSE="$(cl_parse_cnref "$REPORT" "$LED" "$NORM")"
+                ;;
             *)        PARSE="$(cl_parse_anchored "$REPORT" "$PRODUCER" "$NORM")" ;;
         esac
         if [ -z "$EXEC" ]; then
@@ -149,16 +191,24 @@ case "$SUB" in
         CL_STAGE_PREFIX="${SID}-" cl_stage "$PLANS" "$FORMAT" "$ROUND" "$PRODUCER" \
             "$EXEC" "$PARSE" "$NORM" >/dev/null || STAGE_RC=$?
         rm -rf "$TMPD"
-        if [ "$STAGE_RC" -ne 0 ]; then
+        # cl_stage's rc 2 is a rejected argument, not a failed publish, and the
+        # CLI's documented exit codes keep those apart: a caller retrying an
+        # exit 5 is right, a caller retrying bad tokens never gets anywhere.
+        if [ "$STAGE_RC" -eq 2 ]; then
+            exit 2
+        elif [ "$STAGE_RC" -ne 0 ]; then
             exit 5
         fi
         ;;
     reduce)
         LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
         cl_reduce "$LED" "$PLANS/${SID}-${FORMAT}-round-${ROUND}-delta-*.txt" "$ROUND" "$FORMAT" "$LED"
         ;;
     tally)
-        cl_tally "$(resolve_ledger)"; printf '\n'
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        cl_tally "$LED"; printf '\n'
         ;;
     finalize)
         [ -n "$MODE" ] || MODE="terminal"
@@ -167,21 +217,29 @@ case "$SUB" in
         [ -n "$LEDGER_ARG" ] && export CL_LEDGER_OVERRIDE="$LEDGER_ARG"
         if cl_finalize "$PLANS" "$SID" "$FORMAT" "$MODE" "$REASON" "$ROUND" \
                 "$CAP" "$MAXEXT" "$USED"; then
-            printf '%s\n' "$(cl_json_path "$PLANS" "$SID" "$FORMAT")"
+            JSONP="$(cl_json_path "$PLANS" "$SID" "$FORMAT")"
+            [ -n "$JSONP" ] || { bad_path "the unresolved-concerns path"; exit 2; }
+            printf '%s\n' "$JSONP"
         else
             # Announced on both streams: the caller pipes stdout into its own
-            # report, while a human watching the terminal only sees stderr.
+            # report, while a human watching the terminal only sees stderr. The
+            # recovery path is named on stderr alone — stdout becomes a durable
+            # artifact, and an absolute path there records the OS account name
+            # and the checkout layout in it.
             MSG="## Concern Ledger: FINALIZE-FAILED — ${CL_FINALIZE_ERROR:-could not write the unresolved-concerns artifact}"
-            if [ -n "${CL_RECOVERY:-}" ]; then
-                MSG="$MSG (recovered copy: $CL_RECOVERY)"
-            fi
             printf '%s\n' "$MSG"
-            printf '%s\n' "$MSG" >&2
+            if [ -n "${CL_RECOVERY:-}" ]; then
+                printf '%s (recovered copy: %s)\n' "$MSG" "$CL_RECOVERY" >&2
+            else
+                printf '%s\n' "$MSG" >&2
+            fi
             exit 5
         fi
         ;;
     check-finalized)
-        cl_artifact_ok "$(cl_json_path "$PLANS" "$SID" "$FORMAT")" "$ROUND" || exit 1
+        JSONP="$(cl_json_path "$PLANS" "$SID" "$FORMAT")"
+        [ -n "$JSONP" ] || { bad_path "the unresolved-concerns path"; exit 2; }
+        cl_artifact_ok "$JSONP" "$ROUND" || exit 1
         ;;
     check-staged)
         STAGED_MISSING=""
@@ -189,7 +247,20 @@ case "$SUB" in
         if [ -z "$_producers" ]; then
             _any_ok=0
             _fallback_msg="(no format):missing"
-            for _f in "$PLANS/$SID-$FORMAT-round-$ROUND-delta-"*.txt; do
+            # Same discovery mechanism as cl_reduce and finalize's producer
+            # scan: a glob would eat a Windows plans-dir's backslashes and
+            # report "nothing staged" for a round that staged fine (#2088).
+            # The helper answers through a process substitution, so its refusal
+            # arrives on the armed channel and not as an exit status. This is
+            # the caller the distinction matters most to: "nothing staged yet"
+            # is the loop's normal state and it waits, while "the directory
+            # could not be read" must stop it — so the two get different words
+            # and different exit codes (#2025 C6).
+            if ! _cl_discovery_arm; then
+                printf '(no format):discovery-failed\n'
+                exit 3
+            fi
+            while IFS= read -r -d '' _f; do
                 [ -f "$_f" ] || continue
                 _hdr="$(_cl_delta_header "$_f")"
                 IFS='|' read -r _ _prod _comp _ _ _rnd _ <<< "$_hdr"
@@ -200,7 +271,13 @@ case "$SUB" in
                         _fallback_msg="(no format):incomplete:$_comp"
                     fi
                 fi
-            done
+            done < <(_cl_list_pattern_files "$PLANS/$SID-$FORMAT-round-$ROUND-delta-*.txt")
+            if _cl_discovery_failed; then
+                _cl_discovery_disarm
+                printf '(no format):discovery-failed\n'
+                exit 3
+            fi
+            _cl_discovery_disarm
             [ "$_any_ok" -eq 0 ] && STAGED_MISSING="$_fallback_msg"
         else
             for _prod in $_producers; do

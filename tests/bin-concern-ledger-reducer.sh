@@ -10,6 +10,15 @@
 # /write-code lands it every case below FAILS, and the SKIP-BLOCKED notice states why.
 set -uo pipefail
 
+# TL3 gap (mitigation category: filesystem-semantics)
+#   - The library is sourced, so the real `bin/concern-ledger` CLI's own
+#     argument handling and its `set -uo pipefail` are not what runs here.
+#   - Host paths: a real plans dir is `C:\Users\...`, and NTFS case-insensitive
+#     names and 8.3 aliases can make two spellings name one file.
+#   Mitigation, closest to the action: tests/bin-concern-ledger-cli-contract.sh
+#   drives the real CLI, and pattern-discovery.sh builds a genuine
+#   backslash-bearing directory via `cygpath -w` where one exists.
+
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
@@ -265,6 +274,12 @@ SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
 . "$SUITE_DIR/completeness.sh"
 # shellcheck source=./bin-concern-ledger-reducer/cycle-migration-static.sh
 . "$SUITE_DIR/cycle-migration-static.sh"
+# shellcheck source=./bin-concern-ledger-reducer/pattern-discovery.sh
+. "$SUITE_DIR/pattern-discovery.sh"
+# shellcheck source=./bin-concern-ledger-reducer/path-shapes-and-framing.sh
+. "$SUITE_DIR/path-shapes-and-framing.sh"
+# shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
+. "$SUITE_DIR/backslash-reduce.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
