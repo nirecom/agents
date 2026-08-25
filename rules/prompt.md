@@ -45,6 +45,8 @@ When a procedure needs an executable snippet of 3 lines or more:
 
 Existing violations in files not touched by the current change are out of scope — apply this rule at the point of addition or edit, not retroactively to the whole file.
 
+This section governs snippets written INTO prompt files; compound command lines folded onto one line are governed by `rules/shell-commands.md` Command-Line Issuance Discipline.
+
 > Note: examples in this section illustrate the rule itself and are not subject to it.
 
 ### 1.7 Rules injection scope
