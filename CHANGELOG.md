@@ -375,3 +375,7 @@ Changes: Fixed prompt instructions in the `clarify-intent` and `workflow-init` s
 ### FEATURE: PR #2135 (2026-08-25)
 Background: fix(#2088): make concern-ledger glob discovery resilient to backslash...
 Changes: Fixed a bug where the codex review loop's concern ledger could get stuck header-only (exit 4) on Windows-shaped plans-directory paths.;Hardened concern-ledger file writes against path-traversal and symlink/pre-placement attacks.
+
+### FEATURE: PR #2143 (2026-08-26)
+Background: fix(#2140): forward rules/shell-commands.md to write-code/write-tests general-purpose subagents
+Changes: Fixed: the write-code and write-tests subagents now read the shell command-line and user-escalation rules before running Bash, so a rejected command comes with an explanation instead of a silent denial.
