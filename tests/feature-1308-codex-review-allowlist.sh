@@ -3,11 +3,9 @@
 # Tags: codex, review, allowlist, scope:issue-specific
 # Tests for issue #1308: add security-plan and test-review format tokens to Codex review loop.
 # Cases 1-6,10-11,13-27 expect pre-impl failure (new formats/tokens/wrappers/agents
-# not yet added); cases 7-9,12 are regressions expected to pass pre-impl (existing
-# formats + bad-format rejection). ~19 of 32 cases fail before implementation.
-# L3 gap: these are L2 subprocess tests using mock Codex binaries. A true L3 test
-# would invoke a real `codex` CLI session; out of scope for per-PR CI (#1308
-# scoped to L2).
+# not yet added); cases 7-9,12 are regressions expected to pass pre-impl.
+# L3 gap: L2 subprocess tests using mock Codex binaries; a real `codex` CLI
+# session is out of scope for per-PR CI (#1308 scoped to L2).
 
 set -uo pipefail
 

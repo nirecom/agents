@@ -3,25 +3,23 @@
 # Tests: bin/review-loop-summarize-concerns
 # Tags: summarize-concerns, sanitizer, sentinel-injection, prompt-injection, table-driven, parser-regex, security, v1-schema, v2-schema, scope:issue-specific, pwsh-not-required
 
-# review-loop-summarize-concerns renders reviewer-authored text straight into the
-# cap-menu block the main conversation reads, so a concern body is an untrusted
-# channel into the harness' own control vocabulary (#2025 security-scanner F1).
-# The sanitiser is one sed regex looping to a fixed point, and a regex is only as
-# good as the cases pinned against it: this is the table-driven pin required by
+# review-loop-summarize-concerns renders reviewer-authored text straight into
+# the cap-menu block the main conversation reads, so a concern body is an
+# untrusted channel into the harness' own control vocabulary (#2025
+# security-scanner F1). The sanitiser is one sed regex looping to a fixed
+# point; this is the table-driven pin required by
 # skills/_shared/test-design/parser-regex-tests.md, run against the real binary.
 
 set -uo pipefail
 
-# TL2 — the real process against real ledger files, so every assertion is on the
-# bytes a caller actually receives.
+# TL2 — the real process against real ledger files, so every assertion is on
+# the bytes a caller actually receives.
 
-# TL3 gap (what this test does NOT catch):
-# - Whether the skill reading a stripped body still behaves sensibly; that
-#   reader is an LLM and only a real session exercises it.
-# - Whether a sentinel that survives here would actually fire in the harness;
-#   that is hooks/lib/sentinel-patterns.js' contract, pinned in its own tests.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: whether the skill reading a stripped body still behaves sensibly
+# (its reader is an LLM), and whether a surviving sentinel would fire in the
+# harness (hooks/lib/sentinel-patterns.js' own contract) aren't covered here.
+# Mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh, category: skill-orchestration.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$AGENTS_ROOT/bin/review-loop-summarize-concerns"

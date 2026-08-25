@@ -5,22 +5,18 @@
 #
 # When the artifact's publish fails, cl_write_json holds the only verified copy
 # of a whole review cycle's findings and saves it to a recovery file under
-# $TMPDIR rather than losing it — which makes a temp directory shared with every
-# process on the host the store for an unpublished artifact, so the file is
+# $TMPDIR — a directory shared with every process on the host — so the file is
 # chmod'd 0600 before its bytes are written (#2025 C8). The failure is injected
 # the way an attacker gets one: a directory pre-placed at the destination.
 set -uo pipefail
 
 # TL2. The real bin/concern-ledger finalizes a real ledger into a plans dir; no
-# library function is stubbed, so the recovery path is the one the shipped code
-# takes rather than one the test arranged.
+# library function is stubbed, so the recovery path is the shipped one.
 
-# TL3 gap (mitigation category: environment-specific)
-#   Not covered on every host: the mode itself. Git Bash on Windows reports 644
-#   whatever chmod is given, so the 0600 assertion can only run where modes are
-#   real — probed for, and skipped by name rather than silently.
-#   Mitigation: the chmod, and its ordering before the copy, are pinned
-#   structurally so a removal fails everywhere.
+# TL3 gap (environment-specific): the mode itself isn't covered everywhere —
+# Git Bash on Windows reports 644 regardless of chmod, so the 0600 assertion
+# is probed for and skipped by name where modes aren't real. Mitigation: the
+# chmod, and its ordering before the copy, are pinned structurally instead.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"

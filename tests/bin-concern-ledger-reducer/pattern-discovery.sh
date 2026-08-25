@@ -3,21 +3,19 @@
 # Tags: concern-ledger, reducer, pattern-discovery, glob-escape, backslash, table-driven, scope:common, pwsh-not-required
 # Sourced by tests/bin-concern-ledger-reducer.sh.
 
-# #2088: the reducer found this round's staging files by handing a pattern built
-# from the plans dir to `compgen -G`, so a plans dir spelled with Windows
-# separators had every backslash read as a glob escape and matched nothing. The
-# replacement passes the directory to `find` literally and pattern-matches only
-# the basename. These cases pin that split and the NUL-safe sort ordering it.
+# #2088: `compgen -G` read a Windows-separator plans dir's backslashes as glob
+# escapes and matched nothing. The fix passes the directory to `find` literally
+# and pattern-matches only the basename; these cases pin that split and the
+# NUL-safe sort ordering it.
 
 echo ""
 echo "--- reducer pd-1: _cl_list_pattern_files splits directory from pattern ---"
 
 # pd_names <pattern> — the basenames _cl_list_pattern_files yields, in order,
-# comma-joined. Reading the NUL stream rather than `ls` is the point: the
-# contract is a NUL-delimited list, and a name holding a space or a backslash
-# has to survive it. `set -u` is enabled only after the source, so the case
-# exercises the caller's contract (`set -uo pipefail`) and not the library's
-# own unset-variable habits.
+# comma-joined. Reads the NUL stream (not `ls`) since the contract is
+# NUL-delimited, so a name holding a space or backslash must survive it.
+# `set -u` is enabled only after the source, exercising the caller's contract
+# rather than the library's own unset-variable habits.
 pd_names() {
     bash -c 'set +u; source "$0" >/dev/null 2>&1 || exit 127; set -u
              _cl_list_pattern_files "$1" | tr "\0" "\n" \
@@ -119,12 +117,10 @@ pd_bs_dir() {
 }
 
 {
-    # The two empties are not one case. A plans dir that is not there means the
-    # helper could not look; an existing dir with no match means it looked and
-    # the round is genuinely unstaged. Answering rc 0 to both is what let the
-    # reducer write a round off as empty that it had never read (#2025 C6), so
-    # the missing directory is a refusal now — stated out loud, since a refusal
-    # nobody can see is the silent loss again.
+    # The two empties are not one case: a missing plans dir means the helper
+    # could not look, an existing empty one means it looked and the round is
+    # genuinely unstaged. Answering rc 0 to both is the #2025 C6 defect, so
+    # the missing directory is now a refusal, stated out loud.
     ABSENT="$TMPDIR_BASE/pd/absent-dir/*.txt"
     assert_eq "pd-2: a directory that does not exist is a refusal, not an empty round" \
         "rc=3 names=" "rc=$(pd_rc "$ABSENT") names=$(pd_names "$ABSENT")"
@@ -144,12 +140,11 @@ pd_bs_dir() {
 echo ""
 echo "--- reducer pd-2b: a plans dir reached through a symlink ---"
 
-# pd-2b. find's default -P never follows a symlink, and -mindepth 1 then hides
-#        the link itself, so a plans dir addressed through one lists nothing at
-#        rc 0 — the #2088 failure mode wearing a second hat, for a directory
-#        `[ -d "$dir" ]` has already called real. The forced trailing slash is
-#        what makes the OS resolve the link before find starts walking, so the
-#        two spellings of one directory owe the same answer (CPR-ORTH).
+# pd-2b. find's default -P never follows a symlink, and -mindepth 1 hides the
+#        link itself, so a symlinked plans dir lists nothing at rc 0 — the
+#        #2088 failure mode again. The forced trailing slash makes the OS
+#        resolve the link before find walks, so both spellings of one
+#        directory owe the same answer (CPR-ORTH).
 
 PD_SYMLINKS=no
 mkdir -p "$TMPDIR_BASE/pd-sym"
@@ -199,12 +194,11 @@ ln -s "$TMPDIR_BASE/pd-sym" "$TMPDIR_BASE/.pd-symlink-probe" 2>/dev/null || true
 echo ""
 echo "--- reducer pd-3: _cl_sort0 orders a NUL stream ---"
 
-# sort0 <item>... — feed the items through _cl_sort0 as a NUL stream and read
-# the result back comma-joined. NUL framing is what lets a path hold a space or
-# a backslash without the sort splitting it.
-# Each item is terminated with its own comma as it is read, the way pd_names
-# does it: joining with `tr '\n' ','` over a `$( )` capture loses the final
-# separator, because command substitution strips the trailing newline.
+# sort0 <item>... — feed items through _cl_sort0 as a NUL stream and read the
+# result back comma-joined. NUL framing lets a path hold a space or backslash
+# without the sort splitting it. Each item is comma-terminated as read (like
+# pd_names) since `tr '\n' ','` over a `$( )` capture loses the final
+# separator to trailing-newline stripping.
 sort0() {
     local i
     for i in "$@"; do printf '%s\0' "$i"; done \

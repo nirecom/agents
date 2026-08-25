@@ -3,11 +3,11 @@
 # Tags: worktree, codex, review, bin, env, scope:issue-specific
 # Sourced by tests/feature-673-concern-id-ledger.sh (appended cases 14-18).
 
-# Cases 1-13 of the parent pin the plan-format loop's behaviour and must keep passing
-# unchanged — that equivalence is the acceptance condition for the reducer swap. These
-# cases pin what the swap adds: the v2 on-disk schema, a v1 ledger read and written back
-# as v2, the closed round-2 admission policy, and round 1 on a live ledger archiving the
-# previous cycle. Parent helpers are reused; assert_eq is defined here.
+# Parent cases 1-13 must keep passing unchanged — that equivalence is the reducer
+# swap's acceptance condition. These cases pin what the swap adds: the v2 on-disk
+# schema, v1 ledger read and written back as v2, closed round-2 admission, and
+# round 1 on a live ledger archiving the previous cycle. Parent helpers are
+# reused; assert_eq is defined here.
 
 # Fixture isolation below: the loop must not resolve the developer's real state.
 V2_ISO="$(mktemp -d)"
@@ -207,11 +207,10 @@ C99: unresolved — an identifier the reviewer invented"
 }
 
 # ---------------------------------------------------------------------------
-# 18. The v1 -> v2 read boundary. cl_read_v1_or_v2 tells the two schemas apart
-#     by counting '|' separators, and v1's TEXT is free-form prose that may
-#     legitimately contain pipes. Every separator count below the v2 arity must
-#     promote as v1 with its prose intact, or a reviewer who quotes a table row
-#     silently loses the tail of their own finding.
+# 18. The v1 -> v2 read boundary. cl_read_v1_or_v2 distinguishes schemas by
+#     counting '|' separators, but v1's free-form TEXT may itself contain
+#     pipes. Every count below the v2 arity must still promote as v1 with
+#     prose intact, or a quoted table row loses its tail.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -247,12 +246,10 @@ C99: unresolved — an identifier the reviewer invented"
   assert_eq "18: the reader produced a row for every probe" \
     "5" "$(grep -c '^[0-9]*|' "$PROBE_OUT" 2>/dev/null || printf 0)"
 
-  # The requirement, stated once for the whole domain: a v1 row promotes to a
-  # well-formed v2 row whatever its prose contains — 10 structural separators
-  # plus however many the prose carries, state 'open', and the TEXT byte-identical.
-  # Which schema a line belongs to is decided by validated structure (the header
-  # and the state enum), never by counting separators, because prose is free to
-  # hold as many as it likes.
+  # A v1 row promotes to v2 whatever its prose contains — 10 structural
+  # separators plus however many the prose carries, state 'open', TEXT
+  # byte-identical. Schema is decided by validated structure (header, state
+  # enum), never by counting separators.
 
   # probe_row <n> — the observed triple for a pipe count, as one comparable string.
   probe_row() { printf '%s %s %s' "$(p_seps "$1")" "$(p_state "$1")" "$(p_text "$1")"; }

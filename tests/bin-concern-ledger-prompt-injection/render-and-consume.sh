@@ -174,11 +174,9 @@ echo "--- prompt-injection 3: the no-prior and empty-prior edges ---"
 echo ""
 echo "--- prompt-injection 3c: the defang rules, row by row ---"
 
-# 3c. The defanger's own regex domain (#2025 C1). The cases above prove the
-#     defence is wired up; they say nothing about where its boundary sits. A
-#     substitution rule fails in two opposite ways (CPR-SC) — under-matching
-#     leaves a live marker, over-matching eats prose the reviewer needs — so
-#     both are stated once, as a table over the one function that owns them.
+# 3c. The defanger's own regex domain (#2025 C1). A substitution rule fails in
+#     two opposite ways (CPR-SC) — under-matching leaves a live marker,
+#     over-matching eats prose the reviewer needs — stated once as a table.
 
 # defang <text> — one line of untrusted text through the real defanger.
 defang() {

@@ -2,9 +2,8 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, input-validation, path-traversal, injection, quoting, table-driven, scope:common, pwsh-not-required
 
-# 4. The format column. It reaches the same names, so it inherits the same
-#    surface — but unlike the session ID it has a declared allowlist upstream,
-#    and that allowlist is what actually closes the hole.
+# 4. The format column reaches the same names as the session ID, but unlike it
+#    has a declared allowlist upstream, which is what actually closes the hole.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- input 4: the format column ---"
@@ -69,12 +68,10 @@ echo "--- input 5: the producer column ---"
 echo ""
 echo "--- input 5b: the same tokens, reaching the library directly ---"
 
-# 5b. Every case so far goes through bin/concern-ledger, so all of them would
-#     still pass if the refusal lived only in the CLI's argument parsing.
-#     cl_stage builds the delta name itself from the format, the round, the
-#     producer and CL_STAGE_PREFIX — the session ID under another name — and it
-#     is a library function any caller may reach without the CLI. The refusal
-#     therefore belongs where the name is built (#2025 C4, CPR-E2C).
+# 5b. Every case so far goes through bin/concern-ledger, so all would still
+#     pass if the refusal lived only in the CLI's argument parsing. cl_stage
+#     builds the delta name itself and is reachable by any caller without the
+#     CLI, so the refusal must live where the name is built (#2025 C4, CPR-E2C).
 
 # stage_direct <prefix> <format> <round> <producer> — cl_stage in a subshell
 # over a probe dir of its own. Echoes "rc=<n> files=<n>", so a refusal that

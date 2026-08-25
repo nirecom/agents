@@ -5,9 +5,7 @@
 # Cases 26-30: the wrapper-owned round counter (#2068) — self-numbering, refused rounds, --round/--force-round exclusivity, missing ledger, and rollback on exit 3.
 
 # ---------------------------------------------------------------------------
-# 26. --round omitted → the wrapper numbers the round itself, from the counter
-#     it owns. Callers used to compute it, which is how the counter and the
-#     round that actually ran could disagree (#2068).
+# 26. --round omitted → wrapper self-numbers from the counter it owns (#2068).
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN

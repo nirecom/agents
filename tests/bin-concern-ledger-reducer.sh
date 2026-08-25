@@ -5,19 +5,15 @@
 #
 # TL1 dispatcher for the shared concern-ledger reducer (#1992 / #1996).
 # Cases are split into tests/bin-concern-ledger-reducer/ per rules/coding/file-split.md.
-# Expectations are taken from the detail plan's "ledger schema v2" / "cl_reduce state
-# transition table" / "Test plan" sections. The reducer does not exist yet: until
-# /write-code lands it every case below FAILS, and the SKIP-BLOCKED notice states why.
+# Expectations come from the detail plan's ledger schema v2 / cl_reduce state
+# transition table / Test plan sections.
 set -uo pipefail
 
-# TL3 gap (mitigation category: filesystem-semantics)
-#   - The library is sourced, so the real `bin/concern-ledger` CLI's own
-#     argument handling and its `set -uo pipefail` are not what runs here.
-#   - Host paths: a real plans dir is `C:\Users\...`, and NTFS case-insensitive
-#     names and 8.3 aliases can make two spellings name one file.
-#   Mitigation, closest to the action: tests/bin-concern-ledger-cli-contract.sh
-#   drives the real CLI, and pattern-discovery.sh builds a genuine
-#   backslash-bearing directory via `cygpath -w` where one exists.
+# TL3 gap (filesystem-semantics): the library is sourced here, not run through
+# the real CLI's argument handling, and NTFS case-insensitivity/8.3 aliases can
+# make two path spellings name one file. Mitigated by
+# tests/bin-concern-ledger-cli-contract.sh (drives the real CLI) and
+# pattern-discovery.sh (builds a genuine backslash dir via `cygpath -w`).
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"

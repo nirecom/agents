@@ -112,11 +112,9 @@ invoke() {
     AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
-# Cases that seed a ledger by hand and enter at round 2 pass --force-round 2,
-# not --round 2: a fresh fixture has no round-counter file, so ROUND_PREV is 0
-# and a bare --round 2 is rejected (exit 4) before any ledger code runs. Round
-# sequencing itself is the subject of tests/feature-673-round-counter.sh; here it
-# is only the transport that gets the loop to round 2.
+# Cases entering at round 2 use --force-round 2, not --round 2: a fresh fixture
+# has no round-counter file, so a bare --round 2 is rejected (exit 4). Round
+# sequencing itself is covered by tests/feature-673-round-counter.sh.
 
 # ---------------------------------------------------------------------------
 # 1. Round 1 with Cn-prefix concerns already → ledger written, IDs preserved
@@ -318,9 +316,7 @@ C1. [HIGH] alpha"
 
 # ---------------------------------------------------------------------------
 # 9. Missing --round flag → defaults to the recorded counter + 1 (here: round 1)
-#    Omitting --round is not an error: the loop reads the round-number state file
-#    (absent → 0) and enters at ROUND_PREV+1. With no prior round recorded and an
-#    APPROVED mock reviewer, that is round 1 → exit 0.
+#    Not an error: absent counter file → ROUND_PREV 0 → enters at round 1.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -431,7 +427,7 @@ C52: unresolved — new3"
 
 # ---------------------------------------------------------------------------
 # 14-17. v2 ledger schema, v1→v2 write-back, closed round-2 admission, and the
-# cycle boundary at round 1 (issue #1992). Split out to keep this file under the
+# cycle boundary at round 1 (#1992). Split out to keep this file under the
 # file-split HARD limit.
 # ---------------------------------------------------------------------------
 # shellcheck source=tests/feature-673-concern-id-ledger/v2-ledger.sh

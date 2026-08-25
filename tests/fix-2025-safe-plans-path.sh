@@ -3,23 +3,23 @@
 # Tests: bin/lib/safe-plans-path.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
 # Tags: safe-plans-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required
 #
-# #2025: every writer under the plans dir spelled its own destination, so each
-# owned a separate copy of "is this still inside the directory the caller
-# nominated". This pins the shared primitive that replaces them, on the two axes
-# that decide whether a write is safe: the token that names a file, and the
-# directory a finished file is allowed to land in.
+# #2025: every writer under the plans dir spelled its own destination, each
+# owning a separate copy of "is this still inside the directory the caller
+# nominated". This pins the shared primitive that replaces them, on the two
+# axes that decide whether a write is safe: the token naming a file, and the
+# directory a finished file may land in.
 set -uo pipefail
 
-# TL1 — the library is sourced directly; the only real resources are a temp tree
-# and its symlinks, which is what the containment checks are about.
+# TL1 — the library is sourced directly; the only real resources are a temp
+# tree and its symlinks, which is what the containment checks are about.
 #
-# TL3 gap (mitigation: filesystem-semantics): TOCTOU mid-publish is out of scope
-# (the threat is a pre-placed link); Windows junctions/NTFS reparse points are
+# TL3 gap (filesystem-semantics): TOCTOU mid-publish is out of scope (the
+# threat is a pre-placed link); Windows junctions/NTFS reparse points are
 # misreported by `test -h`; SYMLINKS_OK/MODES_OK cases are SKIPPED where the
 # host lacks symlinks or POSIX modes, and permission-denied publication is
 # SKIPPED everywhere (chmod 000 stays writable under Git Bash on Windows).
-# Mitigation: single resolution is pinned as source shape, and the pre-placed
-# *directory* attack needs no symlinks, so it covers every form on every host.
+# Mitigation: the pre-placed *directory* attack needs no symlinks, so it
+# covers every form on every host.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SPLIB="$AGENTS_ROOT/bin/lib/safe-plans-path.sh"

@@ -6,21 +6,19 @@
 # resolve_concern_ledger picks the CLI that ledger_cli then runs with `bash`.
 # Until #2025 C5 the search covered the repository *under review*, so a
 # bin/concern-ledger committed there was code execution inside the review loop.
-# The property is therefore "an untrusted root is never a candidate", asserted
-# in both directions: absent from the trusted roots the loop fails closed, and
-# present there the trusted copy wins while a planted twin sits in the repo.
+# The property: "an untrusted root is never a candidate", asserted both ways —
+# absent from trusted roots fails closed, present there wins over a planted
+# twin in the repo.
 set -uo pipefail
 
-# TL2. The real bin/run-codex-review-loop runs as a subprocess against a mocked
-# review-plan-codex, so the pick is observed by what the planted script would
-# have done: a canary file it can only create by being executed.
+# TL2. The real bin/run-codex-review-loop runs as a subprocess against a
+# mocked review-plan-codex, so the pick is observed by what the planted script
+# would have done: a canary file it can only create by being executed.
 
-# TL3 gap (mitigation category: environment-specific)
-#   Not covered here: a real session whose AGENTS_CONFIG_DIR points at a stale
-#   checkout. The wrapper refuses an unset one, so only a wrong-but-existing
-#   checkout reaches this code, and which checkout a developer has is not
-#   reproducible below TL3.
-#   Mitigation: the diagnostic that developer would act on is pinned verbatim.
+# TL3 gap (environment-specific): a real session whose AGENTS_CONFIG_DIR
+# points at a stale checkout isn't covered — the wrapper refuses an unset one,
+# and which checkout a developer has isn't reproducible below TL3. Mitigation:
+# the diagnostic a developer would act on is pinned verbatim.
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
 

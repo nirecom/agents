@@ -3,7 +3,6 @@
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
 # Sourced by tests/feature-603-run-codex-review-loop.sh.
 # Cases 1-11: the verdict/header -> exit-code matrix (APPROVED, NEEDS_REVISION, MISSING_ALTERNATIVE, cap reached, SKIPPED, timeout, garbage, empty, unrecognized header).
-
 # ---------------------------------------------------------------------------
 # 1. PERFORMED + APPROVED → exit 0
 # ---------------------------------------------------------------------------

@@ -2,9 +2,8 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, input-validation, path-traversal, injection, quoting, table-driven, scope:common, pwsh-not-required
 
-# 3. Traversal. This is the failure the plans dir exists to prevent: a session
-#    ID carrying a separator makes the derived name a path, and the round's
-#    bytes leave the directory the caller nominated.
+# 3. Traversal: a session ID carrying a separator makes the derived name a
+#    path, letting the round's bytes leave the caller's nominated directory.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- input 3: separators in a derived name ---"
@@ -54,11 +53,9 @@ rejected_or() { [ "$1" -ne 0 ] && printf 'rejected' || printf 'accepted'; }
 # themselves rather than one subcommand's behaviour.
 {
     # The probe reports each builder's rc alongside its output, so a refusal
-    # (rc non-zero, nothing printed) is distinguishable from a builder that was
-    # never reached and from one that printed an escaping path. Counting lines
-    # of output alone cannot tell those three apart: a builder that starts
-    # refusing prints nothing, and the old loop dropped empty lines before
-    # counting, so a correct fix would have read as "the probe stopped working".
+    # (rc non-zero, nothing printed) is distinguishable from a builder never
+    # reached and one that printed an escaping path — counting output lines
+    # alone can't tell those apart, since a correct fix also prints nothing.
     PROBE="$TMPDIR_BASE/paths.sh"
     cat > "$PROBE" <<'PROBE_EOF'
 #!/usr/bin/env bash
@@ -108,14 +105,11 @@ PROBE_EOF
 echo ""
 echo "--- input 3b: the --ledger bypass of the three-part address ---"
 
-# 3b. --ledger names the ledger outright, so need_addr stops requiring the
-#     address and the validated builders above are never reached. reduce and
-#     check-staged still paste the session ID and the format into the delta
-#     glob they discover with, so the tokens stay an injection surface after the
-#     bypass and the check has to sit on them rather than on the address
-#     (#2025 C11). Refusal alone is not the property: the subcommand also owns
-#     a ledger it was handed directly, so "changed nothing" is asserted over the
-#     whole sandbox rather than over the plans dir.
+# 3b. --ledger names the ledger outright, so the validated builders above are
+#     never reached — but reduce/check-staged still paste the session ID and
+#     format into the delta glob, so the check must sit on those tokens rather
+#     than on the address (#2025 C11). "Changed nothing" is asserted over the
+#     whole sandbox, not just the plans dir, since the ledger was handed directly.
 
 # glob_sub <sub> <sid> <format> — reduce/check-staged addressed by --ledger.
 glob_sub() {

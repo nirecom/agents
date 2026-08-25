@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # Tests: bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: codex, review, regression, scope:issue-specific
-# Regression test for #1734: bin/review-plan-codex's truncation warning
-# leaked onto stdout instead of stderr, so run-codex-review-loop's header
-# parser misread it as the status header and died with exit 4 (HALT)
-# whenever the plan exceeded MAX_PLAN_LINES=5000.
-# TL3 gap (skill-orchestration, rules/test.md / bin/check-verification-gate.sh):
-# real bash scripts, mock `codex` binary + stub build-codex-context; a live
+# Regression test for #1734: the truncation warning leaked onto stdout
+# instead of stderr, so run-codex-review-loop's header parser misread it as
+# the status header and died with exit 4 (HALT) past MAX_PLAN_LINES=5000.
+# TL3 gap: mock `codex` binary + stub build-codex-context; a live
 # end-to-end run against the real codex CLI remains the only closer.
 set -euo pipefail
 
@@ -155,10 +153,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case C: exact-boundary edge cases — 5000 lines (cap, no truncation) vs
-# 5001 lines (one over the cap, truncation triggers). bin/review-plan-codex
-# uses `if (( INPUT_LINES > MAX_PLAN_LINES ))` with MAX_PLAN_LINES=5000, so
-# 5000 is the last non-truncating size and 5001 is the first truncating one.
+# Case C: exact-boundary — 5000 lines (cap, no truncation) vs 5001 lines (one
+# over, truncation triggers): `if (( INPUT_LINES > MAX_PLAN_LINES ))`.
 # ---------------------------------------------------------------------------
 C_PLAN_AT_CAP="$TMPDIR_BASE/plan-5000.md"
 {
@@ -250,13 +246,9 @@ else
   fail "Case C2 (5001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"
 fi
 
-# Test design self-check (skills/_shared/test-design.md categories):
-#   normal: Case A (direct) + Case B (pipeline). edge: Case C covers the
-#   5000/5001-line boundary (Case A's 5100 covers well-over-cap). error/
-#   idempotency/security/classifier/config-dependent: N/A — single-bug
-#   regression on the stdout/stderr routing of one message; no new input-
-#   handling, state, or branch is introduced (argument/error-path validation
-#   is already covered by feature-review-plan-codex.sh / feature-603-*).
+# Test design self-check: normal = Case A (direct) + Case B (pipeline); edge
+# = Case C's 5000/5001 boundary. Other categories N/A — single-bug regression
+# on stdout/stderr routing, no new input handling or branches.
 
 # ---------------------------------------------------------------------------
 # Summary

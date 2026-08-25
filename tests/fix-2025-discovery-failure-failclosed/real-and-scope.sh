@@ -9,11 +9,9 @@
 echo ""
 echo "--- discovery 6: the same failure, produced by the OS rather than by a stub ---"
 
-# Cases 2-4 inject through a `find` on PATH. That models the failure but does not
-# prove the model: what the helper meets in production is an OS refusal. A
-# directory with no read bit is exactly that — the entry can still be opened by
-# exact name, so it separates "cannot list" from "is not there", which is the
-# distinction the helper collapses.
+# Cases 2-4 inject through a `find` on PATH; this proves the model against a real
+# OS refusal. A directory with no read bit still allows opening an entry by exact
+# name, which is the "cannot list" vs "is not there" distinction the helper collapses.
 
 # lp <pattern> → "rc=<n> n=<matches>", one library call in its own subshell.
 lp() {
@@ -62,20 +60,18 @@ else
     # Because: this host does not enforce POSIX directory modes — chmod 0111
     #   succeeds and `find` still lists the directory, so the fixture cannot
     #   create the condition and the assertion would pass vacuously.
-    # L3 gap: a POSIX CI host runs it; the PATH-stub route in cases 2-4 covers
-    #   the same caller verdicts here, and case 5 pins that the stub shadows the
-    #   mechanism the helper actually invokes.
+    # L3 gap: a POSIX CI host runs it; cases 2-4's PATH-stub route covers the
+    #   same caller verdicts, and case 5 pins the stub to the real mechanism.
     echo "NOTE: 6: SKIPPED — this host does not enforce POSIX directory modes"
 fi
 
 echo ""
 echo "--- discovery 7: a failed round leaves no half-written artifact behind ---"
 
-# The third fail-closed attribute, and the one that already holds: whatever the
-# callers decide about a round they could not read, neither may leave a partial
-# file where a reader could mistake it for a finished one. Publication goes
-# through sp_publish_*, whose temp files are named .sp-tmp.* beside the
-# destination, so a remnant is both detectable and unambiguous.
+# The third fail-closed attribute: neither caller may leave a partial file
+# where a reader could mistake it for a finished one. Publication goes through
+# sp_publish_*, whose temp files are named .sp-tmp.* beside the destination,
+# so a remnant is detectable and unambiguous.
 
 # leftovers <dir> — publication temporaries still present.
 leftovers() {
@@ -117,13 +113,11 @@ echo "--- discovery 8: three callers is the whole class, not a sample of it ---"
         "bin/concern-ledger bin/lib/concern-ledger/finalize.sh bin/lib/concern-ledger/reduce.sh " \
         "$CALLERS"
 
-    # And no sibling reaches around the helper to call find itself, which would
-    # be a fourth surface the helper's fix could not reach. Matched as "find
-    # invoked with a path-shaped first operand" rather than the old 'find -- '
-    # literal: the option terminator was dropped because BSD/macOS find takes
-    # it as a path operand, and a probe pinned to it would report zero call
-    # sites — vacuously passing for whatever a sibling did next. The leading
-    # `[^#]*` keeps the modules' prose about find out of the census.
+    # And no sibling reaches around the helper to call find itself — a fourth
+    # surface the fix couldn't reach. Matched as "find with a path-shaped first
+    # operand" rather than 'find -- ', since BSD/macOS find takes '--' as a path
+    # operand and would report zero call sites vacuously. Leading `[^#]*` keeps
+    # prose about find out of the census.
     DIRECT="$(cd "$AGENTS_ROOT" && grep -rlnE '^[^#]*(^|[^[:alnum:]_-])find[[:space:]]+["$./-]' \
         bin/lib/concern-ledger/ bin/concern-ledger | LC_ALL=C sort | tr '\n' ' ')"
     assert_eq_nz "8: and nothing reaches around the helper to run find itself" \

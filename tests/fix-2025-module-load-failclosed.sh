@@ -5,22 +5,19 @@
 #
 # None of these scripts runs under `set -e`, so an unchecked `source` leaves
 # every cl_* call resolving to "command not found" — and a round whose findings
-# vanished exits 0. Each module is therefore hidden one at a time, in a copied
-# tree, and the entrypoint has to name the module it could not load and refuse
-# (#2025 C10). A half-loaded ledger is the silent findings loss the subsystem
-# exists to stop, so "refused loudly" is the only acceptable answer here.
+# vanished exits 0. Each module is hidden one at a time, in a copied tree, and
+# the entrypoint must name the module it could not load and refuse (#2025 C10).
 set -uo pipefail
 
 # TL2. Copied bin/ trees driven as real subprocesses: the load sequence under
-# test is bash's own `source`, never a stub, and a module is made unloadable the
-# way a broken install does it — by not being there, or by not parsing.
+# test is bash's own `source`, and a module is made unloadable the way a
+# broken install does it — by not being there, or by not parsing.
 
 # TL3 gap (mitigation category: cost)
 #   Not covered behaviourally: bin/review-code-ledger's own guard. Reaching it
-#   means running a full codex review first, which is minutes of billed
-#   reviewer time per row and needs a live CLI.
-#   Mitigation: its two guard lines are pinned structurally below, alongside the
-#   sibling wrappers that are exercised for real.
+#   needs a full codex review first — minutes of billed reviewer time per row.
+#   Mitigation: its two guard lines are pinned structurally below, alongside
+#   the sibling wrappers that are exercised for real.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

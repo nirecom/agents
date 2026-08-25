@@ -5,8 +5,8 @@
 # at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh
 # (category: skill-orchestration).
 #
-# Issue #962: cap-check must fire AFTER reviewer verdict, not BEFORE — OLD code
-# let count=cap pre-existing rows block a re-run; NEW code sets
+# #962: cap-check must fire AFTER reviewer verdict, not BEFORE — OLD code let
+# count=cap pre-existing rows block a re-run; NEW sets
 # limit = 1 + cap + extensions_used so the reviewer always gets one round.
 set -uo pipefail
 
@@ -131,9 +131,9 @@ invoke() {
 # ---------------------------------------------------------------------------
 # 1. Canonical #962: outline-plan CAP=1, round 2, 1 pre-existing row.
 #    OLD: old_limit=1, count=1 >= 1 → blocked before the reviewer runs.
-#    NEW: the reviewer runs and the verdict comes from the ledger tally — round 2
-#    + HIGH residual + budget remaining is AUTO_EXTEND (exit 5) per the matrix in
-#    bin/review-loop-verdict. #962 pins that a verdict is reached, not which one.
+#    NEW: the reviewer runs; verdict comes from the ledger tally — round 2 +
+#    HIGH residual + budget remaining is AUTO_EXTEND (exit 5). #962 pins that
+#    a verdict is reached, not which one.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -222,11 +222,10 @@ C1: unresolved"
 
 # ---------------------------------------------------------------------------
 # 4. The plan.jsonl row count does not steer the cap gate. Same fixture as case 3
-#    plus one pre-existing round-log row (and the mock appends a second), which
-#    under the old row-counting gate would have reached limit=2 and forced exit 2.
-#    Since #2068 the sole cap authority is the round number (codex_core_hard_cap_check
-#    reads <round>, never the log): round 1 < limit 2 → CONTINUE, exit 1, identical
-#    to case 3. This case exists to pin that equivalence.
+#    plus one pre-existing round-log row (mock appends a second) — under the old
+#    row-counting gate this would reach limit=2 and force exit 2. Since #2068 the
+#    sole cap authority is the round number: round 1 < limit 2 → CONTINUE, exit 1,
+#    identical to case 3.
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN

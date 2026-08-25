@@ -4,20 +4,19 @@
 # Tags: safe-plans-path, path-traversal, missing-library, exit-codes, wrapper-contract, security, scope:issue-specific, pwsh-not-required
 #
 # #2025 at the process boundary. The shared path primitive is a new dependency
-# of six entrypoints, so each one now has a way to fail that it did not have
-# before: the library is not there. What each entrypoint owes its caller in that
-# case is not the same answer — a gate must fail closed, a wrapper must not
-# block the review it wraps — and this file pins those answers per entrypoint.
+# of six entrypoints, so each now has a new way to fail: the library missing.
+# What each owes its caller differs — a gate must fail closed, a wrapper must
+# not block the review it wraps — and this file pins those per entrypoint.
 set -uo pipefail
 
-# TL2 — real processes against a copied tree, so an entrypoint's exit code and
-# stderr are the bytes its caller actually sees.
+# TL2 — real processes against a copied tree, so exit code and stderr are the
+# bytes a caller actually sees.
 #
-# TL3 gap (mitigation category: skill-orchestration)
-#   - Whether the skill that reads a wrapper's NOT-STAGED notice actually keeps
-#     reviewing. Here the notice is asserted as text; the reader is an LLM.
-#   Mitigation: the wrapper's exit status is asserted alongside the notice, so a
-#   regression that turns the notice into a hard failure is caught here.
+# TL3 gap (skill-orchestration): whether the skill reading a wrapper's
+# NOT-STAGED notice actually keeps reviewing isn't covered — the notice is
+# asserted as text, but the reader is an LLM. Mitigation: the wrapper's exit
+# status is asserted alongside the notice, catching a regression that turns it
+# into a hard failure.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -68,14 +67,11 @@ mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 # --- two copies of the tree, differing only in the shared library ------------
-# Deleting the file is the honest way to reproduce "the dependency is not
-# there": stubbing it would test the stub, and the copy keeps the real repo
-# untouched. The crippled root is derived from an otherwise complete one so that
-# the missing library is the *only* difference: run-codex-review-loop dies with
-# the same exit 4 when rules/core-principles.md is absent, so a root that merely
-# omitted rules/ would satisfy the exit-4 case below whatever the library
-# handling did. Everything read before an entrypoint's own dependency check has
-# to be present in both roots.
+# Deleting the file (not stubbing it) reproduces "the dependency is not there"
+# honestly. The crippled root is derived from an otherwise complete one so the
+# missing library is the *only* difference — run-codex-review-loop also exits 4
+# when rules/core-principles.md is absent, so an incomplete root would satisfy
+# the exit-4 case for the wrong reason.
 mk_root() {
     local dst="$1"
     mkdir -p "$dst/rules" "$dst/skills/review-code-security/scripts"
@@ -310,12 +306,10 @@ echo ""
 echo "--- contracts 4: the round-number file is written inside the plans dir ---"
 
 # Both wrappers write a round-number file with a bare `> "$ROUND_FILE"`, which
-# follows a symlink pre-placed at that name. The round number is small, but the
-# file it lands in is chosen by whoever placed the link.
-#
-# A host that cannot create real symlinks (Git Bash without developer mode)
-# would turn every assertion below into a vacuous pass, so the link is checked
-# for being a link before anything is concluded from it.
+# follows a symlink pre-placed at that name — the file it lands in is chosen by
+# whoever placed the link. A host without real symlinks (Git Bash without
+# developer mode) would turn assertions vacuous, so the link is checked for
+# being a link first.
 link_at() {
     ln -s "$2" "$1" 2>/dev/null || true
     [ -h "$1" ] && printf yes || printf no
@@ -373,16 +367,11 @@ fi
 echo ""
 echo "--- contracts 5: a legal '..' inside a directory name still works ---"
 
-# CPR-UNV. `..` is only a parent reference when it is a whole path component;
-# `user..name` is an ordinary directory name, and a home directory spelled that
-# way is not exotic. A traversal check that matches the two characters anywhere
-# in the path would lock such a user out of the ledger entirely, so the case is
-# green today and must stay green after the containment gate lands.
-#
-# rc_ok, not rc_of: this is a normal-path case, not a missing-library one. Once
-# safe-plans-path.sh exists, running it through the crippled root would fail
-# closed on the library check before the '..'-in-a-name behaviour is ever
-# reached, turning a legitimate accept into a false failure.
+# CPR-UNV. `..` is only a parent reference as a whole path component;
+# `user..name` is an ordinary directory name a traversal check must not lock
+# out. rc_ok, not rc_of: this is the normal path, not the missing-library one —
+# the crippled root would fail closed on the library check before the
+# '..'-in-a-name behaviour is ever reached.
 {
     U_PLANS="$TMPDIR_BASE/user..name/.workflow-plans"
     mkdir -p "$U_PLANS"
@@ -400,15 +389,11 @@ echo "--- contracts 5: a legal '..' inside a directory name still works ---"
 echo ""
 echo "--- contracts 6: #2088 at the process boundary ---"
 
-# The reducer's pattern discovery is covered per-function elsewhere; this is the
-# same defect seen the way the user saw it — a plans dir spelled with
-# backslashes, the delta on disk, and `reduce` producing a ledger with nothing
-# in it. Reduce is what run-codex-review-loop calls before deciding the round
-# produced nothing, so an empty ledger here is the exit 4 the issue reports.
-#
-# rc_ok, not rc_of: this is the normal path (library present), not the missing-
-# library case — the crippled root would fail closed on safe-plans-path.sh once
-# it exists, misreporting a genuine #2088 regression as the unrelated #2025 gate.
+# Same defect (#2088) seen the way the user saw it — a plans dir spelled with
+# backslashes, the delta on disk, `reduce` producing an empty ledger, which is
+# the exit 4 the issue reports. rc_ok, not rc_of: normal path (library
+# present) — the crippled root would fail closed on safe-plans-path.sh,
+# misreporting #2088 as the unrelated #2025 gate.
 {
     if command -v cygpath >/dev/null 2>&1; then
         B_PLANS="$(cygpath -w "$TMPDIR_BASE")\\plans-bs"

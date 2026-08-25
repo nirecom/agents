@@ -3,12 +3,10 @@
 # Tags: concern-ledger, reducer, backslash, plans-dir, finalize, regression, scope:common, pwsh-not-required
 # Sourced by tests/bin-concern-ledger-reducer.sh.
 
-# #2088 end to end inside the library: a plans dir spelled with backslashes made
-# the round's staged deltas invisible, so the reducer wrote a header-only ledger
-# and the loop above it exited 4 claiming the review had produced nothing. Every
-# case here is run twice — once through a backslash-spelled directory and once
-# through the ordinary spelling — and the two are required to agree, so the
-# assertion is "the spelling does not matter", not "backslashes work".
+# #2088: a backslash-spelled plans dir made staged deltas invisible, so the
+# reducer wrote a header-only ledger and the loop exited 4 claiming nothing
+# was found. Every case runs twice — backslash-spelled dir vs ordinary
+# spelling — asserting the two agree ("spelling does not matter").
 
 echo ""
 echo "--- reducer br-1: a round reduces through a backslash-spelled plans dir ---"

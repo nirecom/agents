@@ -3,25 +3,21 @@
 # Tests: bin/build-codex-context, bin/run-codex-review-loop, bin/lib/safe-plans-path.sh
 # Tags: codex, review-loop, publish, atomic-write, session-id, security, scope:issue-specific, pwsh-not-required
 #
-# The two wrapper scripts create files in the plans dir under names anyone can
-# predict — the context, the built-marker, the round counter. mv onto a
-# pre-placed directory succeeds by moving the file inside it, so the old code
-# announced a context that no reviewer would ever read; and both scripts pasted
-# --session-id into those names without checking it (#2025 C9). Every case here
-# drives the real scripts as subprocesses; only the codex reviewer is mocked.
+# The two wrapper scripts create files in the plans dir under predictable
+# names. mv onto a pre-placed directory moved the file inside it silently, and
+# --session-id was pasted into filenames unchecked (#2025 C9). Cases here drive
+# the real scripts as subprocesses; only the codex reviewer is mocked.
 set -uo pipefail
 
 # TL2. Real bin/build-codex-context and real bin/run-codex-review-loop run in a
-# fixture AGENTS_CONFIG_DIR carrying real bin/lib. The publish primitives are
-# the shipped ones, so a regression in safe-plans-path.sh surfaces here too.
+# fixture AGENTS_CONFIG_DIR carrying real bin/lib, so a regression in
+# safe-plans-path.sh surfaces here too.
 
-# TL3 gap (mitigation category: environment-specific)
-#   Not covered on every host: a symlink pre-placed at a destination, pointing
-#   at a file outside the plans dir. Git Bash on Windows cannot create one, so
-#   those rows are probed for and skipped by name.
-#   Mitigation: the two source properties that decide the symlink case — the
-#   rename that replaces a link instead of writing through it, and the
-#   post-rename check that refuses what is still a link — are pinned below.
+# TL3 gap (environment-specific): a symlink pre-placed at a destination,
+# pointing outside the plans dir, isn't covered everywhere — Git Bash on
+# Windows can't create one, so those rows are probed for and skipped by name.
+# Mitigation: the rename-replaces-link and post-rename still-a-link checks are
+# pinned below as source properties instead.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

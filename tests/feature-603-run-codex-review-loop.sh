@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
-# Tests for bin/run-codex-review-loop (issue #603)
-# Tests the exit-code matrix, pre-flight checks, and argument forwarding.
-# NOTE: bin/run-codex-review-loop does not exist yet — failures are expected until implementation.
-#
+# Tests for bin/run-codex-review-loop (issue #603): exit-code matrix,
+# pre-flight checks, and argument forwarding.
 # TL1 dispatcher: shared fixtures and helpers live here, the cases live in
 # tests/feature-603-run-codex-review-loop/ per rules/coding/file-split.md.
 set -uo pipefail

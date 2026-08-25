@@ -38,13 +38,10 @@ echo "--- sp 4: sp_within_dir — containment after resolution ---"
 echo ""
 echo "--- sp 4b: the caller that owns a destructive step — finalize --ledger ---"
 
-# 4b. The containment above only matters where something irreversible hangs off
-#     it. `finalize --mode escalate` snapshots the ledger and then deletes it,
-#     and --ledger names that file with no address validation of its own, so an
+# 4b. `finalize --mode escalate` snapshots the ledger then deletes it, and
+#     --ledger names that file with no address validation of its own, so an
 #     out-of-bounds override is a delete outside the plans dir (#2025 C3/C6/C8).
-#     Both verdicts of the classifier are asserted: refused outside, performed
-#     inside — a permission test that only ever sees "no" also passes when the
-#     feature is gone.
+#     Both verdicts are asserted: refused outside, performed inside.
 
 # fin <plans> <ledger> <mode> <sid> — the real CLI, one finalize. Echoes its rc.
 fin() {

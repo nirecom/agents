@@ -50,12 +50,10 @@ echo "--- sp 5: publishing beside the destination ---"
             "dest=absent temps=0" \
             "dest=$([ -e "$RO/dest.txt" ] && printf present || printf absent) temps=$(find "$RO" -maxdepth 1 -name '.sp-tmp.*' 2>/dev/null | wc -l | tr -d ' ')"
     else
-        # SKIPPED: publication into a read-only directory.
-        # Because: this host lets the process write to a 0555 directory — the
-        #   write probe above succeeded — so the condition cannot be created and
-        #   both assertions would pass without exercising anything.
-        # L3 gap: a POSIX CI host runs it; here the same fail-closed shape is
-        #   covered by the absent-directory case above, which needs no modes.
+        # SKIPPED: this host lets the process write to a 0555 directory (the
+        # write probe above succeeded), so the condition can't be created.
+        # L3 gap: a POSIX CI host runs it; the absent-directory case above
+        # covers the same fail-closed shape without needing modes.
         echo "NOTE: 5: SKIPPED — this host does not enforce read-only directories"
     fi
     chmod 0755 "$RO" 2>/dev/null || true

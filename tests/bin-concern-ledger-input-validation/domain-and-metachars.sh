@@ -4,10 +4,9 @@
 
 # lang-check: ignore -- table below deliberately includes a non-ASCII session ID fixture
 # ---------------------------------------------------------------------------
-# 1. The ordinary domain and the edge of it. A session ID reaches a derived
-#    file name, so #2025 C9 made the allowlist fail-closed ([A-Za-z0-9._-]):
-#    what a real workflow state file holds still works, anything outside it is
-#    refused before a byte is written. One table, so the boundary is stated once.
+# 1. A session ID reaches a derived file name, so #2025 C9 made the allowlist
+#    fail-closed ([A-Za-z0-9._-]): anything outside it is refused before a byte
+#    is written.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- input 1: session IDs inside and outside the allowlist ---"

@@ -3,25 +3,21 @@
 # Tests: bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/concern-ledger
 # Tags: concern-ledger, render-prior, fail-closed, pipefail, silent-loss, security, scope:issue-specific, pwsh-not-required
 #
-# cl_render_prior renders the prior open concerns through a three-stage pipe,
-# and empty output is its legitimate way of saying "nothing is open". A stage
-# that dies therefore looks exactly like a clean round: the next reviewer is
-# handed no prior IDs, re-raises what was already recorded, and the loop reads
-# as converging (#2025 C13). The scoped `set -o pipefail` is what separates the
-# two, so every stage is failed in turn and both verdicts are asserted.
+# cl_render_prior renders prior open concerns through a three-stage pipe, and
+# empty output legitimately means "nothing is open". A stage that dies looks
+# exactly like a clean round: the loop reads as converging when it isn't
+# (#2025 C13). The scoped `set -o pipefail` separates the two, so every stage
+# is failed in turn and both verdicts are asserted.
 set -uo pipefail
 
-# TL2. The real library is sourced and one stage of the pipeline is replaced in
-# the subshell that calls it — the middle stages by redefinition, the first by
-# shadowing `awk` on PATH, which is the dependency rather than a copy of it.
+# TL2. The real library is sourced and one stage of the pipeline is replaced
+# in the subshell that calls it — the middle stages by redefinition, the first
+# by shadowing `awk` on PATH, the real dependency rather than a copy of it.
 
-# TL3 gap (mitigation category: environment-specific)
-#   Not covered here: the real reasons a stage dies on a host — a sed build
-#   without -E, an out-of-memory awk, a locale that rejects the input bytes.
-#   Each is a different exit status from a different tool and none is
-#   reproducible in a sandbox.
-#   Mitigation: the assertion is on the caller's verdict for any non-zero
-#   status, so the specific cause is not what the contract depends on.
+# TL3 gap (environment-specific): the real reasons a stage dies on a host (a
+# sed build without -E, an out-of-memory awk, a rejecting locale) aren't
+# reproducible in a sandbox. Mitigation: the assertion is on the caller's
+# verdict for any non-zero status, not the specific cause.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"

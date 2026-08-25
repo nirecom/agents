@@ -80,12 +80,9 @@ pd_names0() {
             "$([ "$(pd_names "$PDN/*-delta.txt")" = "a-delta.txt,$NL_NAME," ] \
                 && printf intact || printf split)"
     else
-        # SKIPPED: the newline-in-file-name case (pd-5).
-        # Because: this host's filesystem refuses a newline in a file name, so
-        #   the fixture cannot be built and the assertion would be vacuous.
-        # L3 gap: a POSIX CI host runs it; here the framing is still pinned by
-        #   the space and backslash rows in pd-3 and by the `-print0` / `read -d`
-        #   pairing being the only path through the helper.
+        # SKIPPED: pd-5, this host's filesystem refuses a newline in a file
+        # name, so the fixture can't be built. L3 gap: a POSIX CI host runs
+        # it; the framing is still pinned by pd-3's space/backslash rows.
         echo "NOTE: pd-5: SKIPPED — this filesystem refuses a newline in a file name"
     fi
 }

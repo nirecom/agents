@@ -7,21 +7,17 @@
 # to swallow its own mechanism: `find ... 2>/dev/null`, no status check, an
 # unconditional `return 0`. A failing find was indistinguishable from an empty
 # directory, so each caller reported a clean result for a round it never read
-# (#2025 C6). The helper now propagates that status and every caller refuses:
-# one injected failure, three surfaces, against a control proving it worked.
+# (#2025 C6). The helper now propagates that status and every caller refuses.
 set -uo pipefail
 
-# TL2. The real bin/concern-ledger runs against real staged deltas in a sandbox;
-# the failure is injected by shadowing `find` on PATH, which is the mechanism the
-# helper depends on rather than a rewritten copy of it.
+# TL2. Shadows `find` on PATH to inject the failure against the real
+# bin/concern-ledger, rather than testing a rewritten copy of the mechanism.
 
 # TL3 gap (mitigation category: filesystem-semantics)
-#   Not covered here: the failures a real host produces — an NFS stall, a
-#   permission-denied on one entry of a readable directory, a path over the
-#   Windows MAX_PATH limit. Each surfaces as a different find status or partial
-#   output, and none is reproducible below TL3.
-#   Mitigation: the assertion is on the caller's verdict, not on find's message,
-#   so any non-zero mechanism status is the same case.
+#   Not covered: host-specific find failures (NFS stall, permission-denied on
+#   one entry, Windows MAX_PATH) — not reproducible below TL3.
+#   Mitigation: assertion is on the caller's verdict, not find's message, so
+#   any non-zero mechanism status is the same case.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"

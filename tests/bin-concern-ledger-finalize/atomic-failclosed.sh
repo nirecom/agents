@@ -4,8 +4,8 @@
 # Sourced by tests/bin-concern-ledger-finalize.sh.
 # Detail-plan cases 5, 6(a)-(d), 7: atomic replacement, fail-CLOSED termination,
 # read-only artifact verdict. Portable fault injections: `awk` shadowed on PATH
-# (serialization failure), directory at the artifact path (unwritable dest —
-# `chmod 555` is a no-op on Windows, so not usable here — CPR-UNV).
+# (serialization failure), directory at the artifact path (unwritable dest;
+# `chmod 555` is a no-op on Windows, so not usable — CPR-UNV).
 
 echo ""
 echo "--- finalize 5/6/7: atomic replacement, fail-CLOSED, artifact verdict ---"

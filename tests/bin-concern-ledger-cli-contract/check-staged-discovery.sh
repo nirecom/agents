@@ -11,11 +11,9 @@ echo "--- cli 7b: the check-staged body itself, and what a revert would look lik
 
 # #2088's fix has two class members: cl_reduce, and check-staged's no-producer
 # scan. cl_reduce is pinned by behaviour, but check-staged's two spellings are
-# runtime-indistinguishable — a quoted-prefix bash glob keeps a backslash
-# literal, so every runtime case in cli 7 is green before the fix as well as
-# after. What can still be told apart is the code, so this pins the shape of the
-# subcommand body and proves the detector discriminates, by running it against
-# mutants that put the old spelling back.
+# runtime-indistinguishable (a quoted-prefix bash glob keeps a backslash
+# literal), so this pins the shape of the subcommand body instead, proving the
+# detector discriminates by running it against mutants of the old spelling.
 
 # The mutants load their library by $0's directory, so they need one beside them.
 MUT="$TMPDIR_BASE/mutants"

@@ -3,12 +3,11 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, cli, edge-cases, error-cases, config-branch, sha-tool, table-driven, scope:common, pwsh-not-required
 #
-# What does the CLI do when its arguments are legal-looking but wrong? One that
-# accepts 'round 0' or a missing report and reports success is read by the
-# orchestrator above it as "this round was reviewed". Second half: CL_SHA_TOOL,
-# where SLOT is the address a concern keeps across rounds, so a backend yielding
-# a different digest re-files every concern. TL2, real CLI in a sandbox; TL3 gap
-# (environment) is a host lacking sha256sum, mitigated by pinning cksum.
+# Covers CLI argument validation (bad round/report values must be rejected, not
+# silently accepted as "reviewed") and CL_SHA_TOOL: SLOT is a concern's stable
+# address across rounds, so a digest backend change must not re-file concerns.
+# TL2, real CLI in a sandbox; TL3 gap: a host lacking sha256sum, mitigated by
+# pinning cksum.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -123,10 +122,8 @@ one~rejected~ok
 ROUNDS
 
 # ---------------------------------------------------------------------------
-# 2. The report path. A report that does not exist and a report that exists but
-#    is empty are different failures and must not collapse into one: the first
-#    is a caller bug, the second is a reviewer that produced nothing. Neither
-#    may look like a completed stage.
+# 2. The report path. Missing vs empty are distinct failures (caller bug vs a
+#    reviewer that produced nothing); neither may look like a completed stage.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 2: the --from-report path ---"
@@ -169,16 +166,13 @@ assert_eq "3: check-finalized on a session with no artifact is rejected" "reject
         --session-id nobody --format "$FORMAT" >/dev/null 2>&1; verdict "$?")"
 
 # ---------------------------------------------------------------------------
-# 4. CL_SHA_TOOL. SLOT is the address a concern keeps across rounds, so the
-#    digest backend is a config-dependent branch in the strict sense: pick the
-#    wrong one and every concern is re-filed under a new address next round.
+# 4. CL_SHA_TOOL. SLOT is a concern's stable address across rounds, so picking
+#    the wrong digest backend re-files every concern under a new address.
 # ---------------------------------------------------------------------------
 
-# Two properties, deliberately separate (CPR-SC). Within one backend the digest
-# must be stable and lowercase hex — that is what makes SLOT usable as a key at
-# all. Across backends the digests may legitimately differ, since they are
-# different hash functions; what must NOT differ is whether two distinct
-# concerns collide.
+# Within one backend the digest must be stable lowercase hex; across backends
+# digests may differ (different hash functions), but two distinct concerns
+# must never collide.
 echo ""
 echo "--- cli 4: the CL_SHA_TOOL digest backend ---"
 
@@ -228,10 +222,8 @@ assert_eq "4: and it is the documented cksum fallback, not a fifth behaviour" \
     "$(slot_with cksum "bin/x.sh" "fn" "security")" "$BOGUS"
 
 # ---------------------------------------------------------------------------
-# 5. The empty report has exactly one legitimate answer. Rejecting empties is
-#    only a universal rule if there is no flag that suspends it: a caller with
-#    nothing open must say so in the report rather than send an empty file and
-#    ask the CLI to accept it (CPR-UNV).
+# 5. Rejecting empty reports is universal only if no flag suspends it: a caller
+#    with nothing open must say so in the report, not send an empty file (CPR-UNV).
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 5: the one legitimate way to stage a round with nothing open ---"
@@ -259,10 +251,8 @@ assert_eq "5: carrying no concern records, since none were open to carry" \
     "0" "$(grep -cvE '^#|^$' "$SENT_DELTA" 2>/dev/null | tr -d ' ')"
 
 # ---------------------------------------------------------------------------
-# 6. check-staged has to be reachable before it can be a gate: close-concern-
-#    round.sh calls it on itself, so an unregistered subcommand would make the
-#    gate fail on every round for the wrong reason. Then the gate's own point —
-#    a delta exists, but the producer it names never reviewed anything.
+# 6. check-staged must be reachable (close-concern-round.sh calls it on itself)
+#    and must catch a delta whose named producer never actually reviewed.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- cli 6: check-staged is dispatched, and judges completeness ---"
@@ -293,17 +283,15 @@ assert_eq "6: and the reason names the completeness it found, not just 'missing'
 echo ""
 echo "--- cli 7: check-staged finds staged deltas through a backslash plans dir ---"
 
-# The no-producer branch is one of the two MUST class members for #2088 (the
-# other is bin/lib/concern-ledger/reduce.sh's cl_reduce). Every case below
-# already passes on the pre-fix raw glob — bash globs tolerate a backslash the
-# way #2088's compgen -G did not — so a revert is caught not here but in
-# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh, sourced
-# below, which pins the subcommand body against reverted mutants of it.
+# The no-producer branch is one of two MUST class members for #2088 (the other
+# is cl_reduce in bin/lib/concern-ledger/reduce.sh). These cases already pass on
+# the pre-fix glob, so a revert is caught instead by
+# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh (sourced
+# below), which pins the subcommand body against reverted mutants.
 
-# bs_plans <base> — a plans dir reachable through a path holding a backslash. On
-# Windows that is cygpath -w of a real directory (the shape #2088 was reported
-# in); elsewhere a backslash is a legal filename character, so one goes into the
-# name. Constructible on every platform, so this case never skips.
+# bs_plans <base> — a plans dir path containing a backslash: cygpath -w on
+# Windows (the shape #2088 was reported in), or a literal backslash in the
+# filename elsewhere. Constructible on every platform.
 bs_plans() {
     local base="$1" d
     if command -v cygpath >/dev/null 2>&1; then
