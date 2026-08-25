@@ -30,6 +30,7 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model deri
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
    - Directive: "Read `rules/shell-commands.md` before the first Bash command — general-purpose dispatch does not inherit auto-injected rules."
+   - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."
    - Lint/typecheck recipe table (see below).
    - Self-repair cap: 3 iterations; if still failing after 3, surface tool output verbatim.
    - Lint-tool absence policy: when a tool is unavailable, skip that check AND emit `<tool> not found — check skipped` in the final summary. Never omit this notice.

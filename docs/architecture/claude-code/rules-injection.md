@@ -49,9 +49,12 @@ given that access, general-purpose dispatch is the only shape that supports the 
 Those two sites must therefore name, as an explicit Read directive in the subagent prompt,
 every unconditional rule the subagent depends on — `rules/shell-commands.md` and its
 Command-Line Issuance Discipline being the standing case, since a subagent that has never
-seen it issues compound command lines and only learns they are denied. The remedy is not a
+seen it issues compound command lines and only learns they are denied; `rules/user-escalation.md`
+is the second, since a subagent that has never seen its Rule 1/Rule 3 guardrails has no
+brake on issuing an unapproved system-state-changing command. The remedy is not a
 new mechanism: it is the same explicit-Read pattern the on-demand rules already use, as
-`agents/detail-planner.md` does for `rules/coding.md`.
+`agents/detail-planner.md` does for `rules/coding.md`. Auditing the remaining
+`EXPECTED_UNCONDITIONAL` rules against both dispatch sites is tracked separately (#2141).
 
 ## The on-demand notation
 
