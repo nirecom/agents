@@ -57,14 +57,11 @@ function pathSpellings(rawText) {
 // actually names, with `~`, `$HOME`/`${HOME}` and `$CLAUDE_WORKFLOW_DIR`
 // resolved. Returns the input unchanged when nothing could be resolved.
 //
-// DIRECTION DISCIPLINE: this resolver runs in the DETECTION direction — its
-// only consumer asks "does this directory land inside the workflow dir?",
-// where resolving one more spelling can only ADD a block, never clear one.
-// The workflow dir's canonical spelling is `~/.claude/projects/workflow`, so
-// bailing out on the first `$` or `~` used to let every natural spelling
-// (`$HOME/…`, `${HOME}/…`, `~/…`, `$CLAUDE_WORKFLOW_DIR/…`) bypass a rule the
-// literal spelling enforced. Bailing is now reserved for spellings that
-// survive expansion.
+// DIRECTION DISCIPLINE: this runs in the DETECTION direction — its only consumer
+// asks "does this directory land inside the workflow dir?", where resolving one
+// more spelling can only ADD a block. Bailing on the first `$`/`~` used to let
+// every natural spelling of the workflow dir bypass a rule the literal spelling
+// enforced; bailing is now reserved for spellings that survive expansion.
 const ENV_REF_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 const WORKFLOW_DIR_ENV_NAME = "CLAUDE_WORKFLOW_DIR";
 
@@ -175,8 +172,13 @@ function textNamesPathInsideWorkflowDir(text, ctx) {
   return false;
 }
 
-function literalKind(text) {
-  return classifyProtectedBashToken(text) || classifyProtectedPath(text);
+// `opts` = `{ sessionCtx }` (#2108). Both readings stay on the Bash spelling:
+// classifyProtectedBashToken pins it, and the path reading is of the same Bash
+// word, so an exact-stem test here would narrow one of two symmetric readings
+// of one token (CPR-ORTH).
+function literalKind(text, opts) {
+  return classifyProtectedBashToken(text, opts) ||
+    classifyProtectedPath(text, { sessionCtx: opts && opts.sessionCtx, spelling: "bash" });
 }
 
 // classifyBashWriteTarget(raw, assignText, ctx): "token" | "marker" |
@@ -184,13 +186,13 @@ function literalKind(text) {
 // Bash write-target call site in ../bash-scan.js routes through.
 function classifyBashWriteTarget(raw, assignText, ctx) {
   if (typeof raw !== "string" || raw === "") return null;
-  const direct = literalKind(raw);
+  const direct = literalKind(raw, { sessionCtx: ctx && ctx.sessionCtx });
   if (direct) return direct;
   if (globTargetInsideWorkflowDir(raw, ctx)) return "workflow-glob";
   if (!EXPANSION_CHAR_RE.test(raw)) return null;
   const sub = substituteAssignments(raw, assignText);
   if (sub.substituted) {
-    const kind = literalKind(sub.text);
+    const kind = literalKind(sub.text, { sessionCtx: ctx && ctx.sessionCtx });
     if (kind) return kind;
     if (globTargetInsideWorkflowDir(sub.text, ctx)) return "workflow-glob";
   }

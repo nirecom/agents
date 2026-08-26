@@ -362,8 +362,19 @@ Skill runs (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests
 Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToolUse hook, early gate)
   fires only when clarify_intent step is pending or missing
   fail-open: missing session_id, null state, or complete/skipped status → fall through (approve)
-  allowlist: Write to ~/.workflow-plans/** by default (configurable via WORKFLOW_PLANS_DIR) is permitted (clarify-intent skill writes intent.md/outline.md/detail.md here)
+  allowlist (hooks/workflow-gate/early-gate-allowlist.js, #2108): two destinations, applied
+    identically at Tier 1 (workflow_init) and Tier 2 (clarify_intent) —
+      the plans dir ~/.workflow-plans/** (configurable via WORKFLOW_PLANS_DIR; clarify-intent
+        writes intent.md/outline.md/detail.md here), and
+      the session scratchpad dir (same predicate the settings.md scratchpad allow uses)
+    Both sit outside the repo and outside workflow state, so a write there cannot pre-empt
+    the routing the gate protects — while a gate with no legal write target leaves a
+    subagent nothing to do but hunt for a bypass.
   blocks otherwise with instructions to invoke /clarify-intent or emit <<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>
+  the VERDICT never branches on caller identity — only the REMEDY does
+    (hooks/workflow-gate/early-gate-messages.js): a subagent cannot run a skill or emit a
+    workflow sentinel, so its block reason carries neither, and instead names the allowed
+    write targets and tells it to report back to the main conversation
   Read/Grep/Glob/Bash are not in the matcher — they always pass (clarify-intent skill needs them for codebase exploration)
 
 git commit attempt → workflow-gate.js (PreToolUse hook, full gate)

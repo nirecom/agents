@@ -1,29 +1,13 @@
 #!/usr/bin/env bash
+# Tests: hooks/block-clearance-token-write.js, hooks/lib/protected-basenames.js, hooks/lib/off-clearance-mint-lock.js
+# Tags: mint-lock, protected-basename, ssot, block-clearance-token-write, scope:issue-specific, pwsh-not-required
 # Part of tests/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
-# THE LOCK FILE IS PROTECTED STATE — round-14 HIGH-2.
-#
-# A mutex whose file anyone may create or delete is not a mutex. Both directions
-# are live attacks on the OFF path, and they are opposites (CPR-ORTH — the guard
-# must cover the pair, not one side):
-#
-#   CREATE  — pre-create `<sid>.off-clearance.mint.lock.tmp` and every mint and
-#             every claim for that SID fails to acquire for as long as it exists.
-#             The mint reports UNAVAILABLE and the shim blocks `lock-busy`: a
-#             self-inflicted denial of the entire clearance mechanism, achieved
-#             by touching one file with an innocuous `.tmp` name.
-#   DELETE  — remove it mid-transition and the two participants are unsynchronized
-#             again, which is precisely the race the round-14 HIGH fix closes.
-#
-# So the lock basename must be protected by the SAME SSOT that protects the token
-# (hooks/lib/protected-basenames.js), and the SSOT and the module that NAMES the
-# file must not be able to drift apart. P1/P2 assert exactly that cross-module
-# agreement: the string is taken from off-clearance-mint-lock.js's OWN
-# lockPathFor() and handed to the classifier — not hard-coded on both sides,
-# which would keep passing after a rename on one side only.
-#
-# P6 is the boundary that keeps this from being a blanket `.mint.lock.tmp` ban:
-# a lock beside an UNRELATED file is ordinary scratch state and must stay
-# writable. What is protected is the clearance token's lock specifically.
+# THE LOCK FILE IS PROTECTED STATE — round-14 HIGH-2. A mutex anyone may create or
+# delete is not a mutex: CREATE denies every mint/claim for the SID, DELETE reopens
+# the round-14 HIGH race — opposite halves one guard must cover (CPR-ORTH). The lock
+# basename therefore lives in the SAME SSOT as the token (protected-basenames.js);
+# P1/P2 read the string from off-clearance-mint-lock.js's OWN lockPathFor() so a
+# one-sided rename cannot keep passing, and P6 keeps `.mint.lock.tmp` writable.
 
 # _p_run_hook <stdin-json> → "block" | "approve" | "other:<raw>"
 _p_run_hook() {
@@ -57,9 +41,17 @@ process.stdout.write(JSON.stringify({tool_name:"Bash",session_id:"wsid",
 run_P_lock_protected() {
     local tmp tn out lockpath
     tmp=$(make_tmp); tn=$(node_path "$tmp")
+    # stem realigned to effective sid — a stem must equal the active session-id to
+    # carry clearance (#2108). The lock path is derived from a `mintlocksid` token
+    # while the payloads below carry session_id "wsid"; registering mintlocksid as
+    # an observed session keeps P4/P5 exercising the guard.
+    printf '{"session_id":"mintlocksid"}\n' > "$tmp/mintlocksid.json"
 
     # P1/P2/P3 — cross-module SSOT agreement, driven by lockPathFor() itself.
-    out=$("$RWT" 20 node -e '
+    # Dir pinned here too (#2108): without it this probe resolves the REAL workflow
+    # dir, where `mintlocksid` is not an observed sid, and the stem rule then makes
+    # the lock name classify as null — the registration above would be invisible.
+    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e '
 "use strict";
 const path = require("path");
 const { lockPathFor } = require(process.argv[1]);

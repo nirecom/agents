@@ -66,10 +66,11 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
   // stripped env-prefix / control keyword, so it is the raw text of eff.cmd0
   // rather than of the stripped token), and the cooked eff.cmd0. Additive by
   // construction — each spelling can only widen the detection surface.
+  const stemOpts = { sessionCtx: ctx && ctx.sessionCtx };   // #2108
   const cmd0Kind =
-    classifyProtectedBashToken(seg && seg.cmd0Raw ? seg.cmd0Raw : eff.cmd0) ||
-    classifyProtectedBashToken(eff && eff.cmd0Raw ? eff.cmd0Raw : eff.cmd0) ||
-    classifyProtectedBashToken(eff.cmd0);
+    classifyProtectedBashToken(seg && seg.cmd0Raw ? seg.cmd0Raw : eff.cmd0, stemOpts) ||
+    classifyProtectedBashToken(eff && eff.cmd0Raw ? eff.cmd0Raw : eff.cmd0, stemOpts) ||
+    classifyProtectedBashToken(eff.cmd0, stemOpts);
   if (cmd0Kind) return cmd0Kind;
 
   const cmdBase = path.basename(String(eff.cmd0).replace(/\\/g, "/")).toLowerCase();
@@ -117,23 +118,16 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
     const a = argv[ai];
     if (typeof a !== "string") continue;
     const aRaw = rawArgvAt(ai);
-    // A whitespace-containing argv token isn't necessarily prose: a genuine
-    // quoted path with a spaced directory (e.g. Windows "C:\Users\First
-    // Last\...") is indistinguishable from descriptive text by whitespace
-    // alone. Gate on path-separator presence instead.
+    // Whitespace alone cannot separate prose from a genuine quoted path with a
+    // spaced directory, so the gate below keys on path-separator presence.
     //
-    // An interpreter's -c/-e/-Command body arrives as ONE argv token holding
-    // a full nested command line, not a literal path — treating it as a
-    // bare-path candidate here would misread a proven-safe read as a write
-    // before Tier 2's own interpreter-body gate ever runs.
-    //
-    // The deferral must be per TOKEN, not per SEGMENT: keying on a
-    // segment-wide interpreter regex used to suppress classification of
-    // every argv token in the segment, letting a protected path in a
-    // sibling operand slip through (`sh -c 'rm "$1"' _ <marker>`). Only a
-    // token that IS one of the extracted bodies may defer; membership stays
-    // keyed on the cooked token only, since this set is consumed in the
-    // PERMISSION direction (widening it would widen what reaches Tier 2).
+    // An interpreter's -c/-e/-Command body arrives as ONE argv token holding a
+    // full nested command line, not a literal path; it defers to Tier 2's own
+    // interpreter-body gate. The deferral is per TOKEN, not per SEGMENT — a
+    // segment-wide regex used to suppress every argv token in the segment,
+    // letting a protected path in a sibling operand slip through
+    // (`sh -c 'rm "$1"' _ <marker>`). Membership stays keyed on the cooked
+    // token only: this set is read in the PERMISSION direction.
     const isInterpreterBody = interpreterBodies.has(a);
     // Both spellings are classified — they only differ under quoting or
     // ANSI-C escapes, where they are genuinely different candidate filenames.
@@ -155,7 +149,7 @@ function segmentArgvHitsProtectedArg(seg, precedingAssignText, ctx) {
         // Split into words and classify each — over-detection is correct
         // for a denylist.
         for (const word of sp.split(/\s+/)) {
-          const wordKind = classifyProtectedBashToken(word);
+          const wordKind = classifyProtectedBashToken(word, stemOpts);
           if (wordKind) return wordKind;
         }
       }
