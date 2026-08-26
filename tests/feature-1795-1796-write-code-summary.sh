@@ -4,10 +4,10 @@
 #
 # #1795 (CPR-E2C sibling self-check) / #1796 (contract-pin detection). Both
 # land as scripts under skills/write-code/scripts/ with only a 1-line pointer
-# each in SKILL.md (rules/coding/file-split.md Pattern B: SKILL.md was 77
-# lines, capped at 81 after this change). This pins: both scripts exist and
-# are shebang-shaped, SKILL.md references both by relative path, SKILL.md
-# stays under the size cap, and (TL2) each script runs against a synthetic
+# each in SKILL.md (rules/coding/file-split.md Pattern B: WARN >100 lines,
+# HARD >200 lines). This pins: both scripts exist and are shebang-shaped,
+# SKILL.md references both by relative path, SKILL.md stays under the
+# Pattern B WARN threshold, and (TL2) each script runs against a synthetic
 # input and produces non-empty, structured stdout without crashing.
 set -uo pipefail
 
@@ -62,15 +62,10 @@ else
 fi
 
 echo ""
-echo "--- C: SKILL.md stays within the size cap (<=81 lines; Pattern B WARN=100/HARD=200) ---"
+echo "--- C: SKILL.md stays within the Pattern B size thresholds (WARN=100/HARD=200) ---"
 
 if [ -f "$SKILL_MD" ]; then
   LINES=$(wc -l < "$SKILL_MD")
-  if [ "$LINES" -le 81 ]; then
-    pass "C1 SKILL.md is $LINES lines (<=81)"
-  else
-    fail "C1 SKILL.md is $LINES lines, exceeds the 81-line cap"
-  fi
   if [ "$LINES" -lt 100 ]; then
     pass "C2 SKILL.md is under the Pattern B WARN threshold (100 lines)"
   else

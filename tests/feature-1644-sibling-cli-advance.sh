@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, bin/workflow/next-step, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, sibling-cli, class-completeness, scope:issue-specific, pwsh-not-required
-#
-# #1644 stage 1 — the `--advance` forward operation on the SIBLING workflow CLIs,
-# plus the class-completeness guard that keeps bin/workflow/ partitioned into
-# advance members / named exceptions / non-members.
-# Written BEFORE the implementation: RED until each CLI learns --advance.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the migrated SKILL.md steps actually issue the single --advance call
-#   shape instead of the legacy CLI-then-next-step pair.
-# - Whether settings.json permissions.allow admits the new argv forms without an
-#   approval dialog in a live session.
-# Closest-to-action mitigation: surfaced at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+
+# #1644 stage 1 — the `--advance` forward operation on the SIBLING workflow CLIs, plus
+# the class-completeness guard partitioning bin/workflow/ into advance members / named
+# exceptions / non-members. Written BEFORE the implementation.
+
+# TL3 gap: whether the migrated SKILL.md steps issue the single --advance call shape,
+# and whether settings.json permissions.allow admits the new argv forms live.
+# Mitigation: bin/check-verification-gate.sh category skill-orchestration.
 
 set -uo pipefail
 
@@ -205,13 +200,13 @@ echo "=== S9: record-complexity-and-skip WITHOUT --advance keeps its bare token 
 # is the only meaningful value for the pass-through cases. No CONFIRM_* branch is
 # reachable from this path, so the repo .env cannot influence the result.
 make_state s9a ""
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9a --verdict low --signals "" --target outline
+run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9a --signals "" --target outline
 check "S9a: exit 0" 0 "$RC"
 check "S9a: stdout is exactly the bare token" "auto" "$OUT"
 check "S9a: no step is settled without --advance" '"pending"' "$(step_status s9a outline)"
 
 make_state s9b ""
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9b --verdict high --signals "S2-architecture" --target outline
+run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9b --signals "S2-architecture" --target outline
 check "S9b: high verdict yields the judgment token" "judgment" "$OUT"
 
 echo ""
@@ -229,14 +224,14 @@ printf '#!/usr/bin/env node\nprocess.stderr.write("stub: forced failure\\n");\np
 FAKE_N="$(nrm "$FAKE")"
 
 make_state s10a ""
-run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10a --verdict low --signals "" --target outline --advance
+run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10a --signals "" --target outline --advance
 check "S10a: the child's exit 2 is NOT propagated" 3 "$RC"
 check "S10a: no ACTION line is emitted on the failure path" 0 "$(action_lines)"
 check_contains "S10a: stdout still carries the resolved skip mode" "auto" "$OUT"
 
 # Symmetric control: without --advance the current exit-2 propagation is untouched.
 make_state s10b ""
-run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10b --verdict low --signals "" --target outline
+run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10b --signals "" --target outline
 check "S10b: without --advance the child exit code still propagates" 2 "$RC"
 
 echo ""
@@ -248,7 +243,11 @@ ADVANCE_MEMBERS="next-step record-skip-judgment record-complexity-and-skip set-w
 # verdict about a skip someone else declared, so it never advances the workflow
 # on its own behalf. That is why it is an exception and not a member.
 NAMED_EXCEPTIONS="record-skip-verdict"
-NON_MEMBERS="adopt-session-state read-complexity-evaluation read-merge-base-baseline reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
+# derive-complexity-level (#2099) is a NON-member by construction: it is a
+# stateless derivation CLI (detail.md D1/D4) that reads no session and writes no
+# state, so there is no step for it to advance. S11c below is what pins that —
+# it must carry no --advance token at all.
+NON_MEMBERS="adopt-session-state derive-complexity-level read-complexity-evaluation read-merge-base-baseline read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
 
 ACTUAL="$(ls "$AGENTS_DIR/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \
@@ -276,6 +275,13 @@ done
 # workflow-init-driver silently ignores unknown flags, so running it with
 # --advance would execute a real workflow init instead of reporting a rejection.
 for m in $NON_MEMBERS; do
+  # A missing file makes grep exit non-zero, which would otherwise be read as
+  # "declares no --advance" — a registered non-member that does not exist yet
+  # must fail here, not pass vacuously.
+  if [ ! -f "$AGENTS_DIR/bin/workflow/$m" ]; then
+    fail "S11c: $m is registered as a non-member but bin/workflow/$m does not exist"
+    continue
+  fi
   if grep -qF -- '--advance' "$AGENTS_DIR/bin/workflow/$m"; then
     fail "S11c: $m must NOT accept --advance -- found an --advance token"
   else
@@ -298,7 +304,7 @@ echo "=== S12: record-complexity-and-skip --advance settles the target step ==="
 make_state s12 "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/s12-intent.md"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s12 --verdict low --signals "" --target outline --advance
+  --session s12 --signals "" --target outline --advance
 check "S12a: exit 0" 0 "$RC"
 check "S12a: outline is settled as skipped" '"skipped"' "$(step_status s12 outline)"
 check_contains "S12a: the advance form leads with a newline-terminated SKIP_MODE line" \
@@ -316,7 +322,7 @@ check "S12a: exactly one SKIP_DISPATCH line" 1 "$(printf '%s\n' "$OUT" | grep -c
 # be passing because --advance settles unconditionally.
 make_state s12b "workflow_init clarify_intent research"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s12b --verdict high --signals "S2-architecture" --target outline --advance
+  --session s12b --signals "S2-architecture" --target outline --advance
 check "S12b: the judgment branch still exits 0" 0 "$RC"
 check "S12b: the judgment branch leaves outline pending" '"pending"' "$(step_status s12b outline)"
 check_contains "S12b: SKIP_MODE reports judgment" "SKIP_MODE=judgment" "$OUT"
@@ -344,13 +350,13 @@ check "S13b: the judgment is not recorded either" '"pending"' "$(step_status s13
 # --advance, so requiring it would be inventing a contract.
 make_state s13c "workflow_init clarify_intent research"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s13c --signals "" --target outline --advance
-check "S13c: record-complexity-and-skip --advance without --verdict exits 1" 1 "$RC"
+  --session s13c --target outline --advance
+check "S13c: record-complexity-and-skip --advance without --signals exits 2" 2 "$RC"
 check "S13c: nothing is settled" '"pending"' "$(step_status s13c outline)"
 
 make_state s13d "workflow_init clarify_intent research"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s13d --verdict low --signals "" --target outline --advance --bogus
+  --session s13d --signals "" --target outline --advance --bogus
 check "S13d: an unknown flag still exits 2, not the advance-path 3" 2 "$RC"
 
 echo ""
@@ -399,11 +405,11 @@ check "S15b: workflow_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
 make_state s15c "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/s15c-intent.md"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s15c --verdict low --signals "" --target outline --advance
+  --session s15c --signals "" --target outline --advance
 check "S15c: the first record-complexity-and-skip --advance exits 0" 0 "$RC"
 S15C_ENTRY="$(step_entry s15c outline)"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session s15c --verdict low --signals "" --target outline --advance
+  --session s15c --signals "" --target outline --advance
 check "S15c: the repeat exits 0" 0 "$RC"
 check "S15c: outline is still skipped after the repeat" '"skipped"' "$(step_status s15c outline)"
 check "S15c: the projection is unchanged" "$S15C_ENTRY" "$(step_entry s15c outline)"

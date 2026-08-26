@@ -124,7 +124,7 @@ line_count()  { printf '%s\n' "$OUT" | grep -c "$1" || true; }
 echo "=== C5-1: outline + auto branch settles the step through the delegate ==="
 at_outline a1
 printf '# intent\n' > "$PLANS_DIR/a1-intent.md"
-run_rcas --session a1 --verdict low --signals "" --target outline --advance
+run_rcas --session a1 --signals "" --target outline --advance
 check "C5-1: exit 0" 0 "$RC"
 check_contains "C5-1: SKIP_MODE reports the auto branch" "SKIP_MODE=auto" "$OUT"
 check_contains "C5-1: SKIP_DISPATCH reports advanced" "SKIP_DISPATCH=advanced" "$OUT"
@@ -142,7 +142,7 @@ echo "=== C5-2: outline + judgment branch leaves the step for the orchestrator =
 # The symmetric counterpart of C5-1: without it, C5-1 would pass on a CLI that
 # advanced unconditionally.
 at_outline a2
-run_rcas --session a2 --verdict high --signals "S2-architecture" --target outline --advance
+run_rcas --session a2 --signals "S2-architecture" --target outline --advance
 check "C5-2: exit 0" 0 "$RC"
 check_contains "C5-2: SKIP_MODE reports the judgment branch" "SKIP_MODE=judgment" "$OUT"
 check_contains "C5-2: SKIP_DISPATCH reports need-judgment" "SKIP_DISPATCH=need-judgment" "$OUT"
@@ -157,7 +157,7 @@ echo "=== C5-3: detail + auto branch takes the --c3 delegation ==="
 # itself; if it did not, the delegate would exit 1 and RCAS would normalize to 3.
 at_detail a3
 printf '# outline\n' > "$PLANS_DIR/a3-outline.md"
-run_rcas --session a3 --verdict low --signals "" --target detail --advance
+run_rcas --session a3 --signals "" --target detail --advance
 check "C5-3: exit 0 (the --c3 delegation succeeded)" 0 "$RC"
 check_contains "C5-3: SKIP_MODE reports the auto branch" "SKIP_MODE=auto" "$OUT"
 check_contains "C5-3: SKIP_DISPATCH reports advanced" "SKIP_DISPATCH=advanced" "$OUT"
@@ -175,7 +175,7 @@ echo "=== C5-4: an explicitly false condition outranks the auto branch ==="
 # members of the pair are covered (CPR-ORTH): a guard that read only so_c1 would
 # pass a single-arm test.
 at_outline a4a
-run_rcas --session a4a --verdict low --signals "" --target outline --advance --so-c1 false
+run_rcas --session a4a --signals "" --target outline --advance --so-c1 false
 check "C5-4a: --so-c1 false exits 0 early" 0 "$RC"
 check_contains "C5-4a: SKIP_MODE still reports the resolved auto branch" "SKIP_MODE=auto" "$OUT"
 check_contains "C5-4a: SKIP_DISPATCH reports no-skip" "SKIP_DISPATCH=no-skip" "$OUT"
@@ -184,7 +184,7 @@ check_not_contains "C5-4a: the delegate never ran" "ADVANCED=" "$OUT"
 check "C5-4a: no skip judgment was recorded" 'null' "$(step_sub a4a outline skip_judgment.all_conditions_met)"
 
 at_outline a4b
-run_rcas --session a4b --verdict low --signals "" --target outline --advance --so-c2 false
+run_rcas --session a4b --signals "" --target outline --advance --so-c2 false
 check "C5-4b: --so-c2 false exits 0 early" 0 "$RC"
 check_contains "C5-4b: SKIP_DISPATCH reports no-skip" "SKIP_DISPATCH=no-skip" "$OUT"
 check "C5-4b: outline is NOT skipped" '"pending"' "$(step_status a4b outline)"
@@ -192,7 +192,7 @@ check "C5-4b: outline is NOT skipped" '"pending"' "$(step_status a4b outline)"
 # Control arm: the same call with the conditions TRUE still advances, so C5-4
 # cannot be passing because --so-c1/--so-c2 disable the advance path entirely.
 at_outline a4c
-run_rcas --session a4c --verdict low --signals "" --target outline --advance --so-c1 true --so-c2 true
+run_rcas --session a4c --signals "" --target outline --advance --so-c1 true --so-c2 true
 check "C5-4c: explicitly TRUE conditions still advance" 0 "$RC"
 check_contains "C5-4c: SKIP_DISPATCH reports advanced" "SKIP_DISPATCH=advanced" "$OUT"
 check "C5-4c: outline is skipped" '"skipped"' "$(step_status a4c outline)"
@@ -202,7 +202,7 @@ echo "=== C5-5: the legacy (non---advance) path is untouched ==="
 # stdout is exactly the bare token, with NO trailing newline and no SKIP_* lines:
 # callers capture it into a shell variable and compare it literally.
 at_outline a5a
-run_rcas --session a5a --verdict low --signals "" --target outline
+run_rcas --session a5a --signals "" --target outline
 check "C5-5a: exit 0" 0 "$RC"
 check "C5-5a: stdout is exactly the bare auto token" "auto" "$OUT"
 check_not_contains "C5-5a: no SKIP_MODE line leaks into the legacy form" "SKIP_MODE=" "$OUT"
@@ -213,12 +213,12 @@ check "C5-5a: the legacy form settles nothing" '"pending"' "$(step_status a5a ou
 check "C5-5a: the judgment itself is still recorded" 'true' "$(step_sub a5a outline skip_judgment.all_conditions_met)"
 
 at_outline a5b
-run_rcas --session a5b --verdict high --signals "S2-architecture" --target outline
+run_rcas --session a5b --signals "S2-architecture" --target outline
 check "C5-5b: stdout is exactly the bare judgment token" "judgment" "$OUT"
 check_not_contains "C5-5b: no SKIP_* line in the legacy judgment form" "SKIP_" "$OUT"
 
 at_detail a5c
-run_rcas --session a5c --verdict low --signals "" --target detail
+run_rcas --session a5c --signals "" --target detail
 check "C5-5c: the detail legacy form is the bare auto token too" "auto" "$OUT"
 check "C5-5c: the detail legacy form settles nothing" '"pending"' "$(step_status a5c detail)"
 
@@ -229,7 +229,7 @@ echo "=== C5-6: DOCUMENTED GAP — --next is not accepted (pinned, not endorsed)
 # CURRENT behavior so the gap is visible and so an eventual source fix has to
 # come here and update the expectation deliberately.
 at_outline a6
-run_rcas --session a6 --verdict low --signals "" --target outline --advance --next
+run_rcas --session a6 --signals "" --target outline --advance --next
 check "C5-6a: --next exits 2 (the unknown-flag code, NOT the advance-path 3)" 2 "$RC"
 check_contains "C5-6a: stderr names the rejected flag verbatim" "Unknown flag: --next" "$ERR"
 check_not_contains "C5-6a: no ACTION= block is emitted" "ACTION=" "$OUT"
@@ -248,7 +248,7 @@ check "C5-6a: no complexity evaluation was recorded either" 'PROBE_ERR' \
 # the gap's shape is unambiguous: this is not "--next requires --advance"
 # validation (which is what record-skip-judgment does), it is "no such flag".
 at_outline a6b
-run_rcas --session a6b --verdict low --signals "" --target outline --next
+run_rcas --session a6b --signals "" --target outline --next
 check "C5-6b: bare --next exits 2 as well" 2 "$RC"
 check_contains "C5-6b: the same unknown-flag diagnostic" "Unknown flag: --next" "$ERR"
 # Contrast pin (CPR-ORTH evidence that the class really does differ here):

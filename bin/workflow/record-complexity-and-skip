@@ -3,30 +3,77 @@ set -euo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
 
-# Args: --session <SID> --verdict <high|low> --signals <csv-or-empty> [--target <outline|detail>]
+# Args: --session <SID> (--signals <csv-or-empty> | --signals-file <path>)
+#       [--target <outline|detail>]
+# Levels are derived code-side (#2099); --verdict is removed.
+#
+# --signals-file is the injection-safe form: the judge-produced csv is written to
+# a file by the orchestrator and read by Node's fs.readFileSync, so it never
+# occupies command-argument position and no shell metacharacter in it can run.
 SESSION_ID=""
-VERDICT=""
 SIGNALS=""
+SIGNALS_FILE=""
+# Tracked separately from SIGNALS: `--signals ""` is a VALID zero-signal input,
+# so "not passed" cannot be inferred from an empty value.
+SIGNALS_SEEN=0
+SIGNALS_FILE_SEEN=0
 TARGET="outline"
 ADVANCE=0
 SO_C1=""
 SO_C2=""
 
+# A flag present as the LAST token, or immediately followed by another `--`
+# flag, has no value — reading "$2" blindly under `set -u` either crashes with
+# "unbound variable" (last token) or silently swallows the next flag as this
+# flag's value. Both must be usage errors (exit 2), not a value.
+require_value() {
+    local flag="$1" count="$2" next="${3-}"
+    if [[ "$count" -lt 2 ]] || [[ "$next" == --* ]]; then
+        echo "record-complexity-and-skip: $flag requires a value" >&2
+        exit 2
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session) SESSION_ID="$2"; shift 2 ;;
-        --verdict) VERDICT="$2"; shift 2 ;;
-        --signals) SIGNALS="$2"; shift 2 ;;
-        --target)  TARGET="$2"; shift 2 ;;
+        --session) require_value "--session" "$#" "${2-}"; SESSION_ID="$2"; shift 2 ;;
+        --signals) require_value "--signals" "$#" "${2-}"; SIGNALS="$2"; SIGNALS_SEEN=1; shift 2 ;;
+        --signals-file) require_value "--signals-file" "$#" "${2-}"; SIGNALS_FILE="$2"; SIGNALS_FILE_SEEN=1; shift 2 ;;
+        --target)
+            require_value "--target" "$#" "${2-}"
+            case "$2" in
+                outline|detail) ;;
+                *)
+                    echo "record-complexity-and-skip: --target must be 'outline' or 'detail'" >&2
+                    exit 2
+                    ;;
+            esac
+            TARGET="$2"; shift 2 ;;
         --advance) ADVANCE=1; shift ;;
-        --so-c1)   SO_C1="$2"; shift 2 ;;
-        --so-c2)   SO_C2="$2"; shift 2 ;;
+        --so-c1)   require_value "--so-c1" "$#" "${2-}"; SO_C1="$2"; shift 2 ;;
+        --so-c2)   require_value "--so-c2" "$#" "${2-}"; SO_C2="$2"; shift 2 ;;
+        --verdict) echo "--verdict is removed — levels are derived from --signals" >&2; exit 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 2 ;;
     esac
 done
 
 : "${SESSION_ID:?--session required}"
-: "${VERDICT:?--verdict required}"
+if [[ "$SIGNALS_SEEN" -eq 1 && "$SIGNALS_FILE_SEEN" -eq 1 ]]; then
+    echo '--signals and --signals-file are mutually exclusive — pass exactly one' >&2
+    exit 2
+fi
+if [[ "$SIGNALS_SEEN" -ne 1 && "$SIGNALS_FILE_SEEN" -ne 1 ]]; then
+    echo '--signals or --signals-file is required (pass --signals "" for zero signals)' >&2
+    exit 2
+fi
+
+# One array, built once, so both the --advance and legacy branches below forward
+# the caller's chosen input form without duplicating the choice.
+if [[ "$SIGNALS_FILE_SEEN" -eq 1 ]]; then
+    SIGNALS_ARGS=(--signals-file "$SIGNALS_FILE")
+else
+    SIGNALS_ARGS=(--signals "$SIGNALS")
+fi
 
 # Normalize AGENTS_CONFIG_DIR to Windows-style path for Node.js on Windows/Cygwin.
 AGENTS_CONFIG_DIR_N="$(cygpath -m "$AGENTS_CONFIG_DIR" 2>/dev/null || echo "$AGENTS_CONFIG_DIR")"
@@ -46,14 +93,12 @@ if [[ "$ADVANCE" -eq 1 ]]; then
     RC=0
     node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
         --session "$SESSION_ID" \
-        --verdict "$VERDICT" \
-        --signals "$SIGNALS" 1>&2 || RC=$?
+        "${SIGNALS_ARGS[@]}" 1>&2 || RC=$?
     [[ "$RC" -eq 0 ]] || advance_fail "record-complexity-evaluation" "$RC"
 else
     node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
         --session "$SESSION_ID" \
-        --verdict "$VERDICT" \
-        --signals "$SIGNALS" 1>&2
+        "${SIGNALS_ARGS[@]}" 1>&2
 fi
 
 # Step 2: Resolve skip conditions. Values are passed via env vars (not string interpolation)

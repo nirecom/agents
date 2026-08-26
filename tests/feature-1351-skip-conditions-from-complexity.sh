@@ -2,31 +2,13 @@
 # tests/feature-1351-skip-conditions-from-complexity.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L1, workflow, speculative-skip, scope:issue-specific
-# Security: N/A — pure read-only logic; no shell expansion, I/O mutation, or external untrusted input
-# L3 gap (what this test does NOT catch):
-# - Real orchestrator reading resolveSkipConditionsFromComplexity result and branching correctly at CI-C1c/MOP-1d/MOP-C1 (now in check-outline-skip.sh / check-detail-skip.sh)
-# - End-to-end: 0-signal session auto-skipping outline/detail in a real claude -p session
-# - SC-W1/SC-W2 grep the script files for the symbol name; they do NOT prove the orchestrator
-#   invokes it at the correct step, with the correct target, or wired to record-skip-judgment
-# Closest-to-action mitigation: wiring gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# Issue #1351 — resolveSkipConditionsFromComplexity(sessionId, targetStep) derives
-# per-gate skip-condition objects from the persisted #1350 complexity evaluation.
-#   0-signal-sonnet (ce.signals.length===0 AND ce.verdict==="sonnet"):
-#     outline → {so_c1:true, so_c2:true}
-#     detail  → {sd_c1:true, sd_c2:true, sd_c3:true}
-#   all other cases (opus verdict, non-empty signals, invalid targetStep,
-#     missing/corrupt state) → null (fail-open).
-#   Return keys mirror CONDITION_SCHEMAS[targetStep]; values strictly === true.
-#
-# This is a dispatcher (file-split rule: >500 lines). Static cases live here;
-# behavioral suite lives in feature-1351-skip-conditions-from-complexity/behavioral.sh.
-#
-# Pre-implementation model: the function may not exist yet. Static cases (SC-0,
-# SC-W1..SC-W6) are NON-SKIPPABLE and FAIL until the impl + SKILL.md wiring land.
-# Behavioral cases (SC-1..SC-25) guard on API_READY and SKIP (not FAIL) when the
-# function is absent, so pre-impl the suite reports 7 FAIL + SKIPs (expected).
+# Security: N/A — read-only logic; no shell expansion, I/O mutation, or untrusted input.
+# Issue #1351 — resolveSkipConditionsFromComplexity(sessionId, targetStep): a 0-signal-low
+#   evaluation yields CONDITION_SCHEMAS[targetStep] keys strictly === true; every other case
+#   (level high, non-empty signals, bad step, missing/corrupt state) → null.
+# Dispatcher (file-split Pattern A); behavioral suite SC-1..SC-25 lives in behavioral.sh.
+#   NOTHING is skippable — an absent required member FAILS at SC-API (_lib.sh), never SKIPs.
+# L3 gap: no real orchestrator run; WORKFLOW_USER_VERIFIED preflight covers the wiring.
 
 set -uo pipefail
 
@@ -43,7 +25,7 @@ fi
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 
-echo "=== skip-conditions-from-complexity: API_READY=$API_READY ==="
+echo "=== skip-conditions-from-complexity: required API = $REQUIRED_API_REPORT ==="
 
 # ==========================================================================
 # SC-0: module exports resolveSkipConditionsFromComplexity (NON-SKIPPABLE)
@@ -134,7 +116,7 @@ else
 fi
 
 # ==========================================================================
-# Behavioral suite (SC-1..SC-25, guarded on API_READY)
+# Behavioral suite (SC-1..SC-25, unconditional — see SC-API in _lib.sh)
 # ==========================================================================
 # shellcheck source=feature-1351-skip-conditions-from-complexity/behavioral.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-1351-skip-conditions-from-complexity/behavioral.sh"

@@ -4,27 +4,47 @@
 // CLI wrapper for readComplexityEvaluation(). Used by SKILL.md Bash calls.
 //
 // Usage:
-//   read-complexity-evaluation --session <sid>
+//   read-complexity-evaluation --session <sid> [--stage <detail|write_tests|write_code>]
 //
-// On a valid record prints:
-//   level=<v>
-//   signals=<csv>
-// On no record prints: NONE
+// With --stage, line 1 carries THAT stage's level; without it, the aggregate
+// level plus a `levels=` JSON line when the per-stage view is derivable.
+// On a resolved record prints:  level=<v>  then  signals=<csv or none>
+// On no record / underivable:   NONE   (single line, exit 0 — callers fail open
+// by re-evaluating inline, exactly as before)
 // Exits 0 in both cases; exits 1 on bad args.
 
 const path = require("path");
-const { readComplexityEvaluation } = require(
+const { readComplexityEvaluation, ROUTING_STAGES } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
+// A flag present as the LAST token, or immediately followed by another `--`
+// flag, has no value — argv[i+1] reading blindly would return undefined
+// (indistinguishable from "flag absent") or swallow the next flag as this
+// flag's value. Both are usage errors, not a value, and neither may fall
+// through to the flag-absent behavior.
+function requireValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined || v.startsWith("--")) {
+    process.stderr.write("read-complexity-evaluation: " + flagName + " requires a value\n");
+    process.exit(1);
+  }
+  return v;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   let session = null;
+  let stage = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--session") {
-      session = argv[++i] || null;
+      session = requireValue(argv, i, "--session");
+      i++;
+    } else if (argv[i] === "--stage") {
+      stage = requireValue(argv, i, "--stage");
+      i++;
     } else {
       process.stderr.write("read-complexity-evaluation: unknown argument: " + argv[i] + "\n");
       process.exit(1);
@@ -35,10 +55,47 @@ function main() {
     process.stderr.write("read-complexity-evaluation: --session is required and must match /^[A-Za-z0-9_-]+$/\n");
     process.exit(1);
   }
+  if (stage !== null && !ROUTING_STAGES.includes(stage)) {
+    process.stderr.write("read-complexity-evaluation: --stage must be one of " + ROUTING_STAGES.join(", ") + "\n");
+    process.exit(1);
+  }
 
-  const ce = readComplexityEvaluation(session);
+  // Any read failure — no record, corrupt state, EACCES on the state file — is
+  // one and the same outcome for the caller: NONE, exit 0, nothing about the
+  // record disclosed. Never propagate the OS error.
+  let ce = null;
+  try {
+    ce = readComplexityEvaluation(session);
+  } catch (_) {
+    ce = null;
+  }
+
   if (ce) {
-    process.stdout.write("level=" + ce.level + "\nsignals=" + ce.signals.join(",") + "\n");
+    const signalsLine = "signals=" + (ce.signals.length ? ce.signals.join(",") : "none") + "\n";
+    if (stage !== null) {
+      const level = ce.levels && (ce.levels[stage] === "high" || ce.levels[stage] === "low")
+        ? ce.levels[stage]
+        : null;
+      if (level === null) {
+        // Per-stage view underivable (routing table unusable) — same NONE
+        // contract as "no record", with the cause named on stderr only.
+        process.stderr.write("ROUTING_TABLE_UNAVAILABLE\n");
+        process.stdout.write("NONE\n");
+        process.exit(0);
+      }
+      process.stdout.write("level=" + level + "\n" + signalsLine);
+      process.exit(0);
+    }
+    let out = "level=" + ce.level + "\n" + signalsLine;
+    // Backward-compat mode: the per-stage map is EXTRA information, emitted only
+    // when it is actually derivable. Symmetric with the --stage branch above:
+    // an undecidable levels map still names its cause on stderr.
+    if (ce.levels) {
+      out += "levels=" + JSON.stringify(ce.levels) + "\n";
+    } else {
+      process.stderr.write("ROUTING_TABLE_UNAVAILABLE\n");
+    }
+    process.stdout.write(out);
     process.exit(0);
   }
   process.stdout.write("NONE\n");

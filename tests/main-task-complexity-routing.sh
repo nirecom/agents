@@ -39,14 +39,15 @@ JUDGE="$AGENTS_DIR/skills/_shared/judge-task-complexity.md"
 
 check "judge: file exists" "Shared rubric" "$JUDGE"
 check "judge: signal S1-multi-file" "S1-multi-file" "$JUDGE"
+check "judge: signal S1b-wide-change" "S1b-wide-change" "$JUDGE"
 check "judge: signal S2-architecture" "S2-architecture" "$JUDGE"
 check "judge: signal S3-security" "S3-security" "$JUDGE"
 check "judge: signal S4-installer" "S4-installer" "$JUDGE"
 check "judge: signal S5-breaking" "S5-breaking" "$JUDGE"
 check "judge: signal S6-long-plan" "S6-long-plan" "$JUDGE"
-check "judge: output format high" "LEVEL: high |" "$JUDGE"
-check "judge: output format low" "LEVEL: low | none" "$JUDGE"
-check "judge: parse failure → opus" "err toward higher capability" "$JUDGE"
+check "judge: output format is signals-only" "SIGNALS:" "$JUDGE"
+check "judge: the zero-signal answer is spelled none" "SIGNALS: none" "$JUDGE"
+check "judge: the undecidable signal is defined" "S0-undecidable" "$JUDGE"
 check "judge: S3 covers docs-only" "regardless of whether the change is code-only, docs-only" "$JUDGE"
 
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ done
 
 
 # Edge cases
-check "judge: err toward higher capability (parse failure)" "err toward higher capability" "$JUDGE"
+check "judge: routing is delegated, not restated" "complexity-routing.js" "$JUDGE"
 
 # ---------------------------------------------------------------------------
 

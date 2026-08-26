@@ -2,27 +2,71 @@
 // Top-level (non-step) session field writers, plus the effective skippable-step view.
 // Entrypoint-private to state-io.js.
 
-const { SKIPPABLE_STEPS, readState, updateTopLevel } = require("./core");
+const { SKIPPABLE_STEPS, readState, readRawState, normalizeStateVersion, updateTopLevel } = require("./core");
 const { appendEvents } = require("./events");
 const { withStateLock } = require("./state-lock");
+const { deriveAggregateLevel, deriveStageLevels, canonicalizeSignalsForPersistence } = require("../complexity-routing");
 
-// recordComplexityEvaluation(sessionId, level, signals):
+// recordComplexityEvaluation(sessionId, signals):
 // Session-scoped fact, recorded as its own event (#1733) — a re-evaluation
 // supersedes the previous one in the projection without erasing it.
-// Write path — no fail-open: an invalid level throws.
-function recordComplexityEvaluation(sessionId, level, signals) {
-  if (level !== "high" && level !== "low") {
-    throw new Error(`recordComplexityEvaluation: level must be "high" or "low", got ${JSON.stringify(level)}`);
+// Write path — no fail-open: the caller passes SIGNALS only (#2099) and both the
+// aggregate level and the per-stage levels are derived here, so a recorded level
+// can never disagree with the signals it was derived from. A
+// RoutingTableUnavailableError propagates to the calling CLI, which owns the
+// fail-open decision. Returns the persisted { level, levels, signals } shape
+// so a caller's read-back verification / receipt line can compare against or
+// echo the SAME canonicalized signals actually written (#2099 LI-3/LI-6).
+function recordComplexityEvaluation(sessionId, signals) {
+  if (arguments.length > 2) {
+    throw new Error(
+      "recordComplexityEvaluation(sessionId, level, signals) is removed — pass (sessionId, signals) only"
+    );
   }
+  // Fed to derivation RAW (not pre-normalized): a non-array signals value must
+  // reach deriveAggregateLevel/deriveStageLevels as-is so their own
+  // !Array.isArray(...) fail-high branch (detail.md D1 step 3) actually fires.
+  // Normalizing to [] here first would make every malformed input look like a
+  // valid zero-signal call and silently route to low instead of high.
+  const level = deriveAggregateLevel(signals);
+  const levels = Object.assign({}, deriveStageLevels(signals));
+  // The PERSISTED signals field is canonicalized independently of the
+  // derivation outcome above (#2099 H-SIG/LI-3/LI-6) — see
+  // canonicalizeSignalsForPersistence for the exact rule.
+  const list = canonicalizeSignalsForPersistence(signals);
   appendEvents(sessionId, [
     {
       kind: "complexity_evaluation",
       level,
-      signals: Array.isArray(signals) ? signals : [],
+      levels,
+      signals: list,
       provenance: "observed",
       origin: "record-complexity-evaluation",
+      at: new Date().toISOString(),
     },
   ]);
+  return { level, levels, signals: list };
+}
+
+// readLastRawComplexityEvent(sessionId):
+// Read-back VERIFICATION only (#2099). Returns the most recent
+// complexity_evaluation event's raw persisted fields with NO projection folding
+// and NO compat completion — a `levels` that was never written comes back
+// undefined, which is the whole point: the consumer-facing
+// readComplexityEvaluation() would reconstruct it and mask a persistence bug.
+// Never use this on a normal consumer path.
+function readLastRawComplexityEvent(sessionId) {
+  const raw = readRawState(sessionId);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const state = normalizeStateVersion(raw);
+  if (!state || !Array.isArray(state.events)) return null;
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const e = state.events[i];
+    if (e && typeof e === "object" && e.kind === "complexity_evaluation") {
+      return { level: e.level, levels: e.levels, signals: e.signals, recorded_at: e.at };
+    }
+  }
+  return null;
 }
 
 // recordSessionModel(sessionId, { modelId | id, source }):
@@ -117,6 +161,7 @@ function getSkippableSteps(sessionId) {
 
 module.exports = {
   recordComplexityEvaluation,
+  readLastRawComplexityEvent,
   recordSessionModel,
   setLastPushedSha,
   clearLastPushedSha,
