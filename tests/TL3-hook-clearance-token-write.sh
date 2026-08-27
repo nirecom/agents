@@ -1,27 +1,13 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-clearance-token-write.js
 # Tags: clearance-token, pre-tool-use, hook, security, TL3, run-e2e, scope:common
-#
-# Real-wiring seam test for block-clearance-token-write.js (PreToolUse).
-#
-# Why this exists alongside tests/enforce-clearance-token-write.sh: that file calls the
-# classifier directly and asserts on its verdict. That proves the classifier's opinion,
-# not the outcome. Two failure modes are invisible to it and to any fixture-level test:
-#   1. the hook is registered for the wrong event, the wrong matcher, or not at all —
-#      the classifier still says "deny" while the write sails through,
-#   2. the harness does not honour a deny verdict for the tool in question (Bash
-#      redirects, in particular, are not Write/Edit and are matched differently).
-# The observable that survives both is the protected file itself. So the contract
-# asserted here is the only one that actually matters: after a real session is told to
-# modify a real clearance token through a real hook, the bytes are unchanged.
-#
-# Scope note (#1763): the guard briefly also reserved the issue-provenance markers and
-# .session-transcript. That mechanism is deleted, so `.off-clearance` is the whole
-# protected set again. That those names are writable once more is asserted
-# deterministically in tests/enforce-clearance-token-write.sh section R — it is not
-# expressible here, because a live session declining to touch a file it was asked to
-# touch is indistinguishable from a guard blocking it.
-#
+# Real-wiring seam test for block-clearance-token-write.js (PreToolUse). The sibling
+# tests/enforce-clearance-token-write.sh asserts the classifier's verdict; that misses
+# mis-registration (wrong event/matcher/absent) and a harness that ignores a deny for
+# the tool in question. The observable that survives both is the protected file itself:
+# after a live session is told to modify a real clearance token, the bytes are unchanged.
+# Scope (#1763): `.off-clearance` is again the whole protected set; that the former
+# extra names are writable is asserted deterministically in that sibling's section R.
 # Layer: TL3 (live claude -p session, real PreToolUse dispatch, real token file).
 
 set -uo pipefail
@@ -63,7 +49,10 @@ BASE="$(mktemp -d)"
 trap 'rm -rf "$BASE"' EXIT
 
 REPO="$BASE/repo"; WFDIR="$BASE/workflow"; MOCKBIN="$BASE/bin"
-mkdir -p "$REPO/.claude" "$WFDIR" "$MOCKBIN"
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+PLANSDIR="$BASE/plans"
+mkdir -p "$REPO/.claude" "$WFDIR" "$MOCKBIN" "$PLANSDIR"
 git -C "$REPO" init -q
 git -C "$REPO" config user.email "test@example.com"
 git -C "$REPO" config user.name "Test"
@@ -116,6 +105,7 @@ run_turn() {
     ( cd "$REPO" && \
       PATH="$MOCKBIN:$PATH" \
       CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_PLANS_DIR="$PLANSDIR" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \

@@ -43,11 +43,22 @@ const SESSION_MARKER_KINDS = [
   EMERGENCY_PROVENANCE_MARKER_KIND,
 ];
 
+// #2053: session state the forge-target-ownership guard trusts when it decides
+// to stay SILENT — a cached login, a recorded GH_REPO/GH_HOST, the auth-dirty
+// ledger. Forging one lets an unproven repo pass as proven, or clears the dirty
+// flag that would otherwise force an ask, so they are unforgeable on the same
+// terms as the markers above. They are NOT session markers (session-markers.js
+// never reads them), hence a separate list joined only for protection.
+const FORGE_OWNERSHIP_STATE_KINDS = ["gh-login", "gh-env", "gh-auth-dirty"];
+
+// Every kind whose on-disk file a tool-issued write may not create or mutate.
+const PROTECTED_STATE_KINDS = SESSION_MARKER_KINDS.concat(FORGE_OWNERSHIP_STATE_KINDS);
+
 // M-3 (#1780): writeMarker() in workflow-mark/enforce-override-handlers/
 // off-clearance.js writes `<marker>.tmp` then renames, exactly as the token mint
 // does — so the marker list covers the `.tmp` intermediate too, symmetric with
 // OFF_CLEARANCE_TOKEN_SUFFIXES (CPR-ORTH).
-const PROTECTED_MARKER_SUFFIXES = SESSION_MARKER_KINDS.reduce(
+const PROTECTED_MARKER_SUFFIXES = PROTECTED_STATE_KINDS.reduce(
   (acc, kind) => acc.concat(["." + kind, "." + kind + ".tmp"]),
   []
 );
@@ -70,7 +81,7 @@ const PROTECTED_MARKER_BASENAME_RE = suffixesToAnchoredRe(PROTECTED_MARKER_SUFFI
 // gate is anchored on the `.<kind>` basename-tail form and must not fire on them.
 const TOKEN_MENTION_RE = /off-clearance/i;
 const MARKER_MENTION_RE = new RegExp(
-  "\\.(?:" + SESSION_MARKER_KINDS.join("|") + ")(?:\\.tmp)?(?![\\w.-])",
+  "\\.(?:" + PROTECTED_STATE_KINDS.join("|") + ")(?:\\.tmp)?(?![\\w.-])",
   "i"
 );
 
@@ -229,6 +240,8 @@ module.exports = {
   OFF_CLEARANCE_TOKEN_SUFFIXES,
   PROTECTED_MARKER_SUFFIXES,
   SESSION_MARKER_KINDS,
+  FORGE_OWNERSHIP_STATE_KINDS,
+  PROTECTED_STATE_KINDS,
   EMERGENCY_PROVENANCE_MARKER_KIND,
   TOKEN_BASENAME_RE,
   PROTECTED_MARKER_BASENAME_RE,

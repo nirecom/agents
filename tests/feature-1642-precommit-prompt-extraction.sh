@@ -2,24 +2,12 @@
 # tests/feature-1642-precommit-prompt-extraction.sh
 # Tests: hooks/pre-commit, bin/check-prompt-extraction
 # Tags: pre-commit, hook, git, prompt-extraction, backstop, scope:issue-specific, scope:feature-1642, layer:TL2
-#
-# Issue #1642 — hooks/pre-commit backstop for the prompt-extraction gate.
-#
-# The backstop is armed only under a 2-condition AND guard:
-#   (a) the repo being committed to IS the agents session repo, AND
-#   (b) .prompt-extraction-allowlist exists in that repo.
-# Any other repo is untouched (CPR-UNV: no implicit environment branching).
-#
-# Exit-code mapping enforced here (M3 security fix):
-#   1 / 2 / 126 / 127 -> commit blocked (usage errors and missing/non-executable
-#                        engine are no longer fail-open)
-#   3                 -> warning on stderr, commit continues (infra error only;
-#                        the backstop is a safety net, not an availability
-#                        dependency)
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether git actually invokes hooks/pre-commit via core.hooksPath in a real checkout.
-# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
+# Issue #1642 — hooks/pre-commit backstop for the prompt-extraction gate. It arms
+# only under a 2-condition AND guard: the committed repo IS the agents session repo
+# AND .prompt-extraction-allowlist exists in it; any other repo is untouched
+# (CPR-UNV). Exit codes (M3 security fix): 1/2/126/127 block — usage errors and a
+# missing or non-executable engine are no longer fail-open — while 3 warns and
+# continues. TL3 gap: whether git really invokes the hook via core.hooksPath.
 
 set -u
 
@@ -51,6 +39,12 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
@@ -77,7 +71,6 @@ init_repo() {
     git -C "$dir" config core.autocrlf false
 }
 
-# ---------------------------------------------------------------------------
 # An "agents-like" repo: it is simultaneously the repo under commit AND the
 # AGENTS_CONFIG_DIR, so isAgentsSessionRepo() sees identical git common-dirs.
 # Node helpers referenced by pre-commit are re-exported from the real checkout
@@ -88,7 +81,6 @@ init_repo() {
 #                 | "none"    -> no engine installed at all
 #                 | <integer> -> stub engine exiting with that code
 #                 | "noexec"  -> engine present but not executable (rc 126 path)
-# ---------------------------------------------------------------------------
 make_agents_like_repo() {
     local name="$1" allowlist="$2" engine="$3"
     local dir="$TMPDIR_BASE/$name"
@@ -237,7 +229,7 @@ t01c_agents_repo_without_allowlist_skipped() {
     fi
 }
 
-# T03 — session-marker bypass. Both markers are honoured (detail plan C2 決定,
+# T03 — session-marker bypass. Both markers are honoured (detail plan C2 decision,
 #       rules/workflow-off.md: WORKFLOW_OFF subsumes WORKTREE_OFF, so the
 #       backstop must treat them symmetrically — CPR-ORTH).
 assert_marker_skips_backstop() {
@@ -253,6 +245,7 @@ assert_marker_skips_backstop() {
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile"
     if [ "$RC" -eq 0 ]; then
         pass "$label: .$marker marker -> backstop skipped, commit passes"
@@ -283,6 +276,7 @@ t03c_no_marker_still_blocks() {
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile"
     if [ "$RC" -eq 1 ]; then
         pass "T03c: no marker present -> the same staged violation blocks (exit 1)"

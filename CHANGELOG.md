@@ -355,3 +355,27 @@ Changes: Fixed: a single blank line (or a lone `;`, `:`, `{}`, `()`, `,`) could 
 ### FEATURE: PR #2086 (2026-08-22)
 Background: fix(enforce-worktree): thread dispatch provenance into fragment re-parse
 Changes: Fixed: `enforce-worktree` no longer blocks repository-write-free `gh` and dispatcher commands from the main worktree when a here-doc opener lands on its own line through backslash continuation (#2064). Write detection is tightened at the same time: `eval` / `xargs` / `find -exec` hidden inside command substitutions or on newline-injected lines, and writes on a later line of a quoted multi-line body, are now caught; a shell option can no longer pass an arbitrary script off as a sanctioned dispatcher.
+
+### FEATURE: PR #2113 (2026-08-23)
+Background: fix(#1812/#1744): widen worker-dispatch envScope for SSH push and gh ...
+Changes: Fixed `commit-push` worker child processes not inheriting `SSH_AUTH_SOCK`, which could cause `git push`/`fetch` failures against SSH-signed or SSH-only remotes.;Fixed `doc-append` worker child processes missing the environment `gh` calls need, which could cause history/changelog entry writes to fail.
+
+### FEATURE: PR #2089 (2026-08-23)
+Background: feat: add forge-target-ownership guard for gh issue/api writes (#2053)
+Changes: Claude Code now asks for confirmation before filing a GitHub issue or making a `gh api` write to a repository it cannot prove you own, instead of silently trusting the current checkout.
+
+### FEATURE: PR #2123 (2026-08-24)
+Background: fix(#2098): drop issue-template prefills and mark genuinely absent fields
+Changes: Issue forms no longer arrive pre-filled. Every required field on the incident and task templates must now actually be completed by the submitter, so an issue can no longer be opened with placeholder text alone.;When an issue genuinely has no Background, Changes, Cause, or Fix, the generated history entry now says `(no <Field> recorded)` instead of a value silently invented from the issue title or body.
+
+### FEATURE: PR #2137 (2026-08-25)
+Background: fix(#2132): fold ask-inducing composite command lines in clarify-intent/workflow-init SKILL.md
+Changes: Fixed prompt instructions in the `clarify-intent` and `workflow-init` skills that told Claude to compose a `$(...) | tail -1` shell pipeline in one Bash call — split into a single plain call. (#2132)
+
+### FEATURE: PR #2135 (2026-08-25)
+Background: fix(#2088): make concern-ledger glob discovery resilient to backslash...
+Changes: Fixed a bug where the codex review loop's concern ledger could get stuck header-only (exit 4) on Windows-shaped plans-directory paths.;Hardened concern-ledger file writes against path-traversal and symlink/pre-placement attacks.
+
+### FEATURE: PR #2143 (2026-08-26)
+Background: fix(#2140): forward rules/shell-commands.md to write-code/write-tests general-purpose subagents
+Changes: Fixed: the write-code and write-tests subagents now read the shell command-line and user-escalation rules before running Bash, so a rejected command comes with an explanation instead of a silent denial.

@@ -2,24 +2,13 @@
 # tests/feat-1799-plans-dir-isolation.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/supervisor-emit.js, bin/check-plans-dir-isolation.sh
 # Tags: supervisor-emit, isolation, plans-dir, xor-guard, scope:issue-specific, pwsh-not-required, TL2
-#
-# #1799: test suites that pin CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR drive the real
-# hooks, and supervisor-emit.js then appends escape_hatch_event findings into the developer's
-# LIVE ~/.workflow-plans supervisor state — contaminating the governance audit trail.
-#
-# The fix is an XOR guard at the single choke point (supervisor-emit.js#safeAppend):
-#   both pinned   → isolated test    → write (to the pinned dir)
-#   neither pinned→ real production  → write (fail-open preserved)
-#   exactly one   → contradiction    → refuse + one-line stderr diagnostic, no write
-#
-# The guard must read a PRISTINE process-start snapshot (load-env.js#getPristineIsolationEnv),
-# NOT live process.env: getWorkflowPlansDir() calls loadDefaultEnv(), which INJECTS
-# WORKFLOW_PLANS_DIR from $AGENTS_CONFIG_DIR/.env when unset. Reading post-injection env would
-# mistake "the .env supplied it" for "the caller pinned it" (case G6).
-#
-# TL2 gap (what this test does NOT catch): the guard is driven by requiring supervisor-emit.js
-# in-process, not by a real `claude -p` hook dispatch. A settings.json registration change that
-# stops a hook from running at all is invisible here.
+# #1799: a suite pinning CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR drives the real hooks,
+# and supervisor-emit.js appends escape_hatch_event findings into the developer's LIVE
+# ~/.workflow-plans state. The fix is an XOR guard at supervisor-emit.js#safeAppend: both
+# pinned (isolated test) or neither (production) → write; exactly one → refuse, no write.
+# It must read the PRISTINE process-start snapshot (load-env.js#getPristineIsolationEnv),
+# never live process.env, since loadDefaultEnv() injects WORKFLOW_PLANS_DIR from .env (G6).
+# TL2 gap: in-process require, not a real `claude -p` dispatch — see rules/test/fixture-isolation.md.
 
 set -uo pipefail
 
@@ -386,11 +375,20 @@ G9_classifier_verdicts() {
         return
     fi
 
-    local out rc bypass
-    bypass="tests/feature-workflow-off-bypass-block-history-direct.sh"
+    local out rc
 
-    # G9a — classifier exits 0 when given the N-candidate file (report tool, not a gate).
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$bypass" 2>&1)"
+    # G9a/G9c use a FIXTURE N-candidate for the same reason G9b uses one: this fix
+    # dual-pinned every live repo test, so no production file is a candidate any more.
+    # The fixture pins CLAUDE_WORKFLOW_DIR, omits WORKFLOW_PLANS_DIR, and reaches only a
+    # read-only hook — exactly the shape the classifier must call N rather than W.
+    local n_fixture_dir n_fixture
+    n_fixture_dir="$TMPDIR_BASE/g9c-fixture"
+    n_fixture="$n_fixture_dir/feature-readonly-halfpinned-suite.sh"
+    mkdir -p "$n_fixture_dir"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nCLAUDE_WORKFLOW_DIR=/tmp/pin node hooks/block-history-direct.js\n' > "$n_fixture"
+
+    # G9a — classifier exits 0 even while reporting a candidate (report tool, not a gate).
+    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "G9a classifier exits 0 (report tool, not a gate)"
@@ -415,13 +413,13 @@ G9_classifier_verdicts() {
         fail "G9b fixture unfixed suite must be W-candidate: $out"
     fi
 
-    # bypass-block-history-direct launches only hooks/block-history-direct.js, which READS the
-    # plans dir (helpers.js tryResolveEnvUnderPlansDir) but never calls appendFinding → N-candidate.
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$bypass" 2>&1)"
-    if echo "$out" | grep -F "$(basename "$bypass")" | grep -q 'N-candidate'; then
-        pass "G9c bypass-block-history-direct classified N-candidate (read-only path, no write)"
+    # G9c — the fixture launches only hooks/block-history-direct.js, which READS the plans dir
+    # (helpers.js tryResolveEnvUnderPlansDir) but never calls appendFinding → N-candidate.
+    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
+    if echo "$out" | grep -F "$(basename "$n_fixture")" | grep -q 'N-candidate'; then
+        pass "G9c fixture read-only half-pinned suite classified N-candidate (no supervisor write)"
     else
-        fail "G9c bypass-block-history-direct must be N-candidate: $out"
+        fail "G9c fixture read-only half-pinned suite must be N-candidate: $out"
     fi
 
     # Regression guard: once the sweep is done, every W file carries the pin and therefore

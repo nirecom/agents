@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# bin/lib/concern-ledger.sh
-# Shared concern-ledger library (schema v2) — #1992 / #1996.
-#
-# A review loop that renumbers findings every round breaks the author's
-# handle on "what you told me last time". Identity is by declared reference
-# ID (B1) or frozen content discriminator (B2) — never by position or by resemblance-based text matching.
+# bin/lib/concern-ledger.sh — shared concern-ledger library (schema v2),
+# #1992 / #1996. A review loop that renumbers findings every round breaks the
+# author's handle on "what you told me last time", so identity is by declared
+# reference ID (B1) or frozen content discriminator (B2) — never by position or
+# by resemblance-based text matching. This entrypoint holds the two identity
+# decisions (bind, merge) and the derived file names; sibling modules
+# (rules/coding/file-split.md Pattern A) are core.sh / parse.sh / reduce.sh /
+# render.sh / finalize.sh under bin/lib/concern-ledger/.
+CL_CATEGORY_VOCAB="correctness security contract performance style docs test maintainability portability concurrency usability other"
 
 # Schema v2 (one entry per line, TEXT last so it may contain the separator):
 #   #concern-ledger-v2|<format>|<session-id>|cycle=<K>
@@ -17,12 +20,6 @@
 #   #producer|<name>|<completeness>|<exec-label>|<parse-label>|<round>
 #   <normalized delta records and #unparsed records>
 
-# This entrypoint holds the two identity decisions (bind, merge) and derived
-# file names. Sibling modules (rules/coding/file-split.md Pattern A):
-# core.sh/parse.sh/reduce.sh/render.sh/finalize.sh in bin/lib/concern-ledger/.
-
-CL_CATEGORY_VOCAB="correctness security contract performance style docs test maintainability portability concurrency usability other"
-
 CL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/concern-ledger"
 # Fail loudly here rather than let every cl_* call resolve to "command not found":
 # a caller that copied only this file has a broken install, and a ledger that
@@ -31,26 +28,50 @@ if [ ! -d "$CL_LIB_DIR" ]; then
     printf 'concern-ledger: library modules not found at %s — incomplete installation\n' "$CL_LIB_DIR" >&2
     return 1 2>/dev/null || exit 1
 fi
+# Every module's return value is checked. A module that refuses to load (core.sh
+# cannot find safe-plans-path.sh, say) stops the entrypoint here: half-loading is
+# the silent findings loss this subsystem exists to stop. Five explicit blocks
+# rather than a loop, because shellcheck source= needs a literal path.
 # shellcheck source=./concern-ledger/core.sh
-source "$CL_LIB_DIR/core.sh"
+if ! source "$CL_LIB_DIR/core.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/core.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
 # shellcheck source=./concern-ledger/parse.sh
-source "$CL_LIB_DIR/parse.sh"
+if ! source "$CL_LIB_DIR/parse.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/parse.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
 # shellcheck source=./concern-ledger/reduce.sh
-source "$CL_LIB_DIR/reduce.sh"
+if ! source "$CL_LIB_DIR/reduce.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/reduce.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
 # shellcheck source=./concern-ledger/render.sh
-source "$CL_LIB_DIR/render.sh"
+if ! source "$CL_LIB_DIR/render.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/render.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
 # shellcheck source=./concern-ledger/finalize.sh
-source "$CL_LIB_DIR/finalize.sh"
+if ! source "$CL_LIB_DIR/finalize.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/finalize.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Derived paths — every ledger file name is built here and nowhere else
 # ---------------------------------------------------------------------------
-cl_ledger_path()   { printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$3"; }
-cl_snapshot_path() { printf '%s/%s-%s-concern-ledger-cap-snapshot.txt' "$1" "$2" "$3"; }
-cl_json_path()     { printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$3"; }
-cl_diag_path()     { printf '%s/%s-%s-finalize-diagnostic.txt' "$1" "$2" "$3"; }
-cl_round_path()    { printf '%s/%s-%s-round-number.txt' "$1" "$2" "$3"; }
-cl_delta_path()    { printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$3" "$4" "$5"; }
+# The first argument is the plans dir — a complete path the caller chose, so it
+# is not validated. What is validated is every token pasted into a *name* inside
+# that dir (session id, format, round, producer): those are the ones an attacker
+# can steer into `../` or a separator (#2025 C9). A rejected token prints
+# nothing and returns 2, so a caller that only reads stdout still fails closed.
+cl_ledger_path()   { _cl_reject_bad_tokens cl_ledger_path   "$2" "$3" || return 2; printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$3"; }
+cl_snapshot_path() { _cl_reject_bad_tokens cl_snapshot_path "$2" "$3" || return 2; printf '%s/%s-%s-concern-ledger-cap-snapshot.txt' "$1" "$2" "$3"; }
+cl_json_path()     { _cl_reject_bad_tokens cl_json_path     "$2" "$3" || return 2; printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$3"; }
+cl_diag_path()     { _cl_reject_bad_tokens cl_diag_path     "$2" "$3" || return 2; printf '%s/%s-%s-finalize-diagnostic.txt' "$1" "$2" "$3"; }
+cl_round_path()    { _cl_reject_bad_tokens cl_round_path    "$2" "$3" || return 2; printf '%s/%s-%s-round-number.txt' "$1" "$2" "$3"; }
+cl_delta_path()    { _cl_reject_bad_tokens cl_delta_path    "$2" "$3" "$4" "$5" || return 2; printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$3" "$4" "$5"; }
 
 # cl_snapshot_beside <ledger-path> — the snapshot for an already-resolved ledger
 # path, so a CL_LEDGER_OVERRIDE is snapshotted beside itself rather than beside
@@ -217,3 +238,5 @@ cl_merge_producers() {
     done
 }
 
+
+:  # load-success rc for the CLI entry's source check

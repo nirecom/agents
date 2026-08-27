@@ -4,7 +4,7 @@
 # The round number used to be minted by each stage wrapper and consumed by the
 # shared loop, so the two could disagree — a round the ledger never recorded was
 # reported as approved (#2068). One owner now: bin/run-codex-review-loop.
-# Counter file: <PLANS_DIR>/<session-id>-<format>-round-number.txt (#866 flat).
+# Counter file: <PLANS_DIR>/<session-id>-<format>-round-number.txt (#866).
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -113,7 +113,7 @@ STUB
         cp "$AGENTS_WORKTREE/bin/$f" "$MOCK/bin/$f"
         chmod +x "$MOCK/bin/$f"
     done
-    for f in codex-core.sh concern-ledger.sh; do
+    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$MOCK/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$MOCK/bin/lib/"
@@ -155,9 +155,8 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------
 # 1-3. The loop numbers each round from the counter it owns: absent means 1,
-#      and every continuing round after that is one higher. Round 2 onward
-#      re-raises the same concern by the ID round 1 minted, because a fresh
-#      number would be discarded and the loop would converge on nothing.
+#      each continuing round one higher. Round 2 onward re-raises the same
+#      concern by round 1's ID, since a fresh number would never converge.
 # ---------------------------------------------------------------------------
 {
     mk_env; seed_drafts sid1
@@ -238,9 +237,8 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------
 # 7. exit 3 means codex never reviewed anything, so no round was spent. The
-#    counter rolls back to what it was before the call — #776's intent, now
-#    stated as "restore", not "delete": a retry must re-run the same number, and
-#    the ledger's concern IDs stay continuous with it.
+#    counter rolls back to its pre-call value (#776): a retry re-runs the
+#    same number, keeping ledger concern IDs continuous.
 # ---------------------------------------------------------------------------
 {
     mk_env; seed_drafts sid7

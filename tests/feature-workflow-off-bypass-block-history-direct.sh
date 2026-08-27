@@ -3,32 +3,12 @@
 # Tests: hooks/block-history-direct.js
 # Tags: hook, workflow-off, append-only, docs, marker, TL2, scope:common
 #
-# Issue #1725 — hooks/block-history-direct.js must approve (instead of block) when
-# a protected-path/command hit occurs AND the calling session's WORKFLOW_OFF marker
-# (<workflowDir>/<sid>.workflow-off) exists. The marker is shared by the normal
-# WORKFLOW_ENFORCE_WORKFLOW_OFF sentinel and the WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY
-# sentinel — no new marker is introduced.
-#
-# Contract:
-#   - No marker → protected hit still blocks (baseline regression, both lanes).
-#   - Marker present → protected hit approves (tool-write lane AND shell lane).
-#   - Marker present → stderr carries a notice naming the hook and the marker.
-#   - No hit → approve with NO bypass notice (marker check runs only after a hit).
-#   - Unresolvable / traversal / missing sid → no bypass, block stands (fail-closed).
-#   - Malformed stdin → approve, exit 0 (pre-existing fail-open, must not regress).
-#
-# TDD note (fail-before-fix, fix/* branch): every "marker present → approve" case
-# below FAILS against the current unfixed hook. A01/A02/D02/E01 pass both before
-# and after the fix.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code actually dispatches the PreToolUse event to this hook in a
-#   live session, and whether the sid it passes matches the marker the sentinel wrote.
-# - Whether the stderr notice actually surfaces to the model/user in a real session.
-# - Whether the WORKFLOW_OFF sentinel emission path really creates the marker this
-#   hook reads (cross-hook wiring across a real session lifetime).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Issue #1725 — block-history-direct.js approves instead of blocking when a
+# protected hit coincides with the session's shared WORKFLOW_OFF marker
+# (<workflowDir>/<sid>.workflow-off). Contract: no marker → still blocks; marker →
+# approves in both lanes with a stderr notice; no hit → approve, no notice;
+# unresolvable/traversal/missing sid → fail-closed; malformed stdin → approve.
+# TL3 gap: live dispatch/sid/stderr/marker wiring — see bin/check-verification-gate.sh.
 
 set -uo pipefail
 
@@ -74,6 +54,12 @@ fi
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
 
 fresh_workflow_dir() {
     local d="$TMPDIR_BASE/wf-$RANDOM-$$-${1:-x}"
@@ -127,6 +113,7 @@ run_hook() {
         env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$REPO_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK" 2>"$errfile")" || HOOK_RC=$?
     HOOK_ERR="$(cat "$errfile" 2>/dev/null)"
     rm -f "$errfile"

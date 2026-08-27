@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Chromium/Electron writes this into the CWD when logging is enabled
+debug.log
+
 testResults.xml
 node_modules/
 settings.local.json

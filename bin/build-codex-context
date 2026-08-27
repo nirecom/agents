@@ -25,6 +25,18 @@ done
 [[ -n "$OUTPUT" ]]    || { echo "build-codex-context: --output is required" >&2; exit 1; }
 [[ -d "$PLANS_DIR" ]] || { echo "build-codex-context: --plans-dir does not exist: $PLANS_DIR" >&2; exit 1; }
 
+# The session id is pasted into names inside the plans dir, so it is validated
+# here as well as in the loop: this script is executable on its own, and a design
+# that relies on "the caller already checked" is an unstated assumption (#2025
+# C9). --output is not checked — it is a complete path the caller chose, not a
+# token. The checks are explicit rather than left to `set -e`, so the user gets
+# a reason. This same library also provides the publish primitive used below.
+SAFE_TOKEN_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/safe-plans-path.sh"
+[[ -f "$SAFE_TOKEN_LIB" ]] || { echo "build-codex-context: required library missing: $SAFE_TOKEN_LIB" >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$SAFE_TOKEN_LIB" || { echo "build-codex-context: required library failed to load: $SAFE_TOKEN_LIB" >&2; exit 1; }
+sp_valid_token "$SID" || { echo "build-codex-context: --session-id is not a safe path token: $SID" >&2; exit 1; }
+
 INTENT="$PLANS_DIR/$SID-intent.md"
 OUTLINE="$PLANS_DIR/$SID-outline.md"
 
@@ -40,10 +52,12 @@ if [[ "$INTENT_PRESENT" -eq 0 && "$OUTLINE_PRESENT" -eq 0 ]]; then
 fi
 
 # --- Atomic write ---
-OUT_DIR="$(dirname "$OUTPUT")"
+# _sp_dirname, not dirname(1): for a backslash-spelled --output, dirname answers
+# "." and the real parent is never created, so the temp below has nowhere to go.
+OUT_DIR="$(_sp_dirname "$OUTPUT")"
 mkdir -p "$OUT_DIR"
 
-TMP="$(mktemp "$OUT_DIR/.build-codex-context.XXXXXX")"
+TMP="$(sp_mktemp_beside "$OUTPUT")" || { echo "build-codex-context: cannot create a temporary file beside $OUTPUT" >&2; exit 1; }
 trap 'rm -f "$TMP"' EXIT
 
 inject_trailing_newline_if_missing() {
@@ -71,7 +85,11 @@ if [[ "$OUTLINE_PRESENT" -eq 1 ]]; then
     inject_trailing_newline_if_missing "$OUTLINE"
 fi
 
-mv "$TMP" "$OUTPUT"
+# The danger of mv here is success, not failure: with a directory at $OUTPUT it
+# moves the context inside and returns 0, and the loop then marks the context
+# built. sp_publish_file decides on the post-rename condition instead, and the
+# failure is announced rather than left to `set -e` (#2025 C6).
+sp_publish_file "$TMP" "$OUTPUT" || { echo "build-codex-context: could not publish the context to $OUTPUT" >&2; exit 1; }
 trap - EXIT
 
 exit 0

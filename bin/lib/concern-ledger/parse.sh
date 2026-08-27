@@ -213,16 +213,29 @@ cl_parse_cnref() {
 cl_stage() {
     local dir="$1" fmt="$2" round="$3" prod="$4" exec="$5" parse="$6" norm="$7"
     local dest comp line ex
+    # This is a derived-path builder in its own right: cl_stage pastes the same
+    # tokens into a plans-dir file name without going through cl_delta_path, so
+    # the CLI's early validation is not reachable from a direct library call
+    # (which is exactly how the tests drive it). Enforce here, not only there.
+    _cl_reject_bad_tokens cl_stage "$fmt" "$round" "$prod" || return 2
+    if [ -n "${CL_STAGE_PREFIX:-}" ] && ! sp_valid_token "$CL_STAGE_PREFIX"; then
+        printf 'concern-ledger: cl_stage: refusing to build a path from CL_STAGE_PREFIX=%s\n' \
+            "$(printf '%q' "$CL_STAGE_PREFIX")" >&2
+        return 2
+    fi
     mkdir -p "$dir" 2>/dev/null || return 1
     ex="$(cl_exec_completeness "$exec")"
     comp="$(_cl_label_min "$ex" "$parse")"
     dest="$dir/${CL_STAGE_PREFIX:-}${fmt}-round-${round}-delta-${prod}.txt"
-    if [ -e "$dest" ] && [ ! -f "$dest" ]; then
-        printf 'concern-ledger: stage destination is not a plain file: %s\n' "$dest" >&2
-        return 1
-    fi
     local tmp rc
-    tmp="$dest.tmp.$$"
+    # Exclusively created beside the destination: "$dest.tmp.$$" was a fully
+    # predictable name in a shared directory (#2025 C6). The old "is $dest a
+    # plain file?" pre-check is gone with it — it was a TOCTOU, and the verdict
+    # now comes from the post-rename condition inside sp_publish_file.
+    tmp="$(sp_mktemp_beside "$dest")" || {
+        printf 'concern-ledger: stage could not create a temporary file beside: %s\n' "$dest" >&2
+        return 1
+    }
     rc=0
     {
         printf '#producer|%s|%s|%s|%s|%s\n' "$prod" "$comp" "$ex" "$parse" "$round"
@@ -249,11 +262,12 @@ cl_stage() {
         printf 'concern-ledger: stage could not write the delta: %s\n' "$dest" >&2
         return 1
     fi
-    if ! mv -f "$tmp" "$dest"; then
-        rm -f "$tmp"
+    if ! sp_publish_file "$tmp" "$dest"; then
         printf 'concern-ledger: stage could not publish the delta: %s\n' "$dest" >&2
         return 1
     fi
     printf '%s\n' "$dest"
 }
 
+
+:  # load-success rc for the entrypoint's source check

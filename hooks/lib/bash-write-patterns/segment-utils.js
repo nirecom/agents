@@ -2,28 +2,14 @@
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 // Command wrappers that prefix a real command and transparently exec it. Peeling
-// them is a CLASS-level fix (CPR-E2C/CPR-ORTH): every write predicate that resolves a
-// segment's effective command (green file-op / pwsh / redirect predicates AND
-// isGitWriteIR) uniformly sees through `command git commit`, `env -u X git commit`,
-// `nice rm f`, etc. Without peeling, a wrapper hides the write verb and the
-// command fast-allows past the main-worktree guard (security regression).
-//
-// Each entry declares BOTH:
-//   valueFlags   — options that consume a FOLLOWING token as their argument
-//                  (separated form `-n 5`; attached `-n5` and `--adj=5` are
-//                  self-contained so they consume only their own token).
-//   booleanFlags — options that take NO argument (skip just the flag).
-// eatAssignments (env only): leading NAME=VALUE tokens are consumed.
-//
-// FAIL-CLOSED (security): if a wrapper is followed by an option that is in
-// NEITHER set and is not an attached `=value` form, we CANNOT know whether it
-// consumes the next token. Skipping just the flag risks treating that option's
-// argument as the wrapped command and HIDING a real write (e.g. `env -Z val git
-// commit` → mis-resolves to `val`, isGitWriteIR misses `git commit` = BYPASS).
-// So skipWrapperOptions returns AMBIGUOUS and peelWrappers refuses to peel,
-// leaving the ORIGINAL cmd0 intact. Detection then relies on the raw command
-// (the wrapper name is not a write verb) PLUS the wrappedWriteVerbScan safety
-// net below, so `<wrapper> ...unknown... git <writeverb>` is still caught.
+// them is a CLASS-level fix (CPR-E2C/CPR-ORTH): every write predicate uniformly
+// sees through `command git commit`, `env -u X git commit`, `nice rm f`. Each
+// entry declares valueFlags (consume a FOLLOWING token; attached `-n5`/`--adj=5`
+// are self-contained), booleanFlags (no argument), and eatAssignments (env only:
+// leading NAME=VALUE tokens are consumed). FAIL-CLOSED: an option in NEITHER set
+// and not an attached `=value` form is unclassifiable, so skipWrapperOptions
+// returns AMBIGUOUS and peelWrappers refuses to peel — see the AMBIGUOUS notes
+// on skipWrapperOptions/peelWrappers and the scanWrappedVerb safety net below.
 const AMBIGUOUS = -2; // distinct from -1 ("no wrapped command remains")
 
 const WRAPPER_SPECS = {
@@ -190,13 +176,9 @@ function resolveEffectiveArgv(seg) {
 // Safety net for the fail-closed peel bail (AMBIGUOUS): even when peelWrappers
 // refuses to resolve past an unclassifiable option, a wrapped write command may
 // still be hiding further along the argv. Scan the RAW argv of a wrapper segment
-// for a bare occurrence of `<verb>` at a token position and return true when the
-// verb matches a supplied predicate. Only applies to segments whose cmd0 is a
-// known wrapper (or resolves to one via an env-prefix); a non-wrapper segment is
-// already fully resolved by resolveEffectiveCommand.
-//
-// verbTest(token, restTokens) → boolean. restTokens are the tokens after `token`.
-// This is intentionally conservative: it fires only inside wrapper segments and
+// and return true when verbTest(token, restTokens) matches. Only applies to
+// segments whose cmd0 is a known wrapper (or resolves to one via an env-prefix);
+// a non-wrapper segment is already resolved by resolveEffectiveCommand. It fires
 // only when the effective command could NOT be cleanly resolved, so it never
 // over-fires on ordinary commands.
 function scanWrappedVerb(seg, verbTest) {
@@ -224,4 +206,16 @@ function scanWrappedVerb(seg, verbTest) {
   return false;
 }
 
-module.exports = { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb, commandBasename };
+// ASSIGN_RE / WRAPPER_SPECS / peelWrappers / isAttachedShortValue are exported
+// for #2053: the forge-target-ownership guard peels the same wrapper set this
+// module already models, rather than re-deriving it (CPR-SSOT).
+module.exports = {
+  resolveEffectiveCommand,
+  resolveEffectiveArgv,
+  scanWrappedVerb,
+  commandBasename,
+  ASSIGN_RE,
+  WRAPPER_SPECS,
+  peelWrappers,
+  isAttachedShortValue,
+};

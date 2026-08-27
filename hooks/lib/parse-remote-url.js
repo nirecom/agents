@@ -16,18 +16,27 @@ const SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 // two segments are validated separately against their real-world charsets:
 //   owner — the GitHub login charset: leading alnum, then alnum/hyphen, 1..39
 //           characters. No dots, no underscores, so no dot-segment can form.
-//   repo  — [A-Za-z0-9._-] 1..100, with "." and ".." rejected outright (a repo
-//           name may legitimately begin with a dot, e.g. ".config").
-// The bash counterpart bin/github-issues/lib/origin-repo.sh mirrors this
-// contract verbatim; the two resolvers must never disagree (CPR-ORTH).
+//   repo  — [A-Za-z0-9._-] 1..100, "." and ".." rejected outright (a repo name
+//           may legitimately begin with a dot, e.g. ".config").
+// bin/github-issues/lib/origin-repo.sh mirrors this contract verbatim (CPR-ORTH).
 const OWNER_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 const REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
 
+// #2053: both predicates now also take values lifted from a command line
+// (`--repo <v>`), not only segments of an already-parsed origin URL. So a
+// non-string must be rejected rather than coerced by RegExp.test, and a login
+// with a trailing or doubled hyphen — which GitHub cannot issue — must not
+// reach `gh api repos/...`. Every shape the charset tests pin is unchanged.
+const OWNER_SHAPE_RE = /^[A-Za-z0-9](?:-?[A-Za-z0-9])*$/;
+
 function isValidOwner(owner) {
-  return OWNER_RE.test(owner);
+  if (typeof owner !== "string") return false;
+  if (!OWNER_RE.test(owner)) return false;
+  return OWNER_SHAPE_RE.test(owner);
 }
 
 function isValidRepo(repo) {
+  if (typeof repo !== "string") return false;
   if (repo === "." || repo === "..") return false;
   return REPO_RE.test(repo);
 }
@@ -53,12 +62,10 @@ function extractRepoId(remoteUrl) {
 }
 
 // Replace the userinfo (`user` or `user:pass`) of a remote URL with `***`.
-//
 // `git remote get-url origin` can hand back an HTTPS URL carrying an access
 // token (https://x-access-token:<token>@github.com/owner/repo.git). Anything
 // that echoes that URL back — an error `.message`, a workflow NEXT_HINT line, an
 // on-disk worker log — would leak the token, so every echo goes through here first.
-//
 // The scheme form is redacted wherever it occurs, because such a URL can sit
 // mid-sentence inside a longer message. The SCP form (`git@host:path`) is
 // redacted only at the start of the string, where a remote URL begins — an
@@ -130,4 +137,4 @@ function parseOriginOwnerRepo(remoteUrl) {
   return { ok: true, ownerRepo: `${owner}/${repo}`, owner, repo, host: GITHUB_HOST };
 }
 
-module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, GITHUB_HOST };
+module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, isValidOwner, isValidRepo, GITHUB_HOST };

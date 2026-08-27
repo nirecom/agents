@@ -2,17 +2,13 @@
 # Tests: hooks/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, skills/review-tests/scripts/select-staged-files.sh
 # Tags: scope:issue-specific
 # Tests for issue #882: worktree-aware staged-file selection for /review-tests.
-#
-# RT-1 file selection must resolve the session's *linked worktree* from the
-# workflow state (state.cwd), never process.cwd() and never the main worktree.
-# This guards against a subagent / background run whose process.cwd() is the
-# main worktree silently reviewing the wrong (or empty) file set.
-#
-# L3 gap (what this test does NOT catch):
-# - RT-2 draft assembly (model selecting test/source from staged file list) — requires real claude -p session
-# - Full /review-tests skill run verifying end-to-end review uses linked worktree files
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# RT-1 file selection must resolve the session's *linked worktree* from the workflow
+# state (state.cwd), never process.cwd() and never the main worktree — guarding against
+# a subagent / background run whose process.cwd() is the main worktree silently
+# reviewing the wrong (or empty) file set.
+# L3 gap: RT-2 draft assembly and a full end-to-end /review-tests run both need a real
+# claude -p session; checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
@@ -48,6 +44,9 @@ TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t rwp-test)"
 MAIN_REPO="$TMPDIR_BASE/main"
 WTA="$TMPDIR_BASE/wtA"
 WF_DIR="$TMPDIR_BASE/workflow-state"
+# Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
+# resolves the developer's real ~/.workflow-plans/ and appends there.
+PLANS_DIR="$TMPDIR_BASE/plans"
 
 cleanup() {
   git -C "$MAIN_REPO" worktree remove --force "$WTA" 2>/dev/null || true
@@ -55,7 +54,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$MAIN_REPO" "$WF_DIR"
+mkdir -p "$MAIN_REPO" "$WF_DIR" "$PLANS_DIR"
 git -C "$MAIN_REPO" init -q
 git -C "$MAIN_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$MAIN_REPO" config user.email "test@example.com"
@@ -84,11 +83,13 @@ if command -v cygpath >/dev/null 2>&1; then
   MAIN_NODE="$(cygpath -m "$MAIN_REPO")"
   AGENTS_NODE="$(cygpath -m "$AGENTS_WORKTREE")"
   WF_DIR_NODE="$(cygpath -m "$WF_DIR")"
+  PLANS_DIR_NODE="$(cygpath -m "$PLANS_DIR")"
 else
   WTA_NODE="$WTA"
   MAIN_NODE="$MAIN_REPO"
   AGENTS_NODE="$AGENTS_WORKTREE"
   WF_DIR_NODE="$WF_DIR"
+  PLANS_DIR_NODE="$PLANS_DIR"
 fi
 
 # ---------------------------------------------------------------------------
@@ -135,6 +136,7 @@ run_resolver() {
   SESSION_ID="$sid_env" \
   CLAUDE_SESSION_ID="" \
   CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+  WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
   AGENTS_CONFIG_DIR="$AGENTS_NODE" \
     bash "$RUN_TIMEOUT" 30 "$RESOLVER_BIN" 2>/dev/null
 }
@@ -215,6 +217,7 @@ run_select() {
     SESSION_ID="$sid" \
     CLAUDE_SESSION_ID="" \
     CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
     AGENTS_CONFIG_DIR="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>/dev/null)"
   SELECT_RC=$?
@@ -270,12 +273,10 @@ else
 fi
 
 # ===========================================================================
-# Cases I-L: state.session_worktree fallback (issue #950)
-#
-# When state.cwd points to the main worktree (i.e. the session was started
-# from main), resolveSessionWorktreePath() must fall back to
-# state.session_worktree (set by branching-handler after /worktree-start).
-# These cases are EXPECTED to FAIL until the source fix lands.
+# Cases I-L: state.session_worktree fallback (issue #950). When state.cwd points
+# to the main worktree (i.e. the session was started from main),
+# resolveSessionWorktreePath() must fall back to state.session_worktree (set by
+# branching-handler after /worktree-start). EXPECTED to FAIL until the fix lands.
 # ===========================================================================
 
 # Helper: write state JSON with both cwd and optional session_worktree.
@@ -311,6 +312,7 @@ run_resolver_js() {
   SESSION_ID="$sid" \
   CLAUDE_SESSION_ID="" \
   CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+  WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
     bash "$RUN_TIMEOUT" 30 node -e "
 const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/workflow-state/resolve-worktree-path.js');
 const result = resolveSessionWorktreePath('$sid');

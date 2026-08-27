@@ -5,10 +5,15 @@
 #
 # TL1 dispatcher for the shared concern-ledger reducer (#1992 / #1996).
 # Cases are split into tests/bin-concern-ledger-reducer/ per rules/coding/file-split.md.
-# Expectations are taken from the detail plan's "ledger schema v2" / "cl_reduce state
-# transition table" / "Test plan" sections. The reducer does not exist yet: until
-# /write-code lands it every case below FAILS, and the SKIP-BLOCKED notice states why.
+# Expectations come from the detail plan's ledger schema v2 / cl_reduce state
+# transition table / Test plan sections.
 set -uo pipefail
+
+# TL3 gap (filesystem-semantics): the library is sourced here, not run through
+# the real CLI's argument handling, and NTFS case-insensitivity/8.3 aliases can
+# make two path spellings name one file. Mitigated by
+# tests/bin-concern-ledger-cli-contract.sh (drives the real CLI) and
+# pattern-discovery.sh (builds a genuine backslash dir via `cygpath -w`).
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
@@ -265,6 +270,12 @@ SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
 . "$SUITE_DIR/completeness.sh"
 # shellcheck source=./bin-concern-ledger-reducer/cycle-migration-static.sh
 . "$SUITE_DIR/cycle-migration-static.sh"
+# shellcheck source=./bin-concern-ledger-reducer/pattern-discovery.sh
+. "$SUITE_DIR/pattern-discovery.sh"
+# shellcheck source=./bin-concern-ledger-reducer/path-shapes-and-framing.sh
+. "$SUITE_DIR/path-shapes-and-framing.sh"
+# shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
+. "$SUITE_DIR/backslash-reduce.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

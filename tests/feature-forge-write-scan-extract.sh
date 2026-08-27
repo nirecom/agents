@@ -1,29 +1,12 @@
 #!/bin/bash
-# Tests: hooks/lib/forge-write-extract.js
-# Tags: hook, bin, git, pr, github, scope:common
-# Unit tests for hooks/lib/forge-write-extract.js
+# Tests: hooks/lib/forge-write-extract.js, hooks/lib/parse-remote-url.js, hooks/lib/bash-write-patterns/segment-utils.js, hooks/lib/bash-write-patterns/patterns.js
+# Tags: hook, bin, git, pr, github, ownership, scope:common
 #
-# The module exports two functions:
-#   - isForgeScanTarget(command) -> boolean
-#       true for: gh issue (create|edit|close|comment), gh pr (create|edit|close|comment|review)
-#                 gh repo create|edit,
-#                 gh api -X POST/PATCH/PUT/DELETE, gh api --method POST/PATCH/PUT/DELETE
-#       false for: gh repo rename|archive|delete|view, gh issue list, git commit,
-#                  gh api -X GET, gh api (no method flag)
-#   - extractTexts(command) -> { inline: string[], filePaths: string[] }
-#       --body "x" / --title "x" / --body 'x'   -> inline[]
-#       --description "x" / --homepage "x"      -> inline[]
-#       --body-file /path                        -> filePaths[]
-#       heredoc <<'EOF'\n...\nEOF                -> inline[]
-#       -f key=value / -F key=value / --field key=value -> inline[] (gh api fields)
-#       --input @/path                           -> filePaths[]
-#       --input - (stdin)                        -> empty (no extraction)
-#       gh api -X GET (read-only)                -> empty (no extraction)
-#       no match                                 -> { inline: [], filePaths: [] }
-#
-# These tests target the POST-implementation behavior. While the module does
-# not yet exist, the driver detects MODULE_NOT_FOUND and reports every case as
-# failing with the same "not yet implemented" diagnostic instead of crashing.
+# Unit tests for the forge write-scan primitives; the scan-target and
+# inline[]/filePaths[] contract is documented in the module itself (SSOT).
+# The driver reports MODULE_NOT_FOUND as "not yet implemented" per case.
+# Section 2053 = tests/feature-forge-write-scan-extract/cases-2053-{additive-exports,tables}.sh
+
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -265,6 +248,36 @@ expect_extract "gh repo create --description -> inline" \
 expect_extract "gh repo edit --homepage -> inline" \
     'gh repo edit foo/bar --homepage "https://internal.example.com"' \
     'return Array.isArray(v.inline) && v.inline.some(s => s.indexOf("internal.example.com") !== -1) && Array.isArray(v.filePaths);'
+
+PARTS_DIR="$DOTFILES_DIR/tests/feature-forge-write-scan-extract"
+
+# probe-lib.sh owns the shared expression probe both section-2053 parts use.
+if [ -f "$PARTS_DIR/probe-lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$PARTS_DIR/probe-lib.sh"
+else
+    fail "section 2053 probe library missing: $PARTS_DIR/probe-lib.sh"
+fi
+
+for _part in cases-2053-additive-exports cases-2053-tables; do
+    if [ -f "$PARTS_DIR/$_part.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$PARTS_DIR/$_part.sh"
+    else
+        fail "section 2053 part file missing: $PARTS_DIR/$_part.sh"
+    fi
+done
+
+if declare -F run_2053_additive_exports >/dev/null; then
+    run_2053_additive_exports
+else
+    fail "run_2053_additive_exports was not defined by its part file"
+fi
+if declare -F run_2053_tables >/dev/null; then
+    run_2053_tables
+else
+    fail "run_2053_tables was not defined by its part file"
+fi
 
 echo ""
 echo "================================"
