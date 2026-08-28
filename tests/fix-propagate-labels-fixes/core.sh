@@ -1,11 +1,12 @@
 # Core feature tests for propagate-labels.sh (#1546, #1545, #1548, #1565).
 # Sourced by tests/fix-propagate-labels-fixes.sh — not run standalone.
+# Tests: bin/github-issues/propagate-labels.sh
+# Tags: scope:issue-specific, propagate-labels
 
 # ===========================================================================
 # T-propagate-hooksPath-neutral (#1546): the sibling clone must neutralize any
-# inherited global core.hooksPath before committing, so a blocking global hook
-# cannot abort the propagation commit. Structural assertion: a
-# `git -C <clone> config core.hooksPath` (set to empty) is logged.
+# inherited global core.hooksPath before committing (`git -C <clone> config
+# core.hooksPath` set to empty), so a blocking global hook cannot abort it.
 # FAIL before fix: propagate-labels.sh never sets core.hooksPath.
 # ===========================================================================
 setup_common_mock
@@ -129,13 +130,16 @@ fi
 teardown_common_mock
 
 # ===========================================================================
-# T-propagate-asset-copy (#1565): the 4 canonical assets (sync-labels.sh,
-# task.yml, incident.yml, sync-labels.yml) are git-added into the sibling clone.
+# T-propagate-asset-copy (#1565, revised for the sync-labels.yml exclusion):
+# the 3 canonical assets (sync-labels.sh, task.yml, incident.yml) are
+# git-added into the sibling clone.
 # FAIL before fix: only .github/labels.yml is copied/added.
 # ===========================================================================
 setup_common_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
-# Seed the 4 source assets in AGENTS_WORKSPACE.
+# Seed the 3 source assets in AGENTS_WORKSPACE (plus a sync-labels.yml
+# workflow stub, to prove it is present in the source but deliberately never
+# copied — see T-propagate-asset-workflow-excluded below).
 mkdir -p "$TMP/agents-workspace/bin/github-issues" \
          "$TMP/agents-workspace/.github/ISSUE_TEMPLATE" \
          "$TMP/agents-workspace/.github/workflows"
@@ -149,13 +153,30 @@ touch "$TMP/sibling-repo/.is-git-repo"
 export PROPAGATE_LABELS_REPOS="$TMP/sibling-repo"
 run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
 MISSING=""
-for asset in "sync-labels.sh" "task.yml" "incident.yml" "sync-labels.yml"; do
+for asset in "sync-labels.sh" "task.yml" "incident.yml"; do
     grep -q "add .*$asset" "$MOCK_LOG" 2>/dev/null || MISSING="$MISSING $asset"
 done
 if [ -z "$MISSING" ]; then
-    pass "T-propagate-asset-copy: all 4 assets git-added into sibling clone"
+    pass "T-propagate-asset-copy: all 3 assets git-added into sibling clone"
 else
     fail "T-propagate-asset-copy: not added ->$MISSING (log=$(cat "$MOCK_LOG" 2>/dev/null))"
+fi
+
+# ===========================================================================
+# T-propagate-asset-workflow-excluded: .github/workflows/sync-labels.yml must
+# NOT be git-added into the sibling clone. GitHub rejects a PAT-authored push
+# that creates/updates a workflow file without the `workflow` scope — siblings
+# don't need their own copy since propagate-labels.sh already syncs their
+# labels centrally via sync-labels.sh --repo. Deliberate exclusion, so it is
+# guarded positively rather than left as an absence nobody asserts on.
+# Reuses the same run (same $MOCK_LOG) as T-propagate-asset-copy above.
+# ===========================================================================
+WORKFLOW_ADDED=0
+grep -q "add .*sync-labels\.yml" "$MOCK_LOG" 2>/dev/null && WORKFLOW_ADDED=1
+if [ "$WORKFLOW_ADDED" = "0" ]; then
+    pass "T-propagate-asset-workflow-excluded: sync-labels.yml NOT git-added into sibling clone"
+else
+    fail "T-propagate-asset-workflow-excluded: sync-labels.yml was added (log=$(cat "$MOCK_LOG" 2>/dev/null))"
 fi
 teardown_common_mock
 

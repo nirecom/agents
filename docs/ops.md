@@ -143,10 +143,12 @@ scans one level of subdirectories and propagates to each git repo found there. A
 (no git repos one level down) skips gracefully with exit 0.
 
 **Asset propagation:** in addition to `.github/labels.yml`, each sibling receives copies of
-`bin/github-issues/sync-labels.sh`, `.github/ISSUE_TEMPLATE/task.yml`,
-`.github/ISSUE_TEMPLATE/incident.yml`, and `.github/workflows/sync-labels.yml` from the agents
-workspace. Missing source assets are silently skipped; present ones are committed in the same
-commit as `labels.yml`.
+`bin/github-issues/sync-labels.sh`, `.github/ISSUE_TEMPLATE/task.yml`, and
+`.github/ISSUE_TEMPLATE/incident.yml` from the agents workspace. Missing source assets are
+silently skipped; present ones are committed in the same commit as `labels.yml`.
+`.github/workflows/sync-labels.yml` is deliberately excluded: pushing a workflow file requires
+the `workflow` PAT scope, and siblings do not need their own copy because this job applies their
+labels centrally via `sync-labels.sh --repo`.
 
 **Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
 direct push is rejected and that sibling is recorded as a failure (the others still proceed).
