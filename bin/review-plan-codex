@@ -1,18 +1,8 @@
 #!/usr/bin/env bash
 # Adversarial plan review via OpenAI Codex CLI.
-# Usage: review-plan-codex --input <file> --format {detail-plan|outline-plan}
-#                          [--cap N] [--max-extensions N] [--extensions-used N]
-#                          [--session-id ID] [--log-dir DIR]
-#                          [--accepted-tradeoffs FILE] [--context FILE]...
-#                          [--no-log]
-#
-# Always emits one of:
-#   ## Codex Plan Review: PERFORMED
-#   ## Codex Plan Review: SKIPPED — <reason>
-#   ## Codex Plan Review: FAILED — <reason>
-#
-# Designed to be called from Claude Code Bash tool during planning loops.
-# Always exits 0 so it never blocks the workflow.
+# Usage: review-plan-codex --input <file> --format {detail-plan|outline-plan} [--cap N] [--max-extensions N] [--extensions-used N] [--session-id ID] [--log-dir DIR] [--accepted-tradeoffs FILE] [--context FILE]... [--no-log]
+# Emits "## Codex Plan Review: PERFORMED|SKIPPED — <reason>|FAILED — <reason>".
+# Called from Claude Code's Bash tool during planning loops; always exits 0 so it never blocks the workflow.
 
 set -uo pipefail
 

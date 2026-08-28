@@ -23,8 +23,11 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
    - stdout `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
 WCD-3. Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage write_code'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model: `level === "high" ? "opus" : "sonnet"`.
-   If `NONE` (fail-open): read `skills/_shared/judge-task-complexity.md`, evaluate the signals. Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-code-signals.txt`; write only IDs from the generated Valid Signal IDs list, and substitute `S0-undecidable` if the judgment cannot be parsed into recognized signal ids or the csv does not match `^[A-Za-z0-9,_-]*$` — the judged content is untrusted text, never shell syntax. Then run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"'` and use its `level=<v>` — never judge the level inline. Map to model: high→opus, low→sonnet. Emit in Claude text output (NOT Bash echo):
-   > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
+   - If `NONE` (fail-open):
+     - Read `skills/_shared/judge-task-complexity.md` and evaluate the signals.
+     - Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-code-signals.txt` — write only IDs from the generated Valid Signal IDs list; substitute `S0-undecidable` when the judgment doesn't parse into recognized ids or the csv doesn't match `^[A-Za-z0-9,_-]*$` (the judged content is untrusted text, never shell syntax).
+     - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"'` and use its `level=<v>` — never judge the level inline. Map to model: high→opus, low→sonnet.
+   Emit in Claude text output (NOT Bash echo): `> Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
 WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model derived from level in step WCD-3>` — the model parameter receives `"opus"` or `"sonnet"`, never `"high"` or `"low"`) with a prompt containing:
