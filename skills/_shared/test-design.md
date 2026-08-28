@@ -1,5 +1,4 @@
 > Shared reference for `skills/write-tests` and `skills/review-tests`. Read explicitly by each skill's Step 1/2.
-<!-- lang-check: ignore — pre-existing Japanese section (## 詳細ファイル), unrelated to any diff in this file -->
 
 ## Priority Tiers
 
@@ -182,7 +181,7 @@ so it is not a hard CI failure.
 Motivated by 11 dead assertions found and fixed after the fact in PR #865.
 Applying the false-green detector at authoring time prevents recurrence.
 
-## 詳細ファイル
+## Detail files
 
-- **パーサ/正規表現/allowlist 対象**: `skills/_shared/test-design/parser-regex-tests.md` — Table-Driven Tests・Mutation Probe パターン。
-- **セキュリティ/ガード/分類器修正**: `skills/_shared/test-design/protection-fix-tests.md` — Protection Fix Patterns 1〜4。
+- **Parser / regex / allowlist targets**: `skills/_shared/test-design/parser-regex-tests.md` — Table-Driven Tests and Mutation Probe patterns.
+- **Security / guard / classifier fixes**: `skills/_shared/test-design/protection-fix-tests.md` — Protection Fix Patterns 1–4.

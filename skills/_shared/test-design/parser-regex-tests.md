@@ -1,4 +1,4 @@
-> `skills/_shared/test-design.md` の詳細ファイル。対象がパーサ・正規表現定数・allowlist ファイルの場合に読む。
+> Detail file of `skills/_shared/test-design.md`. Read it when the target is a parser, a regex constant, or an allowlist file.
 
 ## Table-Driven Tests (required when changing parsers, regex constants, or allowlists)
 
