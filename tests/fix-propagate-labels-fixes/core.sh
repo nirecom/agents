@@ -209,3 +209,83 @@ else
     fail "T-propagate-asset-missing-source: rc=$RC task_added=$TASK_ADDED (log=$(cat "$MOCK_LOG" 2>/dev/null))"
 fi
 teardown_common_mock
+
+# ===========================================================================
+# T-propagate-self-skip: an entry resolving to the script's own repo (per
+# GITHUB_REPOSITORY) is skipped — no clone, no `gh label list`, exit 0, and
+# a "self-reference" notice is printed.
+# FAIL before fix: the repo is cloned and synced like any other sibling.
+# ===========================================================================
+setup_common_mock
+export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
+mkdir -p "$TMP/self-owner/self-repo"
+touch "$TMP/self-owner/self-repo/.is-git-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/self-owner/self-repo"
+export GITHUB_REPOSITORY="self-owner/self-repo"
+RUN_OUT="$TMP/run-self-skip.log"
+run_with_timeout 60 bash "$TARGET" >"$RUN_OUT" 2>&1
+RC=$?
+CLONED=0
+grep -q "git clone" "$MOCK_LOG" 2>/dev/null && CLONED=1
+LISTED=0
+grep -q "gh label list" "$MOCK_LOG" 2>/dev/null && LISTED=1
+NOTICE=0
+grep -q "self-reference" "$RUN_OUT" 2>/dev/null && NOTICE=1
+if [ "$RC" = "0" ] && [ "$CLONED" = "0" ] && [ "$LISTED" = "0" ] && [ "$NOTICE" = "1" ]; then
+    pass "T-propagate-self-skip: self-referencing entry skipped, no clone/sync (rc=$RC)"
+else
+    fail "T-propagate-self-skip: rc=$RC cloned=$CLONED listed=$LISTED notice=$NOTICE (log=$(cat "$MOCK_LOG" 2>/dev/null))"
+fi
+unset GITHUB_REPOSITORY
+teardown_common_mock
+
+# ===========================================================================
+# T-propagate-self-origin-fallback: same skip, but GITHUB_REPOSITORY unset so
+# _SELF_REPO is derived from AGENTS_WORKSPACE's origin remote instead.
+# FAIL before fix: the repo is cloned and synced like any other sibling.
+# ===========================================================================
+setup_common_mock
+export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
+unset GITHUB_REPOSITORY
+mkdir -p "$TMP/origin-owner/origin-repo"
+touch "$TMP/origin-owner/origin-repo/.is-git-repo"
+export AGENTS_WORKSPACE="$TMP/origin-owner/origin-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/origin-owner/origin-repo"
+RUN_OUT="$TMP/run-self-origin.log"
+run_with_timeout 60 bash "$TARGET" >"$RUN_OUT" 2>&1
+RC=$?
+CLONED=0
+grep -q "git clone" "$MOCK_LOG" 2>/dev/null && CLONED=1
+LISTED=0
+grep -q "gh label list" "$MOCK_LOG" 2>/dev/null && LISTED=1
+NOTICE=0
+grep -q "self-reference" "$RUN_OUT" 2>/dev/null && NOTICE=1
+if [ "$RC" = "0" ] && [ "$CLONED" = "0" ] && [ "$LISTED" = "0" ] && [ "$NOTICE" = "1" ]; then
+    pass "T-propagate-self-origin-fallback: origin-derived self skip works (rc=$RC)"
+else
+    fail "T-propagate-self-origin-fallback: rc=$RC cloned=$CLONED listed=$LISTED notice=$NOTICE (log=$(cat "$MOCK_LOG" 2>/dev/null))"
+fi
+teardown_common_mock
+
+# ===========================================================================
+# T-propagate-self-guard-no-overreach (regression guard): a genuinely
+# different sibling still propagates normally while GITHUB_REPOSITORY names
+# an unrelated repo. Guards against the guard over-skipping siblings.
+# Should PASS both before and after the fix.
+# ===========================================================================
+setup_common_mock
+export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
+export GITHUB_REPOSITORY="unrelated-owner/unrelated-repo"
+mkdir -p "$TMP/sibling-repo"
+touch "$TMP/sibling-repo/.is-git-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/sibling-repo"
+run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
+LISTED=0
+grep -q "gh label list" "$MOCK_LOG" 2>/dev/null && LISTED=1
+if [ "$LISTED" = "1" ]; then
+    pass "T-propagate-self-guard-no-overreach: unrelated sibling still propagates"
+else
+    fail "T-propagate-self-guard-no-overreach: sibling was skipped (log=$(cat "$MOCK_LOG" 2>/dev/null))"
+fi
+unset GITHUB_REPOSITORY
+teardown_common_mock

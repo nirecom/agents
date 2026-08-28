@@ -150,6 +150,12 @@ silently skipped; present ones are committed in the same commit as `labels.yml`.
 the `workflow` PAT scope, and siblings do not need their own copy because this job applies their
 labels centrally via `sync-labels.sh --repo`.
 
+**Self-reference guard:** an entry that resolves to the agents repo itself is skipped with a
+`self-reference: ... — skipping` notice. Without it, the job rewrites the canonical `labels.yml`
+as header+itself and pushes to `main`, which the workflow's `paths:` filter retriggers — an
+unbounded self-push loop. The guard reads `GITHUB_REPOSITORY` inside Actions and falls back to
+the `AGENTS_WORKSPACE` origin URL locally, so configuration mistakes cannot re-arm the loop.
+
 **Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
 direct push is rejected and that sibling is recorded as a failure (the others still proceed).
 Neither sibling currently has branch protection, so the direct push succeeds today.
