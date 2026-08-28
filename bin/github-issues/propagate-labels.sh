@@ -74,7 +74,9 @@ while IFS= read -r _ENTRY_PATH; do
     else
         case "$_ENTRY_PATH" in
             /*|[A-Za-z]:\\*)
-                _REPO_BASENAME="$(basename "$_ENTRY_PATH")"
+                # basename treats only "/" as a separator, so a Windows entry such as
+                # C:\git\dotfiles would come back whole on the CI (Linux) runner.
+                _REPO_BASENAME="$(basename "${_ENTRY_PATH//\\//}")"
                 _CURRENT_ORIGIN="$(git -C "$AGENTS_WORKSPACE" remote get-url origin 2>/dev/null)"
                 _CURRENT_OWNER="$(printf '%s\n' "$_CURRENT_ORIGIN" | sed 's|.*github\.com[:/]\([^/]*\)/.*|\1|; t; s/.*//')"
                 if [ -z "$_REPO_BASENAME" ] || [ -z "$_CURRENT_OWNER" ]; then
@@ -109,7 +111,7 @@ while IFS= read -r _ENTRY_PATH; do
             slug="${SIBLING//\//-}"
             DEST="$GIT_WORK_DIR/$slug"
 
-            if ! git clone "https://x-access-token:$PROPAGATE_LABELS_PAT@github.com/$SIBLING.git" "$DEST"; then
+            if ! git clone "https://x-access-token:${PROPAGATE_LABELS_PAT}@github.com/$SIBLING.git" "$DEST"; then
                 printf '%s\n' "clone failed for $SIBLING — skipping" >&2
                 exit 1
             fi

@@ -86,6 +86,18 @@ exit 0
 MOCK_EOF
     chmod +x "$TMP/mock-bin/gh"
 
+    # Forces Linux-CI basename semantics ("/" only separator, "\" ordinary)
+    # on every host — MSYS basename also splits on "\", which would mask the
+    # CI-only bug T-propagate-ci-path-3 exercises.
+    cat > "$TMP/mock-bin/basename" <<'MOCK_EOF'
+#!/bin/bash
+_path="$1"
+while [ "${#_path}" -gt 1 ] && [ "${_path%/}" != "$_path" ]; do _path="${_path%/}"; done
+case "$_path" in */*) _path="${_path##*/}" ;; esac
+printf '%s\n' "$_path"
+MOCK_EOF
+    chmod +x "$TMP/mock-bin/basename"
+
     export PATH="$TMP/mock-bin:$PATH"
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
@@ -253,6 +265,31 @@ if [ "$RC" != "0" ] && [ "$CLONE_CALLED" = "0" ]; then
     pass "T-propagate-ci-path-2: owner-lookup fails → exit 1, no clone"
 else
     fail "T-propagate-ci-path-2: rc=$RC clone_called=$CLONE_CALLED"
+fi
+
+# ===========================================================================
+# T-propagate-ci-path-3: Windows backslash path in CI fallback → normalized
+# before basename so it resolves to testorg/dotfiles-fake-xyz instead of
+# being rejected by the owner/repo format guard. "-fake-xyz" suffix avoids
+# colliding with a real dev-box directory, so [ -d ] misses and the CI
+# (basename+owner) fallback branch under test is hit.
+# ===========================================================================
+setup_mock
+mkdir -p "$TMP/repos/testorg/agents"
+export AGENTS_WORKSPACE="$TMP/repos/testorg/agents"
+export PROPAGATE_LABELS_REPOS='C:\git\dotfiles-fake-xyz'
+export PROPAGATE_LABELS_PAT="test-pat-path3"
+export GIT_WORK_DIR="$TMP/workdir"
+export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
+run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
+RC=$?
+CLONE_HAS_REPO=0
+grep "git clone" "$MOCK_LOG" 2>/dev/null | grep -q "testorg/dotfiles-fake-xyz" && CLONE_HAS_REPO=1
+teardown_mock
+if [ "$CLONE_HAS_REPO" = "1" ] && [ "$RC" = "0" ]; then
+    pass "T-propagate-ci-path-3: Windows backslash path resolves to testorg/dotfiles-fake-xyz"
+else
+    fail "T-propagate-ci-path-3: rc=$RC clone_has_repo=$CLONE_HAS_REPO"
 fi
 
 echo ""
