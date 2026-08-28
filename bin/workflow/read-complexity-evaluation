@@ -7,10 +7,8 @@
 //   read-complexity-evaluation --session <sid> [--stage <detail|write_tests|write_code>]
 //
 // With --stage, line 1 carries THAT stage's level; without it, the aggregate
-// level plus a `levels=` JSON line when the per-stage view is derivable.
-// On a resolved record prints:  level=<v>  then  signals=<csv or none>
-// On no record / underivable:   NONE   (single line, exit 0 — callers fail open
-// by re-evaluating inline, exactly as before)
+// level plus a `levels=` JSON line when derivable.
+// Resolved record: level=<v> then signals=<csv or none>. No record / underivable: NONE.
 // Exits 0 in both cases; exits 1 on bad args.
 
 const path = require("path");
@@ -20,11 +18,8 @@ const { readComplexityEvaluation, ROUTING_STAGES } = require(
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
-// A flag present as the LAST token, or immediately followed by another `--`
-// flag, has no value — argv[i+1] reading blindly would return undefined
-// (indistinguishable from "flag absent") or swallow the next flag as this
-// flag's value. Both are usage errors, not a value, and neither may fall
-// through to the flag-absent behavior.
+// A flag as the last token, or followed by another `--` flag, has no value —
+// that's a usage error, not "flag absent" or "next flag is my value".
 function requireValue(argv, i, flagName) {
   const v = argv[i + 1];
   if (v === undefined || v.startsWith("--")) {

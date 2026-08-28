@@ -7,12 +7,10 @@
 //   record-complexity-evaluation --session <sid> --signals <csv>
 //   record-complexity-evaluation --session <sid> --signals-file <path>
 //
-// Exactly one of --signals / --signals-file is REQUIRED; passing both is an error.
-// --signals may be empty: `--signals ""` records zero signals.
-// --signals-file reads the csv from a file with fs.readFileSync (never a shell),
-// so judge-authored text never reaches command-argument position (#2099 PO-INJ).
-// Both forms feed the SAME parse + allowlist derivation: an unrecognized token
-// routes to the undecidable level, so hostile file content fails high.
+// Exactly one of --signals / --signals-file is required (--signals "" is valid, zero signals).
+// --signals-file reads via fs.readFileSync, never a shell, so judge-authored
+// text never reaches command-argument position (#2099 PO-INJ); both forms
+// share the same parse + allowlist, so an unrecognized token fails high.
 // Levels are derived code-side (#2099) — the caller never passes a verdict.
 // On success prints: RECORDED_COMPLEXITY level=<v> signals=<csv>
 // Exits 0 on success, 1 on bad args, derivation failure, or read-back failure.
@@ -33,14 +31,10 @@ function usage(msg) {
   process.exit(1);
 }
 
-// `signals` stays undefined until the flag is SEEN: `--signals ""` (a valid
-// zero-signal input) must be distinguishable from the flag never being passed.
-// No size bound is applied — an unrecognized token simply routes to the
-// undecidable level, so oversized input needs no special case.
-// A flag present as the LAST token, or immediately followed by another `--`
-// flag, has no value — argv[i+1] reading blindly would return undefined
-// (indistinguishable from "flag absent") or swallow the next flag as this
-// flag's value. Both are usage errors, not a value.
+// `signals` stays undefined until seen — `--signals ""` is a valid zero-signal
+// input, distinct from the flag never being passed.
+// A flag as the last token, or followed by another `--` flag, has no value —
+// that's a usage error, not "flag absent" or "next flag is my value".
 function requireValue(argv, i, flagName) {
   const v = argv[i + 1];
   if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
@@ -115,11 +109,9 @@ function main() {
 
   let intended;
   try {
-    // recordComplexityEvaluation() returns the CANONICALIZED shape it actually
-    // persisted (deduplicated/control-char-stripped, #2099 H-SIG/LI-3/LI-6) —
-    // used below for both the read-back comparison and the printed receipt,
-    // so this CLI's own stdout can never echo the raw, pre-canonicalization
-    // input.
+    // Returned shape is CANONICALIZED (deduped/control-char-stripped, #2099
+    // H-SIG/LI-3/LI-6) — used for both read-back and the printed receipt, so
+    // stdout never echoes raw pre-canonicalization input.
     intended = recordComplexityEvaluation(args.session, signals);
   } catch (e) {
     if (e instanceof RoutingTableUnavailableError) {

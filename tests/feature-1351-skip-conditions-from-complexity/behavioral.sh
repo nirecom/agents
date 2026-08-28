@@ -136,10 +136,9 @@ echo "=== SC-11: outline values strictly === true ==="
 # REAL event store (see inject_ce_event in _lib.sh — the old seeder wrote a
 # projection key that persist silently strips, so these cases were testing an
 # absent record). Each case first pins WHAT THE PROJECTION ACTUALLY FOLDED, then
-# the resolver behaviour that follows from it. Two distinct outcomes exist and
-# the split is the point: a malformed `signals` is NORMALIZED to [] by the
-# projection, so it reaches the resolver as a legitimate 0-signal record and
-# auto-skips; a malformed `level` survives to the resolver and fails open.
+# the resolver behaviour that follows. Split: malformed `signals` is NORMALIZED
+# to [] and auto-skips as a legitimate 0-signal record; malformed `level`
+# survives unnormalized to the resolver's own guard and fails open.
 # ==========================================================================
 echo ""
 echo "=== SC-12..SC-17b: malformed CE records via the real event store ==="

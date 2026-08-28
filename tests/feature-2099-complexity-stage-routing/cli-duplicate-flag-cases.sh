@@ -3,28 +3,18 @@
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip
 # Tags: complexity, routing, cli, argument-parsing, security, edge-cases, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh.
-# The sibling hardening suites pass each flag ONCE; a flag repeated with a
-# different value is the parser state nothing covers — and the one an
-# orchestrator produces by accident, when a skill line already carrying
-# `--signals "<csv>"` gets a second one appended by a wrapper's own default.
+# Siblings pass each flag once; a flag repeated with a different value (e.g. an
+# orchestrator appending a default --signals) is untested elsewhere.
 D2099DF_A="S1-multi-file"
 
-# S1/S2 route detail differently (low vs high, detail.md D2), so first-wins,
-# last-wins and merge are three distinguishable outcomes. S3-security does NOT
-# work here: detail's escalation sets omit it, so S1 and S3 both route detail
-# low and every duplicate-resolution rule would look alike through
-# `--stage detail`.
+# S1/S2 route detail differently (low vs high, detail.md D2), so first/last/merge
+# are distinguishable. S3-security doesn't work here — detail routes it low too.
 D2099DF_B="S2-architecture"
 
-# The contract. detail.md fixes no duplicate-flag rule, so BOTH principled
-# answers pass and the AMBIGUOUS middles fail: (a) reject — non-zero exit, a
-# diagnostic, and NOTHING persisted; or (b) last-wins, the conventional CLI
-# default (getopt, git, docker), identical to passing only the last occurrence.
-# first-wins and merge are refused: they let the value a reader sees at the
-# visible tail of the line be overridden by an earlier one, so
-# `--signals X --signals ""` would record the zero-signal LOW while reading as X.
-# Determinism is required either way — a parser answering differently on two
-# identical invocations makes every routing decision unreproducible.
+# detail.md sets no duplicate-flag rule, so both principled answers pass:
+# (a) reject (non-zero exit, nothing persisted) or (b) last-wins (the CLI
+# convention). first-wins and merge fail — they'd let an earlier flag override
+# what the line visibly ends with. Either way the answer must be deterministic.
 d2099df_assert() {
     local id="$1" dup="$2" dup_again="$3" first="$4" last="$5" mutated="$6"
     if [ "$dup" != "$dup_again" ]; then
@@ -49,8 +39,7 @@ d2099df_assert() {
     esac
 }
 
-# One invocation through the CLI's OWN interpreter (d2099_cli_runner — the
-# wrapper is bash while its siblings are node), reduced to exit code + first line.
+# One invocation via the CLI's own interpreter, reduced to exit code + first line.
 d2099df_run() {
     local bin="$1"; shift
     local rc=0 out
@@ -58,8 +47,7 @@ d2099df_run() {
     printf 'rc=%s out=[%s]' "$rc" "$(printf '%s\n' "$out" | head -1)"
 }
 
-# What a WRITE CLI actually stored, read back through the reader — the outcome
-# that matters for record/record-and-skip, whose stdout is only a receipt.
+# Read back what a write CLI stored — its stdout is only a receipt.
 d2099df_stored() {
     printf 'rc=0 out=[stored:%s]' "$(run_with_timeout node "$BIN_READ" --session "$1" --stage detail 2>/dev/null | tr '\n' ';')"
 }
@@ -70,10 +58,8 @@ d2099df_mutation() {
 }
 
 # A write CLI's baseline: one session, one single-flag call, its read-back.
-# When that single call records nothing the pair is unattributable, and the
-# reason belongs in the failure message rather than in a bare empty string. The
-# note travels through a FILE, not a variable: every baseline is read through a
-# command substitution, whose subshell would discard an assignment.
+# The reason for an empty baseline travels via a file, not a variable — each
+# baseline is read through a command substitution, whose subshell discards assignments.
 D2099DF_WHY="$TMPDIR_BASE/d2099df-why"
 d2099df_baseline() {
     local tag="$1"; shift
@@ -117,9 +103,8 @@ d2099df_record_signals() {
     d2099df_assert "DF-1 record-complexity-evaluation --signals twice" \
         "${dup%|*}" "${dup2%|*}" "$first" "$last" "${dup##*|}"
 
-    # The dangerous pairing on its own axis: a visible signal set followed by the
-    # zero-signal value (detail.md item 10). Under first-wins this records the
-    # HIGH while the line ends in "", the direction that hides an escalation.
+    # The dangerous pairing (detail.md item 10): a signal set followed by "".
+    # Under first-wins this records HIGH while the line ends in "", hiding the escalation.
     zero=$(d2099df_baseline dfrec-zerobase "$BIN_RECORD" --signals "")
     dup=$(d2099df_dup_write dfrec-zero "$BIN_RECORD" --signals "$D2099DF_B" --signals "")
     dup2=$(d2099df_dup_write dfrec-zero2 "$BIN_RECORD" --signals "$D2099DF_B" --signals "")
@@ -128,18 +113,15 @@ d2099df_record_signals() {
 }
 
 # --- DF-2/DF-8: a duplicated --session on each write CLI ----------------------
-# The wrong half of the pair must stay untouched whichever answer the parser
-# gives: a record landing in BOTH sessions is what neither behaviour permits.
+# The wrong half of the pair must stay untouched — a record landing in BOTH
+# sessions is what neither behaviour permits.
 d2099df_two_session_write() {
     local id="$1" bin="$2"; shift 2
     local sid_a sid_b rc=0 both ctrl ctrl_rc=0 ctrl_out tag
-    # The session tag comes from the BINARY's name, never from the case id: the
-    # id is prose with spaces, and the CLIs' --session regex rejects those, so a
-    # tag built from it would fail on the session id rather than the duplicate.
+    # Tag comes from the binary name, not the case id — id is prose with
+    # spaces, and the CLIs' --session regex rejects those.
     tag="df-$(basename "$bin")"
-    # Attributability control: the SAME call with one --session must record.
-    # Without it a CLI that refuses every invocation — today's, which has no
-    # signals-only form yet — would satisfy the reject branch and go green.
+    # Control: the same call with ONE --session must record, else "refused" proves nothing.
     ctrl=$(new_session "$tag-ctrl")
     ctrl_out=$(run_with_timeout "$(d2099_cli_runner "$bin")" "$bin" --session "$ctrl" "$@" 2>&1) || ctrl_rc=$?
     if [ "$(d2099_side_effects "$ctrl")" != "ce=1 skip=0" ]; then
@@ -165,9 +147,8 @@ d2099df_two_session_write() {
 }
 
 # --- DF-3/DF-4: read-complexity-evaluation -----------------------------------
-# --stage detail vs write_code splits S1-multi-file low/high (detail.md D2); the
-# --session pair couples a recorded id with an unrecorded one, whose answer is
-# the NONE fallback. A reader has no state to mutate, so `clean` is structural.
+# --stage detail vs write_code splits S1-multi-file low/high (detail.md D2).
+# A reader has no state to mutate, so `clean` is structural here.
 d2099df_read_flags() {
     local sid sid_none first last dup dup2
     sid=$(new_session dfread)
@@ -196,10 +177,8 @@ d2099df_read_flags() {
 }
 
 # --- DF-5/DF-6: derive-complexity-level --------------------------------------
-# Stateless, so this is purely the parser. Pre-implementation the binary is
-# absent, both arms report the same non-zero loader error and the baselines
-# collapse — which is an explicit FAIL naming that error, never a skip: a skip
-# here would be the silent opt-out that hides the CLI still being missing.
+# Stateless, so this is purely the parser. Pre-implementation, both arms report
+# the same loader error and collapse to an explicit FAIL, never a silent skip.
 d2099df_derive_flags() {
     local id="$1" flag="$2" v_first="$3" v_last="$4"
     shift 4
@@ -216,9 +195,8 @@ d2099df_derive_flags() {
 }
 
 # --- DF-7: record-complexity-and-skip ----------------------------------------
-# The bash wrapper does its own presence detection (detail.md item 11), so it
-# owns a SECOND parser: a duplicate resolved here differently than by the node
-# CLI it delegates to is a split-brain contract, invisible to either suite alone.
+# The bash wrapper does its own presence detection (detail.md item 11) — a
+# second parser that can diverge from the node CLI it delegates to.
 d2099df_wrapper_signals() {
     local first last dup dup2
     : > "$D2099DF_WHY"

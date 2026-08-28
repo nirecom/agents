@@ -47,14 +47,10 @@ run_with_timeout() {
 }
 
 # --- required-API assertion (NOT a skip gate) --------------------------------
-# resolveSkipConditionsFromComplexity is a REQUIRED class member of #2099
-# (detail.md "Class members", 4th consumer), and detail.md item 7 requires its
-# decision to run through isZeroSignalLow() from complexity-routing.js. An
-# absent required member is a FAILURE: the earlier `if [ "$API_READY" = true ]`
-# gate turned "the implementation does not exist" into "0 failed, N skipped",
-# which is exactly the false-green the fail-before-fix discipline forbids.
-# Every behavioral case below therefore runs unconditionally and reports its own
-# real reason (MODULE_NOT_FOUND, wrong arity, old contract) when it cannot pass.
+# resolveSkipConditionsFromComplexity is a REQUIRED class member (#2099 detail.md);
+# an absent member is a FAILURE, not a skip — the old `API_READY` gate turned
+# "not implemented" into "0 failed, N skipped", a false green. Every behavioral
+# case below runs unconditionally and reports its own real reason when it can't pass.
 REQUIRED_API_REPORT="$(node -e "
   const out = [];
   function probe(label, fn) {

@@ -22,10 +22,8 @@ ADVANCE=0
 SO_C1=""
 SO_C2=""
 
-# A flag present as the LAST token, or immediately followed by another `--`
-# flag, has no value — reading "$2" blindly under `set -u` either crashes with
-# "unbound variable" (last token) or silently swallows the next flag as this
-# flag's value. Both must be usage errors (exit 2), not a value.
+# A flag as the last token, or followed by another `--` flag, has no value —
+# reading "$2" blindly under `set -u` would crash or swallow the next flag.
 require_value() {
     local flag="$1" count="$2" next="${3-}"
     if [[ "$count" -lt 2 ]] || [[ "$next" == --* ]]; then

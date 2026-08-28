@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 // bin/workflow/derive-complexity-level
-// Stateless per-stage level derivation (#2099) — no session state is read or
-// written. Used by the MDP-3 / WT-5 / WCD-3 fallback path, where no recorded
-// evaluation exists and the stage still needs a model.
+// Stateless per-stage level derivation (#2099) — fallback for MDP-3/WT-5/WCD-3
+// when no recorded evaluation exists.
 //
 // Usage:
 //   derive-complexity-level --stage <detail|write_tests|write_code> --signals <csv>
@@ -11,16 +10,11 @@
 //   derive-complexity-level --print-markdown-table
 //   derive-complexity-level --print-signal-ids
 //
-// Exactly one of --signals / --signals-file is REQUIRED with --stage; passing
-// both is an error. --signals-file reads the csv from a file with
-// fs.readFileSync (never a shell), so judge-authored text never reaches
-// command-argument position (#2099 CF-8a). Both forms feed the SAME parse +
-// allowlist derivation: an unrecognized token routes to the undecidable
-// level, so hostile file content fails high.
+// --signals-file reads via fs.readFileSync, never a shell, so file content
+// never reaches command-argument position (#2099 CF-8a); both forms share the
+// same parse, so an unrecognized token routes to the undecidable level either way.
 //
-// Contract: this CLI ALWAYS returns some level, so it never prints NONE. When
-// the routing table is unusable it fails open toward higher capability:
-// stderr DERIVATION_UNAVAILABLE, stdout level=high, exit 0.
+// Fails open: unusable routing table -> stderr DERIVATION_UNAVAILABLE, level=high, exit 0.
 
 const fs = require("fs");
 const path = require("path");
@@ -37,13 +31,9 @@ function usage(msg) {
   process.exit(1);
 }
 
-// `signals` stays undefined until the flag is SEEN — symmetric with
-// record-complexity-evaluation: `--signals ""` is a valid zero-signal input.
-// No size bound: an unrecognized token routes to the undecidable level.
-// A flag present as the LAST token, or immediately followed by another `--`
-// flag, has no value — argv[i+1] reading blindly would return undefined
-// (indistinguishable from "flag absent") or swallow the next flag as this
-// flag's value. Both are usage errors, not a value.
+// `signals` stays undefined until seen — `--signals ""` is valid (zero signals).
+// A flag with no following value (last token, or followed by another `--` flag)
+// is a usage error, not an empty value.
 function requireValue(argv, i, flagName) {
   const v = argv[i + 1];
   if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
@@ -96,8 +86,8 @@ function main() {
     usage('--signals or --signals-file is required (pass --signals "" for zero signals)');
   }
 
-  // The file is read with fs.readFileSync only — never through a shell, eval, or
-  // child_process — so its content cannot be interpreted as command syntax.
+  // fs.readFileSync only — never shell/eval/child_process — so content can't
+  // be interpreted as command syntax.
   let signalsText = args.signals;
   if (args.signalsFile !== undefined) {
     if (!args.signalsFile.length) usage("--signals-file requires a path");

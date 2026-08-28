@@ -10,13 +10,11 @@ const { deriveAggregateLevel, deriveStageLevels, canonicalizeSignalsForPersisten
 // recordComplexityEvaluation(sessionId, signals):
 // Session-scoped fact, recorded as its own event (#1733) — a re-evaluation
 // supersedes the previous one in the projection without erasing it.
-// Write path — no fail-open: the caller passes SIGNALS only (#2099) and both the
-// aggregate level and the per-stage levels are derived here, so a recorded level
-// can never disagree with the signals it was derived from. A
-// RoutingTableUnavailableError propagates to the calling CLI, which owns the
-// fail-open decision. Returns the persisted { level, levels, signals } shape
-// so a caller's read-back verification / receipt line can compare against or
-// echo the SAME canonicalized signals actually written (#2099 LI-3/LI-6).
+// Write path — no fail-open: caller passes SIGNALS only (#2099); level and
+// levels are derived here so they can never disagree with the input signals.
+// RoutingTableUnavailableError propagates to the caller, who owns fail-open.
+// Returns the persisted { level, levels, signals } so callers can echo/verify
+// the SAME canonicalized signals actually written (#2099 LI-3/LI-6).
 function recordComplexityEvaluation(sessionId, signals) {
   if (arguments.length > 2) {
     throw new Error(

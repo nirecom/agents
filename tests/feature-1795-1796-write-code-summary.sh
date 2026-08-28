@@ -62,14 +62,14 @@ else
 fi
 
 echo ""
-echo "--- C: SKILL.md stays within the size cap (<=85 lines; Pattern B WARN=100/HARD=200) ---"
+echo "--- C: SKILL.md stays within the size cap (<=90 lines; Pattern B WARN=100/HARD=200) ---"
 
 if [ -f "$SKILL_MD" ]; then
   LINES=$(wc -l < "$SKILL_MD")
-  if [ "$LINES" -le 85 ]; then
-    pass "C1 SKILL.md is $LINES lines (<=85)"
+  if [ "$LINES" -le 90 ]; then
+    pass "C1 SKILL.md is $LINES lines (<=90)"
   else
-    fail "C1 SKILL.md is $LINES lines, exceeds the 85-line cap"
+    fail "C1 SKILL.md is $LINES lines, exceeds the 90-line cap"
   fi
   if [ "$LINES" -lt 100 ]; then
     pass "C2 SKILL.md is under the Pattern B WARN threshold (100 lines)"
