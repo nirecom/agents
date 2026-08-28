@@ -134,8 +134,10 @@ while IFS= read -r _ENTRY_PATH; do
                 "bin/github-issues/sync-labels.sh"
                 ".github/ISSUE_TEMPLATE/task.yml"
                 ".github/ISSUE_TEMPLATE/incident.yml"
-                ".github/workflows/sync-labels.yml"
             )
+            # .github/workflows/sync-labels.yml is deliberately NOT propagated:
+            # pushing a workflow file needs the `workflow` PAT scope, and the
+            # siblings do not need one — this job applies their labels centrally.
             for _ASSET in "${_ASSETS[@]}"; do
                 _SRC="$AGENTS_WORKSPACE/$_ASSET"
                 [ -f "$_SRC" ] || continue
