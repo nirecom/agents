@@ -28,6 +28,17 @@ if [[ -z "${PROPAGATE_LABELS_REPOS:-}" ]]; then
 fi
 AGENTS_WORKSPACE="${AGENTS_WORKSPACE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
+# Self-reference guard: this repo is the canonical source, so propagating into it
+# would overwrite labels.yml with header+itself and — via the workflow's paths
+# filter — retrigger this job in an unbounded loop. GITHUB_REPOSITORY is
+# authoritative inside Actions; the origin URL covers local runs identically.
+if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+    _SELF_REPO="$GITHUB_REPOSITORY"
+else
+    _SELF_ORIGIN="$(git -C "$AGENTS_WORKSPACE" remote get-url origin 2>/dev/null)"
+    _SELF_REPO="$(printf '%s\n' "$_SELF_ORIGIN" | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|; t; s|.*github\.com[:/]\(.*\)$|\1|')"
+fi
+
 # F2: reject path traversal in CANONICAL_LABELS_FILE
 case "$CANONICAL_LABELS_FILE" in
     *..*)
@@ -102,6 +113,11 @@ while IFS= read -r _ENTRY_PATH; do
         if ! [[ "$SIBLING" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             printf '%s\n' "invalid resolved repo format: $SIBLING (from path: $_ENTRY_PATH) — skipping" >&2
             EXIT_CODE=1
+            continue
+        fi
+
+        if [[ -n "${_SELF_REPO:-}" && "${SIBLING,,}" == "${_SELF_REPO,,}" ]]; then
+            printf '%s\n' "self-reference: $SIBLING is the canonical source (from path: $_ENTRY_PATH) — skipping"
             continue
         fi
 
