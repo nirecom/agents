@@ -292,6 +292,29 @@ else
     fail "T-propagate-ci-path-3: rc=$RC clone_has_repo=$CLONE_HAS_REPO"
 fi
 
+# ===========================================================================
+# T-propagate-ci-path-4: push after origin sanitization → push must carry the
+# token explicitly ($_AUTH_URL), since origin is reset to a plain URL with no
+# credentials. GIT_DIFF_RC=1 forces the commit/push branch.
+# ===========================================================================
+setup_mock
+export AGENTS_WORKSPACE="$TMP/agents-workspace"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
+export PROPAGATE_LABELS_PAT="test-pat-path4"
+export GIT_DIFF_RC=1
+export GIT_WORK_DIR="$TMP/workdir"
+export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
+run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
+RC=$?
+PUSH_AUTHED=0
+grep "push" "$MOCK_LOG" 2>/dev/null | grep -q "x-access-token:test-pat-path4" && PUSH_AUTHED=1
+teardown_mock
+if [ "$PUSH_AUTHED" = "1" ] && [ "$RC" = "0" ]; then
+    pass "T-propagate-ci-path-4: push uses authenticated URL, not bare origin"
+else
+    fail "T-propagate-ci-path-4: rc=$RC push_authed=$PUSH_AUTHED"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

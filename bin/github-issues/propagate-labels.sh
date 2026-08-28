@@ -110,8 +110,10 @@ while IFS= read -r _ENTRY_PATH; do
 
             slug="${SIBLING//\//-}"
             DEST="$GIT_WORK_DIR/$slug"
+            # origin is sanitized below, so the push needs this URL passed explicitly.
+            _AUTH_URL="https://x-access-token:${PROPAGATE_LABELS_PAT}@github.com/$SIBLING.git"
 
-            if ! git clone "https://x-access-token:${PROPAGATE_LABELS_PAT}@github.com/$SIBLING.git" "$DEST"; then
+            if ! git clone "$_AUTH_URL" "$DEST"; then
                 printf '%s\n' "clone failed for $SIBLING — skipping" >&2
                 exit 1
             fi
@@ -146,7 +148,7 @@ while IFS= read -r _ENTRY_PATH; do
                 printf '%s\n' "$SIBLING: nothing changed — skipping commit/push"
             else
                 git -C "$DEST" commit -m "chore: propagate labels and shared .github assets from nirecom/agents"
-                git -C "$DEST" push
+                git -C "$DEST" push "$_AUTH_URL" HEAD
             fi
 
             GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$SCRIPT_DIR/sync-labels.sh" \
