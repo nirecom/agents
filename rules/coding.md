@@ -15,6 +15,13 @@ paths:
 - Do NOT add `Co-Authored-By` trailers to commit messages.
 - Always choose the simplest implementation.
 
+## Comments
+
+- Resolve the limit before the first comment: `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" COMMENT_BLOCK_MAX_LINES 10` — the printed value is a HARD limit no comment block may exceed, for any reason.
+- Fitting under the limit is not permission to reach it: write no comment by default, and add one only where a rule below grants it.
+- File header: the comment block a reader needs before reading the file may be written there.
+- Mid-file: write a comment **only when the intent is undecipherable without it**, in 1–2 lines.
+
 ## Migration Code Blocks
 
 Temporary migration code must be wrapped with `# --- BEGIN temporary: <old> → <new> migration ---` / `# --- END temporary: ... ---` markers.
@@ -42,6 +49,6 @@ See also `rules/core-principles.md` for the top-level design principles.
 
 Each sub-rule carries its own `paths:` globs, so it is still injected on a file match independently of this hub — de-injecting the hub does not de-inject them.
 
-- [coding/python.md](coding/python.md) — `uv` 使用必須、bare `python`/`pip` 禁止
-- [coding/nodejs.md](coding/nodejs.md) — `fnm`(Windows) / `nvm`(POSIX) 使用必須
+- [coding/python.md](coding/python.md) — `uv` mandatory; bare `python`/`pip` prohibited
+- [coding/nodejs.md](coding/nodejs.md) — `fnm` (Windows) / `nvm` (POSIX) mandatory
 - [coding/file-split.md](coding/file-split.md) — HARD limit file split: code → `<name>/` sibling folder; SKILL.md → `scripts/` or `bin/`

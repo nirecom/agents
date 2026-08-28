@@ -1,4 +1,4 @@
-> `skills/_shared/test-design.md` の詳細ファイル。セキュリティ境界・ガード・分類器修正を含む変更の場合に読む。
+> Detail file of `skills/_shared/test-design.md`. Read it when the change involves a security boundary, a guard, or a classifier fix.
 
 ## Security / Protection Fix Test Patterns (#1001)
 
@@ -36,6 +36,6 @@ One Skipped-Because comment per scenario, placed adjacent to the relevant test c
 
 ### Pattern 4 — Classifier both-direction coverage
 
-分類器・ガード対象の場合、`skills/_shared/test-design.md` の
-`## Test Case Categories` — **Classifier / guard cases** バレットを適用すること。
-拒否パスと許可パス（sanctioned 入力）の両方をカバーすること。
+For a classifier or guard target, apply the **Classifier / guard cases** bullet under
+`## Test Case Categories` in `skills/_shared/test-design.md`.
+Cover both the rejection path and the allow path (sanctioned input).
