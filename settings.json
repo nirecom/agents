@@ -246,9 +246,7 @@
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
-      "../my-specs-repo",
       "../dotfiles",
-      "../my-private-repo",
       "../agents"
     ]
   },
