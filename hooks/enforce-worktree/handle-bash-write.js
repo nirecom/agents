@@ -33,7 +33,12 @@ const { commandTextOf } = require("../lib/write-tools");
 // allow paths when any target hits a protected marker basename, falling
 // through to fail-closed enforcement (same idiom as parseFailure below).
 function handleBashWrite(ctx) {
-  const { toolName, toolInput, _toolCwd, done, reportContext } = ctx;
+  const { toolName, toolInput, _toolCwd, done, reportContext, sessionCtx } = ctx;
+  // #2108: `{ sessionId, transcriptPath }` from the hook's stdin, forwarded to
+  // every protected-basename decision so a stem can be tested against the ids a
+  // clearance reader is actually keyed on. Absent means "cannot observe", which
+  // the classifier resolves fail-closed.
+  const _stemOpts = { sessionCtx };
 
   let repoRoot = null;
   let writeDetector = null;
@@ -56,7 +61,7 @@ function handleBashWrite(ctx) {
   // still resolves its own `cwdRoot` from CWD on purpose, unaffected by this.
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
   const { targets, parseFailure } = collectBashWriteTargets(ir, repoRoot);
-  const _markerHit = parseFailure || bashTargetsHitProtectedMarker(targets);
+  const _markerHit = parseFailure || bashTargetsHitProtectedMarker(targets, _stemOpts);
 
   // Early-exit for git worktree remove/prune (write confirmed above): resolve
   // repo root from CWD, not -C, so the CWD checkout type drives the decision
@@ -124,18 +129,15 @@ function handleBashWrite(ctx) {
     });
   }
 
-  // isGhWriteIR() classifies the WHOLE command as gh-write as soon as ANY
-  // segment matches a gh-write pattern, so a sequenced command like
-  // `gh issue comment 1 --body hi && rm .workflow-off` could otherwise reach
-  // the unconditional allow below without the OTHER segment's marker write
-  // ever being checked. Gating entry on `_markerHit` (computed at the top of
-  // this function) closes that gap.
+  // isGhWriteIR() classifies the WHOLE command as gh-write as soon as ANY segment
+  // matches, so `gh issue comment 1 --body hi && rm .workflow-off` could reach the
+  // unconditional allow below without the OTHER segment's marker write ever being
+  // checked — gating entry on `_markerHit` (computed at the top) closes that gap.
 
   // gh write commands (Group B) get an extra session-scope check before the
-  // standard main/worktree enforcement below. The whitelist defines the set of
-  // repos this session manages; gh writes outside the set are blocked even
-  // from a worktree, on the principle that out-of-session repos are not the
-  // current task's concern.
+  // standard main/worktree enforcement below. The whitelist defines the repos this
+  // session manages; gh writes outside the set are blocked even from a worktree,
+  // since out-of-session repos are not the current task's concern.
   if (!_markerHit && isGhWriteCommand(ir)) {
     // gh issue create skill-context gate: from the main worktree, require the
     // ISSUE_CREATE_SKILL=1 inline prefix so /issue-create (survey-first +
@@ -220,7 +222,7 @@ function handleBashWrite(ctx) {
       // non-extractable write must still fail closed to the sequencing guard
       // below, which areAllWriteSegmentsUnderWorkflowDir (unlike the flat-list
       // areAllBashTargetsUnderWorkflowDir) guarantees.
-      if (areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot)) done();
+      if (areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot, _stemOpts)) done();
 
       // Commands with sequencing operators (;, &&, ||) may contain un-extracted
       // in-scope writes (e.g. `echo x > /tmp/out; rm README.md`). Skip the
@@ -236,7 +238,7 @@ function handleBashWrite(ctx) {
             (repoRoot !== null ||
              areAllBashTargetsUnderPlansDir(targets) ||
              areAllBashTargetsUnderClaude(targets) ||
-             areAllBashTargetsUnderWorkflowDir(targets) ||
+             areAllBashTargetsUnderWorkflowDir(targets, _stemOpts) ||
              targets.every(t => findRepoRoot(String(t.path || '').replace(/^["']|["']$/g, '')) === null))) {
           done();
         }
@@ -248,7 +250,7 @@ function handleBashWrite(ctx) {
         }
       } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
                  (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets) ||
-                  areAllBashTargetsUnderWorkflowDir(targets))) {
+                  areAllBashTargetsUnderWorkflowDir(targets, _stemOpts))) {
         // Sequencing operators appear only inside a heredoc body (e.g. shell
         // fragments written by `cat <<'EOF' > plans-dir/file.md`) — the actual
         // write target is under plans-dir. Allow.

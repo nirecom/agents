@@ -1,16 +1,10 @@
 // Helper for tests/enforce-protected-marker-write/cases-round5-containment.sh.
-//
-// Lives in a FILE rather than a `node -e` body on purpose: the OFF-clearance
-// token suffix is itself a protected string, and hooks/block-clearance-token-write.js
-// blocks any interpreter body that spells one. Everything protected here is
-// derived from the SSOT (hooks/lib/protected-basenames.js) at runtime, so this
-// file also never hardcodes a suffix that could drift.
-//
+// A FILE, not a `node -e` body: the OFF-clearance suffix is itself a protected
+// string, so block-clearance-token-write.js would block an interpreter body
+// spelling one. Suffixes are derived from the SSOT at runtime, never hardcoded.
 // Usage: node round5-containment-probe.js <agentsDir> <wfDir> <aliasDir> <outsideDir>
-//   CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR must point at <wfDir> so that the
-//   enforce-worktree side's getWorkflowDir() resolves to the same directory the
-//   block-clearance-token-write side is handed explicitly.
-// Prints `key=value` lines (value: true/false/error:<msg>) — one assertion each.
+// CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR must point at <wfDir> so both sides
+// resolve the same directory. Prints `key=value` — one assertion each.
 "use strict";
 
 const path = require("path");
@@ -74,13 +68,20 @@ emit("outside_gate", () => gateAllows(j(outsideDir, "x.json")));
 emit("inside_glob", () => globInside(j(wfDir, "x*")));
 emit("inside_gate", () => gateAllows(j(wfDir, "x.json")));
 
+// Stem realigned to an effective sid (#2108): a protected suffix confers
+// clearance only when the STEM is a session id. This probe pins its own
+// CLAUDE_WORKFLOW_DIR, so the parent's registered stems are not observable
+// here; a canonical UUID needs no observation and keeps these cases about
+// CONTAINMENT rather than stem semantics.
+const SID_2108 = "0f3d9a21-1111-4222-8333-444455556666";
+
 // --- MEDIUM-7: bashTargetsHitProtectedMarker is a DETECTION predicate --------
 // It answers "skip every allow fast-path". Both protected FAMILIES count, and a
 // target the normalizer could not parse must count too — `false` there handed the
 // allow paths back for exactly the inputs nothing could vouch for.
-emit("det_marker", () => gate.bashTargetsHitProtectedMarker([t(j(wfDir, "s1" + MARKER_SUF))]));
-emit("det_token", () => gate.bashTargetsHitProtectedMarker([t(j(wfDir, "s1" + TOKEN_SUF))]));
-emit("det_token_bare", () => gate.bashTargetsHitProtectedMarker([t("s1" + TOKEN_SUF)]));
+emit("det_marker", () => gate.bashTargetsHitProtectedMarker([t(j(wfDir, SID_2108 +  MARKER_SUF))]));
+emit("det_token", () => gate.bashTargetsHitProtectedMarker([t(j(wfDir, SID_2108 +  TOKEN_SUF))]));
+emit("det_token_bare", () => gate.bashTargetsHitProtectedMarker([t(SID_2108 +  TOKEN_SUF)]));
 emit("det_malformed_null", () => gate.bashTargetsHitProtectedMarker([null]));
 emit("det_malformed_nopath", () => gate.bashTargetsHitProtectedMarker([{ resolveVia: "ancestor" }]));
 emit("det_malformed_mixed", () => gate.bashTargetsHitProtectedMarker([t(j(wfDir, "ok.json")), null]));
@@ -89,8 +90,8 @@ emit("det_empty", () => gate.bashTargetsHitProtectedMarker([]));
 
 // --- the permission-direction sibling answers the OPPOSITE way ---------------
 // Same two families, same malformed input, but here `false` is the safe answer.
-emit("perm_marker", () => gateAllows(j(wfDir, "s1" + MARKER_SUF)));
-emit("perm_token", () => gateAllows(j(wfDir, "s1" + TOKEN_SUF)));
+emit("perm_marker", () => gateAllows(j(wfDir, SID_2108 +  MARKER_SUF)));
+emit("perm_token", () => gateAllows(j(wfDir, SID_2108 +  TOKEN_SUF)));
 emit("perm_malformed", () => gate.areAllBashTargetsUnderWorkflowDir([null]));
 
 process.stdout.write(out.join("\n") + "\n");

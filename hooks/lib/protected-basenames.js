@@ -9,6 +9,8 @@
 const path = require("path");
 const { candidateBasenameMatchesAnySuffix } = require("./basename-glob-normalize");
 const { decodeAnsiCEscapes, candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
+// One-way edge (#2108): active-session-ids.js must never require this module back.
+const { observeActiveSessionIds } = require("./active-session-ids");
 
 // Every on-disk form of the OFF-clearance token: bare, the write-then-rename mint
 // intermediates, the claimed form, and the SID-scoped mint lock — the lock path is
@@ -68,9 +70,10 @@ function suffixesToAnchoredRe(suffixes) {
   return new RegExp("(?:" + alt + ")$", "i");
 }
 
-// Derived, not hand-maintained. Exported for callers that still want the regex
-// shape (and for test/diagnostic introspection); the predicates below are the
-// preferred API because only they carry the glob/ADS normalization.
+// Derived, not hand-maintained. SUFFIX-ONLY: these carry neither the glob/ADS
+// normalization nor the stem rule (#2108), so they are for introspection and
+// diagnostics only. isClearanceBearingStem / classifyProtectedPath are the SSOT
+// for any actual decision.
 const TOKEN_BASENAME_RE = suffixesToAnchoredRe(OFF_CLEARANCE_TOKEN_SUFFIXES);
 const PROTECTED_MARKER_BASENAME_RE = suffixesToAnchoredRe(PROTECTED_MARKER_SUFFIXES);
 
@@ -196,44 +199,97 @@ function stripConsumingClaimSuffix(basename) {
   return CONSUMING_CLAIM_SUFFIX_RE.test(basename) ? basename.replace(CONSUMING_CLAIM_SUFFIX_RE, "") : null;
 }
 
-function hitsTokenBasename(basename) {
-  if (candidateBasenameMatchesAnySuffix(basename, OFF_CLEARANCE_TOKEN_SUFFIXES)) return true;
-  const inner = stripConsumingClaimSuffix(basename);
-  return inner !== null && candidateBasenameMatchesAnySuffix(inner, OFF_CLEARANCE_TOKEN_SUFFIXES);
+// A protected suffix alone is not a forgery. Every reader opens exactly
+// `path.join(dir, sid + ".<kind>")`, so a name confers clearance only when its
+// STEM is an effective session id — `issue-2108-survey.gh-env` is an artifact no
+// reader will ever open (#2108).
+//
+// SPELLING SEPARATION (CPR-UNV named exception). "clean" = an Edit/Write
+// file_path, which never met a shell, so an EXACT stem match is required.
+// "bash" = a Bash word (the DEFAULT, i.e. the broad side): unquoteBashWord
+// collapses `C:\wf\<uuid>.workflow-off` to `C:wf<uuid>.workflow-off`, leaving
+// normalization residue on the stem's head, so this route allows a TAIL match.
+const SID_UUID_BODY = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const SID_TS_BODY = "[0-9]{8}-[0-9]{6}";            // clarify-intent's date fallback
+const SID_CANONICAL_EXACT_RE = new RegExp("^(?:" + SID_UUID_BODY + "|" + SID_TS_BODY + ")$", "i");
+const SID_CANONICAL_TAIL_RE = new RegExp("(?:^|[^0-9A-Za-z])(?:" + SID_UUID_BODY + "|" + SID_TS_BODY + ")$", "i");
+
+// A character no filename component of ours produces is proof the Bash normalizer
+// mangled the stem (the drive-colon of `C:wf<uuid>` is the known case). The stem
+// is then unprovable, so the bash route treats it as clearance-bearing.
+const BASH_STEM_RESIDUE_RE = /[^A-Za-z0-9._-]/;
+
+function stemEndsWithAnySid(stem, sids) {
+  const lower = stem.toLowerCase();
+  for (const sid of sids) {
+    if (sid === "" || !lower.endsWith(sid)) continue;
+    const at = lower.length - sid.length;
+    if (at === 0 || /[^0-9a-z]/.test(lower[at - 1])) return true;
+  }
+  return false;
 }
 
-function hitsProtectedMarkerBasename(basename) {
-  if (candidateBasenameMatchesAnySuffix(basename, PROTECTED_MARKER_SUFFIXES)) return true;
-  const inner = stripConsumingClaimSuffix(basename);
-  return inner !== null && candidateBasenameMatchesAnySuffix(inner, PROTECTED_MARKER_SUFFIXES);
+// isClearanceBearingStem(stem, { spelling, sessionCtx }): can a file with this
+// stem grant clearance to some reader? Fail-closed at every uncertainty.
+function isClearanceBearingStem(stem, opts = {}) {
+  if (typeof stem !== "string" || stem === "") return false;   // R4: no reader opens `.<kind>`
+  const spelling = opts.spelling === "clean" ? "clean" : "bash";
+  const canonical = spelling === "clean" ? SID_CANONICAL_EXACT_RE : SID_CANONICAL_TAIL_RE;
+  if (canonical.test(stem)) return true;                       // (a) shape alone, observation-free
+  if (spelling === "bash" && BASH_STEM_RESIDUE_RE.test(stem)) return true;
+  const { sids, complete } = observeActiveSessionIds(opts.sessionCtx);
+  if (!complete) return true;                                  // (c) unobservable -> pre-#2108 behaviour
+  return spelling === "clean" ? sids.has(stem.toLowerCase()) : stemEndsWithAnySid(stem, sids);
 }
 
-// classifyProtectedPath(filePath): "token" | "marker" | null. Both kinds block,
-// but they get different remediation text, so the kind is carried out.
-function classifyProtectedPath(filePath) {
+const stemOpt = (opts) => ({ stemAllowed: (stem) => isClearanceBearingStem(stem, opts) });
+
+function hitsTokenBasename(basename, opts) {
+  if (candidateBasenameMatchesAnySuffix(basename, OFF_CLEARANCE_TOKEN_SUFFIXES, stemOpt(opts))) return true;
+  const inner = stripConsumingClaimSuffix(basename);
+  return inner !== null &&
+    candidateBasenameMatchesAnySuffix(inner, OFF_CLEARANCE_TOKEN_SUFFIXES, stemOpt(opts));
+}
+
+function hitsProtectedMarkerBasename(basename, opts) {
+  if (candidateBasenameMatchesAnySuffix(basename, PROTECTED_MARKER_SUFFIXES, stemOpt(opts))) return true;
+  const inner = stripConsumingClaimSuffix(basename);
+  return inner !== null &&
+    candidateBasenameMatchesAnySuffix(inner, PROTECTED_MARKER_SUFFIXES, stemOpt(opts));
+}
+
+// classifyProtectedPath(filePath, opts): "token" | "marker" | null. Both kinds
+// block, but they get different remediation text, so the kind is carried out.
+function classifyProtectedPath(filePath, opts) {
   if (!filePath || typeof filePath !== "string") return null;
   const basename = candidateBasenameOf(filePath);
-  if (hitsTokenBasename(basename)) return "token";
-  if (hitsProtectedMarkerBasename(basename)) return "marker";
+  if (hitsTokenBasename(basename, opts)) return "token";
+  if (hitsProtectedMarkerBasename(basename, opts)) return "marker";
   return null;
 }
 
 // classifyProtectedBashToken(rawToken): the Bash-word sibling of
 // classifyProtectedPath (CPR-ORTH — same verdict vocabulary, different normalizer).
-function classifyProtectedBashToken(rawToken) {
+// The spelling is pinned to "bash" here rather than taken from the caller: this
+// is the Bash-word entry point by construction, so a caller could only get it
+// wrong (#2108).
+function classifyProtectedBashToken(rawToken, opts) {
   if (!rawToken || typeof rawToken !== "string") return null;
+  const stemOpts = { sessionCtx: opts && opts.sessionCtx, spelling: "bash" };
   const { basenames, overCap } = candidateBasenamesOfBashToken(rawToken);
   // An enumeration that was abandoned has NOT been shown to miss the suffix.
   // Reported as "token" to match what candidateBasenameMatchesAnySuffix already
   // returns for the same condition (it is consulted for the token list first).
   if (overCap) return "token";
-  if (basenames.some(hitsTokenBasename)) return "token";
-  if (basenames.some(hitsProtectedMarkerBasename)) return "marker";
+  // Explicit arrows, never a bare reference: `some` passes the array INDEX as the
+  // second argument, which would land in `opts`.
+  if (basenames.some((b) => hitsTokenBasename(b, stemOpts))) return "token";
+  if (basenames.some((b) => hitsProtectedMarkerBasename(b, stemOpts))) return "marker";
   return null;
 }
 
-function hitsProtectedPath(filePath) {
-  return classifyProtectedPath(filePath) !== null;
+function hitsProtectedPath(filePath, opts) {
+  return classifyProtectedPath(filePath, opts) !== null;
 }
 
 module.exports = {
@@ -248,6 +304,9 @@ module.exports = {
   TOKEN_MENTION_RE,
   MARKER_MENTION_RE,
   CONSUMING_CLAIM_SUFFIX_RE,
+  SID_CANONICAL_EXACT_RE,
+  SID_CANONICAL_TAIL_RE,
+  isClearanceBearingStem,
   stripConsumingClaimSuffix,
   mentionsProtectedName,
   candidateBasenameOf,
