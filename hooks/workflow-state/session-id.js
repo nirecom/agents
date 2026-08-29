@@ -5,22 +5,25 @@ const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
 const { isSameGitRepo } = require("../lib/git-common-dir");
+// CPR-SSOT (#2108): the WORKTREE_NOTES parser and the own-worktree matcher were
+// private copies here and in lib/resolve-workflow-session-id.js; both now share one.
+const {
+  readSessionIdFromWorktreeNotes,
+  findOwnWorktreeDir,
+  parseWorktreeDirs,
+} = require("../lib/worktree-notes-session-ids");
 // Direct submodule require (not the ./state-io barrel) to avoid a circular
 // dependency: state-io's barrel pulls in modules that require session-id.js.
 const { SESSION_ID_VALID_RE } = require("./state-io/core");
 
 /**
  * The one enumeration of a transcript directory, reporting what could NOT be observed
- * instead of swallowing it. Returns { files, errors }:
- *   files  — readable `.jsonl` REGULAR-FILE entries as { name, mtime }, mtime descending.
- *   errors — [{ scope: "dir" | "file", path, code }]. A failed readdir yields a single
- *            `dir` error and no files; a failed lstatSync drops only that one file.
- * The stat is an lstat and non-regular entries are skipped, so a `.jsonl` symlink cannot
- * pull a transcript in from outside the selected directory — symmetric with the prune
- * walker and with bin/measure-norm-docs (CPR-ORTH). A skipped entry is simply not listed; it
- * is not an error, because nothing about it failed to be observed.
- * Callers that must distinguish "the directory is empty" from "the directory could not be
- * read" use this view; _listJsonlByMtime below is the swallowing view of the same walk.
+ * instead of swallowing it. Returns { files, errors }: readable `.jsonl` REGULAR-FILE
+ * entries as { name, mtime } (mtime descending), and [{ scope: "dir"|"file", path, code }]
+ * — a failed readdir yields one `dir` error and no files, a failed lstatSync drops only
+ * that file. lstat + regular-file-only, so a `.jsonl` symlink cannot pull a transcript in
+ * from outside the directory (CPR-ORTH with the prune walker and bin/measure-norm-docs);
+ * a skipped entry is not an error. _listJsonlByMtime below is the swallowing view.
  */
 function listJsonlByMtimeStrict(transcriptDir) {
   const files = [];
@@ -62,58 +65,12 @@ function findMostRecentSessionIdInDir(transcriptDir) {
   return /^[A-Za-z0-9_-]+$/.test(base) ? base : null;
 }
 
-function _readSessionIdFromWorktreeNotes(notesPath) {
-  try {
-    const content = fs.readFileSync(notesPath, "utf8");
-    const m = content.match(/^Session-ID:\s*(\S+)\s*$/m);
-    if (m && /^[A-Za-z0-9_-]+$/.test(m[1])) return m[1];
-  } catch (_) {
-    // ignore
-  }
-  return null;
-}
-
 /**
- * Identify the "own" worktree root among `dirs`: the entry whose path is `cwd`
- * itself or a proper ancestor of `cwd`. Uses path.resolve()-normalized prefix
- * matching with a path-separator boundary (so `C:/git/wt1` does not match
- * `C:/git/wt1-other`); on win32 the comparison is case-insensitive.
- * When multiple ancestors qualify (nested worktrees), the deepest wins.
- * Returns the ORIGINAL (unnormalized) dir string, or null when none matches.
- */
-function _findOwnWorktreeDir(dirs, cwd) {
-  const norm = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
-  const cwdNorm = norm(path.resolve(cwd));
-  let own = null;
-  let ownLen = -1;
-  for (const dir of dirs) {
-    if (!dir) continue;
-    const dirNorm = norm(path.resolve(dir));
-    const isMatch =
-      cwdNorm === dirNorm ||
-      (cwdNorm.startsWith(dirNorm) &&
-        (dirNorm.endsWith("/") ||
-          dirNorm.endsWith(path.sep) ||
-          cwdNorm[dirNorm.length] === "/" ||
-          cwdNorm[dirNorm.length] === path.sep));
-    if (isMatch && dirNorm.length > ownLen) {
-      own = dir;
-      ownLen = dirNorm.length;
-    }
-  }
-  return own;
-}
-
-/**
- * Resolve the current session ID with the following priority chain:
- *   1. ctx.sessionIdFromInput — non-empty string from hook input.session_id
- *   2. CLAUDE_CODE_SESSION_ID env var — CC-native, per-session-distinct,
- *      reliably present in the Bash-tool subprocess where CLAUDE_ENV_FILE is
- *      not propagated (#1082, Anthropic bug #27987)
- *   3. CLAUDE_ENV_FILE — KEY=VALUE file written by session-start.js
- *   4. CLAUDE_SESSION_ID env var — best-effort (Anthropic bug #27987)
- *   5. ctx.transcriptPath basename
- *   6. WORKTREE_NOTES.md (CWD, then git common-dir parent)
+ * Resolve the current session ID by priority:
+ *   1. ctx.sessionIdFromInput   2. CLAUDE_CODE_SESSION_ID (CC-native; the only one
+ *      reliably present in the Bash-tool subprocess — #1082, Anthropic bug #27987)
+ *   3. CLAUDE_ENV_FILE   4. CLAUDE_SESSION_ID   5. ctx.transcriptPath basename
+ *   6. WORKTREE_NOTES.md (CWD, git common-dir parent, then sibling worktrees)
  *   7. JSONL mtime scan — last resort
  */
 function resolveSessionId(ctx = {}) {
@@ -146,14 +103,14 @@ function resolveSessionId(ctx = {}) {
     const base = path.basename(ctx.transcriptPath, ".jsonl");
     if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
   }
-  const fromCwd = _readSessionIdFromWorktreeNotes(path.join(process.cwd(), "WORKTREE_NOTES.md"));
+  const fromCwd = readSessionIdFromWorktreeNotes(path.join(process.cwd(), "WORKTREE_NOTES.md"));
   if (fromCwd) return fromCwd;
   try {
     const commonDir = execSync("git rev-parse --git-common-dir", {
       encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     if (commonDir) {
-      const fromGit = _readSessionIdFromWorktreeNotes(
+      const fromGit = readSessionIdFromWorktreeNotes(
         path.join(path.resolve(commonDir), "..", "WORKTREE_NOTES.md")
       );
       if (fromGit) return fromGit;
@@ -162,39 +119,24 @@ function resolveSessionId(ctx = {}) {
     // not in a git repo or git unavailable
   }
   // Priority 6c: sibling worktree scan — symmetric to resolve-workflow-session-id.js
-  // Priority 1d (CPR-ORTH). Reached only after Priority 6/6b (CWD notes reads) fail.
-  // Own-worktree-first: identify the worktree root that is CWD itself or an ancestor
-  // of CWD (so a CWD in a linked-worktree SUBDIR still resolves to that worktree, not
-  // a sibling). If own's WORKTREE_NOTES.md yields a Session-ID, it wins immediately.
-  // Only NON-own entries are collected as siblings; multiple distinct sibling
-  // Session-IDs are ambiguous → null (fail-safe; do not fall through to Priority 7
-  // JSONL mtime scan).
+  // Priority 1d (CPR-ORTH). Own-worktree-first: the worktree root that is CWD itself or
+  // an ancestor of CWD wins immediately if its notes yield a Session-ID. Only NON-own
+  // entries count as siblings; multiple distinct sibling Session-IDs are ambiguous →
+  // null (fail-safe; do not fall through to the Priority 7 JSONL mtime scan).
   try {
     const wtOut = execSync("git worktree list --porcelain", {
       encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"],
     });
-    const worktreeDirs = [];
-    let current = null;
-    for (const line of wtOut.split("\n")) {
-      if (line.startsWith("worktree ")) {
-        current = line.slice("worktree ".length).trim();
-      } else if (line === "" && current !== null) {
-        if (current) worktreeDirs.push(current);
-        current = null;
-      }
-    }
-    // Handle last entry if no trailing blank line (R6).
-    if (current) worktreeDirs.push(current);
-
-    const ownDir = _findOwnWorktreeDir(worktreeDirs, process.cwd());
+    const worktreeDirs = parseWorktreeDirs(wtOut);
+    const ownDir = findOwnWorktreeDir(worktreeDirs, process.cwd());
     if (ownDir) {
-      const ownSid = _readSessionIdFromWorktreeNotes(path.join(ownDir, "WORKTREE_NOTES.md"));
+      const ownSid = readSessionIdFromWorktreeNotes(path.join(ownDir, "WORKTREE_NOTES.md"));
       if (ownSid) return ownSid; // own worktree wins over any sibling
     }
     const hits = new Set();
     for (const dir of worktreeDirs) {
       if (dir === ownDir) continue; // exclude own from the sibling set
-      const sid = _readSessionIdFromWorktreeNotes(path.join(dir, "WORKTREE_NOTES.md"));
+      const sid = readSessionIdFromWorktreeNotes(path.join(dir, "WORKTREE_NOTES.md"));
       if (sid) hits.add(sid);
     }
     if (hits.size === 1) return [...hits][0];

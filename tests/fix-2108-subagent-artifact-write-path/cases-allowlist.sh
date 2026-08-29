@@ -132,10 +132,55 @@ TABLE
     out="$(run_gate "$(mk_edit_input Write "sid2108done" "$REPO_FWD/src/ok.js")" "$SCRATCH_A")"
     assert_eq "A16 both tiers clear -> in-repo write approved (gate dormant)" "approve" "$(gate_decision "$out")"
 
-    # A17 — tool scoping stays exactly as today: editFiles / NotebookEdit are early-gate
-    # tools but NOT allowlist tools (plan R10), so a scratchpad target still blocks.
-    out="$(run_gate "$(printf '{"session_id":"%s","tool_name":"editFiles","tool_input":{"file_path":"%s/x.md","old_string":"a","new_string":"b"}}' "$SID_T1" "$SCRATCH_A_FWD")" "$SCRATCH_A")"
-    assert_eq "A17 editFiles into scratchpad still blocks (R10 accepted narrowness)" "block" "$(gate_decision "$out")"
+    # A17 — tool scoping stays exactly as today. EARLY_GATE_TOOLS holds five tools;
+    # ALLOWLIST_TOOLS holds only Write/Edit/MultiEdit, so `editFiles` and `NotebookEdit`
+    # keep their pre-#2108 blanket block (plan R10). The narrowness is ACCEPTED, not
+    # incidental — which makes it a contract, and a contract asserted on one of the two
+    # excluded tools is half-asserted: adding NotebookEdit to the allowlist would have
+    # gone unnoticed (review C6). Both excluded tools are therefore driven at BOTH tiers
+    # against BOTH allowlisted destinations (scratchpad and plans), the exact four
+    # coordinates where the allowlist WOULD have approved a Write.
+    local a17_label a17_tier a17_tool a17_tkey a17_sid a17_input a17_target
+    while IFS='|' read -r a17_label a17_tier a17_tool a17_tkey; do
+        [[ -z "$a17_label" || "$a17_label" =~ ^[[:space:]]*# ]] && continue
+        a17_label="${a17_label//[[:space:]]/}"; a17_tier="${a17_tier//[[:space:]]/}"
+        a17_tool="${a17_tool//[[:space:]]/}"; a17_tkey="${a17_tkey//[[:space:]]/}"
+        case "$a17_tier" in T1) a17_sid="$SID_T1" ;; *) a17_sid="$SID_T2" ;; esac
+        case "$a17_tkey" in
+            scratchpad) a17_target="$SCRATCH_A_FWD/x" ;;
+            *)          a17_target="$PLANS_FWD/x" ;;
+        esac
+        # Each tool is fed its OWN real payload spelling: editFiles carries file_path +
+        # old_string/new_string, NotebookEdit carries notebook_path + new_source. A test
+        # that gave NotebookEdit an editFiles-shaped body would prove nothing about the
+        # tool the host actually dispatches.
+        if [ "$a17_tool" = "NotebookEdit" ]; then
+            a17_input="$(printf '{"session_id":"%s","tool_name":"NotebookEdit","tool_input":{"notebook_path":"%s.ipynb","new_source":"print(1)","cell_type":"code","edit_mode":"insert"}}' "$a17_sid" "$a17_target")"
+        else
+            a17_input="$(printf '{"session_id":"%s","tool_name":"editFiles","tool_input":{"file_path":"%s.md","old_string":"a","new_string":"b"}}' "$a17_sid" "$a17_target")"
+        fi
+        assert_eq "A17 $a17_label [$a17_tier $a17_tool $a17_tkey] R10 accepted narrowness" \
+            "block" "$(gate_decision "$(run_gate "$a17_input" "$SCRATCH_A")")"
+    done <<'TABLE'
+# label                  | tier | tool         | target
+A17-editfiles-scratch    | T1 | editFiles    | scratchpad
+A17-editfiles-scratch    | T2 | editFiles    | scratchpad
+A17-editfiles-plans      | T1 | editFiles    | plans
+A17-editfiles-plans      | T2 | editFiles    | plans
+A17-notebookedit-scratch | T1 | NotebookEdit | scratchpad
+A17-notebookedit-scratch | T2 | NotebookEdit | scratchpad
+A17-notebookedit-plans   | T1 | NotebookEdit | plans
+A17-notebookedit-plans   | T2 | NotebookEdit | plans
+TABLE
+
+    # A17b — DISCRIMINATOR. Every row above wants `block`, so a gate that blocked
+    # unconditionally would satisfy all eight. The same two destinations under an
+    # ALLOWLISTED tool must still approve, which is what makes the eight blocks
+    # attributable to tool scoping rather than to a gate that stopped allowing anything.
+    assert_eq "A17b discriminator: Write to the same scratchpad target still approves" "approve" \
+        "$(gate_decision "$(run_gate "$(mk_edit_input Write "$SID_T1" "$SCRATCH_A_FWD/x.md")" "$SCRATCH_A")")"
+    assert_eq "A17b discriminator: Write to the same plans target still approves" "approve" \
+        "$(gate_decision "$(run_gate "$(mk_edit_input Write "$SID_T2" "$PLANS_FWD/x.md")" "$SCRATCH_A")")"
 
     # SKIPPED: a real subagent invoking Write into its own scratchpad through the live
     # PreToolUse chain and observing the artifact land on disk.

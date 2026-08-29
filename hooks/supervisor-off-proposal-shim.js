@@ -187,10 +187,26 @@ process.stdin.on("end", () => {
       }
     }
 
+    // isCanonicalFallbackKey(sid): may this RESOLVED wsid key a token? A canonically
+    // shaped stem is clearance-bearing on the write side by shape alone, so no agent
+    // could have minted such a token under the #2108 write gate; a non-canonical stem
+    // is exactly the class that gate may let anyone create. Shape rule imported, never
+    // re-spelled (CPR-SSOT); unavailable → no fallback key (fail-CLOSED).
+    function isCanonicalFallbackKey(sid) {
+      try {
+        const { SID_CANONICAL_EXACT_RE } = require(path.join(__dirname, "./lib/protected-basenames.js"));
+        return typeof sid === "string" && SID_CANONICAL_EXACT_RE.test(sid);
+      } catch (e) {
+        return false;
+      }
+    }
+
     let tokenResult = readToken(sessionId);
     if (tokenResult.status === "absent") {
+      // Gated on the FALLBACK only: the primary stdin session_id is host-supplied,
+      // not agent-writable, and real host ids are not always canonical.
       const wsid = resolveWsid();
-      if (wsid && wsid !== sessionId) {
+      if (wsid && wsid !== sessionId && isCanonicalFallbackKey(wsid)) {
         const fallback = readToken(wsid);
         if (fallback.status !== "absent") tokenResult = fallback;
       }

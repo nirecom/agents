@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # tests/fix-2108-subagent-artifact-write-path.sh
-# Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/workflow-gate/early-gate-messages.js, hooks/lib/active-session-ids.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/claude-scratchpad-base.js, hooks/lib/subagent-detect.js, hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-target-context/classify.js, hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/bash-write-scope/segment-checks.js
-# Tags: workflow-gate, early-gate, scratchpad, plans-dir, subagent, protected-basename, block-message, security, scope:issue-specific, pwsh-not-required, TL2
+# Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/workflow-gate/early-gate-messages.js, hooks/lib/active-session-ids.js, hooks/workflow-state/session-id.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/claude-scratchpad-base.js, hooks/lib/subagent-detect.js, hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-target-context/classify.js, hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/bash-write-scope/segment-checks.js, hooks/enforce-worktree/git-repo-detection.js
+# Tags: workflow-gate, early-gate, scratchpad, plans-dir, subagent, protected-basename, block-message, symlink, fault-injection, security, scope:issue-specific, pwsh-not-required, TL2
 set -u
 
 # TL3 gap (what this test does NOT catch):
 # - The gate and the two write guards firing as REAL PreToolUse hooks in a live
-#   claude -p session. Each hook here is a node subprocess fed synthetic stdin, so
-#   settings.json matcher routing is asserted STATICALLY only (Section C2).
+#   claude -p session: settings.json matcher routing is asserted STATICALLY only
+#   (Section C2). Covered live by tests/TL3-hook-early-gate-allowlist-write.sh.
 # - A real subagent payload: `agent_id` is synthesized, so "a subagent receives this
 #   message and can write to the named scratchpad" is a premise, not an observation.
 # - Real permission failures in the workflow dir (C1c-ii): that readdir fault is only
@@ -261,6 +261,8 @@ PARTS="$AGENTS_DIR/tests/fix-2108-subagent-artifact-write-path"
 . "$PARTS/cases-allowlist.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-plans-containment.sh
 . "$PARTS/cases-plans-containment.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-symlink-containment.sh
+. "$PARTS/cases-symlink-containment.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-messages.sh
 . "$PARTS/cases-messages.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-stem-rules.sh
@@ -277,10 +279,23 @@ PARTS="$AGENTS_DIR/tests/fix-2108-subagent-artifact-write-path"
 . "$PARTS/cases-bctw-command-tools.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-sid-boundary.sh
 . "$PARTS/cases-sid-boundary.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-worktree-notes.sh
+. "$PARTS/cases-worktree-notes.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-notes-enumerate.sh
+. "$PARTS/cases-notes-enumerate.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-ghost-sid.sh
+. "$PARTS/cases-ghost-sid.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-observe-fault.sh
+. "$PARTS/cases-observe-fault.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-resolve-sid-fault.sh
+. "$PARTS/cases-resolve-sid-fault.sh"
+# shellcheck source=./fix-2108-subagent-artifact-write-path/cases-clearance-wsid-gate.sh
+. "$PARTS/cases-clearance-wsid-gate.sh"
 
 run_A_allowlist            # Scope 1+2: Tier 1 and Tier 2 write allowlist, symmetric
 run_A18_input_edges        # Scope 1+2: path alias, invalid SCRATCHPAD, empty/non-string targets
 run_A21_plans_containment  # Scope 1+2: the PLANS_DIR boundary is containment, not prefix
+run_A22_symlink_containment # Scope 1+2: a symlink out of an allowlisted root
 run_B_block_messages       # Scope 3: block wording, main vs subagent, both tiers
 run_B9_agent_id_edges      # Scope 3: malformed agent_id shapes keep main-context wording
 run_C1_stem_rules          # Scope 4: stem predicate TP/FP matrix over all 9 kinds
@@ -295,8 +310,18 @@ run_C6_command_tool_routes # the same boundary on runInTerminal / runCommands (C
 run_C7_state_faults        # malformed / unreadable / mismatched state entries fail closed
 run_C8_sid_boundaries      # near-canonical session-id shapes, one char either side
 run_C9_malformed_sid       # malformed stdin session_id must not crash or fail open
+run_C10_notes_helpers      # the two WORKTREE_NOTES helpers, extracted and shared (SSOT)
+run_C11_enumerate          # every notes-derived sid a reader could resolve to
+run_C12_ghost_observation  # planted Session-ID joins the observed set; memo/charset defects
+run_C13_ghost_end_to_end   # the ghost-sid write/delete hole through the real hook
+run_C14_resolver_pins      # both resolvers' behaviour unchanged by the extraction
+run_C15_observe_fault      # the observation dependency faulted where it is consumed
+run_C16_resolve_sid_fault  # resolveSessionId faulted at its call site INSIDE the observation
+run_C17_interpreter_body   # node -e / python -c bodies: the write vector shell words miss
+run_C18_transcript_sid_e2e # session_id omitted: the sid the decision uses is the transcript's
 run_D_f1_regression        # poisoned TEMP must not turn the scratchpad allow on
 run_E_injection            # the scratchpad allow root is a path boundary, not a prefix
+run_A_clearance_wsid_gate  # the FALLBACK clearance wsid must be canonically shaped
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

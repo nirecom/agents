@@ -39,10 +39,17 @@ function appendAudit(sessionId, finding) {
 // resolveClearanceWsid(): the workflow session id, resolved exactly the way
 // hooks/supervisor-off-proposal-shim.js resolves it, so consumption can reach the
 // same fallback-keyed token the shim may have used to authorize the activation.
+// Gated here, once, so BOTH callers inherit it (CPR-SSOT): a canonically shaped stem
+// is clearance-bearing on the write side by shape alone, so no agent could have forged
+// a file named that way under the #2108 write gate; a non-canonical stem is exactly the
+// class that gate may let anyone create, so it must never key a fallback clearance.
+// The shape rule is imported, never re-spelled.
 function resolveClearanceWsid() {
   try {
     const { resolveWorkflowSessionId } = require("../../lib/resolve-workflow-session-id");
-    return resolveWorkflowSessionId() || null;
+    const { SID_CANONICAL_EXACT_RE } = require("../../lib/protected-basenames");
+    const wsid = resolveWorkflowSessionId() || null;
+    return wsid && SID_CANONICAL_EXACT_RE.test(wsid) ? wsid : null;
   } catch (_e) {
     return null;
   }
