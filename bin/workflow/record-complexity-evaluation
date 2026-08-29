@@ -4,14 +4,20 @@
 // CLI wrapper for recordComplexityEvaluation(). Used by SKILL.md Bash calls.
 //
 // Usage:
-//   record-complexity-evaluation --session <sid> --verdict <high|low> [--signals <csv>]
+//   record-complexity-evaluation --session <sid> --signals <csv>
+//   record-complexity-evaluation --session <sid> --signals-file <path>
 //
-// --signals is optional; comma-separated → array; empty/missing → [].
-// On success prints: RECORDED_COMPLEXITY verdict=<v> signals=<csv>
-// Exits 0 on success, 1 on bad args or write-verification failure.
+// Exactly one of --signals / --signals-file is required (--signals "" is valid, zero signals).
+// --signals-file reads via fs.readFileSync, never a shell, so judge-authored
+// text never reaches command-argument position (#2099 PO-INJ); both forms
+// share the same parse + allowlist, so an unrecognized token fails high.
+// Levels are derived code-side (#2099) — the caller never passes a verdict.
+// On success prints: RECORDED_COMPLEXITY level=<v> signals=<csv>
+// Exits 0 on success, 1 on bad args, derivation failure, or read-back failure.
 
+const fs = require("fs");
 const path = require("path");
-const { recordComplexityEvaluation, readComplexityEvaluation } = require(
+const { recordComplexityEvaluation, readLastRawComplexityEvent, RoutingTableUnavailableError } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 
@@ -19,28 +25,55 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 function usage(msg) {
   if (msg) process.stderr.write("record-complexity-evaluation: " + msg + "\n");
-  process.stderr.write("usage: record-complexity-evaluation --session <sid> --verdict <high|low> [--signals <csv>]\n");
+  process.stderr.write(
+    "usage: record-complexity-evaluation --session <sid> (--signals <csv> | --signals-file <path>)\n"
+  );
   process.exit(1);
 }
 
+// `signals` stays undefined until seen — `--signals ""` is a valid zero-signal
+// input, distinct from the flag never being passed.
+// A flag as the last token, or followed by another `--` flag, has no value —
+// that's a usage error, not "flag absent" or "next flag is my value".
+function requireValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
+  return v;
+}
+
 function parseArgs(argv) {
-  const out = { session: null, verdict: null, signals: [] };
+  const out = { session: null, signals: undefined, signalsFile: undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--session") {
-      out.session = argv[++i] || null;
-    } else if (a === "--verdict") {
-      out.verdict = argv[++i] || null;
+      out.session = requireValue(argv, i, "--session");
+      i++;
     } else if (a === "--signals") {
-      const raw = argv[++i];
-      out.signals = (typeof raw === "string" && raw.trim().length)
-        ? raw.split(",").map((s) => s.trim()).filter((s) => s.length)
-        : [];
+      out.signals = requireValue(argv, i, "--signals");
+      i++;
+    } else if (a === "--signals-file") {
+      out.signalsFile = requireValue(argv, i, "--signals-file");
+      i++;
+    } else if (a === "--verdict") {
+      usage("--verdict is removed — levels are derived from --signals");
     } else {
       usage("unknown argument: " + a);
     }
   }
   return out;
+}
+
+function sameSignals(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  return a.every((s, i) => s === b[i]);
+}
+
+function sameLevels(a, b) {
+  if (!a || typeof a !== "object" || !b || typeof b !== "object") return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => a[k] === b[k]);
 }
 
 function main() {
@@ -49,22 +82,62 @@ function main() {
   if (!args.session || !SESSION_ID_RE.test(args.session)) {
     usage("--session is required and must match /^[A-Za-z0-9_-]+$/");
   }
-  if (args.verdict !== "high" && args.verdict !== "low") {
-    usage("--verdict must be high or low");
+  if (args.signals !== undefined && args.signalsFile !== undefined) {
+    usage("--signals and --signals-file are mutually exclusive — pass exactly one");
+  }
+  if (args.signals === undefined && args.signalsFile === undefined) {
+    usage('--signals or --signals-file is required (pass --signals "" for zero signals)');
   }
 
-  recordComplexityEvaluation(args.session, args.verdict, args.signals);
+  // The file is read with fs.readFileSync only — never through a shell, eval, or
+  // child_process — so its content cannot be interpreted as command syntax.
+  let signalsText = args.signals;
+  if (args.signalsFile !== undefined) {
+    if (!args.signalsFile.length) usage("--signals-file requires a path");
+    try {
+      signalsText = fs.readFileSync(args.signalsFile, "utf8");
+    } catch (e) {
+      usage("--signals-file could not be read: " + args.signalsFile + " (" + e.code + ")");
+    }
+  }
 
-  // Read-back hardening: confirm the record matches EXACTLY what was written.
-  const ce = readComplexityEvaluation(args.session);
-  if (!ce || ce.level !== args.verdict ||
-      ce.signals.length !== args.signals.length ||
-      !ce.signals.every((s, idx) => s === args.signals[idx])) {
-    process.stderr.write("record-complexity-evaluation: write verification failed\n");
+  // Identical parse + allowlist path for both input forms: unrecognized tokens
+  // route to the undecidable level downstream, so no content-shape check is due here.
+  const signals = signalsText.trim().length
+    ? signalsText.split(",").map((s) => s.trim()).filter((s) => s.length)
+    : [];
+
+  let intended;
+  try {
+    // Returned shape is CANONICALIZED (deduped/control-char-stripped, #2099
+    // H-SIG/LI-3/LI-6) — used for both read-back and the printed receipt, so
+    // stdout never echoes raw pre-canonicalization input.
+    intended = recordComplexityEvaluation(args.session, signals);
+  } catch (e) {
+    if (e instanceof RoutingTableUnavailableError) {
+      process.stderr.write("DERIVATION_UNAVAILABLE\n");
+      process.exit(1);
+    }
+    throw e;
+  }
+
+  // Read-back hardening: compare against the RAW persisted event, never the
+  // compat-completing consumer read — that path would reconstruct a `levels`
+  // that was never written and mask the persistence bug this check exists for.
+  const raw = readLastRawComplexityEvent(args.session);
+  if (!raw || raw.level !== intended.level || !sameLevels(raw.levels, intended.levels) ||
+      !sameSignals(raw.signals, intended.signals)) {
+    process.stderr.write(
+      "record-complexity-evaluation: read-back mismatch — intended " +
+        JSON.stringify({ level: intended.level, levels: intended.levels, signals: intended.signals }) +
+        " but persisted " +
+        JSON.stringify(raw === null ? null : { level: raw.level, levels: raw.levels, signals: raw.signals }) +
+        "\n"
+    );
     process.exit(1);
   }
 
-  process.stdout.write("RECORDED_COMPLEXITY verdict=" + args.verdict + " signals=" + args.signals.join(",") + "\n");
+  process.stdout.write("RECORDED_COMPLEXITY level=" + intended.level + " signals=" + intended.signals.join(",") + "\n");
   process.exit(0);
 }
 

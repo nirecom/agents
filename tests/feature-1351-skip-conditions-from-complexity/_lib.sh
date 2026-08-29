@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # tests/feature-1351-skip-conditions-from-complexity/_lib.sh
+# Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js
+# Tags: complexity, skip-conditions, resolver, helpers, scope:issue-specific
 # Shared variables and utilities for the feature-1351 test suite.
 # Sourced by the dispatcher and behavioral suite; guarded against double-sourcing.
 
@@ -13,6 +15,8 @@ RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER_N="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
 STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
+ROUTING="$AGENTS_DIR/hooks/workflow-state/complexity-routing.js"
+ROUTING_N="$(cygpath -m "$ROUTING" 2>/dev/null || echo "$ROUTING")"
 
 CI_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
 MOP_SKILL="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
@@ -42,13 +46,46 @@ run_with_timeout() {
     fi
 }
 
-# --- API presence probe (behavioral cases skip when absent) ------------------
-API_READY="$(node -e "
-  try {
+# --- required-API assertion (NOT a skip gate) --------------------------------
+# resolveSkipConditionsFromComplexity is a REQUIRED class member (#2099 detail.md);
+# an absent member is a FAILURE, not a skip — the old `API_READY` gate turned
+# "not implemented" into "0 failed, N skipped", a false green. Every behavioral
+# case below runs unconditionally and reports its own real reason when it can't pass.
+REQUIRED_API_REPORT="$(node -e "
+  const out = [];
+  function probe(label, fn) {
+    try { out.push(label + '=' + fn()); }
+    catch (e) { out.push(label + '=' + String((e && e.code) || (e && e.name) || 'ERROR')); }
+  }
+  probe('resolve', function () {
     const r = require('$RESOLVER_N');
-    console.log(typeof r.resolveSkipConditionsFromComplexity === 'function' ? 'true' : 'false');
-  } catch (e) { console.log('false'); }
-" 2>/dev/null || echo "false")"
+    if (typeof r.resolveSkipConditionsFromComplexity !== 'function') { return 'missing'; }
+    // Callable, not merely present: fail-open on an unknown session id.
+    r.resolveSkipConditionsFromComplexity('probe-no-such-session', 'outline');
+    return 'callable';
+  });
+  probe('readStage', function () {
+    const r = require('$RESOLVER_N');
+    return typeof r.readStageComplexityLevel === 'function' ? 'callable' : 'missing';
+  });
+  probe('isZeroSignalLow', function () {
+    const cr = require('$ROUTING_N');
+    return typeof cr.isZeroSignalLow === 'function' ? 'callable' : 'missing';
+  });
+  probe('recordArity', function () {
+    const io = require('$STATEIO_N');
+    return typeof io.recordComplexityEvaluation === 'function'
+      ? String(io.recordComplexityEvaluation.length) : 'missing';
+  });
+  console.log(out.join(' '));
+" 2>/dev/null || echo 'PROBE_CRASHED')"
+assert_eq "SC-API. every required member of the #2099 skip-resolution path exists and is callable" \
+    'resolve=callable readStage=callable isZeroSignalLow=callable recordArity=2' \
+    "$REQUIRED_API_REPORT"
+# This probe pins the member's PRESENCE only. That the resolver actually
+# DELEGATES its decision to it — rather than duplicating the predicate inline —
+# is proven by SD-1/SD-3 in
+# tests/feature-2099-complexity-stage-routing/skip-delegation-cases.sh.
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -57,11 +94,12 @@ mkdir -p "$WORKFLOW_DIR"
 WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR")"
 
 # record a complexity evaluation via the state-io write API.
+# Signals-only since #2099: the level is derived, never supplied by the caller.
 node_record() {
-    local sid="$1" verdict="$2" signals_json="$3"
+    local sid="$1" signals_json="$2"
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
-    io.recordComplexityEvaluation('$sid', '$verdict', $signals_json);
+    io.recordComplexityEvaluation('$sid', $signals_json);
   " 2>&1
 }
 
@@ -80,29 +118,53 @@ node_resolve() {
   " 2>/dev/null
 }
 
-# Hand-craft a high-level record whose signals array is empty (SC-8 boundary).
-record_high_empty_signals() {
-    local sid="$1"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
-    const io = require('$STATEIO_N');
-    const s = io.createInitialState('$sid');
-    s.complexity_evaluation = { level: 'high', signals: [], recorded_at: new Date().toISOString() };
-    io.writeState('$sid', s);
-  " 2>/dev/null
-}
-
 write_raw_state() {
     local sid="$1" raw="$2"
     printf '%s' "$raw" > "$WORKFLOW_DIR/${sid}.json"
 }
 
-# Write an arbitrary complexity_evaluation JSON blob into a valid state file.
-write_ce_state() {
+# Seed an arbitrary complexity_evaluation shape via the REAL event store.
+# `complexity_evaluation` is a projection key (#1733), so the older
+# `s.complexity_evaluation = ...; writeState()` seeder was stripped on persist
+# and every case built on it asserted an ABSENT record, not a malformed one.
+# `provenance` and contiguous 1-based `seq` are load-bearing: assertStreamIntegrity()
+# rejects the file otherwise and readState() yields null.
+inject_ce_event() {
     local sid="$1" ce_json="$2"
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const fs = require('fs');
+    const path = require('path');
     const io = require('$STATEIO_N');
     const s = io.createInitialState('$sid');
-    s.complexity_evaluation = $ce_json;
-    io.writeState('$sid', s);
+    s.events = (s.events || []).concat([Object.assign({
+      kind: 'complexity_evaluation',
+      provenance: 'observed',
+      origin: 'test-injection',
+      at: new Date().toISOString(),
+    }, $ce_json)]);
+    s.events.forEach(function (e, i) { e.seq = i + 1; });
+    const p = io.getStatePath('$sid');
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(s, null, 2));
   " 2>/dev/null
+}
+
+# Persistence pre-assertion for inject_ce_event: prints the record as the real
+# projection folded it, or 'null'. Malformed-record cases call this FIRST, so a
+# silently-vanished injection cannot make the assertion after it vacuous.
+ce_projected() {
+    local sid="$1"
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const io = require('$STATEIO_N');
+    const s = io.readState('$sid');
+    if (!s) { console.log('__NO_STATE__'); }
+    else if (s.complexity_evaluation === null || s.complexity_evaluation === undefined) { console.log('null'); }
+    else { console.log(JSON.stringify(s.complexity_evaluation)); }
+  " 2>/dev/null
+}
+
+# High level with an empty signals array (SC-8 boundary) — unreachable through
+# recordComplexityEvaluation now that the level is derived, so it is injected.
+record_high_empty_signals() {
+    inject_ce_event "$1" "{ level: 'high', signals: [] }"
 }

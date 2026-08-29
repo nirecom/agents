@@ -117,13 +117,16 @@ console.log([
   "exited=" + st.worktree_exited_at,
   "model=" + (st.session_model && st.session_model.id),
   "level=" + (st.complexity_evaluation && st.complexity_evaluation.level),
+  "levels=" + (st.complexity_evaluation && st.complexity_evaluation.levels
+    ? [st.complexity_evaluation.levels.detail, st.complexity_evaluation.levels.write_tests, st.complexity_evaluation.levels.write_code].join("/")
+    : "absent"),
   "approvals=" + Object.keys(st.plan_approvals || {}).sort().join(","),
   "artifact_session_id=" + (st.plan_approvals.outline || {}).artifact_session_id,
   "branch=" + st.git_branch,
 ].join(" "));
 '
     assert_eq "V5/toplevel-facts-projected" \
-        "entered=2026-06-20T10:15:00.000Z exited=2026-06-20T13:15:00.000Z model=claude-opus-5 level=high approvals=detail,outline artifact_session_id=genv1 branch=feature/from-v1" \
+        "entered=2026-06-20T10:15:00.000Z exited=2026-06-20T13:15:00.000Z model=claude-opus-5 level=high levels=high/high/high approvals=detail,outline artifact_session_id=genv1 branch=feature/from-v1" \
         "$NODE_OUT"
 fi
 

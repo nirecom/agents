@@ -1,30 +1,14 @@
 #!/bin/bash
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: L2, workflow, complexity-evaluation, scope:issue-specific
-#
-# Issue #1350 — one-time persisted SSOT for the S1..S6 complexity evaluation.
-#
-# recordComplexityEvaluation(sessionId, verdict, signals) persists a single
-# complexity verdict into workflow state (createInitialState seeds the slot);
-# readComplexityEvaluation / hasComplexityEvaluation are read-only accessors on
-# skip-signal-resolver.js and fail-open (missing/invalid → null / false).
-#
-# CLIs bin/workflow/{record,read}-complexity-evaluation wrap the write/read APIs
-# for SKILL.md Bash calls.
-#
-# Pre-implementation model: the write/read APIs and CLIs may not yet exist. This
-# suite does NOT exit 77 globally. Instead it probes API/CLI presence once, sets
-# API_READY / CLI_READY, and SKIPs individual cases (incrementing SKIP, not FAIL)
-# when the target is absent. Result: exit 0 (all SKIP) before implementation, and
-# real FAILs after implementation lands but misbehaves. SKIP never counts as FAIL.
-#
-# L3 gap (what this test does NOT catch):
-# - Real orchestrator-driven single-write flow across CI-C1b / MDP-3 / WCD-3 /
-#   WT-5 in a live claude -p session (this test drives the APIs/CLIs directly
-#   with synthetic session state, not a real workflow run).
-# Closest-to-action mitigation: static reader-ordering checks in the sibling
-# feature-clarify-intent-complexity-write-static.sh / feature-1350-mdp-wt-reader-static.sh
-# and the write-code-skill-static reader assertions.
+# Issue #1350 — one-time persisted SSOT for the S1..S6 complexity evaluation:
+#   recordComplexityEvaluation(sessionId, signals) persists one evaluation, deriving the
+#   level itself (#2099); readComplexityEvaluation / hasComplexityEvaluation are fail-open
+#   read accessors; bin/workflow/{record,read}-complexity-evaluation wrap them for SKILL.md.
+# Nothing here is skippable: lib.sh asserts the required API/CLI surface (CE-REQ-1/2) and
+#   every case runs unconditionally, so pre-impl the suite reports FAILs, not SKIPs (R3-C7).
+# L3 gap: no real orchestrator-driven flow across CI-C1b/MDP-3/WCD-3/WT-5; the sibling
+#   static reader-ordering suites mitigate it.
 
 set -uo pipefail
 

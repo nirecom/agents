@@ -32,7 +32,7 @@ S.markStep(sid, "workflow_init", "complete");
 CA.recordPlanApproval(sid, "outline", { source: "reset-sentinel", reason: "ok" });
 S.markStep(sid, "outline", "complete");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
-S.recordComplexityEvaluation(sid, "high", ["S1-multi-file"]);
+S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);
 S.markStep(sid, "research", "skipped", { skip_reason: "n/a" });
 const st = S.readState(sid);
 const norm = S.normalizeStateVersion(S.readRawState(sid));

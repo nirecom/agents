@@ -1,28 +1,21 @@
 "use strict";
 // Skip-signal resolver (#485 + #1286): advisory predicate (isTrivial) and
-// recorded-verdict judgment (recordSkipJudgment / hasValidSkipJudgment).
+// recorded-verdict judgment (recordSkipJudgment / hasValidSkipJudgment). The
+// complexity-evaluation read side lives in skip-signal-resolver/complexity.js
+// and is re-exported from here unchanged (#2099).
 //
 // isTrivial: WEAK SUPPLEMENTARY hint only (demoted from sole gate by #1286).
-//   Fails-open to FALSE (uncertain ⇒ run full workflow).
-//   Mirrors the read-only / fail-open shape of evidence-resolver.js.
-//
-// Recorded-verdict API (#1286):
-//   skip_judgment schema — stored at state.steps[targetStep].skip_judgment:
-//     recorded_at:        ISO timestamp string (new Date().toISOString())
-//     judgment_source:    string; only "orchestrator" is a valid authoritative value
-//     conditions:         gate-specific boolean object:
-//                           outline: { so_c1, so_c2 }  (so = skip-outline)
-//                           detail:  { sd_c1, sd_c2, sd_c3 }  (sd = skip-detail)
-//     all_conditions_met: boolean = AND of all condition booleans in conditions
-//
-// recordSkipJudgment: records judgment without changing step status (fail-open/silent).
-// readSkipJudgment:   returns skip_judgment object or null (fail-open).
-// hasValidSkipJudgment: returns true iff source=orchestrator AND all_conditions_met=true.
+// Fails open to FALSE (uncertain ⇒ full workflow); mirrors evidence-resolver.js.
+// skip_judgment schema — state.steps[targetStep].skip_judgment: recorded_at (ISO
+// string), judgment_source ("orchestrator" is the only authoritative value),
+// conditions (per-target booleans keyed per CONDITION_SCHEMAS), all_conditions_met.
 
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
+const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
+const complexity = require("./skip-signal-resolver/complexity");
 
 // ---- isTrivial keyword sets (module-level frozen, referenced by tests + describe) ----
 
@@ -77,13 +70,6 @@ function isTrivial(sessionId, plansDir) {
     return false;
   }
 }
-
-// ---- Per-target condition schemas (#1300 hardening #2) ---------------------
-
-const CONDITION_SCHEMAS = Object.freeze({
-  outline: Object.freeze(["so_c1", "so_c2"]),
-  detail: Object.freeze(["sd_c1", "sd_c2", "sd_c3"]),
-});
 
 function isRecordedVerdictValid(sj, targetStep) {
   try {
@@ -188,67 +174,6 @@ function hasValidSkipJudgment(sessionId, targetStep) {
   }
 }
 
-// ---- Complexity-evaluation API (#1350) ------------------------------------
-
-// readComplexityEvaluation(sessionId):
-// Returns state.complexity_evaluation if present and a valid object with all
-// required fields (level:string, recorded_at:string, signals:Array); else null.
-// Fail-open: any exception → null.
-function readComplexityEvaluation(sessionId) {
-  try {
-    const { readState } = require("./state-io");
-    const state = readState(sessionId);
-    if (!state) return null;
-    const ce = state.complexity_evaluation;
-    // --- BEGIN temporary: verdict(opus|sonnet) → level(high|low) migration ---
-    let level;
-    if (ce !== null && typeof ce === 'object' && !('level' in ce) && typeof ce.verdict === 'string') {
-      const LEGACY_MAP = { opus: 'high', sonnet: 'low' };
-      level = LEGACY_MAP[ce.verdict]; // undefined for unknown legacy verdicts → validation rejects → null
-    } else {
-      level = ce && ce.level;
-    }
-    // --- END temporary: verdict(opus|sonnet) → level(high|low) migration ---
-    // signals MUST be an array — consumers call ce.signals.join(); a non-array
-    // would throw a TypeError downstream, so reject it here.
-    if (!ce || typeof ce !== "object" || typeof level !== "string" || typeof ce.recorded_at !== "string" || !Array.isArray(ce.signals)) return null;
-    return { level, signals: ce.signals, recorded_at: ce.recorded_at };
-  } catch (_) {
-    return null;
-  }
-}
-
-// hasComplexityEvaluation(sessionId):
-// Returns true iff a valid evaluation exists with level high|low.
-// Never throws (fail-to-false). No mtime/staleness check (unlike
-// hasValidSkipJudgment): complexity is a session-lifetime fact, not tied to
-// artifact freshness — a recorded level stays valid for the whole session.
-function hasComplexityEvaluation(sessionId) {
-  const ce = readComplexityEvaluation(sessionId);
-  if (!ce) return false;
-  return ce.level === "high" || ce.level === "low";
-}
-
-// resolveSkipConditionsFromComplexity(sessionId, targetStep):
-// Returns a fully-populated conditions object (all keys = true) when the session
-// is provably 0-signal-low (level=low AND signals=[]), meaning planning
-// overhead cannot be justified. Returns null in all other cases (fail-open).
-// Used by CI-C1c and MOP-1d / MOP-C1 to auto-satisfy skip conditions.
-function resolveSkipConditionsFromComplexity(sessionId, targetStep) {
-  try {
-    if (targetStep !== "outline" && targetStep !== "detail") return null;
-    const ce = readComplexityEvaluation(sessionId);
-    if (!ce) return null;
-    if (ce.level !== "low" || !Array.isArray(ce.signals) || ce.signals.length !== 0) return null;
-    const keys = CONDITION_SCHEMAS[targetStep];
-    const result = {};
-    for (const k of keys) result[k] = true;
-    return result;
-  } catch (_) {
-    return null;
-  }
-}
-
 // describeSkipSignal(predicate): human-readable description of what a predicate
 // checks (mirrors evidence-resolver.js describeEvidence, but returns a single
 // joined string). For diagnostics/tests.
@@ -276,7 +201,11 @@ module.exports = {
   recordSkipJudgment,
   readSkipJudgment,
   hasValidSkipJudgment,
-  readComplexityEvaluation,
-  hasComplexityEvaluation,
-  resolveSkipConditionsFromComplexity,
+  // Complexity-evaluation read side — implementation in
+  // skip-signal-resolver/complexity.js, re-exported so the import path callers
+  // already use stays valid.
+  readComplexityEvaluation: complexity.readComplexityEvaluation,
+  hasComplexityEvaluation: complexity.hasComplexityEvaluation,
+  readStageComplexityLevel: complexity.readStageComplexityLevel,
+  resolveSkipConditionsFromComplexity: complexity.resolveSkipConditionsFromComplexity,
 };

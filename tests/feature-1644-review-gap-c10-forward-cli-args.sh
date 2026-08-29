@@ -1,22 +1,15 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, forward-cli, argument-validation, error-cases, edge-cases, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C10 (MEDIUM) — argument handling on all four advance-class
-# CLIs: malformed flags, boundary values, and hostile session ids.
-# Two things are asserted for EVERY rejected call, because either one alone is
-# satisfiable by a broken implementation: (1) the exact exit code — a rejection,
-# not a crash and not a silent success; (2) a byte-for-byte identical workflow
-# directory afterwards — no state file created, none mutated, no lock left
-# behind. A CLI that validates late can exit nonzero and still have written.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether settings.json permissions.allow / deny classify these argv forms the
-#   same way the CLIs do, so a malformed call is refused before it even runs.
-# - Whether a real shell (pwsh) quotes these values identically to Git-Bash —
-#   the special-character and long-value cases are asserted under bash only.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+
+# #1644 review gap C10 (MEDIUM) — argument handling on all four advance-class CLIs:
+# malformed flags, boundary values, hostile session ids. Every rejected call asserts
+# BOTH the exact exit code and a byte-identical workflow dir afterwards — a CLI that
+# validates late can exit nonzero and still have written.
+
+# TL3 gap: settings.json allow/deny classification of these argv forms, and pwsh
+# quoting (asserted under bash only). Mitigation: bin/check-verification-gate.sh
+# category skill-orchestration, at WORKFLOW_USER_VERIFIED preflight.
 
 set -uo pipefail
 
@@ -219,22 +212,25 @@ expect_reject "C10-4k: unknown step for --advance" 1 -- \
 echo ""
 echo "=== C10-5: record-complexity-and-skip argument handling ==="
 # This CLI keeps TWO distinct failure codes: 1 for a missing required value and
-# 2 for an unknown flag. Its `--session` consumes the next token unconditionally,
-# so a value-less --session in the middle turns the following flag into the value
-# and the token after it into an unknown flag — exit 2, not 1.
-expect_reject "C10-5a: --session swallowing the next flag ends as an unknown flag" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session --verdict low --signals "" --target outline
-check_contains "C10-5a: the diagnostic names the swallowed token" "Unknown flag: low" "$ERR"
+# 2 for an unknown flag. Its `--session` uses require_value, which checks
+# whether the next token itself looks like a flag (`--*`) before consuming it —
+# so a value-less --session immediately followed by another flag is rejected
+# as a missing value (exit 2), not treated as swallowing that flag's token.
+expect_reject "C10-5a: --session immediately followed by another flag is a missing value" 2 -- \
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session --target outline --signals ""
+check_contains "C10-5a: the diagnostic names the missing value" "--session requires a value" "$ERR"
 expect_reject "C10-5b: empty --session" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "" --verdict low --signals "" --target outline
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "" --signals "" --target outline
 expect_reject "C10-5c: missing --session entirely" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --verdict low --signals "" --target outline
-expect_reject "C10-5d: missing --verdict" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --signals "" --target outline
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --signals "" --target outline
+expect_reject "C10-5d: missing --signals is a usage error, not a default" 2 -- \
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --target outline
+expect_reject "C10-5d2: the retired --verdict flag is rejected the same way" 2 -- \
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --verdict low --signals "" --target outline
 expect_reject "C10-5e: unknown flag on the advance path still exits 2, not 3" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --verdict low --signals "" --target outline --advance --bogus
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --signals "" --target outline --advance --bogus
 expect_reject "C10-5f: path-traversal --session" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "../evil" --verdict low --signals "" --target outline
+  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "../evil" --signals "" --target outline
 
 echo ""
 echo "=== C10-6: boundary values that are REJECTED ==="

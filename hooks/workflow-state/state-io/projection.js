@@ -105,34 +105,34 @@ function assertStreamIntegrity(events) {
   }
 }
 
+// A `levels` map is carried into the read model only when it is exactly
+// { detail, write_tests, write_code } with high|low values — same check as
+// events.js validateEvent. Anything else folds to null, so the read side
+// re-derives rather than partially trusting a malformed map.
+function isWellFormedStageLevels(levels) {
+  if (!levels || typeof levels !== "object" || Array.isArray(levels)) return false;
+  const { ROUTING_STAGES } = require("../complexity-routing");
+  const keys = Object.keys(levels);
+  if (keys.length !== ROUTING_STAGES.length) return false;
+  return ROUTING_STAGES.every((s) => levels[s] === "high" || levels[s] === "low");
+}
+
 // Fold the event stream into the read model. Pure: never touches the filesystem
 // and never mutates `state`.
 //
 // Deliberately does NOT run assertStreamIntegrity itself: appendEvents folds a
 // BATCH whose new events have no `seq` yet (assignment happens after the fold
 // decides what to append — see events.js), so a blanket check here would
-// reject every legitimate append. Callers that fold a stream claiming to be
-// the durable on-disk truth (readState, appendEvents' pre-append check) call
-// assertStreamIntegrity themselves first.
-//
-// INVARIANT — `updated_seq` is the FOLD LOOP POSITION (`i + 1`), never `e.seq`.
-// The two are equivalent by definition for a durable stream: appendEvents
-// assigns `merged[i].seq = i + 1` over the whole array (events.js), and
-// assertStreamIntegrity enforces that equivalence as tamper detection. Reading
-// `e.seq` here would nonetheless be WRONG, because appendEvents folds the
-// withBatch stream through this function BEFORE it assigns seq — so the very
-// events a decision depends on would project `undefined`. Non-object records
-// are skipped
-// with `continue` but still consume a position, matching the seq assignment.
-//
-// INVARIANT — role separation of the two per-entry axes:
-//   `updated_at`  — WALL-CLOCK only. Answers "how long ago?" (elapsed time).
-//                   Useless for ordering: a single batch stamps every one of its
-//                   events with the same `at`.
-//   `updated_seq` — CAUSAL ORDER only. Answers "before or after?" Never used to
-//                   measure elapsed time.
-// Neither may substitute for the other.
+// reject every legitimate append. Callers that fold a stream claiming to be the
+// durable on-disk truth call assertStreamIntegrity themselves first.
 function projectState(state) {
+  // INVARIANT — `updated_seq` is the FOLD LOOP POSITION (`i + 1`), never `e.seq`:
+  // appendEvents folds the withBatch stream through here BEFORE assigning seq, so
+  // `e.seq` would project `undefined` for the very events a decision depends on.
+  // Non-object records are skipped with `continue` but still consume a position.
+  // INVARIANT — `updated_at` is WALL-CLOCK only (a single batch stamps every one
+  // of its events with the same `at`, so it cannot order them); `updated_seq` is
+  // CAUSAL ORDER only. Neither may substitute for the other.
   const events = state && Array.isArray(state.events) ? state.events : [];
   const ctx = (state && state.session_start_context) || {};
 
@@ -203,8 +203,12 @@ function projectState(state) {
       case "complexity_evaluation": {
         complexity_evaluation = {
           level: e.level,
+          levels: isWellFormedStageLevels(e.levels) ? Object.assign({}, e.levels) : null,
           signals: Array.isArray(e.signals) ? e.signals.slice() : [],
-          recorded_at: e.at !== undefined ? e.at : null,
+          // `at` is the canonical event timestamp key. Events appended before the
+          // key was unified carry `recorded_at` instead; no migration script ships
+          // for them, so the legacy key is absorbed here on the read side.
+          recorded_at: e.at !== undefined ? e.at : (e.recorded_at !== undefined ? e.recorded_at : null),
         };
         break;
       }

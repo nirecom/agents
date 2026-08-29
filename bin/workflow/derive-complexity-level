@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/derive-complexity-level
+// Stateless per-stage level derivation (#2099) — fallback for MDP-3/WT-5/WCD-3
+// when no recorded evaluation exists.
+//
+// Usage:
+//   derive-complexity-level --stage <detail|write_tests|write_code> --signals <csv>
+//   derive-complexity-level --stage <detail|write_tests|write_code> --signals-file <path>
+//   derive-complexity-level --print-markdown-table
+//   derive-complexity-level --print-signal-ids
+//
+// --signals-file reads via fs.readFileSync, never a shell, so file content
+// never reaches command-argument position (#2099 CF-8a); both forms share the
+// same parse, so an unrecognized token routes to the undecidable level either way.
+//
+// Fails open: unusable routing table -> stderr DERIVATION_UNAVAILABLE, level=high, exit 0.
+
+const fs = require("fs");
+const path = require("path");
+const routing = require(path.join(__dirname, "..", "..", "hooks", "workflow-state"));
+
+function usage(msg) {
+  if (msg) process.stderr.write("derive-complexity-level: " + msg + "\n");
+  process.stderr.write(
+    "usage: derive-complexity-level --stage <" + routing.ROUTING_STAGES.join("|") +
+      "> (--signals <csv> | --signals-file <path>)\n" +
+      "       derive-complexity-level --print-markdown-table\n" +
+      "       derive-complexity-level --print-signal-ids\n"
+  );
+  process.exit(1);
+}
+
+// `signals` stays undefined until seen — `--signals ""` is valid (zero signals).
+// A flag with no following value (last token, or followed by another `--` flag)
+// is a usage error, not an empty value.
+function requireValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
+  return v;
+}
+
+function parseArgs(argv) {
+  const out = { stage: null, signals: undefined, signalsFile: undefined, printTable: false, printIds: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--stage") {
+      out.stage = requireValue(argv, i, "--stage");
+      i++;
+    } else if (a === "--signals") {
+      out.signals = requireValue(argv, i, "--signals");
+      i++;
+    } else if (a === "--signals-file") {
+      out.signalsFile = requireValue(argv, i, "--signals-file");
+      i++;
+    } else if (a === "--print-markdown-table") {
+      out.printTable = true;
+    } else if (a === "--print-signal-ids") {
+      out.printIds = true;
+    } else {
+      usage("unknown argument: " + a);
+    }
+  }
+  return out;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (args.printTable) {
+    process.stdout.write(routing.renderStageRoutingMarkdown() + "\n");
+    process.exit(0);
+  }
+  if (args.printIds) {
+    process.stdout.write(routing.renderSignalIdsMarkdown() + "\n");
+    process.exit(0);
+  }
+
+  if (!args.stage || !routing.ROUTING_STAGES.includes(args.stage)) {
+    usage("--stage must be one of " + routing.ROUTING_STAGES.join(", "));
+  }
+  if (args.signals !== undefined && args.signalsFile !== undefined) {
+    usage("--signals and --signals-file are mutually exclusive — pass exactly one");
+  }
+  if (args.signals === undefined && args.signalsFile === undefined) {
+    usage('--signals or --signals-file is required (pass --signals "" for zero signals)');
+  }
+
+  // fs.readFileSync only — never shell/eval/child_process — so content can't
+  // be interpreted as command syntax.
+  let signalsText = args.signals;
+  if (args.signalsFile !== undefined) {
+    if (!args.signalsFile.length) usage("--signals-file requires a path");
+    try {
+      signalsText = fs.readFileSync(args.signalsFile, "utf8");
+    } catch (e) {
+      usage("--signals-file could not be read: " + args.signalsFile + " (" + e.code + ")");
+    }
+  }
+
+  const signals = signalsText.trim().length
+    ? signalsText.split(",").map((s) => s.trim()).filter((s) => s.length)
+    : [];
+
+  let level;
+  try {
+    level = routing.deriveStageLevel(args.stage, signals);
+  } catch (e) {
+    if (e instanceof routing.RoutingTableUnavailableError) {
+      process.stderr.write("DERIVATION_UNAVAILABLE\n");
+      process.stdout.write("level=high\n");
+      process.exit(0);
+    }
+    throw e;
+  }
+
+  process.stdout.write("level=" + level + "\n");
+  process.exit(0);
+}
+
+main();

@@ -31,7 +31,7 @@ if run_case "S1/no-projection-on-disk"; then
 S.markStep(sid, "workflow_init", "complete");
 S.markStep(sid, "outline", "complete");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
-S.recordComplexityEvaluation(sid, "high", ["S1-multi-file"]);
+S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);
 S.markStep(sid, "research", "skipped", { skip_reason: "n/a", skip_judgment: { decision: "skip" } });
 const onDisk = rd();
 const present = process.env.FORBIDDEN.split(",").filter((k) => Object.prototype.hasOwnProperty.call(onDisk, k));
