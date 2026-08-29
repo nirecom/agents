@@ -90,6 +90,13 @@ d2099rp_harness_is_live() {
     rm -rf "$root"
 }
 
+# Load-contention note, owned here for RP-3/RP-4/RP-5: unlike RP-1/RP-2 these three
+# CHAIN 4-8 d2099rp_case invocations, each a separate subprocess under the suite's
+# shared 120s run_with_timeout. One invocation costs ~20s on a busy Windows box, so
+# heavy concurrent load can push one past the cap and surface as NO_CODEX_OUTPUT.
+# That is transient machine contention, not a defect: re-run on an idle box before
+# touching an assertion or the shared timeout constant.
+
 # RP-3: tier 1 — the process environment, when it holds a usable number.
 d2099rp_env_tier() {
     local out=""
@@ -106,6 +113,7 @@ env-above-plan -> none 30
 EOF
 }
 
+# Chains 8 invocations — the load-contention note above RP-3 applies.
 # RP-4: tier 1 rejects everything outside ^[0-9]{1,18}$ (and a zero), falling
 # through to the next tier. With no get-config-var installed the next tier is
 # the built-in 20000, which leaves the 30-line plan untruncated.
@@ -137,6 +145,7 @@ empty -> none 30
 EOF
 }
 
+# Chains 5 invocations — the load-contention note above RP-3 applies.
 # RP-5: tier 2 — bin/get-config-var beside the script. Reached only when tier 1
 # declined, and subject to the SAME numeric and zero checks, so a broken .env
 # cannot set the threshold either.

@@ -3,7 +3,8 @@
 # Tags: codex, review, regression, scope:issue-specific
 # Regression test for #1734: the truncation warning leaked onto stdout
 # instead of stderr, so run-codex-review-loop's header parser misread it as
-# the status header and died with exit 4 (HALT) past MAX_PLAN_LINES=5000.
+# the status header and died with exit 4 (HALT) past MAX_PLAN_LINES
+# (DEFAULT_MAX_PLAN_LINES=20000; see bin/review-plan-codex resolve_threshold).
 # TL3 gap: mock `codex` binary + stub build-codex-context; a live
 # end-to-end run against the real codex CLI remains the only closer.
 set -euo pipefail
@@ -23,16 +24,16 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # ---------------------------------------------------------------------------
-# Setup: 5100-line plan/draft file (over MAX_PLAN_LINES=5000)
+# Setup: 20100-line plan/draft file (over the 20000-line default)
 # ---------------------------------------------------------------------------
 BIG_PLAN="$TMPDIR_BASE/big-plan.md"
 {
   echo "# Oversized Plan"
-  seq 1 5099 | sed 's/^/- line /'
+  seq 1 20099 | sed 's/^/- line /'
 } > "$BIG_PLAN"
 BIG_PLAN_LINES=$(wc -l < "$BIG_PLAN")
-if [[ "$BIG_PLAN_LINES" -ne 5100 ]]; then
-  fail "setup: expected 5100-line plan, got $BIG_PLAN_LINES"
+if [[ "$BIG_PLAN_LINES" -ne 20100 ]]; then
+  fail "setup: expected 20100-line plan, got $BIG_PLAN_LINES"
 fi
 
 # Mock codex bin dir: echoes a minimal valid APPROVED verdict, exits 0.
@@ -70,7 +71,7 @@ else
   pass "Case A: stdout does NOT contain 'Warning: plan is'"
 fi
 
-if grep -qF "Warning: plan is 5100 lines, truncating to 5000 for codex." "$STDERR_A"; then
+if grep -qF "Warning: plan is 20100 lines, truncating to 20000 for codex." "$STDERR_A"; then
   pass "Case A: stderr contains the expected truncation warning"
 else
   fail "Case A: stderr missing expected truncation warning. stderr: $(cat "$STDERR_A" 2>/dev/null)"
@@ -153,30 +154,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case C: exact-boundary — 5000 lines (cap, no truncation) vs 5001 lines (one
+# Case C: exact-boundary — 20000 lines (cap, no truncation) vs 20001 lines (one
 # over, truncation triggers): `if (( INPUT_LINES > MAX_PLAN_LINES ))`.
 # ---------------------------------------------------------------------------
-C_PLAN_AT_CAP="$TMPDIR_BASE/plan-5000.md"
+C_PLAN_AT_CAP="$TMPDIR_BASE/plan-20000.md"
 {
   echo "# At-Cap Plan"
-  seq 1 4999 | sed 's/^/- line /'
+  seq 1 19999 | sed 's/^/- line /'
 } > "$C_PLAN_AT_CAP"
 C_PLAN_AT_CAP_LINES=$(wc -l < "$C_PLAN_AT_CAP")
-if [[ "$C_PLAN_AT_CAP_LINES" -ne 5000 ]]; then
-  fail "setup: expected 5000-line at-cap plan, got $C_PLAN_AT_CAP_LINES"
+if [[ "$C_PLAN_AT_CAP_LINES" -ne 20000 ]]; then
+  fail "setup: expected 20000-line at-cap plan, got $C_PLAN_AT_CAP_LINES"
 fi
 
-C_PLAN_OVER_CAP="$TMPDIR_BASE/plan-5001.md"
+C_PLAN_OVER_CAP="$TMPDIR_BASE/plan-20001.md"
 {
   echo "# Over-Cap Plan"
-  seq 1 5000 | sed 's/^/- line /'
+  seq 1 20000 | sed 's/^/- line /'
 } > "$C_PLAN_OVER_CAP"
 C_PLAN_OVER_CAP_LINES=$(wc -l < "$C_PLAN_OVER_CAP")
-if [[ "$C_PLAN_OVER_CAP_LINES" -ne 5001 ]]; then
-  fail "setup: expected 5001-line over-cap plan, got $C_PLAN_OVER_CAP_LINES"
+if [[ "$C_PLAN_OVER_CAP_LINES" -ne 20001 ]]; then
+  fail "setup: expected 20001-line over-cap plan, got $C_PLAN_OVER_CAP_LINES"
 fi
 
-# --- Case C1: exactly 5000 lines (at the cap) — no truncation, no warning ---
+# --- Case C1: exactly 20000 lines (at the cap) — no truncation, no warning ---
 STDOUT_C1="$TMPDIR_BASE/case-c1-stdout.txt"
 STDERR_C1="$TMPDIR_BASE/case-c1-stderr.txt"
 
@@ -187,31 +188,31 @@ PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
     > "$STDOUT_C1" 2> "$STDERR_C1" || C1_EXIT=$?
 
 if [[ $C1_EXIT -ne 0 ]]; then
-  fail "Case C1 (5000 lines): expected exit 0, got $C1_EXIT. stderr: $(cat "$STDERR_C1" 2>/dev/null)"
+  fail "Case C1 (20000 lines): expected exit 0, got $C1_EXIT. stderr: $(cat "$STDERR_C1" 2>/dev/null)"
 else
-  pass "Case C1 (5000 lines): exits 0"
+  pass "Case C1 (20000 lines): exits 0"
 fi
 
 if grep -q "Warning: plan is" "$STDOUT_C1"; then
-  fail "Case C1 (5000 lines): truncation warning leaked onto stdout at the exact cap. stdout: $(cat "$STDOUT_C1")"
+  fail "Case C1 (20000 lines): truncation warning leaked onto stdout at the exact cap. stdout: $(cat "$STDOUT_C1")"
 else
-  pass "Case C1 (5000 lines): stdout does NOT contain 'Warning: plan is'"
+  pass "Case C1 (20000 lines): stdout does NOT contain 'Warning: plan is'"
 fi
 
 if grep -q "Warning: plan is" "$STDERR_C1"; then
-  fail "Case C1 (5000 lines): unexpected truncation warning on stderr at the exact cap (no truncation should occur). stderr: $(cat "$STDERR_C1")"
+  fail "Case C1 (20000 lines): unexpected truncation warning on stderr at the exact cap (no truncation should occur). stderr: $(cat "$STDERR_C1")"
 else
-  pass "Case C1 (5000 lines): stderr does NOT contain 'Warning: plan is' (no truncation at the cap)"
+  pass "Case C1 (20000 lines): stderr does NOT contain 'Warning: plan is' (no truncation at the cap)"
 fi
 
 FIRST_STDOUT_LINE_C1=$(awk 'NF{print; exit}' "$STDOUT_C1" | tr -d '\r')
 if [[ "$FIRST_STDOUT_LINE_C1" == "## Codex Plan Review: PERFORMED" ]]; then
-  pass "Case C1 (5000 lines): first non-blank stdout line is the PERFORMED status header"
+  pass "Case C1 (20000 lines): first non-blank stdout line is the PERFORMED status header"
 else
-  fail "Case C1 (5000 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C1'"
+  fail "Case C1 (20000 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C1'"
 fi
 
-# --- Case C2: exactly 5001 lines (one over the cap) — truncation, warning ---
+# --- Case C2: exactly 20001 lines (one over the cap) — truncation, warning ---
 STDOUT_C2="$TMPDIR_BASE/case-c2-stdout.txt"
 STDERR_C2="$TMPDIR_BASE/case-c2-stderr.txt"
 
@@ -222,32 +223,32 @@ PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
     > "$STDOUT_C2" 2> "$STDERR_C2" || C2_EXIT=$?
 
 if [[ $C2_EXIT -ne 0 ]]; then
-  fail "Case C2 (5001 lines): expected exit 0, got $C2_EXIT. stderr: $(cat "$STDERR_C2" 2>/dev/null)"
+  fail "Case C2 (20001 lines): expected exit 0, got $C2_EXIT. stderr: $(cat "$STDERR_C2" 2>/dev/null)"
 else
-  pass "Case C2 (5001 lines): exits 0"
+  pass "Case C2 (20001 lines): exits 0"
 fi
 
 if grep -q "Warning: plan is" "$STDOUT_C2"; then
-  fail "Case C2 (5001 lines): truncation warning leaked onto stdout (regression #1734). stdout: $(cat "$STDOUT_C2")"
+  fail "Case C2 (20001 lines): truncation warning leaked onto stdout (regression #1734). stdout: $(cat "$STDOUT_C2")"
 else
-  pass "Case C2 (5001 lines): stdout does NOT contain 'Warning: plan is'"
+  pass "Case C2 (20001 lines): stdout does NOT contain 'Warning: plan is'"
 fi
 
-if grep -qF "Warning: plan is 5001 lines, truncating to 5000 for codex." "$STDERR_C2"; then
-  pass "Case C2 (5001 lines): stderr contains the expected truncation warning"
+if grep -qF "Warning: plan is 20001 lines, truncating to 20000 for codex." "$STDERR_C2"; then
+  pass "Case C2 (20001 lines): stderr contains the expected truncation warning"
 else
-  fail "Case C2 (5001 lines): stderr missing expected truncation warning. stderr: $(cat "$STDERR_C2" 2>/dev/null)"
+  fail "Case C2 (20001 lines): stderr missing expected truncation warning. stderr: $(cat "$STDERR_C2" 2>/dev/null)"
 fi
 
 FIRST_STDOUT_LINE_C2=$(awk 'NF{print; exit}' "$STDOUT_C2" | tr -d '\r')
 if [[ "$FIRST_STDOUT_LINE_C2" == "## Codex Plan Review: PERFORMED" ]]; then
-  pass "Case C2 (5001 lines): first non-blank stdout line is the PERFORMED status header"
+  pass "Case C2 (20001 lines): first non-blank stdout line is the PERFORMED status header"
 else
-  fail "Case C2 (5001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"
+  fail "Case C2 (20001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"
 fi
 
 # Test design self-check: normal = Case A (direct) + Case B (pipeline); edge
-# = Case C's 5000/5001 boundary. Other categories N/A — single-bug regression
+# = Case C's 20000/20001 boundary. Other categories N/A — single-bug regression
 # on stdout/stderr routing, no new input handling or branches.
 
 # ---------------------------------------------------------------------------

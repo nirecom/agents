@@ -55,15 +55,17 @@ check "judge: S3 covers docs-only" "regardless of whether the change is code-onl
 # ---------------------------------------------------------------------------
 
 MDP="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
+# Skip-condition prose lives in the script SKILL.md's "Skip Conditions" section delegates to.
+MDP_SKIP="$AGENTS_DIR/skills/make-detail-plan/scripts/skip-conditions.sh"
 
 check "make-detail-plan: judge-task-complexity invocation" "judge-task-complexity" "$MDP"
 check "make-detail-plan: Model selected output" "Model selected:" "$MDP"
-check "make-detail-plan: model: param in Agent step" "model: <model from step 2>" "$MDP"
-check "make-detail-plan: skip judge in skip conditions" "skip \`judge-task-complexity\`" "$MDP"
+check "make-detail-plan: model: param in Agent step" "model: <from MDP-3>" "$MDP"
+check "make-detail-plan: skip judge in skip conditions" "skip judge-task-complexity" "$MDP_SKIP"
 
-# Steps 1-6 present with no gap
+# Steps MDP-1..MDP-6 present with no gap
 for n in 1 2 3 4 5 6; do
-  check_re "make-detail-plan: step $n present" "^$n\." "$MDP"
+  check_re "make-detail-plan: step $n present" "^### Step MDP-$n " "$MDP"
 done
 
 # Preserved sections
@@ -71,7 +73,7 @@ check "make-detail-plan: Research Escalation preserved" "## Research Escalation"
 check "make-detail-plan: Round counters preserved" "revision_rounds" "$MDP"
 check "make-detail-plan: Re-prompt template preserved" "Re-prompt template" "$MDP"
 check "make-detail-plan: Skip Conditions preserved" "## Skip Conditions" "$MDP"
-check "make-detail-plan: Skipping the Plan Step preserved" "## Skipping the Plan Step Entirely" "$MDP"
+check "make-detail-plan: Skipping This Stage preserved" "## Skipping This Stage (no detail plan)" "$MDP_SKIP"
 check "make-detail-plan: Rules preserved" "## Rules" "$MDP"
 check "make-detail-plan: Completion preserved" "## Completion" "$MDP"
 
