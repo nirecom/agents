@@ -1,3 +1,4 @@
+# Python bytecode and test caches
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -10,7 +11,6 @@ node_modules/
 settings.local.json
 settings-extension.json
 CLAUDE.local.md
-rules/language.md
 .env
 .private-info-blocklist
 .private-info-allowlist
@@ -22,3 +22,6 @@ rules/language.md
 
 # Installer-created directory symlink: /wf-init alias for /workflow-init (#1743)
 skills/wf-init
+
+# CodeGraph's local index — machine-local build artifact, never shared
+.codegraph/
