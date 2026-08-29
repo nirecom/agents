@@ -25,3 +25,7 @@ skills/wf-init
 
 # CodeGraph's local index — machine-local build artifact, never shared
 .codegraph/
+
+# Claude Code's own worktrees (EnterWorktree, subagent isolation). Already in
+# .git/info/exclude, but tools that read only .gitignore index them otherwise.
+.claude/worktrees/
