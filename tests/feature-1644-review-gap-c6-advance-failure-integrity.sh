@@ -162,7 +162,7 @@ check "C6-1c: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC
 
 # record-complexity-and-skip normalizes EVERY advance-path child failure to 3.
 run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
-  bash "$RCAS" --session c61rcas --verdict low --signals "" --target outline --advance
+  bash "$RCAS" --session c61rcas --signals "" --target outline --advance
 check "C6-1d: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-1d: zero ACTION lines" 0 "$(action_lines)"
 check "C6-1d: zero ADVANCED lines" 0 "$(advanced_lines)"
@@ -187,7 +187,7 @@ run_cli env CLAUDE_WORKFLOW_DIR="$DEEP_N" node "$SWT" --session c62swt \
 check "C6-2b: set-workflow-type exits 2" 2 "$RC"
 check "C6-2b: zero ADVANCED lines" 0 "$(advanced_lines)"
 run_cli env CLAUDE_WORKFLOW_DIR="$DEEP_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
-  bash "$RCAS" --session c62rcas --verdict low --signals "" --target outline --advance
+  bash "$RCAS" --session c62rcas --signals "" --target outline --advance
 check "C6-2c: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-2c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-2d: the blocking regular file is still byte-for-byte unchanged" \
@@ -221,7 +221,7 @@ check "C6-3c: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63swt.json")"
 
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session c63rcas --verdict low --signals "" --target outline --advance
+  --session c63rcas --signals "" --target outline --advance
 check "C6-3d: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-3d: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3d: the corrupt file is byte-for-byte unchanged" \
@@ -243,7 +243,7 @@ printf 'module.exports={resolveSkipConditionsFromComplexity:()=>true};\n' \
 printf '%s' "$NOOP" > "$TMPDIR_BASE/fake1/bin/workflow/record-skip-judgment"
 at_outline c64a
 run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake1")" bash "$RCAS" \
-  --session c64a --verdict low --signals "" --target outline --advance
+  --session c64a --signals "" --target outline --advance
 check "C6-4a: a step-1 failure is normalized to 3 (not the child's 7)" 3 "$RC"
 check "C6-4a: zero ADVANCED lines" 0 "$(advanced_lines)"
 check_not_contains "C6-4a: no SKIP_MODE line — step 1 failed before it" "SKIP_MODE=" "$OUT"
@@ -258,7 +258,7 @@ printf 'throw new Error("stub: resolver unavailable");\n' \
 printf '%s' "$NOOP" > "$TMPDIR_BASE/fake2/bin/workflow/record-skip-judgment"
 at_outline c64b
 run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake2")" bash "$RCAS" \
-  --session c64b --verdict low --signals "" --target outline --advance
+  --session c64b --signals "" --target outline --advance
 check "C6-4b: a step-2 failure is normalized to 3" 3 "$RC"
 check "C6-4b: zero ADVANCED lines" 0 "$(advanced_lines)"
 check_not_contains "C6-4b: no SKIP_MODE line — the mode never resolved" "SKIP_MODE=" "$OUT"
@@ -277,7 +277,7 @@ printf '#!/usr/bin/env node\nrequire(%s);\n' "\"$RSJ\"" \
 printf '%s' "$CORRUPT_BYTES" > "$WORKFLOW_DIR/c64c.json"
 C64C_BEFORE="$(file_snapshot "$WORKFLOW_DIR/c64c.json")"
 run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake3")" bash "$RCAS" \
-  --session c64c --verdict low --signals "" --target outline --advance
+  --session c64c --signals "" --target outline --advance
 check "C6-4c: a step-3 failure is normalized to 3 (the delegate's own 2 is swallowed)" 3 "$RC"
 check "C6-4c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-4c: zero ACTION lines" 0 "$(action_lines)"

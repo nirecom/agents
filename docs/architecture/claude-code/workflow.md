@@ -247,6 +247,45 @@ folded into the step's own entry as a step annotation:
 A `pending` verdict blocks next-step with a `"skip_verdict_pending"` hint until the
 verifier resolves.
 
+### `complexity_evaluation` (per-stage routing levels, #2099)
+
+Before #2099, one aggregate `level` (`high`/`low`) routed every model-selecting step alike —
+a single high-complexity signal sent `detail`, `write_tests`, and `write_code` to opus
+together, even when only one of the three actually warranted it. `levels` splits that
+verdict per stage so each step routes on its own evidence:
+
+```json
+{
+  "complexity_evaluation": {
+    "level": "high",
+    "levels": { "detail": "high", "write_tests": "low", "write_code": "high" },
+    "signals": ["S1-multi-file", "S3-security"],
+    "recorded_at": "2026-08-20T10:00:00.000Z"
+  }
+}
+```
+
+- **`level`** stays the legacy aggregate (`high` if any signal fires, else `low`) — kept for
+  callers that never migrated to per-stage routing.
+- **`levels`** keys are exactly `ROUTING_STAGES` (`hooks/workflow-state/complexity-routing.js`:
+  `detail`, `write_tests`, `write_code`), each `"high"` or `"low"`. `recordComplexityEvaluation`
+  (`state-io/session-fields.js`) derives both `level` and `levels` from the same `signals` input
+  in one call, so they can never disagree with each other or be written out of sync.
+- **Optional field, not a breaking change.** `REQUIRED_FIELDS.complexity_evaluation` in
+  `state-io/events.js` stays `["level", "signals"]` — `levels` is validated only when present
+  (exact `ROUTING_STAGES` key set, each value `"high"`/`"low"`, or `InvalidEventError`), so
+  pre-#2099 events and migration-backfilled events with no `levels` still append cleanly.
+- **Read-side compatibility completion.** A missing or malformed `levels` map is not an error
+  at read time: `resolveStageLevels` (`skip-signal-resolver/complexity.js`) re-derives all three
+  stages from the recorded `level`/`signals` via `deriveLegacyStageLevels`, never partially
+  trusting a malformed map. This keeps `readComplexityEvaluation` — the consumer-facing read used
+  by `write-tests`/`write-code`'s model-selection step — returning a usable per-stage view even
+  for sessions recorded before this event carried `levels` at all.
+- **Verification read stays raw.** `readLastRawComplexityEvent` (`state-io/session-fields.js`) is
+  read-back verification only — it returns the event's persisted fields with no folding and no
+  compatibility completion, so a `levels` that was never written comes back `undefined` rather
+  than being silently reconstructed. Never use it on a normal consumer path.
+
 ## Steps and owners
 
 The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core.js` (re-exported by the `state-io.js` barrel). `bin/workflow/next-step --list` renders it with status markers.

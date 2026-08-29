@@ -216,12 +216,12 @@ check "C3-3c: the repeat appended NO second step_status event" "$C33C_N" "$(ev_c
 make_state c33d "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/c33d-intent.md"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session c33d --verdict low --signals "" --target outline --advance
+  --session c33d --signals "" --target outline --advance
 check "C3-3d: first record-complexity-and-skip --advance exits 0" 0 "$RC"
 C33D_N="$(ev_count c33d outline step_status)"
 check "C3-3d: exactly one step_status event after the first call" 1 "$C33D_N"
 run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
-  --session c33d --verdict low --signals "" --target outline --advance
+  --session c33d --signals "" --target outline --advance
 check "C3-3d: the repeat exits 0" 0 "$RC"
 check "C3-3d: the repeat appended NO second step_status event" "$C33D_N" "$(ev_count c33d outline step_status)"
 

@@ -2,25 +2,15 @@
 # tests/feature-1733-state-event-stream/class-members-history.sh
 # Tests: hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js
 # Tags: workflow-state, event-stream, append-only, history, plan-approval, complexity, session-model, scope:issue-specific, pwsh-not-required, TL2
-#
-# "Every timestamped fact becomes an event" is a CLASS statement, and step_status is only
-# its most visible member. The other three members — plan_approvals, complexity_evaluation
-# and session_model — used to be read-modify-write top-level fields, i.e. exactly the
-# overwrite semantics #1733 exists to remove. Covering step_status alone would leave the
-# class half-migrated with a green suite (CPR-ORTH).
-#
-# Each member is asserted on the same two axes:
-#   history    — the superseded record is still IN events[] after the second write
-#   projection — `current` selects the right one (latest, except session_model: first)
-#
-# session_model is the asymmetric member on purpose: it is write-once identity, so its
-# rule is FIRST-writer-wins and the race case below is what makes that claim mean
-# anything — a lock-free implementation passes the sequential case and fails the race.
-#
-# TL3 gap (what this file does NOT catch):
-# - the real SessionStart / confirm-sentinel hooks that call these writers; the writers
-#   are invoked as modules here.
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
+
+# "Every timestamped fact becomes an event" is a CLASS statement; step_status is only its
+# most visible member. plan_approvals, complexity_evaluation and session_model are covered
+# here on the same two axes — history (the superseded record stays in events[]) and
+# projection (`current` picks latest; session_model is first-writer-wins, proven by the race).
+
+# TL3 gap: the real SessionStart / confirm-sentinel hooks that call these writers are not
+# exercised — the writers are invoked as modules. Mitigation: the hook-registration
+# category in bin/check-verification-gate.sh.
 
 CASE_TAG="cls"
 # shellcheck source=tests/feature-1733-state-event-stream/common.sh
@@ -30,9 +20,9 @@ echo "== H1: two complexity evaluations -> both events kept, current holds the l
 if run_case "H1/complexity-history"; then
     next_sid
     nodejs "$SID" "$PRE"'
-S.recordComplexityEvaluation(sid, "low", ["one-file"]);
+S.recordComplexityEvaluation(sid, []);
 sleep(5);
-S.recordComplexityEvaluation(sid, "high", ["many-files", "hook-change"]);
+S.recordComplexityEvaluation(sid, ["S2-architecture", "S3-security"]);
 const ev = evs("complexity_evaluation");
 console.log([
   "n=" + ev.length,
@@ -45,7 +35,7 @@ console.log([
 ].join(" "));
 '
     assert_eq "H1/complexity-history" \
-        'n=2 levels=low>high first_signals=["one-file"] distinct_at=2 current=high current_signals=["many-files","hook-change"] toplevel=false' \
+        'n=2 levels=low>high first_signals=[] distinct_at=2 current=high current_signals=["S2-architecture","S3-security"] toplevel=false' \
         "$NODE_OUT"
 fi
 
@@ -178,7 +168,7 @@ if run_case "H6/class-members-not-top-level"; then
     next_sid
     nodejs "$SID" "$PRE"'
 const CA = require("./hooks/workflow-state/completion-approval");
-S.recordComplexityEvaluation(sid, "high", ["x"]);
+S.recordComplexityEvaluation(sid, ["S3-security"]);
 S.recordSessionModel(sid, { id: "model-x", source: "session-start" });
 CA.recordPlanApproval(sid, "detail", { source: "confirm-sentinel", reason: "ok", artifactSha: "ddd444" });
 const disk = rd();

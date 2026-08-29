@@ -108,7 +108,7 @@ S.markStep(sid, "cleanup", "complete", { skip_reason: "donor-cleanup-note" });
 require("./hooks/workflow-state/state-io/skip-verdict").recordSkipVerdict(sid, "detail", "confirm", "skip-verifier");
 require("./hooks/workflow-state/skip-signal-resolver").recordSkipJudgment(sid, "outline", { c1: true }, "test-source");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
-S.recordComplexityEvaluation(sid, "high", ["S1-multi-file"]);
+S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);
 S.setLastPushedSha(sid, "0".repeat(40));
 { const st = S.readState(sid); st.closes_issues = [1733]; S.writeState(sid, st); }
 console.log("DONOR-READY");

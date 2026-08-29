@@ -3,20 +3,13 @@
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, pwsh-not-required, TL2
 #
-# The two allowlists this schema stands on — EVENT_KINDS (what may enter events[]) and
-# PERSISTED_TOP_LEVEL_KEYS (what may reach the file's top level) — are covered here by
-# ITERATION over the exported constants, not by a hand-picked sample of members.
-#
-# Why iteration rather than examples: an allowlist tested by example silently loses
-# coverage the moment a tenth kind or a twelfth top-level key is added. Every case below
-# walks the exported array, so a new member with no table row fails the set-equality
-# assertion first, and its required-field / rejection coverage follows automatically.
-#
-# TL3 gap (what this file does NOT catch):
-# - whether real producers (markStep callers, the worktree recorder, sentinel handlers)
-#   actually emit these shapes. That is the behavioural files' job; here the vocabulary
-#   itself is the subject.
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
+# EVENT_KINDS and PERSISTED_TOP_LEVEL_KEYS are covered by ITERATION over the exported
+# constants, never by a hand-picked sample: a new member with no table row fails the
+# set-equality assertion first, and its per-member coverage follows automatically.
+
+# TL3 gap: whether real producers actually emit these shapes — the behavioural files'
+# job; here the vocabulary itself is the subject. Mitigation: hook-registration
+# category in bin/check-verification-gate.sh.
 
 CASE_TAG="voc"
 # shellcheck source=tests/feature-1733-state-event-stream/common.sh
@@ -32,7 +25,10 @@ const SAMPLE = {
   step_annotations_cleared: { step: "research" },
   worktree: { transition: "entered", git_branch: "fix/x", cwd: "/w", worktree_path: "/w", path_source: "tool_input" },
   session_model: { id: "model-fixture", source: "stop-hook" },
-  complexity_evaluation: { level: "high", signals: ["many-files"] },
+  // `levels` is OPTIONAL (REQUIRED_FIELDS stays ["level","signals"]; #2099 validates it
+  // only when present), so it must NOT sit in this table — EV3 deletes every key here
+  // and demands a rejection. Its shape contract is EV13 below.
+  complexity_evaluation: { level: "high", signals: ["S2-architecture"] },
   plan_approval: { step: "detail", source: "confirm-sentinel", reason: "approved", artifact_sha256: "ab12", artifact_session_id: "sfix", artifact_hash_status: "match" },
   plan_approval_revoked: { step: "detail", reason: "artifact changed" },
   reset: { from_step: "detail", reason: "user asked" },
@@ -314,6 +310,50 @@ if (!st.current || !st.current.steps || st.current.steps.research.status !== "co
 console.log(bad.length ? "BAD " + bad.join(" | ") : "OK");
 '
     assert_eq "EV12/projection-keys-never-persisted" "OK" "$NODE_OUT"
+fi
+
+echo "== EV13: complexity_evaluation.levels is optional, shape-checked, and rejected ATOMICALLY =="
+if run_case "EV13/complexity-levels-shape-atomic"; then
+    next_sid
+    # "Rejected" cannot mean "threw" alone. An implementation that appends first and
+    # validates afterwards throws exactly the same InvalidEventError while leaving the
+    # malformed event in a log that has no delete operation. The only assertion that
+    # separates the two is the file itself: same bytes, same event count, after the throw.
+    nodejs "$SID" "$PRE$VOCAB_JS"'
+const bad = [];
+const ok = { detail: "low", write_tests: "high", write_code: "high" };
+// Optional: an event with no `levels` at all is valid.
+if (!accepts(mk("complexity_evaluation"))) bad.push("absent-levels:rejected");
+if (!accepts(mk("complexity_evaluation", { levels: ok }))) bad.push("valid-levels:rejected");
+const BAD = {
+  "missing-key": { detail: "low", write_tests: "low" },
+  "extra-key": { detail: "low", write_tests: "low", write_code: "low", docs: "low" },
+  "bad-value": { detail: "low", write_tests: "low", write_code: "medium" },
+  "array": ["low", "low", "low"],
+  "null": null,
+  "string": "high",
+};
+Object.keys(BAD).forEach((label) => {
+  const before = raw();
+  const beforeN = JSON.parse(before).events.length;
+  let name = "NO-THROW";
+  try { S.appendEvents(sid, [mk("complexity_evaluation", { levels: BAD[label] })]); }
+  catch (e) { name = e.name; }
+  if (name !== "InvalidEventError") bad.push(label + ":" + name);
+  // Atomicity — the two halves the throw alone cannot prove.
+  if (raw() !== before) bad.push(label + ":bytes-changed");
+  const afterN = JSON.parse(raw()).events.length;
+  if (afterN !== beforeN) bad.push(label + ":stream-grew-to-" + afterN);
+});
+// The two valid appends above are the ones that may be on disk, and no others.
+const ce = rd().events.filter((e) => e.kind === "complexity_evaluation");
+if (ce.length !== 2) bad.push("surviving-ce-events=" + ce.length);
+if (ce.some((e) => e.levels !== undefined && JSON.stringify(e.levels) !== JSON.stringify(ok))) {
+  bad.push("a-malformed-levels-survived");
+}
+report(bad);
+'
+    assert_eq "EV13/complexity-levels-shape-atomic" "OK" "$NODE_OUT"
 fi
 
 feature_banner

@@ -226,26 +226,45 @@ function migrateV1ToV2(v1State) {
   }
 
   const complexity = src.complexity_evaluation;
-  if (complexity && typeof complexity === "object") {
+  // An unmappable legacy verdict (or a blob that never carried a level) yields
+  // null from complexityLevel(): emit NOTHING rather than an event that folds to
+  // a projected record every reader then rejects — "an evaluation exists but is
+  // broken" is not the truth, "none was ever recorded" is.
+  if (complexity && typeof complexity === "object" && complexityLevel(complexity) !== null) {
     // A v1 blob with no recorded_at never carried an observation timestamp;
     // fabricating one would make "no evaluation was ever recorded" (which callers
     // read as fail-open) indistinguishable from "recorded at the epoch". The event
     // keeps `at` null while group ordering falls back to created_at.
     const recordedAt = typeof complexity.recorded_at === "string" ? complexity.recorded_at : null;
+    const backfillLevel = complexityLevel(complexity);
+    const backfillSignals = Array.isArray(complexity.signals) ? complexity.signals : [];
+    // `levels` is OMITTED entirely when the routing table is unusable: an absent
+    // field falls through to the read-side L1/L2 compat path, whereas a
+    // fabricated one would be indistinguishable from a genuine record (#2099).
+    const levelsFields = {};
+    try {
+      const { deriveLegacyStageLevels } = require("../../complexity-routing");
+      levelsFields.levels = Object.assign({}, deriveLegacyStageLevels(backfillLevel, backfillSignals));
+    } catch (_) {
+      // leave levelsFields empty
+    }
     groups.push({
       at: recordedAt || createdAt,
       estimated: false,
       rank: 0,
       stepIndex: -1,
       events: [
-        {
-          kind: "complexity_evaluation",
-          level: complexityLevel(complexity),
-          signals: Array.isArray(complexity.signals) ? complexity.signals : [],
-          at: recordedAt,
-          provenance: "backfilled",
-          origin: ORIGIN,
-        },
+        Object.assign(
+          {
+            kind: "complexity_evaluation",
+            level: backfillLevel,
+            signals: backfillSignals,
+            at: recordedAt,
+            provenance: "backfilled",
+            origin: ORIGIN,
+          },
+          levelsFields
+        ),
       ],
     });
   }

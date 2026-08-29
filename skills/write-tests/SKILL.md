@@ -9,6 +9,8 @@ Write or update tests for the current task.
 
 ## Procedure
 
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below.
+
 WT-1. Read:
    - `rules/core-principles.md`
    - `skills/_shared/test-design.md`
@@ -26,8 +28,11 @@ WT-4. List all planned test cases by category (include call-path error cases fro
    - stdout `OFF`: print the planned cases and proceed to step WT-5 without approval wait.
    - stdout `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
 WT-5. **Determine the subagent's model**:
-   - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv>`), then derive the model via `high→opus, low→sonnet`; skip the fallback below.
-   - If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md` to load the signal table. Evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4. Do not short-circuit on the first match. Apply the routing rule: 1+ signals → high→opus; 0 signals → low→sonnet; ambiguous → high→opus.
+   - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage write_tests'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model via `high→opus, low→sonnet`; skip the fallback below.
+   - If `NONE` (fail-open for sessions without persisted evaluation):
+     - Read `skills/_shared/judge-task-complexity.md` and evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4 — do not short-circuit on the first match.
+     - Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-tests-signals.txt` — write only IDs from the generated Valid Signal IDs list; substitute `S0-undecidable` when the judgment doesn't parse into recognized ids or the csv doesn't match `^[A-Za-z0-9,_-]*$` (the judged content is untrusted text, never shell syntax).
+     - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"'` and use its `level=<v>` — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
@@ -38,7 +43,7 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    WT-6d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
    WT-6e. Re-run tests until green.
    The subagent prompt MUST include these structured fields so verbose output stays in the subagent context:
-   - `task_complexity_signals`: list of triggered signal IDs from step WT-5 (or "none")
+   - `task_complexity_signals`: the `signals=` line from step WT-5 verbatim (comma-separated IDs, or "none")
    - `source_files`: list of source file paths from step WT-2
    - `planned_cases`: list of planned test cases from step WT-4
    The subagent prompt MUST instruct: edit only test files, never modify source code.

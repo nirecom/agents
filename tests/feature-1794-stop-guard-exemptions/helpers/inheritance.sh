@@ -2,19 +2,14 @@
 # helpers/inheritance.sh
 # Tests: hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/lifecycle.js, hooks/supervisor-guard/detect.js
 # Tags: session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL2
-#
-# Session-inheritance fixtures for the #1794 adoption
-# (I) cases. Split out of helpers.sh to keep both files under the 300-line WARN
-# threshold (rules/coding/file-split.md Pattern A). Sourced by helpers.sh.
-# Expects AGENTS_DIR, RWT, STATEIO_NODE, make_tmp and node_path.
 
-# ── #1794 adoption fixtures (I cases) ───────────────────────────────────────
-# These build a REAL inherited session: a donor state, a transcript that
-# announces it, and an heir created by launching hooks/session-start.js itself,
-# so every inherited step_status carries provenance:"backfilled" and
-# origin:"session-inherit" exactly as a live SessionStart would write it.
-# Layout under <tmp>: wf/ (dual-pinned workflow AND plans dir), repo/ (fixture
-# git repo), tr/ (transcript base), home/ (temp HOME), cfg/ (fixture config).
+# Session-inheritance fixtures for the #1794 adoption (I) cases, split out of helpers.sh
+# under the 300-line WARN. Expects AGENTS_DIR, RWT, STATEIO_NODE, make_tmp, node_path.
+
+# These build a REAL inherited session — donor state, announcing transcript, and an
+# heir created by launching hooks/session-start.js itself — so inherited step_status
+# carries provenance:"backfilled"/origin:"session-inherit" as a live SessionStart writes.
+# Layout under <tmp>: wf/ (workflow+plans, dual-pinned), repo/, tr/, home/, cfg/.
 
 SESSION_START_HOOK="$AGENTS_DIR/hooks/session-start.js"
 
@@ -67,12 +62,10 @@ inh_node() {
 # Builds the whole inheritance fixture and creates <heir> through the REAL
 # SessionStart hook (which also spawns bin/workflow/next-step as a child — the
 # path I8 targets). <ci-mode>:
-#   complete — donor finished clarify_intent. Its <donor>-intent.md MUST exist,
-#              or evaluateInheritance's S3 rule stops the whole donor scan and
-#              nothing is inherited at all.
-#   pending  — donor left clarify_intent pending, and <heir>-intent.md is planted
-#              up front so the heir's own next-step run resolves it from evidence
-#              (the C1 path). See the closes_issues note at the bottom of the body.
+#   complete — donor finished clarify_intent; its <donor>-intent.md MUST exist, or
+#              evaluateInheritance's S3 rule stops the donor scan entirely.
+#   pending  — donor left clarify_intent pending, <heir>-intent.md planted up front so
+#              the heir's own next-step resolves it from evidence (the C1 path).
 # Sets INH_OUT (session-start stdout+stderr).
 seed_donor_and_inherit() {
     local tmp="$1" donor="$2" heir="$3" mode="$4" enc
@@ -193,5 +186,5 @@ seed_recording_only() {
 const S = require('$STATEIO_NODE');
 S.writeState('$sid', S.createInitialState('$sid', { cwd: process.cwd(), git_branch: null }));
 S.recordSessionModel('$sid', { id: 'claude-opus-5', source: 'transcript' });
-S.recordComplexityEvaluation('$sid', 'high', ['S1-multi-file']);" >/dev/null 2>&1
+S.recordComplexityEvaluation('$sid', ['S1-multi-file', 'S2-architecture']);" >/dev/null 2>&1
 }

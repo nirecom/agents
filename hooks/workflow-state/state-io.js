@@ -51,6 +51,7 @@ module.exports = {
   withStateLock: stateLock.withStateLock,
   StateLockTimeoutError: stateLock.StateLockTimeoutError,
   recordComplexityEvaluation: sessionFields.recordComplexityEvaluation,
+  readLastRawComplexityEvent: sessionFields.readLastRawComplexityEvent,
   recordSessionModel: sessionFields.recordSessionModel,
   markReviewTestsComplete: reviewTests.markReviewTestsComplete,
   clearReviewTestsWarnings: reviewTests.clearReviewTestsWarnings,

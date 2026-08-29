@@ -144,8 +144,28 @@ function validateEvent(event) {
       throw new InvalidEventError("event.path_source must be one of: " + PATH_SOURCES.join(", "));
     }
   }
-  if (event.kind === "complexity_evaluation" && !Array.isArray(event.signals)) {
-    throw new InvalidEventError("event.signals must be an array");
+  if (event.kind === "complexity_evaluation") {
+    if (!Array.isArray(event.signals)) {
+      throw new InvalidEventError("event.signals must be an array");
+    }
+    // `levels` stays OPTIONAL (REQUIRED_FIELDS is unchanged) so pre-#2099 and
+    // migration-backfilled events still append; when present it must be exact.
+    if (event.levels !== undefined) {
+      const { ROUTING_STAGES } = require("../complexity-routing");
+      const lv = event.levels;
+      if (!lv || typeof lv !== "object" || Array.isArray(lv)) {
+        throw new InvalidEventError("event.levels must be a plain object (kind=complexity_evaluation)");
+      }
+      const lvKeys = Object.keys(lv);
+      if (lvKeys.length !== ROUTING_STAGES.length || !ROUTING_STAGES.every((s) => lvKeys.includes(s))) {
+        throw new InvalidEventError("event.levels keys must be exactly ROUTING_STAGES (kind=complexity_evaluation)");
+      }
+      for (const stage of ROUTING_STAGES) {
+        if (lv[stage] !== "high" && lv[stage] !== "low") {
+          throw new InvalidEventError(`event.levels.${stage} must be "high" or "low"`);
+        }
+      }
+    }
   }
   return event;
 }

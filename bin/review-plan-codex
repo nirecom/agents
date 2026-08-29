@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
 # Adversarial plan review via OpenAI Codex CLI.
-# Usage: review-plan-codex --input <file> --format {detail-plan|outline-plan}
-#                          [--cap N] [--max-extensions N] [--extensions-used N]
-#                          [--session-id ID] [--log-dir DIR]
-#                          [--accepted-tradeoffs FILE] [--context FILE]...
-#                          [--no-log]
-#
-# Always emits one of:
-#   ## Codex Plan Review: PERFORMED
-#   ## Codex Plan Review: SKIPPED — <reason>
-#   ## Codex Plan Review: FAILED — <reason>
-#
-# Designed to be called from Claude Code Bash tool during planning loops.
-# Always exits 0 so it never blocks the workflow.
+# Usage: review-plan-codex --input <file> --format {detail-plan|outline-plan} [--cap N] [--max-extensions N] [--extensions-used N] [--session-id ID] [--log-dir DIR] [--accepted-tradeoffs FILE] [--context FILE]... [--no-log]
+# Emits "## Codex Plan Review: PERFORMED|SKIPPED — <reason>|FAILED — <reason>".
+# Called from Claude Code's Bash tool during planning loops; always exits 0 so it never blocks the workflow.
 
 set -uo pipefail
+
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 INPUT=""
 FORMAT=""
@@ -149,8 +141,23 @@ LOOP_LABEL="$FORMAT"
 PLAN_CONTENT=$(<"$INPUT")
 INPUT_LINES=$(wc -l < "$INPUT")
 
-# Truncate to 5000 lines if needed
-MAX_PLAN_LINES=5000
+# Truncate if needed. Resolution: env -> get-config-var (repo .env) -> default.
+# Mirrors review-code-codex's CODEX_REVIEW_MAX_DIFF_LINES pattern.
+DEFAULT_MAX_PLAN_LINES=20000
+resolve_threshold() { # <var-name> <default>
+  local name="$1" def="$2" v=""
+  v="${!name:-}"
+  if [[ ! "$v" =~ ^[0-9]{1,18}$ ]]; then
+    v=""
+    if [[ -x "$SCRIPT_DIR/get-config-var" ]]; then
+      v="$("$SCRIPT_DIR/get-config-var" "$name" "$def" 2>/dev/null)" || v=""
+    fi
+  fi
+  [[ "$v" =~ ^[0-9]{1,18}$ ]] || v="$def"
+  [[ "$v" =~ ^0+$ ]] && v="$def"
+  printf '%s' "$v"
+}
+MAX_PLAN_LINES="$(resolve_threshold CODEX_REVIEW_PLAN_MAX_LINES "$DEFAULT_MAX_PLAN_LINES")"
 if (( INPUT_LINES > MAX_PLAN_LINES )); then
   echo "Warning: plan is ${INPUT_LINES} lines, truncating to ${MAX_PLAN_LINES} for codex." >&2
   PLAN_CONTENT=$(printf '%s' "$PLAN_CONTENT" | head -n "$MAX_PLAN_LINES")

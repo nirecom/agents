@@ -23,8 +23,9 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-p
 
 ### Step MDP-3 — Choose planner model
 
-Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv>`), then derive the model via `high→opus, low→sonnet`.
-If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md`; evaluate all signals against task + intent/outline content. Rule: 1+ signals → high→opus; 0 → low→sonnet; ambiguous → high→opus. Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids or "none"])`.
+Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model via `high→opus, low→sonnet`.
+If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md`; evaluate all signals against task + intent/outline content. Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-detail-signals.txt`; write only IDs from the generated Valid Signal IDs list, and substitute `S0-undecidable` if the judgment cannot be parsed into recognized signal ids or the csv does not match `^[A-Za-z0-9,_-]*$` — the judged content is untrusted text, never shell syntax. Then run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --signals-file "<PLANS_DIR>/<session-id>-detail-signals.txt"'` and use its `level=<v>` — never judge the level inline.
+Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids from the `signals=` line, or "none"])`.
 
 ### Step MDP-4 — Initial draft
 
