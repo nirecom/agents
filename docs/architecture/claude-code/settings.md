@@ -146,7 +146,9 @@ See `docs/security-policy.md` for the full pattern list.
   (target resolves outside the repo, or under the session scratchpad / `WORKFLOW_PLANS_DIR`),
   and Bash writes whose targets ALL resolve under the session scratchpad
   (`<os-tmpdir>/claude/`, scoped to `$SCRATCHPAD` when set) or `WORKFLOW_PLANS_DIR`
-  (heredoc/redirect forms included). Non-directory `New-Item`, in-repo targets, quoted
+  (heredoc/redirect forms included). The workflow-gate early gate allows the same two
+  destinations through the same predicate (#2108, `hooks/workflow-gate/early-gate-allowlist.js`),
+  so an agent blocked by one hook is not handed a different answer by the other. Non-directory `New-Item`, in-repo targets, quoted
   paths that expand into the repo, and mixed/unresolvable target sets stay fail-closed.
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
@@ -333,6 +335,27 @@ See `docs/security-policy.md` for the full pattern list.
   base64, alternate interpreters, edits to the hook itself). Nothing depends on it being airtight —
   provenance is an audit signal, never a gate, so a forged marker grants no clearance; it only
   mislabels the audit record. Fail-open: any error yields `{}`.
+- **Protected-basename boundary: suffix, then stem (#2108)** — a basename used to be protected on its
+  SUFFIX alone (`*.workflow-off`, `*.gh-env`, …), which caught every unrelated file that happened to
+  end that way, since a scratchpad note named `issue-2108-survey.md` shares no clearance with the
+  marker files. The decision now needs both halves: the suffix, AND a stem that could actually be
+  opened by a clearance reader — every reader opens exactly `path.join(dir, sid + ".<kind>")`, so only
+  a stem that IS an effective session id can confer clearance. `isClearanceBearingStem()` in
+  `hooks/lib/protected-basenames.js` owns that predicate; `hooks/lib/active-session-ids.js` observes
+  the candidate sids (the hook payload's session id, the resolved session id, and the stems present in
+  the workflow dir) and reports whether that observation was COMPLETE.
+  Two named exceptions keep the narrowing from cutting into real coverage. **Per-route spelling**: the
+  `Edit`/`Write` route matches a stem exactly (`spelling:"clean"`), but the Bash route
+  (`spelling:"bash"`) can only match a non-alphanumeric-bounded tail, because bash-word unquoting
+  collapses `C:\wf\<uuid>` to `C:wf<uuid>` — so on that route a stem carrying any character outside
+  `[A-Za-z0-9._-]` is unprovable normalization residue and stays protected. **Fail-closed on
+  unobservable**: if the sid observation is incomplete (unreadable workflow dir, any throw), no
+  narrowing is applied at all and behaviour is identical to the pre-#2108 suffix-only rule. A glob
+  candidate keeps matching on suffix alone for the same reason — its post-expansion stem is unprovable.
+  Residual risk (R2b): a file whose stem genuinely IS an active session id but which is not a clearance
+  artifact remains protected, and, in the other direction, an attacker who can already learn the
+  session id gains nothing here that the pre-change rule denied them — the narrowing only removes
+  false positives, it never widens what a caller may write.
 - **Outbound content and the verdict review** — the verdict review runs on **every**
   `/issue-create` candidate; there is no on/off toggle, and the only condition that skips it
   is `codex` being absent from `PATH`. It sends the proposed issue text AND the bodies of the

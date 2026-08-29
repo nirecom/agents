@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
+# Tests: hooks/enforce-protected-marker-write.js, hooks/lib/protected-basenames.js
+# Tags: protected-marker, workflow-off, false-positive, classifier, interpreter-gate, scope:issue-specific, pwsh-not-required
 # Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
-# Section N - FALSE POSITIVES. The documentation and the skill that DESCRIBE the
-# escape hatch must never be mistaken for the escape hatch itself.
-#
-# This is not a nicety. `rules/workflow-off.md` and `skills/enforce-workflow-off/`
-# are the two files a session reads while deciding whether to use the sentinel, and
-# `skills/enforce-workflow-off/` is where the sanctioned path is maintained. If the
-# basename classifier or the interpreter MENTION gate treats them as protected,
-# then reading the rule blocks, editing the skill blocks, and the only remaining
-# way to make progress is to turn enforcement off wholesale - the guard would
-# actively push sessions toward the bypass it exists to prevent (CPR-UO/CPR-E2E).
-#
-# Two distinct mechanisms must both stay clear, and they fail differently:
-#   - the basename classifier: `workflow-off.md` ends in `.md`, so a suffix match
-#     that is not anchored at the basename tail would hit it;
-#   - the interpreter Tier-1 MENTION gate: it scans free command text for a
-#     protected NAME, so an unanchored mention regex arms the fail-closed
-#     interpreter path on any command line that merely names the rule file.
+# Section N - FALSE POSITIVES. The docs and the skill that DESCRIBE the escape hatch
+# must never be mistaken for the hatch itself: blocking them would push sessions
+# toward the very bypass this guard exists to prevent (CPR-UO/CPR-E2E). Two mechanisms
+# must both stay clear, and they fail differently - the basename classifier (a suffix
+# match not anchored at the basename tail hits `workflow-off.md`), and the interpreter
+# Tier-1 MENTION gate (an unanchored mention regex arms the fail-closed interpreter
+# path for any command line that merely names the rule file).
 
 run_N_false_positive() {
     local rule="$LINKED_WT/rules/workflow-off.md"
@@ -55,4 +47,27 @@ run_N_false_positive() {
     # `notes-workflow-off.md` write is ordinary content, not a clearance grant.
     assert_approve "N6 plain note file named workflow-off.txt" \
         "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$LINKED_WT/notes/workflow-off.txt")")"
+
+    # N7 (#2108) - the same principle one step further: a basename that ENDS in a
+    # protected kind but whose stem is not the session id. session-markers.js and
+    # gh-env-state.js open exactly `<dir>/<sid>.<kind>`, so none of these names can
+    # ever be read as clearance - yet the suffix-only classifier blocked all of them,
+    # leaving a subagent with no legal filename for its survey artifact. The Edit/Write
+    # spelling carries the stem verbatim, so exact matching is safe on this path.
+    assert_approve "N7 survey artifact issue-2108-survey.gh-env" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$LINKED_WT/artifacts/issue-2108-survey.gh-env")")"
+    assert_approve "N7 dated report report.2026-08-25.gh-env" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$LINKED_WT/artifacts/report.2026-08-25.gh-env")")"
+    assert_approve "N7 dedupe artifact duplicate-check.gh-login" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Edit "$LINKED_WT" file_path "$LINKED_WT/artifacts/duplicate-check.gh-login")")"
+    assert_approve "N7 snapshot-2026-08-25.gh-auth-dirty" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_edits_input MultiEdit "$LINKED_WT" file_path "$LINKED_WT/artifacts/snapshot-2026-08-25.gh-auth-dirty")")"
+    assert_approve "N7 survey artifact issue-2108-survey.workflow-off" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$LINKED_WT/artifacts/issue-2108-survey.workflow-off")")"
+
+    # N7 counterweight (CPR-ORTH): the real marker spelling must still block, or N7
+    # would be passing because the guard stopped working rather than because it
+    # learned the stem rule. `wsid` is the session id mk_tool_input embeds.
+    assert_block "N7 counterweight: wsid.gh-env still blocks" \
+        "$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(mk_tool_input Write "$LINKED_WT" file_path "$LINKED_WT/artifacts/wsid.gh-env")")"
 }

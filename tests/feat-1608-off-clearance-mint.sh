@@ -59,7 +59,7 @@ process.stdout.write((ok&&has)?'PERSISTED':'DROPPED');" 2>/dev/null)
     fi
 }
 
-# ===== bin/request-off-clearance cases (script does examination+mint+audit — 実装時要件2) =====
+# ===== bin/request-off-clearance cases (script does examination+mint+audit — implementation requirement 2) =====
 mint_available() { [ -x "$REQ" ] || [ -f "$REQ" ]; }
 
 # build a fake examiner PATH stub emitting a fixed verdict, and run the script.
@@ -237,13 +237,13 @@ run_CO2() {
     local tmp tn cwdd
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     cwdd=$(make_tmp)
-    printf 'Session-ID: co2wsid\n' > "$cwdd/WORKTREE_NOTES.md"
-    seed_claimed_token "$tn" "co2wsid"   # claimed token keyed to the WSID only, NOT to co2sid
+    printf 'Session-ID: 20260101-000000\n' > "$cwdd/WORKTREE_NOTES.md"
+    seed_claimed_token "$tn" "20260101-000000"   # claimed token keyed to the WSID only, NOT to co2sid
     ( cd "$cwdd" && WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co2sid');" >/dev/null 2>&1 )
     local ok=1
-    [ -f "$tmp/co2wsid.off-clearance.claimed" ] && ok=0               # fallback claimed token consumed
-    grep -q "off_clearance_consumed" "$tmp/co2wsid-supervisor-state.json" 2>/dev/null || ok=0  # audit under WSID
+    [ -f "$tmp/20260101-000000.off-clearance.claimed" ] && ok=0               # fallback claimed token consumed
+    grep -q "off_clearance_consumed" "$tmp/20260101-000000-supervisor-state.json" 2>/dev/null || ok=0  # audit under WSID
     [ -f "$tmp/co2sid-supervisor-state.json" ] && ok=0               # NOT under the direct sid
     rm -rf "$tmp" "$cwdd" 2>/dev/null || true
     if [ "$ok" = "1" ]; then

@@ -1,26 +1,14 @@
 #!/usr/bin/env node
 // Candidate-basename normalization + glob-aware deny-suffix matching.
 //
-// PreToolUse hooks see tool_input text before the shell expands it and the OS
-// normalizes it, so a `$`-anchored regex on raw text misses: shell globs that
-// expand at execution time, Windows stripping trailing whitespace/dots, and
-// NTFS alt-data-stream specs (`name::$DATA`) that write the BASE file.
-//
-// Two entry points (CPR-SC): normalizeCandidateBasename() does pure text
-// normalization, glob metachars left INTACT; candidateBasenameMatchesAnySuffix()
-// normalizes then decides — for a glob, whether it COULD expand to a protected
-// suffix. Metachar handling lives in the matcher so a metachar WIDENS the
-// decision (fail-closed) rather than collapsing to one non-matching string.
-//
-// Named exception (CPR-UNV): a glob whose literal text contributes NOTHING to
-// the suffix (`*`, `logs/2024*`) is a non-match — else `rm -rf build/*` would
-// block. This module is name-only; the caller (bash-target-context.js)
-// additionally fails closed when a glob's directory resolves under the
-// workflow dir.
-//
-// Brace/ANSI-C `$'...'` expansion lives in the sibling
-// ./basename-glob-normalize/brace-ansi-expand.js — read its DIRECTION
-// DISCIPLINE header before touching either module.
+// PreToolUse hooks see tool_input text before the shell expands it, so a
+// `$`-anchored regex on raw text misses shell globs, Windows trailing
+// whitespace/dot stripping, and NTFS `name::$DATA` specs writing the BASE file.
+// Two entry points (CPR-SC): normalizeCandidateBasename() normalizes text with
+// glob metachars INTACT; candidateBasenameMatchesAnySuffix() then decides — for
+// a glob, whether it COULD expand to a protected suffix, so a metachar widens
+// the decision. A glob contributing NO literal text to the suffix is a
+// non-match. Brace/ANSI-C expansion: ./basename-glob-normalize/brace-ansi-expand.js.
 "use strict";
 
 const { candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
@@ -102,12 +90,19 @@ function globCanEndWith(atoms, suffix) {
 // spelling. Non-glob candidates take a plain case-insensitive endsWith
 // (identical to the `$`-anchored regex the callers used before); glob candidates
 // take the could-expand-to matcher above.
-function oneSpellingMatches(spelling, suffixes) {
+// `stemAllowed(stem)` (#2108) is consulted ONLY on the non-glob branch: there the
+// stem is knowable, so a suffix hit whose stem cannot confer clearance is a false
+// positive. A glob's post-expansion stem is unprovable, so the glob branch keeps
+// matching on the suffix alone (named exception).
+function oneSpellingMatches(spelling, suffixes, stemAllowed) {
   const norm = normalizeCandidateBasename(spelling);
   if (typeof norm !== "string" || norm === "") return false;
   if (!GLOB_METACHAR_RE.test(norm)) {
     const lower = norm.toLowerCase();
-    return suffixes.some((suffix) => lower.endsWith(String(suffix).toLowerCase()));
+    const hit = suffixes.find((suffix) => lower.endsWith(String(suffix).toLowerCase()));
+    if (hit === undefined) return false;
+    if (typeof stemAllowed !== "function") return true;
+    return stemAllowed(norm.slice(0, norm.length - String(hit).length));
   }
   const atoms = parseGlobAtoms(norm);
   return suffixes.some((suffix) => globCanEndWith(atoms, String(suffix)));
@@ -119,11 +114,12 @@ function oneSpellingMatches(spelling, suffixes) {
 // An enumeration that gave up (`overCap`) answers "hit": an incomplete
 // expansion has not been shown to miss the suffix, so detection direction
 // resolves the doubt toward blocking. Fail-closed on error is the caller's job.
-function candidateBasenameMatchesAnySuffix(basename, suffixes) {
+function candidateBasenameMatchesAnySuffix(basename, suffixes, opts) {
   if (typeof basename !== "string" || basename === "" || !Array.isArray(suffixes)) return false;
   const { candidates, overCap } = candidateSpellings(basename);
   if (overCap) return true;
-  return candidates.some((c) => oneSpellingMatches(c, suffixes));
+  const stemAllowed = opts && opts.stemAllowed;
+  return candidates.some((c) => oneSpellingMatches(c, suffixes, stemAllowed));
 }
 
 module.exports = {

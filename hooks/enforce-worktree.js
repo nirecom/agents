@@ -1,20 +1,13 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: enforce worktree-based parallel session workflow.
 //
-// Blocks every write-capable tool — the edit-write class
-// (Edit/Write/MultiEdit/editFiles/NotebookEdit) and the command class
-// (Bash/runInTerminal/runCommands), enumerated in hooks/lib/write-tools.js — when:
-//   1. Running in the main git checkout (not a linked worktree), regardless of branch.
-//   2. Running on a protected branch even inside a linked worktree.
-// Allows writes only from a linked worktree on a non-protected branch.
-// Implementation is split across sibling modules under hooks/enforce-worktree/
-// (config / git-repo-detection / session-scope / git-hooks-bypass / shared-cmd-utils
-// / branch-delete-guard / main-worktree-allows / bash-write-scope / block-extras).
-// This file holds the dispatch block plus small helpers (readStdin / done /
-// getWorktreeBaseDirResolved). docs(history|changelog) writes use the GitHub REST
-// API and bypass local file/git writes (Contents API + Git Data API under bin/lib/).
-// Limitation: Bash write detection is pattern-based (UX guard, not a security
-// boundary) — use ENFORCE_WORKTREE=off to bypass for trivial direct-main work.
+// Blocks every write-capable tool (hooks/lib/write-tools.js enumerates both the
+// edit-write and command classes) from the main git checkout, and from any
+// protected branch even inside a linked worktree; writes are allowed only from a
+// linked worktree on a non-protected branch. This file holds the dispatch block
+// plus readStdin / done / getWorktreeBaseDirResolved; the rest lives in sibling
+// modules under hooks/enforce-worktree/. Bash write detection is pattern-based
+// (a UX guard, not a security boundary) — ENFORCE_WORKTREE=off bypasses it.
 
 "use strict";
 
@@ -197,7 +190,11 @@ let _writeDetector = null;
 // resolved `repoRoot` (plus `writeDetector` for Bash) for the post-dispatch
 // main-checkout / protected-branch checks below.
 if (isCommandTool(toolName)) {
-  const result = handleBashWrite({ toolName, toolInput, _toolCwd, done, reportContext: _reportContext });
+  // sessionCtx (#2108): the stdin identity a protected-basename stem is tested against.
+  const result = handleBashWrite({
+    toolName, toolInput, _toolCwd, done, reportContext: _reportContext,
+    sessionCtx: { sessionId: input.session_id, transcriptPath: input.transcript_path },
+  });
   repoRoot = result.repoRoot;
   _writeDetector = result.writeDetector;
 } else if (isEditWriteTool(toolName)) {

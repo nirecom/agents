@@ -301,9 +301,9 @@ run_T9c() {
 run_T10() {
     local tmp tn r rc out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    seed_worktree_notes "$tmp" "t10wsid"           # resolveWsid() -> "t10wsid" (Priority 1, CWD read)
-    seed_state_empty "$tn" "t10wsid"
-    write_token "$tn" "t10wsid" "workflow" "workflow-bug" "valid"   # keyed to wsid, NOT to session_id
+    seed_worktree_notes "$tmp" "20260102-000000"           # resolveWsid() -> "20260102-000000" (Priority 1, CWD read)
+    seed_state_empty "$tn" "20260102-000000"
+    write_token "$tn" "20260102-000000" "workflow" "workflow-bug" "valid"   # keyed to wsid, NOT to session_id
     # deliberately do NOT write a t10sid.off-clearance token
     r=$(run_shim_in_dir "$tmp" "$tn" "t10sid" "$WF_BOUND"); rc="${r%%|*}"; out="${r#*|}"
     rm -rf "$tmp" 2>/dev/null || true

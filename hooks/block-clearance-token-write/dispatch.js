@@ -84,10 +84,13 @@ function blockMessageFor(kind) {
 // (file_path / path / notebook_path, top level and per-entry in `edits[]`)
 // both live in hooks/lib/write-tools.js, so this hook and
 // hooks/enforce-worktree.js cover exactly the same tool surface (CPR-SSOT/CPR-ORTH).
-function evaluateProtectedWrite(toolName, toolInput) {
+function evaluateProtectedWrite(toolName, toolInput, sessionCtx) {
   if (isEditWriteTool(toolName)) {
+    // spelling:"clean" — an Edit/Write file_path never passed through a shell, so
+    // the stem is exactly as written and an EXACT sid match is the right test
+    // (#2108). The Bash branch below keeps the broader tail match.
     for (const p of collectEditWritePaths(toolInput)) {
-      const kind = classifyProtectedPath(p);
+      const kind = classifyProtectedPath(p, { sessionCtx, spelling: "clean" });
       if (kind) return { kind, reason: blockMessageFor(kind) };
     }
     return null;
@@ -97,7 +100,7 @@ function evaluateProtectedWrite(toolName, toolInput) {
   // commandTextOf joins with "\n" so a write in commands[1] is scanned as
   // its own statement rather than glued onto the tail of commands[0].
   if (isCommandTool(toolName)) {
-    const kind = bashHitsProtected(commandTextOf(toolName, toolInput), { cwd: toolInput.cwd });
+    const kind = bashHitsProtected(commandTextOf(toolName, toolInput), { cwd: toolInput.cwd, sessionCtx });
     return kind ? { kind, reason: blockMessageFor(kind) } : null;
   }
   return null;

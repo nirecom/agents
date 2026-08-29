@@ -20,7 +20,9 @@ const out = [];
 // M-3: for every marker kind, BOTH the bare and the .tmp form must classify as a
 // marker, and both must arm the mention gate. Derived from the SSOT, so a kind
 // added later is checked automatically.
-for (const kind of p.SESSION_MARKER_KINDS) {
+// PROTECTED_STATE_KINDS (#2108): SESSION_MARKER_KINDS alone left the forge
+// ownership kinds from PR #2089 out of every check in this section.
+for (const kind of p.PROTECTED_STATE_KINDS) {
   out.push(`classify .${kind}=${p.classifyProtectedPath("s1." + kind)}`);
   out.push(`classify .${kind}.tmp=${p.classifyProtectedPath("s1." + kind + ".tmp")}`);
   out.push(`suffixlist .${kind}=${p.PROTECTED_MARKER_SUFFIXES.includes("." + kind)}`);
@@ -43,13 +45,23 @@ const tokPairs = p.OFF_CLEARANCE_TOKEN_SUFFIXES
 out.push(`tokentmp-pairing=${tokPairs}`);
 // The marker list must be exactly {.kind, .kind.tmp} for every kind - no more, no
 // less. A stray entry means a hand-edit crept into a derived list.
-const want = [...p.SESSION_MARKER_KINDS, ...p.FORGE_OWNERSHIP_STATE_KINDS].reduce((a, k) => a.concat(["." + k, "." + k + ".tmp"]), []);
+const want = [...p.PROTECTED_STATE_KINDS].reduce((a, k) => a.concat(["." + k, "." + k + ".tmp"]), []);
 out.push(`markerlist-exact=${JSON.stringify([...p.PROTECTED_MARKER_SUFFIXES].sort()) === JSON.stringify(want.sort())}`);
 // The mention gate must stay off the DOCUMENTATION of the escape hatch (the
 // Section N failure mode, asserted here at regex level too).
 out.push(`mention rules/workflow-off.md=${p.mentionsProtectedName("rules/workflow-off.md")}`);
 out.push(`mention skills/enforce-workflow-off/SKILL.md=${p.mentionsProtectedName("skills/enforce-workflow-off/SKILL.md")}`);
 out.push(`emergencykind-listed=${p.SESSION_MARKER_KINDS.includes(p.EMERGENCY_PROVENANCE_MARKER_KIND)}`);
+// X12 (#2108): the STEM decides, not just the suffix. A reader only ever opens
+// `<dir>/<sid>.<kind>`, so on the Edit/Write spelling a non-sid stem carries no
+// clearance and must not be blocked - while the real `<sid>.<kind>` still is.
+for (const kind of p.PROTECTED_STATE_KINDS) {
+  const opts = { spelling: "clean", sessionCtx: { sessionId: "s1" } };
+  out.push(`stem-artifact .${kind}=${p.classifyProtectedPath("issue-2108-survey." + kind, opts)}`);
+  out.push(`stem-sid .${kind}=${p.classifyProtectedPath("s1." + kind, opts)}`);
+}
+out.push(`stempredicate-exported=${typeof p.isClearanceBearingStem === "function"}`);
+out.push(`sessionkinds=${p.SESSION_MARKER_KINDS.join(" ")}`);
 process.stdout.write(out.join("\n"));
 PROBE_EOF
 
@@ -66,6 +78,11 @@ PROBE_EOF
         assert_eq "X2 [$kind] .tmp present in suffix list"  "suffixlist .$kind.tmp=true"    "$(printf '%s\n' "$out" | grep -F "suffixlist .$kind.tmp=" | head -1)"
         assert_eq "X2 [$kind] .tmp matches marker regex"    "re .$kind.tmp=true"            "$(printf '%s\n' "$out" | grep -F "re .$kind.tmp=" | head -1)"
         assert_eq "X3 [$kind] .tmp arms the mention gate"   "mention .$kind.tmp=true"       "$(printf '%s\n' "$out" | grep -F "mention .$kind.tmp=" | head -1)"
+        # X12 (#2108) - stem rule, both directions for the same kind.
+        assert_eq "X12 [$kind] artifact stem is not clearance-bearing" "stem-artifact .$kind=null" \
+            "$(printf '%s\n' "$out" | grep -F "stem-artifact .$kind=" | head -1)"
+        assert_eq "X12 [$kind] session-id stem still is"              "stem-sid .$kind=marker" \
+            "$(printf '%s\n' "$out" | grep -F "stem-sid .$kind=" | head -1)"
     done
 
     local sfx
@@ -77,6 +94,7 @@ PROBE_EOF
     assert_eq "X5 token list pairs every writable form with .tmp"  "tokentmp-pairing=true"   "$(printf '%s\n' "$out" | grep -F 'tokentmp-pairing=' | head -1)"
     assert_eq "X5 marker list is exactly {.kind,.kind.tmp} per kind" "markerlist-exact=true" "$(printf '%s\n' "$out" | grep -F 'markerlist-exact=' | head -1)"
     assert_eq "X5 emergency-provenance kind is in the marker set"  "emergencykind-listed=true" "$(printf '%s\n' "$out" | grep -F 'emergencykind-listed=' | head -1)"
+    assert_eq "X12 SSOT exports the stem predicate" "stempredicate-exported=true" "$(printf '%s\n' "$out" | grep -F 'stempredicate-exported=' | head -1)"
     assert_eq "X6 mention gate ignores rules/workflow-off.md"      "mention rules/workflow-off.md=false" "$(printf '%s\n' "$out" | grep -F 'mention rules/workflow-off.md=' | head -1)"
     assert_eq "X6 mention gate ignores skills/enforce-workflow-off/" "mention skills/enforce-workflow-off/SKILL.md=false" "$(printf '%s\n' "$out" | grep -F 'mention skills/enforce-workflow-off/SKILL.md=' | head -1)"
 
@@ -110,10 +128,24 @@ PROBE_EOF
     if [ -f "$ZOMBIE_SRC" ]; then
         local swept missing="" k extra=""
         swept=$(grep -o 'endsWith("\.[A-Za-z][A-Za-z0-9.-]*")' "$ZOMBIE_SRC" | sed 's/.*("//; s/")$//' | sort -u)
-        for k in $MARKER_KINDS; do
+        # Scoped to SESSION_MARKER_KINDS, which is what the sweep owns. The forge
+        # ownership kinds are session-scoped state with their own lifecycle and are
+        # NOT swept here; see the skip below.
+        local sesskinds forgegap=""
+        sesskinds="$(printf '%s\n' "$out" | grep -F 'sessionkinds=' | head -1 | sed 's/^sessionkinds=//')"
+        for k in $sesskinds; do
             printf '%s\n' "$swept" | grep -qx "\.$k" || missing="$missing $k"
         done
-        assert_eq "X8 every protected marker kind is swept by zombie-cleanup" "" "$missing"
+        assert_eq "X8 every session marker kind is swept by zombie-cleanup" "" "$missing"
+        for k in $MARKER_KINDS; do
+            printf '%s\n' "$sesskinds" | tr ' ' '\n' | grep -qx "$k" && continue
+            printf '%s\n' "$swept" | grep -qx "\.$k" || forgegap="$forgegap $k"
+        done
+        # SKIPPED: asserting the forge ownership kinds are swept too.
+        # Because: zombie-cleanup.js does not sweep them today and #2108 does not
+        # change that; making it an assertion would fail on unrelated work.
+        # L3 gap: a stale gh-* ownership marker is never expired by the sweep.
+        [ -n "$forgegap" ] && skip "X8b forge ownership kinds not swept by zombie-cleanup:$forgegap (pre-existing, out of #2108 scope)"
 
         for lit in $swept; do
             case "$lit" in

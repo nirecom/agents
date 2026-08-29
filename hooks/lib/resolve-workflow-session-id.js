@@ -3,68 +3,25 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+// CPR-SSOT (#2108): the WORKTREE_NOTES parser and the own-worktree matcher were
+// private copies here and in workflow-state/session-id.js; both now share one.
+const {
+  readSessionIdFromWorktreeNotes,
+  findOwnWorktreeDir,
+  parseWorktreeDirs,
+} = require("./worktree-notes-session-ids");
 
 const PRIORITY3_DAYS_BACK = 2;
 const CONTEXT_READ_CAP_BYTES = 16384;
 
-function _readSessionIdFromWorktreeNotes(notesPath) {
-  try {
-    const content = fs.readFileSync(notesPath, "utf8");
-    const m = content.match(/^Session-ID:\s*(\S+)\s*$/m);
-    if (m && /^[A-Za-z0-9_-]+$/.test(m[1])) return m[1];
-  } catch (_) {}
-  return null;
-}
-
 /**
- * Identify the "own" worktree root among `dirs`: the entry whose path is `cwd`
- * itself or a proper ancestor of `cwd`. Uses path.resolve()-normalized prefix
- * matching with a path-separator boundary (so `C:/git/wt1` does not match
- * `C:/git/wt1-other`); on win32 the comparison is case-insensitive.
- * When multiple ancestors qualify (nested worktrees), the deepest wins.
- * Returns the ORIGINAL (unnormalized) dir string, or null when none matches.
- */
-function _findOwnWorktreeDir(dirs, cwd) {
-  const norm = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
-  const cwdNorm = norm(path.resolve(cwd));
-  let own = null;
-  let ownLen = -1;
-  for (const dir of dirs) {
-    if (!dir) continue;
-    const dirNorm = norm(path.resolve(dir));
-    const isMatch =
-      cwdNorm === dirNorm ||
-      (cwdNorm.startsWith(dirNorm) &&
-        (dirNorm.endsWith("/") ||
-          dirNorm.endsWith(path.sep) ||
-          cwdNorm[dirNorm.length] === "/" ||
-          cwdNorm[dirNorm.length] === path.sep));
-    if (isMatch && dirNorm.length > ownLen) {
-      own = dir;
-      ownLen = dirNorm.length;
-    }
-  }
-  return own;
-}
-
-/**
- * Resolve the workflow session ID (wsid) — the timestamped session prefix used by
- * plan artifacts in WORKFLOW_PLANS_DIR (e.g. `<YYYYMMDD-HHMMSS>-intent.md`).
- * Distinct from resolveSessionId() which returns the CC session UUID.
- *
- * Priority chain:
- *   1. WORKTREE_NOTES.md Session-ID: line in CWD or git common-dir parent
- *      (written by /worktree-start — gold source).
- *   2. CLAUDE_CODE_SESSION_ID env var (charset-validated), if any
- *      `<value>-*.md` plan artifact exists in plans-dir. CC-native and reliably
- *      present in the Bash-tool path where CLAUDE_ENV_FILE is not propagated
- *      (#1082); existence-guarded to avoid resolving to an artifact-less session.
- *   3. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
- *      if `<value>-intent.md` exists in plans-dir.
- *   4. Depth-score scan of `*-context.md` filenames in plans-dir, filtered by charset and
- *      same-day date-sanity (prefix must start with today's local YYYYMMDD).
- *      Each candidate scores depth: 2 = detail.md present, 1 = intent.md only, 0 = stub.
- *      Sort order: depth desc, mtime desc, sid asc (depth tie-breaks before mtime).
+ * Resolve the workflow session ID (wsid) — the timestamped prefix plan artifacts in
+ * WORKFLOW_PLANS_DIR use; distinct from resolveSessionId()'s CC UUID. Priority:
+ * 1. WORKTREE_NOTES.md `Session-ID:` (CWD, git common-dir parent, then sibling
+ * worktrees — /worktree-start's gold source). 2. CLAUDE_CODE_SESSION_ID, guarded on a
+ * `<value>-*.md` artifact existing (#1082). 3. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID,
+ * guarded on `<value>-intent.md`. 4. Depth-score scan of `*-context.md` in plans-dir
+ * (depth 2 = detail.md, 1 = intent.md, 0 = stub; depth desc, mtime desc, sid asc).
  * Returns null on any failure (no throw).
  */
 function resolveWorkflowSessionId(_ctx = {}) {
@@ -77,7 +34,7 @@ function resolveWorkflowSessionId(_ctx = {}) {
   }
 
   // Priority 1: WORKTREE_NOTES.md Session-ID (written by /worktree-start — gold source).
-  const fromCwd = _readSessionIdFromWorktreeNotes(
+  const fromCwd = readSessionIdFromWorktreeNotes(
     path.join(process.cwd(), "WORKTREE_NOTES.md")
   );
   if (fromCwd) return fromCwd;
@@ -88,7 +45,7 @@ function resolveWorkflowSessionId(_ctx = {}) {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     if (commonDir) {
-      const fromGit = _readSessionIdFromWorktreeNotes(
+      const fromGit = readSessionIdFromWorktreeNotes(
         path.join(path.resolve(commonDir), "..", "WORKTREE_NOTES.md")
       );
       if (fromGit) return fromGit;
@@ -144,28 +101,16 @@ function resolveWorkflowSessionId(_ctx = {}) {
     const wtOut = execSync("git worktree list --porcelain", {
       encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"],
     });
-    const worktreeDirs = [];
-    let current = null;
-    for (const line of wtOut.split("\n")) {
-      if (line.startsWith("worktree ")) {
-        current = line.slice("worktree ".length).trim();
-      } else if (line === "" && current !== null) {
-        if (current) worktreeDirs.push(current);
-        current = null;
-      }
-    }
-    // Handle last entry if no trailing blank line (R6).
-    if (current) worktreeDirs.push(current);
-
-    const ownDir = _findOwnWorktreeDir(worktreeDirs, process.cwd());
+    const worktreeDirs = parseWorktreeDirs(wtOut);
+    const ownDir = findOwnWorktreeDir(worktreeDirs, process.cwd());
     if (ownDir) {
-      const ownSid = _readSessionIdFromWorktreeNotes(path.join(ownDir, "WORKTREE_NOTES.md"));
+      const ownSid = readSessionIdFromWorktreeNotes(path.join(ownDir, "WORKTREE_NOTES.md"));
       if (ownSid) return ownSid; // own worktree wins over any sibling
     }
     const hits = new Set();
     for (const dir of worktreeDirs) {
       if (dir === ownDir) continue; // exclude own from the sibling set
-      const sid = _readSessionIdFromWorktreeNotes(path.join(dir, "WORKTREE_NOTES.md"));
+      const sid = readSessionIdFromWorktreeNotes(path.join(dir, "WORKTREE_NOTES.md"));
       if (sid) hits.add(sid);
     }
     if (hits.size === 1) return [...hits][0];

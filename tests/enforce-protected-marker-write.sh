@@ -7,12 +7,14 @@
 #   (here it is a node subprocess fed synthetic stdin), i.e. that settings.json's
 #   Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands matcher actually
 #   routes those tool calls to it. X6 asserts the registration STATICALLY only.
+set -u
 
 # - Real NTFS alternate-data-stream semantics and real shell glob expansion at
 #   redirect time: the OS/shell behaviour is the premise, and only the hook's
 #   treatment of the spelling is asserted here.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # WHAT THIS FILE DEFENDS (#1780 security-scanner round 8: H-1..H-4, M-1, M-3)
 # hooks/lib/session-markers.js authorizes purely on a marker file's EXISTENCE, so
@@ -20,6 +22,7 @@
 # clearance. The guard against that must be location-independent (H-1, Section L),
 # glob-aware (H-3, Section G), ADS-aware (H-4, Section A), shape-complete
 # (M-1, Section S) and .tmp-symmetric (M-3, Section X).
+if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
 # Every block case is paired with its CPR-ORTH sanctioned counterpart: a guard that
 # over-blocks ordinary work is a different, equally real defect (Section N).
@@ -29,11 +32,6 @@
 # allow when the process exited 0 AND affirmatively said so; a crash, a timeout,
 # empty stdout or unparseable stdout each get their own verdict token and can
 # never be confused with "approve". See classify() below.
-
-set -u
-
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
 HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
@@ -134,13 +132,30 @@ fi
 # escape into real session state.
 SANDBOX=$(make_tmp); WFDIR=$(node_path "$SANDBOX")
 SID="protmarksid"
+# stem realigned to effective sid — a stem must equal the active session-id to carry clearance (#2108)
+# The block-expecting cases below name markers after $SID and `s1` while the stdin
+# payload's session_id is `wsid`; registering those two as ordinary state files makes
+# them OBSERVED session ids, so the cases keep testing cross-session protection
+# rather than silently degrading into "unknown stem, therefore unprotected".
+printf '{"session_id":"%s"}\n' "$SID" > "$SANDBOX/$SID.json"
+printf '{"session_id":"s1"}\n' > "$SANDBOX/s1.json"
+# Exported as a pair so the direct `node` probes below INHERIT them
+# (rules/test/fixture-isolation.md). Without this the registrations above are
+# invisible to those probes: they resolve the real workflow dir, `s1` is not an
+# observed sid there, and every stem-dependent case degrades to "unprotected".
+# classify() on line 77 still overrides both per-invocation for its own sandbox.
+export CLAUDE_WORKFLOW_DIR="$WFDIR"
+export WORKFLOW_PLANS_DIR="$WFDIR"
 
 # --- SSOT introspection: the protected sets are DERIVED, never hardcoded ----
 # A hardcoded copy here would silently stop covering a marker kind added later to
 # hooks/lib/protected-basenames.js; Section X asserts the SSOT itself still agrees
 # with hooks/lib/session-markers.js and zombie-cleanup.js.
+# PROTECTED_STATE_KINDS, not SESSION_MARKER_KINDS: the latter omits the forge
+# ownership kinds PR #2089 added, so the marker cases below were covering only part
+# of what this hook actually protects (#2108).
 MARKER_KINDS=$("$RWT" 10 node -e \
-    "process.stdout.write(require(process.argv[1]).SESSION_MARKER_KINDS.join(' '))" "$PB_NODE" 2>/dev/null)
+    "process.stdout.write(require(process.argv[1]).PROTECTED_STATE_KINDS.join(' '))" "$PB_NODE" 2>/dev/null)
 TOKEN_SUFFIXES=$("$RWT" 10 node -e \
     "process.stdout.write(require(process.argv[1]).OFF_CLEARANCE_TOKEN_SUFFIXES.join(' '))" "$PB_NODE" 2>/dev/null)
 if [ -z "$MARKER_KINDS" ] || [ -z "$TOKEN_SUFFIXES" ]; then

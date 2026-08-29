@@ -50,14 +50,11 @@ const MAX_NESTED_SCAN_DEPTH = 3;
 // unquoted `$( … )` / `` ` … ` `` / `$(( … ))` / `${ … }` span is kept WHOLE,
 // minus the ones the ordinary parse already produced.
 //
-// The ordinary parse tears an unquoted substitution apart on its internal `(`/
-// `)` and whitespace, so neither fragment is the real write target
-// (`touch $(printf '%s%s' <wf>/s1.workflow -off)` was measured ALLOW). This
-// reading is ADDED to the ordinary one, never substituted for it: the
-// ordinary `( )` split is what promotes substitution/subshell/process-sub
-// bodies to their own scanned segments (`$(rm <marker>)` blocks because of
-// it), so replacing it would silently lose that coverage. Fail-soft: if the
-// second parse fails, the caller keeps its previous behaviour.
+// The ordinary parse tears an unquoted substitution apart on its internal `(`/`)`
+// and whitespace, so neither fragment is the real write target. This reading is
+// ADDED to the ordinary one, never substituted for it: the ordinary `( )` split is
+// what promotes substitution/subshell bodies to their own scanned segments, so
+// replacing it would lose that coverage. Fail-soft on a failed second parse.
 function substitutionSpanSegments(cmd, ir) {
   const base = ir && Array.isArray(ir.segments) ? ir.segments : [];
   let spanIr;
@@ -117,6 +114,10 @@ function bashHitsProtected(cmd, opts, _depth) {
   const depth = typeof _depth === "number" ? _depth : 0;
   const toolCwd = opts && typeof opts.cwd === "string" ? opts.cwd : null;
   const workflowDir = resolveWorkflowDir();
+  // #2108: rides alongside `workflowDir`/`cwd` in the per-segment ctx without
+  // changing what either of those means. Self-recursion re-passes `opts` whole,
+  // so nested bodies inherit it automatically.
+  const sessionCtx = opts && opts.sessionCtx;
   try {
     const ir = parse(cmd);
     if (!ir || ir.parseFailure) return unparsedVerdict(cmd);
@@ -145,14 +146,14 @@ function bashHitsProtected(cmd, opts, _depth) {
     const { targets } = collectWriteTargetsFromSegments(segments, { verbs: SHELL_CONFIG_VERB_SET });
     if (targets) {
       for (const t of targets) {
-        const kind = t && classifyProtectedPath(t.path);
+        const kind = t && classifyProtectedPath(t.path, { sessionCtx });
         if (kind) return kind;
       }
     }
-    const rawRedirectKind = redirectRawTargetsHitProtected(segments, { workflowDir, cwd: toolCwd });
+    const rawRedirectKind = redirectRawTargetsHitProtected(segments, { workflowDir, cwd: toolCwd, sessionCtx });
     if (rawRedirectKind) return rawRedirectKind;
     for (let idx = 0; idx < segments.length; idx++) {
-      const ctx = { workflowDir, cwd: commandCwd(segments, idx, toolCwd) };
+      const ctx = { workflowDir, cwd: commandCwd(segments, idx, toolCwd), sessionCtx };
       const kind = segmentArgvHitsProtectedArg(segments[idx], priorAssignmentsText(segments, idx), ctx);
       if (kind) return kind;
       // HIGH-3 / MEDIUM-5: `eval <text>` and `<reader> <<< <text>` hand a
@@ -179,7 +180,7 @@ function bashHitsProtected(cmd, opts, _depth) {
       // `node < <marker>` EXECUTES the file. Classify it as a path — this is
       // narrower than the mention rule on purpose, so a plain `cat < <marker>`
       // read (no interpreter) stays approved.
-      const kind = classifyBashWriteTarget(t, "", { workflowDir, cwd: toolCwd });
+      const kind = classifyBashWriteTarget(t, "", { workflowDir, cwd: toolCwd, sessionCtx });
       if (kind) return kind;
     }
     for (const t of stdinRoutes.opaqueTexts) {

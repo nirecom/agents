@@ -138,7 +138,8 @@ function areAllWriteSegmentsOutsideSessionScope(ir, repoRoot, sessionRoots) {
 // containment under the workflow dir instead of session-scope exclusion.
 // A targetless write segment (git commit, gh pr merge, interpreter -c, etc.)
 // fails closed — extraction can't prove it stays under the workflow dir.
-function areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot) {
+// `opts` is `{ sessionCtx }` (#2108), passed straight through to the marker gate.
+function areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot, opts) {
   if (!ir || ir.parseFailure === true) return false;
   if (!ir.segments || ir.segments.length === 0) return false;
 
@@ -166,7 +167,7 @@ function areAllWriteSegmentsUnderWorkflowDir(ir, repoRoot) {
       : collectBashWriteTargets(segIr);
     if (result.parseFailure === true) return false;
     if (result.targets === null || result.targets.length === 0) return false;
-    if (!areAllBashTargetsUnderWorkflowDir(result.targets)) return false;
+    if (!areAllBashTargetsUnderWorkflowDir(result.targets, opts)) return false;
   }
   return hasWriteSegment === true;
 }

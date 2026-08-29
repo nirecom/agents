@@ -79,7 +79,13 @@ run_M7() {
 # ---------------------------------------------------------------------------
 run_M8() {
     local out tmp wf tn problems=""
-    out=$("$RWT" 20 node -e "
+    tmp="$(make_tmp)"; wf="$tmp/wf"; mkdir -p "$wf"; tn="$(node_path "$wf")"
+    # Dir pinned and `s1` registered before the probe (#2108): a protected suffix
+    # confers clearance only when the STEM is an effective session id. Unpinned,
+    # this probe resolves the developer's REAL workflow dir, where `s1` is not an
+    # observed sid, and both classify calls below correctly return null.
+    printf '{"session_id":"s1"}\n' > "$wf/s1.json"
+    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const p = require('$BASENAMES_NODE');
 const problems = [];
 if (!p.SESSION_MARKER_KINDS.includes('stall-reported')) problems.push('kind-not-listed');
@@ -92,7 +98,6 @@ for (const k of ['workflow-off','next-step-paused']) {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     [ "$out" = "OK" ] || problems="$problems [protected-basenames: ${out:-<err>}]"
 
-    tmp="$(make_tmp)"; wf="$tmp/wf"; mkdir -p "$wf"; tn="$(node_path "$wf")"
     : > "$wf/m8-old.stall-reported"
     : > "$wf/m8-fresh.stall-reported"
     P="$(node_path "$wf/m8-old.stall-reported")" "$RWT" 15 node -e "
