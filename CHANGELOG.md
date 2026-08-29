@@ -379,3 +379,7 @@ Changes: Fixed a bug where the codex review loop's concern ledger could get stuc
 ### FEATURE: PR #2143 (2026-08-26)
 Background: fix(#2140): forward rules/shell-commands.md to write-code/write-tests general-purpose subagents
 Changes: Fixed: the write-code and write-tests subagents now read the shell command-line and user-escalation rules before running Bash, so a rejected command comes with an explanation instead of a silent denial.
+
+### FEATURE: PR #2146 (2026-08-30)
+Background: feat(#2099): split complexity routing into per-stage thresholds
+Changes: Reduced unnecessary Opus usage by selecting the model per workflow stage (write-tests, write-code, detail-plan) instead of one session-wide complexity verdict.;Fixed a bug where a session's recorded task-complexity evaluation was silently unreadable on later workflow steps, causing them to always fall back to the default routing.;Raised the default plan-truncation limit sent to codex from 5000 to 20000 lines, and made it configurable via the new `CODEX_REVIEW_PLAN_MAX_LINES` env var.
