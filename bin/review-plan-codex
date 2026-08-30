@@ -157,7 +157,7 @@ resolve_threshold() { # <var-name> <default>
   [[ "$v" =~ ^0+$ ]] && v="$def"
   printf '%s' "$v"
 }
-MAX_PLAN_LINES="$(resolve_threshold CODEX_REVIEW_PLAN_MAX_LINES "$DEFAULT_MAX_PLAN_LINES")"
+MAX_PLAN_LINES="$(resolve_threshold CODEX_REVIEW_MAX_PLAN_LINES "$DEFAULT_MAX_PLAN_LINES")"
 if (( INPUT_LINES > MAX_PLAN_LINES )); then
   echo "Warning: plan is ${INPUT_LINES} lines, truncating to ${MAX_PLAN_LINES} for codex." >&2
   PLAN_CONTENT=$(printf '%s' "$PLAN_CONTENT" | head -n "$MAX_PLAN_LINES")

@@ -42,18 +42,11 @@ function hint(hints) {
 
 function buildHints(config, isPriv) {
   const hints = [];
-  const histPolicy = isPriv ? config.historyPrivate : config.historyPublic;
-  const clPolicy = isPriv ? config.changelogPrivate : config.changelogPublic;
-  if (classifyPolicy(histPolicy) === "hint") {
+  const policy = isPriv ? config.private : config.public;
+  if (classifyPolicy(policy) === "hint") {
     hints.push(
-      `DOCS_LANG_HISTORY_${isPriv ? "PRIVATE" : "PUBLIC"}=${histPolicy}: ` +
-      `write ## History Notes in ${histPolicy}. Hint only — approved regardless of content language.`
-    );
-  }
-  if (classifyPolicy(clPolicy) === "hint") {
-    hints.push(
-      `DOCS_LANG_CHANGELOG_${isPriv ? "PRIVATE" : "PUBLIC"}=${clPolicy}: ` +
-      `write ## Changelog Notes in ${clPolicy}. Hint only — approved regardless of content language.`
+      `DOCS_LANG_${isPriv ? "PRIVATE" : "PUBLIC"}=${policy}: ` +
+      `write ## History Notes and ## Changelog Notes in ${policy}. Hint only — approved regardless of content language.`
     );
   }
   return hints;
@@ -80,7 +73,7 @@ function formatMessage(violations) {
     .join("\n");
   const footer =
     "Rewrite the offending bullets to match the policy before saving.\n" +
-    "Policy comes from $AGENTS_CONFIG_DIR/.env (DOCS_LANG_HISTORY_*, DOCS_LANG_CHANGELOG_*).";
+    "Policy comes from $AGENTS_CONFIG_DIR/.env (DOCS_LANG_PUBLIC / DOCS_LANG_PRIVATE).";
   return `${header}\n${body}\n${footer}`;
 }
 

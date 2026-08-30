@@ -46,7 +46,7 @@ d2099rp_run() {
 }
 
 # The invocation itself, in a subshell so the exported fixture env — including
-# an UNSET CODEX_REVIEW_PLAN_MAX_LINES, which is one of the branches — never
+# an UNSET CODEX_REVIEW_MAX_PLAN_LINES, which is one of the branches — never
 # leaks into the surrounding suite.
 d2099rp_invoke() {
     local root="$1" envval="$2"
@@ -56,9 +56,9 @@ d2099rp_invoke() {
         export PATH="$root/stub:$PATH"
         export AGENTS_CONFIG_DIR="$root"
         if [ "$envval" = "__UNSET__" ]; then
-            unset CODEX_REVIEW_PLAN_MAX_LINES
+            unset CODEX_REVIEW_MAX_PLAN_LINES
         else
-            export CODEX_REVIEW_PLAN_MAX_LINES="$envval"
+            export CODEX_REVIEW_MAX_PLAN_LINES="$envval"
         fi
         run_with_timeout "$root/bin/review-plan-codex" --format detail-plan \
             --input "$root/plan.md" --log-dir "$root/home" --session-id rp-t \
@@ -104,7 +104,7 @@ d2099rp_env_tier() {
     out="$out$(d2099rp_case env-at-plan-size "" 30)"$'\n'
     out="$out$(d2099rp_case env-one-below "" 29)"$'\n'
     out="$out$(d2099rp_case env-above-plan "" 100)"$'\n'
-    assert_block "RP-3 a usable CODEX_REVIEW_PLAN_MAX_LINES truncates at exactly that many lines" \
+    assert_block "RP-3 a usable CODEX_REVIEW_MAX_PLAN_LINES truncates at exactly that many lines" \
         "$(printf '%s' "$out")" <<'EOF'
 env-below-plan -> 5 5
 env-at-plan-size -> none 30
@@ -175,8 +175,48 @@ d2099rp_builtin_default() {
     assert_eq "RP-7 ... and the wrapper no longer carries a hard-coded MAX_PLAN_LINES literal" \
         "0" "$(grep -c '^MAX_PLAN_LINES=[0-9]' "$D2099RP_SRC")"
     assert_contains "RP-8 ... resolved through resolve_threshold on the named config var" \
-        'resolve_threshold CODEX_REVIEW_PLAN_MAX_LINES' \
+        'resolve_threshold CODEX_REVIEW_MAX_PLAN_LINES' \
         "$(grep -m1 'MAX_PLAN_LINES="\$(resolve_threshold' "$D2099RP_SRC")"
+}
+
+# One run with ONLY the pre-#2153 variable name exported. Same shape as
+# d2099rp_run so its "<warned> <lines>" output is directly comparable.
+d2099rp_run_legacy_name() {
+    local root="$1" out err warned lines
+    err="$root/stderr-legacy.txt"
+    out=$(
+        (
+            cd "$root" || exit 1
+            export HOME="$root/home"
+            export PATH="$root/stub:$PATH"
+            export AGENTS_CONFIG_DIR="$root"
+            unset CODEX_REVIEW_MAX_PLAN_LINES
+            export CODEX_REVIEW_PLAN_MAX_LINES=5
+            run_with_timeout "$root/bin/review-plan-codex" --format detail-plan \
+                --input "$root/plan.md" --log-dir "$root/home" --session-id rp-t \
+                --round 1 --cap 1 --max-extensions 0 --extensions-used 0 --no-log
+        ) 2>"$err"
+    )
+    warned=$(grep -m1 -o 'truncating to [0-9]* for codex' "$err" 2>/dev/null | grep -o '[0-9]*')
+    lines=$(printf '%s\n' "$out" | grep -m1 -o 'PLANLINE-count-is-[0-9]*' | grep -o '[0-9]*')
+    printf '%s %s' "${warned:-none}" "${lines:-NO_CODEX_OUTPUT}"
+}
+
+# RP-9/RP-10: #2153 renamed CODEX_REVIEW_PLAN_MAX_LINES to
+# CODEX_REVIEW_MAX_PLAN_LINES as a clean break — no fallback read of the old
+# name. A silent fallback is the dangerous outcome: a stale export would keep
+# truncating plans long after .env was migrated, and RP-3's 5-line row proves
+# the value IS observable when a name the script reads carries it.
+d2099rp_retired_env_name() {
+    local root out
+    root=$(mktemp -d)
+    d2099rp_mock "$root"
+    out=$(d2099rp_run_legacy_name "$root")
+    assert_eq "RP-9 the retired CODEX_REVIEW_PLAN_MAX_LINES is dead — exporting it alone truncates nothing" \
+        "none 30" "$out"
+    rm -rf "$root"
+    assert_eq "RP-10 ... and the wrapper source carries no reference to the retired name at all" \
+        "0" "$(grep -c 'CODEX_REVIEW_PLAN_MAX_LINES' "$D2099RP_SRC")"
 }
 
 d2099rp_harness_is_live
@@ -184,3 +224,4 @@ d2099rp_env_tier
 d2099rp_env_rejected_values
 d2099rp_config_var_tier
 d2099rp_builtin_default
+d2099rp_retired_env_name

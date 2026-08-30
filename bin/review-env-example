@@ -207,6 +207,22 @@ check_file() {
             has_findings=1
           fi
 
+          # HARD: legacy "What you can do:" / "What you can't do:" prefix
+          if [[ "$cl" =~ ^[[:space:]]*#[[:space:]]*What[[:space:]]+you[[:space:]]+can ]]; then
+            echo "HARD: $file:$cln: legacy \"What you can (do|'t do):\" prefix"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: wrapped continuation line (# followed by 2+ spaces before content)
+          if [[ "$cl" =~ ^[[:space:]]*#[[:space:]][[:space:]]+[^[:space:]] ]]; then
+            echo "HARD: $file:$cln: wrapped continuation line (one sentence per line)"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
           # WARN: architecture rationale
           local lower
           lower="$(printf '%s' "$cl" | tr '[:upper:]' '[:lower:]')"

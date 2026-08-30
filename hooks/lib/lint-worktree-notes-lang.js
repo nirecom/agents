@@ -10,14 +10,8 @@ const { ENGLISH_RUN_RE } = require("./lint-plan-lang");
 const SECTION_HISTORY = "History Notes";
 const SECTION_CHANGELOG = "Changelog Notes";
 
-function enforcementFor(section, config, isPrivateRepo) {
-  if (section === SECTION_HISTORY) {
-    return isPrivateRepo ? config.historyPrivate : config.historyPublic;
-  }
-  if (section === SECTION_CHANGELOG) {
-    return isPrivateRepo ? config.changelogPrivate : config.changelogPublic;
-  }
-  return "any";
+function enforcementFor(config, isPrivateRepo) {
+  return isPrivateRepo ? config.private : config.public;
 }
 
 // Walk the document and collect "- " bullets under each targeted `## <heading>`
@@ -59,7 +53,7 @@ function lintWorktreeNotesLang(content, config, options) {
   const bullets = collectBullets(content || "", targetHeadings);
   const violations = [];
   for (const b of bullets) {
-    const policy = enforcementFor(b.section, config, isPrivateRepo);
+    const policy = enforcementFor(config, isPrivateRepo);
     const tier = classifyPolicy(policy);
     if (tier !== "strict") continue;
     if (policy === "english" && hasCJK(b.line)) {

@@ -183,7 +183,7 @@ write_changelog_marker() {
 LANG_VIOLATIONS="$(
     NOTES_PATH="$NOTES_PATH" \
     AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
-    env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE node -e '
+    env -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE node -e '
         const fs = require("fs");
         const path = require("path");
         const agentsDir = process.env.AGENTS_CONFIG_DIR;
