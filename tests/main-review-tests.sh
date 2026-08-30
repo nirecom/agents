@@ -65,8 +65,8 @@ else
     fail "missing ## Rules section"
 fi
 
-# --- Normal case 8: step labels RT-1 through RT-4 present ---
-for label in RT-1 RT-2 RT-3 RT-4; do
+# --- Normal case 8: step labels RT-1 through RT-5 present ---
+for label in RT-1 RT-2 RT-3 RT-4 RT-5; do
     if [ -f "$SKILL" ] && grep -qF "$label" "$SKILL" 2>/dev/null; then
         pass "step label '$label' present"
     else

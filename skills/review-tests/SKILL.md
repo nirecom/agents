@@ -29,20 +29,21 @@ RT-1. Identify staged test file(s) and source file(s):
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
 RT-2. Assemble review input — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md` via Write. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
 RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; single-round — no re-loop):
-- exit 0 APPROVED → RT-4 COMPLETE.
-- exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-4 WARNINGS (no re-loop).
-- exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; present summary → RT-4 WARNINGS.
-- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-4 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`).
+- exit 0 APPROVED → RT-5 COMPLETE.
+- exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS (no re-loop).
+- exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; present summary → RT-5 WARNINGS.
+- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-5 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 - exit 8 → terminal guard was previously armed (test files unchanged since last terminal); HALT.
-- exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-4 COMPLETE; NEEDS_REVISION → RT-4 WARNINGS.
+- exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
 - exit 4 → HALT with blocking error; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
-- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-4.
-RT-4. Emit workflow sentinel — two separate Bash calls, not chained:
-- RT-4a. `TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js" "${WORKTREE:-}")`
-- RT-4b. (adequate) `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
-- RT-4c. (gaps/warnings) `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} warnings=N — blocking: /write-code stays blocked until the gaps are addressed and /review-tests is re-run>>"`
-- RT-4d. Skip when `WORKFLOW_WRITE_TESTS_NOT_NEEDED` was emitted (propagated skip).
+- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-5.
+RT-4. Triage the concerns against `skills/_shared/priority-hierarchy.md` before emitting the sentinel: a concern that contradicts an approved intent.md / outline.md / detail.md decision — including a documented TL3 gap or a deferral to manual verification — is rejected, not a gap. State each rejection and the decision it rests on, and exclude it from the RT-5c warnings count. Skip on exit 0 (no concerns).
+RT-5. Emit workflow sentinel — two separate Bash calls, not chained:
+- RT-5a. `TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js" "${WORKTREE:-}")`
+- RT-5b. (adequate) `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
+- RT-5c. (gaps/warnings) `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} warnings=N — blocking: /write-code stays blocked until the gaps are addressed and /review-tests is re-run>>"`
+- RT-5d. Skip when `WORKFLOW_WRITE_TESTS_NOT_NEEDED` was emitted (propagated skip).
 
 ## Rules
 
@@ -50,7 +51,7 @@ The Test Case Categories checklist lives in `skills/_shared/test-design.md` — 
 WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/write-code` while `warnings_summary` is recorded.
 Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warning.
 On exit 4 or exit 7, emit neither sentinel and HALT.
-Invariant: RT-4 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4 and exit 7).
+Invariant: RT-5 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4 and exit 7).
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
 To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
 Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
