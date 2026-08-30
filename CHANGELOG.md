@@ -391,3 +391,7 @@ Changes: Fixed a gap where a subagent's Bash write to its own scratchpad or the 
 ### FEATURE: PR #2158 (2026-08-30)
 Background: feat(#2119,#2124): generate settings.json allow rules from an SSOT; prioritize Read/Write over Bash
 Changes: Generated `settings.json` allow rules for agents-internal commands from a single source-of-truth list instead of hand-maintained entries; a pre-commit check now catches drift between the two.;Subagents dispatched by `write-code`/`write-tests` now default to the Read/Write/Edit tools over raw Bash for file I/O.
+
+### FEATURE: PR #2162 (2026-08-30)
+Background: feat(#2153): shrink and restyle .env.example
+Changes: `.env.example` is 24% shorter and easier to scan. The `DOCS_LANG_HISTORY_*`/`DOCS_LANG_CHANGELOG_*` settings are now `DOCS_LANG_PUBLIC`/`DOCS_LANG_PRIVATE`, and `CODEX_REVIEW_PLAN_MAX_LINES` is now `CODEX_REVIEW_MAX_PLAN_LINES` — update your `.env` to match.
