@@ -11,6 +11,8 @@ Governs what Claude issues through the Bash tool. Scope is the FORM of the comma
 
 Default procedure: anything not expressible as one standalone command goes into a scratchpad script, invoked as a single `bash <absolute-path>` call. Never put the compound form on the command line itself.
 
+Create that scratchpad script with the **Write tool**, never with `cat <<'EOF' > file` — the heredoc form trips two prohibited literals (`<<` and `>`) at once, so the escape route would itself violate this rule. The scratchpad root is allowlisted in `hooks/workflow-gate/early-gate.js`, so Write reaches it even while a workflow gate is blocking writes elsewhere.
+
 Self-check before every Bash tool call: match the `command` string against the literals below.
 
 | Prohibited literal | Form |
