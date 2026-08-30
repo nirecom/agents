@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# settings.json allow-rule drift review.
+#
+# Turns `install/gen-settings-allow.js --check` into a PERFORMED/FAIL binary for
+# hooks/pre-commit: a human reads the banner, a machine reads the exit code, and the
+# generator's own findings are forwarded verbatim so the developer gets the diagnosis
+# rather than a bare verdict.
+#
+# Fail-closed by construction: node missing, generator missing, SSOT missing and settings.json
+# unparseable all reach FAIL. There is no path that exits 0 without a successful --check.
+#
+# Always passes --staged: this reviewer's whole job is judging what is ABOUT TO BE committed,
+# so it reads every generator input from the git index rather than the working tree — a file
+# edited-but-unstaged after `git add` must not be able to make this pass a version that differs
+# from what actually lands in the commit.
+#
+# DELIBERATE EXCEPTION: this command is NOT added to install/path-exposed-commands.txt. It is
+# invoked by the pre-commit hook through its repo path, never typed by a developer, so a
+# ~/.local/bin shim would add a spelling nothing issues.
+
+set -uo pipefail
+
+_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+_GEN="$_ROOT/install/gen-settings-allow.js"
+
+fail() { # <message>
+    printf '%s\n' "$1"
+    printf '%s\n' '## Settings Allow Review: FAIL'
+    exit 2
+}
+
+if ! command -v node >/dev/null 2>&1; then
+    fail "node is not available, so settings.json allow-rule drift cannot be checked."
+fi
+
+if [[ ! -f "$_GEN" ]]; then
+    fail "install/gen-settings-allow.js is missing, so the drift gate cannot run: restore it before committing."
+fi
+
+_OUT="$(node "$_GEN" --check --staged 2>&1)"
+_RC=$?
+
+[[ -n "$_OUT" ]] && printf '%s\n' "$_OUT"
+
+if [[ "$_RC" -eq 0 ]]; then
+    printf '%s\n' '## Settings Allow Review: PERFORMED'
+    exit 0
+fi
+
+printf '%s\n' '## Settings Allow Review: FAIL'
+exit "$_RC"
