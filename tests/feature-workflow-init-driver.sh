@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
-# Tags: workflow-init, driver, routing, wip-check, directive-contract, checkpoint-resume, meta-classify, origin-resolution, scope:common
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/issue-comments.js, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, wip-check, directive-contract, checkpoint-resume, meta-classify, origin-resolution, issue-comments, scope:common
 # TL3 gap: no real `claude -p` driver loop (ACTION= dispatch, AskUserQuestion,
 # --resume re-invocation) and no live gh / wip-state.sh / Projects v2 calls.
 # Mitigated at WORKFLOW_USER_VERIFIED preflight via
@@ -12,15 +12,15 @@
 
 set -uo pipefail
 
-# Timeout guard. 300s, not 120s: 10 split groups each spawn a node process per
-# driver run, and the aggregate wall clock crossed 120s once the untrusted-title
-# and answer-validation groups joined.
+# Timeout guard. 420s, not 120s: every split group spawns a node process per driver
+# run, the aggregate crossed 120s once untrusted-title and answer-validation joined,
+# and issue-comments (#2063) adds ~20 more driver runs on top.
 if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     export _TIMEOUT_WRAPPED=1
     if command -v timeout >/dev/null 2>&1; then
-        exec timeout 300 bash "$0" "$@"
+        exec timeout 420 bash "$0" "$@"
     else
-        exec perl -e 'alarm 300; exec @ARGV' -- bash "$0" "$@"
+        exec perl -e 'alarm 420; exec @ARGV' -- bash "$0" "$@"
     fi
 fi
 
@@ -39,6 +39,7 @@ SPLIT_GROUPS=(
     "driver-checkpoint-resume.sh"
     "driver-adopt-resume.sh"
     "driver-answer-validation.sh"
+    "driver-issue-comments.sh"
 )
 
 TOTAL_PASS=0

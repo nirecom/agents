@@ -107,10 +107,12 @@ check_c16 d '12,34'    # partially numeric: two numbers, the multi-select spelli
 # --resume takes a path from the caller, so the file may be anything. C14 covers the
 # stale-version arm; these cover the read path itself. C18/C19 are the controlled arms
 # (readCheckpoint's unreadable/malformed kinds → a blocked directive, exit 0). C20 is
-# fix-neutral: readCheckpoint validates only `version`, so a current-version checkpoint
-# whose `state` is corrupt reaches applyAnswer and crashes with an uncaught TypeError —
-# reported separately as a defect. Asserted here is only what must hold either way: a
-# session that could not read its own state must not claim success or leave artifacts.
+# the gap between them: readCheckpoint validates only `version`, so a current-version
+# checkpoint whose `state` is corrupt sails past it and reaches applyAnswer.
+# An uncaught TypeError there satisfies "not ACTION=done", writes no artifact and calls
+# no WIP — a crash would pass a weaker C20 while the session dies. So C20 demands the
+# same controlled outcome C18/C19 do: one blocked directive naming checkpoint_invalid,
+# exit 0, and no stack trace on either stream.
 plans_inventory() { find "$PLANS" -type f 2>/dev/null | LC_ALL=C sort; }
 assert_no_stack_in_directives() {  # <label>
     if printf '%s\n' "$DRIVER_OUT" | grep -qE 'TypeError|^ +at '; then
@@ -119,6 +121,7 @@ assert_no_stack_in_directives() {  # <label>
         pass "$1"
     fi
 }
+# Stderr coverage lives in _lib.sh's assert_no_uncaught (shared with the #2063 cases).
 
 setup_case wid-c18
 mkdir -p "$PLANS/is-a-directory.json"
@@ -170,6 +173,16 @@ check_c20() {  # <id> <checkpoint-json> — a CURRENT-version checkpoint with a 
     else
         pass "C20$id: a corrupt-state checkpoint never reports success"
     fi
+    # The positive half: not-done is also what a crash produces, so name the directive.
+    assert_single_action_line "C20$id: the rejection emits exactly one ACTION= line"
+    assert_kv "C20$id: a corrupt-state checkpoint → ACTION=blocked" ACTION blocked
+    assert_kv "C20$id: a corrupt-state checkpoint → REASON=checkpoint_invalid" REASON checkpoint_invalid
+    if [ "$DRIVER_RC" = "0" ]; then
+        pass "C20$id: a controlled rejection exits 0 (the caller reads the directive, not the rc)"
+    else
+        fail "C20$id: corrupt state exited rc=$DRIVER_RC — a crash, not a rejection; err='$(printf '%s' "$DRIVER_ERR" | head -c 200)'"
+    fi
+    assert_no_uncaught "C20$id: no uncaught error on stdout or stderr"
     if [ "$(plans_inventory)" = "$before" ]; then
         pass "C20$id: no checkpoint or context file written from unusable state"
     else
@@ -182,9 +195,18 @@ check_c20() {  # <id> <checkpoint-json> — a CURRENT-version checkpoint with a 
     fi
     teardown_case
 }
-C20_HEAD='"version":2,"session_id":"wid-c20","phase":"wip-check","ask_id":"wip_conflict"'
+# Must track CHECKPOINT_VERSION (#2063 bumped 2 → 3): a stale literal here would
+# route these cases through version_mismatch and silently stop testing the corrupt-
+# state path they exist for.
+C20_HEAD='"version":3,"session_id":"wid-c20","phase":"wip-check","ask_id":"wip_conflict"'
 check_c20 a "{$C20_HEAD}"                                   # `state` absent entirely
 check_c20 b "{$C20_HEAD,\"state\":{}}"                      # present but empty: no issues
 check_c20 c "{$C20_HEAD,\"state\":{\"issues\":\"400\"}}"    # issues present, wrong type
+check_c20 d "{$C20_HEAD,\"state\":null}"                    # present but null — the shape a
+                                                            # half-written checkpoint leaves
+# A corrupt `issue_json_cache` under an otherwise usable `state` is deliberately NOT
+# listed here: refetching is a legitimate recovery for it, so demanding a blocked
+# directive would over-constrain the design. Its contract is asserted where it is
+# actually observable — driver-issue-comments.sh C11, through write-context.
 
 finish

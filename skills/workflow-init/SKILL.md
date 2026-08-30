@@ -85,9 +85,10 @@ WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before
 > When `--advance` is called without `--next`, no `ACTION=` block is ever emitted — proceed directly to the next documented step above rather than waiting on `next-step`'s judgment.
 
 #### Path B — issue exists, no intent:clarified
-- B1. Write `<PLANS_DIR>/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`.
-- B2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
-- B3. Invoke `clarify-intent` with `#<N>` in args so step 1a auto-detect fires.
+- **B1.** Run `node "$AGENTS_CONFIG_DIR/bin/workflow/render-issue-comments" --checkpoint '<CHECKPOINT>' --issue <N>` against the driver's own `CHECKPOINT=` value and the same `<N>` B2 seeds; on a non-zero exit discard its stdout and keep its stderr out of every artifact; when that path holds an apostrophe, replace each `'` in it with `'\''` before pasting.
+- **B2.** Write `<PLANS_DIR>/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`, then B1's stdout verbatim, separated by one blank line; on a non-zero B1 rc omit the comments section entirely and fabricate no replacement.
+- **B3.** `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
+- **B4.** Invoke `clarify-intent` with `#<N>` in args so step 1a auto-detect fires.
 
 #### Path C — no issue
 - C1. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
