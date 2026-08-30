@@ -11,6 +11,7 @@ that each reclaim a specific class of residual state. A flagless run applies
 
 ## Procedure
 
+SW-0. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_OFF: sweep hub — maintenance writes/deletes across sub-skills>>` before SW-1.
 SW-1. Invoke `/sweep-worktrees` (deletes by default; pass `--dry-run` to preview).
 SW-2. Invoke `/sweep-branches` (deletes by default; pass `--dry-run` to preview).
    Capture stdout for post-processing (SW-2b/SW-2c).
@@ -27,7 +28,8 @@ SW-3. Invoke `/sweep-plans` (deletes by default; pass `--dry-run` to preview).
 SW-4. Invoke `/sweep-tests` (deletes by default; `--dry-run` and `--fix-headers` are forwarded when passed).
 SW-5. Invoke `/sweep-issues` (tier-1 meta-parent closes apply by default; `--dry-run` previews).
    Tier-2 candidates are human-gated and only surface under `--deep`.
-SW-6. Future sub-skills to be added in subsequent PRs:
+SW-6. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub complete>>` after SW-5, regardless of outcome.
+SW-7. Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
