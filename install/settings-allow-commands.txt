@@ -1,49 +1,9 @@
-# settings-allow-commands.txt
-# Single source of truth (CPR-SSOT) for WHICH agents-internal commands get permission
-# allow rules. It holds command paths and nothing else — never a rule string, never an
-# interpreter name, never a bare-form flag.
-#
-# Sole consumer: install/gen-settings-allow.js, which owns the spelling templates in one
-# place and expands each entry into the eight path rules written into settings.json.
-#
-# The interpreter is read from the entry's own shebang, not written here — a command whose
-# shebang is neither bash nor node stops the generator rather than being guessed at.
-# Bare-form eligibility is likewise not written here: the generator consults
-# install/path-exposed-commands.txt (referenced, never copied) and adds three more
-# spellings for a command whose basename has a ~/.local/bin shim.
-#
-# Format: one repo-relative path per line. `#` comments and blank lines are ignored and
-#         trailing whitespace is stripped. Each entry must be a plain relative path —
-#         no `..`, no leading slash, no drive letter, no backslash, no glob or shell
-#         metacharacter — because every entry is interpolated into eleven permission
-#         rules, where a metacharacter WIDENS a rule instead of naming a file.
-#
-# INCLUSION CRITERION: the command is issued automatically by a skill, rule or hook
-# procedure rather than typed by the user; it is invariant with respect to repository
-# state; and it is idempotent, so a repeated auto-issued run costs nothing.
-#
-# EXCLUSIONS, each a criterion rather than a case:
-#   (a) gh write commands — they change state outside the repository.
-#   (b) git state-changing commands — commit, push, reset and friends stay behind a prompt.
-#   (c) commands that read .env or other credential material.
-#   (d) wrapper launchers that take an arbitrary command as an argument (bin/run-with-timeout.sh),
-#       whose trailing ` *` template would allow-list everything reachable through them.
-#   (e) hook bodies launched by the platform, not by the model — no skill or rule tells
-#       anyone to run them, so an allow rule buys nothing.
-#   (f) dispatchers that reach a state-changing or credential-reading operation through an
-#       argument or subcommand the permission engine never sees — it matches the outer
-#       invocation only, so allow-listing the dispatcher allow-lists whatever it forwards to.
-#
-# CAVEAT — bin/review-code-codex is listed: it changes no repository state, but it does send
-# a diff outbound. hooks/scan-outbound.js inspects the command string at PreToolUse; it does
-# NOT inspect the diff body bin/lib/codex-core.sh assembles afterward, so an allow rule here
-# removes the last human checkpoint before that diff body reaches codex. Accepted because the
-# diff is always a merge-base-to-HEAD comparison of the developer's own already-staged work,
-# never arbitrary model-authored content.
-#
-# DELIBERATELY ABSENT: install/gen-settings-allow.js itself. The generator is run by a human
-# or by the pre-commit gate, not auto-issued mid-session, and listing a tool in the list it
-# consumes buys no allow coverage anyone needs.
+# settings-allow-commands.txt — SSOT (CPR-SSOT) for WHICH agents-internal commands get
+# permission allow rules: one repo-relative path per line, nothing else. Sole consumer:
+# install/gen-settings-allow.js, which owns spelling/interpreter/bare-form logic.
+# Inclusion criterion, exclusions (a-f), the review-code-codex caveat, and the path-syntax
+# and self-exclusion rules are documented in docs/architecture/claude-code/settings.md —
+# read that before adding or removing an entry.
 
 bin/workflow/next-step
 bin/supervisor-report

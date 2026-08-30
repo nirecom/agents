@@ -395,6 +395,7 @@ strings are generated from it.
 - The drift gate lives in `hooks/pre-commit`, which runs `bin/review-settings-allow` on every commit to the agents session repo. That reviewer always passes `--check --staged`, so the generator reads the SSOT, `settings.json`, and each entry's shebang from the git index (`git show :<path>`) rather than the working tree — a file edited-but-unstaged after `git add` cannot make the gate pass a version that differs from what actually lands in the commit. Plain `--check` (no `--staged`) still exists for interactive/dev use.
 - That gate is fail-closed: a missing or non-executable `bin/review-settings-allow`, a deleted SSOT, and an unreadable generator all block the commit, so deleting the gate is not a way to turn the gate off.
 - An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into eleven permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it runs by hand or via the pre-commit gate, never auto-issued mid-session, so listing it buys no allow coverage.
 
 **Known limitations**:
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =

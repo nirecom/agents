@@ -388,23 +388,10 @@ if [ -n "$_od_repo_top" ]; then
     fi
 fi
 
-# ---------- settings.json allow-rule drift gate (issue #2119) ----------
-# Why here: which internal commands are allow-listed is owned by
-# install/settings-allow-commands.txt and spelled into settings.json by a generator, so the
-# two can silently diverge. The failure mode is a prompt in someone's future session rather
-# than a red test today, which makes the commit the last cheap moment to catch it.
-#
-# FAIL-CLOSED, deliberately unlike the on-demand rules gate above: a missing or
-# non-executable reviewer blocks rather than warns, so deleting the gate cannot disable the
-# gate. Any non-zero reviewer rc blocks; only rc 0 passes. There is no suspension toggle.
-#
-# Two-condition AND guard, mirroring the prompt-extraction backstop above:
-#   (a) the repo under commit IS the agents session repo (git common-dir match)
-#   (b) that repo root carries at least one of the gate's own inputs
-# (a) alone is true for any repo that is its own AGENTS_CONFIG_DIR, which arms the gate in
-# repos that never had allow rules to drift. (b) keeps a deleted reviewer blocking (the
-# inputs are still there) while leaving an unrelated repo untouched — CPR-UNV: no implicit
-# environment branching.
+# settings.json allow-rule drift gate (#2119): catches install/settings-allow-commands.txt
+# and settings.json diverging, fail-closed (missing/non-executable reviewer blocks; only
+# rc 0 passes). Arms only when this repo IS the agents session repo AND carries the gate's
+# own inputs, so an unrelated repo stays untouched. Details: docs/architecture/claude-code/settings.md.
 _sa_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 _sa_armed=0
 if [ -n "$_sa_repo_top" ]; then

@@ -1,22 +1,8 @@
 #!/usr/bin/env bash
-# settings.json allow-rule drift review.
-#
-# Turns `install/gen-settings-allow.js --check` into a PERFORMED/FAIL binary for
-# hooks/pre-commit: a human reads the banner, a machine reads the exit code, and the
-# generator's own findings are forwarded verbatim so the developer gets the diagnosis
-# rather than a bare verdict.
-#
-# Fail-closed by construction: node missing, generator missing, SSOT missing and settings.json
-# unparseable all reach FAIL. There is no path that exits 0 without a successful --check.
-#
-# Always passes --staged: this reviewer's whole job is judging what is ABOUT TO BE committed,
-# so it reads every generator input from the git index rather than the working tree — a file
-# edited-but-unstaged after `git add` must not be able to make this pass a version that differs
-# from what actually lands in the commit.
-#
-# DELIBERATE EXCEPTION: this command is NOT added to install/path-exposed-commands.txt. It is
-# invoked by the pre-commit hook through its repo path, never typed by a developer, so a
-# ~/.local/bin shim would add a spelling nothing issues.
+# settings.json allow-rule drift review: turns `gen-settings-allow.js --check --staged`
+# into a PERFORMED/FAIL binary for hooks/pre-commit, fail-closed by construction.
+# Never added to install/path-exposed-commands.txt (repo-path invocation only).
+# Details: docs/architecture/claude-code/settings.md.
 
 set -uo pipefail
 
