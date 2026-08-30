@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * bin/workflow/render-issue-comments — Path B bridge for #2063.
+ * Prints one cached issue's `## Issue comments` section on stdout.
+ *
+ * Usage: render-issue-comments --checkpoint <path> --issue <number>
+ * Exit 0 renders; exit 1 is argument abuse; exit 3 is one reason token on stderr.
+ */
+
+const { readCheckpoint } = require("./lib/workflow-init/checkpoint");
+const { commentsDefect, renderCommentsSection } = require("./lib/workflow-init/issue-comments");
+
+const NAME = "render-issue-comments";
+
+// The diagnostic carries no argument value and no host path: it is read straight
+// into a session transcript (CWE-22 echo-back).
+function usageExit() {
+  process.stderr.write(`${NAME}: usage: --checkpoint <path> --issue <number>\n`);
+  process.exit(1);
+}
+
+function failExit(token) {
+  process.stderr.write(`${NAME}: ${token}\n`);
+  process.exit(3);
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// Anything unrecognized is an immediate error; a repeated flag is last-wins.
+function parseArgs(argv) {
+  let checkpoint = null;
+  let issue = null;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--checkpoint" || arg === "--issue") {
+      if (i + 1 >= argv.length) return null;
+      const value = argv[++i];
+      if (arg === "--checkpoint") checkpoint = value;
+      else issue = value;
+      continue;
+    }
+    return null;
+  }
+  if (checkpoint === null || issue === null) return null;
+  if (checkpoint === "") return null;
+  // Shape-only (CWE-22): a traversal payload never reaches the filesystem.
+  if (issue.length === 0 || /[^0-9]/.test(issue)) return null;
+  return { checkpoint, issue };
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args) usageExit();
+
+  let result;
+  try {
+    result = readCheckpoint(args.checkpoint);
+  } catch (_e) {
+    // A top-level `null` parses yet yields no checkpoint — the same class as
+    // not_found / unreadable / malformed.
+    return failExit("checkpoint_unreadable");
+  }
+  if (result.error === "version_mismatch") return failExit("version_mismatch");
+  if (result.error) return failExit("checkpoint_unreadable");
+
+  const state = result.data.state;
+  if (!isPlainObject(state)) return failExit("checkpoint_state_missing");
+  const cache = state.issue_json_cache;
+  if (!isPlainObject(cache)) return failExit("issue_cache_missing");
+
+  // The raw argument is the key: two numbers that collide once coerced must not
+  // resolve to the same cache entry.
+  const entry = cache[args.issue];
+  if (!entry) return failExit("issue_not_cached");
+
+  const defect = commentsDefect(entry);
+  if (defect) return failExit(defect);
+
+  process.stdout.write(`${renderCommentsSection(entry)}\n`);
+  return undefined;
+}
+
+try {
+  main();
+} catch (_e) {
+  try {
+    process.stderr.write(`${NAME}: internal_error\n`);
+  } catch (_e2) {
+    /* stderr is gone too — the exit code is the only signal left */
+  }
+  process.exit(3);
+}
