@@ -1,32 +1,11 @@
 #!/usr/bin/env bash
 # tests/refactor-1581-run-tl3.sh
-# Tests: bin/select-tests.sh, .env.example, tests/TL3-hook-*.sh
+# Tests: bin/select-tests.sh, .env.example, tests/TL3-hook-clearance-token-write.sh, tests/TL3-hook-forge-target-ownership.sh, tests/TL3-hook-post-compact.sh, tests/TL3-hook-session-start.sh, tests/TL3-hook-stop-confirm-plan-guard.sh, tests/TL3-hook-stop-final-report-guard.sh, tests/TL3-hook-subagent-start.sh, tests/TL3-hook-workflow-mark.sh
 # Tags: test-selection, tl3-toggle, run-tl3, scope:issue-specific
 #
-# TL3 gap (what this test does NOT catch):
-# - Actual invocation inside a real run-tests session where get-config-var reads .env
-# - select-tests.sh behavior when AGENTS_CONFIG_DIR differs from AGENTS_DIR
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: pwsh-required
-#
-# Issue #1581 — RUN_E2E → RUN_TL3 rename + RUN_TL3=on appends tests/TL3-*.sh.
-# Behavioral cases (C1..C5, C8, Cnew) drive bin/select-tests.sh; static cases (C6,C7)
-# assert the .env.example and TL3-hook-*.sh source edits.
-#
-# Issue #1689 — the append is no longer UNCONDITIONAL. The TL3 tier is the expensive one
-# (real hooks, real shells, real installers), and running it over a diff that touched only
-# `docs/*.md` buys nothing while costing minutes on every docs commit. Worse, the same
-# unconditional append fired on an EMPTY diff, which is what a broken merge-base produces —
-# so a run that had resolved the wrong range still looked busy.
-#
-# The rule is now: empty diff → no TL3; docs-only diff → no TL3; anything else → all TL3.
-# C1a/C1b are the two halves of that cut and must be read together: a `return` bolted to the
-# top of the append block would satisfy C1a alone forever.
-#
-# Docs-only classification is delegated to bin/is-docs-only rather than re-derived here,
-# because the allowlist has a single owner (hooks/workflow-gate/staged-evidence.js) and a
-# second copy of it in select-tests.sh would drift. When that helper cannot answer, the
-# append is taken — a needless TL3 run is a cost, a skipped one is a missed regression.
+# TL3 gap: actual get-config-var/.env invocation and AGENTS_CONFIG_DIR≠AGENTS_DIR
+# behavior only testable in a real run-tests session. Mitigation: pwsh-required gate.
+# Issue #1581: RUN_E2E→RUN_TL3 rename; #1689: TL3 skipped for empty/docs-only diffs.
 
 set -u
 

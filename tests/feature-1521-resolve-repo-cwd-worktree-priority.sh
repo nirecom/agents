@@ -1,25 +1,12 @@
 #!/bin/bash
-# Tests: resolveRepoCwd linked-worktree input.cwd priority (Approach B guard)
+# Tests: hooks/lib/path-normalize.js
 # Tags: scope:issue-specific unit path-normalize
 #
-# Unit tests (L1) for the NEW resolveRepoCwd guard in hooks/lib/path-normalize.js.
+# Unit tests (L1) for resolveRepoCwd guard in hooks/lib/path-normalize.js.
 #
-# The guard (Approach B): when the command carries no `-C` flag AND input.cwd is
-# present AND normalizeCwd(input.cwd) !== normalizeCwd(CLAUDE_PROJECT_DIR),
-# resolveRepoCwd returns normalizeCwd(input.cwd). This makes a PostToolUse hook
-# operate on the linked worktree the tool actually ran in, not on the main
-# worktree that CLAUDE_PROJECT_DIR points at. Without the guard, evidence checks
-# (staged tests, HEAD) run against the wrong repo (#1521).
-#
-# L3 gap (what this test does NOT catch):
-# - Whether Claude Code actually populates stdin `cwd` with the linked worktree
-#   path during a real PostToolUse hook invocation. Only a live `claude -p`
-#   session (RUN_TL3) exercises the real stdin cwd wiring end-to-end. This unit
-#   test asserts the resolution logic given controlled inputs, not the wiring.
-#
-# Pre-implementation expectation: C1 FAILS until the guard is added (existing
-# behavior returns CLAUDE_PROJECT_DIR). C2-C5 pass on current code (unchanged
-# behavior). C6 is Windows-only.
+# L3 gap: whether Claude Code populates stdin `cwd` with the linked worktree path
+# is only testable via live `claude -p` (RUN_TL3). This asserts resolution logic only.
+# C1 FAILS until the guard is added; C2-C5 pass on current code; C6 Windows-only.
 
 set -u
 
