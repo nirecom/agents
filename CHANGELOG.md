@@ -387,3 +387,7 @@ Changes: Reduced unnecessary Opus usage by selecting the model per workflow stag
 ### FEATURE: PR #2151 (2026-08-30)
 Background: feature/2108 early gate allowlist block clearance
 Changes: Fixed a gap where a subagent's Bash write to its own scratchpad or the workflow plans directory could be blocked by one write-protection hook while another hook would have allowed it — both now agree on the same allowed write targets, and blocked subagents get a message naming those targets instead of an instruction they cannot act on.
+
+### FEATURE: PR #2158 (2026-08-30)
+Background: feat(#2119,#2124): generate settings.json allow rules from an SSOT; prioritize Read/Write over Bash
+Changes: Generated `settings.json` allow rules for agents-internal commands from a single source-of-truth list instead of hand-maintained entries; a pre-commit check now catches drift between the two.;Subagents dispatched by `write-code`/`write-tests` now default to the Read/Write/Edit tools over raw Bash for file I/O.
