@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
 # tests/fix-526-workflow-mark-null-session-fatal.sh
-# Tests: hooks/workflow-mark.js, hooks/workflow-mark/*.js
+# Tests: hooks/workflow-mark.js, hooks/workflow-mark
 # Tags: workflow-mark, null-session, signalFatal, exit-2, issue-526, scope:issue-specific
 #
-# After fix (#526), MUST handlers (MARK_STEP, NOT_NEEDED, USER_VERIFIED,
-# BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE) must use signalFatal when
-# sessionId cannot be resolved → exit 2 with message on stderr.
-#
+# After fix (#526), MUST handlers use signalFatal when sessionId unresolved → exit 2.
 # OPTIONAL handlers (RESET_FROM) remain exit 0 with pushMessage.
-#
-# Expected:
-#   T2.1–T2.6: FAIL until write-code fixes handlers to use signalFatal.
-#   T2.7 (positive control): PASS now (sessionId provided → exit 0).
-#   T2.8 (optional handler control): PASS now (already exit 0).
+# T2.1–T2.6: FAIL until write-code; T2.7/T2.8: PASS now.
 
 set -u
 

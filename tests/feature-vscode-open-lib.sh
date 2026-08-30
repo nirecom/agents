@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/vscode-open.js, hooks/confirm-checkpoint.js (toVsCodeFileUri, renderMessage)
+# Tests: hooks/lib/vscode-open.js, hooks/confirm-checkpoint.js
 # Tags: vscode, hook, plan, confirm-checkpoint, scope:common
-# Unit tests for hooks/lib/vscode-open.js — VS Code detection and file open helpers
-# extracted from hooks/show-plan-link.js for reuse by confirm-checkpoint.js.
+# Unit tests for hooks/lib/vscode-open.js and hooks/confirm-checkpoint.js.
+# Source file created in a later step; test SKIPs gracefully when missing.
 #
-# Source file is created in a later step. When missing, the test SKIPs gracefully.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether vscode://file/ URIs actually render as clickable links in VS Code extension chat webview
-# - Whether systemMessage markdown is rendered or displayed as plain text in the extension
-# Closest-to-action mitigation: user tests clicking the link after implementation (WORKFLOW_USER_VERIFIED preflight)
-# via bin/check-verification-gate.sh category: hook-registration
+# L3 gap: vscode://file/ URI rendering and systemMessage display only testable in a
+# live VS Code session. Mitigation: WORKFLOW_USER_VERIFIED / hook-registration gate.
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"

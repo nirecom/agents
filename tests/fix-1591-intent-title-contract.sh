@@ -1,16 +1,11 @@
 #!/bin/bash
 # tests/fix-1591-intent-title-contract.sh
-# Tests: clarify-intent CI-4 / workflow-init Path A1 **Title:** data contract + SKILL size limit
+# Tests: skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: skill, clarify-intent, workflow-init, docs, scan-outbound, scope:issue-specific, layer:TL1
 #
-# Issue #1591 — the intent **Title:** line is a symmetric data contract: the writers
-# are clarify-intent CI-4 and workflow-init Path A1; the reader is intent-to-issue.sh.
-# Both SKILL.md files must document emitting a `**Title:** <text>` line after the H1.
-#
-# NOTE: the SKILL.md edits land in the LATER /write-code stage, so the **Title:**
-# assertions here WILL fail (SOFT) until then — that is expected at write-tests time.
-# The <200-line HARD-limit assertions run against the CURRENT files as a baseline
-# regression guard and MUST pass right now.
+# Issue #1591 — **Title:** data contract: clarify-intent CI-4 and workflow-init Path A1
+# must emit it; intent-to-issue.sh reads it. Title assertions FAIL until /write-code;
+# <200-line baseline regression guards MUST pass now.
 
 set -u
 

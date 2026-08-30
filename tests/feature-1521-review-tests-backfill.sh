@@ -1,34 +1,12 @@
 #!/bin/bash
-# Tests: review-tests-handler write_tests backfill (COMPLETE path, evidence-gated)
+# Tests: hooks/workflow-mark/review-tests-handler.js
 # Tags: scope:issue-specific integration review-tests backfill
 #
-# Integration tests (L2) for the write_tests backfill added to the
-# WORKFLOW_REVIEW_TESTS_COMPLETE path in hooks/workflow-mark/review-tests-handler.js.
+# Integration tests (L2) for write_tests backfill in review-tests-handler.js.
+# Cases B1-B6: staged tests present/absent/idempotent/WARNINGS/linked-wt/fail-open.
 #
-# Behavior under test: when REVIEW_TESTS_COMPLETE lands and marks
-# review_tests=complete, the handler also backfills write_tests=complete IFF
-# completion evidence exists (staged/committed tests/ under the resolved repo
-# cwd). This closes the #1521 gap where a linked-worktree session left
-# write_tests=pending even after tests were written and reviewed.
-#
-# Cases:
-#   B1 main path      : write_tests+review_tests pending, tests/ staged → both complete
-#   B2 no evidence    : no tests/ staged → review_tests complete, write_tests pending
-#   B3 idempotent     : write_tests already complete → stays complete
-#   B4 WARNINGS path  : WARNINGS sentinel → NO backfill (write_tests stays pending)
-#   B5 linked worktree: CLAUDE_PROJECT_DIR=main, stdin cwd=linked wt → backfill fires
-#   B6 fail-open      : corrupt/missing state → exit 0, no exception
-#
-# L3 gap (what this test does NOT catch):
-# - Whether the real Claude Code PreToolUse/PostToolUse hook is actually invoked
-#   with the linked-worktree path in stdin `cwd`. Only a live `claude -p` session
-#   (RUN_TL3) exercises the harness stdin cwd wiring end-to-end. This L2 test
-#   spawns workflow-mark.js directly with a synthesized stdin payload, so it
-#   verifies handler + resolver logic but not the harness contract that supplies
-#   the cwd. B5 is the closest-to-action guard for that wiring at L2.
-#
-# Pre-implementation expectation: B1 and B5 FAIL until the backfill lands.
-# B2/B3/B4/B6 pass on current code (no backfill = pending preserved / idempotent).
+# L3 gap: linked-worktree stdin cwd wiring only testable via live `claude -p` (RUN_TL3).
+# B1 and B5 FAIL until the backfill lands; B2/B3/B4/B6 pass on current code.
 
 set -u
 

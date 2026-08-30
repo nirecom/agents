@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-689-frontmatter-convention.sh
-# Tests: tests/*.sh frontmatter convention
-# Tags: frontmatter, tests, bin
+# Tests: skills/_shared/test-design.md
+# Tags: frontmatter, tests, bin, scope:issue-specific
 #
 # Issue #689 — every test file under tests/ (excluding tests/_archive/) must
 # carry single-line `# Tests:` and `# Tags:` frontmatter within its first 10
