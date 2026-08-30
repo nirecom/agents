@@ -1,30 +1,45 @@
 "use strict";
 
 // Per-context language config. Routes language policy queries to .env keys
-// (PLAN_LANG, DOCS_LANG_*) in $AGENTS_CONFIG_DIR/.env.
+// (PLAN_LANG, DOCS_LANG_PUBLIC, DOCS_LANG_PRIVATE) in $AGENTS_CONFIG_DIR/.env.
 // Fail-open on parse/IO errors: returns "any".
 
-const { loadDefaultEnv } = require("./load-env");
+const { loadDefaultEnv, readDefaultEnvFile } = require("./load-env");
 
 const KEY_MAP = {
-  DOCS_LANG_HISTORY_PUBLIC: "historyPublic",
-  DOCS_LANG_HISTORY_PRIVATE: "historyPrivate",
-  DOCS_LANG_CHANGELOG_PUBLIC: "changelogPublic",
-  DOCS_LANG_CHANGELOG_PRIVATE: "changelogPrivate",
+  DOCS_LANG_PUBLIC: "public",
+  DOCS_LANG_PRIVATE: "private",
 };
 const DEFAULT_CONFIG = Object.freeze({
-  historyPublic: "any",
-  historyPrivate: "any",
-  changelogPublic: "any",
-  changelogPrivate: "any",
+  public: "any",
+  private: "any",
 });
+
+const LEGACY_KEYS = ["DOCS_LANG_HISTORY_PUBLIC", "DOCS_LANG_HISTORY_PRIVATE", "DOCS_LANG_CHANGELOG_PUBLIC", "DOCS_LANG_CHANGELOG_PRIVATE"];
+let legacyWarned = false;
 
 function defaultConfig() {
   return { ...DEFAULT_CONFIG };
 }
 
+// Legacy keys are read from the .env FILE, never process.env: a stale shell
+// export must not raise a warning the user cannot act on by editing .env.
+function warnOnLegacyKeys() {
+  if (legacyWarned) return;
+  try {
+    const fileEnv = readDefaultEnvFile() || {};
+    const present = LEGACY_KEYS.filter((k) => typeof fileEnv[k] === "string" && fileEnv[k].length > 0);
+    if (present.length === 0) return;
+    legacyWarned = true;
+    process.stderr.write(`lang-config: ignoring legacy key(s) ${present.join(", ")} — replaced by DOCS_LANG_PUBLIC / DOCS_LANG_PRIVATE. Update .env.\n`);
+  } catch (e) {
+    // fail-open: a warning must never break the caller
+  }
+}
+
 function loadDocsLangConfig() {
   loadDefaultEnv();
+  warnOnLegacyKeys();
   const config = defaultConfig();
   for (const envKey of Object.keys(KEY_MAP)) {
     const v = process.env[envKey];
@@ -58,7 +73,7 @@ function loadLangConfig(surface, options) {
   if (surface === "history") {
     const cfg = loadDocsLangConfig();
     const isPriv = options && options.isPrivateRepo === true;
-    return isPriv ? cfg.historyPrivate : cfg.historyPublic;
+    return isPriv ? cfg.private : cfg.public;
   }
   return "any";
 }
