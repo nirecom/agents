@@ -379,3 +379,11 @@ Changes: Fixed a bug where the codex review loop's concern ledger could get stuc
 ### FEATURE: PR #2143 (2026-08-26)
 Background: fix(#2140): forward rules/shell-commands.md to write-code/write-tests general-purpose subagents
 Changes: Fixed: the write-code and write-tests subagents now read the shell command-line and user-escalation rules before running Bash, so a rejected command comes with an explanation instead of a silent denial.
+
+### FEATURE: PR #2146 (2026-08-30)
+Background: feat(#2099): split complexity routing into per-stage thresholds
+Changes: Reduced unnecessary Opus usage by selecting the model per workflow stage (write-tests, write-code, detail-plan) instead of one session-wide complexity verdict.;Fixed a bug where a session's recorded task-complexity evaluation was silently unreadable on later workflow steps, causing them to always fall back to the default routing.;Raised the default plan-truncation limit sent to codex from 5000 to 20000 lines, and made it configurable via the new `CODEX_REVIEW_PLAN_MAX_LINES` env var.
+
+### FEATURE: PR #2151 (2026-08-30)
+Background: feature/2108 early gate allowlist block clearance
+Changes: Fixed a gap where a subagent's Bash write to its own scratchpad or the workflow plans directory could be blocked by one write-protection hook while another hook would have allowed it — both now agree on the same allowed write targets, and blocked subagents get a message naming those targets instead of an instruction they cannot act on.
