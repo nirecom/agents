@@ -17,7 +17,8 @@ const path = require("path");
 
 const { ISSUE_TOKEN_CLI_GUARD_RE } = require("../../hooks/lib/parse-closes-issues.js");
 const { checkpointPath, makeInitialState, writeCheckpoint, readCheckpoint } = require("./lib/workflow-init/checkpoint");
-const { emitDone, emitAskUser, emitBlocked } = require("./lib/workflow-init/directive");
+const { buildGhSpawn } = require("./lib/workflow-init/spawn-env");
+const directive = require("./lib/workflow-init/directive");
 const { adoptPriorState, ADOPT_PRIOR_STATE_ASK_ID } = require("./lib/workflow-init/phases/adopt-prior-state");
 const { detectIssues } = require("./lib/workflow-init/phases/detect-issues");
 const { fetchIssues } = require("./lib/workflow-init/phases/fetch-issues");
@@ -27,6 +28,13 @@ const { wipCheck } = require("./lib/workflow-init/phases/wip-check");
 const { closedDetection } = require("./lib/workflow-init/phases/closed-detection");
 const { routeDecision } = require("./lib/workflow-init/phases/route-decision");
 const { writeContext } = require("./lib/workflow-init/phases/write-context");
+
+// Exactly one directive line may ever reach stdout, so the top-level guard needs
+// to know whether one already did.
+let directiveEmitted = false;
+const emitDone = (...a) => { directiveEmitted = true; return directive.emitDone(...a); };
+const emitAskUser = (...a) => { directiveEmitted = true; return directive.emitAskUser(...a); };
+const emitBlocked = (...a) => { directiveEmitted = true; return directive.emitBlocked(...a); };
 
 // --- Env / config -----------------------------------------------------------
 
@@ -232,13 +240,39 @@ function applyAnswer(ckptData, answer, tokens) {
 
   // closed_reopen_N
   if (ask_id.startsWith("closed_reopen_")) {
-    const closedN = parseInt(ask_id.replace("closed_reopen_", ""), 10);
+    const suffix = ask_id.slice("closed_reopen_".length);
+    const closedN = Number(suffix);
+    // #2063 C22: a checkpoint's ask_id is untrusted input on --resume — a substituted
+    // or damaged suffix (e.g. "123junk") must not authorize mutating an unrelated issue.
+    if (!/^\d+$/.test(suffix) || !Number.isInteger(closedN) || state.issues.indexOf(closedN) === -1) {
+      return { invalid: true, message: `Invalid ask_id '${ask_id}': not a known issue in this session.` };
+    }
+    // Session membership alone still lets a sibling closed issue be substituted, so the
+    // ask is recomputed from state and must name the same issue the user was asked about.
+    const recomputed = closedDetection(state);
+    if (recomputed.ask !== true || recomputed.askId !== ask_id) {
+      return {
+        invalid: true,
+        message: `Invalid ask_id '${ask_id}': does not match the current pending closed-issue ask.`,
+      };
+    }
     if (answer === "reopen") {
-      // Update cache to treat as OPEN
-      if (state.issue_json_cache[closedN]) {
-        state.issue_json_cache[closedN].state = "OPEN";
+      // #2063: reopen the authoritative GitHub issue first — the cached OPEN state
+      // below must never claim more than the remote side actually holds.
+      const [ghCmd, ghArgs, ghOpts] = buildGhSpawn(["issue", "reopen", String(closedN)]);
+      const ghResult = spawnSync(ghCmd, ghArgs, ghOpts);
+      if (ghResult.status !== 0) {
+        return { blocked: true, reason: "issue_reopen_failed" };
       }
-      return { ok: true, state, startPhase: "closed-detection" };
+      // Record the override and drop the cache entry so the refetch collects
+      // the comments added while the issue was closed. The override set is never read
+      // by the cache-skip test, so a later reopen cannot refetch an earlier issue.
+      if (!Array.isArray(state.reopen_state_override)) state.reopen_state_override = [];
+      if (state.reopen_state_override.indexOf(closedN) === -1) {
+        state.reopen_state_override.push(closedN);
+      }
+      delete state.issue_json_cache[closedN];
+      return { ok: true, state, startPhase: "fetch-issues" };
     }
     if (answer === "remove") {
       state.issues = state.issues.filter((n) => n !== closedN);
@@ -312,6 +346,31 @@ function phaseIndex(name) {
   return PHASE_ORDER.indexOf(name);
 }
 
+// A checkpoint the driver cannot persist must still leave exactly one directive
+// line behind, never an uncaught throw (C18 fail-closed).
+function safeWriteCheckpoint(ckptFile, sessionId, phase, askId, state) {
+  try {
+    writeCheckpoint(ckptFile, sessionId, phase, askId, state);
+    return true;
+  } catch (e) {
+    process.stderr.write(`[workflow-init-driver] checkpoint write failed: ${(e && e.code) || "error"}\n`);
+    return false;
+  }
+}
+
+// #2063 C19: fetch-issues indexes issue_json_cache and applyAnswer assigns into
+// it, so a resumed checkpoint whose container is absent/null/an array is rebuilt.
+function normalizeResumedState(state) {
+  const cache = state.issue_json_cache;
+  let repaired = false;
+  if (!cache || typeof cache !== "object" || Array.isArray(cache)) {
+    state.issue_json_cache = {};
+    repaired = true;
+  }
+  if (!Array.isArray(state.reopen_state_override)) state.reopen_state_override = [];
+  return repaired;
+}
+
 /**
  * Run the pipeline from startPhase through write-context.
  * Returns the final directive result.
@@ -352,21 +411,30 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
 
     if (result && result.ask) {
       // Write checkpoint with ask_id, then emit ask_user
-      writeCheckpoint(ckptFile, sessionId, phase, result.askId, state);
+      if (!safeWriteCheckpoint(ckptFile, sessionId, phase, result.askId, state)) {
+        emitBlocked(ckptFile, "checkpoint_write_failed");
+        return;
+      }
       emitAskUser(ckptFile, result.askId, result.question, result.options);
       return;
     }
 
     if (result && result.blocked) {
-      writeCheckpoint(ckptFile, sessionId, phase, null, state);
-      emitBlocked(ckptFile, result.reason || "unknown", result.nextHint);
+      if (!result.noCheckpoint && !safeWriteCheckpoint(ckptFile, sessionId, phase, null, state)) {
+        emitBlocked(ckptFile, "checkpoint_write_failed");
+        return;
+      }
+      emitBlocked(ckptFile, result.reason || "unknown", result.hint || result.nextHint);
       return;
     }
   }
 
   // Pipeline complete
   const pathDecision = state.path_decision || "C";
-  writeCheckpoint(ckptFile, sessionId, "write-context", null, state);
+  if (!safeWriteCheckpoint(ckptFile, sessionId, "write-context", null, state)) {
+    emitBlocked(ckptFile, "checkpoint_write_failed");
+    return;
+  }
   emitDone(ckptFile, pathDecision);
 }
 
@@ -392,8 +460,15 @@ function main() {
   if (nonGithub) {
     const state = makeInitialState();
     state.path_decision = "C";
-    writeContext(state, plansDir, sessionId);
-    writeCheckpoint(ckptFile, sessionId, "write-context", null, state);
+    const ctxResult = writeContext(state, plansDir, sessionId);
+    if (ctxResult && ctxResult.blocked) {
+      emitBlocked(ckptFile, ctxResult.reason, ctxResult.hint);
+      return;
+    }
+    if (!safeWriteCheckpoint(ckptFile, sessionId, "write-context", null, state)) {
+      emitBlocked(ckptFile, "checkpoint_write_failed");
+      return;
+    }
     emitDone(ckptFile, "C");
     return;
   }
@@ -440,6 +515,22 @@ function main() {
 
     const { data: ckptData } = ckptResult;
 
+    // C20: every answer transition iterates state.issues, so a state missing it (or
+    // carrying it under another type) is unusable — reject it as a directive rather
+    // than let the first phase throw over it.
+    const resumedState = ckptData.state;
+    const stateUsable =
+      Boolean(resumedState) &&
+      typeof resumedState === "object" &&
+      !Array.isArray(resumedState) &&
+      Array.isArray(resumedState.issues);
+    if (!stateUsable) {
+      process.stderr.write("[workflow-init-driver] checkpoint error: state is unusable\n");
+      emitBlocked(resumePath, "checkpoint_invalid");
+      return;
+    }
+    const cacheRepaired = normalizeResumedState(ckptData.state);
+
     // Apply answer
     const applyResult = applyAnswer(ckptData, answer, tokens);
 
@@ -459,8 +550,13 @@ function main() {
       return;
     }
 
-    // ok → continue pipeline
-    runPipeline(applyResult.state, applyResult.startPhase, tokens, wipSid, ckptFile);
+    // ok → continue pipeline. A rebuilt cache holds nothing, so a resume that would
+    // have started past fetch-issues is rewound to refill it.
+    let startPhase = applyResult.startPhase;
+    if (cacheRepaired && phaseIndex(startPhase) > phaseIndex("fetch-issues")) {
+      startPhase = "fetch-issues";
+    }
+    runPipeline(applyResult.state, startPhase, tokens, wipSid, ckptFile);
     return;
   }
 
@@ -476,4 +572,9 @@ function main() {
   runPipeline(state, "adopt-prior-state", tokens, wipSid, ckptFile);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  process.stderr.write(`[workflow-init-driver] internal error: ${(e && e.code) || "error"}\n`);
+  if (!directiveEmitted) emitBlocked("<none>", "driver_internal_error");
+}

@@ -20,7 +20,7 @@ function fetchIssues(state) {
 
     // Fetch via gh issue view
     // buildGhSpawn handles Windows/MSYS2 mock detection in test environments
-    const ghArgs = ["issue", "view", String(n), "--json", "number,title,body,labels,state,createdAt"];
+    const ghArgs = ["issue", "view", String(n), "--json", "number,title,body,labels,state,createdAt,comments"];
     const [cmd, args, opts] = buildGhSpawn(ghArgs);
     const result = spawnSync(cmd, args, opts);
 
@@ -44,6 +44,23 @@ function fetchIssues(state) {
         question: `Failed to parse gh output for issue #${n}. Continue without it (Path C)?`,
         options: "continue|abort",
       };
+    }
+
+    // A non-object payload is unrecoverable downstream: `null` in particular reads
+    // as "never fetched" to the cache-skip test above, so it is rejected here.
+    if (!issueData || typeof issueData !== "object" || Array.isArray(issueData)) {
+      return {
+        ask: true,
+        askId: "fetch_failed_path_c",
+        question: `gh returned no issue object for #${n}. Continue without it (Path C)?`,
+        options: "continue|abort",
+      };
+    }
+
+    // #2063: the reopen answer is a session-scoped override, so it is re-applied to
+    // every fresh payload rather than written into a cache entry a refetch replaces.
+    if (Array.isArray(state.reopen_state_override) && state.reopen_state_override.indexOf(n) !== -1) {
+      issueData.state = "OPEN";
     }
 
     state.issue_json_cache[n] = issueData;

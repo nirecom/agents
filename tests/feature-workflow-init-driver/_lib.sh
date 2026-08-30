@@ -105,21 +105,60 @@ MOCKGH1
     cat >> "$MOCKBIN/gh" <<'MOCKGH2'
 cmd="${1:-}"; sub="${2:-}"
 if [ "$cmd" = "issue" ] && [ "$sub" = "view" ]; then
-    shift 2; N=""
+    shift 2; N=""; JSONF=""; SAWJSON=0
     while [ $# -gt 0 ]; do
         case "$1" in
-            --repo|--json|--jq) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+            --json) if [ $# -ge 2 ]; then SAWJSON=1; JSONF="$2"; shift 2; else shift; fi ;;
+            --repo|--jq) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
             -*) shift ;;
             *) [ -z "$N" ] && N="$1"; shift ;;
         esac
     done
     N="${N#\#}"
     rc=0; [ -f "$RESP/issue-view-$N.rc" ] && rc="$(cat "$RESP/issue-view-$N.rc")"
-    if [ "$rc" != "0" ]; then echo "mock-gh: forced failure for issue $N" >&2; exit "$rc"; fi
-    if [ -f "$RESP/issue-view-$N.json" ]; then cat "$RESP/issue-view-$N.json"; exit 0; fi
+    if [ "$rc" != "0" ]; then
+        # Real gh prints whatever the API/CLI said on the failure path, and that text is
+        # outside this repo's control. `issue-view-<N>.err` is the seam for staging such
+        # a payload verbatim; without it the mock keeps its own default diagnostic.
+        if [ -f "$RESP/issue-view-$N.err" ]; then cat "$RESP/issue-view-$N.err" >&2
+        else echo "mock-gh: forced failure for issue $N" >&2; fi
+        exit "$rc"
+    fi
+    if [ -f "$RESP/issue-view-$N.json" ]; then
+        # Real gh returns ONLY the projected fields. A fixture that hands back
+        # `comments` no matter what was asked for makes every downstream comment
+        # assertion pass even when the --json list never requested the field, so the
+        # projection is honoured here for that one key (#2063).
+        node -e '
+const fs = require("fs");
+const raw = fs.readFileSync(process.argv[1], "utf8");
+const sawJson = process.argv[2] === "1";
+// A deliberately malformed payload is its own test seam — pass it through untouched.
+let obj;
+try { obj = JSON.parse(raw); } catch (e) { process.stdout.write(raw); process.exit(0); }
+const asked = (process.argv[3] || "").split(",").map((s) => s.trim());
+if (sawJson && obj && typeof obj === "object" && !Array.isArray(obj) && !asked.includes("comments")) {
+    delete obj.comments;
+}
+process.stdout.write(JSON.stringify(obj) + "\n");
+' "$RESP/issue-view-$N.json" "$SAWJSON" "$JSONF"
+        exit 0
+    fi
     echo "mock-gh: no fixture for issue $N" >&2; exit 1
 fi
-if [ "$cmd" = "issue" ] && [ "$sub" = "reopen" ]; then exit 0; fi
+if [ "$cmd" = "issue" ] && [ "$sub" = "reopen" ]; then
+    # Symmetric with the issue-view seam: `issue-reopen-<N>.rc` forces a non-zero exit
+    # (permission denied, rate limit, network), `issue-reopen-<N>.err` stages the
+    # third-party STDERR text that failure prints (#2063 C23).
+    RN="${3:-}"; RN="${RN#\#}"
+    rc=0; [ -f "$RESP/issue-reopen-$RN.rc" ] && rc="$(cat "$RESP/issue-reopen-$RN.rc")"
+    if [ "$rc" != "0" ]; then
+        if [ -f "$RESP/issue-reopen-$RN.err" ]; then cat "$RESP/issue-reopen-$RN.err" >&2
+        else echo "mock-gh: forced reopen failure for issue $RN" >&2; fi
+        exit "$rc"
+    fi
+    exit 0
+fi
 if [ "$cmd" = "repo" ] && [ "$sub" = "view" ]; then
     if printf '%s' "$*" | grep -q -- "--jq"; then echo "mockorg/mockrepo"
     else echo '{"nameWithOwner":"mockorg/mockrepo"}'; fi
@@ -207,10 +246,40 @@ mock_issue() {  # <N> <STATE> [labels-csv] [title]
     local IFS=','
     for l in $labels_csv; do labels="$labels{\"name\":\"$l\"},"; done
     labels="[${labels%,}]"
-    printf '{"number":%s,"title":"%s","body":"Body of issue %s","labels":%s,"state":"%s","createdAt":"2026-07-01T00:00:00Z"}\n' \
+    printf '{"number":%s,"title":"%s","body":"Body of issue %s","labels":%s,"state":"%s","createdAt":"2026-07-01T00:00:00Z","comments":[]}\n' \
         "$n" "$title" "$n" "$labels" "$state" > "$RESP/issue-view-$n.json"
 }
+# Replace the `comments` VALUE of an existing issue-view-<N>.json fixture with the
+# raw text given. The payload is spliced in verbatim rather than re-serialized, so
+# it can be healthy JSON, structurally defective JSON (null elements, non-string
+# body, missing author), a non-array value, or syntactically broken text — the
+# corruption seams driver-issue-comments.sh needs. The literal `__DELETE__`
+# removes the key entirely (the "current version but no comments field" shape).
+mock_issue_comments() {  # <N> <comments-json-or-__DELETE__>
+    node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const raw = process.argv[2];
+const base = JSON.parse(fs.readFileSync(p, "utf8"));
+delete base.comments;
+let s = JSON.stringify(base);
+if (raw !== "__DELETE__") {
+  s = s === "{}" ? "{\"comments\":" + raw + "}" : s.slice(0, -1) + ",\"comments\":" + raw + "}";
+}
+fs.writeFileSync(p, s + "\n");
+' "$RESP/issue-view-$1.json" "$2"
+}
 mock_issue_rc() { echo "$2" > "$RESP/issue-view-$1.rc"; }        # <N> <rc>
+# The text the forced failure prints on STDERR, replacing the mock's own diagnostic.
+# gh's failure output is third-party text that can carry a token, a signed URL, or any
+# other secret the transport leaked, so this is the seam for proving none of it reaches
+# an artifact (driver-issue-comments/corrupt-shapes.sh C16). Only read when .rc is non-zero.
+mock_issue_stderr() { printf '%s\n' "$2" > "$RESP/issue-view-$1.err"; }  # <N> <stderr-text>
+# `gh issue reopen <N>` failure seam (#2063 C23): the reopen is a WRITE against the
+# authoritative remote, so its failure arm needs its own forced-error seam rather than
+# borrowing the read path's.
+mock_reopen_rc() { echo "$2" > "$RESP/issue-reopen-$1.rc"; }              # <N> <rc>
+mock_reopen_stderr() { printf '%s\n' "$2" > "$RESP/issue-reopen-$1.err"; }  # <N> <stderr-text>
 mock_sub_issues() { printf '%s\n' "$2" > "$RESP/sub-issues-$1.json"; }  # <N> <json>
 mock_sub_issues_rc() { echo "$2" > "$RESP/sub-issues-$1.rc"; }          # <N> <rc>
 set_wip() { echo "$2" > "$WIPD/state-$1"; }                      # <N> same|none|other
@@ -303,6 +372,20 @@ assert_ckpt() {  # <label> <ckpt-path> <dot.path> <want>
     local got
     got="$(ckpt_get "$2" "$3")"
     if [ "$got" = "$4" ]; then pass "$1"; else fail "$1: want $3=$4 got '$got'"; fi
+}
+
+# A crash and a controlled rejection agree on every negative observable — neither
+# reports done, neither writes artifacts. Only the error streams separate them, and a
+# node crash reports on stderr, which no directive assertion reads. Both are checked.
+assert_no_uncaught() {  # <label>
+    local hit=""
+    printf '%s\n' "$DRIVER_OUT" | grep -qE 'TypeError|ReferenceError|^ +at ' && hit="stdout"
+    printf '%s\n' "$DRIVER_ERR" | grep -qE 'TypeError|ReferenceError|^ +at ' && hit="${hit:+$hit+}stderr"
+    if [ -z "$hit" ]; then
+        pass "$1"
+    else
+        fail "$1: an uncaught error surfaced on $hit: out='$(printf '%s' "$DRIVER_OUT" | head -c 120)' err='$(printf '%s' "$DRIVER_ERR" | head -c 200)'"
+    fi
 }
 
 finish() {
