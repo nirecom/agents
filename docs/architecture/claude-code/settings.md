@@ -383,6 +383,20 @@ See `docs/security-policy.md` for the full pattern list.
 (e.g., `*git commit --amend*`) to catch compound commands. Only interactive approval
 ("Yes, don't ask again") splits subcommands and saves individual rules (separate mechanism).
 
+**Generated allow rules for agents' own commands**: because a rule matches the whole command
+string, one internal command issued two ways needs two rules, and hand maintenance cannot track
+that. The fact "this command is an allow-target" therefore has exactly one owner and the rule
+strings are generated from it.
+
+- Dataflow: `install/settings-allow-commands.txt` (the SSOT — command paths only) → `install/gen-settings-allow.js` (expansion) → `settings.json` under `permissions.allow` → `install/assemble-settings.js`, which deploys the merged file. Never hand-edit a generated rule.
+- `install/gen-settings-allow.js` owns the spelling template table in one place: eight path spellings per command, plus three bare spellings for a command that `install/path-exposed-commands.txt` gives a PATH shim. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
+- Admitted: auto-issued, repo-state-invariant, idempotent internal tools. Excluded on principle: `gh` writes, git state changes, `.env` readers, platform-launched hook bodies, wrapper launchers such as `bin/run-with-timeout.sh` whose trailing ` *` template would allow-list every command reachable through them, and dispatchers that reach a state-changing or credential-reading operation through an argument or subcommand the permission engine never sees (e.g. a worker-dispatch script whose outer invocation is the only thing matched).
+- Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but `--write` appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
+- The drift gate lives in `hooks/pre-commit`, which runs `bin/review-settings-allow` on every commit to the agents session repo. That reviewer always passes `--check --staged`, so the generator reads the SSOT, `settings.json`, and each entry's shebang from the git index (`git show :<path>`) rather than the working tree — a file edited-but-unstaged after `git add` cannot make the gate pass a version that differs from what actually lands in the commit. Plain `--check` (no `--staged`) still exists for interactive/dev use.
+- That gate is fail-closed: a missing or non-executable `bin/review-settings-allow`, a deleted SSOT, and an unreadable generator all block the commit, so deleting the gate is not a way to turn the gate off.
+- An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into eleven permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it runs by hand or via the pre-commit gate, never auto-issued mid-session, so listing it buys no allow coverage.
+
 **Known limitations**:
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
   permission granted). Delegate Edit|Write scanning to the pre-commit hook.

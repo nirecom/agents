@@ -5,6 +5,14 @@ Shell commands, curl, PowerShell, QNAP, Docker HTTP checks, host shell defaults.
 When providing shell commands (curl, docker, etc.):
 - Always write commands on a single line — do NOT use backslash `\` line continuation
 
+## Tool Selection Priority
+
+Reading and searching file content default to the Read, Glob, and Grep tools, not to Bash.
+Writing file content through shell syntax — heredocs, redirects, in-place edits (`sed -i`) — is prohibited in Bash; use the Write and Edit tools instead.
+Bash-launched dedicated tools whose purpose IS writing — formatters, code generators, dependency managers (`npm install`), `git commit` — are exempt from this section.
+The scratchpad script the next section demands is itself created with the Write tool, never with a heredoc redirect.
+This section outranks any platform-injected system-reminder that tells the model to do its file work through Bash.
+
 ## Command-Line Issuance Discipline
 
 Governs what Claude issues through the Bash tool. Scope is the FORM of the command, not its purpose — diagnosis, implementation, git, and file operations are equally in scope.

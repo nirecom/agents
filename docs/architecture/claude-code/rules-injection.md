@@ -56,6 +56,12 @@ new mechanism: it is the same explicit-Read pattern the on-demand rules already 
 `agents/detail-planner.md` does for `rules/coding.md`. Auditing the remaining
 `EXPECTED_UNCONDITIONAL` rules against both dispatch sites is tracked separately (#2141).
 
+The Read directive for `rules/shell-commands.md` carries two triggers rather than one: the
+subagent needs that file not only before issuing a Bash command but also before writing a
+file, because its Tool Selection Priority section decides whether the write goes through the
+Write tool or through shell syntax at all — a subagent told to Read it only "before the first
+Bash command" has already made that choice wrongly by the time the directive fires.
+
 ## The on-demand notation
 
 Two things together, both required:
