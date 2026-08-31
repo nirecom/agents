@@ -1,15 +1,10 @@
 #!/bin/bash
 # tests/fix-1591-forge-write-scan.sh
-# Tests: reopen-with-update.sh + github-contents-write.sh + github-git-data-write.sh scan guards
+# Tests: bin/github-issues/reopen-with-update.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh
 # Tags: github, issues, contents-api, git-data-api, scan-outbound, security, scope:issue-specific, layer:TL2
 #
-# Issue #1591 — outbound-scan guard on the remaining forge-write paths:
-#   reopen-with-update.sh: guards the composed $BODY_TMPFILE before gh issue edit.
-#   github-contents-write.sh: guards commit-message + file content before gh api PUT.
-#   github-git-data-write.sh: guards commit-message + each file before gh api blobs.
-# A block aborts (exit 1) before the outbound `gh api` push. Commit MESSAGE is
-# scanned too (not just file content).
-#
+# Issue #1591 — outbound-scan guards on forge-write paths: reopen-with-update.sh,
+# github-contents-write.sh, github-git-data-write.sh. Block aborts before gh api push.
 # RED until /write-code creates gh-outbound-guard.sh and wires each script.
 
 set -u

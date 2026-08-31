@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-929-supervisor-write-alert-status.sh
-# Tests: bin/supervisor-write-alert (new --finding-status, --confirm-finding-ids, --drop-finding-ids flags)
-# Tags: supervisor, em-supervisor, cli, layer2, finding-status
+# Tests: bin/supervisor-write-alert
+# Tags: supervisor, em-supervisor, cli, layer2, finding-status, scope:issue-specific
 # RED for issue #929.
 #
 # L3 gap (what this test does NOT catch):

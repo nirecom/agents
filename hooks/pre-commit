@@ -341,8 +341,13 @@ _od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$_od_repo_top" ]; then
     _od_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
     _od_is_agents_repo=0
-    _od_agents_common="$(git -C "$_od_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
-    _od_repo_common="$(git -C "$_od_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
+    # -u GIT_DIR/GIT_WORK_TREE/GIT_PREFIX: git invokes this hook with those set for the
+    # repo being committed to, and an inherited GIT_DIR silently overrides -C's target
+    # directory for repo discovery -- without the unset, both calls below resolve to the
+    # committing repo regardless of $_od_cfg_dir, producing a false agents-repo match for
+    # every repo.
+    _od_agents_common="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX git -C "$_od_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
+    _od_repo_common="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX git -C "$_od_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
     if [ -n "$_od_agents_common" ] && [ -n "$_od_repo_common" ]; then
         _od_agents_abs="$(cd "$_od_cfg_dir" 2>/dev/null && cd "$_od_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_od_agents_common")"
         _od_repo_abs="$(cd "$_od_repo_top" 2>/dev/null && cd "$_od_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_od_repo_common")"
@@ -385,6 +390,37 @@ if [ -n "$_od_repo_top" ]; then
                     ;;
             esac
         fi
+    fi
+fi
+
+# settings.json allow-rule drift gate (#2119): catches install/settings-allow-commands.txt
+# and settings.json diverging, fail-closed (missing/non-executable reviewer blocks; only
+# rc 0 passes). Arms only when this repo IS the agents session repo AND carries the gate's
+# own inputs, so an unrelated repo stays untouched. Details: docs/architecture/claude-code/settings.md.
+_sa_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+_sa_armed=0
+if [ -n "$_sa_repo_top" ]; then
+    if [ -f "$_sa_repo_top/install/settings-allow-commands.txt" ] || [ -f "$_sa_repo_top/install/gen-settings-allow.js" ]; then
+        _sa_armed=1
+    fi
+fi
+if [ "$_sa_armed" = "1" ] && (unset AGENTS_CONFIG_DIR; _is_agents_session_repo "$_sa_repo_top"); then
+    _sa_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _sa_reviewer="$_sa_cfg_dir/bin/review-settings-allow"
+    if [ ! -x "$_sa_reviewer" ]; then
+        echo "Commit blocked: review-settings-allow is missing or not executable." >&2
+        echo "Expected at: $_sa_reviewer" >&2
+        echo "The settings.json allow-rule gate fails closed — restore the reviewer before committing." >&2
+        exit 1
+    fi
+    _sa_rc=0
+    _sa_out="$("$_sa_reviewer" 2>&1)" || _sa_rc=$?
+    if [ "$_sa_rc" != "0" ]; then
+        printf '%s\n' "$_sa_out"
+        echo ""
+        echo "Commit blocked: review-settings-allow reported a finding or an outage (rc=$_sa_rc)."
+        echo "Run: node install/gen-settings-allow.js --write"
+        exit 1
     fi
 fi
 

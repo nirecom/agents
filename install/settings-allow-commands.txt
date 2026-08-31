@@ -1,0 +1,22 @@
+# settings-allow-commands.txt — SSOT (CPR-SSOT) for WHICH agents-internal commands get
+# permission allow rules: one repo-relative path per line, nothing else. Sole consumer:
+# install/gen-settings-allow.js, which owns spelling/interpreter/bare-form logic.
+# Inclusion criterion, exclusions (a-f), the review-code-codex caveat, and the path-syntax
+# and self-exclusion rules are documented in docs/architecture/claude-code/settings.md —
+# read that before adding or removing an entry.
+
+bin/workflow/next-step
+bin/supervisor-report
+bin/workflow-plans-dir
+bin/worker-dispatch-paths
+bin/resolve-worktree-path
+bin/concern-ledger
+bin/review-code-codex
+bin/confirm-off
+bin/parse-closes-issues
+bin/workflow/set-workflow-type
+bin/workflow/record-complexity-and-skip
+skills/worktree-start/scripts/derive-worktree-name.sh
+bin/workflow/read-complexity-evaluation
+bin/workflow/derive-complexity-level
+bin/workflow/read-step-status

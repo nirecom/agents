@@ -379,3 +379,19 @@ Changes: Fixed a bug where the codex review loop's concern ledger could get stuc
 ### FEATURE: PR #2143 (2026-08-26)
 Background: fix(#2140): forward rules/shell-commands.md to write-code/write-tests general-purpose subagents
 Changes: Fixed: the write-code and write-tests subagents now read the shell command-line and user-escalation rules before running Bash, so a rejected command comes with an explanation instead of a silent denial.
+
+### FEATURE: PR #2146 (2026-08-30)
+Background: feat(#2099): split complexity routing into per-stage thresholds
+Changes: Reduced unnecessary Opus usage by selecting the model per workflow stage (write-tests, write-code, detail-plan) instead of one session-wide complexity verdict.;Fixed a bug where a session's recorded task-complexity evaluation was silently unreadable on later workflow steps, causing them to always fall back to the default routing.;Raised the default plan-truncation limit sent to codex from 5000 to 20000 lines, and made it configurable via the new `CODEX_REVIEW_PLAN_MAX_LINES` env var.
+
+### FEATURE: PR #2151 (2026-08-30)
+Background: feature/2108 early gate allowlist block clearance
+Changes: Fixed a gap where a subagent's Bash write to its own scratchpad or the workflow plans directory could be blocked by one write-protection hook while another hook would have allowed it — both now agree on the same allowed write targets, and blocked subagents get a message naming those targets instead of an instruction they cannot act on.
+
+### FEATURE: PR #2158 (2026-08-30)
+Background: feat(#2119,#2124): generate settings.json allow rules from an SSOT; prioritize Read/Write over Bash
+Changes: Generated `settings.json` allow rules for agents-internal commands from a single source-of-truth list instead of hand-maintained entries; a pre-commit check now catches drift between the two.;Subagents dispatched by `write-code`/`write-tests` now default to the Read/Write/Edit tools over raw Bash for file I/O.
+
+### FEATURE: PR #2162 (2026-08-30)
+Background: feat(#2153): shrink and restyle .env.example
+Changes: `.env.example` is 24% shorter and easier to scan. The `DOCS_LANG_HISTORY_*`/`DOCS_LANG_CHANGELOG_*` settings are now `DOCS_LANG_PUBLIC`/`DOCS_LANG_PRIVATE`, and `CODEX_REVIEW_PLAN_MAX_LINES` is now `CODEX_REVIEW_MAX_PLAN_LINES` — update your `.env` to match.
