@@ -77,7 +77,7 @@ H3 two segments (cat heredoc piped to bash)| trunc     | H3 | false
 H4 unquoted delimiter                      | trunc     | H4 | false
 H5 non-cat (bash) fronted opener           | trunc     | H5 | false
 H7 opener count mismatch (quoted+unquoted) | trunc     | H7 | false
-H9 verbatim measured dispatch fragment     | trunc     | H9 | true
+H9 verbatim measured dispatch fragment     | trunc     | H9 | false
 TABLE
 
 # Section 7 — gh provenance argv resolution.

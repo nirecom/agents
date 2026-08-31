@@ -13,17 +13,13 @@ const { parse } = require("../lib/command-ir");
 // when Bash CWD has reset to the main worktree.
 const BUILTIN_EXCLUDE_PATTERNS = Object.freeze(["**/.worktree-backup/**"]);
 
-/** True if cmd contains shell chaining/pipe operators outside of quotes.
- *  Also rejects command substitutions ($() and backticks): those spawn a
- *  shell that runs the inner command, which is effectively chaining for
- *  exemption-allowance purposes. Without this, `git merge --ff-only $(rm -rf
- *  /)` would slip past the chaining guard.
- *  POSIX fd-dup redirects (`2>&1`, `1>&2`, `>&2`, `N>&-`, `>&-`) are handled
- *  by the IR parser's fd-dup lookahead — they never produce a segment split.
- *  `&>` / `&>>` (redirect-both-to-file) are intentionally left as bare `&`
- *  in the IR, so they still produce a split and trip this guard.
- *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
- *  so `& git.exe worktree add` is conservatively rejected. */
+// True if cmd contains shell chaining/pipe operators outside of quotes, or a
+// command substitution ($()/backtick) — a substitution spawns a shell that
+// runs the inner command, effectively chaining for exemption-allowance
+// purposes (blocks `git merge --ff-only $(rm -rf /)`). fd-dup redirects
+// (2>&1 etc.) are excluded via the IR parser's fd-dup lookahead. Bare `&`
+// also matches PowerShell's call operator, so `& git.exe ...` is
+// conservatively rejected too.
 function hasShellChaining(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
   const ir = parse(cmd);
@@ -87,23 +83,40 @@ function findFirstUnquotedAnd(cmd) {
   return -1;
 }
 
-// True when cmd contains command-sequencing operators (;, &&, ||) outside quotes.
-// Single | (pipe) is excluded — needed for `cmd | tee file`. Uses IR separators
-// so fd-dup redirects (2>&1 etc.) are never misclassified as chaining.
+// True when cmd contains command-sequencing operators (;, &&, ||) outside quotes
+// AND outside a heredoc body (stripped first, so shell fragments inside a
+// `cat <<'EOF'` write are not treated as real sequencing — #2121). Single |
+// (pipe) is excluded — needed for `cmd | tee file`. Uses IR separators so
+// fd-dup redirects (2>&1 etc.) are never misclassified as chaining.
 // Commands with sequencing must not be fast-pathed through the session-scope
 // allow: the un-extracted portion may contain in-scope writes (e.g. rm, mv).
 function hasCommandSequencing(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  const ir = parse(cmd);
+  const ir = parse(stripHeredocBody(cmd));
   if (ir.parseFailure) return true; // fail-closed
   return ir.separators.some((s) => s === ";" || s === "&&" || s === "||");
 }
 
-// True when cmd has sequencing operators (; && ||) OUTSIDE the heredoc body.
-// Strips the heredoc body before the sequencing test so body-internal operators
-// (e.g. shell fragments in a cat <<'EOF' write) are not treated as real sequencing.
+// Alias kept for call-site compatibility: hasCommandSequencing is itself
+// heredoc-aware now, so this is equivalent.
 function hasCommandSequencingOutsideHeredoc(cmd) {
-  return hasCommandSequencing(stripHeredocBody(cmd));
+  return hasCommandSequencing(cmd);
+}
+
+// True when cmd contains a heredoc opener (`<<`/`<<-`, optionally quoted tag),
+// detected independently of stripHeredocBody(). That function deliberately
+// REFUSES to strip the most dangerous shapes (interpreter heredocs, $()/backtick
+// bodies, pipe-chained sinks); this predicate must still report true for those so
+// callers route them through the narrow plans-dir/scratchpad gate (Guard 6)
+// instead of the broad outside-session-scope allow (Guard 5) — #2120/#2121
+// security review r2 (F2). Tested against the RAW command: stripQuotedArgs
+// blanks a quoted tag (`<<'EOF'` -> `<<''`) and would hide the opener, and
+// true routes to the NARROWER gate, so over-matching here is the safe side.
+const HEREDOC_OPENER_RE = /<<-?\s*(['"]?)[A-Za-z_][A-Za-z0-9_.-]*\1/;
+
+function hasHeredoc(cmd) {
+  if (typeof cmd !== "string") return false;
+  return HEREDOC_OPENER_RE.test(cmd);
 }
 
 /**
@@ -114,8 +127,8 @@ function hasCommandSequencingOutsideHeredoc(cmd) {
  */
 function isPathOutsideRepo(targetPath, repoRoot) {
   try {
-    // Normalize POSIX drive-letter paths (e.g. /c/git/foo) to Windows native
-    // form before path.resolve, which on Windows otherwise misresolves them
+    // Normalize POSIX drive-letter paths (a slash-c-slash prefix) to Windows
+    // native form before path.resolve, which on Windows otherwise misresolves them
     // to C:\c\git\foo. No-op on non-Windows and on already-native paths.
     const normTarget = normalizeCwd(targetPath) || targetPath;
     const normBase = normalizeCwd(repoRoot) || repoRoot;
@@ -166,6 +179,7 @@ module.exports = {
   findFirstUnquotedAnd,
   hasCommandSequencing,
   hasCommandSequencingOutsideHeredoc,
+  hasHeredoc,
   isPathOutsideRepo,
   isExcluded,
   getExcludePatterns,

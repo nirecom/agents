@@ -16,7 +16,7 @@ const { parse } = require("../lib/command-ir");
 const { findRepoRootForBash, isMainCheckout, normalizeForCompare, findRepoRoot } = require("./git-repo-detection");
 const { getSessionRepoRoots } = require("./session-scope");
 const { hasGitHooksBypass } = require("./git-hooks-bypass");
-const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
+const { hasCommandSequencing, hasHeredoc, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
 const { isBranchDeleteCommand, isAllowedBranchDeleteWhenNotCheckedOut } = require("./branch-delete-guard");
 const { isAllowedWorktreeCommand } = require("./main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./bash-write-scope");
@@ -234,7 +234,10 @@ function handleBashWrite(ctx) {
         // is null (non-git CWD), also require every target to resolve to a
         // non-git path or live under plans-dir/.claude — otherwise an empty
         // sessionRoots can't protect non-session git repos from cross-repo writes.
-        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
+        // Heredoc commands skip this broader gate and fall through to the
+        // narrower #2121 block below.
+        if (!hasHeredoc(cmd) &&
+            areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
             (repoRoot !== null ||
              areAllBashTargetsUnderPlansDir(targets) ||
              areAllBashTargetsUnderClaude(targets) ||
@@ -248,13 +251,16 @@ function handleBashWrite(ctx) {
             isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
           done();
         }
-      } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
-                 (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets) ||
-                  areAllBashTargetsUnderWorkflowDir(targets, _stemOpts))) {
-        // Sequencing operators appear only inside a heredoc body (e.g. shell
-        // fragments written by `cat <<'EOF' > plans-dir/file.md`) — the actual
-        // write target is under plans-dir. Allow.
-        done();
+
+        // #2121: this command's only operators (if any) were heredoc-body-internal
+        // (e.g. shell fragments written by `cat <<'EOF' > plans-dir/file.md`) —
+        // hasCommandSequencing is heredoc-aware so it can't tell us that on its
+        // own. Allow when the actual write target is under plans-dir/.claude/workflow-dir.
+        if (hasHeredoc(cmd) &&
+            (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets) ||
+             areAllBashTargetsUnderWorkflowDir(targets, _stemOpts))) {
+          done();
+        }
       } else if (excludePatterns.length > 0 &&
                  isEverySegmentExcluded(ir, repoRoot, excludePatterns)) {
         // Sequenced command where every write segment's targets are covered by

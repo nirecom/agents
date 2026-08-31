@@ -5,38 +5,31 @@
 # Serial: static-detector false positive retained for declaration parity — the two `rm -rf /tmp/x` hits are inert heredoc table data, never executed
 
 # Issue #1679 — four write-detection heuristics false-positive on read-only
-# commands issued from the main worktree:
-#   (1) isExoticExecWriteIR / looksDynamic: ANY `$` or backtick in an eval /
-#       xargs / find body is treated as dynamic → fail-closed WRITE, so
-#       `eval "$(ssh-agent -s)"` is blocked.
-#   (2) isInterpreterCWriteIR: isReadOnlyInterpreterC's raw pre-checks
-#       (`$'`, `<<<`, `<<`, backtick) run BEFORE quote-stripping, so
-#       `bash -c 'echo "see <<EOF in docs"'` is blocked.
+# commands from the main worktree: (1) isExoticExecWriteIR/looksDynamic rejects
+# ANY `$`/backtick under eval/xargs/find; (2) isInterpreterCWriteIR's raw
+# pre-checks run BEFORE quote-stripping; (3) isCommandSubstWriteIR recurses into
+# `$(...)` without the outer Group-A gh context; (4) the here-doc/here-string/
+# pwsh-here WRITE_PATTERNS are raw-regex scanned, so quoted PROSE is blocked.
 
-#   (3) isCommandSubstWriteIR: recurses into `$(...)` without the outer Group-A
-#       gh context, so `gh issue comment N --body "$(cat <<'EOF' … EOF)"` is blocked.
-#   (4) WRITE_PATTERNS here-doc / here-string / pwsh-here entries are raw-regex
-#       scanned (STRIP_KINDS is empty), so quoted PROSE mentioning `<<'EOF'`,
-#       `<<<` or `@'…'@` is blocked.
+set -uo pipefail
 
 # FP1679-* rows assert the POST-FIX contract → RED before the fix (expected).
 # FC1679-* rows are fail-closed security pins → GREEN before AND after the fix.
 # PR/SC/SS rows verify the three propagation consumers of these predicates.
 # GA rows verify the Group-A gh integration path end to end at the module layer.
 
-# TL3 gap (what this test does NOT catch):
-# - Whether classify.js/bash-write-targets.js is actually loaded by the real enforce-worktree.js hook process
-# - Whether the hook process's module resolution finds the same files as the direct require() calls here
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
+PASS=0; FAIL=0; SKIP=0
 
-set -uo pipefail
-
+# TL3 gap (what this test does NOT catch): whether classify.js /
+# bash-write-targets.js is actually loaded by the real enforce-worktree.js hook
+# process, and whether that process's module resolution finds the same files as
+# the direct require() calls here. Closest-to-action mitigation: checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh
+# category: hook-registration
 # Git Bash / MSYS2 rewrites POSIX-looking argv into Windows paths before exec,
 # which would corrupt the raw command strings under test. No-op elsewhere.
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
-
-PASS=0; FAIL=0; SKIP=0
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
@@ -275,6 +268,20 @@ echo "=== GA: Group-A gh command integration ==="
 
 CMD_GA_A="$(cat <<'XEOF'
 gh issue comment 1679 --body "$(cat <<'EOF'
+see the heredoc delimiter syntax
+EOF
+)"
+XEOF
+)"
+
+# GA1679-E — same shape, body carrying a LITERAL heredoc-opener-shaped token.
+# Since the round-5 quote-aware isInsideSubstitution fix (hooks/lib/strip-quoted-args.js)
+# a heredoc nested inside an open `$( )` is no longer stripped: its body must stay
+# visible to write-pattern scanning, which is what stops a real opener-piped-to-a-shell
+# payload hiding there. The blanket "here-doc" WRITE_PATTERN therefore also matches
+# opener-shaped PROSE — an intentionally conservative fail-closed trade-off, not a bug.
+CMD_GA_E="$(cat <<'XEOF'
+gh issue comment 1679 --body "$(cat <<'EOF'
 see the <<EOF syntax
 EOF
 )"
@@ -306,6 +313,12 @@ assert_eq "GA1679-C cmdsubst: gh pr comment --body \$(git log) → false (argpos
   "false" "$(pred isCommandSubstWriteIR "$CMD_GA_C")"
 assert_eq "GA1679-D cmdsubst: gh issue comment --body \$(bash <<'EOF' rm -rf) → true (fail-closed)" \
   "true" "$(pred isCommandSubstWriteIR "$CMD_GA_D")"
+assert_eq "GA1679-E classify: opener-shaped prose in an unstripped heredoc body → read" \
+  "read" "$(classify_ir "$CMD_GA_E")"
+assert_eq "GA1679-E cmdsubst: opener-shaped prose body → false" \
+  "false" "$(pred isCommandSubstWriteIR "$CMD_GA_E")"
+assert_eq "GA1679-E detect: opener-shaped prose body → isNewlineInjectedWriteIR (fail-closed)" \
+  "isNewlineInjectedWriteIR" "$(detect_pred "$CMD_GA_E")"
 
 # ===========================================================================
 # Propagation layer — the three consumers of these predicates. A fix applied

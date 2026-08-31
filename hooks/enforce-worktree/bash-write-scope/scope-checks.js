@@ -45,6 +45,7 @@ function areAllBashTargetsUnderPlansDir(targets) {
   if (!targets || targets.length === 0) return false;
   try {
     const nodePath = require("path");
+    const os = require("os");
     const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
     let plansDir;
     try { plansDir = getWorkflowPlansDir(); } catch (_) { return false; }
@@ -52,6 +53,10 @@ function areAllBashTargetsUnderPlansDir(targets) {
     // #1780 H-3: case folding is decided per-filesystem by isContainedUnder(),
     // not by process.platform. See target-normalize.js.
     const normPlans = nodePath.resolve(plansDir);
+    // The conventional literal default is always trusted as an alias, even when
+    // WORKFLOW_PLANS_DIR is overridden to a different effective plans dir — a
+    // session-local override must not un-trust the well-known default location.
+    const normDefaultPlans = nodePath.resolve(nodePath.join(os.homedir(), ".workflow-plans"));
     const isUnder = (rawT) => {
       const t = normalizeTarget(rawT);
       if (t.malformed === true) return false; // fail-closed: not provably under plans-dir
@@ -63,7 +68,7 @@ function areAllBashTargetsUnderPlansDir(targets) {
         resolved = expanded;
       }
       const n = nodePath.resolve(resolved);
-      return isContainedUnder(n, normPlans);
+      return isContainedUnder(n, normPlans) || isContainedUnder(n, normDefaultPlans);
     };
     return targets.every(isUnder);
   } catch (_) {

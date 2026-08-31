@@ -296,6 +296,34 @@ See `docs/security-policy.md` for the full pattern list.
   all three are reachable only as children of `run-stage-chain.sh` / `run-initial.sh`, and a
   PreToolUse hook that inspects the command head only never sees a child process, so the
   listing granted nothing.
+  **Heredoc gate widening + self-reinforcing-loop fix (#2120/#2121)** —
+  `stripHeredocBody` (`hooks/lib/strip-quoted-args.js`) widened past #371's `cat`-only,
+  `\w+`-delimiter baseline: the sink set is now `cat|tee|sponge` (data sinks, not
+  interpreters — `mail` was dropped as an outbound/info-leakage channel), the sink must
+  own its own command segment (a negative lookbehind rejects `cat x; bash <<'EOF'` and
+  `git cat-file -p HEAD <<EOF` stealing another command's heredoc), the delimiter accepts
+  hyphens (`END-MARK`, not just `\w+`), and stripping is refused when the opener's own
+  line pipes or chains onward (`tee out <<'EOF' | bash` feeds the body to an interpreter —
+  caught by testing `restOfLine` for `[|&;]`). Separately, `hasCommandSequencing`
+  (`hooks/enforce-worktree/shared-cmd-utils.js`) became heredoc-aware itself (it now
+  parses `stripHeredocBody(cmd)` before checking for `;`/`&&`/`||`), so a heredoc-body-only
+  operator (e.g. `cat <<'EOF' > plans-dir/file.md` containing `a;` in its body) no longer
+  registers as real sequencing at all — over-broadening Guard 5 in
+  `universal-target-allow.js` and the "Bug 2" branch in `handle-bash-write.js`, both of
+  which previously routed such commands through the narrower plans-dir/claude-scratchpad
+  gate (#1109) only when sequencing was detected. Fix: both guards now key on `hasHeredoc(cmd)`
+  directly — a predicate that detects a heredoc opener independently of whether
+  `stripHeredocBody` actually strips it, so the dangerous shapes `stripHeredocBody` refuses
+  to touch still route to the narrow gate — restoring the pre-#2121 split for every heredoc
+  command regardless of its sequencing shape. The now-redundant `hasCommandSequencingOutsideHeredoc`
+  alias was removed. On the friction side (#2120's "block → retry same tool → block again"
+  loop), `hooks/lib/alt-target-remedy.js` (`buildAltTargetRemedy()`) is a new shared remedy
+  line appended to every `enforce-worktree.js` / `handle-edit-write.js` /
+  `workflow-gate/worktree-entry-gate.js` block reason, naming the plans dir and the
+  scratchpad as targets reachable right now via Write/Edit/MultiEdit — turning a bare stop
+  into a redirect. `early-gate-messages.js`'s `READ_TOOLS_NOTE` also dropped `Bash` from its
+  "remains available" list: Bash writes are themselves gated during the early-gate block, so
+  the prior wording overstated what was actually open.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and

@@ -58,7 +58,25 @@ run_B_block_messages() {
         local r; [ "$tier" = 1 ] && r="$r1" || r="$r2"
         assert_contains "B3 Tier $tier main names the plans dir"  "$plans_native"   "$r"
         assert_contains "B3 Tier $tier main names the scratchpad" "$scratch_native" "$r"
-        assert_contains "B3 Tier $tier main keeps the read-tools note" "Read, Grep, Glob, Bash" "$r"
+        # DELIBERATE EDIT (#2120): this assertion used to require "Read, Grep, Glob, Bash".
+        # Naming Bash in a block message is what #2120 is about — the agent reads it as
+        # "Bash is the way through", reaches for a Bash write, and enforce-worktree /
+        # the write-detector blocks it again. The note must keep the genuinely read-only
+        # tools and drop Bash; the narrowed substring plus the negative assertion below
+        # is what pins that, so a re-added "Bash" cannot pass silently.
+        assert_contains "B3 Tier $tier main keeps the read-tools note" "Read, Grep, Glob" "$r"
+        assert_not_contains "B3 Tier $tier main note no longer advertises Bash" "Bash" "$r"
+        assert_contains "B3 Tier $tier main note keeps AskUserQuestion" "AskUserQuestion" "$r"
+    done
+
+    # B3b (#2120) — CPR-ORTH: both branches share READ_TOOLS_NOTE, so the subagent
+    # message must lose Bash on exactly the same terms. Asserting only the main
+    # branch would let a branch-local re-add of "Bash" survive.
+    for tier in 1 2; do
+        local s; [ "$tier" = 1 ] && s="$s1" || s="$s2"
+        assert_contains "B3b Tier $tier subagent keeps the read-tools note" "Read, Grep, Glob" "$s"
+        assert_not_contains "B3b Tier $tier subagent note no longer advertises Bash" "Bash" "$s"
+        assert_contains "B3b Tier $tier subagent note keeps AskUserQuestion" "AskUserQuestion" "$s"
     done
 
     # B4 — subagent context: NOT ONE sentinel literal may appear. Asserting the

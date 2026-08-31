@@ -31,6 +31,7 @@ const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyCo
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 const { buildWorktreeRemedy } = require("./enforce-worktree/worktree-remedy");
+const { buildAltTargetRemedy } = require("./lib/alt-target-remedy");
 const { buildExtras } = require("./enforce-worktree/report-extras");
 const { handleBashWrite } = require("./enforce-worktree/handle-bash-write");
 const { handleEditWrite } = require("./enforce-worktree/handle-edit-write");
@@ -261,6 +262,7 @@ if (mainCheckout !== false) {
       `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
       "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
       _remedy +
+      buildAltTargetRemedy() + "\n" +
       "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }
@@ -273,6 +275,7 @@ if (currentBranch && protectedBranches.includes(currentBranch)) {
       `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${currentBranch}' in linked worktree.\n` +
       "Switch to a feature branch before writing.\n" +
       "Run: git switch -c feature/<task-name>\n" +
+      buildAltTargetRemedy() + "\n" +
       "Or set ENFORCE_WORKTREE=off in agents config." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }

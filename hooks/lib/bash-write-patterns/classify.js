@@ -1,6 +1,19 @@
 "use strict";
 
-const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("../strip-quoted-args");
+const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment, isInsideSubstitution, isLineContinuedBoundary } = require("../strip-quoted-args");
+
+// True when the sink word at `sinkOffset` is the HEAD of its own shell segment:
+// only whitespace since a real boundary, no line-continuation folding it onto a
+// previous command, and no enclosing $( / <( / ` capture. Without this, `bash -s
+// cat <<EOF` reads as a benign local sink while `cat` is really an interpreter
+// argument (#2120/#2121 security review r3; mirrors stripHeredocBody's anchor).
+function isSegmentHeadSink(whole, sinkOffset) {
+  const prefix = whole.slice(0, sinkOffset);
+  const head = prefix.replace(/[ \t]*$/, "");
+  if (head.length > 0 && !"\n;&|(".includes(head[head.length - 1])) return false;
+  if (isLineContinuedBoundary(prefix)) return false;
+  return !isInsideSubstitution(prefix);
+}
 
 // Strip DQ content; SQ spans need special handling (#1679 HIGH-1, FP1679-E).
 // Used by spanAware+stripDQOnly so heredoc delimiters like <<'EOF' stay visible
@@ -237,6 +250,11 @@ function isSafeHeredocOnly(cmd) {
       if (!/(^|[\s;|&(])cat$/.test(prefixToken) && prefixToken !== "cat") {
         return false;
       }
+      // ...and that `cat` must head its own segment, not sit in argument
+      // position (`bash -s cat <<EOF`) — see isSegmentHeadSink.
+      if (!isSegmentHeadSink(cmd, m.index + prefixToken.length - 3)) {
+        return false;
+      }
       const isQuoted = quoteChar === "'" || quoteChar === '"';
       if (!isQuoted && /\$\(|`/.test(body)) {
         return false;
@@ -262,10 +280,16 @@ function isTruncatedCatHeredocOnly(cmd, ir) {
     if (!Array.isArray(ir.segments) || ir.segments.length !== 1) return false;
     const openers = cmd.match(/<<-?\s*(?:'\w+'|"\w+"|\w+)/g);
     if (!openers || openers.length === 0) return false;
-    // Count openers that are BOTH quoted-delimiter AND immediately preceded by `cat`.
-    const catQuoted = cmd.match(/(?:^|[\s;|&(])cat\s+<<-?\s*(?:'\w+'|"\w+")/g);
-    if (!catQuoted) return false;
-    return catQuoted.length === openers.length;
+    // Count openers that are BOTH quoted-delimiter AND owned by a segment-head
+    // `cat` — an argument-position `cat` (`bash -s cat <<'EOF'`) does not count.
+    const catRe = /(?:^|[\s;|&(])cat\s+<<-?\s*(?:'\w+'|"\w+")/g;
+    let catQuoted = 0;
+    let cm;
+    while ((cm = catRe.exec(cmd)) !== null) {
+      if (isSegmentHeadSink(cmd, cm.index + cm[0].indexOf("cat"))) catQuoted++;
+    }
+    if (catQuoted === 0) return false;
+    return catQuoted === openers.length;
   } catch (e) {
     return false;
   }

@@ -2,34 +2,16 @@
 
 const { blankQuoteSpans, unwrapCmdSubstInDq } = require("./quote-spans");
 
-// Strip DQ literal content while preserving $(...) and `...` command-substitution
-// regions. Inside a double-quoted span: literal text collapses to "", and each
-// $(...) / `...` is captured then unwrapped by replacing the wrapper chars
-// ($(, ), `) with spaces so inner tokens (rm/mv/tee/redirects/git push/...) are
-// visible to command-position write-pattern regexes. Outside DQ spans, text
-// passes through unchanged. \" / \\ / \` escapes within DQ are skipped.
-// Returns the original string on any exception.
-//
-// Why unwrap rather than preserve verbatim: write-pattern regexes use
-// (?:^|[\s;|&])<word>\b as the command-position anchor. The literal `$(` /
-// `(` / `` ` `` are not in that anchor set, so preserving verbatim still hides
-// inner writes like $(rm foo) and `rm foo` (#514 HIGH gap). Replacing the
-// wrapper chars with spaces exposes them while remaining fail-safe (any
-// unbalanced or quoted-inside content errs toward 'write' classification).
-//
-// Span boundaries come from the shared scanner (hooks/lib/quote-spans) rather
-// than from a local walker: the previous depth-counted `$(` search ignored
-// quoting, so a `)` hidden in a single-quoted string inside the substitution
-// body ended the region early and left live command text unexposed. On an
-// unparseable command the scanner reports ok:false and the string is returned
-// unchanged, which keeps the caller on the "write" side.
-//
-// The try/catch is a hard requirement, not defensive noise: these two functions
-// are called from inside a PreToolUse hook, and an exception escaping here kills
-// the hook process before it can emit a verdict — which the tool layer reads as
-// "no objection", i.e. fail-OPEN. Returning the untransformed input instead keeps
-// every downstream write-pattern reader looking at the original bytes, which is
-// the fail-CLOSED side.
+// Strip DQ literal content, but unwrap (not blank) $(...) / `...` inside a DQ
+// span by replacing the wrapper chars with spaces, so inner writes like
+// $(rm foo) stay visible to the command-position write-pattern anchor
+// (?:^|[\s;|&])<word>\b — blanking them would hide the write (#514 HIGH).
+// Span boundaries come from the shared scanner (hooks/lib/quote-spans), which
+// is quote-aware (a depth-counted `$(` walker misreads a `)` hidden inside a
+// single-quoted string in the substitution body); an unparseable command
+// returns unchanged, keeping the caller on the fail-closed "write" side.
+// The try/catch is load-bearing: this runs inside a PreToolUse hook, and an
+// escaping exception kills the hook (read as "no objection" = fail-OPEN).
 function stripDqPreservingCmdSubst(str) {
   if (typeof str !== "string") return str;
   try {
@@ -48,29 +30,94 @@ function stripQuotedArgs(str) {
   }
 }
 
-// Strip heredoc bodies between the opening tag and closing tag, preserving the
-// opener (so here-doc detection in classify() still fires) and a trailing newline.
-// Supports <<TAG, <<-TAG, <<'TAG', <<"TAG" forms.
-//
-// Safety constraints (#371 codex review HIGH findings):
-//   1. Only strip heredocs preceded by `cat` — interpreter heredocs like
-//      `bash <<EOF` execute their body and must not be stripped.
-//   2. Preserve rest-of-line after the opener (e.g. `> out.txt` redirect on the
-//      same line as `<<EOF`) so external redirects remain visible to scanning.
-//   3. If the opener is unquoted AND the body contains `$(...)` or backticks,
-//      do not strip — shell expansion would execute the inner commands.
-//      Quoted openers (`<<'EOF'` / `<<"EOF"`) prevent expansion → safe.
+// True when `prefix` (text before a sink) leaves a $(, <( or ` open: whatever
+// the sink writes to stdout is then CAPTURED and run by the outer command, so
+// it is an interpreter's input, not a local file write (#2120/#2121 r2 HIGH).
+// Bare `(` is a subshell, not a capture, so it is deliberately not counted.
+// The walk runs over blanked quote spans, not raw text: a `)` sitting inside a
+// quoted literal would otherwise cancel a real open frame and under-count the
+// depth. An unparseable prefix fails closed to "captured" (r5 C24).
+function isInsideSubstitution(prefix) {
+  let scanned;
+  try {
+    scanned = blankQuoteSpans(prefix);
+  } catch (e) {
+    return true;
+  }
+  if (!scanned.ok) return true;
+  const text = scanned.out;
+  let depth = 0;
+  let ticks = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "`") ticks++;
+    else if ((c === "$" || c === "<") && text[i + 1] === "(") { depth++; i++; }
+    else if (c === ")" && depth > 0) depth--;
+  }
+  return depth > 0 || ticks % 2 === 1;
+}
+
+// True when the newline that opens `prefix`'s last segment is escaped by a
+// backslash: `bash -s \<NL>cat <<EOF` is ONE logical command, so that newline is
+// not a segment boundary and `cat` is an argument, not a head (#2120/#2121 r3).
+// An even run of backslashes is a literal `\`, so only an odd run continues.
+function isLineContinuedBoundary(prefix) {
+  const head = prefix.replace(/[ \t]*$/, "");
+  if (!head.endsWith("\n")) return false;
+  let backslashes = 0;
+  for (let i = head.length - 2; i >= 0 && head[i] === "\\"; i--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+// Mirror of isLineContinuedBoundary on the TRAILING side: when the opener line
+// ends in a continuation, the next physical line is still the same logical
+// command, so a pipe/chain there never reaches restOfLine (r5 HIGH).
+function endsWithLineContinuation(text) {
+  const tail = text.replace(/[ \t]*$/, "");
+  let backslashes = 0;
+  for (let i = tail.length - 1; i >= 0 && tail[i] === "\\"; i--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+// Strip heredoc bodies between opening and closing tag, preserving the opener
+// (so classify()'s here-doc detection still fires) and a trailing newline.
+// Supports <<TAG, <<-TAG, <<'TAG', <<"TAG"; delimiter starts with letter/_.
+// Safety (#371; widened #2121; re-anchored by #2120/#2121 security review r2):
+// strip only when a DATA-SINK (cat/tee/sponge) OWNS the redirection — the sink
+// must be the HEAD of its own segment (only whitespace between a segment
+// boundary and the sink), so `bash -s cat <<EOF` or `eval "$(cat <<EOF"` cannot
+// hand an interpreter's heredoc to the strip. Refuse too when the opener's own
+// line pipes/chains onward (`tee out <<'EOF' | bash`), and when an unquoted
+// opener's body holds $(...)/backticks. `mail` was dropped: an outbound channel.
 function stripHeredocBody(str) {
   if (!str || typeof str !== "string") return str;
   try {
     return str.replace(
-      /(\bcat\s*)(<<-?\s*(['"]?)(\w+)\3)([^\n]*)\n([\s\S]*?)\n\s*\4\s*(?:\n|$)/g,
-      function (match, catPart, opener, quoteChar, _tagName, restOfLine, body) {
+      /(?<=(?:^|[\n;&|])[ \t]*)((?:cat|tee|sponge)(?![\w-])(?:[ \t]+[^\s;&|<]+)*[ \t]*)(<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_.-]*)\3)([^\n]*)\n([\s\S]*?)\n\s*\4\s*(?:\n|$)/g,
+      function (match, cmdPart, opener, quoteChar, _tagName, restOfLine, body, offset, whole) {
         const isQuoted = quoteChar === "'" || quoteChar === '"';
         if (!isQuoted && /\$\(|`/.test(body)) {
           return match;
         }
-        return catPart + opener + restOfLine + "\n";
+        if (/[|&;]/.test(restOfLine)) {
+          return match;
+        }
+        if (endsWithLineContinuation(restOfLine)) {
+          return match;
+        }
+        // `> >(cmd)` / `tee >(cmd)`: the sink's output lands in a process
+        // substitution that EXECUTES it, so the body is interpreter input, not
+        // a local file — the write direction the $( capture check misses (r3).
+        if (/>[ \t]*\(/.test(cmdPart + restOfLine)) {
+          return match;
+        }
+        if (isLineContinuedBoundary(whole.slice(0, offset))) {
+          return match;
+        }
+        if (isInsideSubstitution(whole.slice(0, offset))) {
+          return match;
+        }
+        return cmdPart + opener + restOfLine + "\n";
       }
     );
   } catch (e) {
@@ -78,18 +125,13 @@ function stripHeredocBody(str) {
   }
 }
 
-// Strip values of inline --body / --title arguments (and short forms -b/-t)
-// to neutralize write-pattern false positives in Group A gh commands and
-// known-path dispatcher scripts. Both space-separated (--body "...") and
-// equals-sign (--body="...") forms are stripped. --body-file is INTENTIONALLY
-// EXCLUDED — it is a file path, not body text; stripping it would hide
-// suspicious paths from the classifier.
-//
-// Safety guard (#514 HIGH): for DQ form only, do NOT strip when the body
-// contains $(...) or backticks. Shell expands command substitution inside
-// DQ before gh receives the argument, so stripping would hide executable
-// content (e.g. `gh pr create --body "$(bash <<EOF\nrm -rf /\nEOF\n)"`).
-// SQ form is safe — shell does not expand inside single quotes.
+// Strip values of inline --body / --title (and -b/-t) so Group A gh commands and
+// known-path dispatcher scripts don't false-positive on write-pattern scanning.
+// Handles both `--body "..."` and `--body="..."`. --body-file is EXCLUDED (a file
+// path, not body text — stripping it would hide a suspicious path from the
+// classifier). Safety guard (#514 HIGH): DQ form only, do NOT strip when the body
+// contains $(...) or backticks — shell expands those before gh receives the
+// argument, so stripping would hide executable content. SQ form is always safe.
 function stripInlineBodyArg(str) {
   if (!str || typeof str !== "string") return str;
   try {
@@ -118,4 +160,4 @@ function stripShellVarAssignment(str) {
   }
 }
 
-module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment, stripDqPreservingCmdSubst };
+module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment, stripDqPreservingCmdSubst, isInsideSubstitution, isLineContinuedBoundary, endsWithLineContinuation };

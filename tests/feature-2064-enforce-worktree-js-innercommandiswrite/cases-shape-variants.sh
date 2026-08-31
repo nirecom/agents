@@ -44,14 +44,14 @@ TABLE
 
 # Section 13 — C3. Heredoc delimiter variants beyond the `\w+` shape.
 # D1/D2 are the `\w+` baseline: dispatcher -> read, non-dispatch -> write.
-# MEASURED DEVIATION (D3/D4, D9/D10): the opener regexes accept only `\w+`
-# delimiter words, so `END-MARK` matches NO opener, layer 2 returns false and the
-# command stays a write EVEN on the dispatcher path despite layer 1 clearing it
-# (D3p) — fail-closed, pinned so a later widening is a visible change.
-# MEASURED DEVIATION (D5/D6): `<<"END.MARK"` nests a double quote inside a DQ
-# argument, the span scanner extracts no substitution and both paths report read
-# — pre-existing classifier behavior, not a #2064 clearance. D7/D8 are the
-# indented `<<-` form; D11/D12 are its complete-heredoc twin, read on both paths.
+# MEASURED DEVIATION (D3/D4): isTruncatedCatHeredocOnly still accepts only `\w+`
+# delimiters, so the TRUNCATED `<<'END-MARK'` opener leaves the command a write
+# even on the dispatcher path despite layer 1 clearing it (D3p) — fail-closed.
+# D9/D10/D12 stay WRITE: TRAILING_CAT_HEREDOC_RE (bash-write-targets.js) is
+# deliberately `\w+`-only and was never widened by #2121's stripHeredocBody fix,
+# so the hyphenated/indented COMPLETE heredoc never clears isNewlineInjectedWriteIR.
+# MEASURED DEVIATION (D5/D6): `<<"END.MARK"` nests a DQ inside a DQ argument; the
+# span scanner finds no substitution and both paths report read (pre-existing).
 echo ""
 echo "=== Section 13: C3 heredoc delimiter variants ==="
 table <<'TABLE'
@@ -71,7 +71,7 @@ D9d complete hyphen heredoc via detector   | detect | D9  | isCommandSubstWriteI
 D10 NON-dispatch + COMPLETE <<END-MARK     | nl     | D10 | true
 D11 dispatch + COMPLETE <<- heredoc        | nl     | D11 | false
 D11d complete indented heredoc detector    | detect | D11 | null
-D12 NON-dispatch + COMPLETE <<- heredoc    | nl     | D12 | false
+D12 NON-dispatch + COMPLETE <<- heredoc    | nl     | D12 | true
 TABLE
 
 # Section 14 — C4. Nested command substitution `$(echo $(cat <<'EOF' ... ))`.
@@ -79,19 +79,19 @@ TABLE
 # the command still classifies write — with the INNER substitution unquoted the
 # re-parsed fragment splits into TWO segments and isTruncatedCatHeredocOnly
 # requires exactly one, so layer 2 refuses even with a cleared ctx. Fail-closed,
-# symmetric with M2. M3/M4 are the COMPLETE nested heredoc: M3 (DISPATCH) reads
-# via clearance, M4 (non-dispatch) has none, so the truncated opener surviving
-# the split stays fail-closed — matching N2k/D10/C2c/SO8. M5/M6 are the attack twins — a real write in the inner
-# substitution (M5) and one injected after the inner EOF (M6) — and both stay
-# write on the dispatcher path, which is the narrowness guarantee #2064 owes.
+# symmetric with M2. M3/M4 are the COMPLETE nested heredoc: cs/detect stay WRITE
+# for both (recursive descent via innerCommandIsWrite is fail-closed) despite
+# M3p's clearance — only nl/prov's top-level split reads M3 as cleared. M5/M6
+# are the attack twins (M5 a real write, M6 injected after the inner EOF) and
+# both stay write on the dispatcher path, the narrowness guarantee #2064 owes.
 echo ""
 echo "=== Section 14: C4 nested command substitution ==="
 table <<'TABLE'
 M1 dispatch + nested truncated opener      | cs     | M1 | true
 M1p layer 1 clears but layer 2 refuses     | prov   | M1 | cleared
 M2 NON-dispatch + nested truncated opener  | cs     | M2 | true
-M3 dispatch + nested COMPLETE heredoc      | cs     | M3 | false
-M3d nested complete heredoc via detector   | detect | M3 | null
+M3 dispatch + nested COMPLETE heredoc      | cs     | M3 | true
+M3d nested complete heredoc via detector   | detect | M3 | isCommandSubstWriteIR
 M3p nested complete heredoc clearance      | prov   | M3 | cleared
 M4 NON-dispatch + nested COMPLETE heredoc  | cs     | M4 | true
 M5 dispatch + rm -rf in inner substitution | cs     | M5 | true

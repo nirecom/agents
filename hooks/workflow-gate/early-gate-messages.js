@@ -26,7 +26,7 @@ const TIERS = {
 };
 
 const READ_TOOLS_NOTE =
-  "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.";
+  "Note: Read, Grep, Glob, and AskUserQuestion remain available.";
 
 // One ALLOWED line per route, so a reader (and the test that counts them) can see
 // that both destinations survived the build.
