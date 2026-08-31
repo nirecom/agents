@@ -6,36 +6,17 @@
 // Sequenced commands and parse failures → abstain (fail-closed, C1).
 
 const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllWriteSegmentsOutsideSessionScope } = require("./bash-write-scope");
-const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc } = require("./shared-cmd-utils");
+const { hasCommandSequencing, hasHeredoc } = require("./shared-cmd-utils");
 const { parse } = require("../lib/command-ir");
 
-/**
- * Check whether a Bash command's write targets are all outside the session scope.
- * Returns { verdict: 'allow' } when all extracted targets are outside every repo in sessionRoots.
- * Returns { verdict: 'abstain' } in all other cases (fail-closed):
- *   - non-Bash tool
- *   - sessionRoots is empty (non-git CWD with no extra repos configured)
- *   - repoRoot is null (non-git CWD — even when ADDITIONAL_REPOS is configured,
- *     a non-git CWD cannot be evaluated)
- *   - command contains sequencing operators (C1)
- *   - no write targets extracted (unknown write destination)
- *   - parse failure from any extractor
- *   - any target resolves inside any session-scope repo
- *   - unexpected exception
- *
- * Note: when repoRoot resolves to a git repo outside sessionRoots (e.g. the
- * model uses `git -C /otherRepo` or `cd /otherRepo`), the universal rule still
- * applies — writes to a different project entirely are outside this hook's
- * protection scope by design. The session-scope check evaluates write targets,
- * not the CWD repo.
- *
- * @param {string} toolName  Claude Code tool name (e.g. 'Bash', 'Edit').
- * @param {object} toolInput  The tool_input object from the hook payload.
- * @param {Set<string>} sessionRoots  Set of repo roots considered in-session (from getSessionRepoRoots()).
- * @param {string|null|undefined} repoRoot  Resolved repo root for the Bash command's CWD, or null/undefined.
- * @param {import('../lib/command-ir').IR} [ir]  Optional pre-parsed IR; if omitted, cmd is parsed internally.
- * @returns {{ verdict: 'allow' | 'abstain', reason?: string }}
- */
+// Allow a Bash command's write targets when all resolve outside session scope;
+// abstain (fail-closed) on: non-Bash tool, empty sessionRoots, null repoRoot,
+// real sequencing operators (C1), no/unparseable targets, an in-scope target,
+// or an exception. A repoRoot outside sessionRoots (e.g. `git -C /otherRepo`)
+// still applies the rule — targets are what's evaluated, not the CWD repo.
+// @param toolName, toolInput, sessionRoots, repoRoot — see getSessionRepoRoots().
+// @param ir  optional pre-parsed IR; parsed internally when omitted.
+// @returns {{ verdict: 'allow' | 'abstain', reason?: string }}
 function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir) {
   try {
     // Only applies to Bash commands; Edit/Write/MultiEdit are handled by
@@ -52,23 +33,16 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
 
     const irToUse = ir || parse(cmd);
 
-    // Guard 2 (C1 fail-closed): sequenced commands may contain repo-internal write
-    // segments invisible to any single extractor. Abstain immediately — UNLESS the
-    // sequencing operators appear only inside a heredoc body (#1109) AND all targets
-    // are provably under plans-dir (safe non-repo external writes), OR all write
-    // segments are provably outside session scope (#1448A).
+    // Guard 2 (C1 fail-closed): real sequencing (outside any heredoc body — #2121,
+    // hasCommandSequencing is heredoc-aware) may hide repo-internal write segments
+    // from any single extractor. Abstain UNLESS all write segments are provably
+    // outside session scope (#1448A).
     if (hasCommandSequencing(cmd)) {
-      if (hasCommandSequencingOutsideHeredoc(cmd)) {
-        const seqIr = parse(cmd);
-        if (areAllWriteSegmentsOutsideSessionScope(seqIr, repoRoot, sessionRoots)) {
-          return { verdict: "allow", reason: "all write segments outside session scope" };
-        }
-        return { verdict: "abstain" };
+      const seqIr = parse(cmd);
+      if (areAllWriteSegmentsOutsideSessionScope(seqIr, repoRoot, sessionRoots)) {
+        return { verdict: "allow", reason: "all write segments outside session scope" };
       }
-      // Sequencing is heredoc-body-only: check targets now; allow if all under plans-dir.
-      const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse, repoRoot);
-      if (hPf || !(areAllBashTargetsUnderPlansDir(hTargets) || areAllBashTargetsUnderClaude(hTargets))) return { verdict: "abstain" };
-      return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir or claude scratchpad" };
+      return { verdict: "abstain" };
     }
 
     // Extract write targets from all applicable extractors (forward repoRoot so a
@@ -85,10 +59,19 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
     // areAllBashTargetsOutsideSessionScope strips surrounding shell quotes from
     // each target's .path internally (centralized quote-strip — CPR-SSOT), so no
     // pre-stripping is needed here. Fail-closed to abstain if any target is in scope.
-    if (!areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) {
-      return { verdict: "abstain" };
+    // Heredoc commands are excluded here; they must clear the narrower
+    // plans-dir/claude gate in Guard 6 below.
+    if (!hasHeredoc(cmd) && areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) {
+      return { verdict: "allow", reason: "all write targets outside session scope" };
     }
-    return { verdict: "allow", reason: "all write targets outside session scope" };
+
+    // Guard 6 (#1109): sequencing-free command whose only operators (if any) were
+    // heredoc-body-internal — allow when all write targets are under plans-dir or
+    // the claude scratchpad (safe non-repo external writes).
+    if (hasHeredoc(cmd) && (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets))) {
+      return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir or claude scratchpad" };
+    }
+    return { verdict: "abstain" };
   } catch (_) {
     // Any unexpected exception → abstain (fail-closed).
     return { verdict: "abstain" };

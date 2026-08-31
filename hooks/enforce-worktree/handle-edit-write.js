@@ -16,6 +16,7 @@ const { isMainCheckout, findRepoRoot } = require("./git-repo-detection");
 const { isInSessionScope } = require("./bash-write-scope");
 const { getProtectedBranches, getCurrentBranch } = require("./config");
 const { buildWorktreeRemedy } = require("./worktree-remedy");
+const { buildAltTargetRemedy } = require("../lib/alt-target-remedy");
 const { buildExtras } = require("./report-extras");
 const { collectEditWritePaths } = require("../lib/write-tools");
 
@@ -57,6 +58,7 @@ function handleEditWrite(ctx) {
             `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
             "Work from a linked worktree.\n" +
             _remedy +
+            buildAltTargetRemedy() + "\n" +
             "Or set ENFORCE_WORKTREE=off.",
         });
       }
@@ -64,7 +66,7 @@ function handleEditWrite(ctx) {
         reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
         done({
           block: true,
-          reason: `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${branch}' in linked worktree.\nSwitch to a feature branch or set ENFORCE_WORKTREE=off.`,
+          reason: `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${branch}' in linked worktree.\nSwitch to a feature branch or set ENFORCE_WORKTREE=off.\n${buildAltTargetRemedy()}`,
         });
       }
     }
