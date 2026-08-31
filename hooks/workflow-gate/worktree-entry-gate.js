@@ -1,22 +1,16 @@
 "use strict";
 
-// Tier 3 predicate for the hooks/workflow-gate.js EARLY GATE (#1610).
-//
-// Semantics: once branching_complete is recorded and a linked worktree exists for
-// the session, an EARLY_GATE_TOOLS write is blocked whenever the session's current
-// working directory is outside that worktree — regardless of where the write lands.
-// The incident being prevented is "work proceeds without the session worktree
-// binding", not "a file lands in the wrong place"; a write aimed at an absolute
-// path inside the worktree establishes no binding at all, so it is blocked too.
-//
-// The destination path deliberately does NOT participate in the decision.
-// Past transition records (e.g. state.worktree_entered_at) deliberately do NOT
-// participate either: current-location evidence is never overridden by a record
-// that may have gone stale.
-//
-// Fail-open: every predicate failure and every thrown error collapses to "dormant".
+// Tier 3 predicate for the hooks/workflow-gate.js EARLY GATE (#1610). Once
+// branching_complete is recorded and a linked worktree exists for the session, an
+// EARLY_GATE_TOOLS write is blocked whenever the session's CWD is outside that
+// worktree — the incident is "work proceeds without the session worktree binding",
+// not "a file lands in the wrong place", so a write aimed at an absolute path
+// inside the worktree is blocked too; destination path and past transition
+// records deliberately do not participate. Fail-open: every predicate failure and
+// every thrown error collapses to "dormant".
 
 const path = require("path");
+const { buildAltTargetRemedy } = require("../lib/alt-target-remedy");
 
 // True when `childAbs` resolves to `parentAbs` itself or something under it.
 // Case-insensitive on win32, where the same path can differ only in case.
@@ -80,7 +74,8 @@ function buildBlockReason({ toolName, worktreePath, cwd } = {}) {
     "Current directory: " + cwd,
     "Writing to a path inside the worktree does not establish the binding — enter the worktree itself.",
     "Procedure: skills/_shared/worktree-transition.md",
-    "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.",
+    "Note: Read, Grep, Glob, and AskUserQuestion remain available.",
+    buildAltTargetRemedy(),
     "Escape hatches: echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: {reason}>>\" or echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"",
   ].join("\n");
 }

@@ -88,7 +88,7 @@ echo ""
 echo "=== Section 10d: frame-interior dangling-opener split boundary ==="
 table <<'TABLE'
 M3n nested COMPLETE heredoc dispatch path  | nl     | M3 | false
-M4n nested COMPLETE heredoc non-dispatch   | nl     | M4 | false
+M4n nested COMPLETE heredoc non-dispatch   | nl     | M4 | true
 M4d non-dispatch complete nested detector  | detect | M4 | isCommandSubstWriteIR
 M6n injected rm inside subst stays write   | nl     | M6 | true
 T4 top-level heredoc then rm -rf           | nl     | T4 | true
@@ -142,32 +142,33 @@ TABLE
 # (`cat <<'X' | bash`), so it is not trailing and no clearance may demote it;
 # F2 = a single-quoted `'<<'` is not a here-doc operator (the old regex was
 # quote-blind and dropped the co-located `rm -rf`); F3 = `<<<` is a here-STRING.
-# MEASURED detect names: F1* settle as isNewlineInjectedWriteIR, F2* as
-# isFileOpWriteIR, F3* as classify — all WRITE; the `nl` rows pin
-# isNewlineInjectedWriteIR's own verdict.
+# MEASURED detect names: all F1* (including the bare `(...)` F1b/g, since the
+# #2121 quote-aware isInsideSubstitution fix leaves the body unstripped) settle
+# as `classify`; F2* as isFileOpWriteIR, F3* as classify — all WRITE; the `nl`
+# rows pin isNewlineInjectedWriteIR direct.
 echo ""
 echo "=== Section 10f: round-4 fail-open shapes (opener-is-write / quote-blind / here-string) ==="
 table <<'TABLE'
 F1a opener piped to bash in cmd subst      | nl     | F1a | true
-F1ad same via write-detector               | detect | F1a | isNewlineInjectedWriteIR
+F1ad same via write-detector               | detect | F1a | classify
 F1b opener piped to bash in bare subshell  | nl     | F1b | true
-F1bd same via write-detector               | detect | F1b | isNewlineInjectedWriteIR
+F1bd same via write-detector               | detect | F1b | classify
 F1c opener piped to bash in process subst  | nl     | F1c | true
-F1cd same via write-detector               | detect | F1c | isNewlineInjectedWriteIR
+F1cd same via write-detector               | detect | F1c | classify
 F1d opener piped to sh twin                | nl     | F1d | true
-F1dd same via write-detector               | detect | F1d | isNewlineInjectedWriteIR
+F1dd same via write-detector               | detect | F1d | classify
 F1e opener at nested subst depth 3         | nl     | F1e | true
-F1ed same via write-detector               | detect | F1e | isNewlineInjectedWriteIR
+F1ed same via write-detector               | detect | F1e | classify
 F1f DISPATCH twin cmd subst                | nl     | F1f | true
-F1fd DISPATCH twin via write-detector      | detect | F1f | isNewlineInjectedWriteIR
+F1fd DISPATCH twin via write-detector      | detect | F1f | classify
 F1g DISPATCH twin bare subshell            | nl     | F1g | true
-F1gd DISPATCH subshell via write-detector  | detect | F1g | isNewlineInjectedWriteIR
+F1gd DISPATCH subshell via write-detector  | detect | F1g | classify
 F1h DISPATCH twin process subst            | nl     | F1h | true
-F1hd DISPATCH procsubst via write-detector | detect | F1h | isNewlineInjectedWriteIR
+F1hd DISPATCH procsubst via write-detector | detect | F1h | classify
 F1i DISPATCH twin piped to sh              | nl     | F1i | true
-F1id DISPATCH sh twin via write-detector   | detect | F1i | isNewlineInjectedWriteIR
+F1id DISPATCH sh twin via write-detector   | detect | F1i | classify
 F1j DISPATCH twin nested depth 3           | nl     | F1j | true
-F1jd DISPATCH depth 3 via write-detector   | detect | F1j | isNewlineInjectedWriteIR
+F1jd DISPATCH depth 3 via write-detector   | detect | F1j | classify
 F2a quoted '<<' beside rm in cmd subst     | nl     | F2a | true
 F2ad same via write-detector               | detect | F2a | isFileOpWriteIR
 F2b quoted '<<' beside rm in subshell      | nl     | F2b | true
@@ -208,30 +209,26 @@ F4ed EVIL twin via write-detector          | detect | F4e | isCommandSubstWriteI
 TABLE
 
 # Section 10h — TOP-LEVEL `cat <<'X' | bash` (round-4 finding 82df8d25).
-# KNOWN PRE-EXISTING FAIL-OPEN: TP1/TP2/TP3/TP6 measure READ. TP3t/TP6t (EVIL)
-# and TP3n/TP6n (no dispatcher) are the in-suite control: the twins measure
-# IDENTICALLY to the dispatch forms, so dispatch clearance is not the deciding
-# axis — the fail-open is dispatch-independent, hence pre-existing rather than
-# PR-introduced (also byte-identical on baseline 633935d2), filed separately.
-# The rows assert the CURRENT value so an accidental behavior change is still
-# caught; they FLIP TO WRITE TOGETHER when that separate defect is fixed.
+# FIXED by #2121: stripHeredocBody now refuses to strip when the opener's own line
+# carries a pipe/chain, so all 12 rows below flipped from READ to their true WRITE
+# — the dispatch forms and their EVIL/no-dispatcher twins in lockstep, as predicted.
 # TP4 (single-line opener, no body) and TP5 (`bash <<'X'` interpreter heredoc)
-# are the WRITE controls bounding the gap on both baseline and this branch.
+# are the WRITE controls bounding the shape on both sides of the fix.
 echo ""
-echo "=== Section 10h: top-level cat-heredoc piped to a shell (pre-existing gap) ==="
+echo "=== Section 10h: top-level cat-heredoc piped to a shell ==="
 table <<'TABLE'
-TP1 top-level piped to bash + rm body      | nl     | TP1 | false
-TP1d same via write-detector               | detect | TP1 | null
-TP2 top-level piped to sh + git push body  | nl     | TP2 | false
-TP2d same via write-detector               | detect | TP2 | null
-TP3 DISPATCH chained then top-level piped  | nl     | TP3 | false
-TP3d chained shape via write-detector      | detect | TP3 | null
-TP6 DISPATCH --body subst piped to bash    | nl     | TP6 | false
-TP6d subst shape via write-detector        | detect | TP6 | null
-TP3t CONTROL EVIL twin of TP3              | detect | TP3t | null
-TP3n CONTROL bare no-dispatcher twin of TP3| detect | TP3n | null
-TP6t CONTROL EVIL twin of TP6              | detect | TP6t | null
-TP6n CONTROL bare no-dispatcher twin of TP6| detect | TP6n | null
+TP1 top-level piped to bash + rm body      | nl     | TP1 | true
+TP1d same via write-detector               | detect | TP1 | isNewlineInjectedWriteIR
+TP2 top-level piped to sh + git push body  | nl     | TP2 | true
+TP2d same via write-detector               | detect | TP2 | isNewlineInjectedWriteIR
+TP3 DISPATCH chained then top-level piped  | nl     | TP3 | true
+TP3d chained shape via write-detector      | detect | TP3 | isNewlineInjectedWriteIR
+TP6 DISPATCH --body subst piped to bash    | nl     | TP6 | true
+TP6d subst shape via write-detector        | detect | TP6 | isCommandSubstWriteIR
+TP3t CONTROL EVIL twin of TP3              | detect | TP3t | isNewlineInjectedWriteIR
+TP3n CONTROL bare no-dispatcher twin of TP3| detect | TP3n | isNewlineInjectedWriteIR
+TP6t CONTROL EVIL twin of TP6              | detect | TP6t | isCommandSubstWriteIR
+TP6n CONTROL bare no-dispatcher twin of TP6| detect | TP6n | isCommandSubstWriteIR
 TP4 CONTROL single-line opener no body     | detect | TP4 | classify
 TP5 CONTROL interpreter heredoc bash <<X   | nl     | TP5 | true
 TP5d CONTROL via write-detector            | detect | TP5 | classify
