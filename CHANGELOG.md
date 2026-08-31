@@ -395,3 +395,7 @@ Changes: Generated `settings.json` allow rules for agents-internal commands from
 ### FEATURE: PR #2162 (2026-08-30)
 Background: feat(#2153): shrink and restyle .env.example
 Changes: `.env.example` is 24% shorter and easier to scan. The `DOCS_LANG_HISTORY_*`/`DOCS_LANG_CHANGELOG_*` settings are now `DOCS_LANG_PUBLIC`/`DOCS_LANG_PRIVATE`, and `CODEX_REVIEW_PLAN_MAX_LINES` is now `CODEX_REVIEW_MAX_PLAN_LINES` — update your `.env` to match.
+
+### FEATURE: PR #2171 (2026-08-31)
+Background: feat(#2120,#2121): block heredoc-hidden write payloads in the workflow gate
+Changes: Fixed a loop where Claude Code would repeatedly get blocked retrying the same heredoc-shaped write from outside a linked worktree, with no indication of where it *could* write — blocked writes now suggest a reachable alternative target.;Fixed a heredoc-handling gap where certain safe `cat`/`tee`-written heredocs (hyphenated delimiters, or bodies containing shell-looking punctuation) were misclassified, either wrongly blocked or, in one edge case, allowed more broadly than intended.
