@@ -1,47 +1,22 @@
 #!/usr/bin/env bash
 # tests/enforce-off-emergency-provenance.sh
-# Tests: hooks/record-off-skill-invocation.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
+# Tests: hooks/record-off-skill-invocation.js, hooks/lib/off-emergency-provenance.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js, settings.json
 # Tags: off-clearance, emergency-off, provenance, audit, userpromptsubmit, session-marker, security, scope:common, pwsh-not-required, TL2, hook-registration
-# TL3 gap (what this test does NOT catch):
-# - That Claude Code actually fires UserPromptSubmit for a typed slash command and
-#   delivers `prompt` verbatim. Here the hook is a node subprocess fed synthetic
-#   stdin; P9 asserts the registration STATICALLY only. Only a real `claude -p`
-#   session proves the event/payload contract - which is the whole basis for the
-#   claim "the model cannot trigger this event".
-# - Real end-to-end ordering (UserPromptSubmit -> sentinel in the same turn ->
-#   workflow-mark). Sections P3-P8 drive the handler directly.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1780 M-2)
-#
-# The EMERGENCY OFF sentinel bypasses the Phase1 clearance examination on the
-# strength of ONE claim: that a human invoked skills/enforce-workflow-off. Before
-# M-2 the audit record read identically whether the user asked for it or the model
-# emitted it unprompted, so the audit trail could not answer the only question
-# that matters about an escape hatch: WHO OPENED IT. The provenance marker is the
-# evidence, and it is trustworthy only if all of the following hold together:
-#
-#   (a) it is written ONLY on a real user prompt that invokes the skill (P1),
-#   (b) it does not survive to vouch for a LATER emission - cleared on the next
-#       prompt (P2), consumed on use (P3), and time-bounded (P5/P6),
-#   (c) its absence NEVER blocks the override (P4/P5/P7) - provenance is evidence,
-#       not a gate; a session whose examiner is broken must still escape, and
-#   (d) it cannot be forged by the model through any write tool (P10) - without
-#       that, provenance would be self-certifying and worth nothing.
-#
-# (c) is the one an over-zealous fix would break, and breaking it is worse than
-# the original defect: it would turn an audit signal into a lock on the emergency
-# exit. Every "unattributed" case below therefore asserts BOTH the provenance
-# value AND that the override was still applied.
-#
-# HERMETICITY: CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR point at a throwaway temp
-# dir and every session id is a throwaway ("pv1sid" etc). No real session marker,
-# token or audit file is ever created, read or removed.
-# ---------------------------------------------------------------------------
+# TL3 gap: synthetic stdin here, so real UserPromptSubmit firing for a typed
+# slash command (P9 is static-only) and same-turn ordering are covered live by
+# tests/TL3-hook-record-off-skill-invocation.sh instead.
+# Defends #1780 M-2: the provenance marker is the only evidence that a HUMAN
+# opened the EMERGENCY OFF escape hatch - written only on a real invocation
+# (P1), unable to vouch later (P2/P3/P5/P6), never a GATE on the override
+# (P4/P5/P7), unforgeable (P10), bound to skill+targets (P11).
 
 set -u
+
+# rules/test/fixture-isolation.md: the parent Claude Code session exports these,
+# and the recorder falls back to them whenever a payload carries no usable
+# session_id (P12) - inherited values would make those cases resolve the REAL
+# session instead of the one the case names.
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
@@ -97,7 +72,15 @@ if [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers/off-clearan
 fi
 pass "P0 recorder and consumer both present"
 
-TMP=$(make_tmp); WF=$(node_path "$TMP")
+# HERMETICITY: CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR point at this throwaway
+# dir and every session id is a throwaway ("pv1sid" etc), so no real session
+# marker, token or audit file is ever created, read or removed.
+TMP=$(make_tmp)
+if [ -z "$TMP" ] || [ ! -d "$TMP" ]; then
+    fail "P0 mktemp -d failed - refusing to derive fixture paths from an empty TMP"
+    echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
+fi
+WF=$(node_path "$TMP")
 MARKER_KIND=$("$RWT" 10 node -e \
     "process.stdout.write(require(process.argv[1]).EMERGENCY_PROVENANCE_MARKER_KIND)" \
     "$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js" 2>/dev/null)
@@ -110,13 +93,85 @@ pass "P0 provenance marker kind derived from the SSOT: .$MARKER_KIND"
 marker_of() { printf '%s/%s.%s' "$TMP" "$1" "$MARKER_KIND"; }
 audit_of()  { printf '%s/%s-supervisor-state.json' "$TMP" "$1"; }
 
-# submit_prompt <sid> <prompt-text>: one synthetic UserPromptSubmit event.
+# The recorder's own stdout/stderr and exit status, kept OUT of the marker
+# directory so a capture file can never be mistaken for a marker.
+CAPDIR="$TMP/_capture"; mkdir -p "$CAPDIR"
+CAP_OUT="$CAPDIR/stdout"; CAP_ERR="$CAPDIR/stderr"
+LAST_RECORDER_STATUS=0; LAST_RECORDER_OUT=""; LAST_RECORDER_ERR=""
+# A crash is not a "no marker" verdict: without this ledger a recorder that died
+# (nonzero exit, signal kill, timeout) would leave every assert_absent below
+# passing for the WRONG reason. Every invocation is checked; the offenders are
+# named once at the end.
+RECORDER_FAULTS=""
+# The UserPromptSubmit contract: the hook prints one JSON object and nothing else.
+RECORDER_OK_STDOUT='{}'
+
+_note_recorder_run() { # <label>
+    if [ "$LAST_RECORDER_STATUS" -ne 0 ]; then
+        RECORDER_FAULTS="$RECORDER_FAULTS [$1 exit=$LAST_RECORDER_STATUS]"
+    fi
+    if [ "$LAST_RECORDER_OUT" != "$RECORDER_OK_STDOUT" ]; then
+        RECORDER_FAULTS="$RECORDER_FAULTS [$1 stdout=$(printf '%.80s' "$LAST_RECORDER_OUT")]"
+    fi
+}
+# _run_recorder <label> <json-payload> [env-var-name] [env-var-value]
+_run_recorder() {
+    local label="$1" payload="$2" var="${3:-}" val="${4:-}"
+    printf '%s' "$payload" | \
+        (cd "$TMP" && if [ -n "$var" ]; then export "$var=$val"; fi
+            CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+                "$RWT" 15 node "$RECORDER" >"$CAP_OUT" 2>"$CAP_ERR")
+    LAST_RECORDER_STATUS=$?
+    LAST_RECORDER_OUT=$(cat "$CAP_OUT" 2>/dev/null)
+    LAST_RECORDER_ERR=$(cat "$CAP_ERR" 2>/dev/null)
+    _note_recorder_run "$label"
+}
+
+json_escape() { # <text> -> the body of a JSON string literal
+    local esc
+    esc=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    # A raw newline inside a JSON string literal is a parse error, so without
+    # this fold a multi-line prompt never reaches the recorder at all. Bash
+    # parameter expansion, not sed's N/branch idiom - that one is a GNU
+    # extension that folds nothing on BSD/macOS sed. A no-op for single-line
+    # prompts, so every pre-existing case is untouched.
+    printf '%s' "${esc//$'\n'/\\n}"
+}
+
+# submit_prompt <sid> <prompt-text>: one synthetic UserPromptSubmit event. The
+# session id is JSON-escaped too: P12 feeds it hostile spellings, and an
+# unescaped `..\evil` would abort the parse - testing JSON handling rather than
+# the session-id validation the case is about.
 submit_prompt() {
-    local sid="$1" prompt="$2" esc
-    esc=$(printf '%s' "$prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"session_id":"%s","prompt":"%s"}' "$sid" "$esc" | \
-        (cd "$TMP" && CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-            "$RWT" 15 node "$RECORDER" >/dev/null 2>&1)
+    _run_recorder "sid=$1" "$(printf '{"session_id":"%s","prompt":"%s"}' "$(json_escape "$1")" "$(json_escape "$2")")"
+}
+
+# submit_prompt_env <env-var> <env-value> <sid-field> <prompt>: same event, with
+# one session-id env var set for the recorder's fallback resolution.
+submit_prompt_env() {
+    _run_recorder "sid=$3/env=$1" \
+        "$(printf '{"session_id":"%s","prompt":"%s"}' "$(json_escape "$3")" "$(json_escape "$4")")" "$1" "$2"
+}
+
+# submit_prompt_sidless <env-var> <sid> <prompt>: a payload with NO session_id,
+# so the recorder must resolve one from the environment (P12).
+submit_prompt_sidless() {
+    _run_recorder "env=$1" "$(printf '{"prompt":"%s"}' "$(json_escape "$3")")" "$1" "$2"
+}
+
+# File modes are not real everywhere (Git Bash on Windows reports 644 whatever
+# was chmod'd), so the 0600 assertion is PROBED for and skipped by name where it
+# would be meaningless - same idiom as tests/fix-2025-recovery-artifact-mode.sh.
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
+MODES_OK=no
+: > "$CAPDIR/.mode-probe"
+chmod 600 "$CAPDIR/.mode-probe" 2>/dev/null || true
+[ "$(file_mode "$CAPDIR/.mode-probe")" = "600" ] && MODES_OK=yes
+# assert_owner_only <label> <file>: the marker is evidence in a shared state dir,
+# so it must not be world- or group-readable.
+assert_owner_only() {
+    if [ "$MODES_OK" != "yes" ]; then skip "$1 (this filesystem does not keep modes)"; return; fi
+    assert_eq "$1" "600" "$(file_mode "$2")"
 }
 
 # iso_at <delta-ms>: ISO timestamp offset from now (node, so macOS `date` quirks
@@ -127,16 +182,13 @@ submit_prompt() {
 # passed VACUOUSLY. mk_marker guards that with an explicit check.
 iso_at() { "$RWT" 10 node -e "process.stdout.write(new Date(Date.now()+($1)).toISOString())" 2>/dev/null; }
 
-# The payload SHAPE is not restated here. It is produced by the writer's own
-# contract function, hooks/lib/off-emergency-provenance.js buildProvenanceMarker()
-# (CPR-SSOT) - the same function hooks/record-off-skill-invocation.js calls. The
-# earlier hand-rolled `{invoked_at, source}` literal is exactly what went wrong:
-# when M-4 bound the marker to a skill identity and a target set, the fixture
-# froze the pre-M-4 shape and started asserting a downgrade the reader was RIGHT
-# to apply, so a green freshness case would have meant nothing. Building the
-# fixture from the SSOT means a future field addition updates these cases for
-# free, and P11 below pins the short-shape downgrade DELIBERATELY instead of by
-# accident.
+# The payload SHAPE is not restated here: it comes from the writer's own contract
+# function, hooks/lib/off-emergency-provenance.js buildProvenanceMarker()
+# (CPR-SSOT). The earlier hand-rolled `{invoked_at, source}` literal is exactly
+# what went wrong - when M-4 bound the marker to a skill identity and a target
+# set, the fixture froze the pre-M-4 shape and asserted a downgrade the reader
+# was RIGHT to apply, so a green freshness case meant nothing. P11 below pins
+# the short-shape downgrade DELIBERATELY instead.
 PROVENANCE_SSOT="$_AGENTS_DIR_NODE/hooks/lib/off-emergency-provenance.js"
 # mk_marker <sid> <delta-ms>: a current-contract provenance marker dated relative
 # to now. The delta travels by ENV, never argv - see iso_at's note on `-600000`.
@@ -187,197 +239,36 @@ run_emergency() { # <sid> <cmd> -> driver JSON on stdout
 # provenance_in <file>: the provenance value recorded in a marker/audit JSON.
 provenance_in() { grep -o '"provenance":"[a-z_]*"' "$1" 2>/dev/null | head -1 | sed 's/.*:"//; s/"$//'; }
 
-# --- P1: the marker is written ONLY for a real skill invocation ------------
-sid=pv1sid
-submit_prompt "$sid" "/enforce-workflow-off PRIVATEPROMPTTEXT"
-assert_file "P1 slash command writes the provenance marker" "$(marker_of "$sid")"
-body=$(cat "$(marker_of "$sid")" 2>/dev/null)
-assert_contains "P1 marker records source=user_skill_invocation" '"source":"user_skill_invocation"' "$body"
-assert_contains "P1 marker records invoked_at" '"invoked_at"' "$body"
-# The prompt text itself must never be persisted - prompts carry private content
-# and the FACT of invocation is the entire signal.
-assert_not_contains "P1 marker does not persist the prompt text" 'PRIVATEPROMPTTEXT' "$body"
+PARTS_DIR="$AGENTS_DIR/tests/enforce-off-emergency-provenance"
+# shellcheck source=./enforce-off-emergency-provenance/cases-p1-invocation.sh
+. "$PARTS_DIR/cases-p1-invocation.sh"
+# shellcheck source=./enforce-off-emergency-provenance/cases-p2-p8-lifecycle.sh
+. "$PARTS_DIR/cases-p2-p8-lifecycle.sh"
+# shellcheck source=./enforce-off-emergency-provenance/cases-p9-p11-integrity.sh
+. "$PARTS_DIR/cases-p9-p11-integrity.sh"
+# shellcheck source=./enforce-off-emergency-provenance/cases-p12-session-id.sh
+. "$PARTS_DIR/cases-p12-session-id.sh"
+# shellcheck source=./enforce-off-emergency-provenance/cases-p13-verify-bounds.sh
+. "$PARTS_DIR/cases-p13-verify-bounds.sh"
 
-for variant in "/enforce-workflow-off examiner is broken" "/agents:enforce-workflow-off" "  /enforce-workflow-off"; do
-    sid=pv1v; rm -f "$(marker_of "$sid")"
-    submit_prompt "$sid" "$variant"
-    assert_file "P1 variant writes marker: [$variant]" "$(marker_of "$sid")"
-done
-rm -f "$(marker_of pv1v)"
+run_P1_invocation
+run_P2_stale_marker
+run_P3_P4_attribution
+run_P5_freshness
+run_P6_future
+run_P7_corrupt
+run_P8_worktree_orth
+run_P9_registration
+run_P10_forgery
+run_P11_bindings
+run_P12_session_id
+run_P13_verify_bounds
 
-# Near-misses must NOT write: prose mentioning the skill is not an invocation, and
-# a longer slash command that merely starts with the same letters is a different
-# command entirely.
-for near in "please enforce-workflow-off for me" "/enforce-workflow-offline" "/enforce-workflow-off-now" "/workflow-init" "read rules/workflow-off.md"; do
-    sid=pv1n; rm -f "$(marker_of "$sid")"
-    submit_prompt "$sid" "$near"
-    assert_absent "P1 near-miss writes no marker: [$near]" "$(marker_of "$sid")"
-done
-
-# --- P2: any other prompt clears a stale marker ----------------------------
-# The sentinel is emitted in the same turn as the invocation, so a marker that
-# survives into the next prompt is stale by construction and must not be able to
-# vouch for whatever the model does later.
-sid=pv2sid
-submit_prompt "$sid" "/enforce-workflow-off"
-assert_file "P2 precondition: marker present" "$(marker_of "$sid")"
-submit_prompt "$sid" "now please refactor the parser"
-assert_absent "P2 an unrelated later prompt clears the stale marker" "$(marker_of "$sid")"
-
-# Clearing is session-scoped: another session's marker must survive.
-sid=pv2sid; other=pv2other
-submit_prompt "$other" "/enforce-workflow-off"
-submit_prompt "$sid" "unrelated prompt"
-assert_file "P2 clearing is session-scoped (other session's marker survives)" "$(marker_of "$other")"
-rm -f "$(marker_of "$other")"
-
-# --- P3: fresh marker -> attributed, stamped in BOTH records, consumed -----
-sid=pv3sid
-submit_prompt "$sid" "/enforce-workflow-off"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'examiner is broken')")
-assert_contains "P3 handler reports the sentinel as handled" '"handled":true' "$out"
-assert_file "P3 override marker written" "$TMP/$sid.workflow-off"
-assert_eq "P3 override marker stamped provenance=user_skill_invocation" "user_skill_invocation" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_file "P3 audit record written" "$(audit_of "$sid")"
-audit=$(cat "$(audit_of "$sid")" 2>/dev/null)
-assert_json_field "P3 audit record_type=escape_hatch_event" record_type escape_hatch_event "$audit"
-assert_json_field "P3 audit stamped provenance=user_skill_invocation" provenance user_skill_invocation "$audit"
-assert_absent "P3 provenance marker is CONSUMED (single-use)" "$(marker_of "$sid")"
-
-# --- P4: no marker -> unattributed, and the override STILL applies ---------
-# Re-emitting straight after P3 is the exact replay the single-use rule exists to
-# stop: the marker is gone, so the second activation must be recorded honestly -
-# and must still succeed.
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'second emission, no marker')")
-assert_contains "P4 replay still handled" '"handled":true' "$out"
-assert_eq "P4 replay without a marker is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_contains "P4 override still applied (no fatal)" '"fatal":[]' "$out"
-audit=$(cat "$(audit_of "$sid")" 2>/dev/null)
-assert_json_field "P4 audit records the unattributed activation" provenance unattributed "$audit"
-
-sid=pv4sid
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'never invoked the skill')")
-assert_file "P4 override applied with no marker ever present" "$TMP/$sid.workflow-off"
-assert_eq "P4 provenance=unattributed when no marker ever existed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_contains "P4 absence of provenance never gates the escape hatch" '"fatal":[]' "$out"
-
-# --- P5: a marker older than the freshness bound is not evidence -----------
-# The bound is belt-and-braces behind P2's clearing: if a marker somehow survives
-# (crash, killed session, out-of-band write), age alone must disqualify it - while
-# still being consumed so it cannot accumulate.
-sid=pv5sid
-mk_marker "$sid" -660000
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'stale marker present')")
-assert_eq "P5 marker older than the 10-minute bound is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_absent "P5 stale marker is consumed anyway" "$(marker_of "$sid")"
-assert_contains "P5 override still applied despite the stale marker" '"fatal":[]' "$out"
-
-# A marker just inside the bound must still count, or the bound would be a
-# coin-flip rather than a rule.
-sid=pv5fresh
-mk_marker "$sid" -60000
-run_emergency "$sid" "$(emerg_cmd WORKFLOW 'one minute old marker')" >/dev/null
-assert_eq "P5 marker inside the bound is attributed" "user_skill_invocation" "$(provenance_in "$TMP/$sid.workflow-off")"
-
-# --- P6: a future-dated marker cannot buy attribution ----------------------
-# Without the lower bound, `invoked_at` far in the future would stay "fresh"
-# indefinitely - a single forged timestamp would vouch for every later emission.
-sid=pv6sid
-mk_marker "$sid" 600000
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'future dated marker')")
-assert_eq "P6 future-dated marker is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_contains "P6 override still applied" '"fatal":[]' "$out"
-
-# --- P7: an unreadable marker degrades to unattributed, never to a failure -
-sid=pv7sid
-printf 'not json at all' > "$(marker_of "$sid")"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'corrupt marker')")
-assert_eq "P7 corrupt marker is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_absent "P7 corrupt marker is consumed" "$(marker_of "$sid")"
-assert_contains "P7 override still applied" '"fatal":[]' "$out"
-
-# --- P8: CPR-ORTH - the WORKTREE emergency gets identical treatment ----------
-sid=pv8sid
-submit_prompt "$sid" "/enforce-workflow-off"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKTREE 'worktree emergency')")
-assert_file "P8 worktree emergency writes .worktree-off" "$TMP/$sid.worktree-off"
-assert_eq "P8 worktree emergency is provenance-stamped too" "user_skill_invocation" "$(provenance_in "$TMP/$sid.worktree-off")"
-assert_absent "P8 worktree emergency consumes the marker" "$(marker_of "$sid")"
-
-# --- P9: registration - an unregistered recorder records nothing ----------
-if [ -f "$SETTINGS" ]; then
-    reg=$("$RWT" 10 node -e '
-const s = require(process.argv[1]);
-const hooks = ((s.hooks || {}).UserPromptSubmit || []);
-const cmds = hooks.flatMap((h) => (h.hooks || []).map((x) => String(x.command || "")));
-process.stdout.write(cmds.some((c) => c.includes("record-off-skill-invocation.js")) ? "yes" : "no");
-' "$(node_path "$SETTINGS")" 2>/dev/null)
-    assert_eq "P9 settings.json registers the recorder under UserPromptSubmit" "yes" "$reg"
-else
-    skip "P9 settings.json not found"
-fi
-
-# --- P10: the marker must be unforgeable, or provenance self-certifies -----
-# This is the load-bearing tie to hooks/block-clearance-token-write.js: if the model
-# could Write its own <sid>.off-emergency-invoked, it could manufacture
-# user_skill_invocation for an emission the user never asked for, and every
-# assertion above would be theatre.
-if [ -f "$BLOCK_HOOK" ]; then
-    for shape in "bare" "tmp"; do
-        target="$WF/forgesid.$MARKER_KIND"; [ "$shape" = "tmp" ] && target="$target.tmp"
-        verdict=$(printf '{"tool_name":"Write","session_id":"forgesid","cwd":"%s","tool_input":{"file_path":"%s"}}' "$WF" "$target" | \
-            (cd "$TMP" && CLAUDE_WORKFLOW_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
-        assert_contains "P10 forging the provenance marker via Write is blocked [$shape]" '"decision":"block"' "$verdict"
-    done
-    verdict=$(printf '{"tool_name":"Bash","session_id":"forgesid","cwd":"%s","tool_input":{"command":"printf x > %s/forgesid.%s"}}' "$WF" "$WF" "$MARKER_KIND" | \
-        (cd "$TMP" && CLAUDE_WORKFLOW_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
-    assert_contains "P10 forging the provenance marker via Bash is blocked" '"decision":"block"' "$verdict"
-else
-    skip "P10 hooks/block-clearance-token-write.js not found"
-fi
-
-# --- P11: the M-4 bindings - a marker only vouches for what it names -------
-# The marker used to carry `invoked_at` + `source` and nothing else. Two things
-# it therefore could NOT say are now required (hooks/lib/off-emergency-provenance.js
-# M-4): WHICH SKILL was invoked, and WHICH OVERRIDE TARGETS that skill authorizes.
-# Each case below removes exactly one binding and asserts the downgrade - and
-# each is paired with the counterpart assertion that the override still applied,
-# because provenance is evidence and never a gate.
-#
-# P11a is the LEGACY payload, kept deliberately rather than as a side effect of a
-# stale fixture: any marker minted before M-4 (or by a writer that regressed to
-# the short shape) must be treated as not-provably-user-invoked. Writing it out
-# in full is the point - the moment it is built from the SSOT it stops testing
-# the legacy shape at all.
-sid=pv11legacy
-mk_raw_marker "$sid" "$(printf '{"invoked_at":"%s","source":"user_skill_invocation"}' "$(iso_at -1000)")"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'legacy pre-M-4 marker')")
-assert_eq "P11a legacy {invoked_at,source} marker is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_absent "P11a legacy marker is consumed anyway" "$(marker_of "$sid")"
-assert_contains "P11a override still applied despite the legacy marker" '"fatal":[]' "$out"
-
-# P11b: the typed slash-command namespace is attacker-choosable prompt text, so
-# the marker records a CONSTANT skill name and the reader requires exactly it.
-sid=pv11skill
-mk_raw_marker "$sid" "$(printf '{"invoked_at":"%s","source":"user_skill_invocation","skill":"attacker-chosen-skill","targets":["workflow","worktree"]}' "$(iso_at -1000)")"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKFLOW 'marker names a different skill')")
-assert_eq "P11b marker naming a different skill is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.workflow-off")"
-assert_contains "P11b override still applied" '"fatal":[]' "$out"
-
-# P11c: provenance for one target must not vouch for the other. A marker that
-# authorizes only `workflow` cannot attribute a WORKTREE activation.
-sid=pv11target
-mk_raw_marker "$sid" "$(printf '{"invoked_at":"%s","source":"user_skill_invocation","skill":"enforce-workflow-off","targets":["workflow"]}' "$(iso_at -1000)")"
-out=$(run_emergency "$sid" "$(emerg_cmd WORKTREE 'marker does not authorize worktree')")
-assert_eq "P11c marker not authorizing the requested target is unattributed" "unattributed" "$(provenance_in "$TMP/$sid.worktree-off")"
-assert_contains "P11c override still applied" '"fatal":[]' "$out"
-
-# P11d: CONTROL. Same WORKTREE emission, but the marker the real writer produces.
-# Without it, P11a-P11c could all be passing because nothing is ever attributed.
-sid=pv11ok
-mk_marker "$sid" -1000
-run_emergency "$sid" "$(emerg_cmd WORKTREE 'current-contract marker')" >/dev/null
-assert_eq "P11d control: a current-contract marker DOES attribute the same emission" "user_skill_invocation" "$(provenance_in "$TMP/$sid.worktree-off")"
+# --- PY: no assertion above was decided by a DEAD recorder -----------------
+# assert_absent is only evidence when the process that should have written the
+# file actually ran to completion. One ledger, checked once, covers every
+# invocation this file made.
+assert_eq "PY every recorder invocation exited 0 with the empty-JSON stdout" "" "$RECORDER_FAULTS"
 
 # --- cleanup: leave nothing behind ----------------------------------------
 chmod -R u+w "$TMP" 2>/dev/null

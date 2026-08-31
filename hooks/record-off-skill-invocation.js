@@ -35,7 +35,7 @@ function readStdin() {
     while (true) {
       const n = fs.readSync(0, buf, 0, buf.length);
       if (n === 0) break;
-      chunks.push(buf.slice(0, n));
+      chunks.push(Buffer.from(buf.subarray(0, n)));
     }
   } catch (_e) {}
   return Buffer.concat(chunks).toString("utf8");
