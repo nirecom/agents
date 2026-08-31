@@ -24,6 +24,36 @@ After installation, `gh auth login` is invoked only in interactive sessions and 
 already authenticated (skipped on headless/CI machines and on already-authenticated re-runs);
 `gh auth refresh -s project` then adds the required `project` scope automatically.
 
+### CodeGraph (optional, off by default)
+
+[CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) gives planning and review
+agents a pre-built symbol graph instead of a Read/Grep sweep. It is opt-in, never a required
+dependency: with `CODEGRAPH=off` (the default, and the value used when `.env` is missing) the
+installer touches nothing and every worktree and git-hook path stays silent.
+
+- **Enable:** set `CODEGRAPH=on` in `.env`, then **re-run** `install.ps1` / `install.sh`. The
+  installer installs the npm package at the version pinned in
+  `install/codegraph-constants.txt` (with `--ignore-scripts`, so no upstream lifecycle
+  script runs) and registers the MCP server with `claude mcp add`.
+- **Telemetry is opted out.** Upstream CodeGraph reports usage to
+  `https://telemetry.getcodegraph.com/v1/events` and defaults it on, and this installer is
+  non-interactive, so nothing would ever ask you. The registration therefore carries
+  `--env CODEGRAPH_TELEMETRY=0 --env DO_NOT_TRACK=1`, and both installer scripts export the
+  same pair. The values live in `install/codegraph-constants.txt`.
+- **Disable:** set `CODEGRAPH=off` and **re-run the installer again** — editing `.env` alone
+  does not unregister anything. The re-run removes the MCP registration *only if this
+  installer wrote it* (same command, args, and telemetry env); a `codegraph` entry you
+  registered by hand is left in place. The npm package and
+  any existing `.codegraph/` index directories are deliberately left in place. Remove those
+  yourself with `npm uninstall -g @colbymchenry/codegraph` and `codegraph uninit`.
+- **Never run `codegraph install` or `codegraph uninstall`.** They overwrite
+  `~/.claude/CLAUDE.md` — a symlink to this repo — with a plain file, and add a
+  `UserPromptSubmit` prompt-hook. This framework registers the MCP server itself instead.
+- Close Claude Code while the installer runs; it writes `~/.claude.json`, which a live session
+  also writes.
+- Automatic index refresh on checkout and merge needs Node 22.5+ (`node:sqlite`). On older
+  Node the index still builds, but the git hooks skip the refresh.
+
 ## What's Inside
 
 ### Hook-enforced end-to-end workflow

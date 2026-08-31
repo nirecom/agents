@@ -44,6 +44,9 @@ Forward the user's flags verbatim. Add no flags of your own.
   "empty-or-notes-only" gate was removed: a partial `git worktree remove` can
   leave a full checkout without a .git file, which is safe to delete when
   ownership is proven.
+- Before each worktree and orphan-directory removal the sweeper releases that path's own
+  CodeGraph index lock. No-op when the flag is off, when no index exists, or when the tool
+  is absent; a daemon whose own argv does not name exactly this path is reported, never killed.
 
 ## Migration notes for #503
 

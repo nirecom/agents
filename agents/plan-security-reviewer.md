@@ -1,7 +1,7 @@
 ---
 name: plan-security-reviewer
 description: CC fallback security-plan reviewer for review-plan-security; invoked when codex CLI is unusable.
-tools: Read, Glob, Grep
+tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
 model: opus
 effort: medium
 ---
@@ -42,3 +42,4 @@ NEEDS_REVISION
 
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
+Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

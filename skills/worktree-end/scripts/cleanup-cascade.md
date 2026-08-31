@@ -16,6 +16,17 @@ do NOT rely on a `$SID` shell variable — it does not survive across separate B
 plans-dir is resolved inside the JS helper via getWorkflowPlansDir(). If the placeholder
 is empty, the CLI falls back to CLAUDE_SESSION_ID.
 
+## WE-14c — Release the CodeGraph index lock
+`node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path <path>`
+Run immediately before WE-15. The daemon keeps the index DB open, which on Windows is
+a file lock that makes `git worktree remove` fail with EPERM. Non-interactive, idempotent
+(no index / no daemon / already stopped are all success), and always exits 0 — a stderr
+warning is informational only. It stops a process only after matching that process's own
+argv against this worktree's path exactly, so an unconfirmed case is reported and skipped,
+never killed. Proceed to WE-15 in every outcome. `<path>` is the linked worktree path, an
+orchestrator-replaced placeholder like `<main>`; do NOT rely on a `$WORKTREE_PATH` shell
+variable — it does not survive across separate Bash calls.
+
 ## WE-15 — git worktree remove
 `git -C <main> worktree remove <path>` (never `--force`). Try once only — do not retry, and do NOT emit WORKTREE_OFF; on failure follow WE-16.
 
