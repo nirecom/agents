@@ -73,13 +73,26 @@ function codegraphEnabled() {
   return raw.trim().toLowerCase() === "on";
 }
 
+// spawnCodegraph is the only door to the binary, so every invocation carries
+// the same two guarantees: a bounded timeout, and the upstream telemetry
+// opt-out install/codegraph-constants.txt ships to the MCP registration. The
+// env is built per call, not at module load, because codegraphEnabled() may
+// have populated process.env from .env in between.
+function spawnCodegraph(args, options) {
+  return spawnSync("codegraph", args, {
+    ...options,
+    env: { ...process.env, CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1" },
+    timeout: STATUS_TIMEOUT_MS,
+  });
+}
+
 function codegraphOnPath() {
-  const probe = spawnSync("codegraph", ["--version"], { stdio: "ignore" });
+  const probe = spawnCodegraph(["--version"], { stdio: "ignore" });
   return !(probe.error && probe.error.code === "ENOENT");
 }
 
 function runCodegraph(args) {
-  const result = spawnSync("codegraph", args, { stdio: "inherit" });
+  const result = spawnCodegraph(args, { stdio: "inherit" });
   return !result.error && result.status === 0;
 }
 
@@ -89,10 +102,7 @@ function runCodegraph(args) {
 // It asks the binary for the same two facts index-health reads directly, and a
 // missing or partial answer counts as unhealthy.
 function statusHealthy(root) {
-  const result = spawnSync("codegraph", ["status", "--json", root], {
-    encoding: "utf8",
-    timeout: STATUS_TIMEOUT_MS,
-  });
+  const result = spawnCodegraph(["status", "--json", root], { encoding: "utf8" });
   if (result.error || result.status !== 0) return false;
   let parsed = null;
   try {

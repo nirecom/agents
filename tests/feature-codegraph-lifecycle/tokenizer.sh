@@ -26,6 +26,8 @@ longer-flag|--path-prefix /r|[--path-prefix][/r]
 quoted-flag-and-value|"--path /r"|[--path /r]
 metachar-value|--path "/r; rm -rf /"|[--path][/r; rm -rf /]
 metachar-bare|--path /r&&whoami|[--path][/r&&whoami]
+doubled-backslash-before-close|a "C:\repo\\" b|[a][C:\repo\][b]
+odd-run-mid-quote|a "x\\\"y" b|[a][x\"y][b]
 TABLE
 
 echo "--- L19h: an argument the tokenizer cannot resolve never becomes a kill ---"
@@ -43,6 +45,8 @@ done <<'TABLE'
 control-plain|/opt/cg/codegraph.js serve --mcp --path %R%|kill
 control-quoted|/opt/cg/codegraph.js serve --mcp --path "%R%"|kill
 control-second-path|/opt/cg/codegraph.js serve --mcp --path /nope --path %R%|kill
+root-not-last-path|/opt/cg/codegraph.js serve --mcp --path %R% --path /nope|no-kill
+decoy-marker-not-at-script-position|/opt/cg/other.js decoy-arg codegraph.js serve --mcp --path %R%|no-kill
 unterminated-open|/opt/cg/codegraph.js serve --mcp --path "%R%|no-kill
 unterminated-trailing|/opt/cg/codegraph.js serve --mcp --path "%R% and more|no-kill
 quoted-whole-flag|/opt/cg/codegraph.js serve --mcp "--path %R%"|no-kill
@@ -58,3 +62,16 @@ prefix-sibling|/opt/cg/codegraph.js serve --mcp --path %R%-old|no-kill
 child-directory|/opt/cg/codegraph.js serve --mcp --path %R%/sub|no-kill
 empty-command-line||no-kill
 TABLE
+
+echo "--- L19h extra: a root literally named 'codegraph' must not let an unrelated script match ---"
+# namesCodegraph only inspects the argv element immediately before `serve` — this
+# proves a --path value's basename can't stand in for it (the C1 impostor shape).
+codegraph_named_root="$(mkroot "codegraph")"
+assert_eq "L19h/root-named-codegraph-unrelated-script" "no-kill" \
+    "$(tok_verdict "/opt/cg/other.js serve --mcp --path $codegraph_named_root" "$codegraph_named_root")"
+
+# `serveAt < 1` guards the case where `serve` has no preceding argv element at
+# all (nothing to read a script name from) — proves that boundary independently
+# of the impersonation case above, which always has a preceding element.
+assert_eq "L19h/serve-as-argv0-no-preceding-element" "no-kill" \
+    "$(tok_verdict "serve --mcp --path $codegraph_named_root" "$codegraph_named_root")"

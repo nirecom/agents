@@ -18,9 +18,14 @@ const NUL = String.fromCharCode(0);
 
 // tokenizeCommandLine turns an OS-reported command-line STRING back into argv.
 // Rules: whitespace separates; a `"` opens a region only when a matching
-// unescaped `"` follows, otherwise it is an ordinary character; `\"` is a
-// literal quote; `""` yields an empty token. Reconstructing real argument
-// boundaries is what lets the matcher below refuse substring lookalikes.
+// unescaped `"` follows, otherwise it is an ordinary character; a run of N
+// backslashes immediately before a `"` collapses to floor(N/2) literal
+// backslashes, and the quote itself is literal only when N is odd (otherwise
+// it is a real delimiter) — the same rule CommandLineToArgvW uses, and the
+// one a doubled trailing backslash before a closing quote (`"C:\repo\\"`)
+// relies on to still close the string. `""` yields an empty token.
+// Reconstructing real argument boundaries is what lets the matcher below
+// refuse substring lookalikes.
 function tokenizeCommandLine(commandLine) {
   const text = typeof commandLine === "string" ? commandLine : "";
   const tokens = [];
@@ -30,10 +35,12 @@ function tokenizeCommandLine(commandLine) {
 
   while (i < text.length) {
     const ch = text[i];
-    if (ch === "\\" && text[i + 1] === '"') {
-      current += '"';
+    if (ch === "\\") {
+      const scan = scanBackslashRun(text, i);
+      current += "\\".repeat(scan.backslashes);
+      if (scan.quoteConsumed) current += '"';
       started = true;
-      i += 2;
+      i = scan.nextIndex;
     } else if (ch === '"') {
       const close = findClosingQuote(text, i + 1);
       if (close < 0) {
@@ -41,7 +48,7 @@ function tokenizeCommandLine(commandLine) {
         started = true;
         i += 1;
       } else {
-        current += unescapeQuoted(text.slice(i + 1, close));
+        current += unescapeQuoted(text, i + 1, close);
         started = true;
         i = close + 1;
       }
@@ -60,11 +67,26 @@ function tokenizeCommandLine(commandLine) {
   return tokens;
 }
 
+// scanBackslashRun measures the run of backslashes starting at text[i] and
+// classifies what follows it, per the CommandLineToArgvW rule: 2n backslashes
+// before a `"` fold to n literal backslashes with the quote left as a real
+// delimiter (quoteConsumed: false, nextIndex sits ON the quote); 2n+1
+// backslashes fold to n literal backslashes plus one literal `"` (consumed
+// here — quoteConsumed: true, nextIndex sits PAST the quote); a run not
+// followed by `"` is simply that many literal backslashes.
+function scanBackslashRun(text, i) {
+  let n = 0;
+  while (text[i + n] === "\\") n += 1;
+  if (text[i + n] !== '"') return { backslashes: n, quoteConsumed: false, nextIndex: i + n };
+  if (n % 2 === 1) return { backslashes: (n - 1) / 2, quoteConsumed: true, nextIndex: i + n + 1 };
+  return { backslashes: n / 2, quoteConsumed: false, nextIndex: i + n };
+}
+
 function findClosingQuote(text, from) {
   let i = from;
   while (i < text.length) {
-    if (text[i] === "\\" && text[i + 1] === '"') {
-      i += 2;
+    if (text[i] === "\\") {
+      i = scanBackslashRun(text, i).nextIndex;
       continue;
     }
     if (text[i] === '"') return i;
@@ -73,15 +95,23 @@ function findClosingQuote(text, from) {
   return -1;
 }
 
-function unescapeQuoted(segment) {
+// unescapeQuoted walks the ORIGINAL text over [from, to) rather than a
+// pre-sliced copy so that a backslash run ending exactly at `to` still sees
+// the real closing quote at text[to] (findClosingQuote only ever lands `to`
+// on an even run, so this boundary case always folds, never consumes it as
+// a literal `"`). Slicing first would hide that quote and under-fold the
+// trailing run — the doubled-backslash-before-close bug this file now avoids.
+function unescapeQuoted(text, from, to) {
   let out = "";
-  let i = 0;
-  while (i < segment.length) {
-    if (segment[i] === "\\" && segment[i + 1] === '"') {
-      out += '"';
-      i += 2;
+  let i = from;
+  while (i < to) {
+    if (text[i] === "\\") {
+      const scan = scanBackslashRun(text, i);
+      out += "\\".repeat(scan.backslashes);
+      if (scan.quoteConsumed) out += '"';
+      i = scan.nextIndex;
     } else {
-      out += segment[i];
+      out += text[i];
       i += 1;
     }
   }
@@ -173,21 +203,37 @@ function readArgv(pid) {
   return tokenizeCommandLine(line);
 }
 
-function hasServeMcpPair(argv) {
+// serveMcpIndex returns the index of the first `serve` immediately followed by
+// `--mcp`, or -1. It anchors the verb the daemon is invoked with, which is what
+// lets namesCodegraph below locate the script element without scanning argv.
+function serveMcpIndex(argv) {
   for (let i = 0; i < argv.length - 1; i += 1) {
-    if (argv[i] === "serve" && argv[i + 1] === "--mcp") return true;
+    if (argv[i] === "serve" && argv[i + 1] === "--mcp") return i;
   }
-  return false;
+  return -1;
 }
 
-// The daemon runs as node.exe, so the image name identifies nothing; the
-// `...\codegraph.js` element on its command line is the only marker.
+function hasServeMcpPair(argv) {
+  return serveMcpIndex(argv) >= 0;
+}
+
+// The daemon runs as node.exe, so the image name identifies nothing; only the
+// element right before `serve` — the `...\codegraph.js` script in
+// `node <script> serve --mcp` — is the marker. Scanning the rest of argv would
+// let a `--path` value spelled `.../codegraph` pose as the daemon. That marker
+// must also sit at argv[0] or argv[1] — the two positions a real invocation
+// occupies (the script itself when the process rewrote its own argv/title, or
+// the script right after the interpreter at argv[0]) — otherwise an unrelated
+// process could carry a decoy "codegraph.js serve --mcp" token sequence later
+// in its own argv (e.g. forwarded/passthrough arguments) and be misidentified
+// as the daemon.
 function namesCodegraph(argv) {
-  return argv.some((element) => {
-    if (typeof element !== "string" || element.length === 0) return false;
-    const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
-    return base.toLowerCase() === "codegraph";
-  });
+  const serveAt = serveMcpIndex(argv);
+  if (serveAt !== 1 && serveAt !== 2) return false;
+  const element = argv[serveAt - 1];
+  if (typeof element !== "string" || element.length === 0) return false;
+  const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
+  return base.toLowerCase() === "codegraph";
 }
 
 function pathValueMatches(value, wanted) {
@@ -195,10 +241,12 @@ function pathValueMatches(value, wanted) {
 }
 
 // isDaemonForRoot: true only when all three hold — a consecutive `serve`
-// `--mcp` pair, a codegraph-named element, and a standalone `--path` element
-// whose NEXT element normalizes to this root. Matching is whole-element
-// equality, never substring or prefix, which is what keeps <root>-old and
-// <root>/sub from being mistaken for <root>.
+// `--mcp` pair, a codegraph-named script element immediately before `serve`,
+// and a standalone `--path` element whose NEXT element normalizes to this
+// root. Matching is whole-element equality, never substring or prefix, which
+// is what keeps <root>-old and <root>/sub from being mistaken for <root>.
+// Only the LAST `--path` counts: the binary's own parseArgs is last-match-wins,
+// so an earlier occurrence names a root the daemon is not serving.
 function isDaemonForRoot(argv, root) {
   if (!Array.isArray(argv) || argv.length === 0) return false;
   if (!hasServeMcpPair(argv)) return false;
@@ -207,11 +255,9 @@ function isDaemonForRoot(argv, root) {
   const wanted = rootCandidates(root);
   if (wanted.length === 0) return false;
 
-  for (let i = 0; i < argv.length - 1; i += 1) {
-    if (argv[i] !== "--path") continue;
-    if (pathValueMatches(argv[i + 1], wanted)) return true;
-  }
-  return false;
+  const lastPathAt = argv.lastIndexOf("--path");
+  if (lastPathAt < 0) return false;
+  return pathValueMatches(argv[lastPathAt + 1], wanted);
 }
 
 module.exports = {

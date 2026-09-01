@@ -113,6 +113,55 @@ else
     kill_helper "$l19e_pid"
 fi
 
+echo "--- L19i: a root literally named 'codegraph' does not let an unrelated script pass as the daemon ---"
+reset_env
+root="$(mkroot "codegraph")"
+rp="$(root_sh "codegraph")"
+l19i_pid="$(spawn_helper impostor.js serve --mcp --path "$root")"
+if [ -z "$l19i_pid" ]; then
+    fail "L19i — the impostor stand-in did not start"
+else
+    write_pidfile "$root" "{\"pid\":$l19i_pid,\"version\":\"1\"}"
+    run_cli stop "$root"
+    assert_eq "L19i — exit 0" "0" "$RC"
+    assert_eq "L19i — the unrelated process was left running" "yes" "$(is_alive "$l19i_pid")"
+    assert_eq "L19i — exactly 1 stderr warning line" "1" "$(err_lines)"
+    kill_helper "$l19i_pid"
+fi
+
+echo "--- L19j: a --path that is not the LAST one on the daemon's command line does not authorize a kill ---"
+reset_env
+root="$(mkroot "l19j")"
+rp="$(root_sh "l19j")"
+l19j_pid="$(spawn_helper codegraph.js serve --mcp --path "$root" --path "$rp-decoy")"
+if [ -z "$l19j_pid" ]; then
+    fail "L19j — the daemon stand-in did not start"
+else
+    write_pidfile "$root" "{\"pid\":$l19j_pid,\"version\":\"1\"}"
+    run_cli stop "$root"
+    assert_eq "L19j — exit 0" "0" "$RC"
+    assert_eq "L19j — the process whose LAST --path names a different root was left running" "yes" "$(is_alive "$l19j_pid")"
+    kill_helper "$l19j_pid"
+fi
+
+echo "--- L19k: a 'codegraph.js' token that isn't at the script position doesn't authorize a kill ---"
+# spawn_helper always places the script at argv[1]; passing "codegraph.js" as an
+# extra positional argument before serve puts it at argv[2] instead — the exact
+# decoy shape a process forwarding unrelated arguments could carry.
+reset_env
+root="$(mkroot "l19k")"
+rp="$(root_sh "l19k")"
+l19k_pid="$(spawn_helper impostor.js codegraph.js serve --mcp --path "$root")"
+if [ -z "$l19k_pid" ]; then
+    fail "L19k — the impostor stand-in did not start"
+else
+    write_pidfile "$root" "{\"pid\":$l19k_pid,\"version\":\"1\"}"
+    run_cli stop "$root"
+    assert_eq "L19k — exit 0" "0" "$RC"
+    assert_eq "L19k — the process carrying a decoy 'codegraph.js' token was left running" "yes" "$(is_alive "$l19k_pid")"
+    kill_helper "$l19k_pid"
+fi
+
 echo "--- L30: a daemon that ignores SIGTERM is escalated to SIGKILL ---"
 # The stand-in installs a no-op SIGTERM handler, so a stop that only ever sends
 # SIGTERM leaves it running. The control below proves the handler is actually in

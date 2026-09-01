@@ -30,6 +30,11 @@ if (self === "codegraph" && process.env.CG_STUB_LOG) {
   if (verb === "status" && process.env.CG_STUB_STATUS_JSON) {
     process.stdout.write(process.env.CG_STUB_STATUS_JSON);
   }
+  if (process.env.CG_STUB_ENV_LOG) {
+    const wanted = String(process.env.CG_STUB_ENV_VARS || "").split(",").filter(Boolean);
+    const snap = wanted.map((k) => k + "=" + (process.env[k] === undefined ? "<unset>" : process.env[k])).join(" ");
+    fs.appendFileSync(process.env.CG_STUB_ENV_LOG, snap + "\n");
+  }
   const fails = String(process.env.CG_STUB_FAIL || "").split(",").map((s) => s.trim());
   const failed = fails.indexOf(verb) >= 0;
   const wantDb = process.env.CG_STUB_MAKEDB;

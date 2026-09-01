@@ -61,6 +61,24 @@ if make_db "$root" healthy; then
     assert_eq "L6 — sync targets the root" "yes" "$(same_path "$root" "$(printf '%s' "$line" | cut -d' ' -f3-)")"
 fi
 
+echo "--- L6c: telemetry opt-out reaches every spawned codegraph subprocess ---"
+# spawnCodegraph() (bin/codegraph-lifecycle.js) is the single choke point every
+# verb funnels through, so one real invocation reaching it proves the opt-out
+# env for all of them (codegraphOnPath's --version probe included).
+reset_env
+root="$(mkroot "l6c")"
+if make_db "$root" healthy; then
+    env_log="$TMP_BASE/env-log-l6c.txt"
+    rm -f "$env_log"
+    export CG_STUB_ENV_LOG="$(to_native "$env_log")"
+    export CG_STUB_ENV_VARS="CODEGRAPH_TELEMETRY,DO_NOT_TRACK"
+    run_cli sync "$root"
+    unset CG_STUB_ENV_LOG CG_STUB_ENV_VARS
+    assert_eq "L6c — exit 0" "0" "$RC"
+    assert_eq "L6c — telemetry opt-out env vars reached the subprocess" \
+        "CODEGRAPH_TELEMETRY=0 DO_NOT_TRACK=1" "$(head -n1 "$env_log" 2>/dev/null || true)"
+fi
+
 echo "--- L6b: a real environment variable outranks the .env file ---"
 # The two sources disagree on purpose in every row, so a reading that ignores
 # precedence lands on the wrong verdict instead of coincidentally agreeing.
