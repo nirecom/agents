@@ -68,6 +68,14 @@ WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md
    - `status: partial` → call `AskUserQuestion` in main (surface denied/errors via artifact log path); user must confirm or abort.
    - `status: failed` → surface error and stop.
 
+WS-7a. Build the CodeGraph index for the new worktree — one Bash call:
+   `node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" init --path "<WS-3 path>"`
+   Always exits 0. Silent no-op when the flag is off or a healthy index is already
+   there; it rebuilds an index that exists but is empty, truncated, or corrupt, and
+   emits a one-line stderr warning when the tool is missing or a rebuild did not
+   finish. Continue to WS-8 in every outcome — indexing accelerates later work, it
+   never gates it. It can take tens of seconds on a large repository.
+
 WS-8. Enter the worktree: call the native `EnterWorktree` tool with the WS-3 path.
    One confirmation dialog for worktrees outside `.claude/worktrees/` is normal since v2.1.206.
    Protocol: `skills/_shared/worktree-transition.md`

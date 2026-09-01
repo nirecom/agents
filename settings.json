@@ -133,6 +133,7 @@
       "WebFetch(domain:code.visualstudio.com)",
       "Bash(node * hooks/cleanup-orphan-dir.js *)",
       "Bash(node *\\hooks\\cleanup-orphan-dir.js *)",
+      "mcp__codegraph__codegraph_explore",
       "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/next-step\" *)",
       "Bash(node */agents/bin/workflow/next-step *)",
       "Bash(node *\\agents\\bin\\workflow\\next-step *)",
@@ -514,7 +515,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
         "hooks": [
           {
             "type": "command",
@@ -524,7 +525,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
         "hooks": [
           {
             "type": "command",

@@ -242,7 +242,9 @@ T10_sweep_hub_registers_sweep_issues() {
 # ─────────────────────────────────────────────────────────────────────────────
 # T11 — SW step numbering is coherent after the sweep-issues insertion:
 #       primary steps (SW-N. with no letter suffix) are unique and form the
-#       contiguous run 1..N — no duplicate and no skipped number. Lettered
+#       contiguous run 0..N — no duplicate and no skipped number. SW-0 is a
+#       legitimate leading step (the hub's WORKTREE_OFF bracket), not a gap.
+#       Lettered
 #       sub-steps (SW-2b/SW-2c) are sub-ordinates of their primary and are
 #       only required to reference an existing primary.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -252,7 +254,7 @@ T11_sweep_hub_sw_numbering_coherent() {
         fail "T11 sweep_hub_sw_numbering_coherent: $SWEEP_HUB does not exist"
         return
     fi
-    local primaries sub_nums n expected=1 prev=""
+    local primaries sub_nums n expected=0 prev=""
     primaries="$(grep -oE '^SW-[0-9]+\.' "$SWEEP_HUB" 2>/dev/null | sed 's/^SW-//; s/\.$//' | sort -n)"
     if [ -z "$primaries" ]; then
         fail "T11 sweep_hub_sw_numbering_coherent: no SW-N. steps found in $SWEEP_HUB"

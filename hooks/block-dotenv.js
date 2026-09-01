@@ -37,17 +37,10 @@ function block(reason) {
 const SAFE_SUFFIXES = [".env.example", ".env.sample", ".env.template", ".env.dist"];
 
 // Flags whose VALUE is text (not a path). The token after these is skipped.
-//
-// Single-letter short forms `-l`, `-a`, `-r`, `-c` are intentionally OMITTED
-// even though gh/git accept them, because they collide with very common Unix
-// flags (`wc -l file`, `ls -a dir`, `cp -r src dst`, `bash -c script`) and
-// would create read/write bypasses for `.env`. Users must use the long form
-// (`--label`, `--assignee`, `--reviewer`) when targeting gh from this hook's
-// scope. `-c` is handled separately via shell-wrapper recursion (SHELL_BINS).
-//
-// `-m` is kept (highly common for `git commit -m`, `gh pr create -m`); its
-// value is text not a path, and `-m .env` as a literal git-commit message
-// happens to be safe — it's a message string, not a file access.
+// Short forms `-l`, `-a`, `-r`, `-c` are omitted on purpose: they collide with
+// common Unix flags (`wc -l file`, `cp -r src dst`) and would open a `.env`
+// bypass — use the long form; `-c` is handled by SHELL_BINS recursion instead.
+// `-m` is kept: its value is a message string, never a file access.
 const TEXT_FLAGS = new Set([
   "-m", "--message",
   "--body", "--title", "--notes", "--description", "--subject",
@@ -134,6 +127,17 @@ function checkGlobPattern(pattern) {
   return false;
 }
 
+// codegraph_explore is Read-equivalent: it returns verbatim source for whatever its
+// free-text `query` names, so every token in the query is treated as a candidate
+// path and checked exactly as a Read path would be.
+function checkExploreQuery(query) {
+  if (typeof query !== "string" || !query) return false;
+  return query
+    .split(/[\s,;:'"`()[\]{}<>]+/)
+    .filter(Boolean)
+    .some((token) => isDotenvPath(token) || checkGlobPattern(token));
+}
+
 // Parse stdin
 let input;
 try {
@@ -162,6 +166,12 @@ switch (toolName) {
   case "Read":
     if (isDotenvPath(toolInput.file_path)) {
       block("Reading .env files is blocked. Use .env.example for documentation.");
+    }
+    break;
+
+  case "mcp__codegraph__codegraph_explore":
+    if (checkExploreQuery(toolInput.query) || isDotenvPath(toolInput.projectPath)) {
+      block("Exploring .env files is blocked. Use .env.example for documentation.");
     }
     break;
 

@@ -102,6 +102,10 @@ Write-Host "--- Installing jq ---"
 & "$AgentsRoot\install\win\jq.ps1"
 
 Write-Host ""
+Write-Host "--- Configuring CodeGraph ---"
+& "$AgentsRoot\install\win\codegraph.ps1"
+
+Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
 if ($_needRestart) {
     Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow

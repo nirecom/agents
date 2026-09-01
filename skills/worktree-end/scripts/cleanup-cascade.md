@@ -1,20 +1,22 @@
 <!--
-Cleanup cascade spec for worktree-end Steps WE-15..WE-22.
+Cleanup cascade spec for worktree-end: the WE-15..WE-22 cascade plus the two
+pre-steps (WE-14b, WE-14c) and the closing WE-22a that bracket it.
 This file is a documentation spec, not an executable script: the orchestrator
 Reads it and issues each git/gh/node operation one at a time (auditability +
 permission dialogs). It is the canonical SSOT for what those operations are.
 Read it (do not `bash` it) — same Read-as-spec pattern as skills/_shared/*.md.
+`<main>`, `<path>`, `<sid>` and the like are placeholders the orchestrator
+substitutes at issue time; a shell variable would not survive across separate
+Bash calls.
 -->
 
 ## WE-14b — Create cleanup-active marker
 `node "$AGENTS_CONFIG_DIR/hooks/lib/worktree-cleanup-marker.js" create <sid>`
-Run immediately before WE-15 — marks the cleanup window (WE-15..WE-22) active so the
-supervisor OFF-block adaptive message fires only during real cleanup. Non-fatal on
-failure (fail-open: no marker → generic message). `<sid>` is a placeholder the
-orchestrator replaces with the WE-12-resolved session id (same convention as `<main>`);
-do NOT rely on a `$SID` shell variable — it does not survive across separate Bash calls.
-plans-dir is resolved inside the JS helper via getWorkflowPlansDir(). If the placeholder
-is empty, the CLI falls back to CLAUDE_SESSION_ID.
+Run immediately before WE-15 — marks the WE-15..WE-22 window active so the supervisor OFF-block message adapts to real cleanup. Non-fatal on failure (fail-open: no marker → generic message). `<sid>` is the WE-12-resolved session id; empty falls back to CLAUDE_SESSION_ID.
+
+## WE-14c — Release the CodeGraph index lock
+`node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path <path>`
+Run immediately before WE-15 — the daemon holds the index DB open, and on Windows that file lock makes WE-15 fail with EPERM. Idempotent and always exits 0, so a stderr warning is informational; it kills a process only when that process's own argv matches `<path>` exactly. Proceed to WE-15 in every outcome.
 
 ## WE-15 — git worktree remove
 `git -C <main> worktree remove <path>` (never `--force`). Try once only — do not retry, and do NOT emit WORKTREE_OFF; on failure follow WE-16.
@@ -51,8 +53,4 @@ Sibling repo fanout: parse `SIBLING_REPOS_JSON` from the env JSON (field added b
 
 ## WE-22a — Delete cleanup-active marker
 `node "$AGENTS_CONFIG_DIR/hooks/lib/worktree-cleanup-marker.js" delete <sid>`
-Run after WE-22 completes. Idempotent (already-absent is success). `<sid>` is the same
-orchestrator-replaced placeholder as WE-14b (not a `$SID` shell var); plans-dir is
-resolved inside the JS helper, and an empty placeholder falls back to CLAUDE_SESSION_ID.
-This closes the cleanup window — post-WE-22 the marker no longer exists, so
-isWorktreeEndEnv() returns false (fixes the session-2659fd1d false positive).
+Run after WE-22 completes. Idempotent (already-absent is success); `<sid>` is the same value as WE-14b. This closes the cleanup window, so isWorktreeEndEnv() returns false from here on.

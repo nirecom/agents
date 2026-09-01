@@ -1,20 +1,14 @@
 #!/bin/bash
 #
-# bin/sweep-worktrees/orphan-dirs.sh
-#
-# Sourced by bin/sweep-worktrees.sh. Two passes that reclaim filesystem state
-# git's worktree registry no longer knows about:
-#
-#   sweep_orphan_dirs   — depth-2 directories under WORKTREE_BASE_DIR that are
-#                         not registered. Removal itself is delegated to
-#                         hooks/cleanup-orphan-dir.js (4-AND safety gate).
-#   sweep_stale_backups — .worktree-backup/* older than MIN_AGE_HOURS * 7.
-#
-# Must be `source`d, not executed directly — it reads caller-scope variables
-# ($MAIN_ROOT, $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS,
-# $AGENTS_CONFIG_DIR) and mutates the orphan_dirs_* counters.
+# bin/sweep-worktrees/orphan-dirs.sh — sourced by bin/sweep-worktrees.sh. Two
+# passes reclaim filesystem state git's worktree registry no longer knows about:
+# sweep_orphan_dirs (unregistered depth-2 dirs under WORKTREE_BASE_DIR; removal
+# delegated to hooks/cleanup-orphan-dir.js and its 4-AND safety gate) and
+# sweep_stale_backups (.worktree-backup/* older than MIN_AGE_HOURS * 7). Must be
+# `source`d, not executed: it reads caller-scope variables ($MAIN_ROOT,
+# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS, $AGENTS_CONFIG_DIR) and
+# mutates the orphan_dirs_* counters.
 
-# Reclaim directories under WORKTREE_BASE_DIR that are not in the git registry.
 sweep_orphan_dirs() {
   # ── Pre-pass guard: snapshot the registry to a temp file ──────────────────
   # Not `local`: the EXIT trap below must still see it after this returns.
@@ -72,19 +66,15 @@ sweep_orphan_dirs() {
       orphan_dirs_skipped_young=$((orphan_dirs_skipped_young + 1))
       continue
     fi
-    # Gate (5): cross-repo ownership proof. Requires WORKTREE_NOTES.md with a
+    # Gate (5): cross-repo ownership proof — WORKTREE_NOTES.md must carry a
     # `Main repo:` line matching the current MAIN_ROOT (forward-slash form).
     # Basename match alone is not unique ownership (two unrelated repos can
-    # share `agents`/`dotfiles` basenames under different parent paths), so
-    # legacy notes lacking the field and missing notes files are SKIPPED —
-    # never fall through to basename match.
-    #
-    # Gate (4) "empty-or-notes-only" was intentionally removed: a partial
-    # `git worktree remove` (removes .git + registry entry but fails on the
-    # filesystem due to e.g. MAX_PATH) leaves a full checkout with no .git.
-    # That directory has proven ownership via Gate (5) and is safe to delete
-    # via cleanup-orphan-dir.js --force-if-not-registered. Directories without
-    # a valid WORKTREE_NOTES.md are rejected by Gate (5) regardless of content.
+    # share `agents`/`dotfiles` basenames under different parents), so legacy
+    # notes lacking the field and missing notes files are SKIPPED, never fall
+    # through to basename match. Gate (4) "empty-or-notes-only" was removed on
+    # purpose: a partial `git worktree remove` can leave a full checkout with
+    # no .git, and that directory has proven ownership via Gate (5), so it is
+    # safe to delete via cleanup-orphan-dir.js --force-if-not-registered.
     notes_file="$cand_dir/WORKTREE_NOTES.md"
     if [[ ! -f "$notes_file" ]]; then
       orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
@@ -105,6 +95,11 @@ sweep_orphan_dirs() {
     if [[ "$DRY_RUN" == "1" ]]; then
       printf 'would remove orphan dir: %s\n' "$cand_dir" >&2
     else
+      # Release the CodeGraph index lock (Windows file lock) before removal.
+      if command -v node >/dev/null 2>&1; then
+        node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
+      fi
+
       node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
         node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" \
         --force-if-not-registered "$cand_dir" 2>&1)"

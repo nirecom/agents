@@ -1,7 +1,7 @@
 ---
 name: outline-planner
 description: Proposes 2-3 mutually-exclusive high-level approaches for a task. Used by the make-outline-plan skill. Inspired by Aider's architect/editor split and GitHub Spec Kit's /specify stage.
-tools: Read, Glob, Grep, Bash, WebFetch, Write
+tools: Read, Glob, Grep, Bash, WebFetch, Write, mcp__codegraph__codegraph_explore
 model: opus
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
@@ -71,6 +71,8 @@ write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 `## Delivery plan` and subsequent sections.
 
 See agents/lib/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=outline).
+
+Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
 
 ## Consuming `## Class members`
 
