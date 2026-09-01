@@ -24,6 +24,14 @@ After installation, `gh auth login` is invoked only in interactive sessions and 
 already authenticated (skipped on headless/CI machines and on already-authenticated re-runs);
 `gh auth refresh -s project` then adds the required `project` scope automatically.
 
+### CodeGraph (optional, off by default)
+
+[CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) is a third-party code-intelligence
+tool that gives agents a pre-built symbol graph instead of a Read/Grep sweep. Installation, MCP
+registration, and per-worktree index handling are wired into this framework, so it works without any
+manual setup. It stays off unless you ask for it: set `CODEGRAPH=on` in `.env` and re-run the
+installer. See [docs/codegraph.md](docs/codegraph.md) for details.
+
 ## What's Inside
 
 ### Hook-enforced end-to-end workflow

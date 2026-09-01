@@ -12,6 +12,24 @@ set -u
 # Use git rev-parse for both sides so path format is consistent (avoids POSIX vs Windows path mismatch)
 _cfg_dir="$(cd "$(dirname "$0")/.." && git rev-parse --show-toplevel 2>/dev/null || echo '')"
 _repo_top="$(git rev-parse --show-toplevel 2>/dev/null || echo '')"
+
+# --- BEGIN codegraph sync ---
+# Independent of the settings-assembly guard below, and deliberately placed BEFORE it:
+# that guard exits for every repo except the agents main worktree, while a CodeGraph
+# index must be refreshed wherever it exists — most importantly in linked worktrees.
+# This -s test is only a cheap gate that decides whether starting Node is worth it.
+# Whether the file is a real CodeGraph index is decided in the wrapper, which reads
+# the schema. Repos without one pay a single stat here, never a Node startup.
+if [ "${3:-0}" = "1" ] && [ -n "$_repo_top" ] && [ -s "$_repo_top/.codegraph/codegraph.db" ]; then
+  _cg_wrapper="$(dirname "$0")/../bin/codegraph-lifecycle.js"
+  _cg_node="$(command -v node 2>/dev/null || true)"
+  if [ -f "$_cg_wrapper" ] && [ -n "$_cg_node" ]; then
+    "$_cg_node" "$_cg_wrapper" sync --path "$_repo_top" --quiet || true
+  fi
+  unset _cg_wrapper _cg_node
+fi
+# --- END codegraph sync ---
+
 [ -n "$_cfg_dir" ] && [ "$_repo_top" = "$_cfg_dir" ] || exit 0
 
 # $1=prev_head $2=new_head $3=1 if branch switch, 0 if file checkout

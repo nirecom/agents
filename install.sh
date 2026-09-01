@@ -117,6 +117,10 @@ printf -- "${C_BOLD}--- Installing jq ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/jq.sh"
 
 echo ""
+printf -- "${C_BOLD}--- Configuring CodeGraph ---${C_RESET}\n"
+"$AGENTS_ROOT/install/linux/codegraph.sh"
+
+echo ""
 printf "${C_GREEN}=== Done ===${C_RESET}\n"
 if [ "$_need_restart" = "true" ]; then
     echo "Restart your shell or run: source $_rc_file_msg"

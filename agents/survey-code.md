@@ -1,7 +1,7 @@
 ---
 name: survey-code
 description: Investigate the codebase to understand existing patterns, constraints, and relevant files. Writes a session-scoped survey-code.md artifact.
-tools: Read, Glob, Grep, Bash, Write
+tools: Read, Glob, Grep, Bash, Write, mcp__codegraph__codegraph_explore
 model: sonnet
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
@@ -45,3 +45,4 @@ Follow the procedure in `skills/survey-code/SKILL.md`. Produce a `<session-id>-s
 - You MUST NOT emit any `<<WORKFLOW_*>>` sentinels. Sentinel emission is handled
   exclusively by the orchestrator, not by this subagent.
 - gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`.
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

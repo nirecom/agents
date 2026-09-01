@@ -92,6 +92,17 @@ function checkBash(command) {
   });
 }
 
+// codegraph_explore is Read-equivalent: it returns verbatim source for whatever its
+// free-text `query` names, so every token in the query is treated as a candidate
+// path and checked exactly as a Read path would be.
+function checkExploreQuery(query) {
+  if (typeof query !== "string" || !query) return false;
+  return query
+    .split(/[\s,;:'"`()[\]{}<>]+/)
+    .filter(Boolean)
+    .some((token) => isCredentialPath(token) || isCredentialGlobPattern(token));
+}
+
 const BLOCK_MSG =
   "Access to credential files (~/.ssh, ~/.aws, ~/.gnupg, ~/.kube, ~/.git-credentials, " +
   "~/.docker/config.json, ~/.npmrc, ~/.pypirc, ~/.gem/credentials, ~/.netrc, ~/.pgpass, " +
@@ -115,6 +126,9 @@ switch (toolName) {
     break;
   case "Read":
     if (isCredentialPath(toolInput.file_path)) block(BLOCK_MSG);
+    break;
+  case "mcp__codegraph__codegraph_explore":
+    if (checkExploreQuery(toolInput.query) || isCredentialPath(toolInput.projectPath)) block(BLOCK_MSG);
     break;
   case "Grep":
     if (isCredentialPath(toolInput.path) || isCredentialGlobPattern(toolInput.glob)) block(BLOCK_MSG);
