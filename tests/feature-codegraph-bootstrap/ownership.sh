@@ -87,3 +87,55 @@ O19-foreign  | unregister | foreigncmd
 O19-legacy   | unregister | legacy
 O19-current  | register   | present
 TABLE
+
+echo "--- O20/O21: an unreadable codegraph-constants.txt must fail closed, not fall through to 'current' ---"
+# telemetryEnv() returns {} when codegraph-constants.txt is missing/malformed; a bare
+# Object.keys({}).every(...) is vacuously true, so hasTelemetryOptOut would wrongly
+# call ANY same-shape entry "current" — authorizing unregister() to remove a real
+# registration it never proved ownership of. Point a copy of codegraph-mcp.js at a
+# directory with no constants file sibling to reproduce that input class without
+# touching the real one (this suite runs alongside others with no `# Serial:` gate).
+NO_CONSTANTS_DIR="$BASE/no-constants"
+mkdir -p "$NO_CONSTANTS_DIR"
+cp "$CODEGRAPH_MCP_JS" "$NO_CONSTANTS_DIR/codegraph-mcp.js"
+NO_CONSTANTS_JS="$(node_path "$NO_CONSTANTS_DIR/codegraph-mcp.js")"
+
+run_case "O20" unregister on present present no 0 0 yes file "$NO_CONSTANTS_JS"
+assert_eq "O20 (unregister, unreadable constants): observable outcome" \
+    "rc=0 npmi=0 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
+assert_note "O20 (unregister, unreadable constants)" "__silent__"
+assert_eq "O20: a real registration survives an unknowable telemetry env" "1" "$MCP_ENTRY_POST"
+assert_eq "O20: post/.claude.json byte-identical" "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+
+run_case "O21" register on present legacy no 0 0 yes file "$NO_CONSTANTS_JS"
+assert_eq "O21 (register, unreadable constants): observable outcome" \
+    "rc=0 npmi=0 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
+assert_note "O21 (register, unreadable constants)" "__silent__"
+assert_eq "O21: an existing entry is left alone, not refreshed on an unknowable env" "1" "$MCP_ENTRY_POST"
+assert_eq "O21: post/.claude.json byte-identical" "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+
+echo "--- O22/O23: a PARTIAL codegraph-constants.txt (one TELEMETRY_KEYS entry missing) must also fail closed ---"
+# readState guarded only against a totally empty wantedEnv; a file that yields
+# just one of the two TELEMETRY_KEYS entries is neither empty nor complete, and
+# hasTelemetryOptOut only checks the keys present in wanted — so a partial read
+# could still call a same-shape entry "current" on a single matching env var
+# and authorize removing a registration whose full ownership was never proven.
+PARTIAL_CONSTANTS_DIR="$BASE/partial-constants"
+mkdir -p "$PARTIAL_CONSTANTS_DIR"
+cp "$CODEGRAPH_MCP_JS" "$PARTIAL_CONSTANTS_DIR/codegraph-mcp.js"
+printf 'CODEGRAPH_TELEMETRY=0\n' > "$PARTIAL_CONSTANTS_DIR/codegraph-constants.txt"
+PARTIAL_CONSTANTS_JS="$(node_path "$PARTIAL_CONSTANTS_DIR/codegraph-mcp.js")"
+
+run_case "O22" unregister on present present no 0 0 yes file "$PARTIAL_CONSTANTS_JS"
+assert_eq "O22 (unregister, partial constants): observable outcome" \
+    "rc=0 npmi=0 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
+assert_note "O22 (unregister, partial constants)" "__silent__"
+assert_eq "O22: a real registration survives a partially-unknowable telemetry env" "1" "$MCP_ENTRY_POST"
+assert_eq "O22: post/.claude.json byte-identical" "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+
+run_case "O23" register on present legacy no 0 0 yes file "$PARTIAL_CONSTANTS_JS"
+assert_eq "O23 (register, partial constants): observable outcome" \
+    "rc=0 npmi=0 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
+assert_note "O23 (register, partial constants)" "__silent__"
+assert_eq "O23: an existing entry is left alone, not refreshed on a partially-unknowable env" "1" "$MCP_ENTRY_POST"
+assert_eq "O23: post/.claude.json byte-identical" "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"

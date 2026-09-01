@@ -218,22 +218,33 @@ function hasServeMcpPair(argv) {
 }
 
 // The daemon runs as node.exe, so the image name identifies nothing; only the
-// element right before `serve` — the `...\codegraph.js` script in
-// `node <script> serve --mcp` — is the marker. Scanning the rest of argv would
-// let a `--path` value spelled `.../codegraph` pose as the daemon. That marker
-// must also sit at argv[0] or argv[1] — the two positions a real invocation
-// occupies (the script itself when the process rewrote its own argv/title, or
-// the script right after the interpreter at argv[0]) — otherwise an unrelated
-// process could carry a decoy "codegraph.js serve --mcp" token sequence later
-// in its own argv (e.g. forwarded/passthrough arguments) and be misidentified
-// as the daemon.
-function namesCodegraph(argv) {
-  const serveAt = serveMcpIndex(argv);
-  if (serveAt !== 1 && serveAt !== 2) return false;
-  const element = argv[serveAt - 1];
+// element right before `serve` is the marker. Pinning it to a fixed argv
+// index is not enough (rejects `node --flag codegraph.js serve --mcp`,
+// accepts `wrapper /tmp/codegraph.js serve --mcp`): the marker is legitimate
+// only as argv[0] itself, or as the first non-flag element after a node
+// interpreter at argv[0] — never a decoy token behind an arbitrary program.
+const INTERPRETER_BASENAMES = new Set(["node"]);
+
+function isInterpreterImage(element) {
   if (typeof element !== "string" || element.length === 0) return false;
   const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
-  return base.toLowerCase() === "codegraph";
+  return INTERPRETER_BASENAMES.has(base.toLowerCase());
+}
+
+function namesCodegraph(argv) {
+  const serveAt = serveMcpIndex(argv);
+  if (serveAt < 1) return false;
+  const markerAt = serveAt - 1;
+  const element = argv[markerAt];
+  if (typeof element !== "string" || element.length === 0) return false;
+  const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
+  if (base.toLowerCase() !== "codegraph") return false;
+  if (markerAt === 0) return true;
+  if (!isInterpreterImage(argv[0])) return false;
+  for (let i = 1; i < markerAt; i += 1) {
+    if (typeof argv[i] !== "string" || !argv[i].startsWith("-")) return false;
+  }
+  return true;
 }
 
 function pathValueMatches(value, wanted) {

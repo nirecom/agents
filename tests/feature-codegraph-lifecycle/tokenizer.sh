@@ -47,6 +47,8 @@ control-quoted|/opt/cg/codegraph.js serve --mcp --path "%R%"|kill
 control-second-path|/opt/cg/codegraph.js serve --mcp --path /nope --path %R%|kill
 root-not-last-path|/opt/cg/codegraph.js serve --mcp --path %R% --path /nope|no-kill
 decoy-marker-not-at-script-position|/opt/cg/other.js decoy-arg codegraph.js serve --mcp --path %R%|no-kill
+interpreter-flag-before-script|node --enable-source-maps /opt/cg/codegraph.js serve --mcp --path %R%|kill
+wrapper-not-interpreter|wrapper /tmp/codegraph.js serve --mcp --path %R%|no-kill
 unterminated-open|/opt/cg/codegraph.js serve --mcp --path "%R%|no-kill
 unterminated-trailing|/opt/cg/codegraph.js serve --mcp --path "%R% and more|no-kill
 quoted-whole-flag|/opt/cg/codegraph.js serve --mcp "--path %R%"|no-kill

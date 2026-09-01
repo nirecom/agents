@@ -104,8 +104,13 @@ function hasTelemetryOptOut(entry, wanted) {
 // readState collapses ~/.claude.json into the four cases the verbs branch on, plus
 // null for "unknowable", which must change nothing. Only "current" — an entry
 // carrying the exact command, args and telemetry env register() writes — is proof
-// of ownership, so only "current" is ever removed.
+// of ownership, so only "current" is ever removed. An empty or partial wantedEnv
+// means codegraph-constants.txt was missing, malformed, or incomplete (a valid
+// file always yields every TELEMETRY_KEYS entry) — the desired env is itself
+// unknowable, so this must fail closed the same as an unreadable ~/.claude.json,
+// never fall through to "current" on whichever keys happened to be readable.
 function readState(wantedEnv) {
+  if (Object.keys(wantedEnv).length !== TELEMETRY_KEYS.length) return null;
   const found = readEntry();
   if (found === null) return null;
   if (found.absent) return "absent";
@@ -179,7 +184,7 @@ function main() {
   const wantedEnv = telemetryEnv();
   const state = readState(wantedEnv);
   if (state === null) {
-    warn("could not read the MCP server list; leaving registration unchanged.");
+    warn("could not read the MCP server list or its telemetry constants; leaving registration unchanged.");
     process.exit(0);
   }
   if (verb === "register") register(state, wantedEnv);

@@ -123,6 +123,10 @@ digest() { if [ -e "$1" ]; then sha256sum "$1" 2>/dev/null | cut -d' ' -f1; else
 run_case() {
     local name="$1" entry="$2" flag="$3" envfile="$4" mcp_pre="$5"
     local with_cg="$6" npm_mode="$7" claude_mode="$8" with_node="$9" md_kind="${10}"
+    # $11 lets a case swap in a codegraph-mcp.js copy from a directory of the
+    # caller's choosing (e.g. one with no sibling codegraph-constants.txt) —
+    # every other fixture stays the shared, byte-identical installer script.
+    local mcp_js="${11:-$MCP_JS_NATIVE}"
 
     local dir="$BASE/case-$name"
     rm -rf "$dir"; mkdir -p "$dir/cwd" "$dir/cfg" "$dir/nvm" "$dir/bin"
@@ -165,8 +169,8 @@ run_case() {
         export CLAUDE_WORKFLOW_DIR="$dir/wf" WORKFLOW_PLANS_DIR="$dir/plans"
         case "$entry" in
             sh)     bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" bash "$CODEGRAPH_SH" ;;
-            noverb) bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$MCP_JS_NATIVE" ;;
-            *)      bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$MCP_JS_NATIVE" "$entry" ;;
+            noverb) bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$mcp_js" ;;
+            *)      bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$mcp_js" "$entry" ;;
         esac
     ) >"$dir/out.log" 2>"$dir/err.log" </dev/null || rc=$?
 
