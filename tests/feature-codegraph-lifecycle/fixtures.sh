@@ -74,6 +74,10 @@ if (process.env.CG_HELPER_PIDFILE) fs.writeFileSync(process.env.CG_HELPER_PIDFIL
 setInterval(() => {}, 3600000);
 HELPER
 cp "$TMP_BASE/helpers/codegraph.js" "$TMP_BASE/helpers/impostor.js"
+# Extension-decoy stand-in for the allow-list regression (ST-18 L19l): same
+# runtime as codegraph.js, but the script basename carries an extension
+# outside CODEGRAPH_EXTENSIONS, so it must never be identified as the daemon.
+cp "$TMP_BASE/helpers/codegraph.js" "$TMP_BASE/helpers/codegraph.bak"
 
 # SIGTERM-deaf stand-in for the escalation case. It keeps the basename
 # `codegraph` (identity condition 2) by living in its own subdirectory.

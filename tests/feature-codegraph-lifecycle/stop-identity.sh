@@ -77,6 +77,7 @@ L19b|codegraph.js|serve --mcp --path %P%|ROOT_BS|kill|ignore|win32
 L19c|codegraph.js|serve --mcp --path %P%|ROOT_DRIVE|kill|ignore|win32
 L19d-win32|codegraph.js|serve --mcp --path %P%|ROOT_CASE|kill|ignore|win32
 L19d-posix|codegraph.js|serve --mcp --path %P%|ROOT_CASE|alive|ignore|posix
+L19l|codegraph.bak|serve --mcp --path %P%|ROOT|alive|warn|any
 TABLE
 
 echo "--- L19e: a quoted root containing a space is tokenized correctly ---"

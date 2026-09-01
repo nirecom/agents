@@ -63,6 +63,13 @@ no-codegraph-token|/opt/cg/other.js serve --mcp --path %R%|no-kill
 prefix-sibling|/opt/cg/codegraph.js serve --mcp --path %R%-old|no-kill
 child-directory|/opt/cg/codegraph.js serve --mcp --path %R%/sub|no-kill
 empty-command-line||no-kill
+decoy-node-extension|/tmp/evil/node.bak /tmp/evil/codegraph.bak serve --mcp --path %R%|no-kill
+decoy-script-extension|/tmp/evil/node.sh /tmp/evil/codegraph.py serve --mcp --path %R%|no-kill
+decoy-interpreter-extension-only|node.bak /opt/cg/codegraph.js serve --mcp --path %R%|no-kill
+decoy-marker-extension-only|node /opt/cg/codegraph.exe serve --mcp --path %R%|no-kill
+decoy-marker-extension-argv0|codegraph.bak serve --mcp --path %R%|no-kill
+bare-marker-argv0|codegraph serve --mcp --path %R%|kill
+interpreter-exe-extension|node.exe /opt/cg/codegraph.js serve --mcp --path %R%|kill
 TABLE
 
 echo "--- L19h extra: a root literally named 'codegraph' must not let an unrelated script match ---"

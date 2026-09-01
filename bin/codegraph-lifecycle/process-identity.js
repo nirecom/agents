@@ -217,28 +217,41 @@ function hasServeMcpPair(argv) {
   return serveMcpIndex(argv) >= 0;
 }
 
+// matchesSanctionedName compares an argv element's basename against `name`,
+// accepting only a fixed, named extension allow-list — never an arbitrary
+// one. Stripping ANY extension (the prior approach) let a decoy such as
+// "codegraph.bak" or "node.sh" pass the same check as the real "codegraph.js"
+// / "node.exe" forms, defeating the marker entirely (CPR-UNV: the domain is
+// unbounded, so only a bounded allow-list fails closed across all of it).
+function matchesSanctionedName(element, name, extensions) {
+  if (typeof element !== "string" || element.length === 0) return false;
+  const base = element.split(/[/\\]/).pop().toLowerCase();
+  if (base === name) return true;
+  return extensions.some((ext) => base === name + ext);
+}
+
 // The daemon runs as node.exe, so the image name identifies nothing; only the
 // element right before `serve` is the marker. Pinning it to a fixed argv
 // index is not enough (rejects `node --flag codegraph.js serve --mcp`,
 // accepts `wrapper /tmp/codegraph.js serve --mcp`): the marker is legitimate
 // only as argv[0] itself, or as the first non-flag element after a node
 // interpreter at argv[0] — never a decoy token behind an arbitrary program.
-const INTERPRETER_BASENAMES = new Set(["node"]);
+// The extension lists below are exactly the forms these two names are ever
+// legitimately invoked under: a bare POSIX symlink/shim or Windows .exe for
+// the interpreter, a bare shim or the .js script npm's wrapper hands to node
+// for codegraph — nothing else is a marker, however plausible-looking.
+const INTERPRETER_EXTENSIONS = [".exe"];
+const CODEGRAPH_EXTENSIONS = [".js"];
 
 function isInterpreterImage(element) {
-  if (typeof element !== "string" || element.length === 0) return false;
-  const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
-  return INTERPRETER_BASENAMES.has(base.toLowerCase());
+  return matchesSanctionedName(element, "node", INTERPRETER_EXTENSIONS);
 }
 
 function namesCodegraph(argv) {
   const serveAt = serveMcpIndex(argv);
   if (serveAt < 1) return false;
   const markerAt = serveAt - 1;
-  const element = argv[markerAt];
-  if (typeof element !== "string" || element.length === 0) return false;
-  const base = element.split(/[/\\]/).pop().replace(/\.[^.]+$/, "");
-  if (base.toLowerCase() !== "codegraph") return false;
+  if (!matchesSanctionedName(argv[markerAt], "codegraph", CODEGRAPH_EXTENSIONS)) return false;
   if (markerAt === 0) return true;
   if (!isInterpreterImage(argv[0])) return false;
   for (let i = 1; i < markerAt; i += 1) {

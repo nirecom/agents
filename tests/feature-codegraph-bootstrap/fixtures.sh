@@ -34,6 +34,17 @@ esac
 [ -n "$CG_DNT" ] && pass "constants: DO_NOT_TRACK has a value ($CG_DNT)" \
     || fail "constants: DO_NOT_TRACK is missing from install/codegraph-constants.txt"
 
+# Literal, non-derived guard: every assertion below reads CG_TELEMETRY/CG_DNT
+# back out of the same constants file the installer reads, so a shipped flip
+# to opt-IN would move the expectation and the implementation together and
+# pass silently. This pair pins the actual security property — the telemetry
+# opt-out this feature exists to provide — independent of whatever value the
+# file happens to carry.
+[ "$CG_TELEMETRY" = "0" ] && pass "constants: CODEGRAPH_TELEMETRY is opted out (0)" \
+    || fail "constants: CODEGRAPH_TELEMETRY must ship as 0 (opted out) — got '${CG_TELEMETRY:-<empty>}'"
+[ "$CG_DNT" = "1" ] && pass "constants: DO_NOT_TRACK is opted out (1)" \
+    || fail "constants: DO_NOT_TRACK must ship as 1 (opted out) — got '${CG_DNT:-<empty>}'"
+
 # The exact argv install/codegraph-mcp.js must hand the CLI, derived from the SSOT.
 WANT_MCP_ADD="mcp add codegraph --scope user --env CODEGRAPH_TELEMETRY=$CG_TELEMETRY --env DO_NOT_TRACK=$CG_DNT -- codegraph serve --mcp"
 WANT_MCP_REMOVE="mcp remove codegraph -s user"
