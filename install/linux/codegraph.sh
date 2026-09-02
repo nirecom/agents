@@ -14,11 +14,12 @@ fi
 
 # install/codegraph-constants.txt is the single source of truth for the pinned
 # version and the telemetry opt-out; install/win/codegraph.ps1 reads the same file.
+# Only the version is read here — see the matching comment in codegraph.ps1 for why
+# the opt-out pair must not be exported from an installer script.
 CODEGRAPH_VERSION=""
 while IFS='=' read -r _cg_key _cg_value; do
     case "$_cg_key" in
         CODEGRAPH_VERSION) CODEGRAPH_VERSION="$_cg_value" ;;
-        CODEGRAPH_TELEMETRY|DO_NOT_TRACK) export "$_cg_key=$_cg_value" ;;
     esac
 done < "$AGENTS_ROOT/install/codegraph-constants.txt"
 

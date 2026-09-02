@@ -8,16 +8,18 @@ $AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # install/codegraph-constants.txt is the single source of truth for the pinned
 # version and the telemetry opt-out; install/linux/codegraph.sh reads the same file.
+# Only the version is read here. The opt-out pair must NOT be assigned to this
+# process's environment: install.ps1 invokes this script in-process, so the
+# assignment would outlive it and leak the industry-wide DO_NOT_TRACK name into
+# every program the caller's shell launches next — including `claude`, whose
+# Remote Control refuses to start under it. Nothing here needs the pair anyway:
+# `npm install --ignore-scripts` runs no upstream code, and
+# codegraph-mcp.js / bin/codegraph-lifecycle.js each read the constants file
+# themselves and hand the pair to their own children.
 $CodegraphVersion = ""
 foreach ($line in (Get-Content -Path "$AgentsRoot\install\codegraph-constants.txt")) {
     if ($line -notmatch '^([A-Z][A-Z0-9_]*)=(.*)$') { continue }
-    $key = $Matches[1]
-    $value = $Matches[2]
-    if ($key -eq "CODEGRAPH_VERSION") {
-        $CodegraphVersion = $value
-    } elseif ($key -eq "CODEGRAPH_TELEMETRY" -or $key -eq "DO_NOT_TRACK") {
-        Set-Item -Path "Env:$key" -Value $value
-    }
+    if ($Matches[1] -eq "CODEGRAPH_VERSION") { $CodegraphVersion = $Matches[2] }
 }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
