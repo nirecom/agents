@@ -40,6 +40,14 @@ if [ "$_agent_broken" = "1" ]; then
 fi
 
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
+# Claude Code's Bash tool always runs non-interactively, so CLAUDECODE set plus a
+# non-TTY stdout reliably identifies a CC-launched shell — skip the fetch there.
+# No effect when Windows-native Claude Code bridges into WSL2 (CLAUDECODE does not
+# propagate into that shell); WSL-native Claude Code is unaffected. Mirrors the
+# guard in dotfiles' .profile_common (issue #335).
+if [ -n "${CLAUDECODE:-}" ] && [ ! -t 1 ]; then
+    :
+else
 _session_dir="$HOME/.claude/projects"
 if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
     # SESSION_SYNC is opt-in (default off): only an explicit `on` enables automatic
@@ -74,6 +82,7 @@ if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
     unset _ss_on _ss_rc
 fi
 unset _session_dir
+fi
 
 # Returns true if any VS Code window is currently open
 _any_vscode_window() {
