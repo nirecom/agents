@@ -1,7 +1,7 @@
 ---
 name: detail-reviewer
 description: Critically reviews implementation plans produced by the detail-planner agent. Thorough — surfaces minor issues as well as major ones. Used by the make-detail-plan skill.
-tools: Read, Glob, Grep
+tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
 ---
@@ -96,3 +96,4 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 - Do not write the revised plan yourself — that is the planner's job.
 - Do not call Edit/Write.
 - If the planner has already addressed a prior concern correctly, do not re-raise it.
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

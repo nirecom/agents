@@ -202,3 +202,56 @@ per-skill wrapper (skills/*/scripts/run-codex-review-loop.sh)
 Adding a new review format is therefore an allowlist + prompt-body change in the two shared
 binaries, not a new Codex integration. `security-plan` / `test-review` are single-round
 terminal formats (CAP=1, no extensions); `outline-plan` / `detail-plan` allow revision rounds.
+
+
+## 8. CodeGraph Integration
+
+CodeGraph is an opt-in MCP server (`.env` flag `CODEGRAPH`, default `off`) that gives agents
+a pre-built symbol graph of a checkout. Four design decisions are worth recording.
+
+**Bootstrap and steady-state are separate responsibilities.** Installing the npm package and
+registering the MCP server are global, one-time, machine-level acts, so they live where every
+other global act lives — the installers (`install/win/codegraph.ps1`, `install/linux/codegraph.sh`,
+both dispatching to `install/codegraph-mcp.js`). Per-checkout index work is a repeated,
+local act, so it lives in one Node wrapper, `bin/codegraph-lifecycle.js` (`init` / `sync` /
+`stop`), which every caller — `/worktree-start`, `/worktree-end`, `/sweep-worktrees`, and the
+git hooks — invokes identically. Consequence: `.env` flipping to `off` silences steady-state
+immediately, but unregistering the MCP server requires re-running the installer. Steady-state
+paths never write global config. `stop` is the one verb exempt from the flag: a daemon started
+while CODEGRAPH was `on` must still be stoppable the moment it turns `off`, which is also the
+state the uninstall path runs in.
+
+**MCP registration uses `claude mcp add --scope user`, not `codegraph install`.** The upstream
+installer unconditionally rewrites `~/.claude/CLAUDE.md`, which in this framework is a symlink
+to the repo's own `CLAUDE.md` — an atomic rename replaces the link with a plain file and
+severs the single source of truth. It also writes a `UserPromptSubmit` prompt-hook, and its
+CLI exposes no flag to decline that. Delegating registration to Claude Code's own CLI gets
+exactly the one effect wanted (an `mcpServers.codegraph` entry in `~/.claude.json`) and none
+of the rest. Permissions are granted from this repo's `settings.json` instead of by the
+external installer, and at tool granularity (`mcp__codegraph__codegraph_explore`) rather than
+the server wildcard upstream would add. That entry doubles as the ownership marker: `register`
+writes a fixed command, args, and telemetry opt-out env (`install/codegraph-constants.txt`,
+which also pins the npm version), and `unregister` removes the entry only when all three still
+match — a `codegraph` server the user registered by hand is never destroyed by an installer run.
+Because `codegraph_explore` returns verbatim source, it is also matched by
+`hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
+candidate paths.
+
+**`hooks/post-checkout` and `hooks/post-merge` hold two guards with opposite scope, and the
+order is load-bearing.** The settings-assembly guard exits for every repo except the agents
+main worktree. A CodeGraph index must be refreshed wherever it exists — above all in linked
+worktrees, which that guard excludes. So the CodeGraph block sits *before* it, self-contained
+and never calling `exit`; `BEGIN`/`END` markers mark the boundary and a static test pins the
+line order, because silently swapping them would disable the feature without failing anything.
+
+**Index health is judged by reading the database, not by asking `codegraph status`.** The
+wrapper opens `.codegraph/codegraph.db` read-only and checks the schema and
+`project_metadata.index_state` (`bin/codegraph-lifecycle/index-health.js`). `status` is
+secondary information derived from that same file, and obtaining it means starting a
+`codegraph` process on every checkout — the cost the check exists to avoid. Reading directly
+also catches what a file-existence test cannot: a 0-byte, truncated, or foreign database.
+When the schema cannot be read at all the verdict is `unverifiable` and `sync` fails closed.
+Repair is `index -q`, never `init -y`, because upstream treats any existing `codegraph.db` as
+initialized. When a rebuild fails the old database is moved to `.codegraph/broken/` — a
+last-resort holding slot with a fixed name, so quarantines replace rather than accumulate —
+and never deleted outright.

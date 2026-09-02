@@ -130,7 +130,8 @@
       "WebFetch(domain:spec.modelcontextprotocol.io)",
       "WebFetch(domain:code.visualstudio.com)",
       "Bash(node * hooks/cleanup-orphan-dir.js *)",
-      "Bash(node *\\hooks\\cleanup-orphan-dir.js *)"
+      "Bash(node *\\hooks\\cleanup-orphan-dir.js *)",
+      "mcp__codegraph__codegraph_explore"
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
@@ -391,7 +392,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
         "hooks": [
           {
             "type": "command",
@@ -401,7 +402,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
         "hooks": [
           {
             "type": "command",

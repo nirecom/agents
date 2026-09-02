@@ -1,25 +1,14 @@
 #!/usr/bin/env bash
 #
-# bin/sweep-worktrees.sh
-#
-# Reclaims zombie linked worktrees and their branches. Also scans
-# WORKTREE_BASE_DIR for orphan directories not tracked by git's worktree
-# registry. Deletes by default; pass --dry-run to preview.
-#
-# Usage:
-#   sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode]
-#                      [--apply] [--skip-gh-check] [--simulate-eperm]
-#
-# Entrypoint only: flag parsing, environment checks, the registered-worktree
-# main loop, and pass sequencing. The rest lives in the sibling
-# bin/sweep-worktrees/ modules (rules/coding/file-split.md Pattern A):
-#   gates.sh        — norm_path plus the per-worktree safety gates
-#   empty-parent.sh — cross-repo parent discovery and the empty-parent pass
-#   orphan-dirs.sh  — orphan-directory scan and stale-backup cleanup
-#   summary.sh      — CI-mode JSON and plain-text summary
-#
-# Exit code: 0 on normal completion (per-worktree EPERM is non-fatal).
-#            1 only on fatal setup error (missing AGENTS_CONFIG_DIR, git, etc.).
+# bin/sweep-worktrees.sh — reclaims zombie linked worktrees and their branches,
+# and scans WORKTREE_BASE_DIR for orphan directories git's worktree registry
+# does not track. Deletes by default; pass --dry-run to preview.
+# Usage: sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode]
+#                           [--apply] [--skip-gh-check] [--simulate-eperm]
+# Entrypoint only — flag parsing, environment checks, the registered-worktree
+# main loop, and pass sequencing; the passes live in bin/sweep-worktrees/
+# (rules/coding/file-split.md Pattern A). Exit 0 on normal completion (a
+# per-worktree EPERM is non-fatal), 1 only on a fatal setup error.
 
 set -euo pipefail
 
@@ -213,6 +202,11 @@ process_record() {
   if [[ "$APPLY" != "1" ]]; then
     printf 'DRY-RUN: candidate worktree=%s branch=%s\n' "$wt_path" "$branch"
     return 0
+  fi
+
+  # Release the CodeGraph index lock (Windows file lock) before removal.
+  if command -v node >/dev/null 2>&1; then
+    node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path "$wt_path" || true
   fi
 
   # (a) git worktree remove.

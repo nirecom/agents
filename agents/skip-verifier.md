@@ -1,7 +1,7 @@
 ---
 name: skip-verifier
 description: Verifies whether a speculative skip (outline or detail) is safe based on session intent and outline artifacts.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: sonnet
 user-invocable: false
 ---
@@ -33,3 +33,4 @@ SV-5. Return result: `VERDICT=<confirm|veto> TARGET=<target>`.
 - `veto` when uncertain — a false `confirm` can skip a stage that was necessary.
 - Do NOT read source code or implementation files; evaluate design artifacts only.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
