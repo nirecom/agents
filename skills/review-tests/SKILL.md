@@ -12,6 +12,8 @@ Review test case completeness against source code via Codex (single round, no re
 
 Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
+Read `rules/shell-commands.md` before the first Bash command, or before writing a file — defensive measure: RT-2's incident showed the rule content was not effectively available at Bash-issuance time in this `context: fork` execution.
+
 RT-0. Resolve the session-bound linked worktree path:
   `WORKTREE="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path")"`
   If `WORKTREE == "NOSTATE"`, set `WORKTREE=""` — the internal scripts handle the CWD-fallback path for that case.
@@ -27,7 +29,7 @@ RT-1. Identify staged test file(s) and source file(s):
     present "Could not identify the linked worktree. Re-run `/review-tests` from the linked worktree, or specify the test and source files manually."
     and ask the user for the files.
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
-RT-2. Assemble review input — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md` via Write. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
+RT-2. Assemble review input via the Write tool only — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md`. Do not substitute Bash-based assembly for the Write tool call in this step — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
 RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; single-round — no re-loop):
 - exit 0 APPROVED → RT-5 COMPLETE.
 - exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS (no re-loop).

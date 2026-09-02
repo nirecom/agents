@@ -12,7 +12,6 @@ Edit source code for the current task.
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below.
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
-
 Read `rules/ops.md` before any destructive or system-state-changing command (including inside WCD-4 self-repair) — on-demand-only, never auto-injected; it owns the recovery-options-first decision path.
 
 WCD-1. Read `rules/core-principles.md`, `rules/coding.md` (on-demand-only: not auto-injected, so this Read is the only way it arrives), and the target files identified from the plan.
@@ -36,6 +35,7 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model deri
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
    - Directive: "Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules."
    - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."
+   - Directive: "Read `rules/ops.md` before any destructive or system-state-changing command inside self-repair — general-purpose dispatch does not inherit auto-injected rules; on-demand-only, so it does not reach you otherwise."
    - Lint/typecheck recipe table (see below).
    - Self-repair cap: 3 iterations; if still failing after 3, surface tool output verbatim.
    - Lint-tool absence policy: when a tool is unavailable, skip that check AND emit `<tool> not found — check skipped` in the final summary. Never omit this notice.

@@ -62,6 +62,47 @@ file, because its Tool Selection Priority section decides whether the write goes
 Write tool or through shell syntax at all — a subagent told to Read it only "before the first
 Bash command" has already made that choice wrongly by the time the directive fires.
 
+A **third** shape exists: `context: fork`, official frontmatter introduced in #501. Named
+dispatch and general-purpose dispatch each hand a subagent one bounded task; a forked skill
+instead runs its whole procedure — every step, every tool call — in a forked session rather
+than in the main conversation.
+
+What follows is an observation about effect, not a claim about the loader. In review-tests
+RT-2 a fork execution assembled its review input by issuing a compound Bash command carrying
+prohibited literals, and the guard refused it. That is evidence the `rules/shell-commands.md`
+text was not effectively available at Bash-issuance time. It is **not** proof that the fork
+loader withholds `EXPECTED_UNCONDITIONAL`: the fork-time injection path itself was not
+verified in this session, and verifying it needs a TL3-grade real-environment test, which is
+out of scope here. Because the cause is unidentified, the countermeasure is chosen to hold
+whatever the cause turns out to be — an explicit Read directive in the skill's own text,
+reusing the same pattern general-purpose dispatch already relies on.
+
+Concretely: `skills/review-tests/SKILL.md` carries that `rules/shell-commands.md` directive at
+the top of its `## Procedure`, ahead of RT-0, and `skills/refactor-prompts/SKILL.md` carries it
+in step 2, ahead of the command substitution that step issues. The same pass closed two gaps on
+the general-purpose sites — WCD-4 gained a Read of `rules/ops.md`, and WT-6 gained Reads of the
+`rules/coding.md` hub and of `rules/test.md`.
+
+`rules/ops.md` was deliberately **not** added to WT-6. The filter is action-triggered, not
+symmetric: write-code already acknowledges that ops.md applies inside WCD-4's self-repair loop,
+whereas WT-6's procedure names no action ops.md governs and has no counterpart to that
+acknowledgement. Adding it on symmetry alone would not pass the filter.
+
+The five remaining unconditional rules — `core-principles`, `git`, `stop-guard-exemptions`,
+`supervisor-reporting`, `workflow-off` — were likewise not added to WCD-4 or WT-6. They govern
+the parent orchestrator's own conduct, and that responsibility stays with the orchestrator.
+
+The rest of the fork population was inventoried and is out of scope. The other 13
+`context: fork` skills — `review-plan-security`, `save-research`, `update-infrastructure`,
+`sweep-branches`, `sweep-plans`, `sweep-supervisor-state`, `sweep-worktrees`, `create-key`, and
+the five `aws-scan` skills — only invoke fixed scripts or enumerate single CLI calls. None
+assembles free-form Bash, so none can reproduce RT-2's shape.
+
+The two axes must not be conflated. The invariant "general-purpose dispatch sites are exactly
+two", pinned by `tests/feature-2124-tool-selection-priority/injection-policy.sh` U8a, counts
+`mode: "default"` sites. `context: fork` is a different axis, contributes nothing to that count,
+and leaves it unchanged.
+
 ## The on-demand notation
 
 Two things together, both required:
@@ -133,11 +174,11 @@ Eight rules are on demand. The table below is the declaration's own content
 | Rule | Read by |
 |---|---|
 | `rules/branch.md` | `/make-detail-plan`, `/worktree-start` |
-| `rules/coding.md` | `/write-code` |
+| `rules/coding.md` | `/write-code`, `/issue-create`, `/commit-push`, `/update-docs`, `/worktree-end`, `/issue-close-stage`, `/issue-close-finalize`, `/write-tests` |
 | `rules/docs.md` | `/update-docs` |
 | `rules/github-issues.md` | `/issue-create`, `/issue-close-stage`, `/issue-close-finalize`, `/issue-reconcile`, `/issue-close-migrated`, `/clarify-intent`, `/commit-push`, `/worktree-end`, `/workflow-init`, `/sweep-issues`, `/issue-setup` |
 | `rules/mid-workflow-findings.md` | `/issue-create`, `/worktree-end` |
-| `rules/ops.md` | `/worktree-end` |
+| `rules/ops.md` | `/worktree-end`, `/write-code`, `/worktree-start` |
 | `rules/test.md` | `/write-tests`, `/review-tests`, `/run-tests` |
 | `rules/worktree.md` | `/make-detail-plan`, `/worktree-start` |
 
