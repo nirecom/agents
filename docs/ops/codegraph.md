@@ -65,27 +65,83 @@ registration is left untouched — and is never removed when the flag goes back 
 
 ### 3. Build the index — once per worktree
 
-The index lives at `<worktree>/.codegraph/codegraph.db`. It is a **per-worktree artifact on
-disk**, not per-session state, so it must be built once for each worktree you actually work in:
+Steps 1 and 2 are global and belong to whoever owns the machine's config. Step 3 is per-worktree
+and has to happen in each worktree separately, including the main one. It is written up for that
+audience below: [One-time worktree init](#one-time-worktree-init).
+
+Point other sessions at that section rather than restating the command — it is the single source
+of truth for the procedure.
+
+## One-time worktree init
+
+**Audience: a session working inside a worktree that already existed when CodeGraph was turned
+on.** Run this once for your worktree. Nothing else is asked of you.
+
+### Why this is not automatic
+
+The index lives at `<worktree>/.codegraph/codegraph.db` — a **per-worktree file on disk**, not
+per-session state. Two mechanisms normally keep it current, and neither covers a worktree that
+predates the flag:
+
+- `/worktree-start` (WS-7a) builds the index for worktrees **it creates**. Yours was not created
+  by it, or was created before the flag went on.
+- `hooks/post-checkout` and `hooks/post-merge` **refresh an index that already exists**. They
+  deliberately never build one from scratch, because they fire on every checkout and merge where
+  a wrong guess must cost nothing.
+
+So the very first build is the one thing left to do by hand. It is a one-time migration —
+worktrees created from here on are covered by WS-7a.
+
+### The command
+
+From inside your worktree:
 
 ```bash
-node bin/codegraph-lifecycle.js init --path C:\git\agents
-node bin/codegraph-lifecycle.js init --path C:\git\worktrees\2153-env-example\agents
+node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" init --path "$(git rev-parse --show-toplevel)"
 ```
 
-Notes:
+Or with the path written out:
 
-- `--path` takes the **worktree root** — the directory holding the `.git` file. Worktree paths
-  here are two levels (`<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>`), so include the trailing
-  repo name. Pointing at the parent creates the index in the wrong place.
-- `node bin/...` resolves only when the CWD is the agents repo root; from anywhere else use the
-  absolute script path.
-- It is **idempotent**. A healthy index short-circuits to a no-op, a broken one is rebuilt
-  (`codegraph index -q`, then quarantine and re-init if that fails), an absent one is built
-  (`codegraph init -y`). When in doubt, just run it.
-- Only worktrees you are actively working in need this. A stale worktree left registered in
-  `git worktree list` costs nothing by being skipped.
-- The first build takes a while and produces a sizeable file (roughly 15 MB for this repo).
+```bash
+node C:\git\agents\bin\codegraph-lifecycle.js init --path C:\git\worktrees\2153-env-example\agents
+```
+
+- `--path` takes the **worktree root** — the directory holding the `.git` file. Worktree paths in
+  this repo are two levels (`<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>`), so include the
+  trailing repo name. Pointing at the parent puts the index in the wrong place.
+- A bare `node bin/...` resolves only when the CWD is the agents repo root. From a worktree, use
+  the absolute script path as shown. Your worktree's own checkout of the script works too — it is
+  the same tracked file.
+
+### What to expect
+
+- **It is idempotent.** A healthy index short-circuits to a no-op, a broken one is rebuilt, an
+  absent one is built. When in doubt, just run it.
+- Silence means the index was already fine. `index ready for <root>` means it built one.
+- The first build takes a few minutes and produces a sizeable file (roughly 15 MB for this repo).
+- It always exits 0. A CodeGraph problem must never halt the pipeline that called it.
+
+Verify afterwards:
+
+```bash
+ls .codegraph/codegraph.db
+```
+
+Any warning on stderr is explained under [Troubleshooting](#troubleshooting).
+
+### When you do *not* need this
+
+- Your worktree was created by `/worktree-start` after the flag went on — WS-7a already did it.
+- A worktree you are not actively working in. A stale entry in `git worktree list` costs nothing
+  by being skipped; there is no need to sweep them all.
+- A second session entering a worktree that is already initialized. The index is keyed to the
+  path, not to the session, so re-running is a no-op rather than a requirement.
+
+### If you skip it
+
+Nothing breaks. `mcp__codegraph__codegraph_explore` degrades silently to Read/Grep when the index
+is missing, per [`agents/lib/codegraph-usage.md`](../../agents/lib/codegraph-usage.md). You simply
+do not get the faster lookups in that worktree.
 
 ## What happens automatically
 
@@ -93,13 +149,12 @@ Once the flag is on and the binary is installed, these need no operator action:
 
 | Trigger | Effect |
 |---|---|
-| `/worktree-start` (WS-7a) | Builds the index for the new worktree — step 3 above is already done for anything created this way |
-| `hooks/post-checkout`, `hooks/post-merge` | Refreshes the index (`codegraph sync -q`) — **only when a healthy index already exists**; it never builds one from scratch |
+| `/worktree-start` (WS-7a) | Builds the index for the new worktree |
+| `hooks/post-checkout`, `hooks/post-merge` | Refreshes the index (`codegraph sync -q`) — only when a healthy index already exists |
 | `/worktree-end` cleanup cascade | Stops the worktree's daemon before removing the directory |
 
-The consequence of the middle row: a worktree that pre-dates the flag being turned on never gets
-an index from the git hooks alone. That is exactly the gap step 3 fills, and it is a one-time
-migration — worktrees created from now on are covered by WS-7a.
+Between them these two rows leave exactly one gap, which
+[One-time worktree init](#one-time-worktree-init) covers.
 
 ## Turning it off
 
