@@ -131,7 +131,9 @@ only test files, never source code. See `write-tests` skill for the procedure.
 ## 6. settings.json Drift Prevention
 
 `~/.claude/settings.json` is a copy-deployed file assembled by `install/assemble-settings.js`
-from `agents/settings.json` (base) + `agents/settings-extension.json` (extension).
+from `agents/settings.json` (base) + `agents/settings-extension.json` (extension) + the allow
+rules generated from `install/settings-allow-commands.txt`, which are injected at deploy time
+and never tracked in the repository (see `claude-code/settings.md`).
 It cannot be a symlink because the extension contains host-private absolute paths.
 
 **Problem:** When `settings.json` gains new hook registrations or permission entries after
@@ -142,17 +144,32 @@ entries cause workflow sessions to stall on blocked tool calls or absent sentine
 
 | Layer | Hook | Trigger | Action |
 |---|---|---|---|
-| Proactive | `hooks/post-merge` | git merge / pull changes `settings.json` or `settings-extension.json` | Auto-reassemble `~/.claude/settings.json` |
-| Proactive | `hooks/post-checkout` | Branch switch changes those files | Auto-reassemble |
+| Proactive | `hooks/post-merge` | git merge / pull changes anything that defines the deployed permission surface | Auto-reassemble `~/.claude/settings.json` |
+| Proactive | `hooks/post-checkout` | Branch switch changes any of the same inputs | Auto-reassemble |
 | Backstop | `hooks/session-start.js` + `hooks/lib/settings-drift.js` | Every session start | Detect missing entries; inject `WARNING` into `additionalContext` |
+
+**Reassembly trigger** (both git hooks, two stages): stage 1 is the fixed file set —
+`settings.json`, `settings-extension.json`, `install/settings-allow-commands.txt`,
+`install/path-exposed-commands.txt`, `install/gen-settings-allow.js`,
+`install/assemble-settings.js`, `install/lib/*.js`. Stage 2 is read out of the allow-rule SSOT
+itself: editing a command that file lists moves the generated spellings exactly as editing
+`settings.json` does, so the SSOT's own entries are compared against the changed paths. The SSOT
+is read through `tr -d '\r'` because `core.autocrlf=true` is the Windows default and a surviving
+CR would make the whole-line comparison silently never match.
 
 **Repo guard:** Both git hooks compare `git rev-parse --show-toplevel` against the agents
 root to fire only inside the agents repo (not in every repo on the machine that uses
 `core.hooksPath`). All hooks are fail-open — any assembler error exits 0.
 
 **Drift detection algorithm** (`hooks/lib/settings-drift.js`):
-- Permissions (`allow`, `deny`, `ask`, `additionalDirectories`): subset check — every entry
-  present in base+ext must exist in the assembled file.
+- The expectation is built by `install/lib/settings-assembly.js` — the same builder the deploy
+  writes from — so a drift report can never disagree with what a redeploy would actually
+  produce, and the generated allow rules are part of what is checked.
+- When that builder cannot expand the allow rules, session-start emits a second, separate
+  `WARNING` naming the reason: the drift check silently covered less than usual, and a narrowed
+  check must not read as a clean bill of health.
+- Permissions (`allow`, `deny`, `ask`, `additionalDirectories`): subset check — every expected
+  entry must exist in the assembled file.
 - Hooks: multiset count — the same `matcher` string can appear multiple times (e.g., one
   per PreToolUse command), so a Map-based count is used instead of a Set.
 

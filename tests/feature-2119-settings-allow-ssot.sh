@@ -1,83 +1,69 @@
 #!/usr/bin/env bash
 # tests/feature-2119-settings-allow-ssot.sh
-# Tests: install/settings-allow-commands.txt, install/gen-settings-allow.js, bin/review-settings-allow, hooks/pre-commit, settings.json, docs/architecture/claude-code/settings.md
+# Tests: install/settings-allow-commands.txt, install/lib/settings-allow-rules.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js, hooks/lib/settings-drift.js, hooks/post-merge, hooks/post-checkout, settings.json, docs/architecture/claude-code/settings.md
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
 set -uo pipefail
 
-# THE INCIDENT. The permission engine matches allow rules against the WHOLE command string,
+# THE INCIDENT. The permission engine matches an allow rule against the WHOLE command string,
 # so one internal tool spelled two ways is two patterns and the second one falls back to
-# `ask`. settings.json carries seven hand-written rules for agents' own tools, and not one of
-# the ten most-denied commands has a rule at all. What is missing is not "a rule" but "every
-# spelling variant of each command" — the `$AGENTS_CONFIG_DIR` form, the two path forms, the
-# bare form, the `bash -c` form, the `cd && ` form. Hand maintenance cannot track that.
+# `ask`. Every generated spelling ended in ` *`, and a trailing ` *` demands the space in
+# front of it -- so `Bash(node bin/workflow/next-step *)` never matched the argument-less
+# `node bin/workflow/next-step` the model actually issues. Measured denials confirmed it.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# THE ROOT CAUSE is that "which internal command is allow-listed" exists only as ~150
-# hand-typed strings inside settings.json, with the command, the interpreter and the spelling
-# template smeared together in each one. Adding a command means remembering eight spellings;
-# forgetting is silent, because the failure mode is a prompt in someone's future session
-# rather than a red test today (CPR-SSOT: one canonical location owns the fact; CPR-E2C: the
-# class is "agents-internal auto-issued command", not the ten sampled members).
+# THE ROOT CAUSE has two halves. (1) Each spelling family had only its argument-bearing form,
+# so the argument-less invocation had no rule at all. (2) The rules lived in the repository's
+# own settings.json, where "which internal command is allow-listed" was ~150 hand-typed
+# strings a human had to keep in step with the SSOT (CPR-SSOT: one canonical location owns
+# the fact; CPR-ORTH: a treatment one family needs, every sibling family needs).
 
 SSOT_REL="install/settings-allow-commands.txt"
 SSOT="$AGENTS_DIR/$SSOT_REL"
 PATH_SSOT_REL="install/path-exposed-commands.txt"
 PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
 
-# THE CONTRACT UNDER TEST. One declarative file, install/settings-allow-commands.txt, names
-# the commands and nothing else — no interpreter (read from the shebang), no rule strings, no
-# bare-form flag (decided by install/path-exposed-commands.txt). install/gen-settings-allow.js
-# owns the template table in ONE place and expands each entry into 8 path spellings plus 3
-# bare spellings for PATH-exposed commands; `--check` reports both missing AND orphaned
-# entries, `--write` appends only. bin/review-settings-allow turns `--check` into a
-# PERFORMED/FAIL binary and hooks/pre-commit blocks the commit on any non-zero — fail-closed,
-# so deleting the gate cannot disable the gate.
+# THE CONTRACT UNDER TEST. One declarative file names the commands and nothing else -- no
+# interpreter (read from the shebang), no rule strings, no bare-form flag (decided by
+# install/path-exposed-commands.txt). install/lib/settings-allow-rules.js owns the template
+# table in ONE place and expands each entry into 16 path spellings plus 6 bare spellings, as
+# adjacent argument-bearing / argument-less PAIRS. install/lib/settings-assembly.js merges
+# base + extension + generated; install/lib/settings-deploy.js is the single writer of
+# ~/.claude/settings.json. The generated rules are INJECTED AT DEPLOY TIME and never live in
+# the repository's settings.json, so there is nothing left for a human to hand-maintain.
 
 GEN_REL="install/gen-settings-allow.js"
 GEN="$AGENTS_DIR/$GEN_REL"
-REVIEW_REL="bin/review-settings-allow"
-REVIEW="$AGENTS_DIR/$REVIEW_REL"
+ASSEMBLE_REL="install/assemble-settings.js"
+ASSEMBLE="$AGENTS_DIR/$ASSEMBLE_REL"
 SETTINGS_REL="settings.json"
 SETTINGS="$AGENTS_DIR/$SETTINGS_REL"
+LIB_DIR="$AGENTS_DIR/install/lib"
+LIB_REL_LIST="install/lib/settings-allow-rules.js, settings-assembly.js, settings-deploy.js"
 
 # OUT OF SCOPE: install/path-exposed-commands.txt itself (read to decide bare forms, never
-# copied and never modified); wrapper launchers such as bin/run-with-timeout.sh, whose
-# trailing ` *` template would allow-list every command reachable through them; gh-write and
-# git-state-changing commands; and the deployed ~/.claude/settings.json, which nothing here
-# reads or writes.
-
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
-
-# LAYER. Static/structural, plus two fixture-driven integration families that never touch the
-# real tree: the generator and the review script are COPIED into a temp fixture and run with
-# cwd set there, and the pre-commit family runs the real hooks/pre-commit inside a throwaway
-# repo that doubles as its own AGENTS_CONFIG_DIR. The only thing read from the real repo is
-# text; the only real-repo execution is `--check`, which writes nothing.
+# modified); wrapper launchers such as bin/run-with-timeout.sh, whose trailing ` *` template
+# would allow-list every command reachable through them; gh-write and git-state-changing
+# commands; and the developer's OWN ~/.claude/settings.json, which home-canary.sh pins as
+# untouched even though these cases now really do deploy (into fixture-private homes).
 
 PASS=0
 FAIL=0
 SKIP=0
 
-# SKIPPED: asserting that the generated spellings actually stop the permission engine from
-#          prompting — i.e. running each of the eight forms in a live Claude Code session.
-# Because: an approved `ask` leaves no observable record, so a passive after-the-fact check
-#          cannot distinguish "matched an allow rule" from "the user pressed yes".
+# LAYER. Static/structural, plus fixture-driven integration that never touches the real tree
+# or the real home: the install layer is COPIED into a temp fixture, run with cwd set there,
+# and pointed at a fixture-private HOME per subprocess.
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-# TL3 gap (what this test does NOT catch):
-# - Whether the permission engine matches the generated spellings at all: rule matching is
-#   the engine's behaviour, and it is exercised only by a real session.
-# - Whether a spelling that matches here is the spelling the model actually issues.
-# - Whether the `cd "$AGENTS_CONFIG_DIR" && ...` forms are needed — the non-splitting of `&&`
-#   is taken from docs/architecture/claude-code/settings.md, not measured here.
-# - Whether git really invokes hooks/pre-commit through core.hooksPath on the developer's box.
-# Closest-to-action mitigation: live spot-check of one command per spelling family at the
-# WORKFLOW_USER_VERIFIED preflight, before the PR is marked verified.
+# SKIPPED: asserting that the generated spellings actually stop the permission engine from
+#          prompting -- i.e. running each of the 22 forms in a live Claude Code session.
+# Because: an approved `ask` leaves no observable record, so a passive after-the-fact check
+#          cannot distinguish "matched an allow rule" from "the user pressed yes".
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -85,13 +71,35 @@ assert_eq() {
     else echo "FAIL: $name -- want [$want] got [$got]"; FAIL=$((FAIL + 1)); fi
 }
 
+# TL3 gap (what this test does NOT catch):
+# - Whether the permission engine matches the generated spellings at all -- rule matching is
+#   the engine's behaviour, exercised only by a real session.
+# - Whether the ARGUMENT-LESS exact-match spellings are ACCEPTED by that engine: this suite
+#   proves they are generated and that no prefix form is emitted, but "an exact
+#   `Bash(node bin/workflow/next-step)` rule stops the prompt" is measurable only live --
+#   which is exactly the measurement that opened this issue.
+# - Whether a spelling that matches here is the spelling the model actually issues.
+# - Whether the `cd "$AGENTS_CONFIG_DIR" && ...` forms are needed: the non-splitting of `&&`
+#   is taken from docs/architecture/claude-code/settings.md, not measured here.
+
+ROWS=0
+
+# Closest-to-action mitigation for the gap above: a live spot-check of one command per spelling
+# family, in BOTH the argument-bearing and the argument-less form, at the WORKFLOW_USER_VERIFIED
+# preflight. The staged claude-global/settings.json makes bin/check-verification-gate.sh fire
+# category `hook-registration`, which is the prompt forcing that spot-check.
+# The two git-hook CALLERS are covered at TL2 by hook-callers.sh (real assembler, fixture HOME);
+# only what needs a real machine is deferred -- reason in tests/fix-846-settings-drift-hooks.sh.
+#
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS=0
-ROWS_EXPECTED=154  # T3a 3 + T3b 18 + T4 14 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3 + T7b 2 + T7c 2
-                   # + T11 4 + T12 3 + T25 6 + T13 15 + T14 8 + T15 3 + T16 5 + T17 12
-                   # + T8 6 + T9 6 + T18 10 + T20 5 + T21 3 + T24 5 + T22 3 + T23 10
+ROWS_EXPECTED=486 # T3a 4 + T3b 19 + T46 10 + T4 25 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
+                   # + T7b 2 + T7c 2 + T11 4 + T12 3 + T25 6 + T13 15 + T14 16 + T15 6
+                   # + T16 5 + T17 18 + T26 17 + T27 9 + T28 14 + T29 20 + T30 13 + T22 3
+                   # + T23 26 + T31 95 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8
+                   # + T37 8 + T38 5 + T39 3 + T40 16 + T41 17 + T42 7 + T43 33 + T44 12
+                   # + T47 4
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/sa-2119.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -123,12 +131,19 @@ ssot_entries() { # <file>
 # MISSING-ARTIFACT SENTINELS. A case whose implementation does not exist yet must fail with a
 # message naming the artifact, never crash the run: the helpers below return a sentinel
 # string that flows into assert_eq's "got" side, so the table keeps executing its rows and
-# the T10 budget stays meaningful.
-missing_gen()    { printf '<MISSING:%s>' "$GEN_REL"; }
-missing_review() { printf '<MISSING:%s>' "$REVIEW_REL"; }
+# the T10 budget stays meaningful. The lib sentinel is separate from the CLI one on purpose:
+# a CLI present without its modules fails as MODULE_NOT_FOUND, and every rc=2 row in the
+# suite would otherwise read that crash as successful input validation.
+missing_gen()      { printf '<MISSING:%s>' "$GEN_REL"; }
+missing_lib()      { printf '<MISSING:%s>' "$LIB_REL_LIST"; }
+missing_assemble() { printf '<MISSING:%s>' "$ASSEMBLE_REL"; }
 
-have_gen()    { [ -f "$GEN" ]; }
-have_review() { [ -f "$REVIEW" ]; }
+have_gen() { [ -f "$GEN" ]; }
+have_lib() {
+    [ -f "$LIB_DIR/settings-allow-rules.js" ] &&
+    [ -f "$LIB_DIR/settings-assembly.js" ] &&
+    [ -f "$LIB_DIR/settings-deploy.js" ]
+}
 
 PART_DIR="$AGENTS_DIR/tests/feature-2119-settings-allow-ssot"
 
@@ -143,16 +158,23 @@ canary_setup
 . "$PART_DIR/generator.sh"
 . "$PART_DIR/write-and-drift.sh"
 . "$PART_DIR/settings-preservation.sh"
+. "$PART_DIR/merger-contract.sh"
 . "$PART_DIR/orphan-preservation.sh"
 . "$PART_DIR/input-validation.sh"
 . "$PART_DIR/orphan-classifier.sh"
+. "$PART_DIR/orphan-negative.sh"
 . "$PART_DIR/cli-contract.sh"
-. "$PART_DIR/review-script.sh"
-. "$PART_DIR/review-diagnostics.sh"
-. "$PART_DIR/precommit.sh"
-. "$PART_DIR/precommit-real-commit.sh"
-. "$PART_DIR/precommit-synchronized.sh"
+. "$PART_DIR/template-pairs.sh"
+. "$PART_DIR/argless-and-prefix.sh"
+. "$PART_DIR/provider-purity.sh"
+. "$PART_DIR/assembler-failclosed.sh"
+. "$PART_DIR/deploy-preconditions.sh"
+. "$PART_DIR/deploy-symlink-policy.sh"
+. "$PART_DIR/drift-detection.sh"
 . "$PART_DIR/docs-contract.sh"
+. "$PART_DIR/real-repo-expansion.sh"
+. "$PART_DIR/retirement.sh"
+. "$PART_DIR/hook-callers.sh"
 
 t22_home_canary
 

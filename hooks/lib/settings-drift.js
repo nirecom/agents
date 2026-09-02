@@ -1,5 +1,6 @@
-// Drift detection: compares agents/settings.json (base) + settings-extension.json (ext)
-// against ~/.claude/settings.json (assembled). Consumed by hooks/session-start.js.
+// Drift detection: compares the expectation built by install/lib/settings-assembly.js
+// (base + extension + generated allow rules) against ~/.claude/settings.json (assembled).
+// Consumed by hooks/session-start.js.
 //
 // agentsRoot resolution: this module is loaded from the globally-set core.hooksPath
 // (agents/hooks/lib/), so __dirname always resolves to the agents MAIN worktree's
@@ -57,8 +58,6 @@ function hookMatchersMissing(expectedHookEntries, assembledHookEntries) {
 }
 
 function detectDrift({ homeDir }) {
-  const basePath = path.join(agentsRoot, 'settings.json');
-  const extPath = path.join(agentsRoot, 'settings-extension.json');
   const assembledPath = path.join(homeDir, '.claude', 'settings.json');
 
   // (1) assembled file missing
@@ -74,43 +73,39 @@ function detectDrift({ homeDir }) {
     return { drifted: true, broken: true, reason: err.message };
   }
 
-  // (3) base/ext read/parse error (fail-open)
-  let base;
-  let ext;
+  // (3) expectation: the SAME builder the installer deploys from, so a drift report can never
+  // disagree with what a redeploy would actually write. The require() sits INSIDE the try
+  // because a hook may run from a tree that has no install layer at all — that is a reason to
+  // stay silent, not to crash the session.
+  let expected;
+  let generatorError = '';
   try {
-    base = readJson(basePath);
+    const assembly = require(path.join(agentsRoot, 'install', 'lib', 'settings-assembly.js'));
+    const built = assembly.buildAssembledSettings({ agentsRoot });
+    expected = built.settings;
+    generatorError = built.generatorError;
   } catch (err) {
-    return { drifted: false, sourceUnreadable: true, reason: 'base: ' + err.message };
-  }
-  try {
-    ext = fs.existsSync(extPath) ? readJson(extPath) : {};
-  } catch (err) {
-    return { drifted: false, sourceUnreadable: true, reason: 'ext: ' + err.message };
+    return { drifted: false, sourceUnreadable: true, reason: 'settings source: ' + err.message };
   }
 
-  // (4) compute expected entries using concat semantics
+  // (4) every expected entry must be present in the assembled document
   const permKeys = ['allow', 'deny', 'ask', 'additionalDirectories'];
-  const basePerm = (base && base.permissions) || {};
-  const extPerm = (ext && ext.permissions) || {};
+  const expectedPerm = (expected && expected.permissions) || {};
   const assembledPerm = (assembled && assembled.permissions) || {};
 
   const missingPermissions = { allow: [], deny: [], ask: [] };
   for (const pk of permKeys) {
-    const expected = (Array.isArray(basePerm[pk]) ? basePerm[pk] : [])
-      .concat(Array.isArray(extPerm[pk]) ? extPerm[pk] : []);
-    missingPermissions[pk] = permKeyMissing(expected, assembledPerm[pk]);
+    const want = Array.isArray(expectedPerm[pk]) ? expectedPerm[pk] : [];
+    missingPermissions[pk] = permKeyMissing(want, assembledPerm[pk]);
   }
 
-  const baseHooks = (base && base.hooks) || {};
-  const extHooks = (ext && ext.hooks) || {};
+  const expectedHooks = (expected && expected.hooks) || {};
   const assembledHooks = (assembled && assembled.hooks) || {};
-  const eventSet = new Set([...Object.keys(baseHooks), ...Object.keys(extHooks)]);
 
   const missingHooks = {};
-  for (const event of eventSet) {
-    const expected = (Array.isArray(baseHooks[event]) ? baseHooks[event] : [])
-      .concat(Array.isArray(extHooks[event]) ? extHooks[event] : []);
-    const missMatchers = hookMatchersMissing(expected, assembledHooks[event]);
+  for (const event of Object.keys(expectedHooks)) {
+    const want = Array.isArray(expectedHooks[event]) ? expectedHooks[event] : [];
+    const missMatchers = hookMatchersMissing(want, assembledHooks[event]);
     if (missMatchers.length > 0) {
       missingHooks[event] = missMatchers;
     }
@@ -119,10 +114,15 @@ function detectDrift({ homeDir }) {
   const anyPermMissing = permKeys.some((pk) => missingPermissions[pk].length > 0);
   const anyHookMissing = Object.keys(missingHooks).length > 0;
 
-  if (anyPermMissing || anyHookMissing) {
-    return { drifted: true, missingPermissions, missingHooks };
+  // generatorUnavailable carries the REASON, not a flag: the session-start warning has to tell
+  // the user what to fix, and an empty string is how "the generator was fine" is spelled.
+  const result = (anyPermMissing || anyHookMissing)
+    ? { drifted: true, missingPermissions, missingHooks }
+    : { drifted: false };
+  if (generatorError) {
+    result.generatorUnavailable = generatorError;
   }
-  return { drifted: false };
+  return result;
 }
 
 module.exports = { detectDrift };
