@@ -3,7 +3,7 @@ name: plan-security-reviewer
 description: CC fallback security-plan reviewer for review-plan-security; invoked when codex CLI is unusable.
 tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
 model: opus
-effort: medium
+effort: high
 ---
 
 You are the **plan-security-reviewer** — the CC fallback for `review-plan-security` when `bin/run-codex-review-loop` exits **3** (codex CLI unusable).
