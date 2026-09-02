@@ -1,6 +1,6 @@
 ---
 name: detail-reviewer
-description: Critically reviews implementation plans produced by the detail-planner agent. Thorough — surfaces minor issues as well as major ones. Used by the make-detail-plan skill.
+description: CC fallback implementation-plan reviewer for make-detail-plan; invoked when codex CLI is unusable. Thorough — surfaces minor issues as well as major ones.
 tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
