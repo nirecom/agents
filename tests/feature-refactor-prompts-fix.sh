@@ -1,18 +1,11 @@
 #!/bin/bash
 # Tests: skills/refactor-prompts/SKILL.md
 # Tags: worktree, start, prompts, refactor, skill, static, TL2, scope:common
-# Tests for skills/refactor-prompts/SKILL.md content fixes (issue #602 PR1, extended by #1910).
-#
-# Asserts static SKILL.md content:
-#   TC1: NO `/tmp/rp-scan.json` redirect (Windows-unsafe pattern).
-#   TC2: USES `SCAN_JSON=$(...)` variable-capture form.
-#   TC3: worktree-start invocation no longer passes `--task-name` (#1910 removed the flag).
-#   TC4: worktree-start invocation no longer passes `--branch-type`.
-#   TC5: worktree-start is invoked as `/worktree-start --headless refactor-prompts`.
-#   TC6: the /worktree-start line contains no `$(` — slash-command args are not
-#        shell-expanded, so the old `$(date +%Y%m%d)` form was a latent bug.
-#
-# TC3-TC6 are RED until the #1910 implementation lands (fail-before-fix).
+# Static content checks for skills/refactor-prompts/SKILL.md (#602 PR1, #1910, #2140).
+# TC1: no /tmp redirect. TC2: no SCAN_JSON=$(...) capture (regression guard, #2140 —
+# replaced by a scratchpad-script + <PLANS_DIR>-file capture, rules/shell-commands.md).
+# TC3-TC4: worktree-start drops --task-name/--branch-type (#1910). TC5: headless form.
+# TC6: the /worktree-start line has no $( (slash-command args aren't shell-expanded).
 
 set -u
 
@@ -39,11 +32,11 @@ else
     pass "TC1: no /tmp/rp-scan.json redirect"
 fi
 
-# --- TC2: SCAN_JSON=$( variable capture form -------------------------------
+# --- TC2: no SCAN_JSON=$( variable capture form (regression guard, #2140) --
 if grep -qE 'SCAN_JSON=\$\(' "$SKILL_MD"; then
-    pass "TC2: SCAN_JSON=\$(...) capture form present"
+    fail "TC2: SCAN_JSON=\$(...) capture form reintroduced (rules/shell-commands.md violation)"
 else
-    fail "TC2: SCAN_JSON=\$(...) capture form missing"
+    pass "TC2: no SCAN_JSON=\$(...) capture form (fixed per #2140)"
 fi
 
 # --- TC3: --task-name flag removed from worktree-start invocation ----------

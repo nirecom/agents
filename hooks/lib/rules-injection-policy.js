@@ -1,14 +1,13 @@
 "use strict";
 
-// SSOT for the rules-injection scope policy (declaration only — no logic, no I/O). Claude Code injects every
-// `rules/**/*.md` file that carries no conditional `paths:` frontmatter into every session unconditionally. A rule that
-// should only be read on demand disables that auto-injection by declaring a single reserved glob that can never match
-// any real path, and by carrying a marker comment in its body so a human reader knows the omission is deliberate.
+// SSOT for the rules-injection scope policy (declaration only — no logic, no I/O). Rationale and full contract:
+// docs/architecture/claude-code/rules-injection.md. Claude Code injects every `rules/**/*.md` file with no conditional
+// `paths:` frontmatter into every session; a rule that should only be read on demand disables that auto-injection with
+// a single reserved glob that can never match a real path, plus a marker comment so a reader knows it is deliberate.
 //
-// Consumers (never the other way round — this file requires nothing): hooks/instructions-loaded-audit.js (runtime
-// verdicts); bin/check-on-demand-rules.sh (static pre-commit invariants; parses this file AS DATA, never require()s
-// it). Because the static checker reads this file with a text parser, keep every declaration below a plain literal on
-// one line: no computed values, no concatenation, no module-body side effects.
+// Consumers (never the other way round — this file requires nothing): hooks/instructions-loaded-audit.js and
+// bin/check-on-demand-rules.sh. Both parse this file AS DATA and never require() it, so keep every declaration below a
+// plain one-line literal: no computed values, no concatenation, no module-body side effects.
 
 // The reserved `paths:` value. It contains a directory segment that cannot
 // exist, so the loader's glob matcher never selects the file.
@@ -33,7 +32,7 @@ const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
 const ON_DEMAND_READERS = [
   // commit-push/worktree-end are excluded here: branch.md's How-to-Finish section only points at them, it carries no decision they act on.
   "rules/branch.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md",
-  "rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md",
+  "rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/write-tests/SKILL.md",
   "rules/docs.md|skills/update-docs/SKILL.md",
   "rules/github-issues.md|skills/issue-create/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/issue-reconcile/SKILL.md,skills/issue-close-migrated/SKILL.md,skills/clarify-intent/SKILL.md,skills/commit-push/SKILL.md,skills/worktree-end/SKILL.md,skills/workflow-init/SKILL.md,skills/sweep-issues/SKILL.md,skills/issue-setup/SKILL.md",
   "rules/mid-workflow-findings.md|skills/issue-create/SKILL.md,skills/worktree-end/SKILL.md",

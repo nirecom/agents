@@ -49,6 +49,9 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST instruct: Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules.
    The subagent prompt MUST instruct: Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules.
+   The subagent prompt MUST instruct: Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit.
+   The subagent prompt MUST instruct: for Bash, PowerShell, JSON, or YAML test files (no `rules/coding/<lang>.md` B-layer exists for these), apply the A-layer language essence from `skills/write-code/SKILL.md`'s "A-layer language essence" section before the first Edit.
+   The subagent prompt MUST instruct: Read `rules/test.md` before writing or running tests — on-demand-only, so it does not reach you otherwise; general-purpose dispatch does not inherit auto-injected rules.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
