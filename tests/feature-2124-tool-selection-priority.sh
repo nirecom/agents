@@ -72,13 +72,14 @@ FAIL=0
 # and the per-session receipt written by hooks/instructions-loaded-audit.js.
 
 ROWS=0
-ROWS_EXPECTED=49   # U2 real: 5 + U2N fixture controls: 16 (4 elements x canonical/inverted = 8,
+ROWS_EXPECTED=51   # U2 real: 5 + U2N fixture controls: 16 (4 elements x canonical/inverted = 8,
                    # plus tool-exception's 8: canonical, inverted, no-class, 4 x partial-*,
                    # contradicted) + U6: 2 + U7: 6 (incl. out-of-block) + U8b named sites: 2
                    # + U6g (#2140/#2141 rule-position control): 4 (in-block, out-of-block,
                    # negated, mixed) + U6h (dispatch_timing_updated negation control): 2
                    # (negated, mixed) + UAL (#2140/#2141 review finding C1, A-layer directive
-                   # pin): 5 (real, in-block, out-of-block, deleted, heading-existence) + U6i
+                   # pin, cycle3 C5 / review-security C5 negation guard): 7 (real, in-block,
+                   # out-of-block, deleted, negated, mixed, heading-existence) + U6i
                    # (#2140/#2141 review finding C2, dispatch-read timing/ordering): 7 (4 real
                    # sites + 3 wrong-way negative fixtures). U6c-f/U10a-d/U11a-b are non-loop
                    # single assertions, no ROWS.

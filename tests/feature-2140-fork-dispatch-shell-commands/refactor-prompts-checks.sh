@@ -122,16 +122,47 @@ SESSION_FILE_TOKEN='<PLANS_DIR>/<session-id>-refactor-prompts-scan.json'
 # None of the literals below contain BRE metacharacters, so plain `grep -i` (no -F) is used
 # wherever case-insensitivity is needed; `grep -F` alone (no -i) is safe and used where the
 # token's case is fixed (`<absolute-path>`, the exact session-file path).
+# C4 fix (#2140/#2141 review cycle3): a bare "write" token had no negation guard here, unlike
+# f1b_prepended_line_is_the_directive above -- see tests/lib/read-directive-negation.sh.
 step2_action_chain_lineno() { # <block-text> -> 1-based lineno within block, or 0
-    local blk="$1" n
-    n="$(printf '%s\n' "$blk" | grep -n -i -- 'scratchpad script' \
+    local blk="$1" hits hit lineno
+    hits="$(printf '%s\n' "$blk" | grep -n -i -- 'scratchpad script' \
         | grep -i -- 'bash' \
         | grep -i -- 'single' \
+        | grep -i -- 'write' \
         | grep -F -- '<absolute-path>' \
         | grep -i -- 'stdout' \
-        | grep -F -- "$SESSION_FILE_TOKEN" \
-        | head -n1 | cut -d: -f1)"
-    printf '%s' "${n:-0}"
+        | grep -F -- "$SESSION_FILE_TOKEN")"
+    [ -n "$hits" ] || { printf '0'; return; }
+    while IFS= read -r hit; do
+        [ -n "$hit" ] || continue
+        lineno="${hit%%:*}"
+        if [ "$(line_negates_verb "${hit#*:}" 'write')" = "no" ]; then
+            printf '%s' "$lineno"
+            return
+        fi
+    done <<STEP2_ACTION_HITS
+$hits
+STEP2_ACTION_HITS
+    printf '0'
+}
+
+# C4 regression guard (#2140/#2141 review cycle3 finding): the vocabulary-co-occurrence check
+# above never required an affirmative "Write" tool mention (fixed above) nor rejected heredoc
+# (`<<`)/redirect (`>`/`>>`) syntax anywhere else in the block -- a rewrite that keeps every
+# vocabulary token on the action line but reintroduces `cat <<EOF > script.sh` a line or two
+# later would pass step2_uses_scratchpad_pattern undetected. Angle-bracket placeholder tokens
+# (`<absolute-path>`, `<PLANS_DIR>`, `<session-id>`) are legitimate prose, not shell redirect
+# syntax, so they are stripped before the heredoc/redirect check runs.
+step2_reintroduces_heredoc_or_redirect() { # <file> -> yes|no
+    local f="$1" blk stripped
+    blk="$(step2_block "$f")"
+    stripped="$(printf '%s\n' "$blk" | sed -E 's/<[A-Za-z0-9_/.:-]+>//g')"
+    if printf '%s\n' "$stripped" | grep -Eq -- '(<<|[<>])'; then
+        printf 'yes'
+    else
+        printf 'no'
+    fi
 }
 
 step2_read_back_lineno() { # <block-text> -> 1-based lineno within block, or 0
@@ -169,6 +200,8 @@ refactor_prompts_checks() {
         "no" "$(step2_reintroduces_command_substitution "$REFACTOR_PROMPTS_SKILL")"
     assert_eq "F2b: step 2 documents the scratchpad-script + <PLANS_DIR>-file capture pattern" \
         "yes" "$(step2_uses_scratchpad_pattern "$REFACTOR_PROMPTS_SKILL")"
+    assert_eq "F2c: step 2 never reintroduces heredoc/redirect syntax (regression guard for the C4 false-green)" \
+        "no" "$(step2_reintroduces_heredoc_or_redirect "$REFACTOR_PROMPTS_SKILL")"
     assert_eq "F3: review-tests/SKILL.md declares context: fork" \
         "yes" "$(frontmatter_has_context_fork "$REVIEW_TESTS_SKILL")"
     assert_eq "F4: refactor-prompts/SKILL.md declares context: fork" \

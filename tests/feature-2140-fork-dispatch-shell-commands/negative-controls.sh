@@ -44,6 +44,31 @@ CHAIN_OUT_OF_ORDER_BODY='   Read the scan output referenced by `<PLANS_DIR>` bef
 # creation action line instead of before it -- f1c must reject the reversed order.
 REVERSED_ORDER_BODY='   Write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"`.
    Read `rules/shell-commands.md` before the first Bash command, or before writing a file.'
+# G17a (#2140/#2141 review cycle3 finding C4): every OLD vocabulary token is present, but the
+# tool is renamed from "Write" to "Create" -- the strengthened chain check must reject this
+# (the old check never required an affirmative "Write" mention at all).
+NO_WRITE_MENTION_BODY='   Create a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+   Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
+# G17b (#2140/#2141 review cycle3 finding C4): the action line itself is untouched (still passes
+# the chain check), but a heredoc-based rewrite is reintroduced a line below it -- the OLD check
+# never scanned for banned heredoc (`<<`)/redirect (`>`) syntax anywhere else in the block.
+HEREDOC_REINTRODUCED_BODY='   Write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+   cat <<EOF > script.sh
+   bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh" > scan.json
+   EOF
+   Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
+
+# G17c (#2140/#2141 review cycle3 finding C4, round-3 coverage gap): every action-chain
+# vocabulary token is present on one line, but "write" itself is negated -- the strengthened
+# chain check's own new negation branch (line_negates_verb ... 'write') must reject this, not
+# just fall through to a false PASS via an untested code path.
+NEGATED_WRITE_BODY='   Do not write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+   Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
+
+# G18 (review-security C1, HIGH): a review-tests fixture whose RT-2 body reintroduces the exact
+# `VAR=$(...)` command-substitution form -- the R6 regression guard must say "yes" (violation
+# present), proving it can actually fail, not just vacuously pass the real (already-fixed) file.
+COMMAND_SUBSTITUTION_RT2_BODY='TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js" "${WORKTREE:-}")'
 
 # GOOD_ACTION_LINE: the fixed step-2 wording (a scratchpad script, no command substitution on
 # the Bash tool's own line). BUGGY_ACTION_LINE: the original #2140 bug pattern -- proves the F2
@@ -222,6 +247,30 @@ negative_controls() {
     make_refactor_prompts_body_fixture "$f" "$REVERSED_ORDER_BODY"
     assert_eq "G16 (C5): the two-trigger directive sitting AFTER the scratchpad-creation action line fails the precedes-action check" \
         "no" "$(f1c_directive_precedes_action_by_lineno "$f")"
+
+    ROWS=$((ROWS + 1))
+    f="$FIXROOT/g17a-no-write-mention.md"
+    make_refactor_prompts_body_fixture "$f" "$NO_WRITE_MENTION_BODY"
+    assert_eq "G17a (C4): renaming the tool mention from Write to Create fails the strengthened chain check" \
+        "no" "$(step2_uses_scratchpad_pattern "$f")"
+
+    ROWS=$((ROWS + 1))
+    f="$FIXROOT/g17b-heredoc-reintroduced.md"
+    make_refactor_prompts_body_fixture "$f" "$HEREDOC_REINTRODUCED_BODY"
+    assert_eq "G17b (C4): a heredoc/redirect rewrite reintroduced beside an intact action line trips the new regression guard" \
+        "yes" "$(step2_reintroduces_heredoc_or_redirect "$f")"
+
+    ROWS=$((ROWS + 1))
+    f="$FIXROOT/g17c-negated-write.md"
+    make_refactor_prompts_body_fixture "$f" "$NEGATED_WRITE_BODY"
+    assert_eq "G17c (C4): every action-chain token present but 'write' itself is negated fails the strengthened chain check" \
+        "no" "$(step2_uses_scratchpad_pattern "$f")"
+
+    ROWS=$((ROWS + 1))
+    f="$FIXROOT/g18-command-substitution-reintroduced.md"
+    make_review_tests_fixture "$f" "$GOOD_DIRECTIVE" "before-rt0" "$COMMAND_SUBSTITUTION_RT2_BODY"
+    assert_eq "G18 (review-security C1): a reintroduced \$( command substitution trips the R6 regression guard" \
+        "yes" "$(skill_reintroduces_command_substitution "$f")"
 }
 
 negative_controls

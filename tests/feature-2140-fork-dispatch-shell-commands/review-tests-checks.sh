@@ -43,12 +43,31 @@ RT2_NEGATION_RE='(do not|do n.t|don.t|never|no need to)([[:space:]]+[a-z]+){0,2}
 # substitute Bash-based assembly for the Write tool call") satisfies this directly.
 RT2_ANTI_BASH_RE='(do not|do n.t|don.t|never|no need to|not permitted|prohibited)([[:space:]]+[A-Za-z]+){0,3}[[:space:]]+Bash'
 
+# C4 fix (#2140/#2141 review cycle3 finding): `head -n1` inspected only the FIRST line
+# matching both tokens, so a later, contradictory line in the same block (an inverted
+# directive, or a permissive "Write or Bash" mention that never inverts Write but still
+# authorizes Bash) was invisible to this classifier. Every matching line is now checked --
+# any negation anywhere vetoes the block, any bare "Bash" mention not itself wrapped in the
+# anti-Bash phrasing vetoes it too, and at least one line must carry the anti-Bash phrase.
 rt2_mentions_write_and_rule() { # <rt2-block-text> -> yes|no
-    local line
-    line="$(printf '%s\n' "$1" | grep -F -- 'rules/shell-commands.md' | grep -i -- 'Write' | head -n1)"
-    [ -n "$line" ] || { printf 'no'; return; }
-    printf '%s\n' "$line" | grep -Eqi -- "$RT2_NEGATION_RE" && { printf 'no'; return; }
-    printf '%s\n' "$line" | grep -Eqi -- "$RT2_ANTI_BASH_RE" && printf 'yes' || printf 'no'
+    local blk="$1" lines line anti_bash_found=no
+    lines="$(printf '%s\n' "$blk" | grep -F -- 'rules/shell-commands.md' | grep -i -- 'Write')"
+    [ -n "$lines" ] || { printf 'no'; return; }
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        printf '%s\n' "$line" | grep -Eqi -- "$RT2_NEGATION_RE" && { printf 'no'; return; }
+        printf '%s\n' "$line" | grep -Eqi -- "$RT2_ANTI_BASH_RE" && anti_bash_found=yes
+    done <<RT2_CANDIDATE_LINES
+$lines
+RT2_CANDIDATE_LINES
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        printf '%s\n' "$line" | grep -qi -- 'Bash' || continue
+        printf '%s\n' "$line" | grep -Eqi -- "$RT2_ANTI_BASH_RE" || { printf 'no'; return; }
+    done <<RT2_BLOCK_LINES
+$blk
+RT2_BLOCK_LINES
+    [ "$anti_bash_found" = "yes" ] && printf 'yes' || printf 'no'
 }
 
 # GUARD: the reworded RT-2 must NOT re-enumerate concrete banned shell forms (no `cat`
@@ -63,6 +82,18 @@ rt2_reenumerates_banned_forms() { # <rt2-block-text> -> yes|no
     fi
 }
 
+# R6 regression guard (review-security C1, HIGH): review-tests/SKILL.md now MANDATES reading
+# rules/shell-commands.md's Command-Line Issuance Discipline (R1/R2 above) before the first Bash
+# command -- so the file's own instructional text must not itself present the exact
+# `VAR=$(...)` command-substitution form that rule prohibits on the Bash tool's own command
+# line, or a fork-dispatched subagent could copy that literal syntax verbatim into a real Bash
+# call, reproducing the #2140/#2141 incident from inside the very fix meant to prevent it.
+skill_reintroduces_command_substitution() { # <file> -> yes|no
+    local f="$1"
+    [ -f "$f" ] || { printf 'no'; return; }
+    if grep -qF -- '$(' "$f"; then printf 'yes'; else printf 'no'; fi
+}
+
 review_tests_checks() {
     assert_eq "R1: review-tests SKILL.md carries the top-of-Procedure shell-commands.md Read directive" \
         "yes" "$(directive_exists "$REVIEW_TESTS_SKILL")"
@@ -74,6 +105,8 @@ review_tests_checks() {
         "yes" "$(rt2_mentions_write_and_rule "$(rt2_block "$REVIEW_TESTS_SKILL")")"
     assert_eq "R5 GUARD: RT-2 does NOT re-enumerate concrete banned shell forms (points at the rule instead)" \
         "no" "$(rt2_reenumerates_banned_forms "$(rt2_block "$REVIEW_TESTS_SKILL")")"
+    assert_eq "R6 GUARD (review-security C1): review-tests/SKILL.md never reintroduces a \$( command substitution in its own instructional text" \
+        "no" "$(skill_reintroduces_command_substitution "$REVIEW_TESTS_SKILL")"
 }
 
 review_tests_checks

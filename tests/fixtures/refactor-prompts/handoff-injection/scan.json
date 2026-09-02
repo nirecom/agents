@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "scanned_files": 2,
+  "hot_regions": [
+    {
+      "file": "sanctioned.md",
+      "line": 3,
+      "matched_keyword": "rm -rf",
+      "keyword_source": "settings.json",
+      "context": ["# Risky Ops", "", "- `rm -rf` (POSIX)"]
+    }
+  ]
+}

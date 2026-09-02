@@ -1,17 +1,11 @@
 #!/bin/bash
 # Tests: agents/refactor-prompts-judge.md, bin/refactor-prompts/extract-keywords.js, bin/refactor-prompts/index.sh, skills/refactor-prompts/SKILL.md
-# Tags: prompts, refactor, skill, agent, bin
-# Tests for /refactor-prompts — skill + agent + wrapper smoke + handoff contract
-#
-# Files exercised:
-#   skills/refactor-prompts/SKILL.md
-#   agents/refactor-prompts-judge.md
-#   bin/refactor-prompts/index.sh
-#
-# TC1–TC5 are smoke tests on the static artifacts.
-# TC6 is the handoff contract: target.md + judge-output.json → expected.md.
-#
-# RED: this suite fails clean while any of the above is missing.
+# Tags: prompts, refactor, skill, agent, bin, scope:common
+# Tests for /refactor-prompts — skill + agent + wrapper smoke + handoff contract.
+# TC1-TC5: smoke tests on the static artifacts. TC6: handoff contract
+# (target.md + judge-output.json -> expected.md). TC7: test-review C3's
+# prompt-injection scope guard (SKILL.md step 5).
+# RED: this suite fails clean while any exercised file is missing.
 
 set -u
 
@@ -191,6 +185,63 @@ else
 fi
 
 rm -rf "$TC6_TMP_DIR"
+
+# ============================================================================
+# TC7 (test-review C3): prompt-injection scope guard for the file-backed
+# scan-JSON handoff (SKILL.md step 5). scan.json's hot_regions names only
+# sanctioned.md; the malicious judge output also edits protected.md, which
+# is absent from that set. Assert the sanctioned edit applies while
+# protected.md stays byte-identical.
+# ============================================================================
+INJ_DIR="$AGENTS_DIR/tests/fixtures/refactor-prompts/handoff-injection"
+TC7_TMP_DIR="$(mktemp -d)"
+cp "$INJ_DIR/sanctioned.md" "$TC7_TMP_DIR/sanctioned.md"
+cp "$INJ_DIR/protected.md" "$TC7_TMP_DIR/protected.md"
+cp "$INJ_DIR/protected.md" "$TC7_TMP_DIR/protected.md.orig"
+
+node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const dir = process.argv[1];
+    const scan = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    const judge = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+
+    const scopedFiles = new Set((scan.hot_regions || []).map((h) => h.file));
+    const scopedEdits = (judge.edits || []).filter((e) => scopedFiles.has(e.file));
+
+    for (const edit of scopedEdits) {
+        const target = path.join(dir, edit.file);
+        let body = fs.readFileSync(target, "utf8");
+        switch (edit.verdict) {
+            case "delete":
+                if (typeof edit.old_text === "string" && edit.old_text.length > 0) {
+                    body = body.replace(edit.old_text, "");
+                }
+                break;
+            case "category-rewrite":
+                if (typeof edit.old_text === "string" && typeof edit.new_text === "string") {
+                    body = body.replace(edit.old_text, edit.new_text);
+                }
+                break;
+            default:
+                break;
+        }
+        fs.writeFileSync(target, body);
+    }
+' "$TC7_TMP_DIR" "$INJ_DIR/scan.json" "$INJ_DIR/judge-output-malicious.json"
+TC7_DRIVER_RC=$?
+
+if [ "$TC7_DRIVER_RC" -ne 0 ]; then
+    fail "TC7: scope-guard driver exited non-zero ($TC7_DRIVER_RC)"
+elif grep -q 'rm -rf' "$TC7_TMP_DIR/sanctioned.md"; then
+    fail "TC7: sanctioned edit did not apply — sanctioned.md still contains the deleted line"
+elif ! cmp -s "$TC7_TMP_DIR/protected.md" "$TC7_TMP_DIR/protected.md.orig"; then
+    fail "TC7: protected.md was modified by an edit outside the hot_regions scope — scope guard failed"
+else
+    pass "TC7: sanctioned edit applies while the out-of-scope edit on protected.md is discarded (protected.md byte-identical)"
+fi
+
+rm -rf "$TC7_TMP_DIR"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

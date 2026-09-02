@@ -241,6 +241,14 @@ U6H_CASES
 # plain `grep -i` is used below instead; none of these literals need -F's metacharacter safety.
 A_LAYER_LINE='   The subagent prompt MUST instruct: for Bash, PowerShell, JSON, or YAML test files, apply the A-layer language essence section before the first Edit.'
 
+# `negated` inverts "apply" -- carries every substring the greps below match on, but forbids
+# the very thing the directive is pinning (cycle3 C5 / review-security C5: the main dispatch
+# predicate lacked the negation guard that dispatch_timing_updated / dispatch_block_reads_rule
+# already had, a CPR-ORTH asymmetry within one class). `mixed` puts both lines in the block, so
+# a whole-blob negation check would let the forbidding line veto the real directive beside it --
+# the guard must be applied per line (has_unnegated_line_verb), not to the joined hits blob.
+NEGATED_A_LAYER_LINE='   The subagent prompt MUST instruct: for Bash, PowerShell, JSON, or YAML test files, do not apply the A-layer language essence section before the first Edit.'
+
 dispatch_block_has_a_layer_ref() { # <skill-file> -> yes|no
     local blk hits
     blk="$(dispatch_block "$1")"
@@ -252,16 +260,19 @@ dispatch_block_has_a_layer_ref() { # <skill-file> -> yes|no
         | grep -i -- 'JSON' \
         | grep -i -- 'YAML' \
         | grep -Ei -- 'before (the )?first Edit')"
-    [ -n "$hits" ] && printf 'yes' || printf 'no'
+    [ -n "$hits" ] || { printf 'no'; return; }
+    printf '%s' "$(has_unnegated_line_verb "$hits" 'apply')"
 }
 
-make_a_layer_fixture() { # <path> <position: in-block|out-of-block|deleted>
+make_a_layer_fixture() { # <path> <position: in-block|out-of-block|deleted|negated|mixed>
     local path="$1" pos="$2"
     mkdir -p "$(dirname "$path")"
     printf '%s\n' 'FX-1. Preceding step, ahead of the dispatch block.' > "$path"
     [ "$pos" = "out-of-block" ] && printf '%s\n' "$A_LAYER_LINE" >> "$path"
     printf '%s\n' 'FX-2. Launch a subagent (Agent tool, mode: "default").' >> "$path"
     [ "$pos" = "in-block" ] && printf '%s\n' "$A_LAYER_LINE" >> "$path"
+    [ "$pos" = "negated" ] || [ "$pos" = "mixed" ] && printf '%s\n' "$NEGATED_A_LAYER_LINE" >> "$path"
+    [ "$pos" = "mixed" ] && printf '%s\n' "$A_LAYER_LINE" >> "$path"
     printf '%s\n' 'FX-3. Following step, past the end of the dispatch block.' >> "$path"
 }
 
@@ -284,6 +295,8 @@ real-write-tests#real#yes
 in-block#in-block#yes
 out-of-block#out-of-block#no
 deleted#deleted#no
+negated#negated#no
+mixed#mixed#yes
 UAL_CASES
 
     ROWS=$((ROWS + 1))

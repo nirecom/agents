@@ -85,16 +85,12 @@ frontmatter_has_context_fork() { # <file> -> yes|no
 }
 
 ROWS=0
-ROWS_EXPECTED=16  # G1..G13 negative-control rows, plus G14 (C3 anti-Bash-phrase), G15 (C4
-                  # ordered-chain), G16 (C5 directive-precedes-action) (negative-controls.sh)
+ROWS_EXPECTED=20  # G1..G18 (plus G17c) negative-control rows -- see negative-controls.sh for the per-row breakdown.
 
-# TL3 gap (what this test does NOT catch):
-# - Whether a `context: fork` execution actually RECEIVES or READS the new top-of-Procedure
-#   directive at Bash-issuance time -- only the skill's own text is inspected here, never a
-#   live subagent's context window or its actual tool-call sequence.
-# - Whether the reworded RT-2 body is enough, on its own, to stop a subagent from re-deriving
-#   banned shell forms from first principles instead of consulting rules/shell-commands.md.
-# Closest-to-action mitigation: a real fork-dispatch E2E per rules/test/claude-e2e.md, and the
+# TL3 gap: whether a `context: fork` execution actually READS the top-of-Procedure directive at
+# Bash-issuance time, or whether RT-2's reworded body stops a subagent re-deriving banned shell
+# forms from first principles, is not covered here -- only the skill's own text is inspected.
+# Closest-to-action mitigation: a real fork-dispatch E2E (rules/test/claude-e2e.md) and the
 # per-session receipt written by hooks/instructions-loaded-audit.js.
 
 PART_DIR="$AGENTS_DIR/tests/feature-2140-fork-dispatch-shell-commands"
