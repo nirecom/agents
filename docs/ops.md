@@ -183,6 +183,16 @@ set `AUTO_MERGE_PR=off` in `.env`.
 
 ---
 
+## CodeGraph
+
+Opt-in code-intelligence index behind the `CODEGRAPH` flag. Enabling it takes three steps in
+order — set the flag, re-run the installer, then build the index once per active worktree — and
+the third is easy to miss because the git hooks only refresh an index that already exists.
+
+Full setup, verification, off-switch, and troubleshooting: [`ops/codegraph.md`](ops/codegraph.md).
+
+---
+
 ## Plans Directory Migration
 
 One-time operator runbook: rename `intent-<timestamp>-*.md` files in the
