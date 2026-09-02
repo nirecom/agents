@@ -1,32 +1,14 @@
 #!/usr/bin/env bash
 # Assemble a final plan file by injecting mandatory sections from a source file.
 # Usage: assemble-mandatory.sh [--source-kind intent|outline] <source.md> <planner-output.md> <out.md>
-#
-# <planner-output.md> and <out.md> MAY be the same path (in-place mode used after
-# the drafts/ flatten in #866). When they are the same, a snapshot of the planner
-# output is taken BEFORE the final write overwrites the file, so the read/write
-# paths never alias.
-#
-# Algorithm:
-# 1. Detect which issues-section heading the source uses:
-#      - `## Issues` (plural, canonical, new SSOT per #548)
-#      - `## Issue`  (singular, legacy back-compat)
-#    Source-side invariant: EXACTLY ONE form must be present. Both-present is
-#    a hard-fail (authoring bug — `## Issues` is canonical, `## Issue` must be
-#    stripped). Neither-present is a hard-fail (missing mandatory section).
-# 2. Extract the detected section + `## Class members` + `## Accepted Tradeoffs`
-#    from source.md (with headers).
-#    - Legacy soft-fail (--source-kind intent only): if ## Class members absent,
-#      auto-inject legacy stub between Issues and Accepted Tradeoffs.
-#    - Hard-fail (--source-kind outline): if ## Class members absent, exit 2 with
-#      "contract violation".
-# 3. Normalize: when legacy `## Issue` was detected, rewrite the extracted
-#    heading to `## Issues` so the assembled output is canonical.
-# 4. Extract H1 line from planner output.
-# 5. Strip H1 + mandatory sections from planner body (fence-aware).
-# 6. Assemble: H1 + injected block + remaining body. Write atomically via a
-#    temp file in $TMP (same filesystem as $OUT), then mv -f into place.
-# 7. Verify: count==1 per section / H1, order, verbatim match against source.
+# <planner-output.md> and <out.md> MAY be the same path (in-place mode, #866): the planner output
+# is snapshotted before the final write, so the read and write paths never alias.
+# <out.md> must resolve under the plans dir or a system temp root (see the allowlist below).
+# Steps: detect the source's issues heading (`## Issues` canonical, `## Issue` legacy -- exactly
+# one, else hard-fail); extract it with `## Class members` and `## Accepted Tradeoffs` (absent
+# Class members: legacy stub under intent, exit 2 under outline); normalize to `## Issues`; take
+# the planner H1; strip H1 and mandatory sections from the body fence-aware; write H1 + block +
+# body through a temp file; verify per-section count, order and verbatim match against source.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -62,6 +44,47 @@ OUT="${3:?assemble-mandatory: <out.md> required}"
 [[ -f "$PLANNER_OUT" ]] || { echo "assemble-mandatory: planner output not found: $PLANNER_OUT" >&2; exit 2; }
 [[ -x "$EXTRACT" ]] || { echo "assemble-mandatory: extract-mandatory-sections not executable: $EXTRACT" >&2; exit 2; }
 [[ -f "$STRIP_AWK" ]] || { echo "assemble-mandatory: strip awk not found: $STRIP_AWK" >&2; exit 2; }
+
+# Destination allowlist. $OUT drives both `mktemp -d -p` and the final `mv -f`, so an
+# unconstrained third argument is an arbitrary-file-overwrite primitive. Constraining the
+# destination ITSELF -- rather than its relation to another argument, which is satisfiable by
+# pointing arg2 at any commented file in the target directory -- is what makes the limit
+# unreachable by choosing different arguments. Both sides are canonicalised because the path
+# spaces differ: under Git Bash `mktemp -d` yields /tmp/... while node's os.tmpdir() yields
+# C:/Users/.../Temp/... for that same directory.
+_canon() { (CDPATH= cd -- "$1" 2>/dev/null && { pwd -W 2>/dev/null || pwd -P; }); }
+
+_under_root() { # <canonical-dir> <candidate-root>
+  local root
+  [[ -n "$2" ]] || return 1
+  root="$(_canon "$2")"
+  [[ -n "$root" ]] || return 1
+  [[ "$1" == "$root" || "$1" == "$root"/* ]]
+}
+
+OUT_DIR="$(dirname "$OUT")"
+OUT_DIR_CANON="$(_canon "$OUT_DIR")"
+[[ -n "$OUT_DIR_CANON" ]] || {
+  echo "assemble-mandatory: <out.md> directory does not exist or cannot be resolved: $OUT_DIR" >&2
+  exit 2
+}
+
+NODE_TMPDIR=""
+if command -v node > /dev/null 2>&1; then
+  NODE_TMPDIR="$(node -e 'process.stdout.write(require("os").tmpdir())' 2>/dev/null || true)"
+fi
+
+PLANS_ROOT="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+TMP_ROOT="${TMPDIR:-/tmp}"
+OUT_ALLOWED=0
+for _root in "$PLANS_ROOT" "$TMP_ROOT" "$NODE_TMPDIR"; do
+  if _under_root "$OUT_DIR_CANON" "$_root"; then OUT_ALLOWED=1; break; fi
+done
+[[ "$OUT_ALLOWED" -eq 1 ]] || {
+  echo "assemble-mandatory: refusing to write outside the allowed destinations: $OUT" >&2
+  echo "assemble-mandatory: <out.md> must resolve under the workflow plans directory ($PLANS_ROOT) or a system temp root ($TMP_ROOT${NODE_TMPDIR:+, $NODE_TMPDIR})" >&2
+  exit 2
+}
 
 TMP=$(mktemp -d -p "$(dirname "$OUT")" assemble.XXXX)
 trap 'rm -rf "$TMP"' EXIT
