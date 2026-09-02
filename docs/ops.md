@@ -185,11 +185,11 @@ set `AUTO_MERGE_PR=off` in `.env`.
 
 ## CodeGraph
 
-Opt-in code-intelligence index behind the `CODEGRAPH` flag. Enabling it takes three steps in
-order — set the flag, re-run the installer, then build the index once per active worktree — and
-the third is easy to miss because the git hooks only refresh an index that already exists.
+Opt-in code-intelligence index behind the `CODEGRAPH` flag. Full setup, verification, off-switch,
+and troubleshooting: [`ops/codegraph.md`](ops/codegraph.md).
 
-Full setup, verification, off-switch, and troubleshooting: [`ops/codegraph.md`](ops/codegraph.md).
+Sessions in a worktree that predates the flag need one manual step, self-contained here:
+[`ops/codegraph.md` § One-time worktree init](ops/codegraph.md#one-time-worktree-init).
 
 ---
 
