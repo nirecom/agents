@@ -47,6 +47,13 @@ if ($_agentBroken) {
 Remove-Variable _agentSymlinks, _agentBroken, _path, _item, _target, _resolved -ErrorAction SilentlyContinue
 
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
+# Claude Code's Bash tool always runs non-interactively, so $env:CLAUDECODE set
+# plus redirected stdout reliably identifies a CC-launched shell — skip the
+# fetch there. Mirrors the guard in the bash sibling (profile-snippet.sh) and
+# in dotfiles' .profile_common (issue #335).
+if ($env:CLAUDECODE -and [Console]::IsOutputRedirected) {
+    # skip — CC-launched non-interactive shell
+} else {
 $SessionDir = "$HOME\.claude\projects"
 if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir\.git")) {
     # try/catch is mandatory: install.ps1 sets $ErrorActionPreference = "Stop",
@@ -119,6 +126,7 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
         Remove-Variable _fetchSs, _fetchErrFile, _fetchKilled, _gitPromptPrev, _gitSshPrev -ErrorAction SilentlyContinue
     }
     Remove-Variable _ssOn, _getCfg, _preLastExitCode -ErrorAction SilentlyContinue
+}
 }
 
 # $cmd (built inside codes below) is a command STRING executed by a child pwsh, so every
