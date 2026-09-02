@@ -25,8 +25,13 @@ existing `.codegraph/` index directories are deliberately left in place; remove 
 
 Upstream CodeGraph reports usage to `https://telemetry.getcodegraph.com/v1/events` and defaults it on,
 and this installer is non-interactive, so nothing would ever ask you. The registration therefore carries
-`--env CODEGRAPH_TELEMETRY=0 --env DO_NOT_TRACK=1`, and both installer scripts export the same pair.
-The values live in `install/codegraph-constants.txt`.
+`--env CODEGRAPH_TELEMETRY=0 --env DO_NOT_TRACK=1`, and `bin/codegraph-lifecycle.js` passes the same
+pair to every codegraph subprocess it spawns. The values live in `install/codegraph-constants.txt`.
+
+The installer scripts deliberately do **not** export the pair into their own process. `DO_NOT_TRACK`
+is an industry-wide name, not a CodeGraph-private one, and `install.ps1` runs the Windows step
+in-process (`& ...codegraph.ps1`), so exporting it would leave `DO_NOT_TRACK=1` in the caller's
+shell for the rest of its life — breaking, among other things, Claude Code's Remote Control.
 
 ## Cautions
 
