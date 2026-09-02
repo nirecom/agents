@@ -403,3 +403,7 @@ Changes: Fixed a loop where Claude Code would repeatedly get blocked retrying th
 ### FEATURE: PR #2191 (2026-09-03)
 Background: feat(#2119): generate settings.json allow rules from a measured-denial SSOT
 Changes: The `permissions.allow` rules generated from the command SSOT are no longer committed to the repository — they are injected into the deployed `~/.claude/settings.json`, and the tracked `settings.json` keeps hand-written rules only.;Allow rules now cover argument-less invocations: each spelling is emitted in both an argument-bearing and an argument-less form, so a command issued with no arguments no longer raises a permission prompt.;A failed deploy no longer damages the existing configuration: when the rules cannot be generated, nothing is written and the previous `~/.claude/settings.json` stands. Session start warns separately when the generator is unavailable, so a narrowed drift check is not mistaken for a clean one.
+
+### FEATURE: PR #2187 (2026-09-03)
+Background: fix(#2140,#2141): propagate rules/shell-commands.md and other on-dema...
+Changes: Subagents launched via `context: fork` (`/review-tests`, `/refactor-prompts`) now read `rules/shell-commands.md`, so a rejected Bash call can be explained to the user instead of silently retried.;`/write-code` and `/write-tests` subagents now receive the on-demand rules their work actually depends on (`rules/ops.md` for write-code; `rules/coding.md` and `rules/test.md` for write-tests).
