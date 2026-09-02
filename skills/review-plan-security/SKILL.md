@@ -1,8 +1,7 @@
 ---
 name: review-plan-security
 description: Codex-primary single-round security review of the implementation plan across three axes before implementation.
-model: opus
-effort: medium
+model: sonnet
 context: fork
 ---
 

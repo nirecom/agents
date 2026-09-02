@@ -3,6 +3,7 @@ name: security-scanner
 description: Scan code for security anti-patterns across three axes. Read-only, no web access. Used by review-code-security.
 tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: opus
+effort: high
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
