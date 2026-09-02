@@ -2,7 +2,6 @@
 name: review-tests
 description: Codex-primary single-round test coverage review
 model: sonnet
-effort: low
 context: fork
 ---
 
