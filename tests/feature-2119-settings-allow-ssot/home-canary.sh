@@ -1,18 +1,20 @@
 # tests/feature-2119-settings-allow-ssot/home-canary.sh
-# Tests: install/gen-settings-allow.js, bin/review-settings-allow, hooks/pre-commit
+# Tests: install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
 CANARY_HOME=""
 CANARY_BEFORE=""
 
-# T22 -- THE OTHER settings.json. This feature's whole subject is a file called settings.json,
-# and the developer running the suite has a DEPLOYED one at ~/.claude/settings.json that the
-# generator must never touch. Nothing else in this suite defends it: every fixture is built
-# under $TMPROOT, but the node and bash subprocesses inherit the real HOME/USERPROFILE, so a
-# generator that resolves its target through the home directory -- or an error path that falls
-# back to it -- would corrupt the developer's live permission set while the suite reports
-# green. So the home variables are repointed at a seeded canary before any part runs, and the
-# canary is compared byte for byte after all of them have.
+# T22 -- THE OTHER settings.json. The developer running this suite has a DEPLOYED
+# ~/.claude/settings.json, and this feature's whole subject is writing one. Every fixture is
+# built under $TMPROOT, but subprocesses inherit the real HOME/USERPROFILE, so a target
+# resolved through the home directory would corrupt the live permission set while the suite
+# reports green. The home variables are therefore repointed at a seeded canary before any
+# part runs, and compared byte for byte after all of them have.
+# CONTRACT FOR EVERY OTHER PART: rules are injected AT DEPLOY TIME, so lines in this suite
+# really do write a ~/.claude/settings.json. Any such line MUST pass a fixture-private HOME
+# (and USERPROFILE) PER SUBPROCESS -- see run_gen / run_assemble in generator.sh. A part that
+# forgets deploys INTO the canary, and T22 turns red rather than staying silent.
 canary_setup() {
     CANARY_HOME="$TMPROOT/canary-home"
     mkdir -p "$CANARY_HOME/.claude"
