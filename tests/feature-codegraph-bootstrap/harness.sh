@@ -46,8 +46,10 @@ sanitize_path() {
     for d in $1; do
         [ -z "$d" ] && continue
         if [ -e "$d/node" ] || [ -e "$d/node.exe" ] || [ -e "$d/npm" ] || [ -e "$d/npm.cmd" ] \
-           || [ -e "$d/claude" ] || [ -e "$d/claude.exe" ] \
-           || [ -e "$d/codegraph" ] || [ -e "$d/codegraph.cmd" ]; then continue; fi
+           || [ -e "$d/claude" ] || [ -e "$d/claude.exe" ] || [ -e "$d/claude.cmd" ] \
+           || [ -e "$d/claude.bat" ] || [ -e "$d/claude.com" ] \
+           || [ -e "$d/codegraph" ] || [ -e "$d/codegraph.cmd" ] || [ -e "$d/codegraph.bat" ] \
+           || [ -e "$d/codegraph.exe" ] || [ -e "$d/codegraph.com" ]; then continue; fi
         out="$out:$d"
     done
     IFS="$OLD_IFS"
@@ -61,26 +63,38 @@ MCP_JS_NATIVE="$(node_path "$CODEGRAPH_MCP_JS")"
 IS_WIN=0
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) IS_WIN=1 ;; esac
 
+# The PATHEXT every child of this suite runs with (C4), defined once so WC-5 can
+# assert the pin the suite really applies rather than a copy of it. The hostile
+# counterpart is the host shape WC-5 shows the pin protects against.
+PINNED_PATHEXT=".COM;.EXE;.BAT;.CMD"
+HOSTILE_PATHEXT=".EXE"
+SHIM_REF_N="$(node_path "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
+
 # make_stubs <dir> <node yes|no> <codegraph yes|no> <npm 0|1|no> <claude 0|1|no>.
 # npm and codegraph are only ever resolved by bash, so a shebang script suffices.
-# `claude` is resolved by win32 node's spawnSync, which refuses extensionless files and
-# .cmd wrappers alike — on Windows the stub must be a real PE, so it is a hardlink to
-# node.exe running the `mcp` recorder in the case CWD (bounded exception, CPR-UNV).
+# `claude` on win32 now uses the same npm cmd-shim shape spawnShimmedCli resolves in
+# production (extensionless POSIX sibling + .cmd + claude-target.js); the old
+# node.exe-hardlink exception is retired because spawnShimmedCli never executes the
+# .cmd — it only parses it as text — so no real PE needs to sit next to it.
 make_stubs() {
     local dir="$1" with_node="$2" with_cg="$3" npm_mode="$4" claude_mode="$5"
     mkdir -p "$dir"
     printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$NPM_STUB_LOG"\nexit "${NPM_STUB_RC:-0}"\n' > "$dir/npm"
     printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$CG_STUB_LOG"\nexit 0\n' > "$dir/codegraph"
-    write_posix_claude_stub "$dir/claude"
-    chmod +x "$dir/npm" "$dir/codegraph" "$dir/claude"
+    chmod +x "$dir/npm" "$dir/codegraph"
     [ "$with_cg" = "yes" ] || rm -f "$dir/codegraph" "$dir/codegraph.cmd"
     [ "$npm_mode" = "no" ] && rm -f "$dir/npm" "$dir/npm.cmd"
-    # Absence means absence under every PATHEXT spelling: win32 spawnSync resolves
-    # claude.exe, bash resolves the extensionless script, and leaving either behind
-    # would turn a "binary missing" case into a silent presence case.
-    if [ "$claude_mode" = "no" ]; then rm -f "$dir/claude" "$dir/claude.exe"
+    # Absence means absence under every PATHEXT spelling: leaving any spelling of
+    # the shim trio behind would turn a "binary missing" case into a silent
+    # presence case.
+    if [ "$claude_mode" = "no" ]; then
+        rm -f "$dir/claude" "$dir/claude.exe" "$dir/claude.cmd" "$dir/claude.bat" \
+              "$dir/claude.com" "$dir/claude-target.js" "$dir/claude-target-decoy.js"
     elif [ "$IS_WIN" = "1" ]; then
-        ln "$REAL_NODE_EXE" "$dir/claude.exe" 2>/dev/null || cp "$REAL_NODE_EXE" "$dir/claude.exe"
+        write_win_claude_cmd_shim "$dir"
+    else
+        write_posix_claude_stub "$dir/claude"
+        chmod +x "$dir/claude"
     fi
     if [ "$with_node" != "yes" ]; then rm -f "$dir/node" "$dir/node.exe"; return 0; fi
     if [ "$IS_WIN" = "1" ]; then
@@ -90,10 +104,133 @@ make_stubs() {
     fi
 }
 
+# write_win_claude_cmd_shim <dir> — the real npm cmd-shim shape for `claude` on
+# win32: extensionless POSIX sibling (parsed as text, never executed), .cmd (never
+# spawned directly) and claude-target.js, which reproduces the `--version`-is-0 /
+# mcp-verb-logs contract write_posix_claude_stub gives POSIX.
+write_win_claude_cmd_shim() {
+    local dir="$1"
+    mkdir -p "$dir"
+    cat > "$dir/claude-target.js" <<'CLAUDETARGET'
+const fs = require("fs");
+const args = process.argv.slice(2);
+if (args[0] === "--version") { process.exit(0); }
+fs.appendFileSync(process.env.CLAUDE_STUB_LOG, args.join(" ") + "\n");
+process.exit(Number(process.env.CLAUDE_STUB_RC || 0));
+CLAUDETARGET
+    {
+        printf '#!/bin/sh\n'
+        printf 'basedir=$(dirname "$(echo "$0" | sed -e '"'"'s,\\\\,/,g'"'"')")\n'
+        printf '\n'
+        printf 'case `uname` in\n'
+        printf '    *CYGWIN*|*MINGW*|*MSYS*)\n'
+        printf '        if command -v cygpath > /dev/null 2>&1; then\n'
+        printf '            basedir=`cygpath -w "$basedir"`\n'
+        printf '        fi\n'
+        printf '    ;;\n'
+        printf 'esac\n'
+        printf '\n'
+        printf 'if [ -x "$basedir/node" ]; then\n'
+        printf '  exec "$basedir/node"  "$basedir/claude-target.js" "$@"\n'
+        printf 'else \n'
+        printf '  exec node  "$basedir/claude-target.js" "$@"\n'
+        printf 'fi\n'
+    } > "$dir/claude"
+    { _win_claude_cmd_head; _win_claude_cmd_tail; } > "$dir/claude.cmd"
+}
+
+# _win_claude_cmd_head / _win_claude_cmd_tail — byte-faithful npm cmd-shim 8.0.0
+# output, mirrored from tests/feature-2150-spawn-shimmed-cli/fixtures-npm.sh:
+# CRLF, the :find_dp0 subroutine, the `endLocal & goto` prefix and the separator
+# in `"%dp0%\...`. Split in two so a payload can be spliced between them.
+_win_claude_cmd_head() {
+    printf '@ECHO off\r\n'
+    printf 'GOTO start\r\n'
+    printf ':find_dp0\r\n'
+    printf 'SET dp0=%%~dp0\r\n'
+    printf 'EXIT /b\r\n'
+    printf ':start\r\n'
+    printf 'SETLOCAL\r\n'
+    printf 'CALL :find_dp0\r\n'
+    printf '\r\n'
+    printf 'IF EXIST "%%dp0%%\\node.exe" (\r\n'
+    printf '  SET "_prog=%%dp0%%\\node.exe"\r\n'
+    printf ') ELSE (\r\n'
+    printf '  SET "_prog=node"\r\n'
+    printf '  SET PATHEXT=%%PATHEXT:;.JS;=;%%\r\n'
+    printf ')\r\n'
+    printf '\r\n'
+}
+_win_claude_cmd_tail() {
+    printf 'endLocal & goto #_undefined_# 2>NUL || title %%COMSPEC%% & "%%_prog%%"  "%%dp0%%\\claude-target.js" %%*\r\n'
+}
+
+# _write_win_claude_payload <dir> <ext> — a batch half that is a valid npm shim
+# AND destroys $dir/payload-marker.txt the instant a shell interprets it. The
+# ext argument makes .bat the symmetric member of .cmd (CPR-ORTH): both are
+# PATHEXT-delegated and both must be read as text, never run (WC-6/WC-7, C4).
+_write_win_claude_payload() {
+    local dir="$1" ext="$2" marker
+    write_win_claude_cmd_shim "$dir"
+    rm -f "$dir/claude.cmd"
+    printf 'pristine\n' > "$dir/payload-marker.txt"
+    marker="$(node_path "$dir/payload-marker.txt")"
+    {
+        _win_claude_cmd_head
+        printf 'DEL /Q "%s"\r\n' "$marker"
+        printf 'ECHO tampered-by-shell> "%s"\r\n' "$marker"
+        _win_claude_cmd_tail
+    } > "$dir/claude$ext"
+}
+write_win_claude_cmd_payload() { _write_win_claude_payload "$1" .cmd; }
+write_win_claude_bat_payload() { _write_win_claude_payload "$1" .bat; }
+
+# write_win_claude_exe <dir> — the sanctioned DIRECT-launch shape: no shim, no
+# sibling, content never read. WC-8 asserts only how resolution classifies it.
+write_win_claude_exe() {
+    mkdir -p "$1"
+    rm -f "$1/claude" "$1/claude.cmd" "$1/claude.bat"
+    printf 'not-a-real-pe\n' > "$1/claude.exe"
+}
+
+# write_win_claude_cmd_shim_broken <dir> — .cmd present, POSIX sibling absent
+# (WC-2 fail-closed case).
+write_win_claude_cmd_shim_broken() {
+    write_win_claude_cmd_shim "$1"
+    rm -f "$1/claude"
+}
+
+# write_win_claude_cmd_shim_nocmd <dir> — the mirror image: POSIX sibling
+# present, .cmd absent (WC-4). Resolution only ever considers PATHEXT
+# extensions, so the bare sibling is not a candidate and this must fail closed
+# exactly like the _broken shape — the symmetric member of the class (CPR-ORTH).
+write_win_claude_cmd_shim_nocmd() {
+    write_win_claude_cmd_shim "$1"
+    rm -f "$1/claude.cmd"
+}
+
+# write_win_claude_cmd_shim_mismatch <dir> — the .cmd names claude-target.js, the
+# POSIX sibling names a different (also real, also resolvable) decoy, so this
+# fixture only fails closed if the two files are cross-checked (WC-3, C2).
+write_win_claude_cmd_shim_mismatch() {
+    write_win_claude_cmd_shim "$1"
+    cp "$1/claude-target.js" "$1/claude-target-decoy.js"
+    sed 's/claude-target\.js/claude-target-decoy.js/' "$1/claude" > "$1/claude.tmp"
+    mv "$1/claude.tmp" "$1/claude"
+}
+
+# write_win_claude_node <dir> — the node.exe every claude shim shape needs beside
+# it. run_case gets this from make_stubs; the WC-* subshells build their bin dir
+# directly, so they call this instead.
+write_win_claude_node() {
+    ln "$REAL_NODE_EXE" "$1/node.exe" 2>/dev/null || cp "$REAL_NODE_EXE" "$1/node.exe"
+}
+
 # `claude --version` is the presence probe (install/codegraph-mcp.js only inspects
 # error.code === "ENOENT"), so it answers 0 even when CLAUDE_STUB_RC pins the `mcp`
-# verbs to a failure. Windows gets that split for free: node.exe answers --version
-# itself and only `claude mcp ...` reaches the recorder below.
+# verbs to a failure. claude-target.js (win32, write_win_claude_cmd_shim) reproduces
+# the same split; every assertion counts `^mcp ` lines, so the two differ only in
+# whether the probe itself is echoed to the log.
 write_posix_claude_stub() {
     cat > "$1" <<'CLAUDESTUB'
 #!/usr/bin/env bash
@@ -101,14 +238,6 @@ printf '%s\n' "$*" >> "$CLAUDE_STUB_LOG"
 if [ "${1:-}" = "--version" ]; then exit 0; fi
 exit "${CLAUDE_STUB_RC:-0}"
 CLAUDESTUB
-}
-
-write_win_mcp_recorder() {
-    cat > "$1/mcp" <<'MCPREC'
-const fs = require("fs");
-fs.appendFileSync(process.env.CLAUDE_STUB_LOG, ["mcp", ...process.argv.slice(2)].join(" ") + "\n");
-process.exit(Number(process.env.CLAUDE_STUB_RC || 0));
-MCPREC
 }
 
 file_kind() { if [ -L "$1" ]; then printf 'symlink'; elif [ -f "$1" ]; then printf 'regular'; else printf 'absent'; fi; }
@@ -150,7 +279,6 @@ run_case() {
     printf '# no-op nvm stub\n:\n' > "$dir/nvm/nvm.sh"
 
     make_stubs "$dir/bin" "$with_node" "$with_cg" "$npm_mode" "$claude_mode"
-    [ "$IS_WIN" = "1" ] && write_win_mcp_recorder "$dir/cwd"
 
     : > "$dir/npm.log"; : > "$dir/codegraph.log"; : > "$dir/claude.log"
 
@@ -159,6 +287,9 @@ run_case() {
         cd "$dir/cwd" || exit 111
         export HOME="$NORM_HOME" USERPROFILE="$NORM_HOME"
         export PATH="$dir/bin:$CLEAN_PATH"
+        # Pinned so a custom host PATHEXT cannot steer the win32 shim resolution
+        # away from the .cmd branch these fixtures are shaped for (C4).
+        export PATHEXT="$PINNED_PATHEXT"
         export NVM_DIR="$dir/nvm"
         export NPM_STUB_RC="$npm_rc" CLAUDE_STUB_RC="$claude_rc"
         AGENTS_CONFIG_DIR="$(node_path "$dir/cfg")"; export AGENTS_CONFIG_DIR

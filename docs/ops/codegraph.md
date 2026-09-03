@@ -174,15 +174,33 @@ and the uninstall path runs it precisely because the flag has just turned off.
 |---|---|---|
 | Flag | `bash bin/get-config-var CODEGRAPH off` | `on` |
 | Package | `npm ls -g @colbymchenry/codegraph --depth=0` | version matches `install/codegraph-constants.txt` |
-| Binary | `codegraph --version` | resolves on PATH |
+| Binary | see paragraph below | resolves for spawnSync |
 | MCP entry | `jq -c '.mcpServers.codegraph' ~/.claude.json` | command/args/env as shown above |
+| MCP server responds | in a Claude Code session, run any tool under the `codegraph` MCP server (e.g. ask it to explore a symbol) | the server responds instead of "server not found" / "server failed to start" |
 | Index | `ls <worktree>/.codegraph/codegraph.db` | present and non-empty |
+
+**Why not just run `codegraph --version` in a shell?** On Windows, npm installs `codegraph` as three
+files sharing one basename: an extensionless POSIX shim, a `.cmd` batch shim, and a `.ps1` shim. A
+shell (PowerShell, cmd.exe) resolves `.cmd`/`.ps1` transparently, so a manual check can succeed even
+when the actual failure mode is that Node's `spawnSync` — which every part of this framework uses,
+without a shell — cannot spawn a `.cmd`/`.bat` file directly. Verify the way Claude Code itself
+resolves the binary instead, run from the repo root (the require path below is relative, not
+`$AGENTS_CONFIG_DIR`-based, so it works in a plain shell with no environment set up). Any `r.error`
+(not just `ENOENT`) means the CLI did not resolve for `spawnSync` — `EPERM`/`EACCES`/`EINVAL` are
+just as real a failure as a missing binary and must not be reported as success:
+
+```bash
+node -e "const {spawnShimmedCli}=require('./hooks/lib/spawn-shimmed-cli'); const r=spawnShimmedCli('codegraph',['--version'],{stdio:'ignore'}); console.log(r.error ? 'NOT RESOLVED for spawnSync: ' + r.error.code : 'resolves for spawnSync')"
+```
 
 ## Troubleshooting
 
 **`CODEGRAPH is on but the codegraph command was not found; skipping init.`**
 The flag is on but step 2 was never run, or the global npm bin directory is not on PATH. Re-run
-the installer.
+the installer. On Windows, reproduce it with the Node one-liner above rather than with a shell:
+if that one-liner fails while `codegraph.cmd` / `codegraph.ps1` work in PowerShell, the binary is
+installed but not resolvable for `spawnSync`, and a non-`ENOENT` `r.error.code` points away from
+PATH resolution entirely (permissions or a corrupt shim, not a missing install).
 
 **`index for <root> is <verdict>; skipping sync.`**
 A `sync` found an index that is not healthy. Run `init --path <root>` to repair it — sync
@@ -209,6 +227,7 @@ halt the pipeline that called it.
 | Index health verdicts | [`bin/codegraph-lifecycle/index-health.js`](../../bin/codegraph-lifecycle/index-health.js) |
 | Daemon identity and kill path | `bin/codegraph-lifecycle/process-identity.js`, `daemon-stop.js` |
 | MCP registration | [`install/codegraph-mcp.js`](../../install/codegraph-mcp.js) |
+| Windows shim resolution for `codegraph`/`claude` (no shell, no direct `.cmd`/`.bat` spawn) | [`hooks/lib/spawn-shimmed-cli.js`](../../hooks/lib/spawn-shimmed-cli.js) |
 | Version and telemetry constants | [`install/codegraph-constants.txt`](../../install/codegraph-constants.txt) |
 | OS installer steps | `install/win/codegraph.ps1`, `install/linux/codegraph.sh` |
 | Design rationale | [`docs/architecture/claude-code.md`](../architecture/claude-code.md) |
