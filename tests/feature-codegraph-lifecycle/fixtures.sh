@@ -7,18 +7,19 @@
 
 mkdir -p "$TMP_BASE/helpers/sigterm" "$TMP_BASE/external"
 
-# The `codegraph` stub is a hardlink of the node binary plus this NODE_OPTIONS
-# preload, because on win32 spawnSync reaches neither a PATH-visible shell
-# script nor a .cmd/.bat stub. The preload only acts inside that hardlink.
+# record-logic.js — SSOT for the codegraph stub's recording behaviour (CPR-SSOT),
+# shared by both the POSIX preload wrapper (recorder.js) and the win32 .cmd-shim
+# target (codegraph-target.js). It takes the already-sliced verb+args argv, so the
+# two callers differ only in how they compute that slice (a preload has no script
+# argument, a directly-spawned target does).
 # CG_STUB_MAKEDB opts a case into a stub that actually produces an index: on a
 # non-failing init/index it builds that DB kind at the root argv carried, which
 # is what turns L7b / L9s / L11f into end-to-end success paths.
-cat > "$TMP_BASE/recorder.js" <<'RECORDER'
-const path = require("node:path");
-const fs = require("node:fs");
-const self = path.basename(process.execPath).toLowerCase().replace(/\.exe$/, "");
-if (self === "codegraph" && process.env.CG_STUB_LOG) {
-  const argv = process.argv.slice(1);
+cat > "$TMP_BASE/record-logic.js" <<'RECORDLOGIC'
+module.exports = function handle(argv) {
+  const path = require("node:path");
+  const fs = require("node:fs");
+  if (!process.env.CG_STUB_LOG) return;
   const verb = argv.length ? path.basename(argv[0]) : "";
   let line = [verb].concat(argv.slice(1)).join(" ");
   if (process.env.CG_STUB_PROBE_PID) {
@@ -43,10 +44,147 @@ if (self === "codegraph" && process.env.CG_STUB_LOG) {
     catch (e) { fs.appendFileSync(process.env.CG_STUB_LOG, "STUB-MAKEDB-FAILED " + e.message + "\n"); }
   }
   process.exit(failed ? 1 : 0);
-}
+};
+RECORDLOGIC
+
+# recorder.js — POSIX-only NODE_OPTIONS preload wrapper (unchanged mechanism:
+# the `codegraph` stub is a hardlink of the real node binary; the self-check keeps
+# this preload a no-op for every other node invocation in the same process tree).
+cat > "$TMP_BASE/recorder.js" <<'RECORDER'
+const path = require("node:path");
+const self = path.basename(process.execPath).toLowerCase().replace(/\.exe$/, "");
+if (self === "codegraph") require(process.env.CG_RECORD_LOGIC_N)(process.argv.slice(1));
 RECORDER
-ln -f "$NODE_REAL_SH" "$SH_BIN/codegraph$STUB_EXT" 2>/dev/null || cp "$NODE_REAL_SH" "$SH_BIN/codegraph$STUB_EXT"
-chmod +x "$SH_BIN/codegraph$STUB_EXT" 2>/dev/null || true
+
+# codegraph-target.js — win32 .cmd-shim direct target. No self-check needed:
+# spawnShimmedCli spawns this file directly via process.execPath, so it is only
+# ever invoked as the codegraph recording stub.
+cat > "$TMP_BASE/codegraph-target.js" <<'TARGET'
+require(process.env.CG_RECORD_LOGIC_N)(process.argv.slice(2));
+TARGET
+
+if [ "$IS_WIN32" -eq 1 ]; then
+    # Production shape (npm cmd-shim): extensionless POSIX sibling (parsed as
+    # text, never executed), .cmd batch shim (never spawned directly — that is
+    # the whole reason spawnShimmedCli exists) and codegraph-target.js (the real
+    # logic). Every existing case in this suite therefore runs through the .cmd
+    # delegation path on win32.
+    # Byte-faithful npm cmd-shim 8.0.0 output, mirrored from the unit suite's
+    # tests/feature-2150-spawn-shimmed-cli/fixtures-npm.sh: CRLF, the :find_dp0
+    # subroutine, the `endLocal & goto` prefix and the `"%dp0%\...` separator.
+    write_cg_posix_sibling() {
+        {
+            printf '#!/bin/sh\n'
+            printf 'basedir=$(dirname "$(echo "$0" | sed -e '"'"'s,\\\\,/,g'"'"')")\n'
+            printf '\n'
+            printf 'case `uname` in\n'
+            printf '    *CYGWIN*|*MINGW*|*MSYS*)\n'
+            printf '        if command -v cygpath > /dev/null 2>&1; then\n'
+            printf '            basedir=`cygpath -w "$basedir"`\n'
+            printf '        fi\n'
+            printf '    ;;\n'
+            printf 'esac\n'
+            printf '\n'
+            printf 'if [ -x "$basedir/node" ]; then\n'
+            printf '  exec "$basedir/node"  "$basedir/codegraph-target.js" "$@"\n'
+            printf 'else \n'
+            printf '  exec node  "$basedir/codegraph-target.js" "$@"\n'
+            printf 'fi\n'
+        } > "$1"
+    }
+    # _cg_cmd_shim_head <file> — everything cmd-shim 8 writes before the target
+    # line, shared by the honest shim and the payload-carrying one.
+    _cg_cmd_shim_head() {
+        printf '@ECHO off\r\n'
+        printf 'GOTO start\r\n'
+        printf ':find_dp0\r\n'
+        printf 'SET dp0=%%~dp0\r\n'
+        printf 'EXIT /b\r\n'
+        printf ':start\r\n'
+        printf 'SETLOCAL\r\n'
+        printf 'CALL :find_dp0\r\n'
+        printf '\r\n'
+        printf 'IF EXIST "%%dp0%%\\node.exe" (\r\n'
+        printf '  SET "_prog=%%dp0%%\\node.exe"\r\n'
+        printf ') ELSE (\r\n'
+        printf '  SET "_prog=node"\r\n'
+        printf '  SET PATHEXT=%%PATHEXT:;.JS;=;%%\r\n'
+        printf ')\r\n'
+        printf '\r\n'
+    }
+    _cg_cmd_shim_tail() {
+        printf 'endLocal & goto #_undefined_# 2>NUL || title %%COMSPEC%% & "%%_prog%%"  "%%dp0%%\\codegraph-target.js" %%*\r\n'
+    }
+    write_cg_cmd_shim() {
+        { _cg_cmd_shim_head; _cg_cmd_shim_tail; } > "$1"
+    }
+    write_cg_posix_sibling "$SH_BIN/codegraph"
+    write_cg_cmd_shim "$SH_BIN/codegraph.cmd"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN/codegraph-target.js"
+
+    # bin-broken/ — .cmd present, POSIX sibling absent (WS-2: a partially
+    # installed or hand-edited PATH entry).
+    mkdir -p "$SH_BIN_BROKEN"
+    write_cg_cmd_shim "$SH_BIN_BROKEN/codegraph.cmd"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_BROKEN/codegraph-target.js"
+
+    # bin-broken-nocmd/ — the mirror image of bin-broken/: POSIX sibling present,
+    # .cmd absent (WS-5: an interrupted uninstall, or a shim trio whose .cmd was
+    # deleted by hand). Resolution only ever considers PATHEXT extensions, so the
+    # bare sibling is not a candidate and this must fail closed exactly like
+    # bin-broken/ — the symmetric member of the same class (CPR-ORTH).
+    mkdir -p "$SH_BIN_BROKEN_NOCMD"
+    write_cg_posix_sibling "$SH_BIN_BROKEN_NOCMD/codegraph"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_BROKEN_NOCMD/codegraph-target.js"
+
+    # bin-mismatch/ — the .cmd names codegraph-target.js, the POSIX sibling names
+    # a DIFFERENT (also real, also independently resolvable) decoy. Both targets
+    # exist on disk, so this fixture only fails if verifiedShimTarget() really
+    # cross-checks the two files' content rather than mere existence (WS-3 / C2).
+    mkdir -p "$SH_BIN_MISMATCH"
+    write_cg_cmd_shim "$SH_BIN_MISMATCH/codegraph.cmd"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_MISMATCH/codegraph-target.js"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_MISMATCH/codegraph-target-decoy.js"
+    write_cg_posix_sibling "$SH_BIN_MISMATCH/codegraph.tmp"
+    sed 's/codegraph-target\.js/codegraph-target-decoy.js/' \
+        "$SH_BIN_MISMATCH/codegraph.tmp" > "$SH_BIN_MISMATCH/codegraph"
+    rm -f "$SH_BIN_MISMATCH/codegraph.tmp"
+
+    # write_cg_payload_shim <file> <marker-native> — a shim cmd.exe would honour
+    # in full: the DEL+ECHO pair destroys the marker before the target line is
+    # ever reached, so a surviving `pristine` marker is direct evidence that the
+    # shim body was read as text and not handed to a shell (WS-7/WS-8, C4).
+    write_cg_payload_shim() {
+        {
+            _cg_cmd_shim_head
+            printf 'DEL /Q "%s"\r\n' "$2"
+            printf 'ECHO tampered-by-shell> "%s"\r\n' "$2"
+            _cg_cmd_shim_tail
+        } > "$1"
+    }
+
+    # bin-payload/ and bin-batpayload/ — complete, resolvable trios whose batch
+    # half is the saboteur above. Both PATHEXT-delegated extensions get one:
+    # .cmd and .bat are separate allow-list entries, so CPR-ORTH needs both.
+    mkdir -p "$SH_BIN_PAYLOAD" "$SH_BIN_BATPAYLOAD"
+    printf 'pristine\n' > "$PAYLOAD_MARKER"
+    printf 'pristine\n' > "$BATPAYLOAD_MARKER"
+    write_cg_posix_sibling "$SH_BIN_PAYLOAD/codegraph"
+    write_cg_payload_shim "$SH_BIN_PAYLOAD/codegraph.cmd" "$(to_native "$PAYLOAD_MARKER")"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_PAYLOAD/codegraph-target.js"
+    write_cg_posix_sibling "$SH_BIN_BATPAYLOAD/codegraph"
+    write_cg_payload_shim "$SH_BIN_BATPAYLOAD/codegraph.bat" "$(to_native "$BATPAYLOAD_MARKER")"
+    cp "$TMP_BASE/codegraph-target.js" "$SH_BIN_BATPAYLOAD/codegraph-target.js"
+
+    # bin-exe/ — the sanctioned DIRECT-launch shape (no shim, no sibling). Its
+    # content is never read: WS-9 asserts only how resolution classifies it, the
+    # branch every other case in this suite leaves untouched (C3).
+    mkdir -p "$SH_BIN_EXE"
+    printf 'not-a-real-pe\n' > "$SH_BIN_EXE/codegraph.exe"
+else
+    ln -f "$NODE_REAL_SH" "$SH_BIN/codegraph" 2>/dev/null || cp "$NODE_REAL_SH" "$SH_BIN/codegraph"
+    chmod +x "$SH_BIN/codegraph" 2>/dev/null || true
+fi
 
 # Identity-query stub (`ps` on POSIX, `powershell.exe` on win32): CG_QUERY_OUT
 # feeds a canned command line, CG_QUERY_SLEEP forces a timeout, else it exits
