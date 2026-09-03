@@ -21,8 +21,6 @@ if [ -z "$NODE_EXE" ]; then
 fi
 NODE_REAL="$("$NODE_EXE" -e 'process.stdout.write(process.execPath)')"
 NODE_REAL_SH="$(cygpath -u "$NODE_REAL" 2>/dev/null || printf '%s' "$NODE_REAL")"
-STUB_EXT=""
-case "$NODE_REAL" in *.exe|*.EXE) STUB_EXT=".exe" ;; esac
 
 RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
 if [ ! -f "$RUN_TIMEOUT" ]; then
@@ -33,7 +31,7 @@ CASE_TIMEOUT="${CG_TEST_TIMEOUT:-120}"
 
 TMP_BASE="$(mktemp -d)"
 BASE="$(to_native "$TMP_BASE")"
-mkdir -p "$TMP_BASE"/{config,bin,bin-empty,query,query-node,query-empty,helpers,roots,log,home}
+mkdir -p "$TMP_BASE"/{config,bin,bin-empty,bin-broken,bin-broken-nocmd,bin-mismatch,bin-payload,bin-batpayload,bin-exe,query,query-node,query-empty,helpers,roots,log,home}
 : > "$TMP_BASE/helper-pids"
 
 cleanup() {
@@ -46,12 +44,30 @@ cleanup() {
 trap cleanup EXIT
 
 SH_BIN="$TMP_BASE/bin"; SH_BIN_EMPTY="$TMP_BASE/bin-empty"
+SH_BIN_BROKEN="$TMP_BASE/bin-broken"; SH_BIN_BROKEN_NOCMD="$TMP_BASE/bin-broken-nocmd"
+SH_BIN_MISMATCH="$TMP_BASE/bin-mismatch"
+# WS-7/WS-8 (C4): a shim that is a VALID npm batch shim AND carries a DEL+ECHO
+# pair against its own marker, so a shell interpreting it destroys the marker.
+# WS-9 (C3): the sanctioned direct-launch extension, which has no shim at all.
+SH_BIN_PAYLOAD="$TMP_BASE/bin-payload"; SH_BIN_BATPAYLOAD="$TMP_BASE/bin-batpayload"
+SH_BIN_EXE="$TMP_BASE/bin-exe"
+PAYLOAD_MARKER="$TMP_BASE/payload-marker-cmd.txt"
+BATPAYLOAD_MARKER="$TMP_BASE/payload-marker-bat.txt"
 SH_QUERY="$TMP_BASE/query"; SH_QUERY_NODE="$TMP_BASE/query-node"; SH_QUERY_EMPTY="$TMP_BASE/query-empty"
 CONFIG_N="$BASE/config"; HELPERS_N="$BASE/helpers"
 CALL_LOG="$TMP_BASE/log/calls.log"; CALL_LOG_N="$BASE/log/calls.log"
 QUERY_LOG="$TMP_BASE/log/query.log"; QUERY_LOG_N="$BASE/log/query.log"
 OUT_FILE="$TMP_BASE/log/out.txt"; ERR_FILE="$TMP_BASE/log/err.txt"
 RECORDER_N="$BASE/recorder.js"; MKDB_N="$BASE/mkdb.js"; SAMEPATH_N="$BASE/samepath.js"
+RECORD_LOGIC_N="$BASE/record-logic.js"
+# The PATHEXT every child of this suite runs with (C4). Single definition so a
+# case that asserts the pin is load-bearing (WS-6) tests the value run_cli
+# really exports, not a copy of it.
+PINNED_PATHEXT=".COM;.EXE;.BAT;.CMD"
+# A host PATHEXT that omits .CMD — the shape WS-6 uses to show what the pin is
+# protecting the suite from.
+HOSTILE_PATHEXT=".EXE"
+SHIM_REF_N="$(to_native "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
 LIFECYCLE_N="$(to_native "$LIFECYCLE_SRC")"
 IDENTITY_N="$(to_native "$IDENTITY_SRC")"
 RC=0
@@ -81,13 +97,23 @@ reset_env() {
 # and the run reaches the verb under test. `query-empty` removes only the
 # identity-query binary, which is what makes L23's ENOENT that query's and not
 # the codegraph binary's.
+# `missing-sibling` / `missing-cmd` / `mismatched-shim` deliberately omit $PATH:
+# their whole point is that no resolvable `codegraph` exists, and a host that
+# really has one installed would otherwise satisfy the lookup from the tail of the
+# real PATH and turn a fail-closed assertion vacuously green (same reasoning as
+# `empty`).
 path_for_mode() {
     case "${CG_PATH_MODE:-stub}" in
-        empty)       printf '%s' "$SH_BIN_EMPTY" ;;
-        query)       printf '%s' "$SH_QUERY:$SH_BIN:$PATH" ;;
-        query-node)  printf '%s' "$SH_QUERY_NODE:$SH_BIN:$PATH" ;;
-        query-empty) printf '%s' "$SH_QUERY_EMPTY:$SH_BIN" ;;
-        *)           printf '%s' "$SH_BIN:$PATH" ;;
+        empty)            printf '%s' "$SH_BIN_EMPTY" ;;
+        query)            printf '%s' "$SH_QUERY:$SH_BIN:$PATH" ;;
+        query-node)       printf '%s' "$SH_QUERY_NODE:$SH_BIN:$PATH" ;;
+        query-empty)      printf '%s' "$SH_QUERY_EMPTY:$SH_BIN" ;;
+        missing-sibling)  printf '%s' "$SH_BIN_BROKEN" ;;
+        missing-cmd)      printf '%s' "$SH_BIN_BROKEN_NOCMD" ;;
+        mismatched-shim)  printf '%s' "$SH_BIN_MISMATCH" ;;
+        payload-cmd)      printf '%s' "$SH_BIN_PAYLOAD" ;;
+        payload-bat)      printf '%s' "$SH_BIN_BATPAYLOAD" ;;
+        *)                printf '%s' "$SH_BIN:$PATH" ;;
     esac
 }
 
@@ -108,6 +134,7 @@ run_cli() {
     NODE_OPTIONS="--require \"$RECORDER_N\"" AGENTS_CONFIG_DIR="$CONFIG_N" \
         bash "$RUN_TIMEOUT" "$CASE_TIMEOUT" \
         env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "${flag_env[@]}" \
+        CG_RECORD_LOGIC_N="$RECORD_LOGIC_N" PATHEXT="$PINNED_PATHEXT" \
         PATH="$child_path" HOME="$HOME_N" USERPROFILE="$HOME_N" \
         "$NODE_EXE" "$LIFECYCLE_N" "$verb" --path "$root" "$@" > "$OUT_FILE" 2> "$ERR_FILE"
     RC=$?
@@ -135,11 +162,24 @@ stub_db_failures() { grep -c '^STUB-MAKEDB-FAILED' "$CALL_LOG" 2>/dev/null || tr
 verb_calls() { printf '%s' "$(( $(total_calls) - $(version_probes) - $(stub_db_failures) ))"; }
 assert_no_spawn() { assert_eq "$1 — codegraph was never launched for a verb" "0" "$(verb_calls)"; }
 
+# assert_payload_intact <label> <marker> <ran-count> — the C4 measurement. An
+# untouched marker only counts as evidence when the shim was actually reached:
+# a run that never resolved anything leaves it untouched for the wrong reason.
+assert_payload_intact() {
+    if [ "${3:-0}" -lt 1 ]; then
+        fail "$1 — the marker survived only because the shim was never reached (no evidence)"
+    else
+        assert_eq "$1 — the planted shim body was never shell-executed" \
+            "pristine" "$(cat "$2" 2>/dev/null || echo "<destroyed-or-missing>")"
+    fi
+}
+
 VERSION_PROBE_RECORDS=0
 prove_version_probe() {
     : > "$CALL_LOG"
     CG_STUB_LOG="$CALL_LOG_N" NODE_OPTIONS="--require \"$RECORDER_N\"" \
-        env PATH="$SH_BIN:$PATH" "$NODE_EXE" \
+        env CG_RECORD_LOGIC_N="$RECORD_LOGIC_N" PATHEXT="$PINNED_PATHEXT" \
+        PATH="$SH_BIN:$PATH" "$NODE_EXE" \
         -e "require('node:child_process').spawnSync('codegraph',['--version'],{stdio:'ignore'})" \
         >/dev/null 2>&1 || true
     [ -s "$CALL_LOG" ] && VERSION_PROBE_RECORDS=1
