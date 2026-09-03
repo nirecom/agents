@@ -12,7 +12,7 @@ process.removeAllListeners("warning");
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnShimmedCli } = require("../hooks/lib/spawn-shimmed-cli");
 
 const { classifyIndex, upstreamSeesInitialized } = require("./codegraph-lifecycle/index-health");
 const { stopDaemon } = require("./codegraph-lifecycle/daemon-stop");
@@ -79,7 +79,7 @@ function codegraphEnabled() {
 // env is built per call, not at module load, because codegraphEnabled() may
 // have populated process.env from .env in between.
 function spawnCodegraph(args, options) {
-  return spawnSync("codegraph", args, {
+  return spawnShimmedCli("codegraph", args, {
     ...options,
     env: { ...process.env, CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1" },
     timeout: STATUS_TIMEOUT_MS,

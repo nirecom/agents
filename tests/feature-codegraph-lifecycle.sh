@@ -23,6 +23,17 @@ LIFECYCLE_SRC="$AGENTS_DIR/bin/codegraph-lifecycle.js"
 INDEX_HEALTH_SRC="$AGENTS_DIR/bin/codegraph-lifecycle/index-health.js"
 IDENTITY_SRC="$AGENTS_DIR/bin/codegraph-lifecycle/process-identity.js"
 
+# TL3 gap, continued — win32 shim resolution (#2150):
+# - whether a real `npm install -g` on THIS host writes byte-identical shim
+#   content (codegraph + codegraph.cmd + POSIX sibling) to the fixture shape
+#   this suite now uses by default (WS-1..WS-4 cover the edge cases) —
+#   WORKFLOW_USER_VERIFIED preflight, category: installer.
+# - whether a disconnected UNC share, an unresponsive network-mounted PATH
+#   entry, or a drive-letter-mapped network share (undetectable by the UNC
+#   check) really stalls spawnShimmedCli's synchronous resolution walk (C1:
+#   MAX_PATH_DIRS/UNC-skip are cost caps, not a timeout guarantee — accepted
+#   residual risk); this suite's fixtures are always local temp directories.
+
 PASS=0; FAIL=0; SKIPPED=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -63,6 +74,8 @@ done
 . "$SCRIPT_DIR/tokenizer.sh"
 # shellcheck source=./feature-codegraph-lifecycle/secrets.sh
 . "$SCRIPT_DIR/secrets.sh"
+# shellcheck source=./feature-codegraph-lifecycle/win-shim.sh
+. "$SCRIPT_DIR/win-shim.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPPED skipped ==="
