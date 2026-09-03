@@ -12,7 +12,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnShimmedCli } = require("../hooks/lib/spawn-shimmed-cli");
 
 const SERVER_NAME = "codegraph";
 const VERBS = ["register", "unregister"];
@@ -58,7 +58,7 @@ function telemetryEnv() {
 // claudeCliPresent probes the CLI itself; only ENOENT means "not installed".
 // A non-zero exit from `--version` is still a CLI that exists.
 function claudeCliPresent() {
-  const probe = spawnSync("claude", ["--version"], { stdio: "ignore" });
+  const probe = spawnShimmedCli("claude", ["--version"], { stdio: "ignore" });
   return !(probe.error && probe.error.code === "ENOENT");
 }
 
@@ -119,7 +119,7 @@ function readState(wantedEnv) {
 }
 
 function runClaude(args) {
-  const result = spawnSync("claude", args, { stdio: "inherit" });
+  const result = spawnShimmedCli("claude", args, { stdio: "inherit" });
   if (result.error) return false;
   return result.status === 0;
 }

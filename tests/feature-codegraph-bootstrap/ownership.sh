@@ -95,6 +95,12 @@ echo "--- O20/O21: an unreadable codegraph-constants.txt must fail closed, not f
 # registration it never proved ownership of. Point a copy of codegraph-mcp.js at a
 # directory with no constants file sibling to reproduce that input class without
 # touching the real one (this suite runs alongside others with no `# Serial:` gate).
+# codegraph-mcp.js now requires ../hooks/lib/spawn-shimmed-cli (#2150); a
+# standalone copy needs that sibling tree too, resolved relative to $BASE
+# since both this fixture and partial-constants below sit directly under it.
+mkdir -p "$BASE/hooks/lib"
+cp "$AGENTS_DIR/hooks/lib/spawn-shimmed-cli.js" "$BASE/hooks/lib/spawn-shimmed-cli.js"
+
 NO_CONSTANTS_DIR="$BASE/no-constants"
 mkdir -p "$NO_CONSTANTS_DIR"
 cp "$CODEGRAPH_MCP_JS" "$NO_CONSTANTS_DIR/codegraph-mcp.js"

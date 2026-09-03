@@ -30,6 +30,12 @@ CODEGRAPH_MCP_JS="$AGENTS_DIR/install/codegraph-mcp.js"
 RUN_WITH_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
 CASE_TIMEOUT=60
 
+# TL3 gap, continued — win32 shim resolution (#2150):
+# - whether a real `npm install -g` of the claude CLI on THIS host writes
+#   byte-identical shim content (claude + claude.cmd + POSIX sibling) to the
+#   fixture shape this suite now uses by default (WC-1..WC-3 cover the edge
+#   cases) — WORKFLOW_USER_VERIFIED preflight, category: installer.
+
 # No `# Serial:` header: every write lands under a per-run mktemp -d (redirected HOME,
 # stub PATH, private AGENTS_CONFIG_DIR). Nothing touches the repo tree, the real home,
 # global git config or a shared port, and no case depends on another case's leftovers.
@@ -72,6 +78,8 @@ assert_eq "B0-b: install.sh invokes install/linux/codegraph.sh directly, so B0-a
 . "$MODULE_DIR/cases.sh"
 # shellcheck source=./feature-codegraph-bootstrap/ownership.sh
 . "$MODULE_DIR/ownership.sh"
+# shellcheck source=./feature-codegraph-bootstrap/win-shim.sh
+. "$MODULE_DIR/win-shim.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP_ENV env-limited"
