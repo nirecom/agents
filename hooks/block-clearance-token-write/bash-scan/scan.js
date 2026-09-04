@@ -174,7 +174,7 @@ function bashHitsProtected(cmd, opts, _depth) {
     const stdinRoutes = stdinProgramRoutes(cmd, segments);
     for (const b of stdinRoutes.bodies) {
       // Judged in the interpreter's own language, exactly as a `-e`/`-c` body is.
-      if (interpreterBodyHitsProtected(b.body, b.gateText)) return "interpreter";
+      if (interpreterBodyHitsProtected(b.body, b.gateText, b.lang)) return "interpreter";
     }
     for (const t of stdinRoutes.fileTargets) {
       // `node < <marker>` EXECUTES the file. Classify it as a path — this is

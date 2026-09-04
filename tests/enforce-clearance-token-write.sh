@@ -18,38 +18,12 @@ HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 OLD_HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
-PASS=0; FAIL=0; SKIP=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'offwrite'; }
-node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-
-HOOK_PRESENT=no; [ -f "$HOOK" ] && HOOK_PRESENT=yes
-
-# run_hook <tmp_node> <hook-input-json> → prints stdout of the hook (empty if hook absent)
-run_hook() {
-    local tn="$1" input="$2"
-    [ "$HOOK_PRESENT" = "yes" ] || { printf ''; return; }
-    # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
-    mkdir -p "$tn/plans"
-    CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-        "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null
-}
-mk_bash_input() { "$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'wsid',tool_input:{command:process.argv[1]}}))" "$1"; }
-mk_file_input() { "$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:process.argv[1],session_id:'wsid',tool_input:{file_path:process.argv[2]}}))" "$1" "$2"; }
-is_block() { echo "$1" | grep -q '"decision":"block"'; }
-
-assert_block() {  # <label> <hook-out>
-    if is_block "$2"; then pass "$1 → block"
-    else
-        if [ "$HOOK_PRESENT" = "yes" ]; then fail "$1 must block (got: ${2:-<none>})"
-        else fail "$1 → block  [RED-EXPECTED: block-clearance-token-write.js not yet created]"; fi
-    fi
-}
-assert_approve() {  # <label> <hook-out>
-    if is_block "$2"; then fail "$1 must NOT block (over-blocking; got: $2)"
-    else pass "$1 → approve (not blocked)"; fi
-}
+# Counters, run_hook, the input builders and the STRICT verdict classifier all live in
+# the shared harness. assert_approve there demands rc=0 AND an explicit approve decision:
+# the local copy this replaced scored "no block string in stdout" as approve, so a crash,
+# a timeout or a garbled payload would have been recorded as a PASS (#1821 cycle-2 C9).
+# shellcheck source=tests/lib/clearance-hook-harness.sh
+. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
@@ -160,9 +134,15 @@ for CMD in \
     'eval "$(printf %s cm0gLWYgY29ucw== | base64 -d)"' \
     'perl -e "unlink glob qq{$ENV{CLAUDE_WORKFLOW_DIR}/wsid.off-clear*}"' \
     ; do
-    OUT=$(run_hook "$FIXN" "$(mk_bash_input "$CMD")")
-    # A crash would surface as a non-JSON / empty response while the hook is present.
-    if [ "$HOOK_PRESENT" = "yes" ] && [ -z "$OUT" ]; then KB_CRASH=$((KB_CRASH + 1)); fi
+    KB_V=$(classify "$(run_hook "$FIXN" "$(mk_bash_input "$CMD")")")
+    # "Answered at all" is the property here — block and approve are both acceptable
+    # verdicts for an undecidable command. Anything else (a crash, a timeout, empty or
+    # unparseable output) means the guard failed to produce one, which is the bug.
+    case "$KB_V" in
+        block|approve) ;;
+        hook-absent)   ;;
+        *) KB_CRASH=$((KB_CRASH + 1)); echo "  (KB1 detail: '$CMD' -> $KB_V)" ;;
+    esac
 done
 if [ "$HOOK_PRESENT" != "yes" ]; then
     fail "KB1 guard survives undecidable commands  [RED-EXPECTED: block-clearance-token-write.js not yet created]"
@@ -196,7 +176,82 @@ else
     fail "N3 settings.json does not register block-clearance-token-write.js — the guard would never fire"
 fi
 
+echo ""
+echo "=== #1821: the sanctioned minter invocation must not be blocked by its own guard ==="
+# comment-5 reproduction matrix. The mention gate is a bare substring match today, so a
+# script whose NAME merely contains the suffix (the minter this hook itself tells the
+# user to run) arms it. A-off1..A-off4 use the re-spelled entrypoint, A-off5b the old
+# one; both must be approved, and both are the same class of false positive (CPR-E2C).
+assert_approve 'A-off1 new spelling, quoted' \
+    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
+assert_approve 'A-off2 new spelling, unquoted' \
+    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_CONFIG_DIR/bin/request-off-mode-clearance --target workflow --category x --detail y')")"
+assert_approve 'A-off3 new spelling via $FOO assignment' \
+    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance"; bash "$F" --target workflow --category x --detail y')")"
+assert_approve 'A-off4 new spelling after an echo segment' \
+    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
+
+assert_approve 'A-off5b1 old spelling, quoted' \
+    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_CONFIG_DIR/bin/request-off-clearance" --target workflow --category x --detail y')")"
+assert_approve 'A-off5b2 old spelling, unquoted' \
+    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_CONFIG_DIR/bin/request-off-clearance --target workflow --category x --detail y')")"
+assert_approve 'A-off5b3 old spelling via $FOO assignment' \
+    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_CONFIG_DIR/bin/request-off-clearance"; bash "$F" --target workflow --category x --detail y')")"
+assert_approve 'A-off5b4 old spelling after an echo segment' \
+    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_CONFIG_DIR/bin/request-off-clearance" --target workflow --category x --detail y')")"
+
+# The documented workaround (absolute path, no $AGENTS_CONFIG_DIR) must keep working.
+assert_approve 'A-off5 absolute-path workaround' \
+    "$(run_hook "$TN" "$(mk_bash_input 'bash "/abs/bin/request-off-clearance" --target workflow --category x --detail y')")"
+
+# A-off6: the block MESSAGE itself names the invitation, so pasting or echoing the
+# guard's own remediation text must not be blocked by the guard (issue comment 5 asks
+# for this explicitly). Asserted against the classifier directly so the assertion is
+# about the message CONSTANT, not about a hand-copied duplicate of it. Env pinned exactly
+# as run_hook pins it (rules/test/fixture-isolation.md): both dirs dual-pinned at the
+# fixture, both inherited session ids dropped, and NO cwd — mk_bash_input sends none
+# either, so this reads the same context a real Bash turn reaches the classifier with.
+# All four exported messages are covered in the derived S1b matrix of the sibling
+# spelling-ssot-static.sh; this row keeps the parent suite's own regression anchor.
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+A_OFF6="$(CLAUDE_WORKFLOW_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+if [ "$A_OFF6" = "null" ]; then
+    pass "A-off6 TOKEN_BLOCK_MSG is not itself blocked (got null)"
+else
+    fail "A-off6 the guard blocks its own remediation text (bashHitsProtected -> ${A_OFF6:-<no output>})"
+fi
+
+# B-off1: positive control for the narrowing above. Narrowing the mention gate must not
+# stop a REAL token write from blocking; if this ever flips, the fix went too far.
+assert_block "B-off1a redirect into the live token"  "$(run_hook "$TN" "$(mk_bash_input "echo forged > $TOKEN")")"
+assert_block "B-off1b node -e writeFileSync literal token" \
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TOKEN','forged')\"")")"
+
 rm -rf "$TMP" 2>/dev/null || true
+
+# --- CI wiring (#1821 cycle-2 C3): tests/run-all.sh globs tests/*.sh (TOP LEVEL only),
+# so every file under tests/enforce-clearance-token-write/ is dead code in CI until it
+# is reached from here. parser-cases.sh was already unwired before this change; it is
+# folded in with the other two rather than left as a half-fixed instance of the same
+# defect (CPR-E2C/CPR-E2E).
+SECTION_DIR="$AGENTS_DIR/tests/enforce-clearance-token-write"
+# shellcheck source=tests/lib/section-runner.sh
+. "$AGENTS_DIR/tests/lib/section-runner.sh"
+run_section "parser-cases.sh" 120
+run_section "read-only-allowlist-cases.sh" 240
+run_section "flag-cluster-coverage-cases.sh" 240
+run_section "mention-gate-boundary-cases.sh" 90
+run_section "mention-gate-strict-boundary-cases.sh" 90
+run_section "clearance-stem-observation-cases.sh" 180
+run_section "unicode-boundary-e2e-cases.sh" 180
+run_section "interpreter-language-scope-cases.sh" 300
+run_section "consumer-allow-direction-cases.sh" 180
+run_section "spelling-ssot-static.sh" 120
+run_section "wrapper-equivalence-cases.sh" 240
+run_section "wrapper-signal-transparency-cases.sh" 180
+run_section "wrapper-invocation-context-cases.sh" 300
+run_section "block-message-decode-cases.sh" 180
+run_section "interpreter-widening-evidence-cases.sh" 120
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

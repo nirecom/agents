@@ -1,39 +1,14 @@
 #!/usr/bin/env bash
+# tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh
+# Tests: hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/command-ir.js
+# Tags: off-clearance, clearance-token, interpreter, interpreter-identity, stdin-program, stdin-route, heredoc, here-string, eval, language-scope, parser, regex, table-driven, classifier, unit, scope:common, pwsh-not-required, TL1, dup-group-keep:distinct-layer
 # Part of tests/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
-# Sections I and D - the interpreter / nested-body side:
-#   I  hooks/block-clearance-token-write/interpreter-scan.js
-#   D  hooks/block-clearance-token-write/nested-bodies.js
-# Sourced by the parent, which owns run_table(), _expand() and the counters.
-
-# ===========================================================================
-# Section I — interpreter-scan.js. Identity ("is this word an interpreter, and of
-# which kind?") and proof ("does this argv word show the program is on argv, so
-# stdin carries data?").
-#
-# The two alternations point in OPPOSITE directions and must never be merged:
-# INTERPRETER_RE is an EXTRACTION alternation (over-matching = read more text =
-# safe), INLINE_PROGRAM_FLAG_RE is a PERMISSION predicate (over-matching = clear
-# more = unsafe). Sections I and D are where that split is observable.
-#
-# PAIRING:
-#   I-re-node vs I-re-script      a `-c`/`-e`-family FLAG is what makes the shape
-#   I-re-nodex vs I-re-node       word boundary: `nodex` is not `node`
-#   I-re-echoe                    `echo -e` carries the flag but no interpreter
-#   I-re-pwshCo / I-re-case       pwsh accepts every unambiguous prefix of
-#                                 `-Command`, in any casing, and so must this
-#   I-bf-awk / I-bf-php vs I-bf-node   the body-FIRST family needs no flag at all
-#                                 (`awk 'BEGIN{print > "<marker>"}'`), which is
-#                                 exactly why it is a second regex
-#   I-kind-* / I-pwsh-*           identity is path-insensitive, `.exe`-tolerant
-#                                 and case-folded (Windows executable lookup)
-#   I-flag-* vs I-flag-p/I-flag-E `-p` / `-E` are LOOKALIKES — round-7: a flag
-#                                 that merely resembles a program flag is not proof
-#   I-proof-pwsh vs I-proof-nonpwsh  round-8 fix A: `-Command` is proof for pwsh
-#                                 and meaningless for node, so proof is kind-SCOPED
-#   I-ro-read vs I-ro-write       #1709: an anchored, provably side-effect-free
-#                                 read shape is approved; everything else is a
-#                                 write until proven otherwise
-# ===========================================================================
+# Sections I (interpreter-scan.js) and D (nested-bodies.js), sourced by the parent,
+# which owns run_table(), _expand() and the counters.
+# Section I covers interpreter identity and inline-program proof: INTERPRETER_RE
+# extracts (over-matching is safe), INLINE_PROGRAM_FLAG_RE permits (over-matching
+# clears more, so it is unsafe) — the two must never be merged.
+# Per-row pairing rationale for both sections: PAIRING.md.
 run_I_interpreter_scan() {
 run_table I <<'TABLE'
 I-re-node     | true  | interpre | node -e "x"
@@ -69,34 +44,32 @@ I-proof-pwsh    | true  | proof | -Command pwsh
 I-proof-nonpwsh | false | proof | -Command node
 I-proof-e       | true  | proof | -e node
 I-proof-c       | true  | proof | -c sh
-I-ro-read     | true  | roshape | console.log(require('fs').readFileSync('/wf/s1@MK@','utf8'))
-I-ro-write    | false | roshape | require('fs').writeFileSync('/wf/s1@MK@','x')
+I-ro-read     | true  | roshape | node console.log(require('fs').readFileSync('/wf/s1@MK@','utf8'))
+I-ro-write    | false | roshape | node require('fs').writeFileSync('/wf/s1@MK@','x')
+I-ro-ruby     | false | roshape | ruby console.log(require('fs').readFileSync('/wf/s1@MK@','utf8'))
+I-ro-unknown  | false | roshape | zzz console.log(require('fs').readFileSync('/wf/s1@MK@','utf8'))
+I-deliv-plain   | node   | deliver | node
+I-deliv-path    | python3 | deliver | /usr/bin/PYTHON3.EXE
+I-deliv-flagval | ruby   | deliver | ruby -I python3
+I-deliv-runner  | python | deliver | uv run python
+I-deliv-wrapper | node   | deliver | command node
+I-deliv-assign  | node   | deliver | A=1 node
+I-deliv-optarg  | -      | deliver | uvx --from python3 ruby
+I-deliv-chain   | node   | deliver | cd /x && node
+I-deliv-none    | -      | deliver | ls -la
 I-hits-write  | true  | hits | node -e "require('fs').writeFileSync('/wf/s1@MK@','x')"
 I-hits-clean  | false | hits | node -e "console.log(1)"
+I-hits-spoof  | true  | hits | ruby -I python3 -e 'open("|touch /wf/s1@MK@")'
+I-hits-runner | false | hits | uv run python -c "print(open('/wf/s1@MK@').read())"
+# EOF-GUARD, must stay last: run_table feeds the table through $(cat), which strips
+# the trailing newline, so `while read` never sees the final line — a real row here
+# would silently assert nothing. Same guard closes every run_table table.
 TABLE
 }
 
-# ===========================================================================
-# Section D — nested-bodies.js. The routes by which COMMAND TEXT reaches a shell
-# without being written as a command: `eval`, here-strings, heredocs, pipelines.
-#
-# PAIRING:
-#   D-eval-yes / D-eval-wrap vs D-eval-no   `eval` is found through the command
-#       wrappers (command/builtin/exec/nohup/time) and only there
-#   D-hs-raw vs D-hs-val   the SAME here-string in both spellings. Raw keeps the
-#       outer quotes (the shell scanner re-tokenizes it); the value is quote-
-#       stripped (the only form the anchored read-only shapes can match). Feeding
-#       the raw form to those shapes would fail-closed block `node <<< "…"` while
-#       its `-e` sibling is approved — the #1709 asymmetry.
-#   D-stdin-bare vs D-stdin-flag   `node` reading stdin is a PROGRAM route;
-#       `node -e '…'` proves the program is on argv, so stdin is data
-#   D-stdin-script                 accepted over-block: a bare file operand cannot
-#       be proven without flag-arity knowledge, so it stays a program route
-#   D-routes-heredoc vs D-routes-assign   the same heredoc with and without a
-#       leading `VAR=1` — the row that ASSIGN_WORD_RE is keyed on (Section M)
-#   D-routes-pipe                  an upstream pipeline into a bare interpreter is
-#       OPAQUE (o=1): it cannot be analysed, so it is not cleared
-# ===========================================================================
+# Section D — the routes by which COMMAND TEXT reaches a shell without being
+# written as a command: `eval`, here-strings, heredocs, pipelines.
+# Per-row pairing rationale: PAIRING.md (section D).
 run_D_nested_bodies() {
 run_table D <<'TABLE'
 D-eval-yes    | rm /wf/s1@MK@   | evalbody | eval rm /wf/s1@MK@
@@ -117,5 +90,25 @@ D-routes-heredoc | b=1,f=0,o=0 | routes | node <<EOF\nx\nEOF\n
 D-routes-assign  | b=1,f=0,o=0 | routes | FOO=1 node <<EOF\nx\nEOF\n
 D-routes-pipe    | b=0,f=0,o=1 | routes | cat /wf/s1@MK@ | node
 D-routes-none    | b=0,f=0,o=0 | routes | echo hi
+# The `routes` rows above count buckets; these assert the `lang` FIELD VALUE that
+# bash-scan/scan.js forwards to interpreterBodyHitsProtected as the delivering
+# interpreter's identity (#1821). A dropped or wrong tag re-scopes the read-only
+# shapes silently, and no hook-level row can catch it for a HEREDOC body: every
+# recognized read-only shape has parentheses, which command-ir treats as segment
+# separators, so the scan fails closed before the language classifier is reached
+# (measured in tests/enforce-clearance-token-write/interpreter-language-scope-cases.sh,
+# SR-hd5/SR-hd6). This table is therefore the only layer where the tag is visible.
+D-lang-hd-node   | node    | routelangs | node <<EOF\nx\nEOF\n
+D-lang-hd-ruby   | ruby    | routelangs | ruby <<EOF\nx\nEOF\n
+D-lang-hd-path   | /usr/bin/node | routelangs | /usr/bin/node <<EOF\nx\nEOF\n
+D-lang-hd-assign | node    | routelangs | FOO=1 node <<EOF\nx\nEOF\n
+D-lang-hd-wrap   | ruby    | routelangs | command ruby <<EOF\nx\nEOF\n
+D-lang-hd-shell  | -       | routelangs | sh <<EOF\nx\nEOF\n
+D-lang-hd-cat    | -       | routelangs | cat <<EOF\nx\nEOF\n
+D-lang-hd-argv   | -       | routelangs | node -e "y" <<EOF\nx\nEOF\n
+D-lang-hs-node   | node    | routelangs | node <<< 'x'
+D-lang-hs-ruby   | ruby    | routelangs | ruby <<< 'x'
+D-lang-hs-shell  | -       | routelangs | sh <<< 'x'
+# EOF-GUARD, must stay last (see Section I).
 TABLE
 }
