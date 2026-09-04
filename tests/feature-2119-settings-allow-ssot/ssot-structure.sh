@@ -62,7 +62,7 @@ t1b_shebangs_resolve() {
     assert_eq "T1b: every SSOT entry's shebang resolves to bash or node (anything else is fail-closed)" "" "$bad"
 }
 
-# T2a is the conservative-charset gate. Each entry is interpolated into eleven permission
+# T2a is the conservative-charset gate. Each entry is interpolated into thirteen permission
 # rules, so a `..`, a leading slash, a drive letter or a glob metacharacter would WIDEN a
 # rule rather than merely name a file -- the one place here where a typo is a security change
 # and not a broken build.

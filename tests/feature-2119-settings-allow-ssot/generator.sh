@@ -74,14 +74,18 @@ run_gen() { # <fixture> <arg>...
 }
 
 # THE TEMPLATE CONTRACT, restated independently of the generator (a test that imported the
-# generator's own table could only prove it equals itself). Eight path spellings; the Windows
-# form converts the separators inside the path too, because a Windows spelling carrying
-# forward slashes could never match a real command line.
+# generator's own table could only prove it equals itself). Ten path spellings, in the
+# generator's own table order: the two CLOSED forms (no trailing wildcard -- the bare,
+# argument-less invocation) lead, then the eight wildcard forms. The Windows form converts the
+# separators inside the path too, because a Windows spelling carrying forward slashes could
+# never match a real command line.
 expected_path_rules() { # <interpreter> <relative-path>
     local i="$1" p="$2" w bs
     bs='\'
     w="$(printf '%s' "$p" | tr '/' '\\')"
     printf '%s\n' \
+        "Bash($i \"\$AGENTS_CONFIG_DIR/$p\")" \
+        "Bash($i $p)" \
         "Bash($i \"\$AGENTS_CONFIG_DIR/$p\" *)" \
         "Bash($i */agents/$p *)" \
         "Bash($i *${bs}agents${bs}$w *)" \
@@ -113,8 +117,8 @@ t4_generator_present() {
 T4_DUMP=""
 
 # T4 expands a three-entry fixture SSOT (one bash tool, one node tool, one PATH-exposed tool)
-# and checks both the ARITY per entry (8 / 8 / 11) and the exact spelling of every rule for
-# two of them. Counting alone would pass a generator that emitted eight wrong strings.
+# and checks both the ARITY per entry (10 / 10 / 13) and the exact spelling of every rule for
+# two of them. Counting alone would pass a generator that emitted ten wrong strings.
 t4_setup() {
     local fx; fx="$(mk_fixture t4)"
     mk_tool "$fx" bin/fx-bash-tool env-bash
@@ -147,9 +151,9 @@ t4_expansion() {
         ROWS=$((ROWS + 1))
         assert_eq "T4[$id]: $name expands to $want rules" "$want" "$(t4_count "$name")"
     done <<'T4_COUNTS'
-count-bash|8|fx-bash-tool
-count-node|8|fx-node-tool.js
-count-path|11|fx-path-tool
+count-bash|10|fx-bash-tool
+count-node|10|fx-node-tool.js
+count-path|13|fx-path-tool
 T4_COUNTS
     while IFS= read -r rule; do
         [ -n "$rule" ] || continue
@@ -213,7 +217,7 @@ T4_DUP_FIXTURE=""
 # T4-dup -- the SAME path listed twice, fed straight to the generator. T2b guards the real
 # SSOT text against duplicates; it says nothing about a generator handed one anyway. The
 # expectation follows from T6's append-only/idempotent contract: a rule already present is
-# never appended a second time, so a doubled entry yields the same 8 rules, not 16.
+# never appended a second time, so a doubled entry yields the same 10 rules, not 20.
 t4_dup_setup() {
     T4_DUP_FIXTURE="$(mk_fixture t4-dup)"
     mk_tool "$T4_DUP_FIXTURE" bin/fx-dup env-bash
@@ -247,7 +251,7 @@ t4_dup_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T4-dup[$id]: $label" "$want" "$(t4_dup_probe "$id")"
     done <<'T4_DUP_CASES'
-arity|8|the same path listed twice still expands to exactly 8 rules
+arity|10|the same path listed twice still expands to exactly 10 rules
 unique|yes|the written allow list carries no duplicated entry
 T4_DUP_CASES
 }

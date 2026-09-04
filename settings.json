@@ -253,7 +253,37 @@
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && node \"$AGENTS_CONFIG_DIR/bin/workflow/read-step-status\" *')",
       "Bash(review-code-codex *)",
       "Bash(bash -c 'review-code-codex *')",
-      "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && review-code-codex *')"
+      "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && review-code-codex *')",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/next-step\")",
+      "Bash(node bin/workflow/next-step)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/supervisor-report\")",
+      "Bash(node bin/supervisor-report)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/workflow-plans-dir\")",
+      "Bash(bash bin/workflow-plans-dir)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/worker-dispatch-paths\")",
+      "Bash(node bin/worker-dispatch-paths)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path\")",
+      "Bash(bash bin/resolve-worktree-path)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/concern-ledger\")",
+      "Bash(bash bin/concern-ledger)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/review-code-codex\")",
+      "Bash(bash bin/review-code-codex)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\")",
+      "Bash(bash bin/confirm-off)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/parse-closes-issues\")",
+      "Bash(node bin/parse-closes-issues)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/set-workflow-type\")",
+      "Bash(node bin/workflow/set-workflow-type)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip\")",
+      "Bash(bash bin/workflow/record-complexity-and-skip)",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/skills/worktree-start/scripts/derive-worktree-name.sh\")",
+      "Bash(bash skills/worktree-start/scripts/derive-worktree-name.sh)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation\")",
+      "Bash(node bin/workflow/read-complexity-evaluation)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level\")",
+      "Bash(node bin/workflow/derive-complexity-level)",
+      "Bash(node \"$AGENTS_CONFIG_DIR/bin/workflow/read-step-status\")",
+      "Bash(node bin/workflow/read-step-status)"
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
@@ -658,6 +688,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-capture-echo.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
             "timeout": 5
           }
@@ -734,7 +774,7 @@
         ]
       },
       {
-        "matcher": "Monitor|EnterWorktree",
+        "matcher": "Monitor|EnterWorktree|Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",

@@ -29,7 +29,7 @@ PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
 # THE CONTRACT UNDER TEST. One declarative file, install/settings-allow-commands.txt, names
 # the commands and nothing else — no interpreter (read from the shebang), no rule strings, no
 # bare-form flag (decided by install/path-exposed-commands.txt). install/gen-settings-allow.js
-# owns the template table in ONE place and expands each entry into 8 path spellings plus 3
+# owns the template table in ONE place and expands each entry into 10 path spellings plus 3
 # bare spellings for PATH-exposed commands; `--check` reports both missing AND orphaned
 # entries, `--write` appends only. bin/review-settings-allow turns `--check` into a
 # PERFORMED/FAIL binary and hooks/pre-commit blocks the commit on any non-zero — fail-closed,
@@ -89,8 +89,8 @@ assert_eq() {
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
 ROWS=0
-ROWS_EXPECTED=154  # T3a 3 + T3b 18 + T4 14 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3 + T7b 2 + T7c 2
-                   # + T11 4 + T12 3 + T25 6 + T13 15 + T14 8 + T15 3 + T16 5 + T17 12
+ROWS_EXPECTED=158  # T3a 3 + T3b 18 + T4 16 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3 + T7b 2 + T7c 2
+                   # + T11 4 + T12 3 + T25 6 + T13 15 + T14 10 + T15 3 + T16 5 + T17 12
                    # + T8 6 + T9 6 + T18 10 + T20 5 + T21 3 + T24 5 + T22 3 + T23 10
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/sa-2119.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }

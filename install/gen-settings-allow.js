@@ -40,6 +40,11 @@ const bail = (msg) => {
 //   <I> interpreter   <P> repo-relative path   <W> that path in Windows separators
 //   <N> bare command name (PATH-exposed commands only)
 const PATH_TEMPLATES = [
+    // Closed-ended (no trailing wildcard): the bare, argument-less invocation form.
+    // Without these, `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` matches no rule
+    // and prompts — the very form rules/shell-commands.md tells the model to prefer.
+    'Bash(<I> "$AGENTS_CONFIG_DIR/<P>")',
+    'Bash(<I> <P>)',
     'Bash(<I> "$AGENTS_CONFIG_DIR/<P>" *)',
     'Bash(<I> */agents/<P> *)',
     'Bash(<I> *\\agents\\<W> *)',

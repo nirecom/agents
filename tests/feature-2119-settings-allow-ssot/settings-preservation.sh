@@ -143,7 +143,7 @@ t12_setup() {
     {
         printf '%s\n' "$T12_PRE"
         sed -n '4p;7p' "$T12_PARTIAL/full.txt"
-        sed -n '10,17p' "$T12_PARTIAL/full.txt"
+        sed -n '12,21p' "$T12_PARTIAL/full.txt"
     } > "$T12_PARTIAL/pre.txt"
     write_settings "$T12_PARTIAL" "$T12_PARTIAL/pre.txt"
     grep -Fxv -f "$T12_PARTIAL/pre.txt" "$T12_PARTIAL/full.txt" > "$T12_PARTIAL/tail.txt"

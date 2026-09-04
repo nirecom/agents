@@ -5,7 +5,7 @@
 # T13 -- THE SSOT IS AN INPUT, NOT A CONSTANT. Sourced AFTER generator.sh, whose fixture
 # helpers this reuses. ssot-structure.sh T2a inspects the entries in the file today, so it can
 # only say "the current list is clean"; it cannot fail for a generator that never validates.
-# Each entry is interpolated into eleven permission rules, so an unvalidated `..`, absolute
+# Each entry is interpolated into thirteen permission rules, so an unvalidated `..`, absolute
 # path, drive letter, space, backslash, shell metacharacter or glob metacharacter does not
 # merely name the wrong file -- it WIDENS a rule.
 
@@ -91,7 +91,7 @@ t13_fixture() { # <name> <hostile-entry-or-EMPTY> <mkfile:yes|no> -> fixture dir
 }
 
 # Pattern 1 of protection-fix-tests.md: the exit code alone is not the assertion. A generator
-# that rejects the entry AFTER appending the other eight rules has still written a
+# that rejects the entry AFTER appending the other ten rules has still written a
 # half-generated permission set, so the protected resource itself is checked. The exit code is
 # reported EXACTLY (2 = usage/IO/validation per the plan's contract), not as "non-zero": a
 # crash, a timeout and a deliberate rejection are three different outcomes.

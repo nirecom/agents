@@ -4,16 +4,15 @@
 
 # T14-T16: --check as a classifier. Sourced AFTER write-and-drift.sh, whose helpers this reuses.
 
-# T14 -- ONE TEMPLATE PER ROW. Orphan detection reverse-matches eleven separate template
-# regexes, and T7b hands all eight path forms over at once: recognising ONE of them is enough
-# to report the orphan and pass. Each form is therefore given its own fixture, in which the
-# only entry the generator can possibly object to is that single spelling -- and the in-sync
-# command is asserted to stay OUT of the report, so a "list everything" implementation cannot
-# read as a classifier.
-t14_path_template() { # <k 1..8> -> "nonzero/dropped-named/keep-silent" | sentinel
+# T14 -- ONE TEMPLATE PER ROW: T7b hands all ten path forms over at once, so recognising
+# ONE suffices to pass. Each spelling gets its own fixture, and the in-sync command must
+# stay OUT of the report so a "list everything" implementation cannot read as a classifier.
+# Addressed by LINE of expected_path_rules, so the two closed forms (lines 1-2, #2170)
+# are reachable alongside the eight wildcard forms (lines 3-10).
+t14_path_line() { # <line# 1..10> <fixture-tag> -> verdict|sentinel
     have_gen || { missing_gen; return; }
     local fx rcv named silent
-    fx="$(mk_fixture "t14-path-$1")"
+    fx="$(mk_fixture "t14-path-$2")"
     mk_tool "$fx" bin/fx-keep env-bash
     write_ssot "$fx" bin/fx-keep
     expected_path_rules bash bin/fx-keep > "$fx/pre.txt"
@@ -26,29 +25,34 @@ t14_path_template() { # <k 1..8> -> "nonzero/dropped-named/keep-silent" | sentin
     printf '%s/%s/%s' "$rcv" "$named" "$silent"
 }
 
+# Rows c1/c2 are the CLOSED (argument-less) forms #2170 added at the head of
+# PATH_TEMPLATES; without them a stale grant in either spelling escapes the
+# reverse-matcher entirely, since no wildcard template can match a closed rule.
 t14_path_table() {
     local k label
     while IFS='|' read -r k label; do
         [ -n "$k" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T14[path-$k]: an orphan in the '$label' form alone is detected" \
-            "nonzero/dropped-named/keep-silent" "$(t14_path_template "$k")"
+            "nonzero/dropped-named/keep-silent" "$(t14_path_line "${k#c}" "$k")"
     done <<'T14_PATH_CASES'
-1|<I> "$AGENTS_CONFIG_DIR/<P>" *
-2|<I> */agents/<P> *
-3|<I> *\agents\<P> * (Windows separators)
-4|<I> <P> *
-5|"$AGENTS_CONFIG_DIR/<P>" * (no interpreter prefix)
-6|*/agents/<P> * (no interpreter prefix)
-7|bash -c '<I> "$AGENTS_CONFIG_DIR/<P>" *'
-8|bash -c 'cd "$AGENTS_CONFIG_DIR" && <I> "$AGENTS_CONFIG_DIR/<P>" *'
+c1|<I> "$AGENTS_CONFIG_DIR/<P>" (closed, no trailing wildcard)
+c2|<I> <P> (closed, no trailing wildcard)
+3|<I> "$AGENTS_CONFIG_DIR/<P>" *
+4|<I> */agents/<P> *
+5|<I> *\agents\<P> * (Windows separators)
+6|<I> <P> *
+7|"$AGENTS_CONFIG_DIR/<P>" * (no interpreter prefix)
+8|*/agents/<P> * (no interpreter prefix)
+9|bash -c '<I> "$AGENTS_CONFIG_DIR/<P>" *'
+10|bash -c 'cd "$AGENTS_CONFIG_DIR" && <I> "$AGENTS_CONFIG_DIR/<P>" *'
 T14_PATH_CASES
 }
 
 # T15 -- THE THREE BARE FORMS, which T7b never exercises at all. They are keyed on a different
 # SSOT (install/path-exposed-commands.txt) and extract a basename rather than a path, so an
-# implementation can reverse-match all eight path forms and still be blind to every one of
-# these. The fixture's own command IS PATH-exposed, so its eleven rules are complete and the
+# implementation can reverse-match all ten path forms and still be blind to every one of
+# these. The fixture's own command IS PATH-exposed, so its thirteen rules are complete and the
 # orphan is the only finding.
 t15_bare_template() { # <k 1..3> -> "nonzero/gone-named/keep-silent" | sentinel
     have_gen || { missing_gen; return; }
@@ -84,7 +88,7 @@ T15_BARE_CASES
 
 # T16 -- THE REPORT IS THE PRODUCT. `--check` runs from a git hook, where a non-zero exit with
 # a vague message costs a developer the whole diagnosis. Two properties are asserted: the
-# missing list is COMPLETE (all eleven spellings for a command with nothing in the file, not
+# missing list is COMPLETE (all thirteen spellings for a command with nothing in the file, not
 # just the first one the loop noticed), and Missing and Orphaned are reported as two separate
 # sections when both conditions hold at once -- the state a real drifted repository is in.
 T16_COMPLETE=""
@@ -153,7 +157,7 @@ both-named|both the missing command and the orphaned one appear in one report
 rc|a run carrying both findings exits non-zero
 T16_CASES
     ROWS=$((ROWS + 1))
-    assert_eq "T16[complete]: every one of the 11 spellings is listed for a command with no rules at all (not just the first)" \
+    assert_eq "T16[complete]: every one of the 13 spellings is listed for a command with no rules at all (not just the first)" \
         "complete" "$(t16_probe complete)"
 }
 

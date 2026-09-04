@@ -135,6 +135,14 @@ See `docs/security-policy.md` for the full pattern list.
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
   `.git/.cross-platform-reviewed` (one-time, HEAD hash)
+- `block-capture-echo.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — rejects
+  the "assign a command substitution to a variable, then do nothing but display it" shape
+  (`X=$(cmd); echo "$X"`), which adds a shell round-trip over reissuing `cmd` bare and reading
+  its stdout. Unconditional: no `WORKFLOW_OFF` / `WORKTREE_OFF` bypass, because issuance
+  discipline is orthogonal to workflow enforcement. Fail-open on any parse failure — it is a
+  UX guard, not a security boundary. The rejection message names the bare reissue when the
+  inner command is an `install/settings-allow-commands.txt` entry, and otherwise points at the
+  scratchpad-script procedure in `rules/shell-commands.md`
 - `enforce-worktree.js` (PreToolUse, matcher: `Bash|Edit|Write|MultiEdit`) — when
   `ENFORCE_WORKTREE=on` (default), blocks writes from the main worktree regardless
   of branch, and blocks default-branch edits. Main-worktree detection: `--git-common-dir
@@ -389,13 +397,39 @@ that. The fact "this command is an allow-target" therefore has exactly one owner
 strings are generated from it.
 
 - Dataflow: `install/settings-allow-commands.txt` (the SSOT — command paths only) → `install/gen-settings-allow.js` (expansion) → `settings.json` under `permissions.allow` → `install/assemble-settings.js`, which deploys the merged file. Never hand-edit a generated rule.
-- `install/gen-settings-allow.js` owns the spelling template table in one place: eight path spellings per command, plus three bare spellings for a command that `install/path-exposed-commands.txt` gives a PATH shim. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
+- `install/gen-settings-allow.js` owns the spelling template table in one place: ten path spellings per command — eight ending in a trailing ` *`, plus two closed-ended ones covering the argument-less invocation, which the wildcard forms do not match — plus three bare spellings for a command that `install/path-exposed-commands.txt` gives a PATH shim. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
 - Admitted: auto-issued, repo-state-invariant, idempotent internal tools. Excluded on principle: `gh` writes, git state changes, `.env` readers, platform-launched hook bodies, wrapper launchers such as `bin/run-with-timeout.sh` whose trailing ` *` template would allow-list every command reachable through them, and dispatchers that reach a state-changing or credential-reading operation through an argument or subcommand the permission engine never sees (e.g. a worker-dispatch script whose outer invocation is the only thing matched).
 - Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but `--write` appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
 - The drift gate lives in `hooks/pre-commit`, which runs `bin/review-settings-allow` on every commit to the agents session repo. That reviewer always passes `--check --staged`, so the generator reads the SSOT, `settings.json`, and each entry's shebang from the git index (`git show :<path>`) rather than the working tree — a file edited-but-unstaged after `git add` cannot make the gate pass a version that differs from what actually lands in the commit. Plain `--check` (no `--staged`) still exists for interactive/dev use.
 - That gate is fail-closed: a missing or non-executable `bin/review-settings-allow`, a deleted SSOT, and an unreadable generator all block the commit, so deleting the gate is not a way to turn the gate off.
 - An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
-- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into eleven permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it runs by hand or via the pre-commit gate, never auto-issued mid-session, so listing it buys no allow coverage.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into thirteen permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it runs by hand or via the pre-commit gate, never auto-issued mid-session, so listing it buys no allow coverage.
+
+**Why the scratchpad path is not an allow rule**: a static permission rule is a glob matched
+against the whole command string, and the scratchpad-script approval depends on three things a
+glob cannot express — the real temp root behind `os.tmpdir()` (which `TEMP`/`TMP`/`TMPDIR` can
+repoint), the identity of the *current* session, and the absence of shell metacharacters that
+would rewrite the path after inspection. A permission whose value is only known at runtime is
+therefore owned by an allow hook (`hooks/preuse-auto-approve.js` +
+`hooks/preuse-auto-approve/scratchpad-script.js`), not by `permissions.allow`.
+
+Beyond containment, `hooks/preuse-auto-approve/script-body-scan.js` reads the script's own
+content before approval and answers suspect (fall through to the normal confirmation prompt)
+when any line matches a denylist of known-dangerous shapes: system-ops/credential/dotenv/
+memory/history/clearance-token/sentinel writes, forge-scan targets, git-commit invocation,
+`permissions.deny`/`permissions.ask` rule matches (`hooks/lib/settings-deny-match.js`), unknown
+interpreter or direct execution (`hooks/lib/unrecognized-exec-check.js`), and egress/
+exfiltration tools such as curl/wget/scp/ssh (`hooks/lib/egress-command-check.js`). This is a
+denylist, not an allowlist: an unrecognized command shape defaults to approved, so it narrows —
+rather than closes — the gap defence-in-depth would otherwise leave at execution time. Any
+scan failure (unreadable file, parse exception) also answers suspect, per the fail-to-suspect
+contract the module and its call sites share.
+
+The write path (`isAllowedScratchpadTarget`) and the exec path (this hook) deliberately use
+allow roots of different breadth, and must not be "unified" later: the write path keeps its
+existing acceptance of the whole `<os-tmpdir>/claude/` base when `SCRATCHPAD` is absent, whereas
+the exec path issues no approval at all unless the current session's scratchpad directory can be
+established — writing a file into another session's scratchpad is inert, executing one is not.
 
 **Known limitations**:
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =

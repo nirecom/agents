@@ -15,7 +15,7 @@ T25_PRE='Bash(hand-written-only *)'
 # what is not" and rewrites permissions.allow accordingly passes every one of them, because it
 # has nothing generated-shaped to drop. The plan is explicit that --write appends only and that
 # orphan REMOVAL is a separate human judgment (A-2), so the load-bearing fixture is the one
-# nothing else builds: a generated-shaped orphan -- the full eight path spellings of a command
+# nothing else builds: a generated-shaped orphan -- the full ten path spellings of a command
 # that is NOT in the SSOT -- sitting in the array next to rules that really are missing.
 t25_setup() {
     T25_FX="$(mk_fixture t25)"
@@ -99,7 +99,7 @@ t25_orphan_preservation_table() {
     done <<'T25_CASES'
 shape|yes|PRECONDITION: the seeded orphan is byte-identical to what the generator itself emits for that path, so it is a generated-shaped rule and not merely unrelated text
 grew|yes|PRECONDITION: the fixture really is missing some of the current command's spellings, so the append side of the contract is exercised at all
-survives|yes|every one of the orphan's eight spellings is still present after --write: detection is --check's job, removal is nobody's
+survives|yes|every one of the orphan's ten spellings is still present after --write: detection is --check's job, removal is nobody's
 prefix|yes|and each one is still at its ORIGINAL index -- the whole pre-existing array is an unchanged prefix, so nothing was resorted around the orphan
 appended|equal|the missing current rules land after that prefix, in template order, and nothing else changed
 idempotent|yes|a second --write over the orphan-bearing file is byte-identical: the orphan is not re-appended and not re-removed

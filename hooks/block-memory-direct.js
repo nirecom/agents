@@ -4,15 +4,14 @@
 // Behavioral issues should be filed as GitHub Issues, not saved to memory.
 // Fail-open: any error path approves rather than blocking.
 "use strict";
-const os = require("os");
 const path = require("path");
 const fs = require("fs");
-const { isUnderPath } = require("./lib/path-match");
 const { isWorkflowOff } = require("./lib/session-markers");
 const { resolveSessionId } = require("./workflow-state/session-id");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-const { parse } = require("./lib/command-ir");
-const { collectWriteTargetsFromSegments, SHELL_CONFIG_VERB_SET } = require("./lib/bash-write-targets");
+// Detection lives in hooks/lib/memory-path-check.js (shared with the
+// scratchpad-script auto-approve body scan).
+const { hitsMemory, bashHitsMemory } = require("./lib/memory-path-check");
 
 function readStdin() {
   const chunks = [];
@@ -30,7 +29,6 @@ function readStdin() {
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
-const MEMORY_DIR = path.join(os.homedir(), ".claude", "projects", "c--git-agents", "memory");
 const BLOCK_MSG = [
   "Memory write intercepted. This may be an agents-repo behavior improvement that belongs in GitHub Issues.",
   "",
@@ -40,19 +38,6 @@ const BLOCK_MSG = [
   "3. Cancel / do nothing",
   "4. Other",
 ].join("\n");
-
-function hitsMemory(filePath) {
-  return isUnderPath(filePath, MEMORY_DIR);
-}
-
-function bashHitsMemory(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
-  const ir = parse(cmd);
-  if (!ir || ir.parseFailure) return false;
-  const { targets } = collectWriteTargetsFromSegments(ir.segments, { verbs: SHELL_CONFIG_VERB_SET });
-  if (!targets) return false;
-  return targets.some(t => isUnderPath(t.path, MEMORY_DIR));
-}
 
 let input;
 try {

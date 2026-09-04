@@ -4,8 +4,15 @@
 // Allows: .env.example, .env.sample, .env.template, .env.dist
 
 const fs = require("fs");
-const { checkBashCommand: checkCmd } = require("./lib/command-parser");
 const { getBasename } = require("./lib/path-match");
+// Detection lives in hooks/lib/dotenv-check.js (shared with the
+// scratchpad-script auto-approve body scan).
+const {
+  isDotenvPath,
+  checkBashCommand,
+  isProtectedPath,
+  checkGlobPattern,
+} = require("./lib/dotenv-check");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
 function readStdin() {
@@ -31,107 +38,6 @@ function approve() {
 function block(reason) {
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
-}
-
-// Suffixes that are safe to access (documentation/template files)
-const SAFE_SUFFIXES = [".env.example", ".env.sample", ".env.template", ".env.dist"];
-
-// Flags whose VALUE is text (not a path). The token after these is skipped.
-//
-// Single-letter short forms `-l`, `-a`, `-r`, `-c` are intentionally OMITTED
-// even though gh/git accept them, because they collide with very common Unix
-// flags (`wc -l file`, `ls -a dir`, `cp -r src dst`, `bash -c script`) and
-// would create read/write bypasses for `.env`. Users must use the long form
-// (`--label`, `--assignee`, `--reviewer`) when targeting gh from this hook's
-// scope. `-c` is handled separately via shell-wrapper recursion (SHELL_BINS).
-//
-// `-m` is kept (highly common for `git commit -m`, `gh pr create -m`); its
-// value is text not a path, and `-m .env` as a literal git-commit message
-// happens to be safe — it's a message string, not a file access.
-const TEXT_FLAGS = new Set([
-  "-m", "--message",
-  "--body", "--title", "--notes", "--description", "--subject",
-  "--branch",
-  "--label",
-  "--assignee",
-  "--reviewer",
-  "--milestone", "--project",
-  "--head", "--base",
-  "--config",
-]);
-
-// Flags whose VALUE is a path. The token after is checked with isDotenvPath.
-const PATH_FLAGS = new Set([
-  "-f", "--file",
-  "-o", "--output",
-  "-i", "--input",
-  "--from-file", "--to-file",
-  "-T", "--upload-file",
-]);
-
-// Shell-wrapper basenames whose `-c <script>` value is parsed recursively.
-const SHELL_BINS = new Set(["bash", "sh", "dash", "zsh", "ksh"]);
-
-// Commands whose positional arguments are message text, not paths.
-// Without this exemption, `echo "copy .env to prod"` would tokenize to `.env`
-// and incorrectly block.
-const TEXT_CMDS = new Set(["echo", "printf"]);
-
-function isSafeDotenv(name) {
-  return SAFE_SUFFIXES.some((s) => name.endsWith(s));
-}
-
-// Check if a path's basename is a .env file (not a safe variant)
-// Matches: .env, .env.local, .env.production, etc.
-// Does NOT match: .envrc, .environment, envconfig.js, etc.
-function isDotenvPath(filePath) {
-  if (!filePath) return false;
-  // Normalize to forward slashes and get basename
-  const basename = getBasename(filePath);
-  if (!basename) return false;
-  // Exact .env
-  if (basename === ".env") return true;
-  // .env.xxx but not .envrc, .environment, etc.
-  if (basename.startsWith(".env.")) return !isSafeDotenv(basename);
-  return false;
-}
-
-// Path-position parser: tokenize the command, walk argv, check only tokens at
-// path-bearing positions. Replaces the previous strip-then-regex approach;
-// text-flag values (-m, --body, --title, etc.) are skipped by construction so
-// `gh pr create --body "Fix .env hook"` and `git commit -m "..."` are no
-// longer false-positives.
-//
-// Substitutions ($(...) and backticks) are recursed into BEFORE stripping,
-// because they execute as shell commands — `gh pr create --body "$(cat .env)"`
-// must block.
-function checkBashCommand(command) {
-  return checkCmd(command, {
-    isTargetPath: isDotenvPath,
-    textFlags: TEXT_FLAGS,
-    pathFlags: PATH_FLAGS,
-    textCmds: TEXT_CMDS,
-    shellBins: SHELL_BINS,
-  });
-}
-
-function isProtectedPath(filePath) {
-  if (!filePath) return false;
-  const basename = getBasename(filePath);
-  return basename === ".private-info-allowlist" || basename === ".offensive-content-blocklist";
-}
-
-// For Glob patterns: detect .env search patterns
-function checkGlobPattern(pattern) {
-  if (!pattern) return false;
-  const basename = getBasename(pattern);
-  if (!basename) return false;
-
-  // Wildcarded .env patterns
-  if (basename === ".env" || basename === ".env.*" || basename === ".env*") return true;
-  // Specific .env.xxx — check if safe
-  if (basename.startsWith(".env.")) return !isSafeDotenv(basename);
-  return false;
 }
 
 // Parse stdin
