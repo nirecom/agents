@@ -407,3 +407,7 @@ Changes: The `permissions.allow` rules generated from the command SSOT are no lo
 ### FEATURE: PR #2187 (2026-09-03)
 Background: fix(#2140,#2141): propagate rules/shell-commands.md and other on-dema...
 Changes: Subagents launched via `context: fork` (`/review-tests`, `/refactor-prompts`) now read `rules/shell-commands.md`, so a rejected Bash call can be explained to the user instead of silently retried.;`/write-code` and `/write-tests` subagents now receive the on-demand rules their work actually depends on (`rules/ops.md` for write-code; `rules/coding.md` and `rules/test.md` for write-tests).
+
+### FEATURE: PR #2220 (2026-09-04)
+Background: fix(#2169): sanitize workflow-step notify gate against a pre-init lookahead marker
+Changes: Fixed: sessions that never ran workflow-init no longer get spammed with mechanism-failure notifications after dispatching a Skill/Agent/Task, once the in-flight marker's TTL expires.
