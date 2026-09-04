@@ -603,8 +603,11 @@ the subcommand verb (matching git's own option-parsing semantics). The
 
 `hooks/workflow-state/lifecycle.js` (`hasSelfRecordedStepSettlement` /
 `isWorkflowStarted`) answers "did THIS session genuinely start the workflow
-itself?" for the C4 premature-stop guard and the C2 supervisor scheduled
-review. A naive "is any step settled?" check is fooled by cross-session
+itself?" for the C4 premature-stop guard, the C2 supervisor scheduled review,
+and (since #2169) the UserPromptSubmit mechanism-failure notifier's
+pre-workflow-init exemption (`hooks/user-prompt-submit-mechanism-check.js` —
+see "Exception: pre-workflow-init sessions get no notification" below). A
+naive "is any step settled?" check is fooled by cross-session
 inheritance (`hooks/session-start.js` can replay a prior session's entire
 event stream, stamped `origin: "session-inherit"`), so the predicate is an
 explicit allow-list on the settling event's `origin`, not a denylist on
@@ -683,6 +686,24 @@ Boundary properties, and where each is enforced:
   the UserPromptSubmit check `hooks/user-prompt-submit-mechanism-check.js`, and
   the fail-fast block in C4 (#1979 / #1997). Each finding is reported once per
   session, recorded in the `<sid>.stall-reported` ledger.
+- **Exception: pre-workflow-init sessions get no notification for the WI-10
+  lookahead mark specifically (#2169).** The gate is evaluated **per finding**,
+  not once per session: `hooks/user-prompt-submit-mechanism-check.js`'s
+  `isFindingExemptFromPromptNotify(sid, finding)` exempts a finding only when
+  BOTH `isWorkflowStarted(sid) === false` (checked against the `promptNotify`
+  column of `EXEMPTION_MATRIX`, `hooks/lib/stop-exemption-policy.js`) AND
+  `isLookaheadOnlyInFlight(sid, finding.step)` — the last `step_status` event
+  recorded for that finding's own step came from the WI-10 lookahead mark
+  specifically (`hooks/workflow-state/lifecycle.js`, origin
+  `"postuse-in-flight"`), not from any other origin. A finding whose step's
+  last mark has a different origin — a resumed/inherited session's genuinely
+  stalled step, or the `(state)` pseudo-step used for corrupt/unreadable
+  state — is NOT exempt and still notifies and writes the `.stall-reported`
+  ledger normally, even though `isWorkflowStarted(sid)` is false for that same
+  session. C4's fail-fast block is unaffected — only the UserPromptSubmit
+  notifier is gated. A genuinely-started session whose allowlisted step
+  overruns the TTL keeps being notified every prompt, unchanged (Accepted
+  Tradeoff — intent.md).
 
 ### Final Report
 
