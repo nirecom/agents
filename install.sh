@@ -117,6 +117,10 @@ printf -- "${C_BOLD}--- Installing jq ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/jq.sh"
 
 echo ""
+printf -- "${C_BOLD}--- Installing shellcheck ---${C_RESET}\n"
+"$AGENTS_ROOT/install/linux/shellcheck.sh"
+
+echo ""
 printf -- "${C_BOLD}--- Configuring CodeGraph ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/codegraph.sh"
 
