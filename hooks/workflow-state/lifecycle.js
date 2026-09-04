@@ -20,9 +20,8 @@ const ADOPTION_EVENT_KINDS = ["step_status"];
 // is and why session-inherit / next-step auto-persist origins are excluded.
 const ADOPTION_ORIGINS = ["mark-step", "migration-v1-to-v2", "reset-sentinel"];
 
-// Exact origin hooks/postuse-step-in-flight-mark.js passes to markStep for its
-// WI-10 lookahead mark. Deliberately distinct from markStep's own default
-// origin ("mark-step") — isLookaheadOnlyInFlight below keys on that gap.
+// Origin hooks/postuse-step-in-flight-mark.js's WI-10 lookahead mark passes to markStep —
+// distinct from markStep's own default ("mark-step") so isLookaheadOnlyInFlight can key on it.
 const LOOKAHEAD_ORIGIN = "postuse-in-flight";
 
 function isSettledStatus(status) {
@@ -128,10 +127,8 @@ function anyStepInFlight(sid) {
   }
 }
 
-// isLookaheadOnlyInFlight(sid, step): true when the LAST step_status event
-// recorded for `step` came from the WI-10 lookahead mark specifically
-// (origin === LOOKAHEAD_ORIGIN), not from any other marking path. Total —
-// never throws, fail-CLOSED to false on any error or absent evidence (#2169).
+// True when `step`'s LAST step_status event came from the WI-10 lookahead mark specifically.
+// Fail-closed to false on any error or absent evidence (#2169).
 function isLookaheadOnlyInFlight(sid, step) {
   try {
     const state = readState(sid);

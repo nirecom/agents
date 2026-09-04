@@ -13,11 +13,7 @@ const { detectStalledSteps, reportMechanismFailureOnce, STATE_PSEUDO_STEP } = re
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
-// Lazy + cached + fail-closed: a require() failure at module load used to be
-// fatal for the whole hook (the top-level require threw before main() could
-// run its own try/catch). Deferring it here means a broken policy module can
-// only make isPromptNotifyExempt() find no matching row (never exempt) —
-// exactly like every other setup failure in this file, never a hook crash.
+// Lazy + cached: a require() failure here must not crash the hook — resolves to {} (no exemption) instead.
 let _exemptionMatrixCache = null;
 function getExemptionMatrix() {
   if (_exemptionMatrixCache) return _exemptionMatrixCache;
@@ -29,13 +25,8 @@ function getExemptionMatrix() {
   return _exemptionMatrixCache;
 }
 
-// isKnownStep(step): true only for a step name the workflow state machine
-// actually recognizes (or the state-level pseudo-step). Guards describe()'s
-// interpolation of finding.step into additionalContext/systemMessage — a
-// state file rewritten outside the normal appendEvents path (projection.js
-// does not re-validate event.step against VALID_STEPS at read time) could
-// otherwise carry an attacker-chosen string straight into the next prompt's
-// injected context. Fail-CLOSED: any require/read error reads as unknown.
+// Guards describe()'s interpolation of finding.step into the injected prompt context — a state
+// file rewritten outside appendEvents isn't re-validated against VALID_STEPS at read time.
 function isKnownStep(step) {
   if (step === STATE_PSEUDO_STEP) return true;
   try {
@@ -59,10 +50,8 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// `state-absent` is the commonest shape this hook sees — most prompts are typed
-// in sessions that never ran /workflow-init — so it is normal, not a failure.
-// Reporting it would also write a ledger that suppresses the session's FIRST
-// genuine stall, reintroducing #1979 through the code meant to close it.
+// `state-absent` is normal (no /workflow-init yet), not a failure — reporting it would burn the
+// once-per-session ledger slot and suppress the session's first genuine stall (reintroducing #1979).
 function reportableFindings(sid) {
   const findings = detectStalledSteps(sid) || [];
   return findings.filter((f) => f && f.kind !== "state-absent");
@@ -80,11 +69,8 @@ function describe(findings) {
   );
 }
 
-// Exemption predicates for rows registered with promptNotify:true in
-// EXEMPTION_MATRIX (hooks/lib/stop-exemption-policy.js). Per-finding: a
-// finding is exempt only when its OWN step's last mark came from the WI-10
-// lookahead hook specifically, not from any origin isWorkflowStarted misses
-// (state-corrupt's pseudo-step, or a resumed session's real stall) (#2169).
+// Per-finding, not session-wide: a finding is exempt only when its OWN step's last
+// mark came from the WI-10 lookahead hook, not from any other isWorkflowStarted miss (#2169).
 const PROMPT_NOTIFY_EXEMPTIONS = [
   {
     id: "pre-workflow-init",
@@ -93,19 +79,12 @@ const PROMPT_NOTIFY_EXEMPTIONS = [
   },
 ];
 
-// Assembles the predicates PROMPT_NOTIFY_EXEMPTIONS needs. A require()/setup
-// failure here is caught by the caller (isFindingExemptFromPromptNotify) and
-// resolves to NOT exempt — the opposite direction from isWorkflowStarted's own
-// fail-closed — so a broken gate can only over-notify, never go silent.
 function buildPromptNotifyDeps() {
   const { isWorkflowStarted, isLookaheadOnlyInFlight } = require("./workflow-state");
   return { isWorkflowStarted, isLookaheadOnlyInFlight };
 }
 
-// isPromptNotifyExempt(sid, finding, deps): true when some row registered
-// with promptNotify:true in EXEMPTION_MATRIX currently holds for this
-// finding. Mirrors firstExemption()'s fail-closed-on-throw contract
-// (stop-premature-stop-guard.js): a predicate that throws is NOT exempt.
+// Mirrors firstExemption()'s fail-closed-on-throw contract (stop-premature-stop-guard.js).
 function isPromptNotifyExempt(sid, finding, deps) {
   const exemptionMatrix = getExemptionMatrix();
   for (const row of PROMPT_NOTIFY_EXEMPTIONS) {
@@ -118,11 +97,8 @@ function isPromptNotifyExempt(sid, finding, deps) {
   return false;
 }
 
-// isFindingExemptFromPromptNotify(sid, finding): the per-finding entry point
-// main() calls. A setup failure at buildPromptNotifyDeps() is caught here and
-// resolves to "not exempt" — deliberately the OPPOSITE direction from
-// isWorkflowStarted's own fail-closed — so this gate never swallows a genuine
-// finding just because its own setup broke.
+// A buildPromptNotifyDeps() setup failure resolves to "not exempt" here — the opposite of
+// isWorkflowStarted's own fail-closed — so a broken gate can only over-notify, never go silent.
 function isFindingExemptFromPromptNotify(sid, finding) {
   try {
     return isPromptNotifyExempt(sid, finding, buildPromptNotifyDeps());
@@ -141,11 +117,6 @@ function main() {
   }
   if (!sid || !SID_RE.test(sid)) return {};
 
-  // #2169: exemption is evaluated PER FINDING, after reportableFindings, since
-  // each finding's own step decides whether it is a bare WI-10 lookahead mark
-  // (exempt) or a real stall (state-corrupt's pseudo-step, or a resumed
-  // session) that must still surface — a single session-wide gate would wrongly
-  // swallow those too.
   const allFindings = reportableFindings(sid);
   if (allFindings.length === 0) return {};
 
