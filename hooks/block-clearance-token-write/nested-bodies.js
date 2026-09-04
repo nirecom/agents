@@ -80,21 +80,16 @@ function nestedCommandTextsOf(seg) {
   return texts.filter((t, i) => texts.indexOf(t) === i);
 }
 
-// ---------------------------------------------------------------------------
-// Program text delivered on STDIN. A here-string routes to the shell scanner
-// above, but node/python/perl/ruby/deno/bun/pwsh also read a program from
-// stdin — the wrong grammar for shell text (`node <<< '...'` was invisible
-// while `node -e` blocked). The cut is made on the interpreter's IDENTITY, not
-// delivery syntax (`<<<`, `<<`, `|`, `<(...)` all count): a known body is
-// judged in its language; an opaque (piped/substituted) body fails closed on
-// any protected mention; a file operand is classified as a path.
-// ---------------------------------------------------------------------------
+// Program text delivered on STDIN. node/python/perl/ruby/deno/bun/pwsh read a
+// program from stdin — the wrong grammar for shell text (`node <<< '...'` was
+// invisible while `node -e` blocked). The cut is the interpreter's IDENTITY,
+// not delivery syntax (`<<<`, `<<`, `|`, `<(...)` all count): a known body is
+// judged in its language, an opaque body fails closed on any protected
+// mention, a file operand is classified as a path.
 
-// argvProvesInlineProgram(words, interpreterWord): true only if a word is an
-// inline-program flag FOR THIS INTERPRETER (kind-scoped, so a pwsh parameter
-// can't clear a python3 invocation) AND that flag carries a body — attached
-// (`--eval=code`) or in the next word. A bodyless flag (e.g. dangling `-e`
-// before a stdin pipe) is not proof; Tier 2 takes the same view (CPR-ORTH).
+// argvProvesInlineProgram(words, interpreterWord): a word is an inline-program
+// flag FOR THIS INTERPRETER (kind-scoped) AND carries a body — attached
+// (`--eval=code`) or in the next word. A bodyless flag is not proof.
 function argvProvesInlineProgram(words, interpreterWord) {
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
@@ -104,23 +99,27 @@ function argvProvesInlineProgram(words, interpreterWord) {
   return false;
 }
 
-// stdinProgramInterpreterKind(seg): "language" | "shell" | null, reported
-// whenever the program is NOT provably on argv (stdin may be CODE, not data).
-// Burden of proof is on the ALLOW side: a shape-based argv walk ("a non-flag
-// word before the redirect means argv carries the program") was fail-open,
-// since a flag's own VALUE is a non-flag word (e.g. `node --title x <<< prog`
-// wrongly cleared). Only a positive inline-program flag counts as proof now;
-// consequence: a bare file operand can't be proven either, so
-// `node script.js <<< data` over-blocks — accepted, since that shape is rare.
-function stdinProgramInterpreterKind(seg) {
+// stdinProgramInterpreterOf(seg): { kind, word } for the command reading stdin,
+// reported whenever the program is NOT provably on argv (stdin may be CODE, not
+// data). Burden of proof is on the ALLOW side: only a positive inline-program
+// flag clears it, so `node script.js <<< data` over-blocks — accepted, rare.
+// `word` is carried alongside `kind` because the read-only body shapes are
+// scoped to the delivering interpreter's grammar (#1821).
+const NO_STDIN_INTERPRETER = { kind: null, word: null };
+
+function stdinProgramInterpreterOf(seg) {
   const eff = resolveEffectiveSegment(seg);
-  if (!eff || typeof eff.cmd0 !== "string") return null;
+  if (!eff || typeof eff.cmd0 !== "string") return NO_STDIN_INTERPRETER;
   let name = eff.cmd0;
   const argv = (Array.isArray(eff.argv) ? eff.argv : []).slice();
   while (COMMAND_WRAPPERS.has(baseName(name)) && argv.length > 0) name = argv.shift();
   const kind = interpreterKindOfWord(name);
-  if (!kind) return null;
-  return argvProvesInlineProgram(argv, name) ? null : kind;
+  if (!kind) return NO_STDIN_INTERPRETER;
+  return argvProvesInlineProgram(argv, name) ? NO_STDIN_INTERPRETER : { kind, word: name };
+}
+
+function stdinProgramInterpreterKind(seg) {
+  return stdinProgramInterpreterOf(seg).kind;
 }
 
 // segmentOffsets(cmdText, segments): where each segment's rawText sits in the
@@ -169,19 +168,25 @@ const ASSIGN_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 // other routes (CPR-ORTH) — the kind is reported unless an inline-program flag
 // proves the program is on argv, so `node -e '…' <<EOF` treats the heredoc as
 // data while `node script.js <<EOF` does not.
-function readerKindOfHead(head) {
+function readerInterpreterOfHead(head) {
   const words = String(head || "").trim().split(/\s+/).filter(Boolean);
   let i = 0;
   while (i < words.length && ASSIGN_WORD_RE.test(words[i])) i++;
   while (i < words.length && COMMAND_WRAPPERS.has(baseName(words[i]))) i++;
-  if (i >= words.length) return null;
+  if (i >= words.length) return NO_STDIN_INTERPRETER;
   const kind = interpreterKindOfWord(words[i]);
-  if (!kind) return null;
-  return argvProvesInlineProgram(words.slice(i + 1), words[i]) ? null : kind;
+  if (!kind) return NO_STDIN_INTERPRETER;
+  return argvProvesInlineProgram(words.slice(i + 1), words[i])
+    ? NO_STDIN_INTERPRETER
+    : { kind, word: words[i] };
+}
+
+function readerKindOfHead(head) {
+  return readerInterpreterOfHead(head).kind;
 }
 
 // stdinProgramRoutes(cmdText, segments) ->
-//   { bodies: [{body, gateText}], fileTargets: [string], opaqueTexts: [string] }
+//   { bodies: [{body, gateText, lang}], fileTargets: [string], opaqueTexts: [string] }
 // The caller judges each list with the matching classifier: `bodies` in the
 // interpreter's own language, `fileTargets` as paths, `opaqueTexts` by
 // protected-name mention alone.
@@ -195,13 +200,15 @@ function stdinProgramRoutes(cmdText, segments) {
 
   for (let idx = 0; idx < segs.length; idx++) {
     const seg = segs[idx];
-    const kind = stdinProgramInterpreterKind(seg);
+    const { kind, word } = stdinProgramInterpreterOf(seg);
     if (!kind) continue;
     // A shell's here-string is already recursed as shell text by
     // nestedCommandTextsOf; only a LANGUAGE interpreter needs the second,
     // language-aware reading of the same body.
     if (kind === "language") {
-      for (const v of hereStringValuesOf(seg)) bodies.push({ body: v, gateText: seg.rawText });
+      for (const v of hereStringValuesOf(seg)) {
+        bodies.push({ body: v, gateText: seg.rawText, lang: word });
+      }
     }
     for (const r of (seg && seg.redirects) || []) {
       if (!r || r.op !== "<") continue;
@@ -227,8 +234,9 @@ function stdinProgramRoutes(cmdText, segments) {
   HEREDOC_TERMINATED_RE.lastIndex = 0;
   while ((m = HEREDOC_TERMINATED_RE.exec(text)) !== null) {
     terminated++;
-    if (readerKindOfHead(m[1]) !== "language") continue;
-    bodies.push({ body: m[4], gateText: m[1] + "\n" + m[4] });
+    const reader = readerInterpreterOfHead(m[1]);
+    if (reader.kind !== "language") continue;
+    bodies.push({ body: m[4], gateText: m[1] + "\n" + m[4], lang: reader.word });
   }
   // An UNTERMINATED heredoc yields no body but still delivers one at runtime —
   // the same "more invocations than extractable bodies" mismatch that
@@ -251,5 +259,6 @@ module.exports = {
   hereStringValuesOf,
   nestedCommandTextsOf,
   stdinProgramInterpreterKind,
+  stdinProgramInterpreterOf,
   stdinProgramRoutes,
 };

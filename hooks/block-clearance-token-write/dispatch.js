@@ -6,11 +6,18 @@
 const { classifyProtectedPath } = require("../lib/protected-basenames");
 const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandTextOf } = require("../lib/write-tools");
 const { bashHitsProtected } = require("./bash-scan");
+const { OFF_CLEARANCE_INVOCATION } = require("../lib/off-clearance-invocation");
+
+// The invitation, spelled once (CPR-SSOT): three block messages below quote it,
+// and #1821 is exactly the bug where one copy drifts into a spelling the mention
+// gate then refuses.
+const CLEARANCE_INVITATION_LINE =
+  `  ${OFF_CLEARANCE_INVOCATION} --target <workflow|worktree> --category <rubric category> --detail "<why>"`;
 
 const TOKEN_BLOCK_MSG = [
   "Direct write to an OFF-clearance token blocked.",
   "Clearance tokens are minted only by the Phase1 examination:",
-  "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
+  CLEARANCE_INVITATION_LINE,
   "If the examiner itself is broken, use the EMERGENCY OFF sentinel (human approval required).",
   "To READ a token, use a plain shell read (cat / Get-Content) — interpreter one-liners are blocked regardless of intent unless they match a recognized read-only shape.",
   "Recognized shapes take single-quoted literals or $env:/process.env only; double-quoted PowerShell arguments and backslash paths are never accepted.",
@@ -40,7 +47,7 @@ const WORKFLOW_GLOB_BLOCK_MSG = [
   "markers, whose mere existence and contents grant clearance — so a bulk write here is",
   "indistinguishable from forging them.",
   "Name the exact file you mean to write, or run the sanctioned route:",
-  "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
+  CLEARANCE_INVITATION_LINE,
 ].join("\n");
 
 // A target whose BASENAME is assembled at execution time gets its own text
@@ -53,7 +60,7 @@ const WORKFLOW_DYNAMIC_BLOCK_MSG = [
   "unresolved shell variable), so this hook cannot tell it apart from the OFF-clearance",
   "token or a session-override marker — whose mere existence grants clearance.",
   "Spell the target out literally, or run the sanctioned route:",
-  "  bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> --category <rubric category> --detail \"<why>\"",
+  CLEARANCE_INVITATION_LINE,
 ].join("\n");
 
 // A command this scanner cannot PARSE cannot be cleared, so a protected

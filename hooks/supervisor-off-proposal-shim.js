@@ -7,6 +7,7 @@
 // bypass this gate by construction (for when the examiner itself is broken).
 const fs = require("fs");
 const path = require("path");
+const { OFF_CLEARANCE_INVOCATION } = require("./lib/off-clearance-invocation.js");
 
 let input = "";
 process.stdin.on("data", (d) => { input += d; });
@@ -365,7 +366,9 @@ process.stdin.on("end", () => {
             : (stateFileFound ? "no-clearance-findings" : "no-clearance-enoent"))));
 
     const CLEARANCE_GUIDANCE =
-      "Request clearance with: bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> " +
+      // Spelled once, in hooks/lib/off-clearance-invocation.js (CPR-SSOT): this
+      // guard's own remediation text must never trip the mention gate (#1821).
+      "Request clearance with: " + OFF_CLEARANCE_INVOCATION + " --target <workflow|worktree> " +
       "--category <rubric category> --detail \"<why>\"\n" +
       "Then re-emit the OFF sentinel with the granted [category] at the START of the reason.\n" +
       "If the examiner itself is broken, use the EMERGENCY OFF sentinel.";

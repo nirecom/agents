@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// SSOT for which basenames hold OFF-clearance / session-override state that no
-// tool-issued write may create or mutate. Shared (rules/coding/file-split.md) by
-// block-clearance-token-write.js and enforce-worktree/bash-write-scope/marker-gate.js.
-// Matching is directory-agnostic — a marker/token written anywhere is still a
-// forgery attempt. Suffix lists are canonical (CPR-SSOT); regexes are derived from them.
+// SSOT for basenames holding OFF-clearance / session-override state that no
+// tool-issued write may create or mutate. Matching is directory-agnostic.
 "use strict";
 
 const path = require("path");
-const { candidateBasenameMatchesAnySuffix } = require("./basename-glob-normalize");
+const {
+  candidateBasenameMatchesAnySuffix,
+  normalizeCandidateBasename,
+  STRIPPABLE_TAIL_CHARS,
+} = require("./basename-glob-normalize");
 const { decodeAnsiCEscapes, candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
 // One-way edge (#2108): active-session-ids.js must never require this module back.
 const { observeActiveSessionIds } = require("./active-session-ids");
 
-// Every on-disk form of the OFF-clearance token: bare, the write-then-rename mint
-// intermediates, the claimed form, and the SID-scoped mint lock — the lock path is
-// deterministic from the session ID, so it must be protected here too or it's a
-// pre-create/delete-and-race DoS vector.
+// Every on-disk form of the token, including the write-then-rename mint
+// intermediates and the SID-scoped mint lock (deterministic path, so a
+// pre-create/delete race would otherwise bypass it).
 const OFF_CLEARANCE_TOKEN_SUFFIXES = [
   ".off-clearance",
   ".off-clearance.tmp",
@@ -26,12 +26,9 @@ const OFF_CLEARANCE_TOKEN_SUFFIXES = [
   ".off-clearance.mint.lock.tmp",
 ];
 
-// Session-override markers. session-markers.js authorizes purely on a marker's
-// existence, so one forged file grants full clearance. `off-emergency-invoked` is
-// the EMERGENCY-provenance marker, written only by the UserPromptSubmit hook, and
-// must be equally unforgeable. Kept in sync
-// with hooks/lib/session-markers.js and
-// hooks/workflow-state/state-io/zombie-cleanup.js.
+// session-markers.js authorizes purely on a marker's existence, so a forged
+// file grants full clearance; kept in sync with hooks/lib/session-markers.js
+// and hooks/workflow-state/state-io/zombie-cleanup.js.
 const EMERGENCY_PROVENANCE_MARKER_KIND = "off-emergency-invoked";
 
 const SESSION_MARKER_KINDS = [
@@ -39,79 +36,112 @@ const SESSION_MARKER_KINDS = [
   "worktree-off",
   "issue-close-verified",
   "next-step-paused",
-  // The stall-reported ledger AUTHORIZES SUPPRESSION of a mechanism-failure
-  // report (#1997), so a forged one silences future reports.
-  "stall-reported",
+  "stall-reported", // authorizes suppressing a mechanism-failure report (#1997)
   EMERGENCY_PROVENANCE_MARKER_KIND,
 ];
 
-// #2053: session state the forge-target-ownership guard trusts when it decides
-// to stay SILENT — a cached login, a recorded GH_REPO/GH_HOST, the auth-dirty
-// ledger. Forging one lets an unproven repo pass as proven, or clears the dirty
-// flag that would otherwise force an ask, so they are unforgeable on the same
-// terms as the markers above. They are NOT session markers (session-markers.js
-// never reads them), hence a separate list joined only for protection.
+// #2053: session state the forge-target-ownership guard trusts to stay
+// silent (login, GH_REPO/GH_HOST, auth-dirty ledger); not session markers,
+// but forgeable on the same terms.
 const FORGE_OWNERSHIP_STATE_KINDS = ["gh-login", "gh-env", "gh-auth-dirty"];
 
 // Every kind whose on-disk file a tool-issued write may not create or mutate.
 const PROTECTED_STATE_KINDS = SESSION_MARKER_KINDS.concat(FORGE_OWNERSHIP_STATE_KINDS);
 
-// M-3 (#1780): writeMarker() in workflow-mark/enforce-override-handlers/
-// off-clearance.js writes `<marker>.tmp` then renames, exactly as the token mint
-// does — so the marker list covers the `.tmp` intermediate too, symmetric with
-// OFF_CLEARANCE_TOKEN_SUFFIXES (CPR-ORTH).
+// M-3 (#1780): the marker writer does write-then-rename via `.tmp`, so the
+// suffix list covers that intermediate too.
 const PROTECTED_MARKER_SUFFIXES = PROTECTED_STATE_KINDS.reduce(
   (acc, kind) => acc.concat(["." + kind, "." + kind + ".tmp"]),
   []
 );
+
+// The consume-claim wrapper's shape, unanchored, shared by the classifier
+// regex and the mention gates (single source, CPR-SSOT).
+const CONSUMING_CLAIM_SUFFIX_BODY = "\\.consuming-[0-9a-f]{16}\\.tmp";
+
+// Tail the filesystem discards before create; included so mention gates read
+// a name the same way classifyProtectedPath does — without it a trailing-dot
+// form mentioned nothing while still classifying as a token (#1821).
+const STRIPPABLE_TAIL_BODY = STRIPPABLE_TAIL_CHARS + "*";
+
+// Two boundaries (CPR-SC): "wide" prefilters routes that re-classify
+// afterwards; "strict" is for the TERMINAL interpreter route, where an
+// over-arm would over-block a name classifyProtectedPath disowns (#1821).
+// `\p{M}` covers combining marks, which `\w`/`\p{L}\p{N}` alone miss.
+const MENTION_READINGS = {
+  wide: { boundary: "(?![\\w.-])", flags: "i" },
+  strict: { boundary: "(?![\\p{L}\\p{N}\\p{M}_.-])", flags: "iu" },
+};
 
 function suffixesToAnchoredRe(suffixes) {
   const alt = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return new RegExp("(?:" + alt + ")$", "i");
 }
 
-// Derived, not hand-maintained. SUFFIX-ONLY: these carry neither the glob/ADS
-// normalization nor the stem rule (#2108), so they are for introspection and
-// diagnostics only. isClearanceBearingStem / classifyProtectedPath are the SSOT
-// for any actual decision.
+// Mention gate for interpreter bodies / shell-variable text (not a clean
+// basename). Boundary discipline mirrors MARKER_MENTION_RE so a path that
+// merely contains the suffix as a substring (e.g. `bin/request-off-clearance`)
+// never arms this gate, while every on-disk suffix variant still does.
+function suffixesToMentionRe(suffixes, reading) {
+  const alt = suffixes
+    .map((s) => s.replace(/^\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const r = MENTION_READINGS[reading];
+  return new RegExp(
+    "\\.(?:" + alt + ")(?:" + CONSUMING_CLAIM_SUFFIX_BODY + ")?" + STRIPPABLE_TAIL_BODY + r.boundary,
+    r.flags
+  );
+}
+
+// Hand-built (not derived from a suffix list) so the claim wrapper and
+// boundary reading must be applied here too (CPR-ORTH).
+function markerMentionRe(reading) {
+  const r = MENTION_READINGS[reading];
+  return new RegExp(
+    "\\.(?:" + PROTECTED_STATE_KINDS.join("|") + ")(?:\\.tmp)?" +
+      "(?:" + CONSUMING_CLAIM_SUFFIX_BODY + ")?" + STRIPPABLE_TAIL_BODY + r.boundary,
+    r.flags
+  );
+}
+
+// Derived, SUFFIX-ONLY (no glob/ADS normalization or stem rule, #2108) —
+// for introspection only; classifyProtectedPath is the real decision.
 const TOKEN_BASENAME_RE = suffixesToAnchoredRe(OFF_CLEARANCE_TOKEN_SUFFIXES);
 const PROTECTED_MARKER_BASENAME_RE = suffixesToAnchoredRe(PROTECTED_MARKER_SUFFIXES);
 
-// Mention gates for interpreter bodies / shell-variable values, where the text
-// is not a clean basename. "off-clearance" is distinctive enough to match as a
-// bare substring. Marker names are NOT: `rules/workflow-off.md` and
-// `skills/enforce-workflow-off/SKILL.md` are ordinary repo paths, so the marker
-// gate is anchored on the `.<kind>` basename-tail form and must not fire on them.
-const TOKEN_MENTION_RE = /off-clearance/i;
-const MARKER_MENTION_RE = new RegExp(
-  "\\.(?:" + PROTECTED_STATE_KINDS.join("|") + ")(?:\\.tmp)?(?![\\w.-])",
-  "i"
-);
+// Mention gates for interpreter bodies / shell-variable text, anchored on
+// `.<kind>` — a bare substring match would make this hook block its own
+// remediation text (e.g. `bin/request-off-clearance`, #1821).
+const TOKEN_MENTION_RE = suffixesToMentionRe(OFF_CLEARANCE_TOKEN_SUFFIXES, "wide");
+const MARKER_MENTION_RE = markerMentionRe("wide");
+const TOKEN_MENTION_STRICT_RE = suffixesToMentionRe(OFF_CLEARANCE_TOKEN_SUFFIXES, "strict");
+const MARKER_MENTION_STRICT_RE = markerMentionRe("strict");
 
 function mentionsProtectedName(text) {
   if (typeof text !== "string") return false;
   return TOKEN_MENTION_RE.test(text) || MARKER_MENTION_RE.test(text);
 }
 
-// Two normalizers, deliberately separated (CPR-SC) — the two input shapes disagree
-// about what `\` means. candidateBasenameOf(filePath) is an Edit/Write path with no
-// shell in front, so `\` is a Windows separator (fold to `/`).
-// candidateBasenameOfBashToken(rawToken) is a raw Bash word, where `\` is the
-// shell's escape character and quotes may appear mid-word — folding it would be a
-// bypass (`s1.workflow\-off` folded to `/` yields basename `-off`, while bash
-// actually creates `s1.workflow-off`), so it unescapes and collapses intra-word
-// quoting instead of folding. Only `/` splits a Bash word into components; losing a
-// separator can never lose a match since the suffix lists are tail-anchored.
+// Same question with the Unicode boundary, for FINAL verdicts. Expressed as
+// a refinement of the wide reading (never weaker) so the wide regexes stay
+// the one denylist every route keys on (CPR-SSOT).
+function mentionsProtectedNameStrict(text) {
+  if (!mentionsProtectedName(text)) return false;
+  return TOKEN_MENTION_STRICT_RE.test(text) || MARKER_MENTION_STRICT_RE.test(text);
+}
+
+// Two normalizers (CPR-SC) — the input shapes disagree about `\`. A clean
+// Edit/Write path never met a shell, so `\` folds as a Windows separator.
+// A raw Bash word treats `\` as the shell's escape char and may have mid-word
+// quoting, so it unescapes/collapses instead of folding (folding would be a
+// bypass: `s1.workflow\-off` -> `-off`, not what bash actually creates).
 function candidateBasenameOf(filePath) {
   return path.basename(String(filePath).replace(/\\/g, "/"));
 }
 
-// Direction discipline (same rule as basename-glob-normalize/brace-ansi-expand.js):
-// this normalizer runs in the DETECTION direction and is matched against a
-// denylist, so a spelling it fails to produce is a bypass, and a wrong spelling is
-// worse than none. Bash ANSI-C quoting (`$'…'`) must be decoded the way bash
-// decodes it (via the shared decoder), not left to the plain-escape rule below —
-// that rule would erase rather than preserve the match.
+// Runs in the DETECTION direction against a denylist: a spelling this fails
+// to produce is a bypass. `$'...'` (ANSI-C quoting) is decoded via the
+// shared decoder, matching how bash itself decodes it.
 function unquoteBashWord(rawToken) {
   const s = String(rawToken);
   let out = "";
@@ -124,15 +154,13 @@ function unquoteBashWord(rawToken) {
       out += c; i += 1; continue;
     }
     if (mode === "dq") {
-      // Inside "…" bash treats `\` as an escape only before $ ` " \ — elsewhere
-      // it stays a literal backslash.
+      // Inside "…" bash escapes only $ ` " \ — elsewhere `\` stays literal.
       if (c === "\\" && i + 1 < s.length && /["$`\\]/.test(s[i + 1])) { out += s[i + 1]; i += 2; continue; }
       if (c === '"') { mode = "plain"; i += 1; continue; }
       out += c; i += 1; continue;
     }
-    // ANSI-C quoted segment `$'…'`: consume to the terminating unescaped quote
-    // and hand the body to the shared decoder. Must be tested BEFORE the plain
-    // escape rule below, which would otherwise eat the leading backslash.
+    // ANSI-C quoted segment `$'…'` — must be tested before the plain escape
+    // rule below, which would otherwise eat the leading backslash.
     if (c === "$" && s[i + 1] === "'") {
       let j = i + 2;
       let seg = "";
@@ -158,20 +186,15 @@ function basenameOfUnquotedBashWord(unquoted) {
   return idx === -1 ? unquoted : unquoted.slice(idx + 1);
 }
 
-// The SINGLE reading of the raw token — the spelling bash produces when no brace
-// group is involved. Kept as the compatibility entry point; every DECISION goes
-// through the plural form below.
+// The single reading with no brace expansion; compatibility entry point —
+// every decision goes through the plural form below.
 function candidateBasenameOfBashToken(rawToken) {
   return basenameOfUnquotedBashWord(unquoteBashWord(rawToken));
 }
 
-// candidateBasenamesOfBashToken(rawToken): { basenames, overCap } — every basename
-// this token can land on. Must expand the WHOLE token first, then take the
-// basename of every candidate — bash performs brace expansion before splitting on
-// `/`, so a brace group spanning a slash (`{<wf>/x,<wf>/s1.workflow-off}`) produces
-// alternatives with different directory parts; splitting first would erase the
-// protected alternative instead of finding it. `overCap` is propagated (not
-// swallowed) so an abandoned enumeration is treated as a hit here too (CPR-ORTH).
+// Expands the WHOLE token before taking basenames — bash brace-expands
+// before splitting on `/`, so a brace spanning a slash needs full expansion
+// first. `overCap` propagates so an abandoned enumeration counts as a hit.
 function candidateBasenamesOfBashToken(rawToken) {
   const raw = String(rawToken);
   const { candidates, overCap } = candidateSpellings(raw);
@@ -183,40 +206,38 @@ function candidateBasenamesOfBashToken(rawToken) {
     basenames.push(b);
   };
   for (const cand of candidates) push(basenameOfUnquotedBashWord(unquoteBashWord(cand)));
-  push(candidateBasenameOfBashToken(raw));   // defensive: never lose the raw reading
+  push(candidateBasenameOfBashToken(raw)); // defensive: never lose the raw reading
   return { basenames, overCap };
 }
 
-// consume-exact-file.js creates a claim file at
-// `${filePath}.consuming-<16-hex-sha256-prefix>.tmp` during its exclusive-open
-// window. That basename is itself protected state — pre-creating it forces the
-// real consumer's `wx` open into EEXIST, and deleting it mid-window breaks the
-// exclusion — but the hex prefix is content-derived, so it's matched structurally:
-// strip the suffix and re-classify what remains (widens detection, never narrows).
-const CONSUMING_CLAIM_SUFFIX_RE = /\.consuming-[0-9a-f]{16}\.tmp$/i;
+// consume-exact-file.js's claim file (`<file>.consuming-<16hex>.tmp`) is
+// itself protected state; matched structurally since the hex is content-
+// derived — strip the suffix and re-classify what remains.
+const CONSUMING_CLAIM_SUFFIX_RE = new RegExp(CONSUMING_CLAIM_SUFFIX_BODY + "$", "i");
 
+// Normalize first: the `$`-anchored regex misses a filesystem-discarded tail
+// that the suffix-list sibling still matches (#1821).
 function stripConsumingClaimSuffix(basename) {
-  return CONSUMING_CLAIM_SUFFIX_RE.test(basename) ? basename.replace(CONSUMING_CLAIM_SUFFIX_RE, "") : null;
+  const norm = normalizeCandidateBasename(basename);
+  if (typeof norm !== "string" || norm === "") return null;
+  return CONSUMING_CLAIM_SUFFIX_RE.test(norm) ? norm.replace(CONSUMING_CLAIM_SUFFIX_RE, "") : null;
 }
 
-// A protected suffix alone is not a forgery. Every reader opens exactly
-// `path.join(dir, sid + ".<kind>")`, so a name confers clearance only when its
-// STEM is an effective session id — `issue-2108-survey.gh-env` is an artifact no
-// reader will ever open (#2108).
+// A protected suffix alone isn't a forgery — every reader opens exactly
+// `sid + ".<kind>"`, so only a name whose stem is an effective session id
+// confers clearance (#2108).
 //
-// SPELLING SEPARATION (CPR-UNV named exception). "clean" = an Edit/Write
-// file_path, which never met a shell, so an EXACT stem match is required.
-// "bash" = a Bash word (the DEFAULT, i.e. the broad side): unquoteBashWord
-// collapses `C:\wf\<uuid>.workflow-off` to `C:wf<uuid>.workflow-off`, leaving
-// normalization residue on the stem's head, so this route allows a TAIL match.
+// "clean" (Edit/Write path, no shell) requires an exact stem match; "bash"
+// allows a tail match since unquoteBashWord can leave normalization residue
+// on the stem's head (CPR-UNV named exception).
 const SID_UUID_BODY = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const SID_TS_BODY = "[0-9]{8}-[0-9]{6}";            // clarify-intent's date fallback
 const SID_CANONICAL_EXACT_RE = new RegExp("^(?:" + SID_UUID_BODY + "|" + SID_TS_BODY + ")$", "i");
 const SID_CANONICAL_TAIL_RE = new RegExp("(?:^|[^0-9A-Za-z])(?:" + SID_UUID_BODY + "|" + SID_TS_BODY + ")$", "i");
 
-// A character no filename component of ours produces is proof the Bash normalizer
-// mangled the stem (the drive-colon of `C:wf<uuid>` is the known case). The stem
-// is then unprovable, so the bash route treats it as clearance-bearing.
+// A char no filename of ours produces means the Bash normalizer mangled the
+// stem (e.g. the drive-colon of `C:wf<uuid>`) — unprovable, so treat as
+// clearance-bearing.
 const BASH_STEM_RESIDUE_RE = /[^A-Za-z0-9._-]/;
 
 function stemEndsWithAnySid(stem, sids) {
@@ -268,21 +289,13 @@ function classifyProtectedPath(filePath, opts) {
   return null;
 }
 
-// classifyProtectedBashToken(rawToken): the Bash-word sibling of
-// classifyProtectedPath (CPR-ORTH — same verdict vocabulary, different normalizer).
-// The spelling is pinned to "bash" here rather than taken from the caller: this
-// is the Bash-word entry point by construction, so a caller could only get it
-// wrong (#2108).
+// Bash-word sibling of classifyProtectedPath (CPR-ORTH); spelling is pinned
+// to "bash" since this is the Bash-word entry point by construction (#2108).
 function classifyProtectedBashToken(rawToken, opts) {
   if (!rawToken || typeof rawToken !== "string") return null;
   const stemOpts = { sessionCtx: opts && opts.sessionCtx, spelling: "bash" };
   const { basenames, overCap } = candidateBasenamesOfBashToken(rawToken);
-  // An enumeration that was abandoned has NOT been shown to miss the suffix.
-  // Reported as "token" to match what candidateBasenameMatchesAnySuffix already
-  // returns for the same condition (it is consulted for the token list first).
-  if (overCap) return "token";
-  // Explicit arrows, never a bare reference: `some` passes the array INDEX as the
-  // second argument, which would land in `opts`.
+  if (overCap) return "token"; // an abandoned enumeration has not been shown to miss the suffix
   if (basenames.some((b) => hitsTokenBasename(b, stemOpts))) return "token";
   if (basenames.some((b) => hitsProtectedMarkerBasename(b, stemOpts))) return "marker";
   return null;
@@ -303,12 +316,15 @@ module.exports = {
   PROTECTED_MARKER_BASENAME_RE,
   TOKEN_MENTION_RE,
   MARKER_MENTION_RE,
+  TOKEN_MENTION_STRICT_RE,
+  MARKER_MENTION_STRICT_RE,
   CONSUMING_CLAIM_SUFFIX_RE,
   SID_CANONICAL_EXACT_RE,
   SID_CANONICAL_TAIL_RE,
   isClearanceBearingStem,
   stripConsumingClaimSuffix,
   mentionsProtectedName,
+  mentionsProtectedNameStrict,
   candidateBasenameOf,
   unquoteBashWord,
   candidateBasenameOfBashToken,
