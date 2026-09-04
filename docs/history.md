@@ -354,3 +354,7 @@ Changes: #2140: `context: fork` dispatch was the third dispatch shape still miss
 ### FEATURE: PR #2202 — feature/2150-codegraph-worktree-subagent-tool (2026-09-03, 59baec15029dc4b4b41daaffaf8b95aed51e3027, #2202)
 Background: fix(codegraph): resolve Windows CLI shim lookup without a shell
 Changes: Resolved CodeGraph's Windows CLI shim lookup to work without a shell, unblocking the #2150 effort to make CodeGraph usable inside the workflow (worktree init + subagent tool exposure): `spawn-shimmed-cli.js` now resolves the shim target directly instead of relying on a shell to interpret it, so `codegraph-lifecycle.js` init/sync/stop calls succeed on win32. <!-- compose-doc-append-sentinel: branch=feature/2150-codegraph-worktree-subagent-tool pr=#2202 -->
+
+### FEATURE: PR #2220 — feature/2169-workflow-skill-dispatch-research-in (2026-09-04, c08acfe6d0cf4d3505b88b053721199cd4cb65b2, #2220)
+Background: fix(#2169): sanitize workflow-step notify gate against a pre-init lookahead marker
+Changes: Fixed a bug where dispatching a Skill/Agent/Task in a session that never ran workflow-init marked `research` in-flight via a lookahead heuristic; once the 4h TTL expired unsettled, mechanism-failure notifications were injected into every subsequent prompt indefinitely (closes #2169). <!-- compose-doc-append-sentinel: branch=feature/2169-workflow-skill-dispatch-research-in pr=#2220 -->
