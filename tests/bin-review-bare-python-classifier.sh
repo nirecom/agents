@@ -1,25 +1,17 @@
 #!/usr/bin/env bash
 # Tests: bin/review-bare-python
-# Tags: lint, bare-python, regex, allowlist, table-driven, mutation-probe, scope:cross-cutting, pwsh-not-required, TL2
+# Tags: lint, bare-python, regex, allowlist, table-driven, mutation-probe, scope:common, pwsh-not-required, TL2
 #
 # Table-driven classifier coverage for bin/review-bare-python (review gap C7).
-#
-# WHAT THIS FILE DEFENDS
-# tests/fix-992-bare-python.sh drives the script end-to-end but asserts one
-# scenario per hand-written block, so the two REGEX CONSTANTS that decide every
-# verdict — DETECT_RE and SANCTION_RE — are each exercised by only a couple of
-# spellings, and the EXCLUDED_FILES allowlist is exercised by three of its ten
-# entries. Those three artifacts are exactly the class the repo's table-driven
-# rule names (skills/_shared/test-design/parser-regex-tests.md): a parser, a
-# regex constant, and an allowlist.
-#
-# The two regexes pull in OPPOSITE directions, which is why both halves of every
-# pair are written out here:
-#   DETECT_RE   widens  -> false HARD findings block unrelated work
-#   SANCTION_RE widens  -> real bare-interpreter calls are silently exempted
-# A row that only proves "the obvious violation is caught" cannot distinguish a
-# correct boundary from a regex that matches everything.
-#
+# tests/fix-992-bare-python.sh drives the script end-to-end one scenario per
+# hand-written block, so the two verdict-deciding regex constants — DETECT_RE
+# (widens -> false HARD findings block unrelated work) and SANCTION_RE (widens
+# -> real bare-interpreter calls are silently exempted) — and the
+# EXCLUDED_FILES allowlist each get only a few spellings there. Both halves of
+# every pair are written out below, per skills/_shared/test-design/parser-regex-tests.md.
+
+set -uo pipefail
+
 # SELF-EXEMPTION NOTE
 # This file is deliberately NOT in the script's EXCLUDED_FILES. Every candidate
 # line is written with %PY3% / %PY% tokens that are expanded only when the
@@ -27,7 +19,9 @@
 # this file's own bytes. That keeps the suite honest: adding a file to the
 # allowlist to make it pass is the failure mode the allowlist rows below exist
 # to detect.
-#
+AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT="$AGENTS_ROOT/bin/review-bare-python"
+
 # FALSE-GREEN GUARD
 # A CLEAN verdict is never inferred from "the script exited 0". Every case file
 # is committed into one fixture repo, a single `--all` run produces the finding
@@ -35,27 +29,20 @@
 # crashed or empty run is caught by the harness self-check (section H), which
 # requires a known-flagged and a known-clean row to classify correctly before
 # any table below is trusted.
-#
+PASS=0
+FAIL=0
+SKIP=0
+
 # TL3 gap (what this test does NOT catch):
-# - The real Windows App Execution Alias popup that motivated #992: only
-#   observable on a Windows host where the interpreter name resolves to the
-#   Microsoft Store stub.
-# - A grep binary that fails mid-scan (the source treats a grep failure as "no
-#   hits" via `|| true`): not reproducible without breaking PATH for the whole
-#   subprocess, which would also break the harness.
+# - The Windows App Execution Alias popup that motivated #992: observable only
+#   on a Windows host where the interpreter name resolves to the Store stub.
+# - A grep binary failing mid-scan (the source now reports it as an ERROR line
+#   and a non-clean result): observing it needs a PATH shim, which lives in the
+#   sibling suite tests/bin-review-bare-python-exemption-scope.sh, section GF.
 # Closest-to-action mitigation: the Store-stub gap is checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category
 # `pwsh-required`; the git-failure direction IS covered here by the
 # unresolvable-base and metacharacter rows in section G.
-
-set -uo pipefail
-
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCRIPT="$AGENTS_ROOT/bin/review-bare-python"
-
-PASS=0
-FAIL=0
-SKIP=0
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -149,6 +136,12 @@ REPO="$TMP/repo"
 make_repo "$REPO"
 git -C "$REPO" checkout -q -b feature
 
+# SANCTION_RE exempts the matched SPAN, not the physical line: scan_file() strips
+# every `uv run` spelling out of the line and re-tests the remainder, so a second,
+# bare invocation sharing the line is still a finding. The four `mask-` rows say
+# so for a real, a quoted, a trailing-commented and a `.`-glued spelling;
+# `mask-control-alone` carries the identical bare text alone, and M2b pins the
+# verdict to the stripping step rather than to DETECT_RE.
 DS_TABLE='
 det-versioned-dq      | HARD  | %PY3% -c "import sys"
 det-unversioned-dq    | HARD  | %PY% -c "import sys"
@@ -186,8 +179,16 @@ san-uv-sudo           | CLEAN | sudo uv run %PY% -c "x"
 san-uv-multi-space    | CLEAN | uv  run  %PY%  -c "x"
 san-glued-uv-prefix   | HARD  | myuv run %PY% -c "x"
 san-hyphen-uv         | HARD  | uv-run %PY% -c "x"
-san-line-granularity  | CLEAN | uv run %PY% -c "a"; %PY3% -c "b"
-san-mention-masks     | CLEAN | echo "uv run %PY% -c" ; %PY3% -c "b"
+san-uvx-not-uv        | HARD  | uvx run %PY% -c "a"; %PY3% -c "b"
+san-run-m-flag        | HARD  | uv run %PY% -m json.tool; %PY3% -c "b"
+san-flag-between      | HARD  | uv run %PY3% -B -c "a"; %PY3% -c "b"
+san-uv-twice          | CLEAN | uv run %PY% -c "a"; uv run %PY3% -c "b"
+mask-sed-metachars    | HARD  | uv run %PY% -c "a&b\c"; %PY3% -c "d"
+mask-same-line        | HARD  | uv run %PY% -c "a"; %PY3% -c "b"
+mask-mention-only     | HARD  | echo "uv run %PY% -c" ; %PY3% -c "b"
+mask-trailing-comment | HARD  | %PY3% -c "b"  # uv run %PY% -c
+mask-dot-glued-uv     | HARD  | foo.uv run %PY% -c "a"; %PY3% -c "b"
+mask-control-alone    | HARD  | %PY3% -c "b"
 '
 
 while IFS='|' read -r name want line; do
@@ -214,6 +215,9 @@ x-round7-proof     | CLEAN | tests/enforce-protected-marker-write/cases-round7-p
 x-round8-operand   | CLEAN | tests/enforce-protected-marker-write/cases-round8-operand.sh
 x-round12-attack   | CLEAN | tests/fix-1780-round12-classifier-attack-shapes.sh
 x-round12-interp   | CLEAN | tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh
+x-clear-consumer   | CLEAN | tests/enforce-clearance-token-write/consumer-allow-direction-cases.sh
+x-clear-interp     | CLEAN | tests/enforce-clearance-token-write/interpreter-language-scope-cases.sh
+x-clear-readonly   | CLEAN | tests/enforce-clearance-token-write/read-only-allowlist-cases.sh
 xm-suffix-added    | HARD  | tests/fix-992-bare-python-extra.sh
 xm-prefixed-dir    | HARD  | nested/tests/fix-992-bare-python.sh
 xm-sibling-name    | HARD  | tests/enforce-protected-marker-write/cases-round6-identity2.sh
@@ -260,6 +264,14 @@ while IFS='|' read -r name want line; do
     assert_eq "DS $name" "$want" "$(verdict_for "probe/$name.sh")"
 done < <(printf '%s\n' "$DS_TABLE")
 
+# The echoed match must be the ORIGINAL line: the sanction-stripped remainder is
+# an internal artefact, and quoting it would point the reader at text no file has.
+if grep -A1 -F "HARD: probe/mask-same-line.sh:" "$ALL_OUT" | grep -qF 'uv run'; then
+    pass "DS mask-same-line quotes the original line, sanctioned span included"
+else
+    fail "DS mask-same-line — the echoed match lost the stripped span: $(grep -A1 -F 'HARD: probe/mask-same-line.sh:' "$ALL_OUT" | tr '\n' ' ')"
+fi
+
 # ===========================================================================
 # Section X - EXCLUDED_FILES allowlist membership (exact-equality contract).
 # ===========================================================================
@@ -275,7 +287,7 @@ done < <(printf '%s\n' "$X_TABLE")
 # silently added exempts a real file. Pinned against the source so the X table
 # above cannot drift out of sync with EXCLUDED_FILES.
 EXCL_COUNT=$(sed -n '/^EXCLUDED_FILES=(/,/^)/p' "$SCRIPT" | grep -cE '^[[:space:]]*"[^"]+"[[:space:]]*$')
-assert_eq "X allowlist entry count matches the rows asserted above" "12" "$EXCL_COUNT"
+assert_eq "X allowlist entry count matches the rows asserted above" "15" "$EXCL_COUNT"
 
 # ===========================================================================
 # Section G - argument handling and mode-specific exit codes. `--all` never
@@ -434,6 +446,29 @@ if grep -qF "HARD: probe/neg-module-flag.sh:" "$M2_OUT"; then
     fail "M2 control — an unrelated clean row also flipped, so the mutation was too broad"
 else
     pass "M2 control — an unrelated clean row is unaffected by the SANCTION_RE mutation"
+fi
+
+# M2b - span vs line. Reverting scan_file() to the pre-fix WHOLE-LINE exemption
+# (drop the line entirely when SANCTION_RE matches anywhere on it) must turn every
+# `mask-` row CLEAN. That is the proof their HARD verdict comes from stripping the
+# sanctioned SPAN, and not from SANCTION_RE simply failing to match those lines.
+M2B_OUT="$(mutant_run 's#^ *stripped=.*#  stripped=$(printf %s "$content" | grep -vE "$SANCTION_RE")#')"
+for mask_row in mask-same-line mask-mention-only mask-trailing-comment mask-dot-glued-uv mask-sed-metachars; do
+    if grep -qF "HARD: probe/$mask_row.sh:" "$M2B_OUT"; then
+        fail "M2b $mask_row survived whole-line masking — its HARD verdict is not span-stripping"
+    else
+        pass "M2b $mask_row goes CLEAN under whole-line masking (span-stripping is what finds it)"
+    fi
+done
+if grep -qF "HARD: probe/mask-control-alone.sh:" "$M2B_OUT"; then
+    pass "M2b control — a line carrying no sanctioned span keeps its finding"
+else
+    fail "M2b control — mask-control-alone lost its finding, so the mutation was too broad"
+fi
+if grep -qF "HARD: probe/san-uv-versioned.sh:" "$M2B_OUT"; then
+    fail "M2b control — a sanctioned row flipped, so the mutation removed the exemption itself"
+else
+    pass "M2b control — a sanctioned-only row stays exempt under whole-line masking"
 fi
 
 # M3 - one allowlist entry neutered: that fixture must become a finding while

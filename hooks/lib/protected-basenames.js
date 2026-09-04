@@ -7,7 +7,11 @@
 "use strict";
 
 const path = require("path");
-const { candidateBasenameMatchesAnySuffix } = require("./basename-glob-normalize");
+const {
+  candidateBasenameMatchesAnySuffix,
+  normalizeCandidateBasename,
+  STRIPPABLE_TAIL_CHARS,
+} = require("./basename-glob-normalize");
 const { decodeAnsiCEscapes, candidateSpellings } = require("./basename-glob-normalize/brace-ansi-expand");
 // One-way edge (#2108): active-session-ids.js must never require this module back.
 const { observeActiveSessionIds } = require("./active-session-ids");
@@ -65,9 +69,67 @@ const PROTECTED_MARKER_SUFFIXES = PROTECTED_STATE_KINDS.reduce(
   []
 );
 
+// The consume-claim wrapper's shape, as a BODY (unanchored) so both the
+// `$`-anchored classifier regex below and the mention gates can embed it —
+// retyping the hex shape in a second place would be the CPR-SSOT break.
+const CONSUMING_CLAIM_SUFFIX_BODY = "\\.consuming-[0-9a-f]{16}\\.tmp";
+
+// The tail the filesystem discards before the file is created, embedded between
+// the suffix and the boundary so the mention gates read a name exactly as
+// classifyProtectedPath does (SSOT: basename-glob-normalize.js). Without it
+// `<sid>.off-clearance.` mentioned nothing while still classifying as a token —
+// the ALLOW/BLOCK split that made a terminal route hand out the real token
+// (#1821). It cannot widen: the boundary still has to hold after the tail.
+const STRIPPABLE_TAIL_BODY = STRIPPABLE_TAIL_CHARS + "*";
+
+// Two right boundaries for the mention gates, deliberately different (CPR-SC).
+// "wide" is the prefilter for routes that re-classify the target afterwards, so
+// its over-arming costs nothing. "strict" is for the interpreter route, which is
+// TERMINAL — an over-arm there is an over-block of a name classifyProtectedPath
+// disowns (#1821). JS `\w` is ASCII-only and cannot see a multi-byte
+// continuation; `\p{M}` is required alongside `\p{L}\p{N}` because a combining
+// mark carries no letter or number category of its own.
+const MENTION_READINGS = {
+  wide: { boundary: "(?![\\w.-])", flags: "i" },
+  strict: { boundary: "(?![\\p{L}\\p{N}\\p{M}_.-])", flags: "iu" },
+};
+
 function suffixesToAnchoredRe(suffixes) {
   const alt = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return new RegExp("(?:" + alt + ")$", "i");
+}
+
+// Mention gate for interpreter bodies / shell-variable values, where the text is
+// not a clean basename. Derived (CPR-SSOT), not hand-maintained — mirrors
+// MARKER_MENTION_RE's boundary discipline (leading "." anchor + trailing
+// (?![\w.-]) negative lookahead) so a hyphen-joined script/directory name that
+// merely CONTAINS the suffix as a substring (e.g. the sanctioned minter's own
+// invocation `bin/request-off-clearance`) never arms this gate, while every
+// on-disk suffix variant (including the write-then-rename mint intermediates
+// and the optional consume-claim wrapper the write-side classifier strips)
+// still does.
+function suffixesToMentionRe(suffixes, reading) {
+  const alt = suffixes
+    .map((s) => s.replace(/^\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const r = MENTION_READINGS[reading];
+  return new RegExp(
+    "\\.(?:" + alt + ")(?:" + CONSUMING_CLAIM_SUFFIX_BODY + ")?" + STRIPPABLE_TAIL_BODY + r.boundary,
+    r.flags
+  );
+}
+
+// The marker half is hand-built rather than derived from a suffix list, so the
+// claim wrapper and the boundary reading must be applied here explicitly too
+// (CPR-ORTH) — hitsProtectedMarkerBasename strips the same wrapper on the
+// write side.
+function markerMentionRe(reading) {
+  const r = MENTION_READINGS[reading];
+  return new RegExp(
+    "\\.(?:" + PROTECTED_STATE_KINDS.join("|") + ")(?:\\.tmp)?" +
+      "(?:" + CONSUMING_CLAIM_SUFFIX_BODY + ")?" + STRIPPABLE_TAIL_BODY + r.boundary,
+    r.flags
+  );
 }
 
 // Derived, not hand-maintained. SUFFIX-ONLY: these carry neither the glob/ADS
@@ -78,19 +140,31 @@ const TOKEN_BASENAME_RE = suffixesToAnchoredRe(OFF_CLEARANCE_TOKEN_SUFFIXES);
 const PROTECTED_MARKER_BASENAME_RE = suffixesToAnchoredRe(PROTECTED_MARKER_SUFFIXES);
 
 // Mention gates for interpreter bodies / shell-variable values, where the text
-// is not a clean basename. "off-clearance" is distinctive enough to match as a
-// bare substring. Marker names are NOT: `rules/workflow-off.md` and
-// `skills/enforce-workflow-off/SKILL.md` are ordinary repo paths, so the marker
-// gate is anchored on the `.<kind>` basename-tail form and must not fire on them.
-const TOKEN_MENTION_RE = /off-clearance/i;
-const MARKER_MENTION_RE = new RegExp(
-  "\\.(?:" + PROTECTED_STATE_KINDS.join("|") + ")(?:\\.tmp)?(?![\\w.-])",
-  "i"
-);
+// is not a clean basename. Both are anchored on the `.<kind>` basename-tail form:
+// `rules/workflow-off.md` and `bin/request-off-clearance` are ordinary repo paths
+// (the latter is the very command the block message invites, #1821), so a bare
+// substring match there would make this hook refuse what it just told you to run.
+const TOKEN_MENTION_RE = suffixesToMentionRe(OFF_CLEARANCE_TOKEN_SUFFIXES, "wide");
+const MARKER_MENTION_RE = markerMentionRe("wide");
+const TOKEN_MENTION_STRICT_RE = suffixesToMentionRe(OFF_CLEARANCE_TOKEN_SUFFIXES, "strict");
+const MARKER_MENTION_STRICT_RE = markerMentionRe("strict");
 
 function mentionsProtectedName(text) {
   if (typeof text !== "string") return false;
   return TOKEN_MENTION_RE.test(text) || MARKER_MENTION_RE.test(text);
+}
+
+// mentionsProtectedNameStrict(text): the same question read with the Unicode
+// boundary, for callers whose verdict is FINAL. Expressed as a REFINEMENT of the
+// wide reading rather than an independent gate: the strict boundary forbids a
+// superset of what the wide one forbids, so the conjunction is semantically the
+// strict test alone, and keeping it explicit means the wide regexes stay the one
+// armed denylist that every route is keyed on (CPR-SSOT). Never weaker than what
+// classifyProtectedPath owns, so the mention-implies-classify direction that
+// makes the wide reading fail-closed is preserved.
+function mentionsProtectedNameStrict(text) {
+  if (!mentionsProtectedName(text)) return false;
+  return TOKEN_MENTION_STRICT_RE.test(text) || MARKER_MENTION_STRICT_RE.test(text);
 }
 
 // Two normalizers, deliberately separated (CPR-SC) — the two input shapes disagree
@@ -193,10 +267,15 @@ function candidateBasenamesOfBashToken(rawToken) {
 // real consumer's `wx` open into EEXIST, and deleting it mid-window breaks the
 // exclusion — but the hex prefix is content-derived, so it's matched structurally:
 // strip the suffix and re-classify what remains (widens detection, never narrows).
-const CONSUMING_CLAIM_SUFFIX_RE = /\.consuming-[0-9a-f]{16}\.tmp$/i;
+const CONSUMING_CLAIM_SUFFIX_RE = new RegExp(CONSUMING_CLAIM_SUFFIX_BODY + "$", "i");
 
+// Normalizes FIRST: the `$`-anchored claim regex reads a tail the filesystem
+// discards (`<claim>.`, `<claim>::$DATA`) as "not a claim", so stripping the raw
+// basename disowned a name whose suffix-list sibling still matched (#1821).
 function stripConsumingClaimSuffix(basename) {
-  return CONSUMING_CLAIM_SUFFIX_RE.test(basename) ? basename.replace(CONSUMING_CLAIM_SUFFIX_RE, "") : null;
+  const norm = normalizeCandidateBasename(basename);
+  if (typeof norm !== "string" || norm === "") return null;
+  return CONSUMING_CLAIM_SUFFIX_RE.test(norm) ? norm.replace(CONSUMING_CLAIM_SUFFIX_RE, "") : null;
 }
 
 // A protected suffix alone is not a forgery. Every reader opens exactly
@@ -303,12 +382,15 @@ module.exports = {
   PROTECTED_MARKER_BASENAME_RE,
   TOKEN_MENTION_RE,
   MARKER_MENTION_RE,
+  TOKEN_MENTION_STRICT_RE,
+  MARKER_MENTION_STRICT_RE,
   CONSUMING_CLAIM_SUFFIX_RE,
   SID_CANONICAL_EXACT_RE,
   SID_CANONICAL_TAIL_RE,
   isClearanceBearingStem,
   stripConsumingClaimSuffix,
   mentionsProtectedName,
+  mentionsProtectedNameStrict,
   candidateBasenameOf,
   unquoteBashWord,
   candidateBasenameOfBashToken,
