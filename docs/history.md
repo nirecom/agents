@@ -382,3 +382,7 @@ Changes: #2154: Codex plan/test reviews received `--accepted-tradeoffs` from one
 ### FEATURE: PR #2241 — feature/2145-tests-run-all-sh-lpt (2026-09-06, 3168cadbaff3f534461ac9f75efd06186f8d9fa4, #2241)
 Background: feat(#2145): LPT duration-ledger ordering for tests/run-all.sh
 Changes: FEATURE: LPT (Longest-Processing-Time-first) submission ordering for tests/run-all.sh, backed by a new per-test duration ledger (#2145) <!-- compose-doc-append-sentinel: branch=feature/2145-tests-run-all-sh-lpt pr=#2241 -->
+
+### FEATURE: PR #2242 — feature/2111-windows-concern-ledger-check-on (2026-09-06, 968095e7b3a23e3210ca5463e224bedacf74aff8, #2242)
+Background: fix(#2111): eliminate per-call library re-sourcing and per-test-case git-repo creation in Windows test suites
+Changes: fix(#2111): eliminated per-call library re-sourcing and per-test-case git-repo-creation overhead in the concern-ledger and check-on-demand-rules test suites, cutting their Windows Git Bash wall-clock cost; added `docs/architecture/claude-code/test-runner-parallelism.md` §9 corollary documenting the two judgment criteria (no per-assertion re-sourcing, no per-case `git init`) for identifying other suites subject to the same class of cost. <!-- compose-doc-append-sentinel: branch=feature/2111-windows-concern-ledger-check-on pr=#2242 -->

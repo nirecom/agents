@@ -427,3 +427,7 @@ Changes: Plan and test reviews no longer re-raise trade-offs you have already ac
 ### FEATURE: PR #2241 (2026-09-06)
 Background: feat(#2145): LPT duration-ledger ordering for tests/run-all.sh
 Changes: `tests/run-all.sh`'s parallel test lane now schedules historically longer-running tests first, using a lightweight local duration history — reduces idle worker time at the end of a parallel test run. No configuration changes required; the feature degrades automatically to the previous ordering if history is unavailable.
+
+### FEATURE: PR #2242 (2026-09-06)
+Background: fix(#2111): eliminate per-call library re-sourcing and per-test-case git-repo creation in Windows test suites
+Changes: Fixed prohibitively slow Windows Git Bash test runs by removing redundant per-call library sourcing and per-test-case git-repo setup in two test suites (#2111).
