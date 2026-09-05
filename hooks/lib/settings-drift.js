@@ -31,10 +31,8 @@ function permKeyMissing(expectedArr, assembledArr) {
   return missing;
 }
 
-// hookEntriesMissing checks two independent things per event: the matcher groups
-// themselves (multiset), and the individual commands nested inside them. A command
-// dropped from a group that still exists leaves the matcher count untouched, so the
-// matcher pass alone cannot see it; the command pass reports it as "<matcher> :: <command>".
+// Two passes, because a command dropped from a matcher group that still exists
+// leaves the matcher count untouched. The command pass reports "<matcher> :: <command>".
 function hookEntriesMissing(expectedHookEntries, assembledHookEntries) {
   // Use multiset counting: same matcher can appear multiple times for different hook commands.
   const assembledCounts = new Map();

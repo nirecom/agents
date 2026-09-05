@@ -23,9 +23,6 @@ const { warn, report } = require("./codegraph-lifecycle/diagnostics");
 const VERBS = ["init", "sync", "stop"];
 const DERIVED_DB_FILES = ["codegraph.db-wal", "codegraph.db-shm"];
 
-// INDEX_RESYNC_NOTICE answers the question a fresh index raises for whoever is
-// watching: "does my open session see it now?". It does not, and saying so here
-// is cheaper than a stale answer nobody can explain.
 const INDEX_RESYNC_NOTICE =
   "codegraph_explore is served by a CodeGraph daemon that outlives individual sessions, so a running " +
   "session picks this rebuild up only once a new daemon serves this index; a daemon that survived the " +

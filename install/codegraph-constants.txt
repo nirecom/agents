@@ -1,20 +1,19 @@
-# Canonical values shared by install/linux/codegraph.sh, install/win/codegraph.ps1
-# and install/codegraph-mcp.js. KEY=VALUE, one per line; # starts a comment.
-#
-# CODEGRAPH_VERSION pins the npm package so a re-run never floats to `latest`.
-#
-# CODEGRAPH_TELEMETRY and DO_NOT_TRACK are two independent env keys, not one
-# switch: upstream reads DO_NOT_TRACK first (any non-off value opts out of
-# everything), and CODEGRAPH_TELEMETRY only after it. This file is the only
-# control surface for a codegraph process this framework launches — the
-# installer never exports either key into its own environment, so a codegraph
-# you start by hand keeps whatever `codegraph telemetry` choice you made.
-#
-# AGENTS_CODEGRAPH_MCP_OWNER marks an MCP registration as written by this
-# installer, so `unregister` can prove ownership before removing anything. The
-# value is stable on purpose: changing it strands every registration an earlier
-# build wrote.
+# --- CodeGraph shared constants ---
+# Read by install/linux/codegraph.sh, install/win/codegraph.ps1 and install/codegraph-mcp.js.
+
+# Pin the codegraph npm package so a re-run never floats to latest.
+# Format: exact version, no range prefix.
 CODEGRAPH_VERSION=1.6.0
+
+# Turn on codegraph telemetry for the codegraph processes this framework launches.
+# You can't do: does not export the key into your own shell, so a codegraph you start by hand keeps its own `codegraph telemetry` choice.
+# Format: 1 (default) | 0. DO_NOT_TRACK is read first and wins over this.
 CODEGRAPH_TELEMETRY=1
+
+# Opt out of everything upstream collects, ahead of CODEGRAPH_TELEMETRY.
+# Format: 0 (default) | any other non-empty value opts out.
 DO_NOT_TRACK=0
+
+# Mark an MCP registration as written by this installer so unregister can prove ownership before removing it.
+# You can't do: cannot be changed safely — a new value strands every registration an earlier build wrote.
 AGENTS_CODEGRAPH_MCP_OWNER=agents-framework

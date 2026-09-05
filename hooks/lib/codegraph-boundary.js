@@ -1,12 +1,7 @@
 // codegraph-boundary.js — the shared door to the CodeGraph binary and to the
-// constants file that configures it.
-//
-// bin/codegraph-lifecycle.js and install/codegraph-mcp.js both need the same
-// three facts — is CODEGRAPH on, what env must a codegraph process inherit, and
-// how is that process spawned — so those facts live here once rather than in
-// each entrypoint. This module is a pure library: it decides and returns, and
-// never writes to stdout or stderr. Reporting belongs to the entrypoints, which
-// own their own diagnostic vocabulary.
+// constants file that configures it, for bin/codegraph-lifecycle.js,
+// install/codegraph-mcp.js and hooks/codegraph-context-inject.js.
+// A pure library: it decides and returns, and never writes to stdout or stderr.
 
 const fs = require("fs");
 const os = require("os");
@@ -17,24 +12,18 @@ const { normalizeCwd } = require("./path-normalize");
 const CONSTANTS_FILE = path.join(__dirname, "..", "..", "install", "codegraph-constants.txt");
 const TELEMETRY_KEYS = ["CODEGRAPH_TELEMETRY", "DO_NOT_TRACK"];
 
-// OWNER_MARKER_KEY is the positive evidence that an MCP registration was written
-// by this installer. The telemetry pair alone cannot prove that — any tool may
-// ship the same two values — so ownership is decided by this marker and only a
-// marked entry is ever removed.
+// The only evidence an MCP registration is ours: the telemetry pair alone
+// proves nothing, since any tool may ship the same two values.
 const OWNER_MARKER_KEY = "AGENTS_CODEGRAPH_MCP_OWNER";
 const REGISTRATION_ENV_KEYS = [...TELEMETRY_KEYS, OWNER_MARKER_KEY];
 
-// TELEMETRY_FALLBACK_ENV is a privacy-side floor, not a copy of the shipped
-// defaults: when the constants file cannot be read we cannot know what the
-// repo wants, so the spawned process inherits the quietest possible pair.
-// It stays 0/1 even after the shipped defaults invert.
+// Privacy-side floor for an unreadable constants file, not a copy of the
+// shipped defaults — it stays 0/1 even after those defaults invert.
 const TELEMETRY_FALLBACK_ENV = Object.freeze({ CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1" });
 
 const STATUS_TIMEOUT_MS = 60000;
 
-// readConstants returns {} for a missing or unparsable file. Callers that need
-// a complete answer test the key set themselves; callers that only need a
-// process env fall back to TELEMETRY_FALLBACK_ENV.
+// Returns {} for a missing or unparsable file; callers decide what that means.
 function readConstants() {
   const out = {};
   let raw;
@@ -59,34 +48,28 @@ function constantsSubset(keys) {
   return pairs;
 }
 
-// telemetryEnv answers "what telemetry env must a codegraph process this
-// framework starts inherit?". It always answers both keys, so an unreadable
-// constants file degrades to the privacy-side floor rather than to silence.
+// Always answers both keys, so an unreadable constants file degrades to the
+// privacy-side floor rather than to silence.
 function telemetryEnv() {
   return { ...TELEMETRY_FALLBACK_ENV, ...constantsSubset(TELEMETRY_KEYS) };
 }
 
-// registrationEnv is the STRICT reader: it reports only what the constants file
-// actually carries. An incomplete answer must stay incomplete, because the
-// caller uses the key count to decide whether ownership is knowable at all.
+// The strict reader: no fallback, because the caller uses the key count to
+// decide whether ownership is knowable at all.
 function registrationEnv() {
   return constantsSubset(REGISTRATION_ENV_KEYS);
 }
 
-// envHasAll is the subset test: the entry carries at least these keys with these
-// values. Evidence is asymmetric — extra keys another tool added do not make a
-// registration less ours, so a superset still counts as a match.
+// A subset test on purpose: extra keys another tool added do not make a
+// registration less ours.
 function envHasAll(entry, wanted, keys) {
   const env = entry && entry.env;
   if (!env || typeof env !== "object") return false;
   return keys.every((key) => String(env[key]) === wanted[key]);
 }
 
-// classifyRegistration collapses "what is in ~/.claude.json" into the verdicts
-// the two verbs branch on. `found` is null for an unreadable config, {absent:true}
-// for no entry, or {entry}. `shapeMatches` is supplied by the caller because the
-// argv shape (command and args) is the installer's own single source of truth.
-// The verdict vocabulary is documented in docs/ops/codegraph.md.
+// `found`: null for an unreadable config, {absent:true} for no entry, or {entry}.
+// Verdict vocabulary: docs/ops/codegraph.md.
 function classifyRegistration(found, wantedEnv, shapeMatches) {
   const keys = Object.keys(wantedEnv || {});
   // An incomplete or empty-valued constants read makes ownership unknowable.
@@ -100,19 +83,15 @@ function classifyRegistration(found, wantedEnv, shapeMatches) {
   const env = entry && entry.env;
   const marked = Boolean(env) && typeof env === "object"
     && Object.prototype.hasOwnProperty.call(env, OWNER_MARKER_KEY);
-  // The marker is the only evidence of authorship, so an unmarked entry is
-  // foreign however closely it resembles ours. A marker that is ours but an env
-  // that is not means our own registration drifted; someone else's marker value
-  // is refreshable, because the `add` that follows re-establishes ours.
+  // Unmarked is foreign however closely it resembles ours; our own marker with a
+  // drifted env is stale, and someone else's marker is refreshable by the `add`.
   if (!marked) return "foreign";
   return String(env[OWNER_MARKER_KEY]) === wantedEnv[OWNER_MARKER_KEY] ? "ours-stale" : "replaceable";
 }
 
-// codegraphEnabled is the single implementation point of the fail-safe-OFF
-// polarity shared with install/win/codegraph.ps1 and install/linux/codegraph.sh:
-// an explicit lowercase `on` enables, and everything else — `off`, unset,
-// empty, an unrecognized value, or a failure to read the config at all —
-// resolves to OFF. A real environment variable outranks the .env file.
+// Fail-safe-OFF polarity, shared with install/win/codegraph.ps1 and
+// install/linux/codegraph.sh: only a lowercase `on` enables; anything else,
+// including an unreadable config, resolves to OFF.
 function codegraphEnabled() {
   try {
     require("./load-env").loadDefaultEnv();
@@ -124,11 +103,8 @@ function codegraphEnabled() {
   return raw.trim().toLowerCase() === "on";
 }
 
-// spawnCodegraph is the only door to the binary, so every invocation carries
-// the same two guarantees: a bounded timeout, and the telemetry env
-// install/codegraph-constants.txt ships. The env is built per call, not at
-// module load, because codegraphEnabled() may have populated process.env from
-// .env in between. A caller may shorten the timeout but never remove it.
+// The env is built per call, not at module load, because codegraphEnabled() may
+// have populated process.env from .env in between.
 function spawnCodegraph(args, options) {
   return spawnShimmedCli("codegraph", args, {
     ...options,
@@ -137,20 +113,15 @@ function spawnCodegraph(args, options) {
   });
 }
 
-// normalizePayloadCwd wraps the shared normalizeCwd so a POSIX drive-letter cwd
-// — the MSYS form Git Bash hands Claude Code — becomes the form Node's fs
-// and spawn APIs accept. The private copies in hooks/enforce-worktree/ and
-// hooks/workflow-state/ are candidates for the same extraction, out of scope here.
+// A POSIX drive-letter cwd — the MSYS form Git Bash hands Claude Code — is
+// rejected by Node's fs and spawn APIs.
 function normalizePayloadCwd(cwd) {
   const normalized = normalizeCwd(cwd);
   return typeof normalized === "string" ? normalized : cwd;
 }
 
-// promptHookScopeAllows(cwd) — may `prompt-hook` run for this cwd at all? An
-// ENABLEMENT gate (same class as codegraphEnabled), never a filter on output.
-// At the pinned version planFrontload() runs a DOWN-scan gated only on a
-// workspace manifest, while upstream's own exclusion for that hazard is wired
-// into the server-root path alone; this ports that exclusion and nothing more.
+// Ports upstream's own home-directory exclusion, which at the pinned version is
+// wired into the server-root path alone and so misses prompt-hook's DOWN-scan.
 // Delete it once the pinned build applies its own — see docs/ops/codegraph.md.
 const SCOPE_UPWALK_LEVELS = 6;
 
@@ -165,8 +136,7 @@ function promptHookScopeAllows(cwd) {
     dir = parent;
   }
   if (base === path.parse(base).root) return false;
-  // A home directory that cannot be resolved degrades to allow, the same way
-  // upstream's own exclusion degrades.
+  // An unresolvable home directory degrades to allow, as upstream's own does.
   try {
     if (base === path.resolve(os.homedir())) return false;
   } catch (_) {
@@ -175,10 +145,8 @@ function promptHookScopeAllows(cwd) {
   return true;
 }
 
-// verifyPinnedCliVersion — is the codegraph this repo will actually invoke the
-// one install/codegraph-constants.txt pins? Resolved through spawnCodegraph, so
-// it sees the same PATH/PATHEXT resolution the lifecycle and the hook see.
-// Verdicts: "match" | "mismatch" | "unknown-actual" | "unknown-pin".
+// Goes through spawnCodegraph so it sees the same PATH/PATHEXT resolution the
+// lifecycle and the hook see. Verdicts: match | mismatch | unknown-actual | unknown-pin.
 const VERSION_TIMEOUT_MS = 10000;
 const SEMVER_HEAD = /^[0-9]+\.[0-9]+\.[0-9]+/;
 
@@ -193,11 +161,8 @@ function verifyPinnedCliVersion() {
   return { verdict: line === pinned ? "match" : "mismatch", pinned, actual: line };
 }
 
-// The shipped posture, evaluated with upstream's own truthiness for the two env
-// keys this framework injects: undefined, "", "0" and "false" (any case) are the
-// OFF side for BOTH keys, and DO_NOT_TRACK resolves first. The empty value is the
-// one deliberate divergence — upstream lets it fall through to the saved config,
-// so shipping "" means the user's own choice decides and must not be erased.
+// Upstream's own truthiness: "", "0" and "false" (any case) are the OFF side of
+// both keys, and "" deliberately falls through to the user's saved choice.
 function offSide(value) {
   return value === "" || value === "0" || value.toLowerCase() === "false";
 }
@@ -211,10 +176,7 @@ function telemetryEnabledByConstants() {
   return !offSide(cgt);
 }
 
-// clearSavedTelemetryChoice decides, acts, and returns { action, path } — it never
-// prints, because the diagnostic vocabulary belongs to install/codegraph-mcp.js.
-// The file's content is never read: whatever it holds, it goes.
-// action: "skipped" | "absent" | "cleared" | "failed".
+// Returns { action, path }; action: skipped | absent | cleared | failed.
 function clearSavedTelemetryChoice() {
   const configPath = path.join(os.homedir(), ".codegraph", "telemetry.json");
   if (!telemetryEnabledByConstants()) return { action: "skipped", path: configPath };

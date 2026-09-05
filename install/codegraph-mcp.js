@@ -25,11 +25,8 @@ const SERVER_NAME = "codegraph";
 const VERBS = ["register", "unregister"];
 const SERVER_COMMAND = "codegraph";
 const SERVER_ARGS = ["serve", "--mcp"];
-// Both verbs require proven ownership — the classifier grants a verdict other
-// than "foreign" only to an entry carrying our owner marker. They differ on
-// which marked verdicts they act on: removal needs a marker value that is ours,
-// while a refresh also takes someone else's marker value, since the `add` that
-// follows re-establishes ours.
+// Removal needs a marker value that is ours; a refresh also takes someone
+// else's, since the `add` that follows re-establishes ours.
 const REFRESH_STATES = ["replaceable", "ours-stale"];
 const REMOVE_STATES = ["current", "ours-stale"];
 
@@ -41,16 +38,12 @@ function note(message) {
   process.stdout.write(message + "\n");
 }
 
-// RESET_NOTICE is one stdout line: the deletion is silent otherwise, and a saved
-// opt-out that keeps coming back needs to name the file, the cause, and the cure.
-// The two-stage recipe is ordered — the constants change alone restores nothing.
 const RESET_NOTICE =
   "reset the local CodeGraph telemetry choice (removed ~/.codegraph/telemetry.json); the installer repeats " +
   "this on every run while install/codegraph-constants.txt ships CODEGRAPH_TELEMETRY=1 — to turn telemetry " +
   "off everywhere, set it to 0 and re-run the installer, then run `codegraph telemetry off` once for the " +
   "codegraph you start by hand.";
 
-// The boundary decides and acts; this file owns every byte that reaches a stream.
 function reportTelemetryReset() {
   const result = clearSavedTelemetryChoice();
   if (result.action === "cleared") note(RESET_NOTICE);
@@ -114,12 +107,8 @@ function hasOurShape(entry) {
   return SERVER_ARGS.every((value, index) => args[index] === value);
 }
 
-// readState pairs the config read with the shape test this file owns and hands
-// both to the shared classifier. A partial or empty-valued wantedEnv means
-// codegraph-constants.txt was missing, malformed, or incomplete — the desired
-// env is itself unknowable, so classification fails closed exactly as it does
-// for an unreadable ~/.claude.json, rather than falling through to "current"
-// on whichever keys happened to be readable.
+// A partial wantedEnv means codegraph-constants.txt was missing or malformed, so
+// the classifier fails closed rather than judging on whichever keys were readable.
 function readState(wantedEnv) {
   const found = readEntry();
   return classifyRegistration(found, wantedEnv, found && !found.absent && hasOurShape(found.entry));
@@ -132,9 +121,8 @@ function runClaude(args) {
 }
 
 function addServer(wantedEnv) {
-  // Iterating REGISTRATION_ENV_KEYS, not the object, keeps the --env order fixed:
-  // the argv is what tests and reviewers compare, so it must not follow key
-  // insertion order in the constants file.
+  // Iterating the key list, not the object, keeps --env order independent of the
+  // key order in the constants file.
   const envFlags = REGISTRATION_ENV_KEYS.flatMap((key) => ["--env", key + "=" + wantedEnv[key]]);
   return runClaude(
     ["mcp", "add", SERVER_NAME, "--scope", "user"]
@@ -187,9 +175,8 @@ function main() {
     process.stderr.write("usage: node install/codegraph-mcp.js <register|unregister>\n");
     process.exit(64);
   }
-  // Both reports belong to `register` alone and run before the CLI probe: they
-  // describe the local install, not the registration, so a missing claude CLI
-  // must not swallow them.
+  // Before the CLI probe: both describe the local install, not the registration,
+  // so a missing claude CLI must not swallow them.
   if (verb === "register") {
     reportTelemetryReset();
     reportPinnedVersionMismatch();

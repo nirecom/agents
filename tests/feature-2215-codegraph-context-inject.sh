@@ -7,8 +7,6 @@
 # SSOT for case specs. Dispatcher only: counters, the pass/fail vocabulary and the
 # source order. Every fixture, stub and helper lives in harness.sh; the cases are
 # grouped by the contract they pin (forwarding, payload, settings, scope gate).
-# RED-PHASE: hooks/codegraph-context-inject.js and hooks/lib/codegraph-boundary.js do not exist
-# yet, so every case here is expected to FAIL against current HEAD. Do not weaken assertions.
 
 set -u
 

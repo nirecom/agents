@@ -2,12 +2,11 @@
 // codegraph-context-inject.js — UserPromptSubmit hook that forwards the CodeGraph
 // CLI's own per-prompt context into the session.
 //
-// Upstream ships this as a prompt hook its installer writes into
-// ~/.claude/settings.json; this framework refuses that installer (it also rewrites
-// ~/.claude/CLAUDE.md) and calls the same hidden subcommand itself. The output is
-// forwarded whole — no re-implementation of upstream's tiering. Every failure
-// path prints `{}` and exits 0: a CodeGraph problem must never cost a prompt.
-// Design: docs/architecture/claude-code.md, docs/ops/codegraph.md.
+// Upstream ships this as a hook its own installer writes into
+// ~/.claude/settings.json; this framework refuses that installer, which also
+// rewrites ~/.claude/CLAUDE.md, and calls the same subcommand itself. Every
+// failure path prints `{}` and exits 0 — a CodeGraph problem must never cost
+// a prompt. Design: docs/architecture/claude-code.md, docs/ops/codegraph.md.
 
 const fs = require("fs");
 const {
