@@ -170,31 +170,22 @@ case "$N4" in
     *) fail "N4: want both MISSING and EXTRA for a disjoint set, got '$N4'" ;;
 esac
 
-# --- N5: the settled end-state FLOOR, written as literals.
-# WHY this exists next to a derived table: N1-N4 all take their `want` side from
-# ON_DEMAND_READERS, so the declaration is both the question and the answer key. Delete a
-# rule's row from the policy AND its Read step from the skill in the same commit and every
-# case above still passes — nothing is left that remembers the pair was ever required.
-# The floor is the memory. It names only the pairs #1651 and #2037 actually settled (never
-# the whole table, which stays owned by the declaration per CPR-SSOT), and it compares the
-# literal against the REAL TREE via skill_by_of — not against the declaration — so a
-# both-sides deletion has nowhere to hide. A new consumer belongs in the declaration; a
-# row belongs here only once the issue that settled it has shipped. ---
-
-# The consumer lists below are HARD-CODED on purpose — a deliberate regression floor.
-# Reading them out of ON_DEMAND_READERS instead would assert the declaration equals
-# itself, which is exactly the false-green shape bin/check-false-green.sh exists to catch.
-# github-issues.md / coding.md / ops.md carry their full declared reader sets because
-# #2037 widened them: coding.md governs outbound text (issue, PR, commit, docs), and
-# ops.md governs any destructive or system-state step, so a skill dropping its Read step
-# is a real loss of governance, not a tidy-up.
+# --- N5: the settled end-state FLOOR, written as literals and compared against the
+# REAL TREE via skill_by_of, never against the declaration -- deriving both sides
+# from ON_DEMAND_READERS would be the false-green shape bin/check-false-green.sh
+# exists to catch. Names only the pairs #1651/#2037/#2140-#2141 actually settled
+# (not the whole table, which stays owned by the declaration per CPR-SSOT); a new
+# consumer belongs in the declaration, a row belongs here only once its issue has
+# shipped. github-issues.md/coding.md/ops.md carry full reader sets because #2037
+# widened them and #2140/#2141 added skills/write-tests/SKILL.md to coding.md's row --
+# WT-6 now writes test-file code, on the same explicit-Read footing WCD-4 stands on. ---
 N5_FLOOR='rules/test.md|skills/write-tests/SKILL.md,skills/review-tests/SKILL.md,skills/run-tests/SKILL.md
 rules/docs.md|skills/update-docs/SKILL.md
 rules/github-issues.md|skills/issue-create/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/issue-reconcile/SKILL.md,skills/issue-close-migrated/SKILL.md,skills/clarify-intent/SKILL.md,skills/commit-push/SKILL.md,skills/worktree-end/SKILL.md,skills/workflow-init/SKILL.md,skills/sweep-issues/SKILL.md,skills/issue-setup/SKILL.md
 rules/branch.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md
 rules/worktree.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md
 rules/mid-workflow-findings.md|skills/issue-create/SKILL.md,skills/worktree-end/SKILL.md
-rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md
+rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/write-tests/SKILL.md
 rules/ops.md|skills/worktree-end/SKILL.md,skills/write-code/SKILL.md,skills/worktree-start/SKILL.md'
 
 # n5_check <rule> <consumer-csv> -> prints "OK" or the reason it failed, tree-first.

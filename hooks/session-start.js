@@ -327,6 +327,13 @@ try {
     lines.push("WARNING: ~/.claude/settings.json drift detected — run: node \"" + path.join(__dirname, "..", "install", "assemble-settings.js") + "\"");
     lines.push("  reason: " + r);
   }
+  // Independent of drift: the generated allow rules could not be produced, so the check above
+  // silently covered less than it usually does. Say so rather than imply a clean bill of health.
+  if (d.generatorUnavailable) {
+    lines.push("");
+    lines.push("WARNING: the generated allow rules are unavailable — settings.json was checked without them; run: node \"" + path.join(__dirname, "..", "install", "gen-settings-allow.js") + "\" --check");
+    lines.push("  reason: " + d.generatorUnavailable);
+  }
 } catch (_e) { /* fail-open */ }
 try {
   const convLang = getConvLangInjection();

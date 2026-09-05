@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/assemble-mandatory.sh, skills/make-outline-plan/SKILL.md
-# Tags: outline, planning, skill, bin, env
+# Tags: outline, planning, skill, bin, env, scope:issue-specific
 # Integration tests for skills/_shared/assemble-mandatory.sh (issue #462).
 # Tests will FAIL until skills/_shared/assemble-mandatory.sh is implemented
 # and SKILL.md files are updated.
@@ -367,6 +367,121 @@ if grep -qiE "contract violation" "$ERR_FILE" 2>/dev/null; then
 else
     fail "(l) legacy hard-fail: stderr missing 'contract violation'. Stderr:
 $(cat "$ERR_FILE" 2>/dev/null | head -20)"
+fi
+
+# ---------------------------------------------------------------------------
+# (m) output-path constraint — $OUT must resolve under an ALLOWED ROOT
+#
+# The third positional is the destination of both `mktemp -d -p "$(dirname "$OUT")"` and the
+# final `mv -f`, so an unconstrained one is an arbitrary-file-overwrite primitive. The allowed
+# destinations are the workflow plans directory and the system temp roots -- where every real
+# caller already writes -- so the constraint costs nothing and removes the primitive. The
+# refusal must precede every write: "it errored" and "it errored without touching the
+# destination" are two claims, and only the second is the security one.
+# ---------------------------------------------------------------------------
+M_ROOTS="$TMPDIR_BASE/m-temp-root"
+M_PLANS="$TMPDIR_BASE/m-plans-root"
+M_ELSEWHERE="$TMPDIR_BASE/m-elsewhere"
+mkdir -p "$M_ROOTS" "$M_PLANS" "$M_ELSEWHERE"
+
+# The child's roots are PINNED to fixture directories and the escape path is a sibling of both,
+# which is what makes "outside every allowed root" reproducible on a host whose real temp root
+# contains this harness -- and it keeps a regression from writing anywhere the EXIT trap does
+# not already remove. TMPDIR, TMP and TEMP are all pinned because the guard consults
+# `${TMPDIR:-/tmp}` AND node's os.tmpdir(), and on Windows node reads TEMP/TMP, not TMPDIR.
+m_assemble() { # <out> <err-file> -> exit code on stdout
+    local code=0
+    run_with_timeout env TMPDIR="$M_ROOTS" TMP="$M_ROOTS" TEMP="$M_ROOTS" \
+        WORKFLOW_PLANS_DIR="$M_PLANS" \
+        bash "$ASSEMBLE" "$INTENT_FIXTURE" "$PLANNER_FIXTURE" "$1" \
+        2>"$2" >/dev/null || code=$?
+    printf '%s' "$code"
+}
+
+# (m1) the workflow plans directory — where every real caller writes its artifact
+OUT_M_PLANS="$M_PLANS/out-m-plans.md"
+EXIT_CODE=$(m_assemble "$OUT_M_PLANS" "$TMPDIR_BASE/m-plans-err.txt")
+
+if [[ "$EXIT_CODE" == "0" && -f "$OUT_M_PLANS" ]]; then
+    pass "(m) out-path: an output under the workflow plans directory is accepted and written (exit 0)"
+else
+    fail "(m) out-path: expected exit 0 with the file created, got exit=$EXIT_CODE. Stderr:
+$(head -20 "$TMPDIR_BASE/m-plans-err.txt" 2>/dev/null)"
+fi
+
+# (m1b) a system temp root — the OTHER allowed root, and the one every test scratch file uses.
+# Without this row the plans dir alone would satisfy the suite, and a guard that admitted only
+# it would break every mktemp-based caller silently.
+OUT_M_TEMP="$M_ROOTS/out-m-temp.md"
+EXIT_CODE=$(m_assemble "$OUT_M_TEMP" "$TMPDIR_BASE/m-temp-err.txt")
+
+if [[ "$EXIT_CODE" == "0" && -f "$OUT_M_TEMP" ]]; then
+    pass "(m) out-path: an output under a system temp root is accepted too -- both allowed roots, not just one"
+else
+    fail "(m) out-path: expected exit 0 under the temp root, got exit=$EXIT_CODE. Stderr:
+$(head -20 "$TMPDIR_BASE/m-temp-err.txt" 2>/dev/null)"
+fi
+
+# (m2) outside every allowed root — refused, and nothing created there
+OUT_M_ESCAPE="$M_ELSEWHERE/out-m-escape.md"
+ERR_M_FILE="$TMPDIR_BASE/m-escape-err.txt"
+EXIT_CODE=$(m_assemble "$OUT_M_ESCAPE" "$ERR_M_FILE")
+
+if [[ "$EXIT_CODE" == "2" ]]; then
+    pass "(m) out-path: an output under NEITHER allowed root is refused with exit 2"
+else
+    fail "(m) out-path: expected exit 2 for an out-of-tree destination, got $EXIT_CODE. Stderr:
+$(head -20 "$ERR_M_FILE" 2>/dev/null)"
+fi
+
+if grep -qiE "plans directory|temp root" "$ERR_M_FILE" 2>/dev/null; then
+    pass "(m) out-path: stderr names the allowed destinations, so the caller can fix the call"
+else
+    fail "(m) out-path: stderr does not name the allowed destinations. Stderr:
+$(head -20 "$ERR_M_FILE" 2>/dev/null)"
+fi
+
+if [[ ! -e "$OUT_M_ESCAPE" ]]; then
+    pass "(m) out-path: nothing was created at the refused destination"
+else
+    fail "(m) out-path: the refused destination WAS created: $OUT_M_ESCAPE"
+fi
+
+# (m3) the same refusal with a file ALREADY at the destination — the overwrite case.
+# (m2) only proves nothing was created; a `mv -f` that lands on an existing file destroys
+# content instead of creating it, and that is the damage the constraint exists to prevent.
+M_VICTIM="$M_ELSEWHERE/victim.md"
+printf 'DO-NOT-OVERWRITE-THIS-LINE\n' > "$M_VICTIM"
+M_VICTIM_BEFORE=$(cksum < "$M_VICTIM")
+EXIT_CODE=$(m_assemble "$M_VICTIM" "$TMPDIR_BASE/m-victim-err.txt")
+M_VICTIM_AFTER=$(cksum < "$M_VICTIM")
+
+if [[ "$EXIT_CODE" == "2" ]]; then
+    pass "(m) out-path: an EXISTING file outside every allowed root is refused with exit 2 too"
+else
+    fail "(m) out-path: expected exit 2 for an existing out-of-tree destination, got $EXIT_CODE. Stderr:
+$(head -20 "$TMPDIR_BASE/m-victim-err.txt" 2>/dev/null)"
+fi
+
+if [[ "$M_VICTIM_BEFORE" == "$M_VICTIM_AFTER" ]]; then
+    pass "(m) out-path: and that file is byte-identical afterwards -- the refusal precedes every write"
+else
+    fail "(m) out-path: the existing file was MODIFIED ($M_VICTIM_BEFORE -> $M_VICTIM_AFTER)"
+fi
+
+# (m4) in-place mode: arg2 and arg3 are the same file, inside an allowed root. The shape
+# tests/feature-866-flatten-drafts.sh depends on -- the constraint must not break it.
+M_INPLACE="$M_PLANS/m-inplace.md"
+cp "$PLANNER_FIXTURE" "$M_INPLACE"
+EXIT_CODE=0
+ERR_M_INPLACE=$(run_with_timeout env TMPDIR="$M_ROOTS" TMP="$M_ROOTS" TEMP="$M_ROOTS" \
+    WORKFLOW_PLANS_DIR="$M_PLANS" \
+    bash "$ASSEMBLE" "$INTENT_FIXTURE" "$M_INPLACE" "$M_INPLACE" 2>&1) || EXIT_CODE=$?
+
+if [[ "$EXIT_CODE" == "0" && -f "$M_INPLACE" ]]; then
+    pass "(m) out-path: in-place mode (arg2 == arg3) still exits 0 -- the constraint is on the destination root, not on distinctness"
+else
+    fail "(m) out-path: in-place mode broke (exit=$EXIT_CODE). Stderr: $ERR_M_INPLACE"
 fi
 
 # ---------------------------------------------------------------------------

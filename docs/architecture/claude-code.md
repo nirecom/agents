@@ -131,7 +131,9 @@ only test files, never source code. See `write-tests` skill for the procedure.
 ## 6. settings.json Drift Prevention
 
 `~/.claude/settings.json` is a copy-deployed file assembled by `install/assemble-settings.js`
-from `agents/settings.json` (base) + `agents/settings-extension.json` (extension).
+from `agents/settings.json` (base) + `agents/settings-extension.json` (extension) + the allow
+rules generated from `install/settings-allow-commands.txt`, which are injected at deploy time
+and never tracked in the repository (see `claude-code/settings.md`).
 It cannot be a symlink because the extension contains host-private absolute paths.
 
 **Problem:** When `settings.json` gains new hook registrations or permission entries after
@@ -142,17 +144,32 @@ entries cause workflow sessions to stall on blocked tool calls or absent sentine
 
 | Layer | Hook | Trigger | Action |
 |---|---|---|---|
-| Proactive | `hooks/post-merge` | git merge / pull changes `settings.json` or `settings-extension.json` | Auto-reassemble `~/.claude/settings.json` |
-| Proactive | `hooks/post-checkout` | Branch switch changes those files | Auto-reassemble |
+| Proactive | `hooks/post-merge` | git merge / pull changes anything that defines the deployed permission surface | Auto-reassemble `~/.claude/settings.json` |
+| Proactive | `hooks/post-checkout` | Branch switch changes any of the same inputs | Auto-reassemble |
 | Backstop | `hooks/session-start.js` + `hooks/lib/settings-drift.js` | Every session start | Detect missing entries; inject `WARNING` into `additionalContext` |
+
+**Reassembly trigger** (both git hooks, two stages): stage 1 is the fixed file set —
+`settings.json`, `settings-extension.json`, `install/settings-allow-commands.txt`,
+`install/path-exposed-commands.txt`, `install/gen-settings-allow.js`,
+`install/assemble-settings.js`, `install/lib/*.js`. Stage 2 is read out of the allow-rule SSOT
+itself: editing a command that file lists moves the generated spellings exactly as editing
+`settings.json` does, so the SSOT's own entries are compared against the changed paths. The SSOT
+is read through `tr -d '\r'` because `core.autocrlf=true` is the Windows default and a surviving
+CR would make the whole-line comparison silently never match.
 
 **Repo guard:** Both git hooks compare `git rev-parse --show-toplevel` against the agents
 root to fire only inside the agents repo (not in every repo on the machine that uses
 `core.hooksPath`). All hooks are fail-open — any assembler error exits 0.
 
 **Drift detection algorithm** (`hooks/lib/settings-drift.js`):
-- Permissions (`allow`, `deny`, `ask`, `additionalDirectories`): subset check — every entry
-  present in base+ext must exist in the assembled file.
+- The expectation is built by `install/lib/settings-assembly.js` — the same builder the deploy
+  writes from — so a drift report can never disagree with what a redeploy would actually
+  produce, and the generated allow rules are part of what is checked.
+- When that builder cannot expand the allow rules, session-start emits a second, separate
+  `WARNING` naming the reason: the drift check silently covered less than usual, and a narrowed
+  check must not read as a clean bill of health.
+- Permissions (`allow`, `deny`, `ask`, `additionalDirectories`): subset check — every expected
+  entry must exist in the assembled file.
 - Hooks: multiset count — the same `matcher` string can appear multiple times (e.g., one
   per PreToolUse command), so a Map-based count is used instead of a Set.
 
@@ -185,3 +202,77 @@ per-skill wrapper (skills/*/scripts/run-codex-review-loop.sh)
 Adding a new review format is therefore an allowlist + prompt-body change in the two shared
 binaries, not a new Codex integration. `security-plan` / `test-review` are single-round
 terminal formats (CAP=1, no extensions); `outline-plan` / `detail-plan` allow revision rounds.
+
+**Settled decisions reach the reviewer as an explicit input.** Every format passes the
+session's own decision record as `--accepted-tradeoffs`, and a concern that directly
+contradicts a decision recorded there is out of bounds for the review. That record is not a
+single fixed file: a stage is entitled to the nearest decision document that actually exists,
+so `bin/resolve-accepted-tradeoffs-file` walks a per-stage suffix chain (`security-plan`:
+outline → intent; `test-review`: detail → outline → intent) and returns the first readable,
+non-empty candidate. A speculative skip that leaves `outline.md` unwritten therefore falls
+back to `intent.md` instead of reviewing against nothing — the condition that had reviewers
+re-raising decisions the user had already settled, one round of back-and-forth per stage. The
+resolver is fail-closed on a candidate that escapes `PLANS_DIR`: it refuses to forward one,
+and that refusal surfaces as loop exit 4 (HALT), never as a fallback to a Claude reviewer.
+
+**Suppression is asserted twice, by different parties.** The reviewer is told to drop a
+contradicting concern itself, and the calling skill independently re-verifies every verdict it
+receives (`review-plan-security` RPS-3). Either layer alone fails in an opposite direction:
+trusting only the reviewer's self-suppression buys silence that was never examined, while
+triaging only at the skill pays for concerns that should not have been raised at all.
+Rejection obliges naming the specific decision the concern contradicts — an uncited rejection
+is a procedure violation, and raising a topic the plan merely does not address is never
+grounds to reject.
+
+
+## 8. CodeGraph Integration
+
+CodeGraph is an opt-in MCP server (`.env` flag `CODEGRAPH`, default `off`) that gives agents
+a pre-built symbol graph of a checkout. Four design decisions are worth recording.
+
+**Bootstrap and steady-state are separate responsibilities.** Installing the npm package and
+registering the MCP server are global, one-time, machine-level acts, so they live where every
+other global act lives — the installers (`install/win/codegraph.ps1`, `install/linux/codegraph.sh`,
+both dispatching to `install/codegraph-mcp.js`). Per-checkout index work is a repeated,
+local act, so it lives in one Node wrapper, `bin/codegraph-lifecycle.js` (`init` / `sync` /
+`stop`), which every caller — `/worktree-start`, `/worktree-end`, `/sweep-worktrees`, and the
+git hooks — invokes identically. Consequence: `.env` flipping to `off` silences steady-state
+immediately, but unregistering the MCP server requires re-running the installer. Steady-state
+paths never write global config. `stop` is the one verb exempt from the flag: a daemon started
+while CODEGRAPH was `on` must still be stoppable the moment it turns `off`, which is also the
+state the uninstall path runs in.
+
+**MCP registration uses `claude mcp add --scope user`, not `codegraph install`.** The upstream
+installer unconditionally rewrites `~/.claude/CLAUDE.md`, which in this framework is a symlink
+to the repo's own `CLAUDE.md` — an atomic rename replaces the link with a plain file and
+severs the single source of truth. It also writes a `UserPromptSubmit` prompt-hook, and its
+CLI exposes no flag to decline that. Delegating registration to Claude Code's own CLI gets
+exactly the one effect wanted (an `mcpServers.codegraph` entry in `~/.claude.json`) and none
+of the rest. Permissions are granted from this repo's `settings.json` instead of by the
+external installer, and at tool granularity (`mcp__codegraph__codegraph_explore`) rather than
+the server wildcard upstream would add. That entry doubles as the ownership marker: `register`
+writes a fixed command, args, and telemetry opt-out env (`install/codegraph-constants.txt`,
+which also pins the npm version), and `unregister` removes the entry only when all three still
+match — a `codegraph` server the user registered by hand is never destroyed by an installer run.
+Because `codegraph_explore` returns verbatim source, it is also matched by
+`hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
+candidate paths.
+
+**`hooks/post-checkout` and `hooks/post-merge` hold two guards with opposite scope, and the
+order is load-bearing.** The settings-assembly guard exits for every repo except the agents
+main worktree. A CodeGraph index must be refreshed wherever it exists — above all in linked
+worktrees, which that guard excludes. So the CodeGraph block sits *before* it, self-contained
+and never calling `exit`; `BEGIN`/`END` markers mark the boundary and a static test pins the
+line order, because silently swapping them would disable the feature without failing anything.
+
+**Index health is judged by reading the database, not by asking `codegraph status`.** The
+wrapper opens `.codegraph/codegraph.db` read-only and checks the schema and
+`project_metadata.index_state` (`bin/codegraph-lifecycle/index-health.js`). `status` is
+secondary information derived from that same file, and obtaining it means starting a
+`codegraph` process on every checkout — the cost the check exists to avoid. Reading directly
+also catches what a file-existence test cannot: a 0-byte, truncated, or foreign database.
+When the schema cannot be read at all the verdict is `unverifiable` and `sync` fails closed.
+Repair is `index -q`, never `init -y`, because upstream treats any existing `codegraph.db` as
+initialized. When a rebuild fails the old database is moved to `.codegraph/broken/` — a
+last-resort holding slot with a fixed name, so quarantines replace rather than accumulate —
+and never deleted outright.

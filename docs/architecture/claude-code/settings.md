@@ -135,14 +135,6 @@ See `docs/security-policy.md` for the full pattern list.
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
   `.git/.cross-platform-reviewed` (one-time, HEAD hash)
-- `block-capture-echo.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — rejects
-  the "assign a command substitution to a variable, then do nothing but display it" shape
-  (`X=$(cmd); echo "$X"`), which adds a shell round-trip over reissuing `cmd` bare and reading
-  its stdout. Unconditional: no `WORKFLOW_OFF` / `WORKTREE_OFF` bypass, because issuance
-  discipline is orthogonal to workflow enforcement. Fail-open on any parse failure — it is a
-  UX guard, not a security boundary. The rejection message names the bare reissue when the
-  inner command is an `install/settings-allow-commands.txt` entry, and otherwise points at the
-  scratchpad-script procedure in `rules/shell-commands.md`
 - `enforce-worktree.js` (PreToolUse, matcher: `Bash|Edit|Write|MultiEdit`) — when
   `ENFORCE_WORKTREE=on` (default), blocks writes from the main worktree regardless
   of branch, and blocks default-branch edits. Main-worktree detection: `--git-common-dir
@@ -304,6 +296,34 @@ See `docs/security-policy.md` for the full pattern list.
   all three are reachable only as children of `run-stage-chain.sh` / `run-initial.sh`, and a
   PreToolUse hook that inspects the command head only never sees a child process, so the
   listing granted nothing.
+  **Heredoc gate widening + self-reinforcing-loop fix (#2120/#2121)** —
+  `stripHeredocBody` (`hooks/lib/strip-quoted-args.js`) widened past #371's `cat`-only,
+  `\w+`-delimiter baseline: the sink set is now `cat|tee|sponge` (data sinks, not
+  interpreters — `mail` was dropped as an outbound/info-leakage channel), the sink must
+  own its own command segment (a negative lookbehind rejects `cat x; bash <<'EOF'` and
+  `git cat-file -p HEAD <<EOF` stealing another command's heredoc), the delimiter accepts
+  hyphens (`END-MARK`, not just `\w+`), and stripping is refused when the opener's own
+  line pipes or chains onward (`tee out <<'EOF' | bash` feeds the body to an interpreter —
+  caught by testing `restOfLine` for `[|&;]`). Separately, `hasCommandSequencing`
+  (`hooks/enforce-worktree/shared-cmd-utils.js`) became heredoc-aware itself (it now
+  parses `stripHeredocBody(cmd)` before checking for `;`/`&&`/`||`), so a heredoc-body-only
+  operator (e.g. `cat <<'EOF' > plans-dir/file.md` containing `a;` in its body) no longer
+  registers as real sequencing at all — over-broadening Guard 5 in
+  `universal-target-allow.js` and the "Bug 2" branch in `handle-bash-write.js`, both of
+  which previously routed such commands through the narrower plans-dir/claude-scratchpad
+  gate (#1109) only when sequencing was detected. Fix: both guards now key on `hasHeredoc(cmd)`
+  directly — a predicate that detects a heredoc opener independently of whether
+  `stripHeredocBody` actually strips it, so the dangerous shapes `stripHeredocBody` refuses
+  to touch still route to the narrow gate — restoring the pre-#2121 split for every heredoc
+  command regardless of its sequencing shape. The now-redundant `hasCommandSequencingOutsideHeredoc`
+  alias was removed. On the friction side (#2120's "block → retry same tool → block again"
+  loop), `hooks/lib/alt-target-remedy.js` (`buildAltTargetRemedy()`) is a new shared remedy
+  line appended to every `enforce-worktree.js` / `handle-edit-write.js` /
+  `workflow-gate/worktree-entry-gate.js` block reason, naming the plans dir and the
+  scratchpad as targets reachable right now via Write/Edit/MultiEdit — turning a bare stop
+  into a redirect. `early-gate-messages.js`'s `READ_TOOLS_NOTE` also dropped `Bash` from its
+  "remains available" list: Bash writes are themselves gated during the early-gate block, so
+  the prior wording overstated what was actually open.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and
@@ -396,33 +416,29 @@ string, one internal command issued two ways needs two rules, and hand maintenan
 that. The fact "this command is an allow-target" therefore has exactly one owner and the rule
 strings are generated from it.
 
-- Dataflow: `install/settings-allow-commands.txt` (the SSOT — command paths only) → `install/gen-settings-allow.js` (expansion) → `settings.json` under `permissions.allow` → `install/assemble-settings.js`, which deploys the merged file. Never hand-edit a generated rule.
-- `install/gen-settings-allow.js` owns the spelling template table in one place: ten path spellings per command — eight ending in a trailing ` *`, plus two closed-ended ones covering the argument-less invocation, which the wildcard forms do not match — plus three bare spellings for a command that `install/path-exposed-commands.txt` gives a PATH shim. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
+- Dataflow: `install/settings-allow-commands.txt` (the SSOT — command paths only) → `install/gen-settings-allow.js` (the CLI) → `install/lib/settings-allow-rules.js` (expansion) → merged over the repository's `settings.json` by `install/lib/settings-assembly.js` → the deployed file. Never hand-edit a generated rule.
+- The expanded rules are injected into the deployed `~/.claude/settings.json` at deploy time; that deployed document is the only place an operator reads them back.
+- They are therefore never committed: the tracked `settings.json` in this repo carries hand-written rules only, so a generated rule found there is a leftover from before this design, not a source.
+- `install/lib/settings-allow-rules.js` owns the spelling template table — the one place it exists; the CLI, the assembler and the drift check all read it from there rather than restating it.
+- Twenty-four path spellings are emitted per command, plus six bare spellings when `install/path-exposed-commands.txt` gives that command's basename a PATH shim — thirty rules for a PATH-exposed command. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
+- Each template is emitted as a pair: an argument-bearing form and an argument-less twin as well.
+- The pair exists because the permission engine matches the whole command string, not a prefix — a trailing ` *` demands the space before it, so it never covers the argument-less invocation.
+- `install/assemble-settings.js` is the sole deploy entry point and `install/lib/settings-deploy.js` its single writer, so any other code writing that file is a bug. The deploy is fail-closed: when the rules cannot be expanded, nothing is written and the previous deployment stands.
 - Admitted: auto-issued, repo-state-invariant, idempotent internal tools. Excluded on principle: `gh` writes, git state changes, `.env` readers, platform-launched hook bodies, wrapper launchers such as `bin/run-with-timeout.sh` whose trailing ` *` template would allow-list every command reachable through them, and dispatchers that reach a state-changing or credential-reading operation through an argument or subcommand the permission engine never sees (e.g. a worker-dispatch script whose outer invocation is the only thing matched).
-- Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but `--write` appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
-- The drift gate lives in `hooks/pre-commit`, which runs `bin/review-settings-allow` on every commit to the agents session repo. That reviewer always passes `--check --staged`, so the generator reads the SSOT, `settings.json`, and each entry's shebang from the git index (`git show :<path>`) rather than the working tree — a file edited-but-unstaged after `git add` cannot make the gate pass a version that differs from what actually lands in the commit. Plain `--check` (no `--staged`) still exists for interactive/dev use.
-- That gate is fail-closed: a missing or non-executable `bin/review-settings-allow`, a deleted SSOT, and an unreadable generator all block the commit, so deleting the gate is not a way to turn the gate off.
+- Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but the deploy appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
 - An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
-- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into thirteen permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it runs by hand or via the pre-commit gate, never auto-issued mid-session, so listing it buys no allow coverage.
-
-**Why the scratchpad path is not an allow rule**: a static permission rule is a glob matched
-against the whole command string, and the scratchpad-script approval depends on three things a
-glob cannot express — the real temp root behind `os.tmpdir()` (which `TEMP`/`TMP`/`TMPDIR` can
-repoint), the identity of the *current* session, and the absence of shell metacharacters that
-would rewrite the path after inspection. A permission whose value is only known at runtime is
-therefore owned by an allow hook (`hooks/preuse-auto-approve.js` +
-`hooks/preuse-auto-approve/scratchpad-script.js`), not by `permissions.allow`.
-
-Approval beyond containment is path-only: the script's own content is not inspected before
-approval (see issue #2233 for tracked follow-up work on that gap).
-
-The write path (`isAllowedScratchpadTarget`) and the exec path (this hook) deliberately use
-allow roots of different breadth, and must not be "unified" later: the write path keeps its
-existing acceptance of the whole `<os-tmpdir>/claude/` base when `SCRATCHPAD` is absent, whereas
-the exec path issues no approval at all unless the current session's scratchpad directory can be
-established — writing a file into another session's scratchpad is inert, executing one is not.
+- Nothing in the commit path guards these rules any more, and nothing needs to: a hand-maintained mirror is what could drift, and there is no longer one. `hooks/session-start.js` reports a deployed document that has fallen behind, and `hooks/post-merge` / `hooks/post-checkout` re-deploy when the SSOT, either list, or any of the four modules changes.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into twenty-four path permission rules, plus six more bare rules when `install/path-exposed-commands.txt` gives it a PATH shim, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it is run by hand, never auto-issued mid-session, so listing it would buy no coverage.
 
 **Known limitations**:
+- TL3 verification gap: `tests/feature-2119-settings-allow-ssot/` proves the generated rule
+  strings match the template contract exactly, never that Claude Code's own permission matcher
+  honors a given spelling live — that engine is the product's closed runtime, outside this repo's
+  test reach. Confidence rests on the #2201 root-cause measurement (94.7% ask rate for
+  `resolve-worktree-path` across 482 real transcripts, resolved once the missing quoted-absolute
+  template was the one variable changed), not on an executable assertion. A human confirming a
+  real quoted-absolute-path invocation stops prompting against a live deployed settings.json is
+  the final check for any future template addition, not something CI can close out.
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
   permission granted). Delegate Edit|Write scanning to the pre-commit hook.
 - Hook format must be nested. Flat format (matcher/command/timeout at the same level) causes

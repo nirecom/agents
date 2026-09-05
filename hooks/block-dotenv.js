@@ -11,6 +11,7 @@ const {
   checkBashCommand,
   isProtectedPath,
   checkGlobPattern,
+  checkExploreQuery,
 } = require("./lib/dotenv-check");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
@@ -67,6 +68,12 @@ switch (toolName) {
   case "Read":
     if (isDotenvPath(toolInput.file_path)) {
       block("Reading .env files is blocked. Use .env.example for documentation.");
+    }
+    break;
+
+  case "mcp__codegraph__codegraph_explore":
+    if (checkExploreQuery(toolInput.query) || isDotenvPath(toolInput.projectPath)) {
+      block("Exploring .env files is blocked. Use .env.example for documentation.");
     }
     break;
 

@@ -5,9 +5,10 @@
 # T13 -- THE SSOT IS AN INPUT, NOT A CONSTANT. Sourced AFTER generator.sh, whose fixture
 # helpers this reuses. ssot-structure.sh T2a inspects the entries in the file today, so it can
 # only say "the current list is clean"; it cannot fail for a generator that never validates.
-# Each entry is interpolated into thirteen permission rules, so an unvalidated `..`, absolute
-# path, drive letter, space, backslash, shell metacharacter or glob metacharacter does not
-# merely name the wrong file -- it WIDENS a rule.
+# Each entry is interpolated into thirty permission rules, so an unvalidated `..`,
+# absolute path, drive letter, space, backslash, shell metacharacter or glob metacharacter
+# does not merely name the wrong file -- it WIDENS a rule, and the widened rule now lands
+# straight in the deployed permission set with no commit and no review in between.
 
 T13_OUTSIDE=""
 T13_PROBE=""
@@ -74,36 +75,46 @@ t13_entry() { # <id> <mkfile:yes|no> <table-entry> -> resolved entry, or "" when
     printf '%s' "$3"
 }
 
+# Each fixture is DEPLOYED HEALTHY FIRST, from an SSOT carrying only the clean entry, and the
+# hostile entry is added afterwards. Without that step a hostile row would exit non-zero for
+# the wrong reason -- "there is no deployed file to check" -- and the table would report green
+# against a generator that validates nothing. It also makes the positive control meaningful:
+# the same fixture, left clean, is in sync and exits 0.
 t13_fixture() { # <name> <hostile-entry-or-EMPTY> <mkfile:yes|no> -> fixture dir
     local fx="$1" entry="$2" dir
     dir="$(mk_fixture "$fx")"
     mk_tool "$dir" bin/fx-ok env-bash
     mk_tool "$dir" 'bin/fx ok' env-bash
-    if [ "$entry" = "EMPTY" ]; then
-        write_ssot "$dir" bin/fx-ok
-    else
+    printf '%s\n' "$T13_PRE" > "$dir/pre.txt"
+    write_settings "$dir" "$dir/pre.txt"
+    write_ssot "$dir" bin/fx-ok
+    run_gen "$dir" --write
+    if [ "$entry" != "EMPTY" ]; then
         [ "$3" = "yes" ] && try_mk_tool "$dir" "$entry"
         write_ssot "$dir" bin/fx-ok "$entry"
     fi
-    printf '%s\n' "$T13_PRE" > "$dir/pre.txt"
-    write_settings "$dir" "$dir/pre.txt"
     printf '%s\n' "$dir"
 }
 
 # Pattern 1 of protection-fix-tests.md: the exit code alone is not the assertion. A generator
-# that rejects the entry AFTER appending the other ten rules has still written a
-# half-generated permission set, so the protected resource itself is checked. The exit code is
-# reported EXACTLY (2 = usage/IO/validation per the plan's contract), not as "non-zero": a
-# crash, a timeout and a deliberate rejection are three different outcomes.
-t13_probe() { # <id> <entry> <mkfile> -> "<rc>/<unchanged|MODIFIED>" | sentinel
+# that rejects the entry AFTER emitting the other twenty-four rules has still built a
+# half-generated permission set, so both protected resources are checked -- the repository
+# tree AND the deployed file, which is now the one the engine reads. The exit code is reported
+# EXACTLY (2 = usage/IO/validation per the plan's contract), not as "non-zero": a crash, a
+# timeout and a deliberate rejection are three different outcomes.
+t13_probe() { # <id> <entry> <mkfile> -> "<rc>/<tree>/<home>" | sentinel
     have_gen || { missing_gen; return; }
-    local dir before after fv
+    have_lib || { missing_lib; return; }
+    local dir tb ta hb ha tv hv
     dir="$(t13_fixture "t13-$1" "$2" "$3")"
-    before="$(file_digest "$dir/settings.json")"
-    run_gen "$dir" --write
-    after="$(file_digest "$dir/settings.json")"
-    if [ "$before" = "$after" ]; then fv="unchanged"; else fv="MODIFIED"; fi
-    printf '%s/%s' "$GEN_RC" "$fv"
+    tb="$(repo_tree_manifest "$dir")"
+    hb="$(tree_manifest "$dir/home")"
+    run_gen "$dir" --check
+    ta="$(repo_tree_manifest "$dir")"
+    ha="$(tree_manifest "$dir/home")"
+    [ "$tb" = "$ta" ] && tv="unchanged" || tv="TREE-MODIFIED"
+    [ "$hb" = "$ha" ] && hv="unchanged" || hv="HOME-MODIFIED"
+    printf '%s/%s/%s' "$GEN_RC" "$tv" "$hv"
 }
 
 t13_hostile_entries() {
@@ -118,21 +129,21 @@ t13_hostile_entries() {
         fi
         assert_eq "T13[$id]: $label" "$want" "$(t13_probe "$id" "$resolved" "$mkfile")"
     done <<'T13_CASES'
-traversal|no|../outside/fx-out|2/unchanged|a `..` segment escapes the agents root -- and its target really exists with a real shebang, so existence checking alone cannot reject it
-traversal-deep|no|bin/../../outside/fx-out|2/unchanged|the `..` is buried mid-path rather than leading, and resolves to that same real file
-absolute|no|@dynamic@|2/unchanged|a leading slash names a file outside the repository -- computed from $TMPROOT so it exists and carries a shebang
-drive-letter|no|@dynamic@|2/unchanged|the drive-qualified spelling of that same existing file: an absolute path in the other notation
-backslash|no|@dynamic@|2/unchanged|backslashes are the Windows template's own separator, and this spelling resolves to a real file on both hosts
-whitespace|yes|bin/fx ok|2/unchanged|an embedded space splits the generated `Bash(... *)` rule at the wrong place -- and this target exists too
-semicolon|yes|bin/fx;ok|2/unchanged|`;` ends a command in every shell the generated rule is matched against
-dollar|yes|bin/fx$ok|2/unchanged|`$` starts an expansion inside the `"$AGENTS_CONFIG_DIR/<P>"` template's own quotes
-single-quote|yes|bin/fx'ok|2/unchanged|`'` closes the quoting of the `bash -c '...'` templates and leaves the rest of the rule unquoted
-double-quote|yes|bin/fx"ok|2/unchanged|`"` closes the quoting of the `$AGENTS_CONFIG_DIR` templates in the same way
-hash|yes|bin/fx#ok|2/unchanged|`#` starts a comment in the SSOT's own line syntax, so an entry carrying one is ambiguous at the parser as well as at the rule
-glob-star|yes|bin/fx*ok|2/unchanged|a `*` in the entry widens the rule from one file to every sibling
-glob-question|yes|bin/fx?ok|2/unchanged|`?` is a single-character wildcard in the same matcher
-glob-bracket|yes|bin/[f]x-ok|2/unchanged|a character class is the third metacharacter the matcher honours
-control|no|EMPTY|0/MODIFIED|POSITIVE CONTROL: the same fixture with only the clean entry is accepted and does append (so the rows above are not passing because everything is rejected)
+traversal|no|../outside/fx-out|2/unchanged/unchanged|a `..` segment escapes the agents root -- and its target really exists with a real shebang, so existence checking alone cannot reject it
+traversal-deep|no|bin/../../outside/fx-out|2/unchanged/unchanged|the `..` is buried mid-path rather than leading, and resolves to that same real file
+absolute|no|@dynamic@|2/unchanged/unchanged|a leading slash names a file outside the repository -- computed from $TMPROOT so it exists and carries a shebang
+drive-letter|no|@dynamic@|2/unchanged/unchanged|the drive-qualified spelling of that same existing file: an absolute path in the other notation
+backslash|no|@dynamic@|2/unchanged/unchanged|backslashes are the Windows template's own separator, and this spelling resolves to a real file on both hosts
+whitespace|yes|bin/fx ok|2/unchanged/unchanged|an embedded space splits the generated `Bash(... *)` rule at the wrong place -- and this target exists too
+semicolon|yes|bin/fx;ok|2/unchanged/unchanged|`;` ends a command in every shell the generated rule is matched against
+dollar|yes|bin/fx$ok|2/unchanged/unchanged|`$` starts an expansion inside the `"$AGENTS_CONFIG_DIR/<P>"` template's own quotes
+single-quote|yes|bin/fx'ok|2/unchanged/unchanged|`'` closes the quoting of the `bash -c '...'` templates and leaves the rest of the rule unquoted
+double-quote|yes|bin/fx"ok|2/unchanged/unchanged|`"` closes the quoting of the `$AGENTS_CONFIG_DIR` templates in the same way
+hash|yes|bin/fx#ok|2/unchanged/unchanged|`#` starts a comment in the SSOT's own line syntax, so an entry carrying one is ambiguous at the parser as well as at the rule
+glob-star|yes|bin/fx*ok|2/unchanged/unchanged|a `*` in the entry widens the rule from one file to every sibling
+glob-question|yes|bin/fx?ok|2/unchanged/unchanged|`?` is a single-character wildcard in the same matcher
+glob-bracket|yes|bin/[f]x-ok|2/unchanged/unchanged|a character class is the third metacharacter the matcher honours
+control|no|EMPTY|0/unchanged/unchanged|POSITIVE CONTROL: the same fixture left clean is in sync and exits 0, so the fourteen rows above are rejections and not one shared outage
 T13_CASES
 }
 

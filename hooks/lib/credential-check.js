@@ -17,7 +17,7 @@ const CREDENTIALS_TABLE = [
   { root: "~/.azure",                             extraLiteralRoots: ["/root/.azure"],                            displayName: "Azure credentials" },
   { root: "~/.config/gh",                         extraLiteralRoots: ["/root/.config/gh"],                        displayName: "GitHub CLI config" },
   { root: "~/.config/gcloud",                     extraLiteralRoots: ["/root/.config/gcloud"],                    displayName: "gcloud SDK credentials" },
-  { root: "~/.config/op",                         extraLiteralRoots: ["/root/.config/op"],                        displayName: "op CLI config" },
+  { root: "~/.config/op",                         extraLiteralRoots: ["/root/.config/op"],                        displayName: "1Password CLI config" },
   { root: "~/.git-credentials",                   extraLiteralRoots: ["/root/.git-credentials"],                  displayName: "Git credentials store" },
   { root: "~/.docker/config.json",                extraLiteralRoots: ["/root/.docker/config.json"],               displayName: "Docker config" },
   { root: "~/.kube",                              extraLiteralRoots: ["/root/.kube"],                             displayName: "Kubernetes config" },
@@ -48,6 +48,17 @@ function isCredentialGlobPattern(pattern) {
   return globMatchesUnder(pattern, [...ALL_ROOTS, ...ALL_LITERAL_ROOTS]);
 }
 
+// codegraph_explore is Read-equivalent: it returns verbatim source for whatever its
+// free-text `query` names, so every token in the query is treated as a candidate
+// path and checked exactly as a Read path would be.
+function checkExploreQuery(query) {
+  if (typeof query !== "string" || !query) return false;
+  return query
+    .split(/[\s,;:'"`()[\]{}<>]+/)
+    .filter(Boolean)
+    .some((token) => isCredentialPath(token) || isCredentialGlobPattern(token));
+}
+
 // -i deliberately omitted from PATH_FLAGS: collides with sed -i / grep -i / cp -i.
 // Positional fallback still catches ssh -i ~/.ssh/key host.
 const TEXT_FLAGS = new Set([
@@ -76,5 +87,6 @@ module.exports = {
   CREDENTIALS_TABLE,
   isCredentialPath,
   isCredentialGlobPattern,
+  checkExploreQuery,
   commandTouchesCredentials,
 };

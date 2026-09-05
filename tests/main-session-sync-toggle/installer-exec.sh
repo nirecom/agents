@@ -1,56 +1,29 @@
 # Tests: install.sh, install.ps1, install/linux/session-sync-init.sh, install/win/session-sync-init.ps1, bin/get-config-var, bin/get-config-var.ps1
 # Tags: install, installer, session-sync, toggle, pwsh-required, scope:common
-# Part of tests/main-session-sync-toggle.sh — sourced by that dispatcher, not run
-# alone. Uses its AGENTS_DIR / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
-#
-# Why this file exists (over and above the static T17-T19 grep assertions):
-# a grep for "SESSION_SYNC near the init call" cannot distinguish
-#   - a correct gate,
-#   - an inverted gate (`--is-off` used as `--is-on`),
-#   - a comment that merely mentions the variable, or
-#   - an unconditional call that happens to sit under a nearby gated block.
-# All four produce the same source text signature. So each installer is *run*
-# here as a real subprocess inside a sandbox whose install/ tree is entirely
-# recording stubs; the session-sync init step's own stub is the observable.
-#
-# Both installers are the same class member-for-member (CPR-ORTH): the matrix below
-# is applied to install.sh and install.ps1 identically.
-#
-# TL3 gap (what this test does NOT catch):
-# - A real installation on a clean machine: every install step other than the
-#   gate under test is a recording stub, so a gate that is correct here could
-#   still break because a real step reorders or re-execs the installer.
-# - The real `.env` supplying SESSION_SYNC: the sandbox agents tree carries no
-#   .env, so only process-env values and the shipped default are exercised.
-# - Non-Windows execution of install.ps1 and Windows execution of install.sh —
-#   each installer refuses the other platform by design, so each row runs on one
-#   platform only and the cross-platform half is skipped, never asserted.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: installer.
+# Part of tests/main-session-sync-toggle.sh — sourced by that dispatcher; uses its AGENTS_DIR / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
+# Why over the static T17-T19 greps: a correct gate, an inverted gate, a bare
+# mention and an unconditional call all share one source signature, so each
+# installer is *run* in an all-stub sandbox with the session-sync init stub as
+# the observable — the same matrix for both installers (CPR-ORTH).
+# TL3 gap: no clean-machine install, no real .env, and each installer refuses the
+# other platform. Mitigation: bin/check-verification-gate.sh category: installer.
 
 # _winpath <posix-path> — Windows form when cygpath is available, else unchanged.
 _winpath() { cygpath -w "$1" 2>/dev/null || printf '%s' "$1"; }
 
 # Every install/ step the two installers invoke, minus the session-sync init step
 # (which is asserted separately) and codex (only reached with --develop/-Develop).
-INSTALL_STEPS="dotfileslink claude-code vscode-settings global-gitignore gh jq"
+INSTALL_STEPS="dotfileslink claude-code vscode-settings global-gitignore gh jq codegraph"
 
 # ---------------------------------------------------------------------------
-# install.sh sandbox
-#
-# install.sh runs under `set -euo pipefail` and shells out to eight sibling
-# scripts, edits the user's shell rc file, and probes nvm / npm / claude / uname.
-# Everything with a real side effect is replaced:
-#   - install/linux/*.sh      -> recording stubs writing to <sb>/calls/<name>
-#   - HOME                    -> <sb>/home (so the rc-file edit is contained)
-#   - NVM_DIR                 -> <sb>/nvm with a no-op nvm.sh
-#   - uname / npm / claude    -> PATH shims (uname must report Linux, or
-#                                install.sh aborts on Git Bash before it ever
-#                                reaches the session-sync step)
-#   - node                    -> real, except in the no-node rows
-#
-# $1: resolver disposition — "present" (default) or "removed" (bin/get-config-var
-#     deleted, modelling a broken or not-yet-installed resolver).
+# install.sh sandbox. install.sh runs under `set -euo pipefail`, shells out to
+# sibling install/linux scripts, edits the shell rc file and probes nvm / npm /
+# claude / uname, so everything with a real side effect is replaced:
+# install/linux/*.sh -> recording stubs writing <sb>/calls/<name>; HOME ->
+# <sb>/home; NVM_DIR -> <sb>/nvm with a no-op nvm.sh; uname / npm / claude ->
+# PATH shims (uname must report Linux or install.sh aborts on Git Bash before
+# the session-sync step); node stays real except in the no-node rows.
+# $1: resolver disposition — "present" (default) or "removed" (get-config-var deleted).
 # ---------------------------------------------------------------------------
 make_install_sh_sandbox() {
     local resolver="${1:-present}"
@@ -67,9 +40,11 @@ make_install_sh_sandbox() {
         chmod +x "$sb/agents/bin/get-config-var"
     fi
 
+    # Every step install.sh invokes needs a stub: it runs under `set -euo pipefail`,
+    # so one unstubbed name aborts the whole run at exit 127.
     local s
     for s in dotfileslink claude-code codex session-sync-init vscode-settings \
-             global-gitignore gh jq; do
+             global-gitignore gh jq codegraph; do
         cat > "$sb/agents/install/linux/$s.sh" <<EOF
 #!/bin/bash
 printf 'was-called %s\n' "\$*" >> "$sb/calls/$s"
@@ -121,8 +96,8 @@ tc_install_sh_gate() {
     fi
 
     # Orthogonality: gating one step must not short-circuit the installer. Every
-    # other step — including the profile-sourcing edit and the four steps that
-    # come AFTER the session-sync block — must still have happened.
+    # other step — including the profile-sourcing edit and the five steps that
+    # come AFTER the session-sync block, codegraph last — must still have happened.
     local missing="" step
     for step in $INSTALL_STEPS; do
         [ -f "$sb/calls/$step" ] || missing="$missing $step"
@@ -160,9 +135,11 @@ make_install_ps1_sandbox() {
     fi
 
     local calls_win; calls_win="$(_winpath "$sb/calls")"
+    # Same step list as the Linux sandbox (CPR-ORTH): install.ps1 invokes the
+    # same nine steps, so an unstubbed name short-circuits it the same way.
     local s
     for s in dotfileslink claude-code codex session-sync-init vscode-settings \
-             global-gitignore gh jq; do
+             global-gitignore gh jq codegraph; do
         printf 'Add-Content -Path "%s\\%s" -Value ("was-called " + ($args -join " "))\n' \
             "$calls_win" "$s" > "$sb/agents/install/win/$s.ps1"
     done
@@ -224,21 +201,14 @@ tc_install_ps1_gate() {
 }
 
 # ---------------------------------------------------------------------------
-# The matrix. Columns:
-#   label | SESSION_SYNC | node | resolver | expect-init | why
-#
+# The matrix. Columns: label | SESSION_SYNC | node | resolver | expect-init | why
 # expect-init: 1 = the session-sync init step must run, 0 = it must be skipped.
-# The installer's session-sync-init step is unconditional bootstrap: it must
-# run regardless of SESSION_SYNC's value, node availability, or resolver
-# presence, because the manual sync subcommands need the repo/remote/
-# attributes set up on any machine before they can ever work. Every row's
-# expect-init is therefore 1.
-#
-# The matrix still walks the full environment-permutation space (missing
-# node, missing resolver, invalid value, unset) to prove the unconditional
-# call is genuinely robust to those conditions — never accidentally skipped
-# or crashed by them — rather than to prove a gate. That is still meaningful
-# coverage, just against a constant expectation.
+# Every row is 1: the init step is unconditional bootstrap — it must run whatever
+# SESSION_SYNC says, with or without node or the resolver, because the manual
+# sync subcommands need the repo/remote/attributes set up on any machine first.
+# The matrix still walks the full environment-permutation space (missing node,
+# missing resolver, invalid value, unset) to prove that unconditional call is
+# robust to those conditions rather than to prove a gate.
 # ---------------------------------------------------------------------------
 INSTALLER_MATRIX=$(cat <<'TABLE'
 on-explicit       | on    | with-node | present | 1 | explicit on

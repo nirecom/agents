@@ -1,6 +1,7 @@
 # settings-allow-commands.txt — SSOT (CPR-SSOT) for WHICH agents-internal commands get
 # permission allow rules: one repo-relative path per line, nothing else. Sole consumer:
-# install/gen-settings-allow.js, which owns spelling/interpreter/bare-form logic.
+# install/lib/settings-allow-rules.js, which owns spelling/interpreter/bare-form logic; the
+# rules it builds are injected into ~/.claude/settings.json at deploy time, never tracked here.
 # Inclusion criterion, exclusions (a-f), the review-code-codex caveat, and the path-syntax
 # and self-exclusion rules are documented in docs/architecture/claude-code/settings.md —
 # read that before adding or removing an entry.
@@ -20,3 +21,11 @@ skills/worktree-start/scripts/derive-worktree-name.sh
 bin/workflow/read-complexity-evaluation
 bin/workflow/derive-complexity-level
 bin/workflow/read-step-status
+bin/check-issues-class-coverage
+bin/workflow/record-skip-judgment
+skills/_shared/assemble-mandatory.sh
+skills/make-detail-plan/scripts/detect-scope-change.sh
+skills/review-tests/scripts/select-staged-files.sh
+bin/detect-non-github.sh
+bin/worktree-notes-append.js
+skills/issue-create/scripts/make-empty-verdict.sh

@@ -84,6 +84,17 @@ function checkGlobPattern(pattern) {
   return false;
 }
 
+// codegraph_explore is Read-equivalent: it returns verbatim source for whatever its
+// free-text `query` names, so every token in the query is treated as a candidate
+// path and checked exactly as a Read path would be.
+function checkExploreQuery(query) {
+  if (typeof query !== "string" || !query) return false;
+  return query
+    .split(/[\s,;:'"`()[\]{}<>]+/)
+    .filter(Boolean)
+    .some((token) => isDotenvPath(token) || checkGlobPattern(token));
+}
+
 module.exports = {
   SAFE_SUFFIXES,
   TEXT_FLAGS,
@@ -95,4 +106,5 @@ module.exports = {
   checkBashCommand,
   isProtectedPath,
   checkGlobPattern,
+  checkExploreQuery,
 };

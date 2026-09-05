@@ -8,6 +8,7 @@ const fs = require("fs");
 const {
   isCredentialPath,
   isCredentialGlobPattern,
+  checkExploreQuery,
   commandTouchesCredentials,
 } = require("./lib/credential-check");
 
@@ -50,6 +51,9 @@ switch (toolName) {
     break;
   case "Read":
     if (isCredentialPath(toolInput.file_path)) block(BLOCK_MSG);
+    break;
+  case "mcp__codegraph__codegraph_explore":
+    if (checkExploreQuery(toolInput.query) || isCredentialPath(toolInput.projectPath)) block(BLOCK_MSG);
     break;
   case "Grep":
     if (isCredentialPath(toolInput.path) || isCredentialGlobPattern(toolInput.glob)) block(BLOCK_MSG);

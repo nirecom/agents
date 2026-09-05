@@ -230,7 +230,7 @@ teardown_case
 
 # --- C10: multi-issue Path A rendering scope -----------------------------------
 # The scope is a SETTLED design decision, not an oversight: detail.md S4 adopts
-# 「取得は全 issue、context.md への描画のみ issues[0]」 and lists making `## Issue body` /
+# "fetch every issue, but render only issues[0] into context.md" and lists making `## Issue body` /
 # `## Issue metadata` multi-issue-aware under Out of scope. Rendering every issue's
 # comments would leave one file carrying one issue's body beside another issue's
 # discussion — asymmetry inside a single context.md (CPR-ORTH). Hence: the cache still

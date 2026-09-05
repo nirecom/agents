@@ -1,0 +1,10 @@
+# Canonical values shared by install/linux/codegraph.sh, install/win/codegraph.ps1
+# and install/codegraph-mcp.js. KEY=VALUE, one per line; # starts a comment.
+#
+# CODEGRAPH_VERSION pins the npm package so a re-run never floats to `latest`.
+# CODEGRAPH_TELEMETRY / DO_NOT_TRACK opt out of the upstream reporter
+# (https://telemetry.getcodegraph.com/v1/events), which defaults to on and is
+# never offered a prompt by this non-interactive installer.
+CODEGRAPH_VERSION=1.6.0
+CODEGRAPH_TELEMETRY=0
+DO_NOT_TRACK=1

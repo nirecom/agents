@@ -1,23 +1,13 @@
 #!/usr/bin/env node
-// tests/fix-1780-round12-parser-unit-tables/probe.js
-// Table evaluator for tests/fix-1780-round12-parser-unit-tables.sh.
-//
-// The TABLES live in the bash file (rules: skills/_shared/test-design/parser-regex-tests.md
-// prescribes the bash table-driven pattern). This probe is the `eval_subject`
-// half of that pattern: it reads `name|want|fn|input` rows on stdin and prints
-// `name<TAB>got` lines, so ONE node process serves a whole table instead of one
-// process per row.
-//
-// COLUMN ORDER: `want` sits SECOND, before the input, on purpose. Shell inputs
-// legitimately contain `|` (pipelines), so a trailing `want` column could not be
-// split off without truncating exactly the pipeline rows this suite exists to
-// cover. With `want` in front, both readers take the input as "everything after
-// the third field, separators included". The probe ignores `want` — comparison
-// and the PASS/FAIL tally belong to the bash side.
-//
-// argv[2]  agents dir to load the modules under test FROM. The mutation-evidence
-//          section passes a MUTATED COPY of hooks/ here, which is the whole
-//          reason the root is a parameter and not `../..`.
+// Table evaluator for tests/fix-1780-round12-parser-unit-tables.sh — the
+// `eval_subject` half of the bash table-driven pattern
+// (skills/_shared/test-design/parser-regex-tests.md). Reads `name|want|fn|input`
+// rows on stdin, prints `name<TAB>got`, so ONE node process serves a whole table.
+// `want` sits SECOND so the input can keep its own `|` (pipelines) — both readers
+// take the input as "everything after the third field". The probe ignores `want`;
+// comparison and the PASS/FAIL tally belong to the bash side.
+// argv[2] = agents dir to load the modules under test FROM; the mutation-evidence
+// section passes a MUTATED COPY of hooks/, hence a parameter and not `../..`.
 "use strict";
 
 const path = require("path");
@@ -126,7 +116,13 @@ const FNS = {
     const w = i.split(/\s+/).filter(Boolean);
     return b(M.interp.inlineProgramFlagProof(w[0] || "", w[1] || ""));
   },
-  roshape: (i) => b(M.interp.interpreterBodyIsRecognizedReadOnly(i)),
+  // input: "<lang> <body>" — read-only shapes are scoped per interpreter language.
+  roshape: (i) => {
+    const cut = i.indexOf(" ");
+    const ro = M.interp.interpreterBodyIsRecognizedReadOnly;
+    return b(ro.length >= 2 ? ro(i.slice(cut + 1), i.slice(0, cut)) : ro(i));
+  },
+  deliver: (i) => M.interp.deliveringInterpreterOf(i) || "-",
   bodies: (i) => j(M.interp.extractAllInterpreterBodies(i).bodies),
   hits: (i) => b(M.interp.hitsProtectedViaInterpreter(i)),
 
@@ -141,6 +137,15 @@ const FNS = {
     const p = M.ir.parse(i);
     const r = M.nested.stdinProgramRoutes(i, p.segments);
     return "b=" + r.bodies.length + ",f=" + r.fileTargets.length + ",o=" + r.opaqueTexts.length;
+  },
+  // The `lang` TAG each body carries, not just the bucket count above:
+  // bash-scan/scan.js passes it to interpreterBodyHitsProtected as the
+  // delivering interpreter's identity, so a dropped or wrong tag re-scopes the
+  // read-only shapes (#1821) without changing any route count.
+  routelangs: (i) => {
+    const p = M.ir.parse(i);
+    const r = M.nested.stdinProgramRoutes(i, p.segments);
+    return j(r.bodies.map((x) => (x && x.lang ? String(x.lang) : "<no-lang>")));
   },
 
   // ---- SSOT self-checks ---------------------------------------------------

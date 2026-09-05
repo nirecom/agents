@@ -395,3 +395,19 @@ Changes: Generated `settings.json` allow rules for agents-internal commands from
 ### FEATURE: PR #2162 (2026-08-30)
 Background: feat(#2153): shrink and restyle .env.example
 Changes: `.env.example` is 24% shorter and easier to scan. The `DOCS_LANG_HISTORY_*`/`DOCS_LANG_CHANGELOG_*` settings are now `DOCS_LANG_PUBLIC`/`DOCS_LANG_PRIVATE`, and `CODEX_REVIEW_PLAN_MAX_LINES` is now `CODEX_REVIEW_MAX_PLAN_LINES` — update your `.env` to match.
+
+### FEATURE: PR #2171 (2026-08-31)
+Background: feat(#2120,#2121): block heredoc-hidden write payloads in the workflow gate
+Changes: Fixed a loop where Claude Code would repeatedly get blocked retrying the same heredoc-shaped write from outside a linked worktree, with no indication of where it *could* write — blocked writes now suggest a reachable alternative target.;Fixed a heredoc-handling gap where certain safe `cat`/`tee`-written heredocs (hyphenated delimiters, or bodies containing shell-looking punctuation) were misclassified, either wrongly blocked or, in one edge case, allowed more broadly than intended.
+
+### FEATURE: PR #2191 (2026-09-03)
+Background: feat(#2119): generate settings.json allow rules from a measured-denial SSOT
+Changes: The `permissions.allow` rules generated from the command SSOT are no longer committed to the repository — they are injected into the deployed `~/.claude/settings.json`, and the tracked `settings.json` keeps hand-written rules only.;Allow rules now cover argument-less invocations: each spelling is emitted in both an argument-bearing and an argument-less form, so a command issued with no arguments no longer raises a permission prompt.;A failed deploy no longer damages the existing configuration: when the rules cannot be generated, nothing is written and the previous `~/.claude/settings.json` stands. Session start warns separately when the generator is unavailable, so a narrowed drift check is not mistaken for a clean one.
+
+### FEATURE: PR #2187 (2026-09-03)
+Background: fix(#2140,#2141): propagate rules/shell-commands.md and other on-dema...
+Changes: Subagents launched via `context: fork` (`/review-tests`, `/refactor-prompts`) now read `rules/shell-commands.md`, so a rejected Bash call can be explained to the user instead of silently retried.;`/write-code` and `/write-tests` subagents now receive the on-demand rules their work actually depends on (`rules/ops.md` for write-code; `rules/coding.md` and `rules/test.md` for write-tests).
+
+### FEATURE: PR #2220 (2026-09-04)
+Background: fix(#2169): sanitize workflow-step notify gate against a pre-init lookahead marker
+Changes: Fixed: sessions that never ran workflow-init no longer get spammed with mechanism-failure notifications after dispatching a Skill/Agent/Task, once the in-flight marker's TTL expires.
