@@ -411,3 +411,7 @@ Changes: Subagents launched via `context: fork` (`/review-tests`, `/refactor-pro
 ### FEATURE: PR #2220 (2026-09-04)
 Background: fix(#2169): sanitize workflow-step notify gate against a pre-init lookahead marker
 Changes: Fixed: sessions that never ran workflow-init no longer get spammed with mechanism-failure notifications after dispatching a Skill/Agent/Task, once the in-flight marker's TTL expires.
+
+### FEATURE: PR #2235 (2026-09-05)
+Background: fix(#2201): add quoted-absolute-path axis to settings-allow-rules PATH_TEMPLATES
+Changes: Fixed: commands registered in the internal `settings-allow-commands.txt` SSOT (e.g. `resolve-worktree-path`) that were invoked with a quoted absolute path kept triggering permission prompts instead of being auto-allowed; the generated allow-rule templates now cover that spelling.
