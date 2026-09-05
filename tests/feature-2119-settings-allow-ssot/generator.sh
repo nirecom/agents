@@ -141,7 +141,7 @@ run_assemble() { # <fixture> <arg>...
         run_with_timeout 60 node install/assemble-settings.js "$@") 2>&1 )" || ASM_RC=$?
 }
 
-# Three of the eight families spell the checkout by its ABSOLUTE root rather than by a
+# Seven of the twelve families spell the checkout by its ABSOLUTE root rather than by a
 # leading `*`, so the expected string is no longer a constant -- it differs between a fixture
 # tree and the real one. Node owns the resolution (the generator's own normalization runs
 # there), so it is asked once per root and cached instead of rebuilt in shell.
@@ -163,20 +163,27 @@ resolve_root() { # <dir> -- populates the caches for <dir>
 # A case table cannot spell a fixture root it does not yet know, so rows that need one write
 # <R>/<R2W> and this resolves them against the fixture the row just built. <R2W> is consumed
 # first: <R> is a prefix of it, and the other order would leave a stray `2W`.
+# Both replacements are QUOTED: bash 5.2 enables patsub_replacement, under which a bare `&` in
+# the replacement re-inserts the matched pattern -- so a root containing `&` would expand to a
+# rule carrying the literal text `<R>` and every row asserting it would fail for the harness's
+# reason rather than the generator's.
 expand_root_placeholders() { # <string> <agents-root> -> <string>
     local s="$1" d="$2"
     resolve_root "$d" || return 1
-    s="${s//<R2W>/${_ROOT_WIN[$d]}}"
-    printf '%s' "${s//<R>/${_ROOT_POSIX[$d]}}"
+    s="${s//<R2W>/"${_ROOT_WIN[$d]}"}"
+    printf '%s' "${s//<R>/"${_ROOT_POSIX[$d]}"}"
 }
 
 # THE TEMPLATE CONTRACT, restated independently of the generator (a test importing the
-# generator's own table could only prove it equals itself). SIXTEEN path spellings: eight
+# generator's own table could only prove it equals itself). TWENTY-FOUR path spellings: twelve
 # families, each in an argument-bearing and an argument-less form, listed as adjacent pairs.
 # The pair is the whole point -- a trailing ` *` demands the space before it, so
 # `Bash(node bin/next-step *)` never matches the bare `node bin/next-step` the model issues.
 # The Windows form converts the separators inside the path too, because a Windows spelling
-# carrying forward slashes could never match a real command line.
+# carrying forward slashes could never match a real command line. ORDER IS CONTRACT:
+# T25[appended] compares the deployed array against this order byte for byte, so #2201's four
+# QUOTED absolute-path families are APPENDED as rows 17-24 (every existing index stays put) and
+# settings-allow-rules.js must append them to PATH_TEMPLATES_ARGV in the same place.
 expected_path_rules() { # <interpreter> <relative-path> [<agents-root>]
     local i="$1" p="$2" root="${3:-$AGENTS_DIR}" w bs r rw
     bs='\'
@@ -200,7 +207,15 @@ expected_path_rules() { # <interpreter> <relative-path> [<agents-root>]
         "Bash(bash -c '$i \"\$AGENTS_CONFIG_DIR/$p\" *')" \
         "Bash(bash -c '$i \"\$AGENTS_CONFIG_DIR/$p\"')" \
         "Bash(bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && $i \"\$AGENTS_CONFIG_DIR/$p\" *')" \
-        "Bash(bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && $i \"\$AGENTS_CONFIG_DIR/$p\"')"
+        "Bash(bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && $i \"\$AGENTS_CONFIG_DIR/$p\"')" \
+        "Bash($i \"$r/$p\" *)" \
+        "Bash($i \"$r/$p\")" \
+        "Bash($i \"$rw${bs}$w\" *)" \
+        "Bash($i \"$rw${bs}$w\")" \
+        "Bash(\"$r/$p\" *)" \
+        "Bash(\"$r/$p\")" \
+        "Bash(\"$rw${bs}$w\" *)" \
+        "Bash(\"$rw${bs}$w\")"
 }
 
 # Six more spellings -- three families in the same paired form -- added only for a command
@@ -244,8 +259,8 @@ T4_DUMP=""
 T4_FX=""
 
 # T4 expands a three-entry fixture SSOT (one bash tool, one node tool, one PATH-exposed tool)
-# and checks both the ARITY per entry (16 / 16 / 22) and the exact spelling of every rule for
-# two of them. Counting alone would pass a generator that emitted sixteen wrong strings.
+# and checks both the ARITY per entry (24 / 24 / 30) and the exact spelling of every rule for
+# two of them. Counting alone would pass a generator that emitted twenty-four wrong strings.
 t4_setup() {
     local fx; fx="$(mk_fixture t4)"
     T4_FX="$fx"
@@ -281,9 +296,9 @@ t4_expansion() {
         ROWS=$((ROWS + 1))
         assert_eq "T4[$id]: $name expands to $want deployed rules" "$want" "$(t4_count "$name")"
     done <<'T4_COUNTS'
-count-bash|16|fx-bash-tool
-count-node|16|fx-node-tool.js
-count-path|22|fx-path-tool
+count-bash|24|fx-bash-tool
+count-node|24|fx-node-tool.js
+count-path|30|fx-path-tool
 T4_COUNTS
     while IFS= read -r rule; do
         [ -n "$rule" ] || continue
@@ -347,7 +362,7 @@ T4_DUP_FIXTURE=""
 
 # T4-dup -- the SAME path listed twice, fed straight through. T2b guards the real SSOT text
 # against duplicates; it says nothing about a deploy handed one anyway. A rule already
-# present is never emitted twice, so a doubled entry yields the same 16 rules, not 32.
+# present is never emitted twice, so a doubled entry yields the same 24 rules, not 48.
 t4_dup_setup() {
     T4_DUP_FIXTURE="$(mk_fixture t4-dup)"
     mk_tool "$T4_DUP_FIXTURE" bin/fx-dup env-bash
@@ -382,7 +397,7 @@ t4_dup_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T4-dup[$id]: $label" "$want" "$(t4_dup_probe "$id")"
     done <<'T4_DUP_CASES'
-arity|16|the same path listed twice still expands to exactly 16 deployed rules
+arity|24|the same path listed twice still expands to exactly 24 deployed rules
 unique|yes|the deployed allow list carries no duplicated entry
 T4_DUP_CASES
 }

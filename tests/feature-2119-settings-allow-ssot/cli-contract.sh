@@ -116,7 +116,7 @@ not-deployed|fresh|--check|rc=2/absent/assemble-named|nothing deployed yet is an
 dep-json|dep-json|--check|rc=2/unchanged/json-parse|a DEPLOYED document that does not parse is the second reading of "the tool could not do its job", and it is REACHED only because --check reads the deployed path -- the fixture base beside it is healthy
 dep-array|dep-array|--check|rc=2/unchanged/not-object|valid JSON of the wrong shape at the deployed path (top-level array) is rejected on its own branch, not folded into the parse failure above
 dep-noperms|dep-noperms|--check|rc=2/unchanged/no-permissions|a deployed document with no usable permissions object is rc=2, never rc=1: "there are no rules here" must not be reported as "every generated rule is missing"
-dep-allowstr|dep-allowstr|--check|rc=2/unchanged/allow-not-array|a deployed permissions.allow that is a string is rc=2 for the same reason -- comparing the generated set against a scalar would name all 22 spellings as drift
+dep-allowstr|dep-allowstr|--check|rc=2/unchanged/allow-not-array|a deployed permissions.allow that is a string is rc=2 for the same reason -- comparing the generated set against a scalar would name all 30 spellings as drift
 check-in-sync|insync|--check|rc=0/unchanged|a deployed file carrying every current spelling is the only rc=0 for --check
 check-drift|drifted|--check|rc=1/unchanged|a genuine finding is rc=1 -- distinguishable from the rc=2 outages above
 write-success|drifted|--write|rc=0/MODIFIED|a successful deploy reports rc=0 (POSITIVE CONTROL: the seventeen rows above are not all failing for one shared reason)

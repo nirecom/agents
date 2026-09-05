@@ -129,7 +129,7 @@ t25_orphan_preservation_table() {
     done <<'T25_CASES'
 shape|yes|PRECONDITION: the rules seeded as the orphan are byte-identical to what the deploy itself emits for that path, so the orphan is a generated-shaped rule and not merely unrelated text -- compared SAME-ROOT because the root-literal templates make cross-root byte equality impossible by design
 grew|yes|PRECONDITION: the fixture really is missing some of the current command's spellings, so the injection side of the contract is exercised at all
-base-survives|yes|INPUT SIDE: all sixteen spellings of the base document's generated-shaped orphan reach the deployed file -- reporting it is --check's job, deleting it is nobody's
+base-survives|yes|INPUT SIDE: all twenty-four spellings of the base document's generated-shaped orphan reach the deployed file -- reporting it is --check's job, deleting it is nobody's
 prefix|yes|and each one is still at its ORIGINAL index: the whole base array is an unchanged prefix, so nothing was resorted around the orphan
 appended|equal|the missing current rules land after that prefix, in template order, and nothing else changed
 local-only-gone|gone|OUTPUT SIDE: a rule hand-added to the DEPLOYED file only is overwritten by the next deploy -- the deployed file is a build product, and this behaviour change is pinned, not assumed

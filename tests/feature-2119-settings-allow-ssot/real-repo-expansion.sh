@@ -7,16 +7,20 @@
 T31_FX=""
 T31_RC="unrun"
 
-# The four commands this change admits. Every other case in the suite drives a fixture SSOT
-# whose entries live under bin/, so an implementation that quietly drops `skills/**` entries --
-# a path shape no fixture exercises -- passes all of them, and so does a round trip that asks
-# the generator to grade its own output. This part deploys the REAL settings.json + the REAL
-# SSOT into a throwaway HOME and then asserts each admitted entry's sixteen spellings as exact
-# strings rebuilt from the independent template contract.
+# The commands admitted by this change and by #2201 after it. Every other case in the suite
+# drives a fixture SSOT whose entries live under bin/, so an implementation that quietly drops
+# `skills/**` entries -- a path shape no fixture exercises -- passes all of them, and so does a
+# round trip that asks the generator to grade its own output. This part deploys the REAL
+# settings.json + the REAL SSOT into a throwaway HOME and then asserts each admitted entry's
+# spellings as exact strings rebuilt from the independent template contract.
+# The last two are #2201's admissions, one per interpreter and one per path shape (a bin/ node
+# command and a skills/** bash script), so neither half of the resolution is taken on trust.
 T31_NEW_ENTRIES='bin/check-issues-class-coverage
 bin/workflow/record-skip-judgment
 skills/_shared/assemble-mandatory.sh
-skills/make-detail-plan/scripts/detect-scope-change.sh'
+skills/make-detail-plan/scripts/detect-scope-change.sh
+bin/worktree-notes-append.js
+skills/issue-create/scripts/make-empty-verdict.sh'
 
 # The one SSOT entry whose basename install/path-exposed-commands.txt really carries. The bare
 # forms are keyed on that second list, not on the SSOT, so it is the only entry in the real tree
@@ -45,7 +49,7 @@ t31_has() { # <rule> -> present|absent|sentinel
     if grep -Fxq -- "$1" "$T31_FX/allow.txt" 2>/dev/null; then printf 'present'; else printf 'absent'; fi
 }
 
-# The deploy's own exit code is asserted first. Without it the twenty-four absence rows below
+# The deploy's own exit code is asserted first. Without it the bare-absence rows below
 # would all pass on a deploy that produced nothing at all.
 t31_deploy_row() {
     ROWS=$((ROWS + 1))
@@ -67,7 +71,7 @@ t31_path_rules_table() {
 }
 
 # The symmetric half of the pairing rule. `bareRules` are emitted only for an entry whose
-# basename appears in install/path-exposed-commands.txt; none of the four does, so a generator
+# basename appears in install/path-exposed-commands.txt; none of the six does, so a generator
 # that emits bare spellings for every entry would hand a PATH-wide `Bash(record-skip-judgment *)`
 # to anything of that name on the machine. Asserting the absence is the only way that widening
 # is visible.

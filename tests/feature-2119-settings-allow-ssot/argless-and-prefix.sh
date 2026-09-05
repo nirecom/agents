@@ -46,6 +46,31 @@ dispatch|Bash(node bin/worker-dispatch-paths)|the same form for the second measu
 T27_CASES
 }
 
+# T27 -- THE SPELLINGS #2201 MEASURED DENIED: an ABSOLUTE path the model QUOTES. The table above
+# pins the $AGENTS_CONFIG_DIR families, whose quotes are part of the literal, and the absolute
+# root reached the table only UNQUOTED -- so the moment the model quotes a Windows absolute path
+# (the spelling a space in the path forces, and the one it emits by habit) there was no rule at
+# all and the invocation fell back to `ask`. These rows are the same acceptance condition as the
+# four above, asked of the family that was missing.
+#
+# The root is a fixture path no static table can spell, so the rows carry <R>/<R2W> and
+# generator.sh's expand_root_placeholders resolves them against the fixture t27_setup just built
+# -- the same mechanism the `root-literal` negative row uses to reach that root dynamically.
+t27_root_table() {
+    local id rule label expanded
+    while IFS='|' read -r id rule label; do
+        [ -n "$id" ] || continue
+        ROWS=$((ROWS + 1))
+        expanded="$(expand_root_placeholders "$rule" "$T27_FX")"
+        assert_eq "T27[$id]: $label -- $expanded" "present" "$(t27_has "$expanded")"
+    done <<'T27_ROOT_CASES'
+wt-quoted-interp-posix|Bash(bash "<R>/bin/resolve-worktree-path")|the interpreter plus the QUOTED absolute path in forward slashes, argument-less
+wt-quoted-interp-win|Bash(bash "<R2W>\bin\resolve-worktree-path")|the interpreter plus the QUOTED absolute path in Windows separators, argument-less -- the exact shape a quoted Windows path takes
+wt-quoted-plain-posix|Bash("<R>/bin/resolve-worktree-path")|the QUOTED absolute POSIX path with no interpreter prefix, argument-less
+wt-quoted-plain-win|Bash("<R2W>\bin\resolve-worktree-path")|the QUOTED absolute Windows path with no interpreter prefix, argument-less -- CPR-ORTH: the interpreter-free half of the pair the two rows above cover
+T27_ROOT_CASES
+}
+
 # The matcher is written here rather than borrowed from hooks/lib/glob-match.js on purpose:
 # that helper is path-shaped (its `*` does not cross `/`, and it case-folds on win32), while a
 # permission rule is matched against a whole COMMAND STRING where `/` is an ordinary character.
@@ -120,4 +145,5 @@ T27_NEG_CASES
 
 t27_setup
 t27_measured_table
+t27_root_table
 t27_negative_table

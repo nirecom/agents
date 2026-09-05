@@ -15,6 +15,10 @@ Read `rules/shell-commands.md` before the first Bash command, or before writing 
 
 RT-0. Resolve the session-bound linked worktree path: run `"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"` (Bash, as a single standalone command — no variable-capture syntax on the Bash tool's own command line, per `rules/shell-commands.md`); its stdout is `WORKTREE` for later steps.
   If `WORKTREE == "NOSTATE"`, treat `WORKTREE` as empty — the internal scripts handle the CWD-fallback path for that case.
+  Pass it no positional arguments.
+  Use no environment-variable prefix on the invocation.
+  Use no command chaining: no `&&`, no `;` and no `|` on that command line — per `rules/shell-commands.md`.
+  Inspect its exit code, if needed, in a separate, subsequent command.
 RT-0a. Read:
    - `rules/core-principles.md`
    - `rules/test.md` — on-demand-only; never auto-injected, so this Read is mandatory
