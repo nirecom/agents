@@ -5,13 +5,17 @@ set -euo pipefail
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
+# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
+# so a containment refusal is never read as ESCALATE or as codex-unavailable.
+ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" intent)" || exit 4
+
 args=(
   --format outline-plan
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
   --draft-file "$PLANS_DIR/$SESSION_ID-outline.md"
   --cap 1 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
-  --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-intent.md"
+  --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
