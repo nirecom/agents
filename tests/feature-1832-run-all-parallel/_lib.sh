@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # tests/feature-1832-run-all-parallel/_lib.sh — shared fixture builder (SOURCE ONLY).
-# Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
-# Tags: tests, bin, parallel, scope:issue-specific
+# Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/lib/run-all-durations.sh, bin/worker-dispatch/workers/test-runner.js
+# Tags: tests, bin, parallel, ledger, scope:issue-specific
 
-# Builds a throwaway tree that looks like a repo to tests/run-all.sh (dummies at
-# <root>/tests/, runner copy outside it — pointing at the real tests/ re-triggers #1836).
+# Builds a throwaway repo-shaped tree for tests/run-all.sh (dummies at <root>/tests/, runner copy outside it — #1836).
 
-# Public API: fx_init, fx_new_root, fx_runner/fx_tests_dir/fx_log, fx_add_dummy, fx_add_archive_sentinel,
+# Public API: fx_init, fx_new_root/fx_new_git_root, fx_runner/fx_tests_dir/fx_log, fx_add_dummy, fx_add_archive_sentinel,
 # fx_doctor_runner, fx_exec/fx_exec_bg (bg sets FX_BG_PID); fx_contract_line/fx_contract_field/fx_count_contract,
 # fx_recorded_pids/fx_pid_alive/fx_wait_gone/fx_child_pids/fx_kill_tree, fx_wait_file, fx_now_ms/fx_children_user_cs,
-# fx_mask/fx_show_tail, fx_pass/fx_fail/fx_note/fx_check/fx_finish, fx_peak_log/fx_peak_of/fx_peak_starts (--peak dummies)
+# fx_mask/fx_show_tail, fx_pass/fx_fail/fx_note/fx_check/fx_finish, fx_peak_log/fx_peak_of/fx_peak_starts (--peak dummies),
+# fx_ledger_dir/fx_ledger_clear/fx_ledger_snapshot/fx_ledger_restore/fx_ledger_segments/fx_ledger_lines/fx_ledger_cat
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     echo "SKIP: _lib.sh is a sourceable library, not a test" >&2
@@ -18,6 +18,11 @@ fi
 
 FX_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FX_ERRORS=0
+
+# One fx_exec == one run from an EMPTY duration ledger. The runner grows a ledger under
+# $FX_CACHE_DIR/durations and re-orders the work list from it, so a second run would
+# otherwise stop being byte-comparable with the first. Accumulation is opt-in.
+FX_LEDGER_KEEP="${FX_LEDGER_KEEP:-0}"
 
 # One-line shim to the canonical portable wrapper (rules/test/macos-timeout.md).
 run_with_timeout() { "$FX_REPO_ROOT/bin/run-with-timeout.sh" "$@"; }
@@ -87,8 +92,14 @@ fx_cleanup() {
 # fx_init snapshots and drops ambient control vars (e.g. inherited RUN_ALL_JOBS) so a case's
 # own intent isn't silently overridden; anything set AFTER fx_init is caller intent and reaches the child untouched.
 
-FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE"
+FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB"
 FX_DROPPED_CONTROLS=""
+
+# Ledger tuning and output variables. These are NOT pinnable intent: the ledger cases source
+# bin/lib/run-all-durations.sh into THIS process, so they are set here as a side effect, and a
+# leaked RUN_ALL_DUR_REPO_ID or RUN_ALL_DUR_MAX_* would silently retarget or resize the child's
+# ledger. They are therefore always `-u`-scrubbed from the child, never forwarded.
+FX_SCRUBBED_VARS="RUN_ALL_DUR_SCHEMA RUN_ALL_DUR_DIRNAME RUN_ALL_DUR_KEEP_SEGMENTS RUN_ALL_DUR_MAX_SEGMENTS_READ RUN_ALL_DUR_MAX_RECORDS RUN_ALL_DUR_MAX_LINE_BYTES RUN_ALL_DUR_MAX_KEY_BYTES RUN_ALL_DUR_MAX_SECS_DIGITS RUN_ALL_DUR_TOKEN_WIDTH RUN_ALL_DUR_TIER_UNMEASURED RUN_ALL_DUR_SWEEP_MAX RUN_ALL_DUR_REASON RUN_ALL_DUR_REPO_ID RUN_ALL_DUR_HOST_TOKEN RUN_ALL_DUR_SEGMENT RUN_ALL_DUR_WRITE_OK RUN_ALL_DUR_TIER_OUT RUN_ALL_DUR_SEGMENTS_READ"
 
 fx_drop_ambient_controls() {
     local v cur
@@ -104,9 +115,13 @@ fx_drop_ambient_controls() {
 }
 
 # Builds `env` args pinning each control to caller intent: set vars pass through, unset ones get `-u`.
-# Two passes: env stops parsing options at the first NAME=VALUE, so all `-u` must come first.
+# FX_SCRUBBED_VARS get `-u` unconditionally. Two passes: env stops parsing options at the first
+# NAME=VALUE, so all `-u` must come first.
 fx_control_args() {
     local v cur
+    for v in $FX_SCRUBBED_VARS; do
+        printf -- '-u %s ' "$v"
+    done
     for v in $FX_CONTROL_VARS; do
         eval "cur=\${$v+set}"
         [ "$cur" = "set" ] || printf -- '-u %s ' "$v"
@@ -136,6 +151,46 @@ fx_init() {
     return 0
 }
 
+# --- duration ledger (bin/lib/run-all-durations.sh writes here) -------------
+# Segment files are $FX_CACHE_DIR/durations/dur.<schema>.<host16>.<stamp>-<pid>.log
+
+fx_ledger_dir() { echo "${FX_CACHE_DIR:-/nonexistent}/durations"; }
+
+fx_ledger_clear() { rm -rf "$(fx_ledger_dir)" 2>/dev/null || true; return 0; }
+
+fx_ledger_snapshot() {
+    rm -rf "$1" 2>/dev/null || true
+    [ -d "$(fx_ledger_dir)" ] || return 0
+    cp -a "$(fx_ledger_dir)" "$1" 2>/dev/null || return 1
+    return 0
+}
+
+fx_ledger_restore() {
+    rm -rf "$(fx_ledger_dir)" 2>/dev/null || true
+    [ -d "$1" ] || return 0
+    cp -a "$1" "$(fx_ledger_dir)" 2>/dev/null || return 1
+    return 0
+}
+
+# Counts only files: an entry that is a directory is a deliberate undeletable-segment fixture.
+fx_ledger_segments() {
+    local f n=0
+    for f in "$(fx_ledger_dir)"/dur.*; do
+        [ -f "$f" ] && n=$((n + 1))
+    done
+    printf '%s\n' "$n"
+}
+
+fx_ledger_cat() {
+    local f
+    for f in "$(fx_ledger_dir)"/dur.*; do
+        [ -f "$f" ] && cat "$f"
+    done 2>/dev/null
+    return 0
+}
+
+fx_ledger_lines() { fx_ledger_cat | grep -c '' || true; }
+
 # Each call MUST yield a distinct directory even though callers invoke it as
 # `root="$(fx_new_root)"` — a counter would only ever advance in the subshell.
 fx_new_root() {
@@ -144,6 +199,25 @@ fx_new_root() {
     mkdir -p "$root/bin/lib" "$root/tests" "$root/pids"
     cp "$FX_REPO_ROOT/tests/run-all.sh" "$root/bin/run-all.sh"
     cp "$FX_REPO_ROOT/bin/lib/run-all-parallelism.sh" "$root/bin/lib/run-all-parallelism.sh"
+    # Omitting this silently disables the ledger in EVERY fixture, which would turn
+    # the ledger cases green without any of the behaviour under test being present.
+    cp "$FX_REPO_ROOT/bin/lib/run-all-durations.sh" "$root/bin/lib/run-all-durations.sh" 2>/dev/null || true
+    echo "$root"
+}
+
+# fx_new_git_root — fx_new_root plus a real one-commit git repository, so a linked
+# worktree can be added from it. Returns 1 (prints nothing) when git is unavailable.
+fx_new_git_root() {
+    local root
+    command -v git >/dev/null 2>&1 || return 1
+    root="$(fx_new_root)" || return 1
+    git -C "$root" init -q >/dev/null 2>&1 || return 1
+    git -C "$root" config core.hooksPath /dev/null >/dev/null 2>&1 || return 1
+    git -C "$root" config user.name "fx fixture" >/dev/null 2>&1 || return 1
+    git -C "$root" config user.email "fx@example.com" >/dev/null 2>&1 || return 1
+    git -C "$root" config commit.gpgsign false >/dev/null 2>&1 || true
+    git -C "$root" add -A >/dev/null 2>&1 || return 1
+    git -C "$root" commit -q -m "fixture" >/dev/null 2>&1 || return 1
     echo "$root"
 }
 
@@ -248,6 +322,7 @@ fx_doctor_runner() {
 fx_exec() {
     local root="$1" to="$2" out="$3" err="$4"; shift 4
     local rc=0
+    [ "${FX_LEDGER_KEEP:-0}" -eq 1 ] || fx_ledger_clear
     run_with_timeout "$to" env $(fx_control_args) \
         "TESTS_DIR=$(fx_tests_dir "$root")" "RUN_ALL_CACHE_DIR=$FX_CACHE_DIR" \
         bash "$(fx_runner "$root")" "$@" >"$out" 2>"$err" || rc=$?
@@ -257,6 +332,7 @@ fx_exec() {
 # fx_exec_bg <root> <out> <err> [runner-args...] — sets FX_BG_PID.
 fx_exec_bg() {
     local root="$1" out="$2" err="$3"; shift 3
+    [ "${FX_LEDGER_KEEP:-0}" -eq 1 ] || fx_ledger_clear
     set -m
     env $(fx_control_args) \
         "TESTS_DIR=$(fx_tests_dir "$root")" "RUN_ALL_CACHE_DIR=$FX_CACHE_DIR" \

@@ -116,7 +116,7 @@ WORKDIR="$(mktemp -d 2>/dev/null)" || usage_error "cannot create a temporary wor
 
 CLEANUP_DONE=0
 INFLIGHT=()
-declare -a JOB_PID JOB_START JOB_RC DONE_FLAG LANE
+declare -a JOB_PID JOB_START JOB_RC DONE_FLAG LANE TIER KEY
 
 signal_tree() {
   local sig="$1" pid="$2" kid
@@ -183,6 +183,114 @@ detect_serial() {
 }
 detect_serial
 
+# --- duration ledger -------------------------------------------------------
+# Submission order is Longest-Processing-Time-first over historical durations, so the
+# slowest tests start while there is still width to overlap them. Contract and rationale:
+# docs/architecture/tests/run-all-parallelism.md.
+PARALLELISM_LIB_OK=0
+DUR_LIB_OK=0
+LEDGER_INITED=0
+UNMEASURED=99
+
+load_run_all_libs() {
+  local plib="${RUN_ALL_PARALLELISM_LIB:-$AGENTS_DIR/bin/lib/run-all-parallelism.sh}"
+  local dlib="${RUN_ALL_DURATIONS_LIB:-$AGENTS_DIR/bin/lib/run-all-durations.sh}"
+  # shellcheck source=/dev/null
+  [ -f "$plib" ] && . "$plib" 2>/dev/null &&
+    command -v run_all_cache_dir >/dev/null 2>&1 && PARALLELISM_LIB_OK=1
+  [ "$PARALLELISM_LIB_OK" -eq 1 ] || return 0
+  # shellcheck source=/dev/null
+  [ -f "$dlib" ] && . "$dlib" 2>/dev/null &&
+    command -v run_all_dur_lookup >/dev/null 2>&1 && DUR_LIB_OK=1
+  [ "$DUR_LIB_OK" -eq 1 ] && UNMEASURED="$RUN_ALL_DUR_TIER_UNMEASURED"
+  return 0
+}
+load_run_all_libs
+
+# Keys are computed for every index even when the run is too small to reorder: the key
+# is what the writer records at completion, not just what the sort consumed.
+init_tiers() {
+  local i id secs
+  for ((i = 0; i < TOTAL; i++)); do TIER[$i]="$UNMEASURED"; KEY[$i]=""; done
+  { [ "$DUR_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; } || return 0
+  for ((i = 0; i < TOTAL; i++)); do
+    run_all_dur_key_into "${WORK[$i]}" "$AGENTS_DIR" || true
+    KEY[$i]="$RUN_ALL_DUR_KEY_OUT"
+    printf '%s\t%s\n' "$i" "$RUN_ALL_DUR_KEY_OUT"
+  done >"$WORKDIR/dur.keys" 2>/dev/null
+  [ -f "$WORKDIR/dur.keys" ] || return 0
+  run_all_dur_lookup "$AGENTS_DIR" "$WORKDIR/dur.keys" "$WORKDIR/dur.secs"
+  [ -f "$WORKDIR/dur.secs" ] || return 0
+  while IFS="$(printf '\t')" read -r id secs; do
+    case "$id" in ''|*[!0-9]*) continue ;; esac
+    [ "$id" -lt "$TOTAL" ] || continue
+    [ -n "$secs" ] || continue
+    run_all_dur_tier_into "$secs" && TIER[$id]="$RUN_ALL_DUR_TIER_OUT"
+  done <"$WORKDIR/dur.secs"
+  return 0
+}
+init_tiers
+
+# Bucket sort on the tier, unmeasured first then longest-first, stable inside a bucket so
+# an all-unmeasured ledger reproduces glob order exactly. Serial slots are pinned: the
+# barrier semantics are positional, so only the parallel-lane rows are permuted.
+sort_work_lpt() {
+  local i j k t
+  local -a slots=() ordered=() nw=() nl=() nt=() nk=()
+  [ "$TOTAL" -ge 2 ] || return 0
+  for ((i = 0; i < TOTAL; i++)); do
+    [ "${LANE[$i]}" = serial ] || slots+=("$i")
+  done
+  [ "${#slots[@]}" -ge 2 ] || return 0
+  for j in "${slots[@]}"; do
+    [ "${TIER[$j]}" = "$UNMEASURED" ] && ordered+=("$j")
+  done
+  t=30
+  while [ "$t" -ge 0 ]; do
+    for j in "${slots[@]}"; do
+      [ "${TIER[$j]}" = "$t" ] && ordered+=("$j")
+    done
+    t=$((t - 1))
+  done
+  [ "${#ordered[@]}" -eq "${#slots[@]}" ] || return 0
+  k=0
+  for ((i = 0; i < TOTAL; i++)); do
+    if [ "${LANE[$i]}" = serial ]; then
+      j="$i"
+    else
+      j="${ordered[$k]}"
+      k=$((k + 1))
+    fi
+    nw[$i]="${WORK[$j]}"
+    nl[$i]="${LANE[$j]}"
+    nt[$i]="${TIER[$j]}"
+    nk[$i]="${KEY[$j]:-}"
+  done
+  WORK=("${nw[@]}")
+  LANE=("${nl[@]}")
+  TIER=("${nt[@]}")
+  KEY=("${nk[@]}")
+  return 0
+}
+sort_work_lpt
+
+# Lazy: the segment is created on the first completed test, so a run that executes
+# nothing (a pattern matching no file, --print-plan) leaves no ledger behind.
+ledger_record() {
+  local i="$1" secs=""
+  [ "$DUR_LIB_OK" -eq 1 ] || return 0
+  [ -n "${KEY[$i]:-}" ] || return 0
+  [ -f "$WORKDIR/$i.dur" ] || return 0
+  read -r secs <"$WORKDIR/$i.dur" 2>/dev/null
+  case "$secs" in ''|*[!0-9]*) return 0 ;; esac
+  if [ "$LEDGER_INITED" -eq 0 ]; then
+    LEDGER_INITED=1
+    run_all_dur_writer_init "$AGENTS_DIR"
+  fi
+  run_all_dur_append "${KEY[$i]}" "$secs"
+  return 0
+}
+
 # --- width -----------------------------------------------------------------
 RESOLVED_J=4
 resolve_jobs() {
@@ -213,7 +321,7 @@ if [ "$PRINT_PLAN" -eq 1 ]; then
   printf 'jobs=%s\n' "$EFFECTIVE_J"
   printf 'serial_count=%s\n' "$SERIAL_COUNT"
   for ((idx = 0; idx < TOTAL; idx++)); do
-    printf 'plan\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}"
+    printf 'plan\t%s\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}" "${TIER[$idx]:-$UNMEASURED}"
   done
   cleanup_all
   exit 0
@@ -260,8 +368,13 @@ neutralize_stream() {
 
 launch() {
   local i="$1" script="${WORK[$1]}"
-  ( bash "$script" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null
-    echo $? >"$WORKDIR/$i.rc" ) &
+  # The duration is measured child-side and written BEFORE the rc file, which stays the
+  # sole completion signal — a harvest that sees <i>.rc always sees a finished <i>.dur.
+  ( __t0=$SECONDS
+    bash "$script" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null
+    __rc=$?
+    echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
+    echo "$__rc" >"$WORKDIR/$i.rc" ) &
   JOB_PID[$i]=$!
   JOB_START[$i]=$SECONDS
   INFLIGHT+=("$i")
@@ -283,6 +396,7 @@ harvest() {
       read -r rc <"$WORKDIR/$i.rc" 2>/dev/null
       JOB_RC[$i]="$rc"
       DONE_FLAG[$i]=1
+      ledger_record "$i"
       [ "${LANE[$i]}" = serial ] && SERIAL_INFLIGHT=0
       HARVESTED=$((HARVESTED + 1))
     else

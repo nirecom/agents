@@ -2,6 +2,7 @@
 # SSOT for the run-all parallelism cache. Sourced by tests/run-all.sh and
 # bin/calibrate-test-parallelism.sh; defines constants/functions only.
 # Cache values are compared as strings only — never expanded, never used in arithmetic.
+# Sibling bin/lib/run-all-durations.sh (the duration ledger) reuses the helpers below, so it requires this file to be sourced first.
 
 RUN_ALL_CACHE_SCHEMA=1
 RUN_ALL_FALLBACK_JOBS=4
