@@ -12,9 +12,13 @@ const events = require("./state-io/events");
 const intervals = require("./state-io/intervals");
 const projection = require("./state-io/projection");
 const stateLock = require("./state-io/state-lock");
+const stepContextClass = require("./state-io/step-context-class");
 
 module.exports = {
   VALID_STEPS: core.VALID_STEPS,
+  STEP_CONTEXT_CLASS: stepContextClass.STEP_CONTEXT_CLASS,
+  CONTEXT_CLASS_VALUES: stepContextClass.CONTEXT_CLASS_VALUES,
+  isContextIndependentStep: stepContextClass.isContextIndependentStep,
   TERMINAL_STEPS: core.TERMINAL_STEPS,
   SKIPPABLE_STEPS: core.SKIPPABLE_STEPS,
   VALID_STATUSES: core.VALID_STATUSES,

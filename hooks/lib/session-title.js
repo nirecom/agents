@@ -112,17 +112,8 @@ function _parseIssuesWithTitles(intentContent) {
   return issues;
 }
 
-/**
- * writeSetIssue(sessionId, cwd, plansDir)
- *
- * Reads <plansDir>/<sessionId>-intent.md, parses ## Issues section,
- * builds the title, and writes a custom-title JSONL record.
- *
- * Skip guard: overwrites null, bare "⏳", and /^⏳\S/ (VS Code extension temp form).
- * Preserves any other existing title (PR # suffix, ✓ prefix, real issue title).
- *
- * Fail-open: missing intent.md, no issues found → no write.
- */
+// Fail-open by design: a missing intent.md or no parsed issues writes nothing,
+// and any title that is not our own placeholder is preserved (see the skip guard).
 function writeSetIssue(sessionId, cwd, plansDir) {
   if (_isChildSession()) return;
   if (!sessionId) return;
@@ -225,5 +216,6 @@ module.exports = {
   _readCurrentTitle,
   _writeTitle,
   _encodeCwd,
+  _getTranscriptBase,
   _getJsonlPath,
 };

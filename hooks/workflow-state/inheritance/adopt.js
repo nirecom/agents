@@ -1,20 +1,27 @@
 "use strict";
-// Explicit adoption of a prior session's state (#1305).
-//
-// WHY this module exists: automatic inheritance is now keyed on lineage, and a
-// TRUE crash-resume has no lineage — the process died and came back without its
-// session id, so nothing in the new transcript can prove descent. That case is
-// served by an explicit, user-approved adoption instead.
-//
-// There are two ROUTES to it (bin/workflow/adopt-session-state and the
-// /workflow-init `adopt-prior-state` phase) but only ONE implementation, here:
-// both must re-run the same guards and append the same event stream, which is
-// only guaranteed by a single execution point (CPR-SSOT).
+// Explicit adoption of a prior session's state (#1305): the true-crash-resume
+// case, where the process lost its session id so no lineage can prove descent.
+// Two routes reach it (bin/workflow/adopt-session-state and /workflow-init's
+// `adopt-prior-state` phase) but only ONE implementation, here (CPR-SSOT).
 
 const { readState, VALID_STEPS } = require("../state-io");
 const { contextMatches } = require("./context-match");
 const { listRecentContextCandidates } = require("./candidates");
 const { applyInheritance } = require("./apply");
+const {
+  compareRepoContentEquivalence,
+  compareRepoIdentity,
+  VERDICTS,
+} = require("../../../bin/workflow/lib/next-step/repo-dir-guard");
+
+const GRANULARITY_CONTEXT_INDEPENDENT_ONLY = "context-independent-only";
+
+// Resumability verdicts that mean "the EVIDENCE aged out", not "this record must
+// not be reused": a plan artifact past the 7-day retention leaves the donor's
+// work record intact. Explicit adoption degrades on these (the missing artifact
+// is reported, not fatal) while `all-pending` and `user-verified` — statements
+// about the WORK itself — stay hard refusals.
+const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"]);
 
 // The context an adoption is judged against is the HEIR's own recorded context,
 // not the process cwd: the CLI may be run from anywhere (the AD-10 recovery
@@ -22,14 +29,31 @@ const { applyInheritance } = require("./apply");
 // file says where its work actually lives.
 function heirContextOf(heirState) {
   if (!heirState) return null;
-  const cwd = typeof heirState.cwd === "string"
+  const cwd = typeof heirState.cwd === "string" && heirState.cwd.length
     ? heirState.cwd
     : (heirState.session_start_context && heirState.session_start_context.cwd) || null;
-  if (typeof cwd !== "string") return null;
+  if (typeof cwd !== "string" || !cwd.length) return null;
   const git_branch = heirState.git_branch !== undefined && heirState.git_branch !== null
     ? heirState.git_branch
     : (heirState.session_start_context && heirState.session_start_context.git_branch) ?? null;
   return { cwd, git_branch };
+}
+
+// A `--verified-equivalent` claim is an unproven assertion until this runs: it
+// re-derives the equivalence itself, so an assertion about two unrelated repos
+// cannot launder state. heirContextOf's cwd extraction is state-shape-agnostic
+// despite its name, so the donor state passes through it too.
+function verifyEquivalence(heirCwd, donorState) {
+  const donorCtx = heirContextOf(donorState);
+  const donorCwd = donorCtx && donorCtx.cwd;
+  if (typeof heirCwd !== "string" || !heirCwd.length) return false;
+  if (typeof donorCwd !== "string" || !donorCwd.length) return false;
+  // Identity precondition, as at the other call site (resume-session's upstream
+  // view): content equivalence answers "same bytes", never "same repository", so
+  // without this two UNRELATED checkouts holding matching content would waive
+  // the gate. false here means "identity precondition failed", not a diff.
+  if (compareRepoIdentity(heirCwd, donorCwd) !== VERDICTS.SIBLING) return false;
+  return compareRepoContentEquivalence(heirCwd, donorCwd) === true;
 }
 
 // An heir that has already recorded work is NOT a crash-resume shell: adopting
@@ -59,22 +83,15 @@ function listAdoptCandidates(heirSid, fallbackCtx) {
   return { ok: true, error: null, ctx, candidates };
 }
 
-// adoptState({ heirSid, donorSid }) → { ok: true } | { ok: false, error }
+// adoptState({ heirSid, donorSid, granularity, verifiedEquivalent })
+//   → { ok: true, ... } | { ok: false, error }
 //
-// Every guard the automatic path applies is re-run here. Being named on a
-// command line is not evidence: without this re-validation the CLI would be a
-// way to launder exactly the mis-inheritance #1305 removed.
-//
-// Authorization model: `heirSid` is caller-supplied (CLI --session / phase arg),
-// not bound to the OS process invoking this call — the crash-resume case this
-// exists for is exactly a session that lost its own id and cannot self-assert
-// it. The blast radius that leaves open (an operator naming a DIFFERENT live
-// session's sid) is bounded by two independent guards below, both mandatory:
-// isAllPending(heirState) (refuses to touch a heir with any recorded step) and
-// contextMatches (refuses a donor from a different cwd/branch). Both guards
-// operate on state files the same local user already has direct filesystem
-// access to, so this CLI grants no capability beyond what that user already
-// has — it is a local admin tool, not a service boundary.
+// Every guard the automatic path applies is re-run here: being named on a
+// command line is not evidence. `heirSid` is caller-supplied and NOT bound to
+// the invoking process (a session that lost its id cannot self-assert it), so
+// the blast radius is bounded by isAllPending and the context gate — both
+// reading files the same local user can already open. Local admin tool, not a
+// service boundary.
 function adoptState(opts) {
   const heirSid = opts && opts.heirSid;
   const donorSid = opts && opts.donorSid;
@@ -98,9 +115,21 @@ function adoptState(opts) {
     donorState = Object.assign({}, donorState, { session_id: donorSid });
   }
 
+  const granularity = opts && opts.granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+    ? GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+    : "full";
   const ctx = heirContextOf(heirState);
   if (!ctx) return { ok: false, error: `heir session ${heirSid} records no cwd/branch context` };
-  if (!contextMatches(ctx, donorState)) {
+
+  // contextMatches is the ONE gate granularity relaxes — nothing worktree-bound
+  // travels in the degraded mode. `verifiedEquivalent` claims the two checkouts
+  // hold the same content, but the flag is a bare caller assertion (a human
+  // types it on the CLI), so it is re-PROVED here rather than trusted.
+  // isAllPending and evaluateResumability stay armed in both modes.
+  const contextGateWaived = granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+    || (opts && opts.verifiedEquivalent === true && verifyEquivalence(ctx.cwd, donorState));
+
+  if (!contextGateWaived && !contextMatches(ctx, donorState)) {
     return {
       ok: false,
       error: `donor session ${donorSid} ran in a different cwd/branch than ${heirSid} (context-mismatch)`,
@@ -109,7 +138,11 @@ function adoptState(opts) {
 
   const { evaluateResumability } = require("../effective-state");
   const verdict = evaluateResumability(donorState);
-  if (!verdict || !verdict.eligible) {
+  const degradedReason = verdict && !verdict.eligible
+    && DEGRADABLE_RESUMABILITY_REASONS.indexOf(verdict.reason) !== -1
+    ? verdict.reason
+    : null;
+  if ((!verdict || !verdict.eligible) && degradedReason === null) {
     return {
       ok: false,
       error: `donor session ${donorSid} is not resumable ` +
@@ -117,12 +150,28 @@ function adoptState(opts) {
     };
   }
 
+  // A donor accepted only through the degradation path has UNPROVEN evidence, so
+  // it may not travel at full granularity however the caller asked. The raw
+  // `granularity` still owns the contextGateWaived decision above — that gate was
+  // settled before this verdict existed.
+  const effectiveGranularity = degradedReason !== null ? GRANULARITY_CONTEXT_INDEPENDENT_ONLY : granularity;
+
+  let result;
   try {
-    applyInheritance(heirSid, heirState.created_at, donorState);
+    result = applyInheritance(heirSid, heirState.created_at, donorState, {
+      granularity: effectiveGranularity,
+    });
   } catch (e) {
     return { ok: false, error: `adoption failed: ${(e && e.message) || String(e)}` };
   }
-  return { ok: true, error: null, donorSessionId: donorSid };
+  return {
+    ok: true,
+    error: null,
+    donorSessionId: donorSid,
+    granularity: effectiveGranularity,
+    degraded_reason: degradedReason,
+    inheritance: result || null,
+  };
 }
 
 module.exports = { adoptState, listAdoptCandidates, heirContextOf, isAllPending };

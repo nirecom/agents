@@ -2,17 +2,13 @@
 // output-sanitize.js — SSOT for neutralizing untrusted text that re-enters a
 // Claude Code transcript.
 //
-// WHY it lives under hooks/lib/ rather than beside the dispatcher: the dispatcher
-// is no longer the only writer of untrusted bytes. hooks/workflow-run-tests.js
-// records the demoting command as a `trigger_command` annotation, and that string
-// is state text a later reader may transcribe. An unredacted `<<WORKFLOW…` there
-// is indistinguishable from a real sentinel emitted by the session itself — a
-// security property, not cosmetics (CPR-SSOT: one substitution, one owner, so the
-// two boundaries can never drift).
+// Under hooks/lib/ because the dispatcher is no longer the only writer of
+// untrusted bytes: hooks/workflow-run-tests.js stores a raw command as state
+// text, and an unredacted `<<WORKFLOW…` there is indistinguishable from a real
+// sentinel — one substitution, one owner, so the boundaries cannot drift.
 //
-// bin/worker-dispatch/emit.js re-exports these as ordinary enumerable properties;
-// tests/feature-1643-worker-dispatch-sentinel-stdout.sh scans that module's
-// source, so the re-export must stay a plain assignment (never a getter).
+// bin/worker-dispatch/emit.js re-exports these as plain enumerable properties;
+// a test scans that source, so the re-export must never become a getter.
 
 const SENTINEL_REDACT_RE = /<<\s*WORKFLOW/gi;
 
@@ -56,20 +52,14 @@ function sanitizeLine(input, maxLen) {
 
 // --- credential redaction --------------------------------------------------
 //
-// A command line is not only sentinel-shaped risk: it routinely carries the
-// caller's credentials as argument values (`--token=…`, `API_KEY=…`). Anything
-// that copies a raw command into durable state text copies those too, and state
-// text outlives the session that produced it. The two axes are kept as separate
-// functions because they answer different questions — "could this be mistaken
-// for a control signal?" versus "is this a secret?" — and a caller that only
-// renders untrusted output (the worker dispatcher) must not silently start
-// rewriting its payloads.
+// A command line carries the caller's credentials as ordinary argument values,
+// and anything copying it into durable state text copies those too. Sentinel
+// and secret redaction stay separate functions because they answer different
+// questions, and a caller that only renders output must not silently rewrite
+// its payloads.
 //
-// Shapes are the high-signal vendor prefixes bin/scan-outbound.sh already
-// blocks, plus the general rule that a key whose NAME says secret has a value
-// that is one. Detection is deliberately shape-based: a value is redacted for
-// looking like a credential, never for being one, so a false positive costs a
-// few characters of diagnostics and a false negative costs a leak.
+// Shapes are the vendor prefixes bin/scan-outbound.sh blocks; detection is
+// shape-based, so a false positive costs characters and a miss costs a leak.
 const SECRET_VALUE_PATTERNS = [
   // A PEM private key block. Matched whole — header, body and footer — so the
   // secret cannot survive as a fragment. `[\s\S]*?` spans the multi-line
@@ -83,6 +73,11 @@ const SECRET_VALUE_PATTERNS = [
   /gh[pousr]_[A-Za-z0-9]{20,}/g, // GitHub token (classic short form)
   /xox[abposr]-[A-Za-z0-9-]{10,}/g, // Slack token
   /AIzaSy[A-Za-z0-9_-]{33}/g, // Google / GCP API key
+  // URL-embedded credentials (`https://user:pass@host/…`): no option name and
+  // no vendor prefix, so neither the assign form nor the shapes above see it.
+  // Only the userinfo is replaced — scheme and host stay readable, because
+  // attribution needs to say WHICH endpoint was elided.
+  /(?<=:\/\/)[^/\s:@]+:[^/\s@]+(?=@)/g,
 ];
 
 // `<name>=<value>` / `<name>: <value>` where <name> contains a secret-ish word.
@@ -94,12 +89,10 @@ const SECRET_VALUE_PATTERNS = [
 const SECRET_ASSIGN_RE =
   /((?:^|[\s"'`=(,{])-{0,2}[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|apikey|credential|auth|private[_-]?key)[A-Za-z0-9_.-]*["']?\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi;
 
-// Space-separated option form: `--token X`, `-secret X`. Same option, same
-// secret, different quoting convention — and the space form is the one people
-// actually type. Bare `auth` is deliberately ABSENT from this vocabulary: with
-// no `[=:]` to anchor it, a bare substring match would eat the value after
-// `--author "Name"` and similar. It stays only in SECRET_ASSIGN_RE above, where
-// the mandatory separator already bounds the false positives.
+// Space-separated option form: `--token X`, `-secret X`. Bare `auth` is
+// deliberately ABSENT here: with no `[=:]` to anchor it, a substring match
+// would eat the value after `--author "Name"`. It stays only in
+// SECRET_ASSIGN_RE, where the mandatory separator bounds the false positives.
 //
 // `(?!-)` on the value keeps the two boundaries the option form has and the
 // assign form does not: a trailing option with no value at all, and an option

@@ -45,6 +45,21 @@ if (!sessionId) {
   process.exit(0);
 }
 
+// The one event the artifact exists for is also the one the compacted
+// transcript can no longer describe, and PostCompact is the only code that runs
+// at that instant. A lost breadcrumb must never cost the re-injection below.
+try {
+  const { appendHandoffEntry } = require("./lib/handoff-artifact");
+  appendHandoffEntry(sessionId, {
+    cls: "B",
+    step: "-",
+    key: "compaction",
+    summary: `context compaction occurred at ${new Date().toISOString()}`,
+    pointer: "-",
+    origin: "flush",
+  });
+} catch (_e) { /* fail-open */ }
+
 try {
   const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
     path.join(os.homedir(), ".claude", "projects", "workflow");

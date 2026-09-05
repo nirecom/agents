@@ -1,0 +1,4 @@
+{"type":"user","sessionId":"upstream-sess-2218","timestamp":"2026-03-01T00:00:00.000Z","message":{"role":"user","content":"FEAT2218-UPSTREAM-TOKEN start the handoff work"}}
+{"type":"assistant","sessionId":"upstream-sess-2218","timestamp":"2026-03-01T00:01:00.000Z","message":{"role":"assistant","content":"Recorded the plan in the detail artifact."}}
+{"type":"user","sessionId":"upstream-sess-2218","timestamp":"2026-03-01T00:02:00.000Z","message":{"role":"user","content":"the gate blocked the commit; we worked around it with a separate call"}}
+{"type":"assistant","sessionId":"upstream-sess-2218","timestamp":"2026-03-01T00:03:00.000Z","message":{"role":"assistant","content":"FEAT2218-TAIL-TOKEN noted the workaround and the pending review concern."}}
