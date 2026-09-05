@@ -352,6 +352,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/user-prompt-submit-mechanism-check.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/codegraph-context-inject.js\"",
+            "timeout": 5
           }
         ]
       }

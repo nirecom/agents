@@ -7,8 +7,8 @@ $env:SYSTEM_OPS_APPROVED = "1"
 $AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # install/codegraph-constants.txt is the single source of truth for the pinned
-# version and the telemetry opt-out; install/linux/codegraph.sh reads the same file.
-# Only the version is read here. The opt-out pair must NOT be assigned to this
+# version and the telemetry env pair; install/linux/codegraph.sh reads the same file.
+# Only the version is read here. The pair must NOT be assigned to this
 # process's environment: install.ps1 invokes this script in-process, so the
 # assignment would outlive it and leak the industry-wide DO_NOT_TRACK name into
 # every program the caller's shell launches next — including `claude`, whose

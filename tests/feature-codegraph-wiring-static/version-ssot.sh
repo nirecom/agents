@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# Tests: install/codegraph-constants.txt, install/linux/codegraph.sh, install/win/codegraph.ps1, install/codegraph-mcp.js
+# Tests: install/codegraph-constants.txt, install/linux/codegraph.sh, install/win/codegraph.ps1, install/codegraph-mcp.js, hooks/lib/codegraph-boundary.js
 # Tags: codegraph, installer, version-pin, ssot, supply-chain, static, TL2, pwsh-not-required, scope:issue-specific
-# W12 (#2150 review) — the pinned version and the telemetry opt-out live in exactly
+# W12 (#2150 review) — the pinned version and the telemetry env pair live in exactly
 # one file. A floating `@colbymchenry/codegraph` installs whatever the registry
 # serves at install time, and `npm install -g` without --ignore-scripts hands that
 # tarball's postinstall a shell on the developer's machine. Both OS scripts must
@@ -25,10 +25,15 @@ assert_count_re "W12-03" "$CONSTANTS_REL" '^CODEGRAPH_TELEMETRY=' 1 \
     "the telemetry opt-out is read by both OS scripts and by codegraph-mcp.js; a duplicate hides which value ships"
 assert_count_re "W12-04" "$CONSTANTS_REL" '^DO_NOT_TRACK=' 1 \
     "same contract as CODEGRAPH_TELEMETRY (CPR-ORTH)"
+assert_count_re "W12-03b" "$CONSTANTS_REL" '^AGENTS_CODEGRAPH_MCP_OWNER=' 1 \
+    "a second assignment makes the last one win, so the reviewed ownership marker and the deployed one diverge (same contract as W12-03/04, CPR-ORTH)"
 
-# The SSOT claim itself: no file under install/ or bin/ restates the version literal.
+# The SSOT claim itself: no file under install/, bin/ or hooks/ restates the version
+# literal. hooks/ is in scope because #2215 moves the version-pin logic itself into
+# hooks/lib/codegraph-boundary.js (verifyPinnedCliVersion) — a grep scoped to just
+# install/ and bin/ would silently miss a restated literal landing there.
 if [ -n "$W12_VERSION" ]; then
-    W12_ECHOES="$(grep -rlF -e "$W12_VERSION" "$AGENTS_DIR/install" "$AGENTS_DIR/bin" 2>/dev/null \
+    W12_ECHOES="$(grep -rlF -e "$W12_VERSION" "$AGENTS_DIR/install" "$AGENTS_DIR/bin" "$AGENTS_DIR/hooks" 2>/dev/null \
         | grep -vF "codegraph-constants.txt" | sed "s|^$AGENTS_DIR/||" | tr '\n' ' ' || true)"
     assert_eq "W12-05: the version literal $W12_VERSION appears only in $CONSTANTS_REL" "" "$(trim "$W12_ECHOES")"
 fi
@@ -43,7 +48,10 @@ W12-06 | install/linux/codegraph.sh | install/codegraph-constants.txt
 W12-07 | install/win/codegraph.ps1  | install\codegraph-constants.txt
 W12-08 | install/linux/codegraph.sh | npm install -g --ignore-scripts "@colbymchenry/codegraph@$CODEGRAPH_VERSION"
 W12-09 | install/win/codegraph.ps1  | npm install -g --ignore-scripts "@colbymchenry/codegraph@$CodegraphVersion"
-W12-10 | install/codegraph-mcp.js   | codegraph-constants.txt
+W12-10 | hooks/lib/codegraph-boundary.js | codegraph-constants.txt
+# W12-03c pins the marker's value itself (not just its uniqueness): a silent value
+# change is a different failure than a duplicate line, so both rows are needed (CPR-ORTH)
+W12-03c | install/codegraph-constants.txt | AGENTS_CODEGRAPH_MCP_OWNER=agents-framework
 W12_TABLE
 
 # Negative half (Pattern 1): the pre-fix spellings must be gone, not merely
@@ -57,6 +65,10 @@ W12-11 | install/linux/codegraph.sh | npm install -g @colbymchenry/codegraph | a
 W12-12 | install/win/codegraph.ps1  | npm install -g @colbymchenry/codegraph | same finding on the Windows path (CPR-ORTH)
 W12-13 | install/linux/codegraph.sh | npm install -g "@colbymchenry/codegraph" | quoting the bare name still floats the version and still runs install scripts
 W12-14 | install/win/codegraph.ps1  | npm install -g "@colbymchenry/codegraph" | same finding on the Windows path (CPR-ORTH)
+W12-17 | install/linux/codegraph.sh | export CODEGRAPH_TELEMETRY | codegraph.sh runs as its own subprocess, so assigning the pair to its own env leaks it into every child it spawns (npm/claude/codegraph stub calls)
+W12-18 | install/linux/codegraph.sh | export DO_NOT_TRACK | same leak risk as W12-17 for the paired var (CPR-ORTH)
+W12-19 | install/win/codegraph.ps1  | $env:CODEGRAPH_TELEMETRY | codegraph.ps1 is dot-sourced in-process by install.ps1, so this assignment would outlive the script and leak into every command the caller's shell runs next, including `claude`
+W12-20 | install/win/codegraph.ps1  | $env:DO_NOT_TRACK | same leak risk as W12-19; DO_NOT_TRACK is the var that makes claude's Remote Control refuse to start (CPR-ORTH)
 W12_NEG_TABLE
 
 # Exactly one global install call per script: a second, unhardened one would run

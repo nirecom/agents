@@ -13,9 +13,9 @@ if [ -z "${C_RESET+x}" ]; then
 fi
 
 # install/codegraph-constants.txt is the single source of truth for the pinned
-# version and the telemetry opt-out; install/win/codegraph.ps1 reads the same file.
+# version and the telemetry env pair; install/win/codegraph.ps1 reads the same file.
 # Only the version is read here — see the matching comment in codegraph.ps1 for why
-# the opt-out pair must not be exported from an installer script.
+# the pair must not be exported from an installer script.
 CODEGRAPH_VERSION=""
 while IFS='=' read -r _cg_key _cg_value; do
     case "$_cg_key" in

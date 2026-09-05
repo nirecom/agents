@@ -16,8 +16,11 @@ wc_fixture() {
     write_env_file "$d/cfg" present on
     printf '# no-op nvm stub\n:\n' > "$d/nvm/nvm.sh"
     write_win_claude_node "$d/bin"
+    # The register verb probes `codegraph --version` before it looks at `claude` at
+    # all, so without this stub every stderr count below would carry that warning too.
+    write_cg_stub "$d/bin"
     "$builder" "$d/bin"
-    : > "$d/claude.log"; : > "$d/out.log"; : > "$d/err.log"
+    : > "$d/claude.log"; : > "$d/codegraph.log"; : > "$d/out.log"; : > "$d/err.log"
 }
 
 # wc_run <dir> — run `codegraph-mcp.js register` inside that fixture world. These
@@ -35,6 +38,7 @@ wc_run() {
         export NVM_DIR="$d/nvm"
         AGENTS_CONFIG_DIR="$(node_path "$d/cfg")"; export AGENTS_CONFIG_DIR
         CLAUDE_STUB_LOG="$(node_path "$d/claude.log")"; export CLAUDE_STUB_LOG
+        CG_STUB_LOG="$(node_path "$d/codegraph.log")"; export CG_STUB_LOG
         export CLAUDE_WORKFLOW_DIR="$d/wf" WORKFLOW_PLANS_DIR="$d/plans"
         bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$MCP_JS_NATIVE" register
     ) >"$d/out.log" 2>"$d/err.log" </dev/null

@@ -61,10 +61,15 @@ if make_db "$root" healthy; then
     assert_eq "L6 — sync targets the root" "yes" "$(same_path "$root" "$(printf '%s' "$line" | cut -d' ' -f3-)")"
 fi
 
-echo "--- L6c: telemetry opt-out reaches every spawned codegraph subprocess ---"
+echo "--- L6c: telemetry env reaches every spawned codegraph subprocess ---"
 # spawnCodegraph() (bin/codegraph-lifecycle.js) is the single choke point every
-# verb funnels through, so one real invocation reaching it proves the opt-out
+# verb funnels through, so one real invocation reaching it proves the telemetry
 # env for all of them (codegraphOnPath's --version probe included).
+# Expected values are read from the SSOT (install/codegraph-constants.txt)
+# rather than hardcoded, so a future flip of the pair cannot silently drift
+# from what this test asserts.
+L6C_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
+L6C_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
 reset_env
 root="$(mkroot "l6c")"
 if make_db "$root" healthy; then
@@ -75,8 +80,8 @@ if make_db "$root" healthy; then
     run_cli sync "$root"
     unset CG_STUB_ENV_LOG CG_STUB_ENV_VARS
     assert_eq "L6c — exit 0" "0" "$RC"
-    assert_eq "L6c — telemetry opt-out env vars reached the subprocess" \
-        "CODEGRAPH_TELEMETRY=0 DO_NOT_TRACK=1" "$(head -n1 "$env_log" 2>/dev/null || true)"
+    assert_eq "L6c — telemetry env vars reached the subprocess" \
+        "CODEGRAPH_TELEMETRY=$L6C_EXPECTED_TELEMETRY DO_NOT_TRACK=$L6C_EXPECTED_DNT" "$(head -n1 "$env_log" 2>/dev/null || true)"
 fi
 
 echo "--- L6b: a real environment variable outranks the .env file ---"
