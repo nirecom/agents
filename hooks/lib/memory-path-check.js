@@ -1,6 +1,4 @@
-// Pure memory-directory hit detection. Consumers: hooks/block-memory-direct.js
-// (tool inputs) and hooks/preuse-auto-approve/script-body-scan.js (script body
-// lines).
+// Pure memory-directory hit detection. Consumer: hooks/block-memory-direct.js.
 "use strict";
 
 const os = require("os");

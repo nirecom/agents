@@ -1,7 +1,6 @@
 // Pure append-only-document-family detection (canonical docs/history.md +
-// CHANGELOG.md and their rotated archives). Consumers:
-// hooks/block-history-direct.js (tool inputs) and
-// hooks/preuse-auto-approve/script-body-scan.js (script body lines).
+// CHANGELOG.md and their rotated archives). Consumer:
+// hooks/block-history-direct.js.
 "use strict";
 
 const { parse } = require("./command-ir");

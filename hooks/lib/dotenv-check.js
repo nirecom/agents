@@ -1,6 +1,5 @@
-// Pure .env / protected-blocklist path detection. Consumers:
-// hooks/block-dotenv.js (tool inputs) and
-// hooks/preuse-auto-approve/script-body-scan.js (script body lines).
+// Pure .env / protected-blocklist path detection. Consumer:
+// hooks/block-dotenv.js.
 "use strict";
 
 const { checkBashCommand: checkCmd } = require("./command-parser");

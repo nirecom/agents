@@ -9,8 +9,7 @@
 // tests/feature-1611-append-only-archive-guard.sh T1-R).
 "use strict";
 const fs = require("fs");
-// Detection lives in hooks/lib/history-path-check.js (shared with the
-// scratchpad-script auto-approve body scan).
+// Detection lives in hooks/lib/history-path-check.js.
 const { isProtectedPath, bashHitsProtected } = require("./lib/history-path-check");
 
 function readStdin() {

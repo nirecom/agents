@@ -149,65 +149,6 @@ assert_eq "SP-21-legacy-write-path-invariance" "true" \
 assert_eq "SP-21b-legacy-still-rejects-outside-base" "false" \
     "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$TMPROOT/evil.sh" 2>&1)"
 
-# --- D-6: script BODY content scan (#2170 HIGH finding) ----------------------
-# Path containment alone auto-approved `bash <scratchpad>.sh` without ever reading
-# the file, so the body was the one execution channel no PreToolUse hook saw.
-# isAllowedScratchpadInvocation now scans it PER LINE with getBlockCategory
-# (hooks/lib/system-ops-categories.js) and commandTouchesCredentials
-# (hooks/lib/credential-check.js). Both verdicts are asserted: a suspect body is
-# denied, and a benign body still gets the auto-approve it had before.
-BODY="$SP/body"
-mkdir -p "$BODY"
-printf 'winget install jq\n'                              >"$BODY/sysops-a.sh"
-printf 'mkfs.ext4 /dev/sdb1\n'                            >"$BODY/sysops-f.sh"
-printf 'systemctl stop nginx\n'                           >"$BODY/sysops-c.sh"
-printf 'cat ~/.ssh/id_rsa\n'                              >"$BODY/cred.sh"
-printf 'cp ~/.aws/credentials /tmp/exfil\n'               >"$BODY/cred-aws.sh"
-# Middle line, not first or last: proves the scan is per-line over the whole file.
-printf 'echo start\ndate\nwinget install jq\necho mid\necho done\n' >"$BODY/middle.sh"
-# CRLF body: the split is /\r?\n/, so a Windows-authored script is scanned too.
-printf 'echo a\r\nreboot\r\necho b\r\n'                   >"$BODY/crlf.sh"
-# Conservative by design: a commented-out dangerous command still denies, because
-# a comment cannot be told from code without executing the shell's parser.
-printf '# winget install jq\necho harmless\n'             >"$BODY/commented.sh"
-printf 'set -euo pipefail\necho hello\nls -la\n'          >"$BODY/benign.sh"
-printf ''                                                 >"$BODY/empty.sh"
-
-assert_eq "SP-30-deny-body-sysops-category-a"  "deny"  "$(inv_path "bash $BODY/sysops-a.sh")"
-assert_eq "SP-31-deny-body-sysops-category-f"  "deny"  "$(inv_path "bash $BODY/sysops-f.sh")"
-assert_eq "SP-32-deny-body-sysops-category-c"  "deny"  "$(inv_path "bash $BODY/sysops-c.sh")"
-assert_eq "SP-33-deny-body-credential-read"    "deny"  "$(inv_path "bash $BODY/cred.sh")"
-assert_eq "SP-34-deny-body-credential-copy"    "deny"  "$(inv_path "bash $BODY/cred-aws.sh")"
-assert_eq "SP-35-deny-body-middle-line"        "deny"  "$(inv_path "bash $BODY/middle.sh")"
-assert_eq "SP-36-deny-body-crlf-line"          "deny"  "$(inv_path "bash $BODY/crlf.sh")"
-assert_eq "SP-37-deny-body-commented-command"  "deny"  "$(inv_path "bash $BODY/commented.sh")"
-# Both-verdict counterpart (CPR-ORTH): the pre-existing allow must not regress.
-assert_eq "SP-38-allow-benign-multiline-body"  "allow" "$(inv_path "bash $BODY/benign.sh")"
-assert_eq "SP-39-allow-empty-body"             "allow" "$(inv_path "bash $BODY/empty.sh")"
-# The scan sits after containment, so it applies on the session-shape branch too.
-assert_eq "SP-40-deny-body-sysops-session-branch" "deny"  "$(inv_sess "bash $BODY/sysops-a.sh")"
-assert_eq "SP-41-allow-benign-session-branch"     "allow" "$(inv_sess "bash $BODY/benign.sh")"
-
-# A credential path reached through a variable: textHoldsIndirectCredentialAccess
-# correlates the `P=~/.ssh/id_rsa` assignment with the later `cat "$P"` across the
-# joined body. tests/feature-2170-round5-body-gaps.sh G3 pins it at the scan layer;
-# this case records it where it matters — the permission decision.
-printf 'P=~/.ssh/id_rsa\ncat "$P"\n' >"$BODY/cred-indirect.sh"
-assert_eq "SP-49-deny-body-credential-via-variable" "deny" "$(inv_path "bash $BODY/cred-indirect.sh")"
-# Both-direction control (CPR-ORTH): an ordinary variable read of a NON-credential
-# path must stay auto-approved, so the correlation is the credential table and not
-# `cat "$VAR"` itself.
-printf 'P=./notes.txt\ncat "$P"\n' >"$BODY/var-benign.sh"
-assert_eq "SP-49b-allow-body-variable-non-credential" "allow" "$(inv_path "bash $BODY/var-benign.sh")"
-
-# SKIPPED: fail-to-ask on a mid-flight read failure (readFileSync throwing after
-# the containment check). Because: constructing it needs a file that stats as a
-# readable regular file yet fails to open — a TOCTOU race or a POSIX-only chmod,
-# neither reproducible on Windows without weakening fixture isolation. The
-# surrounding try/catch that covers it is exercised by SP-8/SP-8b (stat failures).
-# TL3 gap: a genuine TOCTOU race on a real host, where the file is replaced between
-# the containment check and the read, stays unobservable at this layer.
-
 # --- SP-10: AUTO_APPROVE_TOOLS kill switch (hook process boundary) -----------
 EV="$TMPROOT_RAW/event.json"
 OUT="$TMPROOT_RAW/out.json"
@@ -281,8 +222,6 @@ run_auto_tool() {
 assert_eq "SP-50-runinterminal-allow"     "allow"       "$(run_auto_tool runInTerminal "bash $SP/probe.sh")"
 assert_eq "SP-51-runcommands-single-allow" "allow"      "$(run_auto_tool runCommands "bash $SP/probe.sh")"
 assert_eq "SP-52-runcommands-multi-passthrough" "passthrough" "$(run_auto_tool runCommands "bash $SP/probe.sh" "ls")"
-assert_eq "SP-53-runcommands-suspect-body-passthrough" "passthrough" \
-    "$(run_auto_tool runCommands "bash $BODY/sysops-a.sh")"
 # Third state of the kill switch (SP-10/SP-10b cover off/on): UNSET must behave as on,
 # or the auto-approve would silently never fire on a machine that never exports it.
 node "$HERE/mk-event.js" Bash "bash $SP/probe.sh" >"$EV"

@@ -413,17 +413,8 @@ would rewrite the path after inspection. A permission whose value is only known 
 therefore owned by an allow hook (`hooks/preuse-auto-approve.js` +
 `hooks/preuse-auto-approve/scratchpad-script.js`), not by `permissions.allow`.
 
-Beyond containment, `hooks/preuse-auto-approve/script-body-scan.js` reads the script's own
-content before approval and answers suspect (fall through to the normal confirmation prompt)
-when any line matches a denylist of known-dangerous shapes: system-ops/credential/dotenv/
-memory/history/clearance-token/sentinel writes, forge-scan targets, git-commit invocation,
-`permissions.deny`/`permissions.ask` rule matches (`hooks/lib/settings-deny-match.js`), unknown
-interpreter or direct execution (`hooks/lib/unrecognized-exec-check.js`), and egress/
-exfiltration tools such as curl/wget/scp/ssh (`hooks/lib/egress-command-check.js`). This is a
-denylist, not an allowlist: an unrecognized command shape defaults to approved, so it narrows —
-rather than closes — the gap defence-in-depth would otherwise leave at execution time. Any
-scan failure (unreadable file, parse exception) also answers suspect, per the fail-to-suspect
-contract the module and its call sites share.
+Approval beyond containment is path-only: the script's own content is not inspected before
+approval (see issue #2233 for tracked follow-up work on that gap).
 
 The write path (`isAllowedScratchpadTarget`) and the exec path (this hook) deliberately use
 allow roots of different breadth, and must not be "unified" later: the write path keeps its

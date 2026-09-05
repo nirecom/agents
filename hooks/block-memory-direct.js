@@ -9,8 +9,7 @@ const fs = require("fs");
 const { isWorkflowOff } = require("./lib/session-markers");
 const { resolveSessionId } = require("./workflow-state/session-id");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-// Detection lives in hooks/lib/memory-path-check.js (shared with the
-// scratchpad-script auto-approve body scan).
+// Detection lives in hooks/lib/memory-path-check.js.
 const { hitsMemory, bashHitsMemory } = require("./lib/memory-path-check");
 
 function readStdin() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: hooks/preuse-auto-approve.js, hooks/preuse-auto-approve/scratchpad-script.js, hooks/preuse-auto-approve/script-body-scan.js
-# Tags: capture-echo-guard, scratchpad-allow, pre-tool-use, hook, hook-registration, script-body-scan, TL3, run-e2e, scope:issue-specific
+# Tests: hooks/preuse-auto-approve.js, hooks/preuse-auto-approve/scratchpad-script.js
+# Tags: capture-echo-guard, scratchpad-allow, pre-tool-use, hook, hook-registration, TL3, run-e2e, scope:issue-specific
 # Real-wiring seam test for the scratchpad auto-approve (PreToolUse, allow-only).
 # The sibling TL2 files call isAllowedScratchpadInvocation directly, so they pass even
 # if the hook is registered on the wrong event, under a matcher that misses Bash, or
@@ -69,15 +69,9 @@ chmod +x "$MOCKBIN/gh"
 
 MARKS_M="$(node_path "$MARKS")"
 SP_M="$(node_path "$SP")"
-# Two scripts in the SAME scratchpad, differing only in whether their BODY is scannable
-# as safe. Each records its own execution with `mkdir -p`, which the body scan clears —
-# so the marker line never changes a script's verdict, only reports that it ran.
+# A script inside the scratchpad, contained per path only. It records its own
+# execution with `mkdir -p`.
 printf 'echo hello from the scratchpad\nmkdir -p "%s/safe-ran"\n' "$MARKS_M" > "$SP/safe.sh"
-# The suspect line is an alternate-shell invocation of a path that does not exist: the
-# scan must refuse the script on the SPELLING alone, and if the hook wrongly allows it,
-# the failing line still lets the marker line below run — so the marker is present
-# exactly when the wrong decision was made, and nothing harmful happens either way.
-printf 'zsh /nonexistent/never-here.sh\nmkdir -p "%s/suspect-ran"\n' "$MARKS_M" > "$SP/suspect.sh"
 
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
@@ -91,7 +85,7 @@ fi
 
 # Isolation made visible rather than assumed: --emit reduces the entry to the single
 # hook whose command carries the needle, so no sibling PreToolUse guard is registered
-# here and none can author the refusal that the suspect-turn row below attributes to
+# here and none can author the refusal that a suspect-turn row would attribute to
 # the auto-approve decision. Asserted, because that reduction lives in another file.
 N_CMDS="$(grep -c '"command"[[:space:]]*:' "$REPO/.claude/settings.json")"
 if [ "$N_CMDS" = "1" ] && grep -q 'preuse-auto-approve\.js' "$REPO/.claude/settings.json"; then
@@ -104,8 +98,8 @@ unset CLAUDECODE
 
 # run_turn <session-uuid> <prompt>
 # NOTE: no --dangerously-skip-permissions. That flag is what every other TL3 file uses,
-# and it is exactly what must NOT be set here: with it, both turns would run and the
-# hook's decision would be unobservable.
+# and it is exactly what must NOT be set here: with it, the hook's decision would be
+# unobservable.
 # The CLI's exit code is KEPT (round 13, C9): a timeout or CLI failure must not read
 # the same as a hook that refused the command.
 declare -A TURN_RC=()
@@ -157,98 +151,47 @@ probe_turn() {
 field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 
 T1="cccccccc-0000-4000-8000-00000000000a"
-T2="cccccccc-0000-4000-8000-00000000000b"
 
 echo "=== A: a safe scratchpad script is auto-approved and runs ==="
 run_turn "$T1" \
   "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_M/safe.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
 
-echo "=== B: a scratchpad script whose body does not scan clean is not auto-approved ==="
-run_turn "$T2" \
-  "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_M/suspect.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
-
 echo ""
-echo "=== the assertions: which script actually reached the shell ==="
-# Positive control FIRST: without it, an absent suspect marker proves only that nothing
-# ran at all — a hook that denies everything and a broken harness look identical.
+echo "=== the assertion: the script actually reached the shell ==="
 if [ -d "$MARKS/safe-ran" ]; then
     pass "safe-scratchpad-script-was-auto-approved"
 else
     fail "safe-scratchpad-script-was-auto-approved" "the safe script never ran: the hook is not registered on PreToolUse, its matcher misses Bash, or its allow decision is not being honoured"
 fi
 
-if [ -d "$MARKS/suspect-ran" ]; then
-    fail "suspect-scratchpad-script-not-auto-approved" "the suspect script reached the shell — a scratchpad path alone was enough to auto-approve it"
+if [ -s "$BASE/$T1.out" ]; then
+    pass "turn-produced-output"
 else
-    pass "suspect-scratchpad-script-not-auto-approved"
-fi
-
-if [ -s "$BASE/$T1.out" ] && [ -s "$BASE/$T2.out" ]; then
-    pass "both-turns-produced-output"
-else
-    fail "both-turns-produced-output" "a turn produced no output — the markers prove nothing"
+    fail "turn-produced-output" "the turn produced no output — the marker proves nothing"
 fi
 
 # Round 13, C9: a timed-out or crashed CLI leaves exactly the marker state a correct
-# deny leaves, so both turns must be shown to have COMPLETED. Turn B is expected to end
-# with the tool refused, which is a completed turn, not a CLI error.
-for t in "$T1" "$T2"; do
-    if [ "${TURN_RC[$t]}" -eq 0 ]; then
-        pass "turn-$t-cli-exited-zero"
-    else
-        fail "turn-$t-cli-exited-zero" "claude -p exited ${TURN_RC[$t]} (124 = the 180s timeout fired)"
-    fi
-    got="$(turn_is_error "$t")"
-    if [ "$got" = "false" ]; then
-        pass "turn-$t-transcript-is_error-false"
-    else
-        fail "turn-$t-transcript-is_error-false" "is_error=$got"
-    fi
-done
+# deny leaves, so the turn must be shown to have COMPLETED.
+if [ "${TURN_RC[$T1]}" -eq 0 ]; then
+    pass "turn-$T1-cli-exited-zero"
+else
+    fail "turn-$T1-cli-exited-zero" "claude -p exited ${TURN_RC[$T1]} (124 = the 180s timeout fired)"
+fi
+got="$(turn_is_error "$T1")"
+if [ "$got" = "false" ]; then
+    pass "turn-$T1-transcript-is_error-false"
+else
+    fail "turn-$T1-transcript-is_error-false" "is_error=$got"
+fi
 
-
-# Round 14, C8: an absent suspect marker is also what a turn that never TRIED the
-# script leaves behind — a model that paraphrased the prompt or reached for another
-# tool satisfies every assertion above while proving nothing about the hook. The
-# attribution this file needs is "ATTEMPTED but NOT approved": the suspect script must
-# appear as a real Bash tool_use, and that attempt must come back refused. Its twin on
-# the safe turn is "attempted AND approved", which is what the allow decision means.
+# Round 14, C8: an absent marker is also what a turn that never TRIED the script leaves
+# behind — a model that paraphrased the prompt or reached for another tool satisfies
+# every assertion above while proving nothing about the hook. The attribution this file
+# needs is "attempted AND approved", which is what the allow decision means.
 echo ""
-echo "=== the attribution: attempted, and approved or not ==="
+echo "=== the attribution: attempted, and approved ==="
 A_PROBE="$(probe_turn "$T1" "safe.sh")"
-B_PROBE="$(probe_turn "$T2" "suspect.sh")"
 
-got="$(field "$B_PROBE" attempted)"
-if [ "$got" = "true" ]; then
-    pass "suspect-turn-attempted-the-script"
-else
-    fail "suspect-turn-attempted-the-script" "no Bash tool_use carrying suspect.sh was found (attempted=$got) — the absent marker proves nothing about the hook"
-fi
-
-# `result_error=true` alone would be a false green: a script crash, a timeout, or a
-# different guard's deny all raise that flag. This hook is allow-only, so the one
-# outcome that is attributable to it NOT allowing is the permission system's own
-# refusal — the turn runs without --dangerously-skip-permissions, so a call the hook
-# declines to pre-approve falls through to a prompt no non-interactive session answers.
-got="$(field "$B_PROBE" permission_denial)"
-if [ "$got" = "true" ]; then
-    pass "suspect-turn-attempt-was-not-approved"
-else
-    fail "suspect-turn-attempt-was-not-approved" "permission_denial=$got — no permission refusal is linked to the suspect attempt, so a scratchpad path alone was enough to auto-approve it"
-fi
-
-# Corollary of the row above, kept separate so a CLI that reworded its refusal fails
-# only the attributing row and this one still reports whether the attempt errored.
-got="$(field "$B_PROBE" result_error)"
-if [ "$got" = "true" ]; then
-    pass "suspect-turn-attempt-result-is-an-error"
-else
-    fail "suspect-turn-attempt-result-is-an-error" "result_error=$got — the suspect attempt came back successful"
-fi
-
-# Both-direction control (CPR-ORTH): the safe script must have been attempted too, and
-# its attempt must have SUCCEEDED. Without it, a session that refused every tool call
-# would satisfy the two rows above.
 got="$(field "$A_PROBE" attempted)"
 if [ "$got" = "true" ]; then
     pass "safe-turn-attempted-the-script"
@@ -269,7 +212,7 @@ got="$(field "$A_PROBE" permission_denial)"
 if [ "$got" = "false" ]; then
     pass "safe-turn-attempt-is-not-a-permission-denial"
 else
-    fail "safe-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the allowed turn also hit the permission system, so the suspect-turn attribution cannot separate the two"
+    fail "safe-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the allowed turn also hit the permission system, so a scratchpad path alone was not enough to auto-approve it"
 fi
 
 echo ""

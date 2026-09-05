@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/block-capture-echo/shape.js, hooks/block-capture-echo/remedy.js, hooks/lib/unrecognized-exec-check.js, hooks/lib/egress-command-check.js, hooks/lib/display-only-mask.js
+# Tests: hooks/block-capture-echo/shape.js, hooks/block-capture-echo/remedy.js
 # Tags: mutation-probe, capture-echo-guard, scratchpad-allow, regex, security, scope:issue-specific, pwsh-not-required
 # Serial: no
 
@@ -61,20 +61,6 @@ M04-shape-subst-backtick~hooks/block-capture-echo/shape.js~^`~shape~X=`a`; echo 
 M05-remedy-SAFE_ARG_RE~hooks/block-capture-echo/remedy.js~^[A-Za-z0-9._/=:@,+-]+$~remedy~@E@ --target outline~bare~scratchpad~@E@~bare
 M06-remedy-SECRET_NAME_RE~hooks/block-capture-echo/remedy.js~(?:token|secret|password|passwd|api[_-]?key|apikey|credential|private[_-]?key)~remedy~@E@ --token=hunter2~scratchpad~bare~@E@ --target ghp_TESTFIXTUREAAAABBBBCCCCDDDDEEEE1234~scratchpad
 M07-remedy-OPAQUE_TOKEN_RE~hooks/block-capture-echo/remedy.js~^[A-Za-z0-9_+-]{20,}$~remedy~@E@ --target ghp_TESTFIXTUREAAAABBBBCCCCDDDDEEEE1234~scratchpad~bare~@E@ --token=hunter2~scratchpad
-M08-exec-INTERPRETER_RE~hooks/lib/unrecognized-exec-check.js~(?:node|nodejs|python|python3|npx|pnpx|bunx|ruby|perl|source)~unrecognized~node x.js~true~false~eval "$CMD"~true
-M09-exec-SUBSHELL_C_RE~hooks/lib/unrecognized-exec-check.js~(?:ba|z|k|da)?sh\s+-[a-zA-Z]*c~unrecognized~sh -c "x"~true~false~eval "$CMD"~true
-M10-exec-DOT_SOURCE_RE~hooks/lib/unrecognized-exec-check.js~\\.\\s+\\S~unrecognized~. /etc/profile~true~false~eval "$CMD"~true
-M11-exec-DIRECT_EXEC_RE~hooks/lib/unrecognized-exec-check.js~(?:\\.{1,2})?/[^\\s;|&]~unrecognized~./evil~true~false~eval "$CMD"~true
-M12-exec-PWSH_NAME~hooks/lib/unrecognized-exec-check.js~(?:pwsh|powershell)(?:\\.exe)?~unrecognized~pwsh x.ps1~true~false~eval "$CMD"~true
-M13-exec-BARE_EXE_RE~hooks/lib/unrecognized-exec-check.js~[^\\s;|&'\"]*\\.exe~unrecognized~evil.exe~true~false~eval "$CMD"~true
-M14-exec-EVAL_RE~hooks/lib/unrecognized-exec-check.js~eval(?=\\s|$)~unrecognized~eval "$CMD"~true~false~node x.js~true
-M15-exec-ALT_SHELL_NAME~hooks/lib/unrecognized-exec-check.js~(?:zsh|dash|ksh)(?:\\.exe)?~unrecognized~zsh x.sh~true~false~eval "$CMD"~true
-M16-egress-EGRESS_CMD_RE~hooks/lib/egress-command-check.js~(?:curl|curl\.exe|wget|scp|sftp|ssh|telnet|nc|ncat|netcat)~egress~curl https://x~true~false~gh auth token~true
-M17-egress-GH_CREDENTIAL_RE~hooks/lib/egress-command-check.js~gh(?:\.exe)?\s+(?:auth\s+token|secret)~egress~gh auth token~true~false~curl https://x~true
-M18-egress-RSYNC_REMOTE_RE~hooks/lib/egress-command-check.js~rsync(?=\s)[\s\S]*\s\S+@\S+:~egress~rsync -a /a u@h:/b~true~false~curl https://x~true
-M19-mask-DISPLAY_ONLY_RE~hooks/lib/display-only-mask.js~^\s*(?:echo|printf)(?:\.exe)?(?=\s)~mask~echo hi~true~false~ls -la~false
-M20-mask-SUBSTITUTION_RE~hooks/lib/display-only-mask.js~\$\(|`~mask~echo `x`~false~true~echo hi~true
-M21-mask-SEGMENT_SPLIT_RE~hooks/lib/display-only-mask.js~([;|&()\n])~mask~ls; echo hi~true~false~echo hi~true
 MUT_CASES
 
 # --- Harness self-checks: the probes must be able to fail --------------------------
@@ -82,7 +68,7 @@ assert_eq "MX-1-unknown-fragment-is-reported" "FRAGMENT_NOT_FOUND" \
     "$(judge hooks/block-capture-echo/shape.js 'NO_SUCH_FRAGMENT_XYZ' shape 'ls')"
 assert_eq "MX-2-missing-module-is-reported" "MODULE_MISSING" \
     "$(judge hooks/no-such-module.js --none shape 'ls')"
-assert_eq "MX-3-every-row-ran" "21" "$ROWS"
+assert_eq "MX-3-every-row-ran" "7" "$ROWS"
 
 echo ""
 echo "regex-mutation: PASS=$PASS FAIL=$FAIL ROWS=$ROWS"

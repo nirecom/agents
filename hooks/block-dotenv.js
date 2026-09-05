@@ -5,8 +5,7 @@
 
 const fs = require("fs");
 const { getBasename } = require("./lib/path-match");
-// Detection lives in hooks/lib/dotenv-check.js (shared with the
-// scratchpad-script auto-approve body scan).
+// Detection lives in hooks/lib/dotenv-check.js.
 const {
   isDotenvPath,
   checkBashCommand,

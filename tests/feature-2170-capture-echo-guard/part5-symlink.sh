@@ -57,9 +57,9 @@ mkdir -p "$SP/sub" "$EXT"
 # proves nothing about execution (running it would not rewrite it either). Each escape
 # target instead creates a sentinel as a SIDE EFFECT, so "marker absent" is direct
 # evidence the judgment path never ran the script it was asked to judge.
-# The sentinel is a DIRECTORY made with `mkdir -p`, which the body scan classifies safe.
-# That is deliberate: every escape target's BODY is innocuous, so the only thing that can
-# produce a deny below is the containment check under test, never the body scan.
+# The sentinel is a DIRECTORY made with `mkdir -p`, an innocuous body. That is
+# deliberate: the only thing that can produce a deny below is the containment
+# check under test.
 MARK_EXT="$TMPROOT_RAW/executed-external"
 MARK_ROOT="$TMPROOT_RAW/executed-outside-root"
 printf 'echo pwned\nmkdir -p %s\n' "$MARK_EXT" >"$EXT/evil.sh"

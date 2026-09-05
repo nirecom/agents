@@ -1,5 +1,4 @@
-// Pure credential-path detection. Consumers: hooks/block-credentials.js (tool
-// inputs) and hooks/preuse-auto-approve/scratchpad-script.js (script body lines).
+// Pure credential-path detection. Consumer: hooks/block-credentials.js.
 "use strict";
 
 const { checkBashCommand } = require("./command-parser");
@@ -73,33 +72,9 @@ function commandTouchesCredentials(command) {
   });
 }
 
-// Text-level correlation for the two-step form `P=~/.ssh/id_rsa` … `cat "$P"`,
-// which no single command's text reveals. Deliberately NOT dataflow: it pairs an
-// assignment of a credential-shaped path with a later use of that same name as an
-// argument of a file-reading command, anywhere in the same body.
-const CRED_ASSIGN_RE = /(?:^|[\s;|&(])([A-Za-z_][A-Za-z0-9_]*)=["']?([^\s;|&"'`]+)["']?/g;
-const READ_CMDS_ALT = "cat|less|more|head|tail";
-
-function textHoldsIndirectCredentialAccess(text) {
-  if (typeof text !== "string" || text === "") return false;
-  CRED_ASSIGN_RE.lastIndex = 0;
-  let m;
-  while ((m = CRED_ASSIGN_RE.exec(text)) !== null) {
-    if (!isCredentialPath(m[2])) continue;
-    const useRe = new RegExp(
-      `(?:^|[\\s;|&(])(?:${READ_CMDS_ALT})(?=\\s)[^;|&\\n]*\\$\\{?${m[1]}\\}?(?![A-Za-z0-9_])`,
-    );
-    // Only a read AFTER the assignment can see the credential path, so the search
-    // starts where the assignment ends.
-    if (useRe.test(text.slice(m.index + m[0].length))) return true;
-  }
-  return false;
-}
-
 module.exports = {
   CREDENTIALS_TABLE,
   isCredentialPath,
   isCredentialGlobPattern,
   commandTouchesCredentials,
-  textHoldsIndirectCredentialAccess,
 };

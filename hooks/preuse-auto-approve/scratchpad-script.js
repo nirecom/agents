@@ -1,7 +1,7 @@
 "use strict";
 // isAllowedScratchpadInvocation(cmdText) — true ONLY for `bash <absolute-path>.sh`
-// where the script resolves inside THIS session's scratchpad directory AND its
-// body passes ./script-body-scan.js (the other Bash guards' predicates).
+// where the script resolves inside THIS session's scratchpad directory (path
+// containment only — script content is not inspected; see issue #2233).
 // FAIL-TO-ASK: every uncertainty (no session context, unresolvable path, parse
 // failure, any thrown error) returns false, which surfaces the normal permission
 // prompt. It never denies — this module feeds an allow-only hook.
@@ -23,7 +23,6 @@ const {
   isRepoExcluded,
 } = require("../lib/claude-scratchpad-base");
 const { findRepoRoot } = require("../enforce-worktree/git-repo-detection");
-const { scriptBodyIsSuspect } = require("./script-body-scan");
 
 // Any of these in the RAW argument means the shell would rewrite the path after
 // this hook inspected it, so the inspected path is not what runs.
@@ -104,8 +103,6 @@ function isAllowedScratchpadInvocation(cmdText) {
       ? segmentsUnder(fs.realpathSync(root.root), realScript) !== null
       : isUnderSessionShape(realScript, root.sessionId);
     if (!contained) return false;
-
-    if (scriptBodyIsSuspect(realScript)) return false;
 
     // F1: a poisoned TEMP can place the whole claude base inside a repo.
     return !isRepoExcluded(realScript, findRepoRoot);

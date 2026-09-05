@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/dotenv-check.js, hooks/lib/memory-path-check.js, hooks/lib/history-path-check.js, hooks/lib/settings-deny-match.js
-# Tags: script-body-scan, pretooluse, classifier, table-driven, extraction-parity, scope:issue-specific, pwsh-not-required
+# Tests: hooks/lib/dotenv-check.js, hooks/lib/memory-path-check.js, hooks/lib/history-path-check.js
+# Tags: pretooluse, classifier, table-driven, extraction-parity, scope:issue-specific, pwsh-not-required
 # #2170 round-2 C10 extracted the pure predicates out of block-dotenv.js,
-# block-memory-direct.js and block-history-direct.js so script-body-scan.js can
-# reuse them, and added settings-deny-match.js. Two obligations: the predicates
-# still classify correctly (G1, both directions), and extraction did not shift
-# the ORIGINAL hooks' verdicts (G2, hook subprocess vs lib, same input).
+# block-memory-direct.js and block-history-direct.js. Two obligations: the
+# predicates still classify correctly (G1, both directions), and extraction
+# did not shift the ORIGINAL hooks' verdicts (G2, hook subprocess vs lib, same input).
 # TL3 gap: real PreToolUse dispatch — feature-2170-capture-echo-guard part2/6.
 
 set -uo pipefail
@@ -69,24 +68,7 @@ history-hit-canonical | --history | printf 'x' > docs/history.md      | hit
 history-hit-rotated   | --history | printf 'x' > docs/history/2026.md | hit
 history-miss-rulesdoc | --history | printf 'x' > rules/docs/history.md | miss
 history-miss-read     | --history | cat docs/history.md               | miss
-deny-hit-force-push   | --deny    | git push --force                  | hit
-deny-hit-hard-reset   | --deny    | git reset --hard origin/main      | hit
-deny-hit-no-verify    | --deny    | git commit --no-verify -m x       | hit
-deny-miss-plain-push  | --deny    | git push origin feature/x         | miss
-deny-miss-status      | --deny    | git status --short                | miss
 TABLE
-
-# The `*` in a rule is the harness's wildcard, every other character literal.
-assert_eq "G1-rule-wildcard-spans"  "hit"  "$(node "$DRIVER" --rule '*push --force' 'git -C /r push --force' 2>&1)"
-assert_eq "G1-rule-literal-dot"     "miss" "$(node "$DRIVER" --rule 'a.c' 'abc' 2>&1)"
-assert_eq "G1-rule-anchored-both"   "miss" "$(node "$DRIVER" --rule 'dd *' 'x dd y' 2>&1)"
-assert_eq "G1-deny-empty-input"     "miss" "$(node "$DRIVER" --deny '' 2>&1)"
-# A misresolved settings.json fails SOFT to an empty rule list — which would
-# silently un-guard every deny rule inside script bodies. `<n>:0` proves each
-# Bash rule compiled AND matches its own literal self-probe.
-DENY_COUNT="$(node "$DRIVER" --deny-rule-count 2>&1)"
-assert_eq "G1-every-bash-deny-rule-live" "0" "${DENY_COUNT##*:}"
-assert_eq "G1-deny-rules-nonempty" "yes" "$([ "${DENY_COUNT%%:*}" -gt 0 ] && echo yes || echo no)"
 
 # --- G2: extraction parity — the ORIGINAL hook vs the extracted lib ---------
 # Same command string through the hook subprocess and through the lib; block
@@ -120,12 +102,6 @@ parity "memory-hit"   "block-memory-direct.js"  --memory  "printf 'x' > $MEMFILE
 parity "memory-miss"  "block-memory-direct.js"  --memory  "printf 'x' > /tmp/MEMORY.md"
 parity "history-hit"  "block-history-direct.js" --history "printf 'x' > docs/history.md"
 parity "history-miss" "block-history-direct.js" --history "printf 'x' > rules/docs/history.md"
-
-# SKIPPED: parity for settings-deny-match.js against its source of truth.
-# Because: the Bash deny list is enforced by the Claude Code harness itself, not
-# by a hook this layer can spawn; G1-every-bash-deny-rule-live is the closest
-# available check (every rule compiles and matches its own literal).
-# TL3 gap: only a live session shows the harness and this module agreeing.
 
 echo ""
 echo "==================================================="

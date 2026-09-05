@@ -4,9 +4,6 @@
 //   --dotenv <cmd>     dotenv-check.js        checkBashCommand
 //   --memory <cmd>     memory-path-check.js   bashHitsMemory
 //   --history <cmd>    history-path-check.js  bashHitsProtected
-//   --deny <cmd>       settings-deny-match.js matchesBashDenyRule
-//   --rule <pat> <cmd> settings-deny-match.js ruleToRegExp(pat).test
-//   --deny-rule-count  "<bash rules>:<rules whose own self-probe missed>"
 //   --memdir           MEMORY_DIR, forward-slashed, for the bash side to reuse
 
 const path = require("path");
@@ -48,35 +45,6 @@ switch (mode) {
   case "--history":
     emit(verdict(load("hooks/lib/history-path-check.js"), "bashHitsProtected", arg));
     break;
-  case "--deny":
-    emit(verdict(load("hooks/lib/settings-deny-match.js"), "matchesBashDenyRule", arg));
-    break;
-  case "--rule": {
-    const mod = load("hooks/lib/settings-deny-match.js");
-    if (typeof mod.ruleToRegExp !== "function") emit("EXPORT_MISSING");
-    try {
-      emit(mod.ruleToRegExp(arg).test(process.argv[4] === undefined ? "" : process.argv[4]) ? "hit" : "miss");
-    } catch (e) {
-      emit("ERROR:" + (e && e.message ? e.message : String(e)));
-    }
-    break;
-  }
-  case "--deny-rule-count": {
-    // settings.json is resolved from __dirname, not cwd, and a wrong resolution
-    // fails SOFT (empty rule list) — so this count is the only signal that every
-    // Bash deny rule really reaches a script body.
-    const settings = require(path.join(AGENTS_DIR, "settings.json"));
-    const deny = (settings.permissions && settings.permissions.deny) || [];
-    const bashRules = deny.filter((r) => typeof r === "string" && /^Bash\(/.test(r.trim()));
-    const mod = load("hooks/lib/settings-deny-match.js");
-    const unmatched = bashRules.filter((r) => {
-      const inner = /^Bash\(([\s\S]*)\)$/.exec(r.trim());
-      if (!inner) return true;
-      return !mod.matchesBashDenyRule(inner[1].split("*").join("X"));
-    });
-    emit(bashRules.length + ":" + unmatched.length);
-    break;
-  }
   case "--memdir": {
     const mod = load("hooks/lib/memory-path-check.js");
     if (typeof mod.MEMORY_DIR !== "string") emit("EXPORT_MISSING");
