@@ -9,23 +9,23 @@
 # checker would report a file the repo does not own as an owned reader, and the pointer
 # check would read whatever is on the far end.
 
+echo ""
+echo "=== containment: lstat-based reader/pointer checks and the reserved-token probe ==="
+
 # The containment helper now uses lstat, so a link is judged as a link. Two consumers get
 # it — the reader-existence check and the minimized-pointer check — and a third, the
 # reserved-token existence probe, previously built its path with path.join(root, ...) and
 # so probed outside the root whenever the token carried `..`; it now goes through the same
 # helper (existsInRoot).
 
+CT_N=0
+
 # Every reject case here is paired with a REGULAR FILE in the identical position, because
 # "refuses a symlink" and "refuses everything at that path" produce the same output.
 # Symlink creation needs privilege on Windows; when it is unavailable the symlink cases
 # SKIP loudly rather than passing on a copy that was never a link.
-# Assumes TOKEN, MARKER, BASE, node_path(), wr(), mk_repo(), run_checker(), outfile_for(),
+# Assumes TOKEN, MARKER, BASE, node_path(), wr(), mk_tree(), run_checker(), outfile_for(),
 # rd_policy(), rd_base(), rd_min_base(), rd_expect(), emit_minimized(), pass(), fail().
-
-echo ""
-echo "=== containment: lstat-based reader/pointer checks and the reserved-token probe ==="
-
-CT_N=0
 
 # ct_symlink <link> <target> -> 0 when a REAL symlink now exists at <link>.
 # `ln -s` on Windows without the privilege silently copies, so the link bit is what is
@@ -118,7 +118,7 @@ rd_expect "S4: a REGULAR file at the same pointer path is accepted — S3 reject
 # at all, so the only thing the checker can say about the token is whether it EXISTS.
 ct_tree() {
     local d="$1" tok="$2"
-    mk_repo "$d"
+    mk_tree "$d"
     wr "$d/rules/plain.md" <<'EOF'
 # Plain unconditional rule
 EOF

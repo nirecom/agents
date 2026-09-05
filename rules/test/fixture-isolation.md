@@ -47,9 +47,10 @@ POSIX-style path on Windows.
 
 ## Disable git hooks in fixture repos
 
-Every fixture repo created with `git init` must immediately run
-`git config core.hooksPath /dev/null`. Otherwise the installed `pre-commit`
-hook fires inside the fixture and can block or slow the test.
+Every fixture repo must have `core.hooksPath` set to `/dev/null` before anything runs in it.
+A repo made by `git init` sets it on the next line.
+A repo made by copying an existing `.git` inherits it from the template repo, so set it once there and never per copy.
+Otherwise the installed `pre-commit` hook fires inside the fixture and can block or slow the test.
 
 ## LOCAL_SKILL_MD vs SKILL_MD
 
