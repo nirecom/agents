@@ -212,12 +212,19 @@ assert_warned() {
     assert_eq "$1 — exactly 1 stderr warning line" "1" "$(err_lines)"
 }
 
-# assert_reported <name> — the success shape: one stdout line, nothing on stderr.
-assert_reported() {
+# assert_reported_n <name> <want_stdout_lines> — the success shape: N stdout
+# lines, nothing on stderr. C4 grows runInit's success report to a second
+# line (the index-resync notice); the daemon-stop success paths in
+# stop-identity.sh / stop-pid.sh still report exactly one line, so the line
+# count is a parameter rather than baked into the helper.
+assert_reported_n() {
     assert_eq "$1 — exit 0" "0" "$RC"
-    assert_eq "$1 — exactly 1 stdout line" "1" "$(out_lines)"
+    assert_eq "$1 — exactly $2 stdout line(s)" "$2" "$(out_lines)"
     assert_eq "$1 — stderr is 0 bytes" "0" "$(err_bytes)"
 }
+
+# assert_reported <name> — the success shape: one stdout line, nothing on stderr.
+assert_reported() { assert_reported_n "$1" 1; }
 
 # assert_no_secret <name> <sentinel> — the sentinel reached no channel a user or
 # a log ever sees. Counted, not grepped for absence, so a broken path is visible.
