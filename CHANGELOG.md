@@ -415,3 +415,7 @@ Changes: Fixed: sessions that never ran workflow-init no longer get spammed with
 ### FEATURE: PR #2235 (2026-09-05)
 Background: fix(#2201): add quoted-absolute-path axis to settings-allow-rules PATH_TEMPLATES
 Changes: Fixed: commands registered in the internal `settings-allow-commands.txt` SSOT (e.g. `resolve-worktree-path`) that were invoked with a quoted absolute path kept triggering permission prompts instead of being auto-allowed; the generated allow-rule templates now cover that spelling.
+
+### FEATURE: PR #2229 (2026-09-05)
+Background: feat(#2170): block capture-then-echo anti-pattern via PreToolUse IR hook
+Changes: Fixed a bug (#2170) where storing a command's output in a variable before echoing it could get auto-approved instead of prompting for the simpler bare-command form.
