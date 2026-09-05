@@ -2,23 +2,15 @@
 # Tests: skills/, CLAUDE.md, docs/architecture/claude-code/workflow.md, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/lib/next-step/advance-args.js
 # Tags: tl1, static, workflow, skills, argv, scope:issue-specific
 
-# #1947 regression guard: no model-executed instruction may put a bare `complete`
-# argv token on a next-step / set-workflow-type command line — the worktree
-# isolation classifier reads it as the bash builtin and blocks the whole call.
-# Why here and not only at the four observed call sites: the ban is a property of
-# the FILE CLASS (everything a model reads and re-types), so the scan is
-# recursive and regex-based and catches a re-introduction in any new file.
+# #1947 regression guard: no model-executed instruction may put a bare `complete` argv
+# token on a next-step / set-workflow-type command line — the worktree isolation
+# classifier reads it as the bash builtin and blocks the call. The ban is a property of
+# the FILE CLASS (everything a model reads and re-types), so the scan is recursive.
 
-# Residual gap. The `# TL3 gap` block that skills/_shared/test-design.md mandates
-# is for a TL2-instead-of-TL3 choice and does not apply: this file is TL1 by
-# nature (it reads repo text; there is no environment to make more real). What
-# the scan still cannot see, recorded because silence would read as a coverage
-# claim: a command assembled by SHELL CONCATENATION or a heredoc that never puts
-# the pieces adjacent (`--status "$st"` with `st` set elsewhere) — indirection
-# defeats any textual scan. Backslash continuations are NO LONGER a gap: every
-# detector runs over logical lines (see join_continuations). The runtime half of
-# the ban is tests/fix-1947-advance-status-flag.sh; the external EnterWorktree
-# classifier is out of reach of both (see that file's `# TL3 gap`).
+# Residual gap (TL1 by nature, so test-design.md's `# TL3 gap` block does not apply):
+# a command assembled by shell concatenation or a heredoc that never puts the pieces
+# adjacent. Continuations are covered (join_continuations); the runtime half of the
+# ban is tests/fix-1947-advance-status-flag.sh.
 
 set -uo pipefail
 
@@ -249,6 +241,10 @@ CLAUDE.md|--advance --step <step> --complete|1+
 docs/architecture/claude-code/workflow.md|--advance --step run_tests --skipped|1+
 docs/architecture/claude-code/workflow.md|**`--mark <step>`**|1+
 docs/architecture/claude-code/workflow.md|--mark <step>` marks one step complete|1+
+skills/write-tests/SKILL.md|--advance --step write_tests --complete --next|1+
+skills/deep-research/SKILL.md|--advance --step research --complete --next|1+
+docs/architecture/claude-code/workflow.md|--advance --step write_tests --complete|1+
+docs/architecture/claude-code/workflow.md|--advance --step research --complete|1+
 MATRIX
 
 echo ""
@@ -362,6 +358,59 @@ else
   ' 2>&1 || echo "MODULE_LOAD_FAILED")"
   if [ -z "$INTERSECT" ]; then pass "S7b: RESERVED_ARGV_FLAGS and STATUS_FLAGS do not intersect"
   else fail "S7b: status flags collide with reserved argv flags: $INTERSECT"; fi
+fi
+
+echo ""
+echo "=== S10: the two migrated doors no longer instruct the sentinel echo (#2102) ==="
+# S4 says the new CLI form arrived; S10 says the old sentinel literal LEFT the two
+# doors that #2102 migrates. Row 3 is the non-vacuity control: the same literal
+# legitimately survives in make-outline-plan's MOP-0d aggregate emit, so a broken
+# migration that stripped it from every file would still leave S10 green without it.
+# Columns: file|literal|present|absent
+run_literal_matrix() {
+  local f t want got
+  while IFS='|' read -r f t want; do
+    case "$f" in ''|'#'*) continue ;; esac
+    if [ ! -f "$f" ]; then fail "S10: $f exists -- file not found"; continue; fi
+    got="$(grep -cF -- "$t" "$f" || true)"
+    if [ "$want" = "absent" ]; then
+      check_eq "S10: $f no longer carries [$t]" 0 "$got"
+    else
+      if [ "$got" -ge 1 ]; then pass "S10: $f still carries [$t] (control)"
+      else fail "S10: $f lost [$t] -- the absent-rows above are now vacuous"; fi
+    fi
+  done
+}
+
+run_literal_matrix <<'MATRIX'
+skills/write-tests/SKILL.md|WORKFLOW_MARK_STEP_write_tests_complete|absent
+skills/deep-research/SKILL.md|WORKFLOW_MARK_STEP_research_complete|absent
+skills/make-outline-plan/SKILL.md|WORKFLOW_MARK_STEP_research_complete|present
+MATRIX
+
+echo ""
+echo "=== S11: write-tests SKILL.md Completion instructs staging BEFORE the advance call, with no cd prefix ==="
+# INV-1 (#2102) is an evidence-cwd property; the INSTRUCTION half that makes it hold in a
+# live session is unpinned by any other test: WT completion must (a) stage tests/ before
+# calling the CLI door -- an unstaged tests/ makes the evidence check reject fail-closed --
+# and (b) never wrap the call in `cd "$AGENTS_CONFIG_DIR" &&`, which points
+# resolveTrustedRepoDir() at the main agents worktree instead of the linked one
+# (tests/feature-2102-door-parity/evidence-cwd.sh E1b/E2b reproduce exactly that failure).
+WT_SKILL="skills/write-tests/SKILL.md"
+if [ ! -f "$WT_SKILL" ]; then
+  fail "S11: $WT_SKILL exists -- file not found"
+else
+  if grep -qF -- 'git add tests/' "$WT_SKILL"; then pass "S11a: the Completion section instructs staging tests/ first"
+  else fail "S11a: no 'git add tests/' staging directive found in $WT_SKILL"; fi
+  if grep -qF -- 'Do NOT prefix step 2 with' "$WT_SKILL"; then pass "S11b: the Completion section forbids the cd-prefix form"
+  else fail "S11b: no 'Do NOT prefix step 2 with' directive found in $WT_SKILL"; fi
+  STAGE_LINE="$(grep -nF -- 'git add tests/' "$WT_SKILL" | head -n1 | cut -d: -f1)"
+  ADVANCE_LINE="$(grep -nF -- '--advance --step write_tests --complete --next' "$WT_SKILL" | head -n1 | cut -d: -f1)"
+  if [ -n "$STAGE_LINE" ] && [ -n "$ADVANCE_LINE" ] && [ "$STAGE_LINE" -lt "$ADVANCE_LINE" ]; then
+    pass "S11c: staging is instructed BEFORE the advance call (load-bearing order)"
+  else
+    fail "S11c: staging line [$STAGE_LINE] is not before the advance call line [$ADVANCE_LINE]"
+  fi
 fi
 
 echo ""
