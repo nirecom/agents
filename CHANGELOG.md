@@ -431,3 +431,7 @@ Changes: `tests/run-all.sh`'s parallel test lane now schedules historically long
 ### FEATURE: PR #2242 (2026-09-06)
 Background: fix(#2111): eliminate per-call library re-sourcing and per-test-case git-repo creation in Windows test suites
 Changes: Fixed prohibitively slow Windows Git Bash test runs by removing redundant per-call library sourcing and per-test-case git-repo setup in two test suites (#2111).
+
+### FEATURE: PR #2246 (2026-09-06)
+Background: feat(#2215): CodeGraph telemetry default, runInit notice, UserPromptSubmit context hook
+Changes: CodeGraph: telemetry is now enabled by default (opt out with `CODEGRAPH_TELEMETRY=0`), registration prints a clearer notice about this, and prompts are automatically enriched with relevant CodeGraph context

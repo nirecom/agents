@@ -386,3 +386,7 @@ Changes: FEATURE: LPT (Longest-Processing-Time-first) submission ordering for te
 ### FEATURE: PR #2242 — feature/2111-windows-concern-ledger-check-on (2026-09-06, 968095e7b3a23e3210ca5463e224bedacf74aff8, #2242)
 Background: fix(#2111): eliminate per-call library re-sourcing and per-test-case git-repo creation in Windows test suites
 Changes: fix(#2111): eliminated per-call library re-sourcing and per-test-case git-repo-creation overhead in the concern-ledger and check-on-demand-rules test suites, cutting their Windows Git Bash wall-clock cost; added `docs/architecture/claude-code/test-runner-parallelism.md` §9 corollary documenting the two judgment criteria (no per-assertion re-sourcing, no per-case `git init`) for identifying other suites subject to the same class of cost. <!-- compose-doc-append-sentinel: branch=feature/2111-windows-concern-ledger-check-on pr=#2242 -->
+
+### FEATURE: PR #2246 — feature/2215-codegraph-runinit-telemetry-userpromptsu (2026-09-06, 32039e628ac41f0603d15c9275ad1e4062f56ff1, #2246)
+Background: feat(#2215): CodeGraph telemetry default, runInit notice, UserPromptSubmit context hook
+Changes: feat(#2215): flip CodeGraph telemetry default to enabled with a clearer runInit disclosure notice, add ownership-marker-based MCP registration tracking, and introduce a UserPromptSubmit hook (`hooks/codegraph-context-inject.js`) that injects per-prompt CodeGraph context <!-- compose-doc-append-sentinel: branch=feature/2215-codegraph-runinit-telemetry-userpromptsu pr=#2246 -->
