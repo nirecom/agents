@@ -11,15 +11,9 @@ Investigate the codebase related to the given task.
 
 ### Step SVC-0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+Before any tool call below that references <PLANS_DIR>, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` exactly once as one bare command — never assigned to a variable and echoed back.
 
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
-
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
+Read the printed absolute path from its stdout and substitute it for every <PLANS_DIR>
 placeholder in the remainder of this SKILL.md. Subagent prompts must receive
 the resolved absolute path as a literal string (subagents cannot expand $VAR).
 Reuse across all subsequent steps in this skill invocation — do not re-resolve.

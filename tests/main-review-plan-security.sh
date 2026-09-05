@@ -246,7 +246,7 @@ else
     # rows 16b/16c/16d closed, and gets the same three-part treatment.
     #
     # 15b — reject verb and contradiction condition on the SAME directive line
-    # (approved plan Step 5: 「直接矛盾する場合のみ reject」).
+    # (approved plan Step 5: "reject only when there is a direct contradiction").
     printf '%s' "$rps3_block" | grep -qE '([Rr]eject).*([Cc]ontradict|[Cc]onflict|[Rr]eopen|[Oo]verride)|([Cc]ontradict|[Cc]onflict|[Rr]eopen|[Oo]verride).*([Rr]eject)' \
         || { fail "15b: no RPS-3 line binds the reject disposition to the upstream-contradiction condition"; r15b=1; }
     # 15c — no OTHER line may dispose of a concern unconditionally. Exclusions: the

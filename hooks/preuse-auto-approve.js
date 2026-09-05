@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// PreToolUse hook (matcher: Monitor|EnterWorktree): auto-approves low-risk
-// tool calls so the user is not interrupted for routine, non-destructive
-// actions — background Monitor polling, and EnterWorktree moves that land
-// inside the sanctioned WORKTREE_BASE_DIR tree.
+// PreToolUse hook (matcher: Monitor|EnterWorktree|Bash|runInTerminal|runCommands):
+// auto-approves low-risk tool calls so the user is not interrupted for routine,
+// non-destructive actions — background Monitor polling, EnterWorktree moves inside
+// the sanctioned WORKTREE_BASE_DIR tree, and `bash <this session's scratchpad>.sh`.
 //
 // Fail-safe by construction: any missing input, missing config, or
 // unexpected shape falls through to "no output, exit 0" — which leaves the
@@ -12,6 +12,8 @@
 
 const fs = require("fs");
 const path = require("path");
+const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
+const { isAllowedScratchpadInvocation } = require("./preuse-auto-approve/scratchpad-script");
 
 try {
   require("./lib/load-env").loadDefaultEnv();
@@ -126,6 +128,23 @@ function main() {
 
     if (isInsideBase(resolvedPath, base)) {
       allow("EnterWorktree auto-approved: path is within WORKTREE_BASE_DIR");
+      return;
+    }
+    passThrough();
+    return;
+  }
+
+  if (isCommandTool(tool)) {
+    let units = null;
+    try {
+      units = commandListOf(tool, input.tool_input);
+    } catch (_e) {
+      passThrough();
+    }
+    // One execution unit only: a list is several independent commands, and this
+    // allow covers exactly one `bash <scratchpad script>` invocation.
+    if (Array.isArray(units) && units.length === 1 && isAllowedScratchpadInvocation(units[0])) {
+      allow("Scratchpad script auto-approved: bash invocation of a .sh file inside this session's scratchpad");
       return;
     }
     passThrough();

@@ -44,6 +44,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
 | `hooks/gate-plan-skip-sentinel.js` | PreToolUse | **No** | **No** |
 | `hooks/check-cross-platform.js` | PreToolUse | **No** | **No** |
+| `hooks/block-capture-echo.js` | PreToolUse | **No** | **No** |
 | `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
 | `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
 | `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
