@@ -6,14 +6,16 @@
 T14_WANT="nonzero/dropped-named/keep-silent"
 T15_WANT="nonzero/gone-named/keep-silent"
 
-# T14 -- ONE TEMPLATE PER ROW, and the pair is why there are sixteen rather than eight.
+# T14 -- ONE TEMPLATE PER ROW, and the pair is why there are twenty-four rather than twelve.
 # Reverse-matching is regex work, and the argument-less spelling of a family differs from its
 # argument-bearing sibling by exactly the trailing ` *` -- the character an over-eager pattern
-# swallows and an under-eager one demands. T7b hands all sixteen over at once, so recognising
+# swallows and an under-eager one demands. T7b hands all twenty-four over at once, so recognising
 # ONE is enough to pass there. Each spelling therefore gets its own fixture, deployed healthy
 # first so the run has a real deployed file to classify, with the in-sync command asserted to
 # stay OUT of the report so a "list everything" implementation cannot read as a classifier.
-t14_path_template() { # <k 1..16> -> "nonzero/dropped-named/keep-silent" | sentinel
+# Rows 17-24 are #2201's QUOTED absolute families, where the quote sits between the path and
+# the wildcard -- the one place a reverse matcher is likeliest to swallow one character too many.
+t14_path_template() { # <k 1..24> -> "nonzero/dropped-named/keep-silent" | sentinel
     have_gen || { missing_gen; return; }
     have_lib || { missing_lib; return; }
     local fx rcv named silent
@@ -55,13 +57,21 @@ t14_path_table() {
 14|bash -c '<I> "$AGENTS_CONFIG_DIR/<P>"' (argument-less)
 15|bash -c 'cd "$AGENTS_CONFIG_DIR" && <I> "$AGENTS_CONFIG_DIR/<P>" *'
 16|bash -c 'cd "$AGENTS_CONFIG_DIR" && <I> "$AGENTS_CONFIG_DIR/<P>"' (argument-less)
+17|<I> "<R>/<P>" * (#2201 QUOTED absolute POSIX path)
+18|<I> "<R>/<P>" (#2201 QUOTED absolute POSIX path, argument-less)
+19|<I> "<R2W>\<W>" * (#2201 QUOTED absolute path, Windows separators)
+20|<I> "<R2W>\<W>" (#2201 QUOTED absolute path, Windows separators, argument-less)
+21|"<R>/<P>" * (#2201 QUOTED absolute POSIX path, no interpreter prefix)
+22|"<R>/<P>" (#2201 QUOTED absolute POSIX path, no interpreter prefix, argument-less)
+23|"<R2W>\<W>" * (#2201 QUOTED absolute Windows path, no interpreter prefix)
+24|"<R2W>\<W>" (#2201 QUOTED absolute Windows path, no interpreter prefix, argument-less)
 T14_PATH_CASES
 }
 
 # T15 -- THE SIX BARE FORMS, which T7b never exercises at all. They are keyed on a different
 # SSOT (install/path-exposed-commands.txt) and extract a basename rather than a path, so an
-# implementation can reverse-match all sixteen path forms and still be blind to every one of
-# these. The fixture's own command IS PATH-exposed, so its twenty-two rules are complete and
+# implementation can reverse-match all twenty-four path forms and still be blind to every one of
+# these. The fixture's own command IS PATH-exposed, so its thirty rules are complete and
 # the orphan is the only finding.
 t15_bare_template() { # <k 1..6> -> "nonzero/gone-named/keep-silent" | sentinel
     have_gen || { missing_gen; return; }
@@ -105,7 +115,7 @@ T16_BOTH=""
 
 # T16 -- THE REPORT IS THE PRODUCT. `--check` runs where a non-zero exit with a vague message
 # costs a developer the whole diagnosis. Two properties are asserted: the missing list is
-# COMPLETE (all twenty-two spellings for a command with nothing deployed, not just the first
+# COMPLETE (all thirty spellings for a command with nothing deployed, not just the first
 # the loop noticed), and Missing and Orphaned are reported as two separate sections in the
 # SAME run -- the state a real drifted machine is in. Both fixtures are DEPLOYED FIRST from an
 # SSOT that lists nothing, and the SSOT is rewritten afterwards: that is what leaves the
@@ -180,7 +190,7 @@ both-named|both the missing command and the orphaned one appear in one report
 rc|a run carrying both findings exits non-zero
 T16_CASES
     ROWS=$((ROWS + 1))
-    assert_eq "T16[complete]: all twenty-two spellings are listed for a command with no deployed rules at all (not just the first)" \
+    assert_eq "T16[complete]: all thirty spellings are listed for a command with no deployed rules at all (not just the first)" \
         "complete" "$(t16_probe complete)"
 }
 
