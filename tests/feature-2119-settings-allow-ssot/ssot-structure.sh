@@ -62,7 +62,7 @@ t1b_shebangs_resolve() {
     assert_eq "T1b: every SSOT entry's shebang resolves to bash or node (anything else is fail-closed)" "" "$bad"
 }
 
-# T2a is the conservative-charset gate. Each entry is interpolated into twenty-two permission
+# T2a is the conservative-charset gate. Each entry is interpolated into thirty permission
 # rules, so a `..`, a leading slash, a drive letter or a glob metacharacter would WIDEN a
 # rule rather than merely name a file -- the one place here where a typo is a security change
 # and not a broken build.
@@ -124,10 +124,12 @@ T3A_CASES
 }
 
 # T3b -- ADMISSION SNAPSHOT PIN. Presence rows alone cannot see a silent shrink, so the exact
-# membership is pinned: nineteen rows plus a count assertion. A member that stops meeting the
-# admission criteria then has to leave through this test rather than through a quiet deletion.
-# The last four are the commands this change admits; the three that PR #2158's security
-# review removed (get-config-var, request-off-clearance, worker-dispatch.js) stay out.
+# membership is pinned: one row per entry plus a count assertion. A member that stops meeting
+# the admission criteria then has to leave through this test rather than through a quiet
+# deletion, and one ARRIVING has to arrive through it too -- the count row is what makes an
+# unannounced addition visible, since every presence row still passes when the file grows.
+# The three that PR #2158's security review removed (get-config-var, request-off-clearance,
+# worker-dispatch.js) stay out. The last two are #2201's admissions.
 t3b_snapshot() {
     local entry n
     while IFS= read -r entry; do
@@ -154,16 +156,20 @@ bin/check-issues-class-coverage
 bin/workflow/record-skip-judgment
 skills/_shared/assemble-mandatory.sh
 skills/make-detail-plan/scripts/detect-scope-change.sh
+skills/review-tests/scripts/select-staged-files.sh
+bin/detect-non-github.sh
+bin/worktree-notes-append.js
+skills/issue-create/scripts/make-empty-verdict.sh
 T3B_CASES
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
-    assert_eq "T3b: the SSOT holds exactly the 19 pinned entries and nothing else" "19" "${n:-0}"
+    assert_eq "T3b: the SSOT holds exactly the 23 pinned entries and nothing else" "23" "${n:-0}"
 }
 
 # T46 -- THE READER, NOT THE FILE. Every row above reads the SSOT through ssot_entries, and the
 # spelling library reads both list files again in production: split on \n, strip TRAILING
 # whitespace only, drop empty lines and lines whose first non-blank character is `#`. Neither
 # reader is exercised by the real files, which are tidy. A disagreement between them is silent
-# and one-directional: an entry the harness drops but the generator keeps becomes 22 permission
+# and one-directional: an entry the harness drops but the generator keeps becomes 30 permission
 # rules that no test in this suite ever looks at, and the reverse hides a real entry from T1a's
 # existence check and T2a's charset gate. Each row therefore pins the parse AND the agreement.
 T46_DIR="$TMPROOT/t46"
