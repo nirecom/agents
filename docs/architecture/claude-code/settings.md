@@ -336,6 +336,13 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- `codegraph-context-inject.js` (UserPromptSubmit) — forwards the upstream CodeGraph prompt-hook's
+  OUTPUT as `additionalContext`, without ever running `codegraph install` (which would rewrite
+  `~/.claude/CLAUDE.md` and register the hook itself). Gated three ways before it spawns anything:
+  `CODEGRAPH=on`, a `.codegraph/codegraph.db` found within six levels above the payload cwd, and a
+  scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
+  ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
+  any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes
@@ -420,7 +427,7 @@ strings are generated from it.
 - The expanded rules are injected into the deployed `~/.claude/settings.json` at deploy time; that deployed document is the only place an operator reads them back.
 - They are therefore never committed: the tracked `settings.json` in this repo carries hand-written rules only, so a generated rule found there is a leftover from before this design, not a source.
 - `install/lib/settings-allow-rules.js` owns the spelling template table — the one place it exists; the CLI, the assembler and the drift check all read it from there rather than restating it.
-- Sixteen path spellings are emitted per command, plus six bare spellings when `install/path-exposed-commands.txt` gives that command's basename a PATH shim — twenty-two rules for a PATH-exposed command. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
+- Twenty-four path spellings are emitted per command, plus six bare spellings when `install/path-exposed-commands.txt` gives that command's basename a PATH shim — thirty rules for a PATH-exposed command. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
 - Each template is emitted as a pair: an argument-bearing form and an argument-less twin as well.
 - The pair exists because the permission engine matches the whole command string, not a prefix — a trailing ` *` demands the space before it, so it never covers the argument-less invocation.
 - `install/assemble-settings.js` is the sole deploy entry point and `install/lib/settings-deploy.js` its single writer, so any other code writing that file is a bug. The deploy is fail-closed: when the rules cannot be expanded, nothing is written and the previous deployment stands.
@@ -428,9 +435,17 @@ strings are generated from it.
 - Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but the deploy appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
 - An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
 - Nothing in the commit path guards these rules any more, and nothing needs to: a hand-maintained mirror is what could drift, and there is no longer one. `hooks/session-start.js` reports a deployed document that has fallen behind, and `hooks/post-merge` / `hooks/post-checkout` re-deploy when the SSOT, either list, or any of the four modules changes.
-- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into twenty-two permission rules, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it is run by hand, never auto-issued mid-session, so listing it would buy no coverage.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into twenty-four path permission rules, plus six more bare rules when `install/path-exposed-commands.txt` gives it a PATH shim, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it is run by hand, never auto-issued mid-session, so listing it would buy no coverage.
 
 **Known limitations**:
+- TL3 verification gap: `tests/feature-2119-settings-allow-ssot/` proves the generated rule
+  strings match the template contract exactly, never that Claude Code's own permission matcher
+  honors a given spelling live — that engine is the product's closed runtime, outside this repo's
+  test reach. Confidence rests on the #2201 root-cause measurement (94.7% ask rate for
+  `resolve-worktree-path` across 482 real transcripts, resolved once the missing quoted-absolute
+  template was the one variable changed), not on an executable assertion. A human confirming a
+  real quoted-absolute-path invocation stops prompting against a live deployed settings.json is
+  the final check for any future template addition, not something CI can close out.
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
   permission granted). Delegate Edit|Write scanning to the pre-commit hook.
 - Hook format must be nested. Flat format (matcher/command/timeout at the same level) causes

@@ -11,7 +11,11 @@
 if [ "$IS_WIN32" -ne 1 ]; then
     skip "WS-1..WS-10 — .cmd-shim delegation is a win32-only code path"
 else
-    echo "--- WS-1: telemetry opt-out env reaches the process spawned via the default .cmd-shim path ---"
+    echo "--- WS-1: telemetry env reaches the process spawned via the default .cmd-shim path ---"
+    # Expected values come from the SSOT (install/codegraph-constants.txt), not
+    # a hardcoded literal, so a future flip of the pair cannot silently drift.
+    WS1_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
+    WS1_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
     reset_env
     root="$(mkroot "ws1")"
     export CG_STUB_MAKEDB=healthy
@@ -20,8 +24,8 @@ else
     export CG_STUB_ENV_VARS="CODEGRAPH_TELEMETRY,DO_NOT_TRACK"
     run_cli init "$root"
     unset CG_STUB_MAKEDB CG_STUB_ENV_LOG CG_STUB_ENV_VARS
-    assert_eq "WS-1 — telemetry opt-out env vars reached the .cmd-shim-resolved subprocess" \
-        "CODEGRAPH_TELEMETRY=0 DO_NOT_TRACK=1" "$(head -n1 "$env_log" 2>/dev/null || true)"
+    assert_eq "WS-1 — telemetry env vars reached the .cmd-shim-resolved subprocess" \
+        "CODEGRAPH_TELEMETRY=$WS1_EXPECTED_TELEMETRY DO_NOT_TRACK=$WS1_EXPECTED_DNT" "$(head -n1 "$env_log" 2>/dev/null || true)"
 
     echo "--- WS-2: a .cmd present without its POSIX sibling fails safe (no shell fallback) ---"
     reset_env
@@ -106,6 +110,8 @@ else
     # scratch. This pins a var the caller merely inherited, so it only arrives if
     # the whole options object was delegated intact through the .cmd-shim path.
     echo "--- WS-10: caller-supplied spawn options survive delegation unchanged (C3) ---"
+    # The forced var's expected value comes from the SSOT, same rationale as WS-1.
+    WS10_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
     reset_env
     root="$(mkroot "ws10")"
     env_log="$TMP_BASE/env-log-ws10.txt"; rm -f "$env_log"
@@ -116,5 +122,5 @@ else
     run_cli sync "$root"
     unset CG_STUB_ENV_LOG CG_STUB_ENV_VARS CG_WS10_CUSTOM
     assert_eq "WS-10 — an inherited env var reached the spawned target alongside the forced ones" \
-        "CG_WS10_CUSTOM=ws10-inherited CODEGRAPH_TELEMETRY=0" "$(head -n1 "$env_log" 2>/dev/null || true)"
+        "CG_WS10_CUSTOM=ws10-inherited CODEGRAPH_TELEMETRY=$WS10_EXPECTED_TELEMETRY" "$(head -n1 "$env_log" 2>/dev/null || true)"
 fi

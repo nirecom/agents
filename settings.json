@@ -357,6 +357,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/handoff-pressure-nudge.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/codegraph-context-inject.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -541,6 +546,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-capture-echo.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
             "timeout": 5
           }
@@ -617,7 +632,7 @@
         ]
       },
       {
-        "matcher": "Monitor|EnterWorktree",
+        "matcher": "Monitor|EnterWorktree|Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",

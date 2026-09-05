@@ -2,6 +2,7 @@
 # tests/bin-check-on-demand-rules.sh
 # Tests: bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common
+set -u
 
 # TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail plan "1-3")
 # plus the policy SSOT constants. Dispatcher only — cases, and the fixture-policy contract note, live in tests/bin-check-on-demand-rules/ (see its fixtures.sh).
@@ -11,9 +12,13 @@
 # never that injection stops. Mitigated at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh, category hook-registration.
 
-set -u
-
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh): the fixtures ship their own
+# hooks/lib/rules-injection-policy.js inside the tree under check and also export
+# RULES_INJECTION_POLICY. The checker must resolve policy from one of those two
+# (policy-of-the-tree-under-check), else --all <root> grades a foreign tree against the agents repo's
+# own constants.
 CHECKER="$AGENTS_DIR/bin/check-on-demand-rules.sh"
 POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
 # The policy is contributor-editable declaration DATA; this suite's own harnesses read it
@@ -26,7 +31,23 @@ PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
+# node_path <path> — cygpath -m, memoized. The suite asks for the same handful of paths
+# hundreds of times and each ask cost two forks (`command -v` plus `cygpath`); on Git Bash
+# forks dominate the runtime, so the cache is the point, not the conversion (#2111).
+NODE_PATH_HAS_CYGPATH=0
+command -v cygpath >/dev/null 2>&1 && NODE_PATH_HAS_CYGPATH=1
+declare -A NODE_PATH_CACHE=()
+node_path() {
+    local key="$1"
+    if [ -z "${NODE_PATH_CACHE["$key"]+x}" ]; then
+        if [ "$NODE_PATH_HAS_CYGPATH" -eq 1 ]; then
+            NODE_PATH_CACHE["$key"]="$(cygpath -m "$key")"
+        else
+            NODE_PATH_CACHE["$key"]="$key"
+        fi
+    fi
+    printf '%s\n' "${NODE_PATH_CACHE["$key"]}"
+}
 
 # --- implementation guard (tier 1): fail loudly and specifically when a target is
 # absent, BEFORE any assertion runs, so a real defect can never look like a skip. ---

@@ -1,10 +1,9 @@
-# ===========================================================================
-# GROUP G: Prompt body content assertions (cases 29-32)
-# Verifies that the security-plan and test-review case blocks in
-# bin/review-plan-codex contain the expected security axes and checklist
-# references. Asserts against actual grep results on the source file —
-# not against hardcoded duplicates.
-# ===========================================================================
+# Tests: bin/review-plan-codex
+# Tags: codex, review, prompt-body, scope:issue-specific
+# GROUP G: Prompt body content assertions (cases 29-32, G1).
+# Asserts security axes, checklist references and the #2154 deferred/N-A
+# wording against grep results on bin/review-plan-codex — never against
+# hardcoded duplicates. Sourced by tests/feature-1308-codex-review-allowlist.sh.
 echo ""
 echo "=== Group G: Prompt body content (static source assertions) ==="
 
@@ -41,5 +40,23 @@ echo "=== Group G: Prompt body content (static source assertions) ==="
     pass "32: bin/review-plan-codex test-review prompt references 'test-design.md'"
   else
     fail "32: bin/review-plan-codex missing 'test-design.md' in test-review prompt"
+  fi
+}
+
+# Case G1 (#2154): NEGATIVE only. The withdrawn broad wording — which would
+# suppress any category the plan merely fails to mention — must not exist
+# anywhere in the source, in any format's prompt. A source-wide grep is the
+# right shape for an absence claim.
+# The matching POSITIVE claim (the narrow deferred/N-A wording actually reaching
+# the test-review prompt, and NOT reaching the other formats) is deliberately
+# NOT asserted here: a grep-anywhere match cannot tell the test-review
+# CONTEXT_BLOCK from an unrelated branch. It lives at TL2 instead, in
+# tests/feature-2154-accepted-tradeoffs-fallback/layer-b-prompt.sh cases 8-9,
+# which assert against the stdin bytes the mocked codex actually received.
+{
+  if grep -qF -- "prioritize the plan's committed test scope over exhaustive checklist enumeration" "$CODEX_SRC" 2>/dev/null; then
+    fail "G1: bin/review-plan-codex contains the WITHDRAWN broad wording 'prioritize the plan's committed test scope over exhaustive checklist enumeration'"
+  else
+    pass "G1: bin/review-plan-codex is free of the withdrawn broad suppression wording"
   fi
 }

@@ -102,11 +102,25 @@ mkdir -p "$WORK"
 cd "$TMPDIR_BASE" || exit 1
 
 # ---------------------------------------------------------------------------
-# Library / CLI drivers. Every library call runs in its own subshell so a
-# sourced implementation can never clobber the harness (pass/fail/counters).
+# Library / CLI drivers. The library is sourced ONCE further down rather than
+# once per call (#2111): on Git Bash that re-source dominated the suite's
+# runtime. Every library call still runs in its own subshell, so a call can
+# never write back into the harness; what the single load gives up instead is
+# namespace separation, which namespace-guard.sh asserts at its check points.
+# Every helper a case file may call is defined ABOVE the guard's pre-load
+# snapshot, so all of them are watched: a name born after both snapshots would
+# be in neither watched set, and a case file could replace it for free.
 # ---------------------------------------------------------------------------
+SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
+mkdir -p "$TMPDIR_BASE/ns-guard"
+
+# Read on every cl() call, so the driver can be defined before the load it
+# guards; the load below is what flips it.
+CLG_LIB_LOADED=0
+
 cl() {
-    ( set +u; source "$LIB" >/dev/null 2>&1 || exit 127; "$@" )
+    [[ "$CLG_LIB_LOADED" -eq 1 ]] || return 127
+    ( set +u; "$@" )
 }
 
 run_cli() { bash "$CLI" "$@"; }
@@ -242,6 +256,47 @@ LAST_REDUCE_ERR=""
 LAST_RUN_DIR=""
 
 # ---------------------------------------------------------------------------
+# Namespace baselines and the single library load. Everything the harness owns
+# exists by now, so the pre-load snapshot below covers all of it.
+# ---------------------------------------------------------------------------
+# Both `compgen -v` captures run at FILE scope. Taken inside a function, the
+# second one would enumerate that function's own locals as library names.
+compgen -v > "$TMPDIR_BASE/ns-guard/var-before.txt"
+# shellcheck source=./bin-concern-ledger-reducer/namespace-guard.sh
+. "$SUITE_DIR/namespace-guard.sh"
+clg_snapshot_before
+
+if [[ -f "$LIB" ]]; then
+    set +u
+    # shellcheck source=/dev/null
+    if source "$LIB" >/dev/null 2>&1; then CLG_LIB_LOADED=1; fi
+    set -u
+fi
+
+# The library's hash-tool cascade lives inside cl_sha256 and runs on the first
+# hash, not at load, so one probe here settles CL_SHA_TOOL for every subshell
+# that inherits it. The probe runs BEFORE the second capture so CL_SHA_TOOL is
+# derived as a library-owned name rather than born after both snapshots.
+# Deliberately NOT exported: an exported CL_SHA_TOOL would also reach the
+# `bash "$CLI"` children and change a detection path this issue never touched.
+if [[ "$CLG_LIB_LOADED" -eq 1 ]]; then
+    set +u
+    cl_sha256 "cl-identity-probe" >/dev/null 2>&1 || true
+    set -u
+fi
+compgen -v > "$TMPDIR_BASE/ns-guard/var-after.txt"
+clg_record_library_names
+clg_assert_harness_intact "post-load"
+
+# The probe left its own entry in CL_HASH_CACHE; rebuild it to core.sh's own
+# initial state so the cases start from an empty cache.
+if [[ "$CLG_LIB_LOADED" -eq 1 ]]; then
+    unset CL_HASH_CACHE
+    declare -gA CL_HASH_CACHE=()
+fi
+clg_assert_harness_intact "post-sha-probe"
+
+# ---------------------------------------------------------------------------
 # Implementation presence. A missing implementation is reported as a FAILURE
 # (never absorbed into PASS or SKIP) so the suite exits non-zero until
 # /write-code lands the reducer.
@@ -256,7 +311,8 @@ done
 # ---------------------------------------------------------------------------
 # Cases
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
+clg_assert_harness_intact "pre-cases"
+clg_assert_library_intact "pre-cases"
 
 # shellcheck source=./bin-concern-ledger-reducer/slot-discrim.sh
 . "$SUITE_DIR/slot-discrim.sh"
@@ -276,6 +332,16 @@ SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
 . "$SUITE_DIR/path-shapes-and-framing.sh"
 # shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
 . "$SUITE_DIR/backslash-reduce.sh"
+# Must stay after the file-scope load and the cl() definition above: it asserts
+# the #2111 contract by calling cl() itself.
+# shellcheck source=./bin-concern-ledger-reducer/load-once-isolation.sh
+. "$SUITE_DIR/load-once-isolation.sh"
+
+# The two counters advanced by design while the ten case files ran, so they are
+# re-pinned here; the six identity scalars stay pinned to their load-time values.
+clg_rearm_counters
+clg_assert_harness_intact "post-cases"
+clg_assert_library_intact "post-cases"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

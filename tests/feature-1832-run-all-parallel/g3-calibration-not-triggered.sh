@@ -1,27 +1,14 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/g3-calibration-not-triggered.sh
+# g3-calibration-not-triggered.sh — a normal run never calibrates, in any cache state.
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, calibrator, sentinel, no-auto-calibration, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
-
-# WHY (CPR-WPH): sibling g-calibrator.sh only greps for the calibrator's literal
-# filename, which passes for any indirect invocation. This file proves
-# behaviourally that a normal run never calibrates, across every cache state
-# (absent/corrupt/host-stale/bucket-stale), even with RUN_CALIBRATION=1 forced.
-
-# THE SENTINELS (layered, so no single evasion defeats them all): L1 measure-cmd
-# seam, L2 BASH_ENV script-path log, L3 PATH shim named like the calibrator,
-# L4 cache byte-diff.
-
-# RED-FIRST: the calibrator, lib, and `-j auto` don't exist yet; rows report the
-# absent notice or `implementation missing: <path>` — both intentional.
-
-# ISOLATION: cache dir and TESTS_DIR are pinned to temp fixtures; the real
-# ~/.claude/run-all is never reachable (closing case re-checks it).
-
-# TL3 gap (what this TL2 test does NOT catch): calibration triggered by a real CI
-# wrapper outside tests/run-all.sh. Mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# WHY (CPR-WPH): g-calibrator.sh only greps the calibrator's literal filename, which passes for
+# any indirect invocation; four layered sentinels (L1 measure-cmd seam, L2 BASH_ENV script-path
+# log, L3 PATH shim, L4 cache byte-diff) prove it behaviourally instead, over absent/corrupt/
+# host-stale/bucket-stale caches and forced RUN_CALIBRATION=1. Temp fixtures isolate the cache
+# dir and TESTS_DIR; the closing case re-checks the real ~/.claude/run-all. TL3 gap: a real CI
+# wrapper outside tests/run-all.sh, mitigated by bin/check-verification-gate.sh.
 
 set -u
 
@@ -242,8 +229,10 @@ case_probe_is_live() {
 # ===========================================================================
 # 4. The calibrator's explicit-run gate, asserted behaviourally
 # ===========================================================================
+# Each row gets its OWN cache dir. Sharing phase 2's would assert "a real prior run left no
+# residue" — phase 2 legitimately grows durations/ — instead of "the gate writes nothing".
 case_explicit_run_gate() {
-    local name value rc entries envs
+    local name value rc entries envs gate_dir gate_n=0
     while IFS='|' read -r name value; do
         name="$(trim "$name")"
         [ -z "$name" ] && continue
@@ -255,16 +244,24 @@ case_explicit_run_gate() {
             fail "g3-cal/gate/$name/never-measures" "implementation missing: $CAL_REL"
             continue
         fi
-        rm -f "$CACHE_FILE"
+        gate_n=$((gate_n + 1))
+        gate_dir="$TMPD/gate-cache-$gate_n"
+        rm -rf "$gate_dir"
+        mkdir -p "$gate_dir"
+        if [ -n "$(ls -A "$gate_dir" 2>/dev/null)" ]; then
+            fail "g3-cal/gate/$name/fresh-cache-dir" "the per-row cache dir was not empty before the run"
+        else
+            pass "g3-cal/gate/$name/fresh-cache-dir"
+        fi
         arm_sentinels
-        envs=("RUN_ALL_CACHE_DIR=$CACHE_DIR" "TESTS_DIR=$FX"
+        envs=("RUN_ALL_CACHE_DIR=$gate_dir" "TESTS_DIR=$FX"
               "RUN_ALL_CALIBRATION_MEASURE_CMD=$SENT_MEASURE")
         [ "$value" != "<UNSET>" ] && envs+=("RUN_CALIBRATION=$value")
         rc=0
         run_with_timeout 60 env "${envs[@]}" bash "$CAL" \
             --sample 4 --jobs-list "1 2" --repeat 3 --warmup 0 >/dev/null 2>&1 || rc=$?
         assert_eq "g3-cal/gate/$name/exits-77" "77" "$rc"
-        entries="$(ls -A "$CACHE_DIR" 2>/dev/null | tr '\n' ' ')"
+        entries="$(ls -A "$gate_dir" 2>/dev/null | tr '\n' ' ')"
         assert_eq "g3-cal/gate/$name/writes-nothing" "" "$entries"
         assert_eq "g3-cal/gate/$name/never-measures" "0" "$(calibrator_traces)"
     done <<'TABLE'

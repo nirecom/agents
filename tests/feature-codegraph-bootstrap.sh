@@ -78,6 +78,10 @@ assert_eq "B0-b: install.sh invokes install/linux/codegraph.sh directly, so B0-a
 . "$MODULE_DIR/cases.sh"
 # shellcheck source=./feature-codegraph-bootstrap/ownership.sh
 . "$MODULE_DIR/ownership.sh"
+# shellcheck source=./feature-codegraph-bootstrap/telemetry-reset.sh
+. "$MODULE_DIR/telemetry-reset.sh"
+# shellcheck source=./feature-codegraph-bootstrap/cli-version.sh
+. "$MODULE_DIR/cli-version.sh"
 # shellcheck source=./feature-codegraph-bootstrap/win-shim.sh
 . "$MODULE_DIR/win-shim.sh"
 

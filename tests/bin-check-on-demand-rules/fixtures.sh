@@ -7,13 +7,70 @@
 
 wr() { mkdir -p "$(dirname "$1")"; cat > "$1"; }
 
-mk_repo() {
+# WHY (CPR-WPH, #2111): almost every case runs the checker with --all, whose scan starts at
+# <root>/rules and never looks at .git, so a git repo per fixture bought ~100 git processes
+# and nothing else. The plain tree is the default; the cases that genuinely need git reach
+# fx_ensure_git, and nothing outside this file calls git at all.
+# The node_path warm-up belongs here because mk_tree runs in the PARENT shell, while
+# run_checker is always called inside $( ) where a cache write dies with the subshell.
+mk_tree() {
     local d="$1"
     mkdir -p "$d"
-    git -C "$d" init -q
-    git -C "$d" config core.hooksPath /dev/null
-    git -C "$d" config user.email "test@example.com"
-    git -C "$d" config user.name "Test"
+    node_path "$d" >/dev/null
+    node_path "$d/hooks/lib/rules-injection-policy.js" >/dev/null
+}
+
+# The suite's one real repository. Fixtures that need git clone this whole `.git`, so the
+# hooks-disabling setting rules/test/fixture-isolation.md demands travels with the copy
+# instead of being re-applied per fixture. `--template=<empty dir>` keeps the ~15
+# hooks/*.sample files out of both the init and every clone.
+FX_GIT_TEMPLATE="$BASE/.fx-git-template"
+# WHY (CPR-WPH): `-d …/.git` answers "did git init run", not "did the build finish". A
+# config step that fails after init leaves a directory that looks ready while carrying the
+# HOST's core.hooksPath into every clone — the leak rules/test/fixture-isolation.md forbids.
+# The marker is written only after the last config line, so a half-built template is torn
+# down and rebuilt instead of inherited, and reading it spawns no git (cases-real-git.sh E6
+# counts every init and config this file makes).
+FX_GIT_TEMPLATE_READY="$FX_GIT_TEMPLATE/.fx-template-complete"
+_fx_git_template() {
+    [ -f "$FX_GIT_TEMPLATE_READY" ] && return 0
+    rm -rf "$FX_GIT_TEMPLATE/.git" || return 1
+    mkdir -p "$FX_GIT_TEMPLATE" "$BASE/.fx-git-empty" || return 1
+    git -C "$FX_GIT_TEMPLATE" init -q --template="$BASE/.fx-git-empty" || return 1
+    git -C "$FX_GIT_TEMPLATE" config core.hooksPath /dev/null || return 1
+    git -C "$FX_GIT_TEMPLATE" config user.email "test@example.com" || return 1
+    git -C "$FX_GIT_TEMPLATE" config user.name "Test" || return 1
+    touch "$FX_GIT_TEMPLATE_READY" || return 1
+}
+
+# fx_ensure_git <dir> — idempotent: a finished clone costs two builtin tests and no fork.
+# Its own completion marker is what "finished" means, for the same reason the template has
+# one: `-d "$d/.git"` also accepts the empty or half-copied .git an interrupted cp -R
+# leaves, which git itself then rejects, so an unmarked .git is discarded and re-cloned
+# rather than handed on as a repository.
+# The _fx_git_template call is a contract, not an optimisation (detail plan R21): without it
+# the first-ever call has no clone source, cp fails, and the --staged cases go green on an
+# empty diff.
+FX_CLONE_READY=".git/.fx-clone-complete"
+fx_ensure_git() {
+    local d="$1"
+    if [ -d "$d/.git" ]; then
+        [ -f "$d/$FX_CLONE_READY" ] && return 0
+        rm -rf "$d/.git" || return 1
+    fi
+    _fx_git_template || return 1
+    mkdir -p "$d" || return 1
+    cp -R "$FX_GIT_TEMPLATE/.git" "$d/.git" || return 1
+    touch "$d/$FX_CLONE_READY" || return 1
+}
+
+# fx_stage <dir> <path...> — the staging entry point for case files, so a case that stages
+# without building a committed baseline first still gets a repo.
+fx_stage() {
+    local d="$1"
+    shift
+    fx_ensure_git "$d" || return 1
+    git -C "$d" add "$@" >/dev/null 2>&1 || return 1
 }
 
 # The stand-in owner every generated on-demand row points at. #2037 made the reader set
@@ -82,7 +139,7 @@ POLICY_EOF
 # file, one ordinary conditional file. Expected verdict for the baseline: clean.
 fx_base() {
     local d="$1"
-    mk_repo "$d"
+    mk_tree "$d"
     write_policy "$d" '["rules/od.md"]' '["rules/plain.md"]'
     wr "$d/rules/od.md" <<EOF
 ---
@@ -196,6 +253,11 @@ EOF
 # and a subshell's assignments never reach the caller.
 outfile_for() { echo "$1/.checker-output.txt"; }
 
+# The exit code a driver prints when the fixture repo could not be built. 0 and 1 are the
+# CHECKER's own verdicts, so reporting either would let a case read a repo that never
+# existed as a clean (or a violating) run — the R6 false green.
+FX_SETUP_FAILED_RC=97
+
 run_checker() {
     local d="$1" mode="$2" rc=0
     local OUTFILE; OUTFILE="$(outfile_for "$d")"
@@ -204,6 +266,11 @@ run_checker() {
         ( cd "$d" && RULES_INJECTION_POLICY="$pol" bash "$CHECKER" --all "$(node_path "$d")" ) \
             >"$OUTFILE" 2>&1 || rc=$?
     else
+        if ! fx_ensure_git "$d"; then
+            printf 'fx_ensure_git could not build the fixture repository at %s\n' "$d" >&2
+            echo "$FX_SETUP_FAILED_RC"
+            return "$FX_SETUP_FAILED_RC"
+        fi
         git -C "$d" add -A >/dev/null 2>&1 || true
         local files
         files="$(git -C "$d" diff --cached --name-only)"
@@ -230,6 +297,13 @@ run_checker_nopin() {
 # file list, so the caller controls exactly which paths are handed to the checker.
 run_checker_files() {
     local d="$1" rc=0; shift
+    # CPR-ORTH sibling of run_checker's guard: grading an explicit file list against a repo
+    # that was never built is the same false green as grading an empty staged list.
+    if ! fx_ensure_git "$d"; then
+        printf 'fx_ensure_git could not build the fixture repository at %s\n' "$d" >&2
+        echo "$FX_SETUP_FAILED_RC"
+        return "$FX_SETUP_FAILED_RC"
+    fi
     local OUTFILE; OUTFILE="$(outfile_for "$d")"
     local pol; pol="$(node_path "$d/hooks/lib/rules-injection-policy.js")"
     ( cd "$d" && RULES_INJECTION_POLICY="$pol" bash "$CHECKER" --staged "$@" ) \
@@ -238,6 +312,7 @@ run_checker_files() {
 }
 
 git_commit_all() {
+    fx_ensure_git "$1" || return 1
     git -C "$1" add -A >/dev/null 2>&1
     git -C "$1" commit -q --no-verify -m "baseline" >/dev/null 2>&1
 }
@@ -270,7 +345,7 @@ rd_policy() {
 # real reader skill and a CLAUDE.md pointer, one ordinary unconditional rule.
 rd_base() {
     local d="$1"
-    mk_repo "$d"
+    mk_tree "$d"
     rd_policy "$d" '["rules/od.md|skills/owner/SKILL.md"]' '["rules/plain.md"]'
     wr "$d/rules/od.md" <<EOF
 ---

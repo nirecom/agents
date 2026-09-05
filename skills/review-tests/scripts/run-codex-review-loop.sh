@@ -99,13 +99,17 @@ arm_terminal_guard() {
   return "$rc"
 }
 
+# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
+# so a containment refusal is never read as ESCALATE or as codex-unavailable.
+ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
+
 args=(
   --format test-review
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
   --cap 1 --max-extensions 0 --extensions-used "$EXTENSIONS_USED"
-  --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-outline.md"
+  --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
   --repo-root "$REPO_ROOT_VAL"
 )
 

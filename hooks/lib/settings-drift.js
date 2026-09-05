@@ -31,7 +31,9 @@ function permKeyMissing(expectedArr, assembledArr) {
   return missing;
 }
 
-function hookMatchersMissing(expectedHookEntries, assembledHookEntries) {
+// Two passes, because a command dropped from a matcher group that still exists
+// leaves the matcher count untouched. The command pass reports "<matcher> :: <command>".
+function hookEntriesMissing(expectedHookEntries, assembledHookEntries) {
   // Use multiset counting: same matcher can appear multiple times for different hook commands.
   const assembledCounts = new Map();
   if (Array.isArray(assembledHookEntries)) {
@@ -52,6 +54,30 @@ function hookMatchersMissing(expectedHookEntries, assembledHookEntries) {
     const deficit = expectedCount - (assembledCounts.get(matcher) || 0);
     for (let i = 0; i < deficit; i++) {
       missing.push(matcher);
+    }
+  }
+  // Commands are compared as a subset, not a multiset: an extra deployed command is
+  // not drift, and the union per matcher is what the runtime actually executes.
+  const deployedCommands = new Map();
+  if (Array.isArray(assembledHookEntries)) {
+    for (const entry of assembledHookEntries) {
+      if (!entry || typeof entry.matcher !== 'string' || !Array.isArray(entry.hooks)) continue;
+      let set = deployedCommands.get(entry.matcher);
+      if (!set) {
+        set = new Set();
+        deployedCommands.set(entry.matcher, set);
+      }
+      for (const hook of entry.hooks) {
+        if (hook && typeof hook.command === 'string') set.add(hook.command);
+      }
+    }
+  }
+  for (const entry of expectedHookEntries) {
+    if (!entry || typeof entry.matcher !== 'string' || !Array.isArray(entry.hooks)) continue;
+    const set = deployedCommands.get(entry.matcher);
+    for (const hook of entry.hooks) {
+      if (!hook || typeof hook.command !== 'string') continue;
+      if (!set || !set.has(hook.command)) missing.push(entry.matcher + ' :: ' + hook.command);
     }
   }
   return missing;
@@ -105,7 +131,7 @@ function detectDrift({ homeDir }) {
   const missingHooks = {};
   for (const event of Object.keys(expectedHooks)) {
     const want = Array.isArray(expectedHooks[event]) ? expectedHooks[event] : [];
-    const missMatchers = hookMatchersMissing(want, assembledHooks[event]);
+    const missMatchers = hookEntriesMissing(want, assembledHooks[event]);
     if (missMatchers.length > 0) {
       missingHooks[event] = missMatchers;
     }
