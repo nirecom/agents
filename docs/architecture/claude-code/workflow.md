@@ -486,6 +486,26 @@ independent resolver implementations diverged over time and produced concurrent-
 misattribution (#1082); consolidation (#1251) removes the divergence class instead of patching
 members one at a time.
 
+`resolveSessionId()` answers "which session am *I*?" and nothing else — never repurpose it to
+name an upstream session a cross-session command was pointed at. `/resume-session --from` passes
+that id explicitly, and `bin/workflow/lib/next-step/repo-dir-guard.js` distinguishes the two by
+value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present.
+
+## Cross-session resume
+
+A session can inherit from an upstream session it has no transcript lineage to, via
+`/resume-session --from <sid>` (`bin/lib/resume-session/`). Two facts govern what survives:
+
+- **Step context-dependence** — whether a step's completion evidence lives in the worktree or in
+  the session's own record. `hooks/workflow-state/state-io/step-context-class.js` owns the
+  classification for all 16 steps; `granularity: "context-independent-only"` inherits only the
+  latter set, `"full"` inherits everything.
+- **Evidence class** — what the upstream actually left behind. The state file (7-day TTL) and the
+  handoff artifact (no TTL) expire independently, so availability degrades through
+  `state-and-artifacts` → `state-only` → `artifacts-only` → `none` rather than failing outright.
+  The artifact contract is in
+  [handoff-artifact.md](handoff-artifact.md).
+
 ## Fail-safe behavior
 
 | Condition | Result |

@@ -4,19 +4,12 @@
 # Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common
 
 # TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail plan "1-3")
-# plus the SSOT constants in hooks/lib/rules-injection-policy.js. Dispatcher only — cases live in
-# tests/bin-check-on-demand-rules/.
+# plus the policy SSOT constants. Dispatcher only — cases, and the fixture-policy contract note, live in tests/bin-check-on-demand-rules/ (see its fixtures.sh).
 # TL3 gap (not caught here): whether hooks/pre-commit actually wires this checker in for staged
 # rules/**/*.md (checker can be perfect, still never run on a real commit); whether the host loader
 # really refuses ON_DEMAND_TOKEN — this file only proves the notation is internally consistent,
 # never that injection stops. Mitigated at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh, category hook-registration.
-
-# CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh): the fixtures ship their own
-# hooks/lib/rules-injection-policy.js inside the tree under check and also export
-# RULES_INJECTION_POLICY. The checker must resolve policy from one of those two
-# (policy-of-the-tree-under-check), else --all <root> grades a foreign tree against the agents repo's
-# own constants.
 
 set -u
 
@@ -75,6 +68,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-check-on-demand-ru
 . "$SCRIPT_DIR/cases-containment.sh"
 # shellcheck source=./bin-check-on-demand-rules/cases-marker.sh
 . "$SCRIPT_DIR/cases-marker.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-handoff-flush.sh
+. "$SCRIPT_DIR/cases-handoff-flush.sh"
 # Injection cases run LAST: they deliberately hand the checker hostile paths and an
 # out-of-root file, and they create a canary directory whose emptiness is the assertion.
 # shellcheck source=./bin-check-on-demand-rules/cases-injection.sh

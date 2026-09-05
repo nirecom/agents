@@ -72,6 +72,12 @@ POLICY_EOF
         > "$1/$FX_OWNER_SKILL"
 }
 
+# CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh): the fixtures here ship
+# their own hooks/lib/rules-injection-policy.js inside the tree under check and also export
+# RULES_INJECTION_POLICY. The checker must resolve policy from one of those two
+# (policy-of-the-tree-under-check), else --all <root> grades a foreign tree against the agents
+# repo's own constants.
+
 # Baseline tree: one on-demand file (correct notation), one listed unconditional
 # file, one ordinary conditional file. Expected verdict for the baseline: clean.
 fx_base() {

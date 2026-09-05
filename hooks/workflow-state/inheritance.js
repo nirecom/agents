@@ -1,35 +1,12 @@
 "use strict";
 // Cross-session workflow-state inheritance — donor resolution (#1305).
 //
-// WHY (CPR-WPH): the pre-#1305 rule was "a new session inherits the most recent
-// state recorded on the same cwd+branch". Two sessions started in the same
-// worktree are indistinguishable under that rule, so a session the user had
-// abandoned (or explicitly /clear'd) silently handed its completed steps to an
-// unrelated new one — and the commit gate then accepted completions nobody
-// performed.
-//
-// The key is now PROVABLE DESCENT: the heir must be a fork / resume / compact
-// continuation of the donor, evidenced by its own transcript. cwd+branch is
-// demoted from selector to guard.
-//
-// Gate order (each short-circuits with its own decision string):
-//   A subagent  → a subagent shares its parent's transcript; never inherits.
-//   B source    → only `resume` / `compact` are continuations. `startup` is the
-//                 true-crash-resume case: not inherited, but reported so the
-//                 explicit adopt path can offer it.
-//   C lineage   → ancestors read from the transcript. No evidence, no donor —
-//                 there is deliberately NO fallback to the old cwd+branch scan.
-//   D ancestor  → the NEAREST ancestor holding a state file is the SOLE
-//                 decision-maker. Ancestors with no state file carry no
-//                 information and are skipped; the walk never looks PAST a
-//                 stateful ancestor to a healthier grandparent, whose steps the
-//                 intervening session already superseded.
-//   E context   → the guard (inheritance/context-match.js).
-//   F resumable → effective-state.evaluateResumability (SSOT for the verdict).
-//
-// SD-3 conclusion, recorded here so it is not re-litigated: no active-concurrent
-// -session detection is needed. Lineage already makes a donor the heir's own
-// ancestor, and the donor's file is only ever READ.
+// The key is PROVABLE DESCENT, not cwd+branch: the heir must be a fork / resume
+// / compact continuation of the donor, evidenced by its own transcript, and
+// cwd+branch is only a guard. Gate order (A subagent, B source, C lineage,
+// D nearest stateful ancestor, E context, F resumability), the decision-string
+// vocabulary, and the "no active-concurrent-session detection needed"
+// conclusion: docs/architecture/claude-code/workflow.md.
 
 const fs = require("fs");
 const path = require("path");
@@ -38,7 +15,8 @@ const { readLineageAncestors } = require("./inheritance/lineage");
 const { contextMatches } = require("./inheritance/context-match");
 const { listRecentContextCandidates, transcriptDirFor } =
   require("./inheritance/candidates");
-const { applyInheritance, INHERIT_ORIGIN } = require("./inheritance/apply");
+const { applyInheritance, describeGranularInheritance, INHERIT_ORIGIN } =
+  require("./inheritance/apply");
 
 // SessionStart `source` values that denote a continuation of an earlier session.
 const CONTINUATION_SOURCES = ["resume", "compact"];
@@ -162,6 +140,7 @@ module.exports = {
   resolveInheritanceDonor,
   listRecentContextCandidates,
   applyInheritance,
+  describeGranularInheritance,
   INHERIT_ORIGIN,
   CONTINUATION_SOURCES,
 };

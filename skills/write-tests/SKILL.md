@@ -73,8 +73,10 @@ After completing this skill:
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 If tests are genuinely not needed for this change:
-1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`
+1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`, then record it as `--class E --step write_tests --key write-tests:not-needed`, per `skills/_shared/handoff-record.md`.
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
+
+When step WT-5 took the `NONE` fallback, record it as `--class D --step write_tests --key write-tests:model-fallback`, per `skills/_shared/handoff-record.md`.
 
 ## Rules
 
