@@ -213,7 +213,58 @@ reach a file in a public repo. `count_bucket` is `floor(log2(corpus size))`, coa
 on purpose: adding a handful of tests should not invalidate a measurement, while a
 change of an order of magnitude should.
 
-## 6. Contract-line neutralization
+## 6. Historical duration ledger and LPT ordering
+
+Submission order inside the parallel lane is Longest-Processing-Time-first (LPT):
+the slowest tests start first, so they run alongside everything else instead of
+being the lone straggler that decides the wall-clock floor at the end of a run.
+LPT needs a duration to sort by, so the runner keeps a small cross-run ledger of
+its own — `bin/lib/run-all-durations.sh`, sourced only after
+`bin/lib/run-all-parallelism.sh` (it reuses that library's host/repo identity
+helpers) and only best-effort: any failure to load, read, or write the ledger
+degrades to the pre-existing glob order, never to an error.
+
+**Keying and identity.** Every test file resolves to a repo-relative key (or a
+bare basename when it falls outside `TESTS_DIR`); a byte class that would break
+the on-disk record format (`|`, TAB, CR) rejects the key outright rather than
+mangling it. Segments are namespaced by a 16-character host token and a
+16-character repo id, both digests — never the hostname or the repo path — so
+records from a different machine or a different checkout of a same-named repo
+can never be misread as this one's history, mirroring the parallelism cache's
+own host-digest discipline (Section 5).
+
+**Read path (before the sort).** For every test in the plan, `init_tiers`
+looks up its key's most recent duration across the newest
+`RUN_ALL_DUR_MAX_SEGMENTS_READ` segment files and buckets it into a tier —
+`floor(log2(seconds))`, coarse for the same reason `count_bucket` is coarse in
+the parallelism cache: small timing noise should not reshuffle the plan. A key
+with no history gets the sentinel `UNMEASURED` tier. `sort_work_lpt` then
+bucket-sorts the parallel-lane slots unmeasured-first, then longest-tier-first,
+stable within a tier — so a ledger with no history yet reproduces the original
+glob order exactly, and the ordering only ever affects the parallel lane: the
+serial lane's positions are pinned before the sort runs, because the barrier
+semantics in Section 3 are positional.
+
+**Write path (after each test).** Each job now measures its own wall time
+(`$SECONDS` before and after the child, in `launch`) and writes it to `<i>.dur`
+*before* `<i>.rc` — `.rc` stays the sole completion signal (Section 2), so a
+harvest that observes `.rc` always finds a finished `.dur` beside it. On
+harvest, `ledger_record` lazily creates this process's own segment file on the
+first completed test (a run that executes nothing leaves no ledger behind) and
+appends one `<repo_id>|<seconds>|<key>` line. Segments are one-per-writer-process
+and append-only — never rewritten in place — so concurrent `run-all` invocations
+(nested suites, parallel sessions) cannot corrupt each other's history; a
+retention sweep trims each host/schema class to the newest
+`RUN_ALL_DUR_KEEP_SEGMENTS` segments whenever a new one is created.
+
+**Why this is safe to bolt onto an already-deterministic scheduler.** The
+byte-identical-stdout invariant (Section 1) constrains *output*, not
+*submission order* — LPT only changes which slot a test lands in among the
+parallel lane, never what it prints or how the contract line is assembled.
+`--print-plan` reports the resolved tier per test so a reordering is auditable
+before a real run commits to it.
+
+## 7. Contract-line neutralization
 
 A child test may legitimately print a line that looks like a contract line — some
 tests exist precisely to exercise the contract parser. Under the old sequential
@@ -242,7 +293,7 @@ Two costs are accepted: a file with no trailing newline gains one, and output
 containing NUL bytes is not covered. Both apply uniformly regardless of `-j`, so
 determinism is preserved, and awk costs no extra process over the `cat` it replaced.
 
-## 7. Known residual risks
+## 8. Known residual risks
 
 - **A single hung test occupies a slot indefinitely.** A per-test timeout ceiling is
   a non-goal here; the mitigations are the stderr progress lines (which name the
@@ -255,12 +306,13 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
   `run_tests` to `pending`, and via the worker both surface as `status: fail` with a
   null contract.
 
-## 8. Where things live
+## 9. Where things live
 
 | Path | Role |
 |---|---|
-| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read |
+| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read, LPT sort, duration measurement |
 | `bin/lib/run-all-parallelism.sh` | SSOT for the cache schema and its non-evaluating parser; sourced, never executed |
+| `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |
