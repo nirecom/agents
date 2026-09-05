@@ -15,7 +15,7 @@ Read `rules/mid-workflow-findings.md` before WE-10 — on-demand-only, never aut
 Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the PR body, issue comments, and history entries written from here on.
 
 ### Step WE-1 — Resolve <PLANS_DIR>
-`PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` — run once; reuse. Canonical: `skills/_shared/resolve-plans-dir.md`.
+Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command and reuse its printed path — never assign it to a shell variable, which does not survive to the next Bash call. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 ### Step WE-2 — Pre-flight
 - `gh --version` — abort with installation guidance if not found.

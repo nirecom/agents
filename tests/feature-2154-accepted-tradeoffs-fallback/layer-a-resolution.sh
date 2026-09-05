@@ -69,7 +69,7 @@ printf '#!/usr/bin/env bash\nwhile [[ $# -gt 0 ]]; do case "$1" in --output) : >
   > "$FROOT/bin/build-codex-context"
 chmod +x "$FROOT/bin/build-codex-context"
 
-# CPR-SSOT enforcement (approved plan Step 3: "解決ロジックを1箇所に統一し"): the
+# CPR-SSOT enforcement (approved plan Step 3: "consolidate the resolution logic into one place"): the
 # forwarded PATH alone cannot distinguish a wrapper that CALLS the shared helper
 # from one that re-implements the fallback chain inline — both forward the same
 # file. So the helper is replaced by a recording shim that appends its own argv
