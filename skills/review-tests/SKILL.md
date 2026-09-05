@@ -35,7 +35,7 @@ RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-l
 - exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-5 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 - exit 8 → terminal guard was previously armed (test files unchanged since last terminal); HALT.
 - exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
-- exit 4 → HALT with blocking error; do NOT launch fallback; do NOT emit sentinel.
+- exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
 - exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-5.
 RT-4. Triage the concerns against `skills/_shared/priority-hierarchy.md` before emitting the sentinel: a concern that contradicts an approved intent.md / outline.md / detail.md decision — including a documented TL3 gap or a deferral to manual verification — is rejected, not a gap. State each rejection and the decision it rests on, and exclude it from the RT-5c warnings count. Skip on exit 0 (no concerns).
