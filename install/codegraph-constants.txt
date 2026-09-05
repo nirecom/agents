@@ -2,9 +2,19 @@
 # and install/codegraph-mcp.js. KEY=VALUE, one per line; # starts a comment.
 #
 # CODEGRAPH_VERSION pins the npm package so a re-run never floats to `latest`.
-# CODEGRAPH_TELEMETRY / DO_NOT_TRACK opt out of the upstream reporter
-# (https://telemetry.getcodegraph.com/v1/events), which defaults to on and is
-# never offered a prompt by this non-interactive installer.
+#
+# CODEGRAPH_TELEMETRY and DO_NOT_TRACK are two independent env keys, not one
+# switch: upstream reads DO_NOT_TRACK first (any non-off value opts out of
+# everything), and CODEGRAPH_TELEMETRY only after it. This file is the only
+# control surface for a codegraph process this framework launches — the
+# installer never exports either key into its own environment, so a codegraph
+# you start by hand keeps whatever `codegraph telemetry` choice you made.
+#
+# AGENTS_CODEGRAPH_MCP_OWNER marks an MCP registration as written by this
+# installer, so `unregister` can prove ownership before removing anything. The
+# value is stable on purpose: changing it strands every registration an earlier
+# build wrote.
 CODEGRAPH_VERSION=1.6.0
-CODEGRAPH_TELEMETRY=0
-DO_NOT_TRACK=1
+CODEGRAPH_TELEMETRY=1
+DO_NOT_TRACK=0
+AGENTS_CODEGRAPH_MCP_OWNER=agents-framework

@@ -1,22 +1,13 @@
 #!/bin/bash
 # tests/fix-846-settings-drift.sh
 # Tests: hooks/lib/settings-drift.js, hooks/session-start.js
-# Tags: hook, settings, drift, session-start
-# Tests for issue #846 — settings.json drift detection (module + session-start).
+# Tags: hook, settings, drift, session-start, scope:common
+# Issue #846 — settings.json drift detection (module + session-start). L2 narrow
+# integration: isolated HOME (mktemp -d) per test; never touches real ~/.claude/settings.json.
+# L3 GAP: end-to-end assemble->deploy, merge-marker conflicts, cross-OS HOME resolution,
+# concurrent session-start races. Closest-to-action mitigation: WORKFLOW_USER_VERIFIED
+# preflight (bin/check-verification-gate.sh, category: drift-detection).
 # Git hook tests (T9-T16) live in fix-846-settings-drift-hooks.sh.
-#
-# L2 narrow integration: validates drift-detection module return shape and
-# session-start warning. Each test uses an isolated HOME (mktemp -d) and
-# never touches the real ~/.claude/settings.json.
-#
-# L3 GAP (what this test does NOT catch):
-# - End-to-end: edit agents/settings.json → git pull → assembler re-runs →
-#   ~/.claude/settings.json updated → session-start shows no warning
-# - Conflict resolution: merge markers in settings.json
-# - Cross-OS HOME resolution (Windows %USERPROFILE% vs POSIX $HOME)
-# - Concurrent session-start invocations (race on temp HOME)
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: drift-detection
 
 set -u
 
@@ -319,6 +310,92 @@ let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
         || fail "T8: base unreadable → sourceUnreadable (out=$out)"
 }
 
+# --- T9: nested command missing (matcher count unchanged) → drifted+missingHooks
+# S5-3b: expect nested command-subset detection, not just matcher counting.
+# Regression check: under matcher-only comparison this input wrongly reads as
+# no-drift, so T9 is expected RED until settings-drift.js gains that detection.
+run_t9() {
+    require_source "$DRIFT_MODULE" "T9: nested command missing → drifted+missingHooks" || return
+    local _tmp_home; _tmp_home="$(mktemp -d)"; trap 'rm -rf "$_tmp_home"' RETURN
+    assemble_current "$_tmp_home"
+    if [ ! -f "$_tmp_home/.claude/settings.json" ]; then
+        skip "T9: nested command missing → drifted+missingHooks (assembler failed)"; return
+    fi
+    local target_file="$_tmp_home/.claude/settings.json"
+    local target_node; target_node="$(to_node_path "$target_file")"
+    # Remove one command from the first non-empty UserPromptSubmit hooks[] group —
+    # matcher count stays the same, so only nested command-subset detection can catch this.
+    local removed_command
+    removed_command="$(run_with_timeout 5 node -e "
+const fs = require('fs');
+const p = process.argv[1];
+const j = JSON.parse(fs.readFileSync(p,'utf8'));
+const groups = (j.hooks && j.hooks.UserPromptSubmit) || [];
+let removed = '';
+for (const g of groups) {
+  if (g && Array.isArray(g.hooks) && g.hooks.length > 0) {
+    removed = g.hooks[0].command;
+    g.hooks.shift();
+    break;
+  }
+}
+fs.writeFileSync(p, JSON.stringify(j, null, 2));
+process.stdout.write(removed);
+" -- "$target_node" 2>/dev/null)"
+    if [ -z "$removed_command" ]; then
+        skip "T9: nested command missing → drifted+missingHooks (no UserPromptSubmit command to remove)"; return
+    fi
+    local out; out="$(detect_drift "$_tmp_home")"
+    echo "$out" | run_with_timeout 5 node -e "
+let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+  const r = JSON.parse(d);
+  const removedCommand = process.argv[1];
+  if (r.drifted !== true) { console.error('drifted not true: '+JSON.stringify(r)); process.exit(2); }
+  const missing = (r.missingHooks && r.missingHooks.UserPromptSubmit) || [];
+  const found = missing.some((m) => typeof m === 'string' && m.indexOf(removedCommand) !== -1);
+  if (!found) { console.error('missing entry not found for removed command: '+JSON.stringify(r)); process.exit(3); }
+  console.log('OK');
+});" -- "$removed_command" >/dev/null 2>&1 \
+        && pass "T9: nested command missing → drifted+missingHooks" \
+        || fail "T9: nested command missing → drifted+missingHooks (out=$out)"
+}
+
+# --- T10: extra nested command (superset at nested level) → no drift ----------
+# S5-3b: extends T7's "superset is not drift" contract to the nested
+# command-array dimension.
+run_t10() {
+    require_source "$DRIFT_MODULE" "T10: nested superset → no drift" || return
+    local _tmp_home; _tmp_home="$(mktemp -d)"; trap 'rm -rf "$_tmp_home"' RETURN
+    assemble_current "$_tmp_home"
+    if [ ! -f "$_tmp_home/.claude/settings.json" ]; then
+        skip "T10: nested superset → no drift (assembler failed)"; return
+    fi
+    local target_file="$_tmp_home/.claude/settings.json"
+    local target_node; target_node="$(to_node_path "$target_file")"
+    # Add an extra command to the assembled UserPromptSubmit group — drift check
+    # must remain a subset check at the nested level, not equality.
+    run_with_timeout 5 node -e "
+const fs = require('fs');
+const p = process.argv[1];
+const j = JSON.parse(fs.readFileSync(p,'utf8'));
+if (!j.hooks) j.hooks = {};
+if (!Array.isArray(j.hooks.UserPromptSubmit) || j.hooks.UserPromptSubmit.length === 0) {
+  j.hooks.UserPromptSubmit = [{ matcher: '', hooks: [] }];
+}
+j.hooks.UserPromptSubmit[0].hooks.push({ type: 'command', command: 'node \"/some/user/path/user-customization-extra.js\"', timeout: 5 });
+fs.writeFileSync(p, JSON.stringify(j, null, 2));
+" -- "$target_node" >/dev/null 2>&1
+    local out; out="$(detect_drift "$_tmp_home")"
+    echo "$out" | run_with_timeout 5 node -e "
+let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+  const r = JSON.parse(d);
+  if (r.drifted !== false) { console.error('drifted not false: '+JSON.stringify(r)); process.exit(2); }
+  console.log('OK');
+});" >/dev/null 2>&1 \
+        && pass "T10: nested superset → no drift" \
+        || fail "T10: nested superset → no drift (out=$out)"
+}
+
 # --- T17: session-start drift detected → additionalContext contains warning ---
 run_t17() {
     require_source "$SESSION_START" "T17: session-start drift warning" || return
@@ -402,6 +479,8 @@ run_t5
 run_t6
 run_t7
 run_t8
+run_t9
+run_t10
 run_t17
 run_t18
 run_t19

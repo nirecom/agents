@@ -336,6 +336,13 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- `codegraph-context-inject.js` (UserPromptSubmit) — forwards the upstream CodeGraph prompt-hook's
+  OUTPUT as `additionalContext`, without ever running `codegraph install` (which would rewrite
+  `~/.claude/CLAUDE.md` and register the hook itself). Gated three ways before it spawns anything:
+  `CODEGRAPH=on`, a `.codegraph/codegraph.db` found within six levels above the payload cwd, and a
+  scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
+  ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
+  any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes

@@ -225,14 +225,23 @@ state the uninstall path runs in.
 installer unconditionally rewrites `~/.claude/CLAUDE.md`, which in this framework is a symlink
 to the repo's own `CLAUDE.md` — an atomic rename replaces the link with a plain file and
 severs the single source of truth. It also writes a `UserPromptSubmit` prompt-hook, and its
-CLI exposes no flag to decline that. Delegating registration to Claude Code's own CLI gets
+CLI exposes no flag to decline that. #2215 keeps refusing the upstream hook while adopting its
+*output*: `hooks/codegraph-context-inject.js` is this repo's own `UserPromptSubmit` hook, which
+runs the same CLI subcommand and forwards what it prints — a deliberate reversal of #2150's
+"do not take the prompt-hook at all", narrowed to the one part that carries no config writes.
+Delegating registration to Claude Code's own CLI gets
 exactly the one effect wanted (an `mcpServers.codegraph` entry in `~/.claude.json`) and none
 of the rest. Permissions are granted from this repo's `settings.json` instead of by the
 external installer, and at tool granularity (`mcp__codegraph__codegraph_explore`) rather than
-the server wildcard upstream would add. That entry doubles as the ownership marker: `register`
-writes a fixed command, args, and telemetry opt-out env (`install/codegraph-constants.txt`,
-which also pins the npm version), and `unregister` removes the entry only when all three still
-match — a `codegraph` server the user registered by hand is never destroyed by an installer run.
+the server wildcard upstream would add. Ownership is asserted by one explicit marker rather than
+inferred from the whole shape: `register` writes `AGENTS_CODEGRAPH_MCP_OWNER=agents-framework`
+alongside the telemetry pair (`install/codegraph-constants.txt`, which also pins the npm version),
+and `unregister` removes the entry only when that marker proves ours — a `codegraph` server the
+user registered by hand carries no marker and is never destroyed by an installer run. Both verbs
+demand the marker: an unmarked entry is always `foreign` and left untouched, however closely its
+command and args resemble ours. They differ only on the marker's value — removal acts on an
+entry whose value is ours, while a `register` refresh also acts on someone else's value, since
+the `add` that follows re-establishes the marker either way.
 Because `codegraph_explore` returns verbatim source, it is also matched by
 `hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
 candidate paths.
