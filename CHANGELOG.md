@@ -419,3 +419,7 @@ Changes: Fixed: commands registered in the internal `settings-allow-commands.txt
 ### FEATURE: PR #2229 (2026-09-05)
 Background: feat(#2170): block capture-then-echo anti-pattern via PreToolUse IR hook
 Changes: Fixed a bug (#2170) where storing a command's output in a variable before echoing it could get auto-approved instead of prompting for the simpler bare-command form.
+
+### FEATURE: PR #2234 (2026-09-05)
+Background: feat(#2154): resolve --accepted-tradeoffs via per-stage fallback chai...
+Changes: Plan and test reviews no longer re-raise trade-offs you have already accepted: the reviewer now reads the nearest existing decision document (detail → outline → intent) instead of a single fixed file, and any concern rejected as already-settled must cite the decision it contradicts.;Fixed: the settled-decisions prompt file could survive on disk if the plan/test review process was killed or interrupted mid-run.
