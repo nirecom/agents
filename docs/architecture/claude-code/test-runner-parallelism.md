@@ -318,3 +318,20 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |
 | `skills/_shared/test-design.md` | Author-facing `# Serial:` rules |
 | `skills/run-tests/SKILL.md` | Operator-facing `/run-tests` procedure and payload rules |
+
+## 9. Corollary: per-test-file spawn discipline
+
+§1 established that the corpus is I/O/process-generation-bound, not CPU-bound, at the
+runner level. The same argument applies inside a single test file's own process-spawn
+budget: a dispatcher-plus-cases suite can independently multiply its own wall-clock by
+orders of magnitude regardless of `-j`. Three criteria decide whether a given test file
+is subject to this:
+
+1. The shell library under test must not be re-sourced once per assertion/case —
+   sourcing forks and re-parses on every call.
+2. Fixture git repositories must not be created once per test case — `git init` and its
+   companion setup calls must be confined to a fixture helper the case files call
+   through, never issued directly by each case.
+3. Both are mechanically observable, not a matter of taste: counting per-call helper
+   invocations (e.g. `dirname`) and counting `git init` occurrences across a run
+   distinguishes a per-suite/per-helper-call cost from a per-case one.
