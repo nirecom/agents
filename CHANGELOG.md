@@ -423,3 +423,7 @@ Changes: Fixed a bug (#2170) where storing a command's output in a variable befo
 ### FEATURE: PR #2234 (2026-09-05)
 Background: feat(#2154): resolve --accepted-tradeoffs via per-stage fallback chai...
 Changes: Plan and test reviews no longer re-raise trade-offs you have already accepted: the reviewer now reads the nearest existing decision document (detail → outline → intent) instead of a single fixed file, and any concern rejected as already-settled must cite the decision it contradicts.;Fixed: the settled-decisions prompt file could survive on disk if the plan/test review process was killed or interrupted mid-run.
+
+### FEATURE: PR #2241 (2026-09-06)
+Background: feat(#2145): LPT duration-ledger ordering for tests/run-all.sh
+Changes: `tests/run-all.sh`'s parallel test lane now schedules historically longer-running tests first, using a lightweight local duration history — reduces idle worker time at the end of a parallel test run. No configuration changes required; the feature degrades automatically to the previous ordering if history is unavailable.
