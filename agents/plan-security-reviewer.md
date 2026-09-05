@@ -42,4 +42,5 @@ NEEDS_REVISION
 
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
+Suppress a concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including `## Accepted Tradeoffs`) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

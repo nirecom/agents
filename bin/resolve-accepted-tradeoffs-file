@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Resolve the --accepted-tradeoffs source for a codex review stage.
+# Scans $PLANS_DIR/$SESSION_ID-<suffix>.md in the given order and prints the
+# first readable non-empty candidate that stays inside PLANS_DIR after symlink
+# resolution; an escaping or unverifiable candidate is skipped (fail closed).
+# When nothing qualifies the last candidate is printed as-is so the caller's
+# non-empty-value contract holds — but only when it is lexically inside, is not
+# a symlink, is a direct child of PLANS_DIR, and no canonicalizer exists at all.
+set -euo pipefail
+
+usage() {
+  echo "resolve-accepted-tradeoffs-file: usage: resolve-accepted-tradeoffs-file <PLANS_DIR> <SESSION_ID> <suffix> [<suffix>...]" >&2
+  exit 2
+}
+
+[[ $# -ge 3 ]] || usage
+PLANS_DIR="$1"
+SESSION_ID="$2"
+shift 2
+[[ -n "$PLANS_DIR" && -n "$SESSION_ID" ]] || usage
+
+CANON_MODE=""
+if command -v realpath >/dev/null 2>&1; then
+  CANON_MODE="realpath"
+elif command -v readlink >/dev/null 2>&1 && readlink -f / >/dev/null 2>&1; then
+  CANON_MODE="readlink"
+fi
+
+canon() {
+  case "$CANON_MODE" in
+    realpath) realpath -- "$1" 2>/dev/null || true ;;
+    readlink) readlink -f -- "$1" 2>/dev/null || true ;;
+    *) : ;;
+  esac
+}
+
+lex_norm() {
+  local p="$1" prefix="" seg out=""
+  local -a segs=() keep=()
+  # Win32 consumers treat `\` as a separator, so `..\..` must collapse here too.
+  p="${p//\\//}"
+  case "$p" in /*) prefix="/" ;; esac
+  local IFS='/'
+  # A here-string ends `read` at the first newline, dropping the rest of a path that embeds one.
+  set -f
+  segs=($p)
+  set +f
+  for seg in "${segs[@]}"; do
+    case "$seg" in
+      ''|'.') continue ;;
+      '..')
+        if [[ "${#keep[@]}" -gt 0 && "${keep[${#keep[@]}-1]}" != ".." ]]; then
+          unset "keep[${#keep[@]}-1]"
+          keep=("${keep[@]+"${keep[@]}"}")
+        else
+          keep+=("..")
+        fi
+        ;;
+      *) keep+=("$seg") ;;
+    esac
+  done
+  out="${keep[*]+${keep[*]}}"
+  printf '%s%s' "$prefix" "$out"
+}
+
+REAL_DIR="$(canon "$PLANS_DIR")"
+LEX_DIR="$(lex_norm "$PLANS_DIR")"
+
+# 0 = inside, 1 = outside, 2 = undecidable (no canonicalizer).
+canon_status() {
+  local rp
+  [[ -n "$CANON_MODE" && -n "$REAL_DIR" ]] || return 2
+  rp="$(canon "$1")"
+  [[ -n "$rp" ]] || return 2
+  if [[ "$rp" == "$REAL_DIR"/* ]]; then return 0; fi
+  return 1
+}
+
+LAST=""
+for sfx in "$@"; do
+  CAND="$PLANS_DIR/$SESSION_ID-$sfx.md"
+  LAST="$CAND"
+  [[ -f "$CAND" && -s "$CAND" && -r "$CAND" ]] || continue
+  ST=0
+  canon_status "$CAND" || ST=$?
+  [[ "$ST" -eq 0 ]] || continue
+  printf '%s\n' "$CAND"
+  exit 0
+done
+
+LEX_LAST="$(lex_norm "$LAST")"
+if [[ "$LEX_LAST" != "$LEX_DIR"/* ]]; then
+  echo "resolve-accepted-tradeoffs-file: the last candidate path leaves the plans directory; refusing to forward it." >&2
+  exit 3
+fi
+if [[ -e "$LAST" || -L "$LAST" ]]; then
+  ST=0
+  canon_status "$LAST" || ST=$?
+  REL="${LAST#"$PLANS_DIR"/}"
+  DIRECT_CHILD=0
+  case "$REL" in */*|*\\*) ;; *) DIRECT_CHILD=1 ;; esac
+  # An unverifiable candidate is emitted only when no canonicalizer exists at
+  # all, it is not a symlink, and it is a direct child of PLANS_DIR.
+  if [[ "$ST" -ne 0 && ( -n "$CANON_MODE" || -L "$LAST" || "$DIRECT_CHILD" -eq 0 ) ]]; then
+    echo "resolve-accepted-tradeoffs-file: the last candidate resolves outside the plans directory; refusing to forward it." >&2
+    exit 3
+  fi
+fi
+printf '%s\n' "$LAST"

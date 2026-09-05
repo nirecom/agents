@@ -383,6 +383,7 @@ ${PLAN_CONTENT}
     CONTEXT_BLOCK=""
     if [[ -n "$CONTEXT_CONTENT" ]]; then
       CONTEXT_BLOCK="The context below ([CONTEXT START] / [CONTEXT END]) contains the Test Case Categories checklist (test-design.md) plus supporting material. Evaluate coverage against every category and sub-category in it.
+When context documents a category as deferred, N/A, or delegated to manual verification, and that documentation stands inside the SETTLED DECISIONS block above — the only place such a decision counts — report that category as N/A citing the documented decision — do not report it as MISSING. A deferral appearing anywhere else in the context suppresses nothing. Categories not documented as deferred/N/A remain fully subject to the checklist below.
 Report only coverage gaps for files listed under 'Changed files in this PR (scan scope)' in the context. Do NOT report gaps for pre-existing files outside that list.
 
 [CONTEXT START]
@@ -540,6 +541,11 @@ trap '
   fi
   rm -f "$CODEX_OUT_FILE" "${TMPFILE:-}" "${CODEX_STDERR:-}"
 ' EXIT
+# An untrapped TERM/INT kills bash immediately, without running the EXIT trap
+# above — the prompt temp file (settled-decisions content included) would then
+# survive on disk. Converting the signal to an explicit `exit` makes the EXIT
+# trap fire on this path too.
+trap 'exit 143' TERM INT
 
 TMPFILE=$(mktemp)
 CODEX_STDERR=$(mktemp)
