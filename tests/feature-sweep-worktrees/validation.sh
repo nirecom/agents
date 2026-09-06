@@ -1,6 +1,8 @@
 #!/bin/bash
 # tests/feature-sweep-worktrees/validation.sh
-# Input/env validation + error-path tests: T11, T22.
+# Tests: bin/sweep-worktrees.sh
+# Tags: sweep, worktrees, validation, maintenance, bin, scope:common
+# Input/env validation + error-path tests: T11, T22..T24.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 
 # shellcheck source=./_lib.sh
@@ -102,12 +104,66 @@ T22_sweep_age_days_zero_rejected() {
     fi
 }
 
+# T23 — SWEEP_AGE_DAYS=010 is rejected (bash reads a leading zero as octal).
+T23_sweep_age_days_leading_zero_rejected() {
+    local repo="$TMPDIR_BASE/t23-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T23 sweep_age_days_leading_zero_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t23.out"
+    local stderr_file="$TMPDIR_BASE/t23.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 SWEEP_AGE_DAYS=010 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T23 sweep_age_days_leading_zero_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T23 sweep_age_days_leading_zero_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
+# T24 — SWEEP_AGE_DAYS beyond 15 digits is rejected (64-bit wraparound guard).
+T24_sweep_age_days_overflow_rejected() {
+    local repo="$TMPDIR_BASE/t24-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T24 sweep_age_days_overflow_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t24.out"
+    local stderr_file="$TMPDIR_BASE/t24.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 SWEEP_AGE_DAYS=9999999999999999 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T24 sweep_age_days_overflow_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T24 sweep_age_days_overflow_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
 
 T11_registry_fetch_failure_aborts_scan
 T22_sweep_age_days_zero_rejected
+T23_sweep_age_days_leading_zero_rejected
+T24_sweep_age_days_overflow_rejected
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

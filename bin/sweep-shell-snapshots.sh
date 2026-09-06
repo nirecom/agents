@@ -137,6 +137,18 @@ if ! cd -P -- "$SNAPSHOTS_DIR" 2>/dev/null; then
   exit 1
 fi
 
+# `cd` succeeding proves nothing about *where* it landed: a symlink swap
+# between the check above and this `cd` would make `cd -P` itself follow the
+# attacker's link and land the whole rest of the run somewhere else. Re-check
+# the physical destination against the same expected path, using pwd -P
+# directly rather than re-invoking snapshots_dir_is_physically_expected
+# (which re-resolves "$SNAPSHOTS_DIR" — the very path string a second swap
+# could have already redirected — instead of trusting the cwd already bound).
+if [[ "$(pwd -P)" != "$resolved_home/.claude/shell-snapshots" ]]; then
+  printf 'ERROR: refusing to sweep: entered directory does not match the expected physical location: %s\n' "$SNAPSHOTS_DIR" >&2
+  exit 1
+fi
+
 # ─── Counters + helpers ────────────────────────────────────────────────────
 
 scanned=0

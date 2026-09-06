@@ -1,25 +1,13 @@
 #!/usr/bin/env bash
-#
-# bin/sweep-branches.sh
-#
-# Reclaims merged-but-undeleted local and remote branches. Local branches are
-# age-gated (--min-age-hours); remote branches are only PR-merged checked.
-# Deletes by default; pass --dry-run to preview.
-#
-# Usage:
-#   sweep-branches.sh [--dry-run] [--min-age-hours N] [--ci-mode]
-#                     [--apply] [--skip-gh-check]
-#
-# Entrypoint only: flag parsing, environment checks, candidate collection, and
-# pass sequencing. The logic lives in the sibling bin/sweep-branches/ modules
-# (rules/coding/file-split.md Pattern A):
-#   pr-state.sh      — gh-backed PR state classification
-#   gates.sh         — pure protection / age / reachability gates
-#   delete-passes.sh — the three deletion passes
-#   summary.sh       — CI-mode JSON and plain-text summary
-#
-# Exit code: 0 on normal completion (per-branch failures are non-fatal).
-#            1 only on fatal setup error (missing AGENTS_CONFIG_DIR, git, etc.).
+# bin/sweep-branches.sh — reclaims merged-but-undeleted local and remote
+# branches. Local branches are age-gated (--min-age-hours); remote branches
+# are only PR-merged checked. Deletes by default; pass --dry-run to preview.
+# Usage: sweep-branches.sh [--dry-run] [--min-age-hours N] [--ci-mode] [--apply] [--skip-gh-check]
+# Entrypoint only (rules/coding/file-split.md Pattern A): logic lives in the
+# sibling bin/sweep-branches/ modules — pr-state.sh (gh-backed PR state),
+# gates.sh (protection/age/reachability gates), delete-passes.sh (the three
+# deletion passes), summary.sh (CI-mode JSON and plain-text summary).
+# Exit code: 0 normal completion (per-branch failures are non-fatal); 1 fatal setup error.
 
 set -euo pipefail
 
@@ -47,7 +35,25 @@ SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
   local v="$1"
-  if [[ ! "$v" =~ ^[0-9]+$ ]] || [[ "$v" -lt 1 ]]; then
+  case "$v" in
+    ''|*[!0-9]*)
+      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    0?*)
+      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
+      # error and 010 silently means 8; reject instead of guessing the intent.
+      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    ????????????????*)
+      # >15 digits: 64-bit signed arithmetic could wrap a huge value into a
+      # small or negative one, defeating the guard the operator asked for.
+      printf 'ERROR: SWEEP_AGE_DAYS must be at most 15 digits (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$v" -lt 1 ]]; then
     printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
     exit 2
   fi

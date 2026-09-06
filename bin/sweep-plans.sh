@@ -22,7 +22,25 @@ SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
   local v="$1"
-  if [[ ! "$v" =~ ^[0-9]+$ ]] || [[ "$v" -lt 1 ]]; then
+  case "$v" in
+    ''|*[!0-9]*)
+      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    0?*)
+      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
+      # error and 010 silently means 8; reject instead of guessing the intent.
+      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    ????????????????*)
+      # >15 digits: 64-bit signed arithmetic could wrap a huge value into a
+      # small or negative one, defeating the guard the operator asked for.
+      printf 'ERROR: SWEEP_AGE_DAYS must be at most 15 digits (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$v" -lt 1 ]]; then
     printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
     exit 2
   fi

@@ -1,29 +1,14 @@
 #!/bin/bash
 # tests/feature-sweep-plans.sh
 # Tests: bin/sweep-plans.sh, skills/sweep-plans/SKILL.md
-# Tags: sweep, plans, workflow-plans, maintenance, bin
-#
-# Tests for bin/sweep-plans.sh — the workflow-plans sweep mechanism that
-# cleans up old session artifacts under $WORKFLOW_PLANS_DIR (~/.workflow-plans
-# by default).
-#
-# Contract under test:
-#   bin/sweep-plans.sh [--dry-run|--apply] [--ci-mode]
-#
-# A "candidate" for sweep is a group of files in WORKFLOW_PLANS_DIR sharing a
-# common session-id stem (YYYYMMDD-HHMMSS or UUID) whose:
-#   - oldest member's mtime is older than SWEEP_AGE_DAYS (default 30)
-#   - newest member's mtime is also older than SWEEP_AGE_DAYS (mixed groups
-#     with a freshly-touched member are skipped as "young")
-#
-# Outputs:
-#   --dry-run    → human-readable list (per-group + summary)
-#   --ci-mode    → JSON with keys: scanned, groups_candidates, groups_removed,
-#                  groups_skipped_young, files_removed, errors
-#
-# Validation: SWEEP_AGE_DAYS=0 or non-numeric → exit 2 with stderr message.
-#
-# Source bin/sweep-plans.sh does NOT exist yet — all tests RED until impl lands.
+# Tags: sweep, plans, workflow-plans, maintenance, bin, scope:common
+# Tests bin/sweep-plans.sh [--dry-run|--apply] [--ci-mode], which cleans up
+# old session artifacts under $WORKFLOW_PLANS_DIR. A "candidate" is a group
+# of files sharing a session-id stem (YYYYMMDD-HHMMSS or UUID) whose oldest
+# AND newest member are both older than SWEEP_AGE_DAYS (default 30). --ci-mode
+# prints JSON (scanned, groups_candidates, groups_removed,
+# groups_skipped_young, files_removed, errors). SWEEP_AGE_DAYS=0, non-numeric,
+# leading-zero, or >15 digits all exit 2.
 
 set -uo pipefail
 
@@ -422,6 +407,60 @@ T10_sweep_age_days_non_numeric_rejected() {
     fi
 }
 
+# T11 — SWEEP_AGE_DAYS=010 is rejected (bash reads a leading zero as octal;
+# 010 would otherwise silently mean 8, not 10).
+T11_sweep_age_days_leading_zero_rejected() {
+    local plans_dir="$TMPDIR_BASE/t11-plans"
+    mkdir -p "$plans_dir"
+
+    if [ ! -f "$SWEEP" ]; then
+        fail "T11 sweep_age_days_leading_zero_rejected: $SWEEP not found"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t11.out"
+    local stderr_file="$TMPDIR_BASE/t11.err"
+    WORKFLOW_PLANS_DIR="$plans_dir" SWEEP_AGE_DAYS=010 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+        >"$stdout_file" 2>"$stderr_file"
+    local exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T11 sweep_age_days_leading_zero_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T11 sweep_age_days_leading_zero_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
+# T12 — SWEEP_AGE_DAYS beyond 15 digits is rejected (guards against 64-bit
+# arithmetic wraparound turning a huge value into a small/negative one).
+T12_sweep_age_days_overflow_rejected() {
+    local plans_dir="$TMPDIR_BASE/t12-plans"
+    mkdir -p "$plans_dir"
+
+    if [ ! -f "$SWEEP" ]; then
+        fail "T12 sweep_age_days_overflow_rejected: $SWEEP not found"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t12.out"
+    local stderr_file="$TMPDIR_BASE/t12.err"
+    WORKFLOW_PLANS_DIR="$plans_dir" SWEEP_AGE_DAYS=9999999999999999 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+        >"$stdout_file" 2>"$stderr_file"
+    local exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T12 sweep_age_days_overflow_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T12 sweep_age_days_overflow_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -435,6 +474,8 @@ T6_subdirs_not_touched
 T7_ci_mode_json_shape
 T9_sweep_age_days_zero_rejected
 T10_sweep_age_days_non_numeric_rejected
+T11_sweep_age_days_leading_zero_rejected
+T12_sweep_age_days_overflow_rejected
 
 echo ""
 echo "─────────────────────────────────────────"

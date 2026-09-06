@@ -58,6 +58,7 @@ minage-maxint|--dry-run --min-age-minutes 2147483647|allow|10
 # so the parser now rejects them outright instead of risking wraparound arithmetic.
 minage-int64-boundary|--dry-run --min-age-minutes 9223372036854775807|reject|10
 minage-beyond-int64|--dry-run --min-age-minutes 99999999999999999999999999|reject|10
+minage-leading-zero|--dry-run --min-age-minutes 010|reject|10
 duplicate-dry-run|--dry-run --dry-run|allow|10
 duplicate-minage-last-wins|--dry-run --min-age-minutes 60 --min-age-minutes 0|allow|10
 minage-missing-value|--dry-run --min-age-minutes|reject|10
