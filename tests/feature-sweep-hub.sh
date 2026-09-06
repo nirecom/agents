@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-sweep-hub.sh
-# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md, skills/sweep-issues/SKILL.md
-# Tags: sweep, worktree, branch, issues, maintenance, frontmatter, tests, scope:common, TL1
+# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md, skills/sweep-issues/SKILL.md, skills/sweep-shell-snapshots/SKILL.md
+# Tags: sweep, worktree, branch, issues, shell-snapshots, maintenance, frontmatter, tests, scope:common, TL1
 #
 # Structural tests for the /sweep hub skill and the /sweep-worktrees dispatch
 # target. These check only file presence + frontmatter shape — no source-code
@@ -15,6 +15,7 @@ SWEEP_HUB="$AGENTS_DIR/skills/sweep/SKILL.md"
 SWEEP_WT="$AGENTS_DIR/skills/sweep-worktrees/SKILL.md"
 SWEEP_BR="$AGENTS_DIR/skills/sweep-branches/SKILL.md"
 SWEEP_IS="$AGENTS_DIR/skills/sweep-issues/SKILL.md"
+SWEEP_SS="$AGENTS_DIR/skills/sweep-shell-snapshots/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -43,6 +44,15 @@ frontmatter_of() {
         }
         inblock { print }
     ' "$f"
+}
+
+# Everything AFTER the closing `---` — the procedure the model actually reads.
+# A delegation named only in the frontmatter `description:` is documentation,
+# not an instruction, so wiring assertions must look here and not at the whole file.
+body_of() {
+    local f="$1"
+    [ -f "$f" ] || { printf ''; return; }
+    awk '/^---[[:space:]]*$/ { count++; next } count >= 2 { print }' "$f"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -284,6 +294,120 @@ T11_sweep_hub_sw_numbering_coherent() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T12 — skills/sweep-shell-snapshots/SKILL.md exists, is non-empty, and is
+#       user-invocable (same contract every other sweep sub-skill carries).
+# ─────────────────────────────────────────────────────────────────────────────
+
+T12_sweep_shell_snapshots_exists_user_invocable() {
+    if [ ! -f "$SWEEP_SS" ]; then
+        fail "T12 sweep_shell_snapshots_exists_user_invocable: $SWEEP_SS does not exist"
+        return
+    fi
+    if [ ! -s "$SWEEP_SS" ]; then
+        fail "T12 sweep_shell_snapshots_exists_user_invocable: $SWEEP_SS is empty"
+        return
+    fi
+    local fm
+    fm="$(frontmatter_of "$SWEEP_SS")"
+    if [ -z "$fm" ]; then
+        fail "T12 sweep_shell_snapshots_exists_user_invocable: no frontmatter found"
+        return
+    fi
+    case "$fm" in
+        *"user-invocable: true"*|*"user-invocable:true"*)
+            pass "T12 sweep_shell_snapshots_exists_user_invocable" ;;
+        *)
+            fail "T12 sweep_shell_snapshots_exists_user_invocable: 'user-invocable: true' not in frontmatter: $fm" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T12b — the sub-skill's own body must delegate to bin/sweep-shell-snapshots.sh.
+#        T12 only proves a user-invocable SKILL.md exists; a file that says
+#        nothing about the script is a /sweep-shell-snapshots that sweeps
+#        nothing, and T13 (hub → sub-skill) stays green throughout. This closes
+#        the last hop of the chain, mirroring how sweep-plans/SKILL.md names
+#        `bin/sweep-plans.sh` in its Usage section.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T12b_sweep_shell_snapshots_delegates_to_script() {
+    if [ ! -f "$SWEEP_SS" ]; then
+        fail "T12b sweep_shell_snapshots_delegates_to_script: $SWEEP_SS does not exist"
+        return
+    fi
+    local body
+    body="$(body_of "$SWEEP_SS")"
+    if [ -z "$body" ]; then
+        fail "T12b sweep_shell_snapshots_delegates_to_script: $SWEEP_SS has no body below its frontmatter"
+        return
+    fi
+    if printf '%s\n' "$body" | grep -qF 'bin/sweep-shell-snapshots.sh'; then
+        pass "T12b sweep_shell_snapshots_delegates_to_script"
+    else
+        fail "T12b sweep_shell_snapshots_delegates_to_script: body never names 'bin/sweep-shell-snapshots.sh' — the skill delegates to nothing"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T13 — skills/sweep/SKILL.md registers 'sweep-shell-snapshots' as a dispatch
+#       target (both in the frontmatter description list and in the SW-N
+#       procedure), exactly as T10 pins it for sweep-issues. A sub-skill the hub
+#       never invokes is dead code: /sweep would silently stop clearing the
+#       corrupted snapshots issue #2160 is about.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T13_sweep_hub_registers_sweep_shell_snapshots() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T13 sweep_hub_registers_sweep_shell_snapshots: $SWEEP_HUB does not exist"
+        return
+    fi
+    local fm
+    fm="$(frontmatter_of "$SWEEP_HUB")"
+    case "$fm" in
+        *"sweep-shell-snapshots"*) ;;
+        *)
+            fail "T13 sweep_hub_registers_sweep_shell_snapshots: 'sweep-shell-snapshots' not in hub frontmatter description"
+            return ;;
+    esac
+    if grep -qE '^SW-[0-9]+[a-z]*\..*/sweep-shell-snapshots' "$SWEEP_HUB" 2>/dev/null; then
+        pass "T13 sweep_hub_registers_sweep_shell_snapshots"
+    else
+        fail "T13 sweep_hub_registers_sweep_shell_snapshots: no SW-N step invokes /sweep-shell-snapshots in $SWEEP_HUB"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T14 — the WORKTREE_ON bracket step names the step it actually follows.
+#       Inserting the new dispatch step renumbers the tail, and the bracket
+#       step's prose carries a hard-coded 'after SW-N' back-reference that
+#       T11's numbering check cannot see. Pin it to the last dispatch step —
+#       /sweep-shell-snapshots — so a stale reference is caught.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T14_sweep_hub_worktree_on_references_last_dispatch() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T14 sweep_hub_worktree_on_references_last_dispatch: $SWEEP_HUB does not exist"
+        return
+    fi
+    local snap_step on_ref
+    snap_step="$(grep -oE '^SW-[0-9]+\..*/sweep-shell-snapshots' "$SWEEP_HUB" 2>/dev/null | head -1 | sed 's/^SW-//; s/\..*$//')"
+    if [ -z "$snap_step" ]; then
+        fail "T14 sweep_hub_worktree_on_references_last_dispatch: no primary SW-N step invokes /sweep-shell-snapshots"
+        return
+    fi
+    on_ref="$(grep -E '^SW-[0-9]+[a-z]*\..*WORKFLOW_ENFORCE_WORKTREE_ON' "$SWEEP_HUB" 2>/dev/null | grep -oE 'after SW-[0-9]+' | head -1 | sed 's/^after SW-//')"
+    if [ -z "$on_ref" ]; then
+        fail "T14 sweep_hub_worktree_on_references_last_dispatch: WORKFLOW_ENFORCE_WORKTREE_ON step has no 'after SW-N' back-reference"
+        return
+    fi
+    if [ "$on_ref" = "$snap_step" ]; then
+        pass "T14 sweep_hub_worktree_on_references_last_dispatch (SW-$snap_step)"
+    else
+        fail "T14 sweep_hub_worktree_on_references_last_dispatch: bracket says 'after SW-$on_ref' but the last dispatch step is SW-$snap_step (stale reference after renumbering)"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -298,6 +422,17 @@ T8_sweep_hub_references_sweep_plans
 T9_sweep_issues_exists_user_invocable
 T10_sweep_hub_registers_sweep_issues
 T11_sweep_hub_sw_numbering_coherent
+T12_sweep_shell_snapshots_exists_user_invocable
+T12b_sweep_shell_snapshots_delegates_to_script
+T13_sweep_hub_registers_sweep_shell_snapshots
+T14_sweep_hub_worktree_on_references_last_dispatch
+
+# T15-T17 (exact skill-host frontmatter, the forked dispatch family, flag
+# forwarding) and T18/T19 (real `claude -p` invocation, TL3-gated) live in a
+# sibling part file — rules/coding/file-split.md Pattern A. It self-invokes its
+# cases at source time and uses the pass/fail helpers defined above.
+# shellcheck source=tests/feature-sweep-hub/skill-host-integration.sh
+. "$AGENTS_DIR/tests/feature-sweep-hub/skill-host-integration.sh"
 
 echo ""
 echo "─────────────────────────────────────────"
