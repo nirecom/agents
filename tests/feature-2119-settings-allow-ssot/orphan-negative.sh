@@ -5,9 +5,9 @@
 
 T42_TOOL="bin/fx-keep"
 
-# WHY THIS FILE EXISTS. T14 shows the classifier saying YES to all sixteen path spellings, and
+# WHY THIS FILE EXISTS. T14 shows the classifier saying YES to all twenty-four path spellings, and
 # T35 shows both verdicts for the BARE forms. Nothing shows the path classifier saying NO. A
-# reverse matcher that answers "generated-shaped" for everything passes all sixteen T14 rows,
+# reverse matcher that answers "generated-shaped" for everything passes all twenty-four T14 rows,
 # and its first --check on a real machine reports a developer's own hand-written `Bash(...)`
 # rules as orphans -- which, on the next manual cleanup, is how they get deleted. CPR-ORTH:
 # every verdict of a classifier needs a row, not only the one the happy path exercises.
@@ -55,6 +55,13 @@ no-space-before-star|not-claimed/rc=0|Bash(bash bin/fx-other*)|the trailing wild
 foreign-root|claimed/rc=1|Bash(bash /some/other/checkout/bin/fx-other *)|DERIVED FROM THE CLASS: `<P>` is `[A-Za-z0-9._/-]+`, which contains `/` and therefore spans a whole absolute POSIX path, so the plain `<I> <P> *` family claims a foreign-root POSIX rule even though the `<R>` family would not -- deliberate, per the module's own note that another checkout's root is an orphan here
 foreign-root-win|not-claimed/rc=0|Bash(bash D:\some\other\checkout\bin\fx-other *)|THE ASYMMETRY, and why the row above is not a bug: `:` falls outside every placeholder class, so a Windows foreign-root rule can only reach the `<W>` family, which demands THIS checkout's root as a literal `<R2W>` prefix -- it has no `<P>`-style escape hatch and stays unclaimed
 foreign-cd-prefix|not-claimed/rc=0|Bash(bash -c 'cd "$HOME" && bash "$AGENTS_CONFIG_DIR/bin/fx-other" *')|the `bash -c 'cd ... && ...'` family requires the literal cd into $AGENTS_CONFIG_DIR: a wrapper that cds somewhere else is a hand-written rule with different behaviour
+quoted-root-posix|claimed/rc=1|Bash(bash "<R>/bin/fx-other" *)|#2201 POSITIVE: the new interpreter + QUOTED absolute POSIX family is a spelling this generator now emits, so the same string naming a command the SSOT does not list is this generator's drift and belongs in the report -- a table that grows without the classifier growing with it leaves the new spellings undeletable and unreportable forever
+quoted-root-win|claimed/rc=1|Bash(bash "<R2W>\bin\fx-other" *)|#2201 POSITIVE, Windows separators: the family a quoted Windows absolute path actually lands in is claimed under this root too
+quoted-root-plain-posix|claimed/rc=1|Bash("<R>/bin/fx-other" *)|#2201 POSITIVE, no interpreter prefix: the classifier is derived from the same table as the renderer, so all four new families arrive together or the derivation has been broken
+quoted-root-plain-win|claimed/rc=1|Bash("<R2W>\bin\fx-other" *)|#2201 POSITIVE, the fourth new family -- CPR-ORTH, one row per family rather than one sampled row for the group
+quoted-foreign-root|not-claimed/rc=0|Bash(bash "/some/other/checkout/bin/fx-other" *)|THE NEGATIVE CONTROL the four rows above need: a quote takes the string outside the `<P>` class (which has no `"`), so a QUOTED absolute path can only reach the new families -- and every one of them demands THIS checkout's root as a literal. The new templates therefore widen matching for real paths under this root and for nothing else, and another clone's quoted rule stays unclaimed where the unquoted `foreign-root` row above is claimed
+quoted-foreign-root-win|not-claimed/rc=0|Bash(bash "D:\some\other\checkout\bin\fx-other" *)|CPR-ORTH: the Windows twin of that control, so the narrowness is a property of the quoted families and not of one separator spelling
+quoted-root-lookalike|not-claimed/rc=0|Bash(bash "<R>-backup/bin/fx-other" *)|and a root that merely RESEMBLES this checkout's is not claimed once quoted either: the literal is the root followed by its separator, so `<root>-backup/` is a different tree's rule -- the quoted mirror of T44's `root-prefix-lookalike`
 T42_CASES
 }
 

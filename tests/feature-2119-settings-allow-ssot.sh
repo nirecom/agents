@@ -27,8 +27,9 @@ PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
 # THE CONTRACT UNDER TEST. One declarative file names the commands and nothing else -- no
 # interpreter (read from the shebang), no rule strings, no bare-form flag (decided by
 # install/path-exposed-commands.txt). install/lib/settings-allow-rules.js owns the template
-# table in ONE place and expands each entry into 16 path spellings plus 6 bare spellings, as
-# adjacent argument-bearing / argument-less PAIRS. install/lib/settings-assembly.js merges
+# table in ONE place and expands each entry into 24 path spellings plus 6 bare spellings, as
+# adjacent argument-bearing / argument-less PAIRS (16 path spellings until #2201 added the four
+# QUOTED absolute-path families -- the spelling the model issues whenever it quotes a path). install/lib/settings-assembly.js merges
 # base + extension + generated; install/lib/settings-deploy.js is the single writer of
 # ~/.claude/settings.json. The generated rules are INJECTED AT DEPLOY TIME and never live in
 # the repository's settings.json, so there is nothing left for a human to hand-maintain.
@@ -61,7 +62,7 @@ fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 # SKIPPED: asserting that the generated spellings actually stop the permission engine from
-#          prompting -- i.e. running each of the 22 forms in a live Claude Code session.
+#          prompting -- i.e. running each of the 30 forms in a live Claude Code session.
 # Because: an approved `ask` leaves no observable record, so a passive after-the-fact check
 #          cannot distinguish "matched an allow rule" from "the user pressed yes".
 
@@ -94,12 +95,12 @@ ROWS=0
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS_EXPECTED=486 # T3a 4 + T3b 19 + T46 10 + T4 25 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
-                   # + T7b 2 + T7c 2 + T11 4 + T12 3 + T25 6 + T13 15 + T14 16 + T15 6
-                   # + T16 5 + T17 18 + T26 17 + T27 9 + T28 14 + T29 20 + T30 13 + T22 3
-                   # + T23 26 + T31 95 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8
-                   # + T37 8 + T38 5 + T39 3 + T40 16 + T41 17 + T42 7 + T43 33 + T44 12
-                   # + T47 4
+ROWS_EXPECTED=693 # T3a 4 + T3b 23 + T46 10 + T4 33 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
+                   # + T7b 2 + T7c 2 + T11 4 + T12 3 + T25 6 + T13 15 + T14 24 + T15 6
+                   # + T16 5 + T17 18 + T26 27 + T27 13 + T28 14 + T29 20 + T30 13 + T22 3
+                   # + T23 39 + T31 187 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8
+                   # + T37 8 + T38 5 + T39 3 + T40 16 + T41 17 + T42 14 + T43 33 + T44 12
+                   # + T47 4 + T48 31 + T49 30
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/sa-2119.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -172,6 +173,8 @@ canary_setup
 . "$PART_DIR/deploy-symlink-policy.sh"
 . "$PART_DIR/drift-detection.sh"
 . "$PART_DIR/docs-contract.sh"
+. "$PART_DIR/rt0-calling-convention.sh"
+. "$PART_DIR/quoted-root-space.sh"
 . "$PART_DIR/real-repo-expansion.sh"
 . "$PART_DIR/retirement.sh"
 . "$PART_DIR/hook-callers.sh"

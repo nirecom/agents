@@ -102,6 +102,10 @@ Write-Host "--- Installing jq ---"
 & "$AgentsRoot\install\win\jq.ps1"
 
 Write-Host ""
+Write-Host "--- Installing shellcheck ---"
+& "$AgentsRoot\install\win\shellcheck.ps1"
+
+Write-Host ""
 Write-Host "--- Configuring CodeGraph ---"
 & "$AgentsRoot\install\win\codegraph.ps1"
 

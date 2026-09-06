@@ -1,35 +1,42 @@
 #!/usr/bin/env bash
 # Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
-# Sections M and R - the two sections that answer "would the tables above
-# NOTICE a regression?" (M, by neutering one rule at a time in a copy of the
-# hook) and "can the tables above be reached at all in production?" (R, by
-# asserting the PreToolUse registration the host evaluates before any hook code).
-
-# ===========================================================================
-# Section M - mutation evidence. Table rows only prove the current code answers
-# the way the table says; they do not prove the table would NOTICE the rule
-# being removed. Each probe neuters exactly one category regex in a COPY of the
-# hook and asserts the matching row flips BLOCK -> ALLOW while a sibling
-# category stays BLOCK (so the probe cannot pass by breaking the whole file).
-# ===========================================================================
+# Tests: hooks/enforce-system-ops.js, hooks/lib/system-ops-categories.js, settings.json
+# Tags: system-ops, mutation-probe, classifier, hook-registration, security, scope:common, pwsh-not-required
+# Section M - mutation evidence: each probe neuters exactly one category regex in
+# a COPY of the classifier and asserts the matching row flips BLOCK -> ALLOW while
+# a sibling category stays BLOCK, so a probe cannot pass by breaking the whole
+# file. Section R - registration: the PreToolUse matcher the host evaluates
+# before any hook code runs, asserted against settings.json.
 mutate_hook() {
     # mutate_hook <literal-regex-fragment> -> path to a mutated copy
-    local fragment="$1" dest="$TMP/mutant.js"
+    local fragment="$1" dest="$TMP/mutant.js" libdest="$TMP/mutant-lib.js"
     cp "$HOOK" "$dest"
-    # Replace the target regex fragment with a never-match group. The copy lives
-    # outside hooks/, so its `require("./lib/...")` specifiers are re-pointed at
-    # the real hooks directory — otherwise the mutant dies on MODULE_NOT_FOUND
-    # and every probe would "pass" for the wrong reason.
+    cp "$AGENTS_DIR/hooks/lib/system-ops-categories.js" "$libdest"
+    # Replace the target regex fragment with a never-match group. The category
+    # regexes live in hooks/lib/system-ops-categories.js and the interpreter-body
+    # regex in the hook itself, so the fragment is sought in BOTH copies. Both
+    # copies sit outside hooks/, so the hook copy's `require("./lib/...")`
+    # specifiers are re-pointed — at the mutant lib for the category module, at
+    # the real hooks directory for the rest — otherwise the mutant dies on
+    # MODULE_NOT_FOUND and every probe would "pass" for the wrong reason.
     node -e '
 const fs = require("fs");
-const [dest, frag, hooksDir] = process.argv.slice(1);
+const [dest, libDest, frag, hooksDir] = process.argv.slice(1);
 let src = fs.readFileSync(dest, "utf8");
-const i = src.indexOf(frag);
-if (i === -1) { process.stderr.write("fragment-not-found"); process.exit(3); }
-src = src.slice(0, i) + "(?!x)x" + src.slice(i + frag.length);
+let lib = fs.readFileSync(libDest, "utf8");
+const neuter = (s) => {
+  const i = s.indexOf(frag);
+  return i === -1 ? null : s.slice(0, i) + "(?!x)x" + s.slice(i + frag.length);
+};
+const mutSrc = neuter(src);
+const mutLib = mutSrc === null ? neuter(lib) : null;
+if (mutSrc === null && mutLib === null) { process.stderr.write("fragment-not-found"); process.exit(3); }
+if (mutSrc !== null) { src = mutSrc; } else { lib = mutLib; }
+src = src.split("\"./lib/system-ops-categories\"").join(JSON.stringify(libDest));
 src = src.split("\"./lib/").join("\"" + hooksDir + "/lib/");
 fs.writeFileSync(dest, src);
-' "$(topath "$dest")" "$fragment" "$(topath "$AGENTS_DIR/hooks")" 2>"$TMP/mut-err.txt" || return 1
+fs.writeFileSync(libDest, lib);
+' "$(topath "$dest")" "$(topath "$libdest")" "$fragment" "$(topath "$AGENTS_DIR/hooks")" 2>"$TMP/mut-err.txt" || return 1
     printf '%s' "$dest"
 }
 

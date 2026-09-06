@@ -5,7 +5,7 @@
 # WHY (CPR-WPH): #2037 moves the "which skill must Read this rule" fact out of a hand-written test table and into the policy declaration (ON_DEMAND_READERS). That is only worth declaring if a static checker can say, by name, when a declaration has gone wrong — otherwise a forgotten reader is invisible until a live session runs without the rule.
 # So each violation token gets a PAIR: a fixture that must produce the token BY NAME, and a near-identical fixture that must NOT. A one-sided check cannot distinguish "the checker detects this" from "the checker rejects everything".
 # The MINIMIZED_* half of the same declaration work is in cases-minimized.sh; the helpers both files use are in fixtures.sh.
-# Assumes TOKEN, MARKER, BASE, CHECKER, node_path(), wr(), mk_repo(), run_checker(), outfile_for(), rd_policy(), rd_base(), rd_min_base(), rd_expect(), pass(), fail() from the dispatcher and fixtures.sh.
+# Assumes TOKEN, MARKER, BASE, CHECKER, node_path(), wr(), mk_tree(), run_checker(), outfile_for(), rd_policy(), rd_base(), rd_min_base(), rd_expect(), pass(), fail() from the dispatcher and fixtures.sh.
 
 echo ""
 echo "=== ON_DEMAND_READERS declarations (#2037 reader-side violation tokens) ==="

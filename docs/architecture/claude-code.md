@@ -203,6 +203,27 @@ Adding a new review format is therefore an allowlist + prompt-body change in the
 binaries, not a new Codex integration. `security-plan` / `test-review` are single-round
 terminal formats (CAP=1, no extensions); `outline-plan` / `detail-plan` allow revision rounds.
 
+**Settled decisions reach the reviewer as an explicit input.** Every format passes the
+session's own decision record as `--accepted-tradeoffs`, and a concern that directly
+contradicts a decision recorded there is out of bounds for the review. That record is not a
+single fixed file: a stage is entitled to the nearest decision document that actually exists,
+so `bin/resolve-accepted-tradeoffs-file` walks a per-stage suffix chain (`security-plan`:
+outline → intent; `test-review`: detail → outline → intent) and returns the first readable,
+non-empty candidate. A speculative skip that leaves `outline.md` unwritten therefore falls
+back to `intent.md` instead of reviewing against nothing — the condition that had reviewers
+re-raising decisions the user had already settled, one round of back-and-forth per stage. The
+resolver is fail-closed on a candidate that escapes `PLANS_DIR`: it refuses to forward one,
+and that refusal surfaces as loop exit 4 (HALT), never as a fallback to a Claude reviewer.
+
+**Suppression is asserted twice, by different parties.** The reviewer is told to drop a
+contradicting concern itself, and the calling skill independently re-verifies every verdict it
+receives (`review-plan-security` RPS-3). Either layer alone fails in an opposite direction:
+trusting only the reviewer's self-suppression buys silence that was never examined, while
+triaging only at the skill pays for concerns that should not have been raised at all.
+Rejection obliges naming the specific decision the concern contradicts — an uncited rejection
+is a procedure violation, and raising a topic the plan merely does not address is never
+grounds to reject.
+
 
 ## 8. CodeGraph Integration
 
@@ -225,14 +246,23 @@ state the uninstall path runs in.
 installer unconditionally rewrites `~/.claude/CLAUDE.md`, which in this framework is a symlink
 to the repo's own `CLAUDE.md` — an atomic rename replaces the link with a plain file and
 severs the single source of truth. It also writes a `UserPromptSubmit` prompt-hook, and its
-CLI exposes no flag to decline that. Delegating registration to Claude Code's own CLI gets
+CLI exposes no flag to decline that. #2215 keeps refusing the upstream hook while adopting its
+*output*: `hooks/codegraph-context-inject.js` is this repo's own `UserPromptSubmit` hook, which
+runs the same CLI subcommand and forwards what it prints — a deliberate reversal of #2150's
+"do not take the prompt-hook at all", narrowed to the one part that carries no config writes.
+Delegating registration to Claude Code's own CLI gets
 exactly the one effect wanted (an `mcpServers.codegraph` entry in `~/.claude.json`) and none
 of the rest. Permissions are granted from this repo's `settings.json` instead of by the
 external installer, and at tool granularity (`mcp__codegraph__codegraph_explore`) rather than
-the server wildcard upstream would add. That entry doubles as the ownership marker: `register`
-writes a fixed command, args, and telemetry opt-out env (`install/codegraph-constants.txt`,
-which also pins the npm version), and `unregister` removes the entry only when all three still
-match — a `codegraph` server the user registered by hand is never destroyed by an installer run.
+the server wildcard upstream would add. Ownership is asserted by one explicit marker rather than
+inferred from the whole shape: `register` writes `AGENTS_CODEGRAPH_MCP_OWNER=agents-framework`
+alongside the telemetry pair (`install/codegraph-constants.txt`, which also pins the npm version),
+and `unregister` removes the entry only when that marker proves ours — a `codegraph` server the
+user registered by hand carries no marker and is never destroyed by an installer run. Both verbs
+demand the marker: an unmarked entry is always `foreign` and left untouched, however closely its
+command and args resemble ours. They differ only on the marker's value — removal acts on an
+entry whose value is ours, while a `register` refresh also acts on someone else's value, since
+the `add` that follows re-establishes the marker either way.
 Because `codegraph_explore` returns verbatim source, it is also matched by
 `hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
 candidate paths.

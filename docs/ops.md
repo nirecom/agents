@@ -202,10 +202,10 @@ Run **once** after the PR for this change is merged. Idempotent.
 
 **Setup (resolve the active plans directory once per shell):**
 ```bash
-# Defaults to ~/.workflow-plans; respects WORKFLOW_PLANS_DIR override in .env.
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")
-echo "PLANS_DIR=$PLANS_DIR"
+bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
 ```
+It prints the active plans directory — defaults to `~/.workflow-plans`, and respects a
+`WORKFLOW_PLANS_DIR` override from `.env`. Read the printed path and use it literally below.
 
 **PowerShell (Windows):**
 ```powershell

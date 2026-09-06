@@ -25,12 +25,21 @@ function stripAlternateDataStream(name) {
   return idx === -1 ? name : name.slice(0, idx);
 }
 
+// The tail the FILESYSTEM discards from a component (Windows drops trailing
+// spaces and dots), exported as an unanchored character class so every reading
+// of "the same basename" is derived from this one spelling (CPR-SSOT). The
+// mention gates in ../protected-basenames.js embed it: a gate that stopped at
+// the raw tail would disown `<sid>.off-clearance.`, which the classifier here
+// still calls a token and which the OS creates as the real token (#1821).
+const STRIPPABLE_TAIL_CHARS = "[ \\t.]";
+const STRIPPABLE_TAIL_RE = new RegExp(STRIPPABLE_TAIL_CHARS + "+$");
+
 // normalizeCandidateBasename(basename): quote strip → ADS strip → trailing
 // whitespace/dot strip. Glob metachars are preserved for the matcher below.
 function normalizeCandidateBasename(basename) {
   if (typeof basename !== "string") return basename;
   const unquoted = basename.replace(/^["']+|["']+$/g, "");
-  return stripAlternateDataStream(unquoted).replace(/[ \t.]+$/, "");
+  return stripAlternateDataStream(unquoted).replace(STRIPPABLE_TAIL_RE, "");
 }
 
 function hasGlobMetachar(text) {
@@ -123,6 +132,7 @@ function candidateBasenameMatchesAnySuffix(basename, suffixes, opts) {
 }
 
 module.exports = {
+  STRIPPABLE_TAIL_CHARS,
   normalizeCandidateBasename,
   candidateBasenameMatchesAnySuffix,
   hasGlobMetachar,

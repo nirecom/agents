@@ -46,22 +46,33 @@ This installs the pinned npm package and registers the MCP server:
   (`claude mcp add`), never through the upstream tool's own bootstrap, which would rewrite
   `~/.claude/CLAUDE.md` and inject a prompt hook.
 
-Upstream telemetry is opted out on both paths (`CODEGRAPH_TELEMETRY=0`, `DO_NOT_TRACK=1`).
+Upstream telemetry follows who launched the process:
+
+| Who launched codegraph | What decides telemetry |
+|---|---|
+| This framework (MCP registration, `bin/codegraph-lifecycle.js`) | `CODEGRAPH_TELEMETRY` / `DO_NOT_TRACK` in `install/codegraph-constants.txt` — shipped as `1` / `0`, upstream's own defaults |
+| You, by hand (`codegraph …` in a terminal) | your own `codegraph telemetry on\|off` choice in `~/.codegraph/telemetry.json` |
+
+While the constants file ships `CODEGRAPH_TELEMETRY=1`, every `register` run deletes
+`~/.codegraph/telemetry.json` and says so on stdout, so a stale saved opt-out cannot silently outrank
+the shipped value. To turn telemetry off everywhere, set it to `0`, re-run the installer, and run
+`codegraph telemetry off` once.
 
 **Reading the installer output.** `claude mcp add` prints its confirmation without the `--env`
 flags, so a line like `Added stdio MCP server codegraph with command: codegraph serve --mcp` does
-**not** mean the telemetry opt-out was dropped. A `Removed` immediately followed by `Added` is also
-normal — it means an older registration lacked the env pair, so the registrar replaced it. Verify
+**not** mean the env pair was dropped. A `Removed` immediately followed by `Added` is also
+normal — it means an older registration carried a different env, so the registrar replaced it. Verify
 the real entry instead:
 
 ```bash
 jq -c '.mcpServers.codegraph' ~/.claude.json
 # {"type":"stdio","command":"codegraph","args":["serve","--mcp"],
-#  "env":{"CODEGRAPH_TELEMETRY":"0","DO_NOT_TRACK":"1"}}
+#  "env":{"CODEGRAPH_TELEMETRY":"1","DO_NOT_TRACK":"0","AGENTS_CODEGRAPH_MCP_OWNER":"agents-framework"}}
 ```
 
-Only an entry matching that exact shape is treated as this installer's own. A hand-written
-registration is left untouched — and is never removed when the flag goes back to `off`.
+`AGENTS_CODEGRAPH_MCP_OWNER` is what makes the entry attributable to this installer. A hand-written
+registration carries no such marker, so it is left untouched — and is never removed when the flag
+goes back to `off`.
 
 ### 3. Build the index — once per worktree
 
@@ -120,6 +131,13 @@ node C:\git\agents\bin\codegraph-lifecycle.js init --path C:\git\worktrees\2153-
 - Silence means the index was already fine. `index ready for <root>` means it built one.
 - The first build takes a few minutes and produces a sizeable file (roughly 15 MB for this repo).
 - It always exits 0. A CodeGraph problem must never halt the pipeline that called it.
+
+**A rebuilt index does not reach a running session immediately.** `codegraph_explore` is served by a
+daemon that outlives the session that first started it, and a daemon that survived the rebuild keeps
+answering from the handle it already opened. Neither a context compaction nor opening a new session
+is a resynchronization point — neither restarts the MCP server, and a new session can reconnect to
+the very same daemon. The per-prompt context is the exception: it comes from a fresh process each
+time, so it is current from the next prompt.
 
 Verify afterwards:
 
@@ -215,6 +233,34 @@ The rebuild and quarantine path both ran and the index is still not valid. `code
 return stale or empty results against that root; agents fall back to Read/Grep, so work is not
 blocked. The unusable database is set aside at `<root>/.codegraph/broken/`.
 
+**No per-prompt CodeGraph context appears.**
+Check, in this order: `CODEGRAPH` is `on`; the prompt was not sent from your home directory or a
+filesystem root (the scope gate refuses both); the worktree has an index
+(`ls .codegraph/codegraph.db`). If all three hold, your deployed `~/.claude/settings.json` is
+probably older than this repo — **re-run the installer, then open a new session**, in that order.
+The drift warning that would have told you only fires at session start, so a session that is
+already open will not report it no matter how long you wait.
+
+**`pinned CodeGraph version mismatch: installed <x>, install/codegraph-constants.txt pins <y>`**
+The MCP server keeps working at any version — only the per-prompt context hook needs the pinned
+build. Run the `npm install -g --ignore-scripts @colbymchenry/codegraph@<y>` command the warning
+prints. The same line, with `could not read the installed CodeGraph version`, means the probe
+itself failed; treat it identically. The check runs during `register` only, so installing a
+different version by hand afterwards goes unnoticed until the next installer run.
+
+**Turning telemetry off permanently.**
+Two stages, and the order matters — this section is the source of truth for the procedure the
+installer's one-line notice abbreviates:
+
+1. Set `CODEGRAPH_TELEMETRY=0` in `install/codegraph-constants.txt` and re-run the installer. That
+   covers every codegraph this framework launches, and also stops the reset from firing again.
+2. *Then* run `codegraph telemetry off` once, for the codegraph you start by hand.
+
+Stage 2 must come second. Run it first and the reset — still firing under a constants file that
+says `1` — deletes the choice you just saved. Note also that stage 1 does not restore a
+`~/.codegraph/telemetry.json` that an earlier reset already deleted: with no saved choice, a
+hand-started codegraph falls back to upstream's default, which is on. Stage 2 is what recreates it.
+
 **Nothing at all happens, no output.**
 Expected when the flag is off. Every verb exits 0 in that case — a CodeGraph problem must never
 halt the pipeline that called it.
@@ -227,10 +273,20 @@ halt the pipeline that called it.
 | Index health verdicts | [`bin/codegraph-lifecycle/index-health.js`](../../bin/codegraph-lifecycle/index-health.js) |
 | Daemon identity and kill path | `bin/codegraph-lifecycle/process-identity.js`, `daemon-stop.js` |
 | MCP registration | [`install/codegraph-mcp.js`](../../install/codegraph-mcp.js) |
+| Shared decisions for both entrypoints (env readers, ownership verdicts, version check, telemetry reset) — a pure library that never writes to a stream | [`hooks/lib/codegraph-boundary.js`](../../hooks/lib/codegraph-boundary.js) |
+| Per-prompt context injection (`UserPromptSubmit`) | [`hooks/codegraph-context-inject.js`](../../hooks/codegraph-context-inject.js) |
+| Scope gate — home and filesystem root are refused, index looked up by a 6-level up-walk for `.codegraph/codegraph.db` (`promptHookScopeAllows`) | `hooks/lib/codegraph-boundary.js` |
+| Pinned-version check — reported by `register` only, never by the hook (`verifyPinnedCliVersion`) | `hooks/lib/codegraph-boundary.js` |
+| Telemetry reset — deletes `~/.codegraph/telemetry.json` on **every** `register` run, but only while the constants file says `CODEGRAPH_TELEMETRY=1` (`clearSavedTelemetryChoice`) | `hooks/lib/codegraph-boundary.js` |
 | Windows shim resolution for `codegraph`/`claude` (no shell, no direct `.cmd`/`.bat` spawn) | [`hooks/lib/spawn-shimmed-cli.js`](../../hooks/lib/spawn-shimmed-cli.js) |
 | Version and telemetry constants | [`install/codegraph-constants.txt`](../../install/codegraph-constants.txt) |
 | OS installer steps | `install/win/codegraph.ps1`, `install/linux/codegraph.sh` |
 | Design rationale | [`docs/architecture/claude-code.md`](../architecture/claude-code.md) |
+
+The scope gate is a partial copy of upstream's own eligibility check, kept deliberately narrow (the
+17-manifest `looksLikeProjectRoot()` list is *not* copied). **Remove it** when the pinned
+`CODEGRAPH_VERSION`'s own `planFrontload()` applies the home/root exclusion itself — check whether
+`dist/directory.js`'s `planFrontload` calls `eligibleForSubprojectScan`.
 
 The `bin/codegraph-lifecycle/` directory is never invoked directly — it holds modules private to
 `bin/codegraph-lifecycle.js`, per the Pattern A split in `rules/coding/file-split.md`.

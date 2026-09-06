@@ -46,14 +46,17 @@ run_W_wiring() {
 # and runClaude), so CPR-ORTH is a number here, not a yes/no.
 local life="$AGENTS_DIR/bin/codegraph-lifecycle.js"
 local mcp="$AGENTS_DIR/install/codegraph-mcp.js"
-assert_eq "W-1 codegraph-lifecycle.js requires the shared helper" "1" \
-    "$(grep -c 'require(.*hooks/lib/spawn-shimmed-cli' "$life" 2>/dev/null || true)"
+local boundary="$AGENTS_DIR/hooks/lib/codegraph-boundary.js"
+assert_eq "W-1 codegraph-boundary.js requires the shared helper" "1" \
+    "$(grep -c 'require(.*spawn-shimmed-cli' "$boundary" 2>/dev/null || true)"
 assert_eq "W-2 codegraph-mcp.js requires the shared helper" "1" \
     "$(grep -c 'require(.*hooks/lib/spawn-shimmed-cli' "$mcp" 2>/dev/null || true)"
 assert_eq "W-3 the codegraph spawn goes through the helper" "1" \
-    "$(grep -c 'spawnShimmedCli("codegraph"' "$life" 2>/dev/null || true)"
+    "$(grep -c 'spawnShimmedCli("codegraph"' "$boundary" 2>/dev/null || true)"
 assert_eq "W-4 no raw spawnSync(\"codegraph\") remains" "0" \
     "$(grep -c 'spawnSync("codegraph"' "$life" 2>/dev/null || true)"
+assert_eq "W-4b no raw spawnSync(\"codegraph\") remains in codegraph-boundary.js" "0" \
+    "$(grep -c 'spawnSync("codegraph"' "$boundary" 2>/dev/null || true)"
 assert_eq "W-5 both claude spawns go through the helper" "2" \
     "$(grep -c 'spawnShimmedCli("claude"' "$mcp" 2>/dev/null || true)"
 assert_eq "W-6 no raw spawnSync(\"claude\") remains" "0" \
@@ -67,8 +70,8 @@ assert_eq "W-8 the module never opts into shell:true" "0" \
 # W-9 — Section O pins the value 60000 as the timeout that must survive the
 # helper. If the caller ever changes STATUS_TIMEOUT_MS, that expectation goes
 # stale silently; this row makes the drift a failure instead.
-assert_eq "W-9 codegraph-lifecycle.js still bounds the binary at STATUS_TIMEOUT_MS = 60000" "1" \
-    "$(grep -c 'STATUS_TIMEOUT_MS = 60000' "$life" 2>/dev/null || true)"
+assert_eq "W-9 codegraph-boundary.js still bounds the binary at STATUS_TIMEOUT_MS = 60000" "1" \
+    "$(grep -c 'STATUS_TIMEOUT_MS = 60000' "$boundary" 2>/dev/null || true)"
 
 # W-10..W-13 — the docs half of the fix. The operator-facing verification step
 # is part of the resolution contract: a runbook that still says "run

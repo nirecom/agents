@@ -5,7 +5,14 @@
 // SSOT in hooks/lib/protected-basenames.js (CPR-ORTH).
 "use strict";
 
-const { mentionsProtectedName, TOKEN_MENTION_RE } = require("../lib/protected-basenames");
+// The STRICT mention reading throughout this module: the interpreter route has
+// no downstream classifier to undo an over-arm, unlike the redirect / argv /
+// Write-tool routes, so a Unicode continuation that classifyProtectedPath
+// disowns must not block here (#1821).
+const {
+  mentionsProtectedNameStrict,
+  TOKEN_MENTION_RE,
+} = require("../lib/protected-basenames");
 const { ci, PWSH_ENV_PREFIX } = require("../lib/case-insensitive-literal");
 
 // vector2 heuristic (best-effort, deliberately incomplete): an interpreter
@@ -60,11 +67,59 @@ const L = (c, inner) => (inner ? `${ci(c)}(?:${inner})?` : ci(c));
 const PWSH_COMMAND_PREFIX = L("C", L("o", L("m", L("m", L("a", L("n", L("d")))))));
 const PWSH_ENCCMD_PREFIX = L("E", L("n", L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d")))))))))))))); // eslint-disable-line
 const FLAG_ALTS = String.raw`${CLUSTER_FLAG}\b|${LONG_FLAG}\b|-{1,2}(?:${PWSH_COMMAND_PREFIX}|${PWSH_ENCCMD_PREFIX})\b`;
+
+// Real per-interpreter flag VOCABULARY (not a generic [A-Za-z] class), python
+// only. Verified live (`python3 --help`): these letters take no argument and
+// bundle freely before the arg-taking -c, which TERMINATES the option list, so
+// nothing legitimate follows -c in the same dash-word and no trailing bound is
+// needed. Confirmed executable: `python3 -Piuc "print(1+1)"` — already past the
+// old {0,2} bound. Character-set scoping (not just name scoping) means a pwsh
+// word following a python name cannot arm this branch: "ExecutionPolicy" holds
+// t/l/n/o/y, none of which are in this set.
+const PYTHON_CLUSTER_CHARSET = "BbdEhiIOPqsSuvVx";
+const PYTHON_CLUSTER_FLAG = String.raw`-[${PYTHON_CLUSTER_CHARSET}]*c`;
+const PYTHON_INTERPRETER_NAMES = ["python", "python3"];
+const PYTHON_NAME_ALTS = PYTHON_INTERPRETER_NAMES.map(ci).join("|");
+
+// Perl. Verified live (`perl -h`): these letters take no MANDATORY argument and
+// may precede the terminating -e/-E. Deliberately over-inclusive of a few whose
+// argument is optional (l/F/M/m/s) — this pattern is DETECTION-ONLY, extraction
+// stays narrow and fails closed, so over-matching is the safe direction (F-1).
+// Confirmed executable: `perl -wnle 'print "ok"' /dev/null` (exit 0), a
+// 4-letter cluster past the old {0,2} bound.
+const PERL_CLUSTER_CHARSET = "aCcDdFfgIilMmnpSsTtUuVvWwXx";
+const PERL_CLUSTER_FLAG = String.raw`-[${PERL_CLUSTER_CHARSET}]*[eE]`;
+const PERL_INTERPRETER_NAMES = ["perl"];
+const PERL_NAME_ALTS = PERL_INTERPRETER_NAMES.map(ci).join("|");
+
+// ruby/deno/bun: the exact flag vocabulary is not verifiable here (none is
+// installed), so a conservative full letter class, terminated by e/E and scoped
+// to these three names. Safe because name scoping keeps it from becoming a
+// global widening, and Tier-2 extraction stays narrow and fails closed —
+// over-inclusion can only over-block, never open a bypass (F-1).
+const FALLBACK_CLUSTER_CHARSET = "A-Za-z";
+const FALLBACK_CLUSTER_FLAG = String.raw`-[${FALLBACK_CLUSTER_CHARSET}]*[eE]`;
+const FALLBACK_INTERPRETER_NAMES = ["ruby", "deno", "bun"];
+const FALLBACK_NAME_ALTS = FALLBACK_INTERPRETER_NAMES.map(ci).join("|");
+
+// F-1: every language-specific alternative above is ADDITIVE — each widens
+// Tier-1 detection beyond what extractAllInterpreterBodies's FLAG_ALTS-based
+// flagRe recognizes, which is the SAFE direction: a cluster this wide either
+// gets its body read by the UNCHANGED extractor, or hits the
+// `bodies.length === 0` fail-CLOSED branch. FLAG_ALTS and the extractor stay
+// untouched on purpose — the other call site, bash-scan/argv-scan.js, passes no
+// kind, so branching inside extraction would silently narrow what it defers to
+// Tier 2.
 const INTERPRETER_RE = new RegExp(
-  String.raw`\b(${INTERPRETER_NAME_ALTS})\b[^\n]*\s(?:${FLAG_ALTS})`
+  String.raw`\b(${INTERPRETER_NAME_ALTS})\b[^\n]*\s(?:${FLAG_ALTS})` +
+  "|" +
+  String.raw`\b(?:${PYTHON_NAME_ALTS})\b[^\n]*\s(?:${PYTHON_CLUSTER_FLAG})\b` +
+  "|" +
+  String.raw`\b(?:${PERL_NAME_ALTS})\b[^\n]*\s(?:${PERL_CLUSTER_FLAG})\b` +
+  "|" +
+  String.raw`\b(?:${FALLBACK_NAME_ALTS})\b[^\n]*\s(?:${FALLBACK_CLUSTER_FLAG})\b`
 );
 
-// ---------------------------------------------------------------------------
 // PROOF that the program is on argv (word-level): clears a stdin-program route
 // in ./nested-bodies.js. Unlike FLAG_ALTS (extraction — wide is safe, since
 // over-matching just makes Tier 2 read more text), this set grants PERMISSION,
@@ -74,7 +129,6 @@ const INTERPRETER_RE = new RegExp(
 // count only when cmd0 is actually pwsh, and ambiguous flags (`-E`, `-p`,
 // `--print`) are omitted (CPR-UNV) — doubt always resolves toward over-block.
 // `(?:=|$)` accepts the attached long form (`--eval=code`) too.
-// ---------------------------------------------------------------------------
 const PROOF_CLUSTER_FLAG = String.raw`-[a-z]{0,2}[ce][a-z]{0,2}`;
 const PROOF_LONG_FLAG = String.raw`--eval`;
 const PWSH_ENCCMD_PROOF_PREFIX = `${ci("E")}${ci("n")}(?:${L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d"))))))))))))})?`; // eslint-disable-line
@@ -123,25 +177,15 @@ function looksLikeInterpreterInvocation(text) {
 }
 
 // READ must not be blocked, but "not a write" is undecidable inside an
-// arbitrary interpreter body (execSync / os.system / Path.touch / Deno.* / ...
-// all write without naming any enumerable write verb). So the classification is
-// inverted: only a SHORT LIST of fully-anchored read-only shapes is recognized,
-// and everything else — including anything unparsable — is treated as a write.
-// Plain shell reads (cat / Get-Content / ls / type) never reach this function:
-// they produce no write target and do not match INTERPRETER_RE.
-
+// arbitrary interpreter body, so the classification is inverted: only a SHORT
+// LIST of fully-anchored read-only shapes is recognized, and everything else —
+// including anything unparsable — is treated as a write. Plain shell reads
+// (cat / Get-Content / ls / type) never reach here: no write target, no match.
 // (C3) Interpolation / escape guard: "inside quotes" is NOT inert — pwsh "..."
 // interpolates $(...)/$var (` escapes), node `...` interpolates ${...}, python
-// f-strings interpolate {...}. Any of these is rejected before shape matching
-// (a crafted `Get-Content "$(Remove-Item ...)"` can't present as read-only).
-// Accepted consequence: paths must use forward slashes or $env:/process.env.
-//
-// Bare `$NAME` guard: the hook sees the command text BEFORE shell expansion, so
-// an unbraced variable (`$P`) is still live danger even though it looks inert
-// statically. Any bare `$` fails closed UNLESS it starts the one sanctioned,
-// validated token: pwsh `$env:VAR` (case-insensitive prefix, PWSH_ENV below,
-// SSOT in hooks/lib/case-insensitive-literal.js) — node/python env access
-// doesn't start with `$` so is unaffected.
+// f-strings interpolate {...}; each is rejected before shape matching. A bare
+// `$` fails closed too (this sees the text BEFORE expansion) unless it opens the
+// one sanctioned pwsh `$env:VAR` (SSOT hooks/lib/case-insensitive-literal.js).
 const INTERPOLATION_RE = new RegExp(String.raw`[\x60\\]|\$(?!${PWSH_ENV_PREFIX})|@\(|\bf['"]`);
 
 // Language-specific literal grammars. Single-quoted strings never interpolate in
@@ -171,16 +215,41 @@ const PWSH_PATH_ARG = concatOf(SQ, PWSH_ENV);
 // language, first determine which of its quote forms interpolate and define a
 // fresh PATH_ARG for it — never reuse an existing one. Missing entries fail
 // toward block (safe), so when in doubt do not add.
+// node / deno / bun: print the contents / existence / listing of one path
+const NODE_PRINT_READ_SHAPE =
+  new RegExp(String.raw`^\s*(?:console\.log|process\.stdout\.write)\(\s*(?:require\((?:'fs'|"fs")\)|fs)\.(?:readFileSync|existsSync|readdirSync|statSync)\(\s*${NODE_PATH_ARG}\s*(?:,\s*(?:'utf8'|"utf8"))?\s*\)[^()]*\)\s*;?\s*$`);
+// node / deno / bun: bare read call with no output wrapper — reading and
+// discarding is exactly as inert as reading and printing.
+const NODE_BARE_READ_SHAPE =
+  new RegExp(String.raw`^\s*(?:require\((?:'fs'|"fs")\)|fs)\.(?:readFileSync|existsSync|readdirSync|statSync)\(\s*${NODE_PATH_ARG}\s*(?:,\s*(?:'utf8'|"utf8"))?\s*\)\s*;?\s*$`);
+// python: print(open(p).read())
+const PY_PRINT_READ_SHAPE =
+  new RegExp(String.raw`^\s*print\(\s*open\(\s*${PY_PATH_ARG}\s*\)\.read\(\)\s*\)\s*;?\s*$`);
+// python: bare open(p).read() / open(p) with no print() wrapper
+const PY_BARE_READ_SHAPE =
+  new RegExp(String.raw`^\s*open\(\s*${PY_PATH_ARG}\s*\)(?:\.read\(\))?\s*;?\s*$`);
+// pwsh: Get-Content [-Raw] <path>. PowerShell cmdlet/parameter names are
+// case-insensitive, so canonical-case-only matching fail-closed BLOCKED
+// legit spellings like `get-content -raw` (a read-allow regression). The
+// path argument grammar itself stays as strict as before.
+const PWSH_GET_CONTENT_SHAPE =
+  new RegExp(String.raw`^\s*${ci("Get-Content")}\s+(?:${ci("-Raw")}\s+)?${PWSH_PATH_ARG}\s*$`);
+
+// Each shape is scoped to the language(s) whose grammar it was written against.
+// `open(p)` is inert python but is Kernel#open in ruby, where a leading `|`
+// makes the argument a SHELL COMMAND — so python's shape must never vouch for a
+// ruby body (#1821). ruby/perl have no modeled grammar and therefore no entry:
+// every body of theirs naming a protected path blocks. node's `fs` shapes do
+// cover deno/bun, where require("fs") is the same inert node-compat API.
+const NODE_LANGS = ["node", "nodejs", "deno", "bun"];
+const PYTHON_LANGS = ["python", "python3"];
+const PWSH_LANGS = ["pwsh", "powershell"];
 const READONLY_BODY_SHAPES = [
-  // node / deno / bun: print the contents / existence / listing of one path
-  new RegExp(String.raw`^\s*(?:console\.log|process\.stdout\.write)\(\s*(?:require\((?:'fs'|"fs")\)|fs)\.(?:readFileSync|existsSync|readdirSync|statSync)\(\s*${NODE_PATH_ARG}\s*(?:,\s*(?:'utf8'|"utf8"))?\s*\)[^()]*\)\s*;?\s*$`),
-  // python: print(open(p).read())
-  new RegExp(String.raw`^\s*print\(\s*open\(\s*${PY_PATH_ARG}\s*\)\.read\(\)\s*\)\s*;?\s*$`),
-  // pwsh: Get-Content [-Raw] <path>. PowerShell cmdlet/parameter names are
-  // case-insensitive, so canonical-case-only matching fail-closed BLOCKED
-  // legit spellings like `get-content -raw` (a read-allow regression). The
-  // path argument grammar itself stays as strict as before.
-  new RegExp(String.raw`^\s*${ci("Get-Content")}\s+(?:${ci("-Raw")}\s+)?${PWSH_PATH_ARG}\s*$`),
+  { langs: new Set(NODE_LANGS), re: NODE_PRINT_READ_SHAPE },
+  { langs: new Set(PYTHON_LANGS), re: PY_PRINT_READ_SHAPE },
+  { langs: new Set(PWSH_LANGS), re: PWSH_GET_CONTENT_SHAPE },
+  { langs: new Set(NODE_LANGS), re: NODE_BARE_READ_SHAPE },
+  { langs: new Set(PYTHON_LANGS), re: PY_BARE_READ_SHAPE },
 ];
 
 // extractAllInterpreterBodies(text): every quoted body passed to -e/-c/-Command,
@@ -212,8 +281,36 @@ function scanQuotedBody(str, openIdx) {
   return null; // unterminated
 }
 
+// deliveringInterpreterOf(prefix): the command word that will execute the body
+// following a flag. Scanned FORWARD from command position, not backward from
+// the flag: a back-scan takes the LAST interpreter-looking word, and a flag
+// VALUE is attacker-chosen, so `ruby -I python3 -e '<ruby body>'` named python3
+// and borrowed python's read-only grammar to vouch for a ruby body (#1821).
+// Forward, the first recognized name wins, so a runner prefix still resolves
+// (`uv run python -c`, `command node -e`) while an interpreter at command
+// position can no longer be displaced by anything in its own argv.
+// Normalized by commandBaseName so `/usr/bin/PYTHON3.EXE` folds like `python3`.
+function deliveringInterpreterOf(prefix) {
+  // Everything before the last separator belongs to an earlier command.
+  const tail = String(prefix === undefined || prefix === null ? "" : prefix).split(/[;&|()]/).pop();
+  const words = tail.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    if (!interpreterKindOfWord(words[i])) continue;
+    // A name directly after a dash-word may be that flag's ARGUMENT rather than
+    // a command (`uvx --from python3 ruby -e …`). Which flags take an argument
+    // is not decidable here, so the ambiguity resolves to unknown — and the
+    // read-only check fails closed on unknown.
+    if (i > 0 && words[i - 1].charAt(0) === "-") return null;
+    return commandBaseName(words[i]);
+  }
+  return null;
+}
+
 function extractAllInterpreterBodies(text) {
   const bodies = [];
+  // `entries` is ADDITIVE: bash-scan/argv-scan.js consumes `bodies` alone and
+  // must keep seeing exactly what it saw before.
+  const entries = [];
   let invocationCount = 0;
   // F-1: same flag-shape alternation as INTERPRETER_RE (FLAG_ALTS) — see the
   // comment above INTERPRETER_RE for why the two must never diverge.
@@ -227,6 +324,7 @@ function extractAllInterpreterBodies(text) {
       const scanned = scanQuotedBody(text, argStart);
       if (scanned) {
         bodies.push(scanned.body);
+        entries.push({ body: scanned.body, lang: deliveringInterpreterOf(text.slice(0, m.index)) });
         flagRe.lastIndex = scanned.endIndex; // don't rescan flag-shaped text inside the body
         continue;
       }
@@ -234,12 +332,17 @@ function extractAllInterpreterBodies(text) {
     // Unquoted or unterminated argument: not added to bodies, so it inflates
     // invocationCount past bodies.length and the caller fails closed.
   }
-  return { bodies, flagCount: invocationCount };
+  return { bodies, entries, flagCount: invocationCount };
 }
 
-function interpreterBodyIsRecognizedReadOnly(body) {
+// interpreterBodyIsRecognizedReadOnly(body, lang): only a shape written against
+// `lang`'s own grammar may vouch for it. An unknown or absent lang matches
+// nothing and therefore fails closed.
+function interpreterBodyIsRecognizedReadOnly(body, lang) {
   if (INTERPOLATION_RE.test(body)) return false;     // (C3) interpolation → write
-  return READONLY_BODY_SHAPES.some((re) => re.test(body));
+  const base = commandBaseName(lang);
+  if (base === "") return false;
+  return READONLY_BODY_SHAPES.some((s) => s.langs.has(base) && s.re.test(body));
 }
 
 // Closes an indirection class: a body that only dereferences an env var
@@ -268,27 +371,31 @@ function bodyDerefsProtectedViaAssignment(body, gateText) {
     const am = assignRe.exec(gateText);
     // A marker path assigned to the variable is the same class of
     // indirection as a token path (CPR-ORTH).
-    if (am && mentionsProtectedName(am[1])) return true;
+    if (am && mentionsProtectedNameStrict(am[1])) return true;
   }
   return false;
 }
 
-// interpreterBodyHitsProtected(body, gateText): the verdict for ONE interpreter
-// program body, whatever route delivered it. Hoisted into its own function so
+// interpreterBodyHitsProtected(body, gateText, lang): the verdict for ONE
+// interpreter program body, whatever route delivered it. `lang` is the
+// delivering interpreter's command word — omitting it fails closed, which is
+// the correct answer for a route that cannot name its own reader.
+// Hoisted into its own function so
 // DELIVERY ROUTE and LANGUAGE JUDGEMENT are independent — previously reachable
 // only via a `-c`/`-e`/`-Command` flag, so a body arriving via here-string/
 // heredoc/pipe fell back to the shell scanner and was approved as an ordinary
 // non-matching word. ./nested-bodies.js now reuses this one classifier
 // (CPR-SSOT/CPR-E2C).
-function interpreterBodyHitsProtected(body, gateText) {
+function interpreterBodyHitsProtected(body, gateText, lang) {
   if (typeof body !== "string" || body === "") return false;
   const scope = typeof gateText === "string" ? gateText : body;
   // Out of scope: the body neither names a protected path nor dereferences a
   // variable the surrounding text assigns one to.
-  if (!mentionsProtectedName(body) && !bodyDerefsProtectedViaAssignment(body, scope)) return false;
+  if (!mentionsProtectedNameStrict(body) && !bodyDerefsProtectedViaAssignment(body, scope)) return false;
   // In scope: approved only for an anchored, provably side-effect-free read
-  // shape; everything else is a write until proven otherwise.
-  return !interpreterBodyIsRecognizedReadOnly(body);
+  // shape written against this interpreter's own grammar; everything else is a
+  // write until proven otherwise.
+  return !interpreterBodyIsRecognizedReadOnly(body, lang);
 }
 
 function hitsProtectedViaInterpreter(text, gateText) {
@@ -302,19 +409,19 @@ function hitsProtectedViaInterpreter(text, gateText) {
   // extractor (`node -e "console.log(1)" > out.txt`) would fail-closed block
   // for no reason. The marker regex is anchored on the `.<kind>` basename tail
   // so ordinary repo paths never arm this gate.
-  if (!mentionsProtectedName(gateText)) return false;
+  if (!mentionsProtectedNameStrict(gateText)) return false;
   // Tier 2 (body): the segment mentions a protected name, so extract every
   // interpreter body and re-check there. An opaque body (e.g. `node -e $BODY`)
   // hides its own reference and can't be cleared by substring prefilter, so
   // unextractable (or partially so — flagCount > bodies.length) fails closed.
-  const { bodies, flagCount } = extractAllInterpreterBodies(text);
+  const { bodies, entries, flagCount } = extractAllInterpreterBodies(text);
   if (bodies.length === 0 || flagCount > bodies.length) return true;
   // Every extracted body must be protected-name-free or a recognized read-only
   // shape. The prefilter tests each `body`, never the whole `cmd` — surrounding
   // shell text (e.g. a `cd` into a directory that happens to share the name)
   // would otherwise misclassify a body that never touches the token.
-  for (const body of bodies) {
-    if (interpreterBodyHitsProtected(body, gateText)) return true;
+  for (const e of entries) {
+    if (interpreterBodyHitsProtected(e.body, gateText, e.lang)) return true;
   }
   return false;
 }
@@ -328,6 +435,7 @@ module.exports = {
   LANGUAGE_INTERPRETER_NAMES,
   SHELL_INTERPRETER_NAMES,
   interpreterKindOfWord,
+  deliveringInterpreterOf,
   looksLikeInterpreterInvocation,
   TOKEN_MENTION_RE,
   extractAllInterpreterBodies,

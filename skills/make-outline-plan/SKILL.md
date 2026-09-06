@@ -65,7 +65,7 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    (parameter values for the outline stage: FORMAT=outline-plan, CAP=1,
    MAX_EXTENSIONS=1, PLANNER_AGENT=outline-planner,
    REVIEWER_AGENT=outline-reviewer,
-   ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-intent.md,
+   ACCEPTED_TRADEOFFS_FILE=the `intent` candidate resolved by `bin/resolve-accepted-tradeoffs-file`,
    NON_APPROVED_VERDICT=MISSING_ALTERNATIVE).
 
    For each review round, invoke `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/run-codex-review-loop.sh"`

@@ -21,6 +21,9 @@ Default procedure: anything not expressible as one standalone command goes into 
 
 Create that scratchpad script with the **Write tool**, never with `cat <<'EOF' > file` — the heredoc form trips two prohibited literals (`<<` and `>`) at once, so the escape route would itself violate this rule. The scratchpad root is allowlisted in `hooks/workflow-gate/early-gate.js`, so Write reaches it even while a workflow gate is blocking writes elsewhere.
 
+Name the scratchpad script with a `.sh` extension; invoke it as a single `bash <absolute-path>` call — one absolute literal path, no variable expansion, no globbing.
+Place it under the current session's scratchpad directory for that invocation to auto-approve without a prompt; `hooks/preuse-auto-approve/scratchpad-script.js` owns the exact condition.
+
 Self-check before every Bash tool call: match the `command` string against the literals below.
 
 | Prohibited literal | Form |

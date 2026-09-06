@@ -8,6 +8,7 @@
 
 const { tokenizeSegment, tokenizeSegmentWithQuotes, splitSegmentsWithSeparators, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
 const { hasUnclosedQuoteSpan } = require("./quote-spans");
+const { ASSIGN_RE } = require("./bash-write-patterns/segment-utils");
 
 // Extract the file descriptor string from a redirect operator.
 // Returns "1" for plain >, "1" for 1>, "2" for 2>, "&" for &>, etc.
@@ -79,31 +80,14 @@ function buildSegmentIR(segStr, isSubshell, opts) {
   return seg;
 }
 
-// INVARIANT (argv/argvRaw positional correspondence).
-//
-// Every SegmentIR produced or transformed by this module satisfies:
-//   argvRaw.length === argv.length, and argvRaw[i] is the RAW (quote-preserving)
-//   spelling of argv[i]; cmd0Raw is the raw spelling of cmd0.
-//
-// buildSegmentIR() establishes it by shifting both arrays together. Any transform
-// that shifts tokens off the front of argv (env-prefix stripping, control-keyword
-// stripping) MUST shift argvRaw by the same count — see syncRaw() below. Callers
-// that index the two arrays against each other (the execution-position classifier
-// in hooks/workflow-run-tests/exec-model.js, the protected-token scanner in
-// hooks/block-clearance-token-write/) depend on it.
-
-/**
- * Recompute {cmd0Raw, argvRaw} after `shiftCount` tokens were shifted off the
- * front of `seg.argv`.
- *
- * Guard BEFORE index: this module backs three security hooks, so a segment whose
- * argvRaw is missing, not an array, or out of sync must degrade to a copy of argv
- * rather than throw — a TypeError here would fail those guards OPEN.
- *
- * @param {object} seg - source SegmentIR (pre-shift argv/argvRaw)
- * @param {number} shiftCount - how many leading argv tokens were consumed
- * @returns {{cmd0Raw: string, argvRaw: string[]}}
- */
+// INVARIANT: argvRaw[i] is the RAW spelling of argv[i], and cmd0Raw of cmd0, for
+// every SegmentIR this module produces. Any transform shifting tokens off the
+// front of argv MUST shift argvRaw by the same count — syncRaw() below. Callers
+// index the two arrays against each other and depend on it.
+// syncRaw(seg, shiftCount) recomputes {cmd0Raw, argvRaw} after `shiftCount`
+// leading argv tokens were consumed. It guards BEFORE indexing: this module backs
+// three security hooks, so a missing or out-of-sync argvRaw degrades to a copy of
+// argv rather than throwing, which would fail those guards OPEN.
 function syncRaw(seg, shiftCount) {
   const argv = Array.isArray(seg && seg.argv) ? seg.argv : [];
   const raw =
@@ -117,34 +101,16 @@ function syncRaw(seg, shiftCount) {
   };
 }
 
-/**
- * Parse a bash command string into an IR (Intermediate Representation).
- *
- * Returns:
- * {
- *   segments: SegmentIR[],   // array of segment IRs
- *   cmd0: string,            // first token of first segment (or "")
- *   argv: string[],          // remaining tokens of first segment
- *   redirects: RedirectIR[], // redirects from first segment only: {op, fd, target}
- *   kind: string,            // "simple"|"pipeline"|"subshell"|"empty"
- *   rawText: string,         // ALWAYS the original cmd string, even on parseFailure
- *   separators: string[],    // separator tokens between segments; recorded
- *                            //   unconditionally at each split point (leading/
- *                            //   trailing separators also recorded). May differ
- *                            //   in length from segments.length - 1 (intentional
- *                            //   for fail-closed behavior).
- *   parseFailure: boolean    // true when tokenization throws
- * }
- *
- * rawText is always set before any processing begins.
- */
-// opts.preserveSubstitutionSpans (default OFF): keeps unquoted substitution
-// spans (`$(...)`, backticks, arithmetic, `${...}`) intact through the split
-// and tokenizer, so a write target assembled inside one survives as a single
-// token — see ./command-parser.js and ./substitution-spans.js. Opt-in: the
-// caller merges this ADDITIVE reading with the ordinary one rather than
-// replacing it, since the ordinary reading is what scans substitution/subshell
-// bodies as their own segments.
+// parse(cmd, opts) → IR: {segments: SegmentIR[], cmd0, argv, redirects, kind
+// ("simple"|"pipeline"|"subshell"|"empty"), rawText (ALWAYS the original cmd,
+// even on parseFailure), separators (recorded at every split point, including
+// leading/trailing, so its length may differ from segments.length-1 —
+// intentional for fail-closed behavior), parseFailure}.
+// opts.preserveSubstitutionSpans (default OFF) keeps unquoted `$(...)`, backtick,
+// arithmetic and `${...}` spans intact through the split and tokenizer, so a
+// target assembled inside one survives as a single token (./command-parser.js,
+// ./substitution-spans.js). It is ADDITIVE — the caller merges this reading with
+// the ordinary one, which scans substitution bodies as their own segments.
 function parse(cmd, opts) {
   const rawText = cmd;
 
@@ -208,15 +174,12 @@ const CONTROL_BODY_KEYWORDS = new Set(["do", "then", "else"]);
 const CONTROL_NONEXEC_HEADERS = new Set(["for", "select", "case"]);
 const CONTROL_TERMINATORS = new Set(["done", "fi", "esac"]);
 
-/**
- * Strip env-prefix assignments (VAR=val) from the front of a segment IR.
- * Mirrors resolveEffectiveCommand() from segment-utils.js but returns a
- * full segmentIR rather than just the cmd0 string.
- *
- * Returns null when every token is an assignment (no real command).
- */
+// Strip env-prefix assignments (VAR=val) from the front of a segment IR, returning
+// a full segmentIR rather than just the cmd0 string that segment-utils.js's
+// resolveEffectiveCommand() yields. ASSIGN_RE is the shared constant owned by
+// segment-utils.js (CPR-SSOT), imported at the top of this file.
+// Returns null when every token is an assignment (no real command).
 function stripEnvPrefix(seg) {
-  const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
   if (!seg || seg.cmd0 == null) return null;
   if (!ASSIGN_RE.test(seg.cmd0)) return seg;
   if (!Array.isArray(seg.argv)) return null;
@@ -225,24 +188,12 @@ function stripEnvPrefix(seg) {
   return { ...seg, cmd0: seg.argv[idx], argv: seg.argv.slice(idx + 1), ...syncRaw(seg, idx + 1) };
 }
 
-/**
- * Resolve the effective command from a segment IR, penetrating control-structure
- * keywords (for/do/done/while/until/if/then/else/elif/fi/case/esac/select).
- *
- * Three categories:
- *   - Condition headers (if, elif, while, until): strip keyword, condition argv
- *     IS the effective command (the condition runs as a real command in shell).
- *   - Body keywords (do, then, else): strip keyword, body command is effective.
- *   - Non-executable headers (for, select, case) and terminators (done, fi, esac):
- *     return null — they are not real executable commands.
- *
- * After control-keyword stripping, env-prefix assignments (VAR=val) are also
- * stripped so the caller gets the true effective cmd0 (e.g. FOO=1 head -> head).
- * Non-control segments pass through unchanged (still subject to env-prefix strip).
- *
- * @param {object} segmentIR - A SegmentIR from parse() output
- * @returns {object|null} - Effective SegmentIR, or null for headers/terminators
- */
+// resolveEffectiveSegment(segmentIR) → effective SegmentIR, or null.
+// Penetrates control-structure keywords: condition headers (if/elif/while/until)
+// and body keywords (do/then/else) are stripped and the remainder IS the effective
+// command; non-executable headers (for/select/case) and terminators (done/fi/esac)
+// yield null. Env-prefix assignments are stripped afterwards, so `FOO=1 head`
+// resolves to `head`. Non-control segments pass through the env-prefix strip only.
 function resolveEffectiveSegment(segmentIR) {
   if (!segmentIR || segmentIR.cmd0 == null) return null;
   const cmd0 = segmentIR.cmd0;

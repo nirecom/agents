@@ -1,7 +1,4 @@
-# m-policy-matrix.sh — M1-M3: EXEMPTION_MATRIX (hooks/lib/stop-exemption-policy.js)
-# cross-checked against each consumer's actual implementation. The matrix is
-# declarative-only, so nothing enforces it at runtime — these cases ARE the
-# enforcement. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# m-policy-matrix.sh — M1-M3: EXEMPTION_MATRIX (hooks/lib/stop-exemption-policy.js) cross-checked against each consumer's actual implementation. The matrix is declarative-only, so nothing enforces it at runtime — these cases ARE the enforcement. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/stop-premature-stop-guard.js
 # Tags: stop-hook, exemption-matrix, regression-1794, scope:issue-specific, pwsh-not-required, TL1
 
@@ -35,8 +32,8 @@ process.stdout.write(problems.length ? 'BAD ' + problems.join(' | ') : 'OK');" 2
 
 # ---------------------------------------------------------------------------
 # M1-b: structural contract — the object is frozen, every row has exactly the
-#       three boolean columns {c4, c2, nextStep}, and every c4 column is true
-#       (C4 is the union consumer: every primitive exempts it).
+#       four boolean columns {c4, c2, nextStep, promptNotify}, and every c4
+#       column is true (C4 is the union consumer: every primitive exempts it).
 # ---------------------------------------------------------------------------
 run_M1b() {
     local out
@@ -46,15 +43,15 @@ const problems = [];
 if (!Object.isFrozen(EXEMPTION_MATRIX)) problems.push('not-frozen');
 for (const [id, row] of Object.entries(EXEMPTION_MATRIX)) {
   const cols = Object.keys(row).sort().join(',');
-  if (cols !== 'c2,c4,nextStep') problems.push(id + ':cols=' + cols);
-  for (const k of ['c4', 'c2', 'nextStep']) {
+  if (cols !== 'c2,c4,nextStep,promptNotify') problems.push(id + ':cols=' + cols);
+  for (const k of ['c4', 'c2', 'nextStep', 'promptNotify']) {
     if (typeof row[k] !== 'boolean') problems.push(id + ':' + k + '-not-boolean');
   }
   if (row.c4 !== true) problems.push(id + ':c4-not-true');
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-b: matrix is frozen, every row is {c4,c2,nextStep} booleans, every c4 is true"
+        pass "M1-b: matrix is frozen, every row is {c4,c2,nextStep,promptNotify} booleans, every c4 is true"
     else
         fail "M1-b: structural contract broken; got '${out:-<err>}'"
     fi
@@ -172,18 +169,8 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 }
 
 # ---------------------------------------------------------------------------
-# M1-e (#1665, generalised by #2013): the row that replaced `background-work`.
-#       It is state-derived, not marker-backed, so it needs its own driver: seed
-#       an in_progress step and read both columns off the REAL consumers.
-#         - c4:true      -> the real C4 hook exits silently
-#         - nextStep:false -> next-step keeps recommending a step (ACTION=invoke
-#           with a non-empty NEXT_SKILL), the deliberate difference from the
-#           removed row, whose nextStep column was true
-
-#       Both members are driven: write_code (the original #1665 case) and
-#       research (an allowlisted step, the #2013 case). The control run (same
-#       session, nothing in flight) must block, so the observed silence is
-#       attributable to the in-flight status alone.
+# M1-e (#1665, generalised by #2013): the row that replaced `background-work`. State-derived, not marker-backed, so it needs its own driver: seed an in_progress step and read both columns off the REAL consumers — c4:true means the real C4 hook exits silently; nextStep:false means next-step keeps recommending a step (ACTION=invoke, non-empty NEXT_SKILL), the deliberate difference from the removed row, whose nextStep column was true.
+# Both members are driven: write_code (the original #1665 case) and research (an allowlisted step, the #2013 case). The control run (same session, nothing in flight) must block, so the observed silence is attributable to the in-flight status alone.
 # ---------------------------------------------------------------------------
 run_M1e() {
     local tmp tn want step problems=""

@@ -1,24 +1,16 @@
 "use strict";
 // hooks/lib/claude-scratchpad-base.js
 // SSOT for the session-scratchpad allowlist base (<os-tmpdir>/claude).
-//
-// Security notes:
-// F1 (TEMP/TMP poisoning): os.tmpdir() reads the TEMP/TMP/TMPDIR environment
-//   variables. A poisoned TEMP (e.g. TEMP=C:/git/agents) would make the derived
-//   claude base fall INSIDE the repo, so a naive prefix check on "<base>/claude/**"
-//   could allow an in-repo write. All allow decisions that rely on this base MUST
-//   additionally confirm the candidate target is NOT inside any repo root (via
-//   findRepoRoot) — see isAllowedScratchpadTarget below.
-// H2 (session scoping): when the harness exposes the current session's scratchpad
-//   dir via the SCRATCHPAD env var (and it resolves under the claude base), the
-//   allowlist root tightens to THAT directory — cross-session scratchpad writes are
-//   rejected. When SCRATCHPAD is not available, the root falls back to the whole
-//   claude base (accepted cross-session breadth in the fallback), still guarded by
-//   the F1 repo-exclusion clause.
-// Symlink residual: prefix checks are lexical — a symlink/junction planted under the
-//   allowed root could redirect a write elsewhere. This latent gap also exists in the
-//   pre-existing plans-dir predicate and is tracked as pre-existing (out of scope here).
+// F1 (TEMP/TMP poisoning): os.tmpdir() reads TEMP/TMP/TMPDIR, so a poisoned value
+//   can land the claude base INSIDE a repo — every allow decision built on this
+//   base must ALSO confirm the candidate is not inside any repo root
+//   (isRepoExcluded / isAllowedScratchpadTarget below).
+// H2 (session scoping): with SCRATCHPAD exposed and resolving under the base, the
+//   allow root tightens to that directory. The WRITE path falls back to the whole
+//   base when SCRATCHPAD is absent; the EXEC path (getCurrentSessionScratchpadRootNorm)
+//   never does — see docs/architecture/claude-code/settings.md.
 
+const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
@@ -63,18 +55,53 @@ function getScratchpadAllowRootNorm() {
   return base;
 }
 
-// F1 + H2 hardening: a target is an accepted scratchpad write ONLY when:
-//   1. it resolves STRICTLY under the session-scoped allow root (H2); and
-//   2. it does NOT resolve inside any git repo root (F1 — defeats a poisoned TEMP
-//      that nests the claude base inside a repo tree).
-// `findRepoRoot` is injected by the caller (module layout differs per call site).
-// Fail-closed on any detection error.
+// Symlink-resolving twin of isUnderClaudeBase, for the EXEC path only: that path's
+// containment window is realpath-based, so a root that merely LOOKS in-base while
+// linking outside would relocate the window onto the link's external target.
+// Throws propagate — the caller treats them as fail-to-ask.
+function realIsUnderClaudeBase(p) {
+  const realBase = foldCase(fs.realpathSync(getClaudeBaseNorm()));
+  const n = foldCase(fs.realpathSync(p));
+  return n.startsWith(realBase + path.sep) || n.startsWith(realBase + "/");
+}
+
+// F1 clause, shared by the write path below and the exec path in
+// hooks/preuse-auto-approve/scratchpad-script.js: `findRepoRoot` is injected
+// because the module layout differs per call site.
+function isRepoExcluded(candidatePath, findRepoRoot) {
+  return typeof findRepoRoot === "function" && findRepoRoot(candidatePath) !== null;
+}
+
+// The EXEC-path allow root, deliberately narrower than the write path: exactly one
+// of {kind:"path", root} (SCRATCHPAD strictly under the base), {kind:"session",
+// sessionId} (caller does the structural match — the project-slug derivation is an
+// internal Claude Code detail with no SSOT here), or null. null means FAIL-TO-ASK:
+// the caller must never substitute a wider fallback root.
+function getCurrentSessionScratchpadRootNorm() {
+  const sp = process.env.SCRATCHPAD;
+  if (sp) {
+    try {
+      if (isUnderClaudeBase(sp) && realIsUnderClaudeBase(sp)) {
+        return { kind: "path", root: foldCase(path.resolve(sp)) };
+      }
+    } catch (_) { /* fall through to the session-id shape */ }
+  }
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (typeof sessionId === "string" && sessionId.trim() !== "") {
+    return { kind: "session", sessionId: sessionId.trim() };
+  }
+  return null;
+}
+
+// F1 + H2 hardening: a target is an accepted scratchpad write ONLY when it
+// resolves STRICTLY under the session-scoped allow root AND is not inside any git
+// repo root. Fail-closed on any detection error.
 function isAllowedScratchpadTarget(resolvedPath, findRepoRoot) {
   try {
     const allowRoot = getScratchpadAllowRootNorm();
     const n = foldCase(path.resolve(resolvedPath));
     if (!n.startsWith(allowRoot + path.sep) && !n.startsWith(allowRoot + "/")) return false;
-    if (typeof findRepoRoot === "function" && findRepoRoot(resolvedPath) !== null) return false;
+    if (isRepoExcluded(resolvedPath, findRepoRoot)) return false;
   } catch (_) {
     return false; // fail-closed on any detection error
   }
@@ -87,5 +114,7 @@ module.exports = {
   isUnderClaudeBase,
   isAtOrUnderClaudeBase,
   getScratchpadAllowRootNorm,
+  getCurrentSessionScratchpadRootNorm,
+  isRepoExcluded,
   isAllowedScratchpadTarget,
 };

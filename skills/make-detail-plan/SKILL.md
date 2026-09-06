@@ -37,7 +37,7 @@ If planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`, this is
 
 ### Step MDP-5 — Codex review loop
 
-Follows `skills/_shared/codex-review-loop.md` with: FORMAT=detail-plan, CAP=2, MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner, REVIEWER_AGENT=detail-reviewer, ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md, NON_APPROVED_VERDICT=NEEDS_REVISION.
+Follows `skills/_shared/codex-review-loop.md` with: FORMAT=detail-plan, CAP=2, MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner, REVIEWER_AGENT=detail-reviewer, ACCEPTED_TRADEOFFS_FILE=the first readable candidate of the `outline` → `intent` chain resolved by `bin/resolve-accepted-tradeoffs-file`, NON_APPROVED_VERDICT=NEEDS_REVISION.
 
 Each round: invoke `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"` (Bash) with exported `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required); `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as `--context` when present + non-empty). Exit codes pass through.
 
