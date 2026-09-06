@@ -2,11 +2,11 @@
 # tests/feature-2223-local-env-overlay.sh
 # Tests: hooks/lib/local-env.js, hooks/lib/load-env.js, hooks/lib/plan-confirm-flag.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, trust-boundary, pwsh-not-required
-# RED for issue #2223 — the 2-layer global/.env + project-local override resolver.
+# Issue #2223 — the 2-layer global/.env + project-local override resolver.
 # Pinned contract: load-env.js exports readEffectiveEnvFile(projectRoot) -> map;
-# local-env.js exports resolveProjectRoot(explicitRoot, startDir), overlay(
-# globalMap, localMap, allowedSet) -> {map, applied, ignored}, NEVER_OVERRIDABLE_EXACT
-# and NEVER_OVERRIDABLE_PREFIXES.
+# local-env.js exports resolveProjectRoot, overlay(globalMap, localMap) ->
+# {map, applied, ignored}, isBlocklisted(key), ENV_ENTRY_BLOCKLIST_EXACT and
+# ENV_ENTRY_BLOCKLIST_PREFIX. No allowlist: only the blocklist gates the layer.
 # TL3 gap: a real repo whose own .env.local is edited mid-session is out of reach here.
 
 set -u
@@ -19,15 +19,14 @@ else
 fi
 export AGENTS_DIR_NODE
 
-# The local-override file is never named as a whole path literal: hooks/block-dotenv.js
-# blocks that spelling (DD-1). Every use joins a directory variable to this basename.
+# Never named as a whole path literal: hooks/block-dotenv.js blocks that (DD-1).
 LOCAL_ENV_BASENAME=".env"".local"
 
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-# Fixture isolation: pin both halves of the plans-dir pair, drop inherited session
-# ids, and never let an ambient AGENTS_CONFIG_DIR or project dir reach a child.
+# Isolation: pin both halves of the plans-dir pair, drop inherited session ids,
+# and let no ambient AGENTS_CONFIG_DIR, project dir, or tested key reach a child.
 export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
@@ -35,6 +34,8 @@ unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 unset AGENTS_CONFIG_DIR
+unset CODE_LANG
+unset PROJECT_NFR
 
 PASS=0; FAIL=0
 
@@ -68,8 +69,7 @@ assert_not_contains() {
     fi
 }
 
-# A negative security assertion over an empty payload passes for the wrong
-# reason, so require a JSON object before believing the absence.
+# A negative assertion over an empty payload passes for the wrong reason.
 assert_map_lacks() {
     local name="$1" haystack="$2" needle="$3"
     case "$haystack" in
@@ -98,9 +98,8 @@ trim() {
 }
 
 # ---------------------------------------------------------------------------
-# Probe helper. One node entry point, several subcommands, so each bash case is
-# a single line. Reads the real hooks/lib modules; the fixture supplies only the
-# config dir and the project root.
+# Probe helper. One node entry point, several subcommands, so each bash case is a
+# single line. Reads the real hooks/lib modules; the fixture supplies the dirs.
 # ---------------------------------------------------------------------------
 PROBE="$TMP_ROOT/probe.js"
 cat > "$PROBE" <<'PROBE_EOF'
@@ -130,21 +129,17 @@ if (cmd === "effective") {
 } else if (cmd === "resolve-root") {
   const r = localEnvMod().resolveProjectRoot(a1 || null, a2 || null);
   out(r === null || r === undefined ? "__NULL__" : String(r).replace(/\\/g, "/"));
-} else if (cmd === "never-sets") {
+} else if (cmd === "blocklist-keys") {
   const m = localEnvMod();
-  out(JSON.stringify({
-    exact: Array.from(m.NEVER_OVERRIDABLE_EXACT).sort(),
-    prefixes: Array.from(m.NEVER_OVERRIDABLE_PREFIXES).sort(),
-  }));
-} else if (cmd === "never-keys") {
-  const m = localEnvMod();
-  const src = a1 === "prefixes" ? m.NEVER_OVERRIDABLE_PREFIXES : m.NEVER_OVERRIDABLE_EXACT;
+  const src = a1 === "prefixes" ? m.ENV_ENTRY_BLOCKLIST_PREFIX : m.ENV_ENTRY_BLOCKLIST_EXACT;
   out(Array.from(src).sort().join("\n") + "\n");
+} else if (cmd === "is-blocklisted") {
+  out(String(localEnvMod().isBlocklisted(a1 === "__EMPTY__" ? "" : a1)));
 } else if (cmd === "overlay-pure") {
   const m = localEnvMod();
-  const g = Object.freeze({ CODE_LANG: "english", KEEP: "g", ENFORCE_WORKTREE: "on" });
+  const g = Object.freeze({ CODE_LANG: "english", KEEP: "g", ONLY_GLOBAL: "gg", ENFORCE_WORKTREE: "on" });
   const l = Object.freeze({ CODE_LANG: "japanese", KEEP: "l", ENFORCE_WORKTREE: "off" });
-  const res = m.overlay(g, l, new Set(["CODE_LANG", "ENFORCE_WORKTREE"]));
+  const res = m.overlay(g, l);
   out(JSON.stringify({
     map: res.map,
     applied: Array.from(res.applied || []).sort(),
@@ -186,11 +181,12 @@ probe() {
 
 LOCAL_ENV_JS="$AGENTS_DIR/hooks/lib/local-env.js"
 if [ ! -f "$LOCAL_ENV_JS" ]; then
-    echo "NOTE: hooks/lib/local-env.js absent — every case below is expected RED until /write-code lands."
+    echo "NOTE: hooks/lib/local-env.js absent — every case below is expected RED."
 fi
 
 # ---------------------------------------------------------------------------
-# Table 1 — declaration semantics and the effective map.
+# Table 1 — the effective map under the blocklist-only model. A project's key
+# applies because nothing refuses it; no declaration grants anything any more.
 # Columns: name | global .env (@NL@ = newline) | local override file | key | want
 # ---------------------------------------------------------------------------
 while IFS='|' read -r name genv lenv key want; do
@@ -201,168 +197,76 @@ while IFS='|' read -r name genv lenv key want; do
     got="$(probe effective "$CASE_ROOT_NODE" "$(trim "$key")")"
     assert_eq "T2223L-$name" "$(trim "$want")" "$got"
 done <<'TABLE'
-decl-absent               | CODE_LANG=english                                                       | CODE_LANG=japanese                    | CODE_LANG   | "japanese"
-decl-absent-other-key     | CODE_LANG=english@NL@FOO=globalfoo                                      | FOO=localfoo                          | FOO         | "globalfoo"
-decl-empty                | LOCAL_OVERRIDABLE_KEYS=@NL@CODE_LANG=english                            | CODE_LANG=japanese                    | CODE_LANG   | "english"
-decl-explicit-code-lang   | LOCAL_OVERRIDABLE_KEYS=CODE_LANG,FOO@NL@CODE_LANG=english@NL@FOO=gf     | CODE_LANG=japanese@NL@FOO=lf          | CODE_LANG   | "japanese"
-decl-explicit-foo         | LOCAL_OVERRIDABLE_KEYS=CODE_LANG,FOO@NL@CODE_LANG=english@NL@FOO=gf     | CODE_LANG=japanese@NL@FOO=lf          | FOO         | "lf"
-decl-explicit-bar-denied  | LOCAL_OVERRIDABLE_KEYS=CODE_LANG,FOO@NL@BAR=globalbar                   | BAR=localbar                          | BAR         | "globalbar"
-decl-replaces-default     | LOCAL_OVERRIDABLE_KEYS=FOO@NL@CODE_LANG=english@NL@FOO=gf               | CODE_LANG=japanese@NL@FOO=lf          | CODE_LANG   | "english"
-decl-replaces-default-foo | LOCAL_OVERRIDABLE_KEYS=FOO@NL@CODE_LANG=english@NL@FOO=gf               | CODE_LANG=japanese@NL@FOO=lf          | FOO         | "lf"
-nfr-not-in-default        | CODE_LANG=english                                                       | PROJECT_NFR=test                      | PROJECT_NFR | __ABSENT__
-nfr-opt-in                | LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR,CODE_LANG                            | PROJECT_NFR=test                      | PROJECT_NFR | "test"
-nfr-opt-in-code-lang      | LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR,CODE_LANG@NL@CODE_LANG=english       | CODE_LANG=japanese                    | CODE_LANG   | "japanese"
-non-declared-no-leak      | CODE_LANG=english                                                       | SECRET_API_KEY=leaked-secret          | SECRET_API_KEY | __ABSENT__
-local-absent-fallback     | CODE_LANG=english                                                       | __NONE__                              | CODE_LANG   | "english"
-empty-string-override     | LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english                   | CODE_LANG=                            | CODE_LANG   | ""
-multiline-local-value     | LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR                                      | PROJECT_NFR="a@NL@b"                  | PROJECT_NFR | "a\nb"
-allow-automation-mode     | LOCAL_OVERRIDABLE_KEYS=AUTOMATION_MODE@NL@AUTOMATION_MODE=global         | AUTOMATION_MODE=local                 | AUTOMATION_MODE | "local"
-allow-enforcement-level   | LOCAL_OVERRIDABLE_KEYS=ENFORCEMENT_LEVEL@NL@ENFORCEMENT_LEVEL=global     | ENFORCEMENT_LEVEL=local               | ENFORCEMENT_LEVEL | "local"
-allow-confirmed-state     | LOCAL_OVERRIDABLE_KEYS=CONFIRMED_STATE@NL@CONFIRMED_STATE=global         | CONFIRMED_STATE=local                 | CONFIRMED_STATE | "local"
+undeclared-local-wins      | CODE_LANG=english                                  | CODE_LANG=japanese                | CODE_LANG      | "japanese"
+undeclared-other-key-wins  | CODE_LANG=english@NL@FOO=globalfoo                 | FOO=localfoo                      | FOO            | "localfoo"
+local-only-key-added       | CODE_LANG=english                                  | BRAND_NEW_KEY=fromlocal           | BRAND_NEW_KEY  | "fromlocal"
+global-only-key-survives   | CODE_LANG=english@NL@ONLY_GLOBAL=gonly             | FOO=localfoo                      | ONLY_GLOBAL    | "gonly"
+blocklisted-local-loses    | CODE_LANG=english@NL@ENFORCE_WORKTREE=on           | ENFORCE_WORKTREE=off              | ENFORCE_WORKTREE | "on"
+stale-decl-grants-nothing  | LOCAL_OVERRIDABLE_KEYS=ENFORCE_WORKTREE@NL@ENFORCE_WORKTREE=on | ENFORCE_WORKTREE=off  | ENFORCE_WORKTREE | "on"
+stale-decl-denies-nothing  | LOCAL_OVERRIDABLE_KEYS=NOTHING@NL@FOO=globalfoo    | FOO=localfoo                      | FOO            | "localfoo"
+stale-decl-is-ordinary-key | LOCAL_OVERRIDABLE_KEYS=CODE_LANG                   | LOCAL_OVERRIDABLE_KEYS=EVERYTHING | LOCAL_OVERRIDABLE_KEYS | "EVERYTHING"
+nfr-no-declaration-needed  | CODE_LANG=english                                  | PROJECT_NFR=test                  | PROJECT_NFR    | "test"
+nfr-overrides-global       | PROJECT_NFR=global-nfr                             | PROJECT_NFR=local-nfr             | PROJECT_NFR    | "local-nfr"
+local-absent-fallback      | CODE_LANG=english                                  | __NONE__                          | CODE_LANG      | "english"
+empty-string-override      | CODE_LANG=english                                  | CODE_LANG=                        | CODE_LANG      | ""
+multiline-local-value      | CODE_LANG=english                                  | PROJECT_NFR="a@NL@b"              | PROJECT_NFR    | "a\nb"
+allow-confirm-detail       | CONFIRM_DETAIL=on                                  | CONFIRM_DETAIL=off                | CONFIRM_DETAIL | "off"
+allow-auto-merge-pr        | AUTO_MERGE_PR=on                                   | AUTO_MERGE_PR=off                 | AUTO_MERGE_PR  | "off"
+allow-run-tl3              | RUN_TL3=off                                        | RUN_TL3=on                        | RUN_TL3        | "on"
+allow-run-tl4              | RUN_TL4=off                                        | RUN_TL4=on                        | RUN_TL4        | "on"
+allow-plan-lang            | PLAN_LANG=english                                  | PLAN_LANG=japanese                | PLAN_LANG      | "japanese"
+allow-conv-lang            | CONV_LANG=english                                  | CONV_LANG=japanese                | CONV_LANG      | "japanese"
+allow-docs-lang-primary    | DOCS_LANG_PRIMARY=english                          | DOCS_LANG_PRIMARY=japanese        | DOCS_LANG_PRIMARY | "japanese"
+allow-codegraph            | CODEGRAPH=off                                      | CODEGRAPH=on                      | CODEGRAPH      | "on"
+allow-automation-mode      | AUTOMATION_MODE=global                             | AUTOMATION_MODE=local             | AUTOMATION_MODE | "local"
+allow-enforcement-level    | ENFORCEMENT_LEVEL=global                           | ENFORCEMENT_LEVEL=local           | ENFORCEMENT_LEVEL | "local"
+allow-confirmed-state      | CONFIRMED_STATE=global                             | CONFIRMED_STATE=local             | CONFIRMED_STATE | "local"
 TABLE
 
-# ---------------------------------------------------------------------------
-# Table 2 — the NEVER-overridable list beats an explicit declaration. Every row
-# declares its own key overridable in the global .env, so a pass here proves the
-# hard-coded deny list wins over configuration, not merely over the default.
-# Columns: name | key | global value | local value
-# ---------------------------------------------------------------------------
-while IFS='|' read -r name key gval lval; do
-    name="$(trim "$name")"
-    [ -n "$name" ] || continue
-    case "$name" in \#*) continue ;; esac
-    key="$(trim "$key")"; gval="$(trim "$gval")"; lval="$(trim "$lval")"
-    new_case "$name" "LOCAL_OVERRIDABLE_KEYS=$key@NL@$key=$gval" "$key=$lval"
-    got="$(probe effective "$CASE_ROOT_NODE" "$key")"
-    assert_eq "T2223N-$name" "\"$gval\"" "$got"
-done <<'TABLE'
-forbidden-enforce-worktree      | ENFORCE_WORKTREE       | on          | off
-forbidden-auto-merge-pr         | AUTO_MERGE_PR          | on          | off
-forbidden-auto-approve-tools    | AUTO_APPROVE_TOOLS     | off         | on
-forbidden-confirm-detail        | CONFIRM_DETAIL         | on          | off
-forbidden-confirm-code          | CONFIRM_CODE           | on          | off
-forbidden-confirm-intent        | CONFIRM_INTENT         | on          | off
-forbidden-confirm-outline       | CONFIRM_OUTLINE        | on          | off
-forbidden-run-tl3               | RUN_TL3                | off         | on
-forbidden-run-tl4               | RUN_TL4                | off         | on
-forbidden-session-sync          | SESSION_SYNC           | off         | on
-forbidden-codex-mcp-fs          | CODEX_MCP_FS           | on          | off
-forbidden-workflow-plans-dir    | WORKFLOW_PLANS_DIR     | /global-plans | /tmp/evil
-forbidden-agents-config-dir     | AGENTS_CONFIG_DIR      | /global-cfg   | /tmp/evil
-forbidden-claude-workflow-dir   | CLAUDE_WORKFLOW_DIR    | /global-wf    | /tmp/evil
-forbidden-worktree-base-dir     | WORKTREE_BASE_DIR      | /global-wt    | /tmp/evil
-forbidden-default-branches      | DEFAULT_BRANCHES       | main        | evil
-forbidden-decl-self             | LOCAL_OVERRIDABLE_KEYS | CODE_LANG   | EVERYTHING
-prefix-confirm-future           | CONFIRM_FUTURE         | on          | off
-prefix-enforce-future           | ENFORCE_FUTURE         | on          | off
-prefix-auto-future              | AUTO_FUTURE            | off         | on
-prefix-session-sync-future      | SESSION_SYNC_EXTRA     | off         | on
-prefix-run-tl-future            | RUN_TL_FUTURE          | off         | on
-TABLE
-
-# ---------------------------------------------------------------------------
-# Table 2b — EVERY current deny-list entry, in three spellings.
-# The key list is read out of local-env.js itself (CPR-SSOT): a deny-list entry
-# added tomorrow is covered the day it lands, not the day someone remembers a
-# table. isNeverOverridable() upper-cases before matching because Windows env
-# names are case-insensitive, so a lower- or mixed-case declaration must not
-# slip past — each fixture declares all three spellings overridable at once and
-# gives each its own global value, so a single effective map proves all three.
-# ---------------------------------------------------------------------------
-mixed_case() {
-    local up lo="$1"
-    lo="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"
-    up="$(printf '%s' "${lo:0:1}" | tr 'a-z' 'A-Z')"
-    printf '%s%s' "$up" "${lo:1}"
-}
-
-deny_all_spellings() {
-    local label="$1" canon="$2" lower mixed genv lenv json
-    lower="$(printf '%s' "$canon" | tr 'A-Z' 'a-z')"
-    mixed="$(mixed_case "$canon")"
-    genv="LOCAL_OVERRIDABLE_KEYS=$canon,$lower,$mixed@NL@$canon=gv-canon-$label@NL@$lower=gv-lower-$label@NL@$mixed=gv-mixed-$label"
-    lenv="$canon=DENYLOCAL@NL@$lower=DENYLOCAL@NL@$mixed=DENYLOCAL"
-    new_case "deny-$label" "$genv" "$lenv"
-    json="$(probe effective-json "$CASE_ROOT_NODE")"
-    assert_map_lacks "T2223N2-$canon-local-never-wins" "$json" 'DENYLOCAL'
-    assert_contains "T2223N2-$canon-canonical-global-kept" "$json" "gv-canon-$label"
-    assert_contains "T2223N2-$canon-lower-global-kept" "$json" "gv-lower-$label"
-    assert_contains "T2223N2-$canon-mixed-global-kept" "$json" "gv-mixed-$label"
-}
-
-new_case deny-enum 'CODE_LANG=english' '__NONE__'
-DENY_EXACT="$(probe never-keys exact)"
-DENY_PREFIXES="$(probe never-keys prefixes)"
-DENY_EXACT_N="$(printf '%s\n' "$DENY_EXACT" | grep -c '[A-Z]')"
-DENY_PREFIX_N="$(printf '%s\n' "$DENY_PREFIXES" | grep -c '[A-Z]')"
-# Guard the enumeration itself: an empty read would make every row below vacuous.
-if [ "$DENY_EXACT_N" -lt 20 ] || [ "$DENY_PREFIX_N" -lt 5 ]; then
-    fail "T2223N2-enumeration — deny list read back too small (exact=$DENY_EXACT_N prefixes=$DENY_PREFIX_N)"
+# Every case about what the blocklist REFUSES lives in a sibling case file
+# because this one exceeded the 500-line HARD limit of rules/coding/file-split.md.
+# Sourced (not executed) so the cases share the helpers, fixtures and counters
+# defined above.
+CASES_FILE="$AGENTS_DIR/tests/feature-2223-local-env-overlay/blocklist-coverage.sh"
+if [ -f "$CASES_FILE" ]; then
+    . "$CASES_FILE"
 else
-    pass "T2223N2-enumeration ($DENY_EXACT_N exact entries, $DENY_PREFIX_N prefixes)"
+    fail "T2223-blocklist-cases-file-present — $CASES_FILE missing"
 fi
 
-_i=0
-while IFS= read -r _k; do
-    [ -n "$_k" ] || continue
-    _i=$((_i + 1))
-    deny_all_spellings "e$_i" "$_k"
-done <<EOF
-$DENY_EXACT
-EOF
+# T2223-malformed-local-degrades — an unterminated quote discards that key alone
+# and never takes the global layer down with it.
+new_case malformed 'CODE_LANG=english' 'CODE_LANG="unterminated@NL@BROKEN'
+mal_rc=0
+mal_got="$(probe effective "$CASE_ROOT_NODE" CODE_LANG)" || mal_rc=$?
+assert_eq "T2223-malformed-local-degrades (value)" '"english"' "$mal_got"
+assert_eq "T2223-malformed-local-degrades (exit 0)" "0" "$mal_rc"
 
-# A prefix is proven by a key that only the prefix can deny — a name the exact
-# set does not carry, so a pass cannot come from the exact list by accident.
-_i=0
-while IFS= read -r _p; do
-    [ -n "$_p" ] || continue
-    _i=$((_i + 1))
-    deny_all_spellings "p$_i" "${_p}CANARY2223"
-done <<EOF
-$DENY_PREFIXES
-EOF
-
-# T2223-declared-forbidden-still-blocked — the whole deny list declared at once.
-new_case declared-forbidden \
-  'LOCAL_OVERRIDABLE_KEYS=ENFORCE_WORKTREE,CONFIRM_DETAIL,AUTO_MERGE_PR,LOCAL_OVERRIDABLE_KEYS,AGENTS_CONFIG_DIR@NL@ENFORCE_WORKTREE=on@NL@CONFIRM_DETAIL=on@NL@AUTO_MERGE_PR=on@NL@AGENTS_CONFIG_DIR=/global-cfg' \
-  'ENFORCE_WORKTREE=off@NL@CONFIRM_DETAIL=off@NL@AUTO_MERGE_PR=off@NL@AGENTS_CONFIG_DIR=/tmp/evil@NL@LOCAL_OVERRIDABLE_KEYS=EVERYTHING'
-declared_json="$(probe effective-json "$CASE_ROOT_NODE")"
-assert_map_lacks "T2223-declared-forbidden-still-blocked (no 'off' leaked)" "$declared_json" '"off"'
-assert_map_lacks "T2223-declared-forbidden-still-blocked (no /tmp/evil)" "$declared_json" '/tmp/evil'
-assert_map_lacks "T2223-declared-forbidden-still-blocked (decl not rewritten)" "$declared_json" 'EVERYTHING'
-
-# T2223-non-declared-no-leak-json — an undeclared secret must not reach the map
-# under any key, not merely under its own.
-new_case leak-json 'CODE_LANG=english' 'SECRET_API_KEY=leaked-secret@NL@OTHER=alsoleaked'
-leak_json="$(probe effective-json "$CASE_ROOT_NODE")"
-assert_map_lacks "T2223-non-declared-no-leak-value" "$leak_json" 'leaked-secret'
-assert_map_lacks "T2223-non-declared-no-leak-sibling" "$leak_json" 'alsoleaked'
-
-# T2223-short-circuit-empty-decl — with the declaration explicitly empty the local
-# layer is never consulted, so a file that cannot parse cannot matter.
-new_case short-circuit 'LOCAL_OVERRIDABLE_KEYS=@NL@CODE_LANG=english' 'CODE_LANG="unterminated@NL@BROKEN'
-sc_rc=0
-sc_got="$(probe effective "$CASE_ROOT_NODE" CODE_LANG)" || sc_rc=$?
-assert_eq "T2223-short-circuit-empty-decl (value)" '"english"' "$sc_got"
-assert_eq "T2223-short-circuit-empty-decl (exit 0)" "0" "$sc_rc"
-
-# T2223-door-readDefaultEnvFile — the global-only door stays global-only even when
-# the key is declared overridable and present locally.
-new_case door-global 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=japanese'
+# T2223-door-readDefaultEnvFile — the global-only door stays global-only even
+# though the key is freely overridable in the effective map.
+new_case door-global 'CODE_LANG=english' 'CODE_LANG=japanese'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-door-readDefaultEnvFile" '"english"' "$(probe global CODE_LANG)"
 
-# T2223-door-plan-confirm-flag — the CONFIRM gate reader must not see a local file.
-new_case door-confirm 'LOCAL_OVERRIDABLE_KEYS=CONFIRM_DETAIL' 'CONFIRM_DETAIL=off'
+# T2223-door-plan-confirm-flag — the CONFIRM gate reader must not see a local
+# file, even now that CONFIRM_* is overridable in the effective map.
+new_case door-confirm 'CONFIRM_DETAIL=on' 'CONFIRM_DETAIL=off'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-door-plan-confirm-flag" "false" "$(probe confirm-off detail)"
 
-# T2223-door-loadEnv-process-env — a declared key does reach process.env.
-new_case door-loadenv 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=japanese'
+# T2223-door-loadEnv-process-env — an ordinary local key does reach process.env.
+new_case door-loadenv 'CODE_LANG=english' 'CODE_LANG=japanese'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-door-loadEnv-process-env" '"japanese"' "$(probe load-default CODE_LANG)"
 
+# A blocklisted key must not reach process.env from the local layer either.
+new_case door-loadenv-blocked 'ENFORCE_WORKTREE=on' 'ENFORCE_WORKTREE=off'
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
+assert_eq "T2223-door-loadEnv-blocklisted" '"on"' "$(probe load-default ENFORCE_WORKTREE)"
+
 # T2223-process-env-wins-after-overlay — an explicit export still outranks both layers.
+new_case door-loadenv2 'CODE_LANG=english' 'CODE_LANG=japanese'
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-process-env-wins-after-overlay" '"exported-wins"' \
   "$(CODE_LANG=exported-wins probe load-default CODE_LANG)"
 unset CLAUDE_PROJECT_DIR
@@ -371,9 +275,9 @@ unset CLAUDE_PROJECT_DIR
 # Project-root resolution. Priority, worktree .git file form, upward search, and
 # the no-repo case.
 # ---------------------------------------------------------------------------
-new_case root-explicit 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=from-explicit'
+new_case root-explicit 'CODE_LANG=english' 'CODE_LANG=from-explicit'
 EXPLICIT_ROOT="$CASE_ROOT"; EXPLICIT_ROOT_NODE="$CASE_ROOT_NODE"; EXPLICIT_CFG="$CASE_CFG"
-new_case root-envvar 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=from-envvar'
+new_case root-envvar 'CODE_LANG=english' 'CODE_LANG=from-envvar'
 ENVVAR_ROOT="$CASE_ROOT"
 
 CASE_CFG="$EXPLICIT_CFG"
@@ -386,14 +290,14 @@ assert_eq "T2223-project-root-env-var" \
   "$(to_node_path "$ENVVAR_ROOT")" "$(probe resolve-root '' "$TMP_ROOT")"
 unset CLAUDE_PROJECT_DIR
 
-new_case root-worktree 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=from-worktree' file
+new_case root-worktree 'CODE_LANG=english' 'CODE_LANG=from-worktree' file
 mkdir -p "$CASE_ROOT/nested/deeper"
 assert_eq "T2223-project-root-worktree-git-file" \
   "$(to_node_path "$CASE_ROOT")" "$(probe resolve-root '' "$(to_node_path "$CASE_ROOT/nested/deeper")")"
 assert_eq "T2223-project-root-worktree-git-file-value" '"from-worktree"' \
   "$(probe effective "$CASE_ROOT_NODE" CODE_LANG)"
 
-new_case root-upward 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' 'CODE_LANG=from-upward'
+new_case root-upward 'CODE_LANG=english' 'CODE_LANG=from-upward'
 mkdir -p "$CASE_ROOT/a/b/c"
 assert_eq "T2223-project-root-upward-search" \
   "$(to_node_path "$CASE_ROOT")" "$(probe resolve-root '' "$(to_node_path "$CASE_ROOT/a/b/c")")"
@@ -417,23 +321,15 @@ fi
 assert_eq "T2223-project-root-no-git-no-local-layer" '"english"' "$(probe effective '' CODE_LANG)"
 
 # ---------------------------------------------------------------------------
-# Module surface: the deny sets and the purity of overlay().
+# Module surface: the purity of the 2-argument overlay().
 # ---------------------------------------------------------------------------
 new_case sets 'CODE_LANG=english' '__NONE__'
-sets_json="$(probe never-sets)"
-for k in LOCAL_OVERRIDABLE_KEYS AGENTS_CONFIG_DIR WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR \
-         WORKTREE_BASE_DIR DEFAULT_BRANCHES ENFORCE_WORKTREE CODEX_MCP_FS AUTO_MERGE_PR; do
-    assert_contains "T2223-never-exact-$k" "$sets_json" "\"$k\""
-done
-for p in ENFORCE_ CONFIRM_ AUTO_ SESSION_SYNC RUN_TL; do
-    assert_contains "T2223-never-prefix-$p" "$sets_json" "\"$p\""
-done
-
 overlay_json="$(probe overlay-pure)"
-assert_contains "T2223-overlay-applies-allowed"    "$overlay_json" '"CODE_LANG":"japanese"'
-assert_contains "T2223-overlay-keeps-unallowed"    "$overlay_json" '"KEEP":"g"'
-assert_contains "T2223-overlay-denies-never-key"   "$overlay_json" '"ENFORCE_WORKTREE":"on"'
-assert_contains "T2223-overlay-reports-applied"    "$overlay_json" '"applied":["CODE_LANG"]'
+assert_contains "T2223-overlay-applies-local"      "$overlay_json" '"CODE_LANG":"japanese"'
+assert_contains "T2223-overlay-applies-undeclared" "$overlay_json" '"KEEP":"l"'
+assert_contains "T2223-overlay-keeps-global-only"  "$overlay_json" '"ONLY_GLOBAL":"gg"'
+assert_contains "T2223-overlay-denies-blocklisted" "$overlay_json" '"ENFORCE_WORKTREE":"on"'
+assert_contains "T2223-overlay-reports-applied"    "$overlay_json" '"applied":["CODE_LANG","KEEP"]'
 assert_contains "T2223-overlay-reports-ignored"    "$overlay_json" '"ignored":["ENFORCE_WORKTREE"]'
 assert_contains "T2223-overlay-pure-global"        "$overlay_json" '"globalUnmutated":true'
 assert_contains "T2223-overlay-pure-local"         "$overlay_json" '"localUnmutated":true'
@@ -442,21 +338,30 @@ assert_contains "T2223-overlay-pure-local"         "$overlay_json" '"localUnmuta
 # Real CLIs over hostile project roots. The module cases above run in-process;
 # these run the shipped executables, where a path is re-quoted at every hop and
 # a degenerate override file must degrade to the global layer, not to a crash.
-# ---------------------------------------------------------------------------
-# Paths are normalized with to_node_path first: MSYS rewrites a POSIX-looking
-# env value on its way to a native node.exe, and a ';' in it is taken for a
-# path-list separator — a harness artefact, not behaviour of the code under test.
+# Paths go through to_node_path first: MSYS rewrites a POSIX-looking env value on
+# its way to native node.exe — a harness artefact, not behaviour under test.
 eek() { AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$AGENTS_DIR/bin/env-effective-kv" --repo-root "$(to_node_path "$1")" --key "$2" 2>/dev/null; }
 gcv() { AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$AGENTS_DIR/bin/get-config-var" --repo-root "$(to_node_path "$1")" "$2" 2>/dev/null; }
 
-new_case cli-empty 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' '__NONE__'
+# The issue-#2223 outcome, end to end through both shipped readers: PROJECT_NFR
+# from a project's own file with no declaration anywhere.
+new_case cli-nfr 'CODE_LANG=english@NL@PROJECT_NFR=global-nfr' 'PROJECT_NFR=local-nfr-no-decl'
+assert_eq "T2223R-nfr-eek-local-wins-undeclared" "local-nfr-no-decl" "$(eek "$CASE_ROOT" PROJECT_NFR)"
+assert_eq "T2223R-nfr-gcv-local-wins-undeclared" "local-nfr-no-decl" "$(gcv "$CASE_ROOT" PROJECT_NFR)"
+
+# A stale LOCAL_OVERRIDABLE_KEYS line in the global .env changes neither answer.
+new_case cli-stale-decl 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@PROJECT_NFR=global-nfr@NL@ENFORCE_WORKTREE=on' 'PROJECT_NFR=local-nfr-stale-decl@NL@ENFORCE_WORKTREE=off'
+assert_eq "T2223R-stale-decl-grants-nothing" "on" "$(eek "$CASE_ROOT" ENFORCE_WORKTREE)"
+assert_eq "T2223R-stale-decl-denies-nothing" "local-nfr-stale-decl" "$(eek "$CASE_ROOT" PROJECT_NFR)"
+
+new_case cli-empty 'CODE_LANG=english' '__NONE__'
 : > "$CASE_ROOT/$LOCAL_ENV_BASENAME"
 assert_eq "T2223R-empty-local-eek-falls-back" "english" "$(eek "$CASE_ROOT" CODE_LANG)"
 assert_eq "T2223R-empty-local-gcv-falls-back" "english" "$(gcv "$CASE_ROOT" CODE_LANG)"
 
 # Unreadable-as-a-file: a directory at that name is the portable form of "open
 # fails", since chmod 000 is not honoured on every filesystem this suite runs on.
-new_case cli-unreadable 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english' '__NONE__'
+new_case cli-unreadable 'CODE_LANG=english' '__NONE__'
 mkdir -p "$CASE_ROOT/$LOCAL_ENV_BASENAME"
 assert_eq "T2223R-unreadable-local-eek-falls-back" "english" "$(eek "$CASE_ROOT" CODE_LANG)"
 assert_eq "T2223R-unreadable-local-gcv-falls-back" "english" "$(gcv "$CASE_ROOT" CODE_LANG)"
@@ -464,7 +369,7 @@ assert_eq "T2223R-unreadable-local-gcv-falls-back" "english" "$(gcv "$CASE_ROOT"
 # A project root carrying spaces and shell metacharacters. The local value must
 # still apply — proving the path was really used — while the canary proves no
 # part of the name was ever handed to a shell for evaluation.
-new_case cli-meta 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG@NL@CODE_LANG=english@NL@ENFORCE_WORKTREE=on' '__NONE__'
+new_case cli-meta 'CODE_LANG=english@NL@ENFORCE_WORKTREE=on' '__NONE__'
 META_PARENT="$CASE_ROOT/holder"
 META_ROOT="$META_PARENT/pr oj \$(touch pwned) ;touch pwned& \`touch pwned\`"
 mkdir -p "$META_ROOT/.git"
@@ -476,7 +381,7 @@ if [ -e "$META_PARENT/pwned" ] || [ -e "$META_ROOT/pwned" ] || [ -e "$TMP_ROOT/p
 else
     pass "T2223R-meta-path-no-execution"
 fi
-assert_eq "T2223R-meta-path-denylist-still-wins" "on" "$(eek "$META_ROOT" ENFORCE_WORKTREE)"
+assert_eq "T2223R-meta-path-blocklist-still-wins" "on" "$(eek "$META_ROOT" ENFORCE_WORKTREE)"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

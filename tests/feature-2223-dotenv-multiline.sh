@@ -276,7 +276,7 @@ fi
 I_CFG="$TMP_ROOT/idem-cfg"
 I_PROJ="$TMP_ROOT/idem-proj"
 mkdir -p "$I_CFG" "$I_PROJ/.git"
-printf '%s\n' 'LOCAL_OVERRIDABLE_KEYS=CODE_LANG' 'CODE_LANG=english' 'ENFORCE_WORKTREE=on' > "$I_CFG/.env"
+printf '%s\n' 'CODE_LANG=english' 'ENFORCE_WORKTREE=on' > "$I_CFG/.env"
 printf '%s\n' 'CODE_LANG=japanese' 'ENFORCE_WORKTREE=off' > "$I_PROJ/.env"".local"
 I_PROJ_NODE="$I_PROJ"
 if command -v cygpath >/dev/null 2>&1; then I_PROJ_NODE="$(cygpath -m "$I_PROJ")"; fi

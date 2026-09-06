@@ -199,23 +199,21 @@ function readDefaultEnvFile() {
   return {};
 }
 
-// resolveLocalLayer returns {globalMap, allowed, localMap} for a project root.
-// localMap is null whenever the local layer must not be consulted at all.
+// resolveLocalLayer returns {globalMap, localMap} for a project root.
+// localMap is null whenever no project root resolves or the file is unreadable.
 function resolveLocalLayer(projectRoot) {
   const globalMap = readDefaultEnvFile();
-  const allowed = localEnv.resolveOverridableKeys(globalMap);
-  if (allowed.size === 0) return { globalMap, allowed, localMap: null };
   const root = localEnv.resolveProjectRoot(projectRoot || null, process.cwd());
-  if (!root) return { globalMap, allowed, localMap: null };
-  return { globalMap, allowed, localMap: readEnvFile(localEnv.localEnvPathFor(root)) };
+  if (!root) return { globalMap, localMap: null };
+  return { globalMap, localMap: readEnvFile(localEnv.localEnvPathFor(root)) };
 }
 
 // readEffectiveEnvFile returns the global map with the project-local overlay
 // applied. Never reads process.env for a config value.
 function readEffectiveEnvFile(projectRoot) {
-  const { globalMap, allowed, localMap } = resolveLocalLayer(projectRoot);
+  const { globalMap, localMap } = resolveLocalLayer(projectRoot);
   if (!localMap) return Object.assign({}, globalMap);
-  return localEnv.overlay(globalMap, localMap, allowed).map;
+  return localEnv.overlay(globalMap, localMap).map;
 }
 
 function loadEnv(envPath) {
@@ -245,14 +243,14 @@ function loadEnv(envPath) {
   return true;
 }
 
-// applyLocalOverlayToProcessEnv injects declared-overridable local values on top
-// of the already-injected global layer. `before` is the pre-injection process.env
+// applyLocalOverlayToProcessEnv injects non-blocklisted local values on top of
+// the already-injected global layer. `before` is the pre-injection process.env
 // snapshot, so a value the caller actually exported still outranks both layers.
 // The lookup is case-insensitive: Windows environment variables are, so a
 // caller's real ENFORCE_WORKTREE export must not be missed by a differently
 // cased key on the plain-object `before` snapshot.
 function applyLocalOverlayToProcessEnv(before) {
-  const { allowed, localMap } = resolveLocalLayer(null);
+  const { localMap } = resolveLocalLayer(null);
   if (!localMap) return;
   const beforeUpperTruthy = new Set(
     Object.keys(before)
@@ -260,7 +258,7 @@ function applyLocalOverlayToProcessEnv(before) {
       .map((k) => k.toUpperCase())
   );
   for (const key of Object.keys(localMap)) {
-    if (!allowed.has(key)) continue;
+    if (localEnv.isBlocklisted(key)) continue;
     if (beforeUpperTruthy.has(key.toUpperCase())) continue;
     process.env[key] = localMap[key];
   }

@@ -27,12 +27,15 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         $script:tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("gcv2223-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
         New-Item -ItemType Directory -Path $script:tmp -Force | Out-Null
 
-        # Global layer: declares CODE_LANG and PROJECT_NFR locally overridable.
+        # Global layer. No allowlist exists any more: the stale
+        # LOCAL_OVERRIDABLE_KEYS line rides along to prove the dead setting
+        # grants nothing and denies nothing.
         $script:cfgDir = Join-Path $script:tmp 'cfg'
         New-Item -ItemType Directory -Path $script:cfgDir -Force | Out-Null
         Set-Content -Path (Join-Path $script:cfgDir '.env') -Value @(
-            'LOCAL_OVERRIDABLE_KEYS=CODE_LANG,PROJECT_NFR'
+            'LOCAL_OVERRIDABLE_KEYS=CODE_LANG'
             'CODE_LANG=english'
+            'PROJECT_NFR=global-nfr'
             'ENFORCE_WORKTREE=on'
             'CONFIRM_DETAIL=on'
             'PLAIN_KEY=globalplain'
@@ -45,6 +48,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         $script:localName = '.env' + '.local'
         Set-Content -Path (Join-Path $script:projDir $script:localName) -Value @(
             'CODE_LANG=japanese'
+            'PROJECT_NFR=local-nfr-no-decl'
             'ENFORCE_WORKTREE=off'
             'CONFIRM_DETAIL=off'
             'PLAIN_KEY=localplain'
@@ -77,6 +81,9 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         [System.Environment]::SetEnvironmentVariable('CLAUDE_PROJECT_DIR', $null, 'Process')
         [System.Environment]::SetEnvironmentVariable('CODE_LANG', $null, 'Process')
         [System.Environment]::SetEnvironmentVariable('PLAIN_KEY', $null, 'Process')
+        [System.Environment]::SetEnvironmentVariable('PROJECT_NFR', $null, 'Process')
+        [System.Environment]::SetEnvironmentVariable('ENFORCE_WORKTREE', $null, 'Process')
+        [System.Environment]::SetEnvironmentVariable('CONFIRM_DETAIL', $null, 'Process')
     }
 
     Context 'Value mode' {
@@ -86,20 +93,31 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             $out | Should -Be 'english'
         }
 
-        It 'applies a declared-overridable key from the project layer' {
+        It 'applies a project-layer key that no declaration mentions' {
             $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir CODE_LANG 2>&1) -join ''
             $LASTEXITCODE | Should -Be 0
             $out | Should -Be 'japanese'
         }
 
-        It 'refuses a never-overridable key even from the project layer' {
+        It 'refuses a blocklisted key even from the project layer' {
             $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir ENFORCE_WORKTREE 2>&1) -join ''
             $out | Should -Be 'on'
         }
 
-        It 'refuses an undeclared key from the project layer' {
+        It 'applies an ordinary key the stale declaration omits' {
             $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir PLAIN_KEY 2>&1) -join ''
-            $out | Should -Be 'globalplain'
+            $out | Should -Be 'localplain'
+        }
+
+        It 'applies PROJECT_NFR from the project layer with no declaration' {
+            $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir PROJECT_NFR 2>&1) -join ''
+            $LASTEXITCODE | Should -Be 0
+            $out | Should -Be 'local-nfr-no-decl'
+        }
+
+        It 'falls back to the global PROJECT_NFR without -RepoRoot' {
+            $out = (& pwsh -NoProfile -File $script:helper PROJECT_NFR 2>&1) -join ''
+            $out | Should -Be 'global-nfr'
         }
 
         It 'returns the supplied default when the key is absent from both layers' {
@@ -122,10 +140,16 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
     }
 
     Context '-IsOff exit matrix under -RepoRoot' {
-        It 'keeps a never-overridable gate ON despite a local off (exit 1)' {
-            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir CONFIRM_DETAIL 2>&1) -join ''
+        It 'keeps a blocklisted gate ON despite a local off (exit 1)' {
+            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir ENFORCE_WORKTREE 2>&1) -join ''
             Assert-ScriptWasEntered $out
             $LASTEXITCODE | Should -Be 1
+        }
+
+        It 'lets an ordinary gate go OFF from the project layer (exit 0)' {
+            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir CONFIRM_DETAIL 2>&1) -join ''
+            Assert-ScriptWasEntered $out
+            $LASTEXITCODE | Should -Be 0
         }
 
         It 'reports a key absent from both layers as unset (exit 2)' {
@@ -135,16 +159,15 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         }
 
         It 'accepts -RepoRoot before -IsOff as well (order independence)' {
-            $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir -IsOff CONFIRM_DETAIL 2>&1) -join ''
+            $out = (& pwsh -NoProfile -File $script:helper -RepoRoot $script:projDir -IsOff ENFORCE_WORKTREE 2>&1) -join ''
             Assert-ScriptWasEntered $out
             $LASTEXITCODE | Should -Be 1
         }
 
-        It 'reports OFF for a declared-overridable key set off locally (exit 0)' {
+        It 'reports OFF for an undeclared key set off locally (exit 0)' {
             $overridable = Join-Path $script:tmp 'cfg-overridable'
             New-Item -ItemType Directory -Path $overridable -Force | Out-Null
             Set-Content -Path (Join-Path $overridable '.env') -Value @(
-                'LOCAL_OVERRIDABLE_KEYS=SOME_TOGGLE'
                 'SOME_TOGGLE=on'
             )
             [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $overridable, 'Process')
@@ -160,7 +183,6 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             $cfg = Join-Path $script:tmp 'cfg-secret'
             New-Item -ItemType Directory -Path $cfg -Force | Out-Null
             Set-Content -Path (Join-Path $cfg '.env') -Value @(
-                'LOCAL_OVERRIDABLE_KEYS=SECRET_TOGGLE'
                 'SECRET_TOGGLE=on'
             )
             [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $cfg, 'Process')

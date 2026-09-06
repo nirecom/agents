@@ -36,6 +36,11 @@ unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 unset CODE_LANG
 unset PROJECT_NFR
+# Every key the cases below branch on is pinned to a fixture file, so an ambient
+# export of any of them must not answer instead (skills/_shared/test-design.md).
+unset ENFORCE_WORKTREE
+unset CONFIRM_DETAIL
+unset PLAIN_KEY
 
 LOCAL_ENV_BASENAME=".env"".local"
 
@@ -81,14 +86,17 @@ trim() {
 }
 
 # ---------------------------------------------------------------------------
-# One shared fixture: a config dir declaring CODE_LANG overridable, and a project
-# root whose local file overrides both a permitted and a forbidden key.
+# One shared fixture. There is no allowlist any more: the global .env still
+# carries a stale LOCAL_OVERRIDABLE_KEYS line to prove the dead setting grants
+# nothing and denies nothing, and the project's local file overrides both an
+# ordinary key and a blocklisted one.
 # ---------------------------------------------------------------------------
 CFG="$TMP_ROOT/cfg"
 mkdir -p "$CFG"
 printf '%s\n' \
-    'LOCAL_OVERRIDABLE_KEYS=CODE_LANG,PROJECT_NFR' \
+    'LOCAL_OVERRIDABLE_KEYS=CODE_LANG' \
     'CODE_LANG=english' \
+    'PROJECT_NFR=global-nfr' \
     'ENFORCE_WORKTREE=on' \
     'CONFIRM_DETAIL=on' \
     'PLAIN_KEY=globalplain' > "$CFG/.env"
@@ -97,6 +105,7 @@ PROJ="$TMP_ROOT/proj"
 mkdir -p "$PROJ/.git"
 printf '%s\n' \
     'CODE_LANG=japanese' \
+    'PROJECT_NFR=local-nfr-no-decl' \
     'ENFORCE_WORKTREE=off' \
     'CONFIRM_DETAIL=off' \
     'PLAIN_KEY=localplain' > "$PROJ/$LOCAL_ENV_BASENAME"
@@ -127,10 +136,12 @@ while IFS='|' read -r name args want; do
 done <<'TABLE'
 gcv-no-repo-root-global          | CODE_LANG                                  | english
 gcv-repo-root-applies-override   | --repo-root @R@ CODE_LANG                  | japanese
-gcv-repo-root-forbidden-denied   | --repo-root @R@ ENFORCE_WORKTREE           | on
-gcv-repo-root-undeclared-denied  | --repo-root @R@ PLAIN_KEY                  | globalplain
+gcv-repo-root-blocklisted-denied | --repo-root @R@ ENFORCE_WORKTREE           | on
+gcv-repo-root-undeclared-applies | --repo-root @R@ PLAIN_KEY                  | localplain
+gcv-repo-root-nfr-applies        | --repo-root @R@ PROJECT_NFR                | local-nfr-no-decl
 gcv-repo-root-default-used       | --repo-root @R@ MISSING_KEY fallbackvalue  | fallbackvalue
 gcv-repo-root-missing-dir        | --repo-root @R@/nope CODE_LANG             | english
+gcv-repo-root-missing-dir-nfr    | --repo-root @R@/nope PROJECT_NFR           | global-nfr
 TABLE
 
 # Flag order must not change the answer — the current parser only inspects $1,
@@ -140,7 +151,11 @@ assert_eq "T2223V-gcv-repo-root-order-independent" \
     "$(gcv --is-off --repo-root "$PROJ" CONFIRM_DETAIL; printf 'rc=%s' "$?")"
 
 # --is-off exit matrix under --repo-root: 0 = OFF, 1 = ON, 2 = unset.
-assert_eq "T2223V-gcv-is-off-forbidden-stays-on" "1" \
+# A blocklisted gate keeps its global ON despite the local off...
+assert_eq "T2223V-gcv-is-off-blocklisted-stays-on" "1" \
+    "$(gcv_rc --is-off --repo-root "$PROJ" ENFORCE_WORKTREE)"
+# ...while an ordinary gate now follows the local file with no declaration.
+assert_eq "T2223V-gcv-is-off-undeclared-local-off" "0" \
     "$(gcv_rc --is-off --repo-root "$PROJ" CONFIRM_DETAIL)"
 assert_eq "T2223V-gcv-is-off-unset-key" "2" \
     "$(gcv_rc --is-off --repo-root "$PROJ" NO_SUCH_KEY_AT_ALL)"
@@ -176,8 +191,10 @@ while IFS='|' read -r name args want; do
 done <<'TABLE'
 eek-key-global-only        | --global-only --key CODE_LANG          | english
 eek-key-repo-root-override | --repo-root @R@ --key CODE_LANG        | japanese
-eek-key-forbidden-denied   | --repo-root @R@ --key ENFORCE_WORKTREE | on
-eek-key-undeclared-denied  | --repo-root @R@ --key PLAIN_KEY        | globalplain
+eek-key-blocklisted-denied | --repo-root @R@ --key ENFORCE_WORKTREE | on
+eek-key-undeclared-applies | --repo-root @R@ --key PLAIN_KEY        | localplain
+eek-key-nfr-applies        | --repo-root @R@ --key PROJECT_NFR      | local-nfr-no-decl
+eek-key-nfr-global-only    | --global-only --key PROJECT_NFR        | global-nfr
 eek-key-absent-empty       | --global-only --key NO_SUCH_KEY        |
 TABLE
 
@@ -329,7 +346,6 @@ unset GCV_TOGGLE_A GCV_TOGGLE_B GCV_TOGGLE_C GCV_SECRET_TOGGLE GCV_NO_SUCH_TOGGL
 CFG2="$TMP_ROOT/cfg2"
 mkdir -p "$CFG2"
 printf '%s\n' \
-    'LOCAL_OVERRIDABLE_KEYS=GCV_TOGGLE_C,GCV_SECRET_TOGGLE' \
     'GCV_TOGGLE_A=off' \
     'GCV_TOGGLE_B=on' \
     'GCV_TOGGLE_C=on' \

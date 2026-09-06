@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Project-local config overlay: the 2-layer resolver behind the global .env and
 // a reviewed project's own .env.local.
-// Trust model: a key reaches the local layer only when the global .env declares
-// it in LOCAL_OVERRIDABLE_KEYS, and never when it is on the hard-coded deny
-// list below — declaration cannot buy a key past that list.
+// Trust model: every key a project sets in .env.local applies, except the ones
+// the blocklist below refuses. That list names the settings whose per-repo
+// divergence breaks the agents repo's own contract — either a 1-PC-1-policy
+// value, or one whose consumer reads the global .env directly and would leave a
+// local override half-applied. Per-key rationale: issue #2223.
 // Pure module: no filesystem reads beyond the .git probe, no process.env reads
 // beyond CLAUDE_PROJECT_DIR (path resolution only).
 
@@ -12,65 +14,48 @@ const path = require("path");
 
 const LOCAL_ENV_BASENAME = ".env.local";
 
-// PROJECT_NFR is deliberately absent: a project must opt in explicitly.
-const DEFAULT_LOCAL_OVERRIDABLE = ["CODE_LANG"];
-
-const NEVER_OVERRIDABLE_EXACT = new Set([
-  "ENFORCE_WORKTREE",
+// ENFORCE_WORKTREE, ENFORCE_WORKTREE_EXCLUDE, ENFORCE_WORKTREE_ADDITIONAL_REPOS
+// and DEFAULT_BRANCHES are here for the half-applied reason: hooks/pre-commit
+// reads them through load-env.sh, which has no .env.local layer, so a local
+// override would silence the Node guard while the pre-commit one still fires.
+// CODE_FILE_EXTENSIONS and CLAUDE_CODE_AUTO_COMPACT_WINDOW never reach a local
+// value at all — their readers bypass process.env. Per-repo ENFORCE_WORKTREE
+// belongs in the global .env's ENFORCE_WORKTREE_EXCLUDE instead.
+const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
+  "SHOW_PLAN_LINK_NO_AUTO_OPEN",
   "WORKFLOW_PLANS_DIR",
-  "AGENTS_CONFIG_DIR",
-  "CLAUDE_WORKFLOW_DIR",
   "WORKTREE_BASE_DIR",
+  "ENFORCE_WORKTREE",
+  "ENFORCE_WORKTREE_EXCLUDE",
+  "ENFORCE_WORKTREE_ADDITIONAL_REPOS",
+  "SWEEP_AGE_DAYS",
+  "CODE_LANG_EXCLUDE",
+  "CODE_FILE_EXTENSIONS",
+  "VERBOSE_PROMPT_MODELS",
+  "ISSUE_VERDICT_WEB_SEARCH",
+  "MCP_FS_DEBUG",
+  "MERGE_BASE_MAX_DIFF_LINES",
+  "MERGE_BASE_MAX_DIFF_FILES",
+  "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
   "DEFAULT_BRANCHES",
-  "LOCAL_OVERRIDABLE_KEYS",
-  "CODEX_MCP_FS",
-  "AUTO_MERGE_PR",
-  // Guard-decision and process-runtime names: none of these are config values
-  // a project's own .env.local should ever be able to set for real, since each
-  // one changes what code runs or which permissions are granted, not what a
-  // review reports.
-  "SYSTEM_OPS_APPROVED",
-  "SCRATCHPAD",
-  "AGENT_AUTO_BRANCH",
-  "AGENT_DEFAULT_BRANCHES",
-  "ISSUE_CLOSE_SKILL",
-  "CLAUDE_BLOCK_TESTS_DIR_NAMES",
-  "CLAUDE_PROJECT_DIR",
-  "PATH",
-  "NODE_OPTIONS",
-  "BASH_ENV",
-  "LD_PRELOAD",
-  "GIT_SSH_COMMAND",
+  "AUTO_APPROVE_TOOLS",
 ]);
 
-const NEVER_OVERRIDABLE_PREFIXES = ["ENFORCE_", "CONFIRM_", "AUTO_", "SESSION_SYNC", "RUN_TL"];
+// SESSION_ also covers the harness-supplied SESSION_ID; PROPAGATE_ covers the
+// PROPAGATE_LABELS_PAT credential; CODEX_ covers CODEX_NFR_MAX_*, the caps on
+// the very PROJECT_NFR text the project itself supplies; COMMENT_BLOCK_ reaches
+// only a pre-commit reader that deliberately bypasses process.env.
+const ENV_ENTRY_BLOCKLIST_PREFIX = ["SESSION_", "PROPAGATE_", "CODEX_", "COMMENT_BLOCK_"];
 
-// isNeverOverridable answers the deny list, which outranks every declaration.
-// Case-folded to upper-case: Windows environment variables are case-insensitive
-// (process.env.enforce_worktree and process.env.ENFORCE_WORKTREE name the same
-// slot there), so a lower-case declaration must not slip past a same-cased check.
-function isNeverOverridable(key) {
+// isBlocklisted answers the deny list. Case-folded to upper-case: Windows
+// environment variables are case-insensitive (process.env.enforce_worktree and
+// process.env.ENFORCE_WORKTREE name the same slot there), so a lower-case key
+// in .env.local must not slip past a same-cased check.
+function isBlocklisted(key) {
   if (typeof key !== "string" || key.length === 0) return true;
   const upper = key.toUpperCase();
-  if (NEVER_OVERRIDABLE_EXACT.has(upper)) return true;
-  return NEVER_OVERRIDABLE_PREFIXES.some((p) => upper.startsWith(p));
-}
-
-// resolveOverridableKeys reads LOCAL_OVERRIDABLE_KEYS out of the GLOBAL map.
-// Absent → the built-in seed; present → exactly what it lists (an empty value
-// means "nothing is overridable"). Deny-listed entries are dropped either way.
-function resolveOverridableKeys(globalMap) {
-  const map = globalMap || {};
-  const declared = Object.prototype.hasOwnProperty.call(map, "LOCAL_OVERRIDABLE_KEYS")
-    ? String(map.LOCAL_OVERRIDABLE_KEYS).split(",")
-    : DEFAULT_LOCAL_OVERRIDABLE;
-  const out = new Set();
-  for (const raw of declared) {
-    const key = String(raw).trim();
-    if (!key || isNeverOverridable(key)) continue;
-    out.add(key);
-  }
-  return out;
+  if (ENV_ENTRY_BLOCKLIST_EXACT.has(upper)) return true;
+  return ENV_ENTRY_BLOCKLIST_PREFIX.some((p) => upper.startsWith(p));
 }
 
 // hasGitEntry answers whether `dir` carries a .git entry. A linked worktree's
@@ -108,19 +93,16 @@ function localEnvPathFor(root) {
   return path.join(String(root), LOCAL_ENV_BASENAME);
 }
 
-// overlay merges localMap onto globalMap for allowed, non-deny-listed keys.
+// overlay merges localMap onto globalMap for every non-blocklisted key.
 // Pure: neither input is mutated. Returns {map, applied, ignored}, where
-// `ignored` names the allowed keys the deny list refused — an undeclared key was
-// never a candidate, so it is silently absent from both lists.
-function overlay(globalMap, localMap, allowedKeys) {
+// `ignored` names the keys the blocklist refused.
+function overlay(globalMap, localMap) {
   const result = Object.assign({}, globalMap || {});
-  const allowed = allowedKeys instanceof Set ? allowedKeys : new Set(allowedKeys || []);
   const applied = [];
   const ignored = [];
 
   for (const key of Object.keys(localMap || {})) {
-    if (!allowed.has(key)) continue;
-    if (isNeverOverridable(key)) {
+    if (isBlocklisted(key)) {
       ignored.push(key);
       continue;
     }
@@ -132,11 +114,9 @@ function overlay(globalMap, localMap, allowedKeys) {
 
 module.exports = {
   LOCAL_ENV_BASENAME,
-  DEFAULT_LOCAL_OVERRIDABLE,
-  NEVER_OVERRIDABLE_EXACT,
-  NEVER_OVERRIDABLE_PREFIXES,
-  isNeverOverridable,
-  resolveOverridableKeys,
+  ENV_ENTRY_BLOCKLIST_EXACT,
+  ENV_ENTRY_BLOCKLIST_PREFIX,
+  isBlocklisted,
   resolveProjectRoot,
   localEnvPathFor,
   overlay,

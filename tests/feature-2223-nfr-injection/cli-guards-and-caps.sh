@@ -315,7 +315,7 @@ assert_eq "T2223H-loop-mcp-off-project-root-value" "$REPO_LOOP" \
 # End-to-end: a shim that execs the REAL review-plan-codex, so the mock codex
 # captures the prompt the loop actually causes. Two repos with different local
 # NFRs prove the loop selects by project root, not by ambient config.
-CFG_E2E="$(make_cfg loope2e "LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR" "PROJECT_NFR=global-fallback-nfr")"
+CFG_E2E="$(make_cfg loope2e "PROJECT_NFR=global-fallback-nfr")"
 printf '%s\n' '#!/usr/bin/env bash' "exec bash \"$AGENTS_DIR/bin/review-plan-codex\" \"\$@\"" \
     > "$CFG_E2E/bin/review-plan-codex"
 chmod +x "$CFG_E2E/bin/review-plan-codex"

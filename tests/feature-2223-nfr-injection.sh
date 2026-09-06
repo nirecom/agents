@@ -205,25 +205,38 @@ PROJECT_NFR="INJECTEDVIAPROCESSENV" nfr_block "$CFG_PLAIN" "$PROJ_PLAIN" > "$ENV
 assert_file_has "T2223B-process-env-nfr-config-value-kept" "$ENVINJ_FILE" "$NFR_SENTINEL"
 assert_file_lacks "T2223B-process-env-nfr-ignored" "$ENVINJ_FILE" "INJECTEDVIAPROCESSENV"
 
-# The local layer reaches the NFR only when the project declared it overridable.
-CFG_LOCAL="$(make_cfg local "LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR,CODE_LANG")"
+# The whole point of issue #2223: a project's own PROJECT_NFR reaches the block
+# with no declaration anywhere — the allowlist that used to gate it is gone.
+CFG_LOCAL="$(make_cfg local "CODE_LANG=english")"
 PROJ_LOCAL="$(make_project local)"
 printf 'PROJECT_NFR=%s from-local\n' "$NFR_SENTINEL" > "$PROJ_LOCAL/$LOCAL_ENV_BASENAME"
 LOCAL_FILE="$TMP_ROOT/localnfr.txt"
 nfr_block "$CFG_LOCAL" "$PROJ_LOCAL" > "$LOCAL_FILE"
-assert_file_has "T2223B-local-nfr-when-declared" "$LOCAL_FILE" "$NFR_SENTINEL from-local"
+assert_file_has "T2223B-local-nfr-no-declaration-needed" "$LOCAL_FILE" "$NFR_SENTINEL from-local"
 
-CFG_NODECL="$(make_cfg nodecl "CODE_LANG=english" "PROJECT_NFR=$NFR_SENTINEL global-only")"
-PROJ_NODECL="$(make_project nodecl)"
-printf 'PROJECT_NFR=SNEAKYUNDECLAREDNFR\n' > "$PROJ_NODECL/$LOCAL_ENV_BASENAME"
-NODECL_FILE="$TMP_ROOT/nodecl.txt"
-nfr_block "$CFG_NODECL" "$PROJ_NODECL" > "$NODECL_FILE"
-assert_file_has "T2223B-local-nfr-undeclared-global-kept" "$NODECL_FILE" "$NFR_SENTINEL global-only"
-assert_file_lacks "T2223B-local-nfr-blocked-when-undeclared" "$NODECL_FILE" "SNEAKYUNDECLAREDNFR"
+# A global NFR is a fallback the project may replace, not a value it must be
+# granted permission to replace.
+CFG_OVR="$(make_cfg ovr "CODE_LANG=english" "PROJECT_NFR=GLOBALONLYNFR")"
+PROJ_OVR="$(make_project ovr)"
+printf 'PROJECT_NFR=%s overrides-global\n' "$NFR_SENTINEL" > "$PROJ_OVR/$LOCAL_ENV_BASENAME"
+OVR_FILE="$TMP_ROOT/ovrnfr.txt"
+nfr_block "$CFG_OVR" "$PROJ_OVR" > "$OVR_FILE"
+assert_file_has "T2223B-local-nfr-overrides-global" "$OVR_FILE" "$NFR_SENTINEL overrides-global"
+assert_file_lacks "T2223B-local-nfr-global-replaced" "$OVR_FILE" "GLOBALONLYNFR"
+
+# A stale LOCAL_OVERRIDABLE_KEYS line in the global .env is an ordinary,
+# meaningless key now: it neither grants nor withholds the local NFR.
+CFG_STALE="$(make_cfg stale "LOCAL_OVERRIDABLE_KEYS=CODE_LANG" "PROJECT_NFR=STALEGLOBALNFR")"
+PROJ_STALE="$(make_project stale)"
+printf 'PROJECT_NFR=%s despite-stale-decl\n' "$NFR_SENTINEL" > "$PROJ_STALE/$LOCAL_ENV_BASENAME"
+STALE_FILE="$TMP_ROOT/stalenfr.txt"
+nfr_block "$CFG_STALE" "$PROJ_STALE" > "$STALE_FILE"
+assert_file_has "T2223B-stale-decl-does-not-withhold" "$STALE_FILE" "$NFR_SENTINEL despite-stale-decl"
+assert_file_lacks "T2223B-stale-decl-global-replaced" "$STALE_FILE" "STALEGLOBALNFR"
 
 # Two roots, two NFRs: proof that the block is selected by project root and not
 # by the ambient config alone.
-CFG_AB="$(make_cfg ab "LOCAL_OVERRIDABLE_KEYS=PROJECT_NFR,CODE_LANG" "PROJECT_NFR=global-fallback")"
+CFG_AB="$(make_cfg ab "PROJECT_NFR=global-fallback")"
 PROJ_A="$(make_project langa)"
 PROJ_B="$(make_project langb)"
 printf 'PROJECT_NFR=%s-repo-a\n' "$NFR_SENTINEL" > "$PROJ_A/$LOCAL_ENV_BASENAME"
