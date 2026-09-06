@@ -37,8 +37,6 @@ W1-10e| hooks/lib/codegraph-boundary.js     | const TELEMETRY_KEYS = ["CODEGRAPH
 # the fallback pair is a privacy-side floor for an unreadable constants file, not a
 # copy of the SSOT; it must not flip when C3 inverts the shipped defaults (R7)
 W1-10f| hooks/lib/codegraph-boundary.js     | CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1"
-# the MCP registration ownership marker also lives in the boundary module (C2)
-W1-10g| hooks/lib/codegraph-boundary.js     | AGENTS_CODEGRAPH_MCP_OWNER
 # the steady-state repair verb must stay `index`; `init` alone does not rebuild (C5)
 W1-12 | bin/codegraph-lifecycle.js          | ["init", "-y"
 W1-13 | bin/codegraph-lifecycle.js          | ["index", "-q"
