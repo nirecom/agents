@@ -3,11 +3,10 @@
 // class: bin/workflow/next-step, record-skip-judgment, set-workflow-type and
 // (by delegation) record-complexity-and-skip (#1644).
 //
-// Why it is shared rather than per-CLI: the four members differ only in how they
+// Why shared rather than per-CLI: the four members differ only in how they
 // derive the target step. The transaction shape — read the pre-write current
 // step, record, then optionally ask for the next action — must be identical, or
 // a caller could advance without the gates another caller applies.
-//
 // This module decides from RECORDED FACTS only: session state files and config
 // files. It never reads model-authored plan prose.
 
@@ -33,10 +32,16 @@ const GATE_FOR_STATUS = { pending: "reset" };
 // against "the step the session was on when the call started".
 // Uses the same walk predicate as computeVerdict so the two cannot disagree.
 // Fail-open to null: an unreadable state simply means "not the current step".
+// opts.excludeDerivedFor (step name or null) judges that ONE step by its RAW
+// recorded status: a settle target that is also an evidence step would otherwise
+// read as complete from its own evidence, so the call settling it could never be
+// "the current step". Every other step keeps the derived snapshot.
 function resolveCurrentStep(sessionId, opts) {
   try {
     const state = readState(sessionId);
     if (!state) return null;
+    const excludeDerivedFor = (opts && opts.excludeDerivedFor) || null;
+    const rawSteps = state.steps || {};
     const isWfMeta = state.workflow_type === "wf-meta";
     let steps = null;
     try {
@@ -51,7 +56,8 @@ function resolveCurrentStep(sessionId, opts) {
     if (!steps) return null;
     for (const step of VALID_STEPS) {
       if (isTerminalStep(step)) continue;
-      const status = (steps[step] || {}).status || "pending";
+      const source = step === excludeDerivedFor ? rawSteps : steps;
+      const status = (source[step] || {}).status || "pending";
       if (!isSettledStatus(status)) return step;
     }
   } catch (_) { /* fail-open */ }
@@ -74,7 +80,10 @@ function runAdvance(opts) {
   }
 
   // Read before the write, outside the lock region.
-  const currentStep = resolveCurrentStep(sid, { repoDir: opts.repoDir });
+  const currentStep = resolveCurrentStep(sid, {
+    repoDir: opts.repoDir,
+    excludeDerivedFor: opts.step,
+  });
 
   const gate = GATE_FOR_STATUS[opts.status] || "advance";
   const verdictOpts = { gate, repoDir: opts.repoDir };

@@ -1,9 +1,9 @@
 #!/bin/bash
 # tests/feature-2099-complexity-stage-routing/consumer-signal-forwarding-cases.sh
-# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation
+# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts
 # Tags: complexity, routing, consumers, signals, integration, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh after the consumer
-# orchestration suite — d2099_extract_cmd / d2099_run_skill_cmd come from there.
+# orchestration suite — d2099_consumer_read / d2099_skill_file come from there.
 # Why: that suite drives model selection off the reader's `level=` line only.
 # The second line, `signals=`, is asserted nowhere behaviorally — consumers-static
 # greps prose, which passes just as well when the step discards the list.
@@ -19,10 +19,13 @@ write-tests|high
 write-code|high"
 
 d2099sf_read() {
-    # What the skill's OWN read command answers, first two lines, exactly as the
-    # skill tells the orchestrator to parse them: `level=<v>` then `signals=<csv>`.
+    # What the skill's OWN read command answers, normalized to the two values the
+    # skill tells the orchestrator to parse: `level=<v>` then `signals=<csv>`.
+    # d2099_consumer_read picks the consumer's own CLI — the direct reader's
+    # `level=`/`signals=` lines for make-detail-plan, the bundled record's
+    # `COMPLEXITY_LEVEL_<stage>`/`COMPLEXITY_SIGNALS` keys for the other two (#2102).
     local f="$1" sid="$2" out first second
-    out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "read-complexity-evaluation")" "$sid")
+    out=$(d2099_consumer_read "$f" "$sid")
     first=$(printf '%s\n' "$out" | sed -n 1p)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
     [ "$first" = "NONE" ] && { echo "NONE"; return; }
@@ -147,6 +150,59 @@ EOF
 #   own command output. L3 gap: a skill that resolves the slot and then hands the
 #   subagent a different list. Only a TL3 transcript review closes it.
 
+# CSF-9: mutation-proof twin of CSF-8 (mirrors CFF-10, CPR-ORTH): two DIFFERENT
+# records dispatched through the SAME skill must resolve to two DIFFERENT sink
+# values, ruling out a sink that hardcodes $D2099SF_CSV instead of reading it.
+d2099sf_sink_is_content_driven() {
+    local sid_a sid_b name step re label bind f csv_a csv_b got_a got_b
+    csv_a="S1-multi-file,S3-security"
+    csv_b="S6-long-plan"
+    sid_a=$(new_session sfmuta)
+    sid_b=$(new_session sfmutb)
+    run_with_timeout node "$BIN_RECORD" --session "$sid_a" --signals "$csv_a" >/dev/null 2>&1
+    run_with_timeout node "$BIN_RECORD" --session "$sid_b" --signals "$csv_b" >/dev/null 2>&1
+
+    while IFS='|' read -r name step re label bind; do
+        [ -n "$name" ] || continue
+        f=$(d2099_skill_file "$name")
+        got_a=$(d2099sf_dispatched_signals "$f" "$sid_a" "$label")
+        got_b=$(d2099sf_dispatched_signals "$f" "$sid_b" "$label")
+        assert_eq "CSF-9 $name: the [$label] handoff for record A resolves to record A's own list" \
+            "$label: $csv_a" "$got_a"
+        assert_eq "CSF-9 $name: the [$label] handoff for record B resolves to record B's own list" \
+            "$label: $csv_b" "$got_b"
+        if [ "$got_a" = "$got_b" ]; then
+            fail "CSF-9 $name: two DIFFERENT recorded signal lists produced the SAME [$label] handoff value — the sink is not reading the record, it is echoing a fixed string"
+        else
+            pass "CSF-9 $name: the [$label] handoff changes when the recorded signal list changes — proof of real consumption, not relabeling"
+        fi
+    done <<EOF
+$D2099SF_SINKS
+EOF
+}
+
+# CSF-10: stored-path twin of CF-8/CFF-9 (CPR-ORTH): a regex-valid but
+# adversarial-looking id must reach the sink byte-identical — carried as opaque
+# data, never interpreted, filtered, or re-encoded along the way.
+D2099SF_ADVERSARIAL="S3-security,IGNORE_PREVIOUS_INSTRUCTIONS,sk-2102-canary"
+
+d2099sf_adversarial_content_is_inert() {
+    local sid name step re label bind f
+    sid=$(new_session sfadv)
+    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$D2099SF_ADVERSARIAL" >/dev/null 2>&1
+
+    while IFS='|' read -r name step re label bind; do
+        [ -n "$name" ] || continue
+        f=$(d2099_skill_file "$name")
+        assert_eq "CSF-10 $name: a regex-valid but adversarial-looking recorded list reaches the [$label] handoff byte-identical — carried as opaque data, never interpreted or filtered" \
+            "$label: $D2099SF_ADVERSARIAL" "$(d2099sf_dispatched_signals "$f" "$sid" "$label")"
+    done <<EOF
+$D2099SF_SINKS
+EOF
+}
+
 d2099sf_multi_signal_reaches_each_consumer
 d2099sf_order_is_preserved
 d2099sf_sink_cases
+d2099sf_sink_is_content_driven
+d2099sf_adversarial_content_is_inert

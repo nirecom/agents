@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-2099-complexity-stage-routing/consumers-static.sh
-# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
+# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, bin/workflow/read-session-facts
 # Tags: complexity, routing, prompt-static, consumers, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
 # The four consumers must each name ONLY their own stage and must never restate a
@@ -28,8 +28,12 @@ d2099_stage_wiring() {
     assert_eq "CS-3 make-detail-plan never names another stage" "no" \
         "$(d2099_has_re "$mdp" '--stage (write_tests|write_code)')"
 
-    assert_eq "CS-4 WT-5 reads with --stage write_tests" "yes" \
-        "$(d2099_has_re "$wt" 'read-complexity-evaluation.*--stage write_tests')"
+    # #2102 moved the stored-evaluation read out of WT-5/WCD-3: WT-0 and WCD-0
+    # now take ONE bundled read-session-facts record, which carries no --stage
+    # flag — the stage is spelled in the COMPLEXITY_LEVEL_<stage> key each step
+    # is told to read, so that key is what has to name the stage.
+    assert_eq "CS-4 WT-0 reads its own stage key out of the bundled session facts" "yes yes" \
+        "$(d2099_has "$wt" 'read-session-facts') $(d2099_has "$wt" 'COMPLEXITY_LEVEL_write_tests')"
     assert_eq "CS-5 WT-5 falls back to derive-complexity-level --stage write_tests" "yes" \
         "$(d2099_has_re "$wt" 'derive-complexity-level.*--stage write_tests')"
     assert_eq "CS-6 write-tests never names another stage" "no" \
@@ -37,17 +41,22 @@ d2099_stage_wiring() {
     assert_eq "CS-7 WT-5 consumes the signals= line as task_complexity_signals" "yes" \
         "$(d2099_has "$wt" "task_complexity_signals")"
 
-    assert_eq "CS-8 WCD-3 reads with --stage write_code" "yes" \
-        "$(d2099_has_re "$wcd" 'read-complexity-evaluation.*--stage write_code')"
+    assert_eq "CS-8 WCD-0 reads its own stage key out of the bundled session facts" "yes yes" \
+        "$(d2099_has "$wcd" 'read-session-facts') $(d2099_has "$wcd" 'COMPLEXITY_LEVEL_write_code')"
     assert_eq "CS-9 WCD-3 falls back to derive-complexity-level --stage write_code" "yes" \
         "$(d2099_has_re "$wcd" 'derive-complexity-level.*--stage write_code')"
     assert_eq "CS-10 write-code never names another stage" "no" \
         "$(d2099_has_re "$wcd" '--stage (detail|write_tests)')"
 
-    local f
+    # Same fact, two spellings: the direct CLI answers `signals=`, the bundled
+    # record answers `COMPLEXITY_SIGNALS=`. Each consumer must name the one its
+    # own reader actually emits.
+    local f key
     for f in "$mdp" "$wt" "$wcd"; do
-        assert_eq "CS-11 $(basename "$(dirname "$f")") parses the signals= line for its selection reason" "yes" \
-            "$(d2099_has "$f" "signals=")"
+        key="signals="
+        case "$f" in "$wt" | "$wcd") key="COMPLEXITY_SIGNALS=" ;; esac
+        assert_eq "CS-11 $(basename "$(dirname "$f")") parses the signal list its own reader emits" "yes" \
+            "$(d2099_has "$f" "$key")"
     done
 }
 
@@ -126,27 +135,37 @@ d2099_stage_pattern_teeth() {
     for row in \
         "$mdp|detail|read-complexity-evaluation" \
         "$mdp|detail|derive-complexity-level" \
-        "$wt|write_tests|read-complexity-evaluation" \
+        "$wt|write_tests|read-session-facts" \
         "$wt|write_tests|derive-complexity-level" \
-        "$wcd|write_code|read-complexity-evaluation" \
+        "$wcd|write_code|read-session-facts" \
         "$wcd|write_code|derive-complexity-level"; do
         file="${row%%|*}"
         stage="${row#*|}"; stage="${stage%%|*}"
         cli="${row##*|}"
         local label; label="$(basename "$(dirname "$file")")/$cli"
-        local pattern="$cli.*--stage $stage"
 
-        # Mutant A: the --stage argument is removed entirely.
-        # Mutant B: the --stage argument names a different stage.
+        # Which token carries the stage: a --stage argument for the two flagged
+        # CLIs, the per-stage KEY for #2102's flagless bundled record.
+        local anchor pattern
+        if [ "$cli" = "read-session-facts" ]; then
+            anchor="COMPLEXITY_LEVEL_$stage"
+            pattern="$anchor"
+        else
+            anchor="--stage $stage"
+            pattern="$cli.*$anchor"
+        fi
+
+        # Mutant A: the stage-carrying token is removed entirely.
+        # Mutant B: it names a different stage.
         # The ORIGINAL result is asserted in the SAME line as the two mutants,
         # so this cannot pass vacuously: "no/no" on the mutants proves nothing
         # while the pattern matches nothing anywhere. Only original=yes with
-        # both mutants no means the pattern is anchored on the argument.
+        # both mutants no means the pattern is anchored on that token.
         local dropped="$TMPDIR_BASE/mut-drop-$n.md"
         local swapped="$TMPDIR_BASE/mut-swap-$n.md"
-        sed "s/--stage $stage//g" "$file" > "$dropped" 2>/dev/null
-        sed "s/--stage $stage/--stage bogus_stage/g" "$file" > "$swapped" 2>/dev/null
-        assert_eq "CS-$n $label pattern matches the original and BOTH --stage mutants break it" \
+        sed "s/$anchor//g" "$file" > "$dropped" 2>/dev/null
+        sed "s/$anchor/${anchor%$stage}bogus_stage/g" "$file" > "$swapped" 2>/dev/null
+        assert_eq "CS-$n $label pattern matches the original and BOTH stage mutants break it" \
             "original=yes dropped=no swapped=no" \
             "original=$(d2099_has_re "$file" "$pattern") dropped=$(d2099_has_re "$dropped" "$pattern") swapped=$(d2099_has_re "$swapped" "$pattern")"
         n=$((n + 1))

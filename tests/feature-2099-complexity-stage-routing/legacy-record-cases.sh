@@ -64,6 +64,15 @@ const ROWS = [
   ["L3-opus", { verdict: "opus", signals: ["S1-multi-file"], recorded_at: AT }, seedV1],
   ["L3-sonnet", { verdict: "sonnet", signals: [], recorded_at: AT }, seedV1],
   ["L3-unknown", { verdict: "gpt", signals: [], recorded_at: AT }, seedV1],
+  // L-8: a v1 blob whose complexity_evaluation ALREADY carries a well-formed
+  // per-stage `levels` map -- exercises the migrations/v1-to-v2.js `wellFormed`
+  // branch specifically (L3-* above never set `levels` at all, so migration
+  // always fell through to re-derivation for them). The derived value for this
+  // level+signals pair is low/low/high (see L1-multifile); storing the mirror
+  // opposite (high/low/low) proves the migration preserves the RECORDED map
+  // verbatim instead of silently re-deriving and overwriting the routing
+  // decision a session already made.
+  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
   ["BAD-partial", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low" }, recorded_at: AT }, seedEvent],
   ["BAD-value", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low", write_tests: "yes", write_code: "high" }, recorded_at: AT }, seedEvent],
   ["STORED-wins", { level: "low", signals: [], levels: { detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
@@ -89,7 +98,7 @@ out.unshift("projected=" + projected + "/" + ROWS.length);
 console.log(out.join("\n"));
 ')
     assert_block "L-1 every legacy complexity_evaluation shape resolves per the compatibility table" "$got" <<'EOF'
-projected=11/12
+projected=12/13
 L1-arch=high:high/high/high
 L1-multifile=high:low/low/high
 L2-high-empty=high:high/high/high
@@ -97,6 +106,7 @@ L2-low-empty=low:low/low/low
 L3-opus=high:low/low/high
 L3-sonnet=low:low/low/low
 L3-unknown=null
+L8-wellformed=high:high/low/low
 BAD-partial=high:low/low/high
 BAD-value=high:low/low/high
 STORED-wins=low:high/high/high

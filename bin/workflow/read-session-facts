@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/read-session-facts
+// One process, one fixed eight-key record: the reads write-tests and write-code
+// each needed three separate Bash round trips for (#2102).
+// Reporting only — it never emits ACTION / NEXT_SKILL / NEXT_HINT.
+
+const path = require("path");
+const { collectSessionFacts } = require(
+  path.join(__dirname, "lib", "session-facts", "collect")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function usage(message) {
+  process.stderr.write("read-session-facts: " + message + "\n");
+  process.exit(1);
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] !== "--session") usage("unknown argument: " + argv[i]);
+    const v = argv[i + 1];
+    if (v === undefined || v.startsWith("--")) usage("--session requires a value");
+    session = v;
+    i += 1;
+  }
+  if (!session || !SESSION_ID_RE.test(session)) {
+    usage("--session is required and must match /^[A-Za-z0-9_-]+$/");
+  }
+  const res = await collectSessionFacts(session);
+  for (const line of res.errors) process.stderr.write(line + "\n");
+  process.stdout.write(res.lines.join("\n") + "\n");
+  process.exit(res.exitCode);
+}
+
+main();
