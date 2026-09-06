@@ -65,7 +65,14 @@ init_repo() {
     git -C "$1" config commit.gpgsign false
     printf 'seed\n' > "$1/f.txt"
     git -C "$1" add -A
-    git -C "$1" commit -q -m init
+    # Pinned author/committer date: two independent init_repo calls with
+    # identical tree content must produce a byte-identical commit hash
+    # deterministically. Without this, R6's HEAD-equality-dependent cases
+    # (both the 'true' pairs and the untracked-axis 'false' pairs, which all
+    # need HEAD to match before the intended branch runs) pass or fail based
+    # on whether both commits land in the same wall-clock second.
+    GIT_AUTHOR_DATE='2020-01-01T00:00:00Z' GIT_COMMITTER_DATE='2020-01-01T00:00:00Z' \
+        git -C "$1" commit -q -m init
 }
 
 # R1 — lexical normalization (algorithm step 2). The drive-letter forms are the
@@ -343,10 +350,11 @@ markStep('$ownmain', 'workflow_init', 'complete');
     fi
 }
 
-# R6 — compareRepoContentEquivalence, all four branches. "Different worktree
-# path" is not "different content", so a sibling pair gets one more chance
-# before the guard stops the run; branch (4) folds spawn failure into
-# not-equivalent so there is no undocumented third outcome.
+# R6 — compareRepoContentEquivalence, every branch. "Different worktree path"
+# is not "different content", so a sibling pair gets one more chance before the
+# guard stops the run; branch (4) folds spawn failure into not-equivalent so
+# there is no undocumented third outcome, and branch (5) covers the untracked
+# axis, where anything the guard cannot prove equal is reported as unequal.
 run_R6() {
     require_module "$TARGET" || return 0
     local tmp out
@@ -372,6 +380,41 @@ run_R6() {
     printf 'seed\nleft\n' > "$tmp/x1/f.txt"
     printf 'seed\nright\n' > "$tmp/x2/f.txt"
     mkdir -p "$tmp/nogit"
+    # (5) untracked axis. `git diff HEAD` is blind to untracked files, so every
+    # pair below leaves the tracked tree pristine and varies only what is
+    # untracked — a tracked-diff-only guard would call all of them equivalent.
+    init_repo "$tmp/u1"
+    init_repo "$tmp/u2"
+    printf 'same\n' > "$tmp/u1/extra.txt"
+    printf 'same\n' > "$tmp/u2/extra.txt"
+    init_repo "$tmp/p1"
+    init_repo "$tmp/p2"
+    printf 'same\n' > "$tmp/p1/extra.txt"
+    init_repo "$tmp/c1"
+    init_repo "$tmp/c2"
+    printf 'aaaa\n' > "$tmp/c1/extra.txt"
+    printf 'bbbb\n' > "$tmp/c2/extra.txt"
+    # Oversize pair: byte-identical, but past MAX_UNTRACKED_COMPARE_BYTES the
+    # guard refuses to read them into memory to prove it, so equivalence is
+    # denied rather than downgraded to a size-only match.
+    init_repo "$tmp/b1"
+    init_repo "$tmp/b2"
+    node -e "require('fs').writeFileSync(process.argv[1], Buffer.alloc(1024*1024+16, 97))" "$tmp/b1/big.bin"
+    node -e "require('fs').writeFileSync(process.argv[1], Buffer.alloc(1024*1024+16, 97))" "$tmp/b2/big.bin"
+    # Symlink pair with the same target on both sides. The guard lstats rather
+    # than stats, so it sees a link — not a regular file — and refuses; it never
+    # follows the link into a target that could be anything. Windows without
+    # developer mode turns `symlink` into a copy, which would silently test a
+    # regular file instead, so drop the row unless real links were created.
+    init_repo "$tmp/s1"
+    init_repo "$tmp/s2"
+    node -e "try{require('fs').symlinkSync('f.txt',process.argv[1])}catch(e){}" "$tmp/s1/link"
+    node -e "try{require('fs').symlinkSync('f.txt',process.argv[1])}catch(e){}" "$tmp/s2/link"
+    local symlink_row="" symlink_note=" (symlink row skipped — host cannot create symlinks)"
+    if [ -L "$tmp/s1/link" ] && [ -L "$tmp/s2/link" ]; then
+        symlink_row="['untracked-symlink-same-target', '$(node_path "$tmp/s1")', '$(node_path "$tmp/s2")', false],"
+        symlink_note=""
+    fi
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -393,6 +436,11 @@ const cases = [
   ['dirty-diff-identical', '$(node_path "$tmp/d1")', '$(node_path "$tmp/d2")', true],
   ['dirty-diff-different', '$(node_path "$tmp/x1")', '$(node_path "$tmp/x2")', false],
   ['spawn-failure', clean1, '$(node_path "$tmp/nogit")', false],
+  ['untracked-identical', '$(node_path "$tmp/u1")', '$(node_path "$tmp/u2")', true],
+  ['untracked-path-set-mismatch', '$(node_path "$tmp/p1")', '$(node_path "$tmp/p2")', false],
+  ['untracked-content-mismatch-equal-size', '$(node_path "$tmp/c1")', '$(node_path "$tmp/c2")', false],
+  ['untracked-oversize-byte-identical', '$(node_path "$tmp/b1")', '$(node_path "$tmp/b2")', false],
+  $symlink_row
 ];
 for (const c of cases) {
   const got = eq(c[1], c[2]);
@@ -403,7 +451,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "R6: content equivalence is 2-valued — HEAD mismatch, dirty-diff mismatch and spawn failure all land on not-equivalent"
+        pass "R6: content equivalence is 2-valued — HEAD mismatch, dirty-diff mismatch, spawn failure and every unprovable untracked pair (path-set, content, oversize, symlink) land on not-equivalent$symlink_note"
     else
         fail "R6: expected 'OK', got '${out:-<err>}'"
     fi

@@ -39,7 +39,7 @@ report() {
     env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$envsid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 60 node "$CLI" --categories 'workflow-state' --severity 'warning' \
+        "$RWT" 60 node "$CLI" --categories 'workflow' --severity 'warning' \
         --detail 'gate blocked a sanctioned command' --reporter 'write-tests' "$@" 2>&1
 }
 
@@ -59,7 +59,8 @@ else {
   const entry = e[0];
   if (String(entry.pointer).indexOf(sid + '-supervisor-state.json') === -1) problems.push('pointer:' + String(entry.pointer));
   const s = String(entry.summary);
-  if (s.indexOf('workflow-state') === -1) problems.push('summary-omits-category:' + s);
+  if (!/(^|[^a-zA-Z0-9-])workflow($|[^a-zA-Z0-9-])/.test(s)) problems.push('summary-omits-category:' + s);
+  if (s.indexOf('workflow-state') !== -1) problems.push('summary-contains-invalid-category:workflow-state');
   if (s.indexOf('warning') === -1) problems.push('summary-omits-severity:' + s);
 }
 const others = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((x) => x.key === 'supervisor-reported' && x.class !== 'E');
