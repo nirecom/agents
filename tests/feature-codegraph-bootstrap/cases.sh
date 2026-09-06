@@ -63,7 +63,7 @@ B1     | sh     |         | absent  | none    | no  | 0   | 0      | yes  | file
 B2     | sh     | off     | present | none    | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
 B3     | sh     | off     | present | present | no  | 0   | 0      | yes  | symlink   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0
 B4     | sh     | on      | present | none    | no  | 0   | 0      | yes  | symlink   | rc=0 npmi=1 add=1 rm=0 mcp=1 err=0
-B5     | sh     | on      | present | present | yes | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
+B5     | sh     | on      | present | present | yes | 0   | 0      | yes  | file      | rc=0 npmi=0 add=1 rm=1 mcp=2 err=0
 B6     | sh     | on      | present | none    | no  | 1   | 0      | yes  | file      | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
 B7     | sh     | garbage | present | none    | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
 B8     | sh     | on      | present | none    | no  | 0   | 0      | no   | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1

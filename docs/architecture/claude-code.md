@@ -254,15 +254,14 @@ Delegating registration to Claude Code's own CLI gets
 exactly the one effect wanted (an `mcpServers.codegraph` entry in `~/.claude.json`) and none
 of the rest. Permissions are granted from this repo's `settings.json` instead of by the
 external installer, and at tool granularity (`mcp__codegraph__codegraph_explore`) rather than
-the server wildcard upstream would add. Ownership is asserted by one explicit marker rather than
-inferred from the whole shape: `register` writes `AGENTS_CODEGRAPH_MCP_OWNER=agents-framework`
-alongside the telemetry pair (`install/codegraph-constants.txt`, which also pins the npm version),
-and `unregister` removes the entry only when that marker proves ours — a `codegraph` server the
-user registered by hand carries no marker and is never destroyed by an installer run. Both verbs
-demand the marker: an unmarked entry is always `foreign` and left untouched, however closely its
-command and args resemble ours. They differ only on the marker's value — removal acts on an
-entry whose value is ours, while a `register` refresh also acts on someone else's value, since
-the `add` that follows re-establishes the marker either way.
+the server wildcard upstream would add. Ownership is asserted by comparing shape, not by an
+injected marker: `hasOurShape()` (`install/codegraph-mcp.js`) checks whether the existing
+`mcpServers.codegraph` entry's `command`/`args` equal exactly what `addServer()` would write
+(`codegraph serve --mcp`). A same-named entry that matches is `present`; one that doesn't is
+`foreign` and both verbs leave it untouched — a `codegraph` server the user registered by hand,
+or one an unrelated tool wrote, is never overwritten or destroyed by an installer run. Only a
+`present` entry is ever removed or refreshed (remove-then-add, so the shipped telemetry env
+reaches an older entry).
 Because `codegraph_explore` returns verbatim source, it is also matched by
 `hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
 candidate paths.

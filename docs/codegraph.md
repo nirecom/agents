@@ -16,9 +16,9 @@ Close Claude Code while the installer runs — it writes `~/.claude.json`, which
 
 Set `CODEGRAPH=off` and **re-run the installer again**; editing `.env` alone unregisters nothing.
 
-The re-run removes the MCP registration *only if this installer wrote it* — proven by the
-`AGENTS_CODEGRAPH_MCP_OWNER=agents-framework` env marker the registration carries. A `codegraph` entry
-you registered by hand is left alone. The npm package and any existing `.codegraph/` index directories
+The re-run removes the MCP registration *only if it matches what this installer would write* —
+its `command`/`args` must be exactly `codegraph serve --mcp`. A `codegraph` entry you registered
+by hand with different args is left alone. The npm package and any existing `.codegraph/` index directories
 are deliberately left in place; remove them yourself with `npm uninstall -g @colbymchenry/codegraph`
 and `codegraph uninit`.
 

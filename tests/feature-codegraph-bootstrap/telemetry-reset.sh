@@ -4,7 +4,7 @@
 # M1-M15f (#2215): clearSavedTelemetryChoice() unconditionally deletes a saved
 # telemetry.json on every register run while constants ship telemetry on, independent
 # of MCP ownership/outcome, no once-per-machine marker (rejected, see plan S5-4/S5-5).
-# Sourced after ownership.sh; reuses its $NO_CONSTANTS_JS / $PARTIAL_CONSTANTS_JS.
+# Sourced after ownership.sh.
 
 # telemetry_json: the saved-choice file's exact body, or the literal ABSENT.
 telemetry_json() {
@@ -85,29 +85,18 @@ assert_eq "M6: observable outcome (unregister is silent on an absent entry)" "rc
 assert_eq "M6: telemetry.json is byte-identical" "$TELEMETRY_OFF_BODY" "$(telemetry_json)"
 assert_no_reset_note "M6"
 
-echo "--- M7-M11: the reset fires on every register outcome regardless of MCP ownership state ---"
+echo "--- M8-M11: the reset fires on every register outcome regardless of the registration state ---"
 TELEMETRY_PRE=off
-run_case "M7" sh on present foreigncmd yes 0 0 yes file
-assert_eq "M7: observable outcome (a foreign command is left untouched)" "rc=0 npmi=0 add=0 rm=0 mcp=0 err=0" "$SUMMARY"
-assert_eq "M7: telemetry.json is gone (reset does not depend on touching the foreign entry)" "ABSENT" "$(telemetry_json)"
-assert_reset_note "M7"
-
 run_case "M8" sh on present none yes 0 1 yes file
 assert_eq "M8: observable outcome (claude mcp add fails)" "rc=0 npmi=0 add=1 rm=0 mcp=1 err=1" "$SUMMARY"
 assert_eq "M8: telemetry.json is gone even though addServer failed" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M8"
 
 run_case "M9" sh on present present yes 0 0 yes file
-assert_eq "M9: observable outcome (state=current, a no-op)" "rc=0 npmi=0 add=0 rm=0 mcp=0 err=0" "$SUMMARY"
-assert_eq "M9: telemetry.json is gone on the current/no-op path too" "ABSENT" "$(telemetry_json)"
+assert_eq "M9: observable outcome (an existing entry is refreshed)" "rc=0 npmi=0 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
+assert_eq "M9: telemetry.json is gone on the refresh path too" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M9"
-assert_reset_before "M9" "already registered."
-
-run_case "M10" sh on present ourenvplus yes 0 0 yes file
-assert_eq "M10: observable outcome (current with an unrelated extra env key)" "rc=0 npmi=0 add=0 rm=0 mcp=0 err=0" "$SUMMARY"
-assert_eq "M10: telemetry.json is gone regardless of the extra key" "ABSENT" "$(telemetry_json)"
-assert_reset_note "M10"
-assert_reset_before "M10" "already registered."
+assert_reset_before "M9" "codegraph MCP server registered."
 
 run_case "M11" sh on present broken yes 0 0 yes file
 assert_eq "M11: observable outcome (an unreadable ~/.claude.json, state=null, early return)" \
@@ -118,7 +107,7 @@ assert_reset_note "M11"
 echo "--- M12: re-running the installer clears a re-created opt-out again — accepted, not a bug ---"
 TELEMETRY_PRE=off
 run_case "M12-1" sh on present present yes 0 0 yes file
-assert_eq "M12-1: observable outcome" "rc=0 npmi=0 add=0 rm=0 mcp=0 err=0" "$SUMMARY"
+assert_eq "M12-1: observable outcome" "rc=0 npmi=0 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
 assert_eq "M12-1: telemetry.json is gone" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M12-1"
 
@@ -159,7 +148,13 @@ assert_eq "M13: the undeletable telemetry.json directory survives" "directory" \
     "$([ -d "$FAKE_HOME/.codegraph/telemetry.json" ] && echo directory || echo other)"
 assert_reset_warn "M13"
 
-echo "--- M14: an unreadable/partial codegraph-constants.txt fails closed on telemetry too (reuses ownership.sh's mini trees) ---"
+echo "--- M14: an unreadable/partial codegraph-constants.txt falls back to the privacy floor, so no reset fires ---"
+# Each input class gets its OWN mini installer tree: hooks/lib/codegraph-boundary.js
+# resolves the constants file relative to itself, so a shared hooks/lib copy would
+# make every tree read the same codegraph-constants.txt and collapse "no constants"
+# and "partial constants" into the same input.
+NO_CONSTANTS_JS="$(make_constants_tree fc-no-constants none)"
+PARTIAL_CONSTANTS_JS="$(make_constants_tree fc-partial-constants "CODEGRAPH_TELEMETRY=0")"
 TELEMETRY_PRE=off
 run_case "M14a" register on present none no 0 0 yes file "$NO_CONSTANTS_JS"
 assert_eq "M14a: telemetry.json untouched (constants file absent)" "$TELEMETRY_OFF_BODY" "$(telemetry_json)"

@@ -67,12 +67,12 @@ the real entry instead:
 ```bash
 jq -c '.mcpServers.codegraph' ~/.claude.json
 # {"type":"stdio","command":"codegraph","args":["serve","--mcp"],
-#  "env":{"CODEGRAPH_TELEMETRY":"1","DO_NOT_TRACK":"0","AGENTS_CODEGRAPH_MCP_OWNER":"agents-framework"}}
+#  "env":{"CODEGRAPH_TELEMETRY":"1","DO_NOT_TRACK":"0"}}
 ```
 
-`AGENTS_CODEGRAPH_MCP_OWNER` is what makes the entry attributable to this installer. A hand-written
-registration carries no such marker, so it is left untouched — and is never removed when the flag
-goes back to `off`.
+The installer attributes the entry to itself by shape, not by a marker: `command`/`args` must equal
+exactly `codegraph serve --mcp`. A hand-written registration with different args is left untouched —
+and is never removed when the flag goes back to `off`.
 
 ### 3. Build the index — once per worktree
 

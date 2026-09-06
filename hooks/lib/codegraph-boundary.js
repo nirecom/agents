@@ -12,11 +12,6 @@ const { normalizeCwd } = require("./path-normalize");
 const CONSTANTS_FILE = path.join(__dirname, "..", "..", "install", "codegraph-constants.txt");
 const TELEMETRY_KEYS = ["CODEGRAPH_TELEMETRY", "DO_NOT_TRACK"];
 
-// The only evidence an MCP registration is ours: the telemetry pair alone
-// proves nothing, since any tool may ship the same two values.
-const OWNER_MARKER_KEY = "AGENTS_CODEGRAPH_MCP_OWNER";
-const REGISTRATION_ENV_KEYS = [...TELEMETRY_KEYS, OWNER_MARKER_KEY];
-
 // Privacy-side floor for an unreadable constants file, not a copy of the
 // shipped defaults — it stays 0/1 even after those defaults invert.
 const TELEMETRY_FALLBACK_ENV = Object.freeze({ CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1" });
@@ -52,41 +47,6 @@ function constantsSubset(keys) {
 // privacy-side floor rather than to silence.
 function telemetryEnv() {
   return { ...TELEMETRY_FALLBACK_ENV, ...constantsSubset(TELEMETRY_KEYS) };
-}
-
-// The strict reader: no fallback, because the caller uses the key count to
-// decide whether ownership is knowable at all.
-function registrationEnv() {
-  return constantsSubset(REGISTRATION_ENV_KEYS);
-}
-
-// A subset test on purpose: extra keys another tool added do not make a
-// registration less ours.
-function envHasAll(entry, wanted, keys) {
-  const env = entry && entry.env;
-  if (!env || typeof env !== "object") return false;
-  return keys.every((key) => String(env[key]) === wanted[key]);
-}
-
-// `found`: null for an unreadable config, {absent:true} for no entry, or {entry}.
-// Verdict vocabulary: docs/ops/codegraph.md.
-function classifyRegistration(found, wantedEnv, shapeMatches) {
-  const keys = Object.keys(wantedEnv || {});
-  // An incomplete or empty-valued constants read makes ownership unknowable.
-  if (keys.length !== REGISTRATION_ENV_KEYS.length) return null;
-  if (keys.some((key) => wantedEnv[key] === "")) return null;
-  if (found === null) return null;
-  if (found.absent) return "absent";
-  if (!shapeMatches) return "foreign";
-  const entry = found.entry;
-  if (envHasAll(entry, wantedEnv, REGISTRATION_ENV_KEYS)) return "current";
-  const env = entry && entry.env;
-  const marked = Boolean(env) && typeof env === "object"
-    && Object.prototype.hasOwnProperty.call(env, OWNER_MARKER_KEY);
-  // Unmarked is foreign however closely it resembles ours; our own marker with a
-  // drifted env is stale, and someone else's marker is refreshable by the `add`.
-  if (!marked) return "foreign";
-  return String(env[OWNER_MARKER_KEY]) === wantedEnv[OWNER_MARKER_KEY] ? "ours-stale" : "replaceable";
 }
 
 // Fail-safe-OFF polarity, shared with install/win/codegraph.ps1 and
@@ -192,14 +152,10 @@ function clearSavedTelemetryChoice() {
 module.exports = {
   CONSTANTS_FILE,
   TELEMETRY_KEYS,
-  OWNER_MARKER_KEY,
-  REGISTRATION_ENV_KEYS,
   TELEMETRY_FALLBACK_ENV,
   STATUS_TIMEOUT_MS,
   readConstants,
   telemetryEnv,
-  registrationEnv,
-  classifyRegistration,
   codegraphEnabled,
   spawnCodegraph,
   normalizePayloadCwd,
