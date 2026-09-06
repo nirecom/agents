@@ -301,6 +301,7 @@ module.exports = {
   parseEnv,
   readEnvFile,
   readDefaultEnvFile,
+  resolveLocalLayer,
   readEffectiveEnvFile,
   getPristineIsolationEnv,
 };

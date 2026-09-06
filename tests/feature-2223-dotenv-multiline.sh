@@ -144,9 +144,79 @@ filtered-escape-n      | KEY="a\nb"                   | KEY | "a\nb"
 filtered-crlf-multi    | KEY="a@CR@@NL@b@CR@@NL@c"    | KEY | "a\nb\nc"
 TABLE
 
-# T2223-atif — running filterOsBlocks first consumes a `#@if` line even inside a
-# quoted value. Accepted constraint (DD-3); the spec is only that it never
-# survives into the value, which holds on both platforms.
+# ---------------------------------------------------------------------------
+# Tables 3 and 4 — `#@`-prefixed lines sitting INSIDE a quoted multi-line value.
+# The two layers disagree by construction and each answer is pinned separately:
+# parseEnv alone has no marker concept, so the text is value data and survives
+# verbatim; filterOsBlocks runs line-oriented over the whole file with no quote
+# context, so through readEnvFile the same line is eaten before the parser sees
+# it. Every row also re-reads the NEXT key, because a marker that shifted the
+# quote grammar would show up as the following assignment going missing.
+# ---------------------------------------------------------------------------
+
+# Table 3 — parseEnv() alone: markers are ordinary text. Columns: name|input|key|want
+while IFS='|' read -r name input key want; do
+    name="$(trim "$name")"
+    [ -n "$name" ] || continue
+    case "$name" in \#*) continue ;; esac
+    input="$(decode "$(trim "$input")")"
+    got="$(parse_key_json "$input" "$(trim "$key")")"
+    assert_eq "T2223M-$name" "$(trim "$want")" "$got"
+done <<'TABLE'
+atif-double            | KEY="a@NL@#@if windows@NL@b"@NL@AFTER=tail   | KEY   | "a\n#@if windows\nb"
+atif-double-next       | KEY="a@NL@#@if windows@NL@b"@NL@AFTER=tail   | AFTER | "tail"
+atif-single            | KEY='a@NL@#@if windows@NL@b'@NL@AFTER=tail   | KEY   | "a\n#@if windows\nb"
+atif-single-next       | KEY='a@NL@#@if windows@NL@b'@NL@AFTER=tail   | AFTER | "tail"
+atendif-double         | KEY="a@NL@#@endif@NL@b"@NL@AFTER=tail        | KEY   | "a\n#@endif\nb"
+atendif-double-next    | KEY="a@NL@#@endif@NL@b"@NL@AFTER=tail        | AFTER | "tail"
+atendif-single         | KEY='a@NL@#@endif@NL@b'@NL@AFTER=tail        | KEY   | "a\n#@endif\nb"
+atendif-single-next    | KEY='a@NL@#@endif@NL@b'@NL@AFTER=tail        | AFTER | "tail"
+atunknown-double       | KEY="a@NL@#@bogus 1@NL@b"@NL@AFTER=tail      | KEY   | "a\n#@bogus 1\nb"
+atunknown-double-next  | KEY="a@NL@#@bogus 1@NL@b"@NL@AFTER=tail      | AFTER | "tail"
+atunknown-single       | KEY='a@NL@#@bogus 1@NL@b'@NL@AFTER=tail      | KEY   | "a\n#@bogus 1\nb"
+atunknown-single-next  | KEY='a@NL@#@bogus 1@NL@b'@NL@AFTER=tail      | AFTER | "tail"
+TABLE
+
+# The active OS token is resolved from the platform node actually reports, so
+# these rows mean the same thing on Windows and POSIX rather than passing by
+# accident on one of them.
+ACTIVE_OS_TOKEN="$(run_with_timeout 15 node -e 'process.stdout.write(process.platform === "win32" ? "windows" : "posix")' 2>/dev/null)"
+if [ "$ACTIVE_OS_TOKEN" = "windows" ]; then INACTIVE_OS_TOKEN="posix"; else INACTIVE_OS_TOKEN="windows"; fi
+assert_eq "T2223M-os-token-resolved" "1" "$([ -n "$ACTIVE_OS_TOKEN" ] && printf 1 || printf 0)"
+
+# Table 4 — readEnvFile()'s composed path. Accepted constraint (DD-3): the marker
+# is consumed rather than preserved. The rows say what a user gets, which is a
+# value silently missing a line — and, for an INACTIVE token, a suppressed run
+# that swallows the value's closing quote and takes the following key with it.
+# That last row is the sharp edge of the concession, recorded rather than hidden.
+while IFS='|' read -r name input key want; do
+    name="$(trim "$name")"
+    [ -n "$name" ] || continue
+    case "$name" in \#*) continue ;; esac
+    input="$(decode "$(trim "$input")")"
+    input="${input//@ACTIVE@/$ACTIVE_OS_TOKEN}"
+    input="${input//@INACTIVE@/$INACTIVE_OS_TOKEN}"
+    got="$(parse_key_json "$input" "$(trim "$key")" filtered)"
+    assert_eq "T2223N-$name" "$(trim "$want")" "$got"
+done <<'TABLE'
+f-atif-double           | KEY="a@NL@#@if @ACTIVE@@NL@b"@NL@#@endif@NL@AFTER=tail   | KEY   | "a\nb"
+f-atif-double-next      | KEY="a@NL@#@if @ACTIVE@@NL@b"@NL@#@endif@NL@AFTER=tail   | AFTER | "tail"
+f-atif-single           | KEY='a@NL@#@if @ACTIVE@@NL@b'@NL@#@endif@NL@AFTER=tail   | KEY   | "a\nb"
+f-atif-single-next      | KEY='a@NL@#@if @ACTIVE@@NL@b'@NL@#@endif@NL@AFTER=tail   | AFTER | "tail"
+f-atendif-double        | KEY="a@NL@#@endif@NL@b"@NL@AFTER=tail                    | KEY   | "a\nb"
+f-atendif-double-next   | KEY="a@NL@#@endif@NL@b"@NL@AFTER=tail                    | AFTER | "tail"
+f-atendif-single        | KEY='a@NL@#@endif@NL@b'@NL@AFTER=tail                    | KEY   | "a\nb"
+f-atendif-single-next   | KEY='a@NL@#@endif@NL@b'@NL@AFTER=tail                    | AFTER | "tail"
+f-atunknown-double      | KEY="a@NL@#@bogus 1@NL@b"@NL@AFTER=tail                  | KEY   | "a\nb"
+f-atunknown-double-next | KEY="a@NL@#@bogus 1@NL@b"@NL@AFTER=tail                  | AFTER | "tail"
+f-atunknown-single      | KEY='a@NL@#@bogus 1@NL@b'@NL@AFTER=tail                  | KEY   | "a\nb"
+f-atunknown-single-next | KEY='a@NL@#@bogus 1@NL@b'@NL@AFTER=tail                  | AFTER | "tail"
+f-atif-inactive         | KEY="a@NL@#@if @INACTIVE@@NL@b"@NL@#@endif@NL@AFTER=tail | KEY   | __ABSENT__
+f-atif-inactive-next    | KEY="a@NL@#@if @INACTIVE@@NL@b"@NL@#@endif@NL@AFTER=tail | AFTER | __ABSENT__
+TABLE
+
+# The marker text must never survive into a value on the filtered path — the one
+# property the concession does promise, asserted directly rather than by shape.
 atif_got="$(parse_key_json "$(decode 'KEY="a@NL@#@if windows@NL@b"')" KEY filtered)"
 case "$atif_got" in
     *'#@if'*) fail "T2223-atif-inside-multi — marker leaked into value: $atif_got" ;;

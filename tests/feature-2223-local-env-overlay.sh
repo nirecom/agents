@@ -7,9 +7,14 @@
 # local-env.js exports resolveProjectRoot, overlay(globalMap, localMap) ->
 # {map, applied, ignored}, isBlocklisted(key), ENV_ENTRY_BLOCKLIST_EXACT and
 # ENV_ENTRY_BLOCKLIST_PREFIX. No allowlist: only the blocklist gates the layer.
-# TL3 gap: a real repo whose own .env.local is edited mid-session is out of reach here.
 
 set -u
+
+# TL3 gap (what this test does NOT catch):
+# - A real repo whose own override file is edited mid-session, with the loader
+#   run from the live Claude Code session's own cwd and inherited environment.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -126,6 +131,12 @@ if (cmd === "effective") {
 } else if (cmd === "load-default") {
   loadEnvMod().loadDefaultEnv();
   out(enc(process.env[a1]));
+} else if (cmd === "load-default-has-value") {
+  loadEnvMod().loadDefaultEnv();
+  out(String(Object.keys(process.env).some((k) => process.env[k] === a1)));
+} else if (cmd === "is-blocklisted-raw") {
+  const raws = { __UNDEF__: undefined, __NULL__: null, __NUM__: 42, __OBJ__: {}, __ARR__: [] };
+  out(String(localEnvMod().isBlocklisted(raws[a1])));
 } else if (cmd === "resolve-root") {
   const r = localEnvMod().resolveProjectRoot(a1 || null, a2 || null);
   out(r === null || r === undefined ? "__NULL__" : String(r).replace(/\\/g, "/"));
@@ -269,6 +280,27 @@ new_case door-loadenv2 'CODE_LANG=english' 'CODE_LANG=japanese'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-process-env-wins-after-overlay" '"exported-wins"' \
   "$(CODE_LANG=exported-wins probe load-default CODE_LANG)"
+
+# The case-insensitive half of that guard. Windows env names are case-insensitive,
+# so a local key spelled in another case must still meet the caller's export —
+# the beforeUpperTruthy lookup, not a same-case hit, is what these rows pin.
+new_case door-crosscase 'CODE_LANG=english' 'code_lang=hostile-local-2223'
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
+assert_eq "T2223-crosscase-export-protects" "false" \
+  "$(CODE_LANG=exported-wins probe load-default-has-value hostile-local-2223)"
+assert_eq "T2223-crosscase-export-value-kept" '"exported-wins"' \
+  "$(CODE_LANG=exported-wins probe load-default CODE_LANG)"
+# Positive control: unexported, the same cross-cased local key does reach
+# process.env — so "false" above means the lookup refused it.
+assert_eq "T2223-crosscase-control-applies" "true" \
+  "$(probe load-default-has-value hostile-local-2223)"
+
+# An exported EMPTY value is not protection: beforeUpperTruthy names truthy
+# values only, so the local layer wins over it (symmetric to the truthy case).
+new_case door-empty-export 'CODE_LANG=english' 'CODE_LANG=local-wins-2223'
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
+assert_eq "T2223-empty-export-not-protected" '"local-wins-2223"' \
+  "$(CODE_LANG= probe load-default CODE_LANG)"
 unset CLAUDE_PROJECT_DIR
 
 # ---------------------------------------------------------------------------
@@ -382,6 +414,15 @@ else
     pass "T2223R-meta-path-no-execution"
 fi
 assert_eq "T2223R-meta-path-blocklist-still-wins" "on" "$(eek "$META_ROOT" ENFORCE_WORKTREE)"
+
+# The Bash-tool door in front of env-effective-kv --allow-dump. Same sibling-file
+# form as the blocklist cases above; sourced last because it uses to_node_path.
+DUMP_CASES_FILE="$AGENTS_DIR/tests/feature-2223-local-env-overlay/allow-dump-guard.sh"
+if [ -f "$DUMP_CASES_FILE" ]; then
+    . "$DUMP_CASES_FILE"
+else
+    fail "T2223AD-cases-file-present — $DUMP_CASES_FILE missing"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

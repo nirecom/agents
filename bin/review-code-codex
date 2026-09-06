@@ -133,6 +133,16 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   exit 0
 }
 
+# Unlike review-plan-codex, this script always operates on the repo it is
+# invoked from — REPO_ROOT above is never a caller-supplied target, it is
+# this git checkout. So the project whose PROJECT_NFR should apply is this
+# same repo, and a caller with no opinion (no --project-root, e.g. the
+# run-quality-gates.sh production entry point) gets it for free rather than
+# silently reviewing every code diff with no NFR at all.
+if [[ -z "$PROJECT_ROOT_ARG" ]]; then
+  PROJECT_ROOT_ARG="$REPO_ROOT"
+fi
+
 # ---- path-priority diff collection ------------------------------------------
 # Why per-path rather than one concatenated diff cut with `head -n`: git prints files in its
 # own order, so a raw line cut keeps whatever sorted first. A session that edited three files

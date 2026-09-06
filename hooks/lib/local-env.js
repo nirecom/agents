@@ -23,7 +23,14 @@ const LOCAL_ENV_BASENAME = ".env.local";
 // belongs in the global .env's ENFORCE_WORKTREE_EXCLUDE instead.
 const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   "SHOW_PLAN_LINK_NO_AUTO_OPEN",
+  // CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are one class — load-env.js names
+  // them together as ISOLATION_ENV_KEYS — and a local value for either relocates
+  // the workflow-state root holding gate state and off-clearance tokens.
+  // AGENTS_CONFIG_DIR names the very directory this layer resolves the global
+  // .env from, so a local value would redirect the layer that reads it.
+  "CLAUDE_WORKFLOW_DIR",
   "WORKFLOW_PLANS_DIR",
+  "AGENTS_CONFIG_DIR",
   "WORKTREE_BASE_DIR",
   "ENFORCE_WORKTREE",
   "ENFORCE_WORKTREE_EXCLUDE",

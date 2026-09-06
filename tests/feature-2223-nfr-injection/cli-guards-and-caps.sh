@@ -104,6 +104,148 @@ fi
 assert_file_has "T2223E-multibyte-trust-label" "$MB_FILE" "not instructions"
 
 # ---------------------------------------------------------------------------
+# Part E2 — the two edges of each cap. "Far over the limit" cannot tell a cap
+# from a clamp: only a value exactly AT the limit surviving whole, next to one
+# exactly one unit over losing exactly one unit, pins the boundary itself.
+# Both caps are pinned on every call, so no ambient value decides an answer.
+# ---------------------------------------------------------------------------
+EDGE_LINES=10
+EDGE_HEAD="EDGEHEAD4KM"
+EDGE_VALUE="$EDGE_HEAD"
+i=2
+while [ "$i" -le "$EDGE_LINES" ]; do EDGE_VALUE="$EDGE_VALUE\\nedge line $i"; i=$((i + 1)); done
+CFG_EDGE="$(make_cfg edgelines "PROJECT_NFR=\"$EDGE_VALUE\"")"
+PROJ_EDGE="$(make_project edgelines)"
+
+# block_lines <file> — the frame is START + label + payload + END, so a block of
+# N payload lines is N + 3 lines; the constant is asserted, never assumed.
+block_lines() {
+    local n
+    n="$(wc -l < "$1" 2>/dev/null | tr -d ' ')"
+    printf '%s' "${n:-0}"
+}
+
+AT_FILE="$TMP_ROOT/edge-lines-at.txt"
+nfr_block_caps "$CFG_EDGE" "$PROJ_EDGE" "$EDGE_LINES" 20000 > "$AT_FILE"
+assert_eq "T2223E2-lines-at-limit-block-size" "$((EDGE_LINES + 3))" "$(block_lines "$AT_FILE")"
+assert_file_has "T2223E2-lines-at-limit-keeps-head" "$AT_FILE" "$EDGE_HEAD"
+assert_file_has "T2223E2-lines-at-limit-keeps-last" "$AT_FILE" "edge line $EDGE_LINES"
+assert_one_frame "T2223E2-lines-at-limit" "$AT_FILE"
+
+OVER_FILE="$TMP_ROOT/edge-lines-over.txt"
+nfr_block_caps "$CFG_EDGE" "$PROJ_EDGE" "$((EDGE_LINES - 1))" 20000 > "$OVER_FILE"
+assert_eq "T2223E2-lines-one-over-block-size" "$((EDGE_LINES + 2))" "$(block_lines "$OVER_FILE")"
+assert_file_lacks "T2223E2-lines-one-over-drops-exactly-one" "$OVER_FILE" "edge line $EDGE_LINES"
+assert_file_has "T2223E2-lines-one-over-keeps-the-rest" "$OVER_FILE" "edge line $((EDGE_LINES - 1))"
+assert_one_frame "T2223E2-lines-one-over" "$OVER_FILE"
+
+# Byte axis, same two edges. The payload is one 40-byte ASCII line, so a byte
+# index and a character index coincide and the off-by-one is unambiguous.
+BYTE_VALUE="BYTEHEAD4KMxxxxxxxxxxxxxxxxxxxxxxxxZTAIL"
+BYTE_LEN=40
+CFG_BYTE="$(make_cfg edgebytes "PROJECT_NFR=\"$BYTE_VALUE\"")"
+PROJ_BYTE="$(make_project edgebytes)"
+
+BAT_FILE="$TMP_ROOT/edge-bytes-at.txt"
+nfr_block_caps "$CFG_BYTE" "$PROJ_BYTE" 200 "$BYTE_LEN" > "$BAT_FILE"
+assert_file_has "T2223E2-bytes-at-limit-value-intact" "$BAT_FILE" "$BYTE_VALUE"
+assert_one_frame "T2223E2-bytes-at-limit" "$BAT_FILE"
+
+BOVER_FILE="$TMP_ROOT/edge-bytes-over.txt"
+nfr_block_caps "$CFG_BYTE" "$PROJ_BYTE" 200 "$((BYTE_LEN - 1))" > "$BOVER_FILE"
+assert_file_lacks "T2223E2-bytes-one-over-loses-last-byte" "$BOVER_FILE" "$BYTE_VALUE"
+assert_file_has "T2223E2-bytes-one-over-keeps-the-rest" "$BOVER_FILE" "${BYTE_VALUE%?}"
+assert_one_frame "T2223E2-bytes-one-over" "$BOVER_FILE"
+
+# is_valid_utf8 <file> — "true" when the bytes round-trip through a UTF-8
+# decode unchanged, i.e. no replacement character was substituted.
+is_valid_utf8() {
+    run_with_timeout 20 node -e '
+const fs = require("fs");
+const b = fs.readFileSync(process.argv[1]);
+process.stdout.write(Buffer.compare(Buffer.from(b.toString("utf8"), "utf8"), b) === 0 ? "true" : "false");
+' "$1" 2>/dev/null
+}
+
+# The byte cap counts bytes, so a cap landing inside a multibyte character
+# leaves a fragment of it behind. The block builder drops that fragment whole,
+# so the prompt is always valid UTF-8 — asserted below at all three byte offsets
+# of one 3-byte character, since only the offsets either side of a boundary can
+# tell "drop the partial character" from "drop something, anything".
+CUT_HEAD="CUTHEAD4KM"
+MB_CHAR="$(printf '\xe3\x81\x82')"
+# The value is written by printf rather than make_cfg so the multibyte bytes
+# reach the file exactly, with no shell-level re-encoding in between.
+CFG_CUT="$(make_cfg bytecut "PLACEHOLDER=1")"
+printf 'PROJECT_NFR="%s%s"\n' "$CUT_HEAD" "$MB_CHAR" > "$CFG_CUT/.env"
+PROJ_CUT="$(make_project bytecut)"
+
+# nfr_payload <file> — line 3 of the block: START, trust label, payload, END.
+# Comparing the payload itself is what distinguishes "the partial character was
+# dropped" from "the whole payload was dropped", which a validity probe cannot.
+nfr_payload() { sed -n '3p' "$1"; }
+
+# One byte into the character: lead byte present, both continuations cut off.
+CUT_FILE="$TMP_ROOT/bytecut.txt"
+nfr_block_caps "$CFG_CUT" "$PROJ_CUT" 200 $(( ${#CUT_HEAD} + 1 )) > "$CUT_FILE"
+assert_file_has "T2223E2-multibyte-cut-keeps-head" "$CUT_FILE" "$CUT_HEAD"
+assert_one_frame "T2223E2-multibyte-cut" "$CUT_FILE"
+assert_eq "T2223E2-multibyte-cut-utf8-valid" "true" "$(is_valid_utf8 "$CUT_FILE")"
+assert_eq "T2223E2-multibyte-cut-drops-partial-char-whole" "$CUT_HEAD" "$(nfr_payload "$CUT_FILE")"
+
+# Two bytes in: lead plus one continuation, still an incomplete character. The
+# same answer must come back, or the trim only handles a single stray byte.
+CUT2_FILE="$TMP_ROOT/bytecut2.txt"
+nfr_block_caps "$CFG_CUT" "$PROJ_CUT" 200 $(( ${#CUT_HEAD} + 2 )) > "$CUT2_FILE"
+assert_eq "T2223E2-multibyte-cut2-utf8-valid" "true" "$(is_valid_utf8 "$CUT2_FILE")"
+assert_eq "T2223E2-multibyte-cut2-drops-partial-char-whole" "$CUT_HEAD" "$(nfr_payload "$CUT2_FILE")"
+
+# Three bytes in — the cap lands exactly on the character boundary. The trim
+# must be a no-op here: a complete trailing character stays, and a rule that
+# stripped it would satisfy every row above while silently losing real text.
+WHOLE_FILE="$TMP_ROOT/bytewhole.txt"
+nfr_block_caps "$CFG_CUT" "$PROJ_CUT" 200 $(( ${#CUT_HEAD} + 3 )) > "$WHOLE_FILE"
+assert_eq "T2223E2-multibyte-whole-utf8-valid" "true" "$(is_valid_utf8 "$WHOLE_FILE")"
+assert_eq "T2223E2-multibyte-whole-char-survives" "$CUT_HEAD$MB_CHAR" "$(nfr_payload "$WHOLE_FILE")"
+assert_one_frame "T2223E2-multibyte-whole" "$WHOLE_FILE"
+
+# ---------------------------------------------------------------------------
+# Part E3 — the key this whole feature configures must be documented where a
+# user looks for it. The REAL .env.example is read, never a fixture that would
+# invent the key, and the file must still parse as a whole after the addition.
+# ---------------------------------------------------------------------------
+ENV_EXAMPLE="$AGENTS_DIR/.env.example"
+if [ -f "$ENV_EXAMPLE" ]; then
+    pass "T2223E3-env-example-present"
+else
+    fail "T2223E3-env-example-present — $ENV_EXAMPLE missing"
+fi
+if grep -qE '^PROJECT_NFR=' "$ENV_EXAMPLE" 2>/dev/null; then
+    pass "T2223E3-env-example-documents-project-nfr"
+else
+    fail "T2223E3-env-example-documents-project-nfr — no PROJECT_NFR= entry"
+fi
+# Same category as the two caps that bound it, so the three stay contiguous.
+if awk '/^# --- Codex review scope ---/{c=1;next} /^# --- /{c=0} c && /^PROJECT_NFR=/{found=1} END{exit !found}' \
+        "$ENV_EXAMPLE" 2>/dev/null; then
+    pass "T2223E3-env-example-nfr-in-codex-category"
+else
+    fail "T2223E3-env-example-nfr-in-codex-category — entry is outside the Codex review scope category"
+fi
+
+# Parses cleanly through the real loader: every key survives, PROJECT_NFR among
+# them, and its documented default is the empty value.
+ENV_EXAMPLE_NODE="$ENV_EXAMPLE"
+if command -v cygpath >/dev/null 2>&1; then ENV_EXAMPLE_NODE="$(cygpath -m "$ENV_EXAMPLE")"; fi
+ee_got="$(run_with_timeout 20 node -e '
+const m = require(process.argv[1] + "/hooks/lib/load-env.js");
+const map = m.readEnvFile(process.argv[2]);
+if (!map) { process.stdout.write("__UNREADABLE__"); }
+else { process.stdout.write(JSON.stringify([Object.prototype.hasOwnProperty.call(map, "PROJECT_NFR"), map.PROJECT_NFR, Object.keys(map).length > 10])); }
+' "$(command -v cygpath >/dev/null 2>&1 && cygpath -m "$AGENTS_DIR" || printf '%s' "$AGENTS_DIR")" "$ENV_EXAMPLE_NODE" 2>/dev/null)"
+assert_eq "T2223E3-env-example-parses-cleanly" '[true,"",true]' "$ee_got"
+
+# ---------------------------------------------------------------------------
 # Part F — --project-root argument guards on both review CLIs.
 # Both scripts are documented to always exit 0 so a review never blocks the
 # workflow; the observable failure signal is the FAILED status line plus the

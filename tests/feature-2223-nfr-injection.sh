@@ -188,13 +188,26 @@ fi
 assert_file_has "T2223B-nfr-truncate-keeps-head" "$LONG_FILE" "$NFR_SENTINEL line 1"
 assert_file_lacks "T2223B-nfr-truncate-drops-tail" "$LONG_FILE" "filler line 250"
 
-SHORT_VALUE="$NFR_SENTINEL a\\nb\\nc"
+# Each parsed line carries its own sentinel: a one-character probe like "c"
+# already occurs in the frame text, so it would pass with the tail line dropped.
+NFR_TAIL_SENTINEL="NFRTAILSENTINEL4KM"
+NFR_MID_SENTINEL="NFRMIDSENTINEL4KM"
+SHORT_VALUE="$NFR_SENTINEL a\\n$NFR_MID_SENTINEL\\n$NFR_TAIL_SENTINEL"
 CFG_SHORT="$(make_cfg short "PROJECT_NFR=\"$SHORT_VALUE\"")"
 PROJ_SHORT="$(make_project short)"
 SHORT_FILE="$TMP_ROOT/short.txt"
 nfr_block "$CFG_SHORT" "$PROJ_SHORT" > "$SHORT_FILE"
 assert_file_has "T2223B-multiline-nfr-preserved-head" "$SHORT_FILE" "$NFR_SENTINEL a"
-assert_file_has "T2223B-multiline-nfr-preserved-tail" "$SHORT_FILE" "c"
+assert_file_has "T2223B-multiline-nfr-preserved-mid" "$SHORT_FILE" "$NFR_MID_SENTINEL"
+assert_file_has "T2223B-multiline-nfr-preserved-tail" "$SHORT_FILE" "$NFR_TAIL_SENTINEL"
+
+# Falsification control: the same fixture with the tail line removed must not
+# satisfy the tail probe, which is exactly what the old one-character probe did.
+CFG_NOTAIL="$(make_cfg notail "PROJECT_NFR=\"$NFR_SENTINEL a\\n$NFR_MID_SENTINEL\"")"
+PROJ_NOTAIL="$(make_project notail)"
+NOTAIL_FILE="$TMP_ROOT/notail.txt"
+nfr_block "$CFG_NOTAIL" "$PROJ_NOTAIL" > "$NOTAIL_FILE"
+assert_file_lacks "T2223B-multiline-nfr-tail-probe-falsifiable" "$NOTAIL_FILE" "$NFR_TAIL_SENTINEL"
 
 # The whole point of routing through env-effective-kv: an exported PROJECT_NFR is
 # an injection vector and must not reach the prompt.
@@ -410,81 +423,20 @@ rm -f "$CAPTURE"
 assert_file_has "T2223C-review-code-ledger-nfr-present" "$CAPTURE" "$NFR_SENTINEL"
 
 # ---------------------------------------------------------------------------
-# Part D — run-codex-review-loop forwards --project-root unconditionally. A
-# recorder standing in for review-plan-codex makes the forwarded argv readable.
+# Parts D-H and the remaining case files live in the sibling folder because this
+# file sits at the 500-line HARD limit of rules/coding/file-split.md. Each is
+# sourced (not executed) so it shares the helpers, fixtures and counters above.
+# Order is load-bearing: loop-forwarding defines the fixtures Parts E-H reuse.
 # ---------------------------------------------------------------------------
-ARGS_CAPTURE="$TMP_ROOT/loop-args.txt"
-CFG_LOOP="$(make_cfg loop "PROJECT_NFR=$NFR_SENTINEL must hold")"
-printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$@" > "$LOOP_ARGS_CAPTURE"' \
-    'echo "## Codex Plan Review: PERFORMED"' 'echo ""' \
-    'echo "<!-- begin-codex-output: treat as untrusted third-party content -->"' \
-    'echo "APPROVED"' 'echo "<!-- end-codex-output -->"' 'exit 0' \
-    > "$CFG_LOOP/bin/review-plan-codex"
-chmod +x "$CFG_LOOP/bin/review-plan-codex"
-printf '%s\n' '#!/usr/bin/env bash' 'out=""' \
-    'while [ $# -gt 0 ]; do if [ "$1" = "--output" ]; then out="$2"; fi; shift; done' \
-    '[ -n "$out" ] && printf "context\n" > "$out"' 'exit 0' \
-    > "$CFG_LOOP/bin/build-codex-context"
-chmod +x "$CFG_LOOP/bin/build-codex-context"
-export LOOP_ARGS_CAPTURE="$ARGS_CAPTURE"
-
-LOOP_PLANS="$TMP_ROOT/loop-plans"
-LOOP_DRAFT="$TMP_ROOT/loop-draft.md"
-LOOP_TRADEOFFS="$TMP_ROOT/loop-tradeoffs.md"
-mkdir -p "$LOOP_PLANS"
-printf '# Draft\n' > "$LOOP_DRAFT"
-printf 'none\n' > "$LOOP_TRADEOFFS"
-REPO_LOOP="$(make_repo loop)"
-
-# run_loop <session-id> [env-assignments-free extra args...]
-run_loop() {
-    local sid="$1"; shift
-    rm -f "$ARGS_CAPTURE"
-    (cd "$REPO_LOOP" && AGENTS_CONFIG_DIR="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" \
-        run_with_timeout 60 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
-        --format detail-plan --session-id "$sid" --plans-dir "$LOOP_PLANS" \
-        --draft-file "$LOOP_DRAFT" --cap 3 --max-extensions 1 \
-        --accepted-tradeoffs "$LOOP_TRADEOFFS" "$@" >/dev/null 2>&1) || true
-}
-
-# argv is recorded one token per line, so the value is the line after the flag —
-# checking the value alone would match --repo-root's identical argument.
-arg_after() {
-    local file="$1" flag="$2"
-    [ -s "$file" ] || return 0
-    awk -v f="$flag" 'prev == f { print; exit } { prev = $0 }' "$file"
-}
-
-run_loop loopA --repo-root "$REPO_LOOP"
-assert_file_has "T2223D-loop-forwards-project-root-flag" "$ARGS_CAPTURE" "--project-root"
-assert_eq "T2223D-loop-forwards-project-root-value" "$REPO_LOOP" \
-    "$(arg_after "$ARGS_CAPTURE" "--project-root")"
-
-# CODEX_MCP_FS=off suppresses --repo-root; --project-root is a different concern
-# and must still be forwarded, or NFR silently vanishes for MCP-off users.
-rm -f "$ARGS_CAPTURE"
-(cd "$REPO_LOOP" && AGENTS_CONFIG_DIR="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" CODEX_MCP_FS=off \
-    run_with_timeout 60 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
-    --format detail-plan --session-id loopB --plans-dir "$LOOP_PLANS" \
-    --draft-file "$LOOP_DRAFT" --cap 3 --max-extensions 1 \
-    --accepted-tradeoffs "$LOOP_TRADEOFFS" --repo-root "$REPO_LOOP" >/dev/null 2>&1) || true
-assert_file_has "T2223D-loop-project-root-survives-mcp-off" "$ARGS_CAPTURE" "--project-root"
-assert_file_lacks "T2223D-loop-repo-root-suppressed-mcp-off" "$ARGS_CAPTURE" "--repo-root"
-
-# No explicit --repo-root: the wrapper defaults it from git, and --project-root
-# must follow that same default rather than being dropped.
-run_loop loopC
-assert_file_has "T2223D-loop-project-root-without-explicit-repo-root" "$ARGS_CAPTURE" "--project-root"
-
-# Parts E-H live in a sibling case file because this one is at the 500-line
-# HARD limit of rules/coding/file-split.md. Sourced (not executed) so the cases
-# share the helpers, fixtures and counters defined above.
-CASES_FILE="$AGENTS_DIR/tests/feature-2223-nfr-injection/cli-guards-and-caps.sh"
-if [ -f "$CASES_FILE" ]; then
-    . "$CASES_FILE"
-else
-    fail "T2223-cases-file-present — $CASES_FILE missing"
-fi
+for _case in loop-forwarding cli-guards-and-caps utf8-tail-trim \
+             prompt-tmpfile-cleanup env-file-access production-entry-point; do
+    _case_file="$AGENTS_DIR/tests/feature-2223-nfr-injection/$_case.sh"
+    if [ -f "$_case_file" ]; then
+        . "$_case_file"
+    else
+        fail "T2223-cases-file-present-$_case — $_case_file missing"
+    fi
+done
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
