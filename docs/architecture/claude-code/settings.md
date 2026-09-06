@@ -33,13 +33,19 @@ See `docs/security-policy.md` for the full pattern list.
   the authenticated account. Silence requires positive proof (login match or repo admin); an
   unreadable command shape is unresolved, not safe. Never blocks, never bypassed by WORKFLOW_OFF or
   WORKTREE_OFF. Reason codes: `hooks/confirm-forge-target-ownership/reasons.js` (issue #2053).
-- `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks
-  `WORKFLOW_*` sentinel echoes issued from subagents. Sentinels are reserved for the orchestrator
-  (main conversation); subagents cannot drive the workflow state machine. Detection uses the
-  `isStrictSentinel`, `CHAIN_BOUNDARY_SENTINEL_DQ_RE`, and `CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE`
-  patterns from `hooks/lib/sentinel-patterns.js`. Subagent identification via `agent_id` presence
-  (see `hooks/lib/subagent-detect.js`). Fail-open: approves on malformed stdin or absent `agent_id`.
-  Defense-in-depth with the `workflow-mark.js` PostToolUse backstop (C2).
+- `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks a
+  subagent from driving the workflow state machine through either door: a `WORKFLOW_*` sentinel
+  echo, or an advance-class CLI invoked with a mutating flag (`--advance`/`--mark`/`--reset`) — the
+  CLI-invocation door #2102 added once `research`/`write_tests` moved their completion door off the
+  sentinel echo. Sentinels are reserved for the orchestrator (main conversation) either way.
+  Sentinel detection uses `isStrictSentinel`, `CHAIN_BOUNDARY_SENTINEL_DQ_RE`, and
+  `CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE` (`hooks/lib/sentinel-patterns.js`); CLI-door detection is
+  `isWorkflowStateDriverCommand` (`hooks/lib/workflow-driver-commands.js`), which tokenizes each
+  `runCommands`-array element on its own (never a joined string) and recognizes any CLI named in
+  `ADVANCE_ORIGINS`, including one reached via `bash`/`pwsh`/`cmd -c` recursion. Subagent
+  identification via `agent_id` presence (see `hooks/lib/subagent-detect.js`). Fail-open: approves
+  on malformed stdin, absent `agent_id`, or an empty `ADVANCE_ORIGINS` roster. Defense-in-depth with
+  the `workflow-mark.js` PostToolUse backstop (C2).
 - `block-history-direct.js` — blocks direct writes to the **append-only document family**:
   the canonical documents (`docs/history.md`, `CHANGELOG.md`) *and* their rotated archives
   (`docs/history/*.md`, `changelog/*.md`, `docs/changelog/*.md`). Rotation moves entries out of

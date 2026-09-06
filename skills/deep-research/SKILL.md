@@ -31,7 +31,8 @@ DR-3. **Present findings** — output format: `## Deep Research: PERFORMED|FAILE
 ## Completion
 
 After completing this skill:
-1. Run: `echo "<<WORKFLOW_MARK_STEP_research_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step research --complete --next` (must be the ENTIRE Bash command — no `cd`, no pipes, no && chaining, no redirection)
+2. Follow the returned `ACTION` / `NEXT_SKILL` / `NEXT_HINT` per CLAUDE.md.
 
 Skip this skill when no external knowledge is needed (e.g., the task is purely internal to the codebase).
 
