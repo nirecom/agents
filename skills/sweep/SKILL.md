@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Periodic maintenance sweep hub. Dispatches to /sweep-worktrees, /sweep-branches, /sweep-plans, /sweep-tests, /sweep-issues.
+description: Periodic maintenance sweep hub. Dispatches to /sweep-worktrees, /sweep-branches, /sweep-plans, /sweep-tests, /sweep-issues, /sweep-shell-snapshots.
 user-invocable: true
 model: sonnet
 ---
@@ -28,8 +28,9 @@ SW-3. Invoke `/sweep-plans` (deletes by default; pass `--dry-run` to preview).
 SW-4. Invoke `/sweep-tests` (deletes by default; `--dry-run` and `--fix-headers` are forwarded when passed).
 SW-5. Invoke `/sweep-issues` (tier-1 meta-parent closes apply by default; `--dry-run` previews).
    Tier-2 candidates are human-gated and only surface under `--deep`.
-SW-6. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub complete>>` after SW-5, regardless of outcome.
-SW-7. Future sub-skills to be added in subsequent PRs:
+SW-6. Invoke `/sweep-shell-snapshots` (deletes by default; pass `--dry-run` to preview).
+SW-7. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub complete>>` after SW-6, regardless of outcome.
+SW-8. Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
