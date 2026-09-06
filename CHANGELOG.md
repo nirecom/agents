@@ -439,3 +439,7 @@ Changes: CodeGraph: telemetry is now enabled by default (opt out with `CODEGRAPH
 ### FEATURE: PR #2252 (2026-09-06)
 Background: fix: aggregate installer step failures and simplify CodeGraph MCP ownership
 Changes: Fixed: install.ps1 no longer silently ignores a failing installer sub-script; failures are now collected and reported, and the installer exits non-zero. Fixed: re-running the installer with CodeGraph disabled now correctly detects and removes a codegraph MCP registration created by an earlier installer version.
+
+### FEATURE: PR #2247 (2026-09-06)
+Background: feat(#2218): persist step micro-state to handoff artifacts, extend /resume-session cross-session
+Changes: `/resume-session --from <sid>` can now recover step-level progress from a prior session's handoff artifact, even when the new session has no transcript lineage to it.;Workflow steps persist their in-progress micro-state incrementally to a per-session handoff artifact, making interrupted work easier to resume across sessions.
