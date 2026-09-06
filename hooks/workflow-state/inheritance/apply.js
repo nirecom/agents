@@ -11,28 +11,20 @@ const { appendEvents, VALID_STEPS } = require("../state-io");
 const { convertV1AnnotationsToEvents } =
   require("../state-io/migrations/v1-to-v2");
 const { APPROVAL_GATED_STEPS } = require("../completion-approval");
+const { isContextIndependentStep } = require("../state-io/step-context-class");
 
 const INHERIT_ORIGIN = "session-inherit";
 
-// applyInheritance(sessionId, createdAt, donor)
-//
-// Carries a prior session's WORK RECORD into a fresh session as ONE append-only
-// batch (#1733). Pre-#1733 this was a blind deep copy of the donor's `steps` map;
-// expressing it as events makes three things explicit that the copy hid:
-//
-//   * provenance:"backfilled" + inherited_from — an inherited `complete` is not a
-//     completion this session observed. Downstream genuineness checks can finally
-//     tell the two apart (effective-state.hasGenuineRecordedComplete).
-//   * every event is stamped `at = createdAt` — the heir's timeline never reaches
-//     back into the donor's. The deliberate consequence is that an inherited step's
-//     `updated_at` is now the heir's created_at rather than the donor's original.
-//   * cleanup (#772) is RESET rather than carried: its donor annotations are
-//     dropped by an explicit tombstone, not merely shadowed.
-//
-// What is NOT inherited: session_model, complexity_evaluation, worktree_*,
-// git_branch/cwd, workflow_type, closes_issues, last_pushed_sha. Each is a fact
-// about the donor session itself, not about the work.
-function applyInheritance(sessionId, createdAt, donor) {
+const GRANULARITY_FULL = "full";
+const GRANULARITY_CONTEXT_INDEPENDENT_ONLY = "context-independent-only";
+
+// Carries a donor's WORK RECORD into an heir as ONE append-only batch (#1733):
+// provenance:"backfilled" keeps an inherited `complete` distinguishable from an
+// observed one, every event is stamped `at = createdAt`, and cleanup (#772) is
+// reset rather than carried. Facts about the donor SESSION (worktree_*, cwd,
+// branch, closes_issues, …) are never inherited. Contract and the granularity
+// table: docs/architecture/claude-code/workflow.md.
+function applyInheritance(sessionId, createdAt, donor, opts) {
   const donorSid = (donor && donor.session_id) || null;
   const donorSteps = (donor && donor.steps) || {};
   const donorApprovals = (donor && donor.plan_approvals) || null;
@@ -45,14 +37,28 @@ function applyInheritance(sessionId, createdAt, donor) {
       inherited_from: donorSid,
     });
 
+  const granularity = opts && opts.granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+    ? GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+    : GRANULARITY_FULL;
+  const degraded = granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY;
+  const inheritedSteps = [];
+  const revertedSteps = degraded
+    ? VALID_STEPS.filter((step) => !isContextIndependentStep(step))
+    : [];
+
   const build = () => {
     const events = [];
 
     for (const step of VALID_STEPS) {
       // cleanup is handled below — its donor record is discarded wholesale.
       if (step === "cleanup") continue;
+      // Degraded mode emits NO event of any kind for a worktree-dependent step:
+      // an annotation carried without its status is still a claim about a
+      // working tree this session never had.
+      if (degraded && !isContextIndependentStep(step)) continue;
       const entry = donorSteps[step];
       if (!entry || typeof entry !== "object") continue;
+      if (inheritedSteps.indexOf(step) === -1) inheritedSteps.push(step);
 
       if (typeof entry.status === "string" && entry.status !== "pending") {
         events.push(stamp({ kind: "step_status", step, status: entry.status }));
@@ -70,17 +76,21 @@ function applyInheritance(sessionId, createdAt, donor) {
     }
 
     // #772: cleanup must never inherit as already-done. The three events are one
-    // unit: discard the donor's notes, record the reset, state why.
-    events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
-    events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
-    events.push(
-      stamp({
-        kind: "step_annotation",
-        step: "cleanup",
-        key: "skip_reason",
-        value: "inherited-from-prior-session",
-      })
-    );
+    // unit: discard the donor's notes, record the reset, state why. Skipped when
+    // degraded — the heir's OWN worktree still needs tearing down, so marking
+    // cleanup skipped there would be a false record.
+    if (!degraded) {
+      events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
+      events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
+      events.push(
+        stamp({
+          kind: "step_annotation",
+          step: "cleanup",
+          key: "skip_reason",
+          value: "inherited-from-prior-session",
+        })
+      );
+    }
 
     // #1133: an inherited outline/detail `complete` is a pending->complete
     // transition for the NEW session, so the donor's approval must land in the
@@ -93,6 +103,7 @@ function applyInheritance(sessionId, createdAt, donor) {
       // validateEvent throw, aborting inheritance and leaving this session with no
       // state file at all. Skip what we don't recognize; never let it wedge us.
       for (const step of VALID_STEPS) {
+        if (degraded && !isContextIndependentStep(step)) continue;
         const rec = donorApprovals[step];
         if (!rec || typeof rec !== "object") continue;
         events.push(
@@ -123,7 +134,8 @@ function applyInheritance(sessionId, createdAt, donor) {
   // it is completing. A donor that HAS one is verified the normal way, so a
   // tampered or deleted artifact is still refused (#1133 G15f/G15h).
   const gatedCompleting = APPROVAL_GATED_STEPS.filter(
-    (step) => donorSteps[step] && donorSteps[step].status === "complete"
+    (step) => (!degraded || isContextIndependentStep(step))
+      && donorSteps[step] && donorSteps[step].status === "complete"
   );
   const anyDonorRecord = gatedCompleting.some(
     (step) => donorApprovals && donorApprovals[step] && typeof donorApprovals[step] === "object"
@@ -141,6 +153,29 @@ function applyInheritance(sessionId, createdAt, donor) {
       ? `inherited from session ${donorSid || "(unknown)"} which recorded no plan approval`
       : null,
   });
+
+  return { granularity, inherited_steps: inheritedSteps, reverted_steps: revertedSteps };
 }
 
-module.exports = { INHERIT_ORIGIN, applyInheritance };
+// The ONE renderer both adopt-session-state and /resume-session print from, so
+// the two can never describe the same adoption differently.
+function describeGranularInheritance(result) {
+  const granularity = (result && result.granularity) || GRANULARITY_FULL;
+  const inherited = (result && result.inherited_steps) || [];
+  const reverted = (result && result.reverted_steps) || [];
+  const head = `Inherited ${inherited.length} step(s) at granularity ${granularity}: ` +
+    `${inherited.length ? inherited.join(", ") : "(none)"}.`;
+  if (reverted.length === 0) {
+    return `${head} Nothing was held back — the donor's record carried over whole.`;
+  }
+  return `${head} Left pending in this worktree because their evidence does not travel: ` +
+    `${reverted.join(", ")}.`;
+}
+
+module.exports = {
+  INHERIT_ORIGIN,
+  GRANULARITY_FULL,
+  GRANULARITY_CONTEXT_INDEPENDENT_ONLY,
+  applyInheritance,
+  describeGranularInheritance,
+};

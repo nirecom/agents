@@ -76,6 +76,10 @@ function block(reason, extras = undefined) {
     }
     reportBlock("workflow-gate", _gateReportCtx.command || _gateReportCtx.toolName || "<unknown>", _gateReportCtx.sessionId, effExtras);
   } catch (_) { /* fail-open */ }
+  try {
+    const { recordGateBlock } = require("./workflow-gate/handoff-record");
+    recordGateBlock(_gateReportCtx.sessionId, reason, { command: _gateReportCtx.command });
+  } catch (_) { /* fail-open: a lost breadcrumb must never change the verdict */ }
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
 }

@@ -115,3 +115,50 @@ if [ -d "$REPO/rules/a-directory.md" ]; then
 else
     fail "U2: could not create the directory fixture $REPO/rules/a-directory.md — the EISDIR shape is UNVERIFIED"
 fi
+
+# --- UF3 (issue #2218 Step 10/13): the emergency-flush rule against the REAL policy and the REAL
+# rules tree. Every case above grades a fixture tree, which can only prove the classifier works;
+# this one is the registration itself — a rule the session must receive without earning it by glob
+# is `ok` only while the policy that ships names it. Swapping the policy pin (and restoring it) is
+# the whole setup: the hook reads it from the environment. ---
+UF3_SID="uf3flush"
+UF3_FP="$(node_path "$AGENTS_DIR/rules/handoff-emergency-flush.md")"
+UF3_SAVED_POLICY="$RULES_INJECTION_POLICY"
+UF3_SAVED_PROJECT="$CLAUDE_PROJECT_DIR"
+RULES_INJECTION_POLICY="$(node_path "$AGENTS_DIR/hooks/lib/rules-injection-policy.js")"
+# The project dir moves with the policy: toRulesKey() derives the rules root from
+# it, so leaving it on the fixture tree would classify the real path as "not a
+# rules file" and return a vacuous ok.
+CLAUDE_PROJECT_DIR="$(node_path "$AGENTS_DIR")"
+fire "$UF3_SID" "$UF3_FP" OMIT >/dev/null
+uf3="$(read_field "$UF3_SID" "$UF3_FP" verdict)"
+RULES_INJECTION_POLICY="$UF3_SAVED_POLICY"
+CLAUDE_PROJECT_DIR="$UF3_SAVED_PROJECT"
+if [ "$uf3" = "ok" ]; then
+    pass "UF3: rules/handoff-emergency-flush.md classifies ok against the shipped policy — registered unconditional, no paths: needed"
+else
+    fail "UF3: want ok for rules/handoff-emergency-flush.md against the shipped policy, got '$uf3' — issue #2218 Step 10 registers it in EXPECTED_UNCONDITIONAL and Step 14 authors the file; write_code has not run"
+fi
+
+# --- UF4 (positive control for UF3): `ok` is ALSO E3's verdict for "not a rules file", so
+# UF3 going green while the CLAUDE_PROJECT_DIR/RULES_INJECTION_POLICY swap has silently stopped
+# taking effect would be indistinguishable from a real pass. Fire the identical swapped
+# environment against a real ON-DEMAND rule instead: rules/test.md ships with the reserved
+# `paths: [".on-demand-only/never-match"]` glob (see classify()'s ON_DEMAND_TOKEN branch), so a
+# fire against it — meaning the hook reports it loaded anyway — must classify S-LEAK. Only a
+# verdict other than "ok"/"unreadable" here proves the real rules tree, not a fixture, was read. ---
+UF4_SID="uf4realondemand"
+UF4_FP="$(node_path "$AGENTS_DIR/rules/test.md")"
+UF4_SAVED_POLICY="$RULES_INJECTION_POLICY"
+UF4_SAVED_PROJECT="$CLAUDE_PROJECT_DIR"
+RULES_INJECTION_POLICY="$(node_path "$AGENTS_DIR/hooks/lib/rules-injection-policy.js")"
+CLAUDE_PROJECT_DIR="$(node_path "$AGENTS_DIR")"
+fire "$UF4_SID" "$UF4_FP" OMIT >/dev/null
+uf4="$(read_field "$UF4_SID" "$UF4_FP" verdict)"
+RULES_INJECTION_POLICY="$UF4_SAVED_POLICY"
+CLAUDE_PROJECT_DIR="$UF4_SAVED_PROJECT"
+if [ "$uf4" = "S-LEAK" ]; then
+    pass "UF4: rules/test.md (a real on-demand rule) classifies S-LEAK under the identical swapped environment — the swap is proven live, so UF3's ok is not vacuous"
+else
+    fail "UF4: want S-LEAK for rules/test.md under the swapped environment, got '$uf4' — if this is 'ok' the swap silently stopped classifying the real rules tree and UF3 would be a vacuous pass"
+fi

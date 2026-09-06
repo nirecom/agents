@@ -68,6 +68,7 @@ RNT-9. **Settle the step** as a separate Bash call:
      The query runs on every green run rather than behind a "demotion looked likely" proxy: one state-file read is cheaper than a proxy, and a proxy would be a second judgement axis.
 
 RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tail`.
+   Record a result that changed on re-run as `--class D --step run_tests --key run-tests:flaky`, and an RNT-9 recovery or `NONE` route as `--class E --key run-tests:sentinel-recovery`, per `skills/_shared/handoff-record.md`.
 
 ## Rules
 

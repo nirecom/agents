@@ -10,19 +10,29 @@
 // Consumers: bin/workflow/adopt-session-state --list, the /workflow-init
 // `adopt-prior-state` phase, and session-start's startup-no-lineage notice.
 
-const os = require("os");
 const path = require("path");
+const { _encodeCwd, _getTranscriptBase } = require("../../lib/session-title");
 const { readState } = require("../state-io");
 const { _listJsonlByMtime } = require("../session-id");
 const { readLineageAncestors } = require("./lineage");
 const { contextMatches } = require("./context-match");
 
-// The transcript directory Claude Code derives from a resolved cwd.
+// The transcript directory Claude Code derives from a resolved cwd. The encoder
+// is session-title.js's, not a second copy: the two used to disagree on a
+// POSIX-style drive-letter cwd, so `--from` and `--list` resolved different
+// directories for one session.
 function transcriptDirFor(cwd) {
-  const encoded = String(cwd).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
-  const base = process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
-    path.join(os.homedir(), ".claude", "projects");
-  return path.join(base, encoded);
+  return path.join(_getTranscriptBase(), _encodeCwd(cwd));
+}
+
+// A cwd recorded before any resolve step encodes differently from the resolved
+// form on Windows, and old state files still carry that spelling — so the walk
+// looks in both rather than silently finding nothing.
+function transcriptDirsFor(cwd) {
+  const dirs = [transcriptDirFor(cwd)];
+  const raw = path.join(_getTranscriptBase(), String(cwd).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"));
+  if (raw !== dirs[0]) dirs.push(raw);
+  return dirs;
 }
 
 // Last moment this session recorded anything (ISO string), for display only.
@@ -47,25 +57,29 @@ function listRecentContextCandidates(ctx, opts) {
   const limit = (opts && typeof opts.limit === "number") ? opts.limit : 10;
   if (!ctx || typeof ctx.cwd !== "string") return [];
 
-  let files;
-  try {
-    files = _listJsonlByMtime(transcriptDirFor(ctx.cwd)).slice(0, limit);
-  } catch (e) {
-    return [];
+  const scan = [];
+  for (const dir of transcriptDirsFor(ctx.cwd)) {
+    let files;
+    try {
+      files = _listJsonlByMtime(dir).slice(0, limit);
+    } catch (e) {
+      continue;
+    }
+    for (const { name } of files) scan.push(path.join(dir, name));
   }
+  if (scan.length === 0) return [];
 
   // Lazy require: effective-state → evidence-resolver → state-io, and this
   // module is reached through the inheritance barrel. Deferring keeps the load
   // order acyclic.
   const { evaluateResumability } = require("../effective-state");
 
-  const dir = transcriptDirFor(ctx.cwd);
   const out = [];
   const seen = new Set();
-  for (const { name } of files) {
+  for (const jsonlPath of scan) {
     // Both breadcrumb shapes are accepted here (announce line AND forkedFrom),
     // the same reader the lineage gate uses — no second parser (CPR-SSOT).
-    const { ancestors: ids } = readLineageAncestors(path.join(dir, name), null);
+    const { ancestors: ids } = readLineageAncestors(jsonlPath, null);
 
     for (const id of ids) {
       if (seen.has(id)) continue;
@@ -94,4 +108,4 @@ function listRecentContextCandidates(ctx, opts) {
   return out;
 }
 
-module.exports = { listRecentContextCandidates, transcriptDirFor, lastActivityOf };
+module.exports = { listRecentContextCandidates, transcriptDirFor, transcriptDirsFor, lastActivityOf };

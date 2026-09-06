@@ -3,16 +3,10 @@
 # Tags: workflow, gate, hook, review-tests, wsid, scope:issue-specific
 #
 # Section F: wsid (workflow session id) match enforcement at the commit gate.
-# Sourced by tests/feature-833-review-tests-gate.sh. Inherits parent helpers
-# (PASS, FAIL, TMPDIR_BASE, WORKFLOW_DIR, GATE_HOOK, run_with_timeout,
-# compute_token, is_approve, is_block, setup_linked_worktree, stage_test_file,
-# build_gate_json, NOW_ISO).
-#
-# Pre-implementation expectation (RED phase):
-# - F10 (wsid match -> approve): GREEN (gate currently approves on token match,
-#   and post-fix gate approves on token+wsid match)
-# - F11 (wsid mismatch -> block): RED before write-code; GREEN after
-# - F12 (no wsid / legacy -> approve): GREEN both before and after
+# Sourced by tests/feature-833-review-tests-gate.sh; inherits its helpers
+# (see that file for PASS/FAIL/TMPDIR_BASE/WORKFLOW_DIR/GATE_HOOK/etc.).
+# Expected outcomes: F10 wsid match -> approve; F11 wsid mismatch -> block;
+# F12 legacy entry with no wsid field -> approve (backward compat).
 
 # YYYYMMDD for today (local TZ), used to mint test session IDs.
 TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
@@ -22,11 +16,14 @@ TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toStri
 # the per-test plans_dir we control.
 run_gate_wsid() {
     local plans_dir="$1" repo_cwd="$2" json="$3"
-    echo "$json" | (cd "$plans_dir" && run_with_timeout 30 env \
-        CLAUDE_PROJECT_DIR="$repo_cwd" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
-        WORKFLOW_PLANS_DIR="$plans_dir" \
-        node "$GATE_HOOK") 2>/dev/null
+    local common_dir main_dir=""
+    common_dir="$(git -C "$repo_cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
+    if [ -n "$common_dir" ]; then
+        main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$repo_cwd" "$common_dir" 2>/dev/null)" || main_dir=""
+    fi
+    local env_args=("CLAUDE_PROJECT_DIR=$repo_cwd" "CLAUDE_WORKFLOW_DIR=$WORKFLOW_DIR" "WORKFLOW_PLANS_DIR=$plans_dir")
+    [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
+    echo "$json" | (cd "$plans_dir" && run_with_timeout 30 env "${env_args[@]}" node "$GATE_HOOK") 2>/dev/null
 }
 
 # Write a workflow state JSON for the gate to consume. Compared to

@@ -46,6 +46,7 @@ const ON_DEMAND_READERS = [
 const EXPECTED_UNCONDITIONAL = [
   "rules/core-principles.md",
   "rules/git.md",
+  "rules/handoff-emergency-flush.md",
   "rules/shell-commands.md",
   "rules/stop-guard-exemptions.md",
   "rules/supervisor-reporting.md",
