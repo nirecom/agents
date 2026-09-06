@@ -27,14 +27,27 @@ AGENTS_NODE_GUARD
 # Resolution order for hooks/lib/load-env.js:
 #   1. $AGENTS_CONFIG_DIR/hooks/lib/load-env.js  (when AGENTS_CONFIG_DIR set)
 #   2. $(dirname $0)/../hooks/lib/load-env.js     (SCRIPT_DIR fallback)
-# Process env wins over .env (parity with load-env.js).
+# Process env wins over .env (parity with load-env.js). This is the opposite of
+# bin/env-effective-kv, which never reads process.env — callers resolving a
+# prompt-bound value (e.g. PROJECT_NFR) that must not be forgeable by an inline
+# `VAR=x` shell prefix should use env-effective-kv instead of this script.
 
 set -u
 
 MODE="value"
-if [ "${1:-}" = "--is-off" ]; then
-  MODE="is-off"; shift
-fi
+GETCV_REPO_ROOT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --is-off) MODE="is-off"; shift ;;
+    --repo-root)
+      if [ $# -lt 2 ]; then
+        printf 'usage: get-config-var [--is-off] [--repo-root <path>] <NAME> [<default>]\n' >&2
+        exit 64
+      fi
+      GETCV_REPO_ROOT="$2"; shift 2 ;;
+    *) break ;;
+  esac
+done
 
 GETCV_NAME="${1:-}"
 GETCV_DEFAULT="${2:-}"
@@ -65,10 +78,20 @@ trap 'rm -f "$GETCV_KIND_FILE"' EXIT
 GETCV_KIND_FILE="$(mktemp)"
 export GETCV_KIND_FILE
 
-VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" node -e '
+VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" GETCV_REPO_ROOT="$GETCV_REPO_ROOT" node -e '
   const fs = require("fs");
-  try { require(process.env.GETCV_LOADENV).loadDefaultEnv(); fs.writeFileSync(process.env.GETCV_KIND_FILE, "loaded"); } catch (e) { fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded"); }
-  const v = process.env[process.env.GETCV_NAME];
+  const name = process.env.GETCV_NAME;
+  const exported = process.env[name];
+  let mod = null;
+  try { mod = require(process.env.GETCV_LOADENV); mod.loadDefaultEnv(); fs.writeFileSync(process.env.GETCV_KIND_FILE, "loaded"); } catch (e) { fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded"); }
+  let v;
+  if (exported && exported.length) {
+    v = exported;
+  } else if (mod && process.env.GETCV_REPO_ROOT) {
+    v = mod.readEffectiveEnvFile(process.env.GETCV_REPO_ROOT)[name];
+  } else {
+    v = process.env[name];
+  }
   process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
 ')"
 
@@ -85,8 +108,11 @@ if [ "$MODE" = "is-off" ]; then
     off) exit 0 ;;
     on)  exit 1 ;;
     *)
-      printf 'get-config-var: unrecognized value %s for %s (caller-dependent: exit 3 — see usage header for ON vs OFF handling)\n' \
-        "$VAL" "$GETCV_NAME" >&2
+      # The value itself is withheld: with --repo-root it can come from a
+      # reviewed project's local override file, so echoing it would put a
+      # secret-shaped config value into whatever transcript reads stderr.
+      printf 'get-config-var: unrecognized value for %s (value withheld; caller-dependent: exit 3 — see usage header for ON vs OFF handling)\n' \
+        "$GETCV_NAME" >&2
       exit 3 ;;
   esac
 fi

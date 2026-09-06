@@ -1,25 +1,17 @@
 #!/usr/bin/env node
-// Lightweight .env file loader for Claude Code hooks.
-//
-// Reads $AGENTS_CONFIG_DIR/.env (or a given path) and injects KEY=VALUE pairs
-// into process.env. Existing process.env values take precedence (so explicit
-// shell exports and tests setting their own env override the .env file).
-//
-// Format: simple KEY=VALUE per line. Optional surrounding double or single
-// quotes are stripped. Lines starting with `#` or empty lines are skipped.
-// No multi-line values, no variable interpolation, no `export` prefix.
-//
-// OS-conditional blocks: marker lines (#@if <os> / #@endif) delimit sections
-// that apply only to a specific OS. On win32, blocks tagged `#@if windows` are
-// retained; on all other platforms, blocks tagged `#@if posix` are retained.
-// Marker lines themselves are always stripped from the parsed output. A flat
-// file with no markers is parsed identically — no-op, fully backward compatible.
-//
-// Fail-safe: missing or unreadable .env is a silent no-op.
+// Lightweight .env loader for Claude Code hooks. Reads $AGENTS_CONFIG_DIR/.env
+// (or a given path) into a KEY→value map, and optionally into process.env where
+// a non-empty process.env value always wins.
+// Grammar: KEY=VALUE per line; `#` and blank lines skipped; optional single or
+// double quotes, which may span lines (see parseEnv); no interpolation.
+// OS-conditional `#@if <os>` / `#@endif` blocks are filtered by platform and the
+// marker lines are always stripped.
+// Fail-safe: a missing or unreadable file is a silent no-op.
 
 const fs = require("fs");
 const path = require("path");
 const { configDirCandidates } = require("./agents-config-dir");
+const localEnv = require("./local-env");
 
 // --- Pristine isolation-env snapshot -------------------------------------
 // Captured at module load time, BEFORE loadDefaultEnv() injects any .env
@@ -90,25 +82,82 @@ function filterOsBlocks(text, platform) {
   return out.join("\n");
 }
 
+// findClosingQuote returns the index of the terminating quote in `text`, or -1.
+// A backslash escapes the next character inside a double-quoted value only.
+function findClosingQuote(text, quote) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote === '"' && ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === quote) return i;
+  }
+  return -1;
+}
+
+// unescapeDoubleQuoted expands \n, \t, \\ and \" inside a double-quoted value.
+// An unrecognized sequence keeps its backslash verbatim.
+function unescapeDoubleQuoted(text) {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "\\" || i === text.length - 1) {
+      out += text[i];
+      continue;
+    }
+    const next = text[i + 1];
+    if (next === "n") out += "\n";
+    else if (next === "t") out += "\t";
+    else if (next === "\\") out += "\\";
+    else if (next === '"') out += '"';
+    else out += "\\" + next;
+    i++;
+  }
+  return out;
+}
+
 // parseEnv parses already-OS-filtered .env text into a plain KEY→value map.
-// Pure: never touches process.env. SSOT for the KEY=VALUE line grammar.
+// Pure: never touches process.env. SSOT for the KEY=VALUE grammar.
+// A quoted value runs to its matching closing quote, so every line it covers is
+// data — a `#` or a second `KEY=` inside it is content, not syntax. A newline
+// directly before the closing quote is dropped. An unterminated quote discards
+// that key alone; keys parsed before it survive.
 function parseEnv(content) {
   const map = {};
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
+  const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx].trim();
     if (!line || line.startsWith("#")) continue;
     const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
     if (!m) continue;
     const key = m[1];
-    let val = m[2];
-    // Strip optional surrounding quotes
-    if (val.length >= 2) {
-      if ((val.startsWith('"') && val.endsWith('"')) ||
-          (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
-      }
+    const rawValue = m[2];
+
+    const quote = rawValue.startsWith('"') || rawValue.startsWith("'") ? rawValue[0] : "";
+    if (!quote) {
+      map[key] = rawValue;
+      continue;
     }
-    map[key] = val;
+
+    let buf = rawValue.slice(1);
+    let close = findClosingQuote(buf, quote);
+    while (close < 0 && idx + 1 < lines.length) {
+      idx++;
+      buf += "\n" + lines[idx];
+      close = findClosingQuote(buf, quote);
+    }
+    if (close < 0) {
+      // Name the KEY only — the value it guarded is exactly what must not leak.
+      // Unconditional: an unterminated quote can silently absorb every line down to
+      // the next stray quote character in the file, so this must not require an
+      // opt-in debug flag to be visible.
+      process.stderr.write(`load-env: ${key} discarded — unterminated quote\n`);
+      continue;
+    }
+    let val = buf.slice(0, close);
+    if (val.endsWith("\n")) val = val.slice(0, -1);
+    map[key] = quote === '"' ? unescapeDoubleQuoted(val) : val;
   }
   return map;
 }
@@ -130,7 +179,8 @@ function readEnvFile(envPath) {
 
 // readDefaultEnvFile resolves the config .env the same way loadDefaultEnv does,
 // but returns its parsed contents instead of injecting them into process.env.
-// Returns {} when no .env can be found (callers treat "absent" as "unset").
+// Global-only door (DD-6): the project-local overlay is deliberately invisible
+// here. Returns {} when no .env can be found ("absent" reads as "unset").
 function readDefaultEnvFile() {
   // (a) Honor AGENTS_CONFIG_DIR if set
   if (process.env.AGENTS_CONFIG_DIR) {
@@ -147,6 +197,25 @@ function readDefaultEnvFile() {
     if (viaReal) return viaReal;
   } catch (_) {}
   return {};
+}
+
+// resolveLocalLayer returns {globalMap, allowed, localMap} for a project root.
+// localMap is null whenever the local layer must not be consulted at all.
+function resolveLocalLayer(projectRoot) {
+  const globalMap = readDefaultEnvFile();
+  const allowed = localEnv.resolveOverridableKeys(globalMap);
+  if (allowed.size === 0) return { globalMap, allowed, localMap: null };
+  const root = localEnv.resolveProjectRoot(projectRoot || null, process.cwd());
+  if (!root) return { globalMap, allowed, localMap: null };
+  return { globalMap, allowed, localMap: readEnvFile(localEnv.localEnvPathFor(root)) };
+}
+
+// readEffectiveEnvFile returns the global map with the project-local overlay
+// applied. Never reads process.env for a config value.
+function readEffectiveEnvFile(projectRoot) {
+  const { globalMap, allowed, localMap } = resolveLocalLayer(projectRoot);
+  if (!localMap) return Object.assign({}, globalMap);
+  return localEnv.overlay(globalMap, localMap, allowed).map;
 }
 
 function loadEnv(envPath) {
@@ -176,19 +245,41 @@ function loadEnv(envPath) {
   return true;
 }
 
+// applyLocalOverlayToProcessEnv injects declared-overridable local values on top
+// of the already-injected global layer. `before` is the pre-injection process.env
+// snapshot, so a value the caller actually exported still outranks both layers.
+// The lookup is case-insensitive: Windows environment variables are, so a
+// caller's real ENFORCE_WORKTREE export must not be missed by a differently
+// cased key on the plain-object `before` snapshot.
+function applyLocalOverlayToProcessEnv(before) {
+  const { allowed, localMap } = resolveLocalLayer(null);
+  if (!localMap) return;
+  const beforeUpperTruthy = new Set(
+    Object.keys(before)
+      .filter((k) => before[k])
+      .map((k) => k.toUpperCase())
+  );
+  for (const key of Object.keys(localMap)) {
+    if (!allowed.has(key)) continue;
+    if (beforeUpperTruthy.has(key.toUpperCase())) continue;
+    process.env[key] = localMap[key];
+  }
+}
+
+// loadDefaultEnv injects the effective config into process.env.
+// Candidate ENUMERATION is shared with hooks/lib/agents-config-dir.js. The
+// SELECTION POLICY is not (CPR-SC): an explicit AGENTS_CONFIG_DIR is the sole
+// settings source and never falls through, or a child pointed at a test config
+// dir would get the real repo's .env injected.
+// Pinned by tests/fix-389-load-env-default-fallback T389-7.
 function loadDefaultEnv() {
-  // Candidate ENUMERATION is shared with hooks/lib/agents-config-dir.js — the
-  // (a)/(b)/(c) sources below are now its "env"/"module"/"realpath" candidates,
-  // normalized through normalizeCwd + path.resolve (so a Git Bash
-  // `/c/git/agents` value resolves), and (c) is still the
-  // `realpathSync(__filename)` walk that reaches a symlinked checkout.
-  //
-  // The SELECTION POLICY is deliberately NOT shared (CPR-SC): load-env decides
-  // where SETTINGS come from, so an explicit AGENTS_CONFIG_DIR short-circuits —
-  // it is the sole config source and never falls through, or a child process
-  // pointed at an alternate/test config dir would get the real repo's .env
-  // injected. The resolver decides WHO is executing and does fall through.
-  // Pinned by tests/fix-389-load-env-default-fallback T389-7.
+  const before = Object.assign({}, process.env);
+  const loaded = loadDefaultEnvGlobal();
+  applyLocalOverlayToProcessEnv(before);
+  return loaded;
+}
+
+function loadDefaultEnvGlobal() {
   const candidates = configDirCandidates();
   // (a) Honor AGENTS_CONFIG_DIR if set
   const envCandidate = candidates.find((c) => c.source === "env");
@@ -212,5 +303,6 @@ module.exports = {
   parseEnv,
   readEnvFile,
   readDefaultEnvFile,
+  readEffectiveEnvFile,
   getPristineIsolationEnv,
 };

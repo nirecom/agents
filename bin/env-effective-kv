@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Usage:
+#   env-effective-kv [selector] --key <NAME>          Print one value, unframed
+#   env-effective-kv [selector] --allow-dump          Dump the whole map as NUL-separated KEY/VALUE
+#   selector: --global-only (default) | --repo-root <path>
+#
+# Config values are resolved from files on disk only — process.env is never
+# consulted for them, so `PROJECT_NFR=evil bash bin/review-codex` cannot inject
+# through this door. process.env is used solely to locate config directories.
+#
+# --allow-dump is mandatory for whole-map output (never --key) because a bare
+# invocation would otherwise print every value in the global .env — including
+# any secret living there — to whatever unmarked-.env-aware guard is watching.
+# No production caller needs this; it exists for test/diagnostic use only.
+#
+# Exit: 64 usage error (including both selectors at once, or whole-map output
+# without --allow-dump). A missing node is a graceful degradation: exit 0,
+# empty stdout, a warning on stderr.
+
+set -uo pipefail
+
+EEK_MODE="global"
+EEK_MODE_SET=0
+EEK_ROOT=""
+EEK_KEY=""
+EEK_KEY_SET=0
+EEK_ALLOW_DUMP=0
+
+usage() {
+  printf 'usage: env-effective-kv [--global-only | --repo-root <path>] [--key <NAME> | --allow-dump]\n' >&2
+  exit 64
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --global-only)
+      if [ "$EEK_MODE_SET" -eq 1 ] && [ "$EEK_MODE" != "global" ]; then usage; fi
+      EEK_MODE="global"; EEK_MODE_SET=1; shift ;;
+    --repo-root)
+      if [ "$EEK_MODE_SET" -eq 1 ] && [ "$EEK_MODE" != "effective" ]; then usage; fi
+      if [ $# -lt 2 ]; then usage; fi
+      EEK_MODE="effective"; EEK_MODE_SET=1; EEK_ROOT="$2"; shift 2 ;;
+    --key)
+      if [ $# -lt 2 ]; then usage; fi
+      EEK_KEY="$2"; EEK_KEY_SET=1; shift 2 ;;
+    --allow-dump)
+      EEK_ALLOW_DUMP=1; shift ;;
+    *) usage ;;
+  esac
+done
+
+if [ "$EEK_KEY_SET" -eq 0 ] && [ "$EEK_ALLOW_DUMP" -eq 0 ]; then
+  usage
+fi
+
+if [ -n "${AGENTS_CONFIG_DIR:-}" ] && [ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]; then
+  EEK_LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
+else
+  _SCRIPT="${BASH_SOURCE[0]}"
+  _target="$(readlink "$_SCRIPT" 2>/dev/null)"
+  while [ -n "$_target" ]; do
+    case "$_target" in
+      /*) _SCRIPT="$_target" ;;
+      *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
+    esac
+    _target="$(readlink "$_SCRIPT" 2>/dev/null)"
+  done
+  EEK_SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
+  EEK_LOADENV="$EEK_SCRIPT_DIR/../hooks/lib/load-env.js"
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  printf 'env-effective-kv: node not found in PATH; config resolution unavailable\n' >&2
+  exit 0
+fi
+
+export EEK_LOADENV EEK_MODE EEK_ROOT EEK_KEY EEK_KEY_SET
+node -e '
+  const m = require(process.env.EEK_LOADENV);
+  const map = process.env.EEK_MODE === "effective"
+    ? m.readEffectiveEnvFile(process.env.EEK_ROOT || null)
+    : m.readDefaultEnvFile();
+  if (process.env.EEK_KEY_SET === "1") {
+    const v = map[process.env.EEK_KEY];
+    process.stdout.write(typeof v === "string" ? v : "");
+  } else {
+    const NUL = String.fromCharCode(0);
+    for (const k of Object.keys(map)) {
+      process.stdout.write(k + NUL + String(map[k]) + NUL);
+    }
+  }
+'

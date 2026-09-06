@@ -268,7 +268,9 @@ follows Martin Fowler's narrow/broad integration distinction and Kent C. Dodds' 
 Trophy. Security skills apply the same references at design time (`/review-plan-security`)
 and implementation time (`/review-code-security`). At step 5, `review-code-codex`
 also runs an adversarial review via OpenAI Codex CLI (when installed), providing a
-second-provider opinion independent of Claude's model-specific biases.
+second-provider opinion independent of Claude's model-specific biases. A reviewed
+project can declare its own non-functional requirements once, in a gitignored
+`.env.local` at its root, and every codex review prompt injects them automatically.
 
 `settings.json` enforces a permission deny-list so Claude cannot execute dangerous
 operations even if instructed: force push (`--force`, `-f`, `+<ref>` refspec), direct

@@ -30,6 +30,7 @@ BASE="main"
 BASE_STATE="UNKNOWN"
 NO_LOG=false
 CONCERNS_FILE=""
+PROJECT_ROOT_ARG=""
 CONTEXT_FILES=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,6 +53,12 @@ while [[ $# -gt 0 ]]; do
         exit 0
       fi
       CONCERNS_FILE="$2"; shift 2 ;;
+    --project-root)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Review: FAILED — --project-root requires an argument"
+        exit 0
+      fi
+      PROJECT_ROOT_ARG="$2"; shift 2 ;;
     --context)
       if [[ $# -lt 2 ]]; then
         echo "## Codex Review: FAILED — --context requires an argument"
@@ -467,9 +474,23 @@ fi
 
 PREAMBLE=$(codex_core_adversarial_preamble "code diff")
 
+# Project non-functional requirements; empty unless --project-root names a
+# project that declares PROJECT_NFR (resolved from disk, never from the env).
+NFR_BLOCK=""
+if [[ -n "$PROJECT_ROOT_ARG" ]]; then
+  if [[ ! -d "$PROJECT_ROOT_ARG" ]]; then
+    echo "## Codex Review: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
+    exit 0
+  fi
+  NFR_TEXT="$(codex_core_project_nfr_block "$PROJECT_ROOT_ARG")"
+  if [[ -n "$NFR_TEXT" ]]; then
+    NFR_BLOCK="${NFR_TEXT}"$'\n\n'
+  fi
+fi
+
 PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
-${PRIOR_INSTRUCTIONS}## Concern Delta output format
+${NFR_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
 
 After your review bullets, emit a section headed exactly '## Concern Delta'.
 List one line per concern, in this form:
