@@ -173,5 +173,5 @@ assert_policy_section "W10-03" "$USAGE_REL" \
     "(absen|unavailable|not available|missing|no index|off)" "read" "grep" "(never block|not block|do not block|fall ?back|fallback)"
 
 assert_policy_section "W10-04" "$USAGE_REL" \
-    "agents that record evidence must re-read the file:line before citing it; codegraph output quoted straight into an artifact is evidence nobody verified" \
-    "evidence" "read" "(file:line|line number|verif|confirm|check)"
+    "codegraph output is trusted as Read-equivalent; unless the policy says so AND names the flag that overrides it, agents either re-grep everything the index already answered or read nothing when the index is stale" \
+    "(trust|already read)" "grep" "(flag|banner)" "(stale|fresh)"
