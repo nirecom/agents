@@ -105,9 +105,9 @@ if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
                 if [ -n "${ZSH_VERSION-}" ]; then setopt LOCAL_OPTIONS NO_MONITOR; fi
                 echo "$AGENTS_SESSION_SYNC_FETCH_MARKER" >&2
                 if [ -n "$_ss_sshcmd" ]; then
-                    ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch 2>/dev/null ) &
+                    ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
                 else
-                    ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch 2>/dev/null ) &
+                    ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
                 fi
                 _pid_ss=$!
                 _ss_deadline=$(( $(date +%s) + 3 ))

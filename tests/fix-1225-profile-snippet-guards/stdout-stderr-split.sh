@@ -231,13 +231,13 @@ EOF
     rm -rf "$sb"
 }
 
-# TC-SPLIT6 — stdout purity with core.sshCommand CONFIGURED. Every other purity
-# case runs with it unset, where the fake `git config --get core.sshCommand`
-# exits 1 and prints nothing — so a probe call written without `>/dev/null`
-# leaks nothing and all of TC-SPLIT1/4/5 stay green. With the config present the
-# same call prints its value on stdout, which is exactly what the login shell's
-# snapshot capture would swallow. TC-SSH2 already pins the behavioural half
-# (GIT_SSH_COMMAND left unset); this pins the stream half of the same branch.
+# TC-SPLIT6 — branch-selection anchor for core.sshCommand CONFIGURED: the fetch
+# must take the line-107 branch and honour the value by leaving GIT_SSH_COMMAND
+# unset (TC-SSH2 pins the same behaviour from the ssh angle).
+# It does NOT pin the fetch branch's stream contract: its probe
+# `_ss_sshcmd="$(git config --get ...)"` is a command substitution, which
+# captures that stdout by construction, so no mutation turns out_exact red for a
+# stream reason. TC-SPLIT8 owns that claim via the leaky-fetch fixture below.
 _SSS_CORE_SSHCOMMAND='/custom/ssh -F /dev/null'
 tc_split_stdout_pure_with_core_sshcommand() {
     local sb; sb="$(make_mirror_sandbox 1)"
@@ -253,9 +253,83 @@ tc_split_stdout_pure_with_core_sshcommand() {
     [ -f "$sb/gtp.out" ] || branch_taken=0
     [ "$(cat "$sb/sshcmd.out" 2>/dev/null || true)" = "UNSET" ] || branch_taken=0
     if [ "$out_exact" = "1" ] && [ "$branch_taken" = "1" ]; then
-        pass "TC-SPLIT6: core.sshCommand configured — stdout is still DONE alone (config probe redirected)"
+        pass "TC-SPLIT6: core.sshCommand configured — the configured-value branch runs and stdout is still DONE alone"
     else
-        fail "TC-SPLIT6: out_exact=$out_exact branch_taken=$branch_taken — the core.sshCommand probe's own stdout must not reach the shell snapshot. stdout=[$stdout_body] stderr=[$err]"
+        fail "TC-SPLIT6: out_exact=$out_exact branch_taken=$branch_taken — the configured core.sshCommand branch must run (fetch attempted, GIT_SSH_COMMAND left unset). stdout=[$stdout_body] stderr=[$err]"
+    fi
+    rm -rf "$sb"
+}
+
+# --- Leaky-fetch fixture (TC-SPLIT7 / TC-SPLIT8) -----------------------------
+# The shipped fake `git fetch` writes nothing to real stdout, so reverting
+# either fetch branch's `>/dev/null 2>&1` back to `2>/dev/null` leaves every
+# purity case green. This variant prints a real progress line on real stdout as
+# its FIRST statement — the same deliberate noisiness make_sandbox gives `merge`
+# — so the redirect on profile-snippet.sh:108 / :110 becomes observable.
+_SSS_FETCH_LEAK_LINE='remote: Enumerating objects: 12, done.'
+_sss_leaky_fetch_git() {
+    local sb="$1"
+    cat > "$sb/bin/git" <<EOF
+#!/bin/bash
+# fake git with a stdout-leaking fetch (TC-SPLIT7 / TC-SPLIT8)
+cmd=""; repo="\$PWD"; prev=""
+for a in "\$@"; do
+    if [ "\$prev" = "-C" ]; then repo="\$a"; fi
+    case "\$a" in
+        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
+    esac
+    prev="\$a"
+done
+case "\$cmd" in
+    fetch)
+        printf '%s\n' '$_SSS_FETCH_LEAK_LINE'
+        printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"
+        printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"
+        exit 0
+        ;;
+    merge)
+        printf 'merged' > "$sb/merged.out"
+        printf 'Updating abc1234..def5678\nFast-forward\n'
+        exit 0
+        ;;
+    config)
+        case "\$*" in
+            *"--get core.sshCommand"*)
+                if [ -f "\$repo/core-sshcommand" ]; then cat "\$repo/core-sshcommand"; exit 0; fi
+                exit 1
+                ;;
+        esac
+        exit 0
+        ;;
+    *) exit 0 ;;
+esac
+EOF
+    chmod +x "$sb/bin/git"
+}
+
+# _sss_leaky_case <label> <core.sshCommand value|-> <expected GIT_SSH_COMMAND> <why>
+# One body for the two symmetric fetch branches: seed (or omit) core.sshCommand,
+# run the leaky fetch, and require stdout to be the driver's DONE line alone.
+# expected_sshcmd is the non-vacuity half — it names WHICH branch ran, so a case
+# cannot go green because the other branch happened to be taken.
+_sss_leaky_case() {
+    local label="$1" core_val="$2" expected_sshcmd="$3" why="$4"
+    local sb; sb="$(make_mirror_sandbox 1)"
+    _sss_leaky_fetch_git "$sb"
+    [ "$core_val" = "-" ] || printf '%s\n' "$core_val" > "$sb/home/.claude/projects/core-sshcommand"
+    _sss_run "$sb"
+    local stdout_body; stdout_body="$(cat "$sb/stdout.out" 2>/dev/null)"
+    local err; err="$(cat "$sb/stderr.out" 2>/dev/null)"
+    local got; got="$(cat "$sb/sshcmd.out" 2>/dev/null || true)"
+    local out_exact=1 branch_taken=1 leak_absent=1
+    [ "$stdout_body" = "DONE" ] || out_exact=0
+    [ -f "$sb/gtp.out" ] || branch_taken=0
+    [ "$got" = "$expected_sshcmd" ] || branch_taken=0
+    grep -qF "$_SSS_FETCH_LEAK_LINE" "$sb/stdout.out" 2>/dev/null && leak_absent=0
+    if [ "$out_exact" = "1" ] && [ "$branch_taken" = "1" ] && [ "$leak_absent" = "1" ]; then
+        pass "$label: $why — the fetch's own stdout is discarded; stdout is the driver's DONE line alone"
+    else
+        fail "$label: out_exact=$out_exact branch_taken=$branch_taken leak_absent=$leak_absent (GIT_SSH_COMMAND='$got', expected '$expected_sshcmd') — $why: a fetch redirect of 2>/dev/null alone lets git's stdout into the shell snapshot. stdout=[$stdout_body] stderr=[$err]"
     fi
     rm -rf "$sb"
 }
@@ -267,3 +341,9 @@ tc_split_no_variable_leak           # TC-SPLIT3
 tc_split_claudecode_snapshot_capture  # TC-SPLIT4
 tc_split_steady_state_stdout_silent   # TC-SPLIT5
 tc_split_stdout_pure_with_core_sshcommand  # TC-SPLIT6
+# TC-SPLIT7 / TC-SPLIT8 — the two fetch branches are symmetric, so both carry the
+# same stream contract; a fix applied to one only is what this pair catches.
+_sss_leaky_case "TC-SPLIT7" "-" "ssh -o BatchMode=yes" \
+    "core.sshCommand unset (profile-snippet.sh:110, BatchMode fallback branch)"
+_sss_leaky_case "TC-SPLIT8" "$_SSS_CORE_SSHCOMMAND" "UNSET" \
+    "core.sshCommand configured (profile-snippet.sh:108, configured-value branch)"
