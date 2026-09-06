@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-2099-complexity-stage-routing/consumer-orchestration-cases.sh
-# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
+# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, integration, model-selection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
 # MDP-3 / WT-5 / WCD-3 are the three mandatory consumer points (detail.md). The
@@ -31,6 +31,9 @@ d2099_extract_cmd() {
     [ -n "$line" ] || { echo ""; return; }
     printf '%s' "$line" | sed -E "s/^bash -c '//; s/'$//"
 }
+
+# Which CLI each consumer reads its stored evaluation through, how to extract that
+# command, and how to normalize its answer: consumer-read-cli.sh (sourced first).
 
 # The launch step each read step feeds (detail.md D4 consumer rows).
 d2099_launch_step() {
@@ -123,7 +126,7 @@ d2099_run_skill_cmd() {
 # the mapping this step applies (round-10 C1).
 d2099_orch_model_for() {
     case "$2" in high|low) ;; *) echo "NO_LEVEL"; return ;; esac
-    d2099_section_for_cli "$1" "read-complexity-evaluation" \
+    d2099_section_for_cli "$1" "$(d2099_model_map_cli "$(d2099_skill_dir_name "$1")")" \
         | grep -oE "$2 *(→|->) *(opus|sonnet)" | head -1 | sed -E 's/.*(→|->) *//'
 }
 
@@ -131,7 +134,7 @@ d2099_orch_model_for() {
 # parse the level, map to a model. FALLBACK when the CLI answered NONE.
 d2099_orch_model() {
     local f="$1" sid="$2" out first lvl model
-    out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "read-complexity-evaluation")" "$sid")
+    out=$(d2099_consumer_read "$f" "$sid")
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_COMMAND_IN_SKILL"; return; }
     [ "$first" = "NONE" ] && { echo "FALLBACK"; return; }
@@ -148,19 +151,28 @@ d2099_orch_model() {
 # command every assertion below would measure an empty string instead of the
 # consumer, so the command line is pinned first.
 d2099_orch_commands_are_real() {
-    local name stage step cmd f
+    local name stage step cmd f rcli rstep
     while IFS='|' read -r name stage step _; do
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
+        rcli=$(d2099_read_cli "$name")
+        rstep=$(d2099_read_step "$name")
         # CO-0: the bound itself. Every assertion below extracts from INSIDE the
-        # $step section; if that section is missing, empty of the CLI, or carries
+        # owning section; if that section is missing, empty of the CLI, or carries
         # duplicates, say which rather than measuring an arbitrary line.
-        d2099_assert_section_cli_unique "CO-0" "$step" "$f" "read-complexity-evaluation"
+        d2099_assert_section_cli_unique "CO-0" "$rstep" "$f" "$rcli"
         d2099_assert_section_cli_unique "CO-0a" "$step" "$f" "derive-complexity-level"
-        cmd=$(d2099_extract_cmd "$f" "read-complexity-evaluation")
-        assert_contains "CO-1 $step carries a runnable read command naming its own stage" \
-            "--stage $stage" "$cmd"
-        assert_contains "CO-1b $step's command passes the session through" \
+        cmd=$(d2099_extract_read_cmd "$f")
+        if [ "$rcli" = "read-session-facts" ]; then
+            # The bundled record carries no --stage flag: the stage is spelled in
+            # the KEY the step is told to read, so THAT is what must name it.
+            assert_contains "CO-1 $rstep carries a runnable read command naming its own stage" \
+                "COMPLEXITY_LEVEL_$stage" "$(d2099_section_for_cli "$f" "$rcli")"
+        else
+            assert_contains "CO-1 $rstep carries a runnable read command naming its own stage" \
+                "--stage $stage" "$cmd"
+        fi
+        assert_contains "CO-1b $rstep's command passes the session through" \
             '--session "$SESSION_ID"' "$cmd"
         cmd=$(d2099_extract_cmd "$f" "derive-complexity-level")
         assert_contains "CO-2 $step's NONE fallback carries a runnable derive command for its stage" \
@@ -317,7 +329,7 @@ d2099_orch_dispatched_model() {
         fi
         return
     fi
-    out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "read-complexity-evaluation")" "$sid")
+    out=$(d2099_consumer_read "$f" "$sid")
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
     if [ "$first" = "NONE" ]; then
