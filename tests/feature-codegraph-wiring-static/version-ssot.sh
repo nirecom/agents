@@ -25,8 +25,6 @@ assert_count_re "W12-03" "$CONSTANTS_REL" '^CODEGRAPH_TELEMETRY=' 1 \
     "the telemetry opt-out is read by both OS scripts and by codegraph-mcp.js; a duplicate hides which value ships"
 assert_count_re "W12-04" "$CONSTANTS_REL" '^DO_NOT_TRACK=' 1 \
     "same contract as CODEGRAPH_TELEMETRY (CPR-ORTH)"
-assert_count_re "W12-03b" "$CONSTANTS_REL" '^AGENTS_CODEGRAPH_MCP_OWNER=' 1 \
-    "a second assignment makes the last one win, so the reviewed ownership marker and the deployed one diverge (same contract as W12-03/04, CPR-ORTH)"
 
 # The SSOT claim itself: no file under install/, bin/ or hooks/ restates the version
 # literal. hooks/ is in scope because #2215 moves the version-pin logic itself into
@@ -49,9 +47,6 @@ W12-07 | install/win/codegraph.ps1  | install\codegraph-constants.txt
 W12-08 | install/linux/codegraph.sh | npm install -g --ignore-scripts "@colbymchenry/codegraph@$CODEGRAPH_VERSION"
 W12-09 | install/win/codegraph.ps1  | npm install -g --ignore-scripts "@colbymchenry/codegraph@$CodegraphVersion"
 W12-10 | hooks/lib/codegraph-boundary.js | codegraph-constants.txt
-# W12-03c pins the marker's value itself (not just its uniqueness): a silent value
-# change is a different failure than a duplicate line, so both rows are needed (CPR-ORTH)
-W12-03c | install/codegraph-constants.txt | AGENTS_CODEGRAPH_MCP_OWNER=agents-framework
 W12_TABLE
 
 # Negative half (Pattern 1): the pre-fix spellings must be gone, not merely

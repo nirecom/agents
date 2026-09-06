@@ -53,3 +53,8 @@ if ($authStatusOut -match 'project') {
         Write-Host "gh auth refresh -s project did not complete; continuing installation." -ForegroundColor Yellow
     }
 }
+
+# gh itself is installed at this point; auth login/refresh above are intentionally
+# best-effort native calls that leave $LASTEXITCODE non-zero on failure without
+# throwing, so the caller's exit-code check must not see their outcome.
+exit 0
