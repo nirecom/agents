@@ -30,6 +30,6 @@ on — never block, never retry, never report it as a failure.
 
 ## Evidence discipline
 
-Output from this tool is a lead, not evidence. Any agent recording a file:line in an
-artifact must re-open that location with Read and confirm the line before citing it —
-the index can lag the working tree by a write or two.
+Trust the source codegraph actually returned — don't re-verify it with grep.
+Read a file when the response flags it — a staleness banner naming it, a "⚠ changed on disk after the last index sync" flag, or the rarer auto-sync-disabled banner, which freezes the whole index — and equally when the response never handed you its source: a pointer-only entry (path, symbol, line, no body), a section the response says it trimmed, or anything left unanswered once the explore budget ran out.
+A file whose verbatim source came back unflagged is fresh — treat it as already Read.
