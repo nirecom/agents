@@ -435,3 +435,7 @@ Changes: Fixed prohibitively slow Windows Git Bash test runs by removing redunda
 ### FEATURE: PR #2246 (2026-09-06)
 Background: feat(#2215): CodeGraph telemetry default, runInit notice, UserPromptSubmit context hook
 Changes: CodeGraph: telemetry is now enabled by default (opt out with `CODEGRAPH_TELEMETRY=0`), registration prints a clearer notice about this, and prompts are automatically enriched with relevant CodeGraph context
+
+### FEATURE: PR #2252 (2026-09-06)
+Background: fix: aggregate installer step failures and simplify CodeGraph MCP ownership
+Changes: Fixed: install.ps1 no longer silently ignores a failing installer sub-script; failures are now collected and reported, and the installer exits non-zero. Fixed: re-running the installer with CodeGraph disabled now correctly detects and removes a codegraph MCP registration created by an earlier installer version.
