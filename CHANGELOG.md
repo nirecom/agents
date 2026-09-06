@@ -443,3 +443,7 @@ Changes: Fixed: install.ps1 no longer silently ignores a failing installer sub-s
 ### FEATURE: PR #2247 (2026-09-06)
 Background: feat(#2218): persist step micro-state to handoff artifacts, extend /resume-session cross-session
 Changes: `/resume-session --from <sid>` can now recover step-level progress from a prior session's handoff artifact, even when the new session has no transcript lineage to it.;Workflow steps persist their in-progress micro-state incrementally to a per-session handoff artifact, making interrupted work easier to resume across sessions.
+
+### FEATURE: PR #2257 (2026-09-07)
+Background: fix(#2255): extend the CodeGraph usage policy to every subagent and fix the SubagentStart output shape
+Changes: Fixed: CodeGraph's agent-facing usage policy now reaches every subagent (not just a fixed list), and trusts CodeGraph's results unless the response flags a file as stale or never returned its source.;Fixed: the `SubagentStart` hook emitted its injected context in an undocumented shape, so the conversation-language, plan-language, and CodeGraph directives could be dropped before reaching a subagent.
