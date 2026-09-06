@@ -50,7 +50,7 @@ WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` �
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
    - stdout `OFF`: skip this step; proceed (no user wait).
-   - stdout `ON` or `ERROR`: present the file list and notes.
+   - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
 

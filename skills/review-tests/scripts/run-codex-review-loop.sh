@@ -13,6 +13,17 @@ TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-terminal.txt"
 # Does not collide with bin/run-codex-review-loop's codes (0-7).
 EXIT_REINVOKE_AFTER_TERMINAL=8
 
+# Exits 4, 7 and 8 leave this script without reaching the completion sentinel
+# that records every other outcome, so a resumed session would find no trace of
+# them. Never allowed to change the review's own verdict.
+record_codex_exit() {
+  local rc="$1" path_taken="$2"
+  node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" \
+    --session "$SESSION_ID" --class D --step review_tests --key review-tests:codex-exit \
+    --summary "codex test review ended at exit $rc via $path_taken, before the completion sentinel" \
+    --pointer "$PLANS_DIR/$SESSION_ID-test-review.md" --origin step-end >/dev/null 2>&1 || true
+}
+
 # Print the current staged-tests fingerprint on stdout. Returns non-zero when it
 # cannot be computed (node/require/git failure, or no staged tests → empty token).
 compute_staged_tests_fingerprint() {
@@ -32,6 +43,7 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" ]]; then
     if [[ -f "$TERMINAL_FILE" ]]; then
       # fail-CLOSED: cannot compare fingerprints, so the guard must stay armed.
       echo "[review-tests] ERROR: terminal marker present but commit-target is unresolvable; keeping the re-invoke guard." >&2
+      record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
       exit "$EXIT_REINVOKE_AFTER_TERMINAL"
     fi
     echo "[review-tests] WARNING: no session state and not in a git repo; skipping test review." >&2
@@ -40,6 +52,7 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" ]]; then
 elif [[ -z "$COMMIT_TARGET" ]]; then
   if [[ -f "$TERMINAL_FILE" ]]; then
     echo "[review-tests] ERROR: terminal marker present but commit-target is unresolvable; keeping the re-invoke guard." >&2
+    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   echo "[review-tests] ERROR: cannot resolve commit-target worktree (session-bound source missing or main worktree). Skipping test review." >&2
@@ -58,10 +71,12 @@ if [[ -f "$TERMINAL_FILE" ]]; then
   if [[ -z "$CUR_FP" || -z "$PREV_FP" ]]; then
     # fail-CLOSED: a compare failure is not evidence that tests changed.
     echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the staged-tests fingerprint could not be compared. Keeping the guard armed. Accept the gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage tests/ before re-running." >&2
+    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [[ "$CUR_FP" == "$PREV_FP" ]]; then
     echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and tests/ are unchanged. Re-looping now would defeat --cap 1. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-create/re-stage tests/ and run again." >&2
+    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   # Fingerprint mismatch = tests were re-edited = legitimate restart → auto-clear.
@@ -125,4 +140,7 @@ if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); f
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
 arm_terminal_guard "$RC" || true
+case "$RC" in
+  4|7) record_codex_exit "$RC" "HALT" ;;
+esac
 exit "$RC"

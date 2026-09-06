@@ -56,14 +56,14 @@ CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_share
    Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template`, `wip_mode`, `enforce_worktree`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
    Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before dispatching.
-   Staging verification (Step CP-2) is skipped only when `wip_mode: true` — i.e. `--wip`, or a WORKFLOW_OFF / WORKTREE_OFF session marker (parity with the workflow-gate.js bypass).
-   On `branch_mismatch`: the `branch` payload key is not the branch checked out at `worktree_path` — nothing was committed. Re-derive `branch` from `git rev-parse --abbrev-ref HEAD` in that worktree and re-run; never re-dispatch with the same value.
-   On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path and stop.
-   On `gate_blocked`: workflow-gate refused the commit or the push (or could not be trusted — a gate crash fails closed). Surface the summary verbatim, complete the named workflow step, and re-run `/commit-push`. Never retry by another route.
-   On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
-   On `pushed` (no PR — `ENFORCE_WORKTREE=off` or non-GitHub remote): report the branch and skip step CP-2b.
-   On `pr_created` or `pr_reused`: extract PR URL from summary for steps CP-2b and CP-3.
-   On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step CP-3 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step WE-4b owns that sentinel. Stop.
+   Staging verification (Step CP-2) is skipped only when `wip_mode: true` — i.e. `--wip`, or a WORKFLOW_OFF / WORKTREE_OFF session marker (parity with the workflow-gate.js bypass). Record the outcome below with `node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" --class D --step commit_push --key commit-push:blocked` (`--class E --key commit-push:pushed` for a landed push), per `skills/_shared/handoff-record.md`.
+   On `branch_mismatch`: the `branch` payload key is not the branch checked out at `worktree_path` — nothing was committed. Re-derive `branch` from `git rev-parse --abbrev-ref HEAD` in that worktree and re-run; never re-dispatch with the same value. Record `commit-push:blocked`.
+   On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path, record `commit-push:blocked`, and stop.
+   On `gate_blocked`: workflow-gate refused the commit or the push (or could not be trusted — a gate crash fails closed). Surface the summary verbatim, record `commit-push:blocked`, complete the named workflow step, and re-run `/commit-push`. Never retry by another route.
+   On `push_failed` or `conflict`: surface summary + artifact_path to user, record `commit-push:blocked`, and stop.
+   On `pushed` (no PR — `ENFORCE_WORKTREE=off` or non-GitHub remote): report the branch, record `commit-push:pushed`, and skip step CP-2b.
+   On `pr_created` or `pr_reused`: extract PR URL from summary for steps CP-2b and CP-3, and record `commit-push:pushed`.
+   On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step CP-3 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step WE-4b owns that sentinel. Record `commit-push:blocked`. Stop.
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 

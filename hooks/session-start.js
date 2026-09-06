@@ -280,33 +280,12 @@ if (sessionId) {
   // ancestor when no forkedFrom row exists. SSOT for the wording: lib/session-announce.
   lines.push(`${SESSION_ID_ANNOUNCE_PREFIX}${sessionId}`);
   lines.push(`State file: ${path.join(stateDir, sessionId + ".json")}`);
-  if (inheritedFromSessionId) {
-    lines.push(
-      `Inherited workflow steps from session ${inheritedFromSessionId} ` +
-      `(fork lineage, SessionStart source=${sessionSource})`
-    );
-  } else if (
-    inheritCandidateSid &&
-    (inheritDecision === "context-mismatch" ||
-      (typeof inheritDecision === "string" && inheritDecision.indexOf("not-resumable:") === 0))
-  ) {
-    // An ancestor WAS found and deliberately refused. Silence here would read as
-    // "no prior work existed", which is the opposite of the truth.
-    lines.push(
-      `Prior session ${inheritCandidateSid} is in this session's lineage but was ` +
-      `not inherited (${inheritDecision}).`
-    );
-  } else if (inheritDecision === "startup-no-lineage" && adoptCandidate) {
-    lines.push(
-      `A recent session ${adoptCandidate.sessionId} on this cwd+branch has workflow state ` +
-      `(last activity ${adoptCandidate.last_activity}).`
-    );
-    lines.push("It is NOT inherited automatically. If this session is a crash-resume of it:");
-    lines.push("  interactive     : run /workflow-init and choose \"adopt\"");
-    lines.push(
-      `  non-interactive : node bin/workflow/adopt-session-state --session ${sessionId} ` +
-      `--from ${adoptCandidate.sessionId}`
-    );
+  const { buildInheritanceNotice } = require("./session-start/inheritance-notice");
+  for (const line of buildInheritanceNotice({
+    sessionId, sessionSource, inheritedFromSessionId,
+    inheritCandidateSid, inheritDecision, adoptCandidate,
+  })) {
+    lines.push(line);
   }
   if (stateWriteError) {
     lines.push(

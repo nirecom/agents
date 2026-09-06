@@ -49,6 +49,8 @@ RT-5. Emit workflow sentinel — two separate Bash calls, not chained:
 - RT-5c. (gaps/warnings) `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} warnings=N — blocking: /write-code stays blocked until the gaps are addressed and /review-tests is re-run>>"`
 - RT-5d. Skip when `WORKFLOW_WRITE_TESTS_NOT_NEEDED` was emitted (propagated skip).
 
+RT-6. Record the emitted sentinel as `--class E --step review_tests --key review-tests:sentinel`, per `skills/_shared/handoff-record.md`.
+
 ## Rules
 
 The Test Case Categories checklist lives in `skills/_shared/test-design.md` — do not duplicate it here.
