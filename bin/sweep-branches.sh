@@ -71,7 +71,7 @@ validate_min_age_hours() {
   local v="$1"
   case "$v" in
     ''|*[!0-9]*)
-      printf 'ERROR: --min-age-hours must be a positive integer, got: %s\n' "$v" >&2
+      printf 'ERROR: --min-age-hours must be a non-negative integer, got: %s\n' "$v" >&2
       exit 1
       ;;
     0?*)
@@ -85,10 +85,8 @@ validate_min_age_hours() {
       exit 1
       ;;
   esac
-  if [[ "$v" -lt 1 ]]; then
-    printf 'ERROR: --min-age-hours must be a positive integer, got: %s\n' "$v" >&2
-    exit 1
-  fi
+  # 0 is valid and means "no age gate" (immediate eligibility) — unlike
+  # SWEEP_AGE_DAYS, --min-age-hours has no business reason to require >=1.
   # Largest N for which N * 3600 does not overflow 64-bit signed arithmetic
   # (2562047788015215 * 3600 = 9223372036854774000 <= INT64_MAX); this is the
   # tightest of gates.sh's *3600/*60 uses, so it safely bounds both.
