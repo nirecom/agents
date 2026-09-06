@@ -1,13 +1,10 @@
-# helpers.sh — Shared setup and helper functions for feature-1303-lang-hooks tests.
-# Sourced by the dispatch entrypoint; not executable directly.
-# Sets: AGENTS_DIR, LANG_INJECT_HOOK, SUBAGENT_START_HOOK, SETTINGS_JSON,
-#       TMPDIR_BASE, EMPTY_DIR, EMPTY_DIR_NODE,
-#       PASS, FAIL, SKIP counters, pass/fail/skip functions,
-#       run_with_timeout, to_node_path, build_state,
-#       extract_additional_context, is_valid_hook_output, extract_subagent_ctx.
-#
-# Env vars are passed directly to node processes (not via .env files) to avoid the
-# block-dotenv.js hook that guards .env file reads in this session.
+# helpers.sh — Shared setup for feature-1303-lang-hooks; sourced by the entrypoint.
+# Tests: hooks/lang-inject.js, hooks/subagent-start.js
+# Tags: hook-injection, lang-inject, subagent-start, plan-lang, pwsh-not-required, scope:issue-specific
+# Sets the AGENTS_DIR / hook-path / tmpdir vars, the PASS/FAIL/SKIP counters and their
+# reporters, and run_with_timeout, to_node_path, build_state plus the hook-output
+# extractors every case file in this suite uses.
+# Env vars reach node directly (not via .env) to avoid the block-dotenv.js hook.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && (pwd -W 2>/dev/null || pwd))"
 
@@ -106,7 +103,7 @@ extract_subagent_ctx() {
     node -e "
 try {
   const o = JSON.parse(process.argv[1]);
-  process.stdout.write(o.additionalContext || '');
+  process.stdout.write((o.hookSpecificOutput && o.hookSpecificOutput.additionalContext) || '');
 } catch (e) { process.stdout.write(''); }
 " "$raw" 2>/dev/null
 }

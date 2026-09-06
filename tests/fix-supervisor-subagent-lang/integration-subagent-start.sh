@@ -1,4 +1,6 @@
 # integration-subagent-start.sh — Integration tests for hooks/subagent-start.js
+# Tests: hooks/subagent-start.js
+# Tags: hook-registration, conv-lang, subagent-lang, pwsh-not-required, scope:common
 # Sourced after helpers.sh; inherits all variables and functions.
 #
 # Entire file SKIPs when hooks/subagent-start.js does not exist (Phase 2a gate).
@@ -22,7 +24,7 @@ else
     T5_CTX=$(node -e "
 try {
   const o = JSON.parse(process.argv[1]);
-  process.stdout.write(o.additionalContext || '');
+  process.stdout.write((o.hookSpecificOutput && o.hookSpecificOutput.additionalContext) || '');
 } catch (e) {}
 " "$T5_RAW" 2>/dev/null)
     if echo "$T5_CTX" | grep -qF "$EXPECTED_JA"; then
