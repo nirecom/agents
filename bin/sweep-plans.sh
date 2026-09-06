@@ -33,15 +33,23 @@ validate_sweep_age_days() {
       printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
       exit 2
       ;;
-    ????????????????*)
-      # >15 digits: 64-bit signed arithmetic could wrap a huge value into a
-      # small or negative one, defeating the guard the operator asked for.
-      printf 'ERROR: SWEEP_AGE_DAYS must be at most 15 digits (got: %s)\n' "$v" >&2
+    ?????????????????*)
+      # >17 digits always overflows once multiplied by 86400; the precise
+      # bound below (SWEEP_AGE_DAYS_SAFE_MAX) covers the tighter cases.
+      printf 'ERROR: SWEEP_AGE_DAYS is too large (got: %s)\n' "$v" >&2
       exit 2
       ;;
   esac
   if [[ "$v" -lt 1 ]]; then
     printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+    exit 2
+  fi
+  # Largest N for which N * 86400 does not overflow 64-bit signed arithmetic
+  # (106751991167300 * 86400 = 9223372036854720000 <= INT64_MAX); a larger
+  # value would silently wrap in the `$(( SWEEP_AGE_DAYS * 86400 ))` below.
+  local -r SWEEP_AGE_DAYS_SAFE_MAX=106751991167300
+  if [[ "$v" -gt "$SWEEP_AGE_DAYS_SAFE_MAX" ]]; then
+    printf 'ERROR: SWEEP_AGE_DAYS must be at most %s (got: %s)\n' "$SWEEP_AGE_DAYS_SAFE_MAX" "$v" >&2
     exit 2
   fi
 }

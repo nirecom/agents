@@ -461,6 +461,33 @@ T12_sweep_age_days_overflow_rejected() {
     fi
 }
 
+# T13 — SWEEP_AGE_DAYS one past the exact *86400 safe-max boundary is
+# rejected, even though it is only 15 digits (below the old digit-count cap).
+T13_sweep_age_days_safe_max_boundary_rejected() {
+    local plans_dir="$TMPDIR_BASE/t13-plans"
+    mkdir -p "$plans_dir"
+
+    if [ ! -f "$SWEEP" ]; then
+        fail "T13 sweep_age_days_safe_max_boundary_rejected: $SWEEP not found"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t13.out"
+    local stderr_file="$TMPDIR_BASE/t13.err"
+    WORKFLOW_PLANS_DIR="$plans_dir" SWEEP_AGE_DAYS=106751991167301 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+        >"$stdout_file" 2>"$stderr_file"
+    local exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T13 sweep_age_days_safe_max_boundary_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T13 sweep_age_days_safe_max_boundary_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -476,6 +503,7 @@ T9_sweep_age_days_zero_rejected
 T10_sweep_age_days_non_numeric_rejected
 T11_sweep_age_days_leading_zero_rejected
 T12_sweep_age_days_overflow_rejected
+T13_sweep_age_days_safe_max_boundary_rejected
 
 echo ""
 echo "─────────────────────────────────────────"

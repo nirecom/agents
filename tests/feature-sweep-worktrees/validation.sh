@@ -2,7 +2,7 @@
 # tests/feature-sweep-worktrees/validation.sh
 # Tests: bin/sweep-worktrees.sh
 # Tags: sweep, worktrees, validation, maintenance, bin, scope:common
-# Input/env validation + error-path tests: T11, T22..T24.
+# Input/env validation + error-path tests: T11, T22..T28.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 
 # shellcheck source=./_lib.sh
@@ -156,6 +156,112 @@ T24_sweep_age_days_overflow_rejected() {
     fi
 }
 
+# T25 — SWEEP_AGE_DAYS one past the exact *86400 safe-max boundary is
+# rejected, even though it is only 15 digits (below the old digit-count cap).
+T25_sweep_age_days_safe_max_boundary_rejected() {
+    local repo="$TMPDIR_BASE/t25-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T25 sweep_age_days_safe_max_boundary_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t25.out"
+    local stderr_file="$TMPDIR_BASE/t25.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 SWEEP_AGE_DAYS=106751991167301 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T25 sweep_age_days_safe_max_boundary_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T25 sweep_age_days_safe_max_boundary_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
+# T26 — --min-age-hours 010 is rejected (bash reads a leading zero as octal).
+#       Previously this script had ZERO validation on --min-age-hours.
+T26_min_age_hours_leading_zero_rejected() {
+    local repo="$TMPDIR_BASE/t26-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T26 min_age_hours_leading_zero_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t26.out"
+    local stderr_file="$TMPDIR_BASE/t26.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check --min-age-hours 010 \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T26 min_age_hours_leading_zero_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T26 min_age_hours_leading_zero_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
+# T27 — --min-age-hours one past the exact *3600 safe-max boundary is rejected.
+T27_min_age_hours_overflow_rejected() {
+    local repo="$TMPDIR_BASE/t27-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T27 min_age_hours_overflow_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t27.out"
+    local stderr_file="$TMPDIR_BASE/t27.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check --min-age-hours 2562047788015216 \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T27 min_age_hours_overflow_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T27 min_age_hours_overflow_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
+# T28 — --min-age-hours abc (non-numeric) is rejected.
+T28_min_age_hours_non_numeric_rejected() {
+    local repo="$TMPDIR_BASE/t28-repo"
+    init_repo "$repo"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T28 min_age_hours_non_numeric_rejected: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/t28.out"
+    local stderr_file="$TMPDIR_BASE/t28.err"
+    local exit_code=0
+    (cd "$repo" && SWEEP_SKIP_GH=1 \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check --min-age-hours abc \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T28 min_age_hours_non_numeric_rejected (exit=$exit_code, stderr non-empty)"
+    else
+        fail "T28 min_age_hours_non_numeric_rejected: exit=$exit_code, stderr=[$err]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
@@ -164,6 +270,10 @@ T11_registry_fetch_failure_aborts_scan
 T22_sweep_age_days_zero_rejected
 T23_sweep_age_days_leading_zero_rejected
 T24_sweep_age_days_overflow_rejected
+T25_sweep_age_days_safe_max_boundary_rejected
+T26_min_age_hours_leading_zero_rejected
+T27_min_age_hours_overflow_rejected
+T28_min_age_hours_non_numeric_rejected
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
