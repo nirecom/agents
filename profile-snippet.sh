@@ -11,6 +11,17 @@ fi
 export AGENTS_CONFIG_DIR="$_agents_root"
 export AGENTS_DIR="$_agents_root"
 
+# Startup progress wording, shared with bin/sweep-shell-snapshots.sh (issue #2160).
+# The inline fallback covers a checkout missing the lib; keep the two literals
+# byte-identical to the library's, or the sweep stops recognising the corruption.
+# shellcheck source=bin/lib/session-sync-markers.sh
+if [ -f "$_agents_root/bin/lib/session-sync-markers.sh" ]; then
+    . "$_agents_root/bin/lib/session-sync-markers.sh"
+else
+    AGENTS_SESSION_SYNC_FETCH_MARKER='git fetch Claude session sync ...'
+    AGENTS_SYMLINK_REPAIR_MARKER='Repairing agents symlink(s)...'
+fi
+
 # Global default for Claude Code's auto-compact token window, read from .env.
 # get-config-var resolves process-env-wins-over-.env precedence itself, so a value
 # already set in this shell (or by a launcher such as code-ccgw.cmd for a single
@@ -35,8 +46,11 @@ for _f in "$HOME/.claude/CLAUDE.md" "$HOME/.claude/skills" "$HOME/.claude/rules"
     fi
 done
 if [ "$_agent_broken" = "1" ]; then
-    echo "Repairing agents symlink(s)..."
-    "$_agents_root/install/linux/dotfileslink.sh"
+    # Both lines go to stderr: Claude Code captures a login shell's stdout into
+    # ~/.claude/shell-snapshots/*.sh, where any stray line corrupts the snapshot's
+    # `export PATH='...'` (issue #2160).
+    echo "$AGENTS_SYMLINK_REPAIR_MARKER" >&2
+    "$_agents_root/install/linux/dotfileslink.sh" >&2
 fi
 
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
@@ -61,23 +75,56 @@ if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
     _ss_on=0
     if [ "$_ss_rc" -eq 1 ]; then _ss_on=1; fi
     if [ "$_ss_on" = "1" ]; then
-        _session_sync_fetch() {
-            [ -n "${ZSH_VERSION-}" ] && setopt LOCAL_OPTIONS NO_MONITOR
-            echo "git fetch Claude session sync ..."
-            ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch 2>/dev/null ) &
-            _pid_ss=$!
-            _ss_deadline=$(( $(date +%s) + 3 ))
-            while kill -0 "$_pid_ss" 2>/dev/null; do
-                if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null; break; fi
-                sleep 0.2
-            done
-            wait "$_pid_ss" 2>/dev/null
-            _rc_ss=$?
-        }
-        _session_sync_fetch
-        unset -f _session_sync_fetch 2>/dev/null
-        [ "${_rc_ss:-1}" -eq 0 ] && git -C "$_session_dir" merge --ff-only FETCH_HEAD 2>/dev/null
-        unset _pid_ss _ss_deadline _rc_ss
+        # Frequency guard (issue #2160): fetch at most once per 30 minutes, keyed on
+        # the mtime of a stamp inside .git/ so session-sync's own `git add .` can
+        # never pick it up. An absent stamp fails OPEN (first shell after install
+        # must still sync), and every step is written as `if ...; then ...; fi` —
+        # `[ cond ] && var=1` as a script's last command returns its own failure
+        # status and can kill a login shell running under `set -e`.
+        _ss_stamp="$_session_dir/.git/agents-last-fetch"
+        _ss_due=1
+        if [ -f "$_ss_stamp" ]; then
+            _ss_mtime="$(stat -c %Y "$_ss_stamp" 2>/dev/null || stat -f %m "$_ss_stamp" 2>/dev/null || echo 0)"
+            _ss_now="$(date +%s)"
+            if [ "$(( _ss_now - _ss_mtime ))" -lt 1800 ]; then _ss_due=0; fi
+        fi
+        if [ "$_ss_due" = "1" ]; then
+            # Stamp the ATTEMPT, before launching it: a stamp written afterwards
+            # lets a shell started mid-fetch launch a second one, and a stamp
+            # written only on success retries a broken remote every startup.
+            # Failing to write it costs the suppression, never the fetch.
+            touch "$_ss_stamp" 2>/dev/null || true
+            # Honour a configured core.sshCommand instead of overriding it. Read
+            # from the session repo (`-C`), never the caller's CWD, and compared
+            # as a quoted string — the value is repo config, i.e. untrusted input,
+            # so it must never be re-expanded or evaluated. Empty counts as unset:
+            # git answers 0 with an empty line for `key =`, and exporting an empty
+            # GIT_SSH_COMMAND breaks git's ssh launch.
+            _ss_sshcmd="$(git -C "$_session_dir" config --get core.sshCommand 2>/dev/null || true)"
+            _session_sync_fetch() {
+                if [ -n "${ZSH_VERSION-}" ]; then setopt LOCAL_OPTIONS NO_MONITOR; fi
+                echo "$AGENTS_SESSION_SYNC_FETCH_MARKER" >&2
+                if [ -n "$_ss_sshcmd" ]; then
+                    ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
+                else
+                    ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
+                fi
+                _pid_ss=$!
+                _ss_deadline=$(( $(date +%s) + 3 ))
+                while kill -0 "$_pid_ss" 2>/dev/null; do
+                    if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null || true; break; fi
+                    sleep 0.2
+                done
+                _rc_ss=0
+                wait "$_pid_ss" 2>/dev/null || _rc_ss=$?
+            }
+            _session_sync_fetch
+            unset -f _session_sync_fetch 2>/dev/null
+            # `merge --ff-only` prints "Updating .../Fast-forward" on stdout.
+            if [ "${_rc_ss:-1}" -eq 0 ]; then git -C "$_session_dir" merge --ff-only FETCH_HEAD >/dev/null 2>&1 || true; fi
+            unset _pid_ss _ss_deadline _rc_ss _ss_sshcmd
+        fi
+        unset _ss_stamp _ss_due _ss_mtime _ss_now
     fi
     unset _ss_on _ss_rc
 fi
@@ -126,4 +173,4 @@ codes() {
     disown
 }
 
-unset _agents_root _agent_broken _f
+unset _agents_root _agent_broken _f AGENTS_SESSION_SYNC_FETCH_MARKER AGENTS_SYMLINK_REPAIR_MARKER

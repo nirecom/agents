@@ -1,7 +1,8 @@
 #!/bin/bash
 # tests/feature-sweep-branches/core.sh
-# Core sweep tests: local-branch lifecycle, age gate, JSON shape, JS unit,
-# env-var validation. Remote-branch behaviors live in remote.sh.
+# Core sweep tests: local-branch lifecycle, age gate, JSON shape, JS unit.
+# Remote-branch behaviors live in remote.sh; SWEEP_AGE_DAYS/--min-age-hours
+# input validation lives in validation.sh.
 # Tests: bin/sweep-branches.sh, hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js
 # Tags: sweep, branch, maintenance, bin, git, branch-delete, redirect, scope:common
 #
@@ -306,28 +307,13 @@ T11_isSweepBranchesSkillForceDelete_unit() {
     esac
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
 # T12 — isSweepBranchesSkillForceDelete tolerates Bash-appended trailing
-#       redirects (#1380/#1172 CPR-ORTH symmetric pair). bin/sweep-branches.sh
-#       callsites emit `2>/dev/null`, so the predicate must strip the suffix.
-#   a) "...branch -D feature/x 2>/dev/null" → true (RED before fix)
-#   b) "...branch -D feature/x 2>&1"        → true (RED before fix)
-#   c) "...branch -D main 2>/dev/null"      → false (protected branch — negative)
-#   d) "...branch -D feature/x; rm -rf / 2>/dev/null" → false (layer-A guard:
-#        hasShellChaining(ORIGINAL cmd) detects `;` before the helper strips
-#        the trailing `2>/dev/null`; attack-scenario proof the chain is NOT
-#        authorized after redirect stripping).
-# FAIL-BEFORE-FIX: the `[ \t]*$` anchor rejects the redirect suffix → the
-# want=true rows FAIL until the source fix lands. The want=false rows already
-# return false → GREEN now and must stay GREEN (fail-closed must not regress).
-#
-# Table-driven per test-design.md (branch-delete-guard.js + command-parser.js
-# are regex/predicate files). Each stripped suffix has an independent row so a
-# never-match mutation of any new stripTrailingRedirects const kills at least
-# one row (mutation-probe kill coverage). AFTER the source fix lands, run
-# `bin/mutation-probe.sh hooks/lib/command-parser.js` and confirm the ≥80%
-# threshold (executed at the run-tests stage, not here).
-# ─────────────────────────────────────────────────────────────────────────────
+# redirects (#1380/#1172 CPR-ORTH pair): bin/sweep-branches.sh callsites emit
+# `2>/dev/null`, so the predicate must strip the suffix before deciding true/
+# false, while hasShellChaining still inspects the ORIGINAL (unstripped) cmd
+# so a `;`-chained attack (branch -D feature/x; rm -rf /) stays false even
+# after redirect stripping. Table-driven per test-design.md; see git blame on
+# this comment for the pre-fix RED/GREEN expectations and mutation-probe note.
 
 # Call isSweepBranchesSkillForceDelete('$1') → 'true' | 'false' | 'MISSING_FN'.
 call_isSweepForceDelete() {
@@ -368,37 +354,6 @@ TABLE
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T17 — SWEEP_AGE_DAYS=0 env var → exit non-zero, validation error on stderr
-# ─────────────────────────────────────────────────────────────────────────────
-
-T17_sweep_age_days_zero_rejected() {
-    local repo="$TMPDIR_BASE/t17-repo"
-    local stubdir="$TMPDIR_BASE/t17-stub"
-    init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
-
-    if [ ! -x "$SWEEP" ]; then
-        fail "T17 sweep_age_days_zero_rejected: $SWEEP not found / not executable"
-        return
-    fi
-
-    local stdout_file="$TMPDIR_BASE/t17.out"
-    local stderr_file="$TMPDIR_BASE/t17.err"
-    local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=0 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
-        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
-    local err
-    err="$(cat "$stderr_file" 2>/dev/null || true)"
-
-    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
-        pass "T17 sweep_age_days_zero_rejected (exit=$exit_code, stderr non-empty)"
-    else
-        fail "T17 sweep_age_days_zero_rejected: exit=$exit_code, stderr=[$err]"
-    fi
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -410,7 +365,6 @@ T8_fresh_commit_skipped_young
 T10_age_gate_fresh_vs_stale
 T11_isSweepBranchesSkillForceDelete_unit
 T12_isSweepBranchesSkillForceDelete_redirect_suffix
-T17_sweep_age_days_zero_rejected
 
 echo ""
 echo "─────────────────────────────────────────"

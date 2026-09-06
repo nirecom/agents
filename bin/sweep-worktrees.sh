@@ -38,9 +38,66 @@ SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
   local v="$1"
-  if [[ ! "$v" =~ ^[0-9]+$ ]] || [[ "$v" -lt 1 ]]; then
+  case "$v" in
+    ''|*[!0-9]*)
+      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    0?*)
+      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
+      # error and 010 silently means 8; reject instead of guessing the intent.
+      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    ?????????????????*)
+      # >17 digits always overflows once multiplied by 86400; the precise
+      # bound below (SWEEP_AGE_DAYS_SAFE_MAX) covers the tighter cases.
+      printf 'ERROR: SWEEP_AGE_DAYS is too large (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$v" -lt 1 ]]; then
     printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
     exit 2
+  fi
+  # Largest N for which N * 86400 does not overflow 64-bit signed arithmetic
+  # (106751991167300 * 86400 = 9223372036854720000 <= INT64_MAX). Kept in
+  # step with the sibling validators in sweep-plans.sh/sweep-branches.sh
+  # (CPR-ORTH) even though this script does not itself multiply by 86400.
+  local -r SWEEP_AGE_DAYS_SAFE_MAX=106751991167300
+  if [[ "$v" -gt "$SWEEP_AGE_DAYS_SAFE_MAX" ]]; then
+    printf 'ERROR: SWEEP_AGE_DAYS must be at most %s (got: %s)\n' "$SWEEP_AGE_DAYS_SAFE_MAX" "$v" >&2
+    exit 2
+  fi
+}
+
+validate_min_age_hours() {
+  local v="$1"
+  case "$v" in
+    ''|*[!0-9]*)
+      printf 'ERROR: --min-age-hours must be a non-negative integer, got: %s\n' "$v" >&2
+      exit 1
+      ;;
+    0?*)
+      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
+      # error and 010 silently means 8; reject instead of guessing the intent.
+      printf 'ERROR: --min-age-hours must not have a leading zero (bash reads it as octal), got: %s\n' "$v" >&2
+      exit 1
+      ;;
+    ?????????????????*)
+      printf 'ERROR: --min-age-hours is too large, got: %s\n' "$v" >&2
+      exit 1
+      ;;
+  esac
+  # 0 is valid and means "no age gate" (immediate eligibility) — unlike
+  # SWEEP_AGE_DAYS, --min-age-hours has no business reason to require >=1.
+  # Largest N for which N * 3600 does not overflow 64-bit signed arithmetic
+  # (2562047788015215 * 3600 = 9223372036854774000 <= INT64_MAX); this is
+  # tighter than orphan-dirs.sh's *7 and gates.sh's *60 uses, so it bounds both.
+  local -r MIN_AGE_HOURS_SAFE_MAX=2562047788015215
+  if [[ "$v" -gt "$MIN_AGE_HOURS_SAFE_MAX" ]]; then
+    printf 'ERROR: --min-age-hours must be at most %s, got: %s\n' "$MIN_AGE_HOURS_SAFE_MAX" "$v" >&2
+    exit 1
   fi
 }
 
@@ -73,6 +130,7 @@ while [[ $# -gt 0 ]]; do
     --min-age-hours)
       shift
       MIN_AGE_HOURS="${1:?--min-age-hours requires a value}"
+      validate_min_age_hours "$MIN_AGE_HOURS"
       ;;
     --sweep-age-days)
       shift

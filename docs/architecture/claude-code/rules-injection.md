@@ -92,11 +92,11 @@ The five remaining unconditional rules — `core-principles`, `git`, `stop-guard
 `supervisor-reporting`, `workflow-off` — were likewise not added to WCD-4 or WT-6. They govern
 the parent orchestrator's own conduct, and that responsibility stays with the orchestrator.
 
-The rest of the fork population was inventoried and is out of scope. The other 13
+The rest of the fork population was inventoried and is out of scope. The other 14
 `context: fork` skills — `review-plan-security`, `save-research`, `update-infrastructure`,
-`sweep-branches`, `sweep-plans`, `sweep-supervisor-state`, `sweep-worktrees`, `create-key`, and
-the five `aws-scan` skills — only invoke fixed scripts or enumerate single CLI calls. None
-assembles free-form Bash, so none can reproduce RT-2's shape.
+`sweep-branches`, `sweep-plans`, `sweep-supervisor-state`, `sweep-worktrees`, `create-key`,
+`sweep-shell-snapshots`, and the five `aws-scan` skills — only invoke fixed scripts or enumerate
+single CLI calls. None assembles free-form Bash, so none can reproduce RT-2's shape.
 
 The two axes must not be conflated. The invariant "general-purpose dispatch sites are exactly
 two", pinned by `tests/feature-2124-tool-selection-priority/injection-policy.sh` U8a, counts

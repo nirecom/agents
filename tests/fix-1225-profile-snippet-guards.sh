@@ -1,33 +1,29 @@
 #!/bin/bash
 # tests/fix-1225-profile-snippet-guards.sh
-# Tests: profile-snippet.sh
-# Tags: installer, profile-snippet, idempotency, job-control, scope:issue-specific
+# Tests: profile-snippet.sh, bin/lib/session-sync-markers.sh
+# Tags: installer, profile-snippet, idempotency, job-control, ssh, stdout-stderr, scope:issue-specific
 #
-# Issue #1225: profile-snippet.sh guards — idempotency guard, _session_sync_fetch
-# helper with NO_MONITOR (no zsh job-control suspend output), GIT_TERMINAL_PROMPT=0
-# in the fetch subshell, and unset -f cleanup of the helper after use.
-#
-# L2 broad-integration test: sources the real profile-snippet.sh in real bash and
-# real zsh with a stubbed HOME (valid symlinks to neutralize the repair block) and
-# a fake git on PATH (records GIT_TERMINAL_PROMPT, sleeps, exits 0).
-#
-# L3 gap (what this test does NOT catch):
-# - real SSH passphrase prompting on `git fetch` against a passphrase-protected key
-# - real iTerm/interactive-shell job-control rendering of "[N] + suspended"
-# - real network fetch/merge against the live session-sync remote
-# - the SESSION_SYNC gate as experienced from a real login shell: the gate cases
-#   below source a *copied* profile-snippet.sh from a mirror tree, so they cannot
-#   catch a regression that only shows up when the snippet runs from the real
-#   install location (e.g. an AGENTS_CONFIG_DIR that resolves differently there)
-# - the value actually shipped in the real .env (the mirror deliberately has no
-#   .env, so only process-env values are exercised)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: installer
+# Issue #1225 guards (idempotency, _session_sync_fetch + NO_MONITOR,
+# GIT_TERMINAL_PROMPT=0, unset -f cleanup) and issue #2160 (progress output moved
+# to stderr, core.sshCommand-aware GIT_SSH_COMMAND, fetch frequency stamp guard).
+# TL2 broad integration: sources the real profile-snippet.sh in real bash and real
+# zsh with a stubbed HOME and a fake git on PATH.
 
 set -u
 
+# TL3 gap (what this test does NOT catch):
+# - real SSH passphrase prompting on `git fetch` against a passphrase-protected key
+# - real iTerm/interactive-shell job-control rendering of "[N] + suspended"
+# - real network fetch/merge against the live session-sync remote
+# - the snippet running from its real install location (gate cases source a copy)
+# - the value actually shipped in the real .env (the mirror has none on purpose)
+# - Claude Code's own shell-snapshot capture of a real login shell's stdout
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: installer
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SNIPPET="${AGENTS_DIR}/profile-snippet.sh"
+MARKERS_LIB="${AGENTS_DIR}/bin/lib/session-sync-markers.sh"
 RUN_TIMEOUT="${AGENTS_DIR}/bin/run-with-timeout.sh"
 
 PASS=0
@@ -61,25 +57,46 @@ make_sandbox() {
         mkdir -p "$sb/home/.claude/projects/.git"
     fi
 
-    # Fake git: records GIT_TERMINAL_PROMPT for `fetch`, marks `merge`, no-ops else.
+    # Fake git: `fetch` records GIT_TERMINAL_PROMPT/GIT_SSH_COMMAND; `merge` drops a
+    # marker AND prints "Updating ../Fast-forward" as real `merge --ff-only` does —
+    # a silent fake would let an unredirected merge pass the TC-SPLIT purity cases;
+    # `config --get core.sshCommand` answers from <-C argument>/core-sshcommand
+    # (absent = unset, exit 1). `-C` is honoured as real git honours it (config from
+    # the named repo, not the CWD) and each subcommand's -C argument is recorded to
+    # <sandbox>/dashc-<cmd>.out, so TC-SSH2b reads the `config` probe's own scope
+    # and cannot be satisfied by the `fetch` call's -C.
     mkdir -p "$sb/bin"
     cat > "$sb/bin/git" <<EOF
 #!/bin/bash
 # fake git for fix-1225 test
-cmd=""
+cmd=""; repo="\$PWD"; prev=""; seen_c=""
 for a in "\$@"; do
+    if [ "\$prev" = "-C" ]; then repo="\$a"; seen_c="\$a"; fi
     case "\$a" in
-        fetch|merge) cmd="\$a"; break ;;
+        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
     esac
+    prev="\$a"
 done
+if [ -n "\$cmd" ]; then printf '%s' "\$seen_c" > "$sb/dashc-\$cmd.out"; fi
 case "\$cmd" in
     fetch)
         printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"
+        printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"
         sleep 0.1
         exit 0
         ;;
     merge)
         printf 'merged' > "$sb/merged.out"
+        printf 'Updating abc1234..def5678\nFast-forward\n'
+        exit 0
+        ;;
+    config)
+        case "\$*" in
+            *"--get core.sshCommand"*)
+                if [ -f "\$repo/core-sshcommand" ]; then cat "\$repo/core-sshcommand"; exit 0; fi
+                exit 1
+                ;;
+        esac
         exit 0
         ;;
     *)
@@ -92,44 +109,43 @@ EOF
 }
 
 # Runs a snippet driver under a given shell with the sandbox HOME + fake git PATH.
-# Args: <shell: bash|zsh> <sandbox> <driver-script-path> [<SESSION_SYNC value>]
-#
-# The 4th arg is the SESSION_SYNC value to hand the driver process; the literal
-# string UNSET (the default) removes the variable. It is never simply inherited:
-# once the SESSION_SYNC gate lands, a developer whose own config has the toggle
-# off would otherwise silently turn the fetch block into a no-op and take TC5 /
-# TC8-TC12 down with it. Those cases assert on the fetch block, so they pass
-# "on" explicitly and stay valid on both sides of the change.
+# Args: <shell: bash|zsh> <sandbox> <driver> [<SESSION_SYNC value|UNSET>]. Four
+# ambient vars are dropped so no assertion reads the developer's environment:
+# SESSION_SYNC (off would vacate TC5/TC8-TC12), CLAUDECODE (set whenever this
+# suite runs inside Claude Code — with captured stdout that is exactly the
+# snippet's own skip condition), GIT_SSH_COMMAND and GIT_TERMINAL_PROMPT.
 run_driver() {
     local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}"
     if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+        env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
+            HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     else
-        env SESSION_SYNC="$ss" HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+        env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
+            SESSION_SYNC="$ss" HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     fi
 }
 
 # --- Mirror sandbox (SESSION_SYNC gate cases) -------------------------------
-# profile-snippet.sh line ~11 unconditionally re-exports AGENTS_CONFIG_DIR and
-# AGENTS_DIR to *its own* parent directory. Sourcing the snippet from the real
-# checkout therefore resolves bin/get-config-var against the real .env, and
-# resolves codes()'s `$AGENTS_DIR/bin/session-sync.sh` to the real sync CLI —
-# which would push the developer's actual session repo. The mirror copies the
-# snippet into a throwaway tree carrying just enough of the repo around it, plus
-# recording stubs for the two commands codes() shells out to.
-#
-# Deliberately a local helper rather than a shared file: per-file helpers are the
-# convention in tests/ (make_sandbox above is the same shape).
+# profile-snippet.sh re-exports AGENTS_CONFIG_DIR / AGENTS_DIR to *its own* parent
+# directory, so sourcing it from the real checkout would resolve the real .env and
+# the real session-sync CLI — pushing the developer's actual session repo. The
+# mirror copies the snippet into a throwaway tree carrying just enough of the repo
+# around it (bin/lib/session-sync-markers.sh included) plus recording stubs.
 make_mirror_sandbox() {
     local with_git_repo="$1"
     local sb; sb="$(make_sandbox "$with_git_repo")"
 
-    mkdir -p "$sb/agents/bin" "$sb/agents/hooks" "$sb/agents/install/linux"
+    mkdir -p "$sb/agents/bin/lib" "$sb/agents/hooks" "$sb/agents/install/linux"
     cp "$SNIPPET" "$sb/agents/profile-snippet.sh"
     cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
     chmod +x "$sb/agents/bin/get-config-var"
+    # The marker SSOT lib ships beside the snippet; copying it here keeps the
+    # mirror on the `source the lib` path rather than the inline fallback.
+    if [ -f "$MARKERS_LIB" ]; then
+        cp "$MARKERS_LIB" "$sb/agents/bin/lib/session-sync-markers.sh"
+    fi
     # get-config-var resolves hooks/lib/load-env.js under AGENTS_CONFIG_DIR.
     cp -R "$AGENTS_DIR/hooks/lib" "$sb/agents/hooks/lib"
     # No .env in the mirror on purpose: loadDefaultEnv short-circuits on
@@ -148,8 +164,11 @@ EOF
 exit 0
 EOF
     chmod +x "$sb/agents/bin/wait-vscode-window.sh"
+    # Prints on stdout like the real dotfileslink.sh, so the caller-side
+    # redirection in profile-snippet.sh is observable (issue #2160).
     cat > "$sb/agents/install/linux/dotfileslink.sh" <<'EOF'
 #!/bin/bash
+printf 'Symlinks created in ~/.claude/\n'
 exit 0
 EOF
     chmod +x "$sb/agents/install/linux/dotfileslink.sh"
@@ -162,9 +181,8 @@ printf 'was-called %s\n' "\$*" >> "$sb/code.calls"
 exit 0
 EOF
     chmod +x "$sb/bin/code"
-    # Broken-node stub for the fail-safe cases. A stub rather than an empty PATH:
-    # the snippet also needs date/sleep/dirname, so node must be shadowed, not
-    # the whole environment removed.
+    # Broken-node stub for the fail-safe cases — a stub rather than an empty
+    # PATH, since the snippet still needs date/sleep/dirname.
     mkdir -p "$sb/nonode"
     cat > "$sb/nonode/node" <<'EOF'
 #!/bin/bash
@@ -182,11 +200,13 @@ run_mirror_driver() {
     local path_val="$sb/bin:$PATH"
     [ "$node_mode" = "no-node" ] && path_val="$sb/nonode:$sb/bin:$PATH"
     if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC HOME="$sb/home" PATH="$path_val" \
+        env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
+            HOME="$sb/home" PATH="$path_val" \
             SNIPPET="$sb/agents/profile-snippet.sh" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     else
-        env SESSION_SYNC="$ss" HOME="$sb/home" PATH="$path_val" \
+        env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
+            SESSION_SYNC="$ss" HOME="$sb/home" PATH="$path_val" \
             SNIPPET="$sb/agents/profile-snippet.sh" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     fi
@@ -234,11 +254,8 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# TC5 / TC6 — Idempotency: second source is an early return
-#   We detect the early-return by a side effect: the fetch block prints
-#   "git fetch Claude session sync ..." each time it runs. With the guard, the
-#   2nd source returns before reaching the fetch block → message printed once.
-#   FAIL-BEFORE-FIX: current code has no guard → message printed twice.
+# TC5 / TC6 — Idempotency: the 2nd source returns before the fetch block, so the
+#   fetch marker is printed once. FAIL-BEFORE-FIX: no guard → printed twice.
 # ---------------------------------------------------------------------------
 tc_idempotent() {
     local shell="$1" label="$2"
@@ -262,15 +279,8 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# TC7 — _session_sync_fetch helper is used then cleaned up (not leaked).
-#   The planned change extracts the fetch block into a `_session_sync_fetch`
-#   helper and `unset -f`s it after use. A pure runtime "absent after source"
-#   probe cannot distinguish "never existed" (current code) from "defined then
-#   removed" (fixed code) — both report absent. So TC7 combines two assertions:
-#     (a) STATIC: the source defines `_session_sync_fetch` AND unsets it (-f).
-#         FAIL-BEFORE-FIX: current source contains no such helper name.
-#     (b) RUNTIME: after sourcing, the helper is NOT defined in the shell.
-#   Both must hold. (a) fails on current code, so TC7 fails before the fix.
+# TC7 — _session_sync_fetch is used then cleaned up. "Absent after source" cannot
+#   tell "never existed" from "removed", so STATIC + RUNTIME checks are combined.
 # ---------------------------------------------------------------------------
 tc_helper_cleaned() {
     local shell="$1" label="$2"
@@ -299,57 +309,8 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# TC8 — bash-compat: sourcing in bash produces no "setopt: command not found"
-#   The planned helper begins with a guarded `setopt LOCAL_OPTIONS NO_MONITOR`.
-#   In bash that line must be guarded by ZSH_VERSION so `setopt` is never invoked.
-# ---------------------------------------------------------------------------
-tc_no_setopt_in_bash() {
-    local sb; sb="$(make_sandbox 1)"
-    local drv="$sb/drv_setopt.sh"
-    cat > "$drv" <<'EOF'
-. "$SNIPPET"
-echo "DONE"
-EOF
-    local out; out="$(run_driver bash "$sb" "$drv" on)"
-    if echo "$out" | grep -q "DONE" && ! echo "$out" | grep -qi "setopt"; then
-        pass "bash-compat: no setopt error when sourcing in bash"
-    else
-        fail "bash-compat: setopt invoked under bash. Output: $out"
-    fi
-    rm -rf "$sb"
-}
-
-# ---------------------------------------------------------------------------
-# TC9 — No job control: sourcing in zsh with a slow fake git emits no
-#   "suspended" / "[N] +" background-job notification.
-#   FAIL-BEFORE-FIX: current code backgrounds the fetch without NO_MONITOR.
-# ---------------------------------------------------------------------------
-tc_no_job_control_zsh() {
-    if [ "$HAVE_ZSH" != "1" ]; then
-        echo "SKIP: zsh not available — TC9 (no job control)"
-        return
-    fi
-    local sb; sb="$(make_sandbox 1)"
-    local drv="$sb/drv_jobctl.sh"
-    cat > "$drv" <<'EOF'
-. "$SNIPPET"
-echo "DONE"
-EOF
-    # Run zsh interactively-ish: monitor mode only matters with -m / interactive,
-    # but the planned fix uses NO_MONITOR explicitly. We assert no suspend output.
-    local out; out="$(run_driver zsh "$sb" "$drv" on)"
-    if echo "$out" | grep -Eq "suspended|\[[0-9]+\][[:space:]]*\+"; then
-        fail "zsh job control: background suspend output present. Output: $out"
-    else
-        pass "zsh: no job-control suspend output from backgrounded fetch"
-    fi
-    rm -rf "$sb"
-}
-
-# ---------------------------------------------------------------------------
-# TC10 — GIT_TERMINAL_PROMPT: fake git fetch receives GIT_TERMINAL_PROMPT=0.
-#   FAIL-BEFORE-FIX: current code does not export GIT_TERMINAL_PROMPT into the
-#   fetch subshell → fake git records "UNSET".
+# TC10 — GIT_TERMINAL_PROMPT: fake git fetch receives GIT_TERMINAL_PROMPT=0
+#   (fake git records "UNSET" when the snippet never exports it).
 # ---------------------------------------------------------------------------
 tc_git_terminal_prompt() {
     local sb; sb="$(make_sandbox 1)"
@@ -398,8 +359,8 @@ EOF
 
 # ---------------------------------------------------------------------------
 # TC12 — git fetch exits nonzero → merge is skipped (error-handling path).
-#   The fix uses [ "${_rc_ss:-1}" -eq 0 ] to gate the merge, so a failed
-#   fetch must not call git merge. Fake git is patched to exit 1 for fetch.
+#   The fix gates the merge on [ "${_rc_ss:-1}" -eq 0 ], so a failed fetch must
+#   not call git merge. Fake git (independent copy) is patched to exit 1.
 # ---------------------------------------------------------------------------
 tc_fetch_failure_skips_merge() {
     local sb; sb="$(make_sandbox 1)"
@@ -407,10 +368,19 @@ tc_fetch_failure_skips_merge() {
     cat > "$sb/bin/git" <<EOF
 #!/bin/bash
 cmd=""
-for a in "\$@"; do case "\$a" in fetch|merge) cmd="\$a"; break ;; esac; done
+for a in "\$@"; do case "\$a" in fetch|merge|config) cmd="\$a"; break ;; esac; done
 case "\$cmd" in
-    fetch) printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"; sleep 0.1; exit 1 ;;
-    merge) printf 'merged' > "$sb/merged.out"; exit 0 ;;
+    fetch) printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"; printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"; sleep 0.1; exit 1 ;;
+    merge) printf 'merged' > "$sb/merged.out"; printf 'Updating abc1234..def5678\nFast-forward\n'; exit 0 ;;
+    config)
+        case "\$*" in
+            *"--get core.sshCommand"*)
+                if [ -f "$sb/core-sshcommand" ]; then cat "$sb/core-sshcommand"; exit 0; fi
+                exit 1
+                ;;
+        esac
+        exit 0
+        ;;
     *) exit 0 ;;
 esac
 EOF
@@ -431,15 +401,39 @@ EOF
     rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# TC-SSOT — profile-snippet.sh's inline fallback literals must equal the values
+#   bin/lib/session-sync-markers.sh defines. The fallback only fires on a checkout
+#   missing the lib, so drift is invisible at runtime yet breaks the sweep.
+# ---------------------------------------------------------------------------
+tc_marker_fallback_matches_lib() {
+    if [ ! -f "$MARKERS_LIB" ]; then
+        fail "TC-SSOT: marker lib not found at $MARKERS_LIB"
+        return
+    fi
+    local lib_fetch lib_repair fb_fetch fb_repair
+    lib_fetch="$(bash -c '. "$1"; printf "%s" "${AGENTS_SESSION_SYNC_FETCH_MARKER-}"' _ "$MARKERS_LIB" 2>/dev/null)"
+    lib_repair="$(bash -c '. "$1"; printf "%s" "${AGENTS_SYMLINK_REPAIR_MARKER-}"' _ "$MARKERS_LIB" 2>/dev/null)"
+    fb_fetch="$(grep -oE "AGENTS_SESSION_SYNC_FETCH_MARKER='[^']*'" "$SNIPPET" | head -1 | sed "s/^[^']*'//; s/'\$//")"
+    fb_repair="$(grep -oE "AGENTS_SYMLINK_REPAIR_MARKER='[^']*'" "$SNIPPET" | head -1 | sed "s/^[^']*'//; s/'\$//")"
+
+    if [ -n "$lib_fetch" ] && [ -n "$lib_repair" ] \
+        && [ "$fb_fetch" = "$lib_fetch" ] && [ "$fb_repair" = "$lib_repair" ]; then
+        pass "TC-SSOT: profile-snippet.sh fallback literals match bin/lib/session-sync-markers.sh"
+    else
+        fail "TC-SSOT: marker drift — fetch lib='$lib_fetch' fallback='$fb_fetch'; repair lib='$lib_repair' fallback='$fb_repair'"
+    fi
+}
+
 # --- Run ---------------------------------------------------------------------
 tc_normal bash "TC1"
 tc_codes_defined bash "TC3"
 tc_idempotent bash "TC5"
 tc_helper_cleaned bash "TC7"
-tc_no_setopt_in_bash               # TC8
 tc_git_terminal_prompt             # TC10
 tc_no_git_repo                     # TC11
 tc_fetch_failure_skips_merge       # TC12
+tc_marker_fallback_matches_lib     # TC-SSOT
 
 if [ "$HAVE_ZSH" = "1" ]; then
     tc_normal zsh "TC2"
@@ -448,12 +442,29 @@ if [ "$HAVE_ZSH" = "1" ]; then
 else
     echo "SKIP: zsh not available — TC2/TC4/TC6"
 fi
-tc_no_job_control_zsh              # TC9 (self-skips if no zsh)
 
-# TC13+ — SESSION_SYNC gate cases. Kept in a sibling part file so this file
-# stays under the 500-line HARD limit of rules/coding/file-split.md.
+# TC8/TC9 and TC13+ live in sibling part files so this file stays under the
+# 500-line HARD limit of rules/coding/file-split.md. Each part file self-invokes
+# its cases at source time.
+# shellcheck source=tests/fix-1225-profile-snippet-guards/shell-compat.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/shell-compat.sh"
 # shellcheck source=tests/fix-1225-profile-snippet-guards/session-sync-gate.sh
 . "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/session-sync-gate.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/ssh-command-override.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/ssh-command-override.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/ssh-command-injection.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/ssh-command-injection.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/stdout-stderr-split.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/stdout-stderr-split.sh"
+# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh"
+# set-e-source-safety.sh reuses _ffg_stamp, so it must follow fetch-frequency-guard.sh.
+# shellcheck source=tests/fix-1225-profile-snippet-guards/set-e-source-safety.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/set-e-source-safety.sh"
 
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
