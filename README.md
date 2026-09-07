@@ -272,6 +272,14 @@ second-provider opinion independent of Claude's model-specific biases. A reviewe
 project can declare its own non-functional requirements once, in a gitignored
 `.env.local` at its root, and every codex review prompt injects them automatically.
 
+More generally, `.env` holds this machine's global defaults and a reviewed project's
+own `.env.local` can override most of them for that project alone — except a small
+set of settings (workflow-state paths, the config directory itself, worktree
+enforcement, the codex NFR size caps) that stay machine-wide no matter what a
+project's `.env.local` says. See
+[docs/architecture/claude-code/local-env-overrides.md](docs/architecture/claude-code/local-env-overrides.md)
+for the full list and the reasoning behind each entry.
+
 `settings.json` enforces a permission deny-list so Claude cannot execute dangerous
 operations even if instructed: force push (`--force`, `-f`, `+<ref>` refspec), direct
 `.env` access, bulk deletion (`rm -rf`, `Remove-Item -Recurse`), and AWS destructive
