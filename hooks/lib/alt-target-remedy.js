@@ -16,4 +16,16 @@ function buildAltTargetRemedy() {
   );
 }
 
-module.exports = { buildAltTargetRemedy };
+// The Bash-side twin (#2134): a compound command's sanctioned form is a scratchpad script
+// written with the Write tool and invoked as ONE `bash <absolute-path>` call. Named here
+// rather than in bash-guard so both guards advertise the same reachable target.
+function buildScriptEscapeHatch() {
+  const { scratchpad } = describeAllowedTargets();
+  return (
+    `Write the steps to a scratchpad script (${scratchpad}) with the Write tool — not with ` +
+    "a heredoc redirect, which trips two prohibited literals of its own — then issue it as " +
+    "one call: bash <absolute-path-to-that-script>."
+  );
+}
+
+module.exports = { buildAltTargetRemedy, buildScriptEscapeHatch };

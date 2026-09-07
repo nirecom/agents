@@ -1,7 +1,8 @@
 // hooks/lib/shell-segments.js
-// SSOT for the quote-aware shell-segment splitter used across hooks.
-// Lifted from hooks/lib/merge-detect.js. Splits on ;, &&, || while honoring
-// single- and double-quote state. Pipes (|) and background (&) are not split.
+// Legacy quote-aware segment splitter, shrinking toward hooks/lib/command-ir/.
+// Splits on ;, &&, || honoring quote state; pipes (|) and background (&) are NOT split.
+// canary-1 (merge-detect.js) already migrated to parse(); the remaining 2 consumers
+// migrate under #1253. Ownership map: docs/architecture/claude-code/shell-command-parsing.md.
 
 "use strict";
 

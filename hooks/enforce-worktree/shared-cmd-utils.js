@@ -5,7 +5,7 @@ const { normalizeCwd } = require("../lib/path-normalize");
 const { parseExcludePatterns } = require("../lib/glob-match");
 const { isCoveredByEntryList } = require("../lib/path-coverage-match");
 const { stripQuotedArgs, stripHeredocBody } = require("../lib/strip-quoted-args");
-const { parse } = require("../lib/command-ir");
+const { parse, analysisOf } = require("../lib/command-ir");
 
 // Built-in exclude patterns: always merged with ENFORCE_WORKTREE_EXCLUDE. Users
 // cannot disable these — set ENFORCE_WORKTREE=off session-scoped if needed.
@@ -27,6 +27,9 @@ function hasShellChaining(cmd) {
   // Use separators (not segment count) so leading/trailing operators are caught:
   // `& git.exe status` and `git pull &` each produce 1 segment but 1 separator.
   if (ir.separators.length > 0) return true;
+  // A heredoc body is opaque to the parser (#2121), so its operators no longer
+  // reach `separators`. Fail closed on the opener instead — detail.md S2-7.
+  if (analysisOf(ir).heredocs.length > 0) return true;
   return /\$\(|`/.test(stripQuotedArgs(cmd));
 }
 

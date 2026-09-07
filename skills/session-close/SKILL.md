@@ -20,7 +20,7 @@ reflects every terminal action.
 
 ## Step SC-0 — Resolve PLANS_DIR and session id
 
-Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back.
+Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 Substitute the absolute path it prints for `<PLANS_DIR>` in every subsequent step.
 Resolve `<session-id>` from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
@@ -151,15 +151,10 @@ On `status: complete`:
 Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" "<session-id>" "<PLANS_DIR>/<session-id>-final-report-env.json" "<PLANS_DIR>/<session-id>-issue-close-outcome.json" "<PLANS_DIR>/<session-id>-intent.md" "<PLANS_DIR>/<session-id>-supervisor-state.json"
 Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
 
-SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
+SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete`. Fail-open — the CLI defaults `<cwd>` to its own working directory.
 
-After emitting, mark completion:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase closed
-  WSID=$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "<NOTES_BACKUP_PATH>" 2>/dev/null || true)
-  if [ -n "$WSID" ] && [ "$WSID" != "<session-id>" ]; then
-    node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$WSID" --set-alert-phase closed --clear-alert-armed-at
-  fi
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" --clear-audit-phase --session-id "<session-id>"
+After emitting, mark completion with two separate Bash calls:
+  bash "$AGENTS_CONFIG_DIR/skills/session-close/scripts/close-alert-phase.sh" "<session-id>" "<NOTES_BACKUP_PATH>"
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` blocks (exit 2) when any of the 13 headings or any unsubstituted `<TOKEN>` is missing/present after `## Final Report — <session-id>`.

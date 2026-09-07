@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Warn (non-blocking) when a sibling worktree listed in WORKTREE_NOTES.md
-# `## SiblingWorktrees` has uncommitted or unpushed work, before the session's
-# own PR is merged (#1102 — extracted from commit-push CP-2 so the prompt does
-# not inline a multi-step procedure; rules/prompt.md §1.3).
+# Warn (non-blocking) when a sibling worktree in WORKTREE_NOTES.md
+# `## SiblingWorktrees` has uncommitted or unpushed work (#1102).
 #
-# Usage: check-sibling-uncommitted.sh <worktree_notes_path>
-# Always exits 0 — this is advisory. Missing file / empty section → silent.
-#
-# Note: parses the single-line `- repo: <r>, path: <p>` form written by
-# hooks/lib/worktree-notes.js. The same awk parse also lives in
-# skills/worktree-end/scripts/capture-env.sh — unifying both behind a canonical
-# SiblingWorktrees parser is the deferred schema-harmonization follow-up.
+# Usage: check-sibling-uncommitted.sh [worktree_notes_path] — the argument is
+# optional so the prompt need not issue a `$(git rev-parse ...)` the bash-guard
+# denies (#2132). Always exits 0; missing file / empty section is silent.
+# Entry schema owner: hooks/lib/worktree-notes.js.
 set -euo pipefail
 
-NOTES_PATH="${1:?worktree_notes_path required}"
+NOTES_PATH="${1-}"
+if [[ -z "$NOTES_PATH" ]]; then
+  TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$TOPLEVEL" ]] || exit 0
+  NOTES_PATH="$TOPLEVEL/WORKTREE_NOTES.md"
+fi
 [[ -f "$NOTES_PATH" ]] || exit 0
 
 sibling_entries="$(awk '

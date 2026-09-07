@@ -10,7 +10,8 @@
 // exists but the session is not inside it" diagnosis is owned here (#1610), and
 // inherited complete state leaves the gate dormant by design (#1305).
 
-const { readState, reconcileEffectiveState } = require("../workflow-state");
+const { readState } = require("../workflow-state");
+const { earlyTierStatus } = require("../lib/early-write-gate");
 const { classifyEarlyWriteAllow, describeAllowedTargets } = require("./early-gate-allowlist");
 const { buildEarlyGateReason } = require("./early-gate-messages");
 const { isSubagentCall } = require("../lib/subagent-detect");
@@ -36,46 +37,25 @@ function runEarlyGate(input, { block }) {
   // no legal write target leaves a subagent nothing to do but hunt for a bypass.
   if (classifyEarlyWriteAllow(toolName, toolInput) !== null) return;
 
-  // Derived view (#1681): Tier 1/Tier 2 read the reconciled snapshot, not the
-  // raw record — so evidence-resolved steps clear the gate without the gate
-  // ever writing state back (Approach B replaces the old #1094 self-repair
-  // markStep).
-  // Security: no repoDir here — the early gate only reads workflow_init and
-  // clarify_intent, neither of which uses repoDir for evidence. Supplying
-  // toolInput.cwd would route git execs into an unvalidated path (#H1).
-  // Fail-closed: snapshot failure falls back to raw state, not "complete" (#H2).
-  let earlySnapshot = null;
-  try {
-    earlySnapshot = reconcileEffectiveState(earlyState, sessionId, {
-      isWfMeta: earlyState.workflow_type === "wf-meta",
-      evidencePolicy: "staged-only",
-    });
-  } catch (e) { earlySnapshot = null; }
-  const earlyStatus = (step) => {
-    if (!earlySnapshot || !earlySnapshot.steps) {
-      // Fall back to raw state on error (fail-closed, matching the commit gate).
-      return (earlyState && earlyState.steps && earlyState.steps[step] || {}).status || "pending";
-    }
-    return (earlySnapshot.steps[step] || {}).status || "pending";
-  };
+  // Derived view (#1681): Tier 1/Tier 2 read the reconciled snapshot, not the raw
+  // record, so evidence-resolved steps clear the gate without the gate writing state
+  // back. That computation now lives in ../lib/early-write-gate.js because bash-guard
+  // must stay quiet on exactly the sessions this gate blocks (CPR-SSOT); its
+  // WORKFLOW_OFF branch is deliberately NOT read here — workflow-gate.js approves on
+  // that marker upstream, so re-reading it would be a second, divergent order.
+  const earlyTier = earlyTierStatus(earlyState, sessionId);
 
   // The VERDICT never branches on caller identity — only the REMEDY does
   // (./early-gate-messages), so a subagent is told what it can actually do.
   const isSubagent = isSubagentCall(input);
   const allowedTargets = describeAllowedTargets();
 
-  // Tier 1: workflow_init
-  const wiStatus = earlyStatus("workflow_init");
-  if (wiStatus !== "complete" && wiStatus !== "skipped") {
-    block(buildEarlyGateReason({ tier: "workflow_init", toolName, isSubagent, allowedTargets }));
-  }
-  // Tier 2: clarify_intent (only reached once workflow_init has cleared).
-  // The #1094 evidence self-repair is now derivation, not a write: an
-  // existing intent.md already resolves clarify_intent to complete inside
-  // the snapshot, so the gate simply reads it and stays dormant.
-  const ciStatus = earlyStatus("clarify_intent");
-  if (ciStatus !== "complete" && ciStatus !== "skipped") {
-    block(buildEarlyGateReason({ tier: "clarify_intent", toolName, isSubagent, allowedTargets }));
+  // Tier 1 (workflow_init) then Tier 2 (clarify_intent): pendingTier names the first
+  // unsettled one, which is the tier the gate blocks on. The #1094 evidence self-repair
+  // is derivation, not a write — an existing intent.md already resolves clarify_intent
+  // inside the snapshot, so the gate simply reads it and stays dormant.
+  if (earlyTier.active) {
+    block(buildEarlyGateReason({ tier: earlyTier.pendingTier, toolName, isSubagent, allowedTargets }));
   }
   // Tier 3: session-bound worktree exists but CWD is outside it (#1610).
   try {

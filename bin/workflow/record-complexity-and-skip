@@ -19,6 +19,10 @@ SIGNALS_SEEN=0
 SIGNALS_FILE_SEEN=0
 TARGET="outline"
 ADVANCE=0
+# --dispatch-only is --advance with a one-line stdout contract: the caller is a
+# prompt procedure that must read the value without a `| tail -1 | cut` chain,
+# so every other line the advance path prints is sent to stderr instead.
+DISPATCH_ONLY=0
 SO_C1=""
 SO_C2=""
 
@@ -48,6 +52,7 @@ while [[ $# -gt 0 ]]; do
             esac
             TARGET="$2"; shift 2 ;;
         --advance) ADVANCE=1; shift ;;
+        --dispatch-only) ADVANCE=1; DISPATCH_ONLY=1; shift ;;
         --so-c1)   require_value "--so-c1" "$#" "${2-}"; SO_C1="$2"; shift 2 ;;
         --so-c2)   require_value "--so-c2" "$#" "${2-}"; SO_C2="$2"; shift 2 ;;
         --verdict) echo "--verdict is removed — levels are derived from --signals" >&2; exit 2 ;;
@@ -115,7 +120,11 @@ if [[ "$ADVANCE" -eq 1 ]]; then
     [[ "$RC" -eq 0 ]] || advance_fail "skip-signal-resolver" "$RC"
     # Emitted before Step 3 so the resolved mode is on stdout even when the
     # delegated record fails — the caller always learns which branch it was on.
-    printf 'SKIP_MODE=%s\n' "$SKIP_MODE"
+    if [[ "$DISPATCH_ONLY" -eq 1 ]]; then
+        printf 'SKIP_MODE=%s\n' "$SKIP_MODE" >&2
+    else
+        printf 'SKIP_MODE=%s\n' "$SKIP_MODE"
+    fi
 else
     SKIP_MODE="$(RESOLVE_SKIP_MODE)"
 fi
@@ -137,10 +146,17 @@ if [[ "$SKIP_MODE" = "auto" ]]; then
     if [[ "$TARGET" = "detail" ]]; then C3_ARGS=(--c3 true); fi
     if [[ "$ADVANCE" -eq 1 ]]; then
         RC=0
-        node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
-            --session "$SESSION_ID" \
-            --target "$TARGET" \
-            --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance || RC=$?
+        if [[ "$DISPATCH_ONLY" -eq 1 ]]; then
+            node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+                --session "$SESSION_ID" \
+                --target "$TARGET" \
+                --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance 1>&2 || RC=$?
+        else
+            node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+                --session "$SESSION_ID" \
+                --target "$TARGET" \
+                --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance || RC=$?
+        fi
         [[ "$RC" -eq 0 ]] || advance_fail "record-skip-judgment" "$RC"
         SKIP_DISPATCH="advanced"
     else

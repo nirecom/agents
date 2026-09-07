@@ -52,7 +52,7 @@ CP-1. **Stage changes with `git add`** — explicitly add each file you intend t
    rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step CP-2 worker JSON to propagate the bypass to the worker's Gate 3 staging-verification step.
 
 CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/worker-dispatch.md`.
-   Sibling pre-check (non-blocking): `bash "$AGENTS_CONFIG_DIR/bin/check-sibling-uncommitted.sh" "$(git rev-parse --show-toplevel)/WORKTREE_NOTES.md"` — warns when a sibling worktree in `## SiblingWorktrees` has uncommitted/unpushed work.
+   Sibling pre-check (non-blocking): `bash "$AGENTS_CONFIG_DIR/bin/check-sibling-uncommitted.sh"` — resolves the repository toplevel itself; warns when a sibling worktree in `## SiblingWorktrees` has uncommitted/unpushed work.
    Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template`, `wip_mode`, `enforce_worktree`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
    Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before dispatching.
@@ -67,7 +67,7 @@ CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_share
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
-CP-2a. **Append PR number to session title:** `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "$(pwd)" "<PR_NUMBER>"` where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when outcome is `bootstrap_pending`, `branch_mismatch`, `gate_blocked`, `staging_incomplete`, `staging_check_failed`, `push_failed`, or `conflict`. Fail-open.
+CP-2a. **Append PR number to session title:** `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "<PR_NUMBER>"` (the CLI defaults `<cwd>` to its own working directory) where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when outcome is `bootstrap_pending`, `branch_mismatch`, `gate_blocked`, `staging_incomplete`, `staging_check_failed`, `push_failed`, or `conflict`. Fail-open.
 
 CP-2b. **Open the PR URL:** run `node "$AGENTS_CONFIG_DIR/bin/open-pr-url.js" "<pr_url>"` when the status is `pr_created` only — `pr_reused` did not create anything, so it must not re-open a tab (parity with the retired `pr-created-open.js`, which fired on `gh pr create` alone).
    The PR URL MUST also appear in this turn's final response text — the dispatcher path has no tool-permission dialog to display it.

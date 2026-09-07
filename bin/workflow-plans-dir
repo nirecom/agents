@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Bash bridge to hooks/lib/workflow-plans-dir.js. Prints the absolute plans dir.
+# The env fallback lives here, not in the caller, so a prompt can resolve the
+# path with one standalone command instead of a `$(... || printf ...)` compound
+# the bash-guard denies (#2132).
 set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -6,7 +10,12 @@ if command -v cygpath >/dev/null 2>&1; then
 else
   NODE_DIR="$SCRIPT_DIR"
 fi
-node -e "
+RESOLVED=""
+if RESOLVED="$(node -e "
   try { process.stdout.write(require('$NODE_DIR/../hooks/lib/workflow-plans-dir').getWorkflowPlansDir()); }
   catch (e) { process.stderr.write('workflow-plans-dir: ' + e.message + '\\n'); process.exit(2); }
-"
+")"; then
+  printf '%s' "$RESOLVED"
+  exit 0
+fi
+printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"

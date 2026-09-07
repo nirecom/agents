@@ -16,7 +16,7 @@ the password component must be URL-safe. Standard base64 (`+/=`) breaks URL pars
 - `hex` (recommended — no special characters)
   - Linux/macOS: `openssl rand -hex 32`
   - PowerShell: `-join ((1..32)|%{'{0:x2}' -f (Get-Random -Max 256)})`
-- `base64url` (no padding): `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`
+- `base64url` (no padding): generate standard base64, then replace `+` with `-`, `/` with `_`, and drop every `=` (present that transformation to the user as one command for their own shell; never issue it yourself)
 - Any string: **percent-encode** the password component before embedding in the URL
 
 **Prohibited:** standard base64 (`+/=`) embedded unencoded in a URL password.

@@ -1,20 +1,15 @@
-// hooks/lib/merge-detect.js
-// Classifier for "merge to protected branch" commands.
-// Used by workflow-gate.js (PreToolUse hard gate) and workflow-mark.js (post-push reset).
-//
-// Returns { hit, kind } where kind is one of:
-//   "gh-pr-merge"          — gh pr merge (any flags including --auto)
-//   "git-push-protected"   — git push that targets a protected branch
-//
-// Known gaps (documented):
-// - Non-standard flag forms like "--repo=origin main" are not parsed (canonical forms only).
-// - This hook only fires for Claude Code Bash tool invocations; terminal sessions bypass it.
-//   This is by design — the gate is a workflow assistant, not OS-level access control.
+// hooks/lib/merge-detect.js — classifier for "merge to protected branch" commands.
+// Consumed by workflow-gate.js (PreToolUse hard gate) and workflow-mark.js (post-push reset).
+// Returns { hit, kind }: "gh-pr-merge" | "git-push-protected" | null.
+// Only canonical flag forms are parsed, and only Claude Code Bash calls reach it — the
+// gate is a workflow assistant, not OS-level access control.
+// Segmentation owner: hooks/lib/command-ir/ (canary-1 consumer of parse()).
+// Ownership map: docs/architecture/claude-code/shell-command-parsing.md.
 
 "use strict";
 
 const { parseGitGlobalOptions } = require("./parse-git-args");
-const { splitShellCommands } = require("./shell-segments");
+const { parse, analysisOf } = require("./command-ir");
 
 function getProtectedBranches() {
   const env = (process.env.DEFAULT_BRANCHES || "")
@@ -65,11 +60,37 @@ function checkSegment(segment) {
   return { hit: false, kind: null };
 }
 
+// A backslash-escaped separator (`\;`, `\&&`) is a literal argument, not a split point:
+// `echo x \; git push origin main` is ONE echo. The splitter records the split anyway and
+// the IR flags the link, so rejoin those neighbours before classifying.
+function segmentTexts(ir) {
+  const raw = ir.segments.map((s) => s.rawText);
+  const joinAfter = new Map();
+  analysisOf(ir).separatorLinks.forEach((l) => {
+    if (l.escaped && l.leftSegment != null && l.rightSegment != null) joinAfter.set(l.leftSegment, l.sep);
+  });
+  if (joinAfter.size === 0) return raw;
+  const out = [];
+  raw.forEach((text, i) => {
+    if (i > 0 && joinAfter.has(i - 1)) out[out.length - 1] += joinAfter.get(i - 1) + text;
+    else out.push(text);
+  });
+  return out;
+}
+
 function isMergeToProtectedCommand(command, _repoDir) {
   if (!command || typeof command !== "string") {
     return { hit: false, kind: null };
   }
-  for (const segment of splitShellCommands(command)) {
+  // Fail-closed on parse failure: inspect the whole command as one segment rather than
+  // skipping the check, so malformed input never loosens the gate (#2125).
+  const ir = parse(command);
+  const segments =
+    ir.parseFailure === true || !Array.isArray(ir.segments) || ir.segments.length === 0
+      ? [command]
+      : segmentTexts(ir);
+
+  for (const segment of segments) {
     const result = checkSegment(segment);
     if (result.hit) return result;
   }
