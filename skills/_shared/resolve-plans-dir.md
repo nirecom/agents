@@ -16,17 +16,11 @@ Non-Node callers go through `bin/workflow-plans-dir` (Bash bridge).
 
 ## Protocol (inlined into each consuming SKILL.md)
 
-At the start of Procedure, before the first plans-dir tool call, run:
+At the start of Procedure, before the first plans-dir tool call, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` as one bare command and read its stdout — an absolute path.
 
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
+Never assign that command to a variable and echo it back: the bare command already prints the answer.
 
-Capture the printed absolute path and substitute it for every `<PLANS_DIR>`
-placeholder in the SKILL.md. Resolve once per invocation — reuse across
-all subsequent steps.
+Substitute the printed path for every `<PLANS_DIR>` placeholder in the SKILL.md. Resolve once per invocation — reuse across all subsequent steps.
 
 - Read/Write/Edit args: literal absolute path.
 - Subagent prompts: literal absolute path (subagents can't expand `$VAR` —
@@ -35,10 +29,9 @@ all subsequent steps.
 
 ## Fallback chain
 
-1. Primary: `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — honours `.env`
-   and exported overrides via the JS resolver.
-2. Fallback: `"${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"` — respects an
-   already-exported `WORKFLOW_PLANS_DIR`, but cannot read `.env`.
+`bin/workflow-plans-dir` owns the whole chain — `WORKFLOW_PLANS_DIR` when set, else `$HOME/.workflow-plans`. Callers must not restate it.
+
+Never wrap the call in a caller-side `||` fallback: it duplicates the bridge's own contract and forces the prohibited capture-then-echo form.
 
 `AGENTS_CONFIG_DIR` is set in every Claude Code session; helper
 unreachability is a configuration error.

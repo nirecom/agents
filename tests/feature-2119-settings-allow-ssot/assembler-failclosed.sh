@@ -37,7 +37,7 @@ t29_case() { # <asm|gen> <case-id> -> "rc/state/reason/complete" | sentinel
         # The three MISSING-RESOURCE inputs. Unlike the two above, each names a resource the
         # generator reads but never writes, so the tempting implementation is to shrug and
         # carry on -- which silently drops that resource's whole contribution (every bare
-        # spelling, or one command's sixteen) from an otherwise successful-looking deploy.
+        # spelling, or one command's twenty-four) from an otherwise successful-looking deploy.
         no-cmd-file) write_ssot "$dir" bin/fx-tool bin/fx-ghost ;;
         no-path-ssot)  rm -f "$dir/install/path-exposed-commands.txt" ;;
         # `unreadable` spelled as a directory occupying the path: the mechanism cli-contract.sh
@@ -122,7 +122,7 @@ gen-bad-rc|gen-bad|1|nonzero|CPR-ORTH: the unresolvable-interpreter case fails c
 gen-bad-file|gen-bad|2|unchanged|with the deployed file untouched, because both CLIs go through the one writer
 gen-bad-why|gen-bad|3|reason-stated|and the second CLI states its reason too, rather than exiting non-zero in silence
 ok-rc|ok|1|zero|POSITIVE CONTROL: a healthy fixture deploys and exits 0, so the nine rows above are not passing because everything fails
-ok-complete|ok|4|complete|and every one of the sixteen generated path spellings reached the deployed file, so "it wrote something" is not mistaken for "it wrote the rules"
+ok-complete|ok|4|complete|and every one of the twenty-four generated path spellings reached the deployed file, so "it wrote something" is not mistaken for "it wrote the rules"
 nocmd-rc|asm-nocmd|1|nonzero|an SSOT entry naming a file that does not exist stops the deploy: the entry cannot be expanded, and expanding the other eighteen anyway ships a settings.json quietly short of one command
 nocmd-file|asm-nocmd|2|unchanged|and the previous deployment survives byte-identical
 nocmd-why|asm-nocmd|3|reason-stated|the output names the unresolvable entry, so the operator knows WHICH SSOT line to fix

@@ -15,7 +15,7 @@ export CG_STUB_MAKEDB=healthy
 root="$(mkroot "l7b")"
 make_db "$root" absent
 run_cli init "$root"
-assert_reported "L7b"
+assert_reported_n "L7b" 2
 assert_stub_db_built "L7b"
 assert_only "L7b" init
 assert_db_valid "L7b" "$root"
@@ -25,13 +25,39 @@ else
     pass "L7b — no quarantine directory was created"
 fi
 
+echo "--- L7n: the index-resync notice accompanies a successful init (round-5, C4/C5) ---"
+# Reuses L7b's own run above — the notice is a stdout-only addendum to that
+# exact invocation, not a new scenario, so no extra run_cli call is needed.
+# The reported root and $root can differ in slash direction (native \ vs the
+# cygpath -m form mkroot returns), so the path half is compared with
+# same_path() rather than a literal substring match (same reasoning as every
+# other root comparison in this suite).
+l7n_line1="$(head -n1 "$OUT_FILE")"
+l7n_path_part="${l7n_line1#*index ready for }"
+if [ "$l7n_path_part" != "$l7n_line1" ] && [ "$(same_path "$root" "$l7n_path_part")" = "yes" ]; then
+    l7n_a_result=yes
+else
+    l7n_a_result=no
+fi
+assert_eq "L7n-a — the first stdout line still reports the index-ready line (existing text preserved)" \
+    "yes" "$l7n_a_result"
+l7n_notice_count="$(grep -cF 'only once a new daemon serves this index' "$OUT_FILE" 2>/dev/null || true)"
+assert_eq "L7n-b — the resync notice needle appears on exactly one line" "1" "${l7n_notice_count:-0}"
+assert_eq "L7n-c — the notice is the second line (the existing line was not replaced)" \
+    "yes" "$(sed -n '2p' "$OUT_FILE" | grep -qF 'only once a new daemon serves this index' && echo yes || echo no)"
+assert_eq "L7n-d — stderr stays 0 bytes with the notice present" "0" "$(err_bytes)"
+assert_eq "L7n-e — the per-prompt half of the notice is present (C5)" \
+    "yes" "$(grep -qF 'current from the next prompt' "$OUT_FILE" && echo yes || echo no)"
+assert_eq "L7n-f — the unconditional 'keeps the handle it opened' phrasing never appears (round-4 overclaim guard)" \
+    "no" "$(grep -qF 'keeps the handle it opened' "$OUT_FILE" && echo yes || echo no)"
+
 echo "--- L9s: an in-place rebuild reports once and leaves a valid index ---"
 reset_env
 export CG_STUB_MAKEDB=healthy
 root="$(mkroot "l9s")"
 make_db "$root" zero
 run_cli init "$root"
-assert_reported "L9s"
+assert_reported_n "L9s" 2
 assert_stub_db_built "L9s"
 assert_only "L9s" index
 assert_db_valid "L9s" "$root"
@@ -49,7 +75,7 @@ root="$(mkroot "l11f")"
 root_p="$(root_sh l11f)"
 make_db "$root" zero
 run_cli init "$root"
-assert_reported "L11f"
+assert_reported_n "L11f" 2
 assert_stub_db_built "L11f"
 assert_eq "L11f — index attempted exactly once" "1" "$(verb_count index)"
 assert_eq "L11f — the post-quarantine init -y ran exactly once" "1" "$(verb_count init)"

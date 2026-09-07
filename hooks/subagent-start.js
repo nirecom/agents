@@ -4,6 +4,12 @@
 const fs = require("fs");
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { getPlanLangInjection } = require("./lib/lang-config");
+const { codegraphEnabled } = require("./lib/codegraph-boundary");
+
+// The same nudge the nine adopting agents/*.md carry, extended to every
+// subagent — built-in Explore/general-purpose/Plan agents included.
+const CODEGRAPH_NUDGE =
+  "Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md";
 
 // Planner/reviewer agents that write plan artifacts. Only these receive the
 // proactive PLAN_LANG directive; other subagents (workers) do not.
@@ -50,8 +56,18 @@ try {
   }
 } catch (_e) { /* fail-open */ }
 
+// Every agent type, gated only on CODEGRAPH=on.
+try {
+  if (codegraphEnabled()) lines.push(CODEGRAPH_NUDGE);
+} catch (_e) { /* fail-open */ }
+
 if (lines.length === 0) {
   console.log("{}");
 } else {
-  console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
+  console.log(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "SubagentStart",
+      additionalContext: lines.join("\n"),
+    },
+  }));
 }

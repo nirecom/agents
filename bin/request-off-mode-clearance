@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# request-off-mode-clearance — thin re-spelled entrypoint for ./request-off-clearance (#1821).
+#
+# Multi-defense: block messages INVITE this command, and the OFF-clearance mention gate
+# (hooks/lib/protected-basenames.js TOKEN_MENTION_RE) keys on the sibling's spelling. This
+# name carries no such literal, so a regression of that regex's dot-adjacency narrowing can
+# never make the guard block the very command it just told the caller to run.
+#
+# Behaviour is IDENTICAL by construction: exec, so no extra process, no swallowed
+# diagnostics, and "$@" passes every argument through byte-for-byte.
+# SSOT for the invitation string: hooks/lib/off-clearance-invocation.js
+
+set -euo pipefail
+
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/request-off-clearance" "$@"

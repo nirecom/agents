@@ -1,24 +1,17 @@
 #!/bin/bash
 # tests/bin-sweep-write-mode-default.sh
-# Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/sweep-supervisor-state.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
+# Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/sweep-supervisor-state.sh, bin/sweep-shell-snapshots.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
 # Tags: sweep, write-mode, defaults, cron, scope:common, TL2
-#
 # Pins the apply-by-default write-mode inversion across the whole /sweep series:
-#   - no flag  = production run (writes / deletes)
-#   - --dry-run = classify and report only, write nothing
-#   - --apply   = accepted, backward-compatible synonym of "no flag"
-#
-# ...and the ONE named exception to that inversion (D1): bin/sweep-supervisor-state.sh is
-# dry-run by default. It deletes records from a governance audit trail rather than a
-# regenerable derivative, so the family default is inverted for it deliberately. The
-# exception lives in this table (CPR-SSOT: the family invariant owns its own exceptions) so a
-# future bulk edit cannot silently flip it back.
-#
-# Covers the three surfaces that must stay in lock-step (CPR-ORTH / CPR-E2E):
-#   A. bin/lib/sweep-write-mode.sh semantics SSOT
-#   B. every member script's flag face and observable footer / side effects
-#   C. the unattended callers (.github/workflows/sweep.yml) and the SKILL.md prose
-#
+# no flag = production run, --dry-run = report only, --apply = its synonym. The
+# ONE named exception (D1) is bin/sweep-supervisor-state.sh, dry-run by default
+# because it deletes governance audit records, not regenerable derivatives; the
+# exception lives in this table (CPR-SSOT) so a bulk edit cannot flip it back.
+# Three surfaces must stay in lock-step (CPR-ORTH / CPR-E2E): A the semantics
+# SSOT, B each member's flag face and side effects, C the unattended callers.
+
+set -uo pipefail
+
 # TL3 gap (what this test does NOT catch):
 # - The nightly GitHub Actions run itself: sweep.yml is grepped, not executed,
 #   so a runner-only failure (missing GH_TOKEN, checkout depth) is invisible here.
@@ -26,8 +19,6 @@
 #   layer — only the bin/ scripts are exercised.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
-
-set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WRITE_MODE_LIB="$AGENTS_DIR/bin/lib/sweep-write-mode.sh"
@@ -128,7 +119,7 @@ A2_lib_footer_and_usage_helpers() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# B1. All five member scripts accept --dry-run (table-driven over the class).
+# B1. Every member script accepts --dry-run (table-driven over the class).
 # ─────────────────────────────────────────────────────────────────────────────
 
 B1_all_scripts_accept_dry_run() {
@@ -150,11 +141,12 @@ B1_all_scripts_accept_dry_run() {
             fail "B1 $name: --dry-run rejected (exit=$rc, out=$out)"
         fi
     done <<'TABLE'
-sweep-branches      | bin/sweep-branches.sh
-sweep-plans         | bin/sweep-plans.sh
-sweep-worktrees     | bin/sweep-worktrees.sh
-audit-tests         | bin/audit-tests.sh
-audit-tests-common  | bin/audit-tests-common.sh
+sweep-branches        | bin/sweep-branches.sh
+sweep-plans           | bin/sweep-plans.sh
+sweep-worktrees       | bin/sweep-worktrees.sh
+sweep-shell-snapshots | bin/sweep-shell-snapshots.sh
+audit-tests           | bin/audit-tests.sh
+audit-tests-common    | bin/audit-tests-common.sh
 TABLE
 }
 
@@ -295,20 +287,16 @@ B4_delete_no_pr_alone_is_destructive() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # B5. sweep-worktrees.sh run to completion (CPR-ORTH: same standard as its
-#     siblings — sweep-branches in B4, sweep-plans in B2 /
-#     tests/fix-847-sweep-plans-empty-prefix.sh, audit-tests in B3 /
-#     tests/feature-test-cleanup-944/group-e-deletion.sh). A --help-only smoke
-#     check cannot observe the write/no-write asymmetry, which is the entire
-#     point of the inversion.
-#
-#     Sandboxing: WORKTREE_BASE_DIR and AGENTS_CONFIG_DIR are both pointed at
-#     throwaway temp dirs, and --skip-gh-check removes the network dependency,
-#     so the real ~/git/worktrees registry can never be an input.
+#     siblings in B2/B3/B4) — a --help-only smoke check cannot observe the
+#     write/no-write asymmetry, which is the entire point of the inversion.
+#     WORKTREE_BASE_DIR and AGENTS_CONFIG_DIR both point at throwaway temp dirs
+#     and --skip-gh-check drops the network dependency, so the real
+#     ~/git/worktrees registry can never be an input.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# _b5_fixture <tag> — builds a main repo plus one zombie linked worktree whose
-# branch is merged and clean. Echoes "<repo>|<worktree-dir>|<wt-base>".
 _b5_fixture() {
+    # <tag> → a main repo plus one zombie linked worktree whose branch is merged
+    # and clean. Echoes "<repo>|<worktree-dir>|<wt-base>".
     local tag="$1"
     local root="$TMPDIR_BASE/b5-$tag"
     local repo="$root/main-repo"

@@ -30,6 +30,7 @@ BASE="main"
 BASE_STATE="UNKNOWN"
 NO_LOG=false
 CONCERNS_FILE=""
+PROJECT_ROOT_ARG=""
 CONTEXT_FILES=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,6 +53,12 @@ while [[ $# -gt 0 ]]; do
         exit 0
       fi
       CONCERNS_FILE="$2"; shift 2 ;;
+    --project-root)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Review: FAILED — --project-root requires an argument"
+        exit 0
+      fi
+      PROJECT_ROOT_ARG="$2"; shift 2 ;;
     --context)
       if [[ $# -lt 2 ]]; then
         echo "## Codex Review: FAILED — --context requires an argument"
@@ -125,6 +132,16 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   echo "## Codex Review: FAILED — not inside a git repository"
   exit 0
 }
+
+# Unlike review-plan-codex, this script always operates on the repo it is
+# invoked from — REPO_ROOT above is never a caller-supplied target, it is
+# this git checkout. So the project whose PROJECT_NFR should apply is this
+# same repo, and a caller with no opinion (no --project-root, e.g. the
+# run-quality-gates.sh production entry point) gets it for free rather than
+# silently reviewing every code diff with no NFR at all.
+if [[ -z "$PROJECT_ROOT_ARG" ]]; then
+  PROJECT_ROOT_ARG="$REPO_ROOT"
+fi
 
 # ---- path-priority diff collection ------------------------------------------
 # Why per-path rather than one concatenated diff cut with `head -n`: git prints files in its
@@ -467,9 +484,23 @@ fi
 
 PREAMBLE=$(codex_core_adversarial_preamble "code diff")
 
+# Project non-functional requirements; empty unless --project-root names a
+# project that declares PROJECT_NFR (resolved from disk, never from the env).
+NFR_BLOCK=""
+if [[ -n "$PROJECT_ROOT_ARG" ]]; then
+  if [[ ! -d "$PROJECT_ROOT_ARG" ]]; then
+    echo "## Codex Review: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
+    exit 0
+  fi
+  NFR_TEXT="$(codex_core_project_nfr_block "$PROJECT_ROOT_ARG")"
+  if [[ -n "$NFR_TEXT" ]]; then
+    NFR_BLOCK="${NFR_TEXT}"$'\n\n'
+  fi
+fi
+
 PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
-${PRIOR_INSTRUCTIONS}## Concern Delta output format
+${NFR_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
 
 After your review bullets, emit a section headed exactly '## Concern Delta'.
 List one line per concern, in this form:

@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// PreToolUse hook: block WORKFLOW sentinel echos issued from a subagent.
-// Sentinels are reserved for the orchestrator (main conversation); a subagent
-// must never drive the workflow state machine. Main-conversation calls and
-// non-sentinel commands pass through. Fail-open: any error path approves.
+// PreToolUse hook: block workflow-state DOORS issued from a subagent, across all
+// three command-executing tools. Both doors are reserved for the orchestrator
+// (main conversation): the sentinel echo and the advance-class CLI (#2102).
+// Main-conversation calls and non-door commands pass through.
+// Fail-open: any error path approves.
 
 "use strict";
 
 const fs = require("fs");
 const { isSubagentCall } = require("./lib/subagent-detect");
+const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
+const { isWorkflowStateDriverCommand } = require("./lib/workflow-driver-commands");
 const {
   isStrictSentinel,
   CHAIN_BOUNDARY_SENTINEL_DQ_RE,
@@ -17,7 +20,10 @@ const {
 const BLOCK_MESSAGE =
   "subagent cannot emit WORKFLOW sentinels — sentinels are reserved for the orchestrator (main conversation)";
 
-module.exports = { BLOCK_MESSAGE };
+const DRIVER_BLOCK_MESSAGE =
+  "subagent cannot drive the workflow state machine — `--advance` is reserved for the orchestrator (main conversation)";
+
+module.exports = { BLOCK_MESSAGE, DRIVER_BLOCK_MESSAGE };
 
 function readStdin() {
   const chunks = [];
@@ -37,9 +43,17 @@ function approve() {
   process.exit(0);
 }
 
-function block() {
-  console.log(JSON.stringify({ decision: "block", reason: BLOCK_MESSAGE }));
+function block(reason) {
+  console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
+}
+
+function isSentinelEmission(command) {
+  return (
+    isStrictSentinel(command) ||
+    CHAIN_BOUNDARY_SENTINEL_DQ_RE.test(command) ||
+    CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE.test(command)
+  );
 }
 
 if (require.main === module) {
@@ -50,23 +64,24 @@ if (require.main === module) {
     approve(); // fail-open on malformed stdin
   }
 
-  // Step 1: only intercept Bash
-  if (input.tool_name !== "Bash") approve();
+  // Step 1: only intercept the three command-executing tools
+  if (!isCommandTool(input.tool_name)) approve();
 
-  // Step 2: empty command passes through
-  const command = ((input.tool_input || {}).command || "").trim();
-  if (!command) approve();
+  // Step 2: nothing to adjudicate passes through
+  const commands = commandListOf(input.tool_name, input.tool_input);
+  if (!commands.length) approve();
 
   // Step 3: main conversation passes through (agent_id absent)
   if (!isSubagentCall(input)) approve();
 
-  // Step 4: block sentinel echos using SSOT detectors (no naive `&&` split)
-  if (
-    isStrictSentinel(command) ||
-    CHAIN_BOUNDARY_SENTINEL_DQ_RE.test(command) ||
-    CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE.test(command)
-  ) {
-    block();
+  // Step 4: each element on its OWN — sentinel patterns are ^...$ without `m`, so
+  // a joined text could never match commands[1], and joining would additionally
+  // let two unrelated elements combine into a false driver match.
+  for (const raw of commands) {
+    const command = String(raw).trim();
+    if (!command) continue;
+    if (isSentinelEmission(command)) block(BLOCK_MESSAGE);
+    if (isWorkflowStateDriverCommand(command)) block(DRIVER_BLOCK_MESSAGE);
   }
 
   approve();

@@ -111,6 +111,27 @@ function computeVerdict(rawSid, _didAutoRepair) {
   const isWfMeta = (state.workflow_type === "wf-meta");
   const repoDir = resolveRepoDir();
 
+  // repoDir belongs to THIS process, not to `sid`. A presence check on
+  // `--session` would mislabel hooks/session-start.js, which passes
+  // --session <own-sid> explicitly; only the VALUE comparison separates a
+  // self-call from a genuine cross-session evaluation.
+  {
+    const ownSid = resolveSessionId({});
+    const isExplicitSessionOverride = sid !== ownSid;
+    const { assertRepoDirMatchesSession } = require("./repo-dir-guard");
+    const repoCheck = assertRepoDirMatchesSession(sid, repoDir, { isExplicitSessionOverride });
+    if (!repoCheck.ok) {
+      emit(
+        "abort",
+        "",
+        "next-step resolved repoDir " + repoDir + ", which does not belong to session " + sid +
+          ". Re-run next-step from that session's own worktree.",
+        "repo-dir-mismatch: " + repoCheck.reason
+      );
+      return;
+    }
+  }
+
   // Precondition preserved ahead of the snapshot: clarify_intent requires
   // closes_issues. Resolved against the RAW walk so evidence-based resolution of
   // clarify_intent cannot skip past the check (pre-#1148 precedence).

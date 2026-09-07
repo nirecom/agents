@@ -2,24 +2,28 @@
 // codegraph-mcp.js - register / unregister the `codegraph` MCP server for this user.
 //
 // Registration is delegated to the Claude Code CLI (`claude mcp add|remove`), never to
-// the upstream tool's own bootstrap command: that command rewrites ~/.claude/CLAUDE.md
-// and injects a prompt hook. Rationale: docs/architecture/claude-code.md.
-
-// ~/.claude.json is READ ONLY here, to answer "is it registered, and is it ours?"; every
-// write to it belongs to the CLI. Exit is always 0 except a usage error (64) — a failed
-// registration must never fail the installer that called it.
+// the upstream tool's own bootstrap command, which rewrites ~/.claude/CLAUDE.md and
+// injects a prompt hook. Rationale: docs/architecture/claude-code.md.
+//
+// ~/.claude.json is READ ONLY here; every write belongs to the CLI. A same-named entry
+// counts as ours only when hasOurShape() matches (see readState()). Exit is always 0
+// except a usage error (64) — a failed registration must never fail the installer.
 
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnShimmedCli } = require("../hooks/lib/spawn-shimmed-cli");
+const {
+  TELEMETRY_KEYS,
+  telemetryEnv,
+  clearSavedTelemetryChoice,
+  verifyPinnedCliVersion,
+} = require("../hooks/lib/codegraph-boundary");
 
 const SERVER_NAME = "codegraph";
 const VERBS = ["register", "unregister"];
 const SERVER_COMMAND = "codegraph";
 const SERVER_ARGS = ["serve", "--mcp"];
-const TELEMETRY_KEYS = ["CODEGRAPH_TELEMETRY", "DO_NOT_TRACK"];
-const CONSTANTS_FILE = path.join(__dirname, "codegraph-constants.txt");
 
 function warn(message) {
   process.stderr.write("codegraph-mcp: " + message + "\n");
@@ -29,30 +33,33 @@ function note(message) {
   process.stdout.write(message + "\n");
 }
 
-function readConstants() {
-  const out = {};
-  let raw;
-  try {
-    raw = fs.readFileSync(CONSTANTS_FILE, "utf8");
-  } catch (_) {
-    return out;
+const RESET_NOTICE =
+  "reset the local CodeGraph telemetry choice (removed ~/.codegraph/telemetry.json); the installer repeats " +
+  "this on every run while install/codegraph-constants.txt ships CODEGRAPH_TELEMETRY=1 — to turn telemetry " +
+  "off everywhere, set it to 0 and re-run the installer, then run `codegraph telemetry off` once for the " +
+  "codegraph you start by hand.";
+
+function reportTelemetryReset() {
+  const result = clearSavedTelemetryChoice();
+  if (result.action === "cleared") note(RESET_NOTICE);
+  else if (result.action === "failed") {
+    warn("could not reset the local CodeGraph telemetry choice at " + result.path +
+      "; the next installer run retries.");
   }
-  for (const line of raw.split(/\r?\n/)) {
-    const matched = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
-    if (matched) out[matched[1]] = matched[2];
-  }
-  return out;
 }
 
-// telemetryEnv is the opt-out pair the daemon must inherit; install/codegraph-constants.txt
-// is its single source of truth, shared with both OS installer scripts.
-function telemetryEnv() {
-  const constants = readConstants();
-  const pairs = {};
-  for (const key of TELEMETRY_KEYS) {
-    if (typeof constants[key] === "string") pairs[key] = constants[key];
+// A version report never blocks registration: the MCP server is useful at any
+// version, and only the per-prompt context hook depends on the pinned build.
+function reportPinnedVersionMismatch() {
+  const { verdict, pinned, actual } = verifyPinnedCliVersion();
+  const remedy = "; run: npm install -g --ignore-scripts @colbymchenry/codegraph@" + pinned;
+  if (verdict === "mismatch") {
+    process.stderr.write("pinned CodeGraph version mismatch: installed " + actual +
+      ", install/codegraph-constants.txt pins " + pinned + remedy + "\n");
+  } else if (verdict === "unknown-actual") {
+    process.stderr.write("could not read the installed CodeGraph version (`codegraph --version`); " +
+      "the per-prompt context hook needs the pinned " + pinned + " build" + remedy + "\n");
   }
-  return pairs;
 }
 
 // claudeCliPresent probes the CLI itself; only ENOENT means "not installed".
@@ -62,13 +69,28 @@ function claudeCliPresent() {
   return !(probe.error && probe.error.code === "ENOENT");
 }
 
-function readEntry() {
+// A same-named entry only counts as ours when its command/args match what addServer()
+// writes — a name collision with an unrelated hand-written or third-party MCP server
+// must never be silently overwritten or deleted.
+function hasOurShape(entry) {
+  return (
+    entry.command === SERVER_COMMAND &&
+    Array.isArray(entry.args) &&
+    entry.args.length === SERVER_ARGS.length &&
+    entry.args.every((arg, i) => arg === SERVER_ARGS[i])
+  );
+}
+
+// Returns "present" | "foreign" | "absent" | null. "foreign" means a same-named entry
+// exists but its shape doesn't match ours — leave it alone. null means ~/.claude.json
+// could not be read or parsed: the file is not ours to repair, so both verbs leave it alone.
+function readState() {
   const configPath = path.join(os.homedir(), ".claude.json");
   let raw;
   try {
     raw = fs.readFileSync(configPath, "utf8");
   } catch (err) {
-    if (err && err.code === "ENOENT") return { absent: true };
+    if (err && err.code === "ENOENT") return "absent";
     return null;
   }
   let parsed;
@@ -79,43 +101,11 @@ function readEntry() {
   }
   if (!parsed || typeof parsed !== "object") return null;
   const servers = parsed.mcpServers;
-  if (!servers || typeof servers !== "object") return { absent: true };
-  if (!Object.prototype.hasOwnProperty.call(servers, SERVER_NAME)) return { absent: true };
+  if (!servers || typeof servers !== "object") return "absent";
+  if (!Object.prototype.hasOwnProperty.call(servers, SERVER_NAME)) return "absent";
   const entry = servers[SERVER_NAME];
   if (!entry || typeof entry !== "object") return null;
-  return { absent: false, entry };
-}
-
-// hasOurShape is the weaker test: same command and args, whatever the env. Such an
-// entry may be replaced when CODEGRAPH turns on, but never removed when it turns off.
-function hasOurShape(entry) {
-  if (entry.command !== SERVER_COMMAND) return false;
-  const args = entry.args;
-  if (!Array.isArray(args) || args.length !== SERVER_ARGS.length) return false;
-  return SERVER_ARGS.every((value, index) => args[index] === value);
-}
-
-function hasTelemetryOptOut(entry, wanted) {
-  const env = entry.env;
-  if (!env || typeof env !== "object") return Object.keys(wanted).length === 0;
-  return Object.keys(wanted).every((key) => String(env[key]) === wanted[key]);
-}
-
-// readState collapses ~/.claude.json into the four cases the verbs branch on, plus
-// null for "unknowable", which must change nothing. Only "current" — an entry
-// carrying the exact command, args and telemetry env register() writes — is proof
-// of ownership, so only "current" is ever removed. An empty or partial wantedEnv
-// means codegraph-constants.txt was missing, malformed, or incomplete (a valid
-// file always yields every TELEMETRY_KEYS entry) — the desired env is itself
-// unknowable, so this must fail closed the same as an unreadable ~/.claude.json,
-// never fall through to "current" on whichever keys happened to be readable.
-function readState(wantedEnv) {
-  if (Object.keys(wantedEnv).length !== TELEMETRY_KEYS.length) return null;
-  const found = readEntry();
-  if (found === null) return null;
-  if (found.absent) return "absent";
-  if (!hasOurShape(found.entry)) return "foreign";
-  return hasTelemetryOptOut(found.entry, wantedEnv) ? "current" : "replaceable";
+  return hasOurShape(entry) ? "present" : "foreign";
 }
 
 function runClaude(args) {
@@ -125,7 +115,9 @@ function runClaude(args) {
 }
 
 function addServer(wantedEnv) {
-  const envFlags = Object.keys(wantedEnv).flatMap((key) => ["--env", key + "=" + wantedEnv[key]]);
+  // Iterating the key list, not the object, keeps --env order independent of the
+  // key order in the constants file.
+  const envFlags = TELEMETRY_KEYS.flatMap((key) => ["--env", key + "=" + wantedEnv[key]]);
   return runClaude(
     ["mcp", "add", SERVER_NAME, "--scope", "user"]
       .concat(envFlags)
@@ -138,16 +130,14 @@ function removeServer() {
   return runClaude(["mcp", "remove", SERVER_NAME, "-s", "user"]);
 }
 
+// Remove-then-add rather than a conditional refresh: `claude mcp add` rejects a
+// duplicate name, and re-adding is how the shipped env reaches an older entry.
 function register(state, wantedEnv) {
-  if (state === "current") {
-    note(SERVER_NAME + " MCP server already registered.");
-    return;
-  }
   if (state === "foreign") {
-    note(SERVER_NAME + " MCP server is registered with a command this installer did not write; leaving it unchanged.");
+    warn("a " + SERVER_NAME + " MCP server is already registered with a different command/args; leaving it as-is.");
     return;
   }
-  if (state === "replaceable" && !removeServer()) {
+  if (state === "present" && !removeServer()) {
     warn("could not refresh the " + SERVER_NAME + " MCP server registration; re-run the installer to retry.");
     return;
   }
@@ -159,11 +149,7 @@ function register(state, wantedEnv) {
 }
 
 function unregister(state) {
-  if (state === "absent") return;
-  if (state !== "current") {
-    note(SERVER_NAME + " MCP server does not carry this installer's registration marker; leaving it in place.");
-    return;
-  }
+  if (state !== "present") return;
   if (!removeServer()) {
     warn("could not unregister the " + SERVER_NAME + " MCP server; re-run the installer to retry.");
     return;
@@ -177,17 +163,22 @@ function main() {
     process.stderr.write("usage: node install/codegraph-mcp.js <register|unregister>\n");
     process.exit(64);
   }
+  // Before the CLI probe: both describe the local install, not the registration,
+  // so a missing claude CLI must not swallow them.
+  if (verb === "register") {
+    reportTelemetryReset();
+    reportPinnedVersionMismatch();
+  }
   if (!claudeCliPresent()) {
     warn("claude CLI not found; MCP registration skipped.");
     process.exit(0);
   }
-  const wantedEnv = telemetryEnv();
-  const state = readState(wantedEnv);
+  const state = readState();
   if (state === null) {
-    warn("could not read the MCP server list or its telemetry constants; leaving registration unchanged.");
+    warn("could not read the MCP server list; leaving registration unchanged.");
     process.exit(0);
   }
-  if (verb === "register") register(state, wantedEnv);
+  if (verb === "register") register(state, telemetryEnv());
   else unregister(state);
   process.exit(0);
 }

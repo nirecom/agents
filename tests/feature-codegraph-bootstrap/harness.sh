@@ -70,6 +70,71 @@ PINNED_PATHEXT=".COM;.EXE;.BAT;.CMD"
 HOSTILE_PATHEXT=".EXE"
 SHIM_REF_N="$(node_path "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
 
+# write_npm_stub <path> — a recording npm stub: every argv line is appended to
+# $NPM_STUB_LOG and the process exits with ${NPM_STUB_RC:-0}. A SUCCESSFUL global
+# install of the pinned codegraph package also publishes the staged codegraph stub
+# beside itself, because that is what the real command does — and the register verb
+# probes `codegraph --version` immediately afterwards, so a fixture that installed
+# nothing would warn on stderr in every install case.
+write_npm_stub() {
+    local path="$1"
+    cat > "$path" <<'NPMSTUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$NPM_STUB_LOG"
+npm_rc="${NPM_STUB_RC:-0}"
+if [ "$npm_rc" = "0" ]; then
+    case " $* " in
+        *" -g "*"@colbymchenry/codegraph@"*)
+            npm_bin="$(dirname "$0")"
+            if [ -d "$npm_bin/cg-pending" ]; then
+                cp -R "$npm_bin/cg-pending/." "$npm_bin/"
+                chmod +x "$npm_bin/codegraph" 2>/dev/null || true
+            fi
+            ;;
+    esac
+fi
+exit "$npm_rc"
+NPMSTUB
+    chmod +x "$path"
+}
+
+# write_cg_stub <dir> — a recording codegraph stub at <dir>/codegraph. Every argv
+# line is appended to $CG_STUB_LOG and the process exits 0, EXCEPT `--version`,
+# which is answered directly from ${CG_STUB_VERSION:-$CG_VERSION} on stdout and
+# never touches CG_STUB_LOG — this must stay first so the `^(un)?install( |$)`
+# CG_INSTALL count (harness.sh's own regex) never sees a --version invocation.
+# On win32 the binary is reached through hooks/lib/spawn-shimmed-cli.js, which only
+# ever resolves a PATHEXT extension and then reads the npm cmd-shim trio as text, so
+# the same contract is mirrored into codegraph.cmd + codegraph-target.js there — the
+# symmetric member of write_win_claude_cmd_shim's class (CPR-ORTH).
+write_cg_stub() {
+    local dir="$1"
+    mkdir -p "$dir"
+    if [ "$IS_WIN" = "1" ]; then write_win_cg_cmd_shim "$dir"; return 0; fi
+    printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--version" ]; then printf "%%s\\n" "${CG_STUB_VERSION:-%s}"; exit 0; fi\nprintf "%%s\\n" "$*" >> "$CG_STUB_LOG"\nexit 0\n' "$CG_VERSION" > "$dir/codegraph"
+    chmod +x "$dir/codegraph"
+}
+
+# write_win_cg_cmd_shim <dir> — the win32 codegraph trio (POSIX sibling + .cmd +
+# codegraph-target.js), reproducing write_cg_stub's `--version`-from-CG_STUB_VERSION
+# / argv-logging contract in the shape spawn-shimmed-cli.js parses.
+write_win_cg_cmd_shim() {
+    local dir="$1"
+    mkdir -p "$dir"
+    cat > "$dir/codegraph-target.js" <<CGTARGET
+const fs = require("fs");
+const args = process.argv.slice(2);
+if (args[0] === "--version") {
+  process.stdout.write((process.env.CG_STUB_VERSION || "$CG_VERSION") + "\n");
+  process.exit(0);
+}
+fs.appendFileSync(process.env.CG_STUB_LOG, args.join(" ") + "\n");
+process.exit(0);
+CGTARGET
+    _win_shim_sibling codegraph > "$dir/codegraph"
+    { _win_cmd_shim_head; _win_cmd_shim_tail codegraph; } > "$dir/codegraph.cmd"
+}
+
 # make_stubs <dir> <node yes|no> <codegraph yes|no> <npm 0|1|no> <claude 0|1|no>.
 # npm and codegraph are only ever resolved by bash, so a shebang script suffices.
 # `claude` on win32 now uses the same npm cmd-shim shape spawnShimmedCli resolves in
@@ -79,10 +144,15 @@ SHIM_REF_N="$(node_path "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
 make_stubs() {
     local dir="$1" with_node="$2" with_cg="$3" npm_mode="$4" claude_mode="$5"
     mkdir -p "$dir"
-    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$NPM_STUB_LOG"\nexit "${NPM_STUB_RC:-0}"\n' > "$dir/npm"
-    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$CG_STUB_LOG"\nexit 0\n' > "$dir/codegraph"
-    chmod +x "$dir/npm" "$dir/codegraph"
-    [ "$with_cg" = "yes" ] || rm -f "$dir/codegraph" "$dir/codegraph.cmd"
+    write_npm_stub "$dir/npm"
+    # Staged, not published: `with_cg=no` means the binary is absent NOW, which the
+    # npm stub above may still turn into a presence the way a real install does.
+    write_cg_stub "$dir/cg-pending"
+    rm -f "$dir/codegraph" "$dir/codegraph.cmd" "$dir/codegraph-target.js"
+    if [ "$with_cg" = "yes" ]; then
+        cp -R "$dir/cg-pending/." "$dir/"
+        chmod +x "$dir/codegraph" 2>/dev/null || true
+    fi
     [ "$npm_mode" = "no" ] && rm -f "$dir/npm" "$dir/npm.cmd"
     # Absence means absence under every PATHEXT spelling: leaving any spelling of
     # the shim trio behind would turn a "binary missing" case into a silent
@@ -118,32 +188,36 @@ if (args[0] === "--version") { process.exit(0); }
 fs.appendFileSync(process.env.CLAUDE_STUB_LOG, args.join(" ") + "\n");
 process.exit(Number(process.env.CLAUDE_STUB_RC || 0));
 CLAUDETARGET
-    {
-        printf '#!/bin/sh\n'
-        printf 'basedir=$(dirname "$(echo "$0" | sed -e '"'"'s,\\\\,/,g'"'"')")\n'
-        printf '\n'
-        printf 'case `uname` in\n'
-        printf '    *CYGWIN*|*MINGW*|*MSYS*)\n'
-        printf '        if command -v cygpath > /dev/null 2>&1; then\n'
-        printf '            basedir=`cygpath -w "$basedir"`\n'
-        printf '        fi\n'
-        printf '    ;;\n'
-        printf 'esac\n'
-        printf '\n'
-        printf 'if [ -x "$basedir/node" ]; then\n'
-        printf '  exec "$basedir/node"  "$basedir/claude-target.js" "$@"\n'
-        printf 'else \n'
-        printf '  exec node  "$basedir/claude-target.js" "$@"\n'
-        printf 'fi\n'
-    } > "$dir/claude"
-    { _win_claude_cmd_head; _win_claude_cmd_tail; } > "$dir/claude.cmd"
+    _win_shim_sibling claude > "$dir/claude"
+    { _win_cmd_shim_head; _win_cmd_shim_tail claude; } > "$dir/claude.cmd"
 }
 
-# _win_claude_cmd_head / _win_claude_cmd_tail — byte-faithful npm cmd-shim 8.0.0
+# _win_shim_sibling <name> — npm's POSIX sibling script on stdout, naming
+# "$basedir/<name>-target.js" in the dialect spawn-shimmed-cli.js parses.
+_win_shim_sibling() {
+    printf '#!/bin/sh\n'
+    printf 'basedir=$(dirname "$(echo "$0" | sed -e '"'"'s,\\\\,/,g'"'"')")\n'
+    printf '\n'
+    printf 'case `uname` in\n'
+    printf '    *CYGWIN*|*MINGW*|*MSYS*)\n'
+    printf '        if command -v cygpath > /dev/null 2>&1; then\n'
+    printf '            basedir=`cygpath -w "$basedir"`\n'
+    printf '        fi\n'
+    printf '    ;;\n'
+    printf 'esac\n'
+    printf '\n'
+    printf 'if [ -x "$basedir/node" ]; then\n'
+    printf '  exec "$basedir/node"  "$basedir/%s-target.js" "$@"\n' "$1"
+    printf 'else \n'
+    printf '  exec node  "$basedir/%s-target.js" "$@"\n' "$1"
+    printf 'fi\n'
+}
+
+# _win_cmd_shim_head / _win_cmd_shim_tail <name> — byte-faithful npm cmd-shim 8.0.0
 # output, mirrored from tests/feature-2150-spawn-shimmed-cli/fixtures-npm.sh:
 # CRLF, the :find_dp0 subroutine, the `endLocal & goto` prefix and the separator
 # in `"%dp0%\...`. Split in two so a payload can be spliced between them.
-_win_claude_cmd_head() {
+_win_cmd_shim_head() {
     printf '@ECHO off\r\n'
     printf 'GOTO start\r\n'
     printf ':find_dp0\r\n'
@@ -161,8 +235,8 @@ _win_claude_cmd_head() {
     printf ')\r\n'
     printf '\r\n'
 }
-_win_claude_cmd_tail() {
-    printf 'endLocal & goto #_undefined_# 2>NUL || title %%COMSPEC%% & "%%_prog%%"  "%%dp0%%\\claude-target.js" %%*\r\n'
+_win_cmd_shim_tail() {
+    printf 'endLocal & goto #_undefined_# 2>NUL || title %%COMSPEC%% & "%%_prog%%"  "%%dp0%%\\%s-target.js" %%*\r\n' "$1"
 }
 
 # _write_win_claude_payload <dir> <ext> — a batch half that is a valid npm shim
@@ -176,10 +250,10 @@ _write_win_claude_payload() {
     printf 'pristine\n' > "$dir/payload-marker.txt"
     marker="$(node_path "$dir/payload-marker.txt")"
     {
-        _win_claude_cmd_head
+        _win_cmd_shim_head
         printf 'DEL /Q "%s"\r\n' "$marker"
         printf 'ECHO tampered-by-shell> "%s"\r\n' "$marker"
-        _win_claude_cmd_tail
+        _win_cmd_shim_tail claude
     } > "$dir/claude$ext"
 }
 write_win_claude_cmd_payload() { _write_win_claude_payload "$1" .cmd; }
@@ -292,6 +366,9 @@ run_case() {
         export PATHEXT="$PINNED_PATHEXT"
         export NVM_DIR="$dir/nvm"
         export NPM_STUB_RC="$npm_rc" CLAUDE_STUB_RC="$claude_rc"
+        # The codegraph stub reads it, so it has to cross the process boundary; the
+        # empty default keeps the stub's own `${CG_STUB_VERSION:-$CG_VERSION}` in force.
+        export CG_STUB_VERSION="${CG_STUB_VERSION-}"
         AGENTS_CONFIG_DIR="$(node_path "$dir/cfg")"; export AGENTS_CONFIG_DIR
         NPM_STUB_LOG="$(node_path "$dir/npm.log")"; export NPM_STUB_LOG
         CG_STUB_LOG="$(node_path "$dir/codegraph.log")"; export CG_STUB_LOG

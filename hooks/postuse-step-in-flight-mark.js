@@ -49,7 +49,7 @@ function main() {
   const policy = require("./lib/step-in-flight-policy");
   if (!policy.isDispatchTool(input.tool_name)) return;
 
-  const { resolveSessionId, getStatePath, readState, markStep } = require("./workflow-state");
+  const { resolveSessionId, getStatePath, readState, markStep, LOOKAHEAD_ORIGIN } = require("./workflow-state");
   const { resolveCurrentEffectiveStep } = require("./workflow-state/current-step");
 
   let sid = null;
@@ -81,7 +81,7 @@ function main() {
 
   markStep(sid, step, "in_progress", {}, {
     provenance: "observed",
-    origin: "postuse-in-flight",
+    origin: LOOKAHEAD_ORIGIN,
   });
 }
 

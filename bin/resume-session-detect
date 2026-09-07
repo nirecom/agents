@@ -6,11 +6,13 @@ const {
   readState,
   VALID_STEPS,
 } = require("../hooks/workflow-state");
+const { USAGE, parseResumeArgs } = require("./lib/resume-session/args");
 
 const STEP_TO_SKILL = Object.freeze({
   workflow_init:  "workflow-init",
   clarify_intent: "clarify-intent",
-  plan:           "make-detail-plan",
+  outline:        "make-outline-plan",
+  detail:         "make-detail-plan",
   write_tests:    "write-tests",
   run_tests:      "run-tests",
   docs:           "update-docs",
@@ -34,22 +36,49 @@ function detect() {
   return { type: "none", reason: "no_in_progress" };
 }
 
+function emit(result) {
+  process.stdout.write(JSON.stringify(result) + "\n");
+}
+
+// Exit 3 — not 1 — for an unknown upstream id: the caller must distinguish
+// "that session left nothing behind" from "this command was called wrongly".
+function runFrom(from) {
+  const { buildUpstreamView } = require("./lib/resume-session/upstream-view");
+  const view = buildUpstreamView({ heirSid: resolveSessionId(), upstreamSid: from });
+  emit(view);
+  process.exit(view.availability === "none" ? 3 : 0);
+}
+
+function runList(query, limit) {
+  const { listUpstreamCandidates } =
+    require("../hooks/workflow-state/upstream-search");
+  const sid = resolveSessionId();
+  const state = sid ? readState(sid) : null;
+  const ctx = state
+    ? { cwd: state.cwd || null, git_branch: state.git_branch ?? null }
+    : null;
+  const candidates = listUpstreamCandidates({ heirSid: sid, ctx, query, limit });
+  emit({ type: "list", query: query || "", candidates });
+  process.exit(0);
+}
+
 function main() {
-  const args = process.argv.slice(2);
-  for (const a of args) {
-    if (a === "--help" || a === "-h") {
-      process.stdout.write("Usage: resume-session-detect [--help] [--version]\n");
-      process.exit(0);
-    }
-    if (a === "--version") {
-      process.stdout.write("resume-session-detect 1\n");
-      process.exit(0);
-    }
-    process.stderr.write(`Unknown flag: ${a}\n`);
+  const parsed = parseResumeArgs(process.argv.slice(2));
+  if (parsed.mode === "help") {
+    process.stdout.write(USAGE);
+    process.exit(0);
+  }
+  if (parsed.mode === "version") {
+    process.stdout.write("resume-session-detect 2\n");
+    process.exit(0);
+  }
+  if (parsed.mode === "error") {
+    process.stderr.write(parsed.error + "\n");
     process.exit(1);
   }
-  const result = detect();
-  process.stdout.write(JSON.stringify(result) + "\n");
+  if (parsed.mode === "from") return runFrom(parsed.from);
+  if (parsed.mode === "list") return runList(parsed.query, parsed.limit);
+  emit(detect());
   process.exit(0);
 }
 

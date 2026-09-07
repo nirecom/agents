@@ -20,13 +20,9 @@ reflects every terminal action.
 
 ## Step SC-0 — Resolve PLANS_DIR and session id
 
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
+Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back.
 
-Substitute the absolute path for `<PLANS_DIR>` in every subsequent step.
+Substitute the absolute path it prints for `<PLANS_DIR>` in every subsequent step.
 Resolve `<session-id>` from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
 fallback chain used by `--from-session`. If unresolvable, abort:
 `session id unresolved — cannot render Final Report`.

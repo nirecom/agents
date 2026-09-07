@@ -34,16 +34,16 @@ esac
 [ -n "$CG_DNT" ] && pass "constants: DO_NOT_TRACK has a value ($CG_DNT)" \
     || fail "constants: DO_NOT_TRACK is missing from install/codegraph-constants.txt"
 
-# Literal, non-derived guard: every assertion below reads CG_TELEMETRY/CG_DNT
-# back out of the same constants file the installer reads, so a shipped flip
-# to opt-IN would move the expectation and the implementation together and
-# pass silently. This pair pins the actual security property — the telemetry
-# opt-out this feature exists to provide — independent of whatever value the
-# file happens to carry.
-[ "$CG_TELEMETRY" = "0" ] && pass "constants: CODEGRAPH_TELEMETRY is opted out (0)" \
-    || fail "constants: CODEGRAPH_TELEMETRY must ship as 0 (opted out) — got '${CG_TELEMETRY:-<empty>}'"
-[ "$CG_DNT" = "1" ] && pass "constants: DO_NOT_TRACK is opted out (1)" \
-    || fail "constants: DO_NOT_TRACK must ship as 1 (opted out) — got '${CG_DNT:-<empty>}'"
+# Literal, non-derived guards. Every other assertion reads these back out of the
+# same file the installer reads, so a shipped change would move expectation and
+# implementation together and pass silently. These two pin what #2215 decided:
+# telemetry stays upstream's ON default (the installer no longer overrides the
+# user's own `codegraph telemetry` choice) and DO_NOT_TRACK is decoupled from it
+# (a cross-tool convention this installer has no standing to set).
+[ "$CG_TELEMETRY" = "1" ] && pass "constants: CODEGRAPH_TELEMETRY ships as 1 (telemetry on by default, #2215)" \
+    || fail "constants: CODEGRAPH_TELEMETRY must ship as 1 (telemetry on by default, #2215) — got '${CG_TELEMETRY:-<empty>}'"
+[ "$CG_DNT" = "0" ] && pass "constants: DO_NOT_TRACK ships as 0 (decoupled from CODEGRAPH_TELEMETRY, #2215)" \
+    || fail "constants: DO_NOT_TRACK must ship as 0 (decoupled from CODEGRAPH_TELEMETRY, #2215) — got '${CG_DNT:-<empty>}'"
 
 # The exact argv install/codegraph-mcp.js must hand the CLI, derived from the SSOT.
 WANT_MCP_ADD="mcp add codegraph --scope user --env CODEGRAPH_TELEMETRY=$CG_TELEMETRY --env DO_NOT_TRACK=$CG_DNT -- codegraph serve --mcp"
@@ -63,15 +63,38 @@ make_symlink() {
     if [ -L "$link" ]; then printf 'symlink'; else printf 'regular'; fi
 }
 
-# build_home <mcp-pre> <claude-md: file|symlink>. The mcp-pre kinds are the
-# ownership inputs install/codegraph-mcp.js classifies:
-#   present    — this installer's exact registration (state "current")
-#   legacy     — our command/args but no telemetry env (state "replaceable")
-#   badenv     — our shape, telemetry opted IN (state "replaceable")
-#   foreigncmd — someone else's command under our key (state "foreign")
-#   foreignargs— our command, someone else's args (state "foreign")
-#   none / nokey / missing — nothing registered (state "absent")
-#   broken / nonobject — unreadable (state unknown; must change nothing)
+# TELEMETRY_PRE — the third fixture axis (#2215): what ~/.codegraph/telemetry.json
+# looks like before the installer runs. Module-scope rather than a 12th run_case
+# parameter, so every existing caller keeps the `absent` default untouched.
+#   absent (default) — no ~/.codegraph at all, the brand-new-machine shape
+#   off / on         — a saved CLI consent verdict, either way round
+#   garbage          — a corrupt body: the reset must never parse the file
+#   undeletable      — a non-empty DIRECTORY in its place, so removal must fail
+TELEMETRY_PRE=absent
+TELEMETRY_JSON_TAIL='"machine_id":"m-2215","consent_source":"cli","first_run_notice_shown":true,"updated_at":"2026-01-01T00:00:00.000Z"'
+
+write_telemetry_pre() {
+    local dir="$FAKE_HOME/.codegraph" f="$FAKE_HOME/.codegraph/telemetry.json"
+    case "${TELEMETRY_PRE:-absent}" in
+        absent)      return 0 ;;
+        off)         mkdir -p "$dir"; printf '{"enabled":false,%s}\n' "$TELEMETRY_JSON_TAIL" > "$f" ;;
+        on)          mkdir -p "$dir"; printf '{"enabled":true,%s}\n' "$TELEMETRY_JSON_TAIL" > "$f" ;;
+        garbage)     mkdir -p "$dir"; printf '{not json\n' > "$f" ;;
+        undeletable) mkdir -p "$f"; printf 'keep\n' > "$f/keep" ;;
+        *)           fail "harness bug: unknown TELEMETRY_PRE '${TELEMETRY_PRE:-}'" ;;
+    esac
+}
+
+# build_home <mcp-pre> <claude-md: file|symlink>. readState() answers
+# present/foreign/absent/null: "present" is a same-named entry whose
+# command/args match hasOurShape(); "foreign" is a same-named entry with a
+# different shape (here: same command, missing the --mcp arg) — left alone
+# by both verbs, since a hand-registered or third-party `codegraph` entry
+# must never be silently overwritten or deleted (O20/O21).
+#   present — present
+#   foreign — foreign
+#   absent  — none, nokey, missing
+#   null    — broken, nonobject (unreadable; must change nothing)
 build_home() {
     local mcp_pre="$1" md_kind="$2"
     rm -rf "$FAKE_HOME"
@@ -80,19 +103,18 @@ build_home() {
     local ourenv="\"env\":{\"CODEGRAPH_TELEMETRY\":\"$CG_TELEMETRY\",\"DO_NOT_TRACK\":\"$CG_DNT\"}"
     local base='"type":"stdio","command":"codegraph","args":["serve","--mcp"]'
     local server="{$base,$ourenv}"
+    local j="$FAKE_HOME/.claude.json"
     case "$mcp_pre" in
-        none)    printf '%s\n' "$head,\"mcpServers\":{}}" > "$FAKE_HOME/.claude.json" ;;
-        nokey)   printf '%s\n' "$head}" > "$FAKE_HOME/.claude.json" ;;
-        present) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":$server}}" > "$FAKE_HOME/.claude.json" ;;
-        legacy)  printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{$base}}}" > "$FAKE_HOME/.claude.json" ;;
-        badenv)  printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{$base,\"env\":{\"CODEGRAPH_TELEMETRY\":\"1\",\"DO_NOT_TRACK\":\"$CG_DNT\"}}}}" > "$FAKE_HOME/.claude.json" ;;
-        foreigncmd)  printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{\"type\":\"stdio\",\"command\":\"codegraph-wrapper\",\"args\":[\"serve\",\"--mcp\"],$ourenv}}}" > "$FAKE_HOME/.claude.json" ;;
-        foreignargs) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{\"type\":\"stdio\",\"command\":\"codegraph\",\"args\":[\"serve\",\"--http\",\"--port\",\"9999\"],$ourenv}}}" > "$FAKE_HOME/.claude.json" ;;
-        nonobject)   printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":\"codegraph serve --mcp\"}}" > "$FAKE_HOME/.claude.json" ;;
-        broken)  printf '%s\n' "$head,\"mcpServers\":{" > "$FAKE_HOME/.claude.json" ;;
-        missing) rm -f "$FAKE_HOME/.claude.json" ;;
+        none)    printf '%s\n' "$head,\"mcpServers\":{}}" > "$j" ;;
+        nokey)   printf '%s\n' "$head}" > "$j" ;;
+        present) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":$server}}" > "$j" ;;
+        foreign) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{\"type\":\"stdio\",\"command\":\"codegraph\",\"args\":[\"serve\"],$ourenv}}}" > "$j" ;;
+        nonobject)   printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":\"codegraph serve --mcp\"}}" > "$j" ;;
+        broken)  printf '%s\n' "$head,\"mcpServers\":{" > "$j" ;;
+        missing) rm -f "$j" ;;
         *)       fail "harness bug: unknown mcp-pre '$mcp_pre'" ;;
     esac
+    write_telemetry_pre
     printf '%s\n' "$SETTINGS_BODY" > "$FAKE_HOME/.claude/settings.json"
     if [ "$md_kind" = "symlink" ]; then
         printf '%s\n' "$CLAUDE_MD_BODY" > "$BASE/claude-md-target.md"
@@ -108,4 +130,39 @@ write_env_file() {
     local cfg="$1" envfile="$2" flag="$3"
     if [ "$envfile" = "absent" ]; then rm -f "$cfg/.env"; return 0; fi
     printf 'SESSION_SYNC=off\nCODEGRAPH=%s\nSENTINEL_SECRET=%s\n' "$flag" "$ENV_SENTINEL" > "$cfg/.env"
+}
+
+# make_constants_tree <name> <constants-body|none> — a standalone installer tree
+# at $BASE/<name>/ whose install/codegraph-constants.txt carries exactly <body>
+# (or is absent for `none`), echoing the node-form path of its codegraph-mcp.js
+# for run_case's 11th argument. Each tree gets its OWN hooks/lib copy because
+# hooks/lib/codegraph-boundary.js resolves the constants file relative to itself:
+# a shared lib directory would make every tree read the same constants file and
+# the whole "unreadable constants" input class would vanish. Shared by
+# telemetry-reset.sh and cli-version.sh (CPR-SSOT).
+make_constants_tree() {
+    # Two statements, not one: `local a=$1 b=$BASE/$a` expands every word BEFORE the
+    # builtin assigns, so `$a` would resolve to whatever a caller's loop left behind
+    # and every tree would collide on one directory.
+    local name="$1" body="$2"
+    local root="$BASE/$name"
+    rm -rf "$root"
+    mkdir -p "$root/hooks/lib" "$root/install"
+    cp -R "$AGENTS_DIR/hooks/lib/." "$root/hooks/lib/"
+    cp "$CODEGRAPH_MCP_JS" "$root/install/codegraph-mcp.js"
+    if [ "$body" = "none" ]; then
+        rm -f "$root/install/codegraph-constants.txt"
+    else
+        printf '%s\n' "$body" > "$root/install/codegraph-constants.txt"
+    fi
+    node_path "$root/install/codegraph-mcp.js"
+}
+
+# constants_body <telemetry> <do-not-track> — a COMPLETE constants file that
+# differs from the shipped one only in the telemetry pair, so a case built on it
+# isolates the telemetry axis instead of also losing the version pin (which would
+# change the verdict for unrelated reasons).
+constants_body() {
+    printf 'CODEGRAPH_VERSION=%s\nCODEGRAPH_TELEMETRY=%s\nDO_NOT_TRACK=%s' \
+        "$CG_VERSION" "$1" "$2"
 }

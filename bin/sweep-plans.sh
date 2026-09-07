@@ -1,19 +1,10 @@
 #!/bin/bash
-#
-# bin/sweep-plans.sh
-#
-# Reclaim stale ~/.workflow-plans/ session artifacts. A "candidate" is a group
-# of files sharing a session-id prefix (YYYYMMDD-HHMMSS or UUID) whose newest
-# member is older than SWEEP_AGE_DAYS days.
-#
-# Usage:
-#   sweep-plans.sh [--dry-run|--apply] [--ci-mode] [--sweep-age-days N]
-#
+# bin/sweep-plans.sh — reclaim stale ~/.workflow-plans/ session artifacts. A
+# "candidate" is a group of files sharing a session-id prefix (YYYYMMDD-HHMMSS
+# or UUID) whose newest member is older than SWEEP_AGE_DAYS days.
+# Usage: sweep-plans.sh [--dry-run|--apply] [--ci-mode] [--sweep-age-days N]
 # Deletes by default; pass --dry-run to preview.
-#
-# Exit codes:
-#   0 — normal completion
-#   2 — SWEEP_AGE_DAYS validation error
+# Exit codes: 0 normal completion; 2 SWEEP_AGE_DAYS validation error.
 
 set -euo pipefail
 
@@ -31,8 +22,34 @@ SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
   local v="$1"
-  if [[ ! "$v" =~ ^[0-9]+$ ]] || [[ "$v" -lt 1 ]]; then
+  case "$v" in
+    ''|*[!0-9]*)
+      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    0?*)
+      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
+      # error and 010 silently means 8; reject instead of guessing the intent.
+      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+    ?????????????????*)
+      # >17 digits always overflows once multiplied by 86400; the precise
+      # bound below (SWEEP_AGE_DAYS_SAFE_MAX) covers the tighter cases.
+      printf 'ERROR: SWEEP_AGE_DAYS is too large (got: %s)\n' "$v" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$v" -lt 1 ]]; then
     printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+    exit 2
+  fi
+  # Largest N for which N * 86400 does not overflow 64-bit signed arithmetic
+  # (106751991167300 * 86400 = 9223372036854720000 <= INT64_MAX); a larger
+  # value would silently wrap in the `$(( SWEEP_AGE_DAYS * 86400 ))` below.
+  local -r SWEEP_AGE_DAYS_SAFE_MAX=106751991167300
+  if [[ "$v" -gt "$SWEEP_AGE_DAYS_SAFE_MAX" ]]; then
+    printf 'ERROR: SWEEP_AGE_DAYS must be at most %s (got: %s)\n' "$SWEEP_AGE_DAYS_SAFE_MAX" "$v" >&2
     exit 2
   fi
 }
@@ -105,7 +122,7 @@ errors=()
 
 file_mtime() {
   local f="$1"
-  stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0
+  stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || true
 }
 
 format_date() {
@@ -116,19 +133,13 @@ format_date() {
 }
 
 # ─── Group discovery ───────────────────────────────────────────────────────
+# Walk depth-1 files under PLANS_DIR; group by session-id prefix. Accepted
+# shapes: YYYYMMDD-HHMMSS, UUID, <epoch>-<pid>, or empty (basename starts
+# with '-', prefix=""). Non-matching files are skipped silently.
 #
-# Walk depth-1 files under PLANS_DIR. For each file basename, extract the
-# session-id prefix and group files by prefix. Four accepted shapes:
-#   - YYYYMMDD-HHMMSS  (timestamp)
-#   - UUID             (8-4-4-4-12 hex)
-#   - <epoch>-<pid>    (10-digit unix epoch + numeric pid)
-#   - empty            (basename starts with '-'; prefix=""))
-# Files not matching any shape are skipped silently.
-
-# Bash associative arrays reject empty string subscripts ("bad array subscript"),
-# so the empty-prefix bucket (basenames like "-foo.md") is stored under the
-# sentinel key EMPTY_PREFIX_KEY. The sentinel itself is never a valid prefix
-# shape (contains '@'), so it cannot collide with any real session id.
+# Bash rejects empty-string array subscripts, so the empty-prefix bucket is
+# keyed by sentinel EMPTY_PREFIX_KEY (contains '@', never a valid prefix
+# shape, so it cannot collide with a real session id).
 declare -A PREFIX_FILES=()
 EMPTY_PREFIX_KEY="__empty@@__"
 
@@ -182,7 +193,8 @@ for key in "${!PREFIX_FILES[@]}"; do
     [[ -z "$gf" ]] && continue
     file_count=$(( file_count + 1 ))
     m="$(file_mtime "$gf")"
-    if [[ ! "$m" =~ ^[0-9]+$ ]]; then m=0; fi
+    # Unparsable/unavailable mtime → treat as "now" (see file_mtime above).
+    if [[ ! "$m" =~ ^[0-9]+$ ]]; then m="$now_epoch"; fi
     if [[ "$file_count" -eq 1 ]]; then
       min_mtime="$m"
       max_mtime="$m"
@@ -226,7 +238,7 @@ if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
       [[ -z "$gf" ]] && continue
       [[ ! -e "$gf" ]] && continue
       rm="$(file_mtime "$gf")"
-      [[ "$rm" =~ ^[0-9]+$ ]] || rm=0
+      [[ "$rm" =~ ^[0-9]+$ ]] || rm="$now_epoch"
       [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
     done <<< "$files_blob"
     while IFS= read -r -d '' newgf; do
@@ -239,7 +251,7 @@ if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
         continue
       fi
       rm="$(file_mtime "$newgf")"
-      [[ "$rm" =~ ^[0-9]+$ ]] || rm=0
+      [[ "$rm" =~ ^[0-9]+$ ]] || rm="$now_epoch"
       [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
     done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)  # prefix="" → -name "-*": all '-' prefixed basenames, narrowed to EMPTY_PREFIX_ALLOW_RE above; portable on GNU and BSD find
     if [[ "$recheck_max" -ge "$threshold_epoch" ]]; then

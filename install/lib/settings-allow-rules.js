@@ -33,6 +33,8 @@ const bail = (msg) => {
 // never be written one way and recognised another.
 //   <I> interpreter   <P> repo-relative path   <W> that path in Windows separators
 //   <N> bare name   <R> this checkout's absolute root   <R2W> that root in Windows separators
+// Twenty-four path spellings (plus six bare spellings for PATH-exposed commands) are emitted
+// per admitted command.
 const PATH_TEMPLATES_ARGV = [
     'Bash(<I> "$AGENTS_CONFIG_DIR/<P>" *)',
     'Bash(<I> <R>/<P> *)',
@@ -42,6 +44,10 @@ const PATH_TEMPLATES_ARGV = [
     'Bash(<R>/<P> *)',
     'Bash(bash -c \'<I> "$AGENTS_CONFIG_DIR/<P>" *\')',
     'Bash(bash -c \'cd "$AGENTS_CONFIG_DIR" && <I> "$AGENTS_CONFIG_DIR/<P>" *\')',
+    'Bash(<I> "<R>/<P>" *)',
+    'Bash(<I> "<R2W>\\<W>" *)',
+    'Bash("<R>/<P>" *)',
+    'Bash("<R2W>\\<W>" *)',
 ];
 
 const BARE_TEMPLATES_ARGV = [
@@ -194,7 +200,8 @@ const readListFile = (file, rel) => {
 
 // The charset gate runs BEFORE any path is resolved on disk, deliberately: a hostile entry
 // naming a file that really exists would otherwise sail past a check ordered the other way,
-// and every entry is interpolated into twenty-two rules, where a metacharacter WIDENS a rule
+// and every entry is interpolated into twenty-four path rules, plus six more bare rules when
+// it has a PATH shim, where a metacharacter WIDENS a rule
 // rather than merely naming the wrong file.
 const ENTRY_RE = /^[A-Za-z0-9._/-]+$/;
 
