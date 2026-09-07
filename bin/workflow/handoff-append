@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+"use strict";
+// Thin CLI over appendHandoffEntry, for skill prompts and shell scripts.
+// --session defaults to the CC-native sid (resolveSessionId), never the
+// PLANS_DIR filename heuristic: a wsid default would make writer and reader
+// look at different files.
+
+const path = require("path");
+const { appendHandoffEntry } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-artifact"));
+const { resolveSessionId } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "session-id"));
+
+const FLAGS = {
+  "--session": "session",
+  "--class": "cls",
+  "--step": "step",
+  "--key": "key",
+  "--summary": "summary",
+  "--pointer": "pointer",
+  "--origin": "origin",
+};
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const name = FLAGS[argv[i]];
+    if (!name) return { error: `unknown argument: ${argv[i]}` };
+    if (i + 1 >= argv.length) return { error: `${argv[i]} requires a value` };
+    out[name] = argv[i + 1];
+    i += 1;
+  }
+  return { opts: out };
+}
+
+function main() {
+  const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.error) {
+    process.stderr.write(`handoff-append: ${parsed.error}\n`);
+    return 2;
+  }
+  const opts = parsed.opts;
+  const sid = opts.session !== undefined ? opts.session : resolveSessionId({});
+  if (!sid) {
+    process.stderr.write("handoff-append: no session id could be resolved\n");
+    return 2;
+  }
+  const result = appendHandoffEntry(sid, {
+    cls: opts.cls,
+    step: opts.step,
+    key: opts.key,
+    summary: opts.summary === undefined ? "" : opts.summary,
+    pointer: opts.pointer === undefined ? "-" : opts.pointer,
+    origin: opts.origin,
+  });
+  if (result.written) {
+    process.stdout.write(`WRITTEN=1 REASON=${result.reason}\n`);
+    return 0;
+  }
+  if (result.reason === "invalid") {
+    process.stderr.write("handoff-append: rejected — session id or entry fields are out of vocabulary\n");
+    return 2;
+  }
+  process.stdout.write(`WRITTEN=0 REASON=${result.reason}\n`);
+  return 0;
+}
+
+process.exit(main());

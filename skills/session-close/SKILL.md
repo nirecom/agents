@@ -20,11 +20,9 @@ reflects every terminal action.
 
 ## Step SC-0 — Resolve PLANS_DIR and session id
 
-Issue `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` as one standalone Bash
-call and read the absolute path from its stdout. Canonical:
-`skills/_shared/resolve-plans-dir.md`.
+Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
-Substitute the absolute path for `<PLANS_DIR>` in every subsequent step.
+Substitute the absolute path it prints for `<PLANS_DIR>` in every subsequent step.
 Resolve `<session-id>` from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
 fallback chain used by `--from-session`. If unresolvable, abort:
 `session id unresolved — cannot render Final Report`.

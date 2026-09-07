@@ -60,6 +60,13 @@ EXCLUDED_FILES=(
   # fixture data, not an executed invocation.
   "tests/fix-1780-round12-classifier-attack-shapes.sh"
   "tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh"
+  # enforce-clearance-token-write part files: same class again (CPR-ORTH). The
+  # rows are `label|expect|command` fixtures handed to the hook as JSON, and the
+  # interpreter word is the input the hook's verdict turns on — `uv run python`
+  # is a DIFFERENT case here (the runner prefix RD2 pins), not a rewrite.
+  "tests/enforce-clearance-token-write/consumer-allow-direction-cases.sh"
+  "tests/enforce-clearance-token-write/interpreter-language-scope-cases.sh"
+  "tests/enforce-clearance-token-write/read-only-allowlist-cases.sh"
 )
 
 is_excluded() {
@@ -95,18 +102,28 @@ scan_file() {
   [[ -f "$file" ]] || return 0
   is_excluded "$file" && return 0
 
-  # Collect candidate hits, then filter out lines containing the sanctioned form.
-  local hits
-  hits="$(grep -nE -- "$DETECT_RE" "$file" 2>/dev/null || true)"
+  # Collect candidate hits. grep exit 1 means "no matches"; >=2 is a real failure
+  # and must not masquerade as a clean scan, so the code is captured, not dropped.
+  local hits grep_rc=0
+  hits="$(grep -nE -- "$DETECT_RE" "$file" 2>/dev/null)" || grep_rc=$?
+  if [[ "$grep_rc" -ge 2 ]]; then
+    echo "ERROR: $file: candidate scan failed (grep exit $grep_rc)"
+    HARD_HIT=1
+    HARD_COUNT=$((HARD_COUNT + 1))
+    return 0
+  fi
   [[ -z "$hits" ]] && return 0
 
-  local line lineno content
+  local line lineno content stripped
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     lineno="${line%%:*}"
     content="${line#*:}"
-    # Skip lines where the sanctioned `uv run python -c` form covers the match.
-    if echo "$content" | grep -qE "$SANCTION_RE" 2>/dev/null; then
+    # Exempt the sanctioned SPAN, not the whole line: remove every
+    # `uv run python -c` occurrence, then re-test what is left. A second, bare
+    # invocation sharing the line survives the removal and is still a finding.
+    stripped="$(printf '%s\n' "$content" | sed -E "s/${SANCTION_RE}//g")"
+    if ! printf '%s\n' "$stripped" | grep -qE -- "$DETECT_RE" 2>/dev/null; then
       continue
     fi
     emit_hard "$file" "$lineno" "$content"

@@ -6,13 +6,15 @@
 // pipeline; diagnostics are a single stderr line and stdout carries only a
 // real state change. Health judgement lives in codegraph-lifecycle/
 // index-health.js, daemon identity in process-identity.js, and the kill path
-// in daemon-stop.js. Design: docs/architecture/claude-code.md.
+// in daemon-stop.js. The CODEGRAPH flag and the spawn env are read through
+// hooks/lib/codegraph-boundary.js, shared with the installer.
+// Design: docs/architecture/claude-code.md.
 
 process.removeAllListeners("warning");
 
 const fs = require("fs");
 const path = require("path");
-const { spawnShimmedCli } = require("../hooks/lib/spawn-shimmed-cli");
+const { codegraphEnabled, spawnCodegraph } = require("../hooks/lib/codegraph-boundary");
 
 const { classifyIndex, upstreamSeesInitialized } = require("./codegraph-lifecycle/index-health");
 const { stopDaemon } = require("./codegraph-lifecycle/daemon-stop");
@@ -20,7 +22,12 @@ const { warn, report } = require("./codegraph-lifecycle/diagnostics");
 
 const VERBS = ["init", "sync", "stop"];
 const DERIVED_DB_FILES = ["codegraph.db-wal", "codegraph.db-shm"];
-const STATUS_TIMEOUT_MS = 60000;
+
+const INDEX_RESYNC_NOTICE =
+  "codegraph_explore is served by a CodeGraph daemon that outlives individual sessions, so a running " +
+  "session picks this rebuild up only once a new daemon serves this index; a daemon that survived the " +
+  "rebuild still answers from the handle it opened. " +
+  "The per-prompt CodeGraph context comes from a fresh process and is current from the next prompt.";
 
 let quiet = false;
 
@@ -55,35 +62,6 @@ function resolveRoot(raw) {
   } catch (_) {
     return resolved;
   }
-}
-
-// codegraphEnabled is the single implementation point of the fail-safe-OFF
-// polarity shared with install/win/codegraph.ps1 and install/linux/codegraph.sh:
-// an explicit lowercase `on` enables, and everything else — `off`, unset,
-// empty, an unrecognized value, or a failure to read the config at all —
-// resolves to OFF. A real environment variable outranks the .env file.
-function codegraphEnabled() {
-  try {
-    require("../hooks/lib/load-env").loadDefaultEnv();
-  } catch (_) {
-    return false;
-  }
-  const raw = process.env.CODEGRAPH;
-  if (typeof raw !== "string") return false;
-  return raw.trim().toLowerCase() === "on";
-}
-
-// spawnCodegraph is the only door to the binary, so every invocation carries
-// the same two guarantees: a bounded timeout, and the upstream telemetry
-// opt-out install/codegraph-constants.txt ships to the MCP registration. The
-// env is built per call, not at module load, because codegraphEnabled() may
-// have populated process.env from .env in between.
-function spawnCodegraph(args, options) {
-  return spawnShimmedCli("codegraph", args, {
-    ...options,
-    env: { ...process.env, CODEGRAPH_TELEMETRY: "0", DO_NOT_TRACK: "1" },
-    timeout: STATUS_TIMEOUT_MS,
-  });
 }
 
 function codegraphOnPath() {
@@ -202,6 +180,7 @@ function runInit(root) {
   if (!rebuildOrBuild(root)) return;
   if (classifyIndex(root) === "valid") {
     report("index ready for " + root);
+    report(INDEX_RESYNC_NOTICE);
   } else {
     warn("index for " + root + " is still unusable after a rebuild; codegraph_explore may return stale or empty results.");
   }

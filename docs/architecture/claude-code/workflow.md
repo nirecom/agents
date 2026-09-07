@@ -294,11 +294,11 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 |---|---|
 | `workflow_init` | `/workflow-init` skill (emits `WORKFLOW_MARK_STEP_workflow_init_complete`) |
 | `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE`) |
-| `research` | `/survey-code` or `/deep-research` (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"` |
+| `research` | `/survey-code` (evidence-based) or `/deep-research` completion, which runs `next-step --advance --step research --complete --next` as its sole Bash command (forward-CLI completion door; sentinel dispatch remains a hook-level recovery fallback) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"` |
 | `outline` | `/make-outline-plan` (emits `WORKFLOW_MARK_STEP_outline_complete`) **or** skipped via `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` |
 | `detail` | `/make-detail-plan` (emits `WORKFLOW_MARK_STEP_detail_complete`) **or** skipped via `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>"` |
 | `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after Read of `rules/branch.md` + `rules/worktree.md` (on-demand-only) |
-| `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
+| `write_tests` | `/write-tests` completion runs `next-step --advance --step write_tests --complete --next` as its sole Bash command from the linked worktree CWD (forward-CLI completion door — never prefix with `cd "$AGENTS_CONFIG_DIR" &&`, which breaks the door's own-CWD evidence-repo resolution; sentinel dispatch remains a hook-level recovery fallback) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
 | `write_code` | `/write-code` skill — emits `WORKFLOW_MARK_STEP_write_code_in_progress` before its subagent launch and `WORKFLOW_MARK_STEP_write_code_complete` after the post-action review. Not skippable: the implementation body has no not-needed door |
 | `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --skipped` |
@@ -485,6 +485,26 @@ its own resolver even when that env var points at a different checkout. Why one 
 independent resolver implementations diverged over time and produced concurrent-session
 misattribution (#1082); consolidation (#1251) removes the divergence class instead of patching
 members one at a time.
+
+`resolveSessionId()` answers "which session am *I*?" and nothing else — never repurpose it to
+name an upstream session a cross-session command was pointed at. `/resume-session --from` passes
+that id explicitly, and `bin/workflow/lib/next-step/repo-dir-guard.js` distinguishes the two by
+value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present.
+
+## Cross-session resume
+
+A session can inherit from an upstream session it has no transcript lineage to, via
+`/resume-session --from <sid>` (`bin/lib/resume-session/`). Two facts govern what survives:
+
+- **Step context-dependence** — whether a step's completion evidence lives in the worktree or in
+  the session's own record. `hooks/workflow-state/state-io/step-context-class.js` owns the
+  classification for all 16 steps; `granularity: "context-independent-only"` inherits only the
+  latter set, `"full"` inherits everything.
+- **Evidence class** — what the upstream actually left behind. The state file (7-day TTL) and the
+  handoff artifact (no TTL) expire independently, so availability degrades through
+  `state-and-artifacts` → `state-only` → `artifacts-only` → `none` rather than failing outright.
+  The artifact contract is in
+  [handoff-artifact.md](handoff-artifact.md).
 
 ## Fail-safe behavior
 

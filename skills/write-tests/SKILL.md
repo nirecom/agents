@@ -9,7 +9,11 @@ Write or update tests for the current task.
 
 ## Procedure
 
-Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below.
+WT-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
+   - `PLANS_DIR=` — substitute this absolute path for every `<PLANS_DIR>` below.
+   - `GATE_CONFIRM_TESTS=` — the WT-4 pre-action gate (`ON` / `OFF` / `ERROR`).
+   - `COMPLEXITY_LEVEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-5 level and signals.
+   - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 
 WT-1. Read:
    - `rules/core-principles.md`
@@ -23,12 +27,11 @@ WT-3. **Enumerate call paths**: For each source file from step WT-2, trace all i
    missing field, wrong type, unexpected value). These become integration-path error
    cases in the next step.
 WT-4. List all planned test cases by category (include call-path error cases from step WT-3).
-   Then check via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
-   - stdout `OFF`: print the planned cases and proceed to step WT-5 without approval wait.
-   - stdout `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
+   Then branch on `GATE_CONFIRM_TESTS` from step WT-0:
+   - `OFF`: print the planned cases and proceed to step WT-5 without approval wait.
+   - `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
 WT-5. **Determine the subagent's model**:
-   - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage write_tests'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model via `high→opus, low→sonnet`; skip the fallback below.
+   - If `COMPLEXITY_LEVEL_write_tests` from step WT-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
    - If `NONE` (fail-open for sessions without persisted evaluation):
      - Read `skills/_shared/judge-task-complexity.md` and evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4 — do not short-circuit on the first match.
      - Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-tests-signals.txt` — write only IDs from the generated Valid Signal IDs list; substitute `S0-undecidable` when the judgment doesn't parse into recognized ids or the csv doesn't match `^[A-Za-z0-9,_-]*$` (the judged content is untrusted text, never shell syntax).
@@ -65,16 +68,19 @@ WT-7. Present the final test file content to the user for review — gated by **
 ## Completion
 
 After completing this skill:
-1. Stage the test files: `git add tests/`
-   The commit gate detects staged tests/ changes as evidence of completion.
-   Emit `<<WORKFLOW_MARK_STEP_write_tests_complete>>` from the linked worktree CWD (accepted only when staged or committed test evidence exists).
-   Note: Do not emit from main worktree.
-   `/review-tests` auto-backfills write_tests when evidence exists; the sentinel is a fallback for edge cases.
-2. Run tests (validation only — this does not satisfy the run_tests workflow step).
+The order below is load-bearing — do not reorder.
+1. Stage the test files first: `git add tests/` — the evidence gate is fail-closed, so an unstaged tests/ makes step 2 reject the completion.
+2. From the linked worktree's CWD, as a single standalone Bash command: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step write_tests --complete --next`
+3. Do NOT prefix step 2 with `cd "$AGENTS_CONFIG_DIR" &&` — the CLI resolves the evidence repo from the Bash process's own CWD via `git rev-parse --show-toplevel` (`resolveTrustedRepoDir()` in `hooks/workflow-state/record-step-verdict.js`), so a `cd` points it at the main agents worktree and the completion is rejected fail-closed.
+4. Follow the returned `ACTION` / `NEXT_SKILL` / `NEXT_HINT` per CLAUDE.md.
+5. `/review-tests` auto-backfills write_tests when evidence exists; step 2 is the primary door.
+6. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 If tests are genuinely not needed for this change:
-1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`
+1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`, then record it as `--class E --step write_tests --key write-tests:not-needed`, per `skills/_shared/handoff-record.md`.
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
+
+When step WT-5 took the `NONE` fallback, record it as `--class D --step write_tests --key write-tests:model-fallback`, per `skills/_shared/handoff-record.md`.
 
 ## Rules
 

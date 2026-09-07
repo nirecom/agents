@@ -6,6 +6,8 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 
 `EXTENSIONS_USED` is owned by the caller.
 
+ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` from the suffix chain below; a non-zero exit reaches the caller as exit 4.
+
 ## Parameters (caller supplies)
 
 | Parameter | outline value | detail value |
@@ -18,7 +20,7 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 | MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
-| ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-intent.md` | `<PLANS_DIR>/<session-id>-outline.md` |
+| ACCEPTED_TRADEOFFS_FILE | first readable of `intent` | first readable of `outline` → `intent` |
 | NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
 
 ## Parameters (review-only formats)
@@ -33,7 +35,7 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 | MAX_EXTENSIONS | 0 | 0 |
 | PLANNER_AGENT | (none — review-only) | (none — review-only) |
 | REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
-| ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-outline.md` | `<PLANS_DIR>/<session-id>-outline.md` |
+| ACCEPTED_TRADEOFFS_FILE | first readable of `outline` → `intent` | first readable of `detail` → `outline` → `intent` |
 | NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
 
 ## Single-round review-only formats
@@ -115,7 +117,10 @@ The wrapper internally:
 3. Calls `review-plan-codex` with the assembled flags, always passing
    `--context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` plus the unified
    context.md (when non-empty) plus each caller-supplied `--context` whose target
-   exists and is non-empty.
+   exists and is non-empty, and — whenever a repo root resolves — `--project-root
+   <repo root>`, the lookup root for that project's own non-functional
+   requirements. It is a separate concern from the `--repo-root` filesystem
+   sandbox and is therefore forwarded even when `CODEX_MCP_FS=off`.
 4. Parses status header + verdict.
 
 The hard-cap gate fires **after** the reviewer's verdict is recorded (post-verdict),

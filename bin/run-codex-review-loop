@@ -328,6 +328,12 @@ if [[ "${CODEX_MCP_FS:-}" != "off" ]] && [[ -n "$REPO_ROOT_ARG" ]]; then
   ARGS+=(--repo-root "$REPO_ROOT_ARG")
 fi
 
+# --project-root is the NFR lookup root, a separate concern from the MCP
+# filesystem sandbox: it is forwarded even when CODEX_MCP_FS is off.
+if [[ -n "$REPO_ROOT_ARG" ]]; then
+  ARGS+=(--project-root "$REPO_ROOT_ARG")
+fi
+
 TMP_OUT=$(mktemp) || die "mktemp failed"
 
 bash "$REVIEWER" "${ARGS[@]}" > "$TMP_OUT"

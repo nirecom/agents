@@ -411,3 +411,43 @@ Changes: Subagents launched via `context: fork` (`/review-tests`, `/refactor-pro
 ### FEATURE: PR #2220 (2026-09-04)
 Background: fix(#2169): sanitize workflow-step notify gate against a pre-init lookahead marker
 Changes: Fixed: sessions that never ran workflow-init no longer get spammed with mechanism-failure notifications after dispatching a Skill/Agent/Task, once the in-flight marker's TTL expires.
+
+### FEATURE: PR #2235 (2026-09-05)
+Background: fix(#2201): add quoted-absolute-path axis to settings-allow-rules PATH_TEMPLATES
+Changes: Fixed: commands registered in the internal `settings-allow-commands.txt` SSOT (e.g. `resolve-worktree-path`) that were invoked with a quoted absolute path kept triggering permission prompts instead of being auto-allowed; the generated allow-rule templates now cover that spelling.
+
+### FEATURE: PR #2229 (2026-09-05)
+Background: feat(#2170): block capture-then-echo anti-pattern via PreToolUse IR hook
+Changes: Fixed a bug (#2170) where storing a command's output in a variable before echoing it could get auto-approved instead of prompting for the simpler bare-command form.
+
+### FEATURE: PR #2234 (2026-09-05)
+Background: feat(#2154): resolve --accepted-tradeoffs via per-stage fallback chai...
+Changes: Plan and test reviews no longer re-raise trade-offs you have already accepted: the reviewer now reads the nearest existing decision document (detail → outline → intent) instead of a single fixed file, and any concern rejected as already-settled must cite the decision it contradicts.;Fixed: the settled-decisions prompt file could survive on disk if the plan/test review process was killed or interrupted mid-run.
+
+### FEATURE: PR #2241 (2026-09-06)
+Background: feat(#2145): LPT duration-ledger ordering for tests/run-all.sh
+Changes: `tests/run-all.sh`'s parallel test lane now schedules historically longer-running tests first, using a lightweight local duration history — reduces idle worker time at the end of a parallel test run. No configuration changes required; the feature degrades automatically to the previous ordering if history is unavailable.
+
+### FEATURE: PR #2242 (2026-09-06)
+Background: fix(#2111): eliminate per-call library re-sourcing and per-test-case git-repo creation in Windows test suites
+Changes: Fixed prohibitively slow Windows Git Bash test runs by removing redundant per-call library sourcing and per-test-case git-repo setup in two test suites (#2111).
+
+### FEATURE: PR #2246 (2026-09-06)
+Background: feat(#2215): CodeGraph telemetry default, runInit notice, UserPromptSubmit context hook
+Changes: CodeGraph: telemetry is now enabled by default (opt out with `CODEGRAPH_TELEMETRY=0`), registration prints a clearer notice about this, and prompts are automatically enriched with relevant CodeGraph context
+
+### FEATURE: PR #2252 (2026-09-06)
+Background: fix: aggregate installer step failures and simplify CodeGraph MCP ownership
+Changes: Fixed: install.ps1 no longer silently ignores a failing installer sub-script; failures are now collected and reported, and the installer exits non-zero. Fixed: re-running the installer with CodeGraph disabled now correctly detects and removes a codegraph MCP registration created by an earlier installer version.
+
+### FEATURE: PR #2247 (2026-09-06)
+Background: feat(#2218): persist step micro-state to handoff artifacts, extend /resume-session cross-session
+Changes: `/resume-session --from <sid>` can now recover step-level progress from a prior session's handoff artifact, even when the new session has no transcript lineage to it.;Workflow steps persist their in-progress micro-state incrementally to a per-session handoff artifact, making interrupted work easier to resume across sessions.
+
+### FEATURE: PR #2257 (2026-09-07)
+Background: fix(#2255): extend the CodeGraph usage policy to every subagent and fix the SubagentStart output shape
+Changes: Fixed: CodeGraph's agent-facing usage policy now reaches every subagent (not just a fixed list), and trusts CodeGraph's results unless the response flags a file as stale or never returned its source.;Fixed: the `SubagentStart` hook emitted its injected context in an undocumented shape, so the conversation-language, plan-language, and CodeGraph directives could be dropped before reaching a subagent.
+
+### FEATURE: PR #2250 (2026-09-07)
+Background: feat(#2223): inject project-specific NFR into review-codex prompts vi...
+Changes: Reviewed projects can now declare their own non-functional requirements once, in a gitignored `.env.local` file, and have them injected into every codex review automatically.;New `show-local-env-overrides` command shows which of a project's local override keys took effect and which were refused, without printing any values.

@@ -16,13 +16,11 @@ Non-Node callers go through `bin/workflow-plans-dir` (Bash bridge).
 
 ## Protocol (inlined into each consuming SKILL.md)
 
-At the start of Procedure, before the first plans-dir tool call, issue this one
-standalone Bash call: `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"`.
+At the start of Procedure, before the first plans-dir tool call, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` as one bare command and read its stdout — an absolute path.
 
-Read the absolute path it prints on stdout and substitute that literal text for
-every `<PLANS_DIR>` placeholder in the SKILL.md. Do not assign it to a shell
-variable — each Bash call has fresh shell state, so the consumer is you, not the
-shell. Resolve once per invocation and reuse across all subsequent steps.
+Never assign that command to a variable and echo it back: the bare command already prints the answer, and each Bash call has fresh shell state anyway, so the consumer is you, not the shell.
+
+Substitute the printed path for every `<PLANS_DIR>` placeholder in the SKILL.md. Resolve once per invocation — reuse across all subsequent steps.
 
 - Read/Write/Edit args: literal absolute path.
 - Subagent prompts: literal absolute path (subagents can't expand `$VAR` —
@@ -31,10 +29,9 @@ shell. Resolve once per invocation and reuse across all subsequent steps.
 
 ## Fallback chain
 
-Both steps live inside `bin/workflow-plans-dir`, so the caller issues one command:
+`bin/workflow-plans-dir` owns the whole chain — the JS resolver (honours `.env` and exported overrides) falling back to the exported `WORKFLOW_PLANS_DIR`, else `$HOME/.workflow-plans`. Callers must not restate it.
 
-1. Primary: the JS resolver, which honours `.env` and exported overrides.
-2. Fallback: the exported `WORKFLOW_PLANS_DIR`, else `$HOME/.workflow-plans`.
+Never wrap the call in a caller-side `||` fallback: it duplicates the bridge's own contract and forces the prohibited capture-then-echo form.
 
 `AGENTS_CONFIG_DIR` is set in every Claude Code session; helper
 unreachability is a configuration error.

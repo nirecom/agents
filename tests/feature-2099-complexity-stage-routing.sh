@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-2099-complexity-stage-routing.sh
-# Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
+# Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: complexity, routing, stage, workflow-state, cli, fail-open, scope:issue-specific
 # Serial: writes complexity_evaluation events into a pinned CLAUDE_WORKFLOW_DIR
 # Issue #2099 — per-stage complexity routing. Dispatcher: fixtures + helpers,
@@ -194,8 +194,15 @@ d2099_csv_for_cli() {
 d2099_section_step() {
     case "$1:$2" in
         make-detail-plan:read-complexity-evaluation|make-detail-plan:derive-complexity-level) echo "MDP-3" ;;
-        write-tests:read-complexity-evaluation|write-tests:derive-complexity-level) echo "WT-5" ;;
-        write-code:read-complexity-evaluation|write-code:derive-complexity-level) echo "WCD-3" ;;
+        # #2102 moved write-tests' and write-code's stored-evaluation read OUT of
+        # the level step: WT-0 / WCD-0 now make ONE bundled `read-session-facts`
+        # call whose record carries COMPLEXITY_LEVEL_<stage> / COMPLEXITY_SIGNALS.
+        # The NONE-fallback `derive-complexity-level` call stays in WT-5 / WCD-3,
+        # so the two CLIs now own two DIFFERENT sections in those two skills.
+        write-tests:read-session-facts) echo "WT-0" ;;
+        write-code:read-session-facts) echo "WCD-0" ;;
+        write-tests:derive-complexity-level) echo "WT-5" ;;
+        write-code:derive-complexity-level) echo "WCD-3" ;;
         clarify-intent:record-complexity-and-skip) echo "CI-C1b" ;;
         workflow-init:record-complexity-and-skip) echo "A3a" ;;
         *) echo "" ;;
@@ -211,8 +218,10 @@ d2099_step_anchors() {
     case "$1" in
         MDP-3)  echo '^### Step MDP-3 |^### Step ' ;;
         MDP-4)  echo '^### Step MDP-4 |^### Step ' ;;
+        WT-0)   echo '^WT-0\.|^WT-[0-9]' ;;
         WT-5)   echo '^WT-5\.|^WT-[0-9]' ;;
         WT-6)   echo '^WT-6\.|^WT-[0-9]' ;;
+        WCD-0)  echo '^WCD-0\.|^WCD-[0-9]' ;;
         WCD-3)  echo '^WCD-3\.|^WCD-[0-9]' ;;
         WCD-4)  echo '^WCD-4\.|^WCD-[0-9]' ;;
         CI-C1b) echo '^CI-C1b\.|^CI-C[0-9]' ;;
@@ -362,6 +371,11 @@ CASE_DIR="$(dirname "$0")/feature-2099-complexity-stage-routing"
 . "$CASE_DIR/consumers-static.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-dispatch-cases.sh
 . "$CASE_DIR/consumer-dispatch-cases.sh"
+# Helper-only, sourced first: which read CLI each consumer documents (#2102 split
+# write-tests/write-code onto the bundled read-session-facts record) and how to
+# normalize its answer to the one level=/signals= shape the cases parse.
+# shellcheck source=./feature-2099-complexity-stage-routing/consumer-read-cli.sh
+. "$CASE_DIR/consumer-read-cli.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-orchestration-cases.sh
 . "$CASE_DIR/consumer-orchestration-cases.sh"
 # Sourced after it: reuses its command-extraction and model-mapping helpers.

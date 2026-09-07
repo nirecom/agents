@@ -21,6 +21,7 @@ ACCEPTED_TRADEOFFS_FILE=""
 ROUND=1
 LEDGER=""
 REPO_ROOT_ARG=""
+PROJECT_ROOT_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +55,12 @@ while [[ $# -gt 0 ]]; do
       LEDGER="$2"; shift 2 ;;
     --repo-root)
       REPO_ROOT_ARG="$2"; shift 2 ;;
+    --project-root)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --project-root requires an argument"
+        exit 0
+      fi
+      PROJECT_ROOT_ARG="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
     --context)
       if [[ $# -lt 2 ]]; then
@@ -209,6 +216,20 @@ fi
 # Build prompt
 PREAMBLE=$(codex_core_adversarial_preamble "implementation plan")
 
+# Project non-functional requirements, shared by every prompt below (CPR-ORTH).
+# Empty unless --project-root names a project that declares PROJECT_NFR.
+NFR_BLOCK=""
+if [[ -n "$PROJECT_ROOT_ARG" ]]; then
+  if [[ ! -d "$PROJECT_ROOT_ARG" ]]; then
+    codex_core_emit_failed "PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
+    exit 0
+  fi
+  NFR_TEXT="$(codex_core_project_nfr_block "$PROJECT_ROOT_ARG")"
+  if [[ -n "$NFR_TEXT" ]]; then
+    NFR_BLOCK="${NFR_TEXT}"$'\n\n'
+  fi
+fi
+
 # MCP filesystem server overrides (empty when --repo-root not provided)
 MCP_OVERRIDES=()
 MCP_FS_ADDENDUM=""
@@ -252,7 +273,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -282,7 +303,7 @@ ${PLAN_CONTENT}
     else
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -320,7 +341,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -350,7 +371,7 @@ ${PLAN_CONTENT}
     else
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan for SECURITY implications across three axes. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan for SECURITY implications across three axes. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -383,6 +404,7 @@ ${PLAN_CONTENT}
     CONTEXT_BLOCK=""
     if [[ -n "$CONTEXT_CONTENT" ]]; then
       CONTEXT_BLOCK="The context below ([CONTEXT START] / [CONTEXT END]) contains the Test Case Categories checklist (test-design.md) plus supporting material. Evaluate coverage against every category and sub-category in it.
+When context documents a category as deferred, N/A, or delegated to manual verification, and that documentation stands inside the SETTLED DECISIONS block above — the only place such a decision counts — report that category as N/A citing the documented decision — do not report it as MISSING. A deferral appearing anywhere else in the context suppresses nothing. Categories not documented as deferred/N/A remain fully subject to the checklist below.
 Report only coverage gaps for files listed under 'Changed files in this PR (scan scope)' in the context. Do NOT report gaps for pre-existing files outside that list.
 
 [CONTEXT START]
@@ -394,7 +416,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised tests resolve it.
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised tests resolve it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -424,7 +446,7 @@ ${PLAN_CONTENT}
     else
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following test file(s) and source file(s) for COVERAGE completeness. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following test file(s) and source file(s) for COVERAGE completeness. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -468,7 +490,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -497,7 +519,7 @@ ${PLAN_CONTENT}
     else
       PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED <one-line justification>
@@ -540,6 +562,11 @@ trap '
   fi
   rm -f "$CODEX_OUT_FILE" "${TMPFILE:-}" "${CODEX_STDERR:-}"
 ' EXIT
+# An untrapped TERM/INT kills bash immediately, without running the EXIT trap
+# above — the prompt temp file (settled-decisions content included) would then
+# survive on disk. Converting the signal to an explicit `exit` makes the EXIT
+# trap fire on this path too.
+trap 'exit 143' TERM INT
 
 TMPFILE=$(mktemp)
 CODEX_STDERR=$(mktemp)
