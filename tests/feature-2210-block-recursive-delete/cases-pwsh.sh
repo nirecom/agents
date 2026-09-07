@@ -2,11 +2,8 @@
 # Tests: hooks/block-recursive-delete.js, hooks/lib/bash-write-targets/pwsh.js
 # Tags: scope:issue-specific, recursive-delete, hook, powershell, remove-item, TL2
 #
-# PowerShell positives: -Recurse with/without -Force, ri/rd/del aliases, the -r
-# short form, :$true, and a variable TARGET (Step 2 regression — a variable
-# path must still block). Text-only: no real powershell.exe/pwsh process runs
-# here, so it cannot confirm the payloads expand as assumed (TL3 gap, C10 —
-# see the dispatcher's `# TL3 gap` block).
+# Text-only: no real powershell.exe or pwsh process runs, so payload expansion
+# stays unverified (TL3 gap, C10 — see the dispatcher's `# TL3 gap` block).
 
 run_pwsh_cases() {
     echo ""
@@ -23,8 +20,7 @@ run_pwsh_cases() {
     expect_block_cmd "Remove-Item -Recurse:\$true dir (explicit switch value)" \
         'Remove-Item -Recurse:$true dir'
 
-    # Regression (detail.md Step 2): the target is a variable, the FLAG is not —
-    # the everyday PowerShell spelling must still block.
+    # Regression (detail.md Step 2): a variable TARGET must not defeat the flag match.
     expect_block_cmd "Remove-Item -Recurse \$env:TEMP\\dir (variable target)" \
         'Remove-Item -Recurse $env:TEMP\dir'
     expect_block_cmd "Remove-Item -Recurse \"\$dir\" (quoted variable target)" \
@@ -41,9 +37,6 @@ run_pwsh_cases() {
     echo ""
     echo "=== PowerShell is case-INSENSITIVE — cmdlet, alias and switch-value casing (round-4 C3) ==="
 
-    # PowerShell itself does not distinguish case for cmdlet/alias/param names
-    # or for switch-value literals; Step 2's algorithm already lowercases
-    # effCmd/flagName/suffix before comparing, so these pin that behavior.
     expect_block_cmd "Remove-Item -Recurse:\$TRUE dir (uppercase boolean literal)" \
         'Remove-Item -Recurse:$TRUE dir'
     expect_block_cmd "remove-item -recurse:\$true dir (lowercase cmdlet + flag)" \
@@ -70,10 +63,6 @@ run_pwsh_cases() {
 
     expect_block_cmd "pwsh -Command \"Remove-Item -Recurse x\" (interpreter wrapper)" \
         'pwsh -Command "Remove-Item -Recurse x"'
-    # C5: this label previously claimed "full powershell.exe name" but the
-    # command text below invokes bare `powershell` (no .exe suffix at all) —
-    # so the ACTUAL .exe spelling, the `-c` short form, and a path-qualified
-    # interpreter were never exercised. Renamed and supplemented below.
     expect_block_cmd "powershell -Command \"Remove-Item -Recurse x\" (bare powershell name, no .exe)" \
         'powershell -Command "Remove-Item -Recurse x"'
     expect_block_cmd "powershell.exe -Command \"Remove-Item -Recurse x\" (actual .exe suffix, C5)" \
@@ -88,10 +77,8 @@ run_pwsh_cases() {
     echo ""
     echo "=== PowerShell — upstream-recursion pipeline forms must block (C4) ==="
 
-    # hasRecursivePwshPipelineFlag (pwsh.js) walks a pipeline BACKWARD from a
-    # bare Remove-Item, so `-Recurse` on an UPSTREAM Get-ChildItem still makes
-    # the whole pipeline a recursive delete even though Remove-Item's own
-    # segment carries no flag at all.
+    # hasRecursivePwshPipelineFlag walks BACKWARD from a bare Remove-Item: the
+    # recursion can live on an upstream segment that is not itself a delete.
     expect_block_cmd "Get-ChildItem -Recurse dir | Remove-Item (upstream -Recurse enumeration)" \
         "Get-ChildItem -Recurse dir | Remove-Item"
     expect_block_cmd "gci -Recurse dir | Remove-Item (gci alias upstream)" \
@@ -103,10 +90,7 @@ run_pwsh_cases() {
     expect_block_cmd "ls -Recurse dir | Remove-Item -Force (Force downstream, Recurse upstream)" \
         "ls -Recurse dir | Remove-Item -Force"
 
-    # ForEach-Object { Remove-Item $_ } script-block body — the brace-glue
-    # peel (head-peeling.js's PWSH_BLOCK_PIPELINE_HEADS) judges the block BODY
-    # as its own candidate segment, so a recursive delete inside the block
-    # blocks even though ForEach-Object itself carries no flag.
+    # PWSH_BLOCK_PIPELINE_HEADS judges a script-block BODY as its own segment.
     expect_block_cmd "Get-ChildItem -Recurse dir | ForEach-Object { Remove-Item \$_ } (upstream recurse, block body)" \
         'Get-ChildItem -Recurse dir | ForEach-Object { Remove-Item $_ }'
     expect_block_cmd "gci dir | ForEach-Object { Remove-Item -Recurse \$_ } (Recurse INSIDE the block body)" \
@@ -117,9 +101,6 @@ run_pwsh_cases() {
     echo ""
     echo "=== PowerShell — non-recursive upstream enumeration must NOT block (C4 symmetric negative) ==="
 
-    # CPR-ORTH: every positive above needs a harmless counterpart proving the
-    # pipeline detector does not fire on a plain enumerate-then-delete with no
-    # recursion anywhere in the pipeline.
     expect_approve_cmd "Get-ChildItem dir | Remove-Item (no -Recurse anywhere in the pipeline)" \
         "Get-ChildItem dir | Remove-Item"
     expect_approve_cmd "gci dir | ForEach-Object { Remove-Item \$_ } (no -Recurse anywhere, block body)" \

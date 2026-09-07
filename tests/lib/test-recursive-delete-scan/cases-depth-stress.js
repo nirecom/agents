@@ -3,14 +3,10 @@
 // Tests: hooks/lib/bash-write-targets/recursive-delete-scan/scan.js
 // Tags: scope:issue-specific, recursive-delete, bash-write-targets, guard, TL1
 //
-// Recursion-depth cutoff (pathological nesting fails closed instead of being
-// walked) and timeout-budget stress cases (large/long input must still
-// resolve fast). Split into its own file since these two blocks use raw
-// check() calls rather than runTable() tables — see ./harness.js.
+// Recursion-depth cutoff and timeout-budget stress; raw check() calls, not tables.
 
 const { check, pass, fail, scan } = require("./harness");
 
-// --- Depth cutoff — pathological nesting fails closed instead of recursing on ---
 {
   let nested = "echo hi";
   for (let i = 0; i < 9; i++) {
@@ -19,10 +15,8 @@ const { check, pass, fail, scan } = require("./harness");
   check("depth: 9-deep bash -c nesting → fail-closed cutoff", scan(nested), true);
   check("depth: 2-deep bash -c nesting with harmless body stays false", scan("bash -c \"bash -c 'echo hi'\""), false);
 
-  // MEDIUM: exact boundary. depth reaches 9 only on the 9th peel (cutoff is
-  // `depth > 8`), so 8 layers must still evaluate real content instead of
-  // being forced true by the cutoff — proven with both a harmless and a
-  // recursive core at the SAME depth.
+  // Cutoff is `depth > 8`, so the next two cases must judge real CONTENT at
+  // the boundary rather than be forced true by the cutoff.
   let nested8 = "echo hi";
   for (let i = 0; i < 8; i++) {
     nested8 = 'bash -c "' + nested8.replace(/(["\\])/g, "\\$1") + '"';
@@ -36,7 +30,6 @@ const { check, pass, fail, scan } = require("./harness");
   check("depth: 8-deep nesting with a recursive-delete core still blocks on CONTENT, not the cutoff", scan(nested8r), true);
 }
 
-// --- LOW: timeout-budget stress — large/long input must still resolve fast ---
 {
   const lines = [];
   for (let i = 0; i < 500; i++) lines.push("echo line" + i);

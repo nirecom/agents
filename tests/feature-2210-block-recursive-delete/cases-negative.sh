@@ -2,12 +2,8 @@
 # Tests: hooks/block-recursive-delete.js, hooks/lib/bash-write-targets/recursive-delete-scan.js
 # Tags: scope:issue-specific, recursive-delete, hook, false-positive, negative, TL2, pwsh-not-required
 #
-# Zero false positives is the reason #2210 moves off the settings.json substring
-# globs at all: a glob cannot tell an actual delete from a MENTION of one, and
-# `git log -S "Bash(*rm -rf *)"` was really auto-denied while investigating this
-# issue (#424 is the same class). Every case here must approve. Also covers the
-# non-recursive deletes that stay legal and the sanctioned cleanup route.
-# TL3 gap: text-only — no real shell process runs these payloads (see dispatcher).
+# Zero false positives is why #2210 drops the substring globs: a glob cannot
+# tell a delete from a MENTION of one. TL3 gap: text-only, no real shell runs.
 
 run_negative_cases() {
     echo ""
@@ -24,19 +20,14 @@ run_negative_cases() {
     expect_approve_cmd "git commit -m mentioning rmdir /s" \
         'git commit -m "document cmd.exe rmdir /s coverage"'
 
-    # Heredoc body: the mention is DATA the shell feeds to a command, not a
-    # statement. stripHeredocBody exists exactly so the newline scan cannot
-    # mistake body lines for injected statements.
+    # A heredoc body is data, not a statement the newline scan may judge.
     expect_approve_cmd "heredoc body mentioning rm -rf" \
         $'git commit -m "$(cat <<\'EOF\'\ndrop the rm -rf deny rule\nEOF\n)"'
 
-    # A file whose NAME contains the literal must not implicate the command.
     expect_approve_cmd "path containing 'rm -rf' in its name" \
         'cat "docs/rm -rf-migration.md"'
 
-    # C10: a single-quoted or backslash-escaped $(...) is text, not a real
-    # command substitution — the shell that later runs this text would print
-    # it literally, never execute it.
+    # A quoted or escaped $(...) is printed literally by the shell, never run.
     expect_approve_cmd 'echo single-quoted $(rm -rf x) — literal, never substituted' \
         "echo '\$(rm -rf x)'"
     expect_approve_cmd 'echo escaped \$(rm -rf x) inside double quotes — literal, never substituted' \
@@ -59,16 +50,14 @@ run_negative_cases() {
     echo ""
     echo "=== Adjacent shapes that must not over-block ==="
 
-    # Variable name mismatch: the assignment is unrelated to the rm reference.
     expect_approve_cmd "FLAGS=-rf; rm \$OTHER x (name mismatch)" \
         'FLAGS=-rf; rm $OTHER x'
     # Scope guard: this hook is not a general write gate.
     expect_approve_cmd "bash -c 'echo hi > out.txt' (non-recursive write via wrapper)" \
         "bash -c 'echo hi > out.txt'"
-    # The sanctioned route must never be blocked by the guard that replaces it.
+    # The guard must never block the route it redirects blocked agents to.
     expect_approve_cmd "node hooks/cleanup-orphan-dir.js --force-if-not-registered (sanctioned route)" \
         "node hooks/cleanup-orphan-dir.js --force-if-not-registered /tmp/orphan"
-    # Out of scope for #2210 (detail.md Out of scope): other destructive verbs.
     expect_approve_cmd "git clean -fd (out of scope)" "git clean -fd"
     expect_approve_cmd "git worktree remove --force (out of scope)" \
         "git worktree remove --force /tmp/wt"

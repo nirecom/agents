@@ -3,16 +3,13 @@
 // Tests: hooks/lib/bash-write-targets/recursive-delete-scan/stdin-delivery.js
 // Tags: scope:issue-specific, recursive-delete, bash-write-targets, guard, TL1
 //
-// Stdin delivery routes (round9 C7): script text that never lands in argv at
-// all — a pipe, a herestring, process substitution, or `source`/`. /dev/stdin`
-// re-reading the current shell's own stdin — plus the literal-text producer
-// resolution (echo/printf) that feeds the pipe route (round12 C1). See
-// ./harness.js for the shared runTable() runner.
+// Delivery routes where the script text never lands in argv at all, plus the
+// echo/printf literal-text resolution that feeds the pipe route.
 
 const { runTable } = require("./harness");
 
-// --- Stdin delivery routes (round9 C7): each paired with a harmless-body
-// negative so the route itself is never mistaken for the verdict.
+// Each route is paired with a harmless body so the route itself is never
+// mistaken for the verdict.
 runTable("stdin-delivery-routes (round9 C7)", [
   { label: 'echo "rm -rf x" | bash (pipe route, shell body)', cmd: 'echo "rm -rf x" | bash', want: true },
   { label: 'echo "ls -la" | bash (pipe route, harmless)', cmd: 'echo "ls -la" | bash', want: false },
@@ -32,14 +29,9 @@ runTable("stdin-delivery-routes (round9 C7)", [
   { label: 'echo "Get-ChildItem x" | pwsh -Command - (stdin-fed pwsh, harmless)', cmd: 'echo "Get-ChildItem x" | pwsh -Command -', want: false },
 ]);
 
-// --- round12 C1: producerLiteralText used to naively argv.join(" ") the whole
-// producer, so echo's own leading flags (`-e`/`-ne`) and printf's FORMAT
-// string leaked into the "text" instead of being stripped/resolved — see
-// stdin-delivery.js's echoLiteralText/printfLiteralText/producerTextUnresolvable.
-// Each block case is paired with a harmless counterpart on the same producer
-// shape, plus one unresolvable-printf-format case proving the new
-// producerTextUnresolvable() fail-closed branch (scan.js's two call sites)
-// actually fires rather than silently falling through.
+// A naive argv.join(" ") leaked echo's own leading flags and printf's FORMAT
+// string into the payload text; the last row proves the unresolvable-format
+// branch fails closed instead of falling through.
 runTable("stdin-delivery-text-producers (round12 C1)", [
   { label: 'echo -e "rm -rf x" | bash (leading -e flag stripped by echoLiteralText)', cmd: 'echo -e "rm -rf x" | bash', want: true },
   { label: 'echo -e "ls -la" | bash (leading -e flag stripped, harmless)', cmd: 'echo -e "ls -la" | bash', want: false },

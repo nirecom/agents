@@ -45,36 +45,29 @@ function checkStringNotContains(label, actual, needle) {
 // --- tokenizeSegment ---
 const { tokenizeSegment, splitSegments, stripSubstitutions, extractSubstitutionContents, checkBashCommand } = parser;
 
-// Table-driven per skills/_shared/test-design/parser-regex-tests.md.
-// `kind` documents whether the case exercises a literal backslash surviving
-// into the token ("preserved backslash") or a backslash being stripped out
-// by the tokenizer's escape handling ("consumed backslash"); it is not
-// consumed by the runner below, only by the reader.
+// `kind` is for the reader only — the runner below ignores it.
 const tokenizeCases = [
   { name: "cat TARGET", input: "cat TARGET", want: ["cat", "TARGET"], kind: "n/a" },
   { name: "double-quoted", input: '"double quoted"', want: ["double quoted"], kind: "n/a" },
   { name: "single-quoted", input: "'single quoted'", want: ["single quoted"], kind: "n/a" },
   {
-    // POSIX: inside "...", backslash is special only before $ ` " \ or newline
-    // (#2210). Before any other char (here, space) it is kept literally.
+    // Inside "..." a backslash is special only before $ ` " \ or newline;
+    // before anything else (here, a space) it stays literal (#2210).
     name: "backslash before space (POSIX #2210)",
     input: '"a\\ b"',
     want: ["a\\ b"],
     kind: "preserved backslash",
   },
   {
-    // POSIX line continuation: backslash immediately before a newline inside
-    // "..." (#2210 C1). `\<newline>` is a true line continuation — both
-    // characters vanish and nothing is appended — so "r\<newline>m" tokenizes
-    // to the single token "rm", joining the two halves across the line break.
+    // Backslash-newline vanishes entirely, joining the halves into one token —
+    // so a delete verb can be smuggled across a line break (#2210).
     name: "backslash-newline line continuation (POSIX #2210 C1)",
     input: '"r\\' + "\n" + 'm" -r target',
     want: ["rm", "-r", "target"],
     kind: "consumed backslash",
   },
   {
-    // $'...' (ANSI-C quoting): the tokenizer strips the backslash and keeps
-    // the following char literally (no real ANSI-C escape translation).
+    // $'...': the backslash is stripped, but no ANSI-C escape translation runs.
     name: "ansi-c quote",
     input: "$'ansi\\tcr'",
     wantLen: 1,
@@ -93,7 +86,7 @@ for (const c of tokenizeCases) {
 }
 
 {
-  // Should not throw — not a token-equality case, kept outside the table above.
+  // Outside the table: the assertion is tolerance, not token equality.
   let threw = false;
   let t;
   try { t = tokenizeSegment('unclosed "quote'); } catch (e) { threw = true; }
@@ -120,9 +113,8 @@ checkStringNotContains("strip: indented heredoc <<-", stripSubstitutions("cat <<
 // --- extractSubstitutionContents ---
 checkArrayIncludes("extract: $() body", extractSubstitutionContents('cmd "$(cat X)"'), "cat X");
 checkArrayIncludes("extract: backtick body", extractSubstitutionContents("cmd `cat X`"), "cat X");
-// The regex /\$\(([^()]*)\)/g finds all non-nested $() matches in the string,
-// including inner $(cat X) embedded inside an outer $(echo ...). The innermost
-// match IS captured — this is actually more protective than originally assumed.
+// The non-nested regex still captures the INNER substitution of a nested pair,
+// which is more protective than it looks.
 checkArrayIncludes(
   "extract: inner sub captured (regex finds innermost match)",
   extractSubstitutionContents('cmd "$(echo $(cat X))"'),
@@ -148,7 +140,6 @@ check("check: -f TARGET (pathFlag checked)", checkBashCommand("cmd -f TARGET", o
 check('check: bash -c "cat TARGET"', checkBashCommand('bash -c "cat TARGET"', opts), true);
 check('check: bash -lc "cat TARGET"', checkBashCommand('bash -lc "cat TARGET"', opts), true);
 check('check: substitution "$(cat TARGET)"', checkBashCommand('cmd "$(cat TARGET)"', opts), true);
-// $(cat TARGET) is found inside $(echo ...) because the regex matches the innermost $().
 check('check: nested sub innermost captured → true', checkBashCommand('cmd "$(echo $(cat TARGET))"', opts), true);
 check("check: heredoc body stripped", checkBashCommand("cmd <<EOF\nTARGET\nEOF", opts), false);
 

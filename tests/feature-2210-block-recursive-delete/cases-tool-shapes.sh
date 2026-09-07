@@ -2,11 +2,9 @@
 # Tests: hooks/block-recursive-delete.js, hooks/lib/tool-command-text.js
 # Tags: scope:issue-specific, recursive-delete, hook, tool-shapes, runcommands, TL2, pwsh-not-required
 #
-# Claude Code ships three command tools, two payload shapes: Bash/runInTerminal
-# carry `command` (string); runCommands carries `commands` (array) — reading
-# only `.command` would let runCommands bypass silently (#1780); 2+-element
-# cases also prove the newline-injection scan (joins elements with "\n").
-# TL3 gap: text-only shapes — no real host process builds these payloads.
+# Bash and runInTerminal carry `command`; runCommands carries a `commands` array
+# — reading only `.command` let runCommands bypass silently (#1780). TL3 gap:
+# text-only shapes, no real host process builds these payloads.
 
 
 # payload_cmd_at_offset <offset> <marker> [tool] — pads with 'A' bytes so marker starts near that stdin byte offset (readStdin() 64KiB boundary, round-6).
@@ -24,9 +22,7 @@ process.stdout.write(full);
 }
 
 # run_fault_injection_case <desc> <preload-js-body> <payload> [leak-needle] —
-# runs the hook under NODE_OPTIONS=--require <preload>, which monkey-patches
-# fs.readSync or Module._load to simulate an in-process fault (C3); asserts
-# fail-closed block, and (when given) that the reason never echoes the needle.
+# runs the hook under a --require preload that simulates an in-process fault.
 run_fault_injection_case() {
     local desc="$1" patch_body="$2" payload="$3" needle="${4:-}"
     local patch_file out st verdict
@@ -81,29 +77,20 @@ run_tool_shape_cases() {
     echo ""
     echo "=== Payloads the hook must approve without inspecting a command ==="
 
-    # Not a command tool: nothing to adjudicate.
     expect_approve "Read tool (not a command tool)" \
         '{"tool_name":"Read","tool_input":{"file_path":"/tmp/rm -rf.md"}}'
     expect_approve "empty command string" "$(payload_cmd '' Bash)"
     expect_approve "runCommands with an empty array" '{"tool_name":"runCommands","tool_input":{"commands":[]}}'
     expect_approve "missing tool_input" '{"tool_name":"Bash"}'
-    # Transport-layer fail-open (detail.md Step 5.1): unparseable stdin is a
-    # transport fault, not a command — the unconditional-guard family approves it.
+    # Unparseable stdin is a transport fault, not a command: fail-open by design.
     expect_approve "unparseable stdin JSON (transport fail-open)" 'not json at all'
 
     echo ""
     echo "=== MEDIUM: malformed tool_input shapes must not crash the guard ==="
 
-    # Each of these is a well-formed JSON document with an ill-typed field —
-    # distinct from the unparseable-stdin case above. A crash here would exit
-    # non-zero and _assert_verdict already fails that outright; the point is
-    # that a transport-shape anomaly resolves cleanly, not a hang or throw.
-    #
-    # C1 (real bypass, fixed): a scalar `commands` is NOT a shape anomaly to
-    # approve blindly — hooks/lib/tool-command-text.js's commandTextOf degrades
-    # a non-array `commands` via String(cmds), so {"commands":"rm -rf x"} scans
-    # as the literal command text "rm -rf x". Hardcoding expect_approve here
-    # baked a real bypass into the suite itself; the correct verdict is block.
+    # Well-formed JSON with an ill-typed field, unlike the unparseable case above.
+    # commandTextOf String()s a non-array `commands`, so a scalar one still scans
+    # as real command text — expecting approve here was a real bypass, now fixed.
     expect_block "runCommands.commands is a string, not an array (commandTextOf degrades via String() to the literal command text — must still block)" \
         '{"tool_name":"runCommands","tool_input":{"commands":"rm -rf x"}}'
     expect_approve "Bash tool_input.command is a number, not a string" \
@@ -118,10 +105,8 @@ run_tool_shape_cases() {
     echo ""
     echo "=== MEDIUM: scalar top-level JSON body must not crash the guard (round-4 C7) ==="
 
-    # JSON.parse("null"/'"..."'/"42") all succeed, but a subsequent .tool_name
-    # access on a non-object top level would crash without an explicit guard —
-    # distinct from the unparseable-stdin case above (that fails JSON.parse
-    # itself). Each must resolve to approve cleanly, not a hang or throw.
+    # JSON.parse succeeds here, but .tool_name on a non-object top level crashes
+    # without an explicit guard — unlike the unparseable case, which throws first.
     expect_approve "top-level JSON is null" "null"
     expect_approve "top-level JSON is a string" '"just a string"'
     expect_approve "top-level JSON is a number" "42"
@@ -129,12 +114,8 @@ run_tool_shape_cases() {
     echo ""
     echo "=== HIGH: readStdin() 64KiB read-loop boundary (round-6 regression, C2) ==="
 
-    # readStdin() reads in 65536-byte chunks via fs.readSync into a REUSED
-    # Buffer; round-6 copied a VIEW (subarray) over that buffer instead of a
-    # COPY, so any read after the first silently corrupted earlier bytes on
-    # concat — a delete positioned past the first chunk bypassed the guard
-    # entirely. These cases place the marker at/around/well past that exact
-    # 65536-byte offset to prove the fix (and guard the regression).
+    # Past regression: readStdin() kept a subarray VIEW over its reused 65536-byte
+    # Buffer, so a delete after the first chunk was corrupted away and bypassed.
     expect_block "recursive delete straddling the 65536-byte read boundary" \
         "$(payload_cmd_at_offset 65533 'rm -rf x')"
     expect_block "recursive delete starting exactly at the 65536-byte boundary" \
@@ -147,15 +128,9 @@ run_tool_shape_cases() {
     echo ""
     echo "=== HIGH: fail-closed on in-process faults, never leaking raw input (C3) ==="
 
-    # #2210 round8 N4 / round-5: a stdin read exception (readSync throwing
-    # mid-read) or a failed lazy require (a corrupt lib file) must both resolve
-    # to block(), never approve() and never a crash — the settings.json deny
-    # globs are gone, so there is no backstop layer left once this hook exists.
-    # Genuine EAGAIN/EINTR or a corrupted lib file cannot be reproduced without
-    # actually breaking the host or the repo, so both faults are injected via a
-    # Node --require preload that monkey-patches fs.readSync / Module._load —
-    # exercising the SAME catch paths the real faults would hit, without
-    # touching hook or lib source.
+    # The settings.json deny globs are gone, so this hook is the last layer: a
+    # read fault or a corrupt lib must block, never approve. Neither is
+    # reproducible without breaking the host, hence the preload injection.
     run_fault_injection_case \
         "readSync throws mid-read (simulated EAGAIN/EINTR) -> fail-closed block, not approve" \
         'const fs=require("fs");const orig=fs.readSync;fs.readSync=function(fd){if(fd===0){throw new Error("SIMULATED_EAGAIN_FAULT");}return orig.apply(this,arguments);};' \

@@ -3,49 +3,33 @@
 // Tests: hooks/lib/bash-write-targets/recursive-delete-scan/wrapper-bodies.js
 // Tags: scope:issue-specific, recursive-delete, bash-write-targets, guard, TL1
 //
-// Interpreter wrappers (bash -c / pwsh -Command / ...), the exhaustive
-// WRAPPER_SPECS bare-invocation sweep, and the STRING-BODY branches
-// (wrapperCommandStringBodies / envSplitStringBodies) in both short- and
-// long-flag spellings. See ./harness.js for the shared runTable() runner.
+// Interpreter wrappers, the exhaustive WRAPPER_SPECS sweep, and the
+// string-body branches in both short- and long-flag spellings.
 
 const { runTable } = require("./harness");
 
-// --- Interpreter wrappers (C2) ---
 runTable("wrapper", [
   { label: "bash -c 'rm -rf x'", cmd: "bash -c 'rm -rf x'", want: true },
   { label: "sh -c 'rm -r x'", cmd: "sh -c 'rm -r x'", want: true },
   { label: "bash -lc 'rm -rf x' (combined short flags)", cmd: "bash -lc 'rm -rf x'", want: true },
   { label: 'pwsh -Command "Remove-Item -Recurse x"', cmd: 'pwsh -Command "Remove-Item -Recurse x"', want: true },
-  // C7: interpreter names beyond bash/sh/pwsh.
   { label: "zsh -c 'rm -rf x'", cmd: "zsh -c 'rm -rf x'", want: true },
   { label: "dash -c 'rm -r x'", cmd: "dash -c 'rm -r x'", want: true },
   { label: "ksh -c 'rm -rf x'", cmd: "ksh -c 'rm -rf x'", want: true },
   { label: 'powershell -Command "Remove-Item -Recurse x" (full name)', cmd: 'powershell -Command "Remove-Item -Recurse x"', want: true },
-  // Scope guard (CPR-ORTH): the wrapper route must catch RECURSIVE DELETE only,
-  // not every write — this hook is not a general write gate.
+  // Scope guard: this hook catches recursive delete only, not every write.
   { label: "bash -c 'echo hi > out.txt' (non-recursive write)", cmd: "bash -c 'echo hi > out.txt'", want: false },
   { label: "bash -c 'ls -la' (read-only)", cmd: "bash -c 'ls -la'", want: false },
-  // node is deliberately NOT an interpreter wrapper: the sanctioned cleanup path
-  // (hooks/cleanup-orphan-dir.js) must stay approvable.
+  // node is deliberately NOT a wrapper: the sanctioned cleanup script must stay approvable.
   { label: "node hooks/cleanup-orphan-dir.js (sanctioned path)", cmd: "node hooks/cleanup-orphan-dir.js --force-if-not-registered /tmp/x", want: false },
-  // Interpreter-wrapper fail-closed branch (detail.md Step 4 2b): when the
-  // inline script BODY contains $/`/(, it is statically unresolvable and the
-  // whole call folds to true — even when the body performs no delete at all.
-  // This is the conservative, over-blocking half of the branch; the case
-  // above ("bash -c 'ls -la'", no $/`/() proves the harmless-body half does
-  // NOT trip the same fail-closed path.
+  // A statically unresolvable inline body folds to true even with no delete in
+  // it; the "bash -c 'ls -la'" row above proves a resolvable body does not.
   { label: "bash -c \"echo $(date)\" (unresolvable body, no delete at all, fail-closed)", cmd: 'bash -c "echo $(date)"', want: true },
 ]);
 
-// --- Exhaustive WRAPPER_SPECS coverage (round9 C9): every transparent-wrapper
-// entry in segment-utils.js's WRAPPER_SPECS gets its own block/allow pair, so a
-// future change to that table cannot silently alter a write-classifier's
-// coverage without a failing test pointing at exactly which wrapper regressed
-// (CPR-ORTH: sudo/xargs/timeout already have pairs in cases-posix.sh from the
-// C1 fix — this table covers the REST of the ~22-entry WRAPPER_SPECS list).
-// Bare (no-flag) wrapper invocation is enough to prove the peel reaches the
-// wrapped command; flock/chroot/systemd-run need their own mandatory
-// positional (lockfile / newroot / unit) before the wrapped command.
+// One block/allow pair per WRAPPER_SPECS entry, so a change to that table
+// cannot silently drop coverage without naming the regressed wrapper.
+// sudo, xargs and timeout are covered in cases-posix.sh instead.
 runTable("wrapper-specs-exhaustive (round9 C9)", [
   { label: "env rm -rf x", cmd: "env rm -rf x", want: true },
   { label: "env echo hi (harmless)", cmd: "env echo hi", want: false },
@@ -89,14 +73,8 @@ runTable("wrapper-specs-exhaustive (round9 C9)", [
   { label: "watch echo hi (harmless)", cmd: "watch echo hi", want: false },
 ]);
 
-// --- wrapper-bodies.js STRING-BODY branches (round10 gap 1): `su -c`, `flock
-// ... -c`, `runuser -c` hand a full command STRING to a shell rather than
-// exec'ing tokens as argv (wrapperCommandStringBodies); `env -S` / `env
-// --split-string=` word-split their STRING and exec it (envSplitStringBodies).
-// Round9's "wrapper-specs-exhaustive" table only proved the BARE (no -c flag)
-// argv peel for su/flock/runuser reaches the wrapped command — it never
-// exercised the -c STRING-BODY branch itself, so a regression there had zero
-// coverage. Each wrapper gets a block/allow pair on its OWN command string.
+// These wrappers hand a full command STRING to a shell instead of exec'ing
+// argv tokens, so the bare-invocation sweep above never reaches this branch.
 runTable("wrapper-command-string-bodies (round10 gap 1)", [
   { label: "su -c 'rm -rf /tmp/x' (su -c string body blocks)", cmd: "su -c 'rm -rf /tmp/x'", want: true },
   { label: "su -c 'ls /tmp/x' (su -c string body, harmless)", cmd: "su -c 'ls /tmp/x'", want: false },
@@ -110,16 +88,8 @@ runTable("wrapper-command-string-bodies (round10 gap 1)", [
   { label: "env --split-string='ls d' (env --split-string= form, harmless)", cmd: "env --split-string='ls d'", want: false },
 ]);
 
-// --- round11 C3: wrapperCommandStringBodies' `--command`/`--command=` long-form
-// branch and envSplitStringBodies' ATTACHED short form (`-S'...'` with no space,
-// vs the round10 table's `-S '...'` with a space) — both coded, both untested.
-// wrapper-bodies.js line 48 checks `name !== "-c" && name !== "--command"`
-// against a `=`-split name, so BOTH the two-token `--command X` and the
-// one-token `--command=X` spellings hit the same branch (verified by reading
-// wrapper-bodies.js before writing these). envSplitStringBodies line 25 takes
-// `tok.slice(2)` off a token that STARTS WITH "-S" and is longer than 2 chars —
-// `env -S'rm -rf d'` word-glues the flag and its quoted value into ONE argv
-// token ("-Srm -rf d") with no space, which is exactly that branch.
+// The long-form spellings split on `=`, so two-token and one-token forms hit
+// the same branch; an attached `-S'...'` arrives word-glued as ONE argv token.
 runTable("wrapper-command-string-bodies-longform (round11 C3)", [
   { label: "su --command 'rm -rf /tmp/x' (su --command two-token long-form blocks)", cmd: "su --command 'rm -rf /tmp/x'", want: true },
   { label: "su --command 'ls /tmp/x' (su --command two-token long-form, harmless)", cmd: "su --command 'ls /tmp/x'", want: false },
@@ -131,12 +101,8 @@ runTable("wrapper-command-string-bodies-longform (round11 C3)", [
   { label: "env -S'ls d' (env -S attached-short form, no space, harmless)", cmd: "env -S'ls d'", want: false },
 ]);
 
-// --- round12 C2: `echo su -c "rm -rf x"` used to false-positive-block — "su"
-// there is inert echo ARGUMENT DATA, never the invoked process. Fix (see
-// wrapper-bodies.js's own "#2210 C2" comment): only a wrapper name reached by
-// peeling from the command HEAD arms the -c/--command body search. Paired
-// with a same-shape su-AT-the-head contrast case (already covered above by
-// "su -c 'rm -rf /tmp/x'"; restated here double-quoted for a same-table pair).
+// Regression: a wrapper name appearing as inert ARGUMENT DATA once armed the
+// body search; only a name reached by peeling from the command HEAD may.
 runTable("wrapper-command-string-head-position (round12 C2)", [
   { label: 'echo su -c "rm -rf x" ("su" is inert echo ARGUMENT DATA, not the command head — must approve)', cmd: 'echo su -c "rm -rf x"', want: false },
   { label: 'su -c "rm -rf x" (su actually AT the head, same string — contrast pair, still blocks)', cmd: 'su -c "rm -rf x"', want: true },

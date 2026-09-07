@@ -2,13 +2,10 @@
 # Tests: settings.json, hooks/block-recursive-delete.js
 # Tags: scope:issue-specific, recursive-delete, hook-registration, settings-json, static, TL2, pwsh-not-required
 #
-# Static assertions on the real settings.json (test-design.md "Mandatory
-# integration or E2E coverage" 1/2) — a judgment-function unit test still
-# passes even if the hook is never registered or the deny globs remain.
-# TL3 gap: static JSON inspection only, never a live PreToolUse event.
+# Static assertions on the real settings.json — a judgment-function unit test
+# passes even when the hook is never registered. TL3 gap: no live PreToolUse event.
 
 # settings_probe <probe-name> — one word per question about settings.json.
-# C3: isRealEntry() below requires an exact match, not a basename substring.
 settings_probe() {
     run_with_timeout 30 node -e '
 const fs = require("fs");
@@ -25,14 +22,13 @@ function isRealEntry(h) {
 const pre = (s.hooks && s.hooks.PreToolUse) || [];
 const entries = pre.filter((e) => ((e && e.hooks) || []).some(isRealEntry));
 const realHook = entries.length ? (entries[0].hooks || []).find(isRealEntry) : null;
-// Finding 8: sibling PreToolUse hooks must survive the settings.json edits
-// made for this issue, untouched -- same isRealEntry-shaped exact match.
+// Sibling PreToolUse hooks must survive the settings.json edits for #2210.
 function siblingSurvives(name) {
   const cmd = "node \"$AGENTS_CONFIG_DIR/hooks/" + name + "\"";
   return pre.some((e) => ((e && e.hooks) || []).some((h) => h && h.type === "command" && h.command === cmd));
 }
-// round-4 C6: entries.length only counts matcher ENTRIES -- a duplicate hook
-// OBJECT inside one matcher .hooks array would still read entries.length===1.
+// entries.length counts matcher entries only: a hook object duplicated inside
+// one .hooks array would still read 1.
 const hookObjectCount = pre.reduce((sum, e) => sum + ((e && e.hooks) || []).filter(isRealEntry).length, 0);
 
 const deny = (s.permissions && s.permissions.deny) || [];
@@ -43,10 +39,8 @@ const RETIRED = [
   "Bash(*rm -rf *)",
   "Bash(*rm -fr *)",
 ];
-// detail.md Out of scope: the find-family deny 7 guard a DIFFERENT class
-// (find-driven arbitrary command execution, not deletion) and must survive
-// this issue deny edits untouched -- regression guard against accidentally
-// removing them alongside the retired recursive-delete globs.
+// The find-family deny globs guard a different class (find-driven arbitrary
+// execution, not deletion) and must not be dropped with the retired ones.
 const FIND_DENY = [
   "Bash(*find *-exec *)",
   "Bash(*find *-execdir *)",
@@ -102,36 +96,24 @@ run_registration_cases() {
     echo ""
     echo "=== settings.json registration matcher — meta-test (C3) ==="
 
-    # Proves the structural matcher itself, not just its result on the real
-    # file: a mention-only decoy command must be rejected, the real shape
-    # accepted. Without this, a substring check like the pre-fix version
-    # (`command.indexOf("block-recursive-delete.js") !== -1`) would silently
-    # pass `"command": "echo block-recursive-delete.js"`.
+    # The pre-fix substring check silently passed `echo block-recursive-delete.js`.
     assert_probe "matcher rejects a decoy command that merely names the script" \
         matcher-rejects-decoy yes
     assert_probe "matcher accepts the real command shape" \
         matcher-accepts-real yes
-    # round-4 C6: entries.length===1 only proves ONE matcher entry exists — it
-    # would stay 1 even if the SAME hook object appeared twice inside that
-    # entry's .hooks array. This counts hook OBJECTS across all entries.
     assert_probe "the hook object is registered exactly once, not duplicated within its matcher entry (round-4 C6)" \
         hook-object-count "1"
 
     echo ""
     echo "=== settings.json deny retirement (stage 2) ==="
 
-    # The four substring globs the hook replaces. Leaving one behind keeps the
-    # false-positive class #2210 exists to remove.
+    # Leaving one behind keeps the false-positive class #2210 exists to remove.
     assert_probe "all four recursive-delete deny globs are gone" \
         retired-deny none-left
 
     echo ""
     echo "=== settings.json find-family deny survives untouched (detail.md Out of scope) ==="
 
-    # find's -exec/-execdir/-ok/-okdir/-delete/-fprint/-fls deny 7 guard a
-    # separate class (find-driven arbitrary command execution) and are not
-    # part of this issue's edits — regression guard against them being
-    # accidentally removed alongside the retired recursive-delete globs.
     assert_probe "all seven find-family deny globs survive stage 2's deny edits" \
         find-deny-survives all-present
 
@@ -150,9 +132,7 @@ run_registration_cases() {
 
     assert_probe "permissions.allow still permits the sanctioned cleanup route" \
         cleanup-allow yes
-    # MEDIUM: the backslash-path variant is a separate literal glob string
-    # (Windows-form paths do not glob-match the forward-slash variant) — both
-    # forms must survive this issue's settings.json edits untouched.
+    # A separate literal glob: Windows-form paths never match the slash variant.
     assert_probe "permissions.allow also permits the backslash-path form (Windows)" \
         cleanup-allow-backslash yes
 }

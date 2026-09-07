@@ -2,12 +2,8 @@
 # Tests: hooks/block-recursive-delete.js, settings.json
 # Tags: scope:issue-specific, recursive-delete, hook, protection-fix, integration, TL2, pwsh-not-required
 #
-# C2: skills/_shared/test-design/protection-fix-tests.md Pattern 1/2 — proves
-# the REGISTERED settings.json entry (not a hardcoded `node "$HOOK"` call)
-# blocks a real delete on a real throwaway fixture. cases-registration.sh
-# only asserts the config's shape; direct expect_block_cmd calls elsewhere
-# only invoke the hook file, never the settings.json wiring between them.
-# TL3 gap: bash -c $raw_cmd, not Claude Code's own host process (see dispatcher).
+# C2: proves the REGISTERED settings.json entry, not a direct `node "$HOOK"`
+# call, blocks a real delete on a real fixture. TL3 gap: bash -c, not the host.
 
 run_protection_fix_cases() {
     echo ""
@@ -26,8 +22,7 @@ run_protection_fix_cases() {
     mkdir -p "$fx/victim/nested"
     echo canary > "$fx/victim/nested/file.txt"
 
-    # Pattern 2: the payload targets the REAL fixture path, so a failure to
-    # block would be a real deletion, not a simulated one.
+    # Pattern 2: a REAL fixture path — a failure to block deletes for real.
     out="$(printf '%s' "$(payload_cmd "rm -rf \"$fx_np/victim\"")" | AGENTS_CONFIG_DIR="$AN" run_with_timeout 60 bash -c "$raw_cmd" 2>/dev/null)"; st=$?
     verdict="$(verdict_of "$out")"
     if [ "$verdict" = "block" ]; then
@@ -35,17 +30,14 @@ run_protection_fix_cases() {
     else
         fail "settings.json-registered hook — expected block, got verdict '$verdict' from: $out"
     fi
-    # C7 (remaining half): a parseable block verdict is not enough on its own —
-    # the registered subprocess must also have actually exited 0, not merely
-    # printed something parseable while crashing or timing out afterward.
+    # C7: a parseable verdict can also come from a crashing or timing-out run.
     if [ "$st" -eq 0 ]; then
         pass "settings.json-registered hook subprocess exited 0 on the blocking call (C7)"
     else
         fail "settings.json-registered hook subprocess exited $st on the blocking call (C7)"
     fi
 
-    # Mirror what Claude Code would actually do next: only a NON-blocking
-    # verdict lets the tool call proceed, so only then does the real rm run.
+    # As Claude Code would: only a non-blocking verdict lets the real rm run.
     if [ "$verdict" != "block" ]; then
         rm -rf "$fx/victim" 2>/dev/null
     fi
@@ -57,8 +49,7 @@ run_protection_fix_cases() {
         fail "the canary file was actually deleted — the registered hook failed to protect a real path"
     fi
 
-    # CPR-ORTH: the same registered wiring must also block a PowerShell-shaped
-    # payload, not only the POSIX rm one above — with its own exit-code check.
+    # CPR-ORTH: the same wiring must block the PowerShell shape, not only POSIX.
     out="$(printf '%s' "$(payload_cmd "Remove-Item -Recurse \"$fx_np/victim\"")" | AGENTS_CONFIG_DIR="$AN" run_with_timeout 60 bash -c "$raw_cmd" 2>/dev/null)"; st=$?
     verdict="$(verdict_of "$out")"
     if [ "$verdict" = "block" ]; then
@@ -66,18 +57,14 @@ run_protection_fix_cases() {
     else
         fail "settings.json-registered hook — expected block for Remove-Item -Recurse, got verdict '$verdict' from: $out"
     fi
-    # C7: exit-code check on this third registered subprocess call too.
     if [ "$st" -eq 0 ]; then
         pass "settings.json-registered hook subprocess exited 0 on the PowerShell-shaped blocking call (C7)"
     else
         fail "settings.json-registered hook subprocess exited $st on the PowerShell-shaped blocking call (C7)"
     fi
 
-    # round-4 C5: the PowerShell and cmd.exe checks above are VERDICT-only
-    # (no canary fixture, no delete-simulation) — POSIX is the only route
-    # Pattern 1/2 actually cover. No real powershell.exe/pwsh/cmd.exe process
-    # is spawned here either (kept pwsh-not-required); only the registered
-    # NODE hook and a `bash -c` delete-simulation run, same as POSIX above.
+    # The verdict-only checks above get a canary fixture here. Still no real
+    # pwsh or cmd.exe process — node plus a bash delete-simulation, as POSIX.
     fx_ps="$(mktemp -d)"
     fx_ps_np="$(np "$fx_ps")"
     mkdir -p "$fx_ps/victim/nested"
@@ -104,7 +91,6 @@ run_protection_fix_cases() {
     fi
     rm -rf "$fx_ps" 2>/dev/null
 
-    # cmd.exe had NO real-fixture scenario at all before round-4 C5.
     fx_cmd="$(mktemp -d)"
     fx_cmd_np="$(np "$fx_cmd")"
     mkdir -p "$fx_cmd/victim/nested"
@@ -131,8 +117,7 @@ run_protection_fix_cases() {
     fi
     rm -rf "$fx_cmd" 2>/dev/null
 
-    # Pattern 4: the same real, registered invocation still approves an
-    # unrelated non-recursive delete — the wiring is not a blanket write gate.
+    # Pattern 4: the wiring is not a blanket write gate.
     out="$(printf '%s' "$(payload_cmd "rm -f \"$fx_np/victim/nested/file.txt\"")" | AGENTS_CONFIG_DIR="$AN" run_with_timeout 60 bash -c "$raw_cmd" 2>/dev/null)"; st=$?
     verdict="$(verdict_of "$out")"
     if [ "$verdict" = "approve" ]; then
@@ -140,7 +125,6 @@ run_protection_fix_cases() {
     else
         fail "the same registered hook — expected approve for a non-recursive delete, got '$verdict'"
     fi
-    # C7 (remaining half): same exit-code check on the approving call.
     if [ "$st" -eq 0 ]; then
         pass "settings.json-registered hook subprocess exited 0 on the approving call (C7)"
     else
@@ -152,11 +136,8 @@ run_protection_fix_cases() {
     echo ""
     echo "=== Integration: worst-case nested payload finishes well inside the 5s timeout budget (finding 6) ==="
 
-    # settings.json pins timeout: 5 on this hook's entry (assert_probe timeout
-    # 5, cases-registration.sh). A depth-8 bash -c chain (the boundary the
-    # scan's fail-closed cutoff sits at, test-recursive-delete-scan.js) is the
-    # worst-case realistic payload shape — time it end-to-end through the
-    # registered invocation and assert it completes well under budget.
+    # settings.json pins this entry's timeout to 5s; depth 8 is where the scan's
+    # fail-closed cutoff sits, so a depth-8 chain is the worst realistic payload.
     local nested_cmd t_start t_end elapsed_ms
     nested_cmd="$(node -e '
 let c = "rm -rf x";
@@ -176,8 +157,6 @@ process.stdout.write(c);
     echo ""
     echo "=== Integration: an approved command produces a quiet, side-effect-free response (finding 12) ==="
 
-    # A clean approve() should be exactly one parseable decision line, with no
-    # extra stdout noise (debug prints, warnings, stray console.log) alongside it.
     out="$(printf '%s' "$(payload_cmd "rm -f dir/file.txt")" | AGENTS_CONFIG_DIR="$AN" run_with_timeout 60 bash -c "$raw_cmd" 2>/dev/null)"
     verdict="$(verdict_of "$out")"
     if [ "$verdict" = "approve" ]; then

@@ -3,13 +3,7 @@
 // Tests: hooks/lib/bash-write-targets/recursive-delete-scan.js
 // Tags: scope:issue-specific, recursive-delete, bash-write-targets, guard, TL1
 //
-// Shared harness for the #2210 scanCommandTextForRecursiveDelete unit suite:
-// pass/fail tally, the table-driven runTable() runner, and the loadFn()
-// require-with-stub loader. No cases live here — every table is in a sibling
-// cases-*.js. Split out of the single test-recursive-delete-scan.js when it
-// crossed the 500-line hard limit (rules/coding/file-split.md Pattern A),
-// mirroring how hooks/lib/bash-write-targets/recursive-delete-scan.js itself
-// was split into a directory in round9.
+// Shared tally / runTable() / loadFn() for the sibling cases-*.js tables.
 
 let passed = 0;
 let failed = 0;
@@ -29,12 +23,8 @@ function check(label, actual, expected) {
   else fail(label, expected, actual);
 }
 
-// TL3 gap: pure Node unit calls against rawCmd strings only — no real
-// bash/pwsh/cmd.exe process expands these payloads (see the dispatcher's
-// `# TL3 gap` block for the closest-to-action mitigation).
-
-// Missing module/export degrades to a marker-returning stub so every case still
-// runs and fails readably (see tests/lib/test-recursive-delete-flags.js).
+// A missing module/export degrades to a marker-returning stub so every case
+// still runs and fails readably instead of aborting the whole suite.
 function loadFn(modPath, fnName) {
   let mod = null;
   try {

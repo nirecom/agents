@@ -3,11 +3,8 @@
 // Tests: hooks/lib/bash-write-targets/recursive-delete-scan/interpreter-bodies.js
 // Tags: scope:issue-specific, recursive-delete, bash-write-targets, guard, TL1
 //
-// Interpreter LANGUAGE bodies (round9 C6): a non-shell body is matched
-// against LANGUAGE_DELETE_SHAPES / SHELL_DELETE_SHAPES (interpreter-bodies.js),
-// not re-parsed as shell command text. One block/allow pair per wired
-// language family, each verified directly against the live shapes before
-// being pinned here. See ./harness.js for the shared runTable() runner.
+// A non-shell body is matched against LANGUAGE_DELETE_SHAPES, never re-parsed
+// as shell text; one block/allow pair per wired language family.
 
 const { runTable } = require("./harness");
 
