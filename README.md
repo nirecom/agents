@@ -191,17 +191,6 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
-### Bash compound-command guard
-
-A PreToolUse hook (`hooks/bash-guard.js`) denies command-line issuance of forbidden
-compound-shell literals per `rules/shell-commands.md` Command-Line Issuance Discipline.
-See [docs/architecture/claude-code/settings.md](docs/architecture/claude-code/settings.md).
-
-### Comment-block size gate
-
-Blocks an over-long run of comment lines at edit time and at `git commit` as a backstop.
-See [docs/architecture/claude-code/comment-block-size-gate.md](docs/architecture/claude-code/comment-block-size-gate.md).
-
 ### Forge write target-ownership guard
 
 A Claude Code PreToolUse hook (`hooks/confirm-forge-target-ownership.js`) asks for
