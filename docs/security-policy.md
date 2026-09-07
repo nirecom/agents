@@ -31,7 +31,10 @@ This means:
 
 **Hook-based protection is context-aware.** Some rules use a PreToolUse hook
 (`hooks/block-credentials.js`, `hooks/block-dotenv.js`) backed by the shared
-`hooks/lib/command-parser.js` engine instead of raw glob matching. These hooks
+`hooks/lib/command-parser.js` engine instead of raw glob matching. That engine choice
+is deliberately retained even though the command IR moved to a new parser — see
+`docs/architecture/claude-code/shell-command-parsing.md` for the ownership map and the
+migration order. These hooks
 tokenize the command, walk argv, and check only tokens at path-bearing positions —
 skipping text-flag values (`--body`, `--title`, `-m`) and `echo`/`printf` positionals.
 This prevents false-positives when a protected path appears inside a commit message

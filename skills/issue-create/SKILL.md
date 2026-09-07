@@ -47,21 +47,18 @@ adjacent-issue awareness to the user. Informational-only — never aborts the sk
 Phase 1 runs unconditionally regardless of gate outcome.
 
 IC-1. Resolve session intent:
-   ```bash
-   PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-                 || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-   SESSION_ID="${CLAUDE_SESSION_ID:-}"
-   INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"
-   ```
-   Skip gate silently when `SESSION_ID` is empty or `INTENT_MD` does not exist.
+   Resolve `<PLANS_DIR>` with one standalone Bash call —
+   `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
+   from `$CLAUDE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
+   Skip the gate silently when `<SESSION_ID>` is empty or `<INTENT_MD>` does not exist.
 
 IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-injected; it owns the capture paths the IC-3 notice points the user at.
 
-IC-2. Parse `closes_issues` (pass path as script argument — never use `node -e`):
-   ```bash
-   CLOSES=$(node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "$INTENT_MD" 2>/dev/null || echo "[]")
-   ```
-   If `CLOSES` is `[]` or empty: skip gate silently, proceed to Phase 1.
+IC-2. Parse `closes_issues` with one standalone call (pass the path as a script
+   argument — never use `node -e`):
+   `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "<INTENT_MD>"`.
+   If its stdout is `[]`, empty, or the call fails: skip the gate silently and
+   proceed to Phase 1.
 
 IC-3. When `CLOSES` is non-empty, emit a notice:
    - **Interactive:** "This issue is created now and is NOT added to the current session's
@@ -161,14 +158,14 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 
 For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
 
-**Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers extract the issue number with `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
+**Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers read the last stdout line and take the trailing digits of that URL as the issue number — no pipeline; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
 Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
 
 ### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
 
 Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling|bulk-sub-of).
-Pipe Phase 4 stdout to `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-phase5-record.sh" "$VERDICT" "$(git rev-parse --show-toplevel)/WORKTREE_NOTES.md" "<Phase 1 title>" "$MANIFEST"` (manifest arg only used for `bulk-sub-of`).
+Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is used only for `bulk-sub-of`, pass `""` otherwise).
 Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy

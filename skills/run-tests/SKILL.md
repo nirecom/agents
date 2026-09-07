@@ -22,7 +22,7 @@ RNT-1. **Resolve merge-base.**
    exit 0 with empty stdout -> treat as an empty selection and follow the RNT-5 policy.
 
 RNT-2. **Tier 1 — mechanical stem match.**
-   `tier1_tests=$(bin/select-tests.sh --auto)`
+   `bin/select-tests.sh --auto` — read the tier-1 test list from its stdout.
    Filename stem substring match only. No frontmatter reading.
 
 RNT-3. **Tier 2 — LLM semantic match.**

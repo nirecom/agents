@@ -1,8 +1,11 @@
 #!/bin/bash
 # run-phase5-record.sh — Phase 5: record created issue(s) to WORKTREE_NOTES.md
-# Usage: <phase4-stdout> | bash run-phase5-record.sh <verdict> <notes_path> <title> [<manifest>]
+# Usage: bash run-phase5-record.sh <verdict> <notes_path|auto> <title> [<manifest>]
+#          [--input-file <path>]
+# `auto` resolves WORKTREE_NOTES.md from the git toplevel, and --input-file
+# replaces the stdin pipe, so a prompt can issue this as one command (#2132).
 # Env:   AGENTS_CONFIG_DIR
-# Stdin: Phase 4 dispatch stdout (URL lines)
+# Stdin: Phase 4 dispatch stdout (URL lines) when --input-file is absent
 # Exit:  0 always (non-fatal script — failures logged to stderr and skipped)
 set -euo pipefail
 
@@ -11,8 +14,30 @@ NOTES_PATH="${2:?notes_path required}"
 TITLE="${3:?title required}"
 MANIFEST="${4:-}"
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+shift $(( $# < 4 ? $# : 4 ))
 
-DISPATCH_OUTPUT="$(cat)"
+INPUT_FILE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --input-file) INPUT_FILE="${2:?--input-file requires a value}"; shift 2 ;;
+        *) echo "run-phase5-record.sh: unknown argument: $1" >&2; exit 0 ;;
+    esac
+done
+
+if [[ "$NOTES_PATH" == "auto" ]]; then
+    TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    if [[ -z "$TOPLEVEL" ]]; then
+        echo "run-phase5-record.sh: warning: cannot resolve git toplevel; skipping record (non-fatal)" >&2
+        exit 0
+    fi
+    NOTES_PATH="$TOPLEVEL/WORKTREE_NOTES.md"
+fi
+
+if [[ -n "$INPUT_FILE" ]]; then
+    DISPATCH_OUTPUT="$(cat -- "$INPUT_FILE")"
+else
+    DISPATCH_OUTPUT="$(cat)"
+fi
 
 if [[ "$VERDICT" == "bulk-sub-of" ]]; then
     if [[ -z "$MANIFEST" ]]; then

@@ -18,7 +18,7 @@ Non-Node callers go through `bin/workflow-plans-dir` (Bash bridge).
 
 At the start of Procedure, before the first plans-dir tool call, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` as one bare command and read its stdout — an absolute path.
 
-Never assign that command to a variable and echo it back: the bare command already prints the answer.
+Never assign that command to a variable and echo it back: the bare command already prints the answer, and each Bash call has fresh shell state anyway, so the consumer is you, not the shell.
 
 Substitute the printed path for every `<PLANS_DIR>` placeholder in the SKILL.md. Resolve once per invocation — reuse across all subsequent steps.
 
@@ -29,7 +29,7 @@ Substitute the printed path for every `<PLANS_DIR>` placeholder in the SKILL.md.
 
 ## Fallback chain
 
-`bin/workflow-plans-dir` owns the whole chain — `WORKFLOW_PLANS_DIR` when set, else `$HOME/.workflow-plans`. Callers must not restate it.
+`bin/workflow-plans-dir` owns the whole chain — the JS resolver (honours `.env` and exported overrides) falling back to the exported `WORKFLOW_PLANS_DIR`, else `$HOME/.workflow-plans`. Callers must not restate it.
 
 Never wrap the call in a caller-side `||` fallback: it duplicates the bridge's own contract and forces the prohibited capture-then-echo form.
 

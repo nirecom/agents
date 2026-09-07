@@ -16,7 +16,7 @@ because the user is approving the merge of a specific PR, not an abstract diff.
 
 ### RUN_TL4 gate (precedes all modes)
 
-Resolve TL4 verification readiness first with the sanctioned reader `confirm-off RUN_TL4 off` via the inline command: `OUT=$(bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_TL4 off) || true`.
+Resolve TL4 verification readiness first with the sanctioned reader `confirm-off RUN_TL4 off` issued as one standalone call: `bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_TL4 off`. Read the verdict from its stdout; treat a non-zero exit as `ERROR`.
 
 - `OFF` (RUN_TL4 off — the default; unset counts as off) → TL4 verification is not enabled; do not raise any `AskUserQuestion`; run `check-verification-gate.sh` once as a classifier only and log each matched category to `WORKTREE_NOTES.md ## Unverified Categories` with the distinct annotation `skipped: RUN_TL4=off (TL4 verification not enabled)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below.
 - In this off path, if the classifier exits 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace (skipping the log entry); then proceed to Protocol. This keeps the off path total across every classifier exit — no ask can ever occur when RUN_TL4=off.

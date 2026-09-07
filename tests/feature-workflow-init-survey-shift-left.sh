@@ -1,23 +1,9 @@
 #!/usr/bin/env bash
 # Tests: agents/survey-code.md, agents/survey-history.md, bin/workflow/lib/workflow-init/phases/write-context.js, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: workflow, init, routing, clarify-intent, planning, scope:issue-specific
-# Test suite for "shift survey-code/survey-history left into workflow-init" (Issue #327).
-#
-# PRE-IMPLEMENTATION: This test file is written BEFORE source code changes land.
-# It is EXPECTED to FAIL until the SKILL.md / agent updates are implemented.
-# All checks are static document grep checks — no process spawning, no network.
-#
-# Files under test:
-#   - skills/workflow-init/SKILL.md       (gains context.md writing + parallel surveys)
-#   - bin/workflow/lib/workflow-init/phases/write-context.js
-#                                         (context.md section schema — moved out of
-#                                          SKILL.md prose by the workflow-init driver rewrite)
-#   - skills/survey-code/SKILL.md         (input precedence: intent.md preferred, context.md fallback)
-#   - skills/survey-history/SKILL.md      (input precedence + keyword-only DEGRADED MODE)
-#   - skills/clarify-intent/SKILL.md      (consumes survey artifacts; emits NOT_NEEDED sentinel)
-#   - agents/survey-history.md            (agent file aligned with new SKILL inputs)
-#   - agents/survey-code.md               (new agent file)
-#
+# Static document grep suite for "shift survey-code/survey-history left into
+# workflow-init" (Issue #327) — no process spawning, no network. The files under
+# test are the ones listed on the `# Tests:` line above.
 set -uo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -115,7 +101,22 @@ assert_file_contains "A1" "WI mentions context.md artifact"                 "$WI
 assert_file_contains "A2" "context.md schema emits ## Session metadata (write-context.js)" "$WC_PHASE" "## Session metadata"
 assert_file_contains "A3" "context.md schema emits ## Keywords (write-context.js)"         "$WC_PHASE" "## Keywords"
 assert_file_contains "A4" "WI handles sentinel stripping"                   "$WI_SKILL" "sentinel"
-assert_file_contains "A5a" "WI launches Agent subagent"                     "$WI_SKILL" "Agent"
+# A5a: the Agent-dispatch text moved out of WI Path A (A3a/A3b) into the shared
+# SSOT procedure skills/_shared/complexity-and-outline-skip.md. The contract
+# protected here is unchanged: WI must point at that shared file, and the shared
+# file must still carry the Agent subagent dispatch.
+SHARED_SKIP="$REPO_ROOT/skills/_shared/complexity-and-outline-skip.md"
+if [ ! -f "$WI_SKILL" ]; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — file missing: $WI_SKILL"
+elif [ ! -f "$SHARED_SKIP" ]; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — file missing: $SHARED_SKIP"
+elif ! run_with_timeout grep -qF -- "skills/_shared/complexity-and-outline-skip.md" "$WI_SKILL"; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — WI does not reference 'skills/_shared/complexity-and-outline-skip.md'"
+elif ! run_with_timeout grep -qF -- "Agent" "$SHARED_SKIP"; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — shared procedure does not mention 'Agent'"
+else
+    pass "A5a. WI launches Agent subagent (via shared procedure)"
+fi
 assert_file_contains "A5b" "WI references survey-code subagent"             "$WI_SKILL" "survey-code"
 assert_file_contains "A6" "WI emits WORKFLOW_SURVEY_AGENT_FAILED sentinel"  "$WI_SKILL" "WORKFLOW_SURVEY_AGENT_FAILED"
 assert_file_contains "A7" "WI subagent guard against make-outline-plan"     "$WI_SKILL" "Do NOT invoke make-outline-plan"
@@ -202,7 +203,16 @@ SHARED_VALID="$REPO_ROOT/skills/_shared/survey-artifact-valid.md"
 # F1-F3: shared contract is the SSOT
 assert_file_exists       "F1" "Shared validity contract exists"                       "$SHARED_VALID"
 assert_file_contains     "F2" "Shared contract defines Verified Claims requirement"   "$SHARED_VALID" "## Verified Claims"
-assert_file_contains     "F3" "Shared contract gives reference Bash check"            "$SHARED_VALID" "artifact_valid"
+# F3: reference check is prose now (rules/prompt.md §1.6), not an artifact_valid() block.
+if [ ! -f "$SHARED_VALID" ]; then
+    fail "F3. Shared contract gives reference check — file missing: $SHARED_VALID"
+elif ! run_with_timeout grep -qF -- "## Reference check" "$SHARED_VALID"; then
+    fail "F3. Shared contract gives reference check — not found: '## Reference check'"
+elif ! run_with_timeout grep -qF -- 'grep -qF "## Verified Claims"' "$SHARED_VALID"; then
+    fail "F3. Shared contract gives reference check — not found: 'grep -qF \"## Verified Claims\"'"
+else
+    pass "F3. Shared contract gives reference check"
+fi
 
 # F4-F5: Bug B — survey-code SKILL.md Rules section
 assert_file_not_contains "F4" "SC SKILL.md no longer contains absolute Read-only line" \

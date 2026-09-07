@@ -20,7 +20,7 @@ Usage: `/issue-reconcile`
 
 ## Step 1: pre-resolve
 
-Resolve in main: `OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')`, `HISTORY_MD_PATH` (absolute path to `docs/history.md`), `HISTORY_DIR_PATH` (absolute path to `docs/history/` directory).
+Resolve in main: `<OWNER_REPO>` — read it from the stdout of the standalone call `gh repo view --json owner,name --jq '.owner.login + "/" + .name'` — plus `<HISTORY_MD_PATH>` (absolute path to `docs/history.md`) and `<HISTORY_DIR_PATH>` (absolute path to `docs/history/`).
 
 ## Step 2: scan via worker
 
@@ -39,26 +39,7 @@ Ask whether to **append**, **skip**, or **stop**.
 
 On "append":
 
-```bash
-# Fetch current docs/history.md into a staging file, append via --target,
-# validate, then PUT to GitHub via the Contents API. The ISSUE_CLOSE_SKILL=1
-# env-var bypass was removed in #672.
-STAGING_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"
-STAGE="$STAGING_DIR/reconcile-${NUM}-history.md"
-OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')
-DEF=$(gh api "repos/$OWNER_REPO" --jq '.default_branch')
-gh api "repos/$OWNER_REPO/contents/docs/history.md?ref=$DEF" \
-    | jq -r '.content' | tr -d '\r\n' | base64 -d > "$STAGE"
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM" --target "$STAGE" --allow-backdate
-bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
-    --owner "${OWNER_REPO%%/*}" --repo "${OWNER_REPO#*/}" \
-    --path docs/history.md --file "$STAGE" \
-    --message "docs(history): record issue #$NUM" --branch "$DEF"
-rm -f "$STAGE"
-```
-
-`--allow-backdate` is mandatory here: every reconcile entry is older than the
-stream tail, and `doc-append` rejects that by default.
+Run one standalone call per issue: `bash "$AGENTS_CONFIG_DIR/skills/issue-reconcile/scripts/append-one.sh" "<NUM>"`. It stages the current `docs/history.md`, appends the entry with `--allow-backdate`, and PUTs the result back through the Contents API.
 
 The script is internally idempotent — running it on `history-only` does
 nothing harmful — but skip those in step 2 anyway to avoid unnecessary
@@ -88,7 +69,8 @@ ISSUE_CLOSE_SKILL=1 gh issue comment "$NUM" \
 ## Step 4: optional persistence
 
 Record the last reconcile timestamp at
-`$(git rev-parse --git-common-dir)/info/issue-reconcile.last`. The skill is
+`<git-common-dir>/info/issue-reconcile.last`, where `<git-common-dir>` is what
+`git rev-parse --git-common-dir` prints. The skill is
 otherwise stateless — every run is a fresh scan.
 
 ## End

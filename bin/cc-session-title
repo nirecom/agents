@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // bin/cc-session-title — VS Code session title CLI
 // Subcommands:
-//   set-issue <cwd> <plansDir>      → writeSetIssue
-//   add-pr <cwd> <prNumber>         → writeAddPr
-//   mark-complete <cwd>             → writeMarkComplete
+//   set-issue [cwd] <plansDir>      → writeSetIssue
+//   add-pr [cwd] <prNumber>         → writeAddPr
+//   mark-complete [cwd]             → writeMarkComplete
+//
+// <cwd> is optional and defaults to process.cwd(): the callers are prompt
+// procedures, and requiring it forced every one of them to issue `"$(pwd)"` —
+// a command substitution the bash-guard denies (#2132).
 //
 // Session ID is resolved via the shared resolveSessionId() (hooks/workflow-state/
 // session-id.js) — single source of truth for the resolution chain, which reads
@@ -33,9 +37,13 @@ try {
 
   if (!subcmd) process.exit(0);
 
+  // One optional leading <cwd>: two tokens mean the caller passed it, one means
+  // it omitted it and the process CWD is already the directory it meant.
+  const withCwd = (a) => (a.length >= 2 ? [a[0], a[1]] : [process.cwd(), a[0]]);
+
   switch (subcmd) {
     case "set-issue": {
-      const [cwd, plansDir] = args;
+      const [cwd, plansDir] = withCwd(args);
       if (!cwd || !plansDir) process.exit(0);
       const sessionId = resolveSessionId();
       if (sessionId) {
@@ -44,7 +52,7 @@ try {
       break;
     }
     case "add-pr": {
-      const [cwd, prNumber] = args;
+      const [cwd, prNumber] = withCwd(args);
       if (!cwd || !prNumber) process.exit(0);
       const sessionId = resolveSessionId();
       if (sessionId) {
@@ -53,7 +61,7 @@ try {
       break;
     }
     case "mark-complete": {
-      const [cwd] = args;
+      const cwd = args[0] || process.cwd();
       if (!cwd) process.exit(0);
       const sessionId = resolveSessionId();
       if (sessionId) {

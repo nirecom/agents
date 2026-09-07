@@ -27,7 +27,8 @@ MR-1. Get the migration target path from the user.
      - "No, re-enter the correct path" → re-collect `REPO_PATH`, repeat MR-1
 
 MR-2. Preview + capture the snapshot.
-   - Run: `eval "$(bash "$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh" "$REPO_PATH")"` — runs the dry-run, mirrors it to stderr, and exports `MIGRATE_ACK_UP_TO_ISSUE_N` + `MIGRATE_ACK_SELF_COUNT_AT_ACK`.
+   - Run `bash "$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh" "<REPO_PATH>"` as one standalone call — it runs the dry-run, mirrors it to stderr, and prints `export NAME=value` lines on stdout for `MIGRATE_ACK_UP_TO_ISSUE_N`, `MIGRATE_ACK_SELF_COUNT_AT_ACK` and `MIGRATE_SELF_REPO_DETECTED`.
+   - Read those values from stdout and substitute them literally wherever the steps below name them.
    - Inspect `MIGRATE_SELF_REPO_DETECTED`:
      - `=1` → **AskUserQuestion**: "WARNING: target (`<REPO_PATH>`) is the agents repo itself. Proceed ONLY for an intentional agents-repo Phase 3 self-migration."
        - "Proceed as agents-repo Phase 3" → MR-3

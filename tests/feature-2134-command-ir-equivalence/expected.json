@@ -1,0 +1,3066 @@
+{
+  "a01-single": {
+    "argv": [
+      "status"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git status",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "status"
+        ],
+        "argvRaw": [
+          "status"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git status",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "a02-empty-string": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": false,
+    "rawText": "",
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "a03-whitespace-only": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": false,
+    "rawText": "   ",
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "a04-non-string-null": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": false,
+    "rawText": null,
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "a05-non-string-number": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": false,
+    "rawText": 42,
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "a06-non-string-object": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": false,
+    "rawText": {
+      "rawText": "git status"
+    },
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "b01-and": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git merge && git push",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "push"
+        ],
+        "argvRaw": [
+          "push"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git push",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&"
+    ]
+  },
+  "b02-or": {
+    "argv": [],
+    "cmd0": "a",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "a || b",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "a",
+        "cmd0Raw": "a",
+        "kind": "simple",
+        "rawText": "a",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "b",
+        "cmd0Raw": "b",
+        "kind": "simple",
+        "rawText": "b",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "||"
+    ]
+  },
+  "b03-semicolon": {
+    "argv": [
+      "stash"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git stash; git pull",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "stash"
+        ],
+        "argvRaw": [
+          "stash"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git stash",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "pull"
+        ],
+        "argvRaw": [
+          "pull"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git pull",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";"
+    ]
+  },
+  "b04-pipe": {
+    "argv": [],
+    "cmd0": "cmd",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "cmd | tee file",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cmd",
+        "cmd0Raw": "cmd",
+        "kind": "simple",
+        "rawText": "cmd",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "file"
+        ],
+        "argvRaw": [
+          "file"
+        ],
+        "cmd0": "tee",
+        "cmd0Raw": "tee",
+        "kind": "simple",
+        "rawText": "tee file",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "|"
+    ]
+  },
+  "b05-trailing-amp": {
+    "argv": [
+      "pull"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git pull &",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "pull"
+        ],
+        "argvRaw": [
+          "pull"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git pull",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&"
+    ]
+  },
+  "b06-leading-amp": {
+    "argv": [
+      "status"
+    ],
+    "cmd0": "git.exe",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "& git.exe status",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "status"
+        ],
+        "argvRaw": [
+          "status"
+        ],
+        "cmd0": "git.exe",
+        "cmd0Raw": "git.exe",
+        "kind": "simple",
+        "rawText": "git.exe status",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&"
+    ]
+  },
+  "b07-leading-semicolon": {
+    "argv": [
+      "-rf",
+      "/"
+    ],
+    "cmd0": "rm",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "; rm -rf /",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "-rf",
+          "/"
+        ],
+        "argvRaw": [
+          "-rf",
+          "/"
+        ],
+        "cmd0": "rm",
+        "cmd0Raw": "rm",
+        "kind": "simple",
+        "rawText": "rm -rf /",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";"
+    ]
+  },
+  "b08-trailing-and": {
+    "argv": [
+      "pull"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git pull &&",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "pull"
+        ],
+        "argvRaw": [
+          "pull"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git pull",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&"
+    ]
+  },
+  "b09-multi-separator": {
+    "argv": [],
+    "cmd0": "a",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "a && b; c",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "a",
+        "cmd0Raw": "a",
+        "kind": "simple",
+        "rawText": "a",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "b",
+        "cmd0Raw": "b",
+        "kind": "simple",
+        "rawText": "b",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "c",
+        "cmd0Raw": "c",
+        "kind": "simple",
+        "rawText": "c",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&",
+      ";"
+    ]
+  },
+  "c01-subshell": {
+    "argv": [
+      "x"
+    ],
+    "cmd0": "cd",
+    "kind": "subshell",
+    "parseFailure": false,
+    "rawText": "(cd x && ls)",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "x"
+        ],
+        "argvRaw": [
+          "x"
+        ],
+        "cmd0": "cd",
+        "cmd0Raw": "cd",
+        "kind": "simple",
+        "rawText": "cd x",
+        "redirects": [],
+        "sub": true
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "ls",
+        "cmd0Raw": "ls",
+        "kind": "simple",
+        "rawText": "ls",
+        "redirects": [],
+        "sub": true
+      }
+    ],
+    "separators": [
+      "(",
+      "&&",
+      ")"
+    ]
+  },
+  "c02-procsub-in": {
+    "argv": [
+      "stash"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git stash <(cat /etc/passwd)",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": ""
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "stash"
+        ],
+        "argvRaw": [
+          "stash"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git stash <",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": ""
+          }
+        ]
+      },
+      {
+        "argv": [
+          "/etc/passwd"
+        ],
+        "argvRaw": [
+          "/etc/passwd"
+        ],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat /etc/passwd",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "(",
+      ")"
+    ]
+  },
+  "c03-procsub-out": {
+    "argv": [],
+    "cmd0": "tee",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "tee >(cat) < in.txt",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": ""
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "tee",
+        "cmd0Raw": "tee",
+        "kind": "simple",
+        "rawText": "tee >",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": ""
+          }
+        ]
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "",
+        "cmd0Raw": "",
+        "kind": "simple",
+        "rawText": "< in.txt",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "in.txt"
+          }
+        ]
+      }
+    ],
+    "separators": [
+      "(",
+      ")"
+    ]
+  },
+  "c04-brace-group": {
+    "argv": [
+      "echo",
+      "a"
+    ],
+    "cmd0": "{",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "{ echo a; echo b; }",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "echo",
+          "a"
+        ],
+        "argvRaw": [
+          "echo",
+          "a"
+        ],
+        "cmd0": "{",
+        "cmd0Raw": "{",
+        "kind": "simple",
+        "rawText": "{ echo a",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "b"
+        ],
+        "argvRaw": [
+          "b"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo b",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "}",
+        "cmd0Raw": "}",
+        "kind": "simple",
+        "rawText": "}",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";",
+      ";"
+    ]
+  },
+  "d01-out": {
+    "argv": [
+      "hi"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo hi > out.txt",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "out.txt"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "hi"
+        ],
+        "argvRaw": [
+          "hi"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo hi > out.txt",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "out.txt"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d02-append": {
+    "argv": [
+      "hi"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo hi >> out.txt",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">>",
+        "target": "out.txt"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "hi"
+        ],
+        "argvRaw": [
+          "hi"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo hi >> out.txt",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">>",
+            "target": "out.txt"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d03-stderr": {
+    "argv": [],
+    "cmd0": "make",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "make 2> err.log",
+    "redirects": [
+      {
+        "fd": "2",
+        "op": "2>",
+        "target": "err.log"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "make",
+        "cmd0Raw": "make",
+        "kind": "simple",
+        "rawText": "make 2> err.log",
+        "redirects": [
+          {
+            "fd": "2",
+            "op": "2>",
+            "target": "err.log"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d04-amp-out": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git merge &> /tmp/log",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "",
+        "cmd0Raw": "",
+        "kind": "simple",
+        "rawText": "> /tmp/log",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "/tmp/log"
+          }
+        ]
+      }
+    ],
+    "separators": [
+      "&"
+    ]
+  },
+  "d05-clobber": {
+    "argv": [
+      "x"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo x >| out.txt",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">|",
+        "target": "out.txt"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "x"
+        ],
+        "argvRaw": [
+          "x"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo x >| out.txt",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">|",
+            "target": "out.txt"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d06-fd-dup-2to1": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git merge 2>&1",
+    "redirects": [
+      {
+        "fd": "2",
+        "op": "2>",
+        "target": "&1"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge 2>&1",
+        "redirects": [
+          {
+            "fd": "2",
+            "op": "2>",
+            "target": "&1"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d07-fd-dup-1to2": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git merge 1>&2",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "1>",
+        "target": "&2"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge 1>&2",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "1>",
+            "target": "&2"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d08-fd-close": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git merge 2>&-",
+    "redirects": [
+      {
+        "fd": "2",
+        "op": "2>",
+        "target": "&-"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge 2>&-",
+        "redirects": [
+          {
+            "fd": "2",
+            "op": "2>",
+            "target": "&-"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d09-in": {
+    "argv": [],
+    "cmd0": "sort",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "sort < in.txt",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "in.txt"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "sort",
+        "cmd0Raw": "sort",
+        "kind": "simple",
+        "rawText": "sort < in.txt",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "in.txt"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d10-herestring": {
+    "argv": [
+      "x"
+    ],
+    "cmd0": "grep",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "grep x <<< \"abc\"",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<<<",
+        "target": "abc"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "x"
+        ],
+        "argvRaw": [
+          "x"
+        ],
+        "cmd0": "grep",
+        "cmd0Raw": "grep",
+        "kind": "simple",
+        "rawText": "grep x <<< \"abc\"",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<<<",
+            "target": "abc"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d11-attached-target": {
+    "argv": [
+      "hi"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo hi >~/x",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "~/x"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "hi"
+        ],
+        "argvRaw": [
+          "hi"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo hi >~/x",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "~/x"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d12-quoted-target": {
+    "argv": [
+      "hi"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo hi > \"my file.txt\"",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "my file.txt"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "hi"
+        ],
+        "argvRaw": [
+          "hi"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo hi > \"my file.txt\"",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "my file.txt"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d13-multi-redirect": {
+    "argv": [
+      "status"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git status 2>&1 1>&2 >/dev/null",
+    "redirects": [
+      {
+        "fd": "2",
+        "op": "2>",
+        "target": "&1"
+      },
+      {
+        "fd": "1",
+        "op": "1>",
+        "target": "&2"
+      },
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "/dev/null"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "status"
+        ],
+        "argvRaw": [
+          "status"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git status 2>&1 1>&2 >/dev/null",
+        "redirects": [
+          {
+            "fd": "2",
+            "op": "2>",
+            "target": "&1"
+          },
+          {
+            "fd": "1",
+            "op": "1>",
+            "target": "&2"
+          },
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "/dev/null"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "d14-adjacent-fd-dups": {
+    "argv": [
+      "merge",
+      "main"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git merge main 2>&1 1>&2",
+    "redirects": [
+      {
+        "fd": "2",
+        "op": "2>",
+        "target": "&1"
+      },
+      {
+        "fd": "1",
+        "op": "1>",
+        "target": "&2"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "merge",
+          "main"
+        ],
+        "argvRaw": [
+          "merge",
+          "main"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge main 2>&1 1>&2",
+        "redirects": [
+          {
+            "fd": "2",
+            "op": "2>",
+            "target": "&1"
+          },
+          {
+            "fd": "1",
+            "op": "1>",
+            "target": "&2"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "e01-single-quote": {
+    "argv": [
+      "commit",
+      "-m",
+      "hello world"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git commit -m 'hello world'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "commit",
+          "-m",
+          "hello world"
+        ],
+        "argvRaw": [
+          "commit",
+          "-m",
+          "'hello world'"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git commit -m 'hello world'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "e02-double-quote": {
+    "argv": [
+      "commit",
+      "-m",
+      "hello world"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git commit -m \"hello world\"",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "commit",
+          "-m",
+          "hello world"
+        ],
+        "argvRaw": [
+          "commit",
+          "-m",
+          "\"hello world\""
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git commit -m \"hello world\"",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "e03-ansic": {
+    "argv": [
+      "linen"
+    ],
+    "cmd0": "printf",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "printf $'line\\n'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "linen"
+        ],
+        "argvRaw": [
+          "$'line\\n'"
+        ],
+        "cmd0": "printf",
+        "cmd0Raw": "printf",
+        "kind": "simple",
+        "rawText": "printf $'line\\n'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "e04-ansic-escaped-quote": {
+    "argv": [],
+    "cmd0": "it's fine",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "$'it\\'s fine'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "it's fine",
+        "cmd0Raw": "$'it\\'s fine'",
+        "kind": "simple",
+        "rawText": "$'it\\'s fine'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "e05-unclosed-sq": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": true,
+    "rawText": "git merge 'unclosed",
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "e06-unclosed-dq": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": true,
+    "rawText": "git merge \"unclosed",
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "e07-unclosed-ansic": {
+    "argv": [],
+    "cmd0": "",
+    "kind": "empty",
+    "parseFailure": true,
+    "rawText": "$'unclosed string",
+    "redirects": [],
+    "segments": [],
+    "separators": []
+  },
+  "f01-escaped-and": {
+    "argv": [
+      "a",
+      "\\"
+    ],
+    "cmd0": "echo",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "echo a \\&\\& b",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "a",
+          "\\"
+        ],
+        "argvRaw": [
+          "a",
+          "\\"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo a \\",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "\\",
+        "cmd0Raw": "\\",
+        "kind": "simple",
+        "rawText": "\\",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "b",
+        "cmd0Raw": "b",
+        "kind": "simple",
+        "rawText": "b",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&",
+      "&"
+    ]
+  },
+  "f02-sq-and": {
+    "argv": [
+      "a && b"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo 'a && b'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "a && b"
+        ],
+        "argvRaw": [
+          "'a && b'"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo 'a && b'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "f03-dq-and": {
+    "argv": [
+      "a && b"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo \"a && b\"",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "a && b"
+        ],
+        "argvRaw": [
+          "\"a && b\""
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo \"a && b\"",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "f04-find-exec": {
+    "argv": [
+      ".",
+      "-name",
+      "*.tmp",
+      "-exec",
+      "rm",
+      "{}",
+      "\\"
+    ],
+    "cmd0": "find",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "find . -name '*.tmp' -exec rm {} \\;",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          ".",
+          "-name",
+          "*.tmp",
+          "-exec",
+          "rm",
+          "{}",
+          "\\"
+        ],
+        "argvRaw": [
+          ".",
+          "-name",
+          "'*.tmp'",
+          "-exec",
+          "rm",
+          "{}",
+          "\\"
+        ],
+        "cmd0": "find",
+        "cmd0Raw": "find",
+        "kind": "simple",
+        "rawText": "find . -name '*.tmp' -exec rm {} \\",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";"
+    ]
+  },
+  "f05-sq-substitution": {
+    "argv": [
+      "commit",
+      "-m",
+      "$(text)"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git commit -m '$(text)'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "commit",
+          "-m",
+          "$(text)"
+        ],
+        "argvRaw": [
+          "commit",
+          "-m",
+          "'$(text)'"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git commit -m '$(text)'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "f06-sq-procsub": {
+    "argv": [
+      "commit",
+      "-m"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git commit -m '<(text)'",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "(text)"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "commit",
+          "-m"
+        ],
+        "argvRaw": [
+          "commit",
+          "-m"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git commit -m '<(text)'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "(text)"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g01-cat-eof": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<'EOF'\nbody\nEOF",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<'EOF'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g02-python": {
+    "argv": [],
+    "cmd0": "python3",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "python3 <<'PY'\nprint(1)\nPY",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<PY"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "python3",
+        "cmd0Raw": "python3",
+        "kind": "simple",
+        "rawText": "python3 <<'PY'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<PY"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g03-node": {
+    "argv": [],
+    "cmd0": "node",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "node <<'JS'\nconsole.log(1)\nJS",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<JS"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "node",
+        "cmd0Raw": "node",
+        "kind": "simple",
+        "rawText": "node <<'JS'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<JS"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g04-gh-body-file": {
+    "argv": [
+      "issue",
+      "create",
+      "--title",
+      "x",
+      "--body-file",
+      "-"
+    ],
+    "cmd0": "gh",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "gh issue create --title x --body-file - <<'EOF'\nbody line\nEOF",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "issue",
+          "create",
+          "--title",
+          "x",
+          "--body-file",
+          "-"
+        ],
+        "argvRaw": [
+          "issue",
+          "create",
+          "--title",
+          "x",
+          "--body-file",
+          "-"
+        ],
+        "cmd0": "gh",
+        "cmd0Raw": "gh",
+        "kind": "simple",
+        "rawText": "gh issue create --title x --body-file - <<'EOF'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g05-body-operators": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<'EOF'\na && b; c > d 'e'\nEOF",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<'EOF'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g06-dash-tag": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<-EOT\n\tbody\nEOT",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<-EOT"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<-EOT",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<-EOT"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g07-punctuated-tag": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<'MY-TAG.v1'\nbody\nMY-TAG.v1",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<MY-TAG.v1"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<'MY-TAG.v1'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<MY-TAG.v1"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g08-unquoted-tag": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<EOF\nbody\nEOF",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<EOF",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g09-heredoc-to-file": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat > out.txt <<'EOF'\nx\nEOF",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "out.txt"
+      },
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat > out.txt <<'EOF'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "out.txt"
+          },
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "g10-opener-only": {
+    "argv": [],
+    "cmd0": "cat",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "cat <<'EOF'",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<EOF"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat <<'EOF'",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<EOF"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "h01-assign-subst": {
+    "argv": [],
+    "cmd0": "VAR=$",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "VAR=$(echo x) && echo $VAR",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "VAR=$",
+        "cmd0Raw": "VAR=$",
+        "kind": "simple",
+        "rawText": "VAR=$",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "x"
+        ],
+        "argvRaw": [
+          "x"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo x",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "$VAR"
+        ],
+        "argvRaw": [
+          "$VAR"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $VAR",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "(",
+      ")",
+      "&&"
+    ]
+  },
+  "h02-nested-subst": {
+    "argv": [
+      "$"
+    ],
+    "cmd0": "echo",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "echo $( echo $(date) )",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "$"
+        ],
+        "argvRaw": [
+          "$"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "$"
+        ],
+        "argvRaw": [
+          "$"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "date",
+        "cmd0Raw": "date",
+        "kind": "simple",
+        "rawText": "date",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "(",
+      "(",
+      ")",
+      ")"
+    ]
+  },
+  "h03-backtick": {
+    "argv": [
+      "`date`"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo `date`",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "`date`"
+        ],
+        "argvRaw": [
+          "`date`"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo `date`",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "h04-dq-pwd": {
+    "argv": [
+      "$(pwd)/x"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo \"$(pwd)/x\"",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "$(pwd)/x"
+        ],
+        "argvRaw": [
+          "\"$(pwd)/x\""
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo \"$(pwd)/x\"",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "h05-bare-subst": {
+    "argv": [
+      "$"
+    ],
+    "cmd0": "cmd",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "cmd $(subshell)",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "$"
+        ],
+        "argvRaw": [
+          "$"
+        ],
+        "cmd0": "cmd",
+        "cmd0Raw": "cmd",
+        "kind": "simple",
+        "rawText": "cmd $",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "subshell",
+        "cmd0Raw": "subshell",
+        "kind": "simple",
+        "rawText": "subshell",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "(",
+      ")"
+    ]
+  },
+  "h06-arith": {
+    "argv": [
+      "$"
+    ],
+    "cmd0": "echo",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "echo $((1+2))",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "$"
+        ],
+        "argvRaw": [
+          "$"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "1+2",
+        "cmd0Raw": "1+2",
+        "kind": "simple",
+        "rawText": "1+2",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "(",
+      "(",
+      ")",
+      ")"
+    ]
+  },
+  "h07-param": {
+    "argv": [
+      "${HOME}"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo ${HOME}",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "${HOME}"
+        ],
+        "argvRaw": [
+          "${HOME}"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo ${HOME}",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "i01-env-prefix": {
+    "argv": [
+      "B=2",
+      "bash",
+      "x.sh"
+    ],
+    "cmd0": "A=1",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "A=1 B=2 bash x.sh",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "B=2",
+          "bash",
+          "x.sh"
+        ],
+        "argvRaw": [
+          "B=2",
+          "bash",
+          "x.sh"
+        ],
+        "cmd0": "A=1",
+        "cmd0Raw": "A=1",
+        "kind": "simple",
+        "rawText": "A=1 B=2 bash x.sh",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "i02-env-prefix-quoted": {
+    "argv": [
+      "bash",
+      "tests/x.sh"
+    ],
+    "cmd0": "A=1",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "A=1 bash \"tests/x.sh\"",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "bash",
+          "tests/x.sh"
+        ],
+        "argvRaw": [
+          "bash",
+          "\"tests/x.sh\""
+        ],
+        "cmd0": "A=1",
+        "cmd0Raw": "A=1",
+        "kind": "simple",
+        "rawText": "A=1 bash \"tests/x.sh\"",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "i03-for-loop": {
+    "argv": [
+      "f",
+      "in",
+      "x"
+    ],
+    "cmd0": "for",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "for f in x; do bash tests/x.sh; done",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "f",
+          "in",
+          "x"
+        ],
+        "argvRaw": [
+          "f",
+          "in",
+          "x"
+        ],
+        "cmd0": "for",
+        "cmd0Raw": "for",
+        "kind": "simple",
+        "rawText": "for f in x",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "bash",
+          "tests/x.sh"
+        ],
+        "argvRaw": [
+          "bash",
+          "tests/x.sh"
+        ],
+        "cmd0": "do",
+        "cmd0Raw": "do",
+        "kind": "simple",
+        "rawText": "do bash tests/x.sh",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "done",
+        "cmd0Raw": "done",
+        "kind": "simple",
+        "rawText": "done",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";",
+      ";"
+    ]
+  },
+  "i04-for-loop-env": {
+    "argv": [
+      "f",
+      "in",
+      "x"
+    ],
+    "cmd0": "for",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "for f in x; do A=1 bash tests/x.sh; done",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "f",
+          "in",
+          "x"
+        ],
+        "argvRaw": [
+          "f",
+          "in",
+          "x"
+        ],
+        "cmd0": "for",
+        "cmd0Raw": "for",
+        "kind": "simple",
+        "rawText": "for f in x",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "A=1",
+          "bash",
+          "tests/x.sh"
+        ],
+        "argvRaw": [
+          "A=1",
+          "bash",
+          "tests/x.sh"
+        ],
+        "cmd0": "do",
+        "cmd0Raw": "do",
+        "kind": "simple",
+        "rawText": "do A=1 bash tests/x.sh",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "done",
+        "cmd0Raw": "done",
+        "kind": "simple",
+        "rawText": "done",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";",
+      ";"
+    ]
+  },
+  "i05-while": {
+    "argv": [
+      "A=1",
+      "node",
+      "tests/y.js"
+    ],
+    "cmd0": "while",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "while A=1 node tests/y.js; do echo hi; done",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "A=1",
+          "node",
+          "tests/y.js"
+        ],
+        "argvRaw": [
+          "A=1",
+          "node",
+          "tests/y.js"
+        ],
+        "cmd0": "while",
+        "cmd0Raw": "while",
+        "kind": "simple",
+        "rawText": "while A=1 node tests/y.js",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "echo",
+          "hi"
+        ],
+        "argvRaw": [
+          "echo",
+          "hi"
+        ],
+        "cmd0": "do",
+        "cmd0Raw": "do",
+        "kind": "simple",
+        "rawText": "do echo hi",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "done",
+        "cmd0Raw": "done",
+        "kind": "simple",
+        "rawText": "done",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";",
+      ";"
+    ]
+  },
+  "i06-if": {
+    "argv": [
+      "[",
+      "-f",
+      "x",
+      "]"
+    ],
+    "cmd0": "if",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "if [ -f x ]; then echo y; fi",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "[",
+          "-f",
+          "x",
+          "]"
+        ],
+        "argvRaw": [
+          "[",
+          "-f",
+          "x",
+          "]"
+        ],
+        "cmd0": "if",
+        "cmd0Raw": "if",
+        "kind": "simple",
+        "rawText": "if [ -f x ]",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "echo",
+          "y"
+        ],
+        "argvRaw": [
+          "echo",
+          "y"
+        ],
+        "cmd0": "then",
+        "cmd0Raw": "then",
+        "kind": "simple",
+        "rawText": "then echo y",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "fi",
+        "cmd0Raw": "fi",
+        "kind": "simple",
+        "rawText": "fi",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      ";",
+      ";"
+    ]
+  },
+  "j01-sentinel-dq": {
+    "argv": [],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo \"<<WORKFLOW_MARK_STEP_x>>\"",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": "<",
+        "target": "<WORKFLOW_MARK_STEP_x>>"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo \"<<WORKFLOW_MARK_STEP_x>>\"",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": "<",
+            "target": "<WORKFLOW_MARK_STEP_x>>"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "j02-newline-separated": {
+    "argv": [
+      "rm",
+      "-rf",
+      "x"
+    ],
+    "cmd0": "ls",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "ls\nrm -rf x",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "rm",
+          "-rf",
+          "x"
+        ],
+        "argvRaw": [
+          "rm",
+          "-rf",
+          "x"
+        ],
+        "cmd0": "ls",
+        "cmd0Raw": "ls",
+        "kind": "simple",
+        "rawText": "ls\nrm -rf x",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "j03-newline-interpreter": {
+    "argv": [
+      "stash",
+      "rm",
+      "-rf",
+      "/"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git stash\nrm -rf /",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "stash",
+          "rm",
+          "-rf",
+          "/"
+        ],
+        "argvRaw": [
+          "stash",
+          "rm",
+          "-rf",
+          "/"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git stash\nrm -rf /",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "k01-preserve-spans-on": {
+    "argv": [
+      "$(cat /tmp/tok)"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo $(cat /tmp/tok) > out",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "out"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "$(cat /tmp/tok)"
+        ],
+        "argvRaw": [
+          "$(cat /tmp/tok)"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $(cat /tmp/tok) > out",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "out"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "k02-preserve-spans-off": {
+    "argv": [
+      "$"
+    ],
+    "cmd0": "echo",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "echo $(cat /tmp/tok) > out",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "$"
+        ],
+        "argvRaw": [
+          "$"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "/tmp/tok"
+        ],
+        "argvRaw": [
+          "/tmp/tok"
+        ],
+        "cmd0": "cat",
+        "cmd0Raw": "cat",
+        "kind": "simple",
+        "rawText": "cat /tmp/tok",
+        "redirects": []
+      },
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "",
+        "cmd0Raw": "",
+        "kind": "simple",
+        "rawText": "> out",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "out"
+          }
+        ]
+      }
+    ],
+    "separators": [
+      "(",
+      ")"
+    ]
+  },
+  "k03-preserve-spans-backtick": {
+    "argv": [
+      "`cat f`"
+    ],
+    "cmd0": "echo",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "echo `cat f` > o",
+    "redirects": [
+      {
+        "fd": "1",
+        "op": ">",
+        "target": "o"
+      }
+    ],
+    "segments": [
+      {
+        "argv": [
+          "`cat f`"
+        ],
+        "argvRaw": [
+          "`cat f`"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo `cat f` > o",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "o"
+          }
+        ]
+      }
+    ],
+    "separators": []
+  },
+  "k04-preserve-spans-chain": {
+    "argv": [],
+    "cmd0": "VAR=$(echo x)",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "VAR=$(echo x) && echo $VAR",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [],
+        "argvRaw": [],
+        "cmd0": "VAR=$(echo x)",
+        "cmd0Raw": "VAR=$(echo x)",
+        "kind": "simple",
+        "rawText": "VAR=$(echo x)",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "$VAR"
+        ],
+        "argvRaw": [
+          "$VAR"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo $VAR",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&"
+    ]
+  },
+  "l01-clean-command": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "git merge",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "l02-pipe-tee": {
+    "argv": [
+      "merge"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git merge | tee log.txt",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "merge"
+        ],
+        "argvRaw": [
+          "merge"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git merge",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "log.txt"
+        ],
+        "argvRaw": [
+          "log.txt"
+        ],
+        "cmd0": "tee",
+        "cmd0Raw": "tee",
+        "kind": "simple",
+        "rawText": "tee log.txt",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "|"
+    ]
+  },
+  "l03-bash-c": {
+    "argv": [
+      "-c",
+      "git stash"
+    ],
+    "cmd0": "bash",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "bash -c 'git stash'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "-c",
+          "git stash"
+        ],
+        "argvRaw": [
+          "-c",
+          "'git stash'"
+        ],
+        "cmd0": "bash",
+        "cmd0Raw": "bash",
+        "kind": "simple",
+        "rawText": "bash -c 'git stash'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "l04-chained-bash": {
+    "argv": [
+      "pull"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git pull && bash -c script.sh",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "pull"
+        ],
+        "argvRaw": [
+          "pull"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git pull",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "-c",
+          "script.sh"
+        ],
+        "argvRaw": [
+          "-c",
+          "script.sh"
+        ],
+        "cmd0": "bash",
+        "cmd0Raw": "bash",
+        "kind": "simple",
+        "rawText": "bash -c script.sh",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&"
+    ]
+  },
+  "l05-chained-python": {
+    "argv": [
+      "pull"
+    ],
+    "cmd0": "git",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "git pull && python3 script.py",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "pull"
+        ],
+        "argvRaw": [
+          "pull"
+        ],
+        "cmd0": "git",
+        "cmd0Raw": "git",
+        "kind": "simple",
+        "rawText": "git pull",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "script.py"
+        ],
+        "argvRaw": [
+          "script.py"
+        ],
+        "cmd0": "python3",
+        "cmd0Raw": "python3",
+        "kind": "simple",
+        "rawText": "python3 script.py",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "&&"
+    ]
+  },
+  "l06-xargs-pipe": {
+    "argv": [
+      ".",
+      "-name",
+      "*.tmp"
+    ],
+    "cmd0": "find",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "find . -name '*.tmp' | xargs rm",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          ".",
+          "-name",
+          "*.tmp"
+        ],
+        "argvRaw": [
+          ".",
+          "-name",
+          "'*.tmp'"
+        ],
+        "cmd0": "find",
+        "cmd0Raw": "find",
+        "kind": "simple",
+        "rawText": "find . -name '*.tmp'",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "rm"
+        ],
+        "argvRaw": [
+          "rm"
+        ],
+        "cmd0": "xargs",
+        "cmd0Raw": "xargs",
+        "kind": "simple",
+        "rawText": "xargs rm",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "|"
+    ]
+  },
+  "l07-xargs-pipe-redirect": {
+    "argv": [
+      ".",
+      "-name",
+      "*.tmp"
+    ],
+    "cmd0": "find",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "find . -name '*.tmp' | xargs rm > out.log",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          ".",
+          "-name",
+          "*.tmp"
+        ],
+        "argvRaw": [
+          ".",
+          "-name",
+          "'*.tmp'"
+        ],
+        "cmd0": "find",
+        "cmd0Raw": "find",
+        "kind": "simple",
+        "rawText": "find . -name '*.tmp'",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "rm"
+        ],
+        "argvRaw": [
+          "rm"
+        ],
+        "cmd0": "xargs",
+        "cmd0Raw": "xargs",
+        "kind": "simple",
+        "rawText": "xargs rm > out.log",
+        "redirects": [
+          {
+            "fd": "1",
+            "op": ">",
+            "target": "out.log"
+          }
+        ]
+      }
+    ],
+    "separators": [
+      "|"
+    ]
+  },
+  "l08-allow-rule-form": {
+    "argv": [
+      "-c",
+      "cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on"
+    ],
+    "cmd0": "bash",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "-c",
+          "cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on"
+        ],
+        "argvRaw": [
+          "-c",
+          "'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'"
+        ],
+        "cmd0": "bash",
+        "cmd0Raw": "bash",
+        "kind": "simple",
+        "rawText": "bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "l09-plain-text": {
+    "argv": [
+      "text"
+    ],
+    "cmd0": "normal",
+    "kind": "simple",
+    "parseFailure": false,
+    "rawText": "normal text",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "text"
+        ],
+        "argvRaw": [
+          "text"
+        ],
+        "cmd0": "normal",
+        "cmd0Raw": "normal",
+        "kind": "simple",
+        "rawText": "normal text",
+        "redirects": []
+      }
+    ],
+    "separators": []
+  },
+  "l10-tee-write": {
+    "argv": [
+      "x"
+    ],
+    "cmd0": "echo",
+    "kind": "pipeline",
+    "parseFailure": false,
+    "rawText": "echo x | tee /tmp/out",
+    "redirects": [],
+    "segments": [
+      {
+        "argv": [
+          "x"
+        ],
+        "argvRaw": [
+          "x"
+        ],
+        "cmd0": "echo",
+        "cmd0Raw": "echo",
+        "kind": "simple",
+        "rawText": "echo x",
+        "redirects": []
+      },
+      {
+        "argv": [
+          "/tmp/out"
+        ],
+        "argvRaw": [
+          "/tmp/out"
+        ],
+        "cmd0": "tee",
+        "cmd0Raw": "tee",
+        "kind": "simple",
+        "rawText": "tee /tmp/out",
+        "redirects": []
+      }
+    ],
+    "separators": [
+      "|"
+    ]
+  }
+}

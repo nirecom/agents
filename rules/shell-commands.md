@@ -26,6 +26,9 @@ Place it under the current session's scratchpad directory for that invocation to
 
 Self-check before every Bash tool call: match the `command` string against the literals below.
 
+The table's data rows are generated from `hooks/bash-guard/forbidden-literals.js`, the same set the `bash-guard` PreToolUse hook enforces — so a literal it blocks is always one this document already told you about. Regenerate: `node bin/print-forbidden-literals --markdown-table` (edit the module, never the rows).
+
+<!-- BEGIN GENERATED: forbidden-literals -->
 | Prohibited literal | Form |
 |---|---|
 | `&&` / `;` | command chaining |
@@ -35,6 +38,7 @@ Self-check before every Bash tool call: match the `command` string against the l
 | `<<` | heredoc |
 | `>` / `>>` | redirect |
 | `FOO=1 BAR=2 cmd` | leading environment-variable prefixes |
+<!-- END GENERATED: forbidden-literals -->
 
 Exempt: one standalone command with its own flags and arguments (one `grep`, one `cat`, one `git status`). The target is the compound, not the argument count.
 

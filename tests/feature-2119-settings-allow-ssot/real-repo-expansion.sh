@@ -241,7 +241,9 @@ T32_CASES
 # A hand deletion that clipped the line above the block, took `permissions.deny` with it, or
 # re-serialised the document with its keys reordered satisfies every count in this suite and
 # is invisible in a 244-line diff -- and losing `deny` turns an editing slip into a permission
-# grant. So the whole document except permissions.allow is compared against its own before.
+# grant. So the whole document except permissions.allow is compared against its own before,
+# plus the one PreToolUse entry that registers hooks/bash-guard.js (#2134's deliverable) --
+# excised by exact value, so any OTHER hooks drift still fails the comparison.
 T45_BEFORE="$TMPROOT/t45-before.json"
 T45_BASELINE="unresolved"
 T45_MARKER=""
@@ -302,9 +304,21 @@ t45_compare() { # <delta|deep|keys|perm> -> token
         a = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
       } catch (e) { console.log("UNPARSEABLE:" + e.message); b = null; }
       if (b !== null) {
+        const canon = (v) => Array.isArray(v) ? v.map(canon)
+          : (v && typeof v === "object"
+              ? Object.keys(v).sort().reduce((m, k) => { m[k] = canon(v[k]); return m; }, {})
+              : v);
+        const BASH_GUARD_ENTRY = JSON.stringify(canon({
+          matcher: "Bash",
+          hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/bash-guard.js\"", timeout: 5 }]
+        }));
         const noAllow = (o) => {
           const c = JSON.parse(JSON.stringify(o));
           if (c.permissions) delete c.permissions.allow;
+          const pre = (c.hooks || {}).PreToolUse;
+          if (Array.isArray(pre)) {
+            c.hooks.PreToolUse = pre.filter((e) => JSON.stringify(canon(e)) !== BASH_GUARD_ENTRY);
+          }
           return c;
         };
         const nb = noAllow(b), na = noAllow(a);

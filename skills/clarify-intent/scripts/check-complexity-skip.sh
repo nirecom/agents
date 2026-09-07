@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # check-complexity-skip.sh — outline-skip sentinel dispatch for clarify-intent (#1465)
-# Env: AGENTS_CONFIG_DIR (required), SKIP_MODE (required: auto|judgment)
-# Args: --session <sid> [--so-c1 <true|false>] [--so-c2 <true|false>]
+# Env: AGENTS_CONFIG_DIR (required), SKIP_MODE (auto|judgment; --skip-mode wins)
+# Args: --session <sid> [--skip-mode <auto|judgment>] [--so-c1 <t|f>] [--so-c2 <t|f>]
+# --skip-mode exists so a prompt can issue this without an env prefix (#2132).
 # Stdout:
 #   - If sentinel: first line "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>", final line "SENTINEL_EMITTED"
 #   - No sentinel: only line "NO_SENTINEL"
@@ -9,7 +10,7 @@
 set -uo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
-: "${SKIP_MODE:?SKIP_MODE env var must be set}"
+SKIP_MODE="${SKIP_MODE:-}"
 
 SESSION_ID=""
 SO_C1=""
@@ -17,7 +18,8 @@ SO_C2=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session)  SESSION_ID="${2:?--session requires a value}"; shift 2 ;;
+        --session)    SESSION_ID="${2:?--session requires a value}"; shift 2 ;;
+        --skip-mode)  SKIP_MODE="${2:?--skip-mode requires a value}"; shift 2 ;;
         --so-c1)    SO_C1="${2:?--so-c1 requires a value}"; shift 2 ;;
         --so-c2)    SO_C2="${2:?--so-c2 requires a value}"; shift 2 ;;
         *) echo "[check-complexity-skip] unknown argument: $1" >&2; exit 1 ;;
@@ -28,7 +30,7 @@ done
 
 case "$SKIP_MODE" in
     auto|judgment) ;;
-    *) echo "[check-complexity-skip] SKIP_MODE must be 'auto' or 'judgment', got: $SKIP_MODE" >&2; exit 1 ;;
+    *) echo "[check-complexity-skip] skip mode must be 'auto' or 'judgment', got: '$SKIP_MODE'" >&2; exit 1 ;;
 esac
 
 if [[ "$SKIP_MODE" == "auto" ]]; then

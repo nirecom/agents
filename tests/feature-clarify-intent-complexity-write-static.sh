@@ -1,19 +1,13 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md, bin/workflow/record-complexity-and-skip
+# Tests: skills/clarify-intent/SKILL.md, skills/_shared/complexity-and-outline-skip.md
 # Tags: skill, static, complexity-evaluation, scope:issue-specific
 #
-# Issue #1350/#1427 — clarify-intent invokes the shared record-complexity-and-skip
-# wrapper (which internally records the complexity evaluation) at CI-C1b.
-#
-# After the #1427 refactor, the SKILL.md no longer calls record-complexity-evaluation
-# directly; it calls the wrapper 'record-complexity-and-skip', which owns the
-# record-complexity-evaluation call. The wrapper must be invoked before CI-C1c so the
-# persisted verdict exists for all downstream readers. Regression guards CI-COMP-4/5
-# assert that the WORKFLOW_OUTLINE_NOT_NEEDED sentinel and the skip-verifier subagent
-# launch remain in SKILL.md (agent context), NOT delegated into the shared script.
-#
-# Pre-implementation: assertions are expected to FAIL until the skill is
-# rewritten. The script does not abort on individual assertion failures.
+# Issue #1350/#1427 — clarify-intent's CI-C1b must invoke the record-complexity-and-skip
+# wrapper before the branching logic, and the WORKFLOW_OUTLINE_NOT_NEEDED sentinel plus
+# the skip-verifier subagent launch must stay in agent (prompt) context, never delegated
+# into the wrapper script. CI-C1b may own that procedure inline or delegate it to
+# skills/_shared/complexity-and-outline-skip.md; CI-COMP-0 resolves which file owns it and
+# the remaining checks follow that reference. Assertions do not abort the script.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,18 +28,40 @@ require_file() {
 }
 
 CI_SKILL="$REPO_ROOT/skills/clarify-intent/SKILL.md"
+CI_SHARED_REL="skills/_shared/complexity-and-outline-skip.md"
+CI_SHARED="$REPO_ROOT/$CI_SHARED_REL"
 
-# CI-COMP-1: record-complexity-and-skip appears in SKILL.md in executable command context.
-# After refactor, the SKILL.md calls 'record-complexity-and-skip' (the wrapper) instead of
-# 'record-complexity-evaluation' directly. The wrapper is invoked via bash/bin path.
-echo "=== CI-COMP-1: SKILL.md invokes record-complexity-and-skip (command context) ==="
+# CI-COMP-0: resolve which file owns the CI-C1b procedure. When CI-C1b delegates to the
+# shared file, CI-COMP-1/3/4/5 follow that reference; otherwise they stay on SKILL.md.
+# Losing the reference line without re-inlining the procedure therefore still fails.
+CI_PROC=""
+CI_PROC_LABEL=""
+echo "=== CI-COMP-0: locate the owner of the CI-C1b complexity/outline-skip procedure ==="
 if require_file "$CI_SKILL"; then
-  if ! has_fixed "record-complexity-and-skip" "$CI_SKILL"; then
-    fail "CI-COMP-1. clarify-intent/SKILL.md missing 'record-complexity-and-skip'"
-  elif has_re '(bash|bin/workflow/)[^`]*record-complexity-and-skip' "$CI_SKILL"; then
-    pass "CI-COMP-1. record-complexity-and-skip appears in an executable command context"
+  if has_re "CI-C1b.*$CI_SHARED_REL" "$CI_SKILL"; then
+    if require_file "$CI_SHARED"; then
+      CI_PROC="$CI_SHARED"
+      CI_PROC_LABEL="$CI_SHARED_REL"
+      pass "CI-COMP-0. CI-C1b delegates to $CI_SHARED_REL; checks follow the reference"
+    fi
   else
-    fail "CI-COMP-1. record-complexity-and-skip present but not in bash/bin invocation context"
+    CI_PROC="$CI_SKILL"
+    CI_PROC_LABEL="clarify-intent/SKILL.md"
+    pass "CI-COMP-0. CI-C1b owns the procedure inline; checks target SKILL.md"
+  fi
+fi
+
+# CI-COMP-1: record-complexity-and-skip appears in the procedure owner in executable
+# command context — the wrapper (not record-complexity-evaluation directly) is invoked
+# via a bash/bin path.
+echo "=== CI-COMP-1: procedure owner invokes record-complexity-and-skip (command context) ==="
+if [ -n "$CI_PROC" ]; then
+  if ! has_fixed "record-complexity-and-skip" "$CI_PROC"; then
+    fail "CI-COMP-1. $CI_PROC_LABEL missing 'record-complexity-and-skip'"
+  elif has_re '(bash|bin/workflow/)[^`]*record-complexity-and-skip' "$CI_PROC"; then
+    pass "CI-COMP-1. record-complexity-and-skip appears in an executable command context in $CI_PROC_LABEL"
+  else
+    fail "CI-COMP-1. record-complexity-and-skip present in $CI_PROC_LABEL but not in bash/bin invocation context"
   fi
 fi
 
@@ -67,39 +83,42 @@ if require_file "$CI_SKILL"; then
   fi
 fi
 
-# CI-COMP-3: record-complexity-and-skip appears before CI-C1c.
-echo "=== CI-COMP-3: record-complexity-and-skip precedes CI-C1c ==="
-if require_file "$CI_SKILL"; then
-  line_rcs=$(grep -n "record-complexity-and-skip" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-  line_c1c=$(grep -n "CI-C1c" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-  if [ -z "$line_rcs" ] || [ -z "$line_c1c" ]; then
-    fail "CI-COMP-3. could not find both anchors (record-complexity-and-skip=$line_rcs, CI-C1c=$line_c1c)"
-  elif [ "$line_rcs" -lt "$line_c1c" ]; then
-    pass "CI-COMP-3. record-complexity-and-skip (L$line_rcs) precedes CI-C1c (L$line_c1c)"
+# CI-COMP-3: record-complexity-and-skip runs before the CI-C1c-equivalent branching, so the
+# persisted verdict exists for every downstream reader. The branch is anchored by its own
+# label at line start (CI-C1c) or, in the shared procedure, by the skip-verifier dispatch it
+# performs — never by a header cross-reference that merely names those labels.
+echo "=== CI-COMP-3: record-complexity-and-skip precedes the branching logic ==="
+if [ -n "$CI_PROC" ]; then
+  line_rcs=$(grep -n "record-complexity-and-skip" "$CI_PROC" 2>/dev/null | head -1 | cut -d: -f1)
+  line_branch=$(grep -nE '^\**CI-C1c|subagent_type=`?skip-verifier' "$CI_PROC" 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -z "$line_rcs" ] || [ -z "$line_branch" ]; then
+    fail "CI-COMP-3. could not find both anchors in $CI_PROC_LABEL (record-complexity-and-skip=$line_rcs, branch=$line_branch)"
+  elif [ "$line_rcs" -lt "$line_branch" ]; then
+    pass "CI-COMP-3. record-complexity-and-skip (L$line_rcs) precedes the branching logic (L$line_branch) in $CI_PROC_LABEL"
   else
-    fail "CI-COMP-3. ordering wrong: record-complexity-and-skip=L$line_rcs, CI-C1c=L$line_c1c"
+    fail "CI-COMP-3. ordering wrong in $CI_PROC_LABEL: record-complexity-and-skip=L$line_rcs, branch=L$line_branch"
   fi
 fi
 
-# CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED sentinel remains in SKILL.md.
-# Regression guard: the sentinel must fire from SKILL.md (agent context), NOT delegated to script.
-echo "=== CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED remains in SKILL.md ==="
-if require_file "$CI_SKILL"; then
-  if has_fixed "WORKFLOW_OUTLINE_NOT_NEEDED" "$CI_SKILL"; then
-    pass "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED sentinel present in SKILL.md"
+# CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED sentinel remains in the procedure prompt.
+# Regression guard: the sentinel must fire from agent context, NOT be delegated to a script.
+echo "=== CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED remains in the procedure prompt ==="
+if [ -n "$CI_PROC" ]; then
+  if has_fixed "WORKFLOW_OUTLINE_NOT_NEEDED" "$CI_PROC"; then
+    pass "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED sentinel present in $CI_PROC_LABEL"
   else
-    fail "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED missing from SKILL.md (sentinel must stay in agent context)"
+    fail "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED missing from $CI_PROC_LABEL (sentinel must stay in agent context)"
   fi
 fi
 
-# CI-COMP-5: skip-verifier subagent reference remains in SKILL.md.
-# Regression guard: the skip-verifier Agent launch must stay in SKILL.md.
-echo "=== CI-COMP-5: skip-verifier reference remains in SKILL.md ==="
-if require_file "$CI_SKILL"; then
-  if has_fixed "skip-verifier" "$CI_SKILL"; then
-    pass "CI-COMP-5. skip-verifier reference present in SKILL.md"
+# CI-COMP-5: skip-verifier subagent reference remains in the procedure prompt.
+# Regression guard: the skip-verifier Agent launch must stay in agent context.
+echo "=== CI-COMP-5: skip-verifier reference remains in the procedure prompt ==="
+if [ -n "$CI_PROC" ]; then
+  if has_fixed "skip-verifier" "$CI_PROC"; then
+    pass "CI-COMP-5. skip-verifier reference present in $CI_PROC_LABEL"
   else
-    fail "CI-COMP-5. skip-verifier missing from SKILL.md (must stay in agent context)"
+    fail "CI-COMP-5. skip-verifier missing from $CI_PROC_LABEL (must stay in agent context)"
   fi
 fi
 

@@ -24,14 +24,12 @@ literal string `## Verified Claims` clearly produced the canonical schema. False
 positives from quotes/code fences are not a realistic failure mode for these
 artifacts.
 
-## Reference Bash check
+## Reference check
 
-```bash
-artifact_valid() {
-  local f="$1"
-  [ -f "$f" ] && grep -qF "## Verified Claims" "$f"
-}
-```
+An artifact is valid when the file exists and contains the literal heading
+`## Verified Claims`. Check it with the Read tool, or with one standalone
+`grep -qF "## Verified Claims" <artifact-path>` call — a missing file makes that
+call exit non-zero on its own, so no `[ -f ... ] &&` prefix is needed.
 
 ## Failure handling
 

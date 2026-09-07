@@ -25,9 +25,9 @@ Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command 
 Run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh" "$WORKTREE_PATH"`. rc=0 → continue. rc=1 → display stdout and abort (`git add` / `git stash push -u` / `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` to bypass). rc=2/3 → surface stderr and abort. Skip when WORKFLOW_OFF or WORKTREE_OFF session marker is active.
 
 ### Step WE-4 — PR resolution
-Bootstrap probe: `PROBE_JSON="$(bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "$WORKTREE_PATH")"`. `preBootstrap === true` AND `classification === "empty-repo"` → WE-4b. Any other classification → normal flow.
+Bootstrap probe: `bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "<WORKTREE_PATH>"` — one standalone call; read the JSON from its stdout. `preBootstrap === true` AND `classification === "empty-repo"` → WE-4b. Any other classification → normal flow.
 
-Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reuse if `OPEN`, else `gh pr create --fill`. Display URL. Capture `PR_NUMBER=$(gh pr view --json number --jq .number)`; abort if empty.
+Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reuse if `OPEN`, else `gh pr create --fill`. Display URL. Read `<PR_NUMBER>` from the stdout of `gh pr view --json number --jq .number`; abort if empty.
 
 ### Step WE-4b — Bootstrap mode (empty-repo only)
 1. `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/bootstrap-complete.sh" "$WORKTREE_PATH" "$BRANCH" "$OWNER_REPO"` — parse `BOOTSTRAP_COMMIT_SHA` and `DEFAULT_BRANCH_SET`. Non-zero → stop.

@@ -1,0 +1,62 @@
+
+# tests/feature-2132-prompt-issuance/inventory.tsv
+# #2132 conversion ledger. Columns: <path>:<line> TAB <class> TAB <command-text>.
+# Every row was MEASURED against this worktree, not authored: command-text is a
+# verbatim substring of that file at that line today. Classes:
+#   issuance          - R1..R4 target; must become judge-allowed after conversion
+#   allow-rule-covered- prompt-issued but already exempt via settings.json allow rule
+#   quotation         - the text NAMES a prohibited form as prose; never converted
+# See skills/_shared/test-design.md and the #2132 detail plan section S6.
+skills/_shared/resolve-plans-dir.md:20	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+skills/session-close/SKILL.md:23	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+skills/issue-create/SKILL.md:51	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+skills/survey-code/SKILL.md:16	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+skills/worktree-end/SKILL.md:18	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+skills/worktree-end/SKILL.md:28	issuance	bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "<WORKTREE_PATH>"
+skills/worktree-end/SKILL.md:30	issuance	gh pr view --json number --jq .number
+skills/issue-reconcile/SKILL.md:23	issuance	gh repo view --json owner,name --jq '.owner.login + "/" + .name'
+skills/issue-reconcile/SKILL.md:42	issuance	bash "$AGENTS_CONFIG_DIR/skills/issue-reconcile/scripts/append-one.sh" "<NUM>"
+skills/issue-reconcile/SKILL.md:42	issuance	bash "$AGENTS_CONFIG_DIR/skills/issue-reconcile/scripts/append-one.sh" "<NUM>"
+skills/workflow-init/SKILL.md:78	issuance	node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "<PLANS_DIR>"
+skills/_shared/complexity-and-outline-skip.md:36	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "<SESSION_ID>" --signals-file "<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt" --target outline --dispatch-only
+skills/clarify-intent/SKILL.md:31	issuance	bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/precheck-companions.sh" --seed "${closes_issues[0]}" --exclude "<closes_issues joined with commas>" --output-file "<PLANS_DIR>/<session-id>-companion-precheck.json"
+skills/clarify-intent/SKILL.md:104	issuance	node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "<PLANS_DIR>"
+skills/_shared/complexity-and-outline-skip.md:36	issuance	bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "<SESSION_ID>" --signals-file "<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt" --target outline --dispatch-only
+skills/session-close/SKILL.md:156	issuance	node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete
+skills/session-close/SKILL.md:159	issuance	bash "$AGENTS_CONFIG_DIR/skills/session-close/scripts/close-alert-phase.sh" "<session-id>" "<NOTES_BACKUP_PATH>"
+skills/commit-push/SKILL.md:55	issuance	bash "$AGENTS_CONFIG_DIR/bin/check-sibling-uncommitted.sh"
+skills/commit-push/SKILL.md:70	issuance	node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "<PR_NUMBER>"
+skills/make-detail-plan/SKILL.md:71	issuance	bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG
+skills/make-outline-plan/SKILL.md:104	issuance	bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG
+skills/_shared/user-verified.md:19	issuance	bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_TL4 off
+skills/_shared/survey-artifact-valid.md:31	issuance	grep -qF "## Verified Claims" <artifact-path>
+skills/run-tests/SKILL.md:25	issuance	bin/select-tests.sh --auto
+skills/issue-create/SKILL.md:59	issuance	node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "<INTENT_MD>"
+skills/issue-create/SKILL.md:168	issuance	bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"
+skills/issue-create/SKILL.md:168	issuance	bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"
+skills/issue-close-finalize/SKILL.md:26	issuance	bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh"
+skills/issue-close-migrated/SKILL.md:27	issuance	bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-not-planned.sh" --type "<TYPE>" "<N>"
+skills/migrate-repo/SKILL.md:30	issuance	bash "$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh" "<REPO_PATH>"
+skills/session-close/SKILL.md:46	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'
+skills/commit-push/SKILL.md:79	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'
+skills/clarify-intent/SKILL.md:27	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_OUTLINE on'
+skills/update-docs/SKILL.md:37	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_DOCS on'
+skills/worktree-end/SKILL.md:41	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" AUTO_MERGE_PR on'
+skills/_shared/confirm-plan.md:37	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_{STEP} on'
+skills/write-tests/SKILL.md:27	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'
+skills/write-tests/SKILL.md:61	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'
+skills/write-code/SKILL.md:20	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'
+skills/write-code/SKILL.md:51	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'
+skills/worktree-start/SKILL.md:58	allow-rule-covered	bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'
+rules/git.md:6	quotation	`git -C <path>` instead of `cd <path> && git ...`.
+rules/git.md:9	quotation	WRONG:   `cd /path/to/repo && git log --oneline -5`
+rules/git.md:15	quotation	do NOT chain them with `&&`.
+skills/_shared/worker-dispatch.md:29	quotation	Never add a redirect, pipe, `&&`, `;`, `cd`, env prefix, or `$VAR` to the WD-3 command
+skills/worktree-start/SKILL.md:45	quotation	**Do NOT chain or pipe this command** (no `;`, `&&`, `||`, `|`, `$()`, backticks).
+skills/deep-research/SKILL.md:34	quotation	(must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+skills/review-code-security/SKILL.md:83	quotation	(as a standalone Bash command — no pipes, no && chaining)
+skills/make-detail-plan/SKILL.md:118	quotation	(ENTIRE Bash command — no pipes / && / redirection)
+skills/worktree-end/scripts/cleanup-cascade.md:40	quotation	single command, no `&&`-chaining
+skills/write-code/SKILL.md:61	quotation	`$(...)` over backticks
+skills/supervisor-report/SKILL.md:16	quotation	a `$(...)` or backtick left in the detail executes inside the double-quoted argument.
+skills/_shared/test-design/parser-regex-tests.md:17	quotation	done <<'TABLE'
