@@ -1,0 +1,131 @@
+#!/usr/bin/env node
+// Usage:
+//   show-local-env-overrides [--repo-root <path>]
+//
+// Answers one question for a human: of the keys this project's local override
+// file declares, which ones actually reached the effective config, and which
+// ones did the blocklist refuse? Without it the only way to find out is to read
+// hooks/lib/local-env.js and diff the two layers by hand.
+//
+// Key NAMES only, never values. The global .env may hold secrets and the local
+// layer sits in a directory this machine did not necessarily author, so there
+// is no --allow-dump door here at all: bin/env-effective-kv already owns
+// value-printing and carries the gate that goes with it.
+//
+// Warns on stderr when the project tracks its own override file in git: such a
+// file reaches everyone who clones the repository, which is the exact case this
+// layer's trust model is written against. The warning never withholds the
+// report.
+//
+// --repo-root selects the project whose local layer is inspected; omitted, the
+// same resolution the hooks use applies (CLAUDE_PROJECT_DIR, else the nearest
+// enclosing .git).
+//
+// Exit: 0 in every reportable outcome, including "no project root" and "no
+// local file" — absent reads as "nothing overridden", which is an answer, not a
+// failure. 64 usage error.
+
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+function usage() {
+  process.stderr.write("usage: show-local-env-overrides [--repo-root <path>]\n");
+  process.exit(64);
+}
+
+let repoRoot = null;
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i += 1) {
+  if (argv[i] === "--repo-root") {
+    if (i + 1 >= argv.length) usage();
+    repoRoot = argv[i + 1];
+    i += 1;
+  } else {
+    usage();
+  }
+}
+
+// Resolve the library the same way bin/env-effective-kv does: an explicit
+// AGENTS_CONFIG_DIR wins, otherwise walk back to this file's real location so a
+// PATH shim symlinked into ~/.local/bin still finds the repo it points at.
+// The two modules are one unit — local-env.js is load-env.js's own dependency —
+// so the probe demands both. A config dir carrying only the older half is a
+// checkout that predates this layer, and falling back to this script's own tree
+// is the honest reading of it.
+function libDir() {
+  const configured = process.env.AGENTS_CONFIG_DIR;
+  if (configured) {
+    const candidate = path.join(configured, "hooks", "lib");
+    const complete = ["load-env.js", "local-env.js"].every((f) =>
+      fs.existsSync(path.join(candidate, f)),
+    );
+    if (complete) return candidate;
+  }
+  let self = __filename;
+  try {
+    self = fs.realpathSync(__filename);
+  } catch (_) {}
+  return path.resolve(path.dirname(self), "..", "hooks", "lib");
+}
+
+const LIB = libDir();
+const loadEnv = require(path.join(LIB, "load-env.js"));
+const localEnv = require(path.join(LIB, "local-env.js"));
+
+const root = localEnv.resolveProjectRoot(repoRoot || null, process.cwd());
+if (!root) {
+  process.stdout.write("project-root: (none resolved)\n");
+  process.exit(0);
+}
+
+const localPath = localEnv.localEnvPathFor(root);
+process.stdout.write("project-root: " + root + "\n");
+process.stdout.write("local-file:   " + localPath + "\n");
+
+const { globalMap, localMap } = loadEnv.resolveLocalLayer(root);
+if (!localMap) {
+  process.stdout.write("status:       absent or unreadable — no key is overridden\n");
+  process.exit(0);
+}
+
+// An override file the project commits is distributed to everyone who clones it,
+// which is the case the layer's trust model is written against — so say so. The
+// runtime resolver deliberately never asks (every hook goes through it and it
+// must not spawn git); an on-demand diagnostic can afford exactly one call.
+// Fail-open: no git, no repository, any error at all — no warning, and the
+// report itself is never withheld over it.
+function warnIfTracked(root, basename) {
+  let probe;
+  try {
+    probe = spawnSync("git", ["-C", root, "ls-files", "--error-unmatch", "--", basename], {
+      encoding: "utf8",
+      shell: false,
+    });
+  } catch (_) {
+    return;
+  }
+  if (!probe || probe.error || probe.status !== 0) return;
+  process.stderr.write(
+    "warning: " +
+      basename +
+      " is tracked by git in this repository — local overrides are meant to be" +
+      " per-developer and gitignored\n",
+  );
+}
+
+warnIfTracked(root, localEnv.LOCAL_ENV_BASENAME);
+
+const { applied, ignored } = localEnv.overlay(globalMap, localMap);
+
+function section(label, keys) {
+  process.stdout.write(label + " (" + keys.length + ")\n");
+  for (const key of keys.slice().sort()) {
+    process.stdout.write("  " + key + "\n");
+  }
+}
+
+process.stdout.write("\n");
+section("applied", applied);
+process.stdout.write("\n");
+section("refused by blocklist", ignored);

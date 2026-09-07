@@ -38,7 +38,9 @@ _load_env_only_scan() {
                 v="${BASH_REMATCH[2]}"
                 case "$v" in
                     \"*\") v="${v#\"}"; v="${v%\"}" ;;
+                    \"*) continue ;;
                     \'*\') v="${v#\'}"; v="${v%\'}" ;;
+                    \'*) continue ;;
                 esac
                 found="$v"
             fi
@@ -94,10 +96,19 @@ _load_env_file() {
             if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
                 key="${BASH_REMATCH[1]}"
                 val="${BASH_REMATCH[2]}"
-                # Strip optional surrounding quotes
+                # Strip optional surrounding quotes. This loader has no multi-line
+                # quote grammar (unlike hooks/lib/load-env.js#parseEnv) — an
+                # opening quote unmatched on its own line is refused rather than
+                # exported with a stray literal quote character.
                 case "$val" in
                     \"*\") val="${val#\"}"; val="${val%\"}" ;;
+                    \"*)
+                        printf 'load-env.sh: %s discarded — unterminated quote\n' "$key" >&2
+                        continue ;;
                     \'*\') val="${val#\'}"; val="${val%\'}" ;;
+                    \'*)
+                        printf 'load-env.sh: %s discarded — unterminated quote\n' "$key" >&2
+                        continue ;;
                 esac
                 # Set only if not already in env (preserves explicit shell exports)
                 if ! printenv "$key" >/dev/null 2>&1; then

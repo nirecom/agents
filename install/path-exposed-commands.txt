@@ -25,3 +25,4 @@ check-inline-procedures
 check-prompt-extraction
 review-e2e-coverage
 review-bare-python
+show-local-env-overrides

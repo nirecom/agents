@@ -2,7 +2,13 @@
 // hooks/block-dotenv.js.
 "use strict";
 
-const { checkBashCommand: checkCmd } = require("./command-parser");
+const {
+  checkBashCommand: checkCmd,
+  stripSubstitutions,
+  splitSegments,
+  tokenizeSegment,
+  extractSubstitutionContents,
+} = require("./command-parser");
 const { getBasename } = require("./path-match");
 
 // Suffixes that are safe to access (documentation/template files)
@@ -68,6 +74,58 @@ function checkBashCommand(command) {
   });
 }
 
+// env-effective-kv --allow-dump prints every key AND value of the resolved
+// config map, so a direct Bash-tool call to it is a .env read by another name.
+// The tool is matched by basename and the flag by exact token, both within one
+// invocation, so an unrelated tool carrying --allow-dump stays allowed.
+const ALLOW_DUMP_BIN = "env-effective-kv";
+const ALLOW_DUMP_FLAG = "--allow-dump";
+
+function commandBasename(token) {
+  return String(token).replace(/\\/g, "/").split("/").pop();
+}
+
+// True when tokens[k] is `-c` or a combined short flag containing `c` (-lc, -ic).
+function isShellCFlag(token) {
+  return token === "-c" || /^-[a-zA-Z]*c[a-zA-Z]*$/.test(token);
+}
+
+// One segment: `env-effective-kv ... --allow-dump`, either as cmd0 or as the
+// script argument of a shell wrapper (`bash bin/env-effective-kv --allow-dump`).
+// A wrapper's `-c` body is a script, not a path, so it recurses instead.
+function segmentDumpsEnv(segment) {
+  const tokens = tokenizeSegment(segment);
+  if (tokens.length === 0) return false;
+  let target = commandBasename(tokens[0]);
+  if (SHELL_BINS.has(target)) {
+    let hasCFlag = false;
+    let scriptIdx = -1;
+    for (let k = 1; k < tokens.length; k++) {
+      if (tokens[k].startsWith("-")) {
+        if (isShellCFlag(tokens[k])) hasCFlag = true;
+        continue;
+      }
+      scriptIdx = k;
+      break;
+    }
+    if (hasCFlag && scriptIdx >= 0) return checkAllowDumpCommand(tokens[scriptIdx]);
+    if (scriptIdx < 0) return false;
+    target = commandBasename(tokens[scriptIdx]);
+  }
+  if (target !== ALLOW_DUMP_BIN) return false;
+  return tokens.some((t) => t === ALLOW_DUMP_FLAG);
+}
+
+// Substitution bodies execute as shell, so they are recursed into first —
+// the same order checkBashCommand uses.
+function checkAllowDumpCommand(command) {
+  if (!command) return false;
+  for (const sub of extractSubstitutionContents(command)) {
+    if (checkAllowDumpCommand(sub)) return true;
+  }
+  return splitSegments(stripSubstitutions(command)).some(segmentDumpsEnv);
+}
+
 function isProtectedPath(filePath) {
   if (!filePath) return false;
   const basename = getBasename(filePath);
@@ -104,6 +162,7 @@ module.exports = {
   isSafeDotenv,
   isDotenvPath,
   checkBashCommand,
+  checkAllowDumpCommand,
   isProtectedPath,
   checkGlobPattern,
   checkExploreQuery,
