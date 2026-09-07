@@ -37,8 +37,10 @@ function readStdin() {
   return { text: Buffer.concat(chunks).toString("utf8"), failed };
 }
 
+// Silence, not `decision: "approve"`: this is a deny-only guard on the widest
+// matcher, and an explicit approve bypasses the permission prompt every other
+// layer would still raise, so one scanner miss becomes an auto-approval (C15).
 function approve() {
-  console.log(JSON.stringify({ decision: "approve" }));
   process.exit(0);
 }
 

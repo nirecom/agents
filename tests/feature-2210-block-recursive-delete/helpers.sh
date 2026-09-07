@@ -34,11 +34,14 @@ run_hook() {
     printf '%s' "$1" | run_with_timeout 60 node "$HOOK" 2>/dev/null
 }
 
-# Only block/approve are credited; any other shape is reported distinguishably
+# Only silence/block are credited; any other shape is reported distinguishably
 # so a hook emitting a new verdict fails loudly instead of scoring as a pass.
+# Approve IS the empty output: an explicit decision:"approve" would bypass the
+# permission prompt, so the guard stays silent when it has no objection (C15).
 verdict_of() {
     printf '%s' "$1" | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  if (d.trim() === "") { process.stdout.write("approve"); return; }
   const lines=d.trim().split("\n").filter(Boolean);
   for(let i=lines.length-1;i>=0;i--){
     let j; try { j=JSON.parse(lines[i]); } catch(e) { continue; }
@@ -68,9 +71,8 @@ _assert_verdict() {
     if [ "$st" -ne 0 ]; then
         fail "$desc — hook exited non-zero ($st): crash or timeout, not a verdict"; return 1
     fi
-    if [ -z "$out" ]; then
-        fail "$desc — hook produced EMPTY stdout: no verdict was emitted"; return 1
-    fi
+    # No empty-output guard: silence is the approve verdict. A crashed hook is
+    # already caught above by its non-zero exit.
     verdict="$(verdict_of "$out")"
     if [ "$verdict" = "$want" ]; then
         pass "$desc"; return 0
