@@ -451,3 +451,7 @@ Changes: Fixed: CodeGraph's agent-facing usage policy now reaches every subagent
 ### FEATURE: PR #2250 (2026-09-07)
 Background: feat(#2223): inject project-specific NFR into review-codex prompts vi...
 Changes: Reviewed projects can now declare their own non-functional requirements once, in a gitignored `.env.local` file, and have them injected into every codex review automatically.;New `show-local-env-overrides` command shows which of a project's local override keys took effect and which were refused, without printing any values.
+
+### FEATURE: PR #2260 (2026-09-07)
+Background: feat(#2134): deny compound Bash command lines via a new PreToolUse bash-guard
+Changes: Added a PreToolUse guard that blocks compound Bash command lines (chaining, pipes, substitution, heredocs, redirects, env-var prefixes) at issuance time, pushing multi-step work into reviewable scratchpad scripts instead.;Fixed heredoc bodies and their trailing newlines being misparsed as shell operators.;Corrected prompt assets and internal command examples to stop suggesting compound command lines that trip the new guard.
