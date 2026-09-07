@@ -447,3 +447,7 @@ Changes: `/resume-session --from <sid>` can now recover step-level progress from
 ### FEATURE: PR #2257 (2026-09-07)
 Background: fix(#2255): extend the CodeGraph usage policy to every subagent and fix the SubagentStart output shape
 Changes: Fixed: CodeGraph's agent-facing usage policy now reaches every subagent (not just a fixed list), and trusts CodeGraph's results unless the response flags a file as stale or never returned its source.;Fixed: the `SubagentStart` hook emitted its injected context in an undocumented shape, so the conversation-language, plan-language, and CodeGraph directives could be dropped before reaching a subagent.
+
+### FEATURE: PR #2250 (2026-09-07)
+Background: feat(#2223): inject project-specific NFR into review-codex prompts vi...
+Changes: Reviewed projects can now declare their own non-functional requirements once, in a gitignored `.env.local` file, and have them injected into every codex review automatically.;New `show-local-env-overrides` command shows which of a project's local override keys took effect and which were refused, without printing any values.
