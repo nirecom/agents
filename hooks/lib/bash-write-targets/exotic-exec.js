@@ -1,23 +1,14 @@
 "use strict";
-// hooks/lib/bash-write-targets/exotic-exec.js
 // Exotic execution-bearing constructs (eval / xargs / find action clauses) plus
-// interpreter `-c` bodies. Extracted verbatim from bash-write-targets.js (Pattern A
-// file split); behavior is unchanged.
-//
-// The parent-owned helpers these predicates need (innerCommandIsWrite,
-// isCommandSubstWriteIR, resolveRawArgvAfterEnvPrefix) are INJECTED via the `deps`
-// argument rather than required back from the parent — a `require` in that direction
-// would form a module cycle. This mirrors the existing `innerCommandIsWrite(inner,
-// recurse)` callback style.
+// interpreter `-c` bodies. Parent-owned helpers arrive via `deps` because
+// requiring them back from the parent would form a module cycle.
 
 const { resolveEffectiveCommand, resolveEffectiveArgv, commandBasename, ASSIGN_RE, peelWrappersUntil } = require("../bash-write-patterns/segment-utils");
 
-// xargs is a registered WRAPPER_SPECS wrapper (#2210); stop peeling there so
-// this module still sees "xargs" itself to apply its own dynamic-arg handling.
+// xargs is a registered WRAPPER_SPECS wrapper; stop peeling there so this module
+// still sees "xargs" itself and can apply its own dynamic-arg handling.
 const EXOTIC_STOP_BASENAMES = new Set(["xargs"]);
 
-// {cmd0, argv} of the eval/xargs/find call, peeled through other wrappers but
-// stopped at xargs — mirrors resolveEffectiveCommand/Argv's env-prefix handling.
 function resolveExoticHead(seg) {
   if (!seg || seg.cmd0 == null) return { cmd0: null, argv: [] };
   let cmd0 = seg.cmd0;
@@ -32,69 +23,45 @@ function resolveExoticHead(seg) {
   return { cmd0: peeled.cmd0, argv: peeled.argv };
 }
 
-// Exotic execution-bearing constructs: a write can hide as an ARGUMENT to
-// eval / xargs / find -exec rather than its own IR segment. Static inner
-// write -> WRITE; dynamic/unparseable -> fail-closed WRITE; static read stays
-// allowed. Process substitution and `<interp> -c "<body>"` are handled
-// elsewhere (parse()/classify() already re-parse those) — this predicate is
-// the eval/xargs/find residual.
-
+// A write can hide as an ARGUMENT to eval / xargs / find -exec rather than as
+// its own IR segment. Dynamic or unparseable bodies fail closed to WRITE.
 const EVAL_RE = /^eval$/;
 const XARGS_RE = /^xargs$/;
 const FIND_RE = /^find$/;
 
-// True when a token looks DYNAMIC — it carries an unexpanded shell expansion
-// (`$VAR`, `${VAR}`, `$(...)`, backtick) whose runtime value we cannot know
-// statically. Such an eval/find/xargs body is fail-closed to WRITE.
 function looksDynamic(tok) {
   return typeof tok === "string" && (/\$/.test(tok) || /`/.test(tok));
 }
 
-// Known read-only env-emitter commands safe to `eval "$(…)"` (#1679 S-4).
-// Only exact single-command forms are allowlisted; multi-segment bodies
-// (`;`, `&&`, `||`) fail ALLOWLIST_MATCH by regex design (they contain `;`/`&`/`|`).
-// Each pattern must be anchored (^ … $) to prevent prefix attacks.
+// Read-only env emitters safe to `eval "$(…)"`. Every pattern must stay anchored
+// to prevent prefix attacks; multi-segment bodies never match by regex design.
 const EVAL_SUBST_READ_ALLOWLIST = [
-  // ssh-agent -s / -c : outputs shell variable assignments (SSH_AUTH_SOCK etc.)
   /^ssh-agent\b(?:\s+-[sack\d])?\s*$/,
-  // fnm env : outputs eval-able environment setup for node version management
   /^fnm\s+env\b(?:\s+--[a-z][-a-z0-9]*(?:=[^\s]*)?)?\s*$/,
-  // direnv hook <shell> : outputs shell-specific eval hook, read-only
   /^direnv\s+hook\s+(?:bash|zsh|fish|tcsh|elvish|nu)\s*$/,
-  // nvm use / nvm env (common nvm idioms used in scripts)
   /^nvm\s+(?:use|env)\b(?:\s+[^\s]*)?\s*$/,
 ];
 
-// True when the inner cmdsubst body matches a known read-only env emitter.
 function evalSubstIsAllowlistedRead(inner) {
   const t = inner.trim();
   return EVAL_SUBST_READ_ALLOWLIST.some((re) => re.test(t));
 }
 
-// 3-value expansion disposition for a single resolved token (#1679 S-4):
-//   "static"           — no shell expansion (`$`, backtick) in token
-//   "allowlisted-read" — expansion is a known safe env-emitter `$(…)`
-//   "opaque"           — expansion present but not in allowlist → fail-closed
+// "opaque" means an expansion outside the allowlist, which the caller fails closed on.
 function expansionDisposition(tok) {
   if (typeof tok !== "string") return "opaque";
   if (!looksDynamic(tok)) return "static";
-  // Check for pure $(…) cmdsubst form (whole token = a single cmdsubst)
   const m = tok.match(/^\$\(([^)]*)\)$/);
   if (m && evalSubstIsAllowlistedRead(m[1])) return "allowlisted-read";
   return "opaque";
 }
 
-// eval BODY... : the concatenation of eval's arguments is re-executed by the
-// shell. Reconstruct the body from the resolved argv (already unquoted) and the
-// RAW argv (to detect `$`-dynamic bodies). Static body → re-parse via
-// innerCommandIsWrite; allowlisted-read env-emitters → treat as read;
-// opaque/unknown → fail-closed WRITE.
+// The concatenation of eval's arguments is re-executed by the shell, so the body
+// is reconstructed from the resolved argv and checked against the RAW argv too.
 function evalSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv) || argv.length === 0) return false; // bare `eval` — no body
   const rawArgv = deps.resolveRawArgvAfterEnvPrefix(seg);
 
-  // Check resolved argv tokens for expansion disposition.
-  // "opaque" (unknown dynamic) → fail-closed immediately.
   let anyAllowlisted = false;
   for (const tok of argv) {
     const disp = expansionDisposition(tok);
@@ -102,41 +69,35 @@ function evalSegmentIsWrite(seg, deps, argv) {
     if (disp === "allowlisted-read") anyAllowlisted = true;
   }
 
-  // Belt-and-suspenders: if rawArgv has dynamic content that argv did not
-  // (argv resolution missed an expansion in env-prefix position), fail-closed —
-  // unless argv also carries the same dynamic content (DQ-wrapped cmdsubst already
-  // handled above by the argv loop).
+  // Dynamic content the argv loop above could not see (an expansion left in
+  // env-prefix position) fails closed.
   const argvHasDynamic = argv.some(looksDynamic);
   if ((rawArgv || []).some(looksDynamic) && !argvHasDynamic) return true;
 
-  // If any token is a known allowlisted env-emitter, the eval body is determined
-  // at runtime by that emitter (e.g. ssh-agent -s → SSH_AUTH_SOCK=…; export …).
-  // No further static analysis is possible or needed — treat as read.
+  // An allowlisted emitter decides the body at runtime — no static analysis left.
   if (anyAllowlisted) return false;
 
-  // All static: re-parse the static body for writes.
   const body = argv.join(" ").trim();
   if (!body) return false;
   return deps.innerCommandIsWrite(body, deps.isCommandSubstWriteIR);
 }
 
-// xargs [xargs-opts] COMMAND [args] : the COMMAND xargs runs is the target.
-// Skip xargs's own option flags (value-taking and boolean), then re-parse the
-// remainder as a command. No command token (pure `xargs`) → not a write here.
+// The target is the COMMAND xargs runs, so its own value-taking and boolean
+// options must be skipped first.
 const XARGS_VALUE_FLAGS = new Set(["-I", "-i", "-n", "-P", "-d", "-a", "-E", "-e", "-L", "-l", "-s", "--replace", "--max-lines", "--max-args", "--max-procs", "--delimiter", "--arg-file", "--eof", "--max-chars"]);
 function xargsCommandTokens(argv) {
   let i = 0;
   while (i < argv.length) {
     const tok = argv[i];
-    if (typeof tok !== "string") return null; // non-string token — fail-closed
+    if (typeof tok !== "string") return null; // fail-closed
     if (tok === "--") { i += 1; break; }
     if (tok[0] === "-") {
       const eq = tok.indexOf("=");
-      if (eq !== -1) { i += 1; continue; }          // --flag=value (self-contained)
-      // Attached short-option value forms: -I{}, -n1, -d, , -P4, -s1024.
+      if (eq !== -1) { i += 1; continue; }
+      // Attached short-option value forms: -I{}, -n1, -P4, -s1024.
       if (/^-[IinPdaEeLls]./.test(tok)) { i += 1; continue; }
       if (XARGS_VALUE_FLAGS.has(tok)) { i += 2; continue; } // flag + separate value
-      i += 1; continue;                              // boolean flag (-0, -r, -t, -p, …)
+      i += 1; continue;
     }
     break; // first non-flag token = the command
   }
@@ -146,17 +107,14 @@ function xargsSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv)) return false;
   const cmdTokens = xargsCommandTokens(argv);
   if (!cmdTokens || cmdTokens.length === 0) return false; // no explicit command
-  // Only the COMMAND token (cmdTokens[0]) is subject to the dynamic fail-closed check.
-  // Argument tokens (cmdTokens[1+]) are data passed by the outer shell before xargs runs
-  // (#1679 S-5 CPR-ORTH): `$(git rev-parse …)` in a grep arg is not an xargs-executed command.
+  // Only the COMMAND token is dynamic-checked: later tokens are data the outer
+  // shell expands before xargs runs, so failing closed on them over-blocks.
   if (looksDynamic(cmdTokens[0])) return true;
   return deps.innerCommandIsWrite(cmdTokens.join(" "), deps.isCommandSubstWriteIR);
 }
 
-// find ... action-clause : `-delete` is itself a write; `-exec`/`-execdir`/
-// `-ok`/`-okdir` <cmd> ... {\; | +} runs <cmd> per match — re-parse that <cmd>.
-// The IR tokenizer strips the escape from `\;` leaving a bare `\` or `;`
-// terminator token, so terminate the collected command at `;`, `\`, or `+`.
+// The IR tokenizer strips the escape from `\;`, leaving a bare `\` or `;`, so the
+// collected -exec command terminates at `;`, `\`, or `+`.
 function findSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv)) return false;
   for (let i = 0; i < argv.length; i++) {
@@ -172,12 +130,10 @@ function findSegmentIsWrite(seg, deps, argv) {
         cmdToks.push(t);
       }
       if (cmdToks.length === 0) return true; // malformed action clause → fail-closed
-      // Drop the `{}` placeholder tokens — they are the matched path, not command.
+      // `{}` is the matched path, not part of the command.
       const clean = cmdToks.filter((t) => t !== "{}");
       if (clean.length === 0) return true;   // only placeholders → fail-closed
-      // Only the COMMAND token (clean[0]) is subject to the dynamic fail-closed check.
-      // Argument tokens (clean[1+]) are data the outer shell expands before find runs
-      // (#1679 S-5 CPR-ORTH): `$(date +%F)` in a grep arg is not a find-executed command.
+      // Only the COMMAND token is dynamic-checked; see xargsSegmentIsWrite.
       if (looksDynamic(clean[0])) return true;
       if (deps.innerCommandIsWrite(clean.join(" "), deps.isCommandSubstWriteIR)) return true;
       i = j; // continue scanning after this action clause
@@ -186,26 +142,18 @@ function findSegmentIsWrite(seg, deps, argv) {
   return false;
 }
 
-// True when any segment is a shell/interpreter invocation with a -c/-Command/-EncodedCommand/\/c
-// flag AND the inline body contains a write. This retires the "interpreter-c" WRITE_PATTERNS
-// entry (#1411 canary-6a) and provides IR-based re-parse of the body.
-// Fail-closed: any unrecognized/ambiguous form returns true (treats as write).
-// CIRCULAR DEPENDENCY NOTE: isReadOnlyInterpreterC (classify.js) is lazy-required inside
-// this function to avoid classify.js → bash-write-targets.js → classify.js cycle.
+// Interpreters whose inline `-c` body is re-parsed for writes; any ambiguous
+// form fails closed to write.
 const INTERP_NAMES = new Set(["bash", "sh", "zsh", "dash", "fish", "pwsh", "powershell", "cmd"]);
 
-// Returns true when any argv token is a -c style flag for the given interpreter.
 // interpBase must already be lowercased and .exe-stripped.
-// - POSIX shells: -c or combined short flags like -lc, -xc (single-dash, lowercase c).
-// - PowerShell: case-insensitive -c/-Command/-EncodedCommand.
-// - cmd: /c (case-insensitive).
 function hasCFlag(argv, interpBase) {
   return argv.some((a) => {
     const al = a.toLowerCase();
     if (interpBase === "cmd") return al === "/c";
     if (interpBase === "pwsh" || interpBase === "powershell")
       return al === "-c" || al === "-command" || al === "-encodedcommand";
-    // POSIX shells: standalone -c or combined like -lc, -xc (lowercase c only)
+    // POSIX shells also combine the flag: -lc, -xc.
     return al === "-c" || (a.startsWith("-") && !a.startsWith("--") && a.slice(1).includes("c"));
   });
 }
@@ -222,31 +170,22 @@ function isInterpreterCWriteIR(ir) {
     if (!INTERP_NAMES.has(interpBase)) continue;
     const argv = resolveEffectiveArgv(seg);
     if (!argv || !hasCFlag(argv, interpBase)) continue;
-    // Segment is an interpreter with a -c flag: check if its body is a write.
-    // Lazy require to break classify.js ↔ bash-write-targets.js cycle.
+    // Lazy require to break the classify.js ↔ bash-write-targets.js cycle.
     let isReadOnlyInterpreterC;
     try {
       ({ isReadOnlyInterpreterC } = require("../bash-write-patterns/classify"));
     } catch (_) { return true; } // fail-closed if classify unavailable
     if (typeof isReadOnlyInterpreterC !== "function") return true;
-    // Use seg.rawText if available, else reconstruct from argv.
     const rawText = seg.rawText || argv.join(" ");
-    // Write body → return true immediately; read body → continue checking remaining segments.
     if (!isReadOnlyInterpreterC(rawText)) return true;
   }
   return false;
 }
 
-// True when any segment carries a hidden write inside an eval / xargs / find
-// action clause. Wire this into the SAME three sites as isCommandSubstWriteIR /
-// isNewlineInjectedWriteIR. Fail-safe: guard !ir / parseFailure at the top.
 function isExoticExecWriteIR(ir, deps) {
-  // The split introduced `deps` at this seam; every sibling module under
-  // bash-write-targets/ exports a single-arg predicate, so a future direct
-  // require could call this as isExoticExecWriteIR(ir) and make the eval /
-  // xargs / find helpers throw. enforce-worktree.js does not wrap the
-  // predicate in try/catch, so a throw exits with no verdict — fail-open on
-  // exactly the commands this predicate exists to block. Fail closed instead.
+  // Every sibling module exports a single-arg predicate, so a caller may drop
+  // `deps`. enforce-worktree.js does not catch throws — a missing dep would
+  // fail OPEN on exactly the commands this predicate blocks.
   if (
     !deps ||
     typeof deps.innerCommandIsWrite !== "function" ||

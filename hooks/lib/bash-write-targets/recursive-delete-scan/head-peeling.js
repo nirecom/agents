@@ -1,43 +1,24 @@
 "use strict";
 
-// Transparent-keyword-head and PowerShell-brace-block peeling for
-// recursive-delete-scan.js: `do rm -rf x`, `exec -a NAME rm -rf x`,
-// `foreach { Remove-Item -Recurse x }` all land the wrapped command on the
-// SAME segment as the head keyword, so judging the head's own cmd0 misses the
-// real command underneath. Split out of the parent when it crossed the
-// 500-line hard limit.
+// Head peeling for recursive-delete-scan.js: `do rm -rf x`, `exec -a N rm -rf
+// x`, `foreach { ... }` land the wrapped command on the head's own segment.
 
 const { PWSH_BLOCK_PIPELINE_HEADS: PWSH_BLOCK_HEADS } = require("../pwsh");
 
-// Shell heads that pass their tokens through to a wrapped command unmodified:
-// `do`/`then`/`else`/`elif`/`if`/`while`/`until`/`coproc` (loop/conditional
-// bodies), `{`/`!` (brace groups, negation). The parser lands these on their
-// own segment with the wrapped command's tokens AS that segment's argv (e.g.
-// `do rm -rf x` -> {cmd0:"do", argv:["rm","-rf","x"]}), so judging cmd0 itself
-// silently misses the real command underneath (#2210 F3/N1). `exec`/`time`
-// are handled separately below (OPTION_TAKING_HEADS) since they can carry
-// their own options ahead of the wrapped command.
+// Heads that pass their tokens through unmodified: `do rm -rf x` parses to
+// {cmd0:"do", argv:["rm","-rf","x"]}.
 const TRANSPARENT_KEYWORD_HEADS = new Set([
   "do", "then", "else", "elif", "{", "!", "if", "while", "until", "coproc",
 ]);
 
-// PWSH_BLOCK_HEADS (imported above from pwsh.js, this repo's owner of the set)
-// are the PowerShell block heads whose FIRST ARG, not their cmd0, is the
-// brace-wrapped body: `foreach { ... }` / `% { ... }`. Scoped narrowly (#2210
-// N3) — an unconditional brace-peel fired for ANY cmd0, so `rm {a,b} -rf` got
-// peeled into a non-"rm" cmd0 and its judgment discarded. Matched
-// case-insensitively (#2210 F3) — PowerShell head names fold case.
-
 // Heads that take their OWN options before the wrapped command (`exec -a NAME
-// cmd`, `time -p cmd`) — every suffix position is judged, uncapped (#2210 N2/F1).
+// cmd`, `time -p cmd`) — every suffix position is judged, uncapped.
 const OPTION_TAKING_HEADS = new Set(["exec", "time"]);
 
-// Peel a chain of transparent keyword heads / PowerShell brace-block aliases
-// down to the innermost wrapped command(s). Returns EVERY candidate segment
-// worth judging (never just one) plus `extraScripts` — inline script bodies
-// from `trap`/`eval`, which take a single script rather than word-split
-// tokens, collected for a full recursive scan. Bounded depth guards
-// pathological nesting (e.g. `! ! ! ... rm -rf x`) like peelWrappers does.
+// Peel down to the innermost wrapped command(s). Returns EVERY candidate
+// segment worth judging plus `extraScripts` — `trap`/`eval` bodies, which are
+// one script rather than word-split tokens. Depth is bounded against `! ! !
+// ... rm -rf x`.
 function peelTransparentHeads(seg) {
   let cur = seg;
   const extraScripts = [];
@@ -48,9 +29,8 @@ function peelTransparentHeads(seg) {
     const argvRaw = Array.isArray(cur.argvRaw) && cur.argvRaw.length === argv.length ? cur.argvRaw : argv.slice();
 
     if (cur.cmd0 === "eval") {
-      // `eval` joins its own argv with spaces and evaluates the result — the
-      // whole-argv join IS the script (#2210 N2). A leading `--` is stripped
-      // so it does not itself become the joined script's cmd0.
+      // `eval` evaluates its whole argv joined by spaces; a leading `--` must
+      // not become the joined script's cmd0.
       const a = argv[0] === "--" ? argv.slice(1) : argv;
       if (a.length > 0) extraScripts.push(a.join(" "));
       cur = null;
@@ -58,10 +38,8 @@ function peelTransparentHeads(seg) {
     }
 
     if (cur.cmd0 === "trap") {
-      // `trap [--] ARG SIGSPEC...` — ARG (after an optional `--`) is the one
-      // script; SIGSPECs are plain signal names, never script content, so
-      // pushing them as their own candidates only produced false fail-closed
-      // hits on tokens like `$SIG` (#2210 F7).
+      // `trap [--] ARG SIGSPEC...` — only ARG is script; judging SIGSPECs too
+      // fail-closed on signal-name tokens like `$SIG`.
       let a = argv;
       if (a[0] === "--") a = a.slice(1);
       if (typeof a[0] === "string" && a[0] !== "") extraScripts.push(a[0]);

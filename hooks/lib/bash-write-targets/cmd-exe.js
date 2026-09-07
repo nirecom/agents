@@ -6,30 +6,21 @@ const {
   commandBasename,
 } = require("../bash-write-patterns/segment-utils");
 
-// cmd.exe internal delete verbs that accept the recursive /s switch (#2210).
+// cmd.exe internal delete verbs that accept the recursive `/s` switch.
 const CMD_DELETE_VERBS = new Set(["rmdir", "rd", "del"]);
 // Same verbs at a clause head, optionally with a switch glued on (`rd/s`).
 const CMD_DELETE_VERB_RE = new RegExp("^(?:" + [...CMD_DELETE_VERBS].join("|") + ")(/.*)?$", "i");
 
-// cmd.exe reserves `/` for switches (`rd/s`), so the generic commandBasename()
-// — which also splits on `/` as a path separator — would read "rd/s" as
-// directory "rd", file "s" and misclassify a plain builtin as foreign. This
-// normalizer strips only a backslash-delimited directory prefix and a
-// trailing `.exe`, so `C:\Windows\System32\rd.exe/s` still reads as `rd/s`.
-// Without it, `rd.exe /s dir` matched neither CMD_DELETE_VERB_RE (which only
-// recognizes the bare verb) nor foreignClauseBlocks's builtin set (whose
-// commandBasename-normalized `rd` incorrectly marks it as an already-covered
-// builtin), so the whole clause silently approved (#2210 round8 N5).
+// commandBasename() splits on `/` as a path separator, so it reads `rd/s` as
+// dir "rd" + file "s" and `rd.exe /s dir` slipped through as a covered builtin.
 function cmdVerbBasename(tok) {
   if (typeof tok !== "string") return tok;
   const base = tok.split("\\").pop();
   return base.replace(/\.exe(?=$|\/)/i, "");
 }
 
-// cmd.exe's own vocabulary. A clause head OUTSIDE it launches another program,
-// whose recursion cmd.exe's switch table can say nothing about — see
-// foreignClauseBlocks below. Kept deliberately wide: a name wrongly listed here
-// only skips the extra scan, so anything uncertain is left off.
+// A head outside this vocabulary launches another program — see
+// foreignClauseBlocks. Listing a name here only skips that scan, so keep it tight.
 const CMD_BUILTIN_VERBS = new Set([
   ...CMD_DELETE_VERBS, "cmd", "call", "start", "echo", "set", "setlocal", "endlocal",
   "cd", "chdir", "pushd", "popd", "dir", "copy", "xcopy", "move", "ren", "rename",
@@ -38,12 +29,8 @@ const CMD_BUILTIN_VERBS = new Set([
   "color", "break", "shift", "attrib", "find", "findstr", "more", "sort", "tree",
 ]);
 
-/**
- * tokenizeCmdClause(text) — split ONE cmd.exe clause into tokens.
- * cmd.exe quoting is not bash quoting: `"` is the only quote character and
- * there is no backslash escape, so bash's tokenizer must not be reused here.
- * `^` escapes are a documented non-goal (detail.md Step 3 / Out of scope).
- */
+// cmd.exe quoting is not bash quoting: `"` is the only quote and there is no
+// backslash escape, so bash's tokenizer must not be reused. `^` escapes: non-goal.
 function tokenizeCmdClause(text) {
   const out = [];
   let cur = "";
@@ -65,15 +52,14 @@ function tokenizeCmdClause(text) {
 // Nesting budget for `cmd /c cmd /c ...`; past it the payload fails closed.
 const MAX_CMD_NEST = 8;
 
-// A `/`-leading token can CLUSTER several switches (e.g. "/s" + "/q" glued
-// together), so an exact `/s` compare missed them (#2210 round-4 C2).
-// The glued form splits into ["/s", "/q"].
+// A `/`-leading token can cluster several switches glued together, which an
+// exact `/s` compare missed.
 function splitCmdSwitches(tok) {
   return tok.split("/").filter((p) => p !== "").map((p) => "/" + p);
 }
 
-// The text cmd.exe would run: everything after the `/c` / `/k` switch. Matched
-// by PREFIX because the outer bash tokenizer glues `/c"rd /s dir"` into one token.
+// Matched by PREFIX: the outer bash tokenizer can glue the switch and its
+// quoted payload into a single token.
 function cmdPayloadFrom(toks) {
   const idx = toks.findIndex((t) => typeof t === "string" && /^\/[ck]/i.test(t));
   if (idx === -1) return null;
@@ -83,14 +69,9 @@ function cmdPayloadFrom(toks) {
   return fragments.join(" ");
 }
 
-// One clause's verdict: true = a delete verb carries an independent `/s`;
-// null = a `/`-leading switch carries `%VAR%` / `!VAR!` that could expand to it.
-// The verb may have its switch GLUED to it (`rd/s`), which the whitespace-only
-// tokenizer keeps in one token. A bare (non-`/`-leading) token is always
-// TARGET/verb position, never a switch — cmd.exe reserves `/` to introduce
-// one, so a bare token is left approved even when it is wholly `%VAR%`/`!VAR!`
-// (round-3 review: the round-4 bare-token rule this replaced over-blocked
-// `rd %F% dir` / `rd dir !F!`, #2210 round9).
+// true = a delete verb carries an independent `/s`; null = a `/`-leading switch
+// carries `%VAR%` or `!VAR!` that could expand to it. A bare token is never a
+// switch (cmd.exe reserves `/` for those), so judging those over-blocked `rd %F% dir`.
 function clauseVerdict(toks) {
   const m = CMD_DELETE_VERB_RE.exec(cmdVerbBasename(toks[0]));
   if (!m) return false;
@@ -106,10 +87,8 @@ function clauseVerdict(toks) {
   return sawUnresolvable ? null : false;
 }
 
-// `if`'s condition has a fixed shape — `[/i] [not] exist PATH`, `... defined
-// NAME`, `... errorlevel N`, or a `a==b` comparison the tokenizer may deliver as
-// one token or as three. Consuming it leaves the conditional's BODY, which is
-// where the real command sits.
+// Consume `if`'s fixed-shape condition to reach the BODY, where the real command
+// sits. An `a==b` comparison may arrive as one token or as three.
 function stripIfCondition(toks) {
   let i = 0;
   while (i < toks.length && typeof toks[i] === "string" &&
@@ -121,9 +100,8 @@ function stripIfCondition(toks) {
   return toks.slice(toks[i + 1] === "==" ? i + 3 : i + 1);
 }
 
-// `@` (echo suppression) and `if`/`else` sit AHEAD of the verb, so reading
-// toks[0] saw `@rd` or `if` where the real command was `rd` — both approved
-// (#2210 round-6). Stripped before any verdict is taken.
+// `@` and `if`/`else` sit AHEAD of the verb, so toks[0] read `@rd` or `if` and
+// approved the clause.
 function stripClausePrefixes(toks) {
   let out = toks;
   for (let depth = 0; depth < 8 && out.length > 0; depth++) {
@@ -139,38 +117,26 @@ function stripClausePrefixes(toks) {
   return out;
 }
 
-// A clause whose head is no cmd.exe builtin launches ANOTHER program, and
-// cmd.exe's switch table says nothing about how that one spells recursion:
-// `cmd /c "pwsh -Command Remove-Item -Recurse d"` hid a whole PowerShell delete
-// behind a cmd head (#2210 round-6). Hand the clause back to the top-level
-// dispatcher so every other net judges it. The require is lazy because
-// recursive-delete-scan.js requires THIS module — a top-level one closes the cycle.
+// A non-builtin head launches another program whose recursion spelling cmd.exe
+// knows nothing about, so hand the clause back to the top-level dispatcher. The
+// require is lazy: recursive-delete-scan.js requires THIS module.
 function foreignClauseBlocks(toks, depth) {
-  // Normalized the same way as clauseVerdict (#2210 security-scanner C29) —
-  // commandBasename() alone splits on `/` as a path separator, so a
-  // path-qualified verb (`C:\Windows\System32\rd.exe`) or a glued switch
-  // (`rd.exe/s`) could read as builtin under one normalizer and foreign
-  // under the other, letting the clause slip past whichever check disagreed.
+  // Same normalizer as clauseVerdict — disagreeing ones let a path-qualified or
+  // glued-switch verb read builtin here and foreign there, and slip past both.
   const base = cmdVerbBasename(toks[0]).toLowerCase().split("/")[0];
   if (base === null || base === "" || CMD_BUILTIN_VERBS.has(base)) return false;
   const { scanCommandTextForRecursiveDelete } = require("./recursive-delete-scan");
   return scanCommandTextForRecursiveDelete(toks.join(" "), depth + 1) === true;
 }
 
-// `call CMD` and `start [/wait] [/b] ["TITLE"] CMD` both run CMD inside the SAME
-// clause, so a verb check on toks[0] alone never sees it (#2210 round-5) — and
-// neither does the nested-`cmd` check below. Their own switches are `/`-leading
-// but `start`'s optional TITLE is an ordinary word, indistinguishable from the
-// command once quotes are gone, so every suffix position is offered as its own
-// candidate clause instead of guessing where CMD starts. Scoped to clauses that
-// actually BEGIN with a launcher verb, so no ordinary clause gains candidates.
+// `call CMD` and `start [/wait] [/b] ["TITLE"] CMD` run CMD inside the SAME clause,
+// which a toks[0] verb check never sees. `start`'s optional TITLE is an ordinary
+// word once quotes are gone, so every suffix position becomes its own candidate
+// rather than guessing where CMD starts.
 const CMD_LAUNCHER_VERBS = new Set(["call", "start"]);
 
-// Bounds the launcher fan-out (#2210 N1): each candidate triggers a full
-// foreignClauseBlocks rescan, so an unbounded N candidates over an N-token
-// clause was O(N^2). Past this cap, fail closed instead of continuing to scan.
-// Intentional precision/performance tradeoff: a pathological-length launcher
-// clause is DENIED outright rather than analyzed, benign content included.
+// Each candidate triggers a full foreignClauseBlocks rescan, so an unbounded
+// candidate list was O(N^2). Past the cap a launcher clause is DENIED outright.
 const MAX_CLAUSE_CANDIDATES = 32;
 
 function clauseCandidates(toks) {
@@ -185,25 +151,15 @@ function clauseCandidates(toks) {
   return { candidates, overflow: false };
 }
 
-// A `/`-leading switch position treats BOTH `%VAR%` (always-on expansion) and
-// `!VAR!` (delayed expansion) as unresolvable, since either can carry `/s`.
-const DYNAMIC_VAR_RE = /%[^%\s]+%|![^!\s]+!/;
-
-// A clause HEAD is different: cmd.exe substitutes `%VAR%` at PARSE time, once,
-// before any command on the line runs — so `set CMD=rd& %CMD% /s dir` still
-// expands `%CMD%` to whatever it was BEFORE this line, never to "rd" (that
-// same-line set-then-use only works via delayed expansion). A head is
-// therefore fail-closed only for `!VAR!` (`setlocal enabledelayedexpansion` /
-// `cmd /v:on`), which resolves per-command and CAN pick up a same-line `set`
-// (`cmd /v:on /c "set CMD=rd& !CMD! /s dir"`, #2210 round8 item 8 / round9 C4).
-// Neither clauseVerdict nor foreignClauseBlocks can judge such a head safely.
+// A HEAD is fail-closed only for `!VAR!`: cmd.exe substitutes `%VAR%` once at
+// PARSE time, so `set CMD=rd& %CMD% ...` cannot pick up its own same-line `set`,
+// while delayed expansion resolves per-command and can.
 const DELAYED_VAR_RE = /![^!\s]+!/;
 
 function hasDynamicHead(tok) {
   return typeof tok === "string" && DELAYED_VAR_RE.test(tok);
 }
 
-// Scan one cmd.exe payload's clauses, recursing into a nested `cmd /c ...`.
 function scanCmdExeText(innerText, depth) {
   if (depth > MAX_CMD_NEST) return true;
   let sawUnresolvable = false;
@@ -224,13 +180,8 @@ function scanCmdExeText(innerText, depth) {
   return sawUnresolvable ? null : false;
 }
 
-/**
- * hasRecursiveCmdExeFlag(seg) — does this `cmd /c ...` payload delete recursively?
- * true = a rmdir/rd/del clause carries an independent `/s`; null = the payload
- * cannot be resolved statically (shell expansion, or a `/`-leading flag-position
- * token carrying `%VAR%` / `!VAR!` that could expand to `/s`); false otherwise.
- * Contract: detail.md Step 3.
- */
+// Three-valued: true = the payload deletes recursively; null = it cannot be
+// resolved statically, so the caller fails closed. Contract: detail.md Step 3.
 function hasRecursiveCmdExeFlag(seg) {
   if (!seg) return false;
   if (commandBasename(resolveEffectiveCommand(seg)) !== "cmd") return false;

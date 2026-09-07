@@ -1,10 +1,7 @@
 "use strict";
 
-// The interpreter half — which names carry an inline program body and how to
-// extract it — lives in ./segment-utils/interpreter-specs.js, and the wrapper
-// TABLE plus its option-skipping in ./segment-utils/wrapper-specs.js
-// (file-split); this file keeps the peel/scan half and re-exports both, so
-// callers keep one import.
+// Wrapper peel / mid-argv scan half; re-exports the interpreter and wrapper
+// spec tables so callers keep one import.
 const {
   UNRESOLVABLE_RE,
   INTERPRETER_SPECS,
@@ -24,11 +21,8 @@ const {
   skipWrapperOptions,
 } = require("./segment-utils/wrapper-specs");
 
-// Peel any chain of leading command wrappers (env/command/nice/nohup/...) from a
-// synthetic {cmd0, argv}. Returns the innermost {cmd0, argv} (argv excludes cmd0)
-// plus `ambiguous` (true when peeling was refused mid-chain). On ambiguity the
-// ORIGINAL cmd0/argv are returned unchanged so raw detection still sees them.
-// Bounded iteration guards against pathological nesting.
+// Peel leading command wrappers (env/nice/nohup/...) down to the real command.
+// On ambiguity the ORIGINAL cmd0/argv come back so raw detection still sees them.
 function peelWrappers(cmd0, argv) {
   let curCmd = cmd0;
   let curArgv = Array.isArray(argv) ? argv : [];
@@ -37,9 +31,7 @@ function peelWrappers(cmd0, argv) {
     if (!spec) break;
     const idx = skipWrapperOptions(curArgv, spec);
     if (idx === AMBIGUOUS) {
-      // Fail-closed: do not hide a potential write behind an unclassifiable
-      // option. Return the ORIGINAL (pre-peel) cmd0 so callers fall back to
-      // raw-command detection + the wrappedWriteVerbScan safety net.
+      // Fail-closed: callers fall back to raw detection + scanWrappedVerb.
       return { cmd0, argv: Array.isArray(argv) ? argv : [], ambiguous: true };
     }
     if (idx === -1) break; // wrapper with no wrapped command — leave as-is
@@ -54,12 +46,8 @@ function peelWrappers(cmd0, argv) {
 // Flags whose VALUE is a command line the outer program runs itself.
 const EXEC_ARG_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
 
-// True when tokens[idx] is genuinely INVOKED as a command by what precedes it:
-// the head (after any NAME=VALUE prefix), a `find -exec` argument, or the end
-// of a real wrapper chain (`sudo su`, `timeout 5 su`, and the AMBIGUOUS forms
-// `env --bogusopt su` / `nice -X su`). A name sitting in argv as DATA
-// (`echo su -c "rm -rf x"`) is not — the distinction a head-position-only test
-// draws too narrowly (#2210).
+// True when tokens[idx] is genuinely INVOKED: head, `find -exec` argument, or
+// end of a wrapper chain. A name sitting in argv as DATA is not (#2210).
 function isInvokedAsCommandAt(tokens, idx) {
   const toks = Array.isArray(tokens) ? tokens : [];
   if (idx <= 0) return idx === 0;
@@ -72,8 +60,7 @@ function isInvokedAsCommandAt(tokens, idx) {
     if (!spec) return false;
     const off = skipWrapperOptions(toks.slice(cur + 1), spec);
     if (off === AMBIGUOUS) {
-      // Chain is real, only the unknown option's arity is not: accept idx when
-      // every token in between is itself option- or assignment-shaped.
+      // Chain is real, only the unknown option's arity is not.
       const between = toks.slice(cur + 1, idx);
       return between.every((t) => typeof t === "string" && (t.startsWith("-") || ASSIGN_RE.test(t)));
     }
@@ -88,12 +75,9 @@ function isInvokedAsCommandAt(tokens, idx) {
 // Commands whose arguments are TEXT BEING PRINTED, never a program being run.
 const TEXT_PRODUCERS = new Set(["echo", "printf"]);
 
-// True when tokens[idx] sits in a text producer's argument list, i.e. it is
-// DATA (`echo su -c "rm -rf x"`, #2210 round-10). Everything else — a
-// transparent-exec head this module does not model (ssh, docker run, kubectl
-// exec, npx, make, strace, gdb --args, firejail, poetry run, ...), `find -exec`,
-// a wrapper chain, the head itself — stays a possible invocation, so the
-// mid-argv nets keep their broad reading there (#2210 round-15 item 2).
+// True when tokens[idx] is DATA in a text producer's argv (`echo su -c "rm -rf x"`).
+// Everything else stays a possible invocation: heads this module does not model
+// (ssh, docker run, npx, ...) must keep the mid-argv nets broad (#2210).
 function isPrintedDataAt(tokens, idx) {
   const toks = Array.isArray(tokens) ? tokens : [];
   for (let i = 0; i < idx && i < toks.length; i++) {
@@ -104,13 +88,8 @@ function isPrintedDataAt(tokens, idx) {
   return false;
 }
 
-// Same peel as peelWrappers, but stops BEFORE unwrapping a basename in
-// `stopBasenames` even though it is itself a registered wrapper (#2210
-// round-8). `xargs` is one such entry: recursive-delete-scan.js and rm.js want
-// to see straight through to the command it runs, but exotic-exec.js's
-// isExoticExecWriteIR needs `xargs` itself — it applies its own, more specific,
-// dynamic-argument handling to the command xargs runs rather than treating it
-// like an ordinary transparent wrapper.
+// peelWrappers, stopping before a `stopBasenames` entry. exotic-exec.js needs
+// `xargs` itself (its own dynamic-argument handling); rm.js wants it peeled.
 function peelWrappersUntil(cmd0, argv, stopBasenames) {
   let curCmd = cmd0;
   let curArgv = Array.isArray(argv) ? argv : [];
@@ -131,13 +110,9 @@ function peelWrappersUntil(cmd0, argv, stopBasenames) {
   return { cmd0: curCmd, argv: curArgv, ambiguous: false };
 }
 
-// Same peel as peelWrappers, but threads the RAW (quote-preserving) argv in
-// lockstep so a caller that must classify on raw text (rm.js's flag-quoting
-// detection, #2210 F1/F2) sees the wrapper's OWN options skipped rather than
-// the wrapped command's — a bare peelWrappers(cmd0, argv) result cannot say
-// how many RAW tokens to drop. AMBIGUOUS is reported via the same
-// `ambiguous: true` contract as peelWrappers — the original raw argv is
-// returned unchanged so a fail-closed caller still has full raw text to scan.
+// peelWrappers threading the RAW (quote-preserving) argv in lockstep: a plain
+// peelWrappers result cannot say how many RAW tokens to drop, which rm.js's
+// flag-quoting detection needs (#2210).
 function peelWrappersRaw(cmd0, cmd0Raw, argv, argvRaw) {
   let curCmd = cmd0;
   let curCmdRaw = typeof cmd0Raw === "string" ? cmd0Raw : cmd0;
@@ -172,7 +147,6 @@ function resolveEffectiveCommand(seg) {
   if (!seg || seg.cmd0 == null) return null;
   let cmd0 = seg.cmd0;
   let argv = seg.argv;
-  // Skip leading NAME=VALUE assignments (inline env-prefix, e.g. `A=1 B=2 tee`).
   if (ASSIGN_RE.test(cmd0)) {
     if (!Array.isArray(argv)) return null;
     const idx = argv.findIndex((a) => !ASSIGN_RE.test(a));
@@ -180,7 +154,6 @@ function resolveEffectiveCommand(seg) {
     cmd0 = argv[idx];
     argv = argv.slice(idx + 1);
   }
-  // Peel command wrappers (env/command/nice/nohup/...) so the real command surfaces.
   if (wrapperSpecFor(cmd0)) {
     if (!Array.isArray(argv)) return cmd0;
     return peelWrappers(cmd0, argv).cmd0;
@@ -205,20 +178,14 @@ function resolveEffectiveArgv(seg) {
   return argv.slice();
 }
 
-// Safety net for the fail-closed peel bail (AMBIGUOUS): even when peelWrappers
-// refuses to resolve past an unclassifiable option, a wrapped write command may
-// still be hiding further along the argv. Scan the RAW argv of a wrapper segment
-// and return true when verbTest(token, restTokens) matches. Only applies to
-// segments whose cmd0 is a known wrapper (or resolves to one via an env-prefix);
-// a non-wrapper segment is already resolved by resolveEffectiveCommand. It fires
-// only when the effective command could NOT be cleanly resolved, so it never
-// over-fires on ordinary commands.
+// Safety net for the fail-closed peel bail: a wrapped write command may still be
+// hiding further along a wrapper segment's argv. Fires only on AMBIGUOUS, so it
+// never over-fires on commands resolveEffectiveCommand already resolves.
 function scanWrappedVerb(seg, verbTest) {
   if (!seg || seg.cmd0 == null) return false;
   let cmd0 = seg.cmd0;
   let argv = Array.isArray(seg.argv) ? seg.argv : null;
   if (argv === null) return false;
-  // Penetrate a leading env-prefix (NAME=VALUE... wrapperName ...).
   if (ASSIGN_RE.test(cmd0)) {
     const idx = argv.findIndex((a) => !ASSIGN_RE.test(a));
     if (idx === -1) return false;
@@ -226,10 +193,8 @@ function scanWrappedVerb(seg, verbTest) {
     argv = argv.slice(idx + 1);
   }
   if (!wrapperSpecFor(cmd0)) return false; // not a wrapper — nothing hidden
-  // Only engage the safety net when a clean peel is NOT possible (ambiguous).
   const peeled = peelWrappers(cmd0, argv);
   if (!peeled.ambiguous) return false;
-  // Ambiguous: scan raw argv tokens for a wrapped write verb.
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (typeof tok !== "string") continue;
@@ -238,15 +203,11 @@ function scanWrappedVerb(seg, verbTest) {
   return false;
 }
 
-// Safety net for an interpreter hiding MID-ARGV, where the effective-command
-// path never lands on it: an AMBIGUOUS peel returns the wrapper itself
-// (`env --bogusopt sh -c '...'`), and a non-wrapper head is never peeled at all
-// (`find . -exec sh -c '...'`). scanWrappedVerb cannot cover this class — its
-// test sees one TOKEN at a time, never an interpreter's multi-word `-c` STRING.
-// Only PRINTED DATA is excluded (isPrintedDataAt), the asymmetry round-10 hit
-// with `echo python -c '...'` scanned while `echo su -c '...'` was not. Gating
-// on isInvokedAsCommandAt instead narrowed the net to heads this module models
-// as wrappers, letting `ssh host bash -c 'rm -rf d'` through (#2210 round-15).
+// Safety net for an interpreter hiding MID-ARGV (`find . -exec sh -c '...'`),
+// which scanWrappedVerb cannot cover: its test sees one TOKEN at a time, never
+// an interpreter's multi-word `-c` STRING. Excluding anything beyond printed
+// data — e.g. gating on isInvokedAsCommandAt — let `ssh host bash -c 'rm -rf d'`
+// through (#2210).
 function scanWrappedInterpreter(argv) {
   const toks = Array.isArray(argv) ? argv : [];
   const found = [];
@@ -259,9 +220,8 @@ function scanWrappedInterpreter(argv) {
   return found;
 }
 
-// ASSIGN_RE / WRAPPER_SPECS / peelWrappers / isAttachedShortValue are exported
-// for #2053: the forge-target-ownership guard peels the same wrapper set this
-// module already models, rather than re-deriving it (CPR-SSOT).
+// ASSIGN_RE / WRAPPER_SPECS / peelWrappers / isAttachedShortValue are exported so
+// the #2053 ownership guard reuses this wrapper set instead of re-deriving it.
 module.exports = {
   resolveEffectiveCommand,
   resolveEffectiveArgv,

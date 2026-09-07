@@ -1,10 +1,7 @@
 "use strict";
 
-// Literal-variable tracking for recursive-delete-scan.js: does an `rm`
-// segment reference a tracked flag variable built from an assignment
-// (`FLAGS=-rf; rm $FLAGS d`) or several concatenated ones (`A=-; B=rf;
-// rm $A$B d`, #2210 round8 item 7)? Split out of the parent when it crossed
-// the 500-line hard limit.
+// Literal-variable tracking for recursive-delete-scan.js: does an `rm` segment
+// reference a flag variable built from assignments (`FLAGS=-rf; rm $FLAGS d`)?
 
 const {
   resolveEffectiveCommand,
@@ -38,12 +35,7 @@ function literalAssignmentValue(rhs) {
   return v;
 }
 
-// Track literal VALUES (not just a recursive/non-recursive boolean) so a
-// later reference can be reconstructed even when the flag is built from
-// several variables concatenated together (`A=-; B=rf; rm $A$B dir`, #2210
-// round8 item 7). A later `unset` or a non-literal reassignment drops the
-// name again, so a reassignment to a safe value is not treated as still
-// dangerous. Contract: detail.md Step 4 step 2-0 / 0'.
+// Literal values, not a boolean: `A=-; B=rf; rm $A$B d` must reassemble.
 function applyAssignments(seg, values) {
   for (const tok of segTokens(seg)) {
     const eq = tok.indexOf("=");
@@ -59,10 +51,8 @@ function applyUnset(seg, values) {
   for (const tok of resolveEffectiveArgv(seg)) values.delete(tok);
 }
 
-// `export`/`declare`/`typeset`/`readonly`/`local` carry NAME=VALUE assignments
-// alongside their own option flags, so a plain isPureAssignmentSegment test
-// (every token is an assignment) misses `export FLAGS=-rf` (#2210 N5). Filter
-// to just the argv tokens shaped like an assignment before reusing applyAssignments.
+// These carry assignments alongside option flags, so isPureAssignmentSegment
+// (EVERY token an assignment) misses `export FLAGS=-rf`.
 const ASSIGNMENT_CARRYING_CMDS = new Set(["export", "declare", "typeset", "readonly", "local"]);
 
 function applyAssignmentCarryingCommand(seg, values) {
@@ -71,10 +61,8 @@ function applyAssignmentCarryingCommand(seg, values) {
   applyAssignments({ cmd0: null, argv: assignTokens }, values);
 }
 
-// Replace every `$NAME` / `${NAME}` / `${NAME<op>...}` reference to a tracked
-// variable with its literal value, leaving anything unresolved untouched.
-// A global replace naturally reassembles split-variable concatenation
-// (`$A$B` with A="-", B="rf" -> "-rf") without any special-casing.
+// A global replace reassembles split-variable concatenation (`$A$B` with
+// A="-", B="rf" -> "-rf") without special-casing.
 const VAR_REF_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(?::?[-=?+]|\/\/?)[\s\S]*?)?\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 
 function substituteKnownVars(tok, values) {
@@ -84,14 +72,10 @@ function substituteKnownVars(tok, values) {
   });
 }
 
-// True when an `rm` segment passes a tracked recursive-flag variable as an
-// argument (`rm $FLAGS x` after `FLAGS=-rf`, or a split-variable build like
-// `rm $A$B x` after `A=-; B=rf`) — the single-hop bypass of Step 4 a'.
 function referencesRecursiveFlagVar(seg, values) {
   if (values.size === 0) return false;
-  // BASENAME-resolved, matching hasRecursiveRmFlag's own normalization
-  // (#2210 F5) — an exact-string compare here missed `/bin/rm $F d` and
-  // `rm.exe $F d` even though the sibling judge in rm.js resolves both.
+  // BASENAME-resolved like hasRecursiveRmFlag: an exact compare missed
+  // `rm.exe $F d` and the absolute-path spelling (#2210).
   if (commandBasename(resolveEffectiveCommand(seg)) !== "rm") return false;
   for (const tok of resolveEffectiveArgv(seg)) {
     if (typeof tok !== "string" || !tok.includes("$")) continue;

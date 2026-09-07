@@ -2,31 +2,20 @@
 
 // Which command names carry an INLINE PROGRAM BODY on their argv, how each
 // spells the flag that introduces it, and how to pull that body back out.
-// Split out of segment-utils.js when the interpreter table pushed it past the
-// 500-line hard limit (rules/coding/file-split.md); the parent keeps the
-// wrapper-peel half and re-exports this one, so INTERPRETER_SPECS still has a
-// single owner (CPR-SSOT) shared by the mid-argv scanWrappedInterpreter net and
-// the recursive-delete scan's effective-command path.
 
 // Text that cannot be resolved statically (expansion / substitution).
 const UNRESOLVABLE_RE = /[$`(]/;
 
-// `kind` tells the caller how to judge the body ("shell" = command text,
-// "language" = source); `bodyLetters` are the short-option letters that
-// introduce it inside a single-dash cluster; `attachedBody` says whether the
-// cluster's remainder is itself the body (`python -cCODE`, `perl -e'CODE'`).
-// POSIX shells clear attachedBody because their cluster remainder is more
-// option LETTERS (`sh -ce CMD` runs CMD, not "e"). fish/tcsh/csh join the shell
-// set: each takes one command STRING after `-c` exactly as sh does.
+// `attachedBody`: the single-dash cluster's remainder is itself the body
+// (`python -cCODE`). Shells clear it — their remainder is more option LETTERS
+// (`sh -ce CMD` runs CMD, not "e").
 const SHELL_BODY_SPEC = {
   kind: "shell", lang: null,
   bodyLetters: new Set(["c"]), longFlags: new Set(["--command"]), attachedBody: false,
 };
 
-// Per-language bundling rules differ, so each declares its own body letters
-// rather than reusing the shell's `c`: python bundles boolean flags ahead of
-// `-c` (`-uc CODE`), perl ahead of `-e` (`-le CODE`), node clusters `-pe` and
-// also accepts `--eval=CODE` with the value attached by `=`.
+// Bundling rules differ per language, so each declares its own body letters
+// rather than reusing the shell's `c`.
 const LANG_SPECS = {
   python: { kind: "language", lang: "python", bodyLetters: new Set(["c"]), longFlags: new Set(), attachedBody: true },
   perl: { kind: "language", lang: "perl", bodyLetters: new Set(["e", "E"]), longFlags: new Set(), attachedBody: true },
@@ -34,13 +23,9 @@ const LANG_SPECS = {
   node: { kind: "language", lang: "node", bodyLetters: new Set(["e", "p"]), longFlags: new Set(["--eval", "--print"]), attachedBody: true },
 };
 
-// The second family the sibling guard block-clearance-token-write/
-// interpreter-scan.js already enumerates (BODY_FIRST_INTERPRETER_NAMES): each
-// runs an inline one-liner and each can shell out, so a recursive delete hides
-// in one exactly as it does in `python -c`. Modeled here so the same body
-// reaches the delete-shape matcher (CPR-ORTH). None declares its own delete
-// SHAPES beyond the shell spellings except `r` and `tcl` — see
-// LANGUAGE_DELETE_SHAPES in recursive-delete-scan/interpreter-bodies.js.
+// Mirrors BODY_FIRST_INTERPRETER_NAMES in block-clearance-token-write/
+// interpreter-scan.js: each runs an inline one-liner that can shell out, so a
+// recursive delete hides in one exactly as in `python -c` (CPR-ORTH).
 const langFlagSpec = (lang, letters, longFlags) => ({
   kind: "language", lang,
   bodyLetters: new Set(letters), longFlags: new Set(longFlags || []), attachedBody: true,
@@ -55,9 +40,8 @@ const BODY_FLAG_LANG_SPECS = {
   tcl: langFlagSpec("tcl", ["c"]),
 };
 
-// awk reads its PROGRAM from the first positional argument, with no flag at all
-// — `awk 'BEGIN{system("rm -rf d")}'`. `-f progfile` loads the program from a
-// FILE instead, so that form carries no inline body to scan.
+// awk takes its PROGRAM as the first positional, with no flag at all; `-f
+// progfile` loads it from a FILE instead, so that form has no inline body.
 const AWK_SPEC = {
   kind: "language", lang: "awk", bodyFirst: true,
   valueFlags: new Set(["-F", "-v", "-f"]),
@@ -65,13 +49,9 @@ const AWK_SPEC = {
   bodyLongFlags: new Set(["--source"]),
 };
 
-/**
- * interpreterInlineBodies(spec, argv) — every inline body `spec`'s interpreter
- * would run, given the argv that FOLLOWS its name. Both readings of an attached
- * cluster are returned (`node -pe CODE` clusters two body letters and takes the
- * next word; `python -cCODE` glues the body on) — the caller judges each, so
- * neither reading can be lost to a guess.
- */
+// Every inline body `spec`'s interpreter would run, given the argv FOLLOWING its
+// name. Both readings of an attached cluster are returned (`node -pe CODE` vs
+// `python -cCODE`) so neither is lost to a guess.
 function interpreterInlineBodies(spec, argv) {
   const toks = Array.isArray(argv) ? argv : [];
   const bodies = [];
@@ -103,10 +83,8 @@ function interpreterInlineBodies(spec, argv) {
   return bodies;
 }
 
-// The body-first reading: skip the interpreter's own options, then take the
-// first remaining positional as the program. An option whose value follows as a
-// separate token consumes it so the program is not mistaken for that value; a
-// program-FILE flag means there is no inline body at all.
+// Body-first reading: skip the interpreter's options — consuming separated
+// values so the program is not mistaken for one — then take the first positional.
 function bodyFirstInlineBodies(spec, argv) {
   const toks = Array.isArray(argv) ? argv : [];
   for (let i = 0; i < toks.length; i++) {
@@ -123,9 +101,8 @@ function bodyFirstInlineBodies(spec, argv) {
   return [];
 }
 
-// `pwsh -EncodedCommand <base64>` runs a BASE64 UTF-16LE script, so the token is
-// decoded before it can be scanned. Anything that cannot be decoded statically
-// returns null and the caller fails closed (#2210 round-4 C3).
+// `pwsh -EncodedCommand <base64>` runs a BASE64 UTF-16LE script; null means
+// undecodable and the caller fails closed (#2210).
 function decodeEncodedCommand(tok) {
   if (typeof tok !== "string" || tok === "") return null;
   if (UNRESOLVABLE_RE.test(tok)) return null;
@@ -138,13 +115,10 @@ function decodeEncodedCommand(tok) {
   }
 }
 
-// PowerShell's own inline-body flags: `-Command`/`-EncodedCommand` or any
-// case-insensitive prefix of either (`-c`, `-Comm`, `-enc`). `-Command` consumes
-// ALL remaining arguments and joins them into ONE script — reading only the next
-// token left `pwsh -Command Remove-Item -Recurse d` looking like a bare
-// `Remove-Item`, which approved (#2210 round-6). `-EncodedCommand` keeps its
-// single-token payload, decoded above; anything undecodable yields
-// "unresolvable" so the caller fails closed.
+// `-Command`/`-EncodedCommand`, or any case-insensitive prefix (`-c`, `-enc`).
+// `-Command` consumes ALL remaining arguments as ONE script — reading only the
+// next token let `pwsh -Command Remove-Item -Recurse d` pass as a bare
+// `Remove-Item` (#2210).
 function pwshInterpreterBodies(argv) {
   const toks = Array.isArray(argv) ? argv : [];
   for (let i = 0; i < toks.length; i++) {
@@ -154,11 +128,8 @@ function pwshInterpreterBodies(argv) {
     if (name === "") continue;
     if ("command".startsWith(name)) {
       const rest = toks.slice(i + 1).filter((t) => typeof t === "string");
-      // `-Command -` is PowerShell's own stdin marker (like bash's `-s`), not a
-      // literal one-character script body — treating it as inline text let the
-      // real script arrive via stdin unscanned (`echo 'Remove-Item -Recurse d'
-      // | pwsh -Command -`, #2210 security-scanner C26). Report no inline body
-      // so the stdin-delivery path picks it up instead.
+      // `-Command -` is a stdin marker, not a one-character body: reporting no
+      // inline body hands it to the stdin-delivery path instead (#2210).
       const isStdinMarker = rest.length === 1 && rest[0] === "-";
       return rest.length === 0 || isStdinMarker ? [] : [{ kind: "shell", body: rest.join(" ") }];
     }
@@ -188,15 +159,12 @@ const INTERPRETER_SPECS = new Map([
   ...["awk", "gawk", "mawk", "nawk"].map((n) => [n, AWK_SPEC]),
 ]);
 
-// Still NOT modeled, deliberately: `deno eval CODE` (a SUBCOMMAND, not a flag —
-// a body-first reading would take the word "eval" as the program), and
-// `busybox awk`/`busybox-awk` (busybox is peeled as a WRAPPER, so its applet
-// resolves to a plain `awk` only in the peeled form). Both are enumeration
-// gaps, and enumeration inherently lags — the structural checks are the backstop.
+// Deliberately unmodeled: `deno eval CODE` (a SUBCOMMAND — a body-first reading
+// would take the word "eval" as the program) and `busybox-awk`. Enumeration
+// lags by nature; the structural checks are the backstop.
 
-// The one entry point every caller uses, so no caller has to know which of the
-// three extraction shapes its spec declares. Returns {kind, lang, body} entries
-// (kind "unresolvable" carries no body).
+// Single entry point, so no caller has to know which of the three extraction
+// shapes its spec declares. Kind "unresolvable" carries no body.
 function interpreterFoundBodies(spec, argv) {
   if (typeof spec.inlineBodies === "function") return spec.inlineBodies(argv);
   const bodies = spec.bodyFirst ? bodyFirstInlineBodies(spec, argv) : interpreterInlineBodies(spec, argv);

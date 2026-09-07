@@ -1,22 +1,18 @@
 "use strict";
 
-// Heredoc opener/body extraction for recursive-delete-scan.js. Split out of
-// scan.js (rules/coding/file-split.md Pattern A) when the quote/comment
-// anchoring below pushed that file past the 300-line warn threshold.
+// Heredoc opener/body extraction for recursive-delete-scan.js.
 
 const { scanSpans, quoteContextAt } = require("../../quote-spans");
 
-// One heredoc opener: `<<WORD` / `<<-'WORD'`. The delimiter class mirrors
-// stripHeredocBody's (strip-quoted-args.js) so both routes agree on what a
-// heredoc tag may be spelled as.
+// Delimiter class mirrors stripHeredocBody's (strip-quoted-args.js) so both
+// routes agree on what a heredoc tag may be spelled as.
 const HEREDOC_OPENER_G = /<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_.-]*)\1/g;
 
-// A head may not span these — the clause boundary the opener-anchored regex in
-// strip-quoted-args.js enforces through its own character class.
+// A head may not span these — same clause boundary strip-quoted-args.js enforces.
 const CLAUSE_SEPS = ";|&()";
 
-// Absolute offset of every line start, so a per-line match index can be tested
-// against the whole-command span scan.
+// Absolute line starts, so a per-line match index can be tested against the
+// whole-command span scan.
 function lineOffsets(lines) {
   const offsets = new Array(lines.length);
   let at = 0;
@@ -27,8 +23,8 @@ function lineOffsets(lines) {
   return offsets;
 }
 
-// First `#` that actually opens a comment on this line, or line.length. A `#`
-// glued to a word (`a#b`) or sitting inside a quote is not one.
+// First `#` that actually opens a comment: one glued to a word (`a#b`) or
+// inside a quote is not one.
 function commentIndex(line, base, unquotedAt) {
   for (let k = 0; k < line.length; k++) {
     if (line[k] !== "#") continue;
@@ -47,11 +43,9 @@ function clauseHead(line, base, mi, unquotedAt) {
   return line.slice(0, mi).trim();
 }
 
-// Terminator lookup, linear overall: openers are visited in increasing line
-// order, so a per-delimiter cursor only ever moves forward. `ends.find(j => j >
-// i)` rescanned from 0 for every opener, which is quadratic and blew past the
-// harness's 5-second timeout — fail-open now that settings.json carries no
-// deny-glob backstop (#2210 round-15 C9).
+// Linear, not quadratic: openers arrive in increasing line order, so the
+// cursor only moves forward. A rescan-from-0 blew the harness's 5s timeout,
+// which is fail-open (#2210).
 function terminatorAfter(terminatorLines, cursors, delim, i) {
   const ends = terminatorLines.get(delim);
   if (!ends) return undefined;
@@ -73,14 +67,10 @@ function indexTerminators(lines) {
 }
 
 /**
- * extractHeredocs(rawCmd) — every `{ head, body }` a heredoc opener introduces.
- *
- * Opener recognition is anchored to a real token position: a `<<` merely
- * MENTIONED inside a quoted string (`echo "<<B"`) or after a `#` comment marker
- * is not an opener, so it can no longer shadow the REAL opener on a later line
- * by making the body-line skip below jump over it (#2210 round-15 item 1). When
- * the span scan cannot resolve the text, every `<<` stays a candidate — the
- * fail-closed direction, since extracting more bodies only widens judging.
+ * Every `{ head, body }` a heredoc opener introduces. A `<<` merely MENTIONED
+ * in a quote or comment is not an opener — treating it as one let it shadow
+ * the real opener on a later line via the body-line skip (#2210). An
+ * unresolvable span scan keeps every `<<` a candidate: the fail-closed way.
  */
 function extractHeredocs(rawCmd) {
   if (typeof rawCmd !== "string" || !rawCmd.includes("<<")) return [];

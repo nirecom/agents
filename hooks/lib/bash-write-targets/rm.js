@@ -10,12 +10,9 @@ const {
 } = require("../bash-write-patterns/segment-utils");
 const { expandRawToken, isUnresolvableToken } = require("./helpers");
 
-// Strip shell quoting/escaping so a flag hidden behind it still classifies:
-// `"-rf"`, `'-rf'`, `-"rf"`, `""-rf`, `\-rf`, `-\rf` all reduce to `-rf`
-// (#2210 F2). Bash brace expansion (`-{r,f}`) is a distinct, lexical-only
-// mechanism this does not simulate — an accepted residual gap, not silently
-// dropped: see docs/security-policy.md's "Known residual gaps" section for
-// the canonical, up-to-date inventory of what this hook does and does not cover.
+// Strip shell quoting so a flag hidden behind it still classifies: `-"rf"`,
+// `\-rf`, `-\rf` all reduce to `-rf`. Brace expansion (`-{r,f}`) is not
+// simulated — an accepted gap, inventoried in docs/security-policy.md.
 function dequoteShellToken(raw) {
   if (typeof raw !== "string") return "";
   let out = "";
@@ -43,9 +40,8 @@ function dequoteShellToken(raw) {
   return out;
 }
 
-// Strip a leading `NAME=VALUE...` env-prefix from a segment's {cmd0, argv} AND
-// its raw counterparts in lockstep (command-ir.js's argv/argvRaw positional
-// invariant) — the peel step below needs both forms of the real command.
+// Strips the env-prefix from the resolved AND raw forms in lockstep: the peel
+// step below needs both, and command-ir.js keeps them positionally aligned.
 function stripEnvPrefix(seg) {
   let cmd0 = seg.cmd0;
   let cmd0Raw = typeof seg.cmd0Raw === "string" ? seg.cmd0Raw : seg.cmd0;
@@ -63,8 +59,6 @@ function stripEnvPrefix(seg) {
   return { cmd0, cmd0Raw, argv, argvRaw };
 }
 
-// Return the RAW argv tokens that follow the env-prefix (VAR=val) run and the
-// effective command.
 function resolveRawArgvAfterEnvPrefix(seg) {
   if (!seg || !Array.isArray(seg.argv) || !Array.isArray(seg.argvRaw)) return [];
   const skipCmd = ASSIGN_RE.test(seg.cmd0 || "");
@@ -74,16 +68,8 @@ function resolveRawArgvAfterEnvPrefix(seg) {
   return seg.argvRaw.slice(idx + 1);
 }
 
-/**
- * Extract POSIX rm targets from a SegmentIR.
- *
- * rm [flags] path... — returns all positional (non-flag) args.
- * `--` ends flag parsing: every token after it is a positional.
- *
- * Backward-compat: a raw command string is parsed and its rm segment used.
- * Returns: string[] on success (may be empty), null on parse failure
- *   (unresolvable token via $VAR / $(...) / backticks, single-quote fail-closed).
- */
+// Returns rm's positional targets, or null when a token is unresolvable and the
+// caller must fail closed.
 function extractRmTargets(seg) {
   // Backward compat: accept a raw command string.
   if (typeof seg === "string") {
@@ -103,7 +89,7 @@ function extractRmTargets(seg) {
     if (!sawDashDash && rawTok === "--") { sawDashDash = true; continue; }
     if (!sawDashDash && rawTok.startsWith("-")) continue;
 
-    // Simple single-quoted: literal content, no expansion.
+    // Single-quoted: literal content, no expansion.
     if (rawTok.startsWith("'") && rawTok.endsWith("'") && rawTok.length >= 2) {
       const lit = rawTok.slice(1, -1);
       if (lit.includes("$")) return null;
@@ -121,18 +107,11 @@ function extractRmTargets(seg) {
   return positionals;
 }
 
-/**
- * isRecursiveRmFlagToken(tok) — classify ONE `-`-leading rm token (#2210).
- * true = requests recursion; null = flag content unresolvable, caller fails
- * closed; false = anything else (incl. a `${VAR:-default}` whose default is
- * itself flag-shaped, #2210 N5). Split out for CPR-SSOT reuse by the
- * assignment-value judgment in recursive-delete-scan.js. Contract: detail.md Step 1.
- */
+// Three-valued classifier for ONE `-`-leading rm token; null = unresolvable, so
+// the caller fails closed. Contract: detail.md Step 1.
 const PARAM_DEFAULT_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*:?-([\s\S]*)\}$/;
-// Sibling parameter-expansion operators (`:=`/`=`, `:+`/`+`, `:?`/`?`, `//`/`/`)
-// are not default-value forms, but their operand can still be flag-shaped or
-// itself unresolvable (#2210 F4) — matched broadly so any of them fails
-// closed on an unresolvable operand rather than silently returning false.
+// Non-default expansion operators are matched too: their operand can also be
+// flag-shaped or unresolvable, and must fail closed rather than return false.
 const PARAM_EXPANSION_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::?[-=?+]|\/\/?)([\s\S]*)\}$/;
 
 function isRecursiveRmFlagToken(tok) {
@@ -164,14 +143,8 @@ function isRecursiveRmFlagToken(tok) {
   return false;
 }
 
-/**
- * hasRecursiveRmFlag(seg) — does this POSIX `rm` segment request recursion?
- * Same three-value contract; structure mirrors extractRmTargets (string
- * back-compat entry, env-prefix-stripped RAW argv, `--` ends flag parsing).
- * Only `-`-leading tokens are classified: a bare token is a TARGET, and failing
- * closed on those would break the everyday `rm "$file"`. Command test is by
- * BASENAME so `/bin/rm` / `rm.exe` resolve. Contract: detail.md Step 1.
- */
+// Only `-`-leading tokens are classified: a bare token is a TARGET, and failing
+// closed on those would break the everyday `rm "$file"`. Contract: detail.md Step 1.
 function hasRecursiveRmFlag(seg) {
   if (typeof seg === "string") {
     const ir = parse(seg);
@@ -185,11 +158,8 @@ function hasRecursiveRmFlag(seg) {
   const stripped = stripEnvPrefix(seg);
   if (!stripped) return false;
   const peeled = peelWrappersRaw(stripped.cmd0, stripped.cmd0Raw, stripped.argv, stripped.argvRaw);
-  // An unclassifiable wrapper option must fail closed ONLY when an `rm` is
-  // actually hiding somewhere in the wrapper's raw argv (#2210 F4/N4) — an
-  // ambiguous option on an unrelated wrapped command (`nice -5 npm test`)
-  // must not itself become a block, or every unclassified wrapper flag turns
-  // into a universal deny regardless of what it wraps.
+  // An unclassifiable wrapper option fails closed only when an `rm` really hides
+  // in its raw argv; otherwise `nice -5 npm test` becomes a universal deny.
   if (peeled.ambiguous) {
     const wrapperSeg = { cmd0: stripped.cmd0, argv: stripped.argv };
     return scanWrappedVerb(wrapperSeg, (tok) => commandBasename(tok) === "rm") ? null : false;
