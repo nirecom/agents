@@ -194,35 +194,13 @@ To add private patterns, copy `.private-info-blocklist.example` to `.private-inf
 ### Bash compound-command guard
 
 A PreToolUse hook (`hooks/bash-guard.js`) denies command-line issuance of forbidden
-compound-shell literals — chaining (`&&`/`;`), pipes, command substitution
-(backtick/`$(...)`), grouping (`{ ... }`), heredocs (`<<`), redirects (`>`/`>>`), and
-leading env-var prefixes (`FOO=1 cmd`) — per `rules/shell-commands.md` Command-Line
-Issuance Discipline. Detection parses the command through a shared IR rather than a
-regex over raw text, so multi-step work is pushed into a reviewable scratchpad script
-instead of an opaque one-line compound. Two narrowly-scoped exemptions apply (a pipe
-into `xargs`, a command already covered by a `permissions.allow` rule); everything
-else is denied outright. Covers the `Bash` tool only — `runInTerminal`/`runCommands`
-(PowerShell-driving VS Code tools) are a documented gap, since the same literals mean
-different things in pwsh. See
-[docs/architecture/claude-code/settings.md](docs/architecture/claude-code/settings.md).
+compound-shell literals per `rules/shell-commands.md` Command-Line Issuance Discipline.
+See [docs/architecture/claude-code/settings.md](docs/architecture/claude-code/settings.md).
 
 ### Comment-block size gate
 
-A long run of comment lines is easy to add and hard to notice in review, so it
-is blocked at two points: an `Edit`/`Write`/`MultiEdit` that grows a comment block past the
-threshold is rejected before it lands, and `git commit` blocks as a backstop for anything
-that reaches the staging area another way. A blank line or a lone no-op token (`;`, `:`,
-`{}`, `()`, `,`) bridges a comment block rather than splitting it, so inserting one does not
-reset the count. A staged file is compared against its committed
-version and flagged only when its comment blocks got longer, so an already-long block never
-blocks an unrelated edit; a file with no committed version is judged on its own contents.
-Neither check rewrites a file, and both fire only for this repository even though the hook
-paths are configured globally. Run `bin/review-comment-block-size --all` for the same report
-over the whole working tree. Set `COMMENT_BLOCK_MAX_LINES` (default 10) to tune the threshold
-or `COMMENT_BLOCK_ENFORCE=off` to disable the gate — see `.env.example`. Both settings are
-read only from the repository's own `.env`; an ambient shell variable of the same name cannot
-raise the threshold or turn the gate off, and neither `WORKFLOW_OFF` nor `WORKTREE_OFF`
-suspends it (see `docs/architecture/claude-code/marker-bypass-contract.md`).
+Blocks an over-long run of comment lines at edit time and at `git commit` as a backstop.
+See [docs/architecture/claude-code/comment-block-size-gate.md](docs/architecture/claude-code/comment-block-size-gate.md).
 
 ### Forge write target-ownership guard
 
