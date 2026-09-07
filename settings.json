@@ -135,10 +135,6 @@
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
-      "Bash(*Remove-Item*-Recurse*-Force*)",
-      "Bash(*Remove-Item*-Force*-Recurse*)",
-      "Bash(*rm -rf *)",
-      "Bash(*rm -fr *)",
       "Bash(*find *-exec *)",
       "Bash(*find *-execdir *)",
       "Bash(*find *-ok *)",
@@ -487,6 +483,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-recursive-delete.js\"",
             "timeout": 5
           }
         ]

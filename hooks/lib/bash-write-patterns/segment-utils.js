@@ -1,113 +1,28 @@
 "use strict";
-const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
-// Command wrappers that prefix a real command and transparently exec it. Peeling
-// them is a CLASS-level fix (CPR-E2C/CPR-ORTH): every write predicate uniformly
-// sees through `command git commit`, `env -u X git commit`, `nice rm f`. Each
-// entry declares valueFlags (consume a FOLLOWING token; attached `-n5`/`--adj=5`
-// are self-contained), booleanFlags (no argument), and eatAssignments (env only:
-// leading NAME=VALUE tokens are consumed). FAIL-CLOSED: an option in NEITHER set
-// and not an attached `=value` form is unclassifiable, so skipWrapperOptions
-// returns AMBIGUOUS and peelWrappers refuses to peel — see the AMBIGUOUS notes
-// on skipWrapperOptions/peelWrappers and the scanWrappedVerb safety net below.
-const AMBIGUOUS = -2; // distinct from -1 ("no wrapped command remains")
-
-const WRAPPER_SPECS = {
-  // env [-i] [-u NAME]... [-C DIR] [-S STRING] [--] [NAME=VALUE]... CMD ...
-  env: {
-    valueFlags: new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]),
-    booleanFlags: new Set(["-i", "--ignore-environment", "-0", "--null", "-v", "--debug"]),
-    eatAssignments: true,
-  },
-  // command [-p] [-v] [-V] CMD ... — bare boolean flags only.
-  command: { valueFlags: new Set(), booleanFlags: new Set(["-p", "-v", "-V"]), eatAssignments: false },
-  // nice [-n ADJUST] [--adjustment=ADJUST] CMD ...
-  nice: { valueFlags: new Set(["-n", "--adjustment"]), booleanFlags: new Set(), eatAssignments: false },
-  // nohup CMD ... — no options.
-  nohup: { valueFlags: new Set(), booleanFlags: new Set(), eatAssignments: false },
-  // stdbuf -i MODE -o MODE -e MODE CMD (separated `-o L` and attached `-oL` both
-  // supported: `-oL` is a self-contained attached token, `-o L` consumes `L`).
-  stdbuf: {
-    valueFlags: new Set(["-i", "--input", "-o", "--output", "-e", "--error"]),
-    booleanFlags: new Set(),
-    eatAssignments: false,
-  },
-  // setsid [-w] [-f] CMD ... — boolean flags only.
-  setsid: { valueFlags: new Set(), booleanFlags: new Set(["-w", "--wait", "-f", "--fork", "-c", "--ctty"]), eatAssignments: false },
-  // ionice [-c N] [-n N] [-p PID] [-t] CMD ... — NOTE: with -p PID there is
-  // typically NO wrapped command; -p is value-taking so its PID is consumed and
-  // the peel resolves to whatever follows (or -1 when nothing does).
-  ionice: {
-    valueFlags: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid"]),
-    booleanFlags: new Set(["-t", "--ignore"]),
-    eatAssignments: false,
-  },
-};
-
-// Normalize a command token to its lowercase basename with any trailing `.exe`
-// stripped — the shared FORM-normalization used by wrapper / verb basename checks
-// (FIX B). `/usr/bin/rm` → `rm`, `stdbuf.exe` → `stdbuf`, `./nice` → `nice`.
-function commandBasename(cmd0) {
-  if (typeof cmd0 !== "string" || cmd0 === "") return null;
-  const base = cmd0.split(/[\\/]/).pop();
-  if (!base) return null;
-  return base.replace(/\.exe$/i, "").toLowerCase();
-}
-
-// Look up a wrapper spec by BASENAME so path-qualified / `.exe` wrapper spellings
-// resolve too (FIX B): `/usr/bin/env`, `/bin/nohup`, `stdbuf.exe`, `./nice` all
-// map to their WRAPPER_SPECS entry. Strip any directory prefix (POSIX `/` or
-// Windows `\`) and a trailing `.exe`, lowercase, then look up. Returns the spec or
-// undefined. Mirrors isGitBasename's normalization (git-write-ir.js).
-function wrapperSpecFor(cmd0) {
-  const norm = commandBasename(cmd0);
-  return norm ? WRAPPER_SPECS[norm] : undefined;
-}
-
-// True when a token could be an ATTACHED short-option value form, e.g. `-oL`
-// (stdbuf), `-n5` (nice): a single-dash flag whose known prefix is value-taking
-// but which carries the value glued on. Such a token is self-contained (consumes
-// only itself). We treat any single-dash token longer than 2 chars whose 2-char
-// prefix is a declared value flag as attached-value (skip 1). This keeps `-oL`
-// from being misread as an unknown ambiguous flag.
-function isAttachedShortValue(tok, spec) {
-  if (tok.length <= 2 || tok[1] === "-") return false; // not `-Xrest` short form
-  const prefix = tok.slice(0, 2);
-  return spec.valueFlags.has(prefix);
-}
-
-// Advance an argv array past one wrapper's own options to the wrapped command.
-// Returns the index of the wrapped command token, -1 if none remains, or
-// AMBIGUOUS (-2) when an unclassifiable option is encountered (fail-closed).
-function skipWrapperOptions(argv, spec) {
-  let i = 0;
-  while (i < argv.length) {
-    const tok = argv[i];
-    if (typeof tok !== "string") return AMBIGUOUS; // non-string token — cannot classify
-    if (spec.eatAssignments && ASSIGN_RE.test(tok)) { i += 1; continue; }
-    if (tok[0] === "-") {
-      // `--` explicitly ends option parsing; the next token is the command.
-      if (tok === "--") { i += 1; break; }
-      const eq = tok.indexOf("=");
-      if (eq !== -1) {
-        // attached `--flag=value` / `-c=v` form — self-contained, skip 1.
-        // (Only classify as known if the flag name is recognized; an unknown
-        //  `--x=y` is still self-contained so it is safe to skip just it.)
-        i += 1;
-        continue;
-      }
-      const flagName = tok;
-      if (spec.valueFlags.has(flagName)) { i += 2; continue; }   // flag + separate value
-      if (spec.booleanFlags.has(flagName)) { i += 1; continue; } // known no-arg flag
-      if (isAttachedShortValue(tok, spec)) { i += 1; continue; } // e.g. `-oL`, `-n5`
-      // Unrecognized option: cannot know if it consumes the next token.
-      // Fail-closed — refuse to peel (see AMBIGUOUS rationale above).
-      return AMBIGUOUS;
-    }
-    break; // first non-flag (non-assignment) token = wrapped command
-  }
-  return i < argv.length ? i : -1;
-}
+// The interpreter half — which names carry an inline program body and how to
+// extract it — lives in ./segment-utils/interpreter-specs.js, and the wrapper
+// TABLE plus its option-skipping in ./segment-utils/wrapper-specs.js
+// (file-split); this file keeps the peel/scan half and re-exports both, so
+// callers keep one import.
+const {
+  UNRESOLVABLE_RE,
+  INTERPRETER_SPECS,
+  PWSH_BODY_SPEC,
+  interpreterInlineBodies,
+  interpreterFoundBodies,
+  pwshInterpreterBodies,
+  decodeEncodedCommand,
+} = require("./segment-utils/interpreter-specs");
+const {
+  ASSIGN_RE,
+  AMBIGUOUS,
+  WRAPPER_SPECS,
+  commandBasename,
+  wrapperSpecFor,
+  isAttachedShortValue,
+  skipWrapperOptions,
+} = require("./segment-utils/wrapper-specs");
 
 // Peel any chain of leading command wrappers (env/command/nice/nohup/...) from a
 // synthetic {cmd0, argv}. Returns the innermost {cmd0, argv} (argv excludes cmd0)
@@ -134,6 +49,123 @@ function peelWrappers(cmd0, argv) {
     curArgv = curArgv.slice(idx + 1);
   }
   return { cmd0: curCmd, argv: curArgv, ambiguous: false };
+}
+
+// Flags whose VALUE is a command line the outer program runs itself.
+const EXEC_ARG_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+
+// True when tokens[idx] is genuinely INVOKED as a command by what precedes it:
+// the head (after any NAME=VALUE prefix), a `find -exec` argument, or the end
+// of a real wrapper chain (`sudo su`, `timeout 5 su`, and the AMBIGUOUS forms
+// `env --bogusopt su` / `nice -X su`). A name sitting in argv as DATA
+// (`echo su -c "rm -rf x"`) is not — the distinction a head-position-only test
+// draws too narrowly (#2210).
+function isInvokedAsCommandAt(tokens, idx) {
+  const toks = Array.isArray(tokens) ? tokens : [];
+  if (idx <= 0) return idx === 0;
+  if (EXEC_ARG_FLAGS.has(toks[idx - 1])) return true;
+  let cur = 0;
+  while (cur < idx && typeof toks[cur] === "string" && ASSIGN_RE.test(toks[cur])) cur += 1;
+  if (cur === idx) return true;
+  for (let depth = 0; depth < 16 && cur < idx; depth++) {
+    const spec = wrapperSpecFor(toks[cur]);
+    if (!spec) return false;
+    const off = skipWrapperOptions(toks.slice(cur + 1), spec);
+    if (off === AMBIGUOUS) {
+      // Chain is real, only the unknown option's arity is not: accept idx when
+      // every token in between is itself option- or assignment-shaped.
+      const between = toks.slice(cur + 1, idx);
+      return between.every((t) => typeof t === "string" && (t.startsWith("-") || ASSIGN_RE.test(t)));
+    }
+    if (off < 0) return false;
+    const next = cur + 1 + off;
+    if (next >= idx) return next === idx;
+    cur = next;
+  }
+  return false;
+}
+
+// Commands whose arguments are TEXT BEING PRINTED, never a program being run.
+const TEXT_PRODUCERS = new Set(["echo", "printf"]);
+
+// True when tokens[idx] sits in a text producer's argument list, i.e. it is
+// DATA (`echo su -c "rm -rf x"`, #2210 round-10). Everything else — a
+// transparent-exec head this module does not model (ssh, docker run, kubectl
+// exec, npx, make, strace, gdb --args, firejail, poetry run, ...), `find -exec`,
+// a wrapper chain, the head itself — stays a possible invocation, so the
+// mid-argv nets keep their broad reading there (#2210 round-15 item 2).
+function isPrintedDataAt(tokens, idx) {
+  const toks = Array.isArray(tokens) ? tokens : [];
+  for (let i = 0; i < idx && i < toks.length; i++) {
+    if (typeof toks[i] !== "string") continue;
+    if (!TEXT_PRODUCERS.has(commandBasename(toks[i]))) continue;
+    if (isInvokedAsCommandAt(toks, i)) return true;
+  }
+  return false;
+}
+
+// Same peel as peelWrappers, but stops BEFORE unwrapping a basename in
+// `stopBasenames` even though it is itself a registered wrapper (#2210
+// round-8). `xargs` is one such entry: recursive-delete-scan.js and rm.js want
+// to see straight through to the command it runs, but exotic-exec.js's
+// isExoticExecWriteIR needs `xargs` itself — it applies its own, more specific,
+// dynamic-argument handling to the command xargs runs rather than treating it
+// like an ordinary transparent wrapper.
+function peelWrappersUntil(cmd0, argv, stopBasenames) {
+  let curCmd = cmd0;
+  let curArgv = Array.isArray(argv) ? argv : [];
+  for (let depth = 0; depth < 16; depth++) {
+    if (stopBasenames.has(commandBasename(curCmd))) break;
+    const spec = wrapperSpecFor(curCmd);
+    if (!spec) break;
+    const idx = skipWrapperOptions(curArgv, spec);
+    if (idx === AMBIGUOUS) {
+      return { cmd0, argv: Array.isArray(argv) ? argv : [], ambiguous: true };
+    }
+    if (idx === -1) break;
+    const next = curArgv[idx];
+    if (typeof next !== "string" || next.length === 0) break;
+    curCmd = next;
+    curArgv = curArgv.slice(idx + 1);
+  }
+  return { cmd0: curCmd, argv: curArgv, ambiguous: false };
+}
+
+// Same peel as peelWrappers, but threads the RAW (quote-preserving) argv in
+// lockstep so a caller that must classify on raw text (rm.js's flag-quoting
+// detection, #2210 F1/F2) sees the wrapper's OWN options skipped rather than
+// the wrapped command's — a bare peelWrappers(cmd0, argv) result cannot say
+// how many RAW tokens to drop. AMBIGUOUS is reported via the same
+// `ambiguous: true` contract as peelWrappers — the original raw argv is
+// returned unchanged so a fail-closed caller still has full raw text to scan.
+function peelWrappersRaw(cmd0, cmd0Raw, argv, argvRaw) {
+  let curCmd = cmd0;
+  let curCmdRaw = typeof cmd0Raw === "string" ? cmd0Raw : cmd0;
+  let curArgv = Array.isArray(argv) ? argv : [];
+  let curArgvRaw =
+    Array.isArray(argvRaw) && argvRaw.length === curArgv.length ? argvRaw : curArgv.slice();
+  for (let depth = 0; depth < 16; depth++) {
+    const spec = wrapperSpecFor(curCmd);
+    if (!spec) break;
+    const idx = skipWrapperOptions(curArgv, spec);
+    if (idx === AMBIGUOUS) {
+      return {
+        cmd0,
+        cmd0Raw: typeof cmd0Raw === "string" ? cmd0Raw : cmd0,
+        argv: Array.isArray(argv) ? argv : [],
+        argvRaw: Array.isArray(argvRaw) ? argvRaw : Array.isArray(argv) ? argv.slice() : [],
+        ambiguous: true,
+      };
+    }
+    if (idx === -1) break;
+    const next = curArgv[idx];
+    if (typeof next !== "string" || next.length === 0) break;
+    curCmd = next;
+    curCmdRaw = curArgvRaw[idx];
+    curArgv = curArgv.slice(idx + 1);
+    curArgvRaw = curArgvRaw.slice(idx + 1);
+  }
+  return { cmd0: curCmd, cmd0Raw: curCmdRaw, argv: curArgv, argvRaw: curArgvRaw, ambiguous: false };
 }
 
 function resolveEffectiveCommand(seg) {
@@ -206,6 +238,27 @@ function scanWrappedVerb(seg, verbTest) {
   return false;
 }
 
+// Safety net for an interpreter hiding MID-ARGV, where the effective-command
+// path never lands on it: an AMBIGUOUS peel returns the wrapper itself
+// (`env --bogusopt sh -c '...'`), and a non-wrapper head is never peeled at all
+// (`find . -exec sh -c '...'`). scanWrappedVerb cannot cover this class — its
+// test sees one TOKEN at a time, never an interpreter's multi-word `-c` STRING.
+// Only PRINTED DATA is excluded (isPrintedDataAt), the asymmetry round-10 hit
+// with `echo python -c '...'` scanned while `echo su -c '...'` was not. Gating
+// on isInvokedAsCommandAt instead narrowed the net to heads this module models
+// as wrappers, letting `ssh host bash -c 'rm -rf d'` through (#2210 round-15).
+function scanWrappedInterpreter(argv) {
+  const toks = Array.isArray(argv) ? argv : [];
+  const found = [];
+  for (let i = 0; i < toks.length; i++) {
+    const spec = INTERPRETER_SPECS.get(commandBasename(toks[i]));
+    if (!spec) continue;
+    if (isPrintedDataAt(toks, i)) continue;
+    found.push(...interpreterFoundBodies(spec, toks.slice(i + 1)));
+  }
+  return found;
+}
+
 // ASSIGN_RE / WRAPPER_SPECS / peelWrappers / isAttachedShortValue are exported
 // for #2053: the forge-target-ownership guard peels the same wrapper set this
 // module already models, rather than re-deriving it (CPR-SSOT).
@@ -213,9 +266,21 @@ module.exports = {
   resolveEffectiveCommand,
   resolveEffectiveArgv,
   scanWrappedVerb,
+  scanWrappedInterpreter,
+  interpreterInlineBodies,
+  interpreterFoundBodies,
+  pwshInterpreterBodies,
+  decodeEncodedCommand,
+  UNRESOLVABLE_RE,
+  INTERPRETER_SPECS,
+  PWSH_BODY_SPEC,
   commandBasename,
+  isInvokedAsCommandAt,
+  isPrintedDataAt,
   ASSIGN_RE,
   WRAPPER_SPECS,
   peelWrappers,
+  peelWrappersUntil,
+  peelWrappersRaw,
   isAttachedShortValue,
 };

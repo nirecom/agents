@@ -64,5 +64,7 @@ cost; this skill stays safe by refusing to act on it):
 - **Legacy orphan worktree directories** created before WORKTREE_NOTES.md
   carried a `Main repo:` field. Gate 5 skips them as `repo_mismatch` because
   ownership cannot be proven. Inspect manually and remove with
-  `git worktree remove` (if still registered) or `rm -rf` (if not registered
-  and contents are confirmed disposable).
+  `git worktree remove` (if still registered) or
+  `node hooks/cleanup-orphan-dir.js --force-if-not-registered <path>` (if not
+  registered and contents are confirmed disposable). A raw `rm -rf` is denied
+  by `hooks/block-recursive-delete.js` — that helper is the sanctioned route.

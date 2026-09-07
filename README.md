@@ -272,8 +272,19 @@ second-provider opinion independent of Claude's model-specific biases.
 
 `settings.json` enforces a permission deny-list so Claude cannot execute dangerous
 operations even if instructed: force push (`--force`, `-f`, `+<ref>` refspec), direct
-`.env` access, bulk deletion (`rm -rf`, `Remove-Item -Recurse`), and AWS destructive
-commands. See [docs/security-policy.md](docs/security-policy.md) for the full policy.
+`.env` access, and AWS destructive commands. Recursive deletion is denied by a
+PreToolUse hook rather than by per-spelling globs: it judges one criterion —
+*does this command delete recursively?* — over the parsed command, so `rm -r`,
+`rm -rf`, `Remove-Item -Recurse` and `cmd /c rmdir /s` are caught with the flag
+reordered, split, abbreviated, or hidden behind one of the enumerated
+interpreters (POSIX shells, `pwsh`/`powershell`, and the listed language
+interpreters), a substitution, a newline, or a variable — an interpreter outside
+that enumeration is not covered. Coverage is verb- and shell-specific and grows as new
+bypass classes are found; `tests/feature-2210-block-recursive-delete/` records
+the cases currently covered and the accepted gaps. Verbs outside
+`rm` / `Remove-Item` / `rmdir` — `git clean`, `rsync --delete`, `robocopy /MIR` —
+are not this hook's scope. The deny list is a speed bump, not a hard wall.
+See [docs/security-policy.md](docs/security-policy.md) for the full policy.
 
 ### Three-stage planning pipeline
 

@@ -22,18 +22,11 @@ const REDIRECT_RE = new RegExp(String.raw`^(?:${REDIRECT_OP_ALT})$`);
 // Capture group is the path part after the operator.
 const ATTACHED_REDIRECT_RE = new RegExp(String.raw`^(?:${REDIRECT_OP_ALT})(.+)$`);
 
-// Strip trailing shell-redirect suffixes off a raw command string.
-// Strips fd-dup forms (`2>&1`, `>&2`, `N>&-`) and unquoted file-redirect
-// suffixes (`>/dev/null`, `2>/dev/null`, `>>/file`, `> /dev/null`), both the
-// attached (operator glued to path) and spaced (operator + separate path
-// token) shapes. Stacked redirects (`>/dev/null 2>&1`) are peeled one group
-// per loop iteration until none remain. Quoted redirect targets (`>"my file"`)
-// are intentionally NOT stripped — the unquoted path class excludes quote chars.
-// Design basis: REDIRECT_RE / ATTACHED_REDIRECT_RE (redirect-operator forms) and
-// the fd-dup lookahead in splitSegmentsWithSeparators. This helper does NOT call
-// splitSegments; its sole responsibility is trailing-redirect-suffix recognition.
-// It strips mechanically and does not fail-closed on shell chaining — the
-// predicate layer (its `^...$` anchor and hasShellChaining) rejects chained cmds.
+// Strip trailing shell-redirect suffixes (fd-dup and file-redirect forms, attached
+// or spaced, stacked) off a raw command string; quoted targets are kept.
+// Basis: REDIRECT_RE/ATTACHED_REDIRECT_RE and the fd-dup lookahead below.
+// Mechanical only — does not fail-close on shell chaining (predicate layer's
+// `^...$` anchor + hasShellChaining reject chained commands elsewhere).
 function stripTrailingRedirects(cmd) {
   if (typeof cmd !== "string") return cmd;
   let out = cmd.replace(/\s+$/, "");
@@ -66,17 +59,10 @@ function stripSubstitutions(cmd) {
   return out;
 }
 
-// Quote-aware tokenizer CORE: respects "...", '...', $'...'. Returns
-// Array<{value, raw}> — value is quote-stripped, raw is the original slice
-// (quotes preserved) that expandRawToken needs for quote-context resolution.
-// tokenizeSegment/tokenizeSegmentWithQuotes used to duplicate this walk and
-// drift apart; both are now thin projections over this single core.
-//
-// opts.preserveSubstitutionSpans (default OFF): consumes an unquoted
-// substitution span (`$(...)`, backticks, `$((...))`, `${...}`) WHOLE so
-// interior whitespace does not split it — otherwise an assembled write target
-// tokenizes into unrelated words and evades detection. Fail-closed: keeping a
-// span whole can only make a token MORE complete.
+// Quote-aware tokenizer CORE (respects "...", '...', $'...'); sole source for
+// tokenizeSegment/tokenizeSegmentWithQuotes. Returns Array<{value, raw}>.
+// opts.preserveSubstitutionSpans keeps a `$(...)`/backtick/`$((...))`/`${...}`
+// span WHOLE so it can't be split by interior whitespace (fail-closed).
 function tokenizeCore(seg, opts) {
   const preserve = !!(opts && opts.preserveSubstitutionSpans);
   const ends = preserve ? substitutionSpanEnds(seg) : null;
@@ -96,8 +82,12 @@ function tokenizeCore(seg, opts) {
       }
       if (ch === '"') {
         i++;
+        // POSIX: inside "...", backslash escapes only $ ` " \ or newline (#2210).
         while (i < n && seg[i] !== '"') {
-          if (seg[i] === "\\" && i + 1 < n) { tok += seg[i + 1]; i += 2; }
+          // POSIX: `\<newline>` inside "..." is a line continuation — both
+          // characters vanish, nothing is appended (#2210 C1).
+          if (seg[i] === "\\" && seg[i + 1] === "\n") { i += 2; }
+          else if (seg[i] === "\\" && i + 1 < n && /[$`"\\\n]/.test(seg[i + 1])) { tok += seg[i + 1]; i += 2; }
           else { tok += seg[i]; i++; }
         }
         if (i < n) i++;
@@ -133,21 +123,13 @@ function tokenizeSegmentWithQuotes(seg, opts) {
   return tokenizeCore(seg, opts);
 }
 
-// Split cmd on UNQUOTED shell separators: && || ; | & ( )
-// Returns { segs: string[], seps: string[] } where seps records the separator
-// token at each split point (unconditionally, including leading/trailing).
-//
-// opts.preserveSubstitutionSpans (default OFF): consumes a substitution span
-// (`$(...)`, backticks, `$((...))`, `${...}`) as ONE unit instead of letting
-// its parens hit the separator branch below — otherwise a write target
-// assembled inside one splits across segments and evades detection.
-//
-// Must stay additive at the caller (command-ir's parse() appends these
-// segments rather than replacing the ordinary ones): the `( )` split is also
-// what promotes subshell/process-substitution bodies to their own scanned
-// segments, and shared-cmd-utils.js reads `ir.separators.length > 0` as
-// "this command chains" — swallowing `(`/`)` here would empty that signal
-// and turn a deny into an allow.
+// Split cmd on UNQUOTED shell separators: && || ; | & ( ). Returns
+// { segs, seps } — seps records the separator at each split point.
+// opts.preserveSubstitutionSpans keeps a substitution span whole so its
+// parens don't hit the separator branch (would evade detection).
+// Must stay additive: command-ir's parse() appends these; shared-cmd-utils.js
+// reads `ir.separators.length > 0` as "this command chains" — swallowing
+// `(`/`)` here would empty that signal and turn a deny into an allow.
 function splitSegmentsWithSeparators(cmd, opts) {
   const segs = [];
   const seps = [];
@@ -185,12 +167,8 @@ function splitSegmentsWithSeparators(cmd, opts) {
       seps.push(ch === "&" ? "&&" : "||");
       flush(); i += 2;
     } else if (ch === ";" || ch === "|" || ch === "&" || ch === "(" || ch === ")") {
-      // fd-dup lookahead: N>&M, N>&-  — digit-prefixed forms
-      // NOTE: &&/|| are handled ABOVE this branch, so bare & here is safe to check.
-      // But digits come here; check for N>&M pattern before treating as separator.
-      // (This branch is entered for ; | & ( ) — digits don't match any of those.)
-      // The digit-prefixed fd-dup lookahead is placed BEFORE this else-if in the
-      // main character dispatch below. See the `else` branch for digit handling.
+      // fd-dup lookahead (N>&M / N>&-) is handled in the digit branch below,
+      // BEFORE it reaches here — this branch only sees ; | & ( ) itself.
       // ( ) split also isolates process-substitution bodies <(cmd) / >(cmd):
       // the inner cmd becomes its own segment and is tokenized normally, so
       // path-position checks still fire on its arguments.
@@ -347,27 +325,12 @@ function segmentMatches(segment, opts) {
   return false;
 }
 
-// Recursively check a bash command string. Returns true iff ANY token in a
-// path-bearing position matches `opts.isTargetPath`.
-//
-// Path-bearing positions:
-//   - positional argv of a NON-textCmd command
-//   - value of a PATH_FLAGS flag
-//   - redirect target token (always — bypasses the textCmd exception)
-//
-// NOT checked:
-//   - text-flag values (TEXT_FLAGS) — skipped by construction
-//   - positionals of a textCmd (echo/printf) — but redirect targets in the
-//     same segment ARE still checked (redirects bypass the textCmd exception)
-//   - unknown flag tokens — only the flag itself skipped; the following
-//     token is treated as a positional (false-negative prevention)
-//
-// opts:
-//   isTargetPath: (string) => boolean          // REQUIRED
-//   textFlags?: Set<string>
-//   pathFlags?: Set<string>
-//   textCmds?: Set<string>
-//   shellBins?: Set<string>
+// Recursively check a bash command string; true iff any token in a
+// path-bearing position (positional argv of non-textCmd, PATH_FLAGS value,
+// or redirect target) matches opts.isTargetPath. TEXT_FLAGS values and
+// textCmd positionals are NOT checked (redirect targets still are); an
+// unknown flag token skips only itself, so the next token is still checked.
+// opts: isTargetPath (required), textFlags/pathFlags/textCmds/shellBins (Sets).
 function checkBashCommand(command, opts) {
   if (!command) return false;
   // Recurse into command substitution bodies first (they execute as shell).

@@ -69,6 +69,32 @@ function isLineContinuedBoundary(prefix) {
   return backslashes % 2 === 1;
 }
 
+// isLineContinuedBoundary(str.slice(0, offset)) without materialising or
+// walking the prefix: only the whitespace/backslash run immediately before
+// `offset` can change the answer.
+function isLineContinuedAt(str, offset) {
+  let i = offset - 1;
+  while (i >= 0 && (str[i] === " " || str[i] === "\t")) i--;
+  if (i < 0 || str[i] !== "\n") return false;
+  let backslashes = 0;
+  for (let k = i - 1; k >= 0 && str[k] === "\\"; k--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+// Index of the first character that could open a quote span or a substitution
+// frame, or -1. Before it, blankQuoteSpans cannot fail and no frame can be
+// open, so isInsideSubstitution's O(prefix) walk is provably false and can be
+// skipped — it ran once per match and made a heredoc-dense payload quadratic,
+// past the hook's 5s timeout (#2210 round-15 C9).
+function firstSpanRelevantIndex(str) {
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (c === "'" || c === '"' || c === "`" || c === "$") return i;
+    if (c === "<" && str[i + 1] === "(") return i;
+  }
+  return -1;
+}
+
 // Mirror of isLineContinuedBoundary on the TRAILING side: when the opener line
 // ends in a continuation, the next physical line is still the same logical
 // command, so a pipe/chain there never reaches restOfLine (r5 HIGH).
@@ -92,6 +118,7 @@ function endsWithLineContinuation(text) {
 function stripHeredocBody(str) {
   if (!str || typeof str !== "string") return str;
   try {
+    const spanRelevant = firstSpanRelevantIndex(str);
     return str.replace(
       /(?<=(?:^|[\n;&|])[ \t]*)((?:cat|tee|sponge)(?![\w-])(?:[ \t]+[^\s;&|<]+)*[ \t]*)(<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_.-]*)\3)([^\n]*)\n([\s\S]*?)\n\s*\4\s*(?:\n|$)/g,
       function (match, cmdPart, opener, quoteChar, _tagName, restOfLine, body, offset, whole) {
@@ -111,10 +138,14 @@ function stripHeredocBody(str) {
         if (/>[ \t]*\(/.test(cmdPart + restOfLine)) {
           return match;
         }
-        if (isLineContinuedBoundary(whole.slice(0, offset))) {
+        if (isLineContinuedAt(whole, offset)) {
           return match;
         }
-        if (isInsideSubstitution(whole.slice(0, offset))) {
+        // With no span-relevant character before the opener, the prefix walk can
+        // only answer "not captured", so the empty prefix stands in for it — the
+        // scanner is still CALLED, keeping the throw / ok:false arms live.
+        const captured = spanRelevant !== -1 && spanRelevant < offset;
+        if (isInsideSubstitution(captured ? whole.slice(0, offset) : "")) {
           return match;
         }
         return cmdPart + opener + restOfLine + "\n";

@@ -1,17 +1,8 @@
 #!/usr/bin/env bash
 # bin/mutation-probe.sh
-# T1-E1: lightweight mutation probe — replaces single-line const NAME = /regex/;
-# declarations one at a time with /(?!)/ and verifies the test suite FAILs.
-#
-# Usage: mutation-probe.sh [options] <target-js-file>
-#   --help        Show help and exit
-#   --test-cmd    Test command to run (default: auto-detect)
-#   --threshold   Pass threshold in % (default: 80)
-#
-# Exit codes:
-#   0 = mutation score meets threshold
-#   1 = mutation score below threshold (coverage gap) or no constants found
-#   2 = usage error or file not found
+# T1-E1: lightweight mutation probe — mutates single-line const NAME = /regex/;
+# declarations one at a time and verifies the test suite FAILs. See --help for
+# usage, options, and exit codes.
 
 set -uo pipefail
 
@@ -123,10 +114,6 @@ if [[ -z "$TEST_CMD" ]]; then
 fi
 
 TARGET_ABS="$TARGET"
-BACKUP="${TARGET_ABS}.probe-backup"
-
-# Safety trap: always restore backup on exit
-trap 'rc=$?; if [[ -f "$BACKUP" ]]; then mv "$BACKUP" "$TARGET_ABS"; fi; exit $rc' EXIT INT TERM
 
 TOTAL=0
 KILLED=0
@@ -135,46 +122,73 @@ KILLED=0
 # Pattern: const NAME = /.../ [flags];
 CONST_PATTERN='^[[:space:]]*const[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*/[^/].*[gimsuvyd]*;'
 
-mapfile -t MATCHES < <(grep -En "$CONST_PATTERN" "$TARGET_ABS" 2>/dev/null || true)
+# A file-split (rules/coding/file-split.md) can move a const into a sibling
+# "<name>/" dir; probe that dir too so the split doesn't silently drop coverage.
+target_dir="$(dirname "$TARGET_ABS")"
+target_noext="${basename_target%.js}"
+CANDIDATE_FILES=("$TARGET_ABS")
+if [[ -d "$target_dir/$target_noext" ]]; then
+    while IFS= read -r -d '' sibling; do
+        CANDIDATE_FILES+=("$sibling")
+    done < <(find "$target_dir/$target_noext" -maxdepth 1 -name '*.js' -print0 2>/dev/null | sort -z)
+fi
 
-for match in "${MATCHES[@]}"; do
-    [[ -z "$match" ]] && continue
-    lineno="${match%%:*}"
-    line="${match#*:}"
+for CANDIDATE in "${CANDIDATE_FILES[@]}"; do
+    BACKUP="${CANDIDATE}.probe-backup"
+    # Safety trap: always restore backup for the file currently being mutated.
+    trap 'rc=$?; if [[ -f "$BACKUP" ]]; then mv "$BACKUP" "$CANDIDATE"; fi; exit $rc' EXIT INT TERM
 
-    # Extract const name
-    const_name="$(echo "$line" | grep -oE 'const[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' | head -1 | awk '{print $NF}' || true)"
-    [[ -z "$const_name" ]] && continue
-    # Guard: const_name must be a plain identifier (no shell metacharacters for sed safety)
-    [[ "$const_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    mapfile -t MATCHES < <(grep -En "$CONST_PATTERN" "$CANDIDATE" 2>/dev/null || true)
 
-    TOTAL=$((TOTAL + 1))
+    for match in "${MATCHES[@]}"; do
+        [[ -z "$match" ]] && continue
+        lineno="${match%%:*}"
+        line="${match#*:}"
 
-    # Backup original
-    cp "$TARGET_ABS" "$BACKUP"
+        # Extract const name
+        const_name="$(echo "$line" | grep -oE 'const[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' | head -1 | awk '{print $NF}' || true)"
+        [[ -z "$const_name" ]] && continue
+        # Guard: const_name must be a plain identifier (no shell metacharacters for sed safety)
+        [[ "$const_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
 
-    # Replace the matching line with a never-match mutation (use | as sed delimiter)
-    sed -i "${lineno}s|.*|const ${const_name} = /(?!)/; // MUTATED by mutation-probe.sh|" "$TARGET_ABS"
+        # A sibling const merely passed through (imported + re-exported, never used)
+        # by TARGET_ABS is irrelevant to TARGET_ABS's own behavior — including it
+        # would blame TARGET_ABS's test-cmd for a gap that belongs to whichever
+        # file actually calls it. Only probe consts TARGET_ABS's own code reads.
+        if [[ "$CANDIDATE" != "$TARGET_ABS" ]]; then
+            use_count="$(grep -ocw "$const_name" "$TARGET_ABS" 2>/dev/null || echo 0)"
+            [[ "$use_count" -gt 2 ]] || continue
+        fi
 
-    # Run test and capture exit code
-    # Auto-detect case: use array to avoid quote-injection (M1 security fix)
-    # --test-cmd case: trusted operator input, bash -c is acceptable
-    test_rc=0
-    if $USE_ARGV; then
-        "${TEST_CMD_ARGV[@]}" >/dev/null 2>&1 || test_rc=$?
-    else
-        bash -c "$TEST_CMD" >/dev/null 2>&1 || test_rc=$?
-    fi
+        TOTAL=$((TOTAL + 1))
 
-    # Restore from backup
-    mv "$BACKUP" "$TARGET_ABS"
+        # Backup original
+        cp "$CANDIDATE" "$BACKUP"
 
-    if [[ $test_rc -ne 0 ]]; then
-        echo "KILLED: $const_name (line $lineno)"
-        KILLED=$((KILLED + 1))
-    else
-        echo "LIVE:   $const_name (line $lineno — coverage gap)"
-    fi
+        # Replace the matching line with a never-match mutation (use | as sed delimiter)
+        sed -i "${lineno}s|.*|const ${const_name} = /(?!)/; // MUTATED by mutation-probe.sh|" "$CANDIDATE"
+
+        # Run test and capture exit code
+        # Auto-detect case: use array to avoid quote-injection (M1 security fix)
+        # --test-cmd case: trusted operator input, bash -c is acceptable
+        test_rc=0
+        if $USE_ARGV; then
+            "${TEST_CMD_ARGV[@]}" >/dev/null 2>&1 || test_rc=$?
+        else
+            bash -c "$TEST_CMD" >/dev/null 2>&1 || test_rc=$?
+        fi
+
+        # Restore from backup
+        mv "$BACKUP" "$CANDIDATE"
+
+        if [[ $test_rc -ne 0 ]]; then
+            echo "KILLED: $const_name (line $lineno, $(basename "$CANDIDATE"))"
+            KILLED=$((KILLED + 1))
+        else
+            echo "LIVE:   $const_name (line $lineno, $(basename "$CANDIDATE") — coverage gap)"
+        fi
+    done
+    trap - EXIT INT TERM
 done
 
 if [[ $TOTAL -eq 0 ]]; then

@@ -45,40 +45,55 @@ function checkStringNotContains(label, actual, needle) {
 // --- tokenizeSegment ---
 const { tokenizeSegment, splitSegments, stripSubstitutions, extractSubstitutionContents, checkBashCommand } = parser;
 
-{
-  const t = tokenizeSegment("cat TARGET");
-  check("tokenize: cat TARGET length", t.length, 2);
-  check("tokenize: cat TARGET[0]", t[0], "cat");
-  check("tokenize: cat TARGET[1]", t[1], "TARGET");
+// Table-driven per skills/_shared/test-design/parser-regex-tests.md.
+// `kind` documents whether the case exercises a literal backslash surviving
+// into the token ("preserved backslash") or a backslash being stripped out
+// by the tokenizer's escape handling ("consumed backslash"); it is not
+// consumed by the runner below, only by the reader.
+const tokenizeCases = [
+  { name: "cat TARGET", input: "cat TARGET", want: ["cat", "TARGET"], kind: "n/a" },
+  { name: "double-quoted", input: '"double quoted"', want: ["double quoted"], kind: "n/a" },
+  { name: "single-quoted", input: "'single quoted'", want: ["single quoted"], kind: "n/a" },
+  {
+    // POSIX: inside "...", backslash is special only before $ ` " \ or newline
+    // (#2210). Before any other char (here, space) it is kept literally.
+    name: "backslash before space (POSIX #2210)",
+    input: '"a\\ b"',
+    want: ["a\\ b"],
+    kind: "preserved backslash",
+  },
+  {
+    // POSIX line continuation: backslash immediately before a newline inside
+    // "..." (#2210 C1). `\<newline>` is a true line continuation — both
+    // characters vanish and nothing is appended — so "r\<newline>m" tokenizes
+    // to the single token "rm", joining the two halves across the line break.
+    name: "backslash-newline line continuation (POSIX #2210 C1)",
+    input: '"r\\' + "\n" + 'm" -r target',
+    want: ["rm", "-r", "target"],
+    kind: "consumed backslash",
+  },
+  {
+    // $'...' (ANSI-C quoting): the tokenizer strips the backslash and keeps
+    // the following char literally (no real ANSI-C escape translation).
+    name: "ansi-c quote",
+    input: "$'ansi\\tcr'",
+    wantLen: 1,
+    kind: "consumed backslash",
+  },
+];
+
+for (const c of tokenizeCases) {
+  const t = tokenizeSegment(c.input);
+  if (c.want) {
+    check("tokenize: " + c.name + " length", t.length, c.want.length);
+    c.want.forEach((w, idx) => check("tokenize: " + c.name + "[" + idx + "]", t[idx], w));
+  } else if (typeof c.wantLen === "number") {
+    check("tokenize: " + c.name + " length", t.length, c.wantLen);
+  }
 }
 
 {
-  const t = tokenizeSegment('"double quoted"');
-  check("tokenize: double-quoted length", t.length, 1);
-  check("tokenize: double-quoted content", t[0], "double quoted");
-}
-
-{
-  const t = tokenizeSegment("'single quoted'");
-  check("tokenize: single-quoted length", t.length, 1);
-  check("tokenize: single-quoted content", t[0], "single quoted");
-}
-
-{
-  // Backslash-escapes are only processed inside double-quoted strings.
-  // Input: "a\ b" (double-quoted, backslash before space) → single token "a b".
-  const t = tokenizeSegment('"a\\ b"');
-  check("tokenize: backslash-escape length", t.length, 1);
-  check("tokenize: backslash-escape content", t[0], "a b");
-}
-
-{
-  const t = tokenizeSegment("$'ansi\\tcr'");
-  check("tokenize: ansi-c quote length", t.length, 1);
-}
-
-{
-  // Should not throw
+  // Should not throw — not a token-equality case, kept outside the table above.
   let threw = false;
   let t;
   try { t = tokenizeSegment('unclosed "quote'); } catch (e) { threw = true; }

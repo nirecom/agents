@@ -10,23 +10,34 @@
 // would form a module cycle. This mirrors the existing `innerCommandIsWrite(inner,
 // recurse)` callback style.
 
-const { resolveEffectiveCommand, resolveEffectiveArgv, commandBasename } = require("../bash-write-patterns/segment-utils");
+const { resolveEffectiveCommand, resolveEffectiveArgv, commandBasename, ASSIGN_RE, peelWrappersUntil } = require("../bash-write-patterns/segment-utils");
 
-// --- Exotic execution-bearing constructs (FINAL shell-layer round) ----------
-// A finite set of constructs where a write can hide from the per-segment IR
-// predicates because the WRITE verb is carried as an ARGUMENT to another
-// command (eval / xargs / find -exec) rather than surfacing as its own segment.
-// Design posture (user-approved): re-parse the inner/target command where
-// statically feasible → inner write ⇒ whole command is WRITE; DYNAMIC (a
-// variable-driven / `$`-bearing body) or UNPARSEABLE ⇒ FAIL-CLOSED (WRITE).
-// Genuinely static inner READS stay allowed (no blanket block).
-//
-// NOT covered here because the IR parser ALREADY exposes them as segments:
-//   - process substitution `<(cmd)` / `>(cmd)` — parse() emits the inner cmd as
-//     its own segment, so isFileOpWriteIR / isGitWriteIR / … see it directly.
-//   - `bash|sh|dash|pwsh -c/-Command "<body>"` — classify()/isReadOnlyInterpreterC
-//     re-parse the inner body and fail-closed on an inner write.
-// This predicate is the residual: eval, xargs, and find action clauses.
+// xargs is a registered WRAPPER_SPECS wrapper (#2210); stop peeling there so
+// this module still sees "xargs" itself to apply its own dynamic-arg handling.
+const EXOTIC_STOP_BASENAMES = new Set(["xargs"]);
+
+// {cmd0, argv} of the eval/xargs/find call, peeled through other wrappers but
+// stopped at xargs — mirrors resolveEffectiveCommand/Argv's env-prefix handling.
+function resolveExoticHead(seg) {
+  if (!seg || seg.cmd0 == null) return { cmd0: null, argv: [] };
+  let cmd0 = seg.cmd0;
+  let argv = Array.isArray(seg.argv) ? seg.argv : [];
+  if (ASSIGN_RE.test(cmd0)) {
+    const idx = argv.findIndex((a) => !ASSIGN_RE.test(a));
+    if (idx === -1) return { cmd0: null, argv: [] };
+    cmd0 = argv[idx];
+    argv = argv.slice(idx + 1);
+  }
+  const peeled = peelWrappersUntil(cmd0, argv, EXOTIC_STOP_BASENAMES);
+  return { cmd0: peeled.cmd0, argv: peeled.argv };
+}
+
+// Exotic execution-bearing constructs: a write can hide as an ARGUMENT to
+// eval / xargs / find -exec rather than its own IR segment. Static inner
+// write -> WRITE; dynamic/unparseable -> fail-closed WRITE; static read stays
+// allowed. Process substitution and `<interp> -c "<body>"` are handled
+// elsewhere (parse()/classify() already re-parse those) — this predicate is
+// the eval/xargs/find residual.
 
 const EVAL_RE = /^eval$/;
 const XARGS_RE = /^xargs$/;
@@ -78,8 +89,7 @@ function expansionDisposition(tok) {
 // RAW argv (to detect `$`-dynamic bodies). Static body → re-parse via
 // innerCommandIsWrite; allowlisted-read env-emitters → treat as read;
 // opaque/unknown → fail-closed WRITE.
-function evalSegmentIsWrite(seg, deps) {
-  const argv = resolveEffectiveArgv(seg);
+function evalSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv) || argv.length === 0) return false; // bare `eval` — no body
   const rawArgv = deps.resolveRawArgvAfterEnvPrefix(seg);
 
@@ -132,8 +142,7 @@ function xargsCommandTokens(argv) {
   }
   return i < argv.length ? argv.slice(i) : null;
 }
-function xargsSegmentIsWrite(seg, deps) {
-  const argv = resolveEffectiveArgv(seg);
+function xargsSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv)) return false;
   const cmdTokens = xargsCommandTokens(argv);
   if (!cmdTokens || cmdTokens.length === 0) return false; // no explicit command
@@ -148,8 +157,7 @@ function xargsSegmentIsWrite(seg, deps) {
 // `-ok`/`-okdir` <cmd> ... {\; | +} runs <cmd> per match — re-parse that <cmd>.
 // The IR tokenizer strips the escape from `\;` leaving a bare `\` or `;`
 // terminator token, so terminate the collected command at `;`, `\`, or `+`.
-function findSegmentIsWrite(seg, deps) {
-  const argv = resolveEffectiveArgv(seg);
+function findSegmentIsWrite(seg, deps, argv) {
   if (!Array.isArray(argv)) return false;
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -198,7 +206,7 @@ function hasCFlag(argv, interpBase) {
     if (interpBase === "pwsh" || interpBase === "powershell")
       return al === "-c" || al === "-command" || al === "-encodedcommand";
     // POSIX shells: standalone -c or combined like -lc, -xc (lowercase c only)
-    return al === "-c" || (a.startsWith("-") && !a.startsWith("--") && /c/.test(a.slice(1)));
+    return al === "-c" || (a.startsWith("-") && !a.startsWith("--") && a.slice(1).includes("c"));
   });
 }
 
@@ -250,12 +258,12 @@ function isExoticExecWriteIR(ir, deps) {
   if (!ir || ir.parseFailure === true) return false;
   if (!ir.segments) return false;
   for (const seg of ir.segments) {
-    const eff = resolveEffectiveCommand(seg);
-    const base = eff != null ? commandBasename(eff) : null;
+    const head = resolveExoticHead(seg);
+    const base = head.cmd0 != null ? commandBasename(head.cmd0) : null;
     if (base == null) continue;
-    if (EVAL_RE.test(base) && evalSegmentIsWrite(seg, deps)) return true;
-    if (XARGS_RE.test(base) && xargsSegmentIsWrite(seg, deps)) return true;
-    if (FIND_RE.test(base) && findSegmentIsWrite(seg, deps)) return true;
+    if (EVAL_RE.test(base) && evalSegmentIsWrite(seg, deps, head.argv)) return true;
+    if (XARGS_RE.test(base) && xargsSegmentIsWrite(seg, deps, head.argv)) return true;
+    if (FIND_RE.test(base) && findSegmentIsWrite(seg, deps, head.argv)) return true;
   }
   return false;
 }
