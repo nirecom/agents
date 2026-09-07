@@ -191,6 +191,21 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
+### Bash compound-command guard
+
+A PreToolUse hook (`hooks/bash-guard.js`) denies command-line issuance of forbidden
+compound-shell literals — chaining (`&&`/`;`), pipes, command substitution
+(backtick/`$(...)`), grouping (`{ ... }`), heredocs (`<<`), redirects (`>`/`>>`), and
+leading env-var prefixes (`FOO=1 cmd`) — per `rules/shell-commands.md` Command-Line
+Issuance Discipline. Detection parses the command through a shared IR rather than a
+regex over raw text, so multi-step work is pushed into a reviewable scratchpad script
+instead of an opaque one-line compound. Two narrowly-scoped exemptions apply (a pipe
+into `xargs`, a command already covered by a `permissions.allow` rule); everything
+else is denied outright. Covers the `Bash` tool only — `runInTerminal`/`runCommands`
+(PowerShell-driving VS Code tools) are a documented gap, since the same literals mean
+different things in pwsh. See
+[docs/architecture/claude-code/settings.md](docs/architecture/claude-code/settings.md).
+
 ### Comment-block size gate
 
 A long run of comment lines is easy to add and hard to notice in review, so it

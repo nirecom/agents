@@ -12,7 +12,7 @@ Read `rules/coding.md` before the first close comment or parent-body update — 
 ### `--from-session` per-N dispatch obligations
 
 Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Issues` block lists all values, including subsumed siblings. For each N in insertion order:
-- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "$OWNER_REPO" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
+- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
 - **All-N outcome entries (#695)**: after the pipeline completes or is skipped, ensure EVERY enumerated N has an outcome entry — including subsumed siblings that never ran a pipeline. Write missing entries with the appropriate skip state before the End report.
 - **Early-return outcome entries (#827)**: at any early-return path — `meta_pending_subs` early return, or a terminal-phase early return when triage reports the issue is already in its terminal state — write an outcome entry for that N before returning (states: `skipped_meta_pending_subs`, `already_closed`, `skipped_open_sub_issues`, as fits the branch).
 
@@ -23,7 +23,7 @@ Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Is
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ### Pre-flight (gate)
-`eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0`. Sets `OWNER_REPO`. Non-GitHub remotes exit 0. `AGENTS_CONFIG_DIR` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
+`bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh"` — one standalone call. It prints `OWNER_REPO=<owner/repo>`; read `<OWNER_REPO>` from that line and substitute it literally below. A non-zero exit means a non-GitHub remote: stop the skill silently. `AGENTS_CONFIG_DIR` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
 
 ## Delegation — initial pass
 
@@ -53,7 +53,7 @@ Read `STATE_FILE`. If `state.triage_action` equals `meta_pending_subs` (triage e
 
 Loop while `state.phase != terminal`.
 
-**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "$OWNER_REPO" "$PROPOSAL_PARENT"` returns RC=0 (all sub-issues closed): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Any non-zero RC falls through to the normal judge path. Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
+**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" "$PROPOSAL_PARENT"` returns RC=0 (all sub-issues closed): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Any non-zero RC falls through to the normal judge path. Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
 
 On user yes: dispatch `phase=loop_step, g5_decision=accept`.
 

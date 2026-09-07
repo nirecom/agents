@@ -68,7 +68,7 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/ma
 
 ### Step MDP-7 — Assemble + confirm
 
-Before composing the summary or confirm-plan prose, run: `CONV_LANG=$(bash -c 'cd "$AGENTS_CONFIG_DIR" && bin/get-config-var CONV_LANG 2>/dev/null || true')`. If CONV_LANG is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
+Before composing the summary or confirm-plan prose, issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG` and read `<CONV_LANG>` from its stdout. If `<CONV_LANG>` is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
 
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
 

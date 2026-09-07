@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-2121-heredoc-strip-widening.sh
-# Tests: hooks/lib/strip-quoted-args.js
-# Tags: heredoc, strip-quoted-args, parser, regex, write-detector, enforce-worktree, TL1, pwsh-not-required, scope:issue-specific, dup-group-keep:distinct-layer
+# Tests: hooks/lib/strip-quoted-args.js, hooks/lib/command-ir.js, hooks/lib/bash-write-patterns.js
+# Tags: heredoc, strip-quoted-args, command-ir, parser, regex, write-detector, enforce-worktree, TL1, pwsh-not-required, scope:issue-specific, dup-group-keep:distinct-layer
 #
 # #2121 — stripHeredocBody()'s regex requires a literal `cat` before the opener and
 # a \w+ delimiter, so `tee out <<'EOF'` and `<<'EOF-1.2'` bodies are never stripped
@@ -49,9 +49,11 @@ SUITE_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-2121-heredoc-strip-widening"
 . "$SUITE_DIR/cases-substitution-capture.sh"
 # shellcheck source=./feature-2121-heredoc-strip-widening/cases-line-continuation.sh
 . "$SUITE_DIR/cases-line-continuation.sh"
+# shellcheck source=./feature-2121-heredoc-strip-widening/cases-ir-parser.sh
+. "$SUITE_DIR/cases-ir-parser.sh"
 
 run_H1; run_H2; run_H3; run_H4; run_H5; run_H6; run_H7; run_H8; run_H9; run_H10; run_H11
-run_H12
+run_H12; run_H13
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

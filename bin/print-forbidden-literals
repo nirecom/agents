@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+"use strict";
+// bin/print-forbidden-literals — stamp the forbidden-literal set out of its SSOT.
+//
+// rules/shell-commands.md is a prompt the model reads and hooks/bash-guard/ is the code
+// that enforces it; when the two drift, the guard denies something the discipline document
+// never told the model about. Both are therefore derived from
+// hooks/bash-guard/forbidden-literals.js, and this is the tool that renders the document
+// half. --markdown-table prints the generated block's body; --ids prints the machine ids
+// one per line, which is what the doc-sync test compares against the module.
+
+const path = require("path");
+const { DOC_ROWS, LITERAL_IDS } = require(
+  path.join(__dirname, "..", "hooks", "bash-guard", "forbidden-literals.js")
+);
+
+const USAGE = "usage: print-forbidden-literals --markdown-table | --ids";
+
+function main(argv) {
+  const mode = argv[0];
+  if (mode === "--markdown-table") {
+    process.stdout.write(DOC_ROWS.map((row) => "| " + row + " |").join("\n") + "\n");
+    return 0;
+  }
+  if (mode === "--ids") {
+    process.stdout.write(LITERAL_IDS.join("\n") + "\n");
+    return 0;
+  }
+  process.stderr.write(USAGE + "\n");
+  return 2;
+}
+
+process.exit(main(process.argv.slice(2)));

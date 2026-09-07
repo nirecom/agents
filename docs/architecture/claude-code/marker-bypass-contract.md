@@ -39,6 +39,8 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-memory-direct.js` | PreToolUse | Yes | No |
 | `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
 | `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
+| `hooks/bash-guard.js` | PreToolUse | **No** | **No** |
+| `hooks/lib/early-write-gate.js` (shared predicate, consumed by `hooks/bash-guard/judge.js` and `hooks/workflow-gate/early-gate.js`) | lib | Indirect (see note below) | No |
 | `hooks/block-shell-config.js` | PreToolUse | **No** | **No** |
 | `hooks/block-clearance-token-write.js` | PreToolUse | **No** | **No** |
 | `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
@@ -92,6 +94,16 @@ bypass: see `hooks/lib/protected-basenames.js`.
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
 who need to bypass a specific match must use `.private-info-allowlist` instead.
+
+`hooks/bash-guard.js` does not read either marker directly either (CPR-SC): the only
+leverage a marker has over it is indirect, through the C6 interlock. `earlyWriteGateStatus`
+(`hooks/lib/early-write-gate.js`) checks `isWorkflowOff(sid)` FIRST and, when the marker is
+present, returns `active:false` immediately — so an active `.workflow-off` marker never
+silences bash-guard via the interlock; if anything, it removes the interlock's own silencing
+effect for that call, letting bash-guard's normal deny logic run. The interlock is keyed on
+the early-write gate's EFFECTIVE state (the `workflow_init`/`clarify_intent` step-status
+pair), the same computation `hooks/workflow-gate/early-gate.js` reads, not on either marker.
+`.worktree-off` plays no role in this hook at all.
 
 `hooks/block-history-direct.js`'s marker check runs only after a protected-path hit is
 detected, so non-protected paths never pay the session-ID resolution cost.

@@ -65,6 +65,31 @@ See `docs/security-policy.md` for the full pattern list.
   Use case: follow-up commits that tick a checkbox in `docs/todo.md`, append to
   `docs/history.md`, or refresh the user-visible description in root `README.md`.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
+- `bash-guard.js` (PreToolUse, matcher: `Bash`) — denies command-line issuance of a
+  forbidden compound-shell literal (`&&`/`;`, `|`, backtick/`$(...)`, `{ ... }`, `<<`,
+  `>`/`>>`, leading `FOO=1 cmd` env-prefix) per `rules/shell-commands.md` "Command-Line
+  Issuance Discipline" (#2134). **Matcher is bare `Bash`**, unlike most hooks in this
+  table (`Bash|runInTerminal|runCommands`) — `runInTerminal`/`runCommands` can drive
+  pwsh, where a backtick is a line continuation and `{ }` a script block, so reading
+  that with a bash parser would produce confident false denials; those tools are
+  deliberately out of scope (a documented hole, see "Known limitations" below), not an
+  oversight. Detection parses via the shared command IR (`hooks/lib/command-ir`), never
+  a regex over raw text. Two exemptions, precisely scoped
+  (`hooks/bash-guard/exemptions.js`): a pipe into `xargs` is forgiven at that hit only;
+  a command already matched by a `permissions.allow` `Bash(<pattern>)` rule (via
+  `hooks/lib/settings-allow-match.js`, semantics in "Permission glob matching" below)
+  clears the whole line. Reason codes are `hooks/bash-guard/reasons.js`'s `BG-<LITERAL-ID>`
+  deny codes plus `BG-TOOL-OUT-OF-SCOPE` / `BG-INTERLOCK-QUIET` / `BG-ALLOW-RULE` /
+  `BG-PARSE-FAILURE` / `BG-NO-HIT` allow attributions — a namespace disjoint from
+  workflow-gate's `T-A..T-E` tiers. **Interlock (C6)**: stays quiet while the
+  early-write gate is actually blocking (`hooks/lib/early-write-gate.js`
+  `earlyWriteGateStatus(sessionId).active`, the same SSOT `workflow-gate/early-gate.js`
+  reads), so the two guards never talk over each other; the interlock tracks that
+  gate's EFFECTIVE state, not the `WORKFLOW_OFF`/`WORKTREE_OFF` marker directly — see
+  `marker-bypass-contract.md`, which also records that this hook is never bypassed by
+  either marker. **Fail-open** is the one named exception to hooks/'s deny-on-doubt
+  default: an unparseable stdin payload, a `judgeBashCommand` throw, or `parse()`
+  reporting `parseFailure` all approve silently rather than invent a verdict.
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
@@ -411,6 +436,14 @@ See `docs/security-policy.md` for the full pattern list.
 (e.g., `*git commit --amend*`) to catch compound commands. Only interactive approval
 ("Yes, don't ask again") splits subcommands and saves individual rules (separate mechanism).
 
+`hooks/lib/settings-allow-match.js` reads this semantics as its SSOT to decide whether an
+existing `permissions.allow` rule already covers a `bash-guard.js` candidate — it is an
+**approximation of the host's own permission matcher, not a reimplementation**. Its bias is
+deliberately one-directional: over-matching only silences a presentation guard (harmless —
+the command was already permission-granted), while under-matching would deny a command the
+user explicitly allowed (harmful), so every ambiguity — an unreadable or unparsable
+`settings.json` included — resolves to the wider side (treated as a match).
+
 **Generated allow rules for agents' own commands**: because a rule matches the whole command
 string, one internal command issued two ways needs two rules, and hand maintenance cannot track
 that. The fact "this command is an allow-target" therefore has exactly one owner and the rule
@@ -438,6 +471,13 @@ strings are generated from it.
 - VSCode's "Ask before edits" mode covers Edit/Write only — Bash commands do not trigger
   the ask dialog.
 - Hot-reloading of settings.json hook changes is unreliable. Restart Claude Code after changes.
+- `bash-guard.js`'s matcher is `Bash` only (see above) — a compound command issued through
+  `runInTerminal` / `runCommands` (VS Code-integrated terminal tools) never reaches it and
+  is not otherwise denied. Parsing pwsh with a bash-syntax parser is worse than not parsing
+  it at all (backtick = continuation not command-substitution, `{ }` = script block not
+  grouping, `$env:` = a different variable form), so covering those tools is deliberately
+  out of scope rather than attempted with a parser that would misjudge them. This is a known
+  gap, tracked for a follow-up issue rather than closed here.
 
 ## AWS Permission Posture
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow-plans-dir, hooks/lib/load-env.js, hooks/lib/path-match.js, hooks/lib/workflow-plans-dir.js
-# Tags: workflow, plans, hook, bin, windows
+# Tags: workflow, plans, hook, bin, windows, scope:common
 # Contract tests for hooks/lib/workflow-plans-dir.js helper.
 #
 # Test-first: the source file may not exist yet. Each Node test creates a
@@ -387,27 +387,30 @@ test_i4() {
 test_i4
 
 # ---------------------------------------------------------------------------
-# I5: relative WORKFLOW_PLANS_DIR makes the bridge exit 2 and emit a stderr
-# line prefixed `workflow-plans-dir:`.
+# I5: a relative WORKFLOW_PLANS_DIR makes the underlying resolution fail, and
+# the bridge absorbs that failure: it prints the env fallback
+# `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}` on stdout and exits 0 (#2132),
+# so a caller can resolve the plans dir with one standalone command instead of
+# a `$(... || printf ...)` compound the bash-guard denies.
 # ---------------------------------------------------------------------------
-echo "--- I5: bridge rejects relative WORKFLOW_PLANS_DIR ---"
+echo "--- I5: bridge falls back to the env value on resolution failure ---"
 test_i5() {
     if [ ! -f "$REAL_BRIDGE" ]; then
         skip "I5 bin/workflow-plans-dir not yet created"
         return
     fi
-    local stderr_out exit_code
-    # Capture stderr (discard stdout) and exit code separately. We run the
-    # bridge twice — once to grab the stderr text, once to grab the exit
-    # status — because Bash makes capturing both from a single invocation
-    # awkward and we do not care about timing here.
-    stderr_out="$(run_with_timeout env WORKFLOW_PLANS_DIR=foo/bar "$REAL_BRIDGE" 2>&1 >/dev/null || true)"
+    local stdout_out exit_code
+    # Capture stdout (discard stderr — the underlying node diagnostic still
+    # goes there) and the exit status separately. We run the bridge twice
+    # because Bash makes capturing both from a single invocation awkward and
+    # we do not care about timing here.
+    stdout_out="$(run_with_timeout env WORKFLOW_PLANS_DIR=foo/bar "$REAL_BRIDGE" 2>/dev/null || true)"
     exit_code=0
     run_with_timeout env WORKFLOW_PLANS_DIR=foo/bar "$REAL_BRIDGE" >/dev/null 2>&1 || exit_code=$?
-    if [ "$exit_code" = "2" ] && echo "$stderr_out" | grep -q "^workflow-plans-dir:"; then
-        pass "I5 relative path: exit 2, stderr starts with 'workflow-plans-dir:'"
+    if [ "$exit_code" = "0" ] && [ "$stdout_out" = "foo/bar" ]; then
+        pass "I5 relative path: exit 0, stdout is the env fallback 'foo/bar'"
     else
-        fail "I5 expected exit 2 + stderr 'workflow-plans-dir:...' got exit=$exit_code stderr='$stderr_out'"
+        fail "I5 expected exit 0 + stdout 'foo/bar' got exit=$exit_code stdout='$stdout_out'"
     fi
 }
 test_i5

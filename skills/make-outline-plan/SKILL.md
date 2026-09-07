@@ -101,7 +101,7 @@ MOP-6. **Cap outcome dispatch.**
    `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<PLANS_DIR>/<session-id>-outline-plan-last-round.txt`.
 
 MOP-7. On `APPROVED`:
-   Retrieve `CONV_LANG=$(bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG 2>/dev/null || true)`.
+   Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`.
 
    Evaluate each approach and select the recommended one (highest trade-off score across cost, risk, existing-code consistency, and delivery timeline). Record it as `CHOSEN_APPROACH=<approach-name>`.
 

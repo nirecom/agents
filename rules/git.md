@@ -14,6 +14,8 @@ WRONG:   `cd /path/to/repo && git log --oneline -5`
 
 Run git write commands (any subcommand that modifies state) as **separate sequential Bash calls** — do NOT chain them with `&&`.
 
+Issuance form is not a git-specific rule: `rules/shell-commands.md` "Command-Line Issuance Discipline" owns it, and the `bash-guard` PreToolUse hook enforces it for every Bash call, git included.
+
 ## Force Push
 
 - Prefer `--force-with-lease` over `--force` — it aborts when the remote ref has moved since your last fetch, preventing accidental clobber.

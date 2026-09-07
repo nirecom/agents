@@ -13,11 +13,8 @@ Investigate the codebase related to the given task.
 
 Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
 
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
+`bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — one standalone Bash call.
+Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 Capture the printed absolute path and substitute it for every <PLANS_DIR>
 placeholder in the remainder of this SKILL.md. Subagent prompts must receive

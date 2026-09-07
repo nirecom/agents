@@ -16,17 +16,13 @@ Non-Node callers go through `bin/workflow-plans-dir` (Bash bridge).
 
 ## Protocol (inlined into each consuming SKILL.md)
 
-At the start of Procedure, before the first plans-dir tool call, run:
+At the start of Procedure, before the first plans-dir tool call, issue this one
+standalone Bash call: `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"`.
 
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
-
-Capture the printed absolute path and substitute it for every `<PLANS_DIR>`
-placeholder in the SKILL.md. Resolve once per invocation — reuse across
-all subsequent steps.
+Read the absolute path it prints on stdout and substitute that literal text for
+every `<PLANS_DIR>` placeholder in the SKILL.md. Do not assign it to a shell
+variable — each Bash call has fresh shell state, so the consumer is you, not the
+shell. Resolve once per invocation and reuse across all subsequent steps.
 
 - Read/Write/Edit args: literal absolute path.
 - Subagent prompts: literal absolute path (subagents can't expand `$VAR` —
@@ -35,10 +31,10 @@ all subsequent steps.
 
 ## Fallback chain
 
-1. Primary: `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — honours `.env`
-   and exported overrides via the JS resolver.
-2. Fallback: `"${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"` — respects an
-   already-exported `WORKFLOW_PLANS_DIR`, but cannot read `.env`.
+Both steps live inside `bin/workflow-plans-dir`, so the caller issues one command:
+
+1. Primary: the JS resolver, which honours `.env` and exported overrides.
+2. Fallback: the exported `WORKFLOW_PLANS_DIR`, else `$HOME/.workflow-plans`.
 
 `AGENTS_CONFIG_DIR` is set in every Claude Code session; helper
 unreachability is a configuration error.
