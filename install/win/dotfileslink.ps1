@@ -202,12 +202,32 @@ foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.c
 # --- END temporary: cc-session-title launcher cleanup ---
 
 # --- PATH-exposed bin/ commands (cmd + bash shim) ---
-# The command set is declared once in install/path-exposed-commands.txt and looped over
-# here; install/linux/dotfileslink.sh consumes the same file (CPR-SSOT single source of truth,
-# CPR-ORTH both platforms expose the same set). Do NOT hand-write a launcher pair below —
-# add the command name to the list file instead.
-# Write-Launcher registers every list entry (review-code-codex, review-env-example, ...)
-# as a .cmd launcher plus a bash shim.
+# Command set: install/path-exposed-commands.txt (CPR-SSOT; install/linux/dotfileslink.sh
+# consumes the same file, CPR-ORTH). Do NOT hand-write a launcher pair — add to the list file.
+# Shim's `exec <interpreter>` must match the target's own shebang; mirrors resolveInterpreter()
+# in install/lib/settings-allow-rules.js (canonical bash/node detection).
+function Resolve-PathExposedInterpreter {
+    param([string]$Command)
+    $scriptPath = Join-Path $AgentsRoot "bin\$Command"
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+        throw "install/path-exposed-commands.txt: entry `"$Command`" is not a file ($scriptPath)"
+    }
+    $firstLine = Get-Content -LiteralPath $scriptPath -TotalCount 1
+    if (-not $firstLine -or -not $firstLine.StartsWith("#!")) {
+        throw "install/path-exposed-commands.txt: entry `"$Command`" has no shebang, so its interpreter is unresolvable - fail-closed"
+    }
+    $tokens = @($firstLine.Substring(2).Trim() -split '\s+' | Where-Object { $_.Length -gt 0 })
+    $name = if ($tokens.Length -gt 0) { Split-Path -Leaf ($tokens[0] -replace '\\', '/') } else { "" }
+    if ($name -eq "env") {
+        $name = if ($tokens.Length -gt 1) { Split-Path -Leaf ($tokens[1] -replace '\\', '/') } else { "" }
+    }
+    if ($name -ne "bash" -and $name -ne "node") {
+        $shown = if ($name) { $name } else { "(none)" }
+        throw "install/path-exposed-commands.txt: entry `"$Command`" resolves to interpreter `"$shown`", which is neither bash nor node - fail-closed"
+    }
+    return $name
+}
+
 $PathExposedList = Join-Path $AgentsRoot "install\path-exposed-commands.txt"
 $pathExposedCommands = @()
 if (Test-Path -LiteralPath $PathExposedList) {
@@ -220,8 +240,9 @@ if (Test-Path -LiteralPath $PathExposedList) {
     Write-Warning "Command list not found: $PathExposedList (skipping)"
 }
 foreach ($command in $pathExposedCommands) {
+    $interpreter = Resolve-PathExposedInterpreter $command
     $cmdContentLine = "@echo off`r`nwsl bash -c ""$command %*""`r`n"
     Write-Launcher (Join-Path $LocalBin "$command.cmd") $cmdContentLine "$command.cmd"
-    $shimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/$command`" `"`$@`"`n"
-    Write-Launcher (Join-Path $LocalBin $command) $shimContent "$command (bash shim)"
+    $shimContent = "#!/usr/bin/env bash`nexec $interpreter `"$agentsUnixPath/bin/$command`" `"`$@`"`n"
+    Write-Launcher (Join-Path $LocalBin $command) $shimContent "$command ($interpreter shim)"
 }
