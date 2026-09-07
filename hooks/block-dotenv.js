@@ -9,6 +9,7 @@ const { getBasename } = require("./lib/path-match");
 const {
   isDotenvPath,
   checkBashCommand,
+  checkAllowDumpCommand,
   isProtectedPath,
   checkGlobPattern,
   checkExploreQuery,
@@ -62,6 +63,9 @@ switch (toolName) {
   case "runCommands":
     if (checkBashCommand(toolInput.command)) {
       block("Access to .env files is blocked. Use .env.example for documentation.");
+    }
+    if (checkAllowDumpCommand(toolInput.command)) {
+      block("env-effective-kv --allow-dump is blocked from direct invocation — it can dump every secret in the global .env. Use bin/show-local-env-overrides for key-name-only inspection.");
     }
     break;
 

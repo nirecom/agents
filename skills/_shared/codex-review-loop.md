@@ -117,7 +117,10 @@ The wrapper internally:
 3. Calls `review-plan-codex` with the assembled flags, always passing
    `--context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` plus the unified
    context.md (when non-empty) plus each caller-supplied `--context` whose target
-   exists and is non-empty.
+   exists and is non-empty, and — whenever a repo root resolves — `--project-root
+   <repo root>`, the lookup root for that project's own non-functional
+   requirements. It is a separate concern from the `--repo-root` filesystem
+   sandbox and is therefore forwarded even when `CODEX_MCP_FS=off`.
 4. Parses status header + verdict.
 
 The hard-cap gate fires **after** the reviewer's verdict is recorded (post-verdict),
