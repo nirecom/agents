@@ -17,7 +17,7 @@ way as `/issue-close-finalize`: parse `## Issues` and iterate.
 
 ## Pre-flight
 
-Run: `"$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "issue-close-stage" || exit 0`
+Run: `bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "issue-close-stage" || exit 0`
 
 On non-GitHub remote the script exits 1, so `|| exit 0` terminates the skill immediately (no gh work). On a GitHub remote (or unknown/fail-open) the script exits 0 and the skill continues into the checks below.
 
