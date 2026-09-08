@@ -1,7 +1,8 @@
-# tests/feature-2119-settings-allow-ssot/template-pairs.sh
+# tests/prompt-bash-node-calling-convention/template-pairs.sh
 # Tests: install/lib/settings-allow-rules.js
-# Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
-# T26: the pair invariant, asserted on the template table itself. Sourced AFTER generator.sh.
+# Tags: install, settings, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
+# T26: the pair invariant, asserted on the template table itself. Sourced by the suite
+# dispatcher, which owns PASS/FAIL/ROWS, assert_eq, node_path, run_with_timeout and have_lib.
 
 RULES_LIB_REL="install/lib/settings-allow-rules.js"
 

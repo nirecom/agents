@@ -50,7 +50,7 @@ Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exi
 
 **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt`); re-delegate to planner and loop back to MDP-5.
 
-**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
+**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
 
 ### Step MDP-6 — Cap outcome dispatch
 
@@ -72,11 +72,11 @@ Before composing the summary or confirm-plan prose, issue the standalone call `b
 
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
 
-Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
+Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
 
-After assemble-mandatory.sh succeeds, run `"$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
+After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
 
-Scope-change notification gate (before the CONFIRM_DETAIL check): run `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit 0 → scope change detected: present the one-line description to the user and show the relevant detail plan section even when CONFIRM_DETAIL=off. Exit 1 → no scope change → proceed normally. Exit 2 (usage error) → warn and continue.
+Scope-change notification gate (before the CONFIRM_DETAIL check): run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit 0 → scope change detected: present the one-line description to the user and show the relevant detail plan section even when CONFIRM_DETAIL=off. Exit 1 → no scope change → proceed normally. Exit 2 (usage error) → warn and continue.
 
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.

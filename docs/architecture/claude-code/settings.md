@@ -475,6 +475,7 @@ strings are generated from it.
 - An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
 - Nothing in the commit path guards these rules any more, and nothing needs to: a hand-maintained mirror is what could drift, and there is no longer one. `hooks/session-start.js` reports a deployed document that has fallen behind, and `hooks/post-merge` / `hooks/post-checkout` re-deploy when the SSOT, either list, or any of the four modules changes.
 - `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into twenty-four path permission rules, plus six more bare rules when `install/path-exposed-commands.txt` gives it a PATH shim, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it is run by hand, never auto-issued mid-session, so listing it would buy no coverage.
+- Prompt assets write an SSOT-listed command path in one of two spellings, and the spelling alone decides whether the text is a command line: a command line to be run keeps `bash` or `node` in execution position with the entry path in argument position (`bash "$AGENTS_CONFIG_DIR/bin/foo"`), while a citation that only names where the file lives drops the `$AGENTS_CONFIG_DIR/` prefix and is written repo-relative (`bin/foo`). The two are otherwise structurally identical — `Run: ` and `Backend script path: ` in front of the same backtick span differ only by an English label — so the prefix, not the surrounding prose, is what `tests/prompt-bash-node-calling-convention/` reads to separate a command from a citation, which keeps that check deterministic instead of dependent on a vocabulary of label words.
 
 **Known limitations**:
 - TL3 verification gap: `tests/feature-2119-settings-allow-ssot/` proves the generated rule
@@ -482,7 +483,13 @@ strings are generated from it.
   honors a given spelling live — that engine is the product's closed runtime, outside this repo's
   test reach. Confidence rests on the #2201 root-cause measurement (94.7% ask rate for
   `resolve-worktree-path` across 482 real transcripts, resolved once the missing quoted-absolute
-  template was the one variable changed), not on an executable assertion. A human confirming a
+  template was the one variable changed), not on an executable assertion. That fix covers only the
+  rule-generation side for an already argument-position command string — it does not reach a
+  command whose leading token is itself an unexpanded shell variable (execution-position, e.g.
+  `"$AGENTS_CONFIG_DIR/bin/foo"`), which the matcher never treats as a static path and always
+  "ask"s regardless of template; #2262's later transcript measurement found 820 of 8,237
+  `$AGENTS_CONFIG_DIR`-bearing Bash calls (10%, 560 sessions) still in that form, fixed by rewriting
+  the prompt-asset command literals to the argument-position `bash <path>` form. A human confirming a
   real quoted-absolute-path invocation stops prompting against a live deployed settings.json is
   the final check for any future template addition, not something CI can close out.
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
