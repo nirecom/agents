@@ -25,7 +25,7 @@ Shared detection wrapper: `bin/detect-non-github.sh` — wraps the canonical det
 
 Consumers that have migrated to the shared wrapper use a 1-line call:
 
-`"$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "<context-label>" || <skip-action>`
+`bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "<context-label>" || <skip-action>`
 
 Where `<skip-action>` is either `NON_GITHUB=1` (when the skill continues after
 skipping gh work) or `exit 0` (when the skill should terminate immediately).

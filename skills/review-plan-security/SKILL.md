@@ -18,7 +18,7 @@ RPS-2. Invoke `"$AGENTS_CONFIG_DIR/skills/review-plan-security/scripts/run-codex
 - exit 3 → silently launch `plan-security-reviewer` subagent; its APPROVED verdict → RPS-5; its NEEDS_REVISION verdict → RPS-3.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback agent.
 - exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
-- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `"$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.
+- exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.
 RPS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including their `## Accepted Tradeoffs`).
 - Raising a topic the plan does not address is never grounds to reject.
 - Rejecting obliges naming the specific governing decision; a reject carrying no cited decision is a procedure violation.

@@ -1,7 +1,8 @@
-# tests/feature-2119-settings-allow-ssot/rt0-calling-convention.sh
+# tests/prompt-bash-node-calling-convention/rt0-calling-convention.sh
 # Tests: skills/review-tests/SKILL.md
-# Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
-# T48: RT-0's calling convention, as text, polarity included.
+# Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
+# T48: RT-0's calling convention, as text, polarity included. Sourced by the suite dispatcher,
+# which owns PASS/FAIL/ROWS, assert_eq and TMPROOT.
 
 RT0_SKILL_REL="skills/review-tests/SKILL.md"
 RT0_SKILL="$AGENTS_DIR/$RT0_SKILL_REL"
@@ -13,7 +14,8 @@ RT0_REGION=""
 # issue: a rule for `Bash("<R>/bin/resolve-worktree-path")` buys nothing if the step is read as
 # licence to add an argument, an env prefix or an `&& echo $?`. Each of those turns the command
 # line into a string no generated rule matches, and the step falls back to `ask` -- the exact
-# failure #2201 opened on. The four clauses are therefore asserted as text, not left to review.
+# failure #2201 opened on -- and #2262 adds a sixth clause, since rules match the EXECUTION-POSITION
+# token and only `bash <path>` puts a literal there. The clauses are asserted as text, not reviewed.
 
 # Scoped to RT-0's own block. SKILL.md talks about standalone commands in RT-1 as well, so a
 # file-wide grep would report RT-0 as hardened while RT-0 said nothing.
@@ -37,6 +39,7 @@ rt0_eres() { # <clause> -> ~-delimited ERE list
         no-env-prefix) printf '%s' '\bno\b|without|never|\bnot\b~prefix~env|variable|=' ;;
         no-chaining)   printf '%s' '\bno\b|without|never|\bnot\b~chain|&&' ;;
         exit-separate) printf '%s' 'separate|subsequent|second|another~exit code|exit status|return code|[$]\?~command|call|invocation|line' ;;
+        bash-arg-position) printf '%s' 'bash~argument|parameter' ;;
         *)             printf '%s' 'UNKNOWN-CLAUSE-@@@' ;;
     esac
 }
@@ -44,13 +47,13 @@ rt0_eres() { # <clause> -> ~-delimited ERE list
 # POLARITY IS NOT VOCABULARY, and the list above matches vocabulary. Every keyword survives its
 # own reversal: "Do not forbid chaining with `&&`" and "Do not use a separate command for the
 # exit code" carry every token the probes look for while instructing the OPPOSITE, so a document
-# hardened only in wording would satisfy all five clauses. Each clause therefore also owns a
+# hardened only in wording would satisfy every clause. Each clause therefore also owns a
 # VETO -- a negation binding the clause's own directive verb, or the meta-verb a reversal has to
 # reach for (forbid / require / necessary), disqualifies the line that would otherwise settle it.
 RT0_NEG='(\bnot\b|\bno\b|\bnone\b|never|no longer|need not|nothing|don.t|doesn.t|isn.t|aren.t|cannot|can.t)'
 RT0_META='(forbid|prohibit|disallow|avoid|refrain|require|insist|mandate|matter|prevent|claim|necessary)'
 
-# The two REQUIREMENT clauses veto a negation of their own directive as well: "do not run it as a
+# The three REQUIREMENT clauses veto a negation of their own directive as well: "do not run it as a
 # standalone command" reverses one-command without touching a meta-verb. The three PROHIBITION
 # clauses cannot do the same -- "do not chain" IS their correct form -- so only the double
 # negation is vetoed there.
@@ -58,6 +61,7 @@ rt0_anti_eres() { # <clause> -> ERE a satisfying line must NOT match
     case "$1" in
         one-command)   printf '%s' "$RT0_NEG[^.]{0,24}($RT0_META|\brun\b|\binvoke\b|\bissue\b|\bcall\b|\btreat\b|\buse\b|\bwrite\b|standalone|\bsingle\b)" ;;
         exit-separate) printf '%s' "$RT0_NEG[^.]{0,24}($RT0_META|\buse\b|\brun\b|inspect|\bcheck\b|\bread\b|\bissue\b|\bwrite\b|\bput\b|separate|second|subsequent|another)" ;;
+        bash-arg-position) printf '%s' "$RT0_NEG[^.]{0,24}($RT0_META|\bpass\b|\binvoke\b|\brun\b|\buse\b|\btreat\b|\bwrite\b|argument|\bbash\b)" ;;
         no-arguments|no-env-prefix|no-chaining) printf '%s' "$RT0_NEG[^.]{0,24}$RT0_META" ;;
         *)             printf '%s' 'UNKNOWN-CLAUSE-@@@' ;;
     esac
@@ -90,10 +94,14 @@ rt0_probe() { # <text-file> <clause> -> satisfied|NOT-SATISFIED|sentinel
 # omits or contradicts one clause, and the only text guaranteed to do that is text this file
 # owns: pointing the mutants at the real file would make them pass for as long as the file
 # stays unhardened and start failing the day it is fixed. One clause per line, so a mutant
-# drops or contradicts exactly one and the other four keep answering `satisfied`.
+# drops or contradicts exactly one and the others keep answering `satisfied`.
 rt0_fixture() { # <case> <out-file>
-    local cmd args envp chain exitc
+    local cmd bashpos args envp chain exitc
     cmd='RT-0. Run `"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"` as a single standalone command.'
+    # The hardened wording states the obligation WITHOUT a negation: the clause's own veto reads
+    # `never invoke` / `do not pass` as a polarity reversal, so a control fixture that reached for
+    # "never invoke it directly" would disqualify itself and make the probe look unsatisfiable.
+    bashpos='  Pass the script path to `bash` as its argument, keeping `bash` itself in execution position.'
     args='  Pass it no positional arguments.'
     envp='  Use no environment-variable prefix on the invocation.'
     chain='  Use no command chaining: no `&&`, no `;` and no `|` on that command line.'
@@ -101,6 +109,8 @@ rt0_fixture() { # <case> <out-file>
     case "$1" in
         hardened)              : ;;
         omit-one-command)      cmd='RT-0. Run `"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"`.' ;;
+        omit-bash-arg-position) bashpos='' ;;
+        contradict-bash-arg-position) bashpos='  Invoke the script path directly; do not pass it to `bash` as an argument.' ;;
         omit-arguments)        args='' ;;
         contradict-arguments)  args='  Pass the worktree path to it as a positional argument.' ;;
         omit-env-prefix)       envp='' ;;
@@ -111,6 +121,8 @@ rt0_fixture() { # <case> <out-file>
         contradict-exit)       exitc='  Inspect its exit code on the same command line as the run itself.' ;;
         invert-one-command)     cmd='RT-0. Do not run it as a single standalone command.' ;;
         invert-one-command-need) cmd='RT-0. Running it as a single standalone command is no longer required.' ;;
+        invert-bash-arg-position)      bashpos='  Do not pass the script path to `bash` as an argument.' ;;
+        invert-bash-arg-position-need) bashpos='  Passing the script path to `bash` as an argument is not required.' ;;
         invert-arguments)       args='  Do not forbid a positional argument on that command line.' ;;
         invert-arguments-need)  args='  Passing it no positional arguments is not required.' ;;
         invert-env-prefix)      envp='  It is not forbidden to set an environment-variable prefix on the invocation.' ;;
@@ -121,7 +133,7 @@ rt0_fixture() { # <case> <out-file>
         invert-exit-need)       exitc='  Inspecting the exit code in a separate command is no longer required.' ;;
         *)                     printf '%s\n' 'UNKNOWN-FIXTURE-CASE' > "$2"; return ;;
     esac
-    printf '%s\n' "$cmd" "$args" "$envp" "$chain" "$exitc" > "$2"
+    printf '%s\n' "$cmd" "$bashpos" "$args" "$envp" "$chain" "$exitc" > "$2"
 }
 
 t48_setup() {
@@ -169,10 +181,11 @@ no-arguments|says it takes no arguments: a trailing argument is admitted only by
 no-env-prefix|says no environment-variable prefix precedes it -- a `FOO=1 cmd` line begins with a token no generated rule starts with, so the whole rule set misses it
 no-chaining|says the command is not chained -- the permission engine matches the WHOLE command string, so `cmd && echo` is a different string from `cmd` and matches nothing
 exit-separate|says the exit code is inspected in a SEPARATE command, which is the only way to obey the no-chaining clause and still branch on failure
+bash-arg-position|says the script path is passed to `bash` as an argument, not invoked directly -- a variable in execution position is exactly the shape the permission engine's allow rules do not match
 T48_SKILL_CASES
 }
 
-# The reference fixture is the falsifiability control: without it, five unsatisfiable regexes
+# The reference fixture is the falsifiability control: without it, unsatisfiable regexes
 # would be indistinguishable from five clauses the document has yet to state.
 t48_reference_table() {
     local id label
@@ -187,6 +200,7 @@ no-arguments|CONTROL: the no-arguments probe is satisfiable by ordinary prose, n
 no-env-prefix|CONTROL: so is the no-env-prefix probe
 no-chaining|CONTROL: so is the no-chaining probe
 exit-separate|CONTROL: so is the separate-exit-code probe
+bash-arg-position|CONTROL: so is the bash-as-argument probe
 T48_REFERENCE_CASES
 }
 
@@ -209,6 +223,8 @@ omit-chaining|no-chaining|dropping the no-chaining sentence is detected
 contradict-chaining|no-chaining|text that tells the reader to chain with `&&` fails -- an example of the forbidden shape is not a prohibition of it
 omit-exit|exit-separate|dropping the separate-exit-code sentence is detected
 contradict-exit|exit-separate|text that puts the exit-code check on the SAME command line fails, which is the wording the no-chaining clause alone would leave admissible
+omit-bash-arg-position|bash-arg-position|dropping the bash-argument sentence is detected
+contradict-bash-arg-position|bash-arg-position|text that instructs direct invocation instead of passing to `bash` fails too
 T48_NEGATIVE_CASES
 }
 
@@ -237,6 +253,8 @@ invert-chaining|no-chaining|Codex's own example: "Do not forbid chaining with `&
 invert-chaining-need|no-chaining|and "Chaining with `&&` is not forbidden", the same reversal in the passive voice a reviewer skims past
 invert-exit|exit-separate|Codex's other example: "Do not use a separate command for the exit code" reverses the only clause that makes the no-chaining prohibition obeyable
 invert-exit-need|exit-separate|and cancelling that requirement outright is caught too, so the clause cannot be satisfied by a sentence that merely mentions a separate command
+invert-bash-arg-position|bash-arg-position|"Do not pass the script path to `bash` as an argument" keeps every keyword the probe matches and reverses it
+invert-bash-arg-position-need|bash-arg-position|and neither can a sentence that keeps the clause but cancels the obligation ("is not required")
 T48_INVERSE_CASES
 }
 

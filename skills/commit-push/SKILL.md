@@ -16,7 +16,7 @@ If documentation is missing or the commit hook blocks due to missing documentati
 
 ## Phase 1 (issue-close-stage) pre-flight
 
-Run: `"$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "Phase 1 pre-flight" || NON_GITHUB=1`
+Run: `bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "Phase 1 pre-flight" || NON_GITHUB=1`
 
 When `NON_GITHUB=1` (non-GitHub remote): skip the entire pre-flight block below (including `check-phase1-complete.sh`), then proceed with commit/push as normal — do NOT abort the skill.
 When the command exits 0 (GitHub remote, or unknown/fail-open): run the pre-flight as normal.
