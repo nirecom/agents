@@ -455,3 +455,7 @@ Changes: Reviewed projects can now declare their own non-functional requirements
 ### FEATURE: PR #2260 (2026-09-07)
 Background: feat(#2134): deny compound Bash command lines via a new PreToolUse bash-guard
 Changes: Added a PreToolUse guard that blocks compound Bash command lines (chaining, pipes, substitution, heredocs, redirects, env-var prefixes) at issuance time, pushing multi-step work into reviewable scratchpad scripts instead.;Fixed heredoc bodies and their trailing newlines being misparsed as shell operators.;Corrected prompt assets and internal command examples to stop suggesting compound command lines that trip the new guard.
+
+### FEATURE: PR #2272 (2026-09-09)
+Background: feat(#2262): direct prompt-authored command lines through bash/node execution position
+Changes: Fixed prompt-authored command examples across several skills that were triggering unnecessary approval prompts by not matching the auto-approve pattern for Bash tool calls
