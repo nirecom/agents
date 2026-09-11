@@ -49,7 +49,15 @@ STUB
 #!/usr/bin/env bash
 echo NOSTATE
 STUB
-    chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-worktree-path"
+    # #2270: the script resolves the session id through this bridge before it
+    # touches the worktree, so the fake config dir has to answer rc 0 — a missing
+    # file would read as rc 127 (node absent) and HALT the loop at exit 4.
+    cat > "$fake/bin/resolve-session-id" <<'STUB'
+#!/usr/bin/env bash
+printf 'sid1361'
+STUB
+    chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-worktree-path" \
+        "$fake/bin/resolve-session-id"
     if [ "$with_evidence" = "yes" ]; then
         cp "$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js" "$fake/hooks/workflow-gate/review-tests-evidence.js"
     fi
@@ -75,6 +83,7 @@ TERMINAL_SUFFIX="-test-review-terminal.txt"
 run_loop() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
+        CLAUDE_CODE_SESSION_ID="sid1361" CLAUDE_SESSION_ID="sid1361" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"

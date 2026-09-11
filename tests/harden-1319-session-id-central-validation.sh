@@ -3,18 +3,12 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/session-id.js, hooks/lib/session-markers.js, hooks/stop-final-report-guard.js, hooks/stop-l2-findings-display.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js
 # Tags: session-id, validation, path-traversal, hardening, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
-# Issue #1319 — session-id validation is centralised in
-# hooks/workflow-state/state-io/core.js (SESSION_ID_VALID_RE) and enforced on
-# every resolveSessionId() return path, so the four Stop-hook consumers no
-# longer carry their own redundant regex guard.
-# U1-U6 are TL1 (pure function, real fixture files). I1-I4 are TL2 (real spawned
-# hook process) and cover ALL FOUR consumers whose local regex guard was dropped.
-#
-# L3 gap (what this test does NOT catch):
-# - The consumers receiving a malformed session_id from a real Claude Code Stop
-#   hook payload (settings.json wiring + live transcript resolution)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration
+# Issue #1319 — session-id validation is centralised in core.js's
+# SESSION_ID_VALID_RE, enforced on every resolveSessionId() return path, so the
+# four Stop-hook consumers below no longer carry their own regex guard.
+# U1-U6 are TL1 (pure function). I1-I4 are TL2 (real spawned hook process).
+# L3 gap: a real Stop hook payload is not exercised — mitigated at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 
 set -u
 
@@ -139,29 +133,16 @@ run_consumer_case() {
 
 run_I1() { run_consumer_case "I1" "hooks/stop-final-report-guard.js"; }
 run_I2() { run_consumer_case "I2" "hooks/stop-l2-findings-display.js"; }
-# I3/I4 complete the set: all FOUR consumers whose redundant regex guard was
-# removed are driven with the same malformed session_id. Covering only two left
-# the other half of the class untested (CPR-ORTH).
+# I3/I4 (CPR-ORTH): the other two of the four consumers whose regex guard was removed.
 run_I3() { run_consumer_case "I3" "hooks/stop-premature-stop-guard.js"; }
 run_I4() { run_consumer_case "I4" "hooks/supervisor-guard.js"; }
 
-# ---------------------------------------------------------------------------
-# U5: the fallback chain's SUCCESS paths. U1-U4 only prove that a bad
-#     sessionIdFromInput is refused; without these rows a resolveSessionId that
-#     always returned null would pass the whole file. Each row disables every
-#     source ABOVE the one under test, so the returned value can only have come
-#     from that source.
-#     Rows: 2 CLAUDE_CODE_SESSION_ID, 3 CLAUDE_ENV_FILE, 4 CLAUDE_SESSION_ID,
-#           5 transcriptPath basename, 6 WORKTREE_NOTES.md in CWD.
-#     Plus the precedence pair (input beats env; env beats env-file) and the
-#     "invalid value in a fallback source is skipped, not returned" row.
-# ---------------------------------------------------------------------------
+# U5: the 4-tier SUPPLY-only chain's success paths (#2270 dropped the former
+# CLAUDE_ENV_FILE / WORKTREE_NOTES.md inferred tiers) — without these rows a
+# resolveSessionId that always returned null would pass the whole file.
 run_U5() {
     local tmp tnode out
     tmp="$(make_tmp)"; tnode="$(node_path "$tmp")"
-    printf 'CLAUDE_SESSION_ID=envfile-sid-3\n' > "$tmp/env-file"
-    printf 'Session-ID: notes-sid-6\n' > "$tmp/WORKTREE_NOTES.md"
-    printf 'BAD_KEY=x\nCLAUDE_SESSION_ID=../../escape\n' > "$tmp/env-file-bad"
     out=$(cd "$tmp" && TMPD="$tnode" env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
         -u CLAUDE_ENV_FILE -u CLAUDE_PROJECT_DIR \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tnode/no-transcripts" \
@@ -193,31 +174,19 @@ check('p2-trims', 'code-sid-2', () => {
   process.env.CLAUDE_CODE_SESSION_ID = '  code-sid-2  ';
   return resolveSessionId({});
 });
-// P3 CLAUDE_ENV_FILE — reached only with P2 unset
-check('p3-env-file', 'envfile-sid-3', () => {
-  process.env.CLAUDE_ENV_FILE = path.join(dir, 'env-file');
-  return resolveSessionId({});
-});
-// P4 CLAUDE_SESSION_ID
-check('p4-session-env', 'legacy-sid-4', () => {
+// P3 CLAUDE_SESSION_ID
+check('p3-session-env', 'legacy-sid-4', () => {
   process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
   return resolveSessionId({});
 });
-// P5 transcript basename
-check('p5-transcript', 'transcript-sid-5', () =>
+// P4 transcript basename
+check('p4-transcript', 'transcript-sid-5', () =>
   resolveSessionId({ transcriptPath: path.join(dir, 'transcript-sid-5.jsonl') }));
-// P6 WORKTREE_NOTES.md in CWD (the test chdir'd into the fixture dir)
-check('p6-notes', 'notes-sid-6', () => resolveSessionId({}));
 // precedence: a valid higher source wins over a valid lower one
 check('prec-input-over-env', 'input-sid-1', () => {
   process.env.CLAUDE_CODE_SESSION_ID = 'code-sid-2';
   process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
   return resolveSessionId({ sessionIdFromInput: 'input-sid-1' });
-});
-check('prec-code-over-envfile', 'code-sid-2', () => {
-  process.env.CLAUDE_CODE_SESSION_ID = 'code-sid-2';
-  process.env.CLAUDE_ENV_FILE = path.join(dir, 'env-file');
-  return resolveSessionId({});
 });
 // an INVALID value in a fallback source is skipped, and resolution continues
 check('skip-bad-code-env', 'legacy-sid-4', () => {
@@ -225,18 +194,14 @@ check('skip-bad-code-env', 'legacy-sid-4', () => {
   process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
   return resolveSessionId({});
 });
-check('skip-bad-env-file', 'notes-sid-6', () => {
-  process.env.CLAUDE_ENV_FILE = path.join(dir, 'env-file-bad');
-  return resolveSessionId({});
-});
-check('skip-bad-transcript', 'notes-sid-6', () =>
+check('skip-bad-transcript', null, () =>
   resolveSessionId({ transcriptPath: '/tmp/bad name.jsonl' }));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "U5: every fallback source resolves when reached, higher sources win, and an invalid value is skipped rather than returned"
+        pass "U5: every supply-tier source resolves when reached, higher sources win, and an invalid value is skipped rather than returned"
     else
-        fail "U5: fallback-chain success path wrong; got '${out:-<err>}'"
+        fail "U5: supply-tier success path wrong; got '${out:-<err>}'"
     fi
 }
 

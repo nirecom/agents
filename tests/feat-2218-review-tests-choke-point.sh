@@ -269,9 +269,12 @@ run_R6() {
     fi
 }
 
-# R7 — the second under-exercised site (line ~43): resolve-worktree-path
-# returns the empty string outright (never NOSTATE), so the guard fires on
-# the sibling `elif [[ -z "$COMMIT_TARGET" ]]` branch.
+# R7 — the second INPUT SHAPE into the same site: resolve-worktree-path returns the
+# empty string outright rather than NOSTATE. #2270 merged the former sibling
+# `elif [[ -z "$COMMIT_TARGET" ]]` branch into the NOSTATE one, so the two shapes must
+# now be indistinguishable — same non-git CWD as R6, same exit 8, same entry. Driven
+# through run_loop_at for the same reason R6 is: from the real worktree's CWD the
+# fallback `git rev-parse` would resolve this repo and the guard would never fire.
 run_R7() {
     require_module "$ARTIFACT" || return 0
     local tmp sid rc problems out
@@ -279,14 +282,14 @@ run_R7() {
     mkdir -p "$tmp/wf"
     sid="codex-exit-8-emptytarget"
     printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
-    run_loop "$tmp" "$sid" 0 ""; rc=$?
+    run_loop_at "$tmp" "$tmp" "$sid" 0 ""; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
     [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
     out="$(inspect_code_only "$tmp" "$sid" "8")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "R7: EXIT_REINVOKE_AFTER_TERMINAL at the empty-commit-target site (line ~43) records the choke-point entry"
+        pass "R7: an empty commit-target reaches the same EXIT_REINVOKE_AFTER_TERMINAL site as NOSTATE and records the choke-point entry"
     else
         fail "R7: —$problems"
     fi

@@ -20,6 +20,13 @@ else
 fi
 # Path travels via env, not string interpolation — apostrophes/metachars in the
 # checkout path cannot break or alter the evaluated program.
+# Exit codes (SSOT: docs/architecture/claude-code/session-id-resolution.md "bridge rc contract"):
+#   0   stdout = session id
+#   2   session id unresolvable (no supplied tier has one) — the only "no session" rc
+#   3   resolver failed (resolveSessionId() threw) — treat as a bridge fault, never as "no session"
+#   70  invoked through node instead of bash (#1532 guard above)
+#   127 node not on PATH (bash)
+# Callers: map rc 2 to "no session"; every other non-zero rc is a fault (fail closed or report it).
 BRIDGE_DIR="$NODE_DIR" node -e '
   const path = require("path");
   try {
@@ -27,8 +34,8 @@ BRIDGE_DIR="$NODE_DIR" node -e '
     if (!r) { process.stderr.write("resolve-session-id: session id unresolvable\n"); process.exit(2); }
     process.stdout.write(r);
   } catch (e) {
-    process.stderr.write("resolve-session-id: " + e.message + "\n");
-    process.exit(2);
+    process.stderr.write("resolve-session-id: resolver failed: " + e.message + "\n");
+    process.exit(3);
   }
 '
 # End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md

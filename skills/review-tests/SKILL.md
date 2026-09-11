@@ -13,13 +13,19 @@ Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the
 
 Read `rules/shell-commands.md` before the first Bash command, or before writing a file — defensive measure: RT-2's incident showed the rule content was not effectively available at Bash-issuance time in this `context: fork` execution.
 
-RT-0. Resolve the session-bound linked worktree path: run `bash "$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"` (Bash, as a single standalone command — no variable-capture syntax on the Bash tool's own command line, per `rules/shell-commands.md`); its stdout is `WORKTREE` for later steps.
+RT-0. Resolve the session-bound linked worktree path in two separate standalone Bash commands — never combined with variable-capture syntax on the Bash tool's own command line, per `rules/shell-commands.md`.
+  RT-0 step 1: run `bash "$AGENTS_CONFIG_DIR/bin/resolve-session-id"`; its stdout is the CC session id.
+  RT-0 step 1 exit 2 (stdout empty, stderr `session id unresolvable`): omit `--session` and run step 2 anyway.
+  RT-0 step 1 any other non-zero exit (3 = resolver fault, 127 = node absent): HALT and surface its stderr; do not run step 2 — rc 3 is a fault, not "no session".
+  RT-0 step 2: run `bash "$AGENTS_CONFIG_DIR/bin/resolve-worktree-path" --session <value from step 1>`; its stdout is `WORKTREE` for later steps.
+  RT-0 step 2 exit 2 (malformed `--session` value — a transcription error): HALT; never fall through to a different session.
+  If step 2's stdout is empty after an omitted `--session`, RT-0 skips: the review target cannot be identified.
   If `WORKTREE == "NOSTATE"`, treat `WORKTREE` as empty — the internal scripts handle the CWD-fallback path for that case.
-  Pass the script path to `bash` as its argument, keeping `bash` itself in execution position — a bare quoted path there is a shell variable in execution position, the shape the permission engine's allow rules never match.
-  Pass it no positional arguments.
-  Use no environment-variable prefix on the invocation.
-  Use no command chaining: no `&&`, no `;` and no `|` on that command line — per `rules/shell-commands.md`.
-  Inspect its exit code, if needed, in a separate, subsequent command.
+  Pass each script path to `bash` as its argument, keeping `bash` itself in execution position — a bare quoted path there is a shell variable in execution position, the shape the permission engine's allow rules never match.
+  Pass it no arguments other than `--session <value>`.
+  Use no environment-variable prefix on either invocation.
+  Use no command chaining: no `&&`, no `;` and no `|` on those command lines — per `rules/shell-commands.md`.
+  Inspect an exit code, if needed, in a separate, subsequent command.
 RT-0a. Read:
    - `rules/core-principles.md`
    - `rules/test.md` — on-demand-only; never auto-injected, so this Read is mandatory
@@ -31,9 +37,10 @@ RT-1. Identify staged test file(s) and source file(s):
   - If exit 3 (linked worktree unresolvable): do NOT fall back to cwd;
     present "Could not identify the linked worktree. Re-run `/review-tests` from the linked worktree, or specify the test and source files manually."
     and ask the user for the files.
+  - If exit 4 (`bin/resolve-session-id` faulted): HALT, surface the script's stderr, and do NOT ask for a manual file.
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
 RT-2. Assemble review input via the Write tool only — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md`. Do not substitute Bash-based assembly for the Write tool call in this step — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
-RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; single-round — no re-loop):
+RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID` (plan-artifact prefix), `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; single-round — no re-loop):
 - exit 0 APPROVED → RT-5 COMPLETE.
 - exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS (no re-loop).
 - exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; present summary → RT-5 WARNINGS.
@@ -62,4 +69,4 @@ Invariant: RT-5 emits exactly one of COMPLETE/WARNINGS; never both, never zero (
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
 To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
 Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
-Worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.
+Session-id resolution is delegated to `bin/resolve-session-id` and its value passed on as `--session`; worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.

@@ -2,20 +2,11 @@
 # Tests: bin/get-config-var, bin/confirm-off, bin/resolve-session-id, bin/resolve-worktree-path, bin/is-github-dotcom-remote
 # Tags: bin, polyglot-guard, absolute-contract, scope:issue-specific, pwsh-not-required, TL2
 
-# A: absolute expected values, not a comparison against a twin.
-
-# Why this file exists (review-tests C1): the B group derives its stripped twin
-# from the SAME post-change file it is judging. If the envelope insertion also
-# damaged the body -- the concrete named risk is get-config-var's internal
-# `node -e` block, whose JavaScript now lives inside a bash here-document region
-# -- both sides break identically and every B row still passes. A twin comparison
-# can only ever prove "the envelope changed nothing"; it cannot prove the script
-# still does its job. These rows state what the job IS, in literal values.
-
-# Small on purpose: the contract of each target is owned by its own feature test.
-# What is pinned here is the handful of behaviours that would go silently wrong if
-# the envelope corrupted the body, and get-config-var's node path is pinned first
-# because it is the one C1 named.
+# A: absolute expected values (not a twin comparison, review-tests C1) -- the B
+# group's stripped-twin diff can only prove the envelope changed nothing, never
+# that the body still works, so these rows pin the few behaviours that would go
+# silently wrong in literal values, get-config-var's node path pinned first since
+# that's the one C1 named.
 
 echo "=== A: absolute behaviour contract for $GUARD_TARGET ==="
 
@@ -92,11 +83,13 @@ a_resolve_worktree_path() {
   t="$(target_path resolve-worktree-path)"
   if command -v cygpath >/dev/null 2>&1; then wt="$(cygpath -m "$REPO_ROOT")"; else wt="$REPO_ROOT"; fi
   printf '{"session_id":"%s","cwd":"%s"}' "$A_SID" "$wt" > "$CLAUDE_WORKFLOW_DIR/$A_SID.json"
-  export SESSION_ID="$A_SID"
+  # #2270: bare SESSION_ID is no longer an input channel -- the bridge only reads
+  # CLAUDE_CODE_SESSION_ID / CLAUDE_SESSION_ID.
+  export CLAUDE_CODE_SESSION_ID="$A_SID"
   a_run "resolve-worktree-path/resolved" 0 "$wt" bash "$t"
-  export SESSION_ID="${A_SID}nostate"
+  export CLAUDE_CODE_SESSION_ID="${A_SID}nostate"
   a_run "resolve-worktree-path/nostate" 0 "NOSTATE" bash "$t"
-  unset SESSION_ID
+  unset CLAUDE_CODE_SESSION_ID
 }
 
 # A throwaway repo rather than this checkout: the answer must depend on the remote

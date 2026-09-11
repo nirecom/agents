@@ -57,13 +57,15 @@ setup_case() {  # <session-id>
     export WORKFLOW_PLANS_DIR="$PLANS"
     export AGENTS_CONFIG_DIR="$CFG"
     export CLAUDE_SESSION_ID="$SID"
-    unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+    # CLAUDE_CODE_SESSION_ID is exported by the developer's live session and the
+    # driver reads it (#2270), so an inherited value would decide the case.
+    unset NON_GITHUB CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
 }
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
 }
 
 # --- git fixture (#1899) -----------------------------------------------------

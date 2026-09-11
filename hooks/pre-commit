@@ -390,6 +390,32 @@ if [ -n "$_od_repo_top" ]; then
                     ;;
             esac
         fi
+
+        # ---------- session-id SSOT gate (issue #2270) ----------
+        # Same rc convention as the block above: rc 2 is a contract breach by the caller
+        # (bad flag, rotted allowlist), not an outage, so a rename cannot silently
+        # disarm the gate. Real outages (missing/unrunnable checker, unexpected rc)
+        # leave the commit alone with a diagnostic.
+        _si_checker="$_od_cfg_dir/bin/check-session-id-ssot.sh"
+        if [ ! -x "$_si_checker" ]; then
+            echo "pre-commit: check-session-id-ssot.sh missing or not executable at $_si_checker — session-id SSOT gate skipped" >&2
+        else
+            _si_rc=0
+            _si_out="$(bash "$_si_checker" --staged 2>&1)" || _si_rc=$?
+            case "$_si_rc" in
+                0) : ;;
+                1|2)
+                    printf '%s\n' "$_si_out"
+                    echo ""
+                    echo "Commit blocked: session-id env reads bypassing the SSOT resolver (checker rc=$_si_rc)."
+                    echo "See docs/architecture/claude-code/session-id-resolution.md."
+                    exit 1
+                    ;;
+                *)
+                    echo "pre-commit: check-session-id-ssot.sh rc=$_si_rc — session-id SSOT gate skipped" >&2
+                    ;;
+            esac
+        fi
     fi
 fi
 

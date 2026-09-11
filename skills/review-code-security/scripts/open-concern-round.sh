@@ -16,7 +16,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${AGENTS_CONFIG_DIR:-$(cd "$SELF_DIR/../../.." && pwd)}"
 CLI="$ROOT/bin/concern-ledger"
 
-SID="${SESSION_ID:-${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
+BRIDGE_RC=0
+SID="$("$ROOT/bin/resolve-session-id")" || BRIDGE_RC=$?
 PLANS="${PLANS_DIR:-${WORKFLOW_PLANS_DIR:-${HOME:-}/.workflow-plans}}"
 
 # $2, when given, is the path the reason is about. It goes to stderr and never
@@ -29,7 +30,15 @@ unavailable() {
     exit 0
 }
 
-[ -n "$SID" ] || unavailable "no session id in the environment"
+# Only rc 2 is "no session"; any other rc is a bridge fault named with its rc,
+# so a round is never opened under a guessed session.
+case "$BRIDGE_RC" in
+  0) ;;
+  2) SID="" ;;
+  *) unavailable "bin/resolve-session-id failed (rc $BRIDGE_RC)" ;;
+esac
+
+[ -n "$SID" ] || unavailable "session id unresolvable (bin/resolve-session-id)"
 [ -r "$CLI" ] || unavailable "the concern-ledger CLI is not readable at bin/concern-ledger"
 # This wrapper pastes $SID into plans-dir file names itself, without going
 # through the ledger's path builders, so the token is validated here too

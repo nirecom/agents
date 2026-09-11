@@ -73,7 +73,7 @@ run_r1() {
     local tmp count rc
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID || true
+    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-a --set-audit-phase done >/dev/null 2>&1
     rc=$?
@@ -95,7 +95,7 @@ run_r2() {
     local tmp out rc
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID || true
+    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --set-audit-phase done 2>&1)
     rc=$?
@@ -113,7 +113,7 @@ run_r3() {
     require_wsid_routing "$label" || return
     local tmp rc exists
     tmp="$(mktemp -d)"
-    unset CLAUDE_SESSION_ID || true
+    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r3test \
         WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
@@ -135,6 +135,9 @@ run_r4() {
     require_wsid_routing "$label" || return
     local tmp rc wsid_phase cc_phase
     tmp="$(mktemp -d)"
+    # #2270: the parent session exports CLAUDE_CODE_SESSION_ID, which now outranks
+    # CLAUDE_SESSION_ID in the id chain (rules/test/fixture-isolation.md).
+    unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r4 \
         CLAUDE_SESSION_ID=ccu-r4 \
         WORKFLOW_PLANS_DIR="$tmp" \
@@ -143,7 +146,7 @@ run_r4() {
     wsid_phase=$(read_phase "$tmp" "wsid-r4")
     cc_phase=$(read_phase "$tmp" "ccu-r4")
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID || true
+    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$wsid_phase" = "done" ] && [ "$cc_phase" = "done" ]; then
         pass "$label"
@@ -159,7 +162,7 @@ run_r5() {
     local tmp rc x_phase y_phase
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID || true
+    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-x --mirror-session-id sid-y --set-audit-phase done >/dev/null 2>&1
     rc=$?

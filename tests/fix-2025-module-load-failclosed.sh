@@ -75,6 +75,10 @@ mktree() {
     rm -rf "$d"
     mkdir -p "$d/rules" "$d/skills/review-code-security/scripts"
     cp -r "$AGENTS_ROOT/bin" "$d/bin"
+    # #2270: bin/resolve-session-id resolves through hooks/workflow-state, so a tree
+    # without hooks/ makes the bridge fault (rc 3) before any case's own removal is
+    # reached — a fixture gap, not the behaviour under test.
+    cp -r "$AGENTS_ROOT/hooks" "$d/hooks"
     echo "# core principles stub" > "$d/rules/core-principles.md"
     cp "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" \
         "$d/skills/review-code-security/scripts/"
@@ -214,7 +218,9 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
 
     P4O="$(mkplans plans-open)"
     rc=0
-    O4O="$(AGENTS_CONFIG_DIR="$D4" SESSION_ID="$SID" PLANS_DIR="$P4O" run_with_timeout bash \
+    # #2270: bare SESSION_ID is no longer an input to the bin/resolve-session-id bridge;
+    # supply the CC-native name so the sid resolves and the safe-path check is reached.
+    O4O="$(AGENTS_CONFIG_DIR="$D4" CLAUDE_CODE_SESSION_ID="$SID" PLANS_DIR="$P4O" run_with_timeout bash \
         "$D4/skills/review-code-security/scripts/open-concern-round.sh" 2>&1)" || rc=$?
     assert_eq "4: open-concern-round keeps its exit-0 contract" "0" "$rc"
     assert_eq "4: but says out loud that the round is unnumbered" \

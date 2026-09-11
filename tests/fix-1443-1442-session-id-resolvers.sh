@@ -3,31 +3,11 @@
 # Tests: hooks/lib/resolve-workflow-session-id.js, hooks/workflow-state/session-id.js
 # Tags: worktree-end, worktree-context, session-id, scope:issue-specific, pwsh-not-required
 #
-# Issue #1443 / #1442 — resolve the session id from sibling worktrees when env
-# vars are absent. The detect-worktree-conflict.js hook, SKILL.md text, and
-# settings.json registration (Sections A/D/E) live in
-# tests/fix-1443-1442-worktree-context.sh.
-#
-# FAIL-BEFORE-FIX (BUGFIX session): the implementation does NOT exist yet.
-#   - The sibling-worktree scan is not yet added to resolve-workflow-session-id.js
-#     or workflow-state/session-id.js — Sections B/C FAIL because siblings do not
-#     resolve (env-cleared cases return NULL instead of the sibling's id).
-# Every FAIL below must be attributable to a missing implementation, never to a
-# harness bug. B2 (no siblings -> null), B6/C5 (own-notes Priority 1/6 wins), and
-# B3/B4/C2/C3 may PASS pre-implementation; they are regression guards that must
-# continue to hold once the sibling scan lands.
-#
-# HIGH-1 own-worktree exclusion (codex review) — the sibling scan excludes only
-# path.resolve(cwd), so a CWD in a SUBDIRECTORY of a linked worktree wrongly collects
-# the own worktree root as a "sibling". Fix cases:
-#   - B7/C6 (PASS now, regression guards): subdir CWD, sole worktree -> own id.
-#   - B8/C7 (FAIL now): subdir CWD + a second sibling -> own id; today NULL (own root
-#     collected → false ambiguity).
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Cross-session parallelism: the sibling scan is verified structurally against
-#   fixture worktrees, not against two concurrently live Claude Code sessions
-#   executing in parallel.
+# Issue #1443 / #1442 — Section B pins the sibling-worktree scan where it still lives
+# (resolveWorkflowSessionId, incl. the HIGH-1 own-worktree exclusion); Section C pins
+# resolveSessionId's supply-only chain after #2270 removed every inference tier.
+# Contract: docs/architecture/claude-code/session-id-resolution.md. Sections A/D/E:
+# tests/fix-1443-1442-worktree-context.sh. L3 gap: fixture worktrees, not live sessions.
 
 set -uo pipefail
 
@@ -213,12 +193,15 @@ fi
 rm -rf "$b8_main" "$b8_plans"
 
 # ===========================================================================
-# Section C — resolveSessionId() (workflow-state/session-id.js) symmetric scan.
-# Priority 7 (JSONL mtime scan) is neutralized: point CLAUDE_TRANSCRIPT_BASE_DIR
-# and CLAUDE_PROJECT_DIR at empty fixture dirs so it cannot accidentally resolve.
+# Section C — resolveSessionId() is SUPPLY-only after #2270: sessionIdFromInput ->
+# CLAUDE_CODE_SESSION_ID -> CLAUDE_SESSION_ID -> ctx.transcriptPath basename. Every
+# inference tier (sibling scan, CLAUDE_ENV_FILE, WORKTREE_NOTES.md, JSONL mtime) is
+# gone, so each worktree topology below must answer NULL instead of guessing; the
+# own-vs-sibling precedence rows live on in Section B, where that behaviour remains.
+# C2 is the non-vacuity control: the same harness DOES return a value when supplied.
 # ===========================================================================
 echo ""
-echo "=== Section C — resolveSessionId sibling scan ==="
+echo "=== Section C — resolveSessionId is supply-only (no filesystem inference) ==="
 
 # call_sid <cwd> <transcript_base> [extra env KEY=VAL ...]
 # ctx = {} (no sessionIdFromInput). Env cleared for CC session vars.
@@ -232,14 +215,14 @@ process.stdout.write(r == null ? 'NULL' : r);
 " 2>/dev/null )
 }
 
-# C1: sibling scan resolves from main CWD when ctx empty and env cleared.
+# C1: retargeted — a lone sibling's WORKTREE_NOTES.md must NOT be adopted (no inference).
 c1_main="$(build_fixture "test-sid-c1")"
 c1_tbase="$(mktemp -d)"
 c1_out="$(call_sid "$c1_main" "$c1_tbase")"
-if [ "$c1_out" = "test-sid-c1" ]; then
-    pass "C1. sibling scan resolves session id from main CWD"
+if [ "$c1_out" = "NULL" ]; then
+    pass "C1. a sole sibling's Session-ID is NOT inferred from main CWD -> NULL"
 else
-    fail "C1. sibling scan resolves session id — want 'test-sid-c1' got '$c1_out' (sibling scan not implemented)"
+    fail "C1. supply-only chain must not infer a sibling id — want 'NULL' got '$c1_out'"
 fi
 rm -rf "$c1_main" "$c1_tbase"
 
@@ -259,7 +242,8 @@ else
 fi
 rm -rf "$c2_main" "$c2_tbase"
 
-# C3: two conflicting siblings, env cleared, Priority 7 neutralized -> NULL.
+# C3: unchanged intent — two conflicting siblings, env cleared -> NULL (now because
+# no sibling tier exists at all, rather than via an ambiguity fail-safe).
 c3_main="$(build_fixture "test-sid-c3-a" "test-sid-c3-b")"
 c3_tbase="$(mktemp -d)"
 c3_out="$(call_sid "$c3_main" "$c3_tbase")"
@@ -270,56 +254,60 @@ else
 fi
 rm -rf "$c3_main" "$c3_tbase"
 
-# C4: two siblings with IDENTICAL ids, env cleared -> returns it (CPR-ORTH counterpart of B5).
+# C4: retargeted — even an UNAMBIGUOUS pair of identical sibling ids is not inferred;
+# absence of ambiguity is not a licence to guess (B5 keeps the old row for the wsid family).
 c4_main="$(build_fixture "test-sid-c4" "test-sid-c4")"
 c4_tbase="$(mktemp -d)"
 c4_out="$(call_sid "$c4_main" "$c4_tbase")"
-if [ "$c4_out" = "test-sid-c4" ]; then
-    pass "C4. two identical sibling Session-IDs -> returns it"
+if [ "$c4_out" = "NULL" ]; then
+    pass "C4. two IDENTICAL sibling Session-IDs are still not inferred -> NULL"
 else
-    fail "C4. two identical sibling Session-IDs must resolve — want 'test-sid-c4' got '$c4_out' (sibling scan not implemented)"
+    fail "C4. unambiguous siblings must still be ignored — want 'NULL' got '$c4_out'"
 fi
 rm -rf "$c4_main" "$c4_tbase"
 
-# C5: CWD = the linked worktree itself + conflicting second sibling -> own id via
-# Priority 6 (WORKTREE_NOTES.md in CWD). CPR-ORTH counterpart of B6. Regression guard —
-# may PASS pre-implementation (Priority 6 already exists); post-fix it proves the
-# sibling scan does not preempt the CWD notes read or turn it ambiguous.
+# C5: retargeted — the CWD's OWN WORKTREE_NOTES.md was the old priority 6 and is the
+# most tempting inference of all; it too must be ignored. B6 keeps the row for wsid.
 c5_main="$(build_fixture "test-sid-c5-own" "test-sid-c5-other")"
 c5_tbase="$(mktemp -d)"
 c5_out="$(call_sid "$c5_main/wt1" "$c5_tbase")"
-if [ "$c5_out" = "test-sid-c5-own" ]; then
-    pass "C5. CWD in linked worktree -> own Session-ID wins despite conflicting sibling"
+if [ "$c5_out" = "NULL" ]; then
+    pass "C5. CWD's own WORKTREE_NOTES.md is not read by resolveSessionId -> NULL"
 else
-    fail "C5. own WORKTREE_NOTES.md (Priority 6) must win — want 'test-sid-c5-own' got '$c5_out' (sibling scan preempted P6)"
+    fail "C5. own WORKTREE_NOTES.md must no longer resolve — want 'NULL' got '$c5_out'"
 fi
 rm -rf "$c5_main" "$c5_tbase"
 
-# C6: CPR-ORTH counterpart of B7 for resolveSessionId(). CWD = a subdirectory inside
-# the ONLY linked worktree, env cleared, Priority 7 neutralized, no other sibling
-# -> own Session-ID. Regression guard (currently passes by accident).
+# C6: retargeted — a CWD one level DOWN from the notes file must not resolve either;
+# pins that no ancestor walk was left behind. B7 keeps the resolving row for wsid.
 c6_main="$(build_fixture "test-sid-c6-own")"
 c6_tbase="$(mktemp -d)"
 mkdir -p "$c6_main/wt1/sub/dir"
 c6_out="$(call_sid "$c6_main/wt1/sub/dir" "$c6_tbase")"
-if [ "$c6_out" = "test-sid-c6-own" ]; then
-    pass "C6. CWD in linked-worktree subdir, sole worktree -> own Session-ID"
+if [ "$c6_out" = "NULL" ]; then
+    pass "C6. CWD in a linked-worktree subdir infers nothing -> NULL"
 else
-    fail "C6. CWD in linked-worktree subdir must resolve own id — want 'test-sid-c6-own' got '$c6_out'"
+    fail "C6. no ancestor walk may resolve an id — want 'NULL' got '$c6_out'"
 fi
 rm -rf "$c6_main" "$c6_tbase"
 
-# C7: CPR-ORTH counterpart of B8. CWD = a subdirectory inside linked worktree A
-# ('sid-own-c7'), PLUS a second linked worktree B ('sid-other-c7'). Expect own id.
-# HIGH-1 bug: own root wrongly collected as sibling → false ambiguity → NULL.
+# C7: retargeted into the MUTATION CONTROL for C1/C4/C5/C6. Same topology that used to
+# infer 'sid-own-c7' (subdir CWD in worktree A, sibling B), but CLAUDE_SESSION_ID — the
+# chain's third SUPPLIED tier — is set: the supplied value wins and the notes files are
+# never consulted, so the NULL rows above are the missing tier, not a dead harness.
 c7_main="$(build_fixture "sid-own-c7" "sid-other-c7")"
 c7_tbase="$(mktemp -d)"
 mkdir -p "$c7_main/wt1/sub/dir"
-c7_out="$(call_sid "$c7_main/wt1/sub/dir" "$c7_tbase")"
-if [ "$c7_out" = "sid-own-c7" ]; then
-    pass "C7. CWD in linked-worktree subdir + other sibling -> own Session-ID (not ambiguous)"
+c7_out="$( cd "$c7_main/wt1/sub/dir" && CLAUDE_TRANSCRIPT_BASE_DIR="$c7_tbase" CLAUDE_PROJECT_DIR="$c7_main" CLAUDE_SESSION_ID="env-sid-c7" \
+    run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE node -e "
+const m = require('$SESSION_ID_NODE');
+const r = m.resolveSessionId({});
+process.stdout.write(r == null ? 'NULL' : r);
+" 2>/dev/null )"
+if [ "$c7_out" = "env-sid-c7" ]; then
+    pass "C7. supplied CLAUDE_SESSION_ID resolves in the same topology (non-vacuity control)"
 else
-    fail "C7. own worktree must be excluded from sibling set — want 'sid-own-c7' got '$c7_out' (HIGH-1: own root wrongly collected as sibling → false ambiguity)"
+    fail "C7. supplied tier 3 must win over every notes file — want 'env-sid-c7' got '$c7_out'"
 fi
 rm -rf "$c7_main" "$c7_tbase"
 

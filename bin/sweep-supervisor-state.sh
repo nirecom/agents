@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-#
 # bin/sweep-supervisor-state.sh
-#
 # #1799 remediation: removes the escape_hatch_event records that leaking test
 # suites wrote into real supervisor state files, from FINISHED sessions only.
-#
 # THE ONE EXCEPTION to the /sweep family's apply-by-default rule: this member is
 # DRY-RUN BY DEFAULT. It deletes from a governance audit trail, not from a
 # regenerable derivative, so the blast radius justifies the inversion.
-#
 # The live-session scope guard is unconditional. There is no --include-live.
 # --session narrows the target set; it never relaxes the guard.
 
@@ -80,7 +76,17 @@ fi
 ENGINE_ARGS=(--plans-dir "$(node_path "$PLANS_DIR")")
 [ "${APPLY:-0}" = "1" ] && ENGINE_ARGS+=(--apply)
 [ -n "$SESSION" ] && ENGINE_ARGS+=(--session "$SESSION")
-[ -n "${CLAUDE_SESSION_ID:-}" ] && ENGINE_ARGS+=(--current-session "$CLAUDE_SESSION_ID")
+
+# Liveness comes from the bridge, never from a raw env var: only rc 2 means
+# "no CC session". Any other rc leaves liveness unknown, and sweeping then
+# could scrub the audit trail of the session still running.
+BRIDGE_RC=0
+CURRENT_SID="$("$SCRIPT_DIR/resolve-session-id")" || BRIDGE_RC=$?
+case "$BRIDGE_RC" in
+  0) ENGINE_ARGS+=(--current-session "$CURRENT_SID") ;;
+  2) ;;   # no CC session (cron / CI): nothing to protect; the other liveness guards still apply
+  *) printf 'sweep-supervisor-state: resolve-session-id failed (exit %s); refusing to sweep without liveness\n' "$BRIDGE_RC" >&2; exit 1 ;;
+esac
 
 SUMMARY="$(node "$(node_path "$ENGINE")" "${ENGINE_ARGS[@]}")"
 RC=$?

@@ -47,7 +47,7 @@ echo "--- prompt-injection 5: the second consumer of the same rendered text ---"
 {
     mk_plans 5 "$(row C1 HIGH "closing early: $PAYLOAD_END $INJECTION")"
     OCR_OUT="$(
-        SESSION_ID="$SID" PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
+        CLAUDE_CODE_SESSION_ID="$SID" PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
             bash "$OPEN_ROUND" 2>/dev/null
     )"
 

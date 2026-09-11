@@ -475,21 +475,29 @@ itself evidence.
 
 Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
 no such channel. They all resolve through one canonical implementation:
-`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
-`CLAUDE_CODE_SESSION_ID` → `CLAUDE_ENV_FILE` → `CLAUDE_SESSION_ID` → `ctx.transcriptPath` →
-`WORKTREE_NOTES.md` → JSONL mtime scan (gated by an `isSameGitRepo` cross-repo guard). Bash
-callers reach it via the `bin/resolve-session-id` bridge (stdout = sid, exit 2 when
-unresolvable); Node CLIs `require()` it directly. Callers locate the bridge relative to their
-own file (`BASH_SOURCE` / `__dirname`), never via `$AGENTS_CONFIG_DIR`, so every checkout uses
-its own resolver even when that env var points at a different checkout. Why one SSOT: eight
-independent resolver implementations diverged over time and produced concurrent-session
-misattribution (#1082); consolidation (#1251) removes the divergence class instead of patching
-members one at a time.
+`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a strict 4-tier SUPPLY-only chain:
+`ctx.sessionIdFromInput` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` →
+`ctx.transcriptPath` basename. Every tier comes from the calling process's own context; no tier
+infers an id from filesystem traces (the former `CLAUDE_ENV_FILE` / `WORKTREE_NOTES.md` /
+JSONL-mtime-scan inference tiers were removed — #2270). Bash callers reach it via the
+`bin/resolve-session-id` bridge (stdout = sid on rc 0; rc 2 = unresolvable, the only "no
+session" code; rc 3 = the resolver itself faulted, a distinct condition callers must not
+conflate with "no session" — full rc table: [session-id-resolution.md](session-id-resolution.md#the-bridge-rc-contract));
+Node CLIs `require()` it directly. Callers locate the bridge relative to their own file
+(`BASH_SOURCE` / `__dirname`), never via `$AGENTS_CONFIG_DIR`, so every checkout uses its own
+resolver even when that env var points at a different checkout. Why one SSOT: eight independent
+resolver implementations diverged over time and produced concurrent-session misattribution
+(#1082); consolidation (#1251) removes the divergence class instead of patching members one at
+a time.
 
 `resolveSessionId()` answers "which session am *I*?" and nothing else — never repurpose it to
 name an upstream session a cross-session command was pointed at. `/resume-session --from` passes
 that id explicitly, and `bin/workflow/lib/next-step/repo-dir-guard.js` distinguishes the two by
 value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present.
+
+Identifier-family boundaries, why filesystem inference was removed from the chain, the bridge
+rc contract, and the static guard against bypassing the resolver:
+[session-id-resolution.md](session-id-resolution.md).
 
 ## Cross-session resume
 

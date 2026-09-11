@@ -40,6 +40,7 @@ if (st.alert && st.alert.findings_surfaced_at !== null && st.alert.findings_surf
 const { formatLayer2Findings } = require(path.resolve(__dirname, "../hooks/lib/supervisor-findings-render"));
 const result = formatLayer2Findings(st.alert ? (st.alert.findings || []) : [], {
   sessionId,
+  // session-id-ssot: waived (display annotation only) — no resolution depends on it
   workflowSessionId: process.env.CLAUDE_SESSION_ID || null,
   supervisorPath: process.env.AGENTS_CONFIG_DIR ? process.env.AGENTS_CONFIG_DIR + "/agents/supervisor.md" : null,
   stateFilePath: statePath,

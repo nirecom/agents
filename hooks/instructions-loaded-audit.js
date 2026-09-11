@@ -190,7 +190,8 @@ function main() {
   // the repo-relative form unchanged.
   const recordedPath = rulesKey && relPath.startsWith("out-of-root:") ? rulesKey : relPath;
 
-  const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || "";
+  // session-id-ssot: waived (audit attribution) — an inferred id files the receipt under the wrong session
+  const sessionId = payload.session_id || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || "";
   const dir = receipt.receiptDirFor(sessionId);
   if (!receipt.ensureReceiptDir(dir)) return;
 

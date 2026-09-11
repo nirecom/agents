@@ -57,6 +57,10 @@ mkdir -p "$CLAUDE_WORKFLOW_DIR"
 # emitter still resolves the developer's real ~/.workflow-plans/ and appends there.
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
+# rules/test/fixture-isolation.md: the parent Claude Code session exports
+# CLAUDE_CODE_SESSION_ID, which outranks the CLAUDE_SESSION_ID each case sets, so the
+# live session's id would resolve instead of the fixture's and every token come back empty.
+unset CLAUDE_CODE_SESSION_ID
 
 # ---------------------------------------------------------------------------
 # Precondition gate
@@ -261,6 +265,35 @@ while [[ $# -gt 0 ]]; do
     shift; done; exit 0
 BSTUB
     chmod +x "$FAKE_ACD2/bin/build-codex-context"
+    # #2270: the loop script now resolves the CC session id and the session's worktree
+    # through these two bridges before anything else. They live under AGENTS_CONFIG_DIR,
+    # so the fake tree must carry them or the script halts (exit 4) before the probe.
+    # The worktree stub answers only for SID_A's --session, so the recorded --repo-root
+    # is still evidence that the script forwarded the SESSION's worktree, not its CWD.
+    cat > "$FAKE_ACD2/bin/resolve-session-id" <<STUBSID
+#!/bin/bash
+printf '%s' "${SID_A}"
+STUBSID
+    chmod +x "$FAKE_ACD2/bin/resolve-session-id"
+    cat > "$FAKE_ACD2/bin/resolve-worktree-path" <<STUBWTP
+#!/bin/bash
+while [[ \$# -gt 0 ]]; do
+    if [[ "\$1" == "--session" && "\${2:-}" == "${SID_A}" ]]; then
+        printf '%s' "${LINKED_A}"
+        exit 0
+    fi
+    shift
+done
+printf 'NOSTATE'
+STUBWTP
+    chmod +x "$FAKE_ACD2/bin/resolve-worktree-path"
+    # The third AGENTS_CONFIG_DIR entrypoint the loop reaches before the probe; its
+    # non-zero rc is an unconditional exit 4, so a missing file hides the assertion too.
+    cat > "$FAKE_ACD2/bin/resolve-accepted-tradeoffs-file" <<'STUBATF'
+#!/bin/bash
+printf '%s' "$1/$2-outline.md"
+STUBATF
+    chmod +x "$FAKE_ACD2/bin/resolve-accepted-tradeoffs-file"
 
     ( cd "$MAIN_WT" && \
         AGENTS_CONFIG_DIR="$FAKE_ACD2" SESSION_ID="$SID_A" CLAUDE_SESSION_ID="$SID_A" \

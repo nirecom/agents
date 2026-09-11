@@ -3,22 +3,12 @@
 # Tags: concern-ledger, security-scanner, prompt-contract, drift-guard, TL2, scope:common
 # Sourced by tests/bin-concern-ledger-shared-code-review.sh.
 
-# Why this case exists. Every other case in this suite replays the security
-# scanner as a handcrafted report body: the delimiters, the section header and
-# the delta line shape are all typed out again inside the test. That makes the
-# test and agents/security-scanner.md two independent copies of one contract.
-# Rename `## Concern Delta`, drop the `prior_concerns` field, or reword the
-# [PRIOR CONCERNS START]/[PRIOR CONCERNS END] markers in the prompt file, and
-# every case here keeps passing while the real subagent stops being able to
-# join the round.
-
-# So this file pins the contract in the direction the other cases cannot. It
-# reads the real agents/security-scanner.md — never a copy — asserts the four
-# literals the chain depends on are still in it, and then drives the real
-# open-concern-round.sh -> run-quality-gates.sh -> close-concern-round.sh chain
-# with every scanner-side string *derived from that file* rather than typed
-# here. If the prompt file drifts, the derived strings drift with it and the
-# chain assertions fail, which is the whole point.
+# Why this case exists: every other case retypes the scanner's report shape, so
+# test and agents/security-scanner.md become two copies of one contract and a
+# reworded marker leaves them all green while the real subagent can no longer
+# join the round. This file reads the REAL prompt file, asserts the four
+# literals the chain depends on, and drives the real open/run-quality-gates/
+# close chain with every scanner-side string derived from that file.
 
 echo ""
 echo "--- shared prompt contract: agents/security-scanner.md <-> the round chain ---"
@@ -125,7 +115,7 @@ PCW_SCAN_TEXT="the session token is written to the audit log in cleartext"
 
 pcw_open() {
     PCW_OPEN="$(
-        SESSION_ID="$PCW_SID" PLANS_DIR="$PCW_P" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
+        CLAUDE_CODE_SESSION_ID="$PCW_SID" PLANS_DIR="$PCW_P" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
             bash "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" 2>/dev/null
     )"
 }

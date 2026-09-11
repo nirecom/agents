@@ -1,25 +1,61 @@
-# axis-c.sh — Axis C: Error / fallback / resolution-chain cases (B-23..B-25, B-31..B-34)
+# Tests: bin/resolve-session-id, hooks/workflow-state/session-id.js
+# Tags: scope:common, session-id
+# axis-c.sh — Axis C: Error / fallback / resolution-chain cases (B-23..B-25, B-32, B-34)
 # Sourced by feature-resolve-session-id-sh.sh; inherits all globals and helpers.
 
-# ===========================================================================
-# B-23: bridge rc=2 + stderr when all SID sources absent and transcript base empty.
-# Must run from non-git temp CWD with no WORKTREE_NOTES.md up its git chain.
-# ===========================================================================
+# B-23: bridge rc=2 + stderr when all SID sources absent, non-git temp CWD, no
+# WORKTREE_NOTES.md up-chain. stdout emptiness + "session id unresolvable"
+# wording distinguish rc 2 ("no session") from the rc 3 resolver fault (B-23b).
 setup
 NONGIT_CWD="$TMP/b23-nongit"
 mkdir -p "$NONGIT_CWD"
-STDERR_OUT=$(bash -c "
+B23_ERR="$TMP/b23.err"
+STDOUT_OUT=$(bash -c "
     unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
     bash '$BRIDGE'
-" 2>&1 >/dev/null)
+" 2>"$B23_ERR")
 RC=$?
-if [ "$RC" -eq 2 ] && echo "$STDERR_OUT" | grep -q "resolve-session-id"; then
-    pass "B-23: bridge rc=2 + stderr contains 'resolve-session-id' when unresolvable"
+STDERR_OUT=$(cat "$B23_ERR")
+if [ "$RC" -eq 2 ] && [ -z "$STDOUT_OUT" ] \
+    && echo "$STDERR_OUT" | grep -q "resolve-session-id" \
+    && echo "$STDERR_OUT" | grep -q "session id unresolvable"; then
+    pass "B-23: bridge rc=2 + empty stdout + 'session id unresolvable' on stderr"
 else
-    fail "B-23: rc=$RC stderr='$STDERR_OUT' (expected rc=2, stderr with 'resolve-session-id')"
+    fail "B-23: rc=$RC out='$STDOUT_OUT' stderr='$STDERR_OUT' (expected rc=2, empty stdout, stderr with 'session id unresolvable')"
+fi
+teardown
+
+# ===========================================================================
+# B-23b: resolver throw -> rc=3, empty stdout, stderr names the fault.
+# rc 3 is what stops a resolver fault from masquerading as "no session": the
+# sweep and off-clearance receivers delete/mint on exactly that distinction.
+# The bridge requires hooks/workflow-state relative to its own directory, so a
+# copy of the real bridge beside a throwing stub module reaches the catch path
+# without touching the real resolver.
+# ===========================================================================
+setup
+B23B="$TMP/b23b"
+mkdir -p "$B23B/bin" "$B23B/hooks/workflow-state"
+cp "$BRIDGE" "$B23B/bin/resolve-session-id"
+printf 'module.exports = { resolveSessionId() { throw new Error("boom"); } };\n' \
+    > "$B23B/hooks/workflow-state/index.js"
+B23B_ERR="$TMP/b23b.err"
+B23B_OUT=$(bash -c "
+    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+    export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
+    bash '$B23B/bin/resolve-session-id'
+" 2>"$B23B_ERR")
+RC=$?
+B23B_ERR_TEXT=$(cat "$B23B_ERR")
+if [ "$RC" -eq 3 ] && [ -z "$B23B_OUT" ] \
+    && echo "$B23B_ERR_TEXT" | grep -q "resolve-session-id: resolver failed: boom"; then
+    pass "B-23b: resolver throw -> rc=3, empty stdout, 'resolver failed: boom' on stderr"
+else
+    fail "B-23b: rc=$RC out='$B23B_OUT' stderr='$B23B_ERR_TEXT' (expected rc=3, empty stdout, 'resolve-session-id: resolver failed: boom')"
 fi
 teardown
 
@@ -173,57 +209,24 @@ FEOF
 fi
 
 # ===========================================================================
-# B-31: P3 — CLAUDE_ENV_FILE (KEY=VALUE) provides the SID when P2 is unset.
-# ===========================================================================
-setup
-ENVFILE_B31="$TMP/b31-envfile"
-printf 'CLAUDE_SESSION_ID=envfile-sid-b31\n' > "$ENVFILE_B31"
-NONGIT_CWD="$TMP/b31-nongit"
-mkdir -p "$NONGIT_CWD"
-run_bridge "$NONGIT_CWD" "CLAUDE_ENV_FILE=$ENVFILE_B31"
-if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "envfile-sid-b31" ]; then
-    pass "B-31: bridge P3 reads CLAUDE_SESSION_ID from KEY=VALUE CLAUDE_ENV_FILE"
-else
-    fail "B-31: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='envfile-sid-b31'"
-fi
-teardown
-
-# ===========================================================================
-# B-32: P4 — CLAUDE_SESSION_ID env var when P2 and P3 are unset.
+# B-32: P3 — CLAUDE_SESSION_ID env var when P1 and P2 are unset.
 # ===========================================================================
 setup
 NONGIT_CWD="$TMP/b32-nongit"
 mkdir -p "$NONGIT_CWD"
 run_bridge "$NONGIT_CWD" "CLAUDE_SESSION_ID=envvar-sid-b32"
 if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "envvar-sid-b32" ]; then
-    pass "B-32: bridge P4 falls back to CLAUDE_SESSION_ID env var"
+    pass "B-32: bridge P3 falls back to CLAUDE_SESSION_ID env var"
 else
     fail "B-32: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='envvar-sid-b32'"
 fi
 teardown
 
 # ===========================================================================
-# B-33: P6 — WORKTREE_NOTES.md Session-ID line read from CWD.
-# P6 reads WORKTREE_NOTES.md from CWD before the git-common-dir probe,
-# so a plain non-git temp dir works.
-# ===========================================================================
-setup
-NOTES_CWD="$TMP/b33-notes-cwd"
-mkdir -p "$NOTES_CWD"
-printf 'Session-ID: notes-sid-b33\n' > "$NOTES_CWD/WORKTREE_NOTES.md"
-run_bridge "$NOTES_CWD"
-if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "notes-sid-b33" ]; then
-    pass "B-33: bridge P6 reads WORKTREE_NOTES.md Session-ID line from CWD"
-else
-    fail "B-33: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='notes-sid-b33'"
-fi
-teardown
-
-# ===========================================================================
-# B-34: invalid CLAUDE_CODE_SESSION_ID falls through to P4 (table-driven).
+# B-34: invalid CLAUDE_CODE_SESSION_ID falls through to P3 (table-driven).
 # P2 gate: value must be non-empty and match ^[A-Za-z0-9_-]+$ after trim.
 # Empty / whitespace-only / charset-invalid values must NOT be returned —
-# the chain falls to CLAUDE_SESSION_ID (P4) which holds a valid fallback.
+# the chain falls to CLAUDE_SESSION_ID (P3) which holds a valid fallback.
 # ===========================================================================
 setup
 NONGIT_CWD="$TMP/b34-nongit"
@@ -236,7 +239,7 @@ while IFS='|' read -r row_name p2_val; do
     [ "$p2_val" = "<spaces>" ] && p2_val="   "
     run_bridge "$NONGIT_CWD" "CLAUDE_CODE_SESSION_ID=$p2_val" "CLAUDE_SESSION_ID=fallback-sid-b34"
     if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "fallback-sid-b34" ]; then
-        pass "B-34/$row_name: invalid P2 value falls through to P4 (fallback-sid-b34)"
+        pass "B-34/$row_name: invalid P2 value falls through to P3 (fallback-sid-b34)"
     else
         fail "B-34/$row_name: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='fallback-sid-b34' (P2 value must not leak)"
     fi

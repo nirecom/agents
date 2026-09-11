@@ -140,6 +140,15 @@ assert_eq "SP-20c-root-kind-path"         "path" "$(root_kind "$(env -u CLAUDE_S
 # SCRATCHPAD pointing outside the claude base must NOT become {kind:"path"}.
 assert_eq "SP-20d-root-rejects-outside-scratchpad" "session:$SESS" \
     "$(env SCRATCHPAD="$TMPROOT/not-claude" CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
+# SP-20e (#2270): a non-native-LLM caller exports only CLAUDE_CODE_SESSION_ID.
+# Without it the scratchpad root is null and every scratchpad write is denied for
+# those callers. RED until claude-scratchpad-base.js reads it too.
+assert_eq "SP-20e-root-from-claude-code-session-id" "session:$SESS" \
+    "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
+# SP-20f: per the SSOT resolver priority (P2 CLAUDE_CODE_SESSION_ID > P4
+# CLAUDE_SESSION_ID), CLAUDE_CODE_SESSION_ID wins when both are set.
+assert_eq "SP-20f-claude-code-session-id-outranks-claude-session-id" "session:$OTHER" \
+    "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" CLAUDE_CODE_SESSION_ID="$OTHER" node "$DRIVER" --root 2>&1)"
 
 # --- D-4: existing write-path semantics unchanged by this work ---------------
 # isAllowedScratchpadTarget is the EXISTING function; with no SCRATCHPAD it still
