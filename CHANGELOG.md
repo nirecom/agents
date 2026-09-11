@@ -459,3 +459,7 @@ Changes: Added a PreToolUse guard that blocks compound Bash command lines (chain
 ### FEATURE: PR #2272 (2026-09-09)
 Background: feat(#2262): direct prompt-authored command lines through bash/node execution position
 Changes: Fixed prompt-authored command examples across several skills that were triggering unnecessary approval prompts by not matching the auto-approve pattern for Bash tool calls
+
+### FEATURE: PR #2274 (2026-09-12)
+Background: feat(#2270): unify session-id resolution to a single-source-of-truth ...
+Changes: Session-id resolution used by the CLI bridge tools is now unified behind one source-of-truth resolver, fixing several cases where the session id failed to resolve and a downstream step silently skipped or fell back incorrectly.
