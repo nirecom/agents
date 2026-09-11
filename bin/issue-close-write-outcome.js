@@ -5,14 +5,10 @@
 //   node issue-close-write-outcome.js <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>
 //   node issue-close-write-outcome.js --non-github <issues-json-array> <outcome-file>
 //   node issue-close-write-outcome.js --fallback <intent-md> <outcome-file>
-//
-// Normal mode: resolves PLANS_DIR internally and SESSION_ID via the canonical
-// workflow-state resolver (7-step chain, #1251).
-// --non-github: writes skipped-non-github entries for all issues in the JSON array.
-// --fallback: writes failed entries for all issues parsed from intent.md.
-//
-// Exit 0 on success or skip (session-id unresolvable).
-// Exit 1 on unexpected error (prints to stderr).
+// Normal mode resolves PLANS_DIR internally and SESSION_ID via the canonical
+// workflow-state resolver (#1251); --non-github writes skipped-non-github entries for
+// every issue in the array, --fallback failed entries for those parsed from intent.md.
+// Exit 0 on success or skip (session-id unresolvable); 1 on error (stderr).
 
 "use strict";
 const fs = require("fs");
@@ -36,9 +32,10 @@ function resolveSessionId() {
   try {
     return require(path.join(__dirname, "..", "hooks", "workflow-state")).resolveSessionId() || "";
   } catch (_) {
+    // session-id-ssot: waived (catch fallback) — reached only when the resolver above is unloadable
     const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
     if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) return codeSid.trim();
-    return process.env.CLAUDE_SESSION_ID || "";
+    return process.env.CLAUDE_SESSION_ID || ""; // session-id-ssot: waived (catch fallback) — same branch as above
   }
 }
 

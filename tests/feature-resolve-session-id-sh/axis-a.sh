@@ -1,3 +1,5 @@
+# Tests: bin/resolve-session-id, hooks/workflow-state/session-id.js
+# Tags: scope:common, session-id
 # axis-a.sh — Axis A: Normal / idempotency cases (B-15..B-21)
 # Sourced by feature-resolve-session-id-sh.sh; inherits all globals and helpers.
 
@@ -30,36 +32,6 @@ else
         pass "B-15: resolve_session_id: CLAUDE_CODE_SESSION_ID beats newer foreign JSONL"
     else
         fail "B-15: rc=$RC out='$OUT' expected='own-sid-b15'"
-    fi
-fi
-teardown
-
-# ===========================================================================
-# B-16: wip-state/session-id.sh resolve_session_id — CLAUDE_CODE_SESSION_ID
-# unset → JSONL fallback still works (no regression for headless/CI).
-# B-16 uses a non-git temp CWD; fail-open lets P7 scan proceed.
-# ===========================================================================
-setup
-if [ ! -f "$WIP_SID_HELPER" ]; then
-    fail "B-16: $WIP_SID_HELPER not found"
-else
-    FAKE_CWD="$TMP/b16-cwd"
-    mkdir -p "$FAKE_CWD"
-    ENCODED=$(enc "$FAKE_CWD")
-    mk_jsonl "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED" "headless-sid-b16"
-    OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
-        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
-        cd '$FAKE_CWD'
-        source '$WIP_SID_HELPER'
-        resolve_session_id
-    " 2>/dev/null)
-    RC=$?
-    if [ "$RC" -eq 0 ] && [ "$OUT" = "headless-sid-b16" ]; then
-        pass "B-16: resolve_session_id: CLAUDE_CODE_SESSION_ID unset → JSONL fallback no regression"
-    else
-        fail "B-16: rc=$RC out='$OUT' expected='headless-sid-b16'"
     fi
 fi
 teardown
@@ -163,58 +135,6 @@ fi
 teardown
 
 # ===========================================================================
-# B-20: codex_core_init AND gemini_core_init JSONL fallback via bridge.
-# All SID env unset, non-git temp CWD, own-repo JSONL present.
-# Fail-open in isSameGitRepo admits temp CWD (not a real foreign git repo).
-# ===========================================================================
-setup
-FAKE_CWD="$TMP/b20-cwd"
-mkdir -p "$FAKE_CWD"
-ENCODED=$(enc "$FAKE_CWD")
-mk_jsonl "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED" "jsonl-sid-b20"
-
-if [ ! -f "$CODEX_CORE" ]; then
-    fail "B-20a: $CODEX_CORE not found"
-else
-    OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
-        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
-        export NO_LOG=true
-        cd '$FAKE_CWD'
-        source '$CODEX_CORE'
-        codex_core_init 'test-label' >/dev/null 2>&1
-        printf '%s' \"\$SESSION_ID\"
-    " 2>/dev/null)
-    if [ "$OUT" = "jsonl-sid-b20" ]; then
-        pass "B-20a: codex_core_init JSONL fallback via bridge (fail-open admits temp CWD)"
-    else
-        fail "B-20a: out='$OUT' expected='jsonl-sid-b20'"
-    fi
-fi
-
-if [ ! -f "$GEMINI_CORE" ]; then
-    fail "B-20b: $GEMINI_CORE not found"
-else
-    OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
-        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
-        export NO_LOG=true
-        cd '$FAKE_CWD'
-        source '$GEMINI_CORE'
-        gemini_core_init 'test-label' >/dev/null 2>&1
-        printf '%s' \"\$SESSION_ID\"
-    " 2>/dev/null)
-    if [ "$OUT" = "jsonl-sid-b20" ]; then
-        pass "B-20b: gemini_core_init JSONL fallback via bridge (fail-open admits temp CWD)"
-    else
-        fail "B-20b: out='$OUT' expected='jsonl-sid-b20'"
-    fi
-fi
-teardown
-
-# ===========================================================================
 # B-21: driver wip-check phase SID injection.
 # The driver resolves session-id from CLAUDE_SESSION_ID env (primary) or
 # by spawning resolve-session-id. The fake AGENTS_CONFIG_DIR tree intercepts
@@ -312,25 +232,3 @@ fi
 # SKIPPED: B-21b wip-set-resume.sh full two-pass flow — script removed; behavior
 # absorbed into driver wip-check phase. The SID injection block is asserted by B-21a.
 # No pass/fail emitted for B-21b.
-
-# ===========================================================================
-# B-35: P7 mtime ordering — newest JSONL basename wins.
-# Two JSONL files in the encoded-CWD transcript dir with distinct mtimes;
-# the bridge must print the newer one.
-# ===========================================================================
-setup
-FAKE_CWD="$TMP/b35-cwd"
-mkdir -p "$FAKE_CWD"
-DIR_B35="$CLAUDE_TRANSCRIPT_BASE_DIR/$(enc "$FAKE_CWD")"
-mkdir -p "$DIR_B35"
-echo "{}" > "$DIR_B35/old-sid-b35.jsonl"
-touch -t 202001010000 "$DIR_B35/old-sid-b35.jsonl"
-echo "{}" > "$DIR_B35/new-sid-b35.jsonl"
-touch -t 202601010000 "$DIR_B35/new-sid-b35.jsonl"
-run_bridge "$FAKE_CWD"
-if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "new-sid-b35" ]; then
-    pass "B-35: bridge P7 returns mtime-newest JSONL basename (new-sid-b35)"
-else
-    fail "B-35: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='new-sid-b35'"
-fi
-teardown

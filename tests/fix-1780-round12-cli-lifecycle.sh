@@ -124,13 +124,13 @@ exit 0
 
 # ===========================================================================
 # B - REQUIRED ENV + SESSION-ID RESOLUTION.
-#
-# The token's filename IS its session scope. bin/request-off-clearance resolves
-# the sid from SESSION_ID, then CLAUDE_CODE_SESSION_ID, then CLAUDE_SESSION_ID,
-# then WORKTREE_NOTES.md — a four-source precedence chain that nothing asserted.
-# Each source is exercised alone (so precedence cannot be faked by a script that
-# reads only one of them) and the precedence order is exercised with all three
-# set to DIFFERENT values.
+# The token's filename IS its session scope, so WHICH id the script accepts is a
+# security property. Since #2270 the script reads no env var itself: it asks
+# bin/resolve-session-id, whose contract (docs/architecture/claude-code/
+# session-id-resolution.md) knows only CLAUDE_CODE_SESSION_ID then
+# CLAUDE_SESSION_ID. Every former source — a bare SESSION_ID, a
+# WORKTREE_NOTES.md sid — is now a NON-source, and each is exercised to prove
+# the narrowing happened rather than being documented only.
 # ===========================================================================
 run_B_env_and_sid() {
     local tmp tn notes
@@ -147,9 +147,9 @@ run_B_env_and_sid() {
     fi
     rm -r -f "$tmp" 2>/dev/null || true
 
-    # B2-B4 each sid source ALONE mints under exactly that sid.
+    # B2-B3 the two BRIDGE sources, each alone, mint under exactly that sid.
     local src val
-    for src in SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID; do
+    for src in CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID; do
         tmp=$(make_tmp); tn=$(node_path "$tmp")
         val="sid-from-$(echo "$src" | tr '[:upper:]' '[:lower:]')"
         REQ_ENV=("$src=$val")
@@ -162,14 +162,28 @@ run_B_env_and_sid() {
         rm -r -f "$tmp" 2>/dev/null || true
     done
 
-    # B5 precedence: all three set to DIFFERENT values, SESSION_ID must win, then
-    # CLAUDE_CODE_SESSION_ID. Asserted as "exactly one token, and it is that one" —
-    # a script that minted under two sids would also satisfy a bare -f check.
+    # B4 SESSION_ID is a NON-source after #2270. A generic name that any script
+    # or CI job may set must never be able to name a clearance token, so with it
+    # as the only candidate the run is indistinguishable from "no session at all".
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    REQ_ENV=("SESSION_ID=sid-from-session_id")
+    run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
+    if [ "$RC" -eq 1 ] && echo "$ERR" | grep -q "session id unresolvable" && [ "$(token_count "$tmp")" -eq 0 ]; then
+        pass "B4 bare SESSION_ID is not a sid source -> exit 1, NO token"
+    else
+        fail "B4 want rc=1 + unresolvable + no token; got rc=$RC files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ') err=$(printf '%q' "$ERR")"
+    fi
+    rm -r -f "$tmp" 2>/dev/null || true
+
+    # B5 precedence with all three set to DIFFERENT values. CLAUDE_CODE_SESSION_ID
+    # wins and a stray SESSION_ID changes nothing. Asserted as "exactly one token,
+    # and it is that one" — a script that minted under two sids would also satisfy
+    # a bare -f check.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     REQ_ENV=("SESSION_ID=prec-first" "CLAUDE_CODE_SESSION_ID=prec-second" "CLAUDE_SESSION_ID=prec-third")
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
-    if [ -f "$tmp/prec-first.off-clearance" ] && [ "$(token_count "$tmp")" -eq 1 ]; then
-        pass "B5a SESSION_ID outranks CLAUDE_CODE_SESSION_ID and CLAUDE_SESSION_ID"
+    if [ -f "$tmp/prec-second.off-clearance" ] && [ "$(token_count "$tmp")" -eq 1 ]; then
+        pass "B5a CLAUDE_CODE_SESSION_ID wins; a stray SESSION_ID cannot displace it"
     else
         fail "B5a precedence wrong; files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
     fi
@@ -185,31 +199,32 @@ run_B_env_and_sid() {
     fi
     rm -r -f "$tmp" 2>/dev/null || true
 
-    # B6 WORKTREE_NOTES.md fallback, from $PWD. The CR is deliberate: the notes
-    # file is authored on Windows and the sid is used as a FILENAME, so a stray
-    # \r would mint a token no reader can name.
+    # B6 WORKTREE_NOTES.md in $PWD is no longer a sid source. A file lying in the
+    # current directory must not decide whose clearance this is — anyone who can
+    # drop a WORKTREE_NOTES.md could otherwise mint under a chosen identity.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     notes=$(make_tmp)
     printf 'Session-ID: notes-sid-42\r\nOther: x\n' > "$notes/WORKTREE_NOTES.md"
     REQ_CWD="$notes"
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
-    if [ -f "$tmp/notes-sid-42.off-clearance" ] && [ "$(token_count "$tmp")" -eq 1 ]; then
-        pass "B6 no sid env vars -> WORKTREE_NOTES.md in \$PWD supplies the sid (CR stripped)"
+    if [ "$RC" -eq 1 ] && [ "$(token_count "$tmp")" -eq 0 ]; then
+        pass "B6 WORKTREE_NOTES.md in \$PWD no longer supplies a sid -> exit 1, NO token"
     else
-        fail "B6 notes fallback did not supply the sid; rc=$RC files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ') err=$(printf '%q' "$ERR")"
+        fail "B6 want rc=1 + no token; got rc=$RC files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ') err=$(printf '%q' "$ERR")"
     fi
     rm -r -f "$tmp" "$notes" 2>/dev/null || true
 
-    # B7 WORKTREE_PATH redirects the notes lookup away from $PWD.
+    # B7 the same for a notes file reached through WORKTREE_PATH: the inference
+    # tier is gone entirely, not merely relocated.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     notes=$(make_tmp)
     printf 'Session-ID: wtpath-sid\n' > "$notes/WORKTREE_NOTES.md"
     REQ_ENV=("WORKTREE_PATH=$notes")
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
-    if [ -f "$tmp/wtpath-sid.off-clearance" ]; then
-        pass "B7 WORKTREE_PATH points the WORKTREE_NOTES.md lookup at the worktree, not \$PWD"
+    if [ "$RC" -eq 1 ] && [ "$(token_count "$tmp")" -eq 0 ]; then
+        pass "B7 WORKTREE_PATH notes are not a sid source either -> exit 1, NO token"
     else
-        fail "B7 WORKTREE_PATH notes lookup failed; rc=$RC files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
+        fail "B7 want rc=1 + no token; got rc=$RC files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
     fi
     rm -r -f "$tmp" "$notes" 2>/dev/null || true
 
@@ -230,15 +245,51 @@ run_B_env_and_sid() {
     local bad
     for bad in 'has space' '../escape' 'a/b' 'sid;rm' '..' '/tmp/abs'; do
         tmp=$(make_tmp); tn=$(node_path "$tmp")
-        REQ_ENV=("SESSION_ID=$bad")
+        REQ_ENV=("CLAUDE_CODE_SESSION_ID=$bad")
         run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
-        if [ "$RC" -eq 1 ] && echo "$ERR" | grep -qE "session id unresolvable or malformed" && [ "$(token_count "$tmp")" -eq 0 ]; then
+        if [ "$RC" -eq 1 ] && echo "$ERR" | grep -qE "session id unresolvable" && [ "$(token_count "$tmp")" -eq 0 ]; then
             pass "B9 [$bad] malformed sid -> exit 1, NO token (no path-shaped filename accepted)"
         else
             fail "B9 [$bad] want rc=1 + malformed diagnostic + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
         fi
         rm -r -f "$tmp" 2>/dev/null || true
     done
+
+    # B10 the resolver FAULTS (rc 3) instead of answering "no session". Only rc 2
+    # means "no session"; any other rc is an unknown state, and minting a token
+    # whose filename is a guess hands a clearance to the wrong session. The fault
+    # is injected where the script actually looks — $AGENTS_CONFIG_DIR/bin.
+    local shadow
+    shadow="$(make_tmp)/rc3-config"
+    offclr_shadow_resolver "$shadow" 3
+    tmp=$(make_tmp); tn=$(node_path "$tmp")
+    REQ_ENV=("CLAUDE_CODE_SESSION_ID=b10sid")
+    REQ_CONFIG_DIR="$(node_path "$shadow")"
+    run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
+    if [ "$RC" -eq 1 ] && echo "$ERR" | grep -q "resolve-session-id failed (rc 3)" \
+       && [ "$(token_count "$tmp")" -eq 0 ]; then
+        pass "B10 resolver rc 3 -> exit 1 naming the rc, NO token (a fault is not 'no session')"
+    else
+        fail "B10 want rc=1 + 'resolve-session-id failed (rc 3)' + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
+    fi
+    rm -r -f "$tmp" "$shadow" 2>/dev/null || true
+}
+
+# offclr_shadow_resolver <dir> <rc> — a minimal AGENTS_CONFIG_DIR whose
+# bin/resolve-session-id is a stub exiting <rc>; every module the mint path
+# requires is re-exported unchanged from the real tree, so the ONLY difference
+# from a normal run is the bridge's exit code (CPR-SC).
+offclr_shadow_resolver() {
+    local dir="$1" rc="$2" real="$OFFCLR_AGENTS_NODE" m
+    mkdir -p "$dir/bin" "$dir/hooks/lib" "$dir/hooks/workflow-state/state-io"
+    for m in hooks/workflow-state/index.js hooks/workflow-state/state-io/core.js \
+             hooks/lib/supervisor-state-writer.js hooks/lib/off-clearance-mint-lock.js \
+             hooks/lib/consume-exact-file.js; do
+        printf 'module.exports = require("%s/%s");\n' "$real" "$m" > "$dir/$m"
+    done
+    printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
+        "$rc" > "$dir/bin/resolve-session-id"
+    chmod +x "$dir/bin/resolve-session-id"
 }
 
 # ===========================================================================

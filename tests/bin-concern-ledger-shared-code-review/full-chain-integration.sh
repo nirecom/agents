@@ -3,21 +3,12 @@
 # Tags: concern-ledger, review-code-security, full-chain, integration, TL2, scope:common
 # Sourced by tests/bin-concern-ledger-shared-code-review.sh.
 
-# Why this case exists. Everything else in this suite replays one link of the
-# review at a time: a stage here, a reduce there, the wrapper on its own. Each
-# link can be correct while the chain is not, because the thing the chain has
-# to get right is an agreement between three scripts that never call each
-# other — open-concern-round.sh decides the round, run-quality-gates.sh reaches
-# the codex producer, close-concern-round.sh brings the scanner in and ends the
-# round. A round number that drifts between them, or a second ledger opened by
-# one of them, splits the two producers into two reviews the author is asked to
-# reconcile by hand.
-
-# So this file runs the three scripts in the order the SKILL runs them, with
-# only the external `codex` binary mocked and the security-scanner subagent
-# replayed as the report file it is contracted to produce. What is asserted is
-# the agreement itself: one ledger, one round, both producers inside it, and a
-# final artifact that check-finalized accepts for that round.
+# Why this case exists: each link can be correct while the chain is not — the
+# chain's job is an agreement between three scripts that never call each other,
+# so a drifting round number or a second ledger splits the two producers into
+# two reviews. This file runs open/run-quality-gates/close in SKILL order with
+# only `codex` mocked, and asserts that agreement: one ledger, one round, both
+# producers inside it, one artifact check-finalized accepts.
 
 echo ""
 echo "--- shared-review full chain: open -> gates -> close, twice ---"
@@ -38,7 +29,7 @@ fch_env() {
 # step that decides the round both producers will share. Sets FCH_OPEN.
 fch_open() {
     FCH_OPEN="$(
-        SESSION_ID="$FCH_SID" PLANS_DIR="$FCH_P" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
+        CLAUDE_CODE_SESSION_ID="$FCH_SID" PLANS_DIR="$FCH_P" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
             bash "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" 2>/dev/null
     )"
 }

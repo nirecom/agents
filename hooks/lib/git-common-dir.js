@@ -22,27 +22,4 @@ function getGitCommonDir(dir) {
   }
 }
 
-/**
- * Returns true when dirA and dirB belong to the same git repository (i.e.
- * their git common-dirs are identical after case-insensitive, backslash-
- * normalised comparison).
- *
- * FAIL-OPEN: if either common-dir is null — because git is unavailable, the
- * directory is not inside a git repository, or any other error — the function
- * returns true. Callers MUST NOT rely on this function for security-critical
- * fail-closed enforcement; a null result means "could not confirm they differ",
- * not "confirmed same".
- *
- * Primary use case: gating resolveSessionId() Priority 7's CWD-derived JSONL
- * scan so that a foreign-repo CWD does not cause the resolver to return another
- * session's id (#1099).
- */
-function isSameGitRepo(dirA, dirB) {
-  const a = getGitCommonDir(dirA);
-  const b = getGitCommonDir(dirB);
-  if (!a || !b) return true;
-  const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
-  return norm(a) === norm(b);
-}
-
-module.exports = { getGitCommonDir, isSameGitRepo };
+module.exports = { getGitCommonDir };

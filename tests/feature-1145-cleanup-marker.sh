@@ -152,8 +152,11 @@ run_t7() {
     local tmp tmp_node env_sid rc exists
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     env_sid="marker7-env-sid-$$"
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_SESSION_ID="$env_sid" \
-        run_with_timeout 10 node "$MARKER_NODE" create >/dev/null 2>&1
+    (
+        unset CLAUDE_CODE_SESSION_ID
+        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_SESSION_ID="$env_sid" \
+            run_with_timeout 10 node "$MARKER_NODE" create >/dev/null 2>&1
+    )
     rc=$?
     exists=0
     [ -f "$tmp/${env_sid}-wt-cleanup-active" ] && exists=1
@@ -164,6 +167,56 @@ run_t7() {
     pass "T-marker-7: SID from CLAUDE_SESSION_ID env (no positional arg) → marker created by env SID"
 }
 
+# --- T-marker-8 (#2270): SID via CLAUDE_CODE_SESSION_ID env only ---
+# A non-native-LLM tool exports only CLAUDE_CODE_SESSION_ID. The marker is the
+# worktree-cleanup safety latch, so failing to name it by that SID leaves the
+# latch open for exactly the callers that cannot set CLAUDE_SESSION_ID.
+# RED until the CLAUDE_CODE_SESSION_ID fallback lands in worktree-cleanup-marker.js.
+run_t8() {
+    local tmp tmp_node env_sid rc exists
+    tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
+    env_sid="marker8-env-sid-$$"
+    (
+        unset CLAUDE_SESSION_ID
+        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_CODE_SESSION_ID="$env_sid" \
+            run_with_timeout 10 node "$MARKER_NODE" create >/dev/null 2>&1
+    )
+    rc=$?
+    exists=0
+    [ -f "$tmp/${env_sid}-wt-cleanup-active" ] && exists=1
+    rm -rf "$tmp"
+    if [ $rc -ne 0 ]; then fail "T-marker-8: create via CLAUDE_CODE_SESSION_ID must exit 0, got rc=$rc"; return; fi
+    if [ $exists -ne 1 ]; then
+        fail "T-marker-8: marker file must exist named by CLAUDE_CODE_SESSION_ID when no positional arg given"; return; fi
+    pass "T-marker-8: SID from CLAUDE_CODE_SESSION_ID env (no positional arg) → marker created by env SID"
+}
+
+# --- T-marker-9 (#2270): BOTH env vars set to different ids → which one names the
+# marker. The SSOT resolver ranks CLAUDE_CODE_SESSION_ID (Priority 2) above
+# CLAUDE_SESSION_ID (Priority 4); the marker must agree, or a session whose two
+# variables disagree latches cleanup under an id nobody deletes.
+run_t9() {
+    local tmp tmp_node cc_sid legacy_sid rc cc_exists legacy_exists
+    tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
+    cc_sid="marker9-cc-sid-$$"
+    legacy_sid="marker9-legacy-sid-$$"
+    (
+        WORKFLOW_PLANS_DIR="$tmp_node" \
+        CLAUDE_SESSION_ID="$legacy_sid" \
+        CLAUDE_CODE_SESSION_ID="$cc_sid" \
+            run_with_timeout 10 node "$MARKER_NODE" create >/dev/null 2>&1
+    )
+    rc=$?
+    cc_exists=0; legacy_exists=0
+    [ -f "$tmp/${cc_sid}-wt-cleanup-active" ] && cc_exists=1
+    [ -f "$tmp/${legacy_sid}-wt-cleanup-active" ] && legacy_exists=1
+    rm -rf "$tmp"
+    if [ $rc -ne 0 ]; then fail "T-marker-9: create with both env vars must exit 0, got rc=$rc"; return; fi
+    if [ $cc_exists -ne 1 ] || [ $legacy_exists -ne 0 ]; then
+        fail "T-marker-9: CLAUDE_CODE_SESSION_ID must win (cc_exists=$cc_exists legacy_exists=$legacy_exists)"; return; fi
+    pass "T-marker-9: both env vars set → CLAUDE_CODE_SESSION_ID names the marker"
+}
+
 run_t1
 run_t2
 run_t3
@@ -171,6 +224,8 @@ run_t4
 run_t5
 run_t6
 run_t7
+run_t8
+run_t9
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

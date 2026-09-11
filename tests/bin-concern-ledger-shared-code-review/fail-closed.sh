@@ -20,6 +20,12 @@ FC_NEW="a finding this round produced and must not lose"
 FC_ROOT="$TMPDIR_BASE/fc-agents"
 mkdir -p "$FC_ROOT/rules"
 cp -r "$AGENTS_ROOT/bin" "$FC_ROOT/bin"
+# bin/resolve-session-id resolves the bridge module at "$SELF_DIR/../hooks/workflow-state"
+# (#2270 Option C), so a copied tree that omits hooks/ makes every real (non-stubbed)
+# resolution fail with rc 3 -- indistinguishable, in this fixture, from the very
+# failures E1/E2/E4/F2/F5 are trying to isolate. Copy it alongside bin/ so SID
+# resolution here matches the real repo layout.
+cp -r "$AGENTS_ROOT/hooks" "$FC_ROOT/hooks"
 cp "$AGENTS_ROOT/rules/core-principles.md" "$FC_ROOT/rules/core-principles.md" 2>/dev/null || \
     printf '# stub\n' > "$FC_ROOT/rules/core-principles.md"
 
@@ -253,6 +259,14 @@ fc_json_path() { printf '%s/%s-%s-unresolved-concerns.json' "$FCP" "$FCSID" "$FC
     fc_shim finalize
     FC_REPORT5="$TMPDIR_BASE/fc-report-5.txt"
     mk_report "$FC_REPORT5" "$(anchored HIGH - "bin/new.sh" "auth" "security" "$FC_NEW")"
+    # check-staged demands every producer the format declares, so a round that
+    # only ever stages security-scanner stops at that gate and never reaches the
+    # finalize this case exists to observe. Stage the sibling producer first.
+    FC_REPORT5C="$TMPDIR_BASE/fc-report-5-codex.txt"
+    mk_report "$FC_REPORT5C" "$(anchored HIGH - "bin/x" "fn:security" "security" "$FC_TEXT")"
+    bash "$FC_ROOT/bin/concern-ledger" stage --plans-dir "$FCP" --session-id "$FCSID" \
+        --format "$FCFMT" --round 2 --producer review-code-codex --exec PERFORMED \
+        --from-report "$FC_REPORT5C" >/dev/null 2>&1
     fc_run_close "$FC_REPORT5"
 
     assert_eq "F5: a refused finalize ends the round with a non-zero exit" "1" "$FC_RC"
@@ -406,4 +420,80 @@ REV
     assert_eq "F8: a stage that cannot even start reports a non-zero exit" "5" "$FC_RC"
     assert_eq "F8: and leaves the previous round's ledger untouched" \
         "unchanged" "$(fc_ledger_state)"
+}
+
+# fc_rc_root <rc> — a second copied tree whose bin/resolve-session-id is a stub
+# exiting <rc>. Both bookkeeping wrappers find the bridge inside their own root
+# ($SELF_DIR/.. for the CLI, AGENTS_CONFIG_DIR for the skill script), so the
+# fault must be injected there rather than on PATH (#2270 CPR-UNV).
+fc_rc_root() {
+    local root="$TMPDIR_BASE/fc-agents-rc$1"
+    if [ ! -d "$root" ]; then
+        mkdir -p "$root/rules"
+        cp -r "$AGENTS_ROOT/bin" "$root/bin"
+        cp "$AGENTS_ROOT/rules/core-principles.md" "$root/rules/core-principles.md" 2>/dev/null || \
+            printf '# stub\n' > "$root/rules/core-principles.md"
+        printf '#!/usr/bin/env bash\nprintf "resolve-session-id: node not found\\n" >&2\nexit %s\n' \
+            "$1" > "$root/bin/resolve-session-id"
+        chmod +x "$root/bin/resolve-session-id"
+    fi
+    printf '%s' "$root"
+}
+
+# ---------------------------------------------------------------------------
+# F9. The resolver itself faults (rc 127 — no node) while bin/review-code-ledger
+#     is bookkeeping around a real review. rc 2 would mean "no session" and is a
+#     normal skip; any other rc is an unknown state. The wrapper is advisory, so
+#     it still must not cost the review its exit status — but the skip has to
+#     name the fault, or the caller reads an unstaged round as a staged one.
+# ---------------------------------------------------------------------------
+{
+    fc_env 9 "$FORMAT"
+    fc_shim none
+    FC_RC_ROOT="$(fc_rc_root 127)"
+    BODY9="$(fc_review_body "$FC_NEW")"
+    FC_RC=0
+    FC_OUT="$(
+        cd "$REPO" || exit 1
+        export PATH="$FULL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$FC_RC_ROOT"
+        export CODEX_MOCK_PROMPT="$TMPDIR_BASE/fc-prompt-9.txt" CODEX_MOCK_BODY="$BODY9" CODEX_MOCK_EXIT=0
+        export PLANS_DIR="$FCP" WORKFLOW_PLANS_DIR="$FCP" \
+               CLAUDE_WORKFLOW_DIR="$FCP/workflow-state" \
+               CLAUDE_CODE_SESSION_ID="$FCSID" CONCERN_LEDGER_ROUND=2
+        bash "$FC_RC_ROOT/bin/review-code-ledger" --base main --base-state RECORDED 2>/dev/null
+    )" || FC_RC=$?
+
+    assert_eq "F9: a faulting resolver does not cost the review its exit status" "0" "$FC_RC"
+    assert_contains "F9: the reviewer's own output still reaches the caller" \
+        "## Codex Review: PERFORMED" "$FC_OUT"
+    assert_contains "F9: and the caller is told the round was not staged" \
+        "## Concern Ledger: NOT-STAGED" "$FC_OUT"
+    assert_contains "F9: the skip names the resolver rc instead of looking like 'no session'" \
+        "failed (rc 127)" "$FC_OUT"
+    assert_eq "F9: the previous round's ledger is left exactly as it was" \
+        "unchanged" "$(fc_ledger_state)"
+}
+
+# ---------------------------------------------------------------------------
+# F10. The sibling site (CPR-ORTH): open-concern-round.sh under the same fault.
+#      It opens the round every later step is filed under, so guessing a session
+#      would file the whole review under the wrong one. It is advisory too —
+#      exit 0 — but must declare itself unavailable with the rc named.
+# ---------------------------------------------------------------------------
+{
+    fc_env 10 "$FORMAT"
+    FC_RC_ROOT="$(fc_rc_root 127)"
+    FC_RC=0
+    FC_OUT="$(
+        cd "$TMPDIR_BASE" || exit 1
+        env -u SESSION_ID -u CLAUDE_SESSION_ID \
+            CLAUDE_CODE_SESSION_ID="$FCSID" PLANS_DIR="$FCP" AGENTS_CONFIG_DIR="$FC_RC_ROOT" \
+            bash "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" 2>/dev/null
+    )" || FC_RC=$?
+
+    assert_eq "F10: the round opener stays advisory under a resolver fault" "0" "$FC_RC"
+    assert_contains "F10: and reports itself unavailable with the rc named" \
+        "failed (rc 127)" "$FC_OUT"
+    assert_not_contains "F10: it does not open a round under a guessed session" \
+        "SESSION_ID=$FCSID" "$FC_OUT"
 }

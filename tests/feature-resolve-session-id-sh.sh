@@ -1,29 +1,14 @@
 #!/bin/bash
 # Tests: bin/resolve-session-id, hooks/workflow-state/session-id.js, bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/github-issues/wip-state/session-id.sh, bin/workflow/workflow-init-driver, bin/issue-close-write-outcome.js
 # Tags: scope:common, pwsh-not-required, session-id, bridge
-# Tests for bin/resolve-session-id (bash bridge) and all callers — Issue #1251.
-#
-# Contract: bash "$AGENTS_CONFIG_DIR/bin/resolve-session-id" → stdout = session id,
-#   rc=0 on success, rc=2 + stderr when unresolvable. Internally delegates to
-#   hooks/workflow-state.resolveSessionId() via node -e.
-#
-# L3 gap (what this test does NOT catch):
-#   - Real ~/.claude/projects JSONL with a live Claude Code session writing to it
-#   - Git Bash MSYS /c/... drive form from CLAUDE_PROJECT_DIR (never emitted by
-#     node process.cwd() or env; only old R3 bash encoder produced it — deleted)
-#   - CLAUDE_ENV_FILE written by the real session-start.js (P3 file is faked in B-31)
-#   - CLAUDE_ENV_FILE present but unreadable (permission denied) → P3 fallthrough;
-#     chmod-based read-deny is unreliable under Windows/MSYS ACLs
-#   - Windows path separator round-trip through the real node binary on a POSIX host
-#   - wip-set-resume.sh full two-pass flow (label probe + WIP set — needs live gh)
-#   - issue-close-write-outcome.js catch-fallback when AGENTS_CONFIG_DIR is unset
-#     (require of hooks/workflow-state throws → CLAUDE_SESSION_ID env fallback)
-# Closest-to-action mitigation: skill-orchestration gate at WORKFLOW_USER_VERIFIED preflight.
-#
-# All tests isolate via CLAUDE_TRANSCRIPT_BASE_DIR and mktemp.
-# NEVER touch ~/.claude/projects.
-# RED: this suite exits non-zero (clean FAIL) while bin/resolve-session-id is missing.
-# Split: dispatcher sourcing tests/feature-resolve-session-id-sh/ sub-files.
+# Tests bin/resolve-session-id (bash bridge) and all callers — Issue #1251.
+# Contract (SSOT: docs/architecture/claude-code/session-id-resolution.md): stdout =
+#   session id; rc=0 success, rc=2 + stderr unresolvable, rc=3 + stderr resolver threw.
+# L3 gap: no live ~/.claude/projects JSONL, no CLAUDE_ENV_FILE from the real
+#   session-start.js (nor an unreadable one — MSYS ACLs), no native-Windows node path
+#   round-trip, no live gh for wip-set-resume.sh, no AGENTS_CONFIG_DIR-unset
+#   catch-fallback in issue-close-write-outcome.js. Closest-to-action mitigation:
+#   skill-orchestration gate at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 

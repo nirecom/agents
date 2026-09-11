@@ -2,32 +2,13 @@
 # tests/bin-concern-ledger-shared-code-review.sh
 # Tests: bin/review-code-ledger, bin/concern-ledger, bin/review-code-codex, bin/run-codex-review-loop, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/render.sh, skills/review-code-security/scripts/open-concern-round.sh, skills/review-code-security/scripts/run-quality-gates.sh, skills/review-code-security/scripts/close-concern-round.sh, agents/security-scanner.md
 # Tags: concern-ledger, review-code, shared-ledger, exec-label, table-driven, scope:common, pwsh-not-required
-#
-# TL2 dispatcher for the shared code-review ledger path (#1992 / #1996).
-# Drives the real bin/review-code-ledger -> bin/review-code-codex chain inside a
-# throwaway git repo, with only the external `codex` CLI mocked.
-# Cases live in tests/bin-concern-ledger-shared-code-review/ (rules/coding/file-split.md).
-
-# TL3 gap (mitigation category: skill-orchestration)
-#   Not covered here, and covered nowhere below TL3:
-#     - The real `codex` CLI and a real LLM response. The mock replays a scripted
-#       body, so reviewer wording drift (e.g. a model that stops emitting the
-#       `[SEV] <ref> | <path>#<anchor> | <category> | <text>` bullet form) is
-#       invisible to this suite.
-
-#     - The SKILL.md text that reaches the three scripts. full-chain-integration.sh
-#       runs open-concern-round.sh / run-quality-gates.sh / close-concern-round.sh
-#       in the documented order, but a SKILL.md that stops calling one of them,
-#       or dispatches the security-scanner subagent without the round it was
-#       handed, still passes.
-#     - The security-scanner subagent itself: it is replayed as the report file
-#       it is contracted to produce, never run.
-
-#     - True concurrency of the SC-P window (two producers writing at the same
-#       instant). Staging is sequential here.
-#   Mitigation: the orchestration text is pinned statically by
-#   tests/bin-concern-ledger-finalize.sh (cases 8/9), and the day-to-day runner
-#   for the wiring itself is a manual /review-code-security run.
+# TL2 dispatcher for the shared code-review ledger path (#1992 / #1996): the real
+# bin/review-code-ledger -> bin/review-code-codex chain in a throwaway git repo with
+# only `codex` mocked. Cases: tests/bin-concern-ledger-shared-code-review/.
+# TL3 gap (skill-orchestration) — uncovered here and below: the real codex CLI / LLM
+# wording, the SKILL.md text reaching the three scripts, the security-scanner subagent
+# (replayed as its report), SC-P concurrency. Mitigation: tests/bin-concern-ledger-
+# finalize.sh cases 8/9 pin the text; a manual /review-code-security run is the runner.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -192,8 +173,14 @@ FULL_PATH="$MOCK_BIN:$PATH"
 # A PATH with every directory that holds a `codex` executable removed — the
 # SKIPPED label needs codex genuinely absent, and trimming to /usr/bin would
 # also strip git/node on some hosts (CPR-UNV: no environment assumption).
+# Hosts that ship codex and node from one shim dir (fnm, asdf) would lose node too,
+# so a wrapper re-exposes the original node when the trim dropped it: only "codex is
+# absent" must be simulated — #2270 made bin/resolve-session-id need node.
+NODE_SHIM_DIR="$TMPDIR_BASE/node-shim"
 path_without_codex() {
     local out="" d
+    local node_abs
+    node_abs="$(command -v node 2>/dev/null || true)"
     local OLDIFS="$IFS"
     IFS=':'
     for d in $PATH; do
@@ -204,6 +191,12 @@ path_without_codex() {
         out="${out:+$out:}$d"
     done
     IFS="$OLDIFS"
+    if [ -n "$node_abs" ] && ! ( PATH="$out"; command -v node >/dev/null 2>&1 ); then
+        mkdir -p "$NODE_SHIM_DIR"
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$node_abs" > "$NODE_SHIM_DIR/node"
+        chmod +x "$NODE_SHIM_DIR/node"
+        out="${out:+$out:}$NODE_SHIM_DIR"
+    fi
     printf '%s' "$out"
 }
 NO_CODEX_PATH="$(path_without_codex)"

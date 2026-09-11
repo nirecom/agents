@@ -132,15 +132,17 @@ run_C14_resolver_pins() {
     assert_eq "C14-1 valid stdin sid still wins over WORKTREE_NOTES (priority 1)" "stdin-sid" \
         "$(_wtn_in "$d" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" sid '{"sessionIdFromInput":"stdin-sid"}')"
 
-    # C14-2 — priority 5 before 6: an input sid outside SESSION_ID_VALID_RE is skipped
-    # and the transcript basename is used, still ahead of the notes file.
-    assert_eq "C14-2 invalid stdin sid falls to the transcript basename (priority 5)" "tsid1234" \
+    # C14-2 — the last SUPPLIED tier: an input sid outside SESSION_ID_VALID_RE is skipped
+    # and the transcript basename is used (priority 4 of the #2270 four-tier chain).
+    assert_eq "C14-2 invalid stdin sid falls to the transcript basename" "tsid1234" \
         "$(_wtn_in "$d" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" sid '{"sessionIdFromInput":"bad.sid","transcriptPath":"/xx/tsid1234.jsonl"}')"
 
-    # C14-3 — priority 6: with nothing in front of it, the CWD notes file resolves.
-    assert_eq "C14-3 CWD WORKTREE_NOTES resolves at priority 6" "canon-sid-1" \
+    # C14-3 — #2270 (Option C): resolveSessionId() is SUPPLY-only, so the notes file is
+    # no longer a tier there — with nothing supplied it must answer null rather than infer.
+    # The WORKTREE_NOTES tier lives on only in resolveWorkflowSessionId() (its priority 1).
+    assert_eq "C14-3 resolveSessionId does NOT infer from CWD WORKTREE_NOTES (supply-only)" "null" \
         "$(_wtn_in "$d" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" sid '{}')"
-    assert_eq "C14-3 resolveWorkflowSessionId reads the same file at its priority 1" "canon-sid-1" \
+    assert_eq "C14-3 resolveWorkflowSessionId still reads that file at its priority 1" "canon-sid-1" \
         "$(_wtn_in "$d" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" wsid '{}')"
 
     # C14-4 — a charset-rejected notes value is not adopted by EITHER resolver. Both
@@ -160,7 +162,8 @@ run_C14_resolver_pins() {
 
     # C14-5 — the ambiguity fail-safe stays in RESOLUTION. Two distinct siblings, own
     # worktree carrying no notes: both resolvers must still answer null, even though
-    # C11-3 proves the enumeration reports both.
+    # C11-3 proves the enumeration reports both. resolveSessionId reaches null because
+    # #2270 left it no sibling tier at all; resolveWorkflowSessionId by the fail-safe.
     _wtn_notes "$WTN_BASE/wt-one" sibone
     _wtn_notes "$WTN_BASE/wt-two" sibtwo
     _wtn_notes "$WTN_REPO" none
@@ -169,9 +172,10 @@ run_C14_resolver_pins() {
     assert_eq "C14-5 resolveWorkflowSessionId keeps it too" "null" \
         "$(_wtn_in "$WTN_REPO" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" wsid '{}')"
 
-    # C14-6 — own-worktree-first is preserved: from inside wt-one, its own notes win
-    # over the sibling instead of being folded into an ambiguous set.
-    assert_eq "C14-6 own worktree still wins over a sibling (resolveSessionId)" "sib-one-sid" \
+    # C14-6 — own-worktree-first is preserved WHERE IT STILL EXISTS: in
+    # resolveWorkflowSessionId(). For resolveSessionId() the whole worktree-notes tier was
+    # removed by #2270, so from inside wt-one it must answer null, not its own notes value.
+    assert_eq "C14-6 resolveSessionId does not adopt its own worktree's notes (supply-only)" "null" \
         "$(_wtn_in "$WTN_BASE/wt-one" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" sid '{}')"
     assert_eq "C14-6 own worktree still wins over a sibling (resolveWorkflowSessionId)" "sib-one-sid" \
         "$(_wtn_in "$WTN_BASE/wt-one" "$PROBE_DIR/wtn-resolver-probe.js" "$SIDJS" "$WSIDJS" wsid '{}')"

@@ -103,6 +103,15 @@ function validateTokens(tokens) {
  * an invalid value falls through to the next source as if it were unset.
  */
 function resolveSessionId() {
+  // CLAUDE_CODE_SESSION_ID is the CC-native id and the read side every hook resolves
+  // back through; prefer it so the write side (checkpoint names, wip-state) cannot
+  // diverge from it in a split-env non-native-LLM run (#2270 H3).
+  // session-id-ssot: waived (fast path) — a miss falls through to bin/resolve-session-id, the SSOT resolver.
+  const codeSid = validSid(process.env.CLAUDE_CODE_SESSION_ID);
+  if (codeSid) {
+    return { sid: codeSid, reliable: true };
+  }
+  // session-id-ssot: waived (fast path) — legacy id, consulted only when the canonical var is unset.
   const envSid = validSid(process.env.CLAUDE_SESSION_ID);
   if (envSid) {
     return { sid: envSid, reliable: true };

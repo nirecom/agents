@@ -3,14 +3,11 @@
 // SSOT worktree-path resolution for the session-bound linked worktree.
 //
 // resolveSessionWorktreePath(sessionId) → linked-worktree path | null.
-//   Resolves the worktree the current session's commit target lives in.
-//   Rejects the main worktree and any unresolvable state — NEVER falls back
-//   to process.cwd(). Callers that need a NOSTATE distinction must call
-//   readState directly (see bin/resolve-worktree-path); this helper collapses
-//   every non-resolution to null.
+//   Tries state.cwd then state.session_worktree; rejects the main worktree and
+//   every unresolvable state — NEVER falls back to process.cwd(). Callers needing
+//   a NOSTATE distinction call readState directly (see bin/resolve-worktree-path).
 //
-// isMainWorktree(dir) → boolean.
-//   True when `dir` is the main worktree (git-dir === git-common-dir).
+// isMainWorktree(dir) → boolean: true when git-dir === git-common-dir.
 //   Fail-close: any error is treated as "is main worktree" (reject).
 
 const fs = require("fs");
@@ -43,22 +40,27 @@ function resolveSessionWorktreePath(sessionId) {
   try {
     let sid = sessionId;
     if (!sid) {
-      sid = process.env.SESSION_ID || process.env.CLAUDE_SESSION_ID;
+      // Lazy require: keeps the resolver out of module load and out of any future
+      // require cycle through the ./workflow-state barrel.
+      const { resolveSessionId } = require("./session-id");
+      sid = resolveSessionId({});
     }
     if (!sid) return null;
     const state = readState(sid);
     if (state === null) return null;
-    if (!state.cwd || typeof state.cwd !== "string") return null;
-    if (!fs.existsSync(state.cwd)) return null;
-    if (!isMainWorktree(state.cwd)) return state.cwd;
-    // Fallback: mid-session /worktree-start case — state.cwd was recorded at session
-    // creation from the main worktree; branching-handler.js writes the actual linked
-    // worktree path to state.session_worktree after WORKFLOW_BRANCHING_COMPLETE.
-    const swt = typeof state.session_worktree === "string" ? state.session_worktree : null;
-    if (!swt) return null;
-    if (!fs.existsSync(swt)) return null;
-    if (isMainWorktree(swt)) return null;
-    return swt;
+    // Two candidates in order, judged by ONE predicate (CPR-E2C): a string that exists
+    // and is not the main worktree. Failing it rejects the candidate, not the whole
+    // resolution — state.cwd can be absent or stale while session_worktree is good.
+    // session_worktree covers mid-session /worktree-start: state.cwd was recorded at
+    // session creation from the main worktree, and branching-handler.js writes the real
+    // linked-worktree path there after WORKFLOW_BRANCHING_COMPLETE.
+    for (const candidate of [state.cwd, state.session_worktree]) {
+      if (typeof candidate !== "string" || candidate === "") continue;
+      if (!fs.existsSync(candidate)) continue;
+      if (isMainWorktree(candidate)) continue;
+      return candidate;
+    }
+    return null;
   } catch (_e) {
     return null;
   }

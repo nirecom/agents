@@ -106,6 +106,7 @@ declare -A TURN_RC=()
 run_turn() {
     local rc=0
     ( cd "$REPO" && \
+      unset CLAUDE_CODE_SESSION_ID; \
       PATH="$MOCKBIN:$PATH" \
       TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
       SCRATCHPAD="$SP_M" \

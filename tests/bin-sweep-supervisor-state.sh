@@ -1,24 +1,14 @@
 #!/usr/bin/env bash
-# tests/bin-sweep-supervisor-state.sh
 # Tests: bin/sweep-supervisor-state.sh, bin/sweep-supervisor-state/signatures.js, bin/sweep-supervisor-state/scrub.js
 # Tags: sweep, supervisor-state, contamination, cleanup, scope:common, pwsh-not-required, TL2
-#
 # #1799 remediation tool: removes the escape_hatch_event records that leaking test suites
-# already wrote into real supervisor state files, from FINISHED sessions only.
-#
-# Three invariants this suite exists to pin, all of which bias toward keeping data:
-#   1. dry-run is the DEFAULT (deliberate deviation from the apply-by-default sweep family —
-#      the blast radius here is a governance audit trail, not a regenerable derivative).
-#   2. The live-session scope guard is UNCONDITIONAL. No --include-live override exists, and
-#      --session narrows the target set without ever relaxing the guard.
-#   3. Only layer1.findings is filtered. alert.findings / audit.findings carry position-
-#      dependent `idx` references and derived scalars the tool does not own.
-#
-# TL2 gap (what this test does NOT catch): fixtures are synthesized, not drawn from a real
-# contaminated ~/.workflow-plans. A signature that fails to match real-world record shapes
-# would look green here. Mitigation: the implementer re-runs --dry-run against the live plans
-# dir and confirms the measured distribution (matches = short high-frequency reasons;
-# non-matches = one-off long prose).
+# wrote into real supervisor state files, from FINISHED sessions only. Invariants pinned
+# here, all biased toward keeping data: (1) dry-run is the DEFAULT (the blast radius is a
+# governance audit trail, not a regenerable derivative); (2) the live-session scope guard is
+# UNCONDITIONAL — no --include-live exists and --session only narrows targets; (3) only
+# layer1.findings is filtered, since alert/audit findings carry position-dependent `idx`.
+# TL2 gap: synthesized fixtures, so a signature missing real record shapes looks green —
+# the implementer re-runs --dry-run against the live plans dir.
 
 set -uo pipefail
 
@@ -107,24 +97,60 @@ mk_state() { node "$MKSTATE" "$(node_path "$1")" "$2" "$3"; }
 new_plans_dir() { local d="$TMPDIR_BASE/$1"; mkdir -p "$d"; printf '%s' "$d"; }
 
 # run_sweep <plansdir> [flags...] → stdout+stderr; sets RC.
+# Both session variables are unset: liveness now comes from bin/resolve-session-id,
+# so an inherited parent id would make the fixture treat the DEVELOPER's session as
+# live (rules/test/fixture-isolation.md). With neither set the bridge answers rc 2 —
+# the "no Claude Code session" case (cron / CI) these runs stand for.
 RC=0
 run_sweep() {
     local dir="$1"; shift
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
+    return "$RC"
 }
 
-# run_sweep_as_session <plansdir> <sid> [flags...] — same, but with a live CLAUDE_SESSION_ID.
+# run_sweep_as_session <plansdir> <sid> [flags...] — same, but live under <sid>.
+# The id arrives ONLY through CLAUDE_CODE_SESSION_ID with CLAUDE_SESSION_ID unset:
+# the canonical variable alone has to reach the engine as --current-session, which
+# is the supply path a Bash-tool subprocess actually has.
 run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
-    out="$(env -u AGENTS_CONFIG_DIR "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_SESSION_ID=$sid" \
+    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
+    return "$RC"
+}
+
+# run_sweep_stubbed <plansdir> <stub-rc> [flags...] — a copy of the tool whose
+# SIBLING resolve-session-id is a stub exiting <stub-rc>. The fault has to be
+# injected on the path the tool itself uses ($SCRIPT_DIR), because these runs
+# deliberately leave AGENTS_CONFIG_DIR unset.
+run_sweep_stubbed() {
+    local dir="$1" stub_rc="$2"; shift 2
+    local bin="$TMPDIR_BASE/stubbin-$stub_rc"
+    if [ ! -d "$bin" ]; then
+        mkdir -p "$bin/lib"
+        cp "$SWEEP" "$bin/"
+        cp -r "$AGENTS_DIR/bin/sweep-supervisor-state" "$bin/"
+        cp "$AGENTS_DIR/bin/lib/sweep-write-mode.sh" "$bin/lib/"
+        printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
+            "$stub_rc" > "$bin/resolve-session-id"
+        chmod +x "$bin/resolve-session-id"
+    fi
+    local out
+    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+        "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
+    RC=$?
+    printf '%s' "$out"
+    return "$RC"
 }
 
 ci_field() {  # <output> <key>
@@ -551,7 +577,7 @@ S10_no_live_override() {
     f="$dir/s10live-supervisor-state.json"
     before="$(finfo "$f")"
 
-    out="$(run_sweep "$dir" --apply --ci-mode --session s10live)"; rc=$RC
+    out="$(run_sweep "$dir" --apply --ci-mode --session s10live)"; rc=$?
     after="$(finfo "$f")"
 
     if [ "$before" = "$after" ] && [ "$rc" -eq 0 ]; then
@@ -569,7 +595,8 @@ S10_no_live_override() {
     # S10c: capture exit code directly (run_sweep sets RC inside a command substitution
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
-    incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+    incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
     if [ "$incl_rc" -ne 0 ]; then
@@ -692,14 +719,18 @@ S14_ci_mode_and_list_signatures() {
     fi
 
     local sig rc n
-    sig="$(env -u AGENTS_CONFIG_DIR "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
+    sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "S14b --list-signatures exits 0"
     else
         fail "S14b --list-signatures exited $rc: $sig"
     fi
-    n="$(printf '%s\n' "$sig" | grep -v '^[[:space:]]*$' | grep -vc '^[[:space:]]*#')"
+    # The allowlist count must survive a stderr diagnostic from bin/resolve-session-id:
+    # 2>&1 folds it into $sig, and "no session" is the NORMAL state for this run.
+    n="$(printf '%s\n' "$sig" | grep -v 'resolve-session-id' | grep -v '^[[:space:]]*$' \
+        | grep -vc '^[[:space:]]*#')"
     if [ "$n" = "14" ]; then
         pass "S14c --list-signatures prints exactly 14 allowlist entries"
     else
@@ -728,6 +759,42 @@ S14_ci_mode_and_list_signatures() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# S15 — resolver fault (#2270). Liveness now comes from bin/resolve-session-id, so a
+#       FAILED resolver means the tool cannot tell whether the session it is about to
+#       scrub is the one still running. rc 2 ("no session") is a legitimate answer and
+#       keeps sweeping; anything else must abort before the first write, because
+#       treating a fault as "no live session" scrubs the audit trail of a live one.
+# ─────────────────────────────────────────────────────────────────────────────
+S15_resolver_fault_refuses_to_sweep() {
+    require_tool "S15 resolver fault refuses to sweep" || return
+    local stub_rc dir f before out rc
+    for stub_rc in 3 127; do
+        dir="$(new_plans_dir "s15rc$stub_rc")"
+        mk_state "$dir" "s15target" "{\"findings\":[$(contaminated 'A1 marker test')]}"
+        f="$dir/s15target-supervisor-state.json"
+        before="$(finfo "$f")"
+
+        out="$(run_sweep_stubbed "$dir" "$stub_rc" --apply --ci-mode)"; rc=$?
+
+        if [ "$rc" -eq 1 ]; then
+            pass "S15a/rc$stub_rc resolver fault aborts with exit 1 (not the rc 2 keep-going path)"
+        else
+            fail "S15a/rc$stub_rc exit was $rc, want 1: $out"
+        fi
+        if printf '%s\n' "$out" | grep -q 'refusing to sweep'; then
+            pass "S15b/rc$stub_rc the abort says why (refusing to sweep without liveness)"
+        else
+            fail "S15b/rc$stub_rc no 'refusing to sweep' diagnostic: $out"
+        fi
+        if [ "$before" = "$(finfo "$f")" ]; then
+            pass "S15c/rc$stub_rc nothing was written — the abort precedes the first --apply write"
+        else
+            fail "S15c/rc$stub_rc file changed despite the resolver fault: before='$before' after='$(finfo "$f")'"
+        fi
+    done
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 S1_legitimate_only_untouched
 S2_mixed_file_partial_removal
@@ -743,6 +810,7 @@ S11_cooccurrence_rule
 S12_emptied_file_kept
 S13_unparsable_skipped
 S14_ci_mode_and_list_signatures
+S15_resolver_fault_refuses_to_sweep
 
 echo ""
 echo "─────────────────────────────────────────"
