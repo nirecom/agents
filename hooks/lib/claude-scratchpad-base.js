@@ -86,7 +86,10 @@ function getCurrentSessionScratchpadRootNorm() {
       }
     } catch (_) { /* fall through to the session-id shape */ }
   }
-  const sessionId = process.env.CLAUDE_SESSION_ID;
+  // An inferred id here is the last-active OTHER session, which would authorize writes
+  // into that session's scratchpad — only directly supplied ids are accepted.
+  // session-id-ssot: waived (fail-closed allow root) — inference would widen the allow root
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID;
   if (typeof sessionId === "string" && sessionId.trim() !== "") {
     return { kind: "session", sessionId: sessionId.trim() };
   }

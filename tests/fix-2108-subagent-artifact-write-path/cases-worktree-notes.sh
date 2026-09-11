@@ -242,7 +242,14 @@ READ_TABLE
         grep -qE "require\(.*worktree-notes-session-ids" "$f" 2>/dev/null && req=$((req + 1))
     done
     assert_eq "C10-3 neither resolver still defines a private copy of the helpers" "0" "$dup"
-    assert_eq "C10-3 both resolvers require the shared module" "2" "$req"
+    # #2270 removed the worktree-notes tier from session-id.js entirely, so exactly ONE
+    # consumer is left: resolve-workflow-session-id.js. Asserted by name, not by count,
+    # so a require silently migrating back into session-id.js still fails this row.
+    assert_eq "C10-3 exactly one resolver requires the shared module" "1" "$req"
+    assert_eq "C10-3 it is resolve-workflow-session-id.js that requires it" "yes" \
+        "$(grep -qE "require\(.*worktree-notes-session-ids" "$AGENTS_DIR/hooks/lib/resolve-workflow-session-id.js" 2>/dev/null && echo yes || echo no)"
+    assert_eq "C10-3 session-id.js no longer requires it (supply-only chain)" "no" \
+        "$(grep -qE "require\(.*worktree-notes-session-ids" "$AGENTS_DIR/hooks/workflow-state/session-id.js" 2>/dev/null && echo yes || echo no)"
 
     _wtn_teardown
 }

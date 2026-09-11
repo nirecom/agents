@@ -21,7 +21,16 @@ PRODUCER="review-code-codex"
 notice() { printf '## Concern Ledger: NOT-STAGED — %s\n' "$1"; }
 
 # --- session, shared primitives, and plans directory ------------------------
-SID="${SESSION_ID:-${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
+# Only rc 2 is "no session"; any other rc is a bridge fault, reported with its
+# rc so an unstaged round is never read back as a staged one.
+BRIDGE_RC=0
+SID="$("$SELF_DIR/resolve-session-id")" || BRIDGE_RC=$?
+BRIDGE_FAULT=""
+case "$BRIDGE_RC" in
+  0) ;;
+  2) SID="" ;;
+  *) SID=""; BRIDGE_FAULT="bin/resolve-session-id failed (rc $BRIDGE_RC)" ;;
+esac
 PLANS="${PLANS_DIR:-${WORKFLOW_PLANS_DIR:-${HOME:-}/.workflow-plans}}"
 SAFE_TOKEN_LIB="$SELF_DIR/lib/safe-plans-path.sh"
 
@@ -42,8 +51,10 @@ REASON=""
 # the review report the author keeps, and an absolute path there records the OS
 # account name and the checkout layout in it. Named on stderr instead.
 REASON_PATH=""
-if [ -z "$SID" ]; then
-    RESOLVED=0; REASON="no session id in the environment"
+if [ -n "$BRIDGE_FAULT" ]; then
+    RESOLVED=0; REASON="$BRIDGE_FAULT"
+elif [ -z "$SID" ]; then
+    RESOLVED=0; REASON="session id unresolvable (bin/resolve-session-id)"
 elif [ ! -f "$SAFE_TOKEN_LIB" ]; then
     RESOLVED=0; REASON="the safe-path library is missing"; REASON_PATH="$SAFE_TOKEN_LIB"
 # shellcheck source=./lib/safe-plans-path.sh

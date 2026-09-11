@@ -11,7 +11,9 @@
 # prompt plus this audit trail.
 #
 # Required env: AGENTS_CONFIG_DIR
-# Optional env: SESSION_ID / CLAUDE_CODE_SESSION_ID, CLAUDE_WORKFLOW_DIR, WORKFLOW_PLANS_DIR
+# Session id: resolved through bin/resolve-session-id (SSOT) — rc 2 is "no session"
+# and fails closed here; any other non-zero rc is a bridge fault and also fails closed.
+# Optional env: CLAUDE_WORKFLOW_DIR, WORKFLOW_PLANS_DIR
 #
 # Split under the file-split HARD limit (rules/coding/file-split.md): the verdict-parsing
 # and token-minting logic live in ./request-off-clearance.d/{parse-verdict,mint-token}.js
@@ -62,13 +64,13 @@ if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
   echo "ERROR: AGENTS_CONFIG_DIR not set" >&2; exit 1
 fi
 
-SID="${SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}}"
-if [[ -z "$SID" ]]; then
-  notes_path="${WORKTREE_PATH:-$PWD}/WORKTREE_NOTES.md"
-  if [[ -f "$notes_path" ]]; then
-    SID="$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$notes_path" 2>/dev/null || true)"
-  fi
-fi
+BRIDGE_RC=0
+SID="$("$AGENTS_CONFIG_DIR/bin/resolve-session-id")" || BRIDGE_RC=$?
+case "$BRIDGE_RC" in
+  0) ;;
+  2) SID="" ;;
+  *) echo "ERROR: bin/resolve-session-id failed (rc $BRIDGE_RC) — cannot mint a session-scoped token" >&2; exit 1 ;;
+esac
 if [[ -z "$SID" || ! "$SID" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "ERROR: session id unresolvable or malformed — cannot mint a session-scoped token" >&2
   exit 1

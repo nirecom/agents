@@ -17,6 +17,12 @@ carries a one-line pointer here; this file is the SSOT.
 - `CLAUDE_SESSION_ID` provides the session id deterministically; the mock config
   root also ships `bin/resolve-session-id` echoing `$CLAUDE_SESSION_ID` in case the
   driver unconditionally spawns that primitive.
+- `CLAUDE_CODE_SESSION_ID` is the canonical session-id variable and is read by the
+  driver's fast path ahead of the legacy `CLAUDE_SESSION_ID` (#2270). `setup_case`
+  unsets it so the developer's live session never decides a case; a case that needs
+  it exports it after `setup_case`. `driver-session-id-precedence.sh` replaces the
+  mock `bin/resolve-session-id` with a distinct sentinel so a fast-path hit and a
+  fall-through to the spawned resolver are distinguishable.
 - `NON_GITHUB=1` activates the WI-2 non-GitHub gate.
 - Positional CLI args are the raw issue tokens (`#N`, `repo#N`, `owner/repo#N`)
   from the user's invocation; zero tokens = zero-issue pipeline (Path C).

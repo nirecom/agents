@@ -32,9 +32,17 @@ them, rather than repeating the pair on each invocation line.
 
 ## Unset inherited session IDs
 
-Unset `CLAUDE_SESSION_ID` and `CLAUDE_CODE_SESSION_ID` before spawning a hook.
+Unset `CLAUDE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID` and `CLAUDE_ENV_FILE`
+before spawning a hook.
 The parent Claude Code session exports them, so a test that forgets resolves
 the live session and mutates its real state file.
+`CLAUDE_ENV_FILE` is the same leak one indirection deeper: the resolver reads
+the session id out of that file, so leaving it set silently resolves the
+developer's real session even when both id variables are cleared.
+
+Point `CLAUDE_TRANSCRIPT_BASE_DIR` at an empty fixture directory whenever the
+code under test can reach the default resolution chain: its last stage picks
+the most recently modified transcript, which is some other live session.
 
 ## Neutral CWD and fixture project dir
 

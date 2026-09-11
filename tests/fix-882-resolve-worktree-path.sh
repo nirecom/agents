@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, skills/review-tests/scripts/select-staged-files.sh
-# Tags: scope:issue-specific
+# Tests: hooks/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, hooks/workflow-state/session-id.js, bin/resolve-session-id, skills/review-tests/scripts/select-staged-files.sh
+# Tags: scope:issue-specific, session-id, ssot
 # Tests for issue #882: worktree-aware staged-file selection for /review-tests.
 # RT-1 file selection must resolve the session's *linked worktree* from the workflow
 # state (state.cwd), never process.cwd() and never the main worktree — guarding against
@@ -21,6 +21,7 @@ RESOLVER_BIN="$AGENTS_WORKTREE/bin/resolve-worktree-path"
 SELECT_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/select-staged-files.sh"
 COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-staged-tests-token.js"
 RUN_TIMEOUT="$AGENTS_WORKTREE/bin/run-with-timeout.sh"
+PARTS="$AGENTS_WORKTREE/tests/fix-882-resolve-worktree-path"
 
 SESSION_ID="fix-882-test-sid"
 
@@ -43,18 +44,23 @@ fi
 TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t rwp-test)"
 MAIN_REPO="$TMPDIR_BASE/main"
 WTA="$TMPDIR_BASE/wtA"
+WTB="$TMPDIR_BASE/wtB"
 WF_DIR="$TMPDIR_BASE/workflow-state"
+# Empty transcript base: without it Priority 7's JSONL mtime scan can reach the
+# developer's real ~/.claude/projects and resolve their live session (#2270).
+EMPTY_TRANSCRIPTS="$TMPDIR_BASE/empty-transcripts"
 # Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
 # resolves the developer's real ~/.workflow-plans/ and appends there.
 PLANS_DIR="$TMPDIR_BASE/plans"
 
 cleanup() {
   git -C "$MAIN_REPO" worktree remove --force "$WTA" 2>/dev/null || true
+  git -C "$MAIN_REPO" worktree remove --force "$WTB" 2>/dev/null || true
   rm -rf "$TMPDIR_BASE" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-mkdir -p "$MAIN_REPO" "$WF_DIR" "$PLANS_DIR"
+mkdir -p "$MAIN_REPO" "$WF_DIR" "$PLANS_DIR" "$EMPTY_TRANSCRIPTS"
 git -C "$MAIN_REPO" init -q
 git -C "$MAIN_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$MAIN_REPO" config user.email "test@example.com"
@@ -64,6 +70,12 @@ git -C "$MAIN_REPO" add .gitkeep
 git -C "$MAIN_REPO" commit -q -m "init"
 
 git -C "$MAIN_REPO" worktree add -q -b "wt-branch-a" "$WTA"
+git -C "$MAIN_REPO" worktree add -q -b "wt-branch-b" "$WTB"
+
+# Inference-tier bait for Case T: a worktree whose WORKTREE_NOTES.md carries a
+# discoverable Session-ID (resolveSessionId Priority 6).
+NOTES_SID="fix-882-notes-sid"
+printf 'Session-ID: %s\n' "$NOTES_SID" > "$WTB/WORKTREE_NOTES.md"
 
 # Stage a test file in the linked worktree wtA.
 mkdir -p "$WTA/tests"
@@ -79,18 +91,17 @@ git -C "$MAIN_REPO" add tests/fixture-main.sh
 # Path conversion for Node.js on Windows (Git Bash /c/... -> C:/...)
 # ---------------------------------------------------------------------------
 if command -v cygpath >/dev/null 2>&1; then
-  WTA_NODE="$(cygpath -m "$WTA")"
-  MAIN_NODE="$(cygpath -m "$MAIN_REPO")"
-  AGENTS_NODE="$(cygpath -m "$AGENTS_WORKTREE")"
-  WF_DIR_NODE="$(cygpath -m "$WF_DIR")"
-  PLANS_DIR_NODE="$(cygpath -m "$PLANS_DIR")"
+  _tonode() { cygpath -m "$1"; }
 else
-  WTA_NODE="$WTA"
-  MAIN_NODE="$MAIN_REPO"
-  AGENTS_NODE="$AGENTS_WORKTREE"
-  WF_DIR_NODE="$WF_DIR"
-  PLANS_DIR_NODE="$PLANS_DIR"
+  _tonode() { printf '%s' "$1"; }
 fi
+WTA_NODE="$(_tonode "$WTA")"
+WTB_NODE="$(_tonode "$WTB")"
+MAIN_NODE="$(_tonode "$MAIN_REPO")"
+AGENTS_NODE="$(_tonode "$AGENTS_WORKTREE")"
+WF_DIR_NODE="$(_tonode "$WF_DIR")"
+PLANS_DIR_NODE="$(_tonode "$PLANS_DIR")"
+TRANSCRIPTS_NODE="$(_tonode "$EMPTY_TRANSCRIPTS")"
 
 # ---------------------------------------------------------------------------
 # Write workflow state JSON with cwd pointing to the linked worktree (wtA).
@@ -133,75 +144,70 @@ run_resolver() {
   local sid_env=""
   [[ -n "$sid" ]] && sid_env="$sid"
 
-  SESSION_ID="$sid_env" \
-  CLAUDE_SESSION_ID="" \
-  CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
-  WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-  AGENTS_CONFIG_DIR="$AGENTS_NODE" \
-    bash "$RUN_TIMEOUT" 30 "$RESOLVER_BIN" 2>/dev/null
+  # The session id is supplied through CLAUDE_CODE_SESSION_ID — the only variable
+  # a Claude Code subprocess reliably carries, and after #2270 the only env
+  # channel the resolver reads. Legacy SESSION_ID stays empty here on purpose.
+  run_resolver_env "" "$sid_env" "$TMPDIR_BASE"
 }
 
-# ===========================================================================
-# NOTE: fail-before-fix. resolve-worktree-path.js / bin/resolve-worktree-path /
-# select-staged-files.sh do not exist yet. Cases A-H below FAIL until the
-# write-code step creates them. This is the expected pre-implementation state.
-# ===========================================================================
+# The env-explicit resolver runner every case above and below routes through.
+# CWD is a parameter (default $TMPDIR_BASE, outside any worktree) and the three
+# session vars plus CLAUDE_ENV_FILE / CLAUDE_TRANSCRIPT_BASE_DIR are pinned, so
+# the developer's real host session can never leak into a fixture assertion
+# (rules/test/fixture-isolation.md "Unset inherited session IDs").
+#   $1: SESSION_ID   $2: CLAUDE_CODE_SESSION_ID   $3: process cwd
+#   $4: value for the bridge's --session flag (omitted when empty)
+run_resolver_env() {
+  (
+    cd "${3:-$TMPDIR_BASE}" || exit 1
+    SESSION_ID="$1" \
+    CLAUDE_SESSION_ID="" \
+    CLAUDE_CODE_SESSION_ID="$2" \
+    CLAUDE_ENV_FILE="" \
+    CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
+    CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
+    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+      bash "$RUN_TIMEOUT" 30 "$RESOLVER_BIN" ${4:+--session "$4"}
+  ) 2>/dev/null
+}
 
-# ---------------------------------------------------------------------------
-# Case A: CLI returns linked worktree path when state.cwd is a linked worktree
-# ---------------------------------------------------------------------------
-caseA_got="$(run_resolver "$SESSION_ID" "state" "wta")"
-if [[ "$caseA_got" = "$WTA_NODE" ]]; then
-  pass "Case A (linked worktree resolved): got '$caseA_got'"
-else
-  fail "Case A (linked worktree resolved): got '$caseA_got', expected '$WTA_NODE'"
-fi
-
-# ---------------------------------------------------------------------------
-# Case B: CLI returns empty string when state.cwd is the main worktree
-# ---------------------------------------------------------------------------
-caseB_got="$(run_resolver "$SESSION_ID" "state" "main")"
-if [[ -z "$caseB_got" ]]; then
-  pass "Case B (main worktree rejected): empty string as expected"
-else
-  fail "Case B (main worktree rejected): got '$caseB_got', expected empty"
-fi
-
-# ---------------------------------------------------------------------------
-# Case C: CLI returns empty string when SESSION_ID not set
-# ---------------------------------------------------------------------------
-caseC_got="$(run_resolver "" "state" "wta")"
-if [[ -z "$caseC_got" ]]; then
-  pass "Case C (no SESSION_ID): empty string as expected"
-else
-  fail "Case C (no SESSION_ID): got '$caseC_got', expected empty"
-fi
-
-# ---------------------------------------------------------------------------
-# Case D: CLI returns "NOSTATE" when state file is absent for the session
-# ---------------------------------------------------------------------------
-caseD_got="$(run_resolver "$SESSION_ID" "nostate" "wta")"
-if [[ "$caseD_got" = "NOSTATE" ]]; then
-  pass "Case D (state file absent): got 'NOSTATE' as expected"
-else
-  fail "Case D (state file absent): got '$caseD_got', expected 'NOSTATE'"
-fi
+# Write a state file for an ARBITRARY session id — Cases M/N/O need two stores.
+#   $1: session id   $2: cwd value (node-form path)
+write_state_for() {
+  cat > "$WF_DIR/$1.json" <<EOF
+{
+  "version": 1,
+  "session_id": "$1",
+  "created_at": "2026-09-09T00:00:00.000Z",
+  "cwd": "$2",
+  "git_branch": "wt-branch-a",
+  "steps": {}
+}
+EOF
+}
 
 # ---------------------------------------------------------------------------
 # Helper: run select-staged-files.sh from a given process cwd + env.
-#   $1: process cwd
-#   $2: SESSION_ID value ("" to unset)
-#   $3: state mode ("state" / "nostate")
-#   $4: cwd embedded in state ("wta" / "main")
-# Returns stdout; capture exit code separately via SELECT_RC.
+#   $1: process cwd   $2: sid, routed to CLAUDE_CODE_SESSION_ID when $5 is
+#       empty (SESSION_ID is not a supply channel — #2270)   $3: "state" /
+#       "nostate"   $4: cwd embedded in state ("wta"/"main")   $5: explicit
+#       CLAUDE_CODE_SESSION_ID (wins over $2)   $6: AGENTS_CONFIG_DIR override.
+# Sets SELECT_OUT / SELECT_ERR / SELECT_RC; stderr kept out of stdout.
 # ---------------------------------------------------------------------------
 SELECT_RC=0
 SELECT_OUT=""
+SELECT_ERR=""
 run_select() {
   local proc_cwd="$1"
   local sid="$2"
   local state_mode="$3"
   local cwd_mode="${4:-wta}"
+  local ccsid="${5:-}"
+  local agents_dir="${6:-$AGENTS_NODE}"
+  local errfile="$TMPDIR_BASE/select-staged-files.err"
+  local effective_ccsid="$ccsid"
+  [[ -z "$effective_ccsid" ]] && effective_ccsid="$sid"
 
   rm -f "$WF_DIR/$SESSION_ID.json"
   if [[ "$state_mode" = "state" ]]; then
@@ -214,162 +220,32 @@ run_select() {
 
   local out
   out="$(cd "$proc_cwd" && \
-    SESSION_ID="$sid" \
+    SESSION_ID="" \
     CLAUDE_SESSION_ID="" \
+    CLAUDE_CODE_SESSION_ID="$effective_ccsid" \
+    CLAUDE_ENV_FILE="" \
+    CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
-      bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>/dev/null)"
+    AGENTS_CONFIG_DIR="$agents_dir" \
+      bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>"$errfile")"
   SELECT_RC=$?
   SELECT_OUT="$out"
+  SELECT_ERR="$(cat "$errfile" 2>/dev/null || true)"
 }
 
 # ---------------------------------------------------------------------------
-# Case E [C2 core]: process cwd = main worktree, state.cwd = linked worktree.
-# stdout must contain ONLY wtA's staged files, NOT the main worktree's files.
+# Case bodies (rules/coding/file-split.md Pattern A)
 # ---------------------------------------------------------------------------
-run_select "$MAIN_REPO" "$SESSION_ID" "state" "wta"
-caseE_got="$SELECT_OUT"
-if echo "$caseE_got" | grep -q "fixture-wta.sh" && ! echo "$caseE_got" | grep -q "fixture-main.sh"; then
-  pass "Case E (worktree-aware selection): wtA files only, no main files"
-else
-  fail "Case E (worktree-aware selection): got '$caseE_got' (expect fixture-wta.sh, NOT fixture-main.sh)"
-fi
+. "$PARTS/cases-882-950.sh"
+. "$PARTS/cases-2270-ssot.sh"
+. "$PARTS/cases-2270-arg.sh"
+. "$PARTS/cases-2270-bridge-rc.sh"
 
-# ---------------------------------------------------------------------------
-# Case F [C2]: state.cwd = main worktree -> exit code 3, empty stdout
-# (no cwd fallback — explicit skip).
-# ---------------------------------------------------------------------------
-run_select "$WTA" "$SESSION_ID" "state" "main"
-caseF_got="$SELECT_OUT"
-if [[ "$SELECT_RC" -eq 3 && -z "$caseF_got" ]]; then
-  pass "Case F (main worktree state -> skip): exit 3, empty stdout"
-else
-  fail "Case F (main worktree state -> skip): rc=$SELECT_RC out='$caseF_got', expected rc=3 empty"
-fi
-
-# ---------------------------------------------------------------------------
-# Case G [C2]: state file absent (NOSTATE) -> falls back to process cwd.
-# Run from cwd=wtA -> selects wtA's staged files.
-# ---------------------------------------------------------------------------
-run_select "$WTA" "$SESSION_ID" "nostate" "wta"
-caseG_got="$SELECT_OUT"
-if echo "$caseG_got" | grep -q "fixture-wta.sh"; then
-  pass "Case G (NOSTATE -> cwd fallback): selected wtA files from cwd"
-else
-  fail "Case G (NOSTATE -> cwd fallback): got '$caseG_got' (rc=$SELECT_RC), expected fixture-wta.sh"
-fi
-
-# ---------------------------------------------------------------------------
-# Case H: compute-staged-tests-token.js with $WORKTREE as argv[2] returns a
-# non-empty token when the linked worktree has staged tests.
-# ---------------------------------------------------------------------------
-caseH_got="$(AGENTS_CONFIG_DIR="$AGENTS_NODE" \
-  bash "$RUN_TIMEOUT" 30 node "$COMPUTE_JS" "$WTA_NODE" 2>/dev/null)"
-if [[ -n "$caseH_got" ]]; then
-  pass "Case H (token for linked worktree): non-empty token '$caseH_got'"
-else
-  fail "Case H (token for linked worktree): empty token, expected non-empty"
-fi
-
-# ===========================================================================
-# Cases I-L: state.session_worktree fallback (issue #950). When state.cwd points
-# to the main worktree (i.e. the session was started from main),
-# resolveSessionWorktreePath() must fall back to state.session_worktree (set by
-# branching-handler after /worktree-start). EXPECTED to FAIL until the fix lands.
-# ===========================================================================
-
-# Helper: write state JSON with both cwd and optional session_worktree.
-# $1: cwd value (node-form path)
-# $2: session_worktree value (node-form path | "null" | "" to omit)
-write_state_950() {
-  local cwd_val="$1"
-  local sw_val="$2"
-  local sw_line=""
-  if [[ "$sw_val" = "null" ]]; then
-    sw_line='"session_worktree": null,'
-  elif [[ -n "$sw_val" ]]; then
-    sw_line="\"session_worktree\": \"$sw_val\","
-  fi
-  cat > "$WF_DIR/$SESSION_ID.json" <<EOF
-{
-  "version": 1,
-  "session_id": "$SESSION_ID",
-  "created_at": "2026-07-18T00:00:00.000Z",
-  "cwd": "$cwd_val",
-  $sw_line
-  "git_branch": "wt-branch-a",
-  "steps": {}
-}
-EOF
-}
-
-# Helper: invoke the JS resolver directly (not the bin wrapper) so we can
-# inspect the resolveSessionWorktreePath() return value in isolation.
-# Uses a tiny inline Node.js runner that prints the return value or "null".
-run_resolver_js() {
-  local sid="$1"
-  SESSION_ID="$sid" \
-  CLAUDE_SESSION_ID="" \
-  CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
-  WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    bash "$RUN_TIMEOUT" 30 node -e "
-const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/workflow-state/resolve-worktree-path.js');
-const result = resolveSessionWorktreePath('$sid');
-process.stdout.write(result === null ? '' : result);
-" 2>/dev/null
-}
-
-# ---------------------------------------------------------------------------
-# Case I: state.cwd=main + state.session_worktree=valid linked worktree path
-# Expected: resolveSessionWorktreePath returns that linked worktree path.
-# FAIL before fix (source still reads only state.cwd).
-# ---------------------------------------------------------------------------
-write_state_950 "$MAIN_NODE" "$WTA_NODE"
-caseI_got="$(run_resolver_js "$SESSION_ID")"
-if [[ "$caseI_got" = "$WTA_NODE" ]]; then
-  pass "Case I (session_worktree fallback): got '$caseI_got'"
-else
-  fail "Case I (session_worktree fallback): got '$caseI_got', expected '$WTA_NODE' [expected FAIL before source fix]"
-fi
-
-# ---------------------------------------------------------------------------
-# Case J: state.cwd=main + state.session_worktree=null
-# Expected: resolveSessionWorktreePath returns null (empty stdout).
-# FAIL before fix only if the code tries to use null as a path.
-# ---------------------------------------------------------------------------
-write_state_950 "$MAIN_NODE" "null"
-caseJ_got="$(run_resolver_js "$SESSION_ID")"
-if [[ -z "$caseJ_got" ]]; then
-  pass "Case J (session_worktree=null -> empty): got empty as expected"
-else
-  fail "Case J (session_worktree=null -> empty): got '$caseJ_got', expected empty [expected FAIL before source fix]"
-fi
-
-# ---------------------------------------------------------------------------
-# Case K: state.cwd=main + state.session_worktree=nonexistent path
-# Expected: resolveSessionWorktreePath returns null (empty stdout).
-# ---------------------------------------------------------------------------
-NONEXISTENT_PATH="$TMPDIR_BASE/does-not-exist"
-write_state_950 "$MAIN_NODE" "$NONEXISTENT_PATH"
-caseK_got="$(run_resolver_js "$SESSION_ID")"
-if [[ -z "$caseK_got" ]]; then
-  pass "Case K (session_worktree=nonexistent -> empty): got empty as expected"
-else
-  fail "Case K (session_worktree=nonexistent -> empty): got '$caseK_got', expected empty [expected FAIL before source fix]"
-fi
-
-# ---------------------------------------------------------------------------
-# Case L: state.cwd=main + state.session_worktree=main worktree path
-# (isMainWorktree=true) -> must also be rejected, return empty.
-# ---------------------------------------------------------------------------
-write_state_950 "$MAIN_NODE" "$MAIN_NODE"
-caseL_got="$(run_resolver_js "$SESSION_ID")"
-if [[ -z "$caseL_got" ]]; then
-  pass "Case L (session_worktree=main -> empty): got empty as expected"
-else
-  fail "Case L (session_worktree=main -> empty): got '$caseL_got', expected empty [expected FAIL before source fix]"
-fi
+run_cases_882_950
+run_cases_2270_ssot
+run_cases_2270_arg
+run_cases_2270_bridge_rc
 
 # ---------------------------------------------------------------------------
 # Summary

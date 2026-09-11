@@ -21,14 +21,41 @@ fi
 # Path travels via env, not string interpolation — apostrophes/metachars in the
 # checkout path cannot break or alter the evaluated program.
 # Contract (mirrors compute-staged-tests-token.js):
-#   no session id           → empty stdout, exit 0
-#   session id, no state    → "NOSTATE" stdout, exit 0
-#   resolved linked wt      → path stdout, exit 0
-#   unresolvable / main wt  → empty stdout, exit 0
-BRIDGE_DIR="$NODE_DIR" node -e '
+#   no session id                          → empty stdout, exit 0
+#   session id, no state                   → "NOSTATE" stdout, exit 0
+#   resolved linked wt                     → path stdout, exit 0
+#   unresolvable / main wt                 → empty stdout, exit 0
+#   --session <id> (valid)                 → argument overrides env-derived resolution
+#   --session <malformed> / value missing  → stderr, exit 2 (no env fallback)
+#   unknown flag                           → stderr, exit 2
+BRIDGE_SESSION=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session)
+      if [ $# -lt 2 ]; then
+        echo "resolve-worktree-path: --session requires a value" >&2
+        exit 2
+      fi
+      BRIDGE_SESSION="$2"
+      shift 2
+      ;;
+    *)
+      echo "resolve-worktree-path: unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+BRIDGE_DIR="$NODE_DIR" BRIDGE_SESSION="$BRIDGE_SESSION" node -e '
   const path = require("path");
-  const sid = process.env.SESSION_ID || process.env.CLAUDE_SESSION_ID || "";
   try {
+    const { resolveSessionId } = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "workflow-state", "session-id"));
+    const { SESSION_ID_VALID_RE } = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "workflow-state", "state-io", "core"));
+    const bridgeSession = process.env.BRIDGE_SESSION || "";
+    if (bridgeSession && !SESSION_ID_VALID_RE.test(bridgeSession)) {
+      process.stderr.write("resolve-worktree-path: --session value malformed\n");
+      process.exit(2);
+    }
+    const sid = resolveSessionId({ sessionIdFromInput: bridgeSession || undefined }) || "";
     if (!sid) { process.stdout.write(""); process.exit(0); }
     const stateIo = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "workflow-state", "state-io"));
     if (stateIo.readState(sid) === null) { process.stdout.write("NOSTATE"); process.exit(0); }

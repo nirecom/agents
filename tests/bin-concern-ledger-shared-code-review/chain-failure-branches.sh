@@ -27,7 +27,7 @@ cfb_env() {
 # cfb_open — the real open-concern-round.sh, resolved through the shimmed tree.
 cfb_open() {
     CFB_OPEN="$(
-        SESSION_ID="$CFB_SID" PLANS_DIR="$CFB_P" AGENTS_CONFIG_DIR="$FC_ROOT" \
+        CLAUDE_CODE_SESSION_ID="$CFB_SID" PLANS_DIR="$CFB_P" AGENTS_CONFIG_DIR="$FC_ROOT" \
             bash "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" 2>/dev/null
     )"
 }

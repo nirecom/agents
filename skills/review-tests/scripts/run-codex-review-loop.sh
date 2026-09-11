@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+# Workflow session id (plan-artifact prefix), NOT the CC session UUID resolved below
+# via bin/resolve-session-id. The wsid has no bash bridge yet, so this stays a manual
+# input box until a future session replaces it — see session-id-resolution.md.
 : "${SESSION_ID:?SESSION_ID not set}"
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
@@ -35,9 +38,23 @@ compute_staged_tests_fingerprint() {
 
 # Session-bound commit-target resolution (#1316): never trust CWD, never select main worktree.
 # Resolved before the re-invoke guard (#1361) because the guard needs REPO_ROOT_VAL.
-COMMIT_TARGET="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path")"
-if [[ "$COMMIT_TARGET" == "NOSTATE" ]]; then
-  # No state file: test fixture or first-run scenario. Fall back to CWD.
+# The CC session id is resolved explicitly first (SSOT: bin/resolve-session-id) and
+# handed on via --session. Only rc 2 means "no session"; any other rc is a bridge
+# fault and takes this script's existing exit 4 HALT path, never the exit 3 skip.
+BRIDGE_RC=0
+CC_SID="$("$AGENTS_CONFIG_DIR/bin/resolve-session-id")" || BRIDGE_RC=$?
+case "$BRIDGE_RC" in
+  0) ;;
+  2) CC_SID="" ;;
+  *) echo "[review-tests] ERROR: bin/resolve-session-id failed (rc $BRIDGE_RC)" >&2; exit 4 ;;
+esac
+COMMIT_TARGET="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path" ${CC_SID:+--session "$CC_SID"})"
+# NOSTATE (session resolved, no state file) and "" (no session resolved at all) are
+# both legitimate bin/resolve-worktree-path outcomes -- neither is an error, so both
+# fall back to CWD identically (#2270: previously only NOSTATE fell back, which masked
+# on the fact that bare SESSION_ID used to leak into CC-session resolution and made
+# empty-COMMIT_TARGET effectively unreachable from a real git repo).
+if [[ "$COMMIT_TARGET" == "NOSTATE" || -z "$COMMIT_TARGET" ]]; then
   COMMIT_TARGET="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
   if [[ -z "$COMMIT_TARGET" ]]; then
     if [[ -f "$TERMINAL_FILE" ]]; then
@@ -49,14 +66,6 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" ]]; then
     echo "[review-tests] WARNING: no session state and not in a git repo; skipping test review." >&2
     exit 3
   fi
-elif [[ -z "$COMMIT_TARGET" ]]; then
-  if [[ -f "$TERMINAL_FILE" ]]; then
-    echo "[review-tests] ERROR: terminal marker present but commit-target is unresolvable; keeping the re-invoke guard." >&2
-    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  echo "[review-tests] ERROR: cannot resolve commit-target worktree (session-bound source missing or main worktree). Skipping test review." >&2
-  exit 3
 fi
 REPO_ROOT_VAL="$COMMIT_TARGET"
 
