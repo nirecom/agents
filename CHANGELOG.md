@@ -463,3 +463,7 @@ Changes: Fixed prompt-authored command examples across several skills that were 
 ### FEATURE: PR #2274 (2026-09-12)
 Background: feat(#2270): unify session-id resolution to a single-source-of-truth ...
 Changes: Session-id resolution used by the CLI bridge tools is now unified behind one source-of-truth resolver, fixing several cases where the session id failed to resolve and a downstream step silently skipped or fell back incorrectly.
+
+### FEATURE: PR #2275 (2026-09-12)
+Background: fix(#746): pin codex sandbox_mode/approval_policy via -c overrides for codex-cli 0.153.4
+Changes: Fix: `bin/review-plan-codex` now works with codex-cli >=0.153.4 — reviews no longer silently fall back due to removed `--sandbox`/`--full-auto` CLI flags.
