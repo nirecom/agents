@@ -141,6 +141,12 @@ make_mirror_sandbox() {
     cp "$SNIPPET" "$sb/agents/profile-snippet.sh"
     cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
     chmod +x "$sb/agents/bin/get-config-var"
+    # codes() delegates to bin/codes-launch.sh (re-read from disk on every call,
+    # unlike a sourced function) — mirror it too, or codes() would fail to find it.
+    # No vscode-cc-repair stub: codes-launch.sh's own -e guard skips the repair
+    # call cleanly when the directory is absent, as it is in this mirror.
+    cp "$AGENTS_DIR/bin/codes-launch.sh" "$sb/agents/bin/codes-launch.sh"
+    chmod +x "$sb/agents/bin/codes-launch.sh"
     # The marker SSOT lib ships beside the snippet; copying it here keeps the
     # mirror on the `source the lib` path rather than the inline fallback.
     if [ -f "$MARKERS_LIB" ]; then
