@@ -38,22 +38,58 @@ while [[ $# -gt 0 ]]; do
       fi
       FORMAT="$2"; shift 2 ;;
     --cap)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --cap requires an argument"
+        exit 0
+      fi
       CAP="$2"; shift 2 ;;
     --max-extensions)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --max-extensions requires an argument"
+        exit 0
+      fi
       MAX_EXTENSIONS="$2"; shift 2 ;;
     --extensions-used)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --extensions-used requires an argument"
+        exit 0
+      fi
       EXTENSIONS_USED="$2"; shift 2 ;;
     --session-id)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --session-id requires an argument"
+        exit 0
+      fi
       ARG_SESSION_ID="$2"; shift 2 ;;
     --log-dir)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --log-dir requires an argument"
+        exit 0
+      fi
       ARG_LOG_DIR="$2"; shift 2 ;;
     --accepted-tradeoffs)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --accepted-tradeoffs requires an argument"
+        exit 0
+      fi
       ACCEPTED_TRADEOFFS_FILE="$2"; shift 2 ;;
     --round)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --round requires an argument"
+        exit 0
+      fi
       ROUND="$2"; shift 2 ;;
     --ledger)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --ledger requires an argument"
+        exit 0
+      fi
       LEDGER="$2"; shift 2 ;;
     --repo-root)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Plan Review: FAILED — --repo-root requires an argument"
+        exit 0
+      fi
       REPO_ROOT_ARG="$2"; shift 2 ;;
     --project-root)
       if [[ $# -lt 2 ]]; then
@@ -230,8 +266,16 @@ if [[ -n "$PROJECT_ROOT_ARG" ]]; then
   fi
 fi
 
+# approval_policy/sandbox_mode config overrides (#746: codex-cli 0.153.4 removed
+# --full-auto/--ask-for-approval as CLI flags; -c is used for --sandbox too so both
+# knobs are set by one mechanism. Unconditional -- this is the general codex-invocation
+# posture, not specific to --repo-root/MCP filesystem. Keep these two lines together:
+# approval_policy="never" is only safe paired with sandbox_mode="read-only".
+MCP_OVERRIDES=(
+  -c "approval_policy=\"never\""
+  -c "sandbox_mode=\"read-only\""
+)
 # MCP filesystem server overrides (empty when --repo-root not provided)
-MCP_OVERRIDES=()
 MCP_FS_ADDENDUM=""
 if [[ -n "$REPO_ROOT_ARG" ]]; then
   MCP_SERVER_JS="$(dirname "$(realpath "$0")")/mcp-fs-server.js"
@@ -241,8 +285,6 @@ if [[ -n "$REPO_ROOT_ARG" ]]; then
   MCP_OVERRIDES+=(
     -c "mcp_servers.fs.command=\"node\""
     -c "mcp_servers.fs.args=[\"$MCP_SERVER_JS_TOML\"]"
-    --sandbox read-only
-    --full-auto
   )
   MCP_FS_ADDENDUM=$'You have access to a filesystem MCP server "fs" with read_file({path}); reads confined to REPO_ROOT (.env, keys, WORKTREE_NOTES.md blocked). For concerns about hook behavior, runtime scope, or subprocess reachability: read the relevant source first, then append [verified: <files>] to the concern line — hook-scope keywords (enforce-issue-close, PreToolUse, ISSUE_CLOSE_SKILL, command-head.js) without this annotation are auto-rejected.\n\n'
 fi
