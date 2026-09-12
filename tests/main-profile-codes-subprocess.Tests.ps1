@@ -1,31 +1,13 @@
 # Tests: profile-snippet.ps1, bin/get-config-var.ps1
 # Tags: profile-snippet, session-sync, toggle, pwsh-required, subprocess, scope:common
 #
-# Real-process companion to tests/main-profile-codes.Tests.ps1. That file mocks
-# Start-Process, which makes both automatic call sites unobservable in the ways
-# that matter most:
-#   - startup fetch: with the mock in place `git fetch` never runs, so a gate
-#     that lets the fetch through but is only checked around the banner, or one
-#     that blocks the fetch yet still reaches `git merge --ff-only FETCH_HEAD`,
-#     looks identical to a correctly gated snippet;
-#   - codes(): the push is asserted on the constructed -ArgumentList string, so
-#     broken quoting, a bad argument boundary, or a command that simply cannot
-#     launch still passes.
-# Here the snippet runs in a real child pwsh with real git repositories and real
-# recording stubs on PATH, so fetch, merge, editor launch, and push are observed
-# as side effects rather than as strings. The mocked file is kept as-is: it is
-# the fast layer, this is the broad-integration layer.
+# Real-process companion to tests/main-profile-codes.Tests.ps1 (which mocks
+# Start-Process): runs the snippet in a real child pwsh with real git repos
+# and recording stubs on PATH, so fetch, merge, editor launch, and push are
+# observed as side effects, not asserted strings.
 #
-# TL3 gap (what this test does NOT catch):
-# - A real interactive $PROFILE load driven by the user's own .env: the snippet
-#   is dot-sourced from a mirror tree, so only the process environment and the
-#   shipped default drive the gate.
-# - Real VS Code and the real bin/session-sync.ps1: code.cmd, the window-wait
-#   script, and the sync script are recording stubs, so a push that launches
-#   correctly but fails inside session-sync.ps1 is out of scope here.
-# - Windows PowerShell 5.1 as the host: the child is always pwsh 7.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: pwsh-required.
+# TL3 gap (real .env/$PROFILE load, real VS Code/session-sync.ps1, PS5.1 host):
+# see bin/check-verification-gate.sh category pwsh-required.
 
 BeforeDiscovery {
     $script:CanRunSubprocessTests = (
@@ -63,6 +45,7 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
 
             Copy-Item (Join-Path $script:AgentsDir "profile-snippet.ps1")   (Join-Path $mirror "profile-snippet.ps1")
             Copy-Item (Join-Path $script:AgentsDir "bin\get-config-var.ps1") (Join-Path $mirror "bin\get-config-var.ps1")
+            Copy-Item (Join-Path $script:AgentsDir "bin\codes-launch.ps1") (Join-Path $mirror "bin\codes-launch.ps1")
             Copy-Item (Join-Path $script:AgentsDir "hooks\lib") (Join-Path $mirror "hooks\lib") -Recurse -Force
 
             # Recording stubs — each appends one line per invocation, so both
