@@ -7,28 +7,43 @@ BeforeAll {
     $AgentsDir = Split-Path -Parent $PSScriptRoot
     $ProfileScript = Join-Path $AgentsDir "profile-snippet.ps1"
     $script:ProfileContent = Get-Content $ProfileScript -Raw
+    $LaunchScript = Join-Path $AgentsDir "bin\codes-launch.ps1"
+    $script:LaunchContent = Get-Content $LaunchScript -Raw
 }
 
 Describe "codes function (profile-snippet.ps1)" {
     Context "Normal cases" {
+        It "delegates to bin\codes-launch.ps1 so launch-logic edits apply without re-sourcing the profile" {
+            # codes-launch.ps1 is invoked via `&` (a script-file call), which re-reads the
+            # file from disk on every invocation — unlike a dot-sourced function body,
+            # which is cached in memory at shell startup. Routing the launch logic through
+            # a delegated script file means edits take effect in already-open shells
+            # immediately, with no need to re-source $PROFILE or open a new window.
+            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock | Should -Match 'codes-launch\.ps1' `
+                -Because "codes must forward to the external script, not embed launch logic inline"
+            $codesBlock | Should -Match '@args' `
+                -Because "positional args must be forwarded verbatim to codes-launch.ps1"
+        }
+
         It "uses Start-Process (not Start-Job)" {
-            $ProfileContent | Should -Match 'Start-Process'
-            $ProfileContent | Should -Not -Match 'Start-Job'
+            $LaunchContent | Should -Match 'Start-Process'
+            $LaunchContent | Should -Not -Match 'Start-Job'
         }
 
         It "uses -WindowStyle Hidden for background execution" {
-            $ProfileContent | Should -Match '-WindowStyle\s+Hidden'
+            $LaunchContent | Should -Match '-WindowStyle\s+Hidden'
         }
 
         It "includes code.cmd --new-window (without --wait)" {
-            $ProfileContent | Should -Match 'code\.cmd\s+--new-window'
+            $LaunchContent | Should -Match 'code\.cmd\s+--new-window'
             # --wait should no longer be used (replaced by window polling)
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
             $codesBlock | Should -Not -Match 'code\.cmd[^;]*--wait'
         }
 
         It "calls wait-vscode-window.ps1 between code.cmd and session-sync push" {
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
             $codesBlock | Should -Match 'wait-vscode-window\.ps1' `
                 -Because "window polling script must be called"
             $codesBlock | Should -Match 'syncScript.*push' `
@@ -41,7 +56,7 @@ Describe "codes function (profile-snippet.ps1)" {
             # Start-Process inherits the caller's environment by default. The
             # clear must therefore be part of the command string handed to the
             # child pwsh, and must run before code.cmd is launched.
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
 
             $anthropicIdx = $codesBlock.IndexOf('Remove-Item Env:ANTHROPIC_*')
             $nodeCertsIdx = $codesBlock.IndexOf('Remove-Item Env:NODE_EXTRA_CA_CERTS')
@@ -65,7 +80,7 @@ Describe "codes function (profile-snippet.ps1)" {
             # would also wipe the vars from the user's interactive shell. The
             # clear must only ever appear as text inside the command string
             # built for the child pwsh.
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
 
             $codesBlock | Should -Not -Match '\$env:ANTHROPIC' `
                 -Because "assigning/removing `$env:ANTHROPIC_* directly in codes would mutate the caller's shell, not just the child"
@@ -74,11 +89,40 @@ Describe "codes function (profile-snippet.ps1)" {
         }
 
         It "resolves workspace name for title matching" {
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
             $codesBlock | Should -Match '\.code-workspace' `
                 -Because "must handle .code-workspace files"
             $codesBlock | Should -Match 'Split-Path|GetFileNameWithoutExtension' `
                 -Because "must extract workspace/folder name"
+        }
+
+        It "re-applies the vscode-cc-repair patch/prune before code.cmd launches" {
+            # Every VS Code extension auto-upgrade overwrites the includeWorktrees
+            # patch (bin/vscode-cc-repair), so `codes` must re-apply it before the
+            # extension host loads, not merely reference it somewhere in the body.
+            $codesBlock = $LaunchContent
+            $repairIdx  = $codesBlock.IndexOf('vscode-cc-repair')
+            $codeCmdIdx = $codesBlock.IndexOf('code.cmd --new-window')
+
+            $repairIdx | Should -BeGreaterThan -1 `
+                -Because "codes must invoke bin/vscode-cc-repair"
+            $codeCmdIdx | Should -BeGreaterThan -1 `
+                -Because "the code.cmd launch must still be present"
+            $repairIdx | Should -BeLessThan $codeCmdIdx `
+                -Because "the repair must genuinely precede code.cmd, not merely appear somewhere in the function"
+            $codesBlock | Should -Match '--prune-stub-sessions' `
+                -Because "the stub-session prune pass must be requested alongside the patch pass"
+        }
+
+        It "guards the vscode-cc-repair call with Test-Path and swallows failures (best-effort)" {
+            # A stripped-down install without bin/vscode-cc-repair, or a repair
+            # that fails (e.g. node missing, refused bundle), must never stop a
+            # `codes` launch.
+            $codesBlock = $LaunchContent
+            $codesBlock | Should -Match 'Test-Path\s+\$_repairScript' `
+                -Because "an absent vscode-cc-repair tool must not error out of codes"
+            $codesBlock | Should -Match 'try\s*\{[^}]*\}\s*catch\s*\{\s*\}' `
+                -Because "a repair failure must be swallowed, not thrown out of codes"
         }
     }
 
@@ -87,7 +131,7 @@ Describe "codes function (profile-snippet.ps1)" {
             # Verify the per-arg transform + join pattern is used — empty args
             # produce empty string, not error. The join now runs over the
             # per-item quoting pipeline, not the raw $args array.
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
             $codesBlock | Should -Match '\$args\s*\|\s*ForEach-Object' `
                 -Because "each arg must be piped through a per-item transform before joining"
             $codesBlock | Should -Match '\)\s*-join\s+' `
@@ -95,7 +139,7 @@ Describe "codes function (profile-snippet.ps1)" {
         }
 
         It "args are passed into the command string" {
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
+            $codesBlock = $LaunchContent
             $codesBlock | Should -Match '\$codeArgs' -Because "codeArgs variable must be referenced in command"
         }
 
@@ -106,8 +150,8 @@ Describe "codes function (profile-snippet.ps1)" {
             # the hidden child pwsh. A regression back to raw string
             # interpolation (e.g. "$args -join ' '" or bare "$name") must
             # fail this test.
-            $codesBlock = ($ProfileContent -split 'function codes')[1] -split 'function ' | Select-Object -First 1
-            $ProfileContent | Should -Match '_codesQuote|-replace\s+"''"' `
+            $codesBlock = $LaunchContent
+            $LaunchContent | Should -Match '_codesQuote|-replace\s+"''"' `
                 -Because "a quoting/escaping helper that doubles embedded single quotes must exist"
             $codesBlock | Should -Match '_codesQuote' `
                 -Because "the codes function must route args and `$name through the quoting helper, not raw interpolation"
@@ -116,33 +160,13 @@ Describe "codes function (profile-snippet.ps1)" {
 }
 
 # ---------------------------------------------------------------------------
-# SESSION_SYNC gate — the pwsh half of the contract also covered on the bash
-# side by tests/fix-1225-profile-snippet-guards/session-sync-gate.sh. The two
-# snippets are symmetric members of one class (CPR-ORTH), so the value domain and
-# the expectations below are deliberately identical to TC13-TC21 there.
-#
-# Contract: SESSION_SYNC gates the two *automatic* call sites only —
-#   1. the startup auto-fetch of ~/.claude/projects
-#   2. the codes() auto-push (bin/session-sync.ps1 push -Quiet)
-# Shipped default is off and resolution is fail-safe OFF: the automatic path
-# runs only on an explicit, readable `on`. Unset, unrecognized, and unreadable
-# (node broken) must all leave it silent. The manual CLI is NOT gated — that
-# contract is pinned in tests/main-session-sync.Tests.ps1.
-#
-# TL3 gap (what this test does NOT catch):
-# - A real interactive $PROFILE load, where the user's actual .env supplies
-#   SESSION_SYNC. The snippet is dot-sourced from a mirror tree because
-#   profile-snippet.ps1 overwrites $env:AGENTS_CONFIG_DIR with its own parent,
-#   so only the process environment can drive the gate here.
-# - A real VS Code / git / pwsh process: Start-Process is mocked, so the launch
-#   is asserted on the constructed argument list, not on an observed process.
-#   The broad-integration counterpart — real child pwsh, real git fetch/merge,
-#   recording stubs on PATH — lives in tests/main-profile-codes-subprocess.Tests.ps1;
-#   this file stays the fast, mocked layer.
-# - Windows PowerShell 5.1 vs pwsh 7 divergence in the snippet itself; this file
-#   runs under whichever host the suite is invoked with.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: pwsh-required.
+# SESSION_SYNC gate: pwsh half of the contract in
+# tests/fix-1225-profile-snippet-guards/session-sync-gate.sh (CPR-ORTH twin;
+# value domain mirrors TC13-TC21 there). Gates only the two automatic call
+# sites (startup auto-fetch, codes() auto-push); fail-safe OFF; manual CLI is
+# NOT gated (tests/main-session-sync.Tests.ps1). TL3 gap (real profile load,
+# real VS Code/git/pwsh, PS5.1 vs pwsh7): see tests/main-profile-codes-subprocess.Tests.ps1
+# and bin/check-verification-gate.sh (pwsh-required).
 # ---------------------------------------------------------------------------
 Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git -ErrorAction SilentlyContinue)) {
     BeforeAll {
@@ -153,7 +177,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
         # AGENTS_CONFIG_DIR and a missing .env is a silent no-op, which leaves
         # the process environment as the single SESSION_SYNC source.
         function New-MirrorSandbox {
-            param([switch]$WithSessionRepo, [switch]$NoopConfigVar)
+            param([switch]$WithSessionRepo, [switch]$NoopConfigVar, [switch]$WithRepairStub, [switch]$FailingRepairStub)
 
             $root   = Join-Path $env:TEMP "profile-gate-$(Get-Random)"
             $mirror = Join-Path $root "agents"
@@ -171,6 +195,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
 
             Copy-Item (Join-Path $AgentsDir "profile-snippet.ps1") (Join-Path $mirror "profile-snippet.ps1")
             Copy-Item (Join-Path $AgentsDir "bin\get-config-var.ps1") (Join-Path $mirror "bin\get-config-var.ps1")
+            Copy-Item (Join-Path $AgentsDir "bin\codes-launch.ps1") (Join-Path $mirror "bin\codes-launch.ps1")
             Copy-Item (Join-Path $AgentsDir "hooks\lib") (Join-Path $mirror "hooks\lib") -Recurse -Force
 
             if ($NoopConfigVar) {
@@ -200,7 +225,19 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
                 New-Item -ItemType Directory -Path (Join-Path $sbHome ".claude\projects\.git") -Force | Out-Null
             }
 
-            @{ Root = $root; Mirror = $mirror; Home = $sbHome; NoNode = $noNode }
+            $repairCalls = Join-Path $root "repair.calls"
+            if ($WithRepairStub -or $FailingRepairStub) {
+                $repairCallsJs = $repairCalls -replace '\\', '/'
+                # Extensionless file: `node <path>` loads it directly, same shape
+                # as the real bin/vscode-cc-repair directory entrypoint.
+                $exitLine = if ($FailingRepairStub) { "process.exit(1);" } else { "" }
+                Set-Content -Path (Join-Path $mirror "bin\vscode-cc-repair") -Value @(
+                    "const fs = require('fs');"
+                    "fs.appendFileSync('$repairCallsJs', 'was-called ' + process.argv.slice(2).join(' ') + `"``n`");"
+                    $exitLine)
+            }
+
+            @{ Root = $root; Mirror = $mirror; Home = $sbHome; NoNode = $noNode; RepairCalls = $repairCalls }
         }
 
         # Dot-source the mirrored snippet with $HOME pointed at the sandbox.
@@ -224,19 +261,19 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
         }
 
         function Test-StartupFetchRan {
-            foreach ($c in $script:StartProcessCalls) {
+            foreach ($c in $global:StartProcessCalls) {
                 if ($c.FilePath -eq 'git' -and (($c.ArgumentList -join ' ') -match 'fetch')) { return $true }
             }
             # Second signal: an implementation that swaps the launch mechanism
             # but keeps the banner still counts as "the automatic path ran".
-            foreach ($l in $script:HostLines) {
+            foreach ($l in $global:HostLines) {
                 if ($l -match 'git fetch Claude session sync') { return $true }
             }
             return $false
         }
 
         function Get-CodesLaunchArgs {
-            foreach ($c in $script:StartProcessCalls) {
+            foreach ($c in $global:StartProcessCalls) {
                 $joined = $c.ArgumentList -join ' '
                 if ($joined -match 'code\.cmd') { return $joined }
             }
@@ -256,12 +293,12 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
         $script:SavedPath          = $env:PATH
         $script:SavedHome          = $HOME
         $script:SavedHomeOptions   = (Get-Variable HOME).Options
-        $script:StartProcessCalls  = [System.Collections.ArrayList]::new()
-        $script:HostLines          = [System.Collections.ArrayList]::new()
+        $global:StartProcessCalls  = [System.Collections.ArrayList]::new()
+        $global:HostLines          = [System.Collections.ArrayList]::new()
         $script:Sandbox            = $null
 
         Mock Start-Process {
-            [void]$script:StartProcessCalls.Add([pscustomobject]@{
+            [void]$global:StartProcessCalls.Add([pscustomobject]@{
                 FilePath     = $FilePath
                 ArgumentList = @($ArgumentList)
             })
@@ -271,7 +308,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
                 Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($ms) $true } -PassThru |
                 Add-Member -MemberType ScriptMethod -Name Kill -Value { } -PassThru
         }
-        Mock Write-Host { [void]$script:HostLines.Add(($Object -join ' ')) }
+        Mock Write-Host { [void]$global:HostLines.Add(($Object -join ' ')) }
     }
 
     AfterEach {
@@ -391,7 +428,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
             Test-CodesPushWired | Should -BeFalse `
                 -Because "the first load sees the toggle off"
 
-            $script:StartProcessCalls.Clear()
+            $global:StartProcessCalls.Clear()
             $env:SESSION_SYNC = 'on'
             Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes
             Test-CodesPushWired | Should -BeTrue `
@@ -411,6 +448,42 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
                 -Because "codes must still launch VS Code when sync is off"
             $joined | Should -Match 'code\.cmd\s+--new-window'
             $joined | Should -Not -Match 'session-sync\.ps1'
+        }
+    }
+
+    Context "vscode-cc-repair auto-repair (codes())" {
+        # The extension-patch/prune tool is invoked synchronously in the parent
+        # process before Start-Process launches code.cmd, so its call marker file
+        # must exist by the time Invoke-MirrorProfile returns.
+        It "invokes vscode-cc-repair with --prune-stub-sessions before launching VS Code" {
+            $script:Sandbox = New-MirrorSandbox -WithRepairStub
+
+            Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes
+
+            Test-Path $script:Sandbox.RepairCalls | Should -BeTrue `
+                -Because "codes must invoke bin/vscode-cc-repair"
+            Get-Content $script:Sandbox.RepairCalls -Raw | Should -Match '--prune-stub-sessions' `
+                -Because "the prune pass must be requested"
+            Get-CodesLaunchArgs | Should -Not -BeNullOrEmpty `
+                -Because "the repair call must not prevent the VS Code launch"
+        }
+
+        It "still launches VS Code when bin/vscode-cc-repair is absent" {
+            $script:Sandbox = New-MirrorSandbox
+
+            { Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes } | Should -Not -Throw `
+                -Because "an absent repair tool must be a silent no-op"
+            Get-CodesLaunchArgs | Should -Not -BeNullOrEmpty
+        }
+
+        It "still launches VS Code when vscode-cc-repair fails (best-effort)" {
+            $script:Sandbox = New-MirrorSandbox -FailingRepairStub
+
+            { Invoke-MirrorProfile -Sandbox $script:Sandbox -InvokeCodes } | Should -Not -Throw `
+                -Because "a repair failure must never block the codes launch"
+            Test-Path $script:Sandbox.RepairCalls | Should -BeTrue `
+                -Because "sanity: the failing stub actually ran"
+            Get-CodesLaunchArgs | Should -Not -BeNullOrEmpty
         }
     }
 
