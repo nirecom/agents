@@ -131,46 +131,13 @@ fi
 unset _session_dir
 fi
 
-# Returns true if any VS Code window is currently open
-_any_vscode_window() {
-    if [ "$(uname)" = "Darwin" ]; then
-        local count
-        count=$(osascript -e 'tell application "System Events" to (count (every window of every process whose name contains "Code"))' 2>/dev/null)
-        [ "${count:-0}" -gt 0 ]
-    elif type xdotool >/dev/null 2>&1; then
-        xdotool search --name "Visual Studio Code" 2>/dev/null | grep -q .
-    elif type wmctrl >/dev/null 2>&1; then
-        wmctrl -l 2>/dev/null | grep -q "Visual Studio Code"
-    else
-        return 1
-    fi
-}
-
-# Launch VS Code with session sync (push on close)
+# Launch VS Code with session sync (push on close via title polling).
+# Thin wrapper: the real launch logic (including the vscode-cc-repair call) lives in
+# bin/codes-launch.sh, a script re-read from disk on every invocation -- unlike this
+# sourced function, its edits take effect in already-open shells immediately, with
+# no need to re-source the profile or open a new shell.
 codes() {
-    local target="${1:-.}"
-    local name
-    if [[ "$target" == *.code-workspace ]]; then
-        name="$(basename "$target" .code-workspace)"
-    else
-        name="$(basename "$(cd "$target" 2>/dev/null && pwd || echo "$target")")"
-    fi
-    (
-        code --new-window "$@"
-        _ss_rc=0
-        "$AGENTS_DIR/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
-        _ss_on=0
-        if [ "$_ss_rc" -eq 1 ]; then _ss_on=1; fi
-        if [ "$_ss_on" = "1" ]; then
-            "$AGENTS_DIR/bin/wait-vscode-window.sh" "$name"
-            if _any_vscode_window; then
-                "$AGENTS_DIR/bin/session-sync.sh" push --quiet
-            else
-                "$AGENTS_DIR/bin/session-sync.sh" push --quiet --toast
-            fi
-        fi
-    ) &
-    disown
+    "$AGENTS_DIR/bin/codes-launch.sh" "$@"
 }
 
 unset _agents_root _agent_broken _f AGENTS_SESSION_SYNC_FETCH_MARKER AGENTS_SYMLINK_REPAIR_MARKER
