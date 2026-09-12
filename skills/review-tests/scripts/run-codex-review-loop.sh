@@ -99,7 +99,9 @@ arm_terminal_guard() {
     # or a clean follow-up review would be wrongly blocked. exit 4 is unchanged.
     # exit 6 (HIGH_UNRESOLVED) is terminal with unresolved HIGH concerns — guard
     # applies for same reason as exit 2 (CPR-ORTH).
-    1|2|6)
+    # exit 3 (codex CLI unavailable, test-reviewer fallback taken) is likewise terminal for
+    # this invocation and arms the guard for the same reason (#1742).
+    1|2|3|6)
       fp=""
       fp="$(compute_staged_tests_fingerprint "$REPO_ROOT_VAL")" || fp=""
       printf '%s\n%s\n' "$rc" "$fp" > "$TERMINAL_FILE" || true

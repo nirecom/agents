@@ -295,6 +295,102 @@ run_R7() {
     fi
 }
 
+# R8 — mirrors R5 but for rc=3 (#1742). arm_terminal_guard's case pattern is
+# being widened from `1|2|6` to `1|2|3|6` so bin/run-codex-review-loop's own
+# exit 3 also arms the #1361 re-invoke guard, same as 1/2/6 already do. rc=3
+# is not a choke-point exit (#2218 Step 12 names only 4/7/8), so — like R5 —
+# no review-tests:codex-exit record belongs to this exit either.
+run_R8() {
+    require_module "$ARTIFACT" || return 0
+    local tmp sid rc problems
+    tmp="$(make_tmp)"; problems=""
+    mkdir -p "$tmp/wf"
+    sid="codex-exit-3-nonrecording"
+    run_loop "$tmp" "$sid" 3 "$tmp/target"; rc=$?
+    [ "$rc" -eq 3 ] || problems="$problems exit-code:$rc"
+    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems guard-not-armed"
+    if [ -f "$tmp/wf/$sid-handoff.md" ]; then
+        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid-handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
+    fi
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ -z "$problems" ]; then
+        pass "R8: exit 3 arms the #1361 re-invoke guard but records no review-tests:codex-exit entry (#1742)"
+    else
+        fail "R8: —$problems"
+    fi
+}
+
+# R9 — the wrapper's OWN direct `exit 3` at the NOSTATE/non-git-CWD site
+# (line ~50), reached BEFORE arm_terminal_guard is ever called. Unlike R6
+# (which pre-arms a terminal marker to reach the fail-CLOSED exit-8 branch
+# just above it), this drives the plain "no state, no git" fallback with
+# nothing pre-armed, so it must exit 3 and must never itself write a
+# terminal marker (it never calls arm_terminal_guard).
+run_R9() {
+    require_module "$ARTIFACT" || return 0
+    local tmp sid rc problems
+    tmp="$(make_tmp)"; problems=""
+    mkdir -p "$tmp/wf"
+    sid="codex-exit-3-nostate-nongit-direct"
+    run_loop_at "$tmp" "$tmp" "$sid" 0 "NOSTATE"; rc=$?
+    [ "$rc" -eq 3 ] || problems="$problems exit-code:$rc"
+    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] && problems="$problems terminal-marker-unexpectedly-created"
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ -z "$problems" ]; then
+        pass "R9: direct exit-3 at the NOSTATE/non-git-CWD site (line ~50) writes no terminal marker (arm_terminal_guard never reached)"
+    else
+        fail "R9: —$problems"
+    fi
+}
+
+# R10 — the classifier's negative side beyond R2's incidental rc=0 check:
+# rc values NOT in arm_terminal_guard's `1|2|3|6` case pattern must never arm
+# the #1361 re-invoke guard. Guards against a future overly-broad pattern
+# (e.g. an accidental `*)`) going undetected.
+run_R10() {
+    require_module "$ARTIFACT" || return 0
+    local tmp sid rc code problems
+    problems=""
+    for code in 4 5 7; do
+        tmp="$(make_tmp)"
+        mkdir -p "$tmp/wf"
+        sid="codex-exit-$code-not-armed"
+        run_loop "$tmp" "$sid" "$code" "$tmp/target"; rc=$?
+        [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] && problems="$problems [$code]guard-wrongly-armed"
+        rm -rf "$tmp" 2>/dev/null || true
+    done
+    if [ -z "$problems" ]; then
+        pass "R10: rc values outside 1|2|3|6 (4, 5, 7) never arm the #1361 re-invoke guard"
+    else
+        fail "R10: —$problems"
+    fi
+}
+
+# R11 — the classifier's positive side for the two case-pattern members R5/R8
+# never drove directly: rc=1 and rc=2 (ESCALATE/AUTO_EXTEND-adjacent codes from
+# bin/run-codex-review-loop) must also arm the #1361 re-invoke guard, same as
+# 1/2/6 already did before rc=3 (#1742) was added. Without this, a future
+# narrowing of the case pattern to e.g. `3|6` alone would go undetected.
+run_R11() {
+    require_module "$ARTIFACT" || return 0
+    local tmp sid rc code problems
+    problems=""
+    for code in 1 2; do
+        tmp="$(make_tmp)"
+        mkdir -p "$tmp/wf"
+        sid="codex-exit-$code-nonrecording"
+        run_loop "$tmp" "$sid" "$code" "$tmp/target"; rc=$?
+        [ "$rc" -eq "$code" ] || problems="$problems [$code]exit-code:$rc"
+        [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems [$code]guard-not-armed"
+        rm -rf "$tmp" 2>/dev/null || true
+    done
+    if [ -z "$problems" ]; then
+        pass "R11: rc=1 and rc=2 both arm the #1361 re-invoke guard"
+    else
+        fail "R11: —$problems"
+    fi
+}
+
 if [ ! -f "$LOOP" ]; then
     fail "SCRIPT NOT FOUND: skills/review-tests/scripts/run-codex-review-loop.sh"
 else
@@ -308,6 +404,10 @@ else
     run_R5
     run_R6
     run_R7
+    run_R8
+    run_R9
+    run_R10
+    run_R11
     [ -n "$CFG" ] && rm -rf "$CFG" 2>/dev/null
 fi
 
