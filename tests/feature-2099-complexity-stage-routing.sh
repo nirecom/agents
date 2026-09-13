@@ -197,11 +197,11 @@ d2099_section_step() {
         # #2102 moved write-tests' and write-code's stored-evaluation read OUT of
         # the level step: WT-0 / WCD-0 now make ONE bundled `read-session-facts`
         # call whose record carries COMPLEXITY_LEVEL_<stage> / COMPLEXITY_SIGNALS.
-        # The NONE-fallback `derive-complexity-level` call stays in WT-5 / WCD-3,
+        # The NONE-fallback `derive-complexity-level` call stays in WT-6 / WCD-3,
         # so the two CLIs now own two DIFFERENT sections in those two skills.
         write-tests:read-session-facts) echo "WT-0" ;;
         write-code:read-session-facts) echo "WCD-0" ;;
-        write-tests:derive-complexity-level) echo "WT-5" ;;
+        write-tests:derive-complexity-level) echo "WT-6" ;;
         write-code:derive-complexity-level) echo "WCD-3" ;;
         clarify-intent:record-complexity-and-skip) echo "CI-C1b" ;;
         workflow-init:record-complexity-and-skip) echo "A3a" ;;
@@ -219,8 +219,8 @@ d2099_step_anchors() {
         MDP-3)  echo '^### Step MDP-3 |^### Step ' ;;
         MDP-4)  echo '^### Step MDP-4 |^### Step ' ;;
         WT-0)   echo '^WT-0\.|^WT-[0-9]' ;;
-        WT-5)   echo '^WT-5\.|^WT-[0-9]' ;;
         WT-6)   echo '^WT-6\.|^WT-[0-9]' ;;
+        WT-7)   echo '^WT-7\.|^WT-[0-9]' ;;
         WCD-0)  echo '^WCD-0\.|^WCD-[0-9]' ;;
         WCD-3)  echo '^WCD-3\.|^WCD-[0-9]' ;;
         WCD-4)  echo '^WCD-4\.|^WCD-[0-9]' ;;

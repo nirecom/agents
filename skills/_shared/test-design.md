@@ -185,3 +185,4 @@ Applying the false-green detector at authoring time prevents recurrence.
 
 - **Parser / regex / allowlist targets**: `skills/_shared/test-design/parser-regex-tests.md` — Table-Driven Tests and Mutation Probe patterns.
 - **Security / guard / classifier fixes**: `skills/_shared/test-design/protection-fix-tests.md` — Protection Fix Patterns 1–4.
+- **Where a planned case goes**: `skills/_shared/test-design/append-vs-new.md` — append to an existing test file or create a new one (append-by-default rule).

@@ -322,7 +322,7 @@ if require_file "$WRITE_CODE_SKILL"; then
         else
             fail "r. WCD-2: 'ON'/'ERROR' verdicts do not both route to AskUserQuestion — possible fail-open"
         fi
-        # A copy-paste slip from write-tests/SKILL.md's near-identical WT-4 gate
+        # A copy-paste slip from write-tests/SKILL.md's near-identical WT-5 gate
         # (which branches on GATE_CONFIRM_TESTS) would still pass every check
         # above — pin the exact gate key WCD-2 branches on, and that its sibling
         # gate key never leaks into this section.
@@ -342,7 +342,7 @@ fi
 # ---------------------------------------------------------------------------
 # t. WCD-3 consumes the write_code-specific session-facts keys, not the
 #    write-tests sibling's keys (a wrong-key copy-paste from write-tests/
-#    SKILL.md's WT-5 would still pass every prior check in this file).
+#    SKILL.md's WT-6 would still pass every prior check in this file).
 # ---------------------------------------------------------------------------
 echo "=== t. WCD-3 consumes COMPLEXITY_LEVEL_write_code / COMPLEXITY_SIGNALS ==="
 if require_file "$WRITE_CODE_SKILL"; then

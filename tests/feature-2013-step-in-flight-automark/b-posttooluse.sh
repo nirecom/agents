@@ -65,11 +65,11 @@ _setup_b4() { settle_through "$2" "$3" workflow_init clarify_intent research out
 run_B4() { _expect_marked B4 "Skill dispatch marks the current step (review_tests)" b4 Skill review_tests _setup_b4; }
 
 # B5 is the write_tests row, and it dispatches via `Agent` because that is what
-# the real WT-6 procedure uses. Testing this step through `Task` alone would
+# the real WT-7 procedure uses. Testing this step through `Task` alone would
 # leave the actual production path — the one #2013 was reported against —
 # unexercised for the step where a stalled dispatch is most expensive (#1979).
 _setup_b5() { settle_through "$2" "$3" workflow_init clarify_intent research outline detail branching_complete; }
-run_B5() { _expect_marked B5 "Agent dispatch during write_tests marks write_tests (the real WT-6 dispatch path)" b5 Agent write_tests _setup_b5; }
+run_B5() { _expect_marked B5 "Agent dispatch during write_tests marks write_tests (the real WT-7 dispatch path)" b5 Agent write_tests _setup_b5; }
 
 # B5b: the same step through `Task`, kept as the supplementary row. Task is still
 # a registered dispatch tool, so it must behave identically — but it is the

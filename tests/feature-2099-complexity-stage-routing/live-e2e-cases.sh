@@ -166,7 +166,7 @@ $D2099E_ROWS
 EOF
 }
 
-# SKIPPED: the literal `Agent(... model: ...)` call at MDP-4 / WT-6 / WCD-4.
+# SKIPPED: the literal `Agent(... model: ...)` call at MDP-4 / WT-7 / WCD-4.
 # Because: Agent exists only inside a live Claude Code session and the three skills
 #   express the launch as prose. Even in THIS lane — a real `claude` process — the
 #   subagent's model reaches no argv, env, file or stdout a bash harness can read

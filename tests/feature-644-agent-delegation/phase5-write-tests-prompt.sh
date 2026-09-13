@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # phase5-write-tests-prompt.sh — GATED until Phase 5
 # After Phase 5: write-tests SKILL.md subagent prompt must include
-# structured fields: task_complexity_signals, source_files, planned_cases.
+# structured fields: task_complexity_signals, source_files, planned_cases,
+# test_destinations (the WT-5 append-vs-new routing carried into the dispatch).
 : "${FEATURE_644_PHASE:=0}"
 if [ "$FEATURE_644_PHASE" -lt 5 ]; then
   echo "SKIP: requires FEATURE_644_PHASE>=5 (currently $FEATURE_644_PHASE)" >&2; exit 77
@@ -16,7 +17,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
 [ -f "$SKILL" ] || { fail "$SKILL not found"; exit 1; }
 
-for field in task_complexity_signals source_files planned_cases; do
+for field in task_complexity_signals source_files planned_cases test_destinations; do
   if grep -q "$field" "$SKILL"; then
     pass "write-tests SKILL.md subagent prompt contains $field"
   else

@@ -33,7 +33,7 @@ d2099_read_step() {
 
 # The section stating that consumer's level→model mapping. For make-detail-plan it
 # is the read step itself; for the other two the read moved to WT-0 / WCD-0 while
-# the mapping stayed with the level step (WT-5 / WCD-3 — the derive CLI's section).
+# the mapping stayed with the level step (WT-6 / WCD-3 — the derive CLI's section).
 d2099_model_map_cli() {
     case "$1" in
         write-tests|write-code) echo "derive-complexity-level" ;;

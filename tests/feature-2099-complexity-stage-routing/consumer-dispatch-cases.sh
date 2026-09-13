@@ -19,7 +19,7 @@ d2099_doc_model_for() {
 }
 
 # d2099_dispatch_model <skill.md> <sid> <stage> — replays the consumer's MDP-3 /
-# WT-5 / WCD-3 decision procedure end to end and prints what it selected:
+# WT-6 / WCD-3 decision procedure end to end and prints what it selected:
 # a model name, or FALLBACK when the CLI answered NONE.
 d2099_dispatch_model() {
     local f="$1" sid="$2" stage="$3" out first lvl model
@@ -66,7 +66,7 @@ d2099_recorded_verdict_selects_model() {
     run_with_timeout node "$BIN_RECORD" --session "$sid_lo" --signals "S1-multi-file" >/dev/null 2>&1
     assert_eq "CD-2 MDP-3 dispatches sonnet from a recorded low (S1-multi-file, stage detail)" \
         "sonnet" "$(d2099_dispatch_model "$mdp" "$sid_lo" detail)"
-    assert_eq "CD-3 WT-5 dispatches sonnet from the SAME record (stage write_tests)" \
+    assert_eq "CD-3 WT-6 dispatches sonnet from the SAME record (stage write_tests)" \
         "sonnet" "$(d2099_dispatch_model "$wt" "$sid_lo" write_tests)"
     assert_eq "CD-4 WCD-3 dispatches opus from that same record (stage write_code) — the #2099 split" \
         "opus" "$(d2099_dispatch_model "$wcd" "$sid_lo" write_code)"
@@ -86,7 +86,7 @@ d2099_recorded_verdict_selects_model() {
     local sid_sec
     sid_sec=$(new_session cdsec)
     run_with_timeout node "$BIN_RECORD" --session "$sid_sec" --signals "S3-security" >/dev/null 2>&1
-    assert_eq "CD-7 WT-5 dispatches opus from a recorded high (S3-security)" \
+    assert_eq "CD-7 WT-6 dispatches opus from a recorded high (S3-security)" \
         "opus" "$(d2099_dispatch_model "$wt" "$sid_sec" write_tests)"
     assert_eq "CD-8 WCD-3 dispatches opus from the same high record" \
         "opus" "$(d2099_dispatch_model "$wcd" "$sid_sec" write_code)"
@@ -126,7 +126,7 @@ d2099_none_selects_fallback() {
             "FALLBACK" "$(d2099_dispatch_model "$f" "$sid" "$stage")"
 
         # The branch it lands in must be the documented one: read the rubric, then
-        # derive for THIS stage. Both are what MDP-3/WT-5/WCD-3 spell out.
+        # derive for THIS stage. Both are what MDP-3/WT-6/WCD-3 spell out.
         assert_eq "CD-12 $label: the fallback branch it lands in reads the rubric" "yes" \
             "$(d2099_has "$f" "judge-task-complexity.md")"
         assert_eq "CD-13 $label: ... and derives for its own stage" "yes" \

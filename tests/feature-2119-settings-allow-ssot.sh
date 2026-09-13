@@ -95,7 +95,7 @@ ROWS=0
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS_EXPECTED=635 # T3a 4 + T3b 23 + T46 10 + T4 33 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
+ROWS_EXPECTED=637 # T3a 4 + T3b 25 + T46 10 + T4 33 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
                    # + T7b 2 + T7c 2 + T11 4 + T12 3 + T25 6 + T13 15 + T14 24 + T15 6
                    # + T16 5 + T17 18 + T27 13 + T28 14 + T29 20 + T30 13 + T22 3
                    # + T23 39 + T31 187 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8

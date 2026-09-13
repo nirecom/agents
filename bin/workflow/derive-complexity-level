@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // bin/workflow/derive-complexity-level
-// Stateless per-stage level derivation (#2099) — fallback for MDP-3/WT-5/WCD-3
+// Stateless per-stage level derivation (#2099) — fallback for MDP-3/WT-6/WCD-3
 // when no recorded evaluation exists.
 //
 // Usage:

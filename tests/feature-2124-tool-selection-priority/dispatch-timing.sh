@@ -9,7 +9,7 @@
 STEP_MARKER_ERE='^(## |[A-Za-z][A-Za-z0-9]*-[0-9]+[a-z]*\.)'
 
 # The general-purpose dispatch block: the step that carries `mode: "default"`, from its own step
-# marker (`WCD-4.`, `WT-6.`, `## `…) down to the next marker. Both real sites put `mode:
+# marker (`WCD-4.`, `WT-7.`, `## `…) down to the next marker. Both real sites put `mode:
 # "default"` on the marker line itself, but walking backwards costs nothing and survives a site
 # that puts it a line or two into the step body.
 dispatch_block() { # <skill-file> -> the general-purpose dispatch block, or empty
@@ -78,7 +78,7 @@ u6_both_sites_updated() {
         assert_eq "U6[$id]: $label" "yes" "$(dispatch_timing_updated "$AGENTS_DIR/$file")"
     done <<'U6_CASES'
 write-code#skills/write-code/SKILL.md#WCD-4 orders the Read before the first Bash command AND before writing a file
-write-tests#skills/write-tests/SKILL.md#WT-6 orders the same Read on the same two triggers (CPR-ORTH)
+write-tests#skills/write-tests/SKILL.md#WT-7 orders the same Read on the same two triggers (CPR-ORTH)
 U6_CASES
 }
 
@@ -146,9 +146,9 @@ U7_CASES
 
 # U6c/U6d/U6e/U6f (#2140/#2141): the same dispatch-block extractor, pinning the write-code /
 # write-tests rule-Read additions that shipped alongside the shell-commands.md timing fix --
-# WCD-4 orders a Read of rules/ops.md (self-repair may run a destructive command); WT-6 orders
+# WCD-4 orders a Read of rules/ops.md (self-repair may run a destructive command); WT-7 orders
 # Reads of rules/coding.md and rules/test.md (the subagent writes test-file code and must know
-# both the language-convention hub and the test-design rules); WT-6 deliberately does NOT gain
+# both the language-convention hub and the test-design rules); WT-7 deliberately does NOT gain
 # rules/ops.md (approved decision C4 -- write-tests never runs a destructive command itself).
 dispatch_block_reads_rule() { # <skill-file> <rule-path> -> yes|no
     local blk hits
@@ -161,14 +161,14 @@ dispatch_block_reads_rule() { # <skill-file> <rule-path> -> yes|no
     printf '%s' "$(has_unnegated_line "$hits")"
 }
 
-u6cdef_wcd4_wt6_rule_reads() {
+u6cdef_wcd4_wt7_rule_reads() {
     assert_eq "U6c: WCD-4 orders a Read of rules/ops.md inside the dispatch block" \
         "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-code/SKILL.md" "rules/ops.md")"
-    assert_eq "U6d: WT-6 orders a Read of rules/coding.md inside the dispatch block" \
+    assert_eq "U6d: WT-7 orders a Read of rules/coding.md inside the dispatch block" \
         "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/coding.md")"
-    assert_eq "U6e: WT-6 orders a Read of rules/test.md inside the dispatch block" \
+    assert_eq "U6e: WT-7 orders a Read of rules/test.md inside the dispatch block" \
         "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/test.md")"
-    assert_eq "U6f: WT-6 carries NO rules/ops.md reference (pins the deliberate C4 omission)" \
+    assert_eq "U6f: WT-7 carries NO rules/ops.md reference (pins the deliberate C4 omission)" \
         "no" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/ops.md")"
 }
 
@@ -230,7 +230,7 @@ mixed#mixed#yes
 U6H_CASES
 }
 
-# U-AL (#2140/#2141 review finding C1): pins WT-6's A-layer language essence reference. A bare
+# U-AL (#2140/#2141 review finding C1): pins WT-7's A-layer language essence reference. A bare
 # whole-file substring check cannot tell "the applicability list, the referenced heading, and
 # the 'before the first Edit' timing all land INSIDE the dispatch block, on the SAME line" apart
 # from a stale mention sitting elsewhere in a 200-line SKILL.md -- same rationale as
@@ -282,7 +282,7 @@ u_al_a_layer_directive_pin() {
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
         if [ "$pos" = "real" ]; then
-            assert_eq "UAL[$id]: WT-6 dispatch block carries the A-layer applicability+heading+timing reference" \
+            assert_eq "UAL[$id]: WT-7 dispatch block carries the A-layer applicability+heading+timing reference" \
                 "$want" "$(dispatch_block_has_a_layer_ref "$AGENTS_DIR/skills/write-tests/SKILL.md")"
             continue
         fi
@@ -379,7 +379,7 @@ U6I_REAL_CASES
 
 u6_both_sites_updated
 u7_orth_negative_control
-u6cdef_wcd4_wt6_rule_reads
+u6cdef_wcd4_wt7_rule_reads
 u6g_rule_reference_position_control
 u6h_timing_negation_control
 u_al_a_layer_directive_pin

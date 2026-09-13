@@ -38,7 +38,7 @@ Two shapes exist. **Named dispatch** sets `subagent_type` to an agent backed by 
 bodies verbatim, exactly as the main conversation does. **General-purpose dispatch**
 omits `subagent_type` and runs with `mode: "default"`; it does not.
 
-`skills/write-code/SKILL.md` (WCD-4) and `skills/write-tests/SKILL.md` (WT-6) are the only
+`skills/write-code/SKILL.md` (WCD-4) and `skills/write-tests/SKILL.md` (WT-7) are the only
 general-purpose dispatch sites in the repo. Writing code and writing tests need an
 iterative Edit-plus-Bash self-repair loop over existing files. Nothing about the named-agent
 shape prevents granting `Edit` — it is a configuration choice, not a platform limit — but no
@@ -80,16 +80,16 @@ reusing the same pattern general-purpose dispatch already relies on.
 Concretely: `skills/review-tests/SKILL.md` carries that `rules/shell-commands.md` directive at
 the top of its `## Procedure`, ahead of RT-0, and `skills/refactor-prompts/SKILL.md` carries it
 in step 2, ahead of the command substitution that step issues. The same pass closed two gaps on
-the general-purpose sites — WCD-4 gained a Read of `rules/ops.md`, and WT-6 gained Reads of the
+the general-purpose sites — WCD-4 gained a Read of `rules/ops.md`, and WT-7 gained Reads of the
 `rules/coding.md` hub and of `rules/test.md`.
 
-`rules/ops.md` was deliberately **not** added to WT-6. The filter is action-triggered, not
+`rules/ops.md` was deliberately **not** added to WT-7. The filter is action-triggered, not
 symmetric: write-code already acknowledges that ops.md applies inside WCD-4's self-repair loop,
-whereas WT-6's procedure names no action ops.md governs and has no counterpart to that
+whereas WT-7's procedure names no action ops.md governs and has no counterpart to that
 acknowledgement. Adding it on symmetry alone would not pass the filter.
 
 The five remaining unconditional rules — `core-principles`, `git`, `stop-guard-exemptions`,
-`supervisor-reporting`, `workflow-off` — were likewise not added to WCD-4 or WT-6. They govern
+`supervisor-reporting`, `workflow-off` — were likewise not added to WCD-4 or WT-7. They govern
 the parent orchestrator's own conduct, and that responsibility stays with the orchestrator.
 
 The rest of the fork population was inventoried and is out of scope. The other 14

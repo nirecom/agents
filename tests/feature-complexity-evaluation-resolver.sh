@@ -7,7 +7,7 @@
 #   read accessors; bin/workflow/{record,read}-complexity-evaluation wrap them for SKILL.md.
 # Nothing here is skippable: lib.sh asserts the required API/CLI surface (CE-REQ-1/2) and
 #   every case runs unconditionally, so pre-impl the suite reports FAILs, not SKIPs (R3-C7).
-# L3 gap: no real orchestrator-driven flow across CI-C1b/MDP-3/WCD-3/WT-5; the sibling
+# L3 gap: no real orchestrator-driven flow across CI-C1b/MDP-3/WCD-3/WT-6; the sibling
 #   static reader-ordering suites mitigate it.
 
 set -uo pipefail

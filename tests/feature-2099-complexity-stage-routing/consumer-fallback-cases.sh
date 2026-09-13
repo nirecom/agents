@@ -26,7 +26,7 @@ d2099cf_unparseable_token() {
 # One consumer's whole fallback, driven by the documents under test:
 #   judgment prose -> extraction -> the skill's own derive command -> level
 # The sibling suites hand signal ids straight to each documented command, so the
-# half of MDP-3 / WT-5 / WCD-3 that runs when nothing was persisted stays untested:
+# half of MDP-3 / WT-6 / WCD-3 that runs when nothing was persisted stays untested:
 # the ids the skill wrote as PROSE must become a `--signals` argument. Running
 # that text step for real is what stops an unparseable judgment from reading as
 # "zero signals" — which routes LOW, the cheap model on a job nobody sized.
@@ -230,7 +230,7 @@ EOF
 # label comes from the rubric (CF-1), and the corpus below is mutated from the
 # rubric's OWN example line rather than hand-written. The third — executing the
 # skill's extraction COMMAND — is only possible if a skill documents one, so CF-6
-# asserts the premise: MDP-3/WT-5/WCD-3 describe the step in prose. The moment one
+# asserts the premise: MDP-3/WT-6/WCD-3 describe the step in prose. The moment one
 # grows a literal grep/sed/cut/awk pipeline over SIGNALS, this suite must execute
 # THAT line instead of the mutation substitute, and this case says so out loud.
 D2099CF_EXTRACT_CMD_RE='(grep|sed|cut|awk|tr)[^`]*SIGNALS|SIGNALS[^`]*\|[[:space:]]*(grep|sed|cut|awk|tr)'

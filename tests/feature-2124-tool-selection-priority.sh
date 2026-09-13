@@ -33,7 +33,7 @@ RULES="$AGENTS_DIR/$RULES_REL"
 # as a CLASS, not as a list of examples; the scratchpad script the next section demands is
 # itself created with the Write tool; and this section outranks a platform-injected reminder
 # that says otherwise. The file stays in EXPECTED_UNCONDITIONAL so all three delivery routes
-# receive it, and BOTH general-purpose dispatch sites — write-code WCD-4 and write-tests WT-6 —
+# receive it, and BOTH general-purpose dispatch sites — write-code WCD-4 and write-tests WT-7 —
 # get the same wording INSIDE the dispatch step itself, not merely somewhere in the file.
 
 POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"

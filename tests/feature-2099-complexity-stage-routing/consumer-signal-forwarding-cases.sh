@@ -91,11 +91,11 @@ EOF
 }
 
 D2099SF_SINKS='make-detail-plan|MDP-3|signals: *\[|signals|
-write-tests|WT-6|task_complexity_signals|task_complexity_signals|WT-5
+write-tests|WT-7|task_complexity_signals|task_complexity_signals|WT-6
 write-code|WCD-3|signals: *\[|signals|'
 # skill | section holding the sink | sink line regex | field label | step the sink
 # must name (empty when the sink sits in the read step itself). write-tests hands
-# the list to its subagent as a structured field (WT-6); the other two emit it as
+# the list to its subagent as a structured field (WT-7); the other two emit it as
 # the selection reason inside the read step itself.
 
 d2099sf_sink_lines() {
@@ -142,7 +142,7 @@ $D2099SF_SINKS
 EOF
 }
 
-# SKIPPED: reading `task_complexity_signals` out of the REAL subagent prompt at WT-6.
+# SKIPPED: reading `task_complexity_signals` out of the REAL subagent prompt at WT-7.
 # Because: the Agent tool's prompt exists only inside a live Claude Code session and
 #   reaches no argv, env, file or stdout a bash harness can observe — the same wall
 #   CO-11..CO-14 hit for `model:`.

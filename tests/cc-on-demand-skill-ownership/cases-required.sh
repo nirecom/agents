@@ -178,7 +178,7 @@ esac
 # consumer belongs in the declaration, a row belongs here only once its issue has
 # shipped. github-issues.md/coding.md/ops.md carry full reader sets because #2037
 # widened them and #2140/#2141 added skills/write-tests/SKILL.md to coding.md's row --
-# WT-6 now writes test-file code, on the same explicit-Read footing WCD-4 stands on. ---
+# WT-7 now writes test-file code, on the same explicit-Read footing WCD-4 stands on. ---
 N5_FLOOR='rules/test.md|skills/write-tests/SKILL.md,skills/review-tests/SKILL.md,skills/run-tests/SKILL.md
 rules/docs.md|skills/update-docs/SKILL.md
 rules/github-issues.md|skills/issue-create/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/issue-reconcile/SKILL.md,skills/issue-close-migrated/SKILL.md,skills/clarify-intent/SKILL.md,skills/commit-push/SKILL.md,skills/worktree-end/SKILL.md,skills/workflow-init/SKILL.md,skills/sweep-issues/SKILL.md,skills/issue-setup/SKILL.md

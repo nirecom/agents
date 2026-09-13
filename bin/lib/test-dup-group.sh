@@ -27,6 +27,76 @@ tdg_escape_field() {
   printf '%s' "$s"
 }
 
+# tdg_unescape_field <escaped> — the inverse of tdg_escape_field, and its SSOT
+# partner: changing one without the other silently corrupts every decode. One
+# left-to-right scan branching on the character AFTER a `\`, because a
+# `${var//}` chain cannot tell `\\t` (backslash + literal t) from `\t` (TAB).
+# An unknown escape `\x` drops the backslash; a trailing lone `\` survives.
+# Also sets TDG_UNESCAPED so callers can read the value back without a command
+# substitution, which would eat trailing newlines.
+tdg_unescape_field() {
+  local s="${1-}" out="" i=0 n c d
+  n="${#s}"
+  while [[ "$i" -lt "$n" ]]; do
+    c="${s:i:1}"
+    if [[ "$c" != '\' ]]; then
+      out+="$c"
+      i=$((i + 1))
+      continue
+    fi
+    if [[ $((i + 1)) -ge "$n" ]]; then
+      out+='\'
+      i=$((i + 1))
+      continue
+    fi
+    d="${s:i+1:1}"
+    if [[ "$d" == '\' ]]; then out+='\'
+    elif [[ "$d" == 't' ]]; then out+=$'\t'
+    elif [[ "$d" == 'n' ]]; then out+=$'\n'
+    elif [[ "$d" == 'r' ]]; then out+=$'\r'
+    elif [[ "$d" == ',' ]]; then out+=','
+    else out+="$d"
+    fi
+    i=$((i + 2))
+  done
+  TDG_UNESCAPED="$out"
+  printf '%s' "$out"
+}
+
+# tdg_split_escaped_csv <escaped-csv> <array-name> — splits on UNESCAPED `,`
+# only, then decodes each element through tdg_unescape_field, into the named
+# array. Bash-3.2-compatible: writes via `eval` indirection instead of
+# `local -n` (namerefs are Bash-4.3+ and crash on macOS stock bash, #1486's
+# class of bug). The array-name argument is always a literal identifier at
+# every call site in this repo, never external input, so eval is safe here.
+# The reader half of the `,`-joined escaped element lists.
+tdg_split_escaped_csv() {
+  local s="${1-}"
+  local _tdg_out_name="${2:?tdg_split_escaped_csv: array name required}"
+  eval "$_tdg_out_name=()"
+  local cur="" i=0 n c
+  n="${#s}"
+  while [[ "$i" -lt "$n" ]]; do
+    c="${s:i:1}"
+    if [[ "$c" == '\' && $((i + 1)) -lt "$n" ]]; then
+      cur+="${s:i:2}"
+      i=$((i + 2))
+      continue
+    fi
+    if [[ "$c" == ',' ]]; then
+      tdg_unescape_field "$cur" >/dev/null
+      eval "$_tdg_out_name+=(\"\$TDG_UNESCAPED\")"
+      cur=""
+      i=$((i + 1))
+      continue
+    fi
+    cur+="$c"
+    i=$((i + 1))
+  done
+  tdg_unescape_field "$cur" >/dev/null
+  eval "$_tdg_out_name+=(\"\$TDG_UNESCAPED\")"
+}
+
 # tdg_classify <file> — thin wrapper over the shared parser. Prints and sets
 # TDG_VERDICT to ok | no_tests_header | duplicate_header | late_header |
 # malformed_header. Priority is duplicate > late > malformed so one file is

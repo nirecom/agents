@@ -172,7 +172,7 @@ EOF
 
 # CFF-12: SOURCE GAP, deliberately not asserted as a contract.
 d2099ff_wt6_signals_line_gap() {
-    skip "CFF-12 SOURCE GAP: skills/write-tests/SKILL.md WT-6 requires \`task_complexity_signals\`: the \`signals=\` line from WT-5 verbatim, but WT-5's fallback branch runs derive-complexity-level, which emits level= only (CFF-2). On the NONE path the field has no documented producer"
+    skip "CFF-12 SOURCE GAP: skills/write-tests/SKILL.md WT-7 requires \`task_complexity_signals\`: the \`signals=\` line from WT-6 verbatim, but WT-6's fallback branch runs derive-complexity-level, which emits level= only (CFF-2). On the NONE path the field has no documented producer"
 }
 
 d2099ff_fallback_entry_gate

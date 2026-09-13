@@ -2,31 +2,11 @@
 # tests/feature-1721-subagent-concurrency-refs.sh
 # Tests: skills/_shared/subagent-concurrency.md, skills/workflow-init/SKILL.md, skills/review-code-security/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/_shared/codex-review-loop.md, skills/write-tests/SKILL.md, skills/review-tests/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md
 # Tags: subagent-concurrency, skill-orchestration, static, regression, TL1, scope:issue-specific
-#
-# Issue #1721 — subagent dispatch concurrency policy is stated once in
-# skills/_shared/subagent-concurrency.md (SC-P parallel / SC-S serial /
-# SC-W wait) and referenced from each dispatch site instead of being
-# re-explained inline.
-#
-# The regression that matters is the SYMMETRIC PAIR: worktree-end WE-9 and
-# issue-close-finalize's initial delegation pass are the same shape of
-# serial-by-dependency dispatch. Annotating one and forgetting the other is
-# exactly the #1721 defect, so either span failing fails the whole run.
-# A second axis is SYNTAX DRIFT: the annotation must be the exact literal
-# `Serial by dependency (SC-S):` — a variant like `(SC-S, path)` must FAIL.
-#
-# TL1 (static): the subject is prompt text, read directly off disk. No live
-# LLM call, no runtime behavior.
-#
-# TL3 gap (what this test does NOT catch):
-# - An orchestrator that reads the SC-P/SC-S annotations yet still dispatches
-#   independent subagents sequentially across turns at runtime.
-# Closest-to-action mitigation: manual review during /review-code of every new or
-# edited SKILL.md dispatch block against the SC-P rule in
-# skills/_shared/subagent-concurrency.md.
-#
-# Expected to FAIL until the #1721 write-code step creates
-# skills/_shared/subagent-concurrency.md and lands the references.
+# Issue #1721 — dispatch concurrency policy (SC-P parallel / SC-S serial / SC-W wait) is stated once in skills/_shared/subagent-concurrency.md and referenced from each dispatch site instead of re-explained inline.
+# Two regression axes: the SYMMETRIC PAIR (worktree-end WE-9 and issue-close-finalize's initial delegation pass are the same serial-by-dependency shape — annotating one and forgetting the other IS the #1721 defect, so either span failing fails the whole run) and SYNTAX DRIFT (the annotation must be the exact literal `Serial by dependency (SC-S):`; a variant like `(SC-S, path)` must FAIL).
+# TL1 (static): the subject is prompt text, read directly off disk — no live LLM call, no runtime behavior.
+# TL3 gap (what this test does NOT catch): an orchestrator that reads the SC-P/SC-S annotations yet still dispatches independent subagents sequentially across turns at runtime.
+# Closest-to-action mitigation: manual review during /review-code of every new or edited SKILL.md dispatch block against the SC-P rule in skills/_shared/subagent-concurrency.md.
 
 set -u
 
@@ -363,17 +343,8 @@ TABLE
 }
 
 # Line-scoped filter over `grep -rnF` output ("path:lineno:content").
-# Deliberately NOT a by-path exclusion for subagent-concurrency.md: that file
-# explains the annotation syntax, but its explanatory lines quote the VALID
-# colon-terminated literal, so stripping that literal SUBSTRING per line (not
-# excluding the whole line) is enough. A deviant form anywhere in that same
-# file — an accidental typo elsewhere in its prose, a counter-example written
-# without a fenced marker, or even a deviant form on the SAME physical line as
-# a valid quote — is still reported: the valid-literal substring is stripped
-# from the line first, and only if nothing loose-form-shaped survives that
-# strip is the line treated as clean. Only this test file is excluded
-# wholesale: it must contain deviant fixtures by construction (the mutation
-# probes below).
+# Deliberately NOT a by-path exclusion for subagent-concurrency.md: its explanatory lines quote the VALID colon-terminated literal, so stripping that literal SUBSTRING per line (rather than excluding the whole line) is enough, and a deviant form anywhere in that same file — a typo elsewhere in its prose, an unfenced counter-example, even a deviant form on the SAME physical line as a valid quote — is still reported: the valid literal is stripped first, and the line counts as clean only when nothing loose-form-shaped survives that strip.
+# Only this test file is excluded wholesale: it must contain deviant fixtures by construction (the mutation probes below).
 drift_filter() {
     local drift_line drift_stripped
     grep -vF 'feature-1721-subagent-concurrency-refs.sh' | while IFS= read -r drift_line; do
@@ -500,7 +471,7 @@ group_na_skills_no_scp() {
 # ===========================================================================
 # rel | label | start-prefix | end-prefix | max-lines   ("-" span = whole file)
 WAIT_TABLE="skills/_shared/codex-review-loop.md|E1-codex-loop|-|-|0
-skills/write-tests/SKILL.md|E2-WT-6|WT-6.|WT-7.|30"
+skills/write-tests/SKILL.md|E2-WT-7|WT-7.|WT-8.|30"
 
 # Alphanumeric characters required on the SC-W line besides the token itself.
 SC_W_MIN_DETAIL=20

@@ -30,3 +30,4 @@ bin/detect-non-github.sh
 bin/workflow/read-session-facts
 bin/worktree-notes-append.js
 skills/issue-create/scripts/make-empty-verdict.sh
+bin/find-tests-for-source.sh
