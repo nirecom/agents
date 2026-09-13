@@ -43,6 +43,81 @@ direction from `RUN_TL3`'s fail-safe-ON convention.
 Priority at init time: `--remote-url` CLI arg > `.env` > built-in default.
 Changing `.env` after init requires re-running `session-sync-init.sh` / `session-sync-init.ps1`.
 
+## Init-time trust boundary
+
+The initializers accept a remote URL from configuration and, when an earlier install
+left a git root directly in `~/.claude/`, move that repository down into
+`~/.claude/projects/`. Both are privileged acts on untrusted input: a crafted URL is
+code execution (git's `ext::`/`fd::` remote helpers run a shell), and a
+provenance-free move is silent data loss. Three gates therefore run, in this order,
+**before any filesystem write** — a refusal must leave the machine byte-identical,
+including no freshly created `projects/` directory.
+
+**1. Remote-URL allowlist.** Only `https://`, `ssh://`, `git://` with a syntactically
+valid host, and the SCP-like `user@host:path` form are accepted. Everything else is
+refused and the run aborts: local paths and `file://`, remote-helper schemes
+(`ext::`, `fd::`), other schemes (`http://`, `ftp://`), malformed authorities, and
+any value starting with `-` (option injection into the `git remote` command line).
+The pattern is written in POSIX ERE so that the bash and PowerShell ports stay
+literally identical; `tests/fixtures/session-sync-remote-url-patterns.txt` is the
+shared contract both implementations are checked against. On refusal an existing
+`origin` is left untouched — a bad config cannot repoint a working install.
+Credentials embedded in an accepted URL are redacted (`user:***@host`) in all output.
+
+**2. Path containment.** `$CLAUDE_DIR` and `$PROJECTS_DIR` are resolved to real paths
+(symlinks, junctions and `..` fully expanded) by `_resolve_realpath` /
+`Resolve-RealPath`, then checked in two stages: the resolved claude dir must lie
+inside the resolved `$HOME` (equal to `$HOME` is allowed), and the resolved projects
+dir must lie strictly inside **the resolved claude dir** — not merely inside `$HOME`.
+Checking only against `$HOME` was a real bypass: a `projects` symlink pointing at an
+unrelated repo elsewhere under `$HOME` would have passed. Resolving to the same path
+as the claude dir is also refused. Comparison is separator-aware, so a sibling whose
+name merely shares the prefix (`<home>-evil`) is outside.
+
+**3. Migration provenance.** Evaluated only when `~/.claude/.git` exists — a fresh
+install never sees it. The installer asks: is the repository about to be moved the
+one this configuration is for? The expected origin is taken from, in priority order:
+
+| # | Source | Notes |
+|---|---|---|
+| 1 | `--expected-origin` / `-ExpectedOrigin` | Explicit operator intent; outranks everything, including a conflicting `--remote-url` |
+| 2 | the resolved, allowlist-validated remote URL (`--remote-url` / `.env` / built-in default) | Skipped entirely under `--no-remote` / `-NoRemote` |
+| 3 | — | Nothing to compare against → **refuse** |
+
+The existing repository's `origin` is then read and must match. Absent origin,
+mismatched origin, or no expected value at all are all refusals — fail-closed, so an
+unrecognized repository is never moved, only reported.
+
+**Migration is transactional.** The pre-#1773 code did an unconditional `rm -rf` of
+the destination. It is now a three-phase move (stage the incumbents aside, move the
+incoming repository in under temporary names, promote) with rollback on any failure,
+and a Phase 0 that aborts if staging names are already present rather than writing
+over evidence. Staging uses `.old.<pid>` / `.migrate-tmp.<pid>` suffixes — deliberately
+not the repo-wide `.bak` convention, because a `.bak` left in `~/.claude/` is exactly
+the git-shaped residue this issue is about; the success path leaves bare final names
+only. Renames are judged solely by post-condition (source gone, destination present),
+never by the mover's exit code: GNU `mv -n` returns 0 while silently declining a
+collision.
+
+**Colliding destination must prove itself too.** Migration only ever promotes
+*into* `$PROJECTS_DIR`, so a pre-existing `$PROJECTS_DIR/.git` is itself a
+destination the installer cannot trust on sight. The same provenance check from
+gate 3 applies to it: its `origin` must be non-empty and match the expected
+origin, or the run refuses and leaves both repositories byte-identical. An
+origin-less destination used to slip through — non-empty-and-mismatched was
+checked, but empty was not — silently promoting an unrelated repository over it.
+
+**Restore after migration is scoped to `projects/`.** The pre-migration root
+tracked paths relative to `$CLAUDE_DIR` (typically `projects/<enc>/session.jsonl`
+plus a couple of top-level dotfiles). After `.git` moves under `$PROJECTS_DIR`,
+`_restore_missing_tracked` / `Restore-MissingTracked` re-checks out any tracked
+path `git status` still shows missing — using `$CLAUDE_DIR`, not `$PROJECTS_DIR`,
+as the git work-tree, so a path like `projects/<enc>/session.jsonl` lands back at
+its real location instead of one level too deep. The restore is pathspec-limited
+to `projects/`: top-level tracked files from the old root are deliberately left
+alone rather than relocated, since only the `projects/` subtree is user session
+data worth preserving across the move.
+
 **Sync scope**:
 
 | Path | Synced | Reason |

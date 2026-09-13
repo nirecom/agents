@@ -29,7 +29,9 @@ PLANS_PROJECTS="$PLANS_CLAUDE/projects"
 git init --bare "$PLANS_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_CLAUDE" --remote-url "$PLANS_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_PROJECTS" remote add origin "$PLANS_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_PROJECTS"
 git -C "$PLANS_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -59,7 +61,9 @@ PLANS_FILTER_SRC="$TMPDIR_BASE/plans-filter-src"
 git init --bare "$PLANS_FILTER_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_FILTER_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_FILTER_CLAUDE" --remote-url "$PLANS_FILTER_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_FILTER_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_FILTER_PROJECTS" remote add origin "$PLANS_FILTER_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_FILTER_PROJECTS"
 git -C "$PLANS_FILTER_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_FILTER_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -88,7 +92,9 @@ PLANS_NOPLANS_PROJECTS="$PLANS_NOPLANS_CLAUDE/projects"
 git init --bare "$PLANS_NOPLANS_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_NOPLANS_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_NOPLANS_CLAUDE" --remote-url "$PLANS_NOPLANS_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_NOPLANS_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_NOPLANS_PROJECTS" remote add origin "$PLANS_NOPLANS_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_NOPLANS_PROJECTS"
 git -C "$PLANS_NOPLANS_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_NOPLANS_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -188,7 +194,9 @@ PLANS_PULL3_LOCAL="$TMPDIR_BASE/plans-pull3-local"
 git init --bare "$PLANS_PULL3_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_PULL3_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_PULL3_CLAUDE" --remote-url "$PLANS_PULL3_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_PULL3_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_PULL3_PROJECTS" remote add origin "$PLANS_PULL3_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_PULL3_PROJECTS"
 git -C "$PLANS_PULL3_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_PULL3_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -228,7 +236,9 @@ git -C "$PLANS_RESET_SEED" commit -m "seed plans" >/dev/null 2>&1
 git -C "$PLANS_RESET_SEED" push -u origin main >/dev/null 2>&1
 mkdir -p "$PLANS_RESET_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_RESET_CLAUDE" --remote-url "$PLANS_RESET_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_RESET_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_RESET_PROJECTS" remote add origin "$PLANS_RESET_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_RESET_PROJECTS"
 output=$(WORKFLOW_PLANS_DIR="$PLANS_RESET_LOCAL" "$DOTFILES_DIR/bin/session-sync.sh" \
     reset --claude-dir "$PLANS_RESET_CLAUDE" 2>&1) || true
@@ -247,7 +257,9 @@ PLANS_COMMIT_SRC="$TMPDIR_BASE/plans-commit-src"
 git init --bare "$PLANS_COMMIT_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_COMMIT_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_COMMIT_CLAUDE" --remote-url "$PLANS_COMMIT_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_COMMIT_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_COMMIT_PROJECTS" remote add origin "$PLANS_COMMIT_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_COMMIT_PROJECTS"
 git -C "$PLANS_COMMIT_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_COMMIT_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -272,7 +284,9 @@ PLANS_IDEM_SRC="$TMPDIR_BASE/plans-idem-src"
 git init --bare "$PLANS_IDEM_REMOTE" >/dev/null 2>&1
 mkdir -p "$PLANS_IDEM_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$PLANS_IDEM_CLAUDE" --remote-url "$PLANS_IDEM_REMOTE" >/dev/null 2>&1
+    --claude-dir "$PLANS_IDEM_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$PLANS_IDEM_PROJECTS" remote add origin "$PLANS_IDEM_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$PLANS_IDEM_PROJECTS"
 git -C "$PLANS_IDEM_PROJECTS" add -A >/dev/null 2>&1
 git -C "$PLANS_IDEM_PROJECTS" commit -m "initial" >/dev/null 2>&1
@@ -306,7 +320,9 @@ WPD_CUSTOM="$TMPDIR_BASE/test-custom-plans"
 git init --bare "$WPD_REMOTE" >/dev/null 2>&1
 mkdir -p "$WPD_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$WPD_CLAUDE" --remote-url "$WPD_REMOTE" >/dev/null 2>&1
+    --claude-dir "$WPD_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$WPD_PROJECTS" remote add origin "$WPD_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$WPD_PROJECTS"
 git -C "$WPD_PROJECTS" add -A >/dev/null 2>&1
 git -C "$WPD_PROJECTS" commit -m "initial" >/dev/null 2>&1

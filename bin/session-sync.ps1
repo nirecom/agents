@@ -92,6 +92,7 @@ switch ($Action) {
         # Retry loop: handles simultaneous push race (e.g. Windows + macOS committing at the same time)
         $maxRetries = 3
         $pushExitCode = 1
+        $pushFailReason = ""
         for ($retry = 0; $retry -lt $maxRetries; $retry++) {
             $ErrorActionPreference = "Continue"
             # Commit any new session files written since the last commit
@@ -102,7 +103,21 @@ switch ($Action) {
             }
             # Abort any rebase left stuck by a previous failed attempt
             git -C $ProjectsDir rebase --abort 2>&1 | Out-Null
+            # Same bug class as the #1757 pull fix: an unchecked pull lets a failed
+            # or half-finished rebase be pushed over the remote. A remote that has
+            # no `main` yet is the one legitimate failure — the first publish —
+            # so the abort is conditioned on the branch actually existing.
             git -C $ProjectsDir pull --rebase --autostash -X theirs origin main 2>&1 | Out-Null
+            $pullExitCode = $LASTEXITCODE
+            if ($pullExitCode -ne 0) {
+                $remoteHeads = git -C $ProjectsDir ls-remote --heads origin main 2>&1 | Out-String
+                if ($LASTEXITCODE -eq 0 -and $remoteHeads -match 'refs/heads/main') {
+                    $pushExitCode = $pullExitCode
+                    $pushFailReason = "git pull --rebase failed with exit code $pullExitCode; push aborted"
+                    $ErrorActionPreference = "Stop"
+                    break
+                }
+            }
             git -C $ProjectsDir push -u origin main 2>&1 | Out-Null
             $pushExitCode = $LASTEXITCODE
             $ErrorActionPreference = "Stop"
@@ -112,12 +127,27 @@ switch ($Action) {
             if ($Quiet) { Show-SessionToast "push complete" }
             else { Write-Host "Pushed session data." -ForegroundColor Green }
         } else {
+            if (-not $pushFailReason) { $pushFailReason = "git push failed with exit code $pushExitCode" }
             if ($Quiet) { Show-SessionToast "push failed (exit code $pushExitCode)" }
-            else { throw "git push failed with exit code $pushExitCode" }
+            else { throw $pushFailReason }
         }
     }
     "pull" {
-        git -C $ProjectsDir pull --rebase 2>&1 | Where-Object { $_ -notmatch '^\s*(create|delete) mode ' }
+        # git writes progress to stderr even on success, so a Stop preference would
+        # abort a healthy pull (#1757). Judge the pull by its exit code only, and
+        # do it before any merge work: a failed pull must never reach the merges.
+        $pullExitCode = 1
+        $_prevEap = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            git -C $ProjectsDir pull --rebase 2>&1 | Where-Object { $_ -notmatch '^\s*(create|delete) mode ' }
+            $pullExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $_prevEap
+        }
+        if ($pullExitCode -ne 0) {
+            throw "git pull failed with exit code $pullExitCode"
+        }
         # Merge remote history with local (dedup, preserve order)
         $syncHistory = Join-Path $ProjectsDir ".history.jsonl"
         $localHistory = Join-Path $ClaudeDir "history.jsonl"
@@ -141,9 +171,22 @@ switch ($Action) {
         git -C $ProjectsDir status
     }
     "reset" {
-        $ErrorActionPreference = "Continue"
-        git -C $ProjectsDir fetch origin main 2>&1 | Out-Null
-        $ErrorActionPreference = "Stop"
+        # Same bug class as the #1757 pull fix: git writes progress to stderr even
+        # on success, so the fetch is judged by its exit code only — and judged at
+        # all, because `reset --hard` is destructive and a silent fetch failure
+        # would reset onto a stale origin/main.
+        $fetchExitCode = 1
+        $_prevEap = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            git -C $ProjectsDir fetch origin main 2>&1 | Out-Null
+            $fetchExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $_prevEap
+        }
+        if ($fetchExitCode -ne 0) {
+            throw "git fetch failed with exit code $fetchExitCode"
+        }
         git -C $ProjectsDir reset --hard origin/main
         # Restore mtime from JSONL timestamps (git doesn't preserve mtime)
         Get-ChildItem -Path $ProjectsDir -Recurse -Filter "*.jsonl" | Where-Object { $_.Name -ne ".history.jsonl" } | ForEach-Object {

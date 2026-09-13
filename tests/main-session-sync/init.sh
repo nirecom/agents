@@ -5,9 +5,12 @@
 echo "=== session-sync-init.sh tests ==="
 
 # --- Normal: Fresh initialization ---
+# The shared fixture origin is attached test-side (#1773): $FAKE_REMOTE is a
+# scheme-less local path, which the remote-URL allowlist now refuses. Every
+# later part reuses this origin, so the `git remote add` below is load-bearing.
 echo "[init] Fresh initialization"
 output=$("$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$FAKE_CLAUDE" --remote-url "$FAKE_REMOTE" 2>&1)
+    --claude-dir "$FAKE_CLAUDE" --no-remote 2>&1)
 if [ -d "$FAKE_PROJECTS/.git" ]; then
     pass "git repo created in projects dir"
 else
@@ -20,14 +23,15 @@ else
     fail ".gitattributes not created"
 fi
 
-remote_url=$(git -C "$FAKE_PROJECTS" remote get-url origin 2>/dev/null)
-# Compare in normalized form: on Windows/MSYS the shell hands git an /tmp/... path
-# but git stores and echoes back the native C:/Users/... form. See _norm_path().
-if [ "$(_norm_path "$remote_url")" = "$(_norm_path "$FAKE_REMOTE")" ]; then
-    pass "remote set correctly"
+# Subject behaviour: --no-remote must leave origin unset. Asserted before the
+# fixture origin is attached, and only once the repo is known to exist so an
+# aborted init cannot read as an empty remote list.
+if [ -d "$FAKE_PROJECTS/.git" ] && [ -z "$(git -C "$FAKE_PROJECTS" remote 2>/dev/null)" ]; then
+    pass "--no-remote leaves origin unset"
 else
-    fail "remote not set correctly (got: $remote_url)"
+    fail "--no-remote set an origin, or the repo was never created"
 fi
+git -C "$FAKE_PROJECTS" remote add origin "$FAKE_REMOTE" >/dev/null 2>&1
 
 has_commits=$(git -C "$FAKE_PROJECTS" rev-list --count HEAD 2>/dev/null || echo 0)
 if [ "$has_commits" -eq 0 ]; then
@@ -39,45 +43,46 @@ fi
 # --- Edge: Idempotent re-run ---
 echo "[init] Idempotent re-run"
 output=$("$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$FAKE_CLAUDE" --remote-url "$FAKE_REMOTE" 2>&1)
+    --claude-dir "$FAKE_CLAUDE" --no-remote 2>&1)
 if [ -d "$FAKE_PROJECTS/.git" ]; then
     pass "re-run keeps repo intact"
 else
     fail "re-run broke the repo"
 fi
+# --no-remote skips the remote block entirely, so the fixture origin survives.
+if [ -n "$(git -C "$FAKE_PROJECTS" remote 2>/dev/null)" ]; then
+    pass "re-run with --no-remote leaves the existing origin alone"
+else
+    fail "re-run with --no-remote dropped the existing origin"
+fi
 
 # --- Edge: Remote already set, updates URL ---
+# String-comparison-only case: no fetch happens here, so an allowlist-compliant
+# literal replaces the bare local path and exercises the real remote set-url
+# path through the script (#1773).
 echo "[init] Remote URL update"
-NEW_REMOTE="$TMPDIR_BASE/remote2.git"
-git init --bare "$NEW_REMOTE" >/dev/null 2>&1
+NEW_REMOTE_URL="https://example.invalid/remote2.git"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$FAKE_CLAUDE" --remote-url "$NEW_REMOTE" >/dev/null 2>&1
+    --claude-dir "$FAKE_CLAUDE" --remote-url "$NEW_REMOTE_URL" >/dev/null 2>&1
 updated_url=$(git -C "$FAKE_PROJECTS" remote get-url origin 2>/dev/null)
-if [ "$(_norm_path "$updated_url")" = "$(_norm_path "$NEW_REMOTE")" ]; then
+if [ "$updated_url" = "$NEW_REMOTE_URL" ]; then
     pass "remote URL updated on re-run"
 else
     fail "remote URL not updated (got: $updated_url)"
 fi
-# Restore original remote for subsequent tests
-"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$FAKE_CLAUDE" --remote-url "$FAKE_REMOTE" >/dev/null 2>&1
-
-# --- Edge: Old .git in ~/.claude/ gets migrated ---
-echo "[init] Migration of old git root"
-MIGRATE_HOME="$TMPDIR_BASE/migrate"
-MIGRATE_CLAUDE="$MIGRATE_HOME/.claude"
-mkdir -p "$MIGRATE_CLAUDE/projects"
-git init "$MIGRATE_CLAUDE" >/dev/null 2>&1
-touch "$MIGRATE_CLAUDE/.gitignore"
-MIGRATE_REMOTE="$TMPDIR_BASE/migrate-remote.git"
-git init --bare "$MIGRATE_REMOTE" >/dev/null 2>&1
-"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$MIGRATE_CLAUDE" --remote-url "$MIGRATE_REMOTE" >/dev/null 2>&1
-if [ ! -d "$MIGRATE_CLAUDE/.git" ] && [ -d "$MIGRATE_CLAUDE/projects/.git" ]; then
-    pass "old .git migrated from claude dir to projects dir"
+# Restore the fixture origin directly: the script can no longer be handed the
+# scheme-less local path that the rest of the suite pushes and pulls against.
+git -C "$FAKE_PROJECTS" remote set-url origin "$FAKE_REMOTE" >/dev/null 2>&1
+restored_url=$(git -C "$FAKE_PROJECTS" remote get-url origin 2>/dev/null)
+if [ "$(_norm_path "$restored_url")" = "$(_norm_path "$FAKE_REMOTE")" ]; then
+    pass "shared fixture origin restored for the later parts"
 else
-    fail "migration did not work"
+    fail "shared fixture origin NOT restored (got: $restored_url)"
 fi
+
+# The old "migrates old git root" case is gone: it created the old repo without
+# an origin, which the provenance check now refuses by design. Migration is
+# covered by the provenance matrix in tests/main-session-sync/security.sh.
 
 # --- Normal: --no-remote flag ---
 echo "[init] --no-remote flag"
@@ -117,10 +122,20 @@ case "$hooks_path" in
         fail "core.hooksPath not disabled (got: $hooks_path)" ;;
 esac
 
-# --- Error: No git installed (skip if we can't fake it) ---
+# --- Error: No git installed ---
+# PATH is narrowed to a shim directory that mirrors the coreutils the script
+# needs but deliberately omits git. A wholesale PATH="/nonexistent" would also
+# strip realpath/dirname/readlink, which the --claude-dir boundary check (#1773)
+# runs BEFORE the git probe — the failure would then say nothing about git.
 echo "[init] No git warning"
-output=$(PATH="/usr/bin/nonexistent" "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$TMPDIR_BASE/nogit" --remote-url "$FAKE_REMOTE" 2>&1) || true
+NOGIT_BIN="$TMPDIR_BASE/nogit-bin"
+mkdir -p "$NOGIT_BIN"
+for _cmd in sh env dirname basename realpath readlink pwd mkdir rm mv cat grep head cut tr printf ls test expr sed; do
+    _src=$(command -v "$_cmd" 2>/dev/null || true)
+    [ -n "$_src" ] && ln -sf "$_src" "$NOGIT_BIN/$_cmd" 2>/dev/null || true
+done
+output=$(PATH="$NOGIT_BIN" "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$TMPDIR_BASE/nogit" --no-remote 2>&1) || true
 if echo "$output" | grep -qi "git.*required\|git.*not found"; then
     pass "warns when git is not available"
 else

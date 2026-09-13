@@ -1,0 +1,19 @@
+# Canonical remote-URL allowlist patterns for session-sync-init.sh / .ps1 (#1773).
+#
+# One entry per line, TAB-separated: <SCHEME|SCP><TAB><regex>.
+# Lines starting with `#` and blank lines are ignored.
+#
+# A URL is allowed when it matches SCHEME **or** SCP; otherwise it is refused.
+#
+# Both patterns must behave identically under POSIX ERE (bash `[[ =~ ]]`) and
+# .NET regex (PowerShell `-match`), so neither may use a non-capturing group
+# `(?:...)`, a lookaround, or any other non-ERE construct. Capturing groups are
+# used wherever grouping is needed; the verdict never depends on a capture.
+#
+# These are the design's patterns (detail.md Section A2), pinned here so both
+# language suites can run the whole contrast table through their own engine and
+# prove the two agree — "the pattern string looks identical" is not evidence
+# that bash accepts it. The installers must implement these patterns, or an
+# equivalent form that returns the same verdict for every table row.
+SCHEME	^(https|ssh|git)://([^/@]+@)?(\[[0-9A-Fa-f:]*[0-9A-Fa-f][0-9A-Fa-f:]*\]|[A-Za-z0-9][A-Za-z0-9.-]*)(:[0-9]+)?(/.*)?$
+SCP	^[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*:[^:].*$

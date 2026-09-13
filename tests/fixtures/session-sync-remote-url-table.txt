@@ -1,0 +1,90 @@
+# Remote-URL allowlist contrast table for session-sync-init.sh / session-sync-init.ps1 (#1773).
+#
+# One entry per line, TAB-separated: <ALLOW|DENY><TAB><url>.
+# Lines starting with `#` and blank lines are ignored.
+#
+# Single source of truth for both language suites so the two regexes can never
+# drift apart. Four consumers enumerate it, each covering one engine x one layer:
+#   tests/main-session-sync/security.sh              bash ERE, pattern + installer
+#   tests/main-session-sync-security.Tests.ps1       .NET regex, pattern + installer
+# The patterns themselves live in session-sync-remote-url-patterns.txt.
+#
+# Contract: only https / ssh / git schemes with a non-empty host body, plus the
+# SCP-like `user@host:path` form, are accepted. Everything else is refused
+# before the URL can reach `git remote add` / `git remote set-url`.
+#
+# Path content is deliberately unconstrained on an otherwise-allowed URL: the
+# URL reaches git as one argv element, never a shell word, so metacharacters
+# inside the path are inert. The vectors that matter — remote-helper schemes
+# (`ext::`, `fd::`), leading-dash option injection, and scheme-less junk — are
+# rejected by the shape of the URL, and are enumerated below.
+
+# --- ALLOW -----------------------------------------------------------------
+ALLOW	https://github.com/nirecom/agent-sessions.git
+ALLOW	ssh://git@github.com/nirecom/agent-sessions.git
+ALLOW	git://example.com/repo.git
+# Shipped default (SCP-like form) — must never be rejected by its own installer.
+ALLOW	git@github.com:nirecom/agent-sessions.git
+# SCP-like with a bare repo path (no owner segment).
+ALLOW	git@example.com:repo.git
+# Legitimate userinfo.
+ALLOW	https://user@example.com/repo.git
+# Legitimate IPv6 literal — still accepted after the round-3 bracket tightening.
+ALLOW	https://[::1]/repo
+# Explicit port, with and without userinfo and IPv6.
+ALLOW	https://example.com:8443/repo.git
+ALLOW	ssh://git@github.com:22/nirecom/agent-sessions.git
+ALLOW	ssh://git@[::1]:2222/repo.git
+# No `.git` suffix: the path is not constrained, only the authority is.
+ALLOW	https://github.com/nirecom/agent-sessions
+# Minimal authority: a single-character host with no path at all. The documented
+# pattern allows it, so an implementation that demands a dot, a path, or a
+# multi-character host is over-broad refusal — one row per allowed scheme, since
+# the three share the alternation and could diverge (CPR-ORTH).
+ALLOW	https://a
+ALLOW	ssh://a
+ALLOW	git://a
+# Minimal authority with an empty (root) path — the `(/.*)?` group matching just
+# the separator.
+ALLOW	https://a/
+
+# --- DENY ------------------------------------------------------------------
+# Scheme-less local path: the pre-#1773 fixture form, now refused.
+DENY	/tmp/some/local/path
+# file:// is outside the allowlist.
+DENY	file:///tmp/some/local/path
+# The RCE vector named by the issue: git's ext:: transport executes the command.
+DENY	ext::sh -c "touch pwned"
+# The sibling remote-helper scheme, same class as ext::.
+DENY	fd::/dev/null
+# Non-allowlisted scheme.
+DENY	ftp://example.com/repo.git
+# Near-miss of an allowed scheme: http is not https.
+DENY	http://example.com/repo.git
+# Empty host.
+DENY	https:///nohost
+# Incomplete SCP-like form: no colon, no path.
+DENY	user@host
+# SCP-like form with an empty path after the colon.
+DENY	git@github.com:
+# Empty host reached by backtracking the userinfo group into the host group.
+DENY	https://user@/repo
+# Empty userinfo.
+DENY	https://@host
+# Two userinfo separators: the real host is not the one a reader sees first.
+DENY	https://user@host@evil.com/repo
+# Host body absent, port only.
+DENY	ssh://user@:22/repo
+# Malformed IPv6 literal: no hex group at all inside the brackets.
+DENY	https://[::::]/repo
+# Unterminated IPv6 bracket.
+DENY	https://[::1/repo
+# IPv6 literal with the brackets omitted altogether.
+DENY	https://::1/repo
+# Space inside the host.
+DENY	https://exa mple.com/repo
+# Leading dash: git argument injection, not a URL at all.
+DENY	--upload-pack=touch pwned
+# Shell metacharacters with no scheme and no SCP shape.
+DENY	$(touch pwned)
+DENY	`touch pwned`.git
