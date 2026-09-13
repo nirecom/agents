@@ -92,7 +92,9 @@ RETRY_CLAUDE="$TMPDIR_BASE/retry-claude"
 RETRY_PROJECTS="$RETRY_CLAUDE/projects"
 git init --bare "$RETRY_REMOTE" >/dev/null 2>&1
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$RETRY_CLAUDE" --remote-url "$RETRY_REMOTE" >/dev/null 2>&1
+    --claude-dir "$RETRY_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$RETRY_PROJECTS" remote add origin "$RETRY_REMOTE" >/dev/null 2>&1
 git -C "$RETRY_PROJECTS" add -A >/dev/null 2>&1
 git -C "$RETRY_PROJECTS" commit -m "initial" >/dev/null 2>&1
 git -C "$RETRY_PROJECTS" push -u origin main >/dev/null 2>&1
