@@ -467,3 +467,7 @@ Changes: Session-id resolution used by the CLI bridge tools is now unified behin
 ### FEATURE: PR #2275 (2026-09-12)
 Background: fix(#746): pin codex sandbox_mode/approval_policy via -c overrides for codex-cli 0.153.4
 Changes: Fix: `bin/review-plan-codex` now works with codex-cli >=0.153.4 — reviews no longer silently fall back due to removed `--sandbox`/`--full-auto` CLI flags.
+
+### FEATURE: PR #2281 (2026-09-13)
+Background: fix(#2278): harden PLAN_LANG/DOCS_LANG enforcement against non-compli...
+Changes: Planning artifacts and `WORKTREE_NOTES.md` history/changelog bullets written in the wrong language are now rejected before the write lands (new PreToolUse gates `gate-plan-lang.js` / `gate-worktree-notes-lang.js`); the Stop guard re-lints the confirmed plan against PLAN_LANG on every Stop and every subagent type receives the PLAN_LANG directive (#2278).
