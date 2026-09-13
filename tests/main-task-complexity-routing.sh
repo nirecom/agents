@@ -86,7 +86,7 @@ WT="$AGENTS_DIR/skills/write-tests/SKILL.md"
 check "write-tests: judge-task-complexity invocation" "judge-task-complexity" "$WT"
 check "write-tests: Model selected output" "Model selected:" "$WT"
 
-for label in "WT-5" "WT-6" "WT-7"; do
+for label in "WT-6" "WT-7" "WT-8"; do
   check_re "write-tests: step $label present" "^${label}\." "$WT"
 done
 
