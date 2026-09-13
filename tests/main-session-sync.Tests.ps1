@@ -9,33 +9,25 @@ BeforeAll {
     $InitScript = Join-Path (Join-Path $DotfilesDir "install") "win\session-sync-init.ps1"
     $SyncScript = Join-Path $DotfilesDir "bin\session-sync.ps1"
 
-    # -----------------------------------------------------------------------
-    # Deterministic git + workflow environment (#1214).
-    #
-    # Root cause of the "reset" failures: the developer machine sets
-    # core.hooksPath globally (this repo's own hooks do exactly that), so
-    # `git commit` inside a throwaway *seed* repo ran the agents pre-commit
-    # hook and aborted with "commits from main worktree are blocked". The seed
-    # therefore never reached the bare remote, `git fetch origin main` found
-    # nothing, and every reset case hit
-    #   fatal: ambiguous argument 'origin/main': unknown revision
-    # on an unborn branch. Replacing the global/system config with a minimal
-    # file removes that — plus the missing-identity and default-branch
-    # variables — for the whole suite at once (class-level fix rather than one
-    # patch per fixture). Repo-local config still applies, so assertions about
+    # Deterministic git + workflow environment (#1214): the developer machine
+    # sets core.hooksPath globally, may lack a git identity in CI, and may
+    # default to `master` — all three broke fixture commits. Replacing the
+    # global/system config with a minimal file removes them at once
+    # (class-level fix); repo-local config still applies, so assertions about
     # what session-sync-init.ps1 writes keep testing the real thing.
-    #
     # WORKFLOW_PLANS_DIR is pinned for the same reason as the bash suite
-    # (#1564): bin/session-sync.ps1 resolves its plans source through
-    # hooks/lib/workflow-plans-dir.js, which falls back to the developer's real
-    # ~/.workflow-plans when the variable is unset.
-    # -----------------------------------------------------------------------
+    # (#1564) — see rules/test/fixture-isolation.md "Dual-pin the plans dir".
     $script:SavedEnv = @{
         GIT_CONFIG_NOSYSTEM = $env:GIT_CONFIG_NOSYSTEM
         GIT_CONFIG_GLOBAL   = $env:GIT_CONFIG_GLOBAL
         WORKFLOW_PLANS_DIR  = $env:WORKFLOW_PLANS_DIR
         AGENTS_CONFIG_DIR   = $env:AGENTS_CONFIG_DIR
+        USERPROFILE         = $env:USERPROFILE
     }
+    # Suite-wide profile relocation (#1773): session-sync-init.ps1 fail-closed
+    # refuses a -ClaudeDir that does not resolve inside $env:USERPROFILE, and
+    # every fixture here lives under $env:TEMP. AfterAll restores it.
+    $env:USERPROFILE = $env:TEMP
     $script:SuiteTmp = Join-Path $env:TEMP "session-sync-suite-$(Get-Random)"
     New-Item -ItemType Directory -Path $script:SuiteTmp -Force | Out-Null
     $script:SuiteGitConfig = Join-Path $script:SuiteTmp "gitconfig"
@@ -132,16 +124,13 @@ Describe "session-sync-init.ps1" {
     }
 
     It "sets remote when -NoRemote is not specified" {
-        $fakeRemote = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
-        git init --bare $fakeRemote 2>&1 | Out-Null
-        try {
-            & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $fakeRemote
-            $projDir = Join-Path $script:TestDir "projects"
-            $remote = git -C $projDir remote get-url origin
-            $remote | Should -Be $fakeRemote
-        } finally {
-            Remove-Item -Recurse -Force $fakeRemote -ErrorAction SilentlyContinue
-        }
+        # String-comparison-only case: nothing fetches here, so an
+        # allowlist-compliant literal replaces the bare local path (#1773).
+        $remoteUrl = "https://example.invalid/remote-set.git"
+        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $remoteUrl
+        $projDir = Join-Path $script:TestDir "projects"
+        $remote = git -C $projDir remote get-url origin
+        $remote | Should -Be $remoteUrl
     }
 
     It "does not create commits (sync separated from init)" {
@@ -152,21 +141,9 @@ Describe "session-sync-init.ps1" {
         $LASTEXITCODE | Should -Not -Be 0 -Because "init should not create any commits"
     }
 
-    It "migrates old git root from claude dir to projects/" {
-        # Simulate old layout: .git at claude root
-        git init $script:TestDir 2>&1 | Out-Null
-        Initialize-FixtureRepo $script:TestDir
-        Set-Content -Path (Join-Path $script:TestDir ".gitignore") -Value "*`n!projects/"
-        git -C $script:TestDir add .gitignore
-        git -C $script:TestDir commit -m "old layout" 2>&1 | Out-Null
-
-        & $InitScript -ClaudeDir $script:TestDir -NoRemote
-
-        # Old .git should be gone
-        Test-Path (Join-Path $script:TestDir ".git") | Should -BeFalse
-        # New .git should exist in projects/
-        Test-Path (Join-Path $script:TestDir "projects\.git") | Should -BeTrue
-    }
+    # The old "migrates old git root" case is gone: it created the old repo
+    # without an origin, which the provenance check now refuses by design.
+    # Migration is covered by tests/main-session-sync-security.Tests.ps1.
 }
 
 Describe "session-sync.ps1" {
@@ -176,7 +153,10 @@ Describe "session-sync.ps1" {
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
         git init --bare $script:RemoteDir 2>&1 | Out-Null
         # Initialize via init script (plumbing only, no commits)
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
         # Create initial commit so push/pull tests work.
         # `add -A`, not `add .gitattributes`: session-sync-init.ps1 also writes
         # .gitignore, and leaving it untracked makes the "no changes" cases see
@@ -215,8 +195,8 @@ Describe "session-sync.ps1" {
         $content | Should -Match 'pull\s.*--rebase' -Because "pull must use --rebase to avoid merge commits"
     }
 
-    # Skipped: blocked by #1757 (bin/session-sync.ps1 pull error-action bug) — do not fix in this session
-    It "pull applies commits that landed on the remote" -Skip {
+    # Regression coverage for the #1757 pull fix.
+    It "pull applies commits that landed on the remote" {
         # Behavioural counterpart to the static "pull uses --rebase" check
         # above. Until this case existed, the only pull coverage in the suite
         # was static text plus the plans merge, so nothing here could fail when
@@ -234,6 +214,26 @@ Describe "session-sync.ps1" {
 
         Test-Path (Join-Path $script:TestDir "projects\remote-session.jsonl") |
             Should -BeTrue -Because "pull must bring remote commits into the working tree"
+    }
+
+    # Regression guard for #1757 (C5): a non-zero `git pull` must abort before
+    # the history/plans merge instead of merging stale local data silently.
+    It "a failed pull throws and never reaches the merges" {
+        $historyFile = Join-Path $script:TestDir "history.jsonl"
+        Set-Content -Path $historyFile -Value '{"local":"before"}' -NoNewline
+        $plansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $plansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $plansDir "local-plan.md") -Value "local content"
+        $missing = Join-Path $env:TEMP "session-sync-missing-$(Get-Random)"
+        git -C (Join-Path $script:TestDir "projects") remote set-url origin $missing 2>&1 | Out-Null
+        try {
+            $env:WORKFLOW_PLANS_DIR = $plansDir
+            { & $SyncScript -Action pull -ClaudeDir $script:TestDir } | Should -Throw
+        } finally {
+            $env:WORKFLOW_PLANS_DIR = $script:SuitePlansDir
+        }
+        (Get-Content $historyFile -Raw) | Should -Be '{"local":"before"}' -Because "a failed pull must not merge history"
+        (Get-ChildItem $plansDir -File).Count | Should -Be 1 -Because "a failed pull must not merge plans"
     }
 
     It "status runs without error" {
@@ -292,7 +292,10 @@ Describe "session-sync.ps1 reset" {
         # Init fresh machine (plumbing only)
         $script:TestDir = Join-Path $env:TEMP "session-sync-test-$(Get-Random)"
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
     }
 
     AfterEach {
@@ -384,7 +387,10 @@ Describe "session-sync.ps1 retry loop" {
         $script:RemoteDir = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
         git init --bare $script:RemoteDir 2>&1 | Out-Null
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
         $projDir = Join-Path $script:TestDir "projects"
         git -C $projDir add -A 2>&1 | Out-Null
         git -C $projDir commit -m "initial" 2>&1 | Out-Null
@@ -438,7 +444,10 @@ Describe "session-sync.ps1 output and notifications" {
         $script:RemoteDir = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
         git init --bare $script:RemoteDir 2>&1 | Out-Null
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
         $projDir = Join-Path $script:TestDir "projects"
         git -C $projDir add -A 2>&1 | Out-Null
         git -C $projDir commit -m "initial" 2>&1 | Out-Null
@@ -485,7 +494,10 @@ Describe "session-sync.ps1 plans sync" {
         $script:RemoteDir = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
         git init --bare $script:RemoteDir 2>&1 | Out-Null
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
         $projDir = Join-Path $script:TestDir "projects"
         git -C $projDir add -A 2>&1 | Out-Null
         git -C $projDir commit -m "initial" 2>&1 | Out-Null
@@ -516,8 +528,8 @@ Describe "session-sync.ps1 plans sync" {
         Test-Path $syncedPlan | Should -BeTrue -Because "plans/abc-intent.md should be copied into projects/plans/"
     }
 
-    # Skipped: blocked by #1757 (bin/session-sync.ps1 pull error-action bug) — do not fix in this session
-    It "pull merges plans into ~/.workflow-plans/" -Skip {
+    # Regression coverage for the #1757 pull fix.
+    It "pull merges plans into ~/.workflow-plans/" {
         # Seed remote with plans/remote-plan.md
         $seedDir = Join-Path $env:TEMP "session-sync-plans-seed-$(Get-Random)"
         git clone $script:RemoteDir $seedDir 2>&1 | Out-Null
@@ -543,8 +555,8 @@ Describe "session-sync.ps1 plans sync" {
         Test-Path (Join-Path $localPlansDir "local-plan.md") | Should -BeTrue -Because "local plan should be preserved"
     }
 
-    # Skipped: blocked by #1757 (bin/session-sync.ps1 pull error-action bug) — do not fix in this session
-    It "pull when local plans dir absent creates local plans" -Skip {
+    # Regression coverage for the #1757 pull fix.
+    It "pull when local plans dir absent creates local plans" {
         # Seed remote with plans/remote-only.md
         $seedDir = Join-Path $env:TEMP "session-sync-plans-seed2-$(Get-Random)"
         git clone $script:RemoteDir $seedDir 2>&1 | Out-Null
@@ -639,15 +651,11 @@ Describe "session-sync.ps1 plans sync" {
 }
 
 # ---------------------------------------------------------------------------
-# Contract under test: the SESSION_SYNC toggle gates ONLY the six *automatic*
-# call sites (profile-snippet.sh/.ps1 startup fetch, profile-snippet.sh/.ps1
-# codes() auto-push, install.sh/.ps1 auto-init). The manual CLI —
-# bin/session-sync.ps1 push|pull|status|reset — stays ungated by design: a user
-# who types the command has already expressed intent.
-#
-# These items must pass both before and after the gate lands. If one goes red,
-# the gate has leaked into the manual path. Mirrors the bash-side cases in
-# tests/main-session-sync/session-sync-independence.sh.
+# Contract: the SESSION_SYNC toggle gates ONLY the six *automatic* call sites
+# (profile-snippet startup fetch / codes() auto-push / install auto-init, each
+# in .sh and .ps1). The manual CLI stays ungated — typing it expresses intent.
+# These must pass before and after the gate lands; red means the gate leaked.
+# Mirrors tests/main-session-sync/session-sync-independence.sh.
 # ---------------------------------------------------------------------------
 Describe "session-sync.ps1 SESSION_SYNC independence" {
     BeforeEach {
@@ -656,7 +664,10 @@ Describe "session-sync.ps1 SESSION_SYNC independence" {
         $script:RemoteDir = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
         New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
         git init --bare $script:RemoteDir 2>&1 | Out-Null
-        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        & $InitScript -ClaudeDir $script:TestDir -NoRemote
+        # Local-path remotes are no longer accepted by the installer
+        # allowlist (#1773); the fixture attaches its own origin.
+        git -C (Join-Path $script:TestDir "projects") remote add origin $script:RemoteDir 2>&1 | Out-Null
         $projDir = Join-Path $script:TestDir "projects"
         git -C $projDir add -A 2>&1 | Out-Null
         git -C $projDir commit -m "initial" 2>&1 | Out-Null

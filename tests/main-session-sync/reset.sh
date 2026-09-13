@@ -24,9 +24,11 @@ git -C "$RESET_SEED" push -u origin main >/dev/null 2>&1
 RESET_CLAUDE="$TMPDIR_BASE/reset-test/.claude"
 mkdir -p "$RESET_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$RESET_CLAUDE" --remote-url "$RESET_REMOTE" >/dev/null 2>&1
-output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" 2>&1) || true
+    --claude-dir "$RESET_CLAUDE" --no-remote >/dev/null 2>&1
 RESET_PROJECTS="$RESET_CLAUDE/projects"
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$RESET_PROJECTS" remote add origin "$RESET_REMOTE" >/dev/null 2>&1
+output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" 2>&1) || true
 if [ -f "$RESET_PROJECTS/seed-session.jsonl" ]; then
     pass "reset fetches remote file into working tree"
 else
@@ -111,32 +113,15 @@ else
 fi
 
 # --- Edge: reset tolerates a dash-leading timestamp value (#1218, S2-d) ---
-#
-# Scope note (read before changing these assertions):
-#   The `touch -d "$ts" "$f"` call in the reset block was reported as an
-#   option-injection sink. That was investigated empirically first: with GNU
-#   coreutils `touch`, the argument after `-d` is bound positionally by getopt,
-#   so values such as `--reference=<file>`, `-r<file>`, `-t202001010000` and
-#   `--date=@0` are all consumed as the *date operand*, rejected with
-#   "invalid date format", and leave the file's mtime unchanged. No option
-#   injection was demonstrated. The `case "$ts" in -*) ts= ;; esac` guard being
-#   added is therefore defense-in-depth, not a vulnerability fix, and the
-#   assertions below are a REGRESSION GUARD for that new rejection behavior —
-#   they do not claim to demonstrate a blocked exploit.
-#
-#   Verified against GNU coreutils touch only (Windows Git Bash / MSYS2).
-#   BSD/macOS touch has different flag parsing and was not exercised here —
-#   a known coverage limitation, not an assumption of universality.
-#   Payload matrix: identical to the one pinned for bin/cc-session-mtime in
-#   tests/cc-session-mtime.sh. The two `touch -d "$ts" "$f"` sinks are symmetric
-#   members of one class (CPR-ORTH), so neither may carry a narrower matrix than the
-#   other — a shape rejected in one tool but accepted in the other is exactly the
-#   asymmetry this pairing exists to catch.
-#
-#   Table-driven per skills/_shared/test-design/parser-regex-tests.md.
-#   Columns: case-name | timestamp value written into the JSONL row
-#     @MARKER@ expands to $DASHY_MARKER — an unrelated pre-existing file the
-#     option-shaped value points at, so assertion (4) can prove it stayed intact.
+# Scope: regression guard for the `case "$ts" in -*) ts= ;; esac` defense-in-depth
+# guard, NOT a demonstrated exploit — GNU `touch -d` binds the next argument
+# positionally, so option-shaped values are rejected as dates. GNU coreutils only
+# (Git Bash / MSYS2); BSD/macOS flag parsing is a known coverage gap.
+# Payload matrix pinned identical to bin/cc-session-mtime's in
+# tests/cc-session-mtime.sh — symmetric sinks of one class (CPR-ORTH).
+# Table-driven per skills/_shared/test-design/parser-regex-tests.md. Columns:
+# case-name | timestamp value written into the JSONL row; @MARKER@ expands to
+# $DASHY_MARKER, a pre-existing file assertion (4) proves untouched.
 echo "[reset] Dash-leading timestamp payload matrix (#1218 hardening guard)"
 DASHY_MARKER="$TMPDIR_BASE/dashy-marker"
 printf 'dashy-marker-sentinel\n' > "$DASHY_MARKER"
