@@ -1,11 +1,8 @@
 # unit-helper.sh — T1–T9, T22, T24, T25, T27: Unit tests for hooks/lib/conv-lang.js
+# Tests: hooks/lib/conv-lang.js, hooks/lib/lang-config.js
+# Tags: lang, conv-lang, injection, TL2
 # Sourced after helpers.sh; inherits all variables and functions.
-#
-# Intentionally N/A (not tested):
-# - Non-ASCII CONV_LANG values (e.g. "日本語"): pass-through is correct;
-#   the guard is ASCII-control-only by design. .env is operator-controlled.
-# - Extremely long CONV_LANG: no length cap exists; verbatim pass-through
-#   is the intended behavior. No truncation threshold to test against.
+# Which value shapes are accepted or rejected: hooks/lib/lang-config.js LANGUAGE_NAME_RE.
 
 # ===========================================================================
 # Unit tests for hooks/lib/conv-lang.js (T1–T9)
@@ -106,19 +103,20 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
         fail "T24: expected null, got $OUT"
     fi
 
-    # T25 [Security] CONV_LANG with DEL char (\x7f) → injected as-is
-    # \x7f is NOT in [\x00-\x1f]; the guard is intentionally conservative.
-    # This documents the known behavior: DEL passes through. Acceptable because
-    # the value goes to LLM text (no shell eval) and .env is operator-controlled.
+    # T25 [Security] CONV_LANG with DEL char (\x7f) → null (rejected by shape guard)
+    # \x7f is NOT in [\x00-\x1f], but #2278's LANGUAGE_NAME_RE/isPlausibleLanguageName
+    # shape validation (hooks/lib/lang-config.js) only allows \p{L}/\p{M}/apostrophe/
+    # space/hyphen, so DEL (and other non-printable/control-adjacent bytes outside
+    # \x00-\x1f) is rejected there rather than passing the earlier \x00-\x1f check.
     OUT=$(CONV_LANG=$'japanese\x7fevil' node -e "
 const { getConvLangInjection } = require(process.argv[1]);
 const r = getConvLangInjection();
 process.stdout.write(JSON.stringify(r === undefined ? null : r));
 " "$NODE_LIB_PATH" 2>/dev/null)
-    if [ "$OUT" != "null" ]; then
-        pass "T25: CONV_LANG with DEL char passes through (guard covers \\x00-\\x1f only)"
+    if [ "$OUT" = "null" ]; then
+        pass "T25: CONV_LANG with DEL char → null (rejected by LANGUAGE_NAME_RE shape guard)"
     else
-        fail "T25: DEL char unexpectedly returned null — guard scope may have changed"
+        fail "T25: expected null (DEL rejected by shape guard), got $OUT"
     fi
 
     # T22 [Security] CONV_LANG with newline (\x0a) → null (prompt-split guard)
@@ -173,5 +171,15 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
         pass "T-A5: CONV_LANG=english → null (existing no-op preserved)"
     else
         fail "T-A5: regression — expected null for CONV_LANG=english, got $OUT"
+    fi
+
+    # T-U1 [Regression] native-script CONV_LANG stays injectable: the #2278 shape
+    # guard is Unicode-aware, so a language named in its own script must not be
+    # rejected alongside the injection-shaped values the guard exists to block.
+    OUT=$(call_helper set "日本語")
+    if [ "$OUT" != "null" ] && [ "${OUT#*日本語}" != "$OUT" ]; then
+        pass "T-U1: CONV_LANG=日本語 (native script) → injected verbatim (shape guard is Unicode-aware)"
+    else
+        fail "T-U1: expected an injection naming 日本語, got $OUT"
     fi
 fi

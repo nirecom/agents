@@ -9,12 +9,13 @@
 
 const { readState, SESSION_ID_VALID_RE } = require("../workflow-state");
 
-// The single definition of the hardening line. One sentence covering the three
+// The single definition of the hardening line. One sentence covering the five
 // observed failure modes: skipped skill steps, summarizing over a prescribed
-// command's output, and editing append-only documents directly. It must never
-// be copied anywhere else (CPR-SSOT, pinned by a drift check in the tests).
+// command's output, editing append-only documents directly, dispatching the wrong
+// subagent_type, and drafting plans outside PLAN_LANG (#2278). It must never be
+// copied anywhere else (CPR-SSOT, pinned by a drift check in the tests).
 const VERBOSE_PROMPT_TEXT =
-  "Follow every skill step literally and in order: never replace a step's prescribed command output with your own summary, and never edit append-only documents directly.";
+  "Follow every skill step literally and in order: never replace a step's prescribed command output with your own summary, never edit append-only documents directly, always pass the exact subagent_type a skill names when dispatching an agent, and write every planning artifact in the PLAN_LANG language from the first draft.";
 
 function isUsableSessionId(sessionId) {
   return typeof sessionId === "string" && SESSION_ID_VALID_RE.test(sessionId);
