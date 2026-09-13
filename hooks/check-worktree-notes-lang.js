@@ -9,6 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const { classifyPolicy } = require("./lib/lang-config");
+const { safeIsPrivateRepo } = require("./lib/is-private-repo");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
 const TARGET_BASENAME = "WORKTREE_NOTES.md";
@@ -55,15 +56,6 @@ function buildHints(config, isPriv) {
 function extractFilePath(toolInput) {
   if (!toolInput || typeof toolInput !== "object") return "";
   return toolInput.file_path || toolInput.path || "";
-}
-
-function safeIsPrivateRepo(cwd) {
-  try {
-    const { isPrivateRepo } = require("./lib/is-private-repo");
-    return isPrivateRepo(cwd) === true;
-  } catch (e) {
-    return false;
-  }
 }
 
 function formatMessage(violations) {

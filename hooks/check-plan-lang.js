@@ -1,12 +1,10 @@
 "use strict";
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintPlanLang } = require("./lib/lint-plan-lang");
-const { isPlanArtifact } = require("./lib/is-plan-artifact");
-
-const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
+const { isPlanArtifactPath, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
+const { TARGET_TOOLS } = require("./lib/pretool-lang-gate");
 
 // Read stdin, parse JSON, dispatch
 let raw = "";
@@ -20,14 +18,10 @@ process.stdin.on("end", () => {
   const filePath = payload.tool_input && payload.tool_input.file_path;
   if (!filePath) { approve(); return; }
 
-  const plansDir = path.resolve(
-    process.env.WORKFLOW_PLANS_DIR || path.join(os.homedir(), ".workflow-plans")
-  );
   const resolved = path.resolve(filePath);
-  const rel = path.relative(plansDir, resolved);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) { approve(); return; }
-
-  if (!isPlanArtifact(path.basename(resolved))) { approve(); return; }
+  let isArtifact = false;
+  try { isArtifact = isPlanArtifactPath(resolved); } catch { isArtifact = false; }
+  if (!isArtifact) { approve(); return; }
 
   const policy = loadLangConfig("plan");
   const tier = classifyPolicy(policy);
@@ -68,14 +62,11 @@ function hint(policy) {
 }
 
 function block(violations, policy) {
-  const lines = violations.slice(0, 5).map(v =>
-    `  line ${v.lineNumber}: ${v.line.slice(0, 80)}`
-  );
+  const lines = formatPlanLangViolations(violations).map(s => `  ${s}`);
   const msg = [
     `[check-plan-lang] PLAN_LANG=${policy} — ${violations.length} violation(s):`,
     ...lines,
-    violations.length > 5 ? `  ... and ${violations.length - 5} more` : "",
-  ].filter(Boolean).join("\n");
+  ].join("\n");
   process.stdout.write(JSON.stringify({ decision: "block", reason: msg }) + "\n");
   process.exit(0);
 }

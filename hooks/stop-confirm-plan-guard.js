@@ -1,26 +1,15 @@
 #!/usr/bin/env node
-// Stop hook: structurally enforce the confirm-plan Step 2 protocol.
-//
-// When show-plan-link.js emits a breadcrumb during a turn (regardless of
-// CONFIRM_<STEP>), it drops a per-turn marker. On Stop, this hook
-// reads+deletes those markers, then scans the last assistant message for any
-// forbidden representation of the WORKFLOW_PLANS_DIR path (native,
-// forward-slash, tilde, or file:/// URI). If found, the turn is blocked
-// (decision:block + exit 2) so the orchestrator must re-issue the response
-// without the path.
-//
-// Fail-open everywhere: missing markers, missing transcript, parse errors —
-// all silently pass through. The guard activates only when (a) a marker
-// exists AND (b) the assistant message clearly contains the path.
-//
-// Layer 2: order-aware CONFIRM-continuation guard
-// When a CONFIRM_<STAGE> sentinel (INTENT / OUTLINE / DETAIL) is
-// present in the latest assistant turn but no stage-valid follow-up tool_use
-// appears AFTER it in the same turn, block the turn so the model restarts and
-// invokes the correct next step.
+// Stop hook: structurally enforce the confirm-plan protocol. Fail-open everywhere.
+// Layer 1 (marker-gated): show-plan-link.js drops a per-turn marker; when one exists,
+// block the turn if the last assistant message leaks a WORKFLOW_PLANS_DIR path form.
+// Layer 2 (every Stop, #2278): when CONFIRM_<STAGE> appears in the last assistant
+// turn, block unless the confirmed artifact passes PLAN_LANG re-lint AND a
+// stage-valid follow-up tool_use appears after the sentinel.
+// Reason prefixes and the marker contract: docs/architecture/claude-code/settings.md.
 "use strict";
 
 const fs = require("fs");
+const path = require("path");
 const {
   CONFIRM_INTENT_RE_DQ,
   CONFIRM_OUTLINE_RE_DQ,
@@ -60,8 +49,8 @@ if (require.main === module) {
   if (!sid) process.exit(0);
 
   const { readAndDeleteTurnMarkers } = require("./lib/turn-marker");
+  // Markers gate only Layer 1; Layer 2 must run on every Stop (#2278).
   const markers = readAndDeleteTurnMarkers(sid);
-  if (markers.length === 0) process.exit(0);
 
   // Read transcript and scan backward for the most recent assistant message.
   // Capture both the joined text (Layer 1) and the full content array (Layer 2).
@@ -97,37 +86,39 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-  const { workspaceFolderUriFrom } = require("./show-plan-link");
-  let plansDir;
-  try {
-    plansDir = getWorkflowPlansDir();
-  } catch (_) {
-    process.exit(0);
-  }
+  if (markers.length > 0) {
+    const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+    const { workspaceFolderUriFrom } = require("./show-plan-link");
+    let plansDir;
+    try {
+      plansDir = getWorkflowPlansDir();
+    } catch (_) {
+      process.exit(0);
+    }
 
-  const patternsRaw = [
-    plansDir,
-    plansDir.replace(/\\/g, "/"),
-    "~/.workflow-plans",
-    workspaceFolderUriFrom(plansDir),
-  ];
-  const seen = new Set();
-  const patterns = [];
-  for (const p of patternsRaw) {
-    if (typeof p !== "string" || p.length === 0) continue;
-    if (seen.has(p)) continue;
-    seen.add(p);
-    patterns.push(p);
-  }
+    const patternsRaw = [
+      plansDir,
+      plansDir.replace(/\\/g, "/"),
+      "~/.workflow-plans",
+      workspaceFolderUriFrom(plansDir),
+    ];
+    const seen = new Set();
+    const patterns = [];
+    for (const p of patternsRaw) {
+      if (typeof p !== "string" || p.length === 0) continue;
+      if (seen.has(p)) continue;
+      seen.add(p);
+      patterns.push(p);
+    }
 
-  for (const pat of patterns) {
-    if (lastAssistantText.includes(pat)) {
-      process.stdout.write(JSON.stringify({
-        decision: "block",
-        reason: "[confirm-plan] Step 2 violation: orchestrator emitted a `~/.workflow-plans/` path representation. `show-plan-link.js` is the sole authoritative path surface. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
-      }));
-      process.exit(2);
+    for (const pat of patterns) {
+      if (lastAssistantText.includes(pat)) {
+        process.stdout.write(JSON.stringify({
+          decision: "block",
+          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a `~/.workflow-plans/` path representation. `show-plan-link.js` is the sole authoritative path surface. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
+        }));
+        process.exit(2);
+      }
     }
   }
 
@@ -146,6 +137,20 @@ if (require.main === module) {
         if (CONFIRM_DETAIL_RE_DQ.test(c)) { confirmIdx = i; stage = "detail"; break; }
       }
       if (confirmIdx !== -1) {
+        // Re-lint the confirmed artifact against PLAN_LANG before the follow-up
+        // check: a non-compliant plan must be rewritten, not merely continued (#2278).
+        const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
+        const relint = relintPlanArtifact(sid, stage);
+        if (relint.skipped === null && relint.violations.length > 0) {
+          process.stdout.write(JSON.stringify({
+            decision: "block",
+            reason: "[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
+              " violates PLAN_LANG=" + relint.policy + " (" + relint.violations.length + " line(s)) — rewrite the artifact in " +
+              relint.policy + " before CONFIRM_" + stage.toUpperCase() + ":\n" +
+              formatPlanLangViolations(relint.violations).join("\n"),
+          }));
+          process.exit(2);
+        }
         let followUpFound = false;
         for (let i = confirmIdx + 1; i < lastAssistantContent.length; i++) {
           const item = lastAssistantContent[i];
@@ -167,7 +172,7 @@ if (require.main === module) {
           const nextSkillHint = STAGE_NEXT_SKILL[stage] ? " — invoke " + STAGE_NEXT_SKILL[stage] : "";
           process.stdout.write(JSON.stringify({
             decision: "block",
-            reason: "[confirm-plan] Layer 2: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase() + nextSkillHint,
+            reason: "[confirm-plan] Layer 2/follow-up: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase() + nextSkillHint,
           }));
           process.exit(2);
         }

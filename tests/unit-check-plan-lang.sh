@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
-# Tests: hooks/check-plan-lang.js, hooks/lib/is-plan-artifact.js
+# Tests: hooks/check-plan-lang.js, hooks/lib/is-plan-artifact.js, hooks/lib/plan-artifact-lang.js, hooks/lib/pretool-lang-gate.js
 # Tags: hook, plans, security, scope:common
-# Full hook-invocation tests for hooks/check-plan-lang.js
-#
-# Invokes the hook by piping PreToolUse JSON payloads to
-# `node hooks/check-plan-lang.js` and asserts on stdout decision field.
-#
-# PLAN_LANG is unset for most tests → policy is "noop" → hook always approves.
-# T7 uses PLAN_LANG=english with Japanese content to exercise the block path.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether check-plan-lang.js fires as a real PreToolUse hook in a live Claude
-#   Code session (requires actual hook registration in settings.json and a
-#   real session event).
-# - Whether the hook fires on the correct tool events when registered in
-#   settings.json (only observable in a live session).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Full hook-invocation tests for hooks/check-plan-lang.js: pipes PostToolUse JSON
+# payloads to `node hooks/check-plan-lang.js` and asserts on the stdout decision.
+# PLAN_LANG is unset for most tests → "noop" → always approves; T7 uses
+# PLAN_LANG=english with Japanese content to exercise the block path.
 set -uo pipefail
+
+# L3 gap (not caught here): whether check-plan-lang.js fires as a real hook in a
+# live Claude Code session, on the right tool events, once registered in
+# settings.json. Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
 HOOK="$AGENTS_DIR/hooks/check-plan-lang.js"
