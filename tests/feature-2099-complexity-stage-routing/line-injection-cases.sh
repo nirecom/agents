@@ -127,7 +127,7 @@ $D2099LI_PAYLOADS
 EOF
 }
 
-# LI-5: the consumer's own parse, run for real. MDP-3/WT-5/WCD-3 read the first
+# LI-5: the consumer's own parse, run for real. MDP-3/WT-6/WCD-3 read the first
 # `level=` line and branch on its value; the assertion is that no payload can make
 # that branch see `low`, on any stage.
 d2099li_downstream_parse() {
