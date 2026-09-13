@@ -252,8 +252,9 @@ T10_sweep_hub_registers_sweep_issues() {
 # ─────────────────────────────────────────────────────────────────────────────
 # T11 — SW step numbering is coherent after the sweep-issues insertion:
 #       primary steps (SW-N. with no letter suffix) are unique and form the
-#       contiguous run 0..N — no duplicate and no skipped number. SW-0 is a
-#       legitimate leading step (the hub's WORKTREE_OFF bracket), not a gap.
+#       contiguous run 1..N — no duplicate and no skipped number. The hub no
+#       longer carries a leading SW-0 WORKTREE_OFF bracket (narrowed to the
+#       SW-2b/SW-2c fallback only), so SW-1 is the legitimate first step.
 #       Lettered
 #       sub-steps (SW-2b/SW-2c) are sub-ordinates of their primary and are
 #       only required to reference an existing primary.
@@ -264,7 +265,7 @@ T11_sweep_hub_sw_numbering_coherent() {
         fail "T11 sweep_hub_sw_numbering_coherent: $SWEEP_HUB does not exist"
         return
     fi
-    local primaries sub_nums n expected=0 prev=""
+    local primaries sub_nums n expected=1 prev=""
     primaries="$(grep -oE '^SW-[0-9]+\.' "$SWEEP_HUB" 2>/dev/null | sed 's/^SW-//; s/\.$//' | sort -n)"
     if [ -z "$primaries" ]; then
         fail "T11 sweep_hub_sw_numbering_coherent: no SW-N. steps found in $SWEEP_HUB"
@@ -378,10 +379,12 @@ T13_sweep_hub_registers_sweep_shell_snapshots() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T14 — the WORKTREE_ON bracket step names the step it actually follows.
-#       Inserting the new dispatch step renumbers the tail, and the bracket
-#       step's prose carries a hard-coded 'after SW-N' back-reference that
-#       T11's numbering check cannot see. Pin it to the last dispatch step —
-#       /sweep-shell-snapshots — so a stale reference is caught.
+#       The OFF/ON bracket no longer wraps the whole dispatch chain — it is
+#       narrowed to the SW-2b/SW-2c worktree-remove/branch-delete fallback,
+#       so WORKTREE_ON legitimately trails SW-2c, not the last dispatch step.
+#       Pin the 'after SW-N' back-reference to SW-2c so a stale reference
+#       (e.g. left pointing at an old tail step after a future renumber) is
+#       still caught.
 # ─────────────────────────────────────────────────────────────────────────────
 
 T14_sweep_hub_worktree_on_references_last_dispatch() {
@@ -389,21 +392,16 @@ T14_sweep_hub_worktree_on_references_last_dispatch() {
         fail "T14 sweep_hub_worktree_on_references_last_dispatch: $SWEEP_HUB does not exist"
         return
     fi
-    local snap_step on_ref
-    snap_step="$(grep -oE '^SW-[0-9]+\..*/sweep-shell-snapshots' "$SWEEP_HUB" 2>/dev/null | head -1 | sed 's/^SW-//; s/\..*$//')"
-    if [ -z "$snap_step" ]; then
-        fail "T14 sweep_hub_worktree_on_references_last_dispatch: no primary SW-N step invokes /sweep-shell-snapshots"
-        return
-    fi
-    on_ref="$(grep -E '^SW-[0-9]+[a-z]*\..*WORKFLOW_ENFORCE_WORKTREE_ON' "$SWEEP_HUB" 2>/dev/null | grep -oE 'after SW-[0-9]+' | head -1 | sed 's/^after SW-//')"
+    local on_ref
+    on_ref="$(grep -E '^SW-[0-9]+[a-z]*\..*WORKFLOW_ENFORCE_WORKTREE_ON' "$SWEEP_HUB" 2>/dev/null | grep -oE 'after SW-[0-9]+[a-z]*' | head -1 | sed 's/^after SW-//')"
     if [ -z "$on_ref" ]; then
         fail "T14 sweep_hub_worktree_on_references_last_dispatch: WORKFLOW_ENFORCE_WORKTREE_ON step has no 'after SW-N' back-reference"
         return
     fi
-    if [ "$on_ref" = "$snap_step" ]; then
-        pass "T14 sweep_hub_worktree_on_references_last_dispatch (SW-$snap_step)"
+    if [ "$on_ref" = "2c" ]; then
+        pass "T14 sweep_hub_worktree_on_references_last_dispatch (SW-$on_ref)"
     else
-        fail "T14 sweep_hub_worktree_on_references_last_dispatch: bracket says 'after SW-$on_ref' but the last dispatch step is SW-$snap_step (stale reference after renumbering)"
+        fail "T14 sweep_hub_worktree_on_references_last_dispatch: bracket says 'after SW-$on_ref' but the fallback's last step is SW-2c (stale reference)"
     fi
 }
 

@@ -11,10 +11,12 @@ that each reclaim a specific class of residual state. A flagless run applies
 
 ## Procedure
 
-SW-0. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_OFF: sweep hub — maintenance writes/deletes across sub-skills>>` before SW-1.
 SW-1. Invoke `/sweep-worktrees` (deletes by default; pass `--dry-run` to preview).
 SW-2. Invoke `/sweep-branches` (deletes by default; pass `--dry-run` to preview).
    Capture stdout for post-processing (SW-2b/SW-2c).
+SW-2a. When SW-2's stdout contains any WORKTREE-LOCKED line, emit
+   `echo <<WORKFLOW_ENFORCE_WORKTREE_OFF: sweep hub — SW-2b/SW-2c worktree-remove/branch-delete fallback>>`
+   before SW-2b. Skip SW-2a–SW-2d entirely when no WORKTREE-LOCKED line was produced.
 SW-2b. Parse sweep-branches stdout for WORKTREE-LOCKED lines.
    Each `WORKTREE-LOCKED: branch=X wt=<path>` line triggers:
    `git -C "$MAIN_ROOT" worktree remove --force "<path>" 2>/dev/null || true`
@@ -24,13 +26,13 @@ SW-2c. After worktree removal, retry `git branch -D` for each WORKTREE-LOCKED
    branch using the `branch=X` field. SW-2b removes the worktree block, so the
    cascade rule no longer prevents deletion. Failures are ignored (reclaimed
    next cycle).
+SW-2d. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub — SW-2b/SW-2c fallback complete>>` after SW-2c, regardless of outcome.
 SW-3. Invoke `/sweep-plans` (deletes by default; pass `--dry-run` to preview).
 SW-4. Invoke `/sweep-tests` (deletes by default; `--dry-run` and `--fix-headers` are forwarded when passed).
 SW-5. Invoke `/sweep-issues` (tier-1 meta-parent closes apply by default; `--dry-run` previews).
    Tier-2 candidates are human-gated and only surface under `--deep`.
 SW-6. Invoke `/sweep-shell-snapshots` (deletes by default; pass `--dry-run` to preview).
-SW-7. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub complete>>` after SW-6, regardless of outcome.
-SW-8. Future sub-skills to be added in subsequent PRs:
+SW-7. Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
