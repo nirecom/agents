@@ -471,3 +471,7 @@ Changes: Fix: `bin/review-plan-codex` now works with codex-cli >=0.153.4 — rev
 ### FEATURE: PR #2281 (2026-09-13)
 Background: fix(#2278): harden PLAN_LANG/DOCS_LANG enforcement against non-compli...
 Changes: Planning artifacts and `WORKTREE_NOTES.md` history/changelog bullets written in the wrong language are now rejected before the write lands (new PreToolUse gates `gate-plan-lang.js` / `gate-worktree-notes-lang.js`); the Stop guard re-lints the confirmed plan against PLAN_LANG on every Stop and every subagent type receives the PLAN_LANG directive (#2278).
+
+### FEATURE: PR #2282 (2026-09-13)
+Background: fix(#1773,#1757): harden session-sync-init against untrusted remote URL/git-root migration; fix session-sync.ps1 pull error handling
+Changes: Hardened `session-sync-init.sh`/`.ps1` against a malicious or misconfigured remote URL and against migrating the wrong git repository into `~/.claude/projects/`; migration is now transactional instead of destructive.;Fixed `session-sync.ps1` silently continuing past pull errors instead of surfacing them.
