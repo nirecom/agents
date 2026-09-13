@@ -242,8 +242,9 @@ T32_CASES
 # re-serialised the document with its keys reordered satisfies every count in this suite and
 # is invisible in a 244-line diff -- and losing `deny` turns an editing slip into a permission
 # grant. So the whole document except permissions.allow is compared against its own before,
-# plus the one PreToolUse entry that registers hooks/bash-guard.js (#2134's deliverable) --
-# excised by exact value, so any OTHER hooks drift still fails the comparison.
+# minus the PreToolUse entries that register hooks/bash-guard.js (#2134) and the two #2278 lang
+# gates (gate-plan-lang.js, gate-worktree-notes-lang.js) -- each excised by exact value, so any
+# OTHER hooks drift still fails the comparison.
 T45_BEFORE="$TMPROOT/t45-before.json"
 T45_BASELINE="unresolved"
 T45_MARKER=""
@@ -308,16 +309,24 @@ t45_compare() { # <delta|deep|keys|perm> -> token
           : (v && typeof v === "object"
               ? Object.keys(v).sort().reduce((m, k) => { m[k] = canon(v[k]); return m; }, {})
               : v);
-        const BASH_GUARD_ENTRY = JSON.stringify(canon({
-          matcher: "Bash",
-          hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/bash-guard.js\"", timeout: 5 }]
-        }));
+        const langGate = (script) => ({
+          matcher: "Write|Edit|MultiEdit|editFiles",
+          hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/" + script + "\"", timeout: 10 }]
+        });
+        const EXCISED_ENTRIES = [
+          {
+            matcher: "Bash",
+            hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/bash-guard.js\"", timeout: 5 }]
+          },
+          langGate("gate-plan-lang.js"),
+          langGate("gate-worktree-notes-lang.js")
+        ].map((e) => JSON.stringify(canon(e)));
         const noAllow = (o) => {
           const c = JSON.parse(JSON.stringify(o));
           if (c.permissions) delete c.permissions.allow;
           const pre = (c.hooks || {}).PreToolUse;
           if (Array.isArray(pre)) {
-            c.hooks.PreToolUse = pre.filter((e) => JSON.stringify(canon(e)) !== BASH_GUARD_ENTRY);
+            c.hooks.PreToolUse = pre.filter((e) => EXCISED_ENTRIES.indexOf(JSON.stringify(canon(e))) === -1);
           }
           return c;
         };

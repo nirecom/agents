@@ -106,6 +106,43 @@ See `docs/security-policy.md` for the full pattern list.
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
   diff is suppressed (#445). Draft artifacts (`drafts/` subdirectory) are always suppressed.
+- `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write
+  to a final plan artifact under the plans directory whose submitted text violates a strict
+  `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is
+  the per-edit fragment: each `edits[]` element carries its own path (inheriting the top-level
+  one when absent) and is linted on its own, so an unclosed code fence in one fragment cannot
+  hide prose in the next. The gate never reads the target file and never writes; the block
+  reason is prefixed `[gate-plan-lang] PLAN_LANG=<policy>` and echoes only the violating lines,
+  numbered relative to the fragment. Hint-tier policies and every error path approve silently.
+  Why a PreToolUse gate when `check-plan-lang.js` already exists: a PostToolUse block lands
+  after the bytes are on disk, so a non-compliant model could still confirm the stage.
+- `gate-worktree-notes-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — the
+  same pre-write treatment for `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes`
+  bullets against `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by the hook's own
+  private-repo detection of the cwd (#2278). A fragment that carries one of the two headings is
+  self-contained and linted alone; a headingless fragment (a bullet-only Edit) is judged on the
+  reconstructed post-edit document, because only the file on disk says which section the bullet
+  lands in. Unreadable file or an `old_string` absent from disk approve (fail-open); the
+  PostToolUse checker below remains the backstop. Block prefix:
+  `[gate-worktree-notes-lang] WORKTREE_NOTES.md language check failed`.
+- `check-plan-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — post-write
+  backstop for the plan-artifact language policy: strict tier blocks with the
+  `[check-plan-lang] PLAN_LANG=<policy>` header, hint tier emits `additionalContext` only.
+  Shares plan-artifact path resolution and violation formatting with the PreToolUse gate through
+  `hooks/lib/plan-artifact-lang.js`, so the two surfaces cannot drift (#2278).
+- `check-worktree-notes-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) —
+  post-write backstop for `WORKTREE_NOTES.md`; reads the file as written and lints the two
+  target sections with the same routing (`safeIsPrivateRepo` from `hooks/lib/is-private-repo.js`)
+  as the PreToolUse gate.
+- `stop-confirm-plan-guard.js` (Stop) — two layers with distinct reason prefixes. Layer 1
+  (`[confirm-plan] Step 2 violation:`) is marker-gated: it fires only when `show-plan-link.js`
+  dropped a per-turn marker, and blocks a last assistant message that spells out a plans-directory
+  path. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
+  `CONFIRM_<STAGE>` sentinel appears in the last assistant turn, it first re-lints the confirmed
+  artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`) and then requires a
+  stage-valid follow-up tool_use after the sentinel (`[confirm-plan] Layer 2/follow-up:`). The
+  re-lint resolves `<sid>-<stage>.md` only for UUID or timestamp session ids; any other id, an
+  absent or unreadable artifact, or a non-strict policy skips it. Fail-open throughout.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
   Detects test runner commands over the shared command IR (`hooks/lib/command-ir.js` `parse()` +
@@ -365,8 +402,9 @@ See `docs/security-policy.md` for the full pattern list.
   `clarify_intent`/`outline`/`detail` not complete/skipped) so plan artifacts are steered
   before they are written. Directive text is the shared SSOT from `getConvLangInjection`
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
-  source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
-  planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+  source consumed by `subagent-start.js` (which injects `PLAN_LANG` for every subagent type
+  whenever the policy is not noop, so a mis-dispatched `general-purpose` planner still receives
+  it). Fail-open: any error yields `{}`.
 - `codegraph-context-inject.js` (UserPromptSubmit) — forwards the upstream CodeGraph prompt-hook's
   OUTPUT as `additionalContext`, without ever running `codegraph install` (which would rewrite
   `~/.claude/CLAUDE.md` and register the hook itself). Gated three ways before it spawns anything:
@@ -442,6 +480,10 @@ See `docs/security-policy.md` for the full pattern list.
   reads never re-decide. Two consumers: `session-start.js` (resolves, freezes, then injects) and
   `post-compact.js` (read-only re-injection after compaction). Fail-open throughout: an unresolvable
   model, an unusable session id, or an unwritable state directory all yield no injection.
+  The directive names the five observed failure modes of less compliant models — skipping skill
+  steps, summarizing over a prescribed command's output, editing append-only documents directly,
+  dispatching a subagent under a type other than the one the skill names, and drafting plan
+  artifacts outside `PLAN_LANG` (#2278) — and its exact wording lives only in that module.
 
 **Permission glob matching**: Permissions are matched against the entire command string.
 `&&` does not split into subcommands. `Bash(git commit *)` does not match

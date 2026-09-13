@@ -58,6 +58,18 @@ function normalizeValue(v) {
   return trimmed;
 }
 
+// Shape guard for any language value spliced into injected prompt context.
+// Not an allowlist of languages — free-text names in any script pass
+// ("brazilian portuguese", "español", "日本語"); anything carrying injection
+// framing (parens, colons, newlines, backticks, $, quotes) or over 40 chars does
+// not. \p{M} keeps decomposed accents and Vietnamese tone marks legal.
+// Applied to the already trimmed+lowercased value.
+const LANGUAGE_NAME_RE = /^[\p{L}][\p{L}\p{M}' -]{0,39}$/u;
+
+function isPlausibleLanguageName(v) {
+  return typeof v === "string" && LANGUAGE_NAME_RE.test(v);
+}
+
 const STRICT_POLICIES = new Set(["english", "japanese"]);
 
 function classifyPolicy(policy) {
@@ -86,6 +98,7 @@ function loadLangConfig(surface, options) {
 function getPlanLangInjection() {
   const lang = loadLangConfig("plan");
   if (classifyPolicy(lang) === "noop") return null;
+  if (!isPlausibleLanguageName(lang)) return null;
   return `Write planning artifacts (files under the plans directory) in ${lang}.`;
 }
 
@@ -100,4 +113,4 @@ function loadCodeLangExclude() {
   return typeof v === "string" ? v : "";
 }
 
-module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, getPlanLangInjection, loadCodeLangExclude };
+module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, isPlausibleLanguageName, getPlanLangInjection, loadCodeLangExclude };
