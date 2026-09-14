@@ -35,7 +35,29 @@ if [[ "$target" == *.code-workspace ]]; then
 else
     name="$(basename "$(cd "$target" 2>/dev/null && pwd || echo "$target")")"
 fi
+# Read CC_NATIVE_* pinned model versions from .env and resolve CLAUDE_MODEL / CLAUDE_SMALL_MODEL.
+# Tier detection reads ~/.claude/settings.json so each tier var applies only when CC is configured
+# for that tier -- all four can be set simultaneously without conflict.
+_pinned_model=""
+_pinned_subagent=""
+if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
+    _cc_model=""
+    _cc_settings="$HOME/.claude/settings.json"
+    if [ -f "$_cc_settings" ]; then
+        _cc_model=$(node -e "try{var s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.stdout.write((s.model||'').toLowerCase())}catch{}" "$_cc_settings" 2>/dev/null) || true
+    fi
+    _tier_var="CC_NATIVE_OPUS"
+    case "$_cc_model" in
+        *fable*)  _tier_var="CC_NATIVE_FABLE"  ;;
+        *sonnet*) _tier_var="CC_NATIVE_SONNET" ;;
+        *haiku*)  _tier_var="CC_NATIVE_HAIKU"  ;;
+    esac
+    _pinned_model=$("$AGENTS_DIR/bin/get-config-var" "$_tier_var" 2>/dev/null) || true
+    _pinned_subagent=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_SUBAGENT 2>/dev/null) || true
+fi
 (
+    [ -n "$_pinned_model" ]    && export CLAUDE_MODEL="$_pinned_model"
+    [ -n "$_pinned_subagent" ] && export CLAUDE_SMALL_MODEL="$_pinned_subagent"
     code --new-window "$@"
     _ss_rc=0
     "$AGENTS_DIR/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
