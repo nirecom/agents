@@ -274,6 +274,14 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
+# U7-U17 live in sibling fragments (rules/coding/file-split.md Pattern A); they
+# need $PRELUDE, run_case, require_module and $HEIR_CWD, so they are sourced here
+# rather than at the top of the file.
+# shellcheck source=/dev/null
+. "$AGENTS_DIR/tests/feat-2218-upstream-search/adoptability.sh"
+# shellcheck source=/dev/null
+. "$AGENTS_DIR/tests/feat-2218-upstream-search/list-vs-from.sh"
+
 build_fixture
 run_U1
 run_U2
@@ -281,6 +289,19 @@ run_U3
 run_U4
 run_U5
 run_U6
+run_U7
+run_U8
+run_U9
+run_U10
+run_U11
+run_U12
+run_U13
+run_U14
+run_U15
+run_U16
+run_U17
+run_U18
+run_U19
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
