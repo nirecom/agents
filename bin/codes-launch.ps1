@@ -66,6 +66,8 @@ if (Test-Path $_getCfg) {
     } catch {}
 }
 $global:LASTEXITCODE = $_prevEc
+if ($_pinnedModel)    { Write-Host "[CC_NATIVE] CLAUDE_MODEL=$_pinnedModel" }
+if ($_pinnedSubagent) { Write-Host "[CC_NATIVE] CLAUDE_SMALL_MODEL=$_pinnedSubagent" }
 $codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
 # Clear gateway env vars in the CHILD pwsh only (not $env: here, which would also wipe
 # the caller's shell) — prevents a leftover code-ccgw.ps1 session from misrouting a

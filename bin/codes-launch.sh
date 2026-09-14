@@ -55,6 +55,8 @@ if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
     _pinned_model=$("$AGENTS_DIR/bin/get-config-var" "$_tier_var" 2>/dev/null) || true
     _pinned_subagent=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_SUBAGENT 2>/dev/null) || true
 fi
+[ -n "$_pinned_model" ]    && echo "[CC_NATIVE] CLAUDE_MODEL=$_pinned_model"
+[ -n "$_pinned_subagent" ] && echo "[CC_NATIVE] CLAUDE_SMALL_MODEL=$_pinned_subagent"
 (
     [ -n "$_pinned_model" ]    && export CLAUDE_MODEL="$_pinned_model"
     [ -n "$_pinned_subagent" ] && export CLAUDE_SMALL_MODEL="$_pinned_subagent"
