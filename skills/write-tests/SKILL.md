@@ -11,8 +11,8 @@ Write or update tests for the current task.
 
 WT-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
    - `PLANS_DIR=` — substitute this absolute path for every `<PLANS_DIR>` below.
-   - `GATE_CONFIRM_TESTS=` — the WT-4 pre-action gate (`ON` / `OFF` / `ERROR`).
-   - `COMPLEXITY_LEVEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-5 level and signals.
+   - `GATE_CONFIRM_TESTS=` — the WT-5 pre-action gate (`ON` / `OFF` / `ERROR`).
+   - `COMPLEXITY_LEVEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-6 level and signals.
    - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 
 WT-1. Read:
@@ -27,10 +27,12 @@ WT-3. **Enumerate call paths**: For each source file from step WT-2, trace all i
    missing field, wrong type, unexpected value). These become integration-path error
    cases in the next step.
 WT-4. List all planned test cases by category (include call-path error cases from step WT-3).
-   Then branch on `GATE_CONFIRM_TESTS` from step WT-0:
-   - `OFF`: print the planned cases and proceed to step WT-5 without approval wait.
-   - `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
-WT-5. **Determine the subagent's model**:
+WT-5. Decide the destination of each planned case — append to an existing test file, or create a new one.
+   - For each planned case, state its complete source set S (the `# Tests:` tokens the case protects).
+   - Run `bash "$AGENTS_CONFIG_DIR/bin/find-tests-for-source.sh" --sources <comma-joined S>` once per distinct S (Bash, one standalone command each; read-only, so `hooks/block-tests-direct.js` does not apply).
+   - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
+   - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
+WT-6. **Determine the subagent's model**:
    - If `COMPLEXITY_LEVEL_write_tests` from step WT-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
    - If `NONE` (fail-open for sessions without persisted evaluation):
      - Read `skills/_shared/judge-task-complexity.md` and evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4 — do not short-circuit on the first match.
@@ -39,16 +41,20 @@ WT-5. **Determine the subagent's model**:
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
-WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from step WT-5>`) to autonomously:
-   WT-6a. Write the test file(s).
-   WT-6b. Run tests with timeout.
-   WT-6c. Fix failures and re-run until green.
-   WT-6d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
-   WT-6e. Re-run tests until green.
+WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from step WT-6>`) to autonomously:
+   WT-7a. Write the test file(s).
+   WT-7b. Run tests with timeout.
+   WT-7c. Fix failures and re-run until green.
+   WT-7d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
+   WT-7e. Re-run tests until green.
    The subagent prompt MUST include these structured fields so verbose output stays in the subagent context:
-   - `task_complexity_signals`: the `signals=` line from step WT-5 verbatim (comma-separated IDs, or "none")
+   - `task_complexity_signals`: the `signals=` line from step WT-6 verbatim (comma-separated IDs, or "none")
    - `source_files`: list of source file paths from step WT-2
-   - `planned_cases`: list of planned test cases from step WT-4
+   - `planned_cases`: list of planned test cases from step WT-4 — each entry states the source set it protects
+   - `test_destinations`: one entry per case group, keyed by that group's complete source set — `append <path>` or `new`.
+     All `new` groups in this run consolidate into a single new file.
+     On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
+     `append` is mandatory even when the appended case is expected to push the target past the 500-line HARD limit — never split or redirect to a new file to dodge it; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST instruct: Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules.
    The subagent prompt MUST instruct: Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules.
@@ -58,9 +64,9 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
-While the subagent runs, the orchestrator MAY run the WT-7 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
+While the subagent runs, the orchestrator MAY run the WT-8 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
 
-WT-7. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
+WT-8. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
    - stdout `OFF`: skip this step; proceed directly to Completion (no user wait).
    - stdout `ON` or `ERROR`: present the test file content.
@@ -80,7 +86,7 @@ If tests are genuinely not needed for this change:
 1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`, then record it as `--class E --step write_tests --key write-tests:not-needed`, per `skills/_shared/handoff-record.md`.
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
-When step WT-5 took the `NONE` fallback, record it as `--class D --step write_tests --key write-tests:model-fallback`, per `skills/_shared/handoff-record.md`.
+When step WT-6 took the `NONE` fallback, record it as `--class D --step write_tests --key write-tests:model-fallback`, per `skills/_shared/handoff-record.md`.
 
 ## Rules
 

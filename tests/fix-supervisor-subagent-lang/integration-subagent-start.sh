@@ -36,9 +36,11 @@ fi
 
 # ---------------------------------------------------------------------------
 # T6 [Integration] CONV_LANG unset → output is {} (no additionalContext)
+# PLAN_LANG is unset too: since #2278 every agent receives the PLAN_LANG line
+# under a strict policy, so an inherited PLAN_LANG would make {} unreachable.
 # ---------------------------------------------------------------------------
 T6_RAW=$(printf '{}' | (
-    unset CONV_LANG
+    unset CONV_LANG PLAN_LANG
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null
 ))
@@ -62,11 +64,14 @@ fi
 
 # ---------------------------------------------------------------------------
 # T7 [Integration] CONV_LANG=english → output is {} (english bypass)
+# PLAN_LANG unset for the same reason as T6 (#2278).
 # ---------------------------------------------------------------------------
-T7_RAW=$(printf '{}' | \
+T7_RAW=$(printf '{}' | (
+    unset PLAN_LANG
     CONV_LANG="english" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
-    run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null)
+    run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null
+))
 T7_RC=$?
 if [ "$T7_RC" -ne 0 ]; then
     fail "T7: subagent-start exited non-zero ($T7_RC) with CONV_LANG=english"

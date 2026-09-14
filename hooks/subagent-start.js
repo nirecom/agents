@@ -11,15 +11,6 @@ const { codegraphEnabled } = require("./lib/codegraph-boundary");
 const CODEGRAPH_NUDGE =
   "Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md";
 
-// Planner/reviewer agents that write plan artifacts. Only these receive the
-// proactive PLAN_LANG directive; other subagents (workers) do not.
-const PLAN_AGENTS = new Set([
-  "outline-planner",
-  "outline-reviewer",
-  "detail-planner",
-  "detail-reviewer",
-]);
-
 function readStdin() {
   const chunks = [];
   const buf = Buffer.alloc(4096);
@@ -33,13 +24,9 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-let agentType;
-try {
-  const parsed = JSON.parse(readStdin());
-  agentType = parsed && parsed.agent_type;
-} catch (e) {
-  // fail-open: treat parse errors as {} (agentType stays undefined)
-}
+// Drain stdin so the parent never sees a closed pipe; the payload itself is
+// not consulted — every injection below is payload-independent.
+try { readStdin(); } catch (e) { /* fail-open */ }
 
 const lines = [];
 try {
@@ -47,13 +34,11 @@ try {
   if (convLang) lines.push(convLang);
 } catch (_e) { /* fail-open */ }
 
-// PLAN_LANG only for whitelisted planner/reviewer agents (fail-open: skip on
-// unknown/absent agent_type — backstop is check-plan-lang.js PostToolUse).
+// Every agent type receives the PLAN_LANG directive when the policy is not noop —
+// mirrors the codegraph nudge below. Rescues general-purpose mis-dispatch (#2278).
 try {
-  if (PLAN_AGENTS.has(agentType)) {
-    const planLang = getPlanLangInjection();
-    if (planLang) lines.push(planLang);
-  }
+  const planLang = getPlanLangInjection();
+  if (planLang) lines.push(planLang);
 } catch (_e) { /* fail-open */ }
 
 // Every agent type, gated only on CODEGRAPH=on.

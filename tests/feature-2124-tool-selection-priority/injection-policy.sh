@@ -51,7 +51,7 @@ u8_dispatch_sites() {
         assert_eq "U8b[$rel]: $label" "present" "$got"
     done <<'U8_CASES'
 skills/write-code/SKILL.md#WCD-4 is one of the two expected general-purpose dispatch sites
-skills/write-tests/SKILL.md#WT-6 is the other (a rename keeps U8a at 2 but must not pass here)
+skills/write-tests/SKILL.md#WT-7 is the other (a rename keeps U8a at 2 but must not pass here)
 U8_CASES
 }
 
@@ -72,7 +72,7 @@ policy_row_includes() { # <rule-path> <reader-path> -> yes|no|ERROR
 }
 
 u10_write_tests_coding_row_promotion() {
-    assert_eq "U10a: rules/coding.md row includes skills/write-tests/SKILL.md (WT-6's new Read)" \
+    assert_eq "U10a: rules/coding.md row includes skills/write-tests/SKILL.md (WT-7's new Read)" \
         "yes" "$(policy_row_includes "rules/coding.md" "skills/write-tests/SKILL.md")"
     assert_eq "U10b: rules/ops.md row does NOT include skills/write-tests/SKILL.md (deliberate C4 omission)" \
         "no" "$(policy_row_includes "rules/ops.md" "skills/write-tests/SKILL.md")"

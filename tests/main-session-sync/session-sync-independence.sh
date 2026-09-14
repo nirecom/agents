@@ -1,15 +1,11 @@
 # Tests: bin/session-sync.sh
 # Tags: bin, git, session-sync, toggle, scope:issue-specific
 # Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
-#
-# Contract under test: the SESSION_SYNC toggle gates ONLY the six *automatic*
-# call sites (profile-snippet.sh/.ps1 startup fetch, profile-snippet.sh/.ps1
-# codes() auto-push, install.sh/.ps1 auto-init). The manual CLI —
-# `bin/session-sync.sh push|pull|status|reset` — stays ungated by design: a user
-# who types the command has already expressed intent.
-#
-# These cases must PASS both before and after the gate lands. If one of them
-# ever goes red, the gate has leaked into the manual path.
+# Contract: the SESSION_SYNC toggle gates ONLY the six *automatic* call sites
+# (profile-snippet startup fetch / codes() auto-push / install auto-init, each
+# in .sh and .ps1). The manual CLI `bin/session-sync.sh push|pull|status|reset`
+# stays ungated — typing the command already expresses intent. These cases must
+# PASS both before and after the gate lands; red here means the gate leaked.
 
 echo ""
 echo "=== SESSION_SYNC independence of the manual CLI ==="
@@ -20,7 +16,9 @@ SSI_PROJECTS="$SSI_CLAUDE/projects"
 git init --bare "$SSI_REMOTE" >/dev/null 2>&1
 mkdir -p "$SSI_CLAUDE"
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$SSI_CLAUDE" --remote-url "$SSI_REMOTE" >/dev/null 2>&1
+    --claude-dir "$SSI_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773).
+git -C "$SSI_PROJECTS" remote add origin "$SSI_REMOTE" >/dev/null 2>&1
 _git_prepare_repo "$SSI_PROJECTS"
 git -C "$SSI_PROJECTS" add -A >/dev/null 2>&1
 git -C "$SSI_PROJECTS" commit -m "initial" >/dev/null 2>&1

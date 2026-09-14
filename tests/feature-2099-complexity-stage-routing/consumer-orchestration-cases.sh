@@ -3,7 +3,7 @@
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, integration, model-selection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
-# MDP-3 / WT-5 / WCD-3 are the three mandatory consumer points (detail.md). The
+# MDP-3 / WT-6 / WCD-3 are the three mandatory consumer points (detail.md). The
 # sibling static and dispatch suites grep them or replay a hand-written command;
 # neither runs what the skill itself specifies. Here the command is EXTRACTED
 # FROM THE SKILL FILE, run verbatim, and mapped to a model by the mapping that
@@ -11,7 +11,7 @@
 
 # The three consumer rows: skill dir | stage key | read step | Agent-launch step.
 D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
-write-tests|write_tests|WT-5|WT-6
+write-tests|write_tests|WT-6|WT-7
 write-code|write_code|WCD-3|WCD-4"
 
 d2099_skill_file() { echo "$AGENTS_DIR/skills/$1/SKILL.md"; }
@@ -22,7 +22,7 @@ d2099_skill_file() { echo "$AGENTS_DIR/skills/$1/SKILL.md"; }
 #
 # Bounded to the REQUIRED step's own section (d2099_section_cli_line): a whole-file
 # grep would take the first mention anywhere — an example, a stale duplicate, or
-# prose — and validate that instead of MDP-3/WT-5/WCD-3 (round-10 C1). A section
+# prose — and validate that instead of MDP-3/WT-6/WCD-3 (round-10 C1). A section
 # holding zero or several such lines yields "" here and is reported by name in
 # CO-0 below, never resolved to an arbitrary pick.
 d2099_extract_cmd() {
@@ -39,14 +39,14 @@ d2099_extract_cmd() {
 d2099_launch_step() {
     case "$1" in
         MDP-3) echo "MDP-4" ;;
-        WT-5)  echo "WT-6" ;;
+        WT-6)  echo "WT-7" ;;
         WCD-3) echo "WCD-4" ;;
         *) echo "" ;;
     esac
 }
 
 # --- the signals FILE, the only channel the judged csv now travels on ----------
-# MDP-3 / WT-5 / WCD-3 no longer carry a `--signals <csv-or-empty>` splice slot.
+# MDP-3 / WT-6 / WCD-3 no longer carry a `--signals <csv-or-empty>` splice slot.
 # The orchestrator Writes the judged csv (Write tool, never Bash) to
 # `<PLANS_DIR>/<session-id>-<stage>-signals.txt` and the documented line carries
 # only `--signals-file "<that path>"` — a constant shape no judge text reaches.
@@ -393,7 +393,7 @@ $D2099_CONSUMERS
 EOF
 }
 
-# SKIPPED: observing the REAL Agent tool call at MDP-4 / WT-6 / WCD-4 and asserting
+# SKIPPED: observing the REAL Agent tool call at MDP-4 / WT-7 / WCD-4 and asserting
 #   the `model:` the subagent is actually launched with.
 # Because: `Agent(...)` exists only inside a live Claude Code session and the three
 #   skills express the launch as PROSE ("Launch subagent (Agent tool, ..., model:

@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/turn-marker.js, hooks/show-plan-link.js, hooks/stop-confirm-plan-guard.js
-# Tags: plan, vscode, hook, workflow, plans
-# Tests for #524 confirm-plan guard:
-#   - hooks/stop-confirm-plan-guard.js (Stop hook)
-#   - hooks/lib/turn-marker.js (marker read/write helpers)
-#   - hooks/show-plan-link.js (marker write integration)
-#
-# Marker files: <CLAUDE_WORKFLOW_DIR>/<sid>.confirm-plan-turn-<rand>.json
-# When CONFIRM_<STEP>=on and show-plan-link.js fires a breadcrumb, a marker is
-# written. On Stop, the guard reads markers for the current session, scans the
-# last assistant turn in the JSONL transcript, and blocks with decision=block
-# when a PLANS_DIR path appears in any text content block.
+# Tests: hooks/lib/turn-marker.js, hooks/show-plan-link.js, hooks/stop-confirm-plan-guard.js, hooks/lib/plan-artifact-lang.js
+# Tags: plan, vscode, hook, workflow, plans, scope:common
+# #524 confirm-plan guard: stop-confirm-plan-guard.js (Stop hook), turn-marker.js
+# (marker helpers), show-plan-link.js (marker write integration).
+# Marker files: <CLAUDE_WORKFLOW_DIR>/<sid>.confirm-plan-turn-<rand>.json — written
+# when show-plan-link.js fires a breadcrumb; on Stop the guard reads them, scans the
+# last assistant turn of the JSONL transcript and blocks when a PLANS_DIR path
+# appears in a text block (Layer 1). Layer 2 (#2278) cases: fix-524-confirm-plan-guard/layer2-cases.sh.
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
@@ -315,6 +311,10 @@ else
   fail "T10 two markers — before=$COUNT_BEFORE_T10 after=$COUNT_AFTER_T10 rc=$STOP_RC"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T10}".confirm-plan-turn-*.json 2>/dev/null || true
+
+# ── T13–T26: Layer 2 (marker-independent follow-up + PLAN_LANG re-lint, #2278) ──
+# shellcheck source=./fix-524-confirm-plan-guard/layer2-cases.sh
+. "$(dirname "$0")/fix-524-confirm-plan-guard/layer2-cases.sh"
 
 # ══════════════════════════════════════════════════════════════════════════
 # Section B: hooks/show-plan-link.js — marker write integration
