@@ -1,13 +1,9 @@
 "use strict";
-// hooks/bash-guard/exemptions.js — the two approved carve-outs, and their scopes.
+// hooks/bash-guard/exemptions.js — approved exemptions from bash-guard blocking.
 //
-// SCOPE IS THE WHOLE POINT. Round 1 forgave a command wholesale the moment any reason to
-// forgive appeared, so one excused `|` also excused the `>` beside it. An exemption now
-// declares what it may forgive: a "hit" exemption removes only the literal ids it names
-// at the position it matched, while a "command" exemption clears the line because the
-// grant it reads blessed the line. Only allow-rule-match may be command-scoped — the user
-// wrote that command into permissions.allow themselves, and denying it for its shape
-// would overrule an explicit grant.
+// hit-scoped: removes only the named literalId at the matched position.
+// command-scoped: clears the whole line; only allow-rule-match may use this scope
+// (an allow rule in permissions.allow is an explicit user grant).
 
 const path = require("path");
 const { resolveEffectiveSegment } = require("../lib/command-ir");
@@ -32,12 +28,9 @@ function pipesIntoXargs(hit, ctx) {
   return XARGS_BASENAMES.has(path.posix.basename(effective.cmd0.split("\\").join("/")));
 }
 
-// permissions.allow globs match the WHOLE command string, so an allow rule covering
-// `cd /repo && git commit -m x` would blanket-forgive a push --force appended after
-// the commit. Deny rules are anchored (#2280) and no longer catch the whole string
-// from a cd-prefixed form, so each &&/;/||/newline segment is checked on its own —
-// a hit here withholds the exemption and forces the model to resubmit the chain as
-// separate commands.
+// permissions.allow matches the whole command string, so an allow-rule covering a
+// `cd … && git commit` would excuse a dangerous op in a later segment. Re-check each
+// segment; a deny hit withholds the exemption.
 function anySegmentDenyMatched(ctx) {
   const raw = (ctx && ctx.commandText) || "";
   if (!raw) return false;

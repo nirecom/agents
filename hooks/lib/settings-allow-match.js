@@ -3,11 +3,8 @@
 // command string? Semantics SSOT: docs/architecture/claude-code/settings.md "Permission
 // glob matching".
 //
-// Both fail open toward "let it through" on unreadable settings: isAllowRuleMatch ->
-// matched (under-matching would deny a granted command); isDenyRuleMatch -> NOT
-// matched, since its sole caller only reads a deny match as "withhold the allow-rule
-// exemption" — resolving "matched" here would instead force a denial on every
-// unreadable-settings + chained-command shape (e.g. `git status && ls`).
+// Both fail open on unreadable settings: isAllowRuleMatch → matched (avoid denying a
+// granted command); isDenyRuleMatch → NOT matched (avoid blocking harmless chained ops).
 
 const fs = require("fs");
 const os = require("os");

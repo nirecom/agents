@@ -5,9 +5,8 @@
 #
 # Run wrapped: bin/run-with-timeout.sh 120 bash tests/feature-2280-settings-deny-anchor.sh
 #
-# THE INCIDENT (#2280). A permission glob is matched against the WHOLE command string, so
-# the leading `*` in `Bash(*push --force*)` means "this substring appears ANYWHERE" -- and
-# a WORKFLOW_OFF_EMERGENCY sentinel that merely NARRATES a force push was auto-denied.
+# THE INCIDENT (#2280): `*` in `Bash(*push --force*)` matched narration text, not only
+# real git invocations, causing false-positive blocks on harmless commands.
 
 set -uo pipefail
 
@@ -16,16 +15,11 @@ SETTINGS="$AGENTS_DIR/settings.json"
 ALLOW_MATCH_MODULE="$AGENTS_DIR/hooks/lib/settings-allow-match.js"
 PART_DIR="$AGENTS_DIR/tests/feature-2280-settings-deny-anchor"
 
-# THE CONTRACT UNDER TEST. Every MUST-trigger deny rule is anchored to a real git
-# invocation form (bare / `git -C *` / `git -c *` / `git --no-pager`); the OPTIONAL
-# rm/find/sudo/docker/aws family keeps its leading `*` on purpose (sudo/env/xargs prefixes
-# break the first-token guarantee). A `cd * && git ...` compound bypass is deliberately
-# NOT matched here (P13-P37 pin NO-MATCH) -- see docs/architecture/claude-code/settings.md
-# for why bash-guard, not settings.json, is the layer that catches it.
-#
-# OUT OF SCOPE: the deployed ~/.claude/settings.json and its drift check (the plan keeps
-# that a manual step so this suite stays hermetic), JSON re-assembly, and the argv-walking
-# hook redesign that is the permanent fix (#2266).
+# CONTRACT: MUST-trigger rules are anchored to the four git invocation forms (bare /
+# `git -C *` / `git -c *` / `git --no-pager`). OPTIONAL rm/find/sudo/docker/aws family
+# keeps leading `*` (sudo/env/xargs prefix safety). cd-compound forms are NOT matched
+# (P13-P37 = NO-MATCH); bash-guard's anySegmentDenyMatched handles them instead.
+# OUT OF SCOPE: deployed ~/.claude/settings.json drift, JSON re-assembly, #2266 redesign.
 
 PASS=0
 FAIL=0
