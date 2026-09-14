@@ -17,11 +17,11 @@ run_P6() {
         case "$label" in
             state-corrupt) seed_state_corrupt "$tmp" "$sid" ;;
             invalid-timestamp-pre)
-                dispatch_skill "$tn" "$sid"
+                dispatch_lookahead "$tn" "$sid"
                 strip_timestamp "$tmp" "$sid" research
                 ;;
             invalid-timestamp-started)
-                dispatch_skill "$tn" "$sid"
+                dispatch_lookahead "$tn" "$sid"
                 complete_workflow_init "$tn" "$sid"
                 strip_timestamp "$tmp" "$sid" research
                 ;;
@@ -80,7 +80,7 @@ TABLE
 run_P8() {
     local tmp tn problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p8
+    dispatch_lookahead "$tn" p8
     complete_workflow_init "$tn" p8
     backdate_research "$tmp" p8 $((TTL_MS + 60000))
     seed_workflow_off "$tmp" p8
@@ -125,7 +125,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p8')))
 run_P9() {
     local tmp tn problems="" started kinds compact ledger_steps
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p9pre
+    dispatch_lookahead "$tn" p9pre
     mark_step_in_progress "$tn" p9pre detail
     backdate_step "$tmp" p9pre research $((TTL_MS + 60000))
     backdate_step "$tmp" p9pre detail $((TTL_MS + 60000))
@@ -168,7 +168,7 @@ process.stdout.write(steps.join(','));" 2>/dev/null)"
     rm -rf "$tmp" 2>/dev/null || true
 
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p9started
+    dispatch_lookahead "$tn" p9started
     mark_step_in_progress "$tn" p9started detail
     complete_workflow_init "$tn" p9started
     backdate_step "$tmp" p9started research $((TTL_MS + 60000))

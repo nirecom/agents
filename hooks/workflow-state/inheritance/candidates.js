@@ -17,6 +17,11 @@ const { _listJsonlByMtime } = require("../session-id");
 const { readLineageAncestors } = require("./lineage");
 const { contextMatches } = require("./context-match");
 
+// Mirrors adopt.js's own constant of the same name (not re-exported from there:
+// requiring adopt.js here would close a require cycle, since adopt.js already
+// requires this module). Keep both lists in sync — CPR-ORTH.
+const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"]);
+
 // The transcript directory Claude Code derives from a resolved cwd. The encoder
 // is session-title.js's, not a second copy: the two used to disagree on a
 // POSIX-style drive-letter cwd, so `--from` and `--list` resolved different
@@ -95,13 +100,16 @@ function listRecentContextCandidates(ctx, opts) {
       try {
         verdict = evaluateResumability(state);
       } catch (e) { continue; }
-      if (!verdict || !verdict.eligible) continue;
+      const degradable = verdict && !verdict.eligible
+        && DEGRADABLE_RESUMABILITY_REASONS.indexOf(verdict.reason) !== -1;
+      if ((!verdict || !verdict.eligible) && !degradable) continue;
       out.push({
         sessionId: id,
         session_id: id,
         state,
         git_branch: (state.current && state.current.git_branch) ?? state.git_branch ?? null,
         last_activity: lastActivityOf(state),
+        degraded_reason: degradable ? verdict.reason : null,
       });
     }
   }

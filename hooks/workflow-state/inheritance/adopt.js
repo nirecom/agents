@@ -5,6 +5,7 @@
 // `adopt-prior-state` phase) but only ONE implementation, here (CPR-SSOT).
 
 const { readState, VALID_STEPS } = require("../state-io");
+const { isEffectivelyPendingStep } = require("../lifecycle");
 const { contextMatches } = require("./context-match");
 const { listRecentContextCandidates } = require("./candidates");
 const { applyInheritance } = require("./apply");
@@ -58,11 +59,14 @@ function verifyEquivalence(heirCwd, donorState) {
 
 // An heir that has already recorded work is NOT a crash-resume shell: adopting
 // into it would bulldoze real progress with a foreign session's record.
+//
+// "Recorded work" is asked of isEffectivelyPendingStep, which folds
+// isLookaheadOnlyInFlightState in: the WI-10 lookahead's own mark states that a
+// TOOL CALL ran, not that the heir did anything, and reading it as progress is
+// what made /resume-session --from refuse its own heir (#2279).
 function isAllPending(state) {
-  const steps = (state && state.steps) || {};
   for (const step of VALID_STEPS) {
-    const entry = steps[step];
-    if (entry && entry.status && entry.status !== "pending") return false;
+    if (!isEffectivelyPendingStep(state, step)) return false;
   }
   return true;
 }

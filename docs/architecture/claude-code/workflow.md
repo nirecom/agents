@@ -642,6 +642,15 @@ explicit allow-list on the settling event's `origin`, not a denylist on
 `session-inherit`: only origins known to represent the current session's own
 genuine action count (CPR-UNV — no implicit fallback).
 
+`hooks/workflow-state/lifecycle.js#isEffectivelyPendingStep` is the separate,
+narrower SSOT for a different question — not "did this session start the
+workflow" but "did this specific step receive any genuine work" — used by
+adoption-gate readers deciding whether a heir session's step is safe to
+overwrite. Its sole consumer today is
+`hooks/workflow-state/inheritance/adopt.js#isAllPending` (#2279); any future
+reader asking "is this step still untouched" should call it rather than
+re-deriving the same in-progress/origin check.
+
 `ADOPTION_ORIGINS` currently contains:
 
 - `mark-step` — the direct, user/skill-driven completion path (default
@@ -700,6 +709,19 @@ Boundary properties, and where each is enforced:
   `/workflow-init` WI-10, before any state file exists. The hook resolves an
   absent state (or `workflow_init` still pending) to `research`, so the WI-10
   window is covered — a bounded special case, not an "always research" rule.
+  The lookahead promotion itself is narrower than the general allow-list: it
+  fires only for `Agent`/`Task` dispatches (`LOOKAHEAD_DISPATCH_TOOLS`,
+  `isLookaheadDispatchTool`), not `Skill` — WI-10's own dispatch is a
+  subagent call, so widening the lookahead window to `Skill` would mark a
+  step in-flight on every ordinary skill invocation, not just the genuine
+  first-dispatch case (#2279 D-3). Separately, any `Skill` dispatch whose
+  resolved name is on `META_OP_SKILLS` (`isMetaOpDispatch`) — currently just
+  `resume-session` — is never marked in-flight for any step, lookahead or
+  not: a meta-operation skill inspects workflow state rather than performing
+  it, so treating its own dispatch as work would taint the very state it is
+  trying to read. `tests/TL3-hook-skill-dispatch-payload.sh` owns verifying
+  that the host's real `tool_input.skill` payload shape still matches what
+  `skillNameOf` expects.
 - **Subagents are excluded.** A dispatch made *from inside* a subagent carries
   `agent_id`; the hook no-ops, so a nested dispatch cannot re-mark the step.
 - **Idempotent.** Re-marking an already `in_progress` step appends no event.
@@ -732,6 +754,13 @@ Boundary properties, and where each is enforced:
   notifier is gated. A genuinely-started session whose allowlisted step
   overruns the TTL keeps being notified every prompt, unchanged (Accepted
   Tradeoff — intent.md).
+- **C4's per-finding treatment (#2213) sits alongside this exception.** Both
+  are grounded in the same `isLookaheadOnlyInFlight` check, but they gate
+  different consumers: the bullet above scopes the UserPromptSubmit
+  notifier's exemption per finding rather than per session; #2213 applies the
+  same per-finding granularity to C4's own premature-stop evaluation, so a
+  session with one genuinely-stalled step and one lookahead-only step is
+  blocked for the former without being silenced for the latter.
 
 ### Final Report
 

@@ -11,12 +11,45 @@
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'notstarted2169'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-# dispatch_skill <tn> <sid> — the real PostToolUse auto-mark hook, driven with
-# a Skill dispatch payload, so `research` gets marked in_progress via WI-10.
-dispatch_skill() {
-    printf '{"tool_name":"Skill","session_id":"%s","transcript_path":"","tool_input":{"description":"x"}}' "$2" \
+# dispatch_lookahead <tn> <sid> — the real PostToolUse auto-mark hook, driven
+# with a payload that TRIGGERS THE WI-10 LOOKAHEAD, so `research` gets marked
+# in_progress on a session that never ran /workflow-init.
+#
+# `Agent`, not `Skill`: LOOKAHEAD_DISPATCH_TOOLS (hooks/lib/step-in-flight-policy.js,
+# #2279) excludes Skill, so a Skill payload marks nothing and every caller below
+# would measure an empty state file. Renamed from dispatch_skill accordingly —
+# callers mean "produce the lookahead mark". The Skill axis lives in
+# tests/feature-2013-step-in-flight-automark/d-skill-dispatch.sh.
+dispatch_lookahead() {
+    printf '{"tool_name":"Agent","session_id":"%s","transcript_path":"","tool_input":{"description":"x"}}' "$2" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
+}
+
+# dispatch_meta_skill <tn> <sid> — a Skill dispatch of the meta-op skill
+# `resume-session`. Marks nothing (META_OP_SKILLS + LOOKAHEAD_DISPATCH_TOOLS
+# both exclude it), so the session stays untouched — the C-d shape of
+# tests/feature-2013-step-in-flight-automark/e-lookahead-guard.sh.
+dispatch_meta_skill() {
+    printf '{"tool_name":"Skill","session_id":"%s","transcript_path":"","tool_input":{"skill":"resume-session"}}' "$2" \
+        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+          "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
+}
+
+# seed_all_pending <tmp> <sid> — a state file that exists with every step
+# pending and no event stream, written directly (the C-b shape of
+# e-lookahead-guard.sh): "a file exists" is not "the session started".
+seed_all_pending() {
+    P="$(node_path "$1/$2.json")" SID="$2" "$RWT" 15 node -e "
+const fs = require('fs');
+const now = new Date().toISOString();
+const ALL = ['workflow_init','clarify_intent','research','outline','detail','branching_complete',
+  'write_tests','review_tests','run_tests','review_security','docs','user_verification',
+  'cleanup','pre_final_report_gate'];
+const steps = {};
+for (const s of ALL) steps[s] = { status: 'pending', updated_at: null };
+fs.writeFileSync(process.env.P, JSON.stringify({ version: 1, session_id: process.env.SID,
+  created_at: now, steps, workflow_type: 'wf-code' }));" >/dev/null 2>&1
 }
 
 # backdate_research <tmp> <sid> <ms-ago> — age research's own events so the
@@ -45,7 +78,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(s));" >/dev/null 2>&1
 }
 
 # mark_step_in_progress <tn> <sid> <step> — direct markStep on an arbitrary
-# STEP_IN_FLIGHT_ALLOWLIST step. dispatch_skill only ever marks `research`
+# STEP_IN_FLIGHT_ALLOWLIST step. dispatch_lookahead only ever marks `research`
 # (the WI-10 lookahead is hardcoded to that step pre-adoption), so P9's second
 # stalled step needs this instead. Same technique as seed_step_in_flight in
 # tests/feature-1794-stop-guard-exemptions/helpers.sh.
@@ -77,8 +110,8 @@ seed_state_corrupt() {
 # strip_timestamp <tmp> <sid> <step> — deletes the `at` field from <step>'s
 # event(s), turning an in_progress record into one with no usable timestamp
 # (models M5 in tests/feature-1997-mechanism-failure/m-detect.sh, generalized
-# to accept a step so it works after either dispatch_skill alone or
-# dispatch_skill + complete_workflow_init).
+# to accept a step so it works after either dispatch_lookahead alone or
+# dispatch_lookahead + complete_workflow_init).
 strip_timestamp() {
     P="$(node_path "$1/$2.json")" ST="$3" "$RWT" 15 node -e "
 const fs = require('fs');

@@ -59,12 +59,13 @@ require_defined() {
 }
 require_defined \
     pass fail skip \
-    make_tmp node_path dispatch_skill backdate_research backdate_step \
+    make_tmp node_path dispatch_lookahead dispatch_meta_skill seed_all_pending \
+    backdate_research backdate_step \
     mark_step_in_progress seed_workflow_off seed_state_corrupt strip_timestamp \
     complete_workflow_init run_ups research_status stalled_kinds_for \
     seed_malicious_step mark_step_with_origin \
     run_P1 run_P1b run_P2 run_P3 run_P4 run_P5 run_P6 run_P8 run_P9 \
-    run_P10 run_P11 run_P12 run_P13 run_P14
+    run_P10 run_P11 run_P12 run_P13 run_P14 run_P15 run_P16
 
 # P1-P3 — core pre-workflow-init suppression contract
 run_P1
@@ -90,6 +91,14 @@ run_P10
 # gap, xfail-pinned) and isKnownStep()'s direct per-branch verdicts
 run_P13
 run_P14
+
+# P15 — the cross-reader drift detector for the WI-10 lookahead rule (#2279)
+run_P15
+
+# P16 — the same drift detector one lane over: C4's per-finding exemption vs
+# this hook's, on identical fixtures (#2213). Fails until S-5 exports
+# isFindingExemptFromC4.
+run_P16
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

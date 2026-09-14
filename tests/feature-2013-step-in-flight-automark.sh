@@ -4,37 +4,25 @@
 # Tags: stop-hook, c4, step-in-flight, posttooluse, automark, allowlist, matrix, malformed-input, wi-10-lookahead, regression-2013, scope:issue-specific, pwsh-not-required, TL1, TL2
 
 # Issue #2013 — an Agent-tool dispatch during WI-10 tripped the C4 premature-stop
-# guard: `research` was never recorded in_progress, so nothing told C4 that work
-# was under way. Two halves, both covered here:
-#   A (TL1) — the predicate. isStepInFlight / anyStepInFlight over a four-member
-#     allowlist inside a 4h TTL, fail-CLOSED, write_code predicate untouched.
-#   B (TL2) — the write. The real PostToolUse hook spawned as a child process,
-#     including the WI-10 lookahead (absent state / workflow_init-pending both
-#     resolve to `research`) and the malformed-payload classes it must survive.
-#   C (TL2) — the read, at the consumer that motivated the issue: the real C4
-#     Stop guard over all four allowlisted steps x four record states.
+# guard: `research` was never recorded in_progress, so nothing told C4 work was
+# under way. A (TL1) the predicate, B (TL2) the real PostToolUse write, C (TL2)
+# the real C4 read. D/E add the #2279/#2213 Skill-dispatch axis.
+# Every positive case is paired with its non-targeted counterpart (CPR-ORTH), so
+# a fix over-reaching into "any in_progress step silences C4" fails
+# A5/A6/A7/A12/B8/B9.
 
-# Every positive case is paired with its non-targeted counterpart (CPR-ORTH):
-# allowlisted vs not, dispatch tool vs not, main conversation vs subagent, fresh
-# vs TTL-expired. A fix that over-reaches into "any in_progress step silences
-# C4" fails A5/A6/A7/A12/B8/B9.
+set -u
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code fires PostToolUse for Agent/Task/Skill with the payload
-#   shape assumed here (agent_id presence in particular), or UserPromptSubmit
-#   for the mechanism-check hook. A renamed matcher/event/command in settings.json
-#   would break host dispatch without any TL2 test failing; a host-process test
-#   with claude -p would catch this, but requires RUN_TL3=on.
+#   shape assumed here (agent_id and tool_input.skill in particular), or
+#   UserPromptSubmit for the mechanism-check hook. A renamed matcher/event/command
+#   in settings.json would break host dispatch without any TL2 test failing.
+#   tests/TL3-hook-skill-dispatch-payload.sh covers it under RUN_TL3=on.
 # - Whether the real Stop chain stays silent across a genuine multi-minute
-#   dispatch driven by Claude Code itself
-
-# - Real matcher-string semantics inside the host's hook dispatcher: A14 reads
-#   settings.json as data only. No test verifies a main-agent payload where
-#   `agent_id` is absent (Claude may omit it in main-conversation PostToolUse).
+#   dispatch driven by Claude Code itself.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration
-
-set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -62,6 +50,12 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 . "$CASE_DIR/b-posttooluse.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/c-guard.sh"
+# shellcheck source=/dev/null
+. "$CASE_DIR/d-skill-dispatch.sh"
+# shellcheck source=/dev/null
+. "$CASE_DIR/e-lookahead-guard.sh"
+# shellcheck source=/dev/null
+. "$CASE_DIR/f-skill-name.sh"
 
 # Sourced-fragment sanity gate (same rationale as the #1794 suite): a fragment
 # that dies half-way leaves some functions defined and the rest missing, and
@@ -88,7 +82,11 @@ require_defined \
     run_A11 run_A12 run_A13 run_A14 run_A15 run_A16 \
     run_B1 run_B2 run_B3 run_B4 run_B5 run_B5b run_B6 run_B7 run_B8 run_B9 \
     run_B10 run_B11 run_B12 \
-    run_C1 run_C2 run_C3
+    run_B13 run_B14 run_B15 run_B16 run_B17 run_B18 run_B19 run_B20 run_B21 \
+    run_B22 run_B23 run_B24 \
+    run_F1 run_F2 run_F3 \
+    run_C1 run_C2 run_C3 \
+    run_Ca run_Cb run_Cc run_Cd run_Ce run_Cf run_Cg run_Ch
 
 # A1-A15 — predicate + policy + registration
 run_A1
@@ -123,10 +121,45 @@ run_B10
 run_B11
 run_B12
 
+# B13-B24 — the Skill-tool dimension of the same lookahead (#2279)
+run_B13
+run_B14
+run_B15
+run_B16
+run_B17
+run_B18
+run_B19
+run_B20
+run_B21
+run_B22
+run_B23
+run_B24
+
+# F1-F3 — skillNameOf / isMetaOpDispatch over the whole input domain
+run_F1
+run_F2
+run_F3
+
 # C1-C3 — the real C4 Stop guard, the consumer the record exists to influence
 run_C1
 run_C2
 run_C3
+
+# C-a..C-e — the lookahead vs the pre-workflow-init exemption (#2213/#2279)
+run_Ca
+run_Cb
+run_Cc
+run_Cd
+run_Ce
+
+# C-f/C-g — the OTHER C4 lane: pre-workflow-init must not silence a genuine
+# mechanism failure (#2213). Expected to fail until the S-5 fix lands.
+run_Cf
+run_Cg
+
+# C-h — the two lanes' findings in ONE session: the exemption is per-finding, so
+# an exempt lookahead mark must not carry a genuine stall out with it (#2213).
+run_Ch
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

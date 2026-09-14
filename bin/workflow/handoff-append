@@ -6,7 +6,13 @@
 // look at different files.
 
 const path = require("path");
-const { appendHandoffEntry } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-artifact"));
+const {
+  appendHandoffEntry,
+  HANDOFF_CLASSES,
+  HANDOFF_ORIGINS,
+  HANDOFF_STEPS,
+  KEY_VALID_RE,
+} = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-artifact"));
 const { resolveSessionId } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "session-id"));
 
 const FLAGS = {
@@ -19,11 +25,42 @@ const FLAGS = {
   "--origin": "origin",
 };
 
+// A context-pressured session runs this from memory (rules/handoff-emergency-flush.md)
+// and cannot afford to open the source, so the command answers for itself.
+// --origin has no default on purpose: the producer is never inferred.
+const USAGE = [
+  "Usage: handoff-append --class <A-G> --step <step|-> --key <id> --summary <text> --pointer <path|-> --origin <origin>",
+  "",
+  "Required flags:",
+  "  --class <A-G>       entry class; one of: " + HANDOFF_CLASSES.join(", "),
+  "  --step <step|->     workflow step the entry belongs to, or '-' for a stepless entry",
+  "  --key <id>          dedup identity; characters A-Z a-z 0-9 _ . : -",
+  "  --origin <origin>   what produced the entry; one of: " + HANDOFF_ORIGINS.join(", "),
+  "",
+  "Optional flags:",
+  "  --summary <text>    what a fresh session needs; keep under 300 characters",
+  "  --pointer <path|->  file holding the detail, or '-' when there is none",
+  "  --session <sid>     target session; defaults to the resolved Claude Code session id",
+  "  --help, -h          print this message",
+  "",
+  "Class vocabulary and the entry grammar: docs/architecture/claude-code/handoff-artifact.md",
+  "",
+].join("\n");
+
+const HELP_FLAGS = ["--help", "-h"];
+
+function acceptedFlagList() {
+  return Object.keys(FLAGS).concat(HELP_FLAGS).join(", ");
+}
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
+    if (HELP_FLAGS.indexOf(argv[i]) !== -1) return { help: true };
     const name = FLAGS[argv[i]];
-    if (!name) return { error: `unknown argument: ${argv[i]}` };
+    if (!name) {
+      return { error: `unknown argument: ${argv[i]} — accepted flags: ${acceptedFlagList()}` };
+    }
     if (i + 1 >= argv.length) return { error: `${argv[i]} requires a value` };
     out[name] = argv[i + 1];
     i += 1;
@@ -31,8 +68,31 @@ function parseArgs(argv) {
   return { opts: out };
 }
 
+// Every offending field in ONE pass: a caller who mistyped two flags should not
+// have to rerun the command to discover the second one.
+function invalidEntryFields(opts) {
+  const bad = [];
+  if (HANDOFF_CLASSES.indexOf(opts.cls) === -1) {
+    bad.push(`--class ${JSON.stringify(opts.cls ?? null)} (want one of: ${HANDOFF_CLASSES.join(", ")})`);
+  }
+  if (HANDOFF_STEPS.indexOf(opts.step) === -1) {
+    bad.push(`--step ${JSON.stringify(opts.step ?? null)} (want a workflow step name, or '-')`);
+  }
+  if (typeof opts.key !== "string" || !KEY_VALID_RE.test(opts.key)) {
+    bad.push(`--key ${JSON.stringify(opts.key ?? null)} (want characters A-Z a-z 0-9 _ . : -)`);
+  }
+  if (HANDOFF_ORIGINS.indexOf(opts.origin) === -1) {
+    bad.push(`--origin ${JSON.stringify(opts.origin ?? null)} (want one of: ${HANDOFF_ORIGINS.join(", ")})`);
+  }
+  return bad;
+}
+
 function main() {
   const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.help) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
   if (parsed.error) {
     process.stderr.write(`handoff-append: ${parsed.error}\n`);
     return 2;
@@ -41,6 +101,11 @@ function main() {
   const sid = opts.session !== undefined ? opts.session : resolveSessionId({});
   if (!sid) {
     process.stderr.write("handoff-append: no session id could be resolved\n");
+    return 2;
+  }
+  const bad = invalidEntryFields(opts);
+  if (bad.length) {
+    process.stderr.write(`handoff-append: rejected — ${bad.length} field(s) out of vocabulary: ${bad.join("; ")}\n`);
     return 2;
   }
   const result = appendHandoffEntry(sid, {
@@ -55,8 +120,10 @@ function main() {
     process.stdout.write(`WRITTEN=1 REASON=${result.reason}\n`);
     return 0;
   }
+  // invalidEntryFields already cleared the entry, so `invalid` here can only be
+  // the session id — named rather than folded into a generic sentence.
   if (result.reason === "invalid") {
-    process.stderr.write("handoff-append: rejected — session id or entry fields are out of vocabulary\n");
+    process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
     return 2;
   }
   process.stdout.write(`WRITTEN=0 REASON=${result.reason}\n`);
