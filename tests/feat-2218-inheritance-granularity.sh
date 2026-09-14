@@ -20,6 +20,21 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
+# Real git fixture for G5's verifiedEquivalent path: compareRepoIdentity (in
+# bin/workflow/lib/next-step/repo-dir-guard.js) requires actual on-disk git
+# repos to reach SIBLING — a bare fake path string can never satisfy it.
+init_repo() {
+    git init -q "$1" 2>/dev/null
+    git -C "$1" config core.hooksPath /dev/null
+    git -C "$1" config user.email 't@example.com'
+    git -C "$1" config user.name 'fixture'
+    git -C "$1" config commit.gpgsign false
+    printf 'seed\n' > "$1/f.txt"
+    git -C "$1" add -A
+    GIT_AUTHOR_DATE='2020-01-01T00:00:00Z' GIT_COMMITTER_DATE='2020-01-01T00:00:00Z' \
+        git -C "$1" commit -q -m init
+}
+
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
 
 require_granularity() {
@@ -218,14 +233,39 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # flag the very same call must still be refused.
 run_G5() {
     require_granularity || return 0
-    local out
+    local out fixture_tmp main wt main_n wt_n
+    fixture_tmp="$(make_tmp)"
+    main="$fixture_tmp/main"; wt="$fixture_tmp/linked"
+    init_repo "$main"
+    git -C "$main" worktree add -q -b feature/g5 "$wt" 2>/dev/null
+    if [ ! -d "$wt" ]; then
+        rm -rf "$fixture_tmp" 2>/dev/null || true
+        fail "G5: fixture setup failed — could not create a linked worktree"
+        return 0
+    fi
+    main_n="$(node_path "$main")"; wt_n="$(node_path "$wt")"
+    # Donor's cwd is a projection field derived from creation-time events, not a
+    # plain object property — it cannot be reassigned after the fact
+    # (assertProjectionUnmutated). Substitute the REAL sibling-worktree repo into
+    # the shared DONOR_JS fixture at creation instead: compareRepoIdentity
+    # (repo-dir-guard.js) requires actual on-disk git repos to reach SIBLING, so
+    # the verifiedEquivalent path cannot use the fixture's opaque fake path.
+    donor_js_g5="${DONOR_JS//\/fixture\/repo/$main_n}"
     out="$(run_node "
 const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
 const { adoptState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
 const donorSid = 'donor-g5';
-$DONOR_JS
-writeState('heir-g5a', createInitialState('heir-g5a', { cwd: '/sibling/worktree', git_branch: 'feature/x' }));
+$donor_js_g5
+// DONOR_JS marks clarify_intent complete; evaluateResumability's S3 check
+// demotes to context-independent-only when the intent.md artifact backing
+// that completion is missing (#1681 symptom 2) — write the stub so this test
+// exercises full granularity rather than the degraded path.
+const fs = require('fs');
+const path = require('path');
+fs.mkdirSync(process.env.WORKFLOW_PLANS_DIR, { recursive: true });
+fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, donorSid + '-intent.md'), '# intent\n');
+writeState('heir-g5a', createInitialState('heir-g5a', { cwd: '$wt_n', git_branch: 'feature/x' }));
 const withFlag = adoptState({ heirSid: 'heir-g5a', donorSid, granularity: 'full', verifiedEquivalent: true });
 if (withFlag.ok !== true) problems.push('verified-equivalent-rejected:' + JSON.stringify(withFlag));
 const heirA = readState('heir-g5a');
@@ -240,6 +280,7 @@ const heirB = readState('heir-g5b');
 if ((heirB.events || []).some((e) => e.origin === 'session-inherit')) problems.push('events-written-despite-rejection');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
+    rm -rf "$fixture_tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
         pass "G5: granularity full + verifiedEquivalent inherits everything; full alone still refuses the mismatch"
     else

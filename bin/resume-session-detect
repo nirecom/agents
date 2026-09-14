@@ -5,7 +5,10 @@ const {
   resolveSessionId,
   readState,
   VALID_STEPS,
+  isLookaheadOnlyInFlightState,
+  isEffectivelyPendingStep,
 } = require("../hooks/workflow-state");
+const { LOOKAHEAD_PREINIT_STEP } = require("../hooks/lib/step-in-flight-policy");
 const { USAGE, parseResumeArgs } = require("./lib/resume-session/args");
 
 const STEP_TO_SKILL = Object.freeze({
@@ -19,6 +22,18 @@ const STEP_TO_SKILL = Object.freeze({
   cleanup:        "worktree-end",
 });
 
+// The WI-10 lookahead can only ever synthesize LOOKAHEAD_PREINIT_STEP, and only on
+// a session that has recorded nothing else. Any OTHER step carrying the same
+// origin is #2013's mark on a genuinely interrupted dispatch, which still resumes.
+function isPreInitLookaheadArtifact(state, step) {
+  if (step !== LOOKAHEAD_PREINIT_STEP) return false;
+  if (!isLookaheadOnlyInFlightState(state, step)) return false;
+  for (const other of VALID_STEPS) {
+    if (other !== step && !isEffectivelyPendingStep(state, other)) return false;
+  }
+  return true;
+}
+
 function detect() {
   const sessionId = resolveSessionId();
   if (!sessionId) return { type: "none", reason: "session_id_unresolved" };
@@ -29,6 +44,7 @@ function detect() {
   for (const step of VALID_STEPS) {
     const s = (state.steps[step] || {}).status;
     if (s === "in_progress") {
+      if (isPreInitLookaheadArtifact(state, step)) continue;
       if (STEP_TO_SKILL[step]) return { type: "skill", step, skill: STEP_TO_SKILL[step] };
       return { type: "sentinel-wait", step, hint: step };
     }
@@ -52,11 +68,10 @@ function runFrom(from) {
 function runList(query, limit) {
   const { listUpstreamCandidates } =
     require("../hooks/workflow-state/upstream-search");
+  const { heirContextOf } = require("./lib/resume-session/upstream-view");
   const sid = resolveSessionId();
-  const state = sid ? readState(sid) : null;
-  const ctx = state
-    ? { cwd: state.cwd || null, git_branch: state.git_branch ?? null }
-    : null;
+  // Same resolver as the `--from` path, so both agree on the heir's cwd/branch.
+  const ctx = heirContextOf({ heirSid: sid });
   const candidates = listUpstreamCandidates({ heirSid: sid, ctx, query, limit });
   emit({ type: "list", query: query || "", candidates });
   process.exit(0);

@@ -446,6 +446,11 @@ run_H11() {
     rm -rf "$tmp" 2>/dev/null || true
 }
 
+# H12-H17 (CLI UX) live in a sibling fragment: this file is already near the
+# 500-line HARD limit (rules/coding/file-split.md Pattern A).
+# shellcheck source=/dev/null
+. "$AGENTS_DIR/tests/feat-2218-handoff-artifact/cli-ux.sh"
+
 run_H1
 run_H2
 run_H3
@@ -457,6 +462,12 @@ run_H8
 run_H9
 run_H10
 run_H11
+run_H12
+run_H13
+run_H14
+run_H15
+run_H16
+run_H17
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

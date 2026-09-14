@@ -100,13 +100,19 @@ assert_pred() {
     fi
 }
 
-# run_automark <tn> <sid> <tool_name> [agent_id] — drives the real PostToolUse
-# auto-mark hook the way Claude Code does: a JSON payload on stdin. Sets
-# AM_OUT / AM_RC.
+# run_automark <tn> <sid> <tool_name> [agent_id] [skill_name] — drives the real
+# PostToolUse auto-mark hook the way Claude Code does: a JSON payload on stdin.
+# Sets AM_OUT / AM_RC.
+#
+# <skill_name> is the Skill tool's own payload field (`tool_input.skill`, the
+# same field hooks/stop-confirm-plan-guard.js reads). Omitted, the payload keeps
+# the pre-#2279 shape so every existing case is byte-identical.
 run_automark() {
-    AM_OUT=$(TOOL="$3" SID="$2" AGENT="${4:-}" "$RWT" 15 node -e "
+    AM_OUT=$(TOOL="$3" SID="$2" AGENT="${4:-}" SKILL="${5:-}" "$RWT" 15 node -e "
+const ti = { description: 'x' };
+if (process.env.SKILL) ti.skill = process.env.SKILL;
 process.stdout.write(JSON.stringify({ tool_name: process.env.TOOL, session_id: process.env.SID,
-  agent_id: process.env.AGENT, transcript_path: '', tool_input: { description: 'x' } }));" \
+  agent_id: process.env.AGENT, transcript_path: '', tool_input: ti }));" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" 2>/dev/null)
     AM_RC=$?

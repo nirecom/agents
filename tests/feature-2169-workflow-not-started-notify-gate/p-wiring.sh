@@ -7,7 +7,7 @@
 run_P4() {
     local tmp tn preload problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p4
+    dispatch_lookahead "$tn" p4
     backdate_research "$tmp" p4 $((TTL_MS + 60000))
 
     preload="$tmp/mutate-matrix-preload.js"
@@ -57,7 +57,7 @@ process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_pa
 run_P5() {
     local tmp tn preload problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p5
+    dispatch_lookahead "$tn" p5
     complete_workflow_init "$tn" p5
     backdate_research "$tmp" p5 $((TTL_MS + 60000))
 
@@ -131,7 +131,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isLookaheadOnlyInFlight('
 run_P12() {
     local tmp tn preload problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p12
+    dispatch_lookahead "$tn" p12
     backdate_research "$tmp" p12 $((TTL_MS + 60000))
 
     preload="$tmp/fault-inject-stop-exemption-policy-preload.js"
@@ -164,5 +164,117 @@ process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_pa
         pass "P12: a require('./lib/stop-exemption-policy') failure inside getExemptionMatrix() makes an otherwise-exempt pre-workflow-init/WI-10-lookahead session notify instead of staying silently suppressed — fail-safe, distinct from P5's fault injection of require('./workflow-state')"
     else
         fail "P12: getExemptionMatrix()'s own require failure did not fail safe toward notifying;$problems"
+    fi
+}
+
+# P15 (#2279): the drift detector. "Is this in_progress mark only the WI-10
+# lookahead's?" is one question with one owner — lifecycle.js's LOOKAHEAD_ORIGIN
+# and isLookaheadOnlyInFlight. The prompt-notify gate P1-P12 exercise already
+# asks it correctly; the readers that decide ADOPTION do not, and that split is
+# #2279. Read as data, so it costs nothing and holds for every future reader.
+run_P15() {
+    local f label problems="" owner="hooks/workflow-state/lifecycle.js"
+    # (a) the constant has exactly one definition site.
+    for f in $(grep -rl 'postuse-in-flight' "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" 2>/dev/null); do
+        case "$f" in
+            *"$owner") : ;;
+            *) problems="$problems [$(basename "$f") hard-codes the origin string instead of importing LOOKAHEAD_ORIGIN]" ;;
+        esac
+    done
+    # (b) every module that gates on "has this session recorded progress" reaches
+    #     the shared predicate. The list is the reader set, not an inventory of
+    #     today's call sites: adding a reader without the predicate is the drift.
+    for label in hooks/user-prompt-submit-mechanism-check.js \
+                 hooks/workflow-state/inheritance/adopt.js \
+                 bin/resume-session-detect; do
+        f="$AGENTS_DIR/$label"
+        if [ ! -f "$f" ]; then
+            problems="$problems [$label: not found]"
+        elif ! grep -qE 'isLookaheadOnlyInFlight|LOOKAHEAD_ORIGIN' "$f"; then
+            problems="$problems [$label: decides on in_progress without ever asking whether the mark is lookahead-only]"
+        fi
+    done
+    if [ -z "$problems" ]; then
+        pass "P15: the lookahead origin has a single owner and every progress-gating reader consults the shared predicate (CPR-SSOT)"
+    else
+        fail "P15: the WI-10 lookahead rule has drifted across its readers;$problems"
+    fi
+}
+
+# _p16_verdicts <tn> <sid> <step> <kind> — the two per-finding exemption
+# verdicts for ONE (session, finding) pair, as "c4=<v>,pn=<v>". A missing export
+# or a throwing predicate is reported as its own token rather than collapsing
+# into `false`, so the case can name what is actually absent.
+_p16_verdicts() {
+    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    SID="$2" STEP="$3" KIND="$4" "$RWT" 20 node -e "
+const finding = { step: process.env.STEP, kind: process.env.KIND };
+const sid = process.env.SID;
+const c4mod = require('$(node_path "$C4_HOOK")');
+const pnmod = require('$(node_path "$UPS_HOOK")');
+let c4;
+if (typeof c4mod.isFindingExemptFromC4 !== 'function') c4 = '<no-export:isFindingExemptFromC4>';
+else if (typeof c4mod.buildExemptionDeps !== 'function') c4 = '<no-export:buildExemptionDeps>';
+else {
+  try { c4 = String(c4mod.isFindingExemptFromC4(sid, finding, c4mod.buildExemptionDeps())); }
+  catch (e) { c4 = '<threw>'; }
+}
+let pn;
+try { pn = String(pnmod.isFindingExemptFromPromptNotify(sid, finding)); }
+catch (e) { pn = '<threw>'; }
+process.stdout.write('c4=' + c4 + ',pn=' + pn);" 2>/dev/null
+}
+
+# P16 (#2213, detail.md (h)): C4's C4_MECHANISM_EXEMPTIONS and the prompt-notify
+# hook's PROMPT_NOTIFY_EXEMPTIONS encode the SAME per-finding pre-workflow-init
+# rule in two places on purpose (#2169's implementation stays untouched as the
+# reference). A deliberate duplicate needs a machine-checked equality, or the two
+# drift and the same session gets contradictory answers from Stop and from the
+# next prompt. Fixtures are the C-b / C-c / C-d population of
+# tests/feature-2013-step-in-flight-automark/e-lookahead-guard.sh plus the
+# corrupt-state shape C-f adds. Expected to FAIL until the S-5 fix exports
+# isFindingExemptFromC4.
+run_P16() {
+    local tmp tn sid label step kind want out c4 pn problems="" C4_HOOK
+    C4_HOOK="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
+    while IFS='|' read -r label step kind want; do
+        label="$(printf '%s' "$label" | tr -d ' ')"
+        step="$(printf '%s' "$step" | tr -d ' ')"
+        kind="$(printf '%s' "$kind" | tr -d ' ')"
+        want="$(printf '%s' "$want" | tr -d ' ')"
+        [ -z "$label" ] && continue
+        case "$label" in \#*) continue ;; esac
+        tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
+        sid="p16-${label}"
+        case "$label" in
+            allpending)   seed_all_pending "$tmp" "$sid" ;;
+            lookahead)    dispatch_lookahead "$tn" "$sid"
+                          backdate_research "$tmp" "$sid" $((TTL_MS + 60000)) ;;
+            metaopskill)  dispatch_meta_skill "$tn" "$sid" ;;
+            statecorrupt) seed_state_corrupt "$tmp" "$sid" ;;
+        esac
+
+        out="$(_p16_verdicts "$tn" "$sid" "$step" "$kind")"
+        c4="${out%%,*}"; c4="${c4#c4=}"
+        pn="${out#*,pn=}"
+        [ "$c4" = "$pn" ] ||
+            problems="$problems [$label ($step/$kind): C4 says '$c4' but prompt-notify says '$pn' — the two copies of the pre-workflow-init per-finding rule disagree]"
+        [ "$c4" = "$want" ] ||
+            problems="$problems [$label ($step/$kind): C4 exemption verdict is '$c4', expected '$want']"
+        [ "$pn" = "$want" ] ||
+            problems="$problems [$label ($step/$kind): prompt-notify exemption verdict is '$pn', expected '$want']"
+        rm -rf "$tmp" 2>/dev/null || true
+    done <<'TABLE'
+# label      | finding step | finding kind      | both must answer
+allpending   | research     | in-flight-expired | false
+lookahead    | research     | in-flight-expired | true
+metaopskill  | research     | in-flight-expired | false
+statecorrupt | (state)      | state-corrupt     | false
+TABLE
+
+    if [ -z "$problems" ]; then
+        pass "P16: C4's C4_MECHANISM_EXEMPTIONS and the prompt-notify hook's PROMPT_NOTIFY_EXEMPTIONS return the SAME per-finding verdict across the C-b/C-c/C-d/corrupt-state population — the intentional duplicate has not drifted (#2213)"
+    else
+        fail "P16: the two per-finding pre-workflow-init exemption implementations disagree;$problems"
     fi
 }

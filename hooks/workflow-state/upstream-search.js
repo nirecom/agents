@@ -111,6 +111,7 @@ function toSearchRecord(rec, matchedOn) {
     sid: rec.sid,
     adoptable: false,
     adoptable_reason: SEARCH_ONLY_REASON,
+    adoptable_granularity: null,
     git_branch: null,
     cwd: null,
     last_activity: rec.lastActivity,
@@ -158,10 +159,15 @@ function contextRecord(candidate, searchRec) {
     matched_on: [], issues: [], title: null,
     artifacts: { intent: null, outline: null, detail: null, handoff: null },
   };
+  const degradedReason = candidate.degraded_reason || null;
   return {
     sid: candidate.sessionId,
     adoptable: true,
-    adoptable_reason: "context-match: lineage and resumability guards both pass for this cwd",
+    adoptable_reason: degradedReason
+      ? `context-match: lineage and context guards pass, resumability degraded (${degradedReason})`
+      : "context-match: lineage and resumability guards both pass for this cwd",
+    adoptable_granularity: null,
+    resumability_degraded_reason: degradedReason,
     git_branch: candidate.git_branch || null,
     cwd: state.cwd || null,
     last_activity: candidate.last_activity || lastActivityOf(state),
@@ -172,6 +178,33 @@ function contextRecord(candidate, searchRec) {
     artifacts: base.artifacts,
     sources: searchRec ? ["context", "search"] : ["context"],
   };
+}
+
+// Fills in each record's adoptable_granularity from the SAME decideGranularity
+// the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
+// the readState/git cost is bounded by displayed records, not by candidates.
+// The require is lazy: upstream-view.js reaches back into this tree, and a
+// top-level require would close the cycle.
+function enrichAdoptability(records, input) {
+  let previewer = null;
+  try {
+    const { createAdoptabilityPreviewer } = require("../../bin/lib/resume-session/upstream-view");
+    previewer = createAdoptabilityPreviewer(input || {});
+  } catch (e) {
+    previewer = null;
+  }
+  for (const rec of records) {
+    let preview = null;
+    if (previewer) {
+      try {
+        preview = previewer.preview(rec);
+      } catch (e) {
+        preview = null;
+      }
+    }
+    rec.adoptable_granularity = preview ? preview.adoptable_granularity : null;
+  }
+  return records;
 }
 
 // listUpstreamCandidates({heirSid, ctx, query, limit}) → [record, ...]
@@ -202,12 +235,14 @@ function listUpstreamCandidates(input) {
   out.push(...searchOnly);
 
   const limit = Number.isInteger(opts.limit) && opts.limit > 0 ? opts.limit : null;
-  return limit === null ? out : out.slice(0, limit);
+  const page = limit === null ? out : out.slice(0, limit);
+  return enrichAdoptability(page, { heirSid: opts.heirSid, ctx: opts.ctx });
 }
 
 module.exports = {
   ARTIFACT_KINDS,
   SEARCH_ONLY_CAP,
   searchUpstreamSessions,
+  enrichAdoptability,
   listUpstreamCandidates,
 };

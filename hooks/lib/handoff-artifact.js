@@ -332,6 +332,7 @@ module.exports = {
   HANDOFF_CLASSES,
   HANDOFF_ORIGINS,
   HANDOFF_STEPS,
+  KEY_VALID_RE,
   MAX_ENTRY_LINES,
   MAX_BYTES,
   getHandoffPath,

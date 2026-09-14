@@ -40,6 +40,32 @@ const C4_EXEMPTIONS = [
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
 ];
 
+// Per-finding exemptions that apply to the mechanism-failure lane only. The
+// condition mirrors hooks/user-prompt-submit-mechanism-check.js and rests on
+// the same EXEMPTION_MATRIX row (pre-workflow-init's c4 column) (#2213).
+// Deliberate duplication: intent.md keeps the #2169 side untouched as the
+// reference implementation; tests/feature-2169-.../p-wiring.sh cross-checks
+// that the two agree.
+const C4_MECHANISM_EXEMPTIONS = [
+  { id: "pre-workflow-init",
+    test: (sid, finding, d) =>
+      !d.isWorkflowStarted(sid) && d.isLookaheadOnlyInFlight(sid, finding.step) },
+];
+
+function isFindingExemptFromC4(sid, finding, deps) {
+  const matrix = require("./lib/stop-exemption-policy").EXEMPTION_MATRIX || {};
+  for (const row of C4_MECHANISM_EXEMPTIONS) {
+    const matrixRow = matrix[row.id];
+    if (!matrixRow || !matrixRow.c4) continue;
+    try {
+      if (row.test(sid, finding, deps)) return true;
+    } catch (_e) {
+      // fail-closed: do not exempt
+    }
+  }
+  return false;
+}
+
 // Assembles the predicates the table needs. Both the hook body and tests use
 // only this function, so the wiring never diverges between the two.
 // A require failure throws here and is caught by the caller (the
@@ -48,10 +74,11 @@ const C4_EXEMPTIONS = [
 function buildExemptionDeps() {
   const { isWorkflowOff, isNextStepPaused } =
     require("./lib/session-markers");
-  const { isWorkflowStarted, anyStepInFlight } = require("./workflow-state");
+  const { isWorkflowStarted, anyStepInFlight, isLookaheadOnlyInFlight } =
+    require("./workflow-state");
   return {
     isWorkflowOff, isNextStepPaused, isWorkflowStarted,
-    anyStepInFlight,
+    anyStepInFlight, isLookaheadOnlyInFlight,
   };
 }
 
@@ -155,7 +182,9 @@ if (require.main === module) {
     if (!sessionId) process.exit(0);
 
     const degraded = [];
-    if (firstExemption("session", { sid: sessionId }, deps, degraded)) process.exit(0);
+    const sessionExemption = firstExemption("session", { sid: sessionId }, deps, degraded);
+    // Every session exemption except pre-workflow-init still silences both lanes.
+    if (sessionExemption !== null && sessionExemption !== "pre-workflow-init") process.exit(0);
 
     // #1997: a stalled MECHANISM is fail-fast, and it is decided before
     // next-step runs — a session whose state is stuck often makes next-step
@@ -163,11 +192,18 @@ if (require.main === module) {
     // the failure invisible, which is the silence #1979 was made of.
     // `state-absent` is excluded: no state at all is the ordinary
     // no-workflow session, already covered by the pre-workflow-init exemption.
-    const stalls = mechanismStalls(sessionId);
+    // The lane is judged per-finding (#2213): even when pre-workflow-init holds,
+    // a stall NOT explained by the WI-10 lookahead mark (corrupt state, a
+    // genuinely claimed step) must still surface.
+    const stalls = mechanismStalls(sessionId)
+      .filter((f) => !(sessionExemption === "pre-workflow-init" && isFindingExemptFromC4(sessionId, f, deps)));
     if (stalls.length > 0) {
       emitMechanismBlock(sessionId, stalls);
       process.exit(2);
     }
+
+    // The premature-stop (ACTION=invoke) lane keeps its pre-workflow-init exemption.
+    if (sessionExemption === "pre-workflow-init") process.exit(0);
 
     // Locate next-step binary.
     const agentsDir = process.env.AGENTS_CONFIG_DIR
@@ -230,4 +266,7 @@ if (require.main === module) {
   }
 }
 
-module.exports = { C4_EXEMPTIONS, buildExemptionDeps, firstExemption };
+module.exports = {
+  C4_EXEMPTIONS, C4_MECHANISM_EXEMPTIONS,
+  buildExemptionDeps, firstExemption, isFindingExemptFromC4,
+};

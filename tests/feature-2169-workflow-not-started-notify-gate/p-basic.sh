@@ -11,7 +11,7 @@
 run_P1() {
     local tmp tn problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p1
+    dispatch_lookahead "$tn" p1
     [ -f "$tmp/p1.json" ] || problems="$problems [dispatch did not create a state file — fixture setup failed]"
 
     rstatus="$(research_status "$tn" p1)"
@@ -42,7 +42,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p1')))
         problems="$problems [a stall-reported ledger was written while the session was pre-adoption: $strays]"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "P1: a Skill dispatch with no /workflow-init leaves research in_progress past the TTL WITHOUT a prompt-time notification or ledger write"
+        pass "P1: a WI-10 lookahead dispatch with no /workflow-init leaves research in_progress past the TTL WITHOUT a prompt-time notification or ledger write"
     else
         fail "P1: the pre-workflow-init notify gate is broken;$problems"
     fi
@@ -56,7 +56,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p1')))
 run_P1b() {
     local tmp tn problems="" i compact
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p1b
+    dispatch_lookahead "$tn" p1b
     backdate_research "$tmp" p1b $((TTL_MS + 60000))
 
     for i in 1 2 3; do
@@ -82,7 +82,7 @@ run_P1b() {
 run_P2() {
     local tmp tn problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p2
+    dispatch_lookahead "$tn" p2
 
     rstatus="$(research_status "$tn" p2)"
     [ "$rstatus" = "in_progress" ] ||
@@ -123,7 +123,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p2')))
 run_P3() {
     local tmp tn problems="" adopt_at ledger_info entry_count reported_at
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    dispatch_skill "$tn" p3
+    dispatch_lookahead "$tn" p3
     backdate_research "$tmp" p3 $((TTL_MS + 60000))
 
     run_ups "$tn" p3   # pre-adoption: must not report (same as P1)

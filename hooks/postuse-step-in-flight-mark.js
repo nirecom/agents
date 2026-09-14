@@ -48,6 +48,15 @@ function main() {
 
   const policy = require("./lib/step-in-flight-policy");
   if (!policy.isDispatchTool(input.tool_name)) return;
+  // A meta-operation dispatch acts ON the workflow record; claiming a step for it
+  // is what made /resume-session disqualify its own heir (#2279). Claude Code
+  // delivers the dispatched skill's name at `tool_input.skill` — the payload seam
+  // TL3-hook-skill-dispatch-payload.sh probes against the real CLI; the policy
+  // owns only which names count as meta-operations.
+  const dispatchedSkill = input.tool_input && typeof input.tool_input === "object"
+    ? input.tool_input.skill
+    : null;
+  if (policy.isMetaOpDispatch(input.tool_name, dispatchedSkill)) return;
 
   const { resolveSessionId, getStatePath, readState, markStep, LOOKAHEAD_ORIGIN } = require("./workflow-state");
   const { resolveCurrentEffectiveStep } = require("./workflow-state/current-step");
@@ -70,8 +79,13 @@ function main() {
   // WI-10 lookahead: during /workflow-init the first Agent dispatch happens
   // before (or at) workflow_init, so the step that owns the dispatch is the one
   // that comes next — `research`. Bounded to exactly that window (CPR-UNV).
+  // The escalation is reserved for Agent/Task (#2279 D-3): only a subagent
+  // dispatch is a unit of work whose step the session has not yet recorded.
   let step = hasStateFile ? resolveCurrentEffectiveStep(sid) : null;
-  if (step === null || step === "workflow_init") step = "research";
+  if (step === null || step === "workflow_init") {
+    if (!policy.isLookaheadDispatchTool(input.tool_name)) return;
+    step = policy.LOOKAHEAD_PREINIT_STEP;
+  }
   if (!policy.isStepInFlightCandidate(step)) return;
 
   // Idempotent: repeat dispatches during one delegated step append no events.
