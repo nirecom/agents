@@ -13,6 +13,7 @@ else
     C_CYAN=''; C_GREEN=''; C_YELLOW=''; C_GRAY=''; C_BOLD=''; C_RESET=''
 fi
 export C_CYAN C_GREEN C_YELLOW C_GRAY C_BOLD C_RESET
+export HOMEBREW_NO_INTERACTIVE=1
 
 _uname_s="$(uname -s)"
 if [[ "$_uname_s" == MINGW* || "$_uname_s" == MSYS* || "$_uname_s" == CYGWIN* ]]; then
