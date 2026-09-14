@@ -53,24 +53,7 @@ elif [ -n "${WSL_DISTRO_NAME:-}" ] && command -v powershell.exe >/dev/null 2>&1;
     }
 elif [ "$(uname)" = "Darwin" ]; then
     has_vscode_window() {
-        local t
-        while IFS= read -r t; do
-            case "$t" in
-                *" - $SUFFIX"*|"$SUFFIX"*|*" - $SUFFIX_WS"*|"$SUFFIX_WS"*) return 0 ;;
-            esac
-        done < <(osascript <<'APPLESCRIPT' 2>/dev/null
-tell application "System Events"
-    set output to ""
-    repeat with p in (every process whose name contains "Code")
-        repeat with w in (every window of p)
-            set output to output & (name of w) & linefeed
-        end repeat
-    end repeat
-    output
-end tell
-APPLESCRIPT
-        )
-        return 1
+        pgrep -f "Visual Studio Code.app/Contents/MacOS" > /dev/null 2>&1
     }
 else
     echo "Warning: No window detection tool found (xdotool/wmctrl). Session sync skipped." >&2
