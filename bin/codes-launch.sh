@@ -35,25 +35,24 @@ if [[ "$target" == *.code-workspace ]]; then
 else
     name="$(basename "$(cd "$target" 2>/dev/null && pwd || echo "$target")")"
 fi
-# Read CC_NATIVE_* pinned model versions from .env and inject as ANTHROPIC_DEFAULT_*_MODEL /
-# CLAUDE_CODE_SUBAGENT_MODEL. All four tier vars are injected simultaneously; CC resolves the
-# right one based on its active model setting (no tier detection needed here).
+# Inject pinned CC model versions from .env into the child process.
+# Variables match the official CC env var names, so no mapping is needed.
 _native_fable=""
 _native_opus=""
 _native_sonnet=""
 _native_haiku=""
 _native_subagent=""
 if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    _native_fable=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_FABLE 2>/dev/null) || true
-    _native_opus=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_OPUS 2>/dev/null) || true
-    _native_sonnet=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_SONNET 2>/dev/null) || true
-    _native_haiku=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_HAIKU 2>/dev/null) || true
-    _native_subagent=$("$AGENTS_DIR/bin/get-config-var" CC_NATIVE_SUBAGENT 2>/dev/null) || true
-    [ -n "$_native_fable" ]    && echo "[CC_NATIVE] CC_NATIVE_FABLE=$_native_fable -> ANTHROPIC_DEFAULT_FABLE_MODEL"
-    [ -n "$_native_opus" ]     && echo "[CC_NATIVE] CC_NATIVE_OPUS=$_native_opus -> ANTHROPIC_DEFAULT_OPUS_MODEL"
-    [ -n "$_native_sonnet" ]   && echo "[CC_NATIVE] CC_NATIVE_SONNET=$_native_sonnet -> ANTHROPIC_DEFAULT_SONNET_MODEL"
-    [ -n "$_native_haiku" ]    && echo "[CC_NATIVE] CC_NATIVE_HAIKU=$_native_haiku -> ANTHROPIC_DEFAULT_HAIKU_MODEL"
-    [ -n "$_native_subagent" ] && echo "[CC_NATIVE] CC_NATIVE_SUBAGENT=$_native_subagent -> CLAUDE_CODE_SUBAGENT_MODEL"
+    _native_fable=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_FABLE_MODEL 2>/dev/null) || true
+    _native_opus=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_OPUS_MODEL 2>/dev/null) || true
+    _native_sonnet=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_SONNET_MODEL 2>/dev/null) || true
+    _native_haiku=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null) || true
+    _native_subagent=$("$AGENTS_DIR/bin/get-config-var" CLAUDE_CODE_SUBAGENT_MODEL 2>/dev/null) || true
+    [ -n "$_native_fable" ]    && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_FABLE_MODEL=$_native_fable"
+    [ -n "$_native_opus" ]     && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_OPUS_MODEL=$_native_opus"
+    [ -n "$_native_sonnet" ]   && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_SONNET_MODEL=$_native_sonnet"
+    [ -n "$_native_haiku" ]    && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_HAIKU_MODEL=$_native_haiku"
+    [ -n "$_native_subagent" ] && echo "[CC_NATIVE] CLAUDE_CODE_SUBAGENT_MODEL=$_native_subagent"
 fi
 (
     [ -n "$_native_fable" ]    && export ANTHROPIC_DEFAULT_FABLE_MODEL="$_native_fable"
@@ -61,6 +60,7 @@ fi
     [ -n "$_native_sonnet" ]   && export ANTHROPIC_DEFAULT_SONNET_MODEL="$_native_sonnet"
     [ -n "$_native_haiku" ]    && export ANTHROPIC_DEFAULT_HAIKU_MODEL="$_native_haiku"
     [ -n "$_native_subagent" ] && export CLAUDE_CODE_SUBAGENT_MODEL="$_native_subagent"
+
     code --new-window "$@"
     _ss_rc=0
     "$AGENTS_DIR/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
