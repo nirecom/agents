@@ -17,9 +17,7 @@ fi
 # Returns true if any VS Code window is currently open
 _any_vscode_window() {
     if [ "$(uname)" = "Darwin" ]; then
-        local count
-        count=$(osascript -e 'tell application "System Events" to (count (every window of every process whose name contains "Code"))' 2>/dev/null)
-        [ "${count:-0}" -gt 0 ]
+        pgrep -f "Visual Studio Code.app/Contents/MacOS" > /dev/null 2>&1
     elif type xdotool >/dev/null 2>&1; then
         xdotool search --name "Visual Studio Code" 2>/dev/null | grep -q .
     elif type wmctrl >/dev/null 2>&1; then
