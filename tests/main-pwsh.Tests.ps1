@@ -200,7 +200,7 @@ if (-not `$msiAsset) {
     return
 }
 
-`$msiPath = Join-Path `$env:TEMP `$msiAsset.name
+`$msiPath = Join-Path ([System.IO.Path]::GetTempPath()) `$msiAsset.name
 Write-Host "Downloading `$(`$msiAsset.name)..."
 Invoke-WebRequest -Uri `$msiAsset.browser_download_url -OutFile `$msiPath
 
