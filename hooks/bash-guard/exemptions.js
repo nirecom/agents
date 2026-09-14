@@ -11,12 +11,11 @@
 
 const path = require("path");
 const { resolveEffectiveSegment } = require("../lib/command-ir");
-const { isAllowRuleMatch } = require("../lib/settings-allow-match");
+const { isAllowRuleMatch, isDenyRuleMatch } = require("../lib/settings-allow-match");
 
 const XARGS_BASENAMES = new Set(["xargs", "xargs.exe"]);
 
-// The right-hand side of the pipe, read through separatorLinks — `segments[index + 1]`
-// is wrong whenever a leading or trailing separator shifted the numbering.
+// The right-hand side of the pipe, read through separatorLinks.
 function rightSegmentOf(hitAt, ctx) {
   const links = (ctx.analysis && ctx.analysis.separatorLinks) || [];
   const link = links.find((l) => l.index === hitAt.index);
@@ -33,6 +32,19 @@ function pipesIntoXargs(hit, ctx) {
   return XARGS_BASENAMES.has(path.posix.basename(effective.cmd0.split("\\").join("/")));
 }
 
+// permissions.allow globs match the WHOLE command string, so an allow rule covering
+// `cd /repo && git commit -m x` would blanket-forgive a push --force appended after
+// the commit. Deny rules are anchored (#2280) and no longer catch the whole string
+// from a cd-prefixed form, so each &&/;/||/newline segment is checked on its own —
+// a hit here withholds the exemption and forces the model to resubmit the chain as
+// separate commands.
+function anySegmentDenyMatched(ctx) {
+  const raw = (ctx && ctx.commandText) || "";
+  if (!raw) return false;
+  const segs = raw.split(/&&|;|\|\||\n/);
+  return segs.some((s) => isDenyRuleMatch(s.trim()));
+}
+
 const EXEMPTIONS = Object.freeze([
   Object.freeze({
     id: "xargs-pipe",
@@ -44,7 +56,7 @@ const EXEMPTIONS = Object.freeze([
     id: "allow-rule-match",
     scope: "command",
     excuses: "*",
-    applies: (_hit, ctx) => isAllowRuleMatch(ctx && ctx.commandText),
+    applies: (_hit, ctx) => isAllowRuleMatch(ctx && ctx.commandText) && !anySegmentDenyMatched(ctx),
   }),
 ]);
 

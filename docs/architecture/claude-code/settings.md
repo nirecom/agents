@@ -444,10 +444,21 @@ See `docs/security-policy.md` for the full pattern list.
   model, an unusable session id, or an unwritable state directory all yield no injection.
 
 **Permission glob matching**: Permissions are matched against the entire command string.
-`&&` does not split into subcommands. `Bash(git commit *)` does not match
-`cd /path && git commit -m msg` (starts with `cd`). Deny rules use a leading `*`
-(e.g., `*git commit --amend*`) to catch compound commands. Only interactive approval
-("Yes, don't ask again") splits subcommands and saves individual rules (separate mechanism).
+`&&` does not split into subcommands, so `Bash(git commit *)` does not match
+`cd /path && git commit -m msg` (starts with `cd`). MUST-trigger deny rules are anchored to
+the START of a real git-invocation form — bare `git`, `git -C *`, `git -c *`,
+`git --no-pager` (#2280: a leading `*`, e.g. `*git commit --amend*`, matched the substring
+ANYWHERE in the string and false-positived on a sentinel that only NARRATED a force push,
+auto-denying it). The OPTIONAL rm/find/sudo/docker/aws family keeps its leading `*` on
+purpose — a `sudo`/`env`/`xargs` prefix breaks the first-token guarantee anchoring depends on.
+Anchoring means a `cd /path && git commit --amend -m x` compound is deliberately NOT caught
+at this settings.json level — no anchored rule spans the `cd &&` prefix. That shape's real
+defense is segment-aware, one layer up: `hooks/bash-guard/exemptions.js`'s
+`anySegmentDenyMatched()` (backed by `isDenyRuleMatch` in `hooks/lib/settings-allow-match.js`)
+withholds the allow-rule-match exemption when ANY individual segment's own text matches an
+anchored deny rule, forcing the model to resubmit the command as separate Bash calls — each of
+which then hits the anchored deny rule directly. Only interactive approval ("Yes, don't ask
+again") splits subcommands and saves individual rules (a third, separate mechanism).
 
 `hooks/lib/settings-allow-match.js` reads this semantics as its SSOT to decide whether an
 existing `permissions.allow` rule already covers a `bash-guard.js` candidate — it is an
