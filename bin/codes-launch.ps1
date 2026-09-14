@@ -43,25 +43,17 @@ if (Test-Path $_getCfg) {
     } catch { $_ssOn = $false }
 }
 $global:LASTEXITCODE = $_preLastExitCode
-# Read CC_NATIVE_* pinned model versions from .env and inject as ANTHROPIC_DEFAULT_*_MODEL /
-# CLAUDE_CODE_SUBAGENT_MODEL into the child window. All four tier vars are injected simultaneously;
-# CC resolves the right one based on its active model setting (no tier detection needed here).
+# Inject pinned CC model versions from .env into the child window.
+# Variables match the official CC env var names, so no mapping is needed.
 $_prevEc = $global:LASTEXITCODE
 $_nativePins = [ordered]@{}
 if (Test-Path $_getCfg) {
     try {
-        $_tierMap = [ordered]@{
-            "CC_NATIVE_FABLE"    = "ANTHROPIC_DEFAULT_FABLE_MODEL"
-            "CC_NATIVE_OPUS"     = "ANTHROPIC_DEFAULT_OPUS_MODEL"
-            "CC_NATIVE_SONNET"   = "ANTHROPIC_DEFAULT_SONNET_MODEL"
-            "CC_NATIVE_HAIKU"    = "ANTHROPIC_DEFAULT_HAIKU_MODEL"
-            "CC_NATIVE_SUBAGENT" = "CLAUDE_CODE_SUBAGENT_MODEL"
-        }
-        foreach ($_cv in $_tierMap.Keys) {
+        foreach ($_cv in @("ANTHROPIC_DEFAULT_FABLE_MODEL","ANTHROPIC_DEFAULT_OPUS_MODEL","ANTHROPIC_DEFAULT_SONNET_MODEL","ANTHROPIC_DEFAULT_HAIKU_MODEL","CLAUDE_CODE_SUBAGENT_MODEL")) {
             $_val = & $_getCfg $_cv
             if ($_val) {
-                Write-Host "[CC_NATIVE] ${_cv}=$_val -> $($_tierMap[$_cv])"
-                $_nativePins[$_tierMap[$_cv]] = $_val
+                Write-Host "[CC_NATIVE] ${_cv}=$_val"
+                $_nativePins[$_cv] = $_val
             }
         }
     } catch {}
