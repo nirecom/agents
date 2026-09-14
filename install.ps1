@@ -120,6 +120,8 @@ Invoke-InstallStep "Installing jq" "$AgentsRoot\install\win\jq.ps1"
 
 Invoke-InstallStep "Installing shellcheck" "$AgentsRoot\install\win\shellcheck.ps1"
 
+Invoke-InstallStep "Installing pwsh (PowerShell) and Pester" "$AgentsRoot\install\win\pwsh.ps1"
+
 Invoke-InstallStep "Configuring CodeGraph" "$AgentsRoot\install\win\codegraph.ps1"
 
 Write-Host ""

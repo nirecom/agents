@@ -65,6 +65,18 @@ When a TL2 fallback is taken, verification of the residual gap MUST happen at th
 
 The authoritative list of risk categories lives in `bin/check-verification-gate.sh` — its stdout records both the category token and the question text. Do not duplicate the list here. Current categories: `pwsh-required`, `hook-registration`, `skill-orchestration`, `installer`, `merge-base-suspect`.
 
+## PowerShell Testing Scope
+
+`.ps1` / `.Tests.ps1` files that do not touch Windows-only APIs (registry, `winget`, drive letters, Windows-exclusive COM/WMI) can and should be exercised locally on macOS/Linux with `pwsh`.
+
+| Scope | Where to verify |
+|---|---|
+| Pure PS logic, string handling, Pester assertions | `pwsh` on macOS/Linux — required before merge |
+| `$PSNativeCommandUseErrorActionPreference`, `StrictMode`, `Join-Path` separator | `pwsh` on macOS/Linux — covered |
+| Registry, `winget`, `%APPDATA%`, Windows-only APIs | Windows native only — mark as `# TL3 gap` in the test |
+
+When a `.ps1` change touches Windows-only code and a local verification is impossible, add a `# TL3 gap` block naming what was not run and why. The `pwsh-required` risk category in `bin/check-verification-gate.sh` gates commit for changes that include `.ps1` files.
+
 ### TL4 aspiration
 
 See [test/claude-e2e.md](test/claude-e2e.md) `## Acceptance Criteria for claude -p E2E Tests` for the current real-`claude -p` test contract. Full-pipeline TL4 (workflow-init → Final Report driven through a real TTY) is tracked as a roadmap item (#1543) and is out of scope for #942 / #943.
