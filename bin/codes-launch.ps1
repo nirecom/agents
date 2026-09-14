@@ -43,11 +43,36 @@ if (Test-Path $_getCfg) {
     } catch { $_ssOn = $false }
 }
 $global:LASTEXITCODE = $_preLastExitCode
+# Read CC_NATIVE_* pinned model versions from .env and resolve CLAUDE_MODEL / CLAUDE_SMALL_MODEL
+# for the child window. Tier detection reads ~/.claude/settings.json so each tier var applies only
+# when CC is configured for that tier, letting all four be set simultaneously without conflict.
+$_prevEc = $global:LASTEXITCODE
+$_pinnedModel = ""
+$_pinnedSubagent = ""
+if (Test-Path $_getCfg) {
+    try {
+        $_ccModel = ""
+        $_ccSettings = Join-Path $env:USERPROFILE ".claude\settings.json"
+        if (Test-Path $_ccSettings) {
+            try { $_ccModel = (Get-Content $_ccSettings -Raw | ConvertFrom-Json).model } catch {}
+            if (-not $_ccModel) { $_ccModel = "" }
+        }
+        $_tierVar = if ($_ccModel -match "fable")  { "CC_NATIVE_FABLE"  }
+                    elseif ($_ccModel -match "sonnet") { "CC_NATIVE_SONNET" }
+                    elseif ($_ccModel -match "haiku")  { "CC_NATIVE_HAIKU"  }
+                    else                               { "CC_NATIVE_OPUS"   }
+        $_pinnedModel    = & $_getCfg $_tierVar
+        $_pinnedSubagent = & $_getCfg CC_NATIVE_SUBAGENT
+    } catch {}
+}
+$global:LASTEXITCODE = $_prevEc
 $codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
 # Clear gateway env vars in the CHILD pwsh only (not $env: here, which would also wipe
 # the caller's shell) — prevents a leftover code-ccgw.ps1 session from misrouting a
 # native `codes` launch. #2083
 $_envClear = 'Remove-Item Env:ANTHROPIC_* -ErrorAction SilentlyContinue; Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue; '
+if ($_pinnedModel)    { $_envClear += '$env:CLAUDE_MODEL = '       + (_codesQuote $_pinnedModel)   + '; ' }
+if ($_pinnedSubagent) { $_envClear += '$env:CLAUDE_SMALL_MODEL = ' + (_codesQuote $_pinnedSubagent) + '; ' }
 $cmd = "$_envClear" + "code.cmd --new-window $codeArgs"
 if ($_ssOn) { $cmd += "; & $(_codesQuote $waitScript) $(_codesQuote $name); & $(_codesQuote $syncScript) push -Quiet" }
 Start-Process pwsh -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command", $cmd -WindowStyle Hidden
