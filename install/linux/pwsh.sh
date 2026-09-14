@@ -33,7 +33,7 @@ fi
 echo "Installing pwsh..."
 case "$(uname -s)" in
     Darwin)
-        if ! brew install --cask powershell; then
+        if ! brew install powershell; then
             if command -v pwsh &>/dev/null; then
                 printf "${C_GRAY}pwsh already present (installer returned non-zero).${C_RESET}\n"
             else
