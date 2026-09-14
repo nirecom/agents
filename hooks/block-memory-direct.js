@@ -29,7 +29,9 @@ function approve() { console.log(JSON.stringify({ decision: "approve" })); proce
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
 const BLOCK_MSG = [
-  "Memory write intercepted. This may be an agents-repo behavior improvement that belongs in GitHub Issues.",
+  "Memory write intercepted. Intercepted content splits into two kinds: (a) genuinely local behavior the user wants you to remember, and (b) an agents-repo improvement that belongs in GitHub Issues, not memory.",
+  "The dialog below asks the user which kind this is — follow their choice.",
+  "Going forward, do NOT write agents-repo improvements to memory; file them with /issue-create.",
   "",
   "Please ask the user:",
   "1. Create a GitHub issue with /issue-create (Recommended)",
