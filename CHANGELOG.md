@@ -475,3 +475,7 @@ Changes: Planning artifacts and `WORKTREE_NOTES.md` history/changelog bullets wr
 ### FEATURE: PR #2282 (2026-09-13)
 Background: fix(#1773,#1757): harden session-sync-init against untrusted remote URL/git-root migration; fix session-sync.ps1 pull error handling
 Changes: Hardened `session-sync-init.sh`/`.ps1` against a malicious or misconfigured remote URL and against migrating the wrong git repository into `~/.claude/projects/`; migration is now transactional instead of destructive.;Fixed `session-sync.ps1` silently continuing past pull errors instead of surfacing them.
+
+### FEATURE: PR #2298 (2026-09-14)
+Background: fix(#2279,#2213): stop WI-10 lookahead from poisoning /resume-session's own heir
+Changes: Fixed: `/resume-session --from` (and `--list`) now correctly detect adoptable sessions on a fresh session instead of being blocked by an internal workflow-init timing artifact.;Fixed: the workflow's premature-stop safeguard no longer silences a genuinely stalled step just because an unrelated step is still in its startup window.
