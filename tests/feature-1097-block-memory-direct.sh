@@ -278,6 +278,18 @@ assert_block "C15" "Memory dir subdirectory → block" \
 assert_approve "C16" "Path with 'memory' in name but not under MEMORY_DIR → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"/some/other/memory/foo.md"},"session_id":"test-sess-1097","agent_id":""}'
 
+# C17: MSYS2 POSIX drive-letter path (/c/Users/...) under memory dir → block.
+# Git Bash delivers file_path in this form to the hook; normalizeCwd must fold
+# /c/... back to C:\... before isUnderPath, or the guard fails open. win32-only:
+# on POSIX, /c/... is legitimately not under a $HOME-rooted MEMORY_DIR.
+MEMORY_DIR_MSYS="$(node -e "const os=require('os'),path=require('path');if(process.platform!=='win32')process.exit(0);const home=os.homedir();const m=home.match(/^([A-Za-z]):/);if(!m)process.exit(0);const rel=path.join(home,'.claude','projects','c--git-agents','memory').slice(2).split(path.sep).join('/');process.stdout.write('/'+m[1].toLowerCase()+rel);")"
+if [ -n "$MEMORY_DIR_MSYS" ]; then
+    assert_block "C17" "MSYS2 /c/ drive-letter path under memory dir → block (normalizeCwd)" \
+        '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR_MSYS"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+else
+    echo "SKIP: C17 (MSYS2 /c/ path form) — not win32"
+fi
+
 # ===========================================================================
 # Section D — One-shot marker idempotency
 # ===========================================================================
@@ -327,6 +339,15 @@ assert_block "E20" "runInTerminal redirect to memory dir → block" \
 # E21: Bash tee to memory dir → block
 assert_block "E21" "Bash tee to memory dir → block" \
     '{"tool_name":"Bash","tool_input":{"command":"echo bar | tee '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+
+# E22: Bash redirect to MSYS2 /c/ drive-letter memory path → block (bashHitsMemory
+# arm of the normalizeCwd fix; symmetric with C17). win32-only for the same reason.
+if [ -n "$MEMORY_DIR_MSYS" ]; then
+    assert_block "E22" "Bash redirect to MSYS2 /c/ memory path → block (normalizeCwd)" \
+        '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR_MSYS"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+else
+    echo "SKIP: E22 (MSYS2 /c/ path form) — not win32"
+fi
 
 # ===========================================================================
 # Section F — Security / adversarial inputs
