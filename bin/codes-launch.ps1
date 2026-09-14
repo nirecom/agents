@@ -43,38 +43,36 @@ if (Test-Path $_getCfg) {
     } catch { $_ssOn = $false }
 }
 $global:LASTEXITCODE = $_preLastExitCode
-# Read CC_NATIVE_* pinned model versions from .env and resolve CLAUDE_MODEL / CLAUDE_SMALL_MODEL
-# for the child window. Tier detection reads ~/.claude/settings.json so each tier var applies only
-# when CC is configured for that tier, letting all four be set simultaneously without conflict.
+# Read CC_NATIVE_* pinned model versions from .env and inject as ANTHROPIC_DEFAULT_*_MODEL /
+# CLAUDE_CODE_SUBAGENT_MODEL into the child window. All four tier vars are injected simultaneously;
+# CC resolves the right one based on its active model setting (no tier detection needed here).
 $_prevEc = $global:LASTEXITCODE
-$_pinnedModel = ""
-$_pinnedSubagent = ""
+$_nativePins = [ordered]@{}
 if (Test-Path $_getCfg) {
     try {
-        $_ccModel = ""
-        $_ccSettings = Join-Path $env:USERPROFILE ".claude\settings.json"
-        if (Test-Path $_ccSettings) {
-            try { $_ccModel = (Get-Content $_ccSettings -Raw | ConvertFrom-Json).model } catch {}
-            if (-not $_ccModel) { $_ccModel = "" }
+        $_tierMap = [ordered]@{
+            "CC_NATIVE_FABLE"    = "ANTHROPIC_DEFAULT_FABLE_MODEL"
+            "CC_NATIVE_OPUS"     = "ANTHROPIC_DEFAULT_OPUS_MODEL"
+            "CC_NATIVE_SONNET"   = "ANTHROPIC_DEFAULT_SONNET_MODEL"
+            "CC_NATIVE_HAIKU"    = "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+            "CC_NATIVE_SUBAGENT" = "CLAUDE_CODE_SUBAGENT_MODEL"
         }
-        $_tierVar = if ($_ccModel -match "fable")  { "CC_NATIVE_FABLE"  }
-                    elseif ($_ccModel -match "sonnet") { "CC_NATIVE_SONNET" }
-                    elseif ($_ccModel -match "haiku")  { "CC_NATIVE_HAIKU"  }
-                    else                               { "CC_NATIVE_OPUS"   }
-        $_pinnedModel    = & $_getCfg $_tierVar
-        $_pinnedSubagent = & $_getCfg CC_NATIVE_SUBAGENT
+        foreach ($_cv in $_tierMap.Keys) {
+            $_val = & $_getCfg $_cv
+            if ($_val) {
+                Write-Host "[CC_NATIVE] ${_cv}=$_val -> $($_tierMap[$_cv])"
+                $_nativePins[$_tierMap[$_cv]] = $_val
+            }
+        }
     } catch {}
 }
 $global:LASTEXITCODE = $_prevEc
-if ($_pinnedModel)    { Write-Host "[CC_NATIVE] CLAUDE_MODEL=$_pinnedModel" }
-if ($_pinnedSubagent) { Write-Host "[CC_NATIVE] CLAUDE_SMALL_MODEL=$_pinnedSubagent" }
 $codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
 # Clear gateway env vars in the CHILD pwsh only (not $env: here, which would also wipe
 # the caller's shell) — prevents a leftover code-ccgw.ps1 session from misrouting a
 # native `codes` launch. #2083
 $_envClear = 'Remove-Item Env:ANTHROPIC_* -ErrorAction SilentlyContinue; Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue; '
-if ($_pinnedModel)    { $_envClear += '$env:CLAUDE_MODEL = '       + (_codesQuote $_pinnedModel)   + '; ' }
-if ($_pinnedSubagent) { $_envClear += '$env:CLAUDE_SMALL_MODEL = ' + (_codesQuote $_pinnedSubagent) + '; ' }
+foreach ($_k in $_nativePins.Keys) { $_envClear += '$env:' + $_k + ' = ' + (_codesQuote $_nativePins[$_k]) + '; ' }
 $cmd = "$_envClear" + "code.cmd --new-window $codeArgs"
 if ($_ssOn) { $cmd += "; & $(_codesQuote $waitScript) $(_codesQuote $name); & $(_codesQuote $syncScript) push -Quiet" }
 Start-Process pwsh -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command", $cmd -WindowStyle Hidden
