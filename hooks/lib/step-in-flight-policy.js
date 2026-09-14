@@ -50,7 +50,7 @@ function skillNameOf(skillOrToolInput) {
   let raw = skillOrToolInput;
   if (raw && typeof raw === "object" && !Array.isArray(raw)) raw = raw.skill;
   if (typeof raw !== "string" || !raw.length) return null;
-  const last = raw.split("/").pop().split(":").pop().trim();
+  const last = raw.split(/[:/\\]/).pop().trim();
   return last.length ? last : null;
 }
 

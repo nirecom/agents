@@ -36,7 +36,7 @@ inner-space         | 'resume session'                | resume session
 double-colon        | 'a:b:resume-session'            | resume-session
 deep-path           | 'x/y/z/resume-session'          | resume-session
 space-after-colon   | 'ns:  resume-session'           | resume-session
-windows-separator   | 'skills\\resume-session'        | skills\resume-session
+windows-separator   | 'skills\\resume-session'        | resume-session
 tool-input-array2   | ([{ skill: 'resume-session' }]) | <null>
 EOF
 }
@@ -68,7 +68,7 @@ for (const line of String(process.env.ROWS).split(/\r?\n/)) {
 if (seen !== 25) bad.push('rows-evaluated=' + seen + '(want 25)');
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "F1: skillNameOf normalizes every namespaced/path/whitespace spelling — POSIX separators only, never a throw, never a partial string — and returns null for all 9 unusable input classes"
+        pass "F1: skillNameOf normalizes every namespaced/path/whitespace spelling — POSIX and Windows separators, never a throw, never a partial string — and returns null for all 9 unusable input classes"
     else
         fail "F1: skillNameOf disagrees with the boundary table; $out"
     fi
