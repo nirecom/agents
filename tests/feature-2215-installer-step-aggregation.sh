@@ -154,6 +154,22 @@ case "$PROFILE_BLOCK" in
     *) fail "I4: the profile-sourcing block is not guarded — an exception here would abort the installer before later steps run — got $(printf '%q' "$PROFILE_BLOCK")" ;;
 esac
 
+echo "--- I5: the inline git long-path block is guarded like every Invoke-InstallStep call ---"
+# Same collateral-failure class as I4: the long-path block runs inline, ahead of
+# every Invoke-InstallStep call, under the global Stop preference — an uncaught
+# exception there (e.g. git absent from PATH) would abort the whole installer
+# before symlinks/Claude Code/gh/jq/shellcheck/codegraph ever ran.
+LONGPATH_BLOCK="$(awk '
+    /--- Enabling git long-path support ---/ { on = 1 }
+    on { print }
+    on && /FailedSteps.*Enabling git long-path support/ { exit }
+' "$INSTALL_PS1")"
+case "$LONGPATH_BLOCK" in
+    *"try {"*"catch {"*'$script:FailedSteps += "Enabling git long-path support"'*)
+        pass "I5: the git long-path block is wrapped in try/catch and reports into FailedSteps" ;;
+    *) fail "I5: the git long-path block is not guarded — an exception here would abort the installer before later steps run — got $(printf '%q' "$LONGPATH_BLOCK")" ;;
+esac
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -gt 0 ] && exit 1
