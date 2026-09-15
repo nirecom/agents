@@ -39,6 +39,13 @@ RT-1. Identify staged test file(s) and source file(s):
     and ask the user for the files.
   - If exit 4 (`bin/resolve-session-id` faulted): HALT, surface the script's stderr, and do NOT ask for a manual file.
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
+RT-1a. Check each newly added test file for a missed append target:
+  - Run `bash "$AGENTS_CONFIG_DIR/skills/review-tests/scripts/select-staged-files.sh" --added-only` (Bash, single standalone command); its stdout is `ADDED`. Exit 3 / exit 4 are handled exactly as in RT-1.
+  - For each `ADDED` entry under `tests/`, run `bash "$AGENTS_CONFIG_DIR/bin/find-tests-for-source.sh" --test-file <path> --root <WORKTREE>` (Bash, one standalone command per file; omit `--root` when `WORKTREE` is empty). The helper itself returns `skipped`/`not-top-level` for nested part files — do not pre-filter by eye.
+  - The gap predicate is the row's `viable` column alone, never the `verdict` column: a non-`-` `viable` column means an append target under the HARD limit existed for this file's `# Tests:` set.
+  - A non-`-` `viable` column is a `high`-tier gap "append candidate existed but a new file was created". A `# Tags:` `dup-group-keep:size-hard-limit` does NOT waive it — the same row disproves the tag by showing a sub-HARD target. No `dup-group-keep:<reason>` value waives anything; the only escape is the WARNINGS_ACCEPTED sentinel.
+  - Validate the tag's claim, not its presence: when the file's `# Tags:` carries `dup-group-keep:size-hard-limit`, the row corroborates it only if `excluded` is non-`-` and `reason` is `size-hard-limit`. A tag on a row with `excluded` = `-` (`reason=no-candidate` — no append candidate ever existed) is an unvalidated opt-out: report it at the same `high` tier as a missed append target.
+  - Feed the gaps into RT-3's review input and count them in RT-5c.
 RT-2. Assemble review input via the Write tool only — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md`. Do not substitute Bash-based assembly for the Write tool call in this step — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
 RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID` (plan-artifact prefix), `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; round-continuing under the 2+1 cap):
 - exit 0 APPROVED → RT-5 COMPLETE.
@@ -62,6 +69,7 @@ RT-6. Record the emitted sentinel as `--class E --step review_tests --key review
 ## Rules
 
 The Test Case Categories checklist lives in `skills/_shared/test-design.md` — do not duplicate it here.
+The append-vs-new criteria live in `skills/_shared/test-design/append-vs-new.md` — do not restate them here.
 WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/write-code` while `warnings_summary` is recorded.
 Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warning.
 On exit 4 or exit 7, emit neither sentinel and HALT.

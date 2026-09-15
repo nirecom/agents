@@ -80,6 +80,81 @@ function decideGranularity(upstreamCwd, heirCwd) {
   return { granularity: GRANULARITY_DEGRADED, verifiedEquivalent: false, repo_verdict: verdict };
 }
 
+// The ONE resolver for "which cwd/branch is the heir working in?" (#2279 C3).
+// `--from` read state.cwd with a session_start_context fallback while `--list`
+// read only the top-level field, so the two paths disagreed about the same heir.
+function heirContextOf(input) {
+  const opts = input || {};
+  const ctx = opts.ctx;
+  if (ctx && typeof ctx.cwd === "string" && ctx.cwd.length) {
+    return { cwd: ctx.cwd, git_branch: ctx.git_branch ?? null };
+  }
+  let state = opts.heirState || null;
+  if (!state && opts.heirSid) {
+    try {
+      state = readState(opts.heirSid);
+    } catch (e) {
+      state = null;
+    }
+  }
+  const cwd = cwdOf(state);
+  if (cwd === null) return null;
+  const start = (state && state.session_start_context) || null;
+  const branch = state && state.git_branch !== undefined && state.git_branch !== null
+    ? state.git_branch
+    : (start && start.git_branch) ?? null;
+  return { cwd, git_branch: branch };
+}
+
+// createAdoptabilityPreviewer({heirState|heirSid|ctx}) → { heir_cwd, preview(record) }
+//
+// `--list` says adoptable yes/no while `--from` answers at decideGranularity's
+// finer grain; the previewer runs THAT function so a listing cannot promise more
+// than the adoption would hand over (#2279 CPR-E2E). Granularity is memoized per
+// donor cwd because a listing evaluates many candidates against one heir.
+function createAdoptabilityPreviewer(input) {
+  const heirCtx = heirContextOf(input);
+  const heirCwd = heirCtx && heirCtx.cwd;
+  const granularityByCwd = new Map();
+
+  function granularityFor(donorCwd) {
+    const key = typeof donorCwd === "string" && donorCwd.length ? donorCwd : null;
+    if (granularityByCwd.has(key)) return granularityByCwd.get(key);
+    const decided = heirCwd
+      ? decideGranularity(donorCwd, heirCwd).granularity
+      : GRANULARITY_DEGRADED;
+    granularityByCwd.set(key, decided);
+    return decided;
+  }
+
+  return {
+    heir_cwd: heirCwd || null,
+    // A record that may not be adopted has no granularity to state — null is the
+    // honest answer, never a guess the caller would have to interpret.
+    preview(record) {
+      const adoptable = !!record && record.adoptable === true;
+      // A donor accepted only through the degradation path never travels at full
+      // granularity, regardless of repo identity — mirrors adopt.js's
+      // effectiveGranularity, which forces this the same way (CPR-ORTH).
+      const granularity = !adoptable
+        ? null
+        : (record && record.resumability_degraded_reason)
+          ? GRANULARITY_DEGRADED
+          : granularityFor(record && record.cwd);
+      return {
+        adoptable,
+        adoptable_reason: (record && record.adoptable_reason) || null,
+        adoptable_granularity: granularity,
+      };
+    },
+  };
+}
+
+// Single-shot wrapper for callers evaluating one record rather than a listing.
+function previewAdoptability(input, record) {
+  return createAdoptabilityPreviewer(input).preview(record);
+}
+
 function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
   if (!heirSid || !heirState) {
     return { attempted: false, reason: "no-heir-state" };
@@ -171,5 +246,8 @@ module.exports = {
   AVAILABILITY,
   ARTIFACT_KINDS,
   decideGranularity,
+  heirContextOf,
+  createAdoptabilityPreviewer,
+  previewAdoptability,
   buildUpstreamView,
 };

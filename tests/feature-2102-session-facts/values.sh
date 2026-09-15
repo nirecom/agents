@@ -250,7 +250,7 @@ check "(c) iv: degradation is a value, not an exit code" 0 "$RC"
 
 echo ""
 echo "=== (d) the post-action gate probe is NOT served from the bundled snapshot ==="
-# WT-7 / WCD-6 run AFTER a long subagent. A human may flip CONFIRM_* to on in between,
+# WT-8 / WCD-6 run AFTER a long subagent. A human may flip CONFIRM_* to on in between,
 # and re-serving the pre-subagent value would silently skip the review the human asked
 # for -- a fail-OPEN error on a gate. Hence the probe stays an independent call.
 printf 'CONFIRM_TESTS=off\n' > "$CFG/.env"
@@ -273,7 +273,7 @@ GDEF="$(run_with_timeout node -e '
   })();' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
 check "(d) keys.js owns the gate defaults table" "on on" "$GDEF"
 DEF_T="${GDEF%% *}"
-check "(d) write-tests keeps exactly one WT-7 probe, at the keys.js default" 1 \
+check "(d) write-tests keeps exactly one WT-8 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_TESTS $DEF_T" "$WT_SKILL" 2>/dev/null || true)"
 check "(d) write-code keeps exactly one WCD-6 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_CODE $DEF_T" "$WC_SKILL" 2>/dev/null || true)"

@@ -29,17 +29,18 @@ pending() { PEND=$((PEND + 1)); echo "  PENDING: $1"; }
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# ---------------------------------------------------------------------------
-# Suite-wide environment fixtures (#1564)
-#
-# Root cause of the hang: bin/session-sync.sh resolves its plans source through
-# bin/workflow-plans-dir, which falls back to the *developer's real*
-# ~/.workflow-plans when WORKFLOW_PLANS_DIR is unset. Every push/pull/reset case
-# therefore copied and committed the whole real plans directory into a fixture
-# repo — hundreds of files, CRLF renormalization on Windows — until the suite
-# timed out. Pinning the variable once here (rather than at each call site) is
-# the class-level fix: any case added later inherits the isolation for free.
-# ---------------------------------------------------------------------------
+# Suite-wide $HOME relocation (#1773): session-sync-init.sh fail-closed rejects
+# a --claude-dir that does not resolve inside $HOME, and every fixture here
+# lives under $TMPDIR_BASE. Relocating once is the class-level fix — later cases
+# inherit it. GIT_CONFIG_GLOBAL/WORKFLOW_PLANS_DIR are pinned explicitly below,
+# so nothing else in the suite depends on the original $HOME.
+export HOME="$TMPDIR_BASE"
+
+# Suite-wide environment fixtures (#1564): bin/workflow-plans-dir falls back to
+# the developer's real ~/.workflow-plans when WORKFLOW_PLANS_DIR is unset, which
+# made every push/pull/reset case commit hundreds of live files until the suite
+# timed out. Pinning once here is the class-level fix — see
+# rules/test/fixture-isolation.md "Dual-pin the plans dir".
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 # bin/session-sync.sh locates bin/workflow-plans-dir relative to AGENTS_CONFIG_DIR.
@@ -129,6 +130,19 @@ git init --bare "$FAKE_REMOTE" >/dev/null 2>&1
 . "$PARTS_DIR/plans.sh"
 # shellcheck source=tests/main-session-sync/session-sync-independence.sh
 . "$PARTS_DIR/session-sync-independence.sh"
+# The security-* parts reuse the helpers security.sh defines, so it comes first.
+# shellcheck source=tests/main-session-sync/security.sh
+. "$PARTS_DIR/security.sh"
+# shellcheck source=tests/main-session-sync/security-remote.sh
+. "$PARTS_DIR/security-remote.sh"
+# shellcheck source=tests/main-session-sync/security-containment.sh
+. "$PARTS_DIR/security-containment.sh"
+# shellcheck source=tests/main-session-sync/security-provenance.sh
+. "$PARTS_DIR/security-provenance.sh"
+# shellcheck source=tests/main-session-sync/security-migration.sh
+. "$PARTS_DIR/security-migration.sh"
+# shellcheck source=tests/main-session-sync/security-transaction.sh
+. "$PARTS_DIR/security-transaction.sh"
 
 echo ""
 echo "=== Results ==="

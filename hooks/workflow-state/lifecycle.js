@@ -127,11 +127,11 @@ function anyStepInFlight(sid) {
   }
 }
 
-// True when `step`'s LAST step_status event came from the WI-10 lookahead mark specifically.
-// Fail-closed to false on any error or absent evidence (#2169).
-function isLookaheadOnlyInFlight(sid, step) {
+// True when `step`'s LAST step_status event in `state` came from the WI-10
+// lookahead mark specifically. The state-taking form of isLookaheadOnlyInFlight,
+// for readers that already hold the state (#2279). Fail-closed on any error.
+function isLookaheadOnlyInFlightState(state, step) {
   try {
-    const state = readState(sid);
     if (!state || !Array.isArray(state.events)) return false;
     for (let i = state.events.length - 1; i >= 0; i--) {
       const e = state.events[i];
@@ -140,6 +140,30 @@ function isLookaheadOnlyInFlight(sid, step) {
       }
     }
     return false;
+  } catch (_e) {
+    return false;
+  }
+}
+
+// True when `step` records no work of the session's own: either genuinely
+// pending, or in_progress solely because the WI-10 lookahead said a tool call
+// was running. The adoption gate's notion of "untouched" (#2279).
+function isEffectivelyPendingStep(state, step) {
+  try {
+    const entry = state && state.steps && state.steps[step];
+    if (!entry || !entry.status || entry.status === "pending") return true;
+    if (entry.status !== "in_progress") return false;
+    return isLookaheadOnlyInFlightState(state, step);
+  } catch (_e) {
+    return false;
+  }
+}
+
+// True when `step`'s LAST step_status event came from the WI-10 lookahead mark specifically.
+// Fail-closed to false on any error or absent evidence (#2169).
+function isLookaheadOnlyInFlight(sid, step) {
+  try {
+    return isLookaheadOnlyInFlightState(readState(sid), step);
   } catch (_e) {
     return false;
   }
@@ -157,4 +181,6 @@ module.exports = {
   isAdoptionEvent,
   LOOKAHEAD_ORIGIN,
   isLookaheadOnlyInFlight,
+  isLookaheadOnlyInFlightState,
+  isEffectivelyPendingStep,
 };

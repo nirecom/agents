@@ -13,6 +13,8 @@ const EXEMPTION_MATRIX = Object.freeze({
   // correct pre-init; only the Stop hook's forced nudge is silenced.
   // promptNotify:true (#2169) — a session lacking /workflow-init is the
   // ordinary not-yet-started case, not a mechanism failure.
+  // c4:true silences the premature-stop lane; C4's mechanism-failure lane is
+  // exempted per-finding on the same row (#2213).
   "pre-workflow-init": { c4: true,  c2: true,  nextStep: false, promptNotify: true  },
   // Covers write_code and the #2013 delegated-step allowlist.
   // promptNotify:false — out of #2169's scope: a started session's allowlisted

@@ -21,6 +21,16 @@ else
     fail "T24: settings.json does NOT register check-worktree-notes-lang.js"
 fi
 
+# T24p1/T24p2: #2278 PreToolUse gates are registered next to the PostToolUse checkers
+for _t24p in "T24p1:gate-plan-lang.js" "T24p2:gate-worktree-notes-lang.js"; do
+    _t24p_id="${_t24p%%:*}"; _t24p_script="${_t24p#*:}"
+    if [ -f "$SETTINGS_JSON" ] && grep -q "$_t24p_script" "$SETTINGS_JSON"; then
+        pass "$_t24p_id: settings.json registers $_t24p_script"
+    else
+        fail "$_t24p_id: settings.json does NOT register $_t24p_script"
+    fi
+done
+
 # T24r1: settings.json does NOT register check-ask-lang.js (removed in #645)
 if [ -f "$SETTINGS_JSON" ] && ! grep -q "check-ask-lang" "$SETTINGS_JSON"; then
     pass "T24r1: settings.json does not register check-ask-lang.js (removal regression)"

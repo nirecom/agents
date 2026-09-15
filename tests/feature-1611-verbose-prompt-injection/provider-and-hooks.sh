@@ -2,16 +2,12 @@
 # tests/feature-1611-verbose-prompt-injection/provider-and-hooks.sh
 # Tests: hooks/lib/verbose-prompt.js, hooks/session-start.js, hooks/post-compact.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
-#
-# Fragment of tests/feature-1611-verbose-prompt-injection.sh — sourced by the
-# parent, not run directly; cases run at source time. Owns groups D
-# (getVerbosePromptInjection, the read-only provider), G (SessionStart
-# integration) and H (PostCompact integration).
-#
-# Defines VP_TEXT / VP_TEXT_OK and the inject/hook_out/contains helpers that the
-# later fragments reuse, so it must be sourced before adversarial-and-hygiene.sh.
-# Depends on the parent for: WFDIR, SESSION_START_JS, POST_COMPACT_JS, jsn,
-# seed_state, state_hash, state_field, run_with_timeout, assert_eq, pass, fail.
+# Fragment of tests/feature-1611-verbose-prompt-injection.sh (sourced, cases run at
+# source time). Groups D (provider), G (SessionStart), H (PostCompact); D09/G01b/H01c
+# pin the #2278 sentence. Defines VP_TEXT / VP_TEXT_OK + inject/hook_out/contains for
+# later fragments (source before adversarial-and-hygiene.sh). Parent supplies WFDIR,
+# SESSION_START_JS, POST_COMPACT_JS, jsn, seed_state, state_hash, state_field,
+# run_with_timeout, assert_eq, pass, fail.
 
 # ---------------------------------------------------------------------------
 echo ""
@@ -63,6 +59,12 @@ D08_BEFORE="$(state_hash sid-d01)"
 inject sid-d01 >/dev/null
 assert_eq "D08-provider-has-no-side-effect" "$D08_BEFORE" "$(state_hash sid-d01)"
 
+# D09 (#2278): literal drift pin — the constant must equal the approved sentence
+# (detail.md Files-to-modify item 10) byte for byte, PLAN_LANG clause included.
+VP_TEXT_2278="Follow every skill step literally and in order: never replace a step's prescribed command output with your own summary, never edit append-only documents directly, always pass the exact subagent_type a skill names when dispatching an agent, and write every planning artifact in the PLAN_LANG language from the first draft."
+if [ "$VP_TEXT" = "$VP_TEXT_2278" ]; then pass "D09-text-matches-2278-sentence"
+else fail "D09-text-matches-2278-sentence" "VERBOSE_PROMPT_TEXT drifted from detail.md item 10: '$VP_TEXT'"; fi
+
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== G: SessionStart integration ==="
@@ -87,6 +89,8 @@ seed_state "sid-g01" '{"verbose_prompt":true}'
 G01="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g01"}')"
 if contains "$VP_TEXT" "$G01"; then pass "G01-flag-true-injects-line"
 else fail "G01-flag-true-injects-line" "additionalContext lacks the hardening line"; fi
+if contains "$VP_TEXT_2278" "$G01"; then pass "G01b-2278-sentence-in-session-start"
+else fail "G01b-2278-sentence-in-session-start" "SessionStart output lacks the exact #2278 sentence"; fi
 
 seed_state "sid-g02" '{"verbose_prompt":false}'
 G02="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g02"}')"
@@ -133,6 +137,8 @@ H01="$(hook_out "$POST_COMPACT_JS" '{"session_id":"sid-h01"}')"
 if contains "$VP_TEXT" "$H01"; then pass "H01-flag-true-injects-line"
 else fail "H01-flag-true-injects-line" "additionalContext lacks the hardening line"; fi
 assert_eq "H01b-state-file-unchanged" "$H01_BEFORE" "$(state_hash sid-h01)"
+if contains "$VP_TEXT_2278" "$H01"; then pass "H01c-2278-sentence-in-post-compact"
+else fail "H01c-2278-sentence-in-post-compact" "PostCompact output lacks the exact #2278 sentence"; fi
 
 seed_state "sid-h02" '{"verbose_prompt":false}'
 H02="$(hook_out "$POST_COMPACT_JS" '{"session_id":"sid-h02"}')"

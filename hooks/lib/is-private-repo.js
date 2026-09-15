@@ -57,6 +57,16 @@ function isPrivateRepo(repoDir) {
   }
 }
 
+// Boolean-only wrapper for hooks that must never throw and must hand the linter
+// a real boolean (lintWorktreeNotesLang compares with `=== true`).
+function safeIsPrivateRepo(cwd) {
+  try {
+    return isPrivateRepo(cwd) === true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Convert WSL/MSYS-style drive paths (e.g. bash /X/path) to Windows paths (X:/path) on win32.
 // Necessary because the Bash tool uses Unix-style paths even on Windows.
 function toNativePath(p) {
@@ -140,4 +150,4 @@ function findPrivateName(candidate, privateNames) {
   return null;
 }
 
-module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost, shouldScanAsPublicTarget, listPrivateRepoNames, escapeRegex, findPrivateName };
+module.exports = { isPrivateRepo, safeIsPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost, shouldScanAsPublicTarget, listPrivateRepoNames, escapeRegex, findPrivateName };

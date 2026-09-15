@@ -371,7 +371,18 @@ launch() {
   # The duration is measured child-side and written BEFORE the rc file, which stays the
   # sole completion signal — a harvest that sees <i>.rc always sees a finished <i>.dur.
   ( __t0=$SECONDS
-    bash "$script" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null
+    case "$script" in
+      *.Tests.ps1)
+        if command -v pwsh >/dev/null 2>&1; then
+          pwsh -NoProfile -Command "Invoke-Pester -Path '$script' -CI" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null
+        else
+          printf 'SKIP: pwsh not on PATH\n' >"$WORKDIR/$i.out"
+          echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
+          echo 77 >"$WORKDIR/$i.rc"
+          exit 0
+        fi ;;
+      *) bash "$script" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null ;;
+    esac
     __rc=$?
     echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
     echo "$__rc" >"$WORKDIR/$i.rc" ) &

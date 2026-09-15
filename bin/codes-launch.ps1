@@ -43,11 +43,28 @@ if (Test-Path $_getCfg) {
     } catch { $_ssOn = $false }
 }
 $global:LASTEXITCODE = $_preLastExitCode
+# Inject pinned CC model versions from .env into the child window.
+# Variables match the official CC env var names, so no mapping is needed.
+$_prevEc = $global:LASTEXITCODE
+$_nativePins = [ordered]@{}
+if (Test-Path $_getCfg) {
+    try {
+        foreach ($_cv in @("ANTHROPIC_DEFAULT_FABLE_MODEL","ANTHROPIC_DEFAULT_OPUS_MODEL","ANTHROPIC_DEFAULT_SONNET_MODEL","ANTHROPIC_DEFAULT_HAIKU_MODEL","CLAUDE_CODE_SUBAGENT_MODEL")) {
+            $_val = & $_getCfg $_cv
+            if ($_val) {
+                Write-Host "[CC_NATIVE] ${_cv}=$_val"
+                $_nativePins[$_cv] = $_val
+            }
+        }
+    } catch {}
+}
+$global:LASTEXITCODE = $_prevEc
 $codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
 # Clear gateway env vars in the CHILD pwsh only (not $env: here, which would also wipe
 # the caller's shell) — prevents a leftover code-ccgw.ps1 session from misrouting a
 # native `codes` launch. #2083
 $_envClear = 'Remove-Item Env:ANTHROPIC_* -ErrorAction SilentlyContinue; Remove-Item Env:NODE_EXTRA_CA_CERTS -ErrorAction SilentlyContinue; '
+foreach ($_k in $_nativePins.Keys) { $_envClear += '$env:' + $_k + ' = ' + (_codesQuote $_nativePins[$_k]) + '; ' }
 $cmd = "$_envClear" + "code.cmd --new-window $codeArgs"
 if ($_ssOn) { $cmd += "; & $(_codesQuote $waitScript) $(_codesQuote $name); & $(_codesQuote $syncScript) push -Quiet" }
 Start-Process pwsh -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command", $cmd -WindowStyle Hidden

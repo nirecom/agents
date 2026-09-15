@@ -28,17 +28,17 @@ d2099_stage_wiring() {
     assert_eq "CS-3 make-detail-plan never names another stage" "no" \
         "$(d2099_has_re "$mdp" '--stage (write_tests|write_code)')"
 
-    # #2102 moved the stored-evaluation read out of WT-5/WCD-3: WT-0 and WCD-0
+    # #2102 moved the stored-evaluation read out of WT-6/WCD-3: WT-0 and WCD-0
     # now take ONE bundled read-session-facts record, which carries no --stage
     # flag — the stage is spelled in the COMPLEXITY_LEVEL_<stage> key each step
     # is told to read, so that key is what has to name the stage.
     assert_eq "CS-4 WT-0 reads its own stage key out of the bundled session facts" "yes yes" \
         "$(d2099_has "$wt" 'read-session-facts') $(d2099_has "$wt" 'COMPLEXITY_LEVEL_write_tests')"
-    assert_eq "CS-5 WT-5 falls back to derive-complexity-level --stage write_tests" "yes" \
+    assert_eq "CS-5 WT-6 falls back to derive-complexity-level --stage write_tests" "yes" \
         "$(d2099_has_re "$wt" 'derive-complexity-level.*--stage write_tests')"
     assert_eq "CS-6 write-tests never names another stage" "no" \
         "$(d2099_has_re "$wt" '--stage (detail|write_code)')"
-    assert_eq "CS-7 WT-5 consumes the signals= line as task_complexity_signals" "yes" \
+    assert_eq "CS-7 WT-6 consumes the signals= line as task_complexity_signals" "yes" \
         "$(d2099_has "$wt" "task_complexity_signals")"
 
     assert_eq "CS-8 WCD-0 reads its own stage key out of the bundled session facts" "yes yes" \
@@ -180,7 +180,7 @@ d2099_stage_pattern_teeth() {
 # keeps the csv out of command position. Bounded to each step's own section.
 d2099_consumer_fallback_rules() {
     local row name step f
-    for row in "make-detail-plan|MDP-3" "write-tests|WT-5" "write-code|WCD-3"; do
+    for row in "make-detail-plan|MDP-3" "write-tests|WT-6" "write-code|WCD-3"; do
         name="${row%%|*}"; step="${row##*|}"
         f="$AGENTS_DIR/skills/$name/SKILL.md"
         assert_eq "CS-28 $step substitutes S0-undecidable for an unparseable or unsafe judged csv" "yes" \

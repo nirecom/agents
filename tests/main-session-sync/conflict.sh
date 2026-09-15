@@ -14,7 +14,10 @@ REBASE_CLAUDE="$TMPDIR_BASE/rebase-interrupted/.claude"
 REBASE_PROJECTS="$REBASE_CLAUDE/projects"
 git init --bare "$REBASE_REMOTE" >/dev/null 2>&1
 "$DOTFILES_DIR/install/linux/session-sync-init.sh" \
-    --claude-dir "$REBASE_CLAUDE" --remote-url "$REBASE_REMOTE" >/dev/null 2>&1
+    --claude-dir "$REBASE_CLAUDE" --no-remote >/dev/null 2>&1
+# Local-path remotes are no longer accepted by the installer allowlist (#1773);
+# the fixture attaches its own origin instead.
+git -C "$REBASE_PROJECTS" remote add origin "$REBASE_REMOTE" >/dev/null 2>&1
 _git_config_user "$REBASE_PROJECTS"
 git -C "$REBASE_PROJECTS" add -A >/dev/null 2>&1
 git -C "$REBASE_PROJECTS" commit -m "initial" >/dev/null 2>&1

@@ -13,6 +13,7 @@ else
     C_CYAN=''; C_GREEN=''; C_YELLOW=''; C_GRAY=''; C_BOLD=''; C_RESET=''
 fi
 export C_CYAN C_GREEN C_YELLOW C_GRAY C_BOLD C_RESET
+export HOMEBREW_NO_INTERACTIVE=1
 
 _uname_s="$(uname -s)"
 if [[ "$_uname_s" == MINGW* || "$_uname_s" == MSYS* || "$_uname_s" == CYGWIN* ]]; then
@@ -119,6 +120,10 @@ printf -- "${C_BOLD}--- Installing jq ---${C_RESET}\n"
 echo ""
 printf -- "${C_BOLD}--- Installing shellcheck ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/shellcheck.sh"
+
+echo ""
+printf -- "${C_BOLD}--- Installing pwsh (PowerShell) and Pester ---${C_RESET}\n"
+"$AGENTS_ROOT/install/linux/pwsh.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Configuring CodeGraph ---${C_RESET}\n"
