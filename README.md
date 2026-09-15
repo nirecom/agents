@@ -11,27 +11,6 @@
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
 Codex CLI is supported (install with `-Develop`).
 
-## Prerequisites
-
-The installer (`install.ps1` / `install.sh`) automatically installs the following dependencies:
-
-| Dependency | Scope | Why required |
-|---|---|---|
-| `gh` (GitHub CLI) | `project`, `repo` | `/issue-create`, Projects v2 integration, PR creation |
-| `jq` | — | `/worktree-end` doc-append pipeline, GitHub API writes |
-
-After installation, `gh auth login` is invoked only in interactive sessions and only when not
-already authenticated (skipped on headless/CI machines and on already-authenticated re-runs);
-`gh auth refresh -s project` then adds the required `project` scope automatically.
-
-### CodeGraph (optional, off by default)
-
-[CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) is a third-party code-intelligence
-tool that gives agents a pre-built symbol graph instead of a Read/Grep sweep. Installation, MCP
-registration, and per-worktree index handling are wired into this framework, so it works without any
-manual setup. It stays off unless you ask for it: set `CODEGRAPH=on` in `.env` and re-run the
-installer. See [docs/codegraph.md](docs/codegraph.md) for details.
-
 ## What's Inside
 
 ### Hook-enforced end-to-end workflow
@@ -45,13 +24,14 @@ blocks `git commit` until every required step completes or is explicitly skipped
 flowchart TD
     classDef terminal  fill:#16a34a,stroke:#14532d,color:#fff,font-weight:bold
     classDef decision  fill:#b45309,stroke:#92400e,color:#fff
+    classDef audit     fill:#be123c,stroke:#881337,color:#fff
     classDef skippable fill:#475569,stroke:#334155,color:#fff
-    classDef required  fill:#1d4ed8,stroke:#1e3a8a,color:#fff
     classDef parallel  fill:#6d28d9,stroke:#4c1d95,color:#fff
+    classDef required  fill:#1d4ed8,stroke:#1e3a8a,color:#fff
 
-    Task([Task]) --> DocCheck{Docs-only<br/>changes?}
-    DocCheck -- Yes --> UV["12 · User verify"]
-    DocCheck -- No  --> S0_sg
+    Task([Task]) --> Doc{Docs-only?}
+    Doc -- Yes --> Gate
+    Doc -- No  --> S0_sg
 
     subgraph S0_sg["1 · workflow-init"]
         direction TB
@@ -64,7 +44,7 @@ flowchart TD
     end
 
     S0_sg --> S1["2 · clarify-intent<br/>skippable"]
-    S1  --> P2a
+    S1 --> P2a
 
     subgraph Plan["3-5 · Plan  —  3-stage pipeline"]
         direction TB
@@ -80,29 +60,27 @@ flowchart TD
         end
     end
 
-    Plan --> S3["6 · Branch / Worktree<br/>main · branch · worktree"]
-    S3   --> S4["7-8 · write-tests & review<br/>before code · skippable"]
-    S4   --> S5["Code"]
+    Plan --> S3["6 · branch / worktree"]
+    S3 --> S4["7-8 · write-tests<br/>skippable"]
+    S4 --> S5["9 · write-code"]
 
-    S5 --> S6a & S6b & S6c & S6d
+    S5 --> S6a & S6b & SR
 
-    subgraph Review["9-10 · Tests & Security"]
+    subgraph Review["10-11 · tests & review"]
         S6a["run-tests"]
-        S6b["review-code-security"]
-        S6c["review-code-codex<br/>Codex second opinion"]
-        S6d["review-prompt-size"]
+        S6b["review-security<br/>+ code quality"]
+        SR["systemic-risk<br/>audit"]
     end
 
-    S6a & S6b & S6c & S6d --> S7["11 · Docs"]
-    S7 --> UV
-    UV --> S9["Commit & push<br/>blocked until all steps done"]
+    S6a & S6b & SR --> S7["12 · docs"]
+    S7 --> Gate["pre-merge audit"]
+    Gate --> UV["13 · user verify"]
+    UV --> Push["commit & push"]
 
-    S9 --> Cleanup{worktree · branch<br/>or main?}
-    Cleanup -- worktree --> WE["/worktree-end<br/>merge + cleanup"]
-    Cleanup -- branch   --> PR["gh pr create → merge → delete"]
-    Cleanup -- main     --> IC["/issue-close-finalize<br/>--from-session"]
+    Push --> Clean{worktree or main?}
+    Clean -- worktree --> WE["worktree-end"]
+    Clean -- main     --> IC["issue-close"]
     WE --> IC
-    PR --> IC
     IC --> Done([Done])
 
     style S0_sg  fill:#1e3a8a,stroke:#1d4ed8,color:#fff
@@ -113,10 +91,11 @@ flowchart TD
     style Review fill:#4c1d95,stroke:#6d28d9,color:#fff
 
     class Task,Done terminal
-    class DocCheck,Cleanup decision
+    class Doc,Clean,S3 decision
+    class Gate,SR audit
     class S1,P2a,S4 skippable
-    class P2b_L,P2c_L,S0_R,S3,S5,S7,UV,S9,WE,PR,IC required
-    class P2b_R,P2c_R,S0_SC,S0_SH,S6a,S6b,S6c,S6d parallel
+    class S0_SC,S0_SH,P2b_R,P2c_R,S6a,S6b parallel
+    class S0_R,P2b_L,P2c_L,S5,S7,UV,Push,WE,IC required
 ```
 
 Inspect the step list and current session state with `bin/workflow/next-step --list`:
@@ -133,31 +112,17 @@ Inspect the step list and current session state with `bin/workflow/next-step --l
  8  review_tests        Review test coverage adequacy
  9  write_code          Implement the planned changes
 10  run_tests           Run test suite and security review
-11  review_security     Adversarial security code review
+11  review_security     Adversarial security review and code quality gates
 12  docs                Update docs and changelog
 13  user_verification   User verifies the implementation
 14  cleanup             Remove worktree and merge branch
 15  pre_final_report_gate  Final report and session close
+16  final_report        Final report delivered (terminal)
 ```
 
-**WF-META** (meta-label issues — planning only; steps 7–14 auto-skipped):
-```
- 1  workflow_init       Initialize session state and GitHub issue
- 2  clarify_intent      Interview and write intent.md
- 3  research            Run survey-code and/or deep-research
- 4  outline             Propose high-level approaches
- 5  detail              File-level implementation plan
- 6  branching_complete  Create feature branch and worktree
-[-] 7  write_tests      (auto-skipped)
-[-] 8  review_tests     (auto-skipped)
-[-] 9  write_code       (auto-skipped)
-[-]10  run_tests        (auto-skipped)
-[-]11  review_security  (auto-skipped)
-[-]12  docs             (auto-skipped)
-[-]13  user_verification  (auto-skipped)
-[-]14  cleanup          (auto-skipped)
-15  pre_final_report_gate  Final report and session close
-```
+Meta-label issues run a planning-only variant (**WF-META**) that auto-skips the implementation
+steps 7–14. Its step list and the full derivation rules are documented in
+[docs/architecture/claude-code/workflow.md](docs/architecture/claude-code/workflow.md#workflow-types-in-next-step---list).
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
   satisfies the corresponding steps — no manual marker required.
@@ -311,79 +276,16 @@ The installer configures all required VS Code settings automatically.
 
 See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full design.
 
-## Directory Structure
+## Quickstart
 
-```
-CLAUDE.md          — global instructions (Claude Code + Copilot)
-settings.json      — hooks, permissions, model, and effort-level configuration
-rules/             — coding, testing, docs, git, and security conventions
-skills/            — slash commands (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, /resume-session, …) for Claude Code and Copilot
-copilot/           — Copilot-specific configuration (VS Code settings scripts)
-hooks/             — git and Claude Code/Copilot hook scripts
-agents/            — agent definition files for work that needs judgement (outline-planner, detail-planner, their reviewers, survey-code, supervisor, …) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-cc-repair, measure-norm-docs, count-subagents, and other tools
-bin/worker-dispatch.js — single entrypoint for deterministic workers (test-runner, worktree-copy, worktree-backup, doc-append, issue-reconcile, session-close-gate); skills dispatch these as plain scripts instead of spending a subagent on them
-bin/worker-dispatch/ — the dispatcher's worker modules, argument validators, and stdout renderers
-bin/lib/           — shared libraries used by two or more bin/ entrypoints (codex-core.sh, gh-outbound-guard.sh, …)
-install/
-  win/             — Windows-specific install subscripts
-  linux/           — Linux/macOS install subscripts
-install.sh         — Linux/macOS installer
-install.ps1        — Windows installer
-docs/              — architecture decisions, history, and operational docs
-tests/             — test suite for hooks, skills, and framework behaviors
-```
+One branching installer covers every platform (Linux, macOS, Windows native and WSL2) and
+installs the dependencies it needs (full list under [Requirements](#requirements)). Install once,
+source the generated profile, then launch VS Code with the `codes` command — the workflow hooks
+activate automatically.
 
-## Requirements
+### Install
 
-### Required
-
-| Tool | Purpose |
-|------|---------|
-| `git` | Repo clone; `core.hooksPath` is set to the repo's `hooks/` directory |
-| `bash` | All shell hooks (`pre-commit`, `commit-msg`) and `bin/` scripts |
-| Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` |
-| PowerShell 5+ (Windows) | `install.ps1`, symlink creation, session-sync wrapper |
-| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host |
-| `jq` (≥1.6) | `bin/review-plan-codex` — round-log JSON encoding (hard prerequisite; missing jq → early-exit FAILED with install guidance) |
-
-> Windows: symlink creation requires Developer Mode (Settings → System → For developers) or Administrator privileges.
-
-#### jq install
-
-```
-# Windows
-winget install jqlang.jq
-
-# macOS
-brew install jq
-
-# Debian / Ubuntu
-sudo apt install jq
-```
-
-Reviewer scripts call `codex_core_check_jq` at startup; missing jq results in early exit with the same install commands echoed.
-
-### Optional
-
-| Tool | Used by |
-|------|---------|
-| [fnm](https://github.com/Schniz/fnm) (Windows) / [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) | Installer: installs Claude Code and Codex via npm |
-| [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
-| [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit`; `project` scope (`gh auth refresh -s project`) required for `/issue-create` and Projects v2 |
-| `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
-
-### GitHub Copilot
-
-GitHub Copilot for VS Code is required for Copilot integration. The installer
-(`install.ps1` / `install.sh`) writes the required VS Code user settings automatically.
-
-> **Note**: `settings.json` is standard JSON. If your VS Code `settings.json` contains
-> comments (JSONC), the installer will warn and skip the merge — remove comments first.
-
-## Install
-
-### Linux / macOS
+**Linux / macOS**
 
 ```bash
 git clone https://github.com/nirecom/agents ~/git/agents
@@ -393,13 +295,10 @@ cd ~/git/agents && ./install.sh
 
 > If nvm was just installed, restart your terminal before re-running `./install.sh` so that Node.js (npm) is available.
 
-Then add to `~/.bash_profile` or `~/.zshrc`:
+The installer appends the profile sourcing to your shell rc file (`~/.bashrc`, `~/.zshrc`, or
+`~/.profile`) automatically — open a new terminal afterward to load it.
 
-```bash
-source ~/.agents_profile
-```
-
-### Windows (PowerShell)
+**Windows (PowerShell)**
 
 ```powershell
 git clone https://github.com/nirecom/agents $HOME\git\agents
@@ -410,26 +309,87 @@ Set-Location $HOME\git\agents
 
 > If fnm was just installed, restart your terminal before re-running `.\install.ps1` so that Node.js (npm) is available.
 
-Then add to your PowerShell profile:
+The installer appends the profile sourcing to your PowerShell `$PROFILE` automatically — open a
+new terminal afterward to load it. It also enables git long-path support (`core.longpaths`) so
+deep worktree paths don't hit the Windows `Filename too long` limit.
 
-```powershell
-. "$HOME\.agents_profile.ps1"
+**Configure and authenticate**
+
+Sourcing the profile exports `AGENTS_CONFIG_DIR` / `AGENTS_DIR` for you — no manual setup. All
+tunable behavior lives in `.env`: copy the template (`cp .env.example .env`) and edit as needed.
+`.env.example` documents every setting inline; any repo can override a subset via a `.env.local`
+at its root — see [Configuration](#configuration) for details.
+
+On the first interactive run the installer invokes `gh auth login` when not already authenticated
+(skipped on headless/CI machines and on already-authenticated re-runs), then `gh auth refresh -s
+project` adds the required `project` scope automatically.
+
+### Launch
+
+Sourcing the profile defines the **`codes`** command — the way to start a session. It opens VS Code
+wired to the framework (CLAUDE.md, hooks, skills, and the pinned Claude model versions from `.env`
+all in effect) and pushes the session-sync repo when the window closes:
+
+```bash
+codes            # open the current directory
+codes path/to/repo   # open a specific repo or .code-workspace
 ```
 
-> On Windows, enable long-path support before first use to avoid `Filename too long`
-> errors on deep worktree paths:
-> ```powershell
-> git config --global core.longpaths true
-> ```
+Inside VS Code, start Claude Code (or GitHub Copilot) as usual — the hook-enforced workflow is
+already active. `codes` works identically in bash (`bin/codes-launch.sh`) and PowerShell
+(`bin/codes-launch.ps1`).
+
+## Directory Structure
+
+- `CLAUDE.md` — global instructions, read natively by both Claude Code and Copilot
+- `settings.json` — base hook/permission/model config; the installer merges it with `settings-extension.json` and generated allow rules, then writes the result to `~/.claude/settings.json` as a real file (not a symlink)
+- `rules/` — coding, testing, docs, git, and security conventions
+- `skills/` — slash commands (`/clarify-intent`, `/make-outline-plan`, `/write-tests`, …)
+- `agents/` — subagent definitions for judgement-heavy work (planners, reviewers, survey, supervisor)
+- `hooks/` — the git and Claude Code/Copilot hooks that drive the workflow state machine
+- `bin/` — supporting CLIs and deterministic workers invoked by the hooks and skills
+- `install/`, `install.sh`, `install.ps1` — one branching cross-platform installer
+- `docs/` — architecture decisions, history, and operational docs
+- `tests/` — test suite for hooks, skills, and framework behaviors
+
+## Requirements
+
+The installer brings in everything marked **✓** automatically; the rest must already be present before you run it.
+
+### Required
+
+| Tool | Purpose | Installed by the installer |
+|------|---------|:--:|
+| `git` | Repo clone; `core.hooksPath` is set to the repo's `hooks/` directory | — (needed to clone the repo first) |
+| `bash` | All shell hooks (`pre-commit`, `commit-msg`) and `bin/` scripts | — |
+| PowerShell 5+ (Windows) | Bootstraps `install.ps1` | — (needed to run the installer) |
+| Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` | ✓ (installs `nvm`/`fnm`, then Node via npm) |
+| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host | ✓ |
+| `jq` (≥1.6) | JSON encoding in `bin/review-plan-codex` and the doc-append pipeline | ✓ |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Issue/PR operations, private-repo detection, and Projects v2 throughout the workflow | ✓ (run `gh auth refresh -s project` for the `project` scope) |
+| Codex CLI | Adversarial second-provider review in the planning loop and `/review-*-codex`. When Codex is unavailable — not authenticated, token expired, or offline — reviews fall back to Claude reviewer subagents. | ✓ with `--develop` / `-Develop` |
+
+> Windows: symlink creation requires Developer Mode (Settings → System → For developers) or Administrator privileges.
+
+### Optional
+
+| Tool | Used by | Installed by the installer |
+|------|---------|:--:|
+| [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` | — |
+| [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) | Third-party code-intelligence: a pre-built symbol graph agents query instead of a Read/Grep sweep | ✓ wired in, but off by default — set `CODEGRAPH=on` in `.env` and re-run the installer ([docs](docs/codegraph.md)) |
 
 ## Configuration
 
-Key environment variables set by `dotfileslink`:
+All tunable behavior is driven by `.env`, created from `.env.example` during [Quickstart](#quickstart).
+The template documents every setting inline; the sections below cover only what needs framing.
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `AGENTS_CONFIG_DIR` | path to this repo | Resolves hook paths in `settings.json` |
-| `AGENTS_DIR` | path to this repo | Resolves `session-sync.sh` path in shell profile |
+### Global vs. per-repo
+
+- **Global** — `.env` at this repo's root is the single source of truth for every setting.
+- **Per-repo override** — any repo you work in may drop a `.env.local` at its root to override a
+  subset of settings for that repo only. A blocklist (`hooks/lib/local-env.js`) pins the settings
+  whose per-repo divergence would break the framework's own contract — `AGENTS_CONFIG_DIR`,
+  `ENFORCE_WORKTREE`, `WORKFLOW_PLANS_DIR`, and similar — so those always resolve from the global `.env`.
 
 ## Contributing
 

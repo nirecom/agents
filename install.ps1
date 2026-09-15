@@ -50,6 +50,22 @@ function Invoke-InstallStep {
 Write-Host "=== agents installer ===" -ForegroundColor Cyan
 
 Write-Host ""
+Write-Host "--- Enabling git long-path support ---"
+# Deep worktree paths overflow the Windows MAX_PATH (260) limit and surface as
+# `Filename too long` errors. This user-scoped git config is idempotent.
+try {
+    git config --global core.longpaths true
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "git config core.longpaths failed (exit code: $LASTEXITCODE)."
+    } else {
+        Write-Host "git core.longpaths enabled" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "Enabling git long-path support failed: $($_.Exception.Message)" -ForegroundColor Red
+    $script:FailedSteps += "Enabling git long-path support"
+}
+
+Write-Host ""
 Write-Host "--- Checking Node.js (fnm) ---"
 if (-not (Get-Command fnm -ErrorAction SilentlyContinue)) {
     if (Get-Command winget -ErrorAction SilentlyContinue) {

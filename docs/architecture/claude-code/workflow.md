@@ -330,6 +330,32 @@ the gate, not in the file.
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
 when CLAUDE.md skip conditions are met.
 
+### Workflow types in `next-step --list`
+
+`bin/workflow/next-step --list` renders the 16-step plan for the session's workflow type. The
+standard **WF-CODE** rendering (all 16 steps active) is shown in the README. **WF-META** sessions
+(meta-label issues — planning only) auto-skip the implementation steps 7–14 per the wf-meta
+auto-skip stage above:
+
+```
+ 1  workflow_init       Initialize session state and GitHub issue
+ 2  clarify_intent      Interview and write intent.md
+ 3  research            Run survey-code and/or deep-research
+ 4  outline             Propose high-level approaches
+ 5  detail              File-level implementation plan
+ 6  branching_complete  Create feature branch and worktree
+[-] 7  write_tests      (auto-skipped)
+[-] 8  review_tests     (auto-skipped)
+[-] 9  write_code       (auto-skipped)
+[-]10  run_tests        (auto-skipped)
+[-]11  review_security  (auto-skipped)
+[-]12  docs             (auto-skipped)
+[-]13  user_verification  (auto-skipped)
+[-]14  cleanup          (auto-skipped)
+15  pre_final_report_gate  Final report and session close
+16  final_report        Final report delivered (terminal)
+```
+
 Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"` as
 the sole Bash command (no pipes, no `&&`, no redirection). The PostToolUse hook
 (`workflow-mark.js`) intercepts this via strict anchored regex on `tool_input.command` and
