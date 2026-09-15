@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard.js, hooks/stop-l2-findings-display.js
-# Tags: supervisor, alert-phase, closed, paused, frozen, regression, #1166, scope:issue-specific
-# L3 gap: hook-registration — whether the hook actually fires on Stop events in a real
-#          claude -p session requires RUN_TL3=on; skipped here (L2 unit-level).
-#
-# RED for issue #1166 (pre-implementation).
-#
-# Validates the closed-terminal + frozen->paused rename semantics:
-# - alert_phase="closed" is a permanent terminal phase: appendFinding must NOT re-arm.
-# - The alert_eligible_phase=post_final_report_window bypass must NOT resurrect a closed phase.
-# - alert_phase="paused" (renamed from "frozen") still re-arms on new findings (preserves #967).
-# - validateAlertPhaseTransition: closed->pending rejected; paused->pending allowed.
-# - migrateLegacyState up-casts legacy alert_phase="frozen" to "paused".
-# - writeAlertState with alert_phase="closed" clears alert_eligible_phase to null (#905 extension).
-# - supervisor-guard treats legacy alert_phase="frozen" as terminal (backward-compat alias).
+# Tags: supervisor, alert-phase, closed, paused, regression, #1166, scope:issue-specific
+# L3 gap: hook-registration — real Stop event in a live claude -p session requires RUN_TL3=on.
+# Validates: closed phase is terminal (no re-arm), eligible_phase bypass blocked, paused re-arms,
+#   phase transition validation, writeAlertState closed clears eligible_phase.
 
 set -u
 
@@ -200,39 +190,6 @@ console.log('OK');
     fi
 }
 
-# T5: migrateLegacyState({alert:{alert_phase:'frozen'}}) -> alert_phase becomes 'paused'
-run_t5() {
-    require_writer "T5: migrateLegacyState frozen -> paused" || return
-    local out rc
-    out=$(run_with_timeout 5 node -e "
-const w = require('$WRITER_NODE');
-// readStateOrInit invokes migrateLegacyState; assert the up-cast via a seeded on-disk frozen state.
-const s = require('$SCHEMA_NODE');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mig-'));
-process.env.WORKFLOW_PLANS_DIR = tmp;
-delete require.cache[require.resolve('$WRITER_NODE')];
-const w2 = require('$WRITER_NODE');
-const st = s.createEmptyState('mig-sid');
-st.alert.alert_phase = 'frozen';
-fs.writeFileSync(w2.getStatePath('mig-sid'), JSON.stringify(st));
-const migrated = w2.readStateOrInit('mig-sid');
-if (!migrated || !migrated.alert || migrated.alert.alert_phase !== 'paused') {
-  console.error('alert_phase after migrate='+JSON.stringify(migrated && migrated.alert && migrated.alert.alert_phase));
-  process.exit(3);
-}
-console.log('OK');
-" 2>&1)
-    rc=$?
-    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "T5: migrateLegacyState frozen -> paused"
-    else
-        fail "T5: migrateLegacyState frozen -> paused (rc=$rc, out=$out)"
-    fi
-}
-
 # T6: writeAlertState alert_phase='closed' -> alert_eligible_phase cleared to null (#905 extension)
 run_t6() {
     require_writer "T6: writeAlertState closed -> alert_eligible_phase cleared null" || return
@@ -258,37 +215,13 @@ console.log('OK');
     fi
 }
 
-# T7: supervisor-guard with legacy readState() returning alert_phase='frozen' -> treated as terminal.
-# Guard branch (3): armed alert with a terminal phase must NOT block (exit 0, no block JSON).
-run_t7() {
-    require_writer "T7: guard treats legacy frozen as terminal (no block)" || return
-    if [ ! -f "$GUARD_HOOK" ]; then skip "T7: guard treats legacy frozen as terminal (guard not present)"; return; fi
-    local tmp sid out rc
-    tmp="$(mktemp -d)"; sid="t7-sid"
-    # Seed an armed alert with the legacy frozen phase. If frozen were NOT terminal,
-    # the armed alert_armed_at would fire guard branch (3) and emit a block.
-    seed_alert "$tmp" "$sid" "'frozen'" "'2026-06-06T11:00:00.000Z'" "0"
-    out=$(printf '{"session_id":"%s","transcript_path":"/nonexistent","stop_hook_active":false}' "$sid" \
-        | WORKFLOW_PLANS_DIR="$tmp" AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout 10 node "$GUARD_HOOK_NODE" 2>&1)
-    rc=$?
-    rm -rf "$tmp"
-    # Terminal frozen: guard must not block. Block would be exit 2 + a decision:"block" line.
-    if [ $rc -eq 0 ] && ! printf '%s' "$out" | grep -q '"decision":"block"'; then
-        pass "T7: guard treats legacy frozen as terminal (no block)"
-    else
-        fail "T7: guard treats legacy frozen as terminal (no block) (rc=$rc, out=$out)"
-    fi
-}
-
 run_t1
 run_t2
 run_t3
 run_t4a
 run_t4b
 run_t4c
-run_t5
 run_t6
-run_t7
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

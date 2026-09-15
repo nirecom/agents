@@ -1,0 +1,17 @@
+name: "Migration blocks audit"
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch: {}
+
+jobs:
+  audit-migration-blocks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check migration blocks (format + age warnings)
+        env:
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/check-migration-blocks.sh --all

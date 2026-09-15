@@ -1,18 +1,10 @@
 #!/usr/bin/env node
-// Stop hook: EM Supervisor alert/audit block gate.
-// Branch dispatch (evaluated in order):
-//   (1) stop_hook_active=true                    -> exit 0 immediately
-//   (audit-B) audit_phase=done                   -> surface audit verdict; if BLOCK -> exit 2; else fall through
-//   (2) cumulative_severity=error                -> increment-retry; if frozen exit 0; else block, exit 2
-//   (3) detectSentinelHang || alertArmedAt       -> increment-retry; if frozen exit 0; else block, exit 2
-//   (4) legacy layer2 state + cumSev=warning/notice -> advisory additionalContext; exit 0 (new alert format skips)
-//   (audit-A) CONFIRM_* sentinel or cumSev>=error -> arm audit (write pending); block with agent invocation msg; exit 2
-//   (5) all-null                                 -> exit 0 silently
-//
-// AskUserQuestion gate (#903): when the last assistant turn ends with an
-// AskUserQuestion tool_use, branches (2), (3) are suppressed — the
-// user is already mid-dialog and the guard must not block on top.
-// Fail-open on any error.
+// Stop hook: EM Supervisor alert/audit block gate. Branch order:
+//   (1) stop_hook_active -> exit 0; (audit-B) audit_phase=done -> surface verdict, BLOCK -> exit 2
+//   (2) cumSev=error and (3) sentinel hang || alertArmedAt -> increment-retry, else block/exit 2
+//   (4) legacy layer2 state + cumSev=warning/notice -> advisory additionalContext, exit 0
+//   (audit-A) CONFIRM_* sentinel or cumSev>=error -> arm audit, block, exit 2; (5) all-null -> exit 0
+// AskUserQuestion gate (#903) suppresses (2)/(3) mid-dialog. Fail-open on any error.
 "use strict";
 
 const fs = require("fs");
@@ -168,9 +160,6 @@ if (require.main === module) {
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&
       !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen" &&
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       (cumSev === "error" || hangDetected || alertArmedAt);
     if (alertWouldFire) {
       let alertReason;
@@ -207,11 +196,7 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen"
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
-  ) {
+  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
     const reason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
@@ -223,11 +208,7 @@ if (require.main === module) {
   }
 
   // (3)
-  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen"
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
-  ) {
+  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const reason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
@@ -249,9 +230,6 @@ if (require.main === module) {
   // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
   // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
   if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen" &&
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       isLegacyLayer2State) {
     const additionalContext = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
