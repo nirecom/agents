@@ -416,6 +416,40 @@ if [ -n "$_od_repo_top" ]; then
                     ;;
             esac
         fi
+
+        # ---------- migration-blocks gate (issue #1987) ----------
+        # _mb_staged: すべての staged ファイル（rules/*.md と tests/ を除外）
+        # 拡張子フィルタは設けない — 拡張子なしファイル・.ps1 等も対象
+        _mb_staged=()
+        while IFS= read -r -d '' _mb_f; do
+            case "$_mb_f" in
+                rules/*.md) ;;   # 除外: ドキュメントのみ
+                tests/*)    ;;   # 除外: テストファイル
+                *)          _mb_staged+=("$_mb_f") ;;
+            esac
+        done < <(git diff --cached --name-only -z 2>/dev/null || true)
+
+        # Blocking on axis-1/2 violations (rc 1 AND rc 2); warnings pass through (rc 0).
+        # Real outages (missing/unrunnable checker, unexpected rc) leave the commit alone.
+        _mb_checker="$_od_cfg_dir/bin/check-migration-blocks.sh"
+        if [ ! -x "$_mb_checker" ]; then
+            echo "pre-commit: check-migration-blocks.sh missing or not executable at $_mb_checker — migration blocks gate skipped" >&2
+        else
+            _mb_rc=0
+            _mb_out="$("$_mb_checker" --staged ${_mb_staged[@]+"${_mb_staged[@]}"} 2>&1)" || _mb_rc=$?
+            case "$_mb_rc" in
+                0) : ;;
+                1|2)
+                    printf '%s\n' "$_mb_out"
+                    echo ""
+                    echo "Commit blocked: migration block format violations (checker rc=$_mb_rc)."
+                    exit 1
+                    ;;
+                *)
+                    echo "pre-commit: check-migration-blocks.sh rc=$_mb_rc — migration blocks gate skipped" >&2
+                    ;;
+            esac
+        fi
     fi
 fi
 
@@ -451,14 +485,6 @@ if (unset AGENTS_CONFIG_DIR; _is_agents_session_repo "$_cb_repo_top") && [ -x "$
     # Read from the config dir's .env ONLY. Consulting the ambient value would
     # make `COMMENT_BLOCK_ENFORCE=off git commit` a one-word bypass of the gate.
     _cb_enforce="$(_cb_env_value "COMMENT_BLOCK_ENFORCE:-on")"
-    # --- BEGIN temporary: COMMENT_BLOCK_WARN* → COMMENT_BLOCK_MAX_LINES/ENFORCE migration ---
-    # The old names are INERT, not dual-read: honouring a stale COMMENT_BLOCK_WARN=off
-    # would let a setting written to silence a warning switch a block off.
-    _cb_obsolete="$(_cb_env_value "COMMENT_BLOCK_WARN")$(_cb_env_value "COMMENT_BLOCK_WARN_LINES")"
-    if [ -n "$_cb_obsolete" ]; then
-        echo "NOTE: COMMENT_BLOCK_WARN* is obsolete — use COMMENT_BLOCK_MAX_LINES / COMMENT_BLOCK_ENFORCE" >&2
-    fi
-    # --- END temporary: COMMENT_BLOCK_WARN* → COMMENT_BLOCK_MAX_LINES/ENFORCE migration ---
     if [ "$_cb_enforce" = "off" ]; then
         # A disabled blocking check that says nothing is indistinguishable from a
         # check that keeps passing, which is how a gate quietly stops existing.

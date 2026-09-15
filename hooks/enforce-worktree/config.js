@@ -5,7 +5,6 @@ const path = require("path");
 const { parseGitCPath, findRepoRoot } = require("./git-repo-detection");
 const { isCoveredByEntryList } = require("../lib/path-coverage-match");
 
-const _warnedDeprecated = new Set();
 
 function isEnforceWorktreeOn() {
   const raw = process.env.ENFORCE_WORKTREE;
@@ -68,21 +67,6 @@ function getCurrentBranch(repoCwd) {
 // covers that repo root and its subtree; glob entries match file paths.
 // ENFORCE_WORKTREE_EXCLUDE_REPOS is a deprecated alias, merged in once per process.
 function isRepoExcluded(repoDir) {
-  // --- BEGIN temporary: ENFORCE_WORKTREE_EXCLUDE_REPOS → ENFORCE_WORKTREE_EXCLUDE migration ---
-  if (process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS && !process.env._EXCL_REPOS_MIGRATED) {
-    if (!_warnedDeprecated.has("ENFORCE_WORKTREE_EXCLUDE_REPOS")) {
-      process.stderr.write(
-        "enforce-worktree: ENFORCE_WORKTREE_EXCLUDE_REPOS is deprecated; " +
-        "migrate entries to ENFORCE_WORKTREE_EXCLUDE in your .env\n"
-      );
-      _warnedDeprecated.add("ENFORCE_WORKTREE_EXCLUDE_REPOS");
-    }
-    const existing = process.env.ENFORCE_WORKTREE_EXCLUDE || "";
-    const extra = process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS;
-    process.env.ENFORCE_WORKTREE_EXCLUDE = existing ? existing + ";" + extra : extra;
-    process.env._EXCL_REPOS_MIGRATED = "1";
-  }
-  // --- END temporary: ENFORCE_WORKTREE_EXCLUDE_REPOS → ENFORCE_WORKTREE_EXCLUDE migration ---
   const resolved = path.resolve(repoDir);
   return isCoveredByEntryList(process.env.ENFORCE_WORKTREE_EXCLUDE || "", resolved);
 }
