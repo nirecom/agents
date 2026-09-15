@@ -79,6 +79,25 @@ definition, and related links.
   `make-detail-plan`.
 - **Related**: [skills/make-detail-plan/SKILL.md](../skills/make-detail-plan/SKILL.md)
 
+## Supervisor audit
+
+These terms are fixed by the #2256 outline Glossary and used identically across
+intent, outline, detail, implementation, and docs. Full design detail lives in
+[claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md).
+
+| Term | Definition | Related |
+|---|---|---|
+| **step** | One of the 16 units of `next-step --list` (`clarify_intent` … `final_report`). The planning stages are steps too — `clarify_intent` / `outline` / `detail`. Do not call these "工程", "stage", "segment", or "boundary". | [CLAUDE.md](../CLAUDE.md) |
+| **trigger** | The general term for a condition that arms the supervisor. Audit triggers are step completion (5 steps) or the severity threshold; alert triggers are C1 / C2 / C3. Do not call a trigger an "anchor". | [claude-code.md](architecture/claude-code.md) |
+| **arm / surface / clear** | The audit two-phase lifecycle: a trigger arms the run (`audit_phase=pending`), the agent writes a verdict to surface it (`done`), and the next Stop clears it (`null`) so the next boundary can re-arm. | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
+| **audit ledger** | The append-only record, in the supervisor state file, of which step's audit was judged, against which version of which artifact, and when. New in #2256. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **audit run identity** | The `run-NNNN` identifier that names one audit run uniquely from arm to verdict. Minted at arm time; it binds `audit_phase`, the background dispatch, verdict finalization, and the ledger entry into one unit. A verdict is accepted only while its own identity is in-flight; a mismatched verdict is discarded as stale. New in #2256. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **sub-check** | One individually-settled audit concern the ledger tracks (e.g. `intent-internal`, `outline-detail`, `scope-drift`, `recurrence-patterns`), each keyed by its own input version so a later trigger re-judges only what has changed. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **freshness backstop** | The read-only check the `gh pr merge` gate is reduced to: it reconciles the ledger's last terminal run against the current freshness key and never launches an agent. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **audit checklist** | The three items supervisor-audit judges — cross-stage coherence, recurrence patterns, systemic risk. They are a checklist, not mutually exclusive axes, so they are never called "three axes" (the unrelated security-review "three axes" is a different concept). | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
+| **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
+| **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
+
 ## Miscellaneous
 
 ### IR

@@ -88,8 +88,12 @@ _cl_body() {
 }
 
 _cl_delta_section() {
+    # Severity sub-headers (## HIGH / ## MEDIUM / ## LOW) are grouping labels a
+    # reviewer may place inside the delta section; they neither terminate it nor
+    # count as content. Any other '## ' header ends the section.
     awk '
         /^##[[:space:]]+Concern Delta[[:space:]]*$/ { inb = 1; found = 1; next }
+        inb && /^##[[:space:]]+(HIGH|MEDIUM|LOW)[[:space:]]*$/ { next }
         inb && /^##[[:space:]]/ { inb = 0 }
         inb { print }
         END { exit !found }
@@ -212,12 +216,24 @@ cl_parse_cnref() {
 # cl_stage <dir> <format> <round> <producer> <exec-label> <parse-label> <norm>
 cl_stage() {
     local dir="$1" fmt="$2" round="$3" prod="$4" exec="$5" parse="$6" norm="$7"
-    local dest comp line ex
+    local dest comp line ex lbl allowed
     # This is a derived-path builder in its own right: cl_stage pastes the same
     # tokens into a plans-dir file name without going through cl_delta_path, so
     # the CLI's early validation is not reachable from a direct library call
     # (which is exactly how the tests drive it). Enforce here, not only there.
     _cl_reject_bad_tokens cl_stage "$fmt" "$round" "$prod" || return 2
+    # Fail-closed against the closed producer set (#2276 round-2 C3): a name that
+    # is lexically valid but outside cl_allowed_producers must never reach disk,
+    # or any caller could file a delta under a producer the round reducer never
+    # expected. Formats with no closed set keep the lexical-only behaviour.
+    allowed="$(cl_allowed_producers "$fmt")"
+    if [ -n "$allowed" ]; then
+        case $'\n'"$allowed"$'\n' in
+            *$'\n'"$prod"$'\n'*) ;;
+            *) printf 'concern-ledger: cl_stage: producer %s is not in the allowed set for format %s\n' \
+                   "$prod" "$fmt" >&2; return 2 ;;
+        esac
+    fi
     if [ -n "${CL_STAGE_PREFIX:-}" ] && ! sp_valid_token "$CL_STAGE_PREFIX"; then
         printf 'concern-ledger: cl_stage: refusing to build a path from CL_STAGE_PREFIX=%s\n' \
             "$(printf '%q' "$CL_STAGE_PREFIX")" >&2
@@ -225,6 +241,7 @@ cl_stage() {
     fi
     mkdir -p "$dir" 2>/dev/null || return 1
     ex="$(cl_exec_completeness "$exec")"
+    lbl="$(_cl_exec_label "$exec")"
     comp="$(_cl_label_min "$ex" "$parse")"
     dest="$dir/${CL_STAGE_PREFIX:-}${fmt}-round-${round}-delta-${prod}.txt"
     local tmp rc
@@ -238,7 +255,7 @@ cl_stage() {
     }
     rc=0
     {
-        printf '#producer|%s|%s|%s|%s|%s\n' "$prod" "$comp" "$ex" "$parse" "$round"
+        printf '#producer|%s|%s|%s|%s|%s|%s\n' "$prod" "$comp" "$ex" "$lbl" "$parse" "$round"
         if [ -f "$norm" ]; then
             local r s sl di ca an tx rest
             while IFS= read -r line || [ -n "$line" ]; do
@@ -253,6 +270,12 @@ cl_stage() {
                 ca="${rest%%|*}"; rest="${rest#*|}"
                 rest="${rest#*|}"
                 an="${rest%%|*}"; tx="${rest#*|}"
+                # Neutralise reviewer-forgeable sentinels and fence delimiters as
+                # untrusted concern text enters the ledger, so a forged marker in a
+                # staged report (the codex delta or the security-scanner prestaged
+                # pass, #2276 S8-d) is already defanged at rest — not only when
+                # render.sh / finalize.sh read it back out (CPR-ORTH, one defanger).
+                tx="$(printf '%s' "$tx" | _cl_defang_untrusted)"
                 printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$r" "$s" "$sl" "$di" "$ca" "$prod" "$an" "$tx"
             done < "$norm"
         fi

@@ -19,7 +19,7 @@ else
     pass "SKIPPED case: exits 0 when codex not found"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: SKIPPED — codex CLI not installed"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: SKIPPED — codex CLI not installed"; then
     pass "SKIPPED case: correct status label present"
 else
     fail "SKIPPED case: status label missing. Output: $OUTPUT"
@@ -28,10 +28,10 @@ fi
 # ---------------------------------------------------------------------------
 # 2. Visibility invariant — status label always present in all outputs
 # ---------------------------------------------------------------------------
-if echo "$OUTPUT" | grep -q "## Codex Plan Review:"; then
+if echo "$OUTPUT" | grep -q "## Codex Review:"; then
     pass "Visibility invariant: status label always present in SKIPPED case"
 else
-    fail "Visibility invariant: no '## Codex Plan Review:' line in SKIPPED output"
+    fail "Visibility invariant: no '## Codex Review:' line in SKIPPED output"
 fi
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ else
     pass "PERFORMED case: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "PERFORMED case: correct status label present"
 else
     fail "PERFORMED case: status label missing. Output: $OUTPUT"
@@ -99,16 +99,16 @@ else
     pass "FAILED case: exits 0 despite codex failure"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED — codex exec exit code 2"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED — codex exec exit code 2"; then
     pass "FAILED case: correct status label present"
 else
     fail "FAILED case: status label missing. Output: $OUTPUT"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review:"; then
+if echo "$OUTPUT" | grep -q "## Codex Review:"; then
     pass "Visibility invariant: status label present in FAILED case"
 else
-    fail "Visibility invariant: no '## Codex Plan Review:' in FAILED output"
+    fail "Visibility invariant: no '## Codex Review:' in FAILED output"
 fi
 
 # ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ else
     pass "TIMEOUT case: exits 0 despite codex timeout"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED — timeout"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED — timeout"; then
     pass "TIMEOUT case: correct status label present"
 else
     fail "TIMEOUT case: status label missing. Output: $OUTPUT"

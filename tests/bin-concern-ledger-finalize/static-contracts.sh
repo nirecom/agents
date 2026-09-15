@@ -1,5 +1,5 @@
 # tests/bin-concern-ledger-finalize/static-contracts.sh
-# Tests: bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
+# Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/format-params.sh, skills/review-code-security/scripts/run-quality-gates.sh, skills/review-code-security/scripts/run-codex-review-loop.sh
 # Tags: concern-ledger, finalize, static-contracts, completion-sentinel, TL2, scope:common
 # Sourced by tests/bin-concern-ledger-finalize.sh.
 # Detail-plan Test plan (finalize TL2) cases 8, 9 — the completion-sentinel
@@ -49,7 +49,8 @@ make-outline-plan documents exit 7      ~ skills/make-outline-plan/SKILL.md     
 review-plan-security documents exit 7   ~ skills/review-plan-security/SKILL.md   ~ exit 7
 review-tests documents exit 7           ~ skills/review-tests/SKILL.md           ~ exit 7
 exit 7 is tied to withholding sentinel  ~ skills/_shared/codex-review-loop.md    ~ exit 7.*sentinel|sentinel.*exit 7|7 .*(do not|never).*sentinel
-review-code-security closes via the shared script ~ skills/review-code-security/SKILL.md ~ close-concern-round\.sh
+review-code-security routes through the review loop ~ skills/review-code-security/SKILL.md ~ scripts/run-codex-review-loop\.sh
+review-code-security selects the security-code format ~ skills/review-code-security/scripts/run-codex-review-loop.sh ~ --format[= ]security-code
 review-code-security names the check-finalized gate ~ skills/review-code-security/SKILL.md ~ check-finalized
 review-code-security withholds the sentinel ~ skills/review-code-security/SKILL.md ~ (CHECK=FINALIZE-FAILED|check-finalized|exit 1).*(do not|does not|never).*(sentinel|WORKFLOW_MARK_STEP_review_security_complete)|(do not|does not|never).*(sentinel|WORKFLOW_MARK_STEP_review_security_complete).*(CHECK=FINALIZE-FAILED|check-finalized|exit 1)
 TABLE
@@ -75,12 +76,19 @@ assert_eq "9b: run-codex-review-loop no longer copies the ledger itself" \
 assert_eq "9c: only the library writes the unresolved-concerns artifact" \
     "bin/lib/concern-ledger.sh" "$(ref_files '-unresolved-concerns.json' bin)"
 
-assert_eq "9d: bin/review-code-codex is launched from exactly one place" \
-    "bin/review-code-ledger" "$(ref_files 'bin/review-code-codex' bin skills)"
+# #2276 folds the security code review into the one loop, so the reviewer is no
+# longer named by a wrapper of its own: it is a column of the format table.
+assert_eq "9d: the security-code format names its reviewer in the format table" \
+    "yes" "$(file_has "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 'review-code-codex')"
 
-# The counterpart of 9(d): the quality-gate script must reach the reviewer
-# through the ledger wrapper, otherwise 9(d) could be satisfied by simply
-# dropping the codex review from the security gate altogether.
-assert_contains "9d: run-quality-gates.sh goes through the ledger wrapper" \
-    "bin/review-code-ledger" \
-    "$(cat "$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh" 2>/dev/null || true)"
+assert_eq "9d: and the deleted ledger wrapper is referenced from nowhere" \
+    "" "$(ref_files 'bin/review-code-ledger' bin skills)"
+
+# The counterpart of 9(d): the codex review moved OUT of the security quality
+# gate, so the gate script must no longer launch a reviewer at all — the loop
+# owns that now, and a gate that still shells out to one would run it twice.
+QG="$(cat "$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh" 2>/dev/null || true)"
+assert_not_contains "9d: run-quality-gates.sh no longer runs the codex review itself" \
+    "review-code-codex" "$QG"
+assert_not_contains "9d: nor reaches it through the deleted ledger wrapper" \
+    "review-code-ledger" "$QG"

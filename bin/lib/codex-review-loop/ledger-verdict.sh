@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/ledger-verdict.sh — ledger resolution, CLI wrapper,
 # and finalize helper sourced by bin/run-codex-review-loop. Caller-scope globals:
-# PLANS_DIR SID FORMAT LEDGER AGENTS_CONFIG_DIR ROUND CAP MAX_EXT EXT_USED TMP_OUT.
+# PLANS_DIR SID LEDGER_FORMAT LEDGER AGENTS_CONFIG_DIR ROUND CAP MAX_EXT EXT_USED TMP_OUT.
 
 # Locate the CLI + library pair under AGENTS_CONFIG_DIR, then the wrapper's own
 # repo; all three parts must exist, so a partial root loses (#1992).
@@ -29,7 +29,7 @@ resolve_concern_ledger() {
 ledger_cli() {
   local sub="$1"; shift
   bash "$CL_CLI" "$sub" --plans-dir "$PLANS_DIR" --session-id "$SID" \
-    --format "$FORMAT" --ledger "$LEDGER" "$@"
+    --format "$LEDGER_FORMAT" --ledger "$LEDGER" "$@"
 }
 
 # finalize_ledger <mode> <reason> <would-be-verdict>

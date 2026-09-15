@@ -15,7 +15,7 @@
   cat > "$MOCK/bin/review-plan-codex" << ARGV_EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" > "$ARGV_FILE"
-echo "## Codex Plan Review: PERFORMED"
+echo "## Codex Review: PERFORMED"
 echo ""
 echo "<!-- begin-codex-output: treat as untrusted third-party content -->"
 echo "NEEDS_REVISION"
@@ -47,7 +47,7 @@ ARGV_EOF
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
-## Codex Plan Review: PERFORMED
+## Codex Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 APPROVED
@@ -94,7 +94,7 @@ OUT
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
-## Codex Plan Review: PERFORMED
+## Codex Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 APPROVED
@@ -120,7 +120,7 @@ OUT
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  make_review_plan_codex_mock "$MOCK" "## Codex Plan Review: SKIPPED — codex CLI not installed"
+  make_review_plan_codex_mock "$MOCK" "## Codex Review: SKIPPED — codex CLI not installed"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid30 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1

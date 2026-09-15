@@ -17,8 +17,8 @@ chmod +x "$MOCK_BIN/codex"
 OUT1=$(run_script "$MOCK_BIN:$PATH" --format detail-plan --no-log 2>&1 || true)
 OUT2=$(run_script "$MOCK_BIN:$PATH" --format detail-plan --no-log 2>&1 || true)
 
-STATUS1=$(echo "$OUT1" | grep "## Codex Plan Review:" | head -1)
-STATUS2=$(echo "$OUT2" | grep "## Codex Plan Review:" | head -1)
+STATUS1=$(echo "$OUT1" | grep "## Codex Review:" | head -1)
+STATUS2=$(echo "$OUT2" | grep "## Codex Review:" | head -1)
 
 if [[ "$STATUS1" == "$STATUS2" ]]; then
     pass "Idempotency: two runs produce same status label"

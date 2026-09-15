@@ -54,10 +54,12 @@ if [ ! -f "$CLI" ]; then
     exit 0
 fi
 
-# V1 — valid CONTINUE: audit_phase=done, audit_verdict=CONTINUE, audit_cause set, exit 0.
+# V1 — valid CONTINUE: audit_phase=done, audit_verdict=CONTINUE, the 2nd positional
+# lands in audit_verdict_summary (#2256 S1-b — it is the verdict SUMMARY, not the
+# arm cause), audit_cause stays the arm-written value (null here), exit 0.
 run_v1() {
-    local label="V1: valid CONTINUE -> audit_phase=done, audit_verdict=CONTINUE, audit_cause set, exit 0"
-    local tmp rc audit_phase audit_verdict audit_cause
+    local label="V1: valid CONTINUE -> audit_phase=done, audit_verdict=CONTINUE, audit_verdict_summary set, audit_cause untouched, exit 0"
+    local tmp rc audit_phase audit_verdict audit_verdict_summary audit_cause
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
@@ -66,12 +68,13 @@ run_v1() {
     rc=$?
     audit_phase=$(read_field "$tmp" "sid-v1" "audit_phase")
     audit_verdict=$(read_field "$tmp" "sid-v1" "audit_verdict")
+    audit_verdict_summary=$(read_field "$tmp" "sid-v1" "audit_verdict_summary")
     audit_cause=$(read_field "$tmp" "sid-v1" "audit_cause")
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && [ "$audit_phase" = "done" ] && [ "$audit_verdict" = "CONTINUE" ] && [ "$audit_cause" = "all checks passed" ]; then
+    if [ $rc -eq 0 ] && [ "$audit_phase" = "done" ] && [ "$audit_verdict" = "CONTINUE" ] && [ "$audit_verdict_summary" = "all checks passed" ] && [ "$audit_cause" = "null" ]; then
         pass "$label"
     else
-        fail "$label (rc=$rc, audit_phase=$audit_phase, audit_verdict=$audit_verdict, audit_cause=$audit_cause)"
+        fail "$label (rc=$rc, audit_phase=$audit_phase, audit_verdict=$audit_verdict, audit_verdict_summary=$audit_verdict_summary, audit_cause=$audit_cause)"
     fi
 }
 

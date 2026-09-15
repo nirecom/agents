@@ -84,7 +84,7 @@ LOG_DIR1="$TMPDIR_BASE/log1"
 mkdir -p "$LOG_DIR1"
 OUT=$(run_with_log "$LOG_DIR1" "sess001" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
 
-if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "first call: PERFORMED label present"
 else
     fail "first call: PERFORMED missing. Output: $OUT"
@@ -119,7 +119,7 @@ make_mock_codex "APPROVED"
 
 OUT=$(run_with_log "$LOG_DIR2" "sess002" --round 5 --ledger "$LEDGER_FILE" --cap 2 --extensions-used 2 --max-extensions 2 --no-log)
 
-if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "ceiling: PERFORMED present (codex was invoked — pre-review gate removed)"
 else
     fail "ceiling: expected PERFORMED before cap. Output: $OUT"
@@ -144,7 +144,7 @@ make_mock_codex "APPROVED"
 
 OUT=$(run_with_log "$LOG_DIR3" "sess003" --round 3 --ledger "$LEDGER_FILE" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
 
-if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "at-limit: PERFORMED present (codex invoked before post-verdict cap)"
 else
     fail "at-limit: expected PERFORMED. Output: $OUT"
@@ -188,13 +188,13 @@ case "$(uname -s)" in
         OUT=$(run_with_log "$RO_LOG" "sess004" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
         chmod 755 "$RO_LOG"
 
-        if echo "$OUT" | grep -q "## Codex Plan Review: FAILED" && echo "$OUT" | grep -qi "round log persistence failure"; then
+        if echo "$OUT" | grep -q "## Codex Review: FAILED" && echo "$OUT" | grep -qi "round log persistence failure"; then
             pass "read-only log dir: FAILED + 'round log persistence failure'"
         else
             fail "read-only log dir: expected FAILED + 'round log persistence failure'. Output: $OUT"
         fi
 
-        if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+        if echo "$OUT" | grep -q "## Codex Review: PERFORMED"; then
             fail "read-only log dir: PERFORMED unexpectedly present (log-before-emit contract violated)"
         else
             pass "read-only log dir: PERFORMED absent (log-before-emit contract)"
@@ -245,7 +245,7 @@ else
     fail "extensions-used > max-extensions: expected exit 0, got $EXIT_CODE"
 fi
 
-if echo "$OUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUT" | grep -q "## Codex Review: FAILED"; then
     pass "extensions-used > max-extensions: FAILED label present"
 else
     fail "extensions-used > max-extensions: FAILED missing. Output: $OUT"

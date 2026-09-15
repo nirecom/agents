@@ -104,7 +104,9 @@ function readStateOrInit(sessionId) {
 }
 
 function writeAtomic(filePath, state) {
-  const tmpPath = filePath + ".tmp";
+  // pid-qualified tmp: two processes writing the same state must not collide
+  // on one shared scratch name (#2256 S2-c).
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf8");
   fs.renameSync(tmpPath, filePath);
 }

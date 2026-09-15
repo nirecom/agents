@@ -148,9 +148,10 @@ run_g24() {
 }
 
 # G25 — transcript with Bash tool_use containing WORKFLOW_ENFORCE_WORKTREE_OFF proposal
-#       -> C3 branch fires, decision:block, exit 2
+#       with no armed alert state -> guard falls through, exit 0 (C3 arming is done by
+#       supervisor-trigger, not supervisor-guard; the guard only blocks when already armed).
 run_g25() {
-    require_source "$HOOK" "G25: C3 worktree-off proposal -> decision:block, exit 2" || return
+    require_source "$HOOK" "G25: C3 worktree-off proposal + no armed state -> guard exits 0 (not armed yet)" || return
     local tmp out rc tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
@@ -162,10 +163,12 @@ run_g25() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "G25: C3 worktree-off proposal -> decision:block, exit 2"
+    # #2256: detectOffProposal is not wired into supervisor-guard.js; C3 arming happens
+    # in supervisor-trigger (PostToolUse). When no state is armed, guard exits 0 cleanly.
+    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi '"decision":"block"' ); then
+        pass "G25: C3 worktree-off proposal + no armed state -> guard exits 0 (not armed yet)"
     else
-        fail "G25: C3 worktree-off proposal -> decision:block, exit 2 (rc=$rc, out=$out)"
+        fail "G25: C3 worktree-off proposal + no armed state -> guard exits 0 (not armed yet) (rc=$rc, out=$out)"
     fi
 }
 

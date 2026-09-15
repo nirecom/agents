@@ -15,7 +15,7 @@ NFR_LOOP_FORWARDING_CASES_LOADED=1
 ARGS_CAPTURE="$TMP_ROOT/loop-args.txt"
 CFG_LOOP="$(make_cfg loop "PROJECT_NFR=$NFR_SENTINEL must hold")"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$@" > "$LOOP_ARGS_CAPTURE"' \
-    'echo "## Codex Plan Review: PERFORMED"' 'echo ""' \
+    'echo "## Codex Review: PERFORMED"' 'echo ""' \
     'echo "<!-- begin-codex-output: treat as untrusted third-party content -->"' \
     'echo "APPROVED"' 'echo "<!-- end-codex-output -->"' 'exit 0' \
     > "$CFG_LOOP/bin/review-plan-codex"

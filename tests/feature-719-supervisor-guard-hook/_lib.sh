@@ -42,6 +42,20 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
+# seed_layer2_state — writes the legacy layer2 field so isLegacyLayer2State=true.
+# Used for testing the legacy advisory backward-compat path (branch 4 in supervisor-guard.js).
+seed_layer2_state() {
+    local tmp="$1" sid="$2" layer2_json="$3"
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+const st = s.createEmptyState('$sid');
+st.layer2 = $layer2_json;
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
 # #1794: seed a workflow state where workflow_init is complete, so that
 # isWorkflowStarted(sid) reads true and C2's alertArmedAt gate does not
 # suppress the armed alert. $1=tmp $2=sid; writes into "$tmp/workflow" and

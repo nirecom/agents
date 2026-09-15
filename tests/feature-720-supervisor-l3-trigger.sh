@@ -65,7 +65,7 @@ base_state='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "
 
 run_t1() {
     local tr='[{ "role": "assistant", "content": "going to <<WORKFLOW_CONFIRM_INTENT: scope>> now" }]'
-    assert_collect "T1: CONFIRM_INTENT sentinel → shouldArm=true, stage-boundary cause" "$tr" "$base_state" "true" "stage-boundary"
+    assert_collect "T1: CONFIRM_INTENT sentinel → shouldArm=true, step-complete cause" "$tr" "$base_state" "true" "step-complete:clarify_intent"
 }
 
 run_t2() {
@@ -86,7 +86,7 @@ run_t4() {
 run_t5() {
     local tr='[]'
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": "error" }, "layer3": {} }'
-    assert_collect "T5: cumulative_severity=error → shouldArm=true, severity-threshold cause" "$tr" "$st" "true" "severity-threshold"
+    assert_collect "T5: cumulative_severity=error → shouldArm=true, severity-threshold cause" "$tr" "$st" "true" "severity-threshold:error"
 }
 
 run_t6() {

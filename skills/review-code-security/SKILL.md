@@ -1,15 +1,15 @@
 ---
 name: review-code-security
-description: Scan implemented code for concrete security anti-patterns. Companion to /review-plan-security.
-model: opus
+description: Codex-primary security review of implemented code across three axes; security-scanner fallback.
+model: sonnet
 effort: high
 ---
 
-Scan the specified code for security anti-patterns using the same three axes as `/review-plan-security`. Use after implementation to verify the plan's security goals hold in the actual code.
+Scan implemented code for security anti-patterns across the same three axes as `/review-plan-security`, via Codex through the shared review loop (round-continuing under the 2+1 cap: fix concerns and re-run). Use after implementation to verify the plan's security goals hold in the actual code.
 
 ## When to Use
 
-Use when the implementation touches external input, secrets handling, or third-party integrations. Pass a file path, diff, or describe the code to review.
+Use when the implementation touches external input, secrets handling, or third-party integrations.
 
 ## Rules
 
@@ -20,21 +20,13 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-RCS-1. **Open the concern round** (Bash): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/open-concern-round.sh"` — prints `ROUND`, `PLANS_DIR`, `SESSION_ID`, and the `[PRIOR CONCERNS START]`…`[PRIOR CONCERNS END]` block both producers receive. `ROUND=0` means the ledger is unavailable: run RCS-2 and RCS-3, report the `NOT-STAGED` line, skip the ledger close-out in `## Completion`.
+RCS-1. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
+RCS-2. Invoke `"$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`. Pass `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` when available. Exit-code handling SSOT: `skills/_shared/codex-review-loop.md`. On exit 3 (codex unavailable): load prior concerns via `bin/concern-ledger render-prior --plans-dir <PLANS_DIR> --session-id <session-id> --format review-security-shared`, launch the `security-scanner` subagent, re-run the wrapper with `--prestaged-report <artifact_path> --prestaged-producer security-scanner --prestaged-exec <COMPLETE|PARTIAL|ABSENT>` (mapping scanner `status:` complete→COMPLETE / partial→PARTIAL / failed→ABSENT); on `failed` still re-run with `--prestaged-exec ABSENT` so the round is recorded.
+RCS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including their `## Accepted Tradeoffs`). Raising a topic the code does not address is never grounds to reject; a reject must cite the specific governing decision.
 
-RCS-2. **Delegate scan to security-scanner**, issued together with the RCS-3 quality gates per `skills/_shared/subagent-concurrency.md` SC-P (independent — both are read-only over the merge-base diff and write no shared target):
-   ```
-   Agent({ subagent_type: "security-scanner", prompt: JSON.stringify({
-     topic: "security review", context: SCAN_TARGET,
-     artifact_dir: PLANS_DIR, prior_concerns: PRIOR_BLOCK
-   }) })
-   ```
-   Pass the RCS-1 block verbatim as `prior_concerns`; omit the key when RCS-1 printed none.
-   On `failed` status: surface summary + artifact_path to user.
-   Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
+## Completion
 
-RCS-3. **Quality gates** (Bash, issued with RCS-2 per SC-P): `CONCERN_LEDGER_ROUND=<ROUND> bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs the ledger-wrapped codex reviewer plus 7 lint gates; the wrapper stages the reviewer's own delta. Each gate is advisory; non-zero exit is a warning, not a blocker.
-   When the output carries any `## <gate>: NOT FOUND` line, append `(N gates NOT FOUND)` to the `## Security Review:` line so the reader sees the sweep was incomplete.
+Run `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — advisory lint gates only; non-zero per gate is a warning. Append `(N gates NOT FOUND)` when any `## <gate>: NOT FOUND` line appears. Report findings (APPROVED: no RISK items; NEEDS_REVISION: summarize mitigations). On exit 0 (APPROVED) the loop deletes the ledger — skip `check-finalized`. On any other exit: confirm finalized via `bin/concern-ledger check-finalized`; if unfinalized, or wrapper returned exit 1 or exit 7, do not emit the sentinel. On the APPROVED / all-rejected path emit (as a standalone Bash call): `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`.
 
 ## Patterns by Axis
 
@@ -74,14 +66,6 @@ RCS-3. **Quality gates** (Bash, issued with RCS-2 per SC-P): `CONCERN_LEDGER_ROU
 | XSS | Unsanitized user input rendered as HTML | CWE-79 |
 | Instruction override in input | Untrusted input containing `ignore previous`, `you are now`, `system:` forwarded to LLM as context | LLM01 |
 | Base64 obfuscation | Base64 string from untrusted input decoded and passed to LLM/shell | LLM01 |
-
-## Completion
-
-After reporting findings, once both RCS-2 and RCS-3 finish, close the ledger round via `skills/review-code-security/scripts/close-concern-round.sh`. Schema and severity vocabulary: `skills/_shared/concern-ledger.md`.
-
-1. Run: `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/close-concern-round.sh" <ROUND> <PLANS_DIR> <SESSION_ID> security-scanner <COMPLETE|PARTIAL|ABSENT> <artifact_path>` — stages the scanner's delta (mapping its `status:` onto the exec label), reduces, finalizes, and verifies via `check-finalized`, retrying finalize once on a transient failure. Append `(N unresolved concerns)`, derived from its `UNRESOLVED=` line, to the `## Security Review:` line.
-2. `CHECK=ok` → run (as a standalone Bash command — no pipes, no && chaining): `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`
-3. `CHECK=FINALIZE-FAILED` → do not emit the completion sentinel; report the `FINALIZE-FAILED` reason and the recovered-copy path instead.
 
 ## Relationship to Other Tools
 

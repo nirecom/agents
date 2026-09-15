@@ -81,7 +81,7 @@ cp -r "$AGENTS_ROOT/bin/lib/." "$MOCK/bin/lib/"
 cat > "$MOCK/bin/review-plan-codex" <<'MOCKEOF'
 #!/usr/bin/env bash
 cat <<'OUT'
-## Codex Plan Review: PERFORMED
+## Codex Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 APPROVED

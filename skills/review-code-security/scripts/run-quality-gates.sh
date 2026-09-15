@@ -39,21 +39,15 @@ _unusable_config_reason() {
     return 0
 }
 
-# The base every gate is scoped by. Degradation is not an error — a detached checkout, a
-# shallow clone, or a default branch that is not `main` all reach it — and the run continues.
-# But it used to be announced on STDERR alone, where nothing downstream looks, so every gate
-# examined the wrong range and the costliest one self-reported an empty diff, which reads as a
-# clean pass. The values are set rather than echoed because the state and the base are
-# separate facts and a command substitution can only carry one.
-
-# The resolution CHAIN itself is no longer here: bin/resolve-merge-base.sh owns it (SSOT,
-# #1638), because five callers each re-deriving the base is five different answers to the
-# same question. This function only asks, and translates the answer into a base and a report.
-
-# The helper being absent, unrunnable, or wrong about its own arguments is NOT rounded into
-# FALLBACK: FALLBACK is a specific claim ("no merge-base against main, so HEAD~1"), and
-# stating it when we simply could not ask would be a report that lies. Those cases are
-# UNRESOLVED, which scopes to uncommitted changes against a base that certainly exists.
+# The base every gate is scoped by. Degradation (detached checkout, shallow clone,
+# non-main default) is not an error — the run continues — but it must reach STDOUT,
+# not STDERR alone, or a mis-scoped gate reads as a clean pass. State and base are set
+# as separate variables because a command substitution carries only one value.
+# The resolution chain is not here: bin/resolve-merge-base.sh owns it (SSOT #1638); this
+# function only asks and translates the answer into a base + report. A helper that is
+# absent, unrunnable, or wrong about its arguments is UNRESOLVED (scope to uncommitted
+# changes), never FALLBACK — FALLBACK is the specific claim "no merge-base against main",
+# and stating it when we could not ask would be a report that lies.
 _resolve_merge_base() {
     local helper="${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh"
     MERGE_BASE=""
@@ -102,7 +96,7 @@ _resolve_merge_base() {
     MERGE_BASE_SOURCE="$src"
 
     # An unrecognised state is treated as UNRESOLVED rather than trusted: a base this script
-    # has no rule for is a base it cannot honestly scope eight gates by.
+    # has no rule for is a base it cannot honestly scope the lint gates by.
     case "$state" in
         RECORDED|RESOLVED)
             if [[ -z "$base" ]]; then
@@ -134,22 +128,14 @@ _resolve_merge_base() {
     esac
 }
 
-# Every gate is named by its full path under the agents config dir, never by bare name:
-# a bare name resolves only if a PATH shim was installed, and `|| true` cannot tell exit 127
-# (command not found) from a gate's own advisory non-zero exit. A gate with no shim was
-# therefore skipped silently and forever while the report still read as a full sweep.
-# An absent executable now becomes a line in the report, in the same `## <name>: <verdict>`
-# family the gates themselves print, so a reviewer sees the hole instead of inferring a pass.
-# A gate that ran and complained stays advisory — that distinction is the point.
-
-# Three states, three verdicts, because they are three different facts and only one of them
-# is absence. `-x` alone conflated them: the Windows shim the installer writes never
-# depended on the execute bit, and `core.fileMode=false`, a copied tree, and several mounts
-# all produce a gate that exists and runs perfectly with `-x` false. Every gate carries a
-# bash shebang, so interpreting one directly preserves its behaviour exactly. A gate that
-# cannot be READ can run under no invocation form at all, and is neither called absent
-# (which sends the reader hunting for an install when the repair is a chmod) nor counted
-# among the gates that ran.
+# Every gate is named by its full path under the agents config dir, never a bare name:
+# a bare name needs a PATH shim, and `|| true` cannot tell exit 127 from a gate's own
+# advisory non-zero. An absent gate now prints a `## <name>: NOT FOUND` line in the same
+# `## <name>: <verdict>` family the gates print, so a reviewer sees the hole not a pass.
+# `-x` is not used to gate execution: the Windows shim and core.fileMode=false make a
+# runnable gate look non-executable, so a readable gate is interpreted via its bash
+# shebang. A gate that cannot be READ runs under no form and is reported UNREADABLE,
+# never silently skipped, and never counted among the gates that ran.
 _run_gate() { # <full-path> [args...]
     local exe="$1" name
     shift
@@ -208,12 +194,10 @@ if [[ "$MERGE_BASE_WARN" == "post-session-head" ]]; then
     echo "## merge-base: NOTE — the recorded baseline was created after this session started; commits made before the branching sentinel are outside the reviewed range (alt base: ${MERGE_BASE_ALT:-unknown})"
 fi
 
-# --base-state goes to the codex reviewer ALONE. It is the only gate that emits a prose
-# verdict a reader can mistake for a full-coverage judgement, so it is the only one that has
-# to disclose an untrustworthy range. The other seven receive a resolved base and nothing more.
-# The reviewer is reached through review-code-ledger, which forwards these arguments
-# unchanged and additionally carries the round's concerns in and the round's delta out.
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-ledger" --base "$MERGE_BASE" --base-state "$MERGE_BASE_STATE" --context "${AGENTS_CONFIG_DIR}/rules/core-principles.md"
+# The codex security reviewer is NO LONGER a gate here: it is owned solely by
+# bin/run-codex-review-loop --format security-code (#2276 S8-c), which owns the round
+# counter this advisory pass must not touch. The seven lint gates below each receive the
+# resolved base and stay advisory (non-zero is a warning, not a blocker).
 _run_gate "${AGENTS_CONFIG_DIR}/bin/review-prompt-size" --base "$MERGE_BASE"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/check-inline-procedures" --base "$MERGE_BASE"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-size" --base "$MERGE_BASE"
@@ -223,7 +207,7 @@ _run_gate "${AGENTS_CONFIG_DIR}/bin/review-e2e-coverage" --base "$MERGE_BASE"
 _run_gate "${AGENTS_CONFIG_DIR}/bin/review-bare-python" --base "$MERGE_BASE"
 
 # The last line, and printed even when nothing is missing: a total that appears only when
-# something is wrong cannot be relied on to be there, and one NOT FOUND line among eight
+# something is wrong cannot be relied on to be there, and one NOT FOUND line among the
 # blocks of gate output is exactly what a reader skims past.
 if [[ "$GATES_MISSING" -gt 0 ]]; then
     echo "## gates: $GATES_RAN/$GATES_TOTAL ran, $GATES_MISSING NOT FOUND ($GATES_MISSING_NAMES)"

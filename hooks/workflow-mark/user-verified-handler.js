@@ -3,10 +3,12 @@
 // step. Marks user_verification as complete and records the approval reason.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep } = require("../workflow-state");
+const { markStep, readState } = require("../workflow-state");
 const {
   USER_VERIFIED_RE_DQ, USER_VERIFIED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
+const { consumeTransitions } = require("../lib/supervisor-state-writer/audit-run");
+const { transitionKey } = require("../lib/audit-triggers");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
@@ -48,6 +50,16 @@ function handle(ctx) {
         `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
       );
     }
+    // Consume the post-acceptance seq so evaluatePhaseA does not re-arm TR5 on
+    // the next Stop (#2256 post-sentinel re-arm).
+    try {
+      const stateAfter = readState(sessionId);
+      const uvEntry = stateAfter && stateAfter.current && stateAfter.current.steps && stateAfter.current.steps.user_verification;
+      const seq = uvEntry && uvEntry.updated_seq;
+      if (seq !== undefined && seq !== null) {
+        consumeTransitions(sessionId, [transitionKey("user_verification", seq)]);
+      }
+    } catch (_) {}
     return true;
   }
 
