@@ -2,22 +2,10 @@
 # tests/feature-supervisor-atmost1.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard/collect-audit-triggers.js
 # Tags: supervisor, em-supervisor, at-most-1, dedup, audit-verdict, scope:issue-specific, pwsh-not-required
-# L3 gap (what this test does NOT catch):
-# - Real session where multiple hooks race to arm alert simultaneously
-# - audit_verdict durability across real Claude Code Stop cycles
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# SKIPPED: Repeated pre-merge audit attempt after audit_verdict=BLOCK (C9)
-# Because: requires workflow-gate.js checkSupervisorPreMerge to exist (not yet implemented);
-#   once implemented, the T5 dedup test covers the repeat-arm case; BLOCK verdict
-#   durability is covered by T8c
-# L3 gap: end-to-end: merge attempted → BLOCK verdict → merge re-attempted → still blocked
-
-# T8: at-most-1 invariants:
-# (a) alert_armed_at already set → appendFinding does NOT duplicate/rewrite alert_armed_at
-# (b) audit_phase="done" + AUDIT_SEVERITY_THRESHOLD="warning" → collect-audit-triggers does NOT re-arm
-# (c) Stop clears audit_phase but keeps audit_verdict (audit_verdict durability)
+# L3 gap: no real session racing to arm alert, no audit_verdict durability across real Stop cycles.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, category hook-registration.
+# T8 at-most-1 invariants: (a) alert_armed_at is written once, (b) audit_phase=done never re-arms,
+# (c) audit_verdict survives an audit_phase clear. T8f: one Stop coalesces every TR into one run.
 
 set -u
 
@@ -174,7 +162,7 @@ const st = s.createEmptyState('$sid');
 st.audit.audit_phase = 'done';
 st.audit.audit_verdict = 'BLOCK';
 st.audit.audit_last_run_at = new Date().toISOString();
-st.audit.audit_cause = 'stage-boundary:CONFIRM_DETAIL';
+st.audit.audit_cause = 'step-complete:detail';
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 
 // Simulate Stop hook clearing audit_phase (what supervisor-guard.js Phase B does)
@@ -277,7 +265,7 @@ run_t8e
 
 # --- Additional-1: collect-audit-triggers fires on WORKFLOW_CONFIRM_INTENT sentinel ---
 # When a conversation transcript contains <<WORKFLOW_CONFIRM_INTENT: ...>>,
-# collectAuditCandidates() should return shouldArm=true with a stage-boundary cause.
+# collectAuditCandidates() should return shouldArm=true with a step-complete cause (TR1).
 # This is trigger (a) in collect-audit-triggers.js.
 run_additional1_confirm_sentinel() {
     if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
@@ -314,8 +302,8 @@ process.stdout.write(JSON.stringify(result));
         fail "Additional-1: collectAuditCandidates must return shouldArm=true for WORKFLOW_CONFIRM_INTENT sentinel, got shouldArm=$should_arm"
         return
     fi
-    if ! echo "$cause" | grep -q "stage-boundary"; then
-        fail "Additional-1: cause must contain 'stage-boundary', got '$cause'"
+    if ! echo "$cause" | grep -q "step-complete:clarify_intent"; then
+        fail "Additional-1: cause must contain 'step-complete:clarify_intent', got '$cause'"
         return
     fi
     pass "Additional-1: WORKFLOW_CONFIRM_INTENT sentinel → collectAuditCandidates returns shouldArm=true, cause=$cause"
@@ -373,14 +361,63 @@ run_c8_confirm_table() {
         fi
         pass "C8/$name: shouldArm=$got_arm cause=$got_cause"
     done <<'TABLE'
-confirm-intent   | <<WORKFLOW_CONFIRM_INTENT: reason>>   | true  | stage-boundary:
-confirm-outline  | <<WORKFLOW_CONFIRM_OUTLINE: reason>>  | true  | stage-boundary:
-confirm-detail   | <<WORKFLOW_CONFIRM_DETAIL: reason>>   | true  | stage-boundary:
+confirm-intent   | <<WORKFLOW_CONFIRM_INTENT: reason>>   | true  | step-complete:clarify_intent
+confirm-outline  | <<WORKFLOW_CONFIRM_OUTLINE: reason>>  | true  | step-complete:outline
+confirm-detail   | <<WORKFLOW_CONFIRM_DETAIL: reason>>   | true  | step-complete:detail
 non-sentinel     | confirmation received for the intent | false |
 bare-no-reason   | <<WORKFLOW_CONFIRM_INTENT>>           | false |
 TABLE
 }
 run_c8_confirm_table
+
+# --- T8f: one Stop with several TRs coalesces into a single armed run (S6-c) ---
+AUDIT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer/audit.js"
+run_t8f_coalescing() {
+    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-state-writer/audit.js" ]; then
+        skip "T8f: supervisor-state-writer/audit.js not present"
+        return
+    fi
+    local tmp sid out tmp_node
+    tmp=$(make_tmp)
+    sid="t8f-sid-$$"
+    if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 15 node -e "
+const audit = require('$AUDIT_NODE');
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid')));
+audit.armAuditRun('$sid', {
+    tr_ids: ['TR1', 'TR2', 'TR3'],
+    cause: 'step-complete:clarify_intent+step-complete:outline+step-complete:detail',
+    transitions: ['clarify_intent#1', 'outline#1', 'detail#1']
+});
+const a = w.readState('$sid').audit;
+const entries = (a.ledger || []).filter((e) => e.id === a.audit_run_id);
+const e = entries[0] || {};
+const trKeys = Object.keys(e.trigger_input_keys || {}).sort().join(',');
+const subKeys = Object.keys(e.input_key || {}).sort().join(',');
+const subChecks = (e.sub_checks || []).slice().sort().join(',');
+process.stdout.write([
+    (a.ledger || []).length,
+    entries.length,
+    (e.tr_ids || []).slice().sort().join(','),
+    trKeys,
+    subKeys === subChecks ? 'subcheck-keyed' : 'MISMATCH:' + subKeys
+].join('|'));
+" 2>&1)
+
+    rm -rf "$tmp"
+
+    case "$out" in
+        "1|1|TR1,TR2,TR3|TR1,TR2,TR3|subcheck-keyed")
+            pass "T8f: coalesced TR1-TR3 → one identity, all tr_ids, TR-keyed trigger_input_keys, sub-check-keyed input_key" ;;
+        *)
+            fail "T8f: coalescing contract not met (got '$out')" ;;
+    esac
+}
+run_t8f_coalescing
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

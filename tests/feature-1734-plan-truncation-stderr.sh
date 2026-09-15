@@ -78,7 +78,7 @@ else
 fi
 
 FIRST_STDOUT_LINE_A=$(awk 'NF{print; exit}' "$STDOUT_A" | tr -d '\r')
-if [[ "$FIRST_STDOUT_LINE_A" == "## Codex Plan Review: PERFORMED" ]]; then
+if [[ "$FIRST_STDOUT_LINE_A" == "## Codex Review: PERFORMED" ]]; then
   pass "Case A: first non-blank stdout line is the PERFORMED status header"
 else
   fail "Case A: first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_A'"
@@ -109,6 +109,7 @@ mkdir -p "$B_CFG/bin/lib/concern-ledger"
 cp "$AGENTS_ROOT"/bin/lib/concern-ledger/*.sh "$B_CFG/bin/lib/concern-ledger/"
 cp "$AGENTS_ROOT/bin/lib/codex-review-loop/ledger-verdict.sh" \
    "$B_CFG/bin/lib/codex-review-loop/ledger-verdict.sh"
+cp "$AGENTS_ROOT"/bin/lib/codex-review-loop/*.sh "$B_CFG/bin/lib/codex-review-loop/"
 
 # Stub build-codex-context: just touches --output (mirrors sibling suite pattern)
 cat > "$B_CFG/bin/build-codex-context" << 'STUB_EOF'
@@ -206,7 +207,7 @@ else
 fi
 
 FIRST_STDOUT_LINE_C1=$(awk 'NF{print; exit}' "$STDOUT_C1" | tr -d '\r')
-if [[ "$FIRST_STDOUT_LINE_C1" == "## Codex Plan Review: PERFORMED" ]]; then
+if [[ "$FIRST_STDOUT_LINE_C1" == "## Codex Review: PERFORMED" ]]; then
   pass "Case C1 (20000 lines): first non-blank stdout line is the PERFORMED status header"
 else
   fail "Case C1 (20000 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C1'"
@@ -241,7 +242,7 @@ else
 fi
 
 FIRST_STDOUT_LINE_C2=$(awk 'NF{print; exit}' "$STDOUT_C2" | tr -d '\r')
-if [[ "$FIRST_STDOUT_LINE_C2" == "## Codex Plan Review: PERFORMED" ]]; then
+if [[ "$FIRST_STDOUT_LINE_C2" == "## Codex Review: PERFORMED" ]]; then
   pass "Case C2 (20001 lines): first non-blank stdout line is the PERFORMED status header"
 else
   fail "Case C2 (20001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"

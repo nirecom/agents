@@ -1,11 +1,11 @@
 ---
 name: review-tests
-description: Codex-primary single-round test coverage review
+description: Codex-primary test coverage review
 model: sonnet
 context: fork
 ---
 
-Review test case completeness against source code via Codex (single round, no re-loop).
+Review test case completeness against source code via Codex (round-continuing under the 2+1 cap: address gaps and re-run).
 
 ## Procedure
 
@@ -40,15 +40,15 @@ RT-1. Identify staged test file(s) and source file(s):
   - If exit 4 (`bin/resolve-session-id` faulted): HALT, surface the script's stderr, and do NOT ask for a manual file.
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
 RT-2. Assemble review input via the Write tool only — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md`. Do not substitute Bash-based assembly for the Write tool call in this step — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
-RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID` (plan-artifact prefix), `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; single-round — no re-loop):
+RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID` (plan-artifact prefix), `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; round-continuing under the 2+1 cap):
 - exit 0 APPROVED → RT-5 COMPLETE.
-- exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS (no re-loop).
+- exit 1 NEEDS_REVISION → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS. WARNINGS is blocking: address the gaps, re-stage tests, and re-run `/review-tests` — the round counter survives, so the re-run is counted as the next round.
 - exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; present summary → RT-5 WARNINGS.
 - exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-5 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 - exit 8 → terminal guard was previously armed (test files unchanged since last terminal); HALT.
 - exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
-- exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
+- exit 5 AUTO_EXTEND → same as exit 1 (gaps remain within the extension budget): present gaps → RT-5 WARNINGS; address and re-run.
 - exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-5.
 RT-4. Triage the concerns against `skills/_shared/priority-hierarchy.md` before emitting the sentinel: a concern that contradicts an approved intent.md / outline.md / detail.md decision — including a documented TL3 gap or a deferral to manual verification — is rejected, not a gap. State each rejection and the decision it rests on, and exclude it from the RT-5c warnings count. Skip on exit 0 (no concerns).
 RT-5. Emit workflow sentinel — two separate Bash calls, not chained:

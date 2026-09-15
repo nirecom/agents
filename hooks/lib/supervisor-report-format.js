@@ -159,6 +159,27 @@ function formatPreMergeBlockReason(cause, sessionId, workflowSessionId, auditAge
   return lines.join("\n");
 }
 
+// #2256 S5-e — pre-merge freshness backstop deny reason. The gate no longer
+// arms an audit; it only re-checks that a terminal user_verification (TR5)
+// audit exists, is fresh, and did not return BLOCK. `cause` is the caller's
+// FRESHNESS_BACKSTOP_CAUSE label; `detailLine` names why the merge was denied
+// (no TR5 run / stale inputs / BLOCK verdict / uncomputable freshness key) and,
+// for a stale deny, which component moved.
+function formatFreshnessBackstopReason(cause, detailLine, sessionId, workflowSessionId, stateSessionId) {
+  const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
+  lines.push("[EM Supervisor] Pre-merge freshness backstop denied the merge.");
+  lines.push(`Cause: ${cause}`);
+  if (detailLine) lines.push(`Reason: ${detailLine}`);
+  lines.push("This gate arms no audit. The user_verification (TR5) audit must run and stay fresh before merge.");
+  lines.push("Re-run the merge after a fresh, non-BLOCK TR5 verdict is recorded.");
+  if (stateSessionId) lines.push(`Effective state session ID: ${stateSessionId}`);
+  if (sessionId) lines.push(`Session ID: ${sessionId}`);
+  if (workflowSessionId) lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  return lines.join("\n");
+}
+
 // #720 — Audit reason formatters. Mirror the alert formatters' shape so the
 // integrated formatter (format-integrated.js) can stack them side-by-side.
 
@@ -182,4 +203,4 @@ function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePa
   return lines.join("\n");
 }
 
-module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason, formatPreMergeBlockReason, formatL3StageBoundaryReason, formatL3SeverityThresholdReason };
+module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason, formatPreMergeBlockReason, formatFreshnessBackstopReason, formatL3StageBoundaryReason, formatL3SeverityThresholdReason };

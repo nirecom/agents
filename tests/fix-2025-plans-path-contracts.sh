@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # tests/fix-2025-plans-path-contracts.sh
-# Tests: bin/concern-ledger, bin/review-code-ledger, bin/run-codex-review-loop, bin/build-codex-context, skills/review-code-security/scripts/open-concern-round.sh, bin/lib/safe-plans-path.sh
+# Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/build-codex-context, bin/lib/codex-review-loop/format-params.sh, bin/lib/safe-plans-path.sh
 # Tags: safe-plans-path, path-traversal, missing-library, exit-codes, wrapper-contract, security, scope:issue-specific, pwsh-not-required
 #
-# #2025 at the process boundary. The shared path primitive is a new dependency
-# of six entrypoints, so each now has a new way to fail: the library missing.
-# What each owes its caller differs — a gate must fail closed, a wrapper must
-# not block the review it wraps — and this file pins those per entrypoint.
+# #2025 at the process boundary. The shared path primitive is a dependency of
+# every plans-dir entrypoint, so each has a way to fail the library missing.
+# What each owes its caller differs — a gate must fail closed, the loop must
+# refuse a round it cannot record — and this file pins those per entrypoint.
 set -uo pipefail
 
 # TL2 — real processes against a copied tree, so exit code and stderr are the
 # bytes a caller actually sees.
 #
-# TL3 gap (skill-orchestration): whether the skill reading a wrapper's
-# NOT-STAGED notice actually keeps reviewing isn't covered — the notice is
-# asserted as text, but the reader is an LLM. Mitigation: the wrapper's exit
-# status is asserted alongside the notice, catching a regression that turns it
-# into a hard failure.
+# TL3 gap (skill-orchestration): whether the skill reading the loop's refusal
+# actually stops rather than proceeding as if reviewed isn't covered — the
+# diagnostic is asserted as text, but the reader is an LLM. Mitigation: the
+# exit status is asserted alongside it, so a regression that softens the
+# refusal into a notice is caught here.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -74,11 +74,9 @@ cd "$TMPDIR_BASE" || exit 1
 # the exit-4 case for the wrong reason.
 mk_root() {
     local dst="$1"
-    mkdir -p "$dst/rules" "$dst/skills/review-code-security/scripts"
+    mkdir -p "$dst/rules"
     cp -R "$AGENTS_ROOT/bin" "$dst/bin"
     cp -R "$AGENTS_ROOT/rules/." "$dst/rules/"
-    cp "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" \
-        "$dst/skills/review-code-security/scripts/open-concern-round.sh"
 }
 
 # ROOT_OK — complete. ROOT — the same tree with only the library removed.
@@ -95,7 +93,7 @@ rm -f "$ROOT/bin/lib/safe-plans-path.sh"
 for _r in "$ROOT" "$ROOT_OK"; do
     cat > "$_r/bin/review-plan-codex" <<'RVEOF'
 #!/usr/bin/env bash
-printf '## Codex Plan Review: PERFORMED\n\n'
+printf '## Codex Review: PERFORMED\n\n'
 printf '<!-- begin-codex-output -->\nAPPROVED\n<!-- end-codex-output -->\n'
 exit 0
 RVEOF
@@ -149,8 +147,8 @@ echo ""
 echo "--- contracts 1: the gate fails closed when its library is missing ---"
 
 # The CLI's own exit vocabulary: 5 is "the artifact could not be produced".
-# Anything that reads as success would tell close-concern-round.sh that a round
-# it never recorded was recorded.
+# Anything that reads as success would tell the loop above it that a round it
+# never recorded was recorded.
 {
     assert_eq_nz "1: stage refuses rather than claiming a round it cannot write" \
         "5" "$(rc_of bash "$ROOT/bin/concern-ledger" stage --plans-dir "$PLANS" \
@@ -211,58 +209,72 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
     rm -f "$PLANS/$SID-intent.md"
 }
 
-echo ""
-echo "--- contracts 2: a wrapper never blocks the review it wraps ---"
+# Reviewer and merge-base stubs for the security-code path, in both roots: the
+# loop resolves both out of AGENTS_CONFIG_DIR, a test must never reach the real
+# codex CLI, and the crippled-root run has to die on its library rather than on
+# a missing reviewer.
+for _r in "$ROOT" "$ROOT_OK"; do
+    cat > "$_r/bin/review-code-codex" <<'STUBEOF'
+#!/usr/bin/env bash
+printf '## Codex Review: PERFORMED\n\n## Concern Delta\n(none)\n'
+exit 0
+STUBEOF
+    cat > "$_r/bin/resolve-merge-base.sh" <<'MBEOF'
+#!/usr/bin/env bash
+printf 'base=main\nstate=RECORDED\nsource=recorded-baseline\n'
+printf 'base_is_head=0\nsafe_base=HEAD\nwarn=none\nalt_base=0000000\ndetail=-\n'
+exit 0
+MBEOF
+    chmod +x "$_r/bin/review-code-codex" "$_r/bin/resolve-merge-base.sh"
+done
 
-# Both wrappers exist to add ledger bookkeeping to something else. Bookkeeping
-# that cannot happen is a notice, never a non-zero exit: the review itself is
-# still worth having, and the caller above reads exit status as "did the review
-# run" (CPR-ORTH — the two wrappers get the same treatment).
+LOOP_FORMAT="security-code"
+SEC_ARGS=(--format "$LOOP_FORMAT" --cap 2 --max-extensions 1 --extensions-used 0
+          --accepted-tradeoffs "$REPORT")
+
+echo ""
+echo "--- contracts 2: the security-code loop fails closed on the same library ---"
+
+# #2276 folded the code review's ledger bookkeeping into the loop, and with it
+# the contract changed on purpose: the deleted wrappers exited 0 with a
+# NOT-STAGED notice, whereas the loop owns the round it cannot record, so it
+# must refuse (CPR-ORTH — every loop format gets the contracts-1 treatment).
 {
-    W_OUT="$TMPDIR_BASE/wrapper-out.txt"
-    (
-        export AGENTS_CONFIG_DIR="$ROOT" SESSION_ID="$SID" PLANS_DIR="$PLANS"
-        bash "$ROOT/skills/review-code-security/scripts/open-concern-round.sh" > "$W_OUT" 2>/dev/null
-    )
-    W_RC=$?
-    assert_eq_nz "2: open-concern-round.sh still exits 0" "0" "$W_RC"
-    assert_contains "2: reporting the round as unavailable rather than guessing one" \
-        "ROUND=0" "$(cat "$W_OUT")"
-    assert_contains "2: and saying so on the NOT-STAGED line the skill reads" \
-        "## Concern Ledger: NOT-STAGED" "$(cat "$W_OUT")"
-    assert_eq "2: with no prior-concerns block, since it has no basis for one" \
-        "0" "$(grep -c -F '[PRIOR CONCERNS START]' "$W_OUT" | tr -d ' ')"
+    W_PLANS="$TMPDIR_BASE/plans-w"
+    mkdir -p "$W_PLANS"
+    W_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT"; \
+        bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+            --session-id "$SID" --plans-dir "$W_PLANS" 2>&1 >/dev/null) )"
+    assert_eq_nz "2: the security-code loop stops with the loop's config-failure code" \
+        "4" "$(rc_of bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+            --session-id "$SID" --plans-dir "$W_PLANS")"
+    assert_contains "2: naming the dependency it could not load" \
+        "safe-plans-path.sh" "$W_ERR"
+    assert_eq "2: rather than claiming an unrecorded round the way the old wrapper did" \
+        "clean" \
+        "$(printf '%s' "$W_ERR" | grep -Fq 'NOT-STAGED' && printf 'notice-instead-of-refusal' \
+            || printf clean)"
+    assert_eq "2: and nothing was written into the plans dir on the way out" \
+        "0" "$(find "$W_PLANS" -type f 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 {
-    # review-code-ledger's contract is stronger: stdout must stay byte-for-byte
-    # the reviewer's own output, so the notice is appended, never interleaved.
-    # The stub goes into both roots: review-code-ledger resolves the reviewer
-    # from its own directory, so the intact-root cases below need it too.
-    for _r in "$ROOT" "$ROOT_OK"; do
-        cat > "$_r/bin/review-code-codex" <<'STUBEOF'
-#!/usr/bin/env bash
-printf 'REVIEWER SAID THIS\n'
-exit 0
-STUBEOF
-    done
-    L_OUT="$TMPDIR_BASE/ledger-out.txt"
-    (
-        export AGENTS_CONFIG_DIR="$ROOT" SESSION_ID="$SID" PLANS_DIR="$PLANS"
-        bash "$ROOT/bin/review-code-ledger" > "$L_OUT" 2>/dev/null
-    )
-    L_RC=$?
-    assert_eq_nz "2: review-code-ledger still exits 0" "0" "$L_RC"
-    assert_contains "2: the reviewer's own output reaches the caller unchanged" \
-        "REVIEWER SAID THIS" "$(cat "$L_OUT")"
-    assert_contains "2: with the bookkeeping failure appended as a notice" \
-        "## Concern Ledger: NOT-STAGED" "$(cat "$L_OUT")"
-    assert_eq_nz "2: and the notice comes after the review, not before it" \
-        "after" \
-        "$(R_LINE=$(grep -n -F 'REVIEWER SAID THIS' "$L_OUT" | head -n1 | cut -d: -f1); \
-           N_LINE=$(grep -n -F 'NOT-STAGED' "$L_OUT" | head -n1 | cut -d: -f1); \
-           [ -n "$R_LINE" ] && [ -n "$N_LINE" ] && [ "$N_LINE" -gt "$R_LINE" ] \
-               && printf after || printf "review=$R_LINE notice=$N_LINE")"
+    # The intact counterpart: a refusal that also fires when nothing is wrong
+    # proves nothing, so the same call on the complete tree has to reach the
+    # reviewer and record the round the crippled one refused to invent.
+    WOK_PLANS="$TMPDIR_BASE/plans-w-ok"
+    mkdir -p "$WOK_PLANS"
+    WOK_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT_OK"; \
+        bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+            --session-id "$SID" --plans-dir "$WOK_PLANS" 2>&1 >/dev/null) )"
+    assert_eq "2: (precondition) the complete tree gets past the library check" \
+        "clean" \
+        "$(printf '%s' "$WOK_ERR" | grep -Fq 'safe-plans-path.sh' && printf 'halted-on-load' \
+            || printf clean)"
+    assert_eq "2: and records the round the crippled run refused to invent" \
+        "1" "$(tr -dc '0-9' < "$WOK_PLANS/$SID-$LOOP_FORMAT-last-round.txt" 2>/dev/null)"
+    assert_eq "2: under the ledger name the shared code-review format owns" \
+        "yes" "$(grep -qF 'FP_LEDGER_FORMAT="review-security-shared"' "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 2>/dev/null && printf yes || printf no)"
 }
 
 echo ""
@@ -305,62 +317,63 @@ echo "--- contracts 3: a traversing session id never reaches the filesystem ---"
 echo ""
 echo "--- contracts 4: the round-number file is written inside the plans dir ---"
 
-# Both wrappers write a round-number file with a bare `> "$ROUND_FILE"`, which
-# follows a symlink pre-placed at that name — the file it lands in is chosen by
-# whoever placed the link. A host without real symlinks (Git Bash without
-# developer mode) would turn assertions vacuous, so the link is checked for
-# being a link first.
+# The loop's own write_round_file now owns every round number the deleted
+# wrappers used to write, so this is where the symlink defence has to hold: a
+# bare `> "$ROUND_FILE"` follows a link pre-placed at that name and lands in a
+# file chosen by whoever placed it. A host without real symlinks (Git Bash
+# without developer mode) would turn the assertions vacuous, so the link is
+# checked for being a link first.
 link_at() {
     ln -s "$2" "$1" 2>/dev/null || true
     [ -h "$1" ] && printf yes || printf no
+}
+
+run_secloop_ok() {
+    (
+        export AGENTS_CONFIG_DIR="$ROOT_OK"
+        bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+            --session-id "$SID" --plans-dir "$1" >/dev/null 2>&1
+    )
 }
 
 S_PLANS="$TMPDIR_BASE/plans-s"
 mkdir -p "$S_PLANS"
 S_OUTSIDE="$TMPDIR_BASE/round-victim.txt"
 printf 'untouched\n' > "$S_OUTSIDE"
-S_LINKED="$(link_at "$S_PLANS/$SID-$FORMAT-round-number.txt" "$S_OUTSIDE")"
+S_LINKED="$(link_at "$S_PLANS/$SID-$LOOP_FORMAT-round-number.txt" "$S_OUTSIDE")"
 
 if [ "$S_LINKED" != "yes" ]; then
     echo "SKIP: 4: this host does not create real symlinks — the round-file cases cannot run here"
 else
-    (
-        export AGENTS_CONFIG_DIR="$AGENTS_ROOT" SESSION_ID="$SID" PLANS_DIR="$S_PLANS"
-        bash "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" \
-            >/dev/null 2>&1
-    )
-    assert_eq_nz "4: open-concern-round.sh does not write the round through a pre-placed symlink" \
+    # A non-empty decoy first: the loop must not overwrite a file outside the
+    # plans dir even when the link is the only thing standing at the name.
+    run_secloop_ok "$S_PLANS"
+    assert_eq_nz "4: the loop does not write the round through a pre-placed symlink" \
         "untouched" "$(cat "$S_OUTSIDE" 2>/dev/null)"
 
-    # review-code-ledger, against the *intact* root: with the library missing
-    # the bookkeeping short-circuits before the round write, which would satisfy
-    # the assertion without the defence ever running. The control run directly
-    # below establishes that this arrangement does reach the write.
+    # Against the *intact* root: with the library missing the loop refuses long
+    # before the round write, which would satisfy the assertion without the
+    # defence ever running. This control establishes that the run reaches it.
     S2_CTRL="$TMPDIR_BASE/plans-s2-control"
     mkdir -p "$S2_CTRL"
-    (
-        export AGENTS_CONFIG_DIR="$ROOT_OK" SESSION_ID="$SID" PLANS_DIR="$S2_CTRL"
-        bash "$ROOT_OK/bin/review-code-ledger" >/dev/null 2>&1
-    )
+    run_secloop_ok "$S2_CTRL"
     assert_eq "4: (precondition) with an ordinary name, the round write is reached" \
-        "1" "$([ -s "$S2_CTRL/$SID-$FORMAT-round-number.txt" ] && printf 1 || printf 0)"
+        "1" "$([ -s "$S2_CTRL/$SID-$LOOP_FORMAT-round-number.txt" ] && printf 1 || printf 0)"
 
-    # Same run, with a symlink standing at that name. The decoy has to be empty:
-    # review-code-ledger only writes the round file when it is empty.
+    # Same run, with a symlink standing at that name. The decoy is empty here:
+    # the round file is only written when the existing one holds no number, so
+    # a non-empty decoy would spare the write for the wrong reason.
     S2_PLANS="$TMPDIR_BASE/plans-s2"
     mkdir -p "$S2_PLANS"
     S2_OUTSIDE="$TMPDIR_BASE/round-victim-2.txt"
     : > "$S2_OUTSIDE"
-    link_at "$S2_PLANS/$SID-$FORMAT-round-number.txt" "$S2_OUTSIDE" >/dev/null
-    (
-        export AGENTS_CONFIG_DIR="$ROOT_OK" SESSION_ID="$SID" PLANS_DIR="$S2_PLANS"
-        bash "$ROOT_OK/bin/review-code-ledger" >/dev/null 2>&1
-    )
-    assert_eq "4: and neither does review-code-ledger (CPR-ORTH, same write)" \
+    link_at "$S2_PLANS/$SID-$LOOP_FORMAT-round-number.txt" "$S2_OUTSIDE" >/dev/null
+    run_secloop_ok "$S2_PLANS"
+    assert_eq "4: and an empty decoy is not filled in either (same write)" \
         "empty" "$([ -s "$S2_OUTSIDE" ] && cat "$S2_OUTSIDE" || printf empty)"
     assert_eq "4: the name it refused no longer points out of the plans dir" \
         "not-symlink" \
-        "$([ -h "$S2_PLANS/$SID-$FORMAT-round-number.txt" ] && printf still-symlink \
+        "$([ -h "$S2_PLANS/$SID-$LOOP_FORMAT-round-number.txt" ] && printf still-symlink \
             || printf not-symlink)"
 fi
 
@@ -410,7 +423,7 @@ echo "--- contracts 6: #2088 at the process boundary ---"
         --producer review-code-codex --from-report "$REPORT" >/dev/null
     rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage --plans-dir "$B_PLANS" \
         --session-id "$SID" --format "$FORMAT" --round 1 \
-        --producer review-code-security --from-report "$REPORT" >/dev/null
+        --producer security-scanner --from-report "$REPORT" >/dev/null
     assert_eq_nz "6: both deltas were written into that directory (precondition)" \
         "2" "$(find "$B_PLANS" -maxdepth 1 -name "*-round-1-delta-*.txt" 2>/dev/null \
             | wc -l | tr -d ' ')"

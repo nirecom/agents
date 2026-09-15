@@ -103,7 +103,7 @@ done
 if [[ -n "$SID" && -n "$LOG_DIR" ]]; then
   _ROUND_LOG="$LOG_DIR/$SID-plan.jsonl"
   source "$(dirname "$0")/lib/codex-core.sh" >/dev/null 2>&1 || true
-  CODEX_LABEL="Codex Plan Review"
+  CODEX_LABEL="Codex Review"
   codex_core_round_log_append "$_ROUND_LOG" "$SID" "$FORMAT" "MOCK_VERDICT" "" >/dev/null 2>&1 || true
 fi
 HEADER_EOF

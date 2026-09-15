@@ -1,26 +1,12 @@
 #!/usr/bin/env node
-// Claude Code PostToolUse hook: intercept workflow markers from skill completions
-//
-// Supported markers (each marker must be a standalone echo, but multiple markers
-// may be chained with ` && ` in a single Bash command — each part is evaluated
-// independently):
-//   echo "<<WORKFLOW_MARK_STEP_{step}_{status}>>"   — mark a step
-//   echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" — reset state from a step (reason mandatory)
-//   echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"      — record user verification (reason mandatory)
-//   echo "<<WORKFLOW_{RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED: {reason}>>"
-//
-// Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: {reason}>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: {reason}>>"   — restore enforcement (delete marker; reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>"  — session-scoped ENFORCE_WORKFLOW bypass (reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>"   — restore enforcement (delete marker; reason mandatory)
-//
-// Dispatch implementation is split across sibling modules under hooks/workflow-mark/:
-//   skip-reason / not-needed-handlers / clarify-intent-complete-handler /
-//   branching-handler / user-verified-handler / mark-step-handler /
-//   enforce-override-handlers / reset-handler.
-// This file holds the CLI bootstrap (stdin parse, merge-class push detection,
-// `&&` chain split, sentinel-only validation) plus the sequential dispatch loop.
+// Claude Code PostToolUse hook: intercept workflow markers from skill completions.
+// Markers are standalone `echo "<<WORKFLOW_...>>"` sentinels; multiple may be chained
+// with ` && ` (each part evaluated independently). Families: MARK_STEP, RESET_FROM,
+// USER_VERIFIED, {RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED, and
+// ENFORCE_{WORKTREE,WORKFLOW}_{OFF,ON} (session-scoped bypass; reasons mandatory;
+// works around CLAUDE_ENV_FILE propagation bug #27987). Dispatch is split across
+// hooks/workflow-mark/ sibling modules; this file holds the CLI bootstrap (stdin
+// parse, merge-class push detection, sentinel decomposition) + the dispatch loop.
 
 "use strict";
 
@@ -34,8 +20,10 @@ const {
 } = require("./workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const { resolveRepoCwd } = require("./lib/path-normalize");
-// Sentinel recognition centralized in hooks/lib/sentinel-patterns.js (SSOT).
-const { isSentinel } = require("./lib/sentinel-patterns");
+// #2256 S5-a1: command-tool normalization + sentinel decomposition shared with
+// workflow-gate.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
+const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
+const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 const { isSubagentCall } = require("./lib/subagent-detect");
 
 const notNeededHandlers = require("./workflow-mark/not-needed-handlers");
@@ -76,10 +64,12 @@ try {
   done(); // fail-open on malformed stdin
 }
 
-// Only handle Bash tool
-if (input.tool_name !== "Bash") done();
+// Only handle command tools (Bash / runInTerminal / runCommands).
+if (!isCommandTool(input.tool_name)) done();
 
-const command = ((input.tool_input && input.tool_input.command) || "").trim();
+// Joined blob for merge/push detection and repoCwd resolution; per-element
+// sentinel decomposition happens via analyzeSentinelCommand below.
+const command = commandTextOf(input.tool_name, input.tool_input).trim();
 
 // Hoist: needed by push-reset below and by sentinel logic further down.
 const toolResponse = input.tool_response || {};
@@ -95,7 +85,12 @@ const sessionId = resolveSessionId({
 // Reset user_verification only after a successful merge-class operation
 // (push to a protected branch / gh pr merge). Feature-branch pushes leave
 // verification state alone so the upcoming gh pr merge gate can pass.
-const mergeResult = isMergeToProtectedCommand(command);
+// Scan every command-tool element: a protected push/merge in any runCommands
+// element must reset user_verification (SSOT: tool-command-text.js).
+const mergeResult =
+  commandListOf(input.tool_name, input.tool_input)
+    .map((el) => isMergeToProtectedCommand(el))
+    .find((h) => h.hit) || { hit: false };
 if (mergeResult.hit) {
   let msg;
   if (exitCode === 0 && sessionId) {
@@ -132,16 +127,14 @@ if (mergeResult.hit) {
 // push/merge detection above still runs for subagents (C1 regression guard).
 if (isSubagentCall(input)) done();
 
-// Split on `&&` so multiple sentinel echos chained in one Bash call are all processed.
-// All-or-nothing: if any part is NOT a sentinel, reject the whole command.
-const commandParts = command
-  .split(/\s*&&\s*/)
-  .map((s) => s.trim())
-  .filter(Boolean);
-if (commandParts.length === 0) done();
-const allAreSentinels = commandParts.every(isSentinel);
-if (!allAreSentinels) done(); // prefix-chained or mixed-content command — reject
-const sentinelParts = commandParts;
+// Decompose into sentinel sub-commands (SSOT: sentinel-command.js). Bash/
+// runInTerminal `&&` chains stay order-independent all-or-nothing; the runCommands
+// array additionally rejects a non-sentinel element that follows a sentinel.
+const analysis = analyzeSentinelCommand(input.tool_name, input.tool_input);
+if (!analysis.sentinelPresent) done(); // no sentinel content — nothing to record
+if (!analysis.clean) done(); // impure chain or trailing non-sentinel — reject whole
+const sentinelParts = analysis.sentinelParts;
+if (sentinelParts.length === 0) done();
 
 if (exitCode !== 0) {
   done(

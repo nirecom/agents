@@ -3,35 +3,12 @@
 # Tests: bin/run-codex-review-loop
 # Tags: review-tests, codex-context, marker-lifecycle, built-marker, scope:issue-specific
 #
-# Issue #1376 — FORMAT=test-review must force-clear the built marker before
-# checking, so every /review-tests invocation rebuilds codex context fresh.
-# Other formats (detail-plan, outline-plan) must preserve the marker (idempotent
-# expensive context build — rebuild only when marker absent).
+# Issue #1376: FORMAT=test-review must force-clear the built marker before checking,
+# so every /review-tests invocation rebuilds codex context fresh. Other formats
+# (detail-plan, outline-plan) preserve the marker (idempotent expensive context build).
 #
-# Current behavior (bug): bin/run-codex-review-loop only builds context when
-# the marker is absent (line 142 `if [[ ! -f "$MARKER" ]]`). For test-review a
-# stale marker from a previous /review-tests run causes the stale context to be
-# reused, which may miss new test files or updated staged content.
-#
-# EXPECTED: cases 9 and 10 FAIL until bin/run-codex-review-loop is patched to
-#           delete the marker before the check for FORMAT=test-review.
-#           Case 11 PASSES both before and after (regression guard for other formats).
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Whether the rebuilt context actually includes the new test-file content
-#   (the build-codex-context invocation runs for real only in a live session
-#   with a working codex CLI and AGENTS_CONFIG_DIR with all dependencies).
-# - Whether the marker path collision between parallel FORMAT=test-review runs
-#   causes a race (single-threaded in tests; real races need two concurrent
-#   review-tests invocations on the same SID).
-# Closest-to-action mitigation: context freshness is observable in review output
-# when /review-tests is run twice on updated tests/ before committing.
-#
-# L3 gap (what this test does NOT catch):
-# - Parallel same-session-id test-review invocations (race condition in marker file ops)
-# Because: L2 cannot simulate true parallel execution of the hook
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# L3 gap: whether rebuilt context includes new test files or parallel FORMAT=test-review
+# runs cause a race — L2 cannot simulate true parallel execution of the hook.
 
 set -uo pipefail
 
@@ -117,7 +94,7 @@ chmod +x "$STUB_BIN/build-codex-context"
 # Stub out review-plan-codex too so the loop reaches the reviewer then exits 3.
 cat > "$STUB_BIN/review-plan-codex" <<'RPCEOF'
 #!/bin/bash
-echo "## Codex Plan Review: SKIPPED — codex unavailable (stub)"
+echo "## Codex Review: SKIPPED — codex unavailable (stub)"
 exit 0
 RPCEOF
 chmod +x "$STUB_BIN/review-plan-codex"
@@ -136,6 +113,14 @@ fi
 for f in run-with-timeout.sh review-loop-verdict; do
     [[ -f "$AGENTS_DIR/bin/$f" ]] && cp "$AGENTS_DIR/bin/$f" "$FAKE_AGENTS/bin/" 2>/dev/null || true
 done
+mkdir -p "$FAKE_AGENTS/bin/lib/codex-review-loop"
+cp "$AGENTS_DIR/bin/lib/codex-review-loop/"*.sh "$FAKE_AGENTS/bin/lib/codex-review-loop/" 2>/dev/null || true
+cp "$AGENTS_DIR/bin/lib/safe-plans-path.sh" "$FAKE_AGENTS/bin/lib/safe-plans-path.sh" 2>/dev/null || true
+cp "$AGENTS_DIR/bin/concern-ledger" "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
+chmod +x "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
+cp "$AGENTS_DIR/bin/lib/concern-ledger.sh" "$FAKE_AGENTS/bin/lib/concern-ledger.sh" 2>/dev/null || true
+mkdir -p "$FAKE_AGENTS/bin/lib/concern-ledger"
+cp "$AGENTS_DIR"/bin/lib/concern-ledger/*.sh "$FAKE_AGENTS/bin/lib/concern-ledger/" 2>/dev/null || true
 
 run_loop() {
     local format="$1" round="${2:-1}"
@@ -206,16 +191,11 @@ fi
 rm -f "$STUB_CALLED_FILE" "$MARKER_DP" "$CONTEXT_OUT"
 
 # ===========================================================================
-# Case 12 (C5) — Stale context file exists before rebuild → stderr warning.
-#   When FORMAT=test-review and a stale context file (codex-context.md) already
-#   exists at entry, the script must emit a warning to stderr containing "stale"
-#   or "rebuilding" (case-insensitive) so operators can detect reuse decisions.
-#
-#   Source NOT yet implemented → this test FAILS (fail-before-fix).
-#   After the fix, bin/run-codex-review-loop must:
-#     1. Detect stale context (file exists before clearing marker)
-#     2. Print "stale" or "rebuilding" (or similar) to stderr
-#     3. Proceed to rebuild
+# Case 12 (C5) — Stale context file → stderr warning.
+# When FORMAT=test-review and stale context (codex-context.md) exists, the script
+# must emit a warning containing "stale" or "rebuilding" to stderr.
+# Source NOT yet implemented → FAILS (fail-before-fix). After fix: detect stale
+# context, print warning, proceed to rebuild.
 # EXPECTED: FAIL before fix (no stale warning is emitted by current code).
 # ===========================================================================
 rm -f "$STUB_CALLED_FILE" "$MARKER_TR" "$CONTEXT_OUT"

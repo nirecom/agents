@@ -35,34 +35,37 @@ run_g2() {
 }
 
 run_g3() {
-    require_source "$HOOK" "G3: cumulative_severity=warning -> additionalContext, exit 0" || return
+    require_source "$HOOK" "G3: cumulative_severity=warning (layer2 format) -> additionalContext, exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "g3-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
+    # Use legacy layer2 format: new alert-format state skips the advisory branch (#2256).
+    # isLegacyLayer2State=true only when st.layer2 exists and st.alert has no meaningful data.
+    seed_layer2_state "$tmp" "g3-sid" "{ cumulative_severity: 'warning', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g3-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "additionalContext\|warning" ); then
-        pass "G3: cumulative_severity=warning -> additionalContext, exit 0"
+        pass "G3: cumulative_severity=warning (layer2 format) -> additionalContext, exit 0"
     else
-        fail "G3: cumulative_severity=warning -> additionalContext, exit 0 (rc=$rc, out=$out)"
+        fail "G3: cumulative_severity=warning (layer2 format) -> additionalContext, exit 0 (rc=$rc, out=$out)"
     fi
 }
 
 run_g4() {
-    require_source "$HOOK" "G4: cumulative_severity=notice -> additionalContext, exit 0" || return
+    require_source "$HOOK" "G4: cumulative_severity=notice (layer2 format) -> additionalContext, exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "g4-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
+    # Use legacy layer2 format: new alert-format state skips the advisory branch (#2256).
+    seed_layer2_state "$tmp" "g4-sid" "{ cumulative_severity: 'notice', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g4-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "additionalContext\|notice" ); then
-        pass "G4: cumulative_severity=notice -> additionalContext, exit 0"
+        pass "G4: cumulative_severity=notice (layer2 format) -> additionalContext, exit 0"
     else
-        fail "G4: cumulative_severity=notice -> additionalContext, exit 0 (rc=$rc, out=$out)"
+        fail "G4: cumulative_severity=notice (layer2 format) -> additionalContext, exit 0 (rc=$rc, out=$out)"
     fi
 }
 

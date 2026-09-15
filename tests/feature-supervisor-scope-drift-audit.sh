@@ -2,24 +2,8 @@
 # tests/feature-supervisor-scope-drift-audit.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, workflow-gate, scope-drift, audit, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - workflow-gate.js firing as a real PreToolUse hook (hook registration via settings.json)
-# - Real git push intercepted in live session — tests use a real git repo fixture
-#   but not a live Claude Code session
-# - resolveBranchDiff using origin/* refs that require a real remote
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# SKIPPED: CC-UUID-only dual-store resolution path (C4)
-# Because: T5/T6 setup uses WORKFLOW_SESSION_ID env; CC-UUID→wsid resolution via
-#   resolve-workflow-session-id.js is an L3 gap (requires real claude -p session env)
-# L3 gap: a test where checkSupervisorPreMerge receives only CLAUDE_SESSION_ID and
-#   must internally call resolveWorkflowSessionId() to locate warning/audit state
-
-# T6: Three subcases (unconditional, works with ZERO prior findings):
-# (a) gh pr merge: branch diff includes undeclared file → audit_cause="scope-drift:pre-merge" + block
-# (b) git push origin main: same drift via BRANCH diff (NOT staged diff) → armed
-# (c) dedup: with audit_last_run_at set + audit_cause="scope-drift:pre-merge" → NO re-arm, approve
+# L3 gap: workflow-gate.js not exercised as a real PreToolUse hook / live-session git push; checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (hook-registration). C4 (CC-UUID->wsid dual-store) skipped — T6 uses WORKFLOW_SESSION_ID env; CC-UUID resolution is an L3 gap.
+# T6/T8 (#2256 S5-e): the pre-merge gate is now a READ-ONLY freshness backstop that arms nothing (scope-drift:pre-merge arming retired). It denies unless a terminal TR5 run exists whose freshness_key still matches and whose verdict is not BLOCK. SSOT: tests/feature-2256-premerge-backstop.sh.
 
 set -u
 
@@ -149,7 +133,70 @@ process.stdout.write(JSON.stringify((st && st.audit) || null));
 " 2>/dev/null
 }
 
-# --- T6a: gh pr merge + branch diff with undeclared file → scope-drift block ---
+# Compute the current freshness key over repo working tree + plan artifacts for a
+# sid — must be computed identically to checkSupervisorPreMerge (same repo/plans/sid).
+FP_NODE="$_AGENTS_DIR_NODE/hooks/lib/diff-fingerprint.js"
+fresh_key() {
+    local plans_node="$1" repo_node="$2" sid="$3"
+    run_with_timeout 5 node -e "
+const fp = require('$FP_NODE');
+const r = fp.computeFreshnessKey('$repo_node', '$plans_node', '$sid');
+process.stdout.write(String((r && r.freshness_key) || 'null'));
+" 2>/dev/null
+}
+
+# Seed one terminal TR5 audit ledger run (verdict + freshness key) — the only shape
+# the read-only freshness backstop approves (when fresh + non-BLOCK).
+seed_tr5_terminal_run() {
+    local tmp_node="$1" sid="$2" verdict="$3" fk="$4"
+    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const fs = require('fs');
+const st = w.readState('$sid') || {};
+st.audit = st.audit || {};
+st.audit.ledger = [{
+  id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
+  tr_ids: ['TR5'], verdict: '$verdict', freshness_key: '$fk',
+  sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': '$fk' },
+}];
+st.audit.last_terminal_run_id = 'run-0011';
+st.audit.audit_verdict_summary = '$verdict';
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
+# Write all three plan artifacts under a sid so computeFreshnessKey resolves a
+# non-null key (it collapses to null if intent/outline/detail is missing).
+write_plan_artifacts() {
+    local plansdir="$1" sid="$2"
+    mkdir -p "$plansdir"
+    printf '# intent\ni1\n' > "$plansdir/${sid}-intent.md"
+    printf '# outline\no1\n' > "$plansdir/${sid}-outline.md"
+    printf '# detail\nd1\n\n## Files to modify\n\n- hooks/workflow-gate.js\n' > "$plansdir/${sid}-detail.md"
+}
+
+# Run the pre-merge hook under fixture isolation (rules/test/fixture-isolation.md).
+# resolveWorkflowSessionId() never reads WORKFLOW_SESSION_ID; its wsid priority is
+# (1) WORKTREE_NOTES.md at CWD / git-common-dir parent, (2) CLAUDE_CODE_SESSION_ID
+# guarded on a `<value>-*.md` artifact, (3) CLAUDE_ENV_FILE→CLAUDE_SESSION_ID. Running
+# from the real worktree therefore leaked the developer's live wsid via priority 1.
+# Neutralize priority 1 by running node from the isolated temp dir (no WORKTREE_NOTES.md,
+# git-root probes miss), unset the priority-3 leak vars, and pin the test's wsid via
+# priority 2 (CLAUDE_CODE_SESSION_ID + the ${wsid}-*.md artifacts the test seeds). The
+# hook's own CC session id still comes from hook_input.session_id (= sid), so the audit
+# ledger stays keyed by sid while plan artifacts resolve under wsid (#2256 C8 dual-ID).
+run_premerge_hook() {
+    local tmp_node="$1" wsid="$2" hook_input="$3"
+    (
+        cd "$tmp_node" || exit 1
+        unset CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+        CLAUDE_CODE_SESSION_ID="$wsid" \
+        WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+            run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null
+    )
+}
+
+# --- T6a: gh pr merge, supervisor state but no terminal TR5 run → backstop blocks, arms nothing ---
 run_t6a() {
     local tmp sid out rc repodir wsid
     tmp=$(make_tmp)
@@ -173,9 +220,7 @@ run_t6a() {
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
-        WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    out=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     rc=$?
 
     local audit_state audit_cause audit_phase
@@ -185,19 +230,21 @@ run_t6a() {
 
     rm -rf "$tmp"
 
+    # Supervisor state resolves but no terminal TR5 run exists → the read-only
+    # backstop denies the merge (authoritative) and arms NOTHING.
     if ! echo "$out" | grep -q '"decision":"block"'; then
-        fail "T6a: scope-drift gh pr merge must block (checkSupervisorPreMerge not yet implemented)"
+        fail "T6a: freshness backstop must block a merge with no terminal TR5 run, got: $(printf '%q' "${out:0:80}")"
         return
     fi
-    if [ "$audit_cause" != "scope-drift:pre-merge" ]; then
-        fail "T6a: audit_cause must be 'scope-drift:pre-merge', got '$audit_cause'"
+    if [ "$audit_cause" != "null" ]; then
+        fail "T6a: freshness backstop arms nothing — audit_cause must stay null, got '$audit_cause'"
         return
     fi
-    if [ "$audit_phase" != "pending" ]; then
-        fail "T6a: audit_phase must be 'pending', got '$audit_phase'"
+    if [ "$audit_phase" != "null" ]; then
+        fail "T6a: freshness backstop arms nothing — audit_phase must stay null, got '$audit_phase'"
         return
     fi
-    pass "T6a: gh pr merge + undeclared file → audit_cause=scope-drift:pre-merge + block"
+    pass "T6a: gh pr merge, no terminal TR5 run → backstop blocks, arms nothing"
 }
 
 # --- T6b: git push origin main + branch diff (staged empty) → scope-drift armed ---
@@ -233,9 +280,7 @@ run_t6b() {
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"git push origin main","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
-        WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    out=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     rc=$?
 
     local audit_state audit_cause
@@ -244,20 +289,20 @@ run_t6b() {
 
     rm -rf "$tmp"
 
-    # T6b verifies that branch diff (not staged diff) is used.
-    # Staged is empty, but committed branch has undeclared file — should still detect drift.
+    # The freshness backstop gates git push to a protected branch the same way as
+    # gh pr merge: no terminal TR5 run → block, and it arms nothing.
     if ! echo "$out" | grep -q '"decision":"block"'; then
-        fail "T6b: scope-drift git push must use BRANCH diff (not staged diff) — block expected even with empty staged area"
+        fail "T6b: freshness backstop must block a git push with no terminal TR5 run, got: $(printf '%q' "${out:0:80}")"
         return
     fi
-    if [ "$audit_cause" != "scope-drift:pre-merge" ]; then
-        fail "T6b: audit_cause must be 'scope-drift:pre-merge' for git push path, got '$audit_cause'"
+    if [ "$audit_cause" != "null" ]; then
+        fail "T6b: freshness backstop arms nothing on the git push path — audit_cause must stay null, got '$audit_cause'"
         return
     fi
-    pass "T6b: git push origin main + branch diff (staged empty) → scope-drift armed via branch diff"
+    pass "T6b: git push origin main, no terminal TR5 run → backstop blocks, arms nothing"
 }
 
-# --- T6c: dedup — audit_last_run_at already set + same cause → NO re-arm, approve ---
+# --- T6c: a fresh, non-BLOCK terminal TR5 run → the backstop approves the merge ---
 run_t6c() {
     local tmp sid out rc repodir wsid
     tmp=$(make_tmp)
@@ -274,50 +319,51 @@ run_t6c() {
     fi
 
     setup_git_fixture "$repodir"
+    # All three plan artifacts must exist under WSID (#2256 C8: plan artifacts are
+    # keyed by the workflow session id, not the CC session id) or computeFreshnessKey
+    # collapses to null (fail-closed block). write_plan_artifacts first, then
+    # write_detail_fixture overwrites detail.md under WSID with the scope-drift detail.
+    write_plan_artifacts "$tmp" "$wsid"
     write_detail_fixture "$tmp" "$wsid"
     seed_wf_state "$tmp_node" "$sid"
     seed_supervisor_state "$tmp_node" "$sid"
 
-    # Mark audit as already ran for this cause
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
-const w = require('$WRITER_NODE');
-w.writeAuditState('$sid', {
-    audit_phase: null,
-    audit_cause: 'scope-drift:pre-merge',
-    audit_last_run_at: new Date().toISOString(),
-    audit_verdict: 'CONTINUE'
-});
-" >/dev/null 2>&1
+    # Seed a fresh, non-BLOCK terminal TR5 run whose freshness_key matches the
+    # current working tree — the one shape the read-only backstop approves.
+    # The freshness key is computed over WSID (matching supervisor-check's
+    # planSessionId = wsid || effectiveSid), while the ledger lives in the CC-sid
+    # state file (read via the hook's session_id).
+    local fk
+    fk=$(fresh_key "$tmp_node" "$repodir_node" "$wsid")
+    seed_tr5_terminal_run "$tmp_node" "$sid" "CONTINUE" "$fk"
 
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
-        WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    out=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     rc=$?
 
     rm -rf "$tmp"
 
-    # Dedup: scope-drift already audited → no re-arm → approve
+    # A fresh, non-BLOCK terminal TR5 run is the one shape the backstop lets through.
     if echo "$out" | grep -q '"decision":"block"'; then
-        fail "T6c: dedup must prevent re-arm when audit_last_run_at+audit_cause=scope-drift:pre-merge already set"
+        fail "T6c: a fresh non-BLOCK TR5 run must let the merge through, got block: $(printf '%q' "${out:0:80}")"
         return
     fi
     if ! echo "$out" | grep -q '"decision":"approve"'; then
-        fail "T6c: expected approve after dedup, got: $(printf '%q' "$out")"
+        fail "T6c: expected approve for a fresh non-BLOCK TR5 run, got: $(printf '%q' "$out")"
         return
     fi
-    pass "T6c: scope-drift dedup → no re-arm → approve"
+    pass "T6c: fresh non-BLOCK terminal TR5 run → backstop approves the merge"
 }
 
 run_t6a
 run_t6b
 run_t6c
 
-# T8-all-declared: first merge arms scope-drift:pre-merge even when ALL changed files are declared
-# and zero prior findings exist. Second merge deduplicates → approve.
-# RED-EXPECTED until Change 2+3 implement unconditional pre-merge scope-drift audit trigger.
+# T8-all-declared (#2256 S5-e): "declared vs undeclared" no longer matters — the
+# backstop arms nothing and only checks for a fresh non-BLOCK terminal TR5 run.
+# Pass 1: no TR5 run → block, arms nothing. Pass 2: fresh TR5 run seeded → approve.
 setup_git_all_declared() {
     local repodir="$1"
     git -C "$repodir" init -b main >/dev/null 2>&1 || git -C "$repodir" init >/dev/null 2>&1
@@ -353,53 +399,50 @@ run_t8() {
     fi
 
     setup_git_all_declared "$repodir"
+    # Plan artifacts keyed by WSID (#2256 C8), detail.md written last so the
+    # scope-drift detail wins; freshness key is computed over WSID to match
+    # supervisor-check's planSessionId = wsid || effectiveSid.
+    write_plan_artifacts "$tmp" "$wsid"
     write_detail_fixture "$tmp" "$wsid"
     seed_wf_state "$tmp_node" "$sid"
-    # C1: seed with a warning-severity finding so the warning-flush path fires and blocks
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
-const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
-const st=s.createEmptyState('$sid');
-st.alert.cumulative_severity='warning';
-st.alert.findings=[{categories:['workflow'],severity:'warning',detail:'pre-merge warning finding',reporter:'test',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('$sid'),JSON.stringify(st));
-" >/dev/null 2>&1
+    # Seed supervisor state (empty findings) so it resolves → backstop is authoritative.
+    seed_supervisor_state "$tmp_node" "$sid"
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    # Pass 1: first merge attempt — capture stdout to assert block decision (C1)
-    out_pass1=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    # Pass 1: no terminal TR5 run exists → backstop blocks and arms nothing.
+    out_pass1=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     audit_state=$(read_audit_state "$tmp_node" "$sid")
     audit_phase=$(echo "$audit_state" | node -e "const s=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String((s&&s.audit_phase)||'null'))" 2>/dev/null)
 
-    if [ "$audit_phase" != "pending" ]; then
-        fail "T8-all-declared pass1: expected audit_phase=pending, got phase=$audit_phase (Change 2+3 not yet applied)"
+    if [ "$audit_phase" != "null" ]; then
+        fail "T8-all-declared pass1: backstop arms nothing — audit_phase must stay null, got phase=$audit_phase"
         rm -rf "$tmp"; return
     fi
-    # C1: hook stdout must contain decision:block (warning-flush path fires first)
     if ! echo "$out_pass1" | grep -q '"decision":"block"'; then
-        fail "T8-all-declared pass1 (C1): hook output must contain decision:block on first merge (warning-flush path), got: $(printf '%q' "${out_pass1:0:80}")"
+        fail "T8-all-declared pass1: backstop must block first merge (no terminal TR5 run), got: $(printf '%q' "${out_pass1:0:80}")"
         rm -rf "$tmp"; return
     fi
 
-    # Simulate audit ran — use the actual audit_cause that was set
-    local audit_cause
-    audit_cause=$(echo "$audit_state" | node -e "const s=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String((s&&s.audit_cause)||'pre-merge-warning-flush'))" 2>/dev/null)
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
-const w=require('$WRITER_NODE');
-w.writeAuditState('$sid',{audit_phase:null,audit_cause:'$audit_cause',audit_last_run_at:new Date().toISOString(),audit_verdict:'CONTINUE'});
-" >/dev/null 2>&1
+    # Seed a fresh, non-BLOCK terminal TR5 run — the one shape the backstop approves.
+    # Freshness key over WSID (plan-artifact keying, #2256 C8); ledger under CC-sid.
+    local fk
+    fk=$(fresh_key "$tmp_node" "$repodir_node" "$wsid")
+    seed_tr5_terminal_run "$tmp_node" "$sid" "CONTINUE" "$fk"
 
-    # Pass 2: second merge → dedup → approve (no re-arm for same cause)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    # Pass 2: fresh non-BLOCK TR5 run present → merge is allowed.
+    out=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     rm -rf "$tmp"
 
     if echo "$out" | grep -q '"decision":"block"'; then
-        fail "T8-all-declared pass2: dedup must prevent re-arm after audit already ran for cause=$audit_cause"
+        fail "T8-all-declared pass2: a fresh non-BLOCK TR5 run must let the merge through, got block: $(printf '%q' "${out:0:80}")"
         return
     fi
-    pass "T8-all-declared: pass1 blocks (decision:block emitted, C1 fixed); pass2 deduplicates → approve"
+    if ! echo "$out" | grep -q '"decision":"approve"'; then
+        fail "T8-all-declared pass2: expected approve for a fresh non-BLOCK TR5 run, got: $(printf '%q' "${out:0:80}")"
+        return
+    fi
+    pass "T8-all-declared: pass1 blocks (no TR5 run, arms nothing); pass2 approves (fresh non-BLOCK TR5 run)"
 }
 run_t8
 
@@ -440,8 +483,7 @@ fs.writeFileSync(w.getStatePath('$sid'),JSON.stringify(st));
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_SESSION_ID="$wsid" \
-        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+    out=$(run_premerge_hook "$tmp_node" "$wsid" "$hook_input")
     rm -rf "$tmp"
 
     # audit_verdict=BLOCK: the pre-merge warning-flush path should block on cumSev=warning.

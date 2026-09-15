@@ -26,6 +26,10 @@ SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 # shellcheck source=lib/codex-core.sh
 source "$SCRIPT_DIR/lib/codex-core.sh"
 
+# Status-header label SSOT: defined before the arg-parse loop so the early
+# "--x requires an argument" error paths emit a named header, not "## : FAILED".
+CODEX_LABEL="Codex Review"
+
 BASE="main"
 BASE_STATE="UNKNOWN"
 NO_LOG=false
@@ -36,32 +40,32 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Review: FAILED — --base requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --base requires an argument"
         exit 0
       fi
       BASE="$2"; shift 2 ;;
     --base-state)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Review: FAILED — --base-state requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --base-state requires an argument"
         exit 0
       fi
       BASE_STATE="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
     --concerns-file)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Review: FAILED — --concerns-file requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --concerns-file requires an argument"
         exit 0
       fi
       CONCERNS_FILE="$2"; shift 2 ;;
     --project-root)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Review: FAILED — --project-root requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --project-root requires an argument"
         exit 0
       fi
       PROJECT_ROOT_ARG="$2"; shift 2 ;;
     --context)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Review: FAILED — --context requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --context requires an argument"
         exit 0
       fi
       CONTEXT_FILES+=("$2"); shift 2 ;;
@@ -71,7 +75,7 @@ done
 
 # Validate base ref: only alphanumerics, dots, slashes, underscores, hyphens
 if ! [[ "$BASE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-  echo "## Codex Review: FAILED — invalid --base ref (rejected to prevent injection): '$BASE'"
+  echo "## ${CODEX_LABEL}: FAILED — invalid --base ref (rejected to prevent injection): '$BASE'"
   exit 0
 fi
 
@@ -90,7 +94,7 @@ case "$BASE_STATE" in
     BASE_STATE="UNKNOWN" ;;
 esac
 
-codex_core_init "Codex Review"
+codex_core_init "$CODEX_LABEL"
 
 # Check codex CLI
 codex_core_check_cli
@@ -129,7 +133,7 @@ MAX_DIFF_LINES="$(resolve_threshold CODEX_REVIEW_MAX_DIFF_LINES "$DEFAULT_MAX_DI
 # subdirectory turns "sub/file.txt" into a pathspec resolved as "sub/sub/file.txt", which git
 # reports as an empty diff that then gets recorded as reviewed.
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "## Codex Review: FAILED — not inside a git repository"
+  echo "## ${CODEX_LABEL}: FAILED — not inside a git repository"
   exit 0
 }
 
@@ -353,7 +357,7 @@ codex_priority_collect() { # <workdir>
 CP_WORKDIR=$(mktemp -d /tmp/codex-diff-XXXXXX)
 trap 'rm -rf "$CP_WORKDIR"' EXIT
 if ! codex_priority_collect "$CP_WORKDIR"; then
-  echo "## Codex Review: FAILED — ${CP_ERR}"
+  echo "## ${CODEX_LABEL}: FAILED — ${CP_ERR}"
   codex_core_log failed "${CP_ERR}" 0
   exit 0
 fi
@@ -367,7 +371,7 @@ if (( CP_FALLBACK )); then
 fi
 
 if [[ -z "$DIFF" ]]; then
-  echo "## Codex Review: SKIPPED — empty diff (no committed changes vs ${BASE}, no uncommitted changes, no untracked files)"
+  echo "## ${CODEX_LABEL}: SKIPPED — empty diff (no committed changes vs ${BASE}, no uncommitted changes, no untracked files)"
   codex_core_log skipped "empty diff" 0
   exit 0
 fi
@@ -489,7 +493,7 @@ PREAMBLE=$(codex_core_adversarial_preamble "code diff")
 NFR_BLOCK=""
 if [[ -n "$PROJECT_ROOT_ARG" ]]; then
   if [[ ! -d "$PROJECT_ROOT_ARG" ]]; then
-    echo "## Codex Review: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
+    echo "## ${CODEX_LABEL}: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
     exit 0
   fi
   NFR_TEXT="$(codex_core_project_nfr_block "$PROJECT_ROOT_ARG")"

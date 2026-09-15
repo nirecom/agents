@@ -1,19 +1,17 @@
 #!/usr/bin/env node
-// PreToolUse hook: when a Bash tool is about to run the <<WORKFLOW_USER_VERIFIED>>
-// sentinel, emit a "User verification context:" systemMessage listing staged files
-// and the open PR URL (if any) BEFORE the permission dialog, so the user sees the
-// context alongside the approval prompt.
-//
-// See skills/_shared/user-verified.md for the protocol.
-//
-// Detection is on tool_input.command (like workflow-mark.js). PreToolUse payloads
-// have no tool_response field, so no exit-code gating is performed.
-//
+// PreToolUse hook: when a command tool is about to run the <<WORKFLOW_USER_VERIFIED>>
+// sentinel, emit a "User verification context:" systemMessage (staged files + open PR
+// URL) BEFORE the permission dialog. Protocol: skills/_shared/user-verified.md.
+// PreToolUse payloads carry no tool_response, so no exit-code gating is performed.
 // Fail-open on all error paths — must never block the workflow.
 "use strict";
 
 const fs = require("fs");
 const { spawnSync } = require("child_process");
+
+// #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
+// USER_VERIFIED_RE is unanchored, so the joined command text finds a sentinel in any element.
+const { isCommandTool, commandTextOf } = require("./lib/tool-command-text");
 
 
 // Match the reason-bearing form only — the bare form was removed from the contract (#404).
@@ -69,11 +67,9 @@ if (require.main === module) {
   let input = {};
   try { input = JSON.parse(readStdin()); } catch { noopExit(); }
 
-  if (input.tool_name !== "Bash") noopExit();
+  if (!isCommandTool(input.tool_name)) noopExit();
 
-  const command =
-    (input.tool_input && typeof input.tool_input.command === "string")
-      ? input.tool_input.command : "";
+  const command = commandTextOf(input.tool_name, input.tool_input);
   if (!USER_VERIFIED_RE.test(command)) noopExit();
 
   const cwd = resolveCwd(input);

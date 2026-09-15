@@ -168,6 +168,19 @@ if [[ -f "$AGENTS_ROOT/bin/review-loop-verdict" ]]; then
     chmod +x "$A_CFG/bin/review-loop-verdict"
 fi
 
+# #2276 extracted the loop's per-format table and verdict handling into
+# bin/lib/codex-review-loop/*.sh (format-params, round-counter, ledger-verdict,
+# path-parse, ref-kind-input, verdict-dispatch) plus bin/lib/safe-plans-path.sh,
+# and run-codex-review-loop now resolves the concern-ledger CLI (bin/concern-ledger
+# + bin/lib/concern-ledger.sh + bin/lib/concern-ledger/) unconditionally at
+# startup. The copied loop resolves all of these under AGENTS_CONFIG_DIR, so the
+# fixture must mirror the real bin/lib tree and the ledger CLI or the loop dies at
+# its first `die "required library missing"` before the mock reviewer is ever
+# invoked (leaving $A_RPC_ARGS absent — the A3/A4 failure mode).
+cp -R "$AGENTS_ROOT/bin/lib" "$A_CFG/bin/lib"
+cp "$AGENTS_ROOT/bin/concern-ledger" "$A_CFG/bin/concern-ledger"
+chmod +x "$A_CFG/bin/concern-ledger"
+
 # Stub build-codex-context (touches --output)
 cat > "$A_CFG/bin/build-codex-context" << 'STUB_EOF'
 #!/usr/bin/env bash
@@ -187,7 +200,7 @@ cat > "$A_CFG/bin/review-plan-codex" << MOCK_EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$@" > "$A_RPC_ARGS"
 cat << 'OUT'
-## Codex Plan Review: PERFORMED
+## Codex Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
 APPROVED
@@ -282,7 +295,7 @@ else
     fail "A7: trailing --repo-root with no value exited $A7_EXIT instead of 0 — missing [[ \$# -lt 2 ]] guard"
 fi
 
-if echo "$A7_OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$A7_OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "A7: trailing --repo-root with no value produces FAILED status label (guard fired, not a coincidental exit 0)"
 else
     fail "A7: trailing --repo-root with no value missing FAILED status label. Output: $A7_OUTPUT"

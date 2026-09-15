@@ -252,7 +252,7 @@ while [[ \$# -gt 0 ]]; do
     fi
     shift
 done
-echo "## Codex Plan Review: SKIPPED -- stub"
+echo "## Codex Review: SKIPPED -- stub"
 exit 3
 STUBSCRIPT
     chmod +x "$FAKE_ACD2/bin/run-codex-review-loop"

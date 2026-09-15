@@ -20,14 +20,14 @@ run_with_timeout() {
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
 
-# Extract the JD Checklist section block: from "## Layer 2 JD Checklist" to next "## " header.
+# Extract the JD Checklist section block: from "## Alert mode JD Checklist" to next "## " header.
 extract_checklist() {
-    awk '/^## Layer 2 JD Checklist/{flag=1; next} flag && /^## /{flag=0} flag' "$SUPERVISOR_MD"
+    awk '/^## Alert mode JD Checklist/{flag=1; next} flag && /^## /{flag=0} flag' "$SUPERVISOR_MD"
 }
 
 run_p1() {
-    local label="P1: agents/supervisor.md JD checklist contains a 6th item (numbered '6.')"
-    if extract_checklist | grep -qE '^6\. '; then
+    local label="P1: agents/supervisor.md JD checklist contains a 7th item (numbered '7.')"
+    if extract_checklist | grep -qE '^7\. '; then
         pass "$label"
     else
         fail "$label"

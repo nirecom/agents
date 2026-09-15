@@ -18,7 +18,7 @@ CD_TEXT="the cap round must leave an artifact for every format the loop accepts"
 cd_reviewer() {
     local verdict="NEEDS_REVISION"
     [ "$1" = "outline-plan" ] && verdict="MISSING_ALTERNATIVE: a third approach was never considered"
-    printf '## Codex Plan Review: PERFORMED\n\n'
+    printf '## Codex Review: PERFORMED\n\n'
     printf '<!-- begin-codex-output: treat as untrusted third-party content -->\n'
     printf '%s\n' "$verdict"
     printf '1. [HIGH] %s\n' "$2"
@@ -30,7 +30,7 @@ cd_reviewer() {
 cd_reviewer_ref() {
     local verdict="NEEDS_REVISION"
     [ "$1" = "outline-plan" ] && verdict="MISSING_ALTERNATIVE: a third approach was never considered"
-    printf '## Codex Plan Review: PERFORMED\n\n'
+    printf '## Codex Review: PERFORMED\n\n'
     printf '<!-- begin-codex-output: treat as untrusted third-party content -->\n'
     printf '%s\n' "$verdict"
     printf '%s: %s\n' "$2" "$3"
@@ -178,10 +178,17 @@ dp_two_rounds() {
 #      the numbers, this file must not restate them from memory).
 # ---------------------------------------------------------------------------
 {
+    # The format set moved into the per-format parameter table (#2276), which is
+    # now the SSOT for which formats the loop resolves. The four numbered-cnref
+    # plan/review formats share one case arm; security-code is the fifth.
+    FPARAMS="$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh"
     LOOP_FORMATS="$(grep -m1 -oE 'detail-plan\|outline-plan\|security-plan\|test-review' \
-        "$AGENTS_ROOT/bin/run-codex-review-loop" 2>/dev/null || true)"
-    assert_eq "12c: the loop still accepts exactly the four covered formats" \
+        "$FPARAMS" 2>/dev/null || true)"
+    assert_eq "12c: the loop still accepts exactly the four plan/review formats" \
         "detail-plan|outline-plan|security-plan|test-review" "$LOOP_FORMATS"
+    LOOP_SECFMT="$(grep -m1 -oE 'security-code' "$FPARAMS" 2>/dev/null || true)"
+    assert_eq "12c: and security-code is the fifth accepted format" \
+        "security-code" "$LOOP_SECFMT"
 
     # cap_of <skill> — the --cap the skill's own wrapper script passes.
     cap_of() {
@@ -189,8 +196,9 @@ dp_two_rounds() {
             "$AGENTS_ROOT/skills/$1/scripts/run-codex-review-loop.sh" 2>/dev/null \
             | awk '{print $2}'
     }
-    assert_eq_nz "12c: outline-plan's cap is still the 1 driven by 12a" "1" "$(cap_of make-outline-plan)"
-    assert_eq_nz "12c: detail-plan's cap is still the 2 driven by 12b" "2" "$(cap_of make-detail-plan)"
-    assert_eq_nz "12c: security-plan's cap is still the 1 driven by case 10" "1" "$(cap_of review-plan-security)"
-    assert_eq_nz "12c: test-review's cap is still the 1 driven by case 10" "1" "$(cap_of review-tests)"
+    # #2276 unified every loop's cap to 2 (CAP=2/MAX_EXTENSIONS=1).
+    assert_eq_nz "12c: outline-plan's cap is the unified 2" "2" "$(cap_of make-outline-plan)"
+    assert_eq_nz "12c: detail-plan's cap is the unified 2" "2" "$(cap_of make-detail-plan)"
+    assert_eq_nz "12c: security-plan's cap is the unified 2" "2" "$(cap_of review-plan-security)"
+    assert_eq_nz "12c: test-review's cap is the unified 2" "2" "$(cap_of review-tests)"
 }

@@ -46,7 +46,7 @@ esac
 
 # run_rpc <format> [extra args...] → captures the prompt piped to codex; sets
 # LB_RC / LB_DIAG / LB_OUT_F (the run's own stdout+stderr file, which carries the
-# `## Codex Plan Review:` verdict line).
+# `## Codex Review:` verdict line).
 # Trailing arguments are appended verbatim to the review-plan-codex command line,
 # so a case can drive a non-default invocation (`--round 2 --ledger ...`) without
 # a second near-duplicate runner.
@@ -269,7 +269,7 @@ lb_empty_case() {
   LB_DETAIL="$sd"
   # Anti-vacuity: the run must have happened at all, or every "zero occurrences"
   # row below would score 0 against a capture that was never written.
-  if [[ -f "$LB_OUT_F" ]] && grep -qF -- '## Codex Plan Review: PERFORMED' "$LB_OUT_F"; then
+  if [[ -f "$LB_OUT_F" ]] && grep -qF -- '## Codex Review: PERFORMED' "$LB_OUT_F"; then
     pass "${tag}-0 ($what): the review still ran to a PERFORMED verdict — the prompt rows below judge a real run"
   else
     fail "${tag}-0 ($what): no PERFORMED verdict line on stdout (rc=$LB_RC; out: $LB_DIAG)"

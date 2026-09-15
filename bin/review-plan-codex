@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Adversarial plan review via OpenAI Codex CLI.
 # Usage: review-plan-codex --input <file> --format {detail-plan|outline-plan} [--cap N] [--max-extensions N] [--extensions-used N] [--session-id ID] [--log-dir DIR] [--accepted-tradeoffs FILE] [--context FILE]... [--no-log]
-# Emits "## Codex Plan Review: PERFORMED|SKIPPED — <reason>|FAILED — <reason>".
+# Emits "## Codex Review: PERFORMED|SKIPPED — <reason>|FAILED — <reason>".
 # Called from Claude Code's Bash tool during planning loops; always exits 0 so it never blocks the workflow.
 
 set -uo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+
+# Status-header label SSOT: defined before the arg-parse loop so the early
+# "--x requires an argument" error paths emit a named header, not "## : FAILED".
+CODEX_LABEL="Codex Review"
 
 INPUT=""
 FORMAT=""
@@ -27,80 +31,80 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --input)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --input requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --input requires an argument"
         exit 0
       fi
       INPUT="$2"; shift 2 ;;
     --format)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --format requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --format requires an argument"
         exit 0
       fi
       FORMAT="$2"; shift 2 ;;
     --cap)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --cap requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --cap requires an argument"
         exit 0
       fi
       CAP="$2"; shift 2 ;;
     --max-extensions)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --max-extensions requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --max-extensions requires an argument"
         exit 0
       fi
       MAX_EXTENSIONS="$2"; shift 2 ;;
     --extensions-used)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --extensions-used requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --extensions-used requires an argument"
         exit 0
       fi
       EXTENSIONS_USED="$2"; shift 2 ;;
     --session-id)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --session-id requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --session-id requires an argument"
         exit 0
       fi
       ARG_SESSION_ID="$2"; shift 2 ;;
     --log-dir)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --log-dir requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --log-dir requires an argument"
         exit 0
       fi
       ARG_LOG_DIR="$2"; shift 2 ;;
     --accepted-tradeoffs)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --accepted-tradeoffs requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --accepted-tradeoffs requires an argument"
         exit 0
       fi
       ACCEPTED_TRADEOFFS_FILE="$2"; shift 2 ;;
     --round)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --round requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --round requires an argument"
         exit 0
       fi
       ROUND="$2"; shift 2 ;;
     --ledger)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --ledger requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --ledger requires an argument"
         exit 0
       fi
       LEDGER="$2"; shift 2 ;;
     --repo-root)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --repo-root requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --repo-root requires an argument"
         exit 0
       fi
       REPO_ROOT_ARG="$2"; shift 2 ;;
     --project-root)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --project-root requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --project-root requires an argument"
         exit 0
       fi
       PROJECT_ROOT_ARG="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
     --context)
       if [[ $# -lt 2 ]]; then
-        echo "## Codex Plan Review: FAILED — --context requires an argument"
+        echo "## ${CODEX_LABEL}: FAILED — --context requires an argument"
         exit 0
       fi
       CONTEXT_FILES+=("$2"); shift 2 ;;
@@ -112,7 +116,7 @@ done
 # shellcheck source=lib/codex-core.sh
 source "$(dirname "$(realpath "$0")")/lib/codex-core.sh"
 
-codex_core_init "Codex Plan Review"
+codex_core_init "$CODEX_LABEL"
 
 # Validate required arguments
 if [[ -z "$INPUT" ]]; then

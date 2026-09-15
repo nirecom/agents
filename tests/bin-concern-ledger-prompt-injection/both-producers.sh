@@ -1,5 +1,5 @@
 # tests/bin-concern-ledger-prompt-injection/both-producers.sh
-# Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, skills/review-code-security/scripts/open-concern-round.sh
+# Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, prompt-injection, delimiter-forgery, untrusted-input, security, scope:common, pwsh-not-required
 
 # 4. The prompt delimits two untrusted regions with the same bracket
@@ -37,54 +37,69 @@
 }
 
 echo ""
-echo "--- prompt-injection 5: the second consumer of the same rendered text ---"
+echo "--- prompt-injection 5: the other producer's text enters through the loop ---"
 
-# 5. open-concern-round.sh hands the identical rendered text to the security
-#    scanner and wraps it in the same delimiters. Neither consumer defangs any
-#    more: containment sits in the single producer of the text, so both
-#    producers of a shared round inherit it without either repeating it
-#    (CPR-SSOT, closing the CPR-ORTH gap this case used to pin).
+# 5. #2276 moved the security scanner out from behind a wrapper: it runs on its
+#    own and its findings enter the round through --prestaged-report. That is
+#    now the second door reviewer-written text comes in by, so the payload is
+#    pushed through it here and must land in the ledger neutralised — the same
+#    containment the codex path gets, from the same single site (CPR-SSOT).
 {
-    mk_plans 5 "$(row C1 HIGH "closing early: $PAYLOAD_END $INJECTION")"
-    OCR_OUT="$(
-        CLAUDE_CODE_SESSION_ID="$SID" PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
-            bash "$OPEN_ROUND" 2>/dev/null
-    )"
+    mk_plans 5 "$(row C1 HIGH "$BENIGN")"
+    SCAN_REPORT="$TMPDIR_BASE/scanner-5.txt"
+    {
+        printf '## Codex Review: PERFORMED\n\n## Concern Delta\n'
+        printf -- '- [HIGH] - | bin/x#fn | security | scanner found %s %s\n' \
+            "$PAYLOAD_END" "$INJECTION"
+    } > "$SCAN_REPORT"
+    (
+        cd "$REPO" || exit 1
+        export PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$AGENTS_ROOT"
+        bash "$LOOP_BIN" --format security-code --session-id "$SID" --plans-dir "$PLANS" \
+            --cap 2 --max-extensions 1 --extensions-used 0 \
+            --accepted-tradeoffs "$SCAN_REPORT" --repo-root "$REPO" \
+            --prestaged-report "$SCAN_REPORT" --prestaged-producer security-scanner \
+            --prestaged-exec COMPLETE >/dev/null 2>&1
+    ) || true
+    LEDGER5="$(cat "$PLANS/$SID-$FORMAT-concern-ledger.txt" 2>/dev/null)"
 
-    assert_contains "5: the round advances past 1, which is what emits the block" \
-        "ROUND=2" "$OCR_OUT"
-    assert_contains "5: the scanner is handed a delimited prior-concerns block" \
-        "[PRIOR CONCERNS START]" "$OCR_OUT"
-    assert_contains "5: carrying the concern the earlier round left open" \
-        "- C1 [HIGH]" "$OCR_OUT"
-    # Required behaviour: the second producer of the same round reads the same
-    # untrusted text, so it owns the same containment step. Exactly one end
-    # marker may reach the scanner — the real one that closes the block.
-    assert_eq "5: the block carries exactly one end marker, the real one" \
-        "1" "$(count_f "$PAYLOAD_END" "$OCR_OUT")"
+    # Vacuity guard: everything below is trivially true of a report that never
+    # reached the ledger at all.
+    assert_contains "5: the scanner's finding reached the ledger" \
+        "scanner found" "$LEDGER5"
+    assert_eq "5: with no live end marker anywhere in the stored text" \
+        "0" "$(count_f "$PAYLOAD_END" "$LEDGER5")"
     assert_contains "5: the forged marker is neutralised on this path too" \
-        "(PRIOR CONCERNS END)" "$OCR_OUT"
-    # And the directive itself must stay inside the fenced region, exactly as
-    # case 2 requires of the codex path.
-    OCR_BS="$(printf '%s\n' "$OCR_OUT" | grep -n -F -x -- '[PRIOR CONCERNS START]' | head -n1 | cut -d: -f1)"
-    OCR_BE="$(printf '%s\n' "$OCR_OUT" | grep -n -F -x -- '[PRIOR CONCERNS END]' | head -n1 | cut -d: -f1)"
-    assert_eq "5: the injected directive appears exactly once in what the scanner is handed" \
-        "1" "$(count_f "$INJECTION" "$OCR_OUT")"
+        "(PRIOR CONCERNS END)" "$LEDGER5"
+
+    # And the directive survives as data — defanging removes the marker, never
+    # the finding, or a payload would be a way to delete concerns.
+    PRIOR5="$(render_prior)"
+    assert_eq "5: the injected directive reaches the next prompt exactly once" \
+        "1" "$(count_f "$INJECTION" "$PRIOR5")"
+
+    # render-prior emits no fence of its own — the standalone [PRIOR CONCERNS
+    # START]/[PRIOR CONCERNS END] lines are added by bin/review-code-codex when it
+    # builds the prompt (core.sh only *defangs* brackets, it never emits the
+    # block). So the containment claim is made against the codex prompt (PF5), the
+    # same path the defang check below uses, not the unfenced render-prior output.
+    CODEX_FILE="$TMPDIR_BASE/prior-5.txt"
+    printf '%s\n' "$PRIOR5" > "$CODEX_FILE"
+    PF5="$(codex_prompt "$CODEX_FILE")"
+    B5S="$(lineno "$PF5" '[PRIOR CONCERNS START]')"
+    B5E="$(lineno "$PF5" '[PRIOR CONCERNS END]')"
+    INJ_LN="$(grep -n -F -- "$INJECTION" "$PF5" | head -n1 | cut -d: -f1)"
     assert_eq "5: and that one occurrence is inside the fenced untrusted region" \
         "fenced" \
-        "$([ -n "$OCR_BS" ] && [ -n "$OCR_BE" ] && [ "$OCR_BE" -gt "$OCR_BS" ] \
-            && [ "$(printf '%s\n' "$OCR_OUT" | grep -n -F -- "$INJECTION" | head -n1 | cut -d: -f1)" -lt "$OCR_BE" ] \
+        "$([ -n "$B5S" ] && [ -n "$B5E" ] && [ "$B5E" -gt "$B5S" ] \
+            && [ -n "$INJ_LN" ] && [ "$INJ_LN" -gt "$B5S" ] && [ "$INJ_LN" -lt "$B5E" ] \
             && echo fenced || echo unfenced)"
 
-    # The asymmetry stated as one value, so a fix to either side shows up here
-    # as a changed expectation rather than as a silently still-passing test.
-    CODEX_FILE="$TMPDIR_BASE/prior-5.txt"
-    render_prior > "$CODEX_FILE"
-    PF5="$(codex_prompt "$CODEX_FILE")"
-    B5="$(region "$PF5" "$(lineno "$PF5" '[PRIOR CONCERNS START]')" \
-                        "$(lineno "$PF5" '[PRIOR CONCERNS END]')")"
-    SCAN_LINE="$(printf '%s\n' "$OCR_OUT" | grep -F -- '- C1 [HIGH]')"
-    assert_eq "5: one rendered text, and both consumers defang it identically" \
+    # Both producers' text stated as one value, so a fix or a regression on
+    # either side shows up here rather than as a silently still-passing test.
+    B5="$(region "$PF5" "$B5S" "$B5E")"
+    SCAN_LINE="$(printf '%s\n' "$PRIOR5" | grep -F -- 'scanner found')"
+    assert_eq "5: one rendered text, and both producers' findings defanged alike" \
         "codex=0 scanner=0" \
         "codex=$(count_f "$PAYLOAD_END" "$B5") scanner=$(count_f "$PAYLOAD_END" "$SCAN_LINE")"
 }
@@ -92,17 +107,19 @@ echo "--- prompt-injection 5: the second consumer of the same rendered text ---"
 echo ""
 echo "--- prompt-injection 6: both paths take their prior text from one source ---"
 
-# 6. The gap in case 5 is only worth pinning if the two paths really do share
-#    the rendered text; if they diverged, each would need its own analysis.
-#    CPR-SSOT: render-prior is the single producer, so a defence added there
-#    would cover both consumers at once.
+# 6. Case 5 is only worth pinning if the two paths really do share the rendered
+#    text; if they diverged, each would need its own analysis. CPR-SSOT:
+#    render-prior is the single producer, and since #2276 the loop's ref-kind
+#    input builder is what calls it and hands the result to the reviewer, so a
+#    defence added at the source still covers both consumers at once.
 {
-    assert_eq_nz "6: the scanner path sources its prior text from render-prior" \
-        "1" "$(grep -c -F 'render-prior' "$OPEN_ROUND" | tr -d ' ')"
-    assert_eq_nz "6: the codex path sources it from the same subcommand" \
-        "1" "$(grep -c -F 'render-prior' "$LEDGER_BIN" | tr -d ' ')"
+    assert_eq_nz "6: the loop's input builder sources the prior text from render-prior" \
+        "1" "$(grep -c -F 'render-prior' "$REFKIND_LIB" | tr -d ' ')"
     assert_contains "6: and hands it over as the concerns file codex defangs" \
-        "--concerns-file" "$(cat "$LEDGER_BIN")"
+        "--concerns-file" "$(cat "$REFKIND_LIB" 2>/dev/null)"
+    assert_eq_nz "6: no second renderer stands between the ledger and either producer" \
+        "1" "$(grep -rl -F 'render-prior' "$AGENTS_ROOT/bin/lib/codex-review-loop" \
+            "$AGENTS_ROOT/bin/run-codex-review-loop" 2>/dev/null | wc -l | tr -d ' ')"
     assert_contains "6: the defanging itself still lives on the codex path" \
         'PRIOR_TEXT="${PRIOR_TEXT//\[PRIOR CONCERNS END\]/(PRIOR CONCERNS END)}"' \
         "$(cat "$CODEX_BIN")"

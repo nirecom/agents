@@ -13,6 +13,10 @@ const {
 } = require("./workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+// #2256 S5-a1: command-tool normalization + sentinel decomposition shared with
+// workflow-mark.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
+const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
+const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 
 // Steps tracked by the workflow but not enforced at commit time.
 // `final_report` is a TERMINAL step (SSOT: state-io TERMINAL_STEPS) recorded
@@ -87,8 +91,15 @@ function block(reason, extras = undefined) {
 // Populated at hook-input parse time so block() can self-report.
 let _gateReportCtx = { sessionId: undefined, command: undefined, toolName: undefined, cwd: undefined };
 
-// Block without recording a supervisor L1 finding (used for supervisor pre-merge gates).
+// Block without emitting a supervisor L1 finding (used for supervisor pre-merge
+// gates, to avoid recursing the pre-merge audit). It still leaves the #2218
+// handoff breadcrumb — a block is a block and must survive a compaction; only the
+// supervisor L1 finding is intentionally omitted here.
 function blockWithoutError(reason) {
+  try {
+    const { recordGateBlock } = require("./workflow-gate/handoff-record");
+    recordGateBlock(_gateReportCtx.sessionId, reason, { command: _gateReportCtx.command });
+  } catch (_) { /* fail-open: a lost breadcrumb must never change the verdict */ }
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
 }
@@ -99,9 +110,8 @@ function blockWithoutError(reason) {
 const {
   checkSupervisorPreMerge,
   parseDetailFilesToModify,
-  shouldBlockOnAuditVerdict,
-  isAuditVerdictFresh,
 } = require("./workflow-gate/supervisor-check");
+const { checkUserVerifiedAudit } = require("./workflow-gate/user-verified-audit");
 const { runEarlyGate } = require("./workflow-gate/early-gate");
 
 if (require.main === module) {
@@ -132,110 +142,113 @@ if (require.main === module) {
   // block() is injected so the module stays free of this hook stdout protocol.
   runEarlyGate(input, { block });
 
-  if (toolName !== "Bash") approve();
+  if (!isCommandTool(toolName)) approve();
 
-  const command = toolInput.command || "";
+  // Joined blob for merge/commit detection and repoDir resolution; per-element
+  // sentinel decomposition uses analyzeSentinelCommand (SSOT: sentinel-command.js).
+  const command = commandTextOf(toolName, toolInput);
   if (!command) approve();
 
-  // SENTINEL CHAIN GUARD (closes #382): reject `<<WORKFLOW_*>> && <non-sentinel>` chains.
-  // Predicts what workflow-mark.js (PostToolUse) silently drops — it splits on /\s*&&\s*/ and
-  // applies #110 all-or-nothing, so every part must match isSentinel() or none are processed —
-  // and surfaces that as a PreToolUse error instead. drop-predict := (split has >1 part) AND
-  // (not every part isSentinel) AND (a real sentinel echo form is present); the last conjunct
-  // keeps incidental `<<WORKFLOW_` substrings (e.g. `grep '<<WORKFLOW_' file && wc -l`) out.
-  // Quote convention parity: CHAIN_BOUNDARY_SENTINEL_*_RE mirror isSentinel() exactly — DQ for
-  // every category, SQ only for MARK_STEP_* (matching MARKER_RE_SQ). Accepting SQ everywhere
-  // would block chains workflow-mark.js treats as non-sentinel (bare-form USER_VERIFIED,
-  // retained as a historical attack-vector example per #404), creating a new asymmetry.
-  if (/<<WORKFLOW_/.test(command)) {
-    const {
-      isSentinel,
-      isStrictSentinel,
-      USER_VERIFIED_RE_DQ,
-      CHAIN_BOUNDARY_SENTINEL_DQ_RE,
-      CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
-    } = require("./lib/sentinel-patterns");
-    // Step 1 — standalone sentinel (incl. reasons containing '&&'): approve.
-    // Uses isStrictSentinel (not isSentinel) because LOOKSLIKE regexes use
-    // greedy `.*` that can span across `>>` and match chained commands as if
-    // they were single sentinels. Strict DQ regexes use `[^>]+` for reason
-    // fields, which correctly rejects chained commands.
-    if (!isStrictSentinel(command)) {
-      // Step 2 — mirror workflow-mark.js naive split.
-      const parts = command
-        .split(/\s*&&\s*/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (parts.length > 1) {
-        const allSentinel = parts.every(isSentinel);
-        if (!allSentinel) {
-          // Step 3 — distinguish real chain-boundary sentinel involvement from
-          // incidental occurrences (e.g. diagnostic grep patterns, or sentinel
-          // text quoted inside another command's argument).
-          if (
-            CHAIN_BOUNDARY_SENTINEL_DQ_RE.test(command) ||
-            CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE.test(command)
-          ) {
-            block(
-              "workflow-gate: sentinel command chained with non-sentinel via `&&` is blocked.\n" +
-              "Sentinel echoes must be standalone Bash calls (or chained only with other sentinels).\n" +
-              "Without this guard, workflow-mark.js (PostToolUse) splits on `&&` and applies\n" +
-              "all-or-nothing dispatch (issue #110): when even one part is not a recognized\n" +
-              "sentinel, ALL state updates are silently dropped. This includes the case where\n" +
-              "a sentinel's reason text itself contains `&&` (the naive splitter fragments it).\n\n" +
-              "Fix: split into separate Bash calls. Example:\n" +
-              '  call 1: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only change>>"\n' +
-              "  call 2: <the other command>"
-            );
-          }
-          // else: incidental substring (no real sentinel echo present) — approve.
-        }
-        // else: all-sentinel chain — workflow-mark.js #110 will dispatch each.
-      }
-      // else parts.length == 1: not a chain; not a recognized standalone sentinel
-      // either (Step 1 would have caught it). Pass through — nothing to gate here.
+  // SENTINEL GUARD (#382): block exactly what workflow-mark.js (PostToolUse) would
+  // silently drop. analyzeSentinelCommand decomposes the call identically for both
+  // layers — Bash/runInTerminal `&&` chains stay order-independent all-or-nothing,
+  // and the runCommands array also rejects a non-sentinel element after a sentinel.
+  const sentinelAnalysis = analyzeSentinelCommand(toolName, toolInput);
+  if (sentinelAnalysis.sentinelPresent) {
+    if (!sentinelAnalysis.clean) {
+      block(
+        "workflow-gate: sentinel command chained with non-sentinel via `&&` is blocked.\n" +
+        "Sentinel echoes must be standalone Bash calls (or chained only with other sentinels).\n" +
+        "Without this guard, workflow-mark.js (PostToolUse) splits on `&&` and applies\n" +
+        "all-or-nothing dispatch (issue #110): when even one part is not a recognized\n" +
+        "sentinel, ALL state updates are silently dropped. This includes the case where\n" +
+        "a sentinel's reason text itself contains `&&` (the naive splitter fragments it).\n\n" +
+        "Fix: split into separate Bash calls. Example:\n" +
+        '  call 1: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only change>>"\n' +
+        "  call 2: <the other command>"
+      );
     }
 
-    // PREMATURE USER_VERIFIED GUARD: block emission when ENFORCE_WORKTREE=on and
-    // no OPEN/MERGED PR exists for the branch (i.e., before worktree-end Step WE-7 (local merge)).
-    // Requires toolInput.cwd — without an explicit Bash cwd we cannot reliably
-    // determine the worktree context (resolveRepoDir may return a stale path),
-    // so we skip the guard and fail-open. Real Claude Code always supplies cwd.
-    const rawSentinelCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : null;
-    if (
-      rawSentinelCwd &&
-      isStrictSentinel(command) &&
-      USER_VERIFIED_RE_DQ.test(command) &&
-      process.env.ENFORCE_WORKTREE !== "off" &&
-      isWorktreeContext(normalizeForWindows(rawSentinelCwd)) &&
-      !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd)) &&
-      !isBranchDirectlyMerged(normalizeForWindows(rawSentinelCwd))
-    ) {
-      block(
-        "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
-        "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step WE-7 (local merge)\n" +
-        "(after the PR is open and merge is imminent).\n\n" +
-        "Defer: proceed to /worktree-end which emits the sentinel at the correct point.\n" +
-        "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"\n" +
-        "See issue #577."
-      );
+    // A clean sentinel emission carrying <<WORKFLOW_USER_VERIFIED>>.
+    if (sentinelAnalysis.uvHit) {
+      // PREMATURE USER_VERIFIED GUARD: block emission when ENFORCE_WORKTREE=on and
+      // no OPEN/MERGED PR exists for the branch (before /worktree-end Step WE-7).
+      // Requires an explicit Bash cwd; without it fail-open (real Claude Code
+      // always supplies cwd). See issue #577.
+      const rawSentinelCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : null;
+      if (
+        rawSentinelCwd &&
+        process.env.ENFORCE_WORKTREE !== "off" &&
+        isWorktreeContext(normalizeForWindows(rawSentinelCwd)) &&
+        !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd)) &&
+        !isBranchDirectlyMerged(normalizeForWindows(rawSentinelCwd))
+      ) {
+        block(
+          "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
+          "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step WE-7 (local merge)\n" +
+          "(after the PR is open and merge is imminent).\n\n" +
+          "Defer: proceed to /worktree-end which emits the sentinel at the correct point.\n" +
+          "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"\n" +
+          "See issue #577."
+        );
+      }
+
+      // Block if a merge command co-appears in this runCommands: the merge gate
+      // (below) never runs once approve() exits, bypassing the freshness backstop
+      // (#2256 C33 leading-merge bypass).
+      const hasMergeInCall = commandListOf(toolName, toolInput)
+        .some((el) => isMergeToProtectedCommand(el).hit);
+      if (hasMergeInCall) {
+        block(
+          "workflow-gate: a merge command in the same runCommands as <<WORKFLOW_USER_VERIFIED>> is blocked.\n" +
+          "Emit the sentinel in a separate Bash call before the merge."
+        );
+      }
+
+      // #2256 S5-b/c: TR5 user_verification audit gate — authoritative when
+      // supervisor state resolves (arms/holds via blockWithoutError, or approves),
+      // else a no-op.
+      const uvCwd = rawSentinelCwd ? normalizeForWindows(rawSentinelCwd) : null;
+      checkUserVerifiedAudit(sessionId, uvCwd, { approveFn: approve, blockFn: blockWithoutError });
     }
   }
 
   // MERGE GATE: hard-block gh pr merge / git push to protected branches when
   // user_verification is not complete. Runs unconditionally regardless of
   // ENFORCE_WORKTREE — protected branches are protected in all modes.
-  const mergeHit = isMergeToProtectedCommand(command);
+  // Scan every command-tool element: a merge in any runCommands element (even
+  // after a non-merge lead) must be gated (SSOT: tool-command-text.js).
+  const mergeHit =
+    commandListOf(toolName, toolInput)
+      .map((el) => isMergeToProtectedCommand(el))
+      .find((h) => h.hit) || { hit: false };
   if (mergeHit.hit) {
+    // #2256 S5-e: the supervisor freshness backstop is authoritative whenever
+    // supervisor state resolves — it approves a fresh non-BLOCK TR5 run and
+    // denies (via blockWithoutError, which exits) otherwise. Only when no
+    // supervisor state exists does it return non-authoritative and we fall
+    // through to the legacy workflow user_verification merge gate.
+    const backstop = checkSupervisorPreMerge(sessionId, mergeHit.kind, normalizeForWindows(toolInput.cwd), {
+      blockFn: blockWithoutError,
+      resolveRepoDirFn: resolveRepoDir,
+    });
+    if (backstop && backstop.authoritative) approve();
+
+    // Legacy user_verification merge gate (only reached when no supervisor state
+    // exists). It denies via blockWithoutError: a routine "not verified yet" merge
+    // block is a workflow gate, not a supervisor anomaly, so it must NOT emit a
+    // supervisor L1 finding — doing so would seed a findings-only supervisor state
+    // that hijacks the freshness backstop on the very next merge attempt (path
+    // flip). The #2218 handoff breadcrumb is still recorded by blockWithoutError.
     if (!sessionId) {
-      block(
+      blockWithoutError(
         "workflow-gate: merge to protected branch blocked — session_id missing.\n" +
         'Run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" first (reason: >=3 non-space chars, no \'>\', not a placeholder).'
       );
     }
     const mergeState = readState(sessionId);
     if (!mergeState) {
-      block(
+      blockWithoutError(
         "workflow-gate: merge to protected branch blocked — no workflow state.\n" +
         'Run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" first (reason: >=3 non-space chars, no \'>\', not a placeholder).'
       );
@@ -243,17 +256,13 @@ if (require.main === module) {
     const uv = mergeState.steps && mergeState.steps.user_verification;
     const uvStatus = uv ? uv.status : "missing";
     if (uvStatus !== "complete") {
-      block(
+      blockWithoutError(
         `workflow-gate: ${mergeHit.kind} blocked — user_verification is "${uvStatus}".\n\n` +
         'Run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"\n' +
         '(reason: >=3 non-space chars, no \'>\', not a placeholder; ' +
         'set Bash description: "User verification: approve if implementation is complete — approving unlocks the merge gate.")'
       );
     }
-    checkSupervisorPreMerge(sessionId, mergeHit.kind, normalizeForWindows(toolInput.cwd), {
-      blockFn: blockWithoutError,
-      resolveRepoDirFn: resolveRepoDir,
-    });
     approve();
   }
 
@@ -487,4 +496,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories, parseDetailFilesToModify, checkSupervisorPreMerge, shouldBlockOnAuditVerdict, isAuditVerdictFresh };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories, parseDetailFilesToModify, checkSupervisorPreMerge };

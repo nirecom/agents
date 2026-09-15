@@ -24,7 +24,7 @@ else
     pass "detail-plan APPROVED: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "detail-plan APPROVED: PERFORMED label present"
 else
     fail "detail-plan APPROVED: PERFORMED label missing. Output: $OUTPUT"
@@ -56,7 +56,7 @@ else
     pass "detail-plan NEEDS_REVISION: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "detail-plan NEEDS_REVISION: PERFORMED label present"
 else
     fail "detail-plan NEEDS_REVISION: PERFORMED label missing. Output: $OUTPUT"
@@ -87,7 +87,7 @@ else
     pass "outline-plan APPROVED: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "outline-plan APPROVED: PERFORMED label present"
 else
     fail "outline-plan APPROVED: PERFORMED label missing. Output: $OUTPUT"
@@ -112,7 +112,7 @@ else
     pass "outline-plan MISSING_ALTERNATIVE: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "outline-plan MISSING_ALTERNATIVE: PERFORMED label present"
 else
     fail "outline-plan MISSING_ALTERNATIVE: PERFORMED label missing. Output: $OUTPUT"
