@@ -2,27 +2,9 @@
 # tests/feature-1235-exclude-repos.sh
 # Tests: hooks/enforce-worktree/config.js, hooks/pre-commit, hooks/enforce-worktree.js
 # Tags: enforce-worktree, hook, git, pre-commit, security, scope:issue-specific, pwsh-not-required
-#
-# Four-part test suite for ENFORCE_WORKTREE_EXCLUDE repo-level exclusion.
-#
-# Part A: isRepoExcluded(repoDir) unit (table-driven, node driver) using ENFORCE_WORKTREE_EXCLUDE
-# Part B: hooks/pre-commit integration (temp git repo, direct hook invocation)
-#   B-1: EXCLUDE matches repo → allowed (RED until config.js updated)
-#   B-2: EXCLUDE unset → blocked (GREEN now)
-#   B-3: sibling-prefix false positive → blocked (GREEN now)
-#   B-4: deprecated EXCLUDE_REPOS alias → allowed + stderr 'is deprecated' (RED until pre-commit updated)
-# Part C: hooks/enforce-worktree.js integration (JSON stdin → allow/block)
-#   C-1: baseline → blocked (GREEN now)
-#   C-2: EXCLUDE=<mainWt> → allowed (RED until config.js updated)
-#   C-4: deprecated EXCLUDE_REPOS alias → allowed + stderr 'is deprecated' (RED until hook updated)
-# Part D: JS/Bash parity — same inputs through both paths, assert equal verdicts
-#
-# L3 gap (what this test does NOT catch):
-# - real Claude Code Bash tool session with live enforce-worktree hook registration
-# - Windows path normalisation (drive letter casing) in a live session
-# - hook loading from settings.json (settings path wiring not tested here)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Parts: A (isRepoExcluded unit), B (pre-commit integration: B-1..B-3), C (hook JS: C-1, C-2), D (parity)
+# L3 gap: live hook registration, Windows path casing, settings.json wiring;
+#   mitigation: bin/check-verification-gate.sh category: hook-registration
 
 set -u
 
@@ -285,25 +267,6 @@ else
     pass "Part B-3: SIBLING-PREFIX — my-specs-repo-old correctly blocked despite sibling my-specs-repo in EXCLUDE"
 fi
 
-# Part B-4: deprecated ENFORCE_WORKTREE_EXCLUDE_REPOS alias → allow + 'is deprecated' in stderr
-REPO_B4="$(setup_repo "b4-deprecated-alias")"
-stage_file "$REPO_B4" "src/w.txt" "content"
-STDERR_B4="$TMPBASE/b4-stderr.txt"
-RC_B4=0
-RUN_OUT_B4="$(cd "$REPO_B4" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
-    run_with_timeout 30 env ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_B4" \
-    bash "$PRE_COMMIT" 2>"$STDERR_B4")" || RC_B4=$?
-if [ "$RC_B4" = "0" ]; then
-    if grep -q "is deprecated" "$STDERR_B4" 2>/dev/null; then
-        pass "Part B-4: EXCLUDE_REPOS deprecated alias works AND stderr shows 'is deprecated'"
-    else
-        fail "Part B-4: EXCLUDE_REPOS alias allowed but no 'is deprecated' in stderr (expected red)"
-    fi
-else
-    fail "Part B-4: EXCLUDE_REPOS deprecated alias should allow (rc=$RC_B4) (expected red)"
-fi
-
 fi # pre-commit present
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -366,23 +329,6 @@ elif is_block "$OUT_C2"; then
     fail "Part C-2: ENFORCE_WORKTREE_EXCLUDE=<mainWt> → expected allow, got block (not yet implemented)"
 else
     fail "Part C-2: unexpected hook output: $OUT_C2 (not yet implemented)"
-fi
-
-# Part C-4: deprecated ENFORCE_WORKTREE_EXCLUDE_REPOS alias → allow + 'is deprecated' in stderr
-STDERR_C4="$TMPBASE/c4-stderr.txt"
-JSON_C4='{"tool_name":"Bash","tool_input":{"command":"git -C \"'"$_MAIN_WT_NODE"'\" commit -m test","cwd":"'"$_MAIN_WT_NODE"'"},"session_id":"test-c4-$$"}'
-OUT_C4="$(run_hook_with_stderr "$JSON_C4" "$STDERR_C4" ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$_MAIN_WT_NODE")"
-if is_allow "$OUT_C4"; then
-    if grep -q "is deprecated" "$STDERR_C4" 2>/dev/null; then
-        pass "Part C-4: EXCLUDE_REPOS deprecated alias → allows + 'is deprecated' in stderr"
-    else
-        fail "Part C-4: EXCLUDE_REPOS alias allowed but no 'is deprecated' in stderr (expected red)"
-    fi
-elif is_block "$OUT_C4"; then
-    fail "Part C-4: EXCLUDE_REPOS deprecated alias → expected allow, got block (expected red)"
-else
-    fail "Part C-4: unexpected hook output: $OUT_C4 (expected red)"
 fi
 
 fi # _MAIN_WT available

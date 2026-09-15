@@ -161,20 +161,6 @@ if (sessionId) {
   } catch (e) { /* fail-open */ }
 }
 
-// --- BEGIN temporary: .git/workflow/ → ~/.claude/projects/workflow/ migration ---
-// Delete old per-repo state files left by the previous implementation.
-// Safe to run on every session start — idempotent, only touches CLAUDE_PROJECT_DIR.
-if (sessionId && process.env.CLAUDE_PROJECT_DIR) {
-  try {
-    const oldDir = require("path").join(process.env.CLAUDE_PROJECT_DIR, ".git", "workflow");
-    const oldFile = require("path").join(oldDir, sessionId + ".json");
-    const fs2 = require("fs");
-    if (fs2.existsSync(oldFile)) fs2.unlinkSync(oldFile);
-  } catch (e) {
-    // Fail-open
-  }
-}
-// --- END temporary: .git/workflow/ → ~/.claude/projects/workflow/ migration ---
 
 // Clean up zombie state files (older than 7 days)
 try {
