@@ -5,6 +5,9 @@ on:
     branches: ["**"]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   audit-migration-blocks:
     runs-on: ubuntu-latest
