@@ -418,13 +418,13 @@ if [ -n "$_od_repo_top" ]; then
         fi
 
         # ---------- migration-blocks gate (issue #1987) ----------
-        # _mb_staged: すべての staged ファイル（rules/*.md と tests/ を除外）
-        # 拡張子フィルタは設けない — 拡張子なしファイル・.ps1 等も対象
+        # _mb_staged: all staged files (excluding rules/*.md and tests/)
+        # no extension filter — extensionless files and .ps1 etc. are also included
         _mb_staged=()
         while IFS= read -r -d '' _mb_f; do
             case "$_mb_f" in
-                rules/*.md) ;;   # 除外: ドキュメントのみ
-                tests/*)    ;;   # 除外: テストファイル
+                rules/*.md) ;;   # excluded: docs only
+                tests/*)    ;;   # excluded: test files
                 *)          _mb_staged+=("$_mb_f") ;;
             esac
         done < <(git diff --cached --name-only -z 2>/dev/null || true)
