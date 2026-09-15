@@ -14,7 +14,7 @@ args=(
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
   --draft-file "$PLANS_DIR/$SESSION_ID-outline.md"
-  --cap 1 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
+  --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"

@@ -357,7 +357,7 @@ F6_RC=0
 # always falls through to `exit 0`; failure is signaled on stdout only, never via
 # the wrapper's own exit code — same pattern as log_persist_or_fail's exit 0).
 assert_eq "F6-nonzero: review-plan-codex exits 0 even when the mocked codex fails (fail-soft; failure is signaled on stdout, not via exit code)" "0" "$F6_RC"
-if grep -qF -- '## Codex Plan Review: FAILED' "$F6_OUT_F" 2>/dev/null; then
+if grep -qF -- '## Codex Review: FAILED' "$F6_OUT_F" 2>/dev/null; then
   pass "F6-nonzero: a FAILED verdict line is emitted on stdout"
 else
   fail "F6-nonzero: no FAILED verdict line found on stdout: $(cat "$F6_OUT_F" 2>/dev/null)"

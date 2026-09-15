@@ -2,18 +2,9 @@
 # tests/fix-1381-sc6-audit-clear.sh
 # Tests: bin/supervisor-write-audit, hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, sc6, audit-clear, clear-audit-phase, dual-store, scope:issue-specific, pwsh-not-required
-# L3 gap (what this test does NOT catch):
-# - session-close SC-6 invoking supervisor-write-audit inside a real claude -p Stop-hook session
-# - CLAUDE_SESSION_ID / WORKFLOW_SESSION_ID env propagation across a real hook subprocess boundary
-#   (Anthropic bug #27987) — here both IDs are passed explicitly via flags
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# #1381: session-close SC-6 must clear BOTH audit_armed_at AND audit_phase so a stale
-# "pending" audit does not survive into the next cycle. Requires a new --clear-audit-phase
-# flag on bin/supervisor-write-audit.
-# T1 (RED until #1381): --clear-audit-phase clears audit_phase to null (single store).
-# T2 (RED until #1381): --clear-audit-phase mirrors to a second store (dual-store).
+# L3 gap: no real claude -p Stop-hook session; session-id env propagation is bypassed (flags).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, category skill-orchestration.
+# #1381: SC-6 must clear BOTH audit_armed_at AND audit_phase (T1 single store / T2 dual store).
 
 set -u
 
@@ -58,7 +49,7 @@ const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.audit.audit_phase = 'pending';
 st.audit.audit_armed_at = new Date().toISOString();
-st.audit.audit_cause = 'stage-boundary:CONFIRM_DETAIL';
+st.audit.audit_cause = 'step-complete:detail';
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }

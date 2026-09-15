@@ -50,13 +50,18 @@ _cl_json_spec() {
             [ -f "$f" ] || continue
             hdr="$(grep -m1 '^#producer|' "$f" 2>/dev/null || true)"
             [ -n "$hdr" ] || continue
-            [ "$(printf '%s' "$hdr" | cut -d'|' -f6)" = "$round" ] || continue
+            # Round is the header's last field ($NF): the reader spans the delta
+            # header width the CLI writes and any narrower hand-built fixture
+            # without pinning a column the header layout owns. The producer
+            # record carries completeness (f3), the reviewer-facing exec label
+            # (f5), and the parse label (f6) — the three the JSON promises.
+            [ "$(printf '%s' "$hdr" | awk -F'|' '{print $NF}')" = "$round" ] || continue
             pname="$(printf '%s' "$hdr" | cut -d'|' -f2)"
             [ -n "${prec[$pname]:-}" ] || pord+=("$pname")
             prec[$pname]="$(printf 'P|%s|%s|%s|%s' "$pname" \
                 "$(printf '%s' "$hdr" | cut -d'|' -f3)" \
-                "$(printf '%s' "$hdr" | cut -d'|' -f4)" \
-                "$(printf '%s' "$hdr" | cut -d'|' -f5)")"
+                "$(printf '%s' "$hdr" | cut -d'|' -f5)" \
+                "$(printf '%s' "$hdr" | cut -d'|' -f6)")"
         done < <(_cl_list_pattern_files "$plans/$sid-$fmt-round-$round-delta-*.txt")
         for pname in "${pord[@]:-}"; do
             [ -n "$pname" ] || continue

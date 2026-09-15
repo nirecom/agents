@@ -50,7 +50,18 @@ function createEmptyState(sessionId) {
     last_updated: now,
     layer1: { findings: [] },
     alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, alert_eligible_phase: null },
-    audit: { audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] },
+    audit: {
+      audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null,
+      audit_cause: null, audit_retry_count: 0, findings: [],
+      // #2256 S2-a — audit run identity, ledger, and their retention companions.
+      // audit_run_id and audit_dispatched_at are deliberately absent (not null):
+      // "never armed/dispatched" and "armed/dispatched then cleared" are
+      // different facts, and the gate/backstop tests read an unset field as
+      // "none". armAuditRun mints the id; the TR4 dispatch sets dispatched_at.
+      run_seq: 0, audit_verdict_summary: null,
+      ledger: [], consumed_transitions: [], last_terminal_run_id: null,
+      declared_files: null, uv_attempt_seq: 0, block_overrides: [],
+    },
   };
 }
 
@@ -110,6 +121,50 @@ function validateFinding(f) {
     errors.push(`invalid record_type: ${f.record_type} (must be ${RECORD_TYPE_VALUES.join(" or ")})`);
   }
   return { ok: errors.length === 0, errors };
+}
+
+// #2256 S2-a/S2-d — audit run identity, ledger and retention fields.
+// input_key is ALWAYS keyed by sub_check_id: a TR-keyed map would make one
+// trigger's settlement silently cover a sibling sub-check it never reviewed.
+const TR_KEY_RE = /^TR[0-9]+$/;
+
+function validateAuditLedgerFields(au, errors) {
+  if ("run_seq" in au && (!Number.isInteger(au.run_seq) || au.run_seq < 0)) errors.push("audit.run_seq must be a non-negative integer");
+  if ("uv_attempt_seq" in au && (!Number.isInteger(au.uv_attempt_seq) || au.uv_attempt_seq < 0)) errors.push("audit.uv_attempt_seq must be a non-negative integer");
+  for (const k of ["audit_run_id", "audit_verdict_summary", "audit_dispatched_at", "last_terminal_run_id"]) {
+    if (k in au && au[k] !== null && typeof au[k] !== "string") errors.push(`audit.${k} must be null or a string`);
+  }
+  for (const k of ["ledger", "consumed_transitions", "block_overrides"]) {
+    if (k in au && !Array.isArray(au[k])) errors.push(`audit.${k} must be an array`);
+  }
+  if ("consumed_transitions" in au && Array.isArray(au.consumed_transitions)) {
+    for (const t of au.consumed_transitions) {
+      if (typeof t !== "string") { errors.push("audit.consumed_transitions elements must be strings"); break; }
+    }
+  }
+  if ("declared_files" in au && au.declared_files !== null) {
+    const df = au.declared_files;
+    if (!df || typeof df !== "object" || Array.isArray(df)) {
+      errors.push("audit.declared_files must be null or an object");
+    } else if ("files" in df && !Array.isArray(df.files)) {
+      errors.push("audit.declared_files.files must be an array");
+    }
+  }
+  if ("ledger" in au && Array.isArray(au.ledger)) {
+    for (let i = 0; i < au.ledger.length; i++) {
+      const e = au.ledger[i];
+      if (!e || typeof e !== "object" || Array.isArray(e)) { errors.push(`audit.ledger[${i}] must be an object`); continue; }
+      if (e.input_key !== undefined && e.input_key !== null) {
+        if (typeof e.input_key !== "object" || Array.isArray(e.input_key)) {
+          errors.push(`audit.ledger[${i}].input_key must be an object keyed by sub_check_id`);
+        } else {
+          for (const k of Object.keys(e.input_key)) {
+            if (TR_KEY_RE.test(k)) errors.push(`audit.ledger[${i}].input_key must be keyed by sub_check_id, not TR id: ${k}`);
+          }
+        }
+      }
+    }
+  }
 }
 
 function validate(obj) {
@@ -177,6 +232,7 @@ function validate(obj) {
     if ("audit_cause" in au && au.audit_cause !== null && typeof au.audit_cause !== "string") errors.push("audit.audit_cause must be null or a string");
     if ("audit_retry_count" in au && (!Number.isInteger(au.audit_retry_count) || au.audit_retry_count < 0)) errors.push("audit.audit_retry_count must be a non-negative integer");
     if ("findings" in au && !Array.isArray(au.findings)) errors.push("audit.findings must be an array");
+    validateAuditLedgerFields(au, errors);
   }
   return { ok: errors.length === 0, errors };
 }

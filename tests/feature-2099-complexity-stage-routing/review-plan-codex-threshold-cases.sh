@@ -84,7 +84,7 @@ d2099rp_harness_is_live() {
     d2099rp_mock "$root"
     out=$(d2099rp_invoke "$root" __UNSET__ 2>/dev/null)
     assert_contains "RP-1 the stubbed harness runs the real wrapper through to a PERFORMED review" \
-        "Codex Plan Review: PERFORMED" "$out"
+        "Codex Review: PERFORMED" "$out"
     assert_contains "RP-2 ... and the plan content genuinely reached the codex stub" \
         "<!-- begin-codex-output" "$out"
     rm -rf "$root"

@@ -1,20 +1,13 @@
 #!/usr/bin/env bash
 # tests/feature-supervisor-scope-drift-audit-p2.sh
-# Tests: hooks/workflow-gate.js, hooks/lib/supervisor-state-writer.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-gate/supervisor-check.js
 # Tags: supervisor, em-supervisor, workflow-gate, scope-drift, audit, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - workflow-gate.js firing as a real PreToolUse hook (hook registration via settings.json)
-# - Real git push intercepted in a live Claude Code session
-# - resolveBranchDiff using origin/* refs that require a real remote — this test stubs
-#   refs/remotes/origin/main locally via update-ref, not a live fetch
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# C3: scope-drift path (Path ii) must fire WITHOUT any warning-flush (Path i) contribution.
-# Unlike T8-all-declared (which seeds a warning finding → Path i fires first), this test
-# seeds NO supervisor state file at all. resolveSupervisorState returns an empty state
-# with no cumulative_severity, so Path i is skipped and only Path ii (scope-drift) can block.
-# The branch diff contains an undeclared file → scope-drift:pre-merge block is asserted.
+# L3 gap: workflow-gate.js as a real PreToolUse hook + live git push are not exercised;
+# origin/* is stubbed via update-ref, not a live fetch. Mitigated at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: hook-registration.
+# C3 (#2256 S5-e): pre-merge scope-drift arming is RETIRED. With NO supervisor state,
+# checkSupervisorPreMerge returns authoritative:false → the legacy user_verification
+# merge gate decides; user_verification=complete → approve, and nothing is armed.
 
 set -u
 
@@ -54,8 +47,8 @@ if ! command -v node >/dev/null 2>&1; then
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
     exit 0
 fi
-if ! grep -q "scope-drift" "$HOOK" 2>/dev/null; then
-    skip "C3: scope-drift not present in workflow-gate.js"
+if ! grep -q "checkSupervisorPreMerge" "$HOOK" 2>/dev/null; then
+    skip "C3: pre-merge backstop not wired into workflow-gate.js"
     echo ""
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
     exit 0
@@ -114,7 +107,7 @@ process.stdout.write(String((st && st.audit && st.audit['$field']) || 'null'));
 " 2>/dev/null
 }
 
-# --- C3: no supervisor state seeded → only Path ii (scope-drift) can block ---
+# --- C3: no supervisor state → backstop non-authoritative → legacy gate approves ---
 run_c3_scope_drift_only() {
     local tmp sid wsid repodir tmp_node repodir_node hook_input out audit_cause audit_phase
     tmp=$(make_tmp)
@@ -133,7 +126,9 @@ run_c3_scope_drift_only() {
     setup_git_fixture "$repodir"
     write_detail_fixture "$tmp" "$wsid"
     seed_wf_state "$tmp_node" "$sid"
-    # NOTE: no seed_supervisor_state — no state file exists → no cumSev → Path i skipped.
+    # NOTE: no seed_supervisor_state — no state file exists. checkSupervisorPreMerge
+    # returns {authoritative:false}, so the legacy user_verification merge gate decides.
+    # An undeclared branch file no longer arms anything (#2256 S5-e retired scope-drift).
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
@@ -146,19 +141,25 @@ run_c3_scope_drift_only() {
 
     rm -rf "$tmp"
 
-    if ! echo "$out" | grep -q '"decision":"block"'; then
-        fail "C3: no-state scope-drift must block via Path ii (undeclared branch file), got: $(printf '%q' "${out:0:80}")"
+    # user_verification=complete + no supervisor state → legacy gate approves the merge.
+    if echo "$out" | grep -q '"decision":"block"'; then
+        fail "C3: no-state + user_verification=complete must approve (legacy gate), got block: $(printf '%q' "${out:0:80}")"
         return
     fi
-    if [ "$audit_cause" != "scope-drift:pre-merge" ]; then
-        fail "C3: audit_cause must be 'scope-drift:pre-merge' (not warning-flush), got '$audit_cause'"
+    if ! echo "$out" | grep -q '"decision":"approve"'; then
+        fail "C3: expected approve for no-state + user_verification=complete, got: $(printf '%q' "${out:0:80}")"
         return
     fi
-    if [ "$audit_phase" != "pending" ]; then
-        fail "C3: audit_phase must be 'pending', got '$audit_phase'"
+    # The backstop arms nothing on the non-authoritative path: audit stays untouched.
+    if [ "$audit_cause" != "null" ]; then
+        fail "C3: backstop must arm nothing — audit_cause must stay null, got '$audit_cause'"
         return
     fi
-    pass "C3: no supervisor state + undeclared branch file → scope-drift:pre-merge block (Path ii only)"
+    if [ "$audit_phase" != "null" ]; then
+        fail "C3: backstop must arm nothing — audit_phase must stay null, got '$audit_phase'"
+        return
+    fi
+    pass "C3: no supervisor state + user_verification=complete → legacy gate approves, nothing armed"
 }
 run_c3_scope_drift_only
 

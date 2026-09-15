@@ -1,45 +1,30 @@
 #!/usr/bin/env bash
 # tests/bin-concern-ledger-prompt-injection.sh
-# Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, skills/review-code-security/scripts/open-concern-round.sh
+# Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, prompt-injection, delimiter-forgery, untrusted-input, security, scope:common, pwsh-not-required
 #
-# Why this file exists. A concern's TEXT is reviewer output from an earlier
-# round — the same untrusted class as the diff — and the next round splices it
-# back into a prompt inside a delimited block. Anything the payload can do to
-# that delimiter it can do to the reviewer: close the block early and the rest
-# of the TEXT is read as operator instructions.
-
-# So the property under test is not "the text is sanitised" but "the payload
-# cannot become instructions": the delimiters it could forge are defanged, and
-# whatever survives stays inside a region the prompt has already labelled
-# untrusted. Both consumers of the same rendered text are checked, because a
-# defence present on one path and absent on its sibling is the CPR-ORTH failure
-# this suite is meant to catch.
-
-# TL2. The real `codex` binary is the only mocked boundary; it records the
-# prompt it was handed so the assertions run against the bytes an LLM would
-# actually receive.
-
-# TL3 gap (mitigation category: external-service)
-#   Not covered here, and covered nowhere below TL3:
-#     - Whether a real model actually honours the delimiter contract. Defanging
-#       removes the forged marker; it cannot prove the model treats the block
-#       as data. Only a live adversarial run against the real codex CLI shows
-#       that, and no automated tier can assert it.
-
-#     - The security-scanner subagent's handling of the block that
-#       open-concern-round.sh prints. Here the block is inspected as text; the
-#       agent that consumes it is an LLM.
-#   Mitigation: the defanging step itself is pinned byte-for-byte below, and
-#   the untrusted-content labelling around both blocks is asserted, so a
-#   regression that drops either is caught here rather than in production.
+# A concern's TEXT is reviewer output from an earlier round — the same untrusted
+# class as the diff — and the next round splices it back into a prompt inside a
+# delimited block. Close that block early and the rest of the TEXT is read as
+# operator instructions. So the property under test is not "the text is
+# sanitised" but "the payload cannot become instructions".
 set -uo pipefail
 
+# Both producers of a shared round are checked: a defence present on one path
+# and absent on its sibling is the CPR-ORTH failure this suite exists to catch.
+# TL2 — the real `codex` binary is the only mocked boundary; it records the
+# prompt it was handed, so the assertions run against the bytes an LLM receives.
+#
+# TL3 gap (external-service): whether a real model honours the delimiter
+# contract, and how the security-scanner subagent treats the text it produced
+# — both readers are LLMs and no automated tier can assert their behaviour.
+# Mitigation: the defanging step is pinned byte-for-byte below, and the
+# untrusted-content labelling around the block is asserted here.
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
 CODEX_BIN="$AGENTS_ROOT/bin/review-code-codex"
-OPEN_ROUND="$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh"
-LEDGER_BIN="$AGENTS_ROOT/bin/review-code-ledger"
+LOOP_BIN="$AGENTS_ROOT/bin/run-codex-review-loop"
+REFKIND_LIB="$AGENTS_ROOT/bin/lib/codex-review-loop/ref-kind-input.sh"
 
 PASS=0
 FAIL=0

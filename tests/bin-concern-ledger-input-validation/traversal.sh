@@ -168,17 +168,22 @@ TABLE
 
     # Both directions of the same classifier. Without these, every row above
     # would also pass against a build in which reduce and check-staged had
-    # stopped discovering anything at all.
-    printf '#producer|review-code-codex|complete|complete|anchored|1\n' \
+    # stopped discovering anything at all. #2276 folded review-security-shared to
+    # single-primary+fallback: it declares no mandatory producer, so one COMPLETE
+    # producer completes the round — "who has not staged" is no longer named, and
+    # discovery is proven instead by the accept-vs-missing split.
+    printf '#producer|review-code-codex|COMPLETE|COMPLETE|-|anchored|1\n' \
         > "$PLANS/sess3b-review-security-shared-round-1-delta-review-code-codex.txt"
     assert_eq "3b: an accepted address still reduces into the ledger --ledger named" \
         "rc=0" "rc=$(glob_sub reduce sess3b review-security-shared)"
     assert_eq_nz "3b: and the reduction really reached that ledger" \
         "1" "$(grep -c 'stale' "$LED3B" | tr -d ' ')"
-    CS3B="$(bash "$CLI" check-staged --ledger "$LED3B" --plans-dir "$PLANS" \
-        --session-id sess3b --format review-security-shared --round 1 2>&1)"
-    assert_eq_nz "3b: and check-staged reaches discovery and names who has not staged" \
-        "1" "$(printf '%s' "$CS3B" | grep -c -F 'security-scanner:missing' | tr -d ' ')"
+    assert_eq "3b: check-staged accepts the round the single COMPLETE producer staged" \
+        "0" "$(glob_sub check-staged sess3b review-security-shared)"
+    CS3B_MISS="$(bash "$CLI" check-staged --ledger "$LED3B" --plans-dir "$PLANS" \
+        --session-id sess3b --format review-security-shared --round 2 2>&1)"
+    assert_eq_nz "3b: and an unstaged round is reported missing, proving discovery ran" \
+        "1" "$(printf '%s' "$CS3B_MISS" | grep -c -F ':missing' | tr -d ' ')"
 }
 
 # ---------------------------------------------------------------------------

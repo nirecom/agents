@@ -76,7 +76,10 @@ cl_reduce() {
         [ -f "$f" ] || continue
         hdr="$(grep -m1 '^#producer|' "$f" 2>/dev/null || true)"
         [ -n "$hdr" ] || continue
-        [ "$(printf '%s' "$hdr" | cut -d'|' -f6)" = "$round" ] || continue
+        # Round is the last header field: read it as $NF so the reader spans both
+        # the delta header width the CLI writes and any narrower hand-built
+        # fixture, without pinning a column number that the header layout owns.
+        [ "$(printf '%s' "$hdr" | awk -F'|' '{print $NF}')" = "$round" ] || continue
         prod="$(printf '%s' "$hdr" | cut -d'|' -f2)"
         comp="$(printf '%s' "$hdr" | cut -d'|' -f3)"
         # Last-wins, but never silently: the CLI puts the producer in the file
@@ -99,18 +102,16 @@ cl_reduce() {
     done
 
     # --- completeness of the round -------------------------------------------
-    local complete=1 declared_any=0
-    while IFS= read -r p; do
-        declared_any=1
-        [ "${fcomp[$p]:-MISSING}" = "COMPLETE" ] || complete=0
-    done < <(cl_declared_producers "$fmt")
-    if [ "$declared_any" -eq 0 ]; then
-        [ "${#ordered[@]}" -eq 0 ] && complete=0
-        for p in "${ordered[@]:-}"; do
-            [ -n "$p" ] || continue
-            [ "${fcomp[$p]}" = "COMPLETE" ] || complete=0
-        done
-    fi
+    # The shared judge (core.sh) weighs declared vs allowed producers so this
+    # reducer and `concern-ledger check-staged` can never split on what "a round
+    # is complete" means (CPR-SSOT). Feed it every producer that staged a delta
+    # this round with its completeness.
+    local complete=1
+    local -a _cpairs=()
+    for p in "${!fcomp[@]}"; do
+        _cpairs+=("$p" "${fcomp[$p]}")
+    done
+    cl_round_complete_for "$fmt" "${_cpairs[@]:-}" || complete=0
 
     # --- concatenate the round's deltas ---------------------------------------
     : > "$tmpd/delta.txt"
@@ -245,6 +246,21 @@ cl_reduce() {
     # --- absent entries: the two gates that must both open before a resolve ---
     local anchored_fmt=0
     [ "$fmt" = "review-security-shared" ] && anchored_fmt=1
+    # Provenance gate (anchored/review-security-shared): an untouched entry may
+    # resolve only when EVERY allowed producer staged COMPLETE this round. The
+    # shared security review has two eyes (codex + scanner); neither one alone may
+    # silently resolve a concern the other never re-examined, so a round missing a
+    # producer (the codex-only or scanner-only fallback) leaves untouched entries
+    # open+stale (#2276 S8-d). Round completeness itself stays the laxer
+    # single-producer judge (cl_round_complete_for) for check-staged parity.
+    local all_allowed_complete=1
+    if [ "$anchored_fmt" -eq 1 ]; then
+        local _ap
+        while IFS= read -r _ap; do
+            [ -n "$_ap" ] || continue
+            [ "${fcomp[$_ap]:-}" = "COMPLETE" ] || all_allowed_complete=0
+        done < <(cl_allowed_producers "$fmt")
+    fi
     local amb blocked
     for id in "${CL_IDS[@]}"; do
         [ -n "${touched[$id]:-}" ] && continue
@@ -264,6 +280,7 @@ cl_reduce() {
         blocked=0
         [ "$complete" -eq 1 ] || blocked=1
         if [ "$anchored_fmt" -eq 1 ] && _cl_flag_has "$oldflags" "no-anchor"; then blocked=1; fi
+        if [ "$anchored_fmt" -eq 1 ] && [ "$all_allowed_complete" -ne 1 ]; then blocked=1; fi
         if [ "$blocked" -eq 1 ]; then flags="$(_cl_flag_add "$flags" "stale")"; fi
         if [ "$amb" -eq 1 ]; then flags="$(_cl_flag_add "$flags" "ambiguous")"; blocked=1; fi
         [ "$blocked" -eq 0 ] && CL_E_STATE[$id]="resolved"

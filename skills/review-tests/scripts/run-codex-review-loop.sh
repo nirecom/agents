@@ -84,7 +84,7 @@ if [[ -f "$TERMINAL_FILE" ]]; then
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [[ "$CUR_FP" == "$PREV_FP" ]]; then
-    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and tests/ are unchanged. Re-looping now would defeat --cap 1. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-create/re-stage tests/ and run again." >&2
+    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and tests/ are unchanged. Re-looping now would defeat the 2+1 round cap. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-create/re-stage tests/ and run again." >&2
     record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
@@ -95,16 +95,16 @@ fi
 arm_terminal_guard() {
   local rc=$1 fp
   case "$rc" in
-    # Non-success terminal codes only: exit 0 (COMPLETE) must not arm the guard,
-    # or a clean follow-up review would be wrongly blocked. exit 4 is unchanged.
-    # exit 6 (HIGH_UNRESOLVED) is terminal with unresolved HIGH concerns — guard
-    # applies for same reason as exit 2 (CPR-ORTH).
-    # exit 3 (codex CLI unavailable, test-reviewer fallback taken) is likewise terminal for
-    # this invocation and arms the guard for the same reason (#1742).
-    1|2|3|6)
+    # Terminal exits (2=ESCALATE, 3=codex-unavailable, 6=HIGH_UNRESOLVED, 7=FINALIZE_FAILED)
+    # retire the round counter; arm guard so unchanged-input re-invocation is blocked.
+    # exit 1 (round-continuing) must NOT arm (#2276 S9-c). exit 4 is config error, no guard.
+    2|3|6|7)
       fp=""
       fp="$(compute_staged_tests_fingerprint "$REPO_ROOT_VAL")" || fp=""
-      printf '%s\n%s\n' "$rc" "$fp" > "$TERMINAL_FILE" || true
+      local _tmp
+      _tmp="$(mktemp "${PLANS_DIR}/.sg-XXXXXX" 2>/dev/null)" || break
+      printf '%s\n%s\n' "$rc" "$fp" > "$_tmp" || { rm -f "$_tmp"; break; }
+      mv -f "$_tmp" "$TERMINAL_FILE" || rm -f "$_tmp"
       ;;
   esac
   return "$rc"
@@ -119,7 +119,7 @@ args=(
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
-  --cap 1 --max-extensions 0 --extensions-used "$EXTENSIONS_USED"
+  --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
   --repo-root "$REPO_ROOT_VAL"
 )

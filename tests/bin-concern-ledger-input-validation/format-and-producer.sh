@@ -127,21 +127,48 @@ TABLE
 }
 
 # ---------------------------------------------------------------------------
-# 6. The producer names are a closed set declared in the library, so the
-#    producer column is not in fact reviewer-controlled today. Pinned so that a
-#    future producer derived from reviewer output is a visible change.
+# 6. #2276 splits the one producer set in two: "declared" is the set a round
+#    must wait for before it can complete, and "allowed" is the set permitted
+#    to stage at all. The shared code-review format declares none — no producer
+#    is mandatory — while still admitting exactly two.
 # ---------------------------------------------------------------------------
 echo ""
-echo "--- input 6: the declared producer set ---"
+echo "--- input 6: the declared and the allowed producer sets ---"
 
 DECL="$(grep -c 'cl_declared_producers' "$LIB" "$AGENTS_ROOT/bin/lib/concern-ledger/core.sh" 2>/dev/null \
     | awk -F: '{s += $2} END {print s + 0}')"
 assert_eq "6: the declared-producer helper still exists" \
     "yes" "$([ "${DECL:-0}" -gt 0 ] && printf yes || printf no)"
 
-PRODUCERS="$(bash -c 'set +u; source "$1" >/dev/null 2>&1 || exit 127; cl_declared_producers review-security-shared' \
-    _ "$LIB" 2>/dev/null | tr '\n' ' ')"
-PRODUCERS="${PRODUCERS%"${PRODUCERS##*[![:space:]]}"}"
-assert_eq_nz "6: the shared code-review format declares its two producers" \
-    "review-code-codex security-scanner" "$PRODUCERS"
+producer_set() {
+    local fn="$1" out
+    out="$(bash -c 'set +u; source "$1" >/dev/null 2>&1 || exit 127; "$2" review-security-shared' \
+        _ "$LIB" "$fn" 2>/dev/null | tr '\n' ' ')"
+    printf '%s' "${out%"${out##*[![:space:]]}"}"
+}
+
+assert_eq "6: the shared code-review format declares no mandatory producer" \
+    "" "$(producer_set cl_declared_producers)"
+
+ALLOW="$(grep -c 'cl_allowed_producers' "$LIB" "$AGENTS_ROOT/bin/lib/concern-ledger/core.sh" 2>/dev/null \
+    | awk -F: '{s += $2} END {print s + 0}')"
+assert_eq "6: the allowed-producer helper exists" \
+    "yes" "$([ "${ALLOW:-0}" -gt 0 ] && printf yes || printf no)"
+
+assert_eq_nz "6: and it admits exactly the two producers of the shared format" \
+    "review-code-codex security-scanner" "$(producer_set cl_allowed_producers)"
+
+# ---------------------------------------------------------------------------
+# 6b. The allowlist is only worth having if cl_stage enforces it. A producer
+#     whose name is perfectly well-formed but outside the set must be refused
+#     fail-closed, with nothing on disk — otherwise any caller can file a delta
+#     under a name the round reducer never expected.
+# ---------------------------------------------------------------------------
+{
+    new_box
+    assert_eq "6b: a well-formed producer outside the allowed set is refused fail-closed" \
+        "rc=2 files=0" "$(stage_direct sess6b- review-security-shared 1 attacker-producer)"
+    assert_eq "6b: an allowed producer still stages under the same conditions" \
+        "rc=0 files=1" "$(stage_direct sess6b- review-security-shared 1 security-scanner)"
+}
 

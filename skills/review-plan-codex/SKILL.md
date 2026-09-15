@@ -30,12 +30,12 @@ review-plan-codex --input <path-to-plan-file> --format {detail-plan|outline-plan
 
 ## Output contract
 
-Always emits exactly one of these as the **first line** of stdout:
+Always emits exactly one of these as a `## Codex Review: ` status line on stdout (the caller picks it up with a prefix `grep`, not by first-line position):
 
 ```
-## Codex Plan Review: PERFORMED
-## Codex Plan Review: SKIPPED — <reason>
-## Codex Plan Review: FAILED — <reason>
+## Codex Review: PERFORMED
+## Codex Review: SKIPPED — <reason>
+## Codex Review: FAILED — <reason>
 ```
 
 On `PERFORMED`, the codex output follows, wrapped in safety fences:

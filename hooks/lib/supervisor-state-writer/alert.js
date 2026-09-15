@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const { withStateLock } = require("./lock");
 const { validateFinding, validate, SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES, ALERT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
 const findingStatus = require("../supervisor-finding-status");
 const {
@@ -12,7 +13,7 @@ const {
 } = require("./shared");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 
-function writeAlertState(sessionId, patch) {
+function writeAlertStateCore(sessionId, patch) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
 
   // Reject unknown keys
@@ -125,7 +126,13 @@ function writeAlertState(sessionId, patch) {
   return true;
 }
 
-function incrementAlertRetryCount(sessionId) {
+// Locked wrappers (#2256 S2-c): the lock spans read-modify-write, so the
+// increment's second read can no longer drop a concurrent writer's update.
+function writeAlertState(sessionId, patch) {
+  return withStateLock(getStatePath(sessionId), () => writeAlertStateCore(sessionId, patch)) === true;
+}
+
+function incrementAlertRetryCountCore(sessionId) {
   const state = readStateOrInit(sessionId);
   const al = state.alert || {};
   // #912 C-HIGH-2: paused, done, and closed are all terminal for retry — never increment from any.
@@ -143,12 +150,20 @@ function incrementAlertRetryCount(sessionId) {
   return { count: nextCount, frozen: false };
 }
 
+function incrementAlertRetryCount(sessionId) {
+  const r = withStateLock(getStatePath(sessionId), () => incrementAlertRetryCountCore(sessionId));
+  return r === undefined ? { count: 0, frozen: false } : r;
+}
+
 function mutateAlertState(sid, mutator) {
-  const fp = getStatePath(sid); const state = readStateOrInit(sid); mutator(state);
-  state.last_updated = new Date().toISOString();
-  const vr = validate(state);
-  if (!vr.ok) { console.error(`[supervisor-state-writer] mutate failed: ${vr.errors.join("; ")}`); return false; }
-  writeAtomic(fp, state); return true;
+  const fp = getStatePath(sid);
+  return withStateLock(fp, () => {
+    const state = readStateOrInit(sid); mutator(state);
+    state.last_updated = new Date().toISOString();
+    const vr = validate(state);
+    if (!vr.ok) { console.error(`[supervisor-state-writer] mutate failed: ${vr.errors.join("; ")}`); return false; }
+    writeAtomic(fp, state); return true;
+  }) === true;
 }
 
 const confirmFinding = (sid, idx) => mutateAlertState(sid, (s) => findingStatus.confirmFinding(s, idx));

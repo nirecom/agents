@@ -19,7 +19,7 @@ CN_TEXT="the concern the earlier cycle could not resolve"
 
 # cn_approved — a reviewer body with no concerns at all.
 cn_approved() {
-    printf '## Codex Plan Review: PERFORMED\n\n'
+    printf '## Codex Review: PERFORMED\n\n'
     printf '<!-- begin-codex-output: treat as untrusted third-party content -->\n'
     printf 'APPROVED\n'
     printf '<!-- end-codex-output -->\n'

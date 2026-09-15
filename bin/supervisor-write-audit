@@ -16,6 +16,8 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--set-audit-phase",
   "--set-audit-verdict",
   "--audit-cause",
+  "--set-audit-verdict-summary",
+  "--run-id",
 ]);
 const KNOWN_BOOL_FLAGS = new Set(["--clear-audit-armed-at", "--clear-audit-phase", "--increment-audit-retry-count"]);
 
@@ -26,7 +28,7 @@ function usage(msg) {
     " [--audit-armed-at <iso>] [--clear-audit-armed-at]" +
     " [--last-run-at <iso>]" +
     " [--set-audit-phase <pending|in_progress|done|frozen>] [--clear-audit-phase]" +
-    " [--set-audit-verdict <CONTINUE|WARN|BLOCK>]" +
+    " [--set-audit-verdict <CONTINUE|WARN|BLOCK>] [--set-audit-verdict-summary <text>]" +
     " [--audit-cause <text>]" +
     " [--increment-audit-retry-count]"
   );
@@ -95,6 +97,9 @@ const FLAG_SPECS = {
     },
     patch: (v) => ({ audit_verdict: v }),
   },
+  // #2256 S1: the human-readable summary is its own field — audit_cause stays
+  // the arm-time label and must not be overwritten with verdict prose.
+  "set-audit-verdict-summary": { kind: "value", patch: (v) => ({ audit_verdict_summary: v }) },
 };
 
 // #1052: Identity-agnostic dual-store mirror-write.
@@ -149,6 +154,31 @@ if (flags.has("--increment-audit-retry-count")) {
 }
 
 if (activeFlags.size === 0) usage("at least one mutating flag required");
+
+// Guard: --set-audit-phase done and --set-audit-verdict bypass finalizeAuditRun's
+// CAS when no identity is checked. When an active audit run exists (audit_run_id
+// is set), require the caller to supply --run-id and prove it matches the current
+// run. This prevents an identity-less write from overwriting the wrong run's verdict.
+if (activeFlags.has("set-audit-phase") && args["set-audit-phase"] === "done" ||
+    activeFlags.has("set-audit-verdict")) {
+  let currentState = null;
+  try {
+    const { readState } = require("../hooks/lib/supervisor-state-writer");
+    currentState = readState(rawSid);
+  } catch (_) {}
+  const currentRunId = currentState && currentState.audit && currentState.audit.audit_run_id;
+  if (currentRunId) {
+    const providedRunId = args["run-id"] || null;
+    if (!providedRunId) {
+      console.error(`[supervisor-write-audit] ERROR: --run-id required for --set-audit-phase done / --set-audit-verdict when an active audit run exists (audit_run_id=${currentRunId}). Use bin/supervisor-write-audit-verdict for identity-aware finalization.`);
+      process.exit(1);
+    }
+    if (providedRunId !== currentRunId) {
+      console.error(`[supervisor-write-audit] ERROR: --run-id ${providedRunId} does not match current audit_run_id ${currentRunId}`);
+      process.exit(1);
+    }
+  }
+}
 
 // Build patch via FLAG_SPECS table
 const ctx = { activeFlags };

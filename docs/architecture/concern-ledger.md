@@ -77,11 +77,11 @@ Staging and finalize both need every file a producer left behind for a round —
 
 Writing the resulting file safely is a separate question from naming it safely, and `bin/lib/safe-plans-path.sh` is the shared answer: `sp_publish_stdin`/`sp_publish_copy` write to a private, exclusively-created temp file beside the destination and `rename(2)` it into place, so a symlink or a directory pre-placed at the destination name is refused rather than followed or written through; `sp_within_dir` / `sp_contained_publish_*` / `sp_contained_rm` add physical containment — resolving every symlink in the parent directory once and comparing the resolved paths — for the callers (`CL_LEDGER_OVERRIDE` among them) whose destination is not a name this library generated itself. Five separate callers used to each own a copy of "is this destination still inside the directory I meant to write to"; now there is one.
 
-## Two producers, one ledger
+## One primary, one fallback, one ledger
 
-`/review-code-security` is the first format with more than one producer. The codex reviewer reaches the ledger through `bin/review-code-ledger`, a wrapper whose stdout is byte-for-byte the reviewer's own output and whose exit status is always 0 — ledger bookkeeping must never be able to block or reshape a review. The security scanner is staged by the skill from the report it writes.
+`/review-code-security` runs a single primary reviewer — codex, via `bin/run-codex-review-loop --format security-code` → `bin/review-code-codex` — and falls back to the `security-scanner` subagent (opus) only when codex is unavailable (loop exit 3). The two never run in the same round; the fallback re-enters the same loop with `--prestaged-report`, so its report is staged, reduced, judged, and finalized by exactly the code the codex round uses. The `review-security-shared` ledger token is shared by both so they address one ledger and one round counter.
 
-Both are handed the same rendered block of still-open concerns before they run, so "have you seen this before" is answered identically for both, and both are expected to re-report a still-valid concern under the ID it already has.
+`cl_allowed_producers review-security-shared` is the closed set `{review-code-codex, security-scanner}`: a round completes on either producer alone, but no other producer name can stage into it. Whichever runs is handed the same rendered block of still-open concerns before it starts, so "have you seen this before" is answered identically, and a still-valid concern is re-reported under the ID it already has.
 
 ## Where the code lives
 
@@ -91,8 +91,8 @@ Both are handed the same rendered block of still-open concerns before they run, 
 | `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, rendering, finalize, discovery (`_cl_list_pattern_files`), token validation |
 | `bin/lib/safe-plans-path.sh` | Shared primitive for every write under the plans dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |
 | `bin/concern-ledger` | CLI front end; the only sanctioned entry point |
-| `bin/review-code-ledger` | Ledger-aware wrapper around the codex code reviewer |
-| `bin/run-codex-review-loop` | Plan/test review loops; owns the exit-7 contract |
+| `bin/run-codex-review-loop` | Plan / test / security-code review loops; owns the round counter and the exit-7 contract |
+| `bin/review-code-codex` | The security-code primary reviewer (diff-based); invoked by the loop's ref-kind branch |
 | `bin/review-loop-summarize-concerns` | Renders the ledger for the cap-reach dialog |
 | `skills/_shared/concern-ledger.md` | Schema and CLI specification (SSOT) |
 

@@ -76,8 +76,14 @@ SKIPS
     assert_ne "B3: --force-round is accepted where --round would be refused" "4" "$RCS_RC"
     assert_contains "B3: but never silently — it says what it is for" \
         "recovery/test use only" "$RCS_ERR"
-    assert_eq "B3: and the forced round becomes the new recorded counter" \
-        "5" "$(clf_read "$(rcs_counter)")"
+    # --force-round 5 is past the 2+1 ceiling (--cap 2 --max-extensions 1): the round
+    # collapses to a terminal verdict, which settles by removing the live counter and
+    # recording the round it reached in the last-round marker (#2276 S9-c cap ceiling;
+    # verdict-dispatch.sh auto-extend collapse + round-counter.sh _srn_terminate).
+    assert_eq "B3: a forced round past the 2+1 ceiling collapses — no live counter is left" \
+        "missing" "$(clf_file_state "$(rcs_counter)")"
+    assert_eq "B3: and the collapsed round is recorded as the last round reached" \
+        "5" "$(clf_read "$(rcs_last)")"
 
     # Below the highest delta on disk it would overwrite history, so it stops.
     rcs_env forceback

@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { withStateLock } = require("./lock");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { validateFinding, validate } = require("../supervisor-state-schema");
 const {
@@ -48,7 +49,7 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
   }
 }
 
-function appendFinding(sessionId, finding) {
+function appendFindingCore(sessionId, finding) {
   const vr = validateFinding(finding);
   if (!vr.ok) return false;
 
@@ -164,6 +165,13 @@ function appendFinding(sessionId, finding) {
 
   writeAtomic(filePath, state);
   return true;
+}
+
+// Locked wrapper (#2256 S2-c): every writeAtomic exit of the core — dedup
+// collapse, class dedup, and normal append — stays inside one lock scope, so a
+// concurrent audit/alert writer cannot lose this finding.
+function appendFinding(sessionId, finding) {
+  return withStateLock(getStatePath(sessionId), () => appendFindingCore(sessionId, finding)) === true;
 }
 
 function readState(sessionId) {

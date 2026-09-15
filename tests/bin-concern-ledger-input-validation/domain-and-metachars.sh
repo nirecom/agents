@@ -18,7 +18,10 @@ while IFS='~' read -r label sid want; do
     [ -z "$label" ] && continue
     case "$label" in \#*) continue ;; esac
     new_box
-    RC="$(stage_with "$sid" review-security-shared prod)"
+    # review-security-shared is a closed-producer format (#2276 round-2 C3): a
+    # producer outside {review-code-codex, security-scanner} is refused before
+    # session-id validation runs, so use an in-set producer to reach the ID check.
+    RC="$(stage_with "$sid" review-security-shared review-code-codex)"
     if [ "$want" = "accepted" ]; then
         assert_eq "1: $label stages into the plans dir" \
             "rc=0 landed=in-plans concern=yes" \
@@ -51,7 +54,7 @@ TABLE
         "chars=300 illegal=no" \
         "chars=${#LONG_SID} illegal=$(case "$LONG_SID" in *[!A-Za-z0-9._-]*) printf yes ;; *) printf no ;; esac)"
 
-    LONG_RC="$(stage_with "$LONG_SID" review-security-shared prod)"
+    LONG_RC="$(stage_with "$LONG_SID" review-security-shared review-code-codex)"
     LONG_OUT="rc=$([ "$LONG_RC" -ne 0 ] && printf nonzero || printf zero) landed=$(landed) concern=$(holds_concern)"
     assert_eq "1: an overlong session ID either stages completely or writes nothing at all" \
         "consistent" \
@@ -79,7 +82,7 @@ while IFS='~' read -r label sid; do
     case "$label" in \#*) continue ;; esac
     new_box
     BEFORE="$(canaries)"
-    stage_with "$sid" review-security-shared prod >/dev/null
+    stage_with "$sid" review-security-shared review-code-codex >/dev/null
     assert_eq "2: $label executes nothing" \
         "canaries=$BEFORE" "canaries=$(canaries)"
 done <<'TABLE'
@@ -95,10 +98,10 @@ TABLE
 # A glob in the session ID must not make the CLI address a file it did not name.
 {
     new_box
-    printf 'decoy\n' > "$PLANS/decoy-review-security-shared-round-1-delta-prod.txt"
-    stage_with '*' review-security-shared prod >/dev/null
+    printf 'decoy\n' > "$PLANS/decoy-review-security-shared-round-1-delta-review-code-codex.txt"
+    stage_with '*' review-security-shared review-code-codex >/dev/null
     assert_eq "2: a '*' session ID does not overwrite an unrelated staged file" \
-        "decoy" "$(cat "$PLANS/decoy-review-security-shared-round-1-delta-prod.txt" 2>/dev/null || true)"
+        "decoy" "$(cat "$PLANS/decoy-review-security-shared-round-1-delta-review-code-codex.txt" 2>/dev/null || true)"
 }
 
 # ---------------------------------------------------------------------------

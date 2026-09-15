@@ -1,37 +1,13 @@
 # Part of tests/fix-quality-gates-not-found.sh (sourced, not standalone).
-# Tests: skills/review-code-security/scripts/run-quality-gates.sh, bin/review-code-codex
+# Tests: skills/review-code-security/scripts/run-quality-gates.sh, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: security-gate, quality-gates, merge-base, argv-propagation, false-green, scope:common, pwsh-not-required, TL2
 #
-# G10 — WHAT THE RUNNER TELLS THE GATE, not just what it tells the reader.
-#
-# G6 pins the report lines and the --base value. Both are about the runner's own output. The
-# state is also an INPUT to one gate: review-code-codex has to warn inside its prompt and on
-# its stdout that the range it reviewed is not trustworthy, and it cannot know that unless the
-# runner passes it. A runner that prints a perfect `## merge-base: SUSPECT` line and forgets
-# --base-state produces a report where the caveat is at the top and the codex section below it
-# still reads like an unqualified review of the change.
-#
-# TWO HALVES, and the second is the one that rots:
-#   IT ARRIVES. review-code-codex must receive --base-state <STATE> for EVERY state the
-#   resolver can produce, not only for the alarming ones. RESOLVED has to arrive too: an
-#   implementation that passes the flag only when something is wrong leaves the gate defaulting
-#   to UNKNOWN on the ordinary path, so its own scope line can never say "the base was fine".
-#   IT ARRIVES NOWHERE ELSE. The other gates do not accept the flag. Handing `--base-state` to
-#   a script that parses arguments strictly is an immediate usage error, and to one that ignores
-#   unknown flags it is silent noise that the next author will copy. Each row therefore asserts
-#   the ABSENCE of the flag from every other gate's argv, which is the assertion that catches a
-#   well-meaning "pass it to all of them" refactor.
-#
-# WHY ARGV RATHER THAN THE REPORT. There is no line on stdout that says what codex was handed;
-# the existing recording stub logs only `--base`. So the stubs here log their FULL argument
-# vector to a per-gate file, and the rows read it back. That is the only place the flag is
-# observable without running the real gate.
-#
-# G11 is the second reporting obligation of the same table: warn=post-session-head. It is not a
-# state — the base is a fact, the session has simply moved on — so it must be its OWN line
-# carrying the alternative base, and it must be able to appear next to a state line that says
-# nothing is wrong. A NOTE folded into the state line disappears in exactly that case.
-
+# G10 — WHAT THE RUNNER TELLS THE GATES, not just what it tells the reader. G6 pins the report
+# lines on stdout; this file pins the argv, where a wrongly scoped gate is invisible. No stdout
+# line says what a gate was handed, so the stubs record their FULL argument vector per gate.
+# #2276 took the codex reviewer out of this runner, and with it the only gate that ever
+# accepted --base-state: the state now reaches the reviewer through run-codex-review-loop,
+# which derives it from bin/resolve-merge-base.sh itself.
 ARGV_STATES="RECORDED RESOLVED SUSPECT FALLBACK UNRESOLVED"
 
 # A stub that behaves like write_stub and additionally records every argument it received, one
@@ -73,25 +49,35 @@ argv_flag_value() { # <argv-file> <flag> ; prints the value
   awk -v f="$2" 'found { print; exit } $0 == f { found = 1 }' "$1"
 }
 
-# One state, both halves. Given the argv log directory, assert review-code-codex received the
-# expected state and that no other gate received the flag at all.
-expect_base_state() { # <row-id> <log-dir> <want-state>
-  local row="$1" dir="$2" want="$3" f name got leaked=""
-  # The vacuity guard: with no argv files at all the "nobody else got it" loop below is
-  # trivially satisfied, so the presence of the logs is asserted first.
+# The two halves this file owns, given one gate log directory:
+#   EVERY GATE IS SCOPED BY THE SAME BASE — a gate handed a different --base reviews a
+#   different range while the report above it describes the runner's.
+#   NO GATE IS HANDED THE STATE — --base-state is an immediate usage error for a gate that
+#   parses strictly, and silent noise the next author copies for one that does not. Since
+#   #2276 the flag belongs to the review loop, which builds it from the resolver itself.
+# <want-base> is optional: the fixtures that know the base pin it, the rest only require
+# agreement, which is what a "scope this one differently" regression breaks.
+expect_gate_scoping() { # <row-id> <log-dir> [<want-base>]
+  local row="$1" dir="$2" want="${3:-}" f name val bad="" leaked="" seen=""
+  # The vacuity guard: with no argv files at all every loop below is trivially satisfied, so
+  # the presence of the logs is asserted first.
   check "$row-ran: every gate recorded its arguments" "$GATE_COUNT" \
     "$(find "$dir" -name '*.argv' 2>/dev/null | grep -c . || true)"
-
-  got="$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
-  check "$row: review-code-codex is told the merge-base state" "$want" "$got"
 
   for f in "$dir"/*.argv; do
     [ -f "$f" ] || continue
     name="$(basename "$f" .argv)"
-    [ "$name" = "review-code-ledger" ] && continue
+    val="$(argv_flag_value "$f" --base)"
+    if [ -z "$val" ]; then bad="$bad [$name:no-base]"
+    elif [ -n "$want" ] && [ "$val" != "$want" ]; then bad="$bad [$name:$val]"; fi
+    case " $seen " in *" $val "*) ;; *) seen="$seen $val" ;; esac
     if grep -qxF -- "--base-state" "$f"; then leaked="$leaked [$name]"; fi
   done
-  check "$row-only: and no other gate is handed a flag it does not accept" "" "$leaked"
+  check "$row: every gate is scoped by the base the runner resolved" "" "$bad"
+  check "$row-one: and every gate by the same one" "1" \
+    "$(printf '%s' "$seen" | wc -w | tr -d ' ')"
+  check "$row-only: the merge-base state reaches no gate — the review loop derives its own" \
+    "" "$leaked"
 }
 
 # A read-merge-base-baseline bridge stub for the config dir, so the RECORDED and post-session-head
@@ -119,14 +105,18 @@ install_baseline_stub() { # <cfg> <repo> <base> <branch> <branch-head> <post-ses
 }
 
 g10_resolved_state_is_passed() {
-  local cfg repo dir
+  local cfg repo dir want
   dir="$(mktemp -d "$TMPROOT/argv.XXXXXX")"
   cfg="$(make_cfg_argv "$dir")"
   repo="$(make_repo)"
+  want="$(git -C "$repo" merge-base main HEAD 2>/dev/null || true)"
   run_runner "$cfg" "$repo"
-  # The ordinary path. Passing the flag here is what lets the gate distinguish "the base was
-  # fine" from "nobody told me", and it is the row an only-when-broken implementation fails.
-  expect_base_state "G10a-RESOLVED" "$dir" "RESOLVED"
+  # The ordinary path, where the base is a real merge-base rather than the HEAD every degraded
+  # state falls back to. A runner that scoped only the degraded rows correctly fails here, so
+  # the expected value is asserted computable before it is used as one.
+  check "G10a-fixture: the fixture repo really has a merge-base to be scoped by" "yes" \
+    "$([ -n "$want" ] && printf yes || printf no)"
+  expect_gate_scoping "G10a-RESOLVED" "$dir" "$want"
 }
 
 g10_fallback_state_is_passed() {
@@ -135,7 +125,7 @@ g10_fallback_state_is_passed() {
   cfg="$(make_cfg_argv "$dir")"
   repo="$(make_repo_no_main)"
   run_runner "$cfg" "$repo"
-  expect_base_state "G10b-FALLBACK" "$dir" "FALLBACK"
+  expect_gate_scoping "G10b-FALLBACK" "$dir"
 }
 
 g10_suspect_state_is_passed() {
@@ -144,11 +134,9 @@ g10_suspect_state_is_passed() {
   cfg="$(make_cfg_argv "$dir")"
   repo="$(make_repo_with_stale_origin)"
   run_runner "$cfg" "$repo" MERGE_BASE_MAX_DIFF_LINES=50 MERGE_BASE_MAX_DIFF_FILES=2
-  expect_base_state "G10c-SUSPECT" "$dir" "SUSPECT"
-  # SUSPECT narrows the range to HEAD, and the state has to travel WITH the narrowed base:
-  # a gate handed `--base HEAD --base-state RESOLVED` would report a clean review of nothing.
-  check "G10c-base: and the narrowed base travels with it" "HEAD" \
-    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
+  # SUSPECT narrows the range to HEAD, and the narrowing has to reach the gates: one still
+  # scoped by the implausible base reviews a range the report has already disowned.
+  expect_gate_scoping "G10c-SUSPECT" "$dir" "HEAD"
 }
 
 g10_unresolved_state_is_passed() {
@@ -157,7 +145,7 @@ g10_unresolved_state_is_passed() {
   cfg="$(make_cfg_argv "$dir")"
   repo="$(make_repo_root_only)"
   run_runner "$cfg" "$repo"
-  expect_base_state "G10d-UNRESOLVED" "$dir" "UNRESOLVED"
+  expect_gate_scoping "G10d-UNRESOLVED" "$dir" "HEAD"
 }
 
 g10_recorded_state_is_passed() {
@@ -169,27 +157,22 @@ g10_recorded_state_is_passed() {
   head="$(git -C "$repo" rev-parse HEAD)"
   install_baseline_stub "$cfg" "$repo" "$base" work "$head" false -
   run_runner "$cfg" "$repo" MERGE_BASE_MAX_DIFF_LINES=50 MERGE_BASE_MAX_DIFF_FILES=2
-  expect_base_state "G10e-RECORDED" "$dir" "RECORDED"
-  check "G10e-base: with the recorded base rather than the stale guess" "$base" \
-    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
+  # The recorded base beats the stale guess the same fixture would otherwise produce, so this
+  # row is the one that catches a runner scoping the gates by the resolver's raw answer.
+  expect_gate_scoping "G10e-RECORDED" "$dir" "$base"
 }
 
-# The helper is a separate file that can simply be absent. The runner still has to tell codex
-# something, and the something must be the state it reported to the reader — silence here is
-# how a gate ends up reviewing a range nobody vouched for while claiming UNKNOWN.
+# The helper is a separate file that can simply be absent, and the runner reports UNRESOLVED
+# when it is. The gates must then be scoped to the base that certainly exists rather than left
+# with an empty --base, which is how a gate ends up reviewing the whole history or nothing.
 g10_missing_helper_still_passes_a_state() {
-  local cfg repo dir got
+  local cfg repo dir
   dir="$(mktemp -d "$TMPROOT/argv.XXXXXX")"
   cfg="$(make_cfg_argv "$dir")"
   repo="$(make_repo)"
   rm -f "$cfg/bin/resolve-merge-base.sh"
   run_runner "$cfg" "$repo"
-  got="$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
-  if [ "$got" = "UNRESOLVED" ]; then
-    pass "G10f: with no resolver installed, codex is still told the state the report claimed (UNRESOLVED)"
-  else
-    fail "G10f: with no resolver installed, codex was told [$got] rather than the UNRESOLVED the report claimed"
-  fi
+  expect_gate_scoping "G10f-no-resolver" "$dir" "HEAD"
 }
 
 # ============================================================================
@@ -225,11 +208,9 @@ g11_post_session_head_is_its_own_line() {
     fail "G11b: the NOTE line does not name the alternative base [$alt] -- got [$note]"
   fi
   # A note is not a demotion. If post-session-head were folded into the state the base would
-  # be narrowed to HEAD and the review would silently cover less than the change.
-  check "G11c: the state is unchanged by the note — the recorded base is still a fact" "RECORDED" \
-    "$(argv_flag_value "$dir/review-code-ledger.argv" --base-state)"
-  check "G11c-base: and the recorded base is still what the gates are scoped by" "$base" \
-    "$(argv_flag_value "$dir/review-code-ledger.argv" --base)"
+  # be narrowed to HEAD and every gate would silently cover less than the change — which is
+  # visible here, in the argv, rather than in the report line G11a already pins.
+  expect_gate_scoping "G11c-still-recorded" "$dir" "$base"
   check "G11d: a caveat is not a failure — the runner still exits 0" "0" "$RQG_RC"
 }
 
@@ -250,11 +231,26 @@ g11_no_note_when_nothing_to_note() {
   fi
 }
 
+# Where the state went. Asserting only that no gate receives it would be satisfied by a chain
+# in which nobody does, so the obligation is followed to its new owner: the loop's ref-kind
+# input builder, which asks the resolver and hands the reviewer both halves.
+g10_state_moved_to_the_review_loop() {
+  local refkind="$AGENTS_DIR/bin/lib/codex-review-loop/ref-kind-input.sh"
+  check "G10g: the runner no longer mentions the flag it stopped owning" "0" \
+    "$(grep -c -F -- '--base-state' "$RUNNER" | tr -d ' ')"
+  check "G10g-new-home: the loop's ref-kind input builder hands it to the reviewer instead" \
+    "yes" "$(grep -qF -- '--base-state' "$refkind" 2>/dev/null && printf yes || printf no)"
+  check "G10g-source: deriving it from the merge-base resolver rather than inventing one" \
+    "yes" "$(grep -qF 'resolve-merge-base.sh' "$refkind" 2>/dev/null && printf yes || printf no)"
+}
+
 # SKIPPED: running the real review-code-codex to see the flag accepted.
 # Because: it bills a model call per invocation, and the flag's acceptance is pinned directly
 #          in tests/feature-review-code-codex.sh against the real script.
-# TL3 gap: a runner that passes --base-state to a codex build that predates the flag. Only a
-#          real pair of scripts on one host can catch that mismatch.
+# TL3 gap: a review loop that derives --base-state for a codex build predating the flag. Only
+#          a real pair of scripts on one host can catch that mismatch.
+
+g10_state_moved_to_the_review_loop
 
 if exec_bit_works; then
   g10_resolved_state_is_passed

@@ -258,16 +258,36 @@ case "$SUB" in
                 printf '(no format):discovery-failed\n'
                 exit 3
             fi
+            # A closed allowed set (review-security-shared) binds a round's
+            # provenance: a delta staged by a producer outside the set can never
+            # complete the round, matching cl_round_complete_for's refusal in the
+            # reducer (#2276 round-2 C3). An empty set leaves the scan as it was —
+            # any COMPLETE producer completes, keeping this the "any-complete"
+            # judge check-staged has always been for open formats (CPR-UNV). This
+            # deliberately stays distinct from the reducer's all-complete gate:
+            # the two callers ask different questions of a multi-producer round
+            # (see the WAVE-3 report's plan-divergence note on detail.md S8-d.2).
+            _allowed="$(cl_allowed_producers "$FORMAT" 2>/dev/null)"
             while IFS= read -r -d '' _f; do
                 [ -f "$_f" ] || continue
                 _hdr="$(_cl_delta_header "$_f")"
-                IFS='|' read -r _ _prod _comp _ _ _rnd _ <<< "$_hdr"
-                if [ "$_rnd" = "$ROUND" ]; then
-                    if [ "$_comp" = "COMPLETE" ]; then
-                        _any_ok=1; break
-                    else
-                        _fallback_msg="(no format):incomplete:$_comp"
-                    fi
+                _prod="$(printf '%s' "$_hdr" | cut -d'|' -f2)"
+                _comp="$(printf '%s' "$_hdr" | cut -d'|' -f3)"
+                # Round is the header's last field: read it as $NF so this reader
+                # spans the delta header width the CLI writes and any narrower
+                # hand-built fixture (CPR-UNV).
+                _rnd="$(printf '%s' "$_hdr" | awk -F'|' '{print $NF}')"
+                [ "$_rnd" = "$ROUND" ] || continue
+                if [ -n "$_allowed" ]; then
+                    case $'\n'"$_allowed"$'\n' in
+                        *$'\n'"$_prod"$'\n'*) ;;
+                        *) _fallback_msg="(no format):incomplete:out-of-set"; continue ;;
+                    esac
+                fi
+                if [ "$_comp" = "COMPLETE" ]; then
+                    _any_ok=1; break
+                else
+                    _fallback_msg="(no format):incomplete:$_comp"
                 fi
             done < <(_cl_list_pattern_files "$PLANS/$SID-$FORMAT-round-$ROUND-delta-*.txt")
             if _cl_discovery_failed; then
@@ -284,7 +304,9 @@ case "$SUB" in
                     STAGED_MISSING="$STAGED_MISSING $_prod:missing"; continue
                 fi
                 _hdr="$(_cl_delta_header "$_delta")"
-                IFS='|' read -r _ _hprod _comp _ _ _rnd _ <<< "$_hdr"
+                _hprod="$(printf '%s' "$_hdr" | cut -d'|' -f2)"
+                _comp="$(printf '%s' "$_hdr" | cut -d'|' -f3)"
+                _rnd="$(printf '%s' "$_hdr" | awk -F'|' '{print $NF}')"
                 if [ "$_rnd" != "$ROUND" ]; then
                     STAGED_MISSING="$STAGED_MISSING $_prod:round-mismatch:$_rnd"; continue
                 fi

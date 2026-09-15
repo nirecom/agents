@@ -16,7 +16,7 @@ else
     pass "--input missing: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "--input missing: FAILED status label present"
 else
     fail "--input missing: status label missing. Output: $OUTPUT"
@@ -34,7 +34,7 @@ else
     pass "--format missing: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "--format missing: FAILED status label present"
 else
     fail "--format missing: status label missing. Output: $OUTPUT"
@@ -52,7 +52,7 @@ else
     pass "--format garbage: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "--format garbage: FAILED status label present"
 else
     fail "--format garbage: status label missing. Output: $OUTPUT"
@@ -76,7 +76,7 @@ else
     pass "--input nonexistent: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "--input nonexistent: FAILED status label present"
 else
     fail "--input nonexistent: status label missing. Output: $OUTPUT"
@@ -97,7 +97,7 @@ else
     pass "--input empty file: exits 0"
 fi
 
-if echo "$OUTPUT" | grep -q "## Codex Plan Review: FAILED"; then
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
     pass "--input empty file: FAILED status label present"
 else
     fail "--input empty file: status label missing. Output: $OUTPUT"

@@ -68,8 +68,9 @@ closed on, never as "no session":
 | 70 | invoked through `node` instead of `bash` (#1532 misinvocation guard) |
 | 127 | `node` not found on `PATH` |
 
-`bin/review-code-ledger` and `tests/fix-882-resolve-worktree-path/cases-2270-bridge-rc.sh` both
-read this table as authoritative rather than restating the contract themselves.
+`bin/run-codex-review-loop --format security-code` (which invokes `bin/review-code-codex`) and
+`tests/fix-882-resolve-worktree-path/cases-2270-bridge-rc.sh` both read this table as
+authoritative rather than restating the contract themselves.
 
 ## The static guard
 

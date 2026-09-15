@@ -99,6 +99,12 @@ make_cfg() {
     local dir="$TMP_ROOT/cfg-$name"
     rm -rf "$dir"; mkdir -p "$dir/rules" "$dir/bin"
     cp -R "$AGENTS_DIR/bin/lib" "$dir/bin/lib" 2>/dev/null || true
+    cp "$AGENTS_DIR/bin/review-code-codex" "$dir/bin/review-code-codex" 2>/dev/null || true
+    chmod +x "$dir/bin/review-code-codex" 2>/dev/null || true
+    cp "$AGENTS_DIR/bin/resolve-accepted-tradeoffs-file" "$dir/bin/resolve-accepted-tradeoffs-file" 2>/dev/null || true
+    chmod +x "$dir/bin/resolve-accepted-tradeoffs-file" 2>/dev/null || true
+    cp "$AGENTS_DIR/bin/resolve-merge-base.sh" "$dir/bin/resolve-merge-base.sh" 2>/dev/null || true
+    chmod +x "$dir/bin/resolve-merge-base.sh" 2>/dev/null || true
     cp "$AGENTS_DIR/rules/core-principles.md" "$dir/rules/core-principles.md" 2>/dev/null || true
     : > "$dir/.env"
     local line
@@ -412,15 +418,24 @@ rm -f "$CAPTURE"
     --base main --project-root "$REPO_ENV" >/dev/null 2>&1) || true
 assert_file_lacks "T2223C-code-process-env-injection-blocked" "$CAPTURE" "CODEINJECTEDENV"
 
-# review-code-ledger forwards "$@" verbatim, so the NFR must survive that hop.
-CFG_CODE="$(make_cfg codeledger "PROJECT_NFR=$NFR_SENTINEL must hold")"
-REPO_LEDGER="$(make_repo ledger)"
+# #2276 replaced the review-code-ledger wrapper with the shared loop's
+# input_kind=ref branch, which launches review-code-codex directly. The NFR must
+# survive that hop, which is the one the security review actually takes now.
+CFG_CODE="$(make_cfg codeloop "PROJECT_NFR=$NFR_SENTINEL must hold")"
+REPO_SECLOOP="$(make_repo secloop)"
+SECLOOP_PLANS="$TMP_ROOT/secloop-plans"
+SECLOOP_TRADEOFFS="$TMP_ROOT/secloop-tradeoffs.md"
+mkdir -p "$SECLOOP_PLANS"
+printf 'none\n' > "$SECLOOP_TRADEOFFS"
 rm -f "$CAPTURE"
-(cd "$REPO_LEDGER" && run_with_timeout 60 env -u CODEX_REVIEW_MAX_DIFF_LINES \
+(cd "$REPO_SECLOOP" && run_with_timeout 90 env -u CODEX_REVIEW_MAX_DIFF_LINES \
     AGENTS_CONFIG_DIR="$CFG_CODE" PATH="$MOCK_BIN:$PATH" \
-    bash "$AGENTS_DIR/bin/review-code-ledger" \
-    --base main --project-root "$REPO_LEDGER" >/dev/null 2>&1) || true
-assert_file_has "T2223C-review-code-ledger-nfr-present" "$CAPTURE" "$NFR_SENTINEL"
+    bash "$AGENTS_DIR/bin/run-codex-review-loop" --format security-code \
+    --session-id nfrsecloop --plans-dir "$SECLOOP_PLANS" \
+    --cap 2 --max-extensions 1 --extensions-used 0 \
+    --accepted-tradeoffs "$SECLOOP_TRADEOFFS" --repo-root "$REPO_SECLOOP" \
+    --project-root "$REPO_SECLOOP" >/dev/null 2>&1) || true
+assert_file_has "T2223C-security-code-loop-nfr-present" "$CAPTURE" "$NFR_SENTINEL"
 
 # ---------------------------------------------------------------------------
 # Parts D-H and the remaining case files live in the sibling folder because this

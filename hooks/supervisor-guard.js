@@ -1,23 +1,17 @@
 #!/usr/bin/env node
-// Stop hook: EM Supervisor alert/audit block gate.
-// Branch dispatch (evaluated in order):
-//   (1) stop_hook_active=true                    -> exit 0 immediately
-//   (audit-B) audit_phase=done                   -> surface audit verdict; if BLOCK -> exit 2; else fall through
-//   (2) cumulative_severity=error                -> increment-retry; if frozen exit 0; else block, exit 2
-//   (3) detectSentinelHang || alertArmedAt       -> increment-retry; if frozen exit 0; else block, exit 2
-//   (4) legacy layer2 state + cumSev=warning/notice -> advisory additionalContext; exit 0 (new alert format skips)
-//   (audit-A) CONFIRM_* sentinel or cumSev>=error -> arm audit (write pending); block with agent invocation msg; exit 2
-//   (5) all-null                                 -> exit 0 silently
-//
-// AskUserQuestion gate (#903): when the last assistant turn ends with an
-// AskUserQuestion tool_use, branches (2), (3) are suppressed — the
-// user is already mid-dialog and the guard must not block on top.
-// Fail-open on any error.
+// Stop hook: EM Supervisor alert/audit block gate. Branch order:
+//   (1) stop_hook_active -> exit 0; (audit-B) audit_phase=done -> surface verdict;
+//   (2) cumSev=error and (3) hang||alertArmedAt -> increment-retry then block/exit 2;
+//   (4) legacy layer2 warning/notice -> advisory; (5) all-null -> exit 0.
+// (audit-A, #2256 S3/S4/S6) Phase A arms from the workflow projection: every
+// unconsumed edge transition + the TR6 level trigger are deduped/coalesced by
+// hooks/supervisor-guard/audit-arm.js into one armAuditRun, then block/exit 2.
+// AskUserQuestion gate (#903) suppresses (2)/(3)/audit-A. Fail-open on any error.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
-const { detectSentinelHang, detectAskUserQuestionTurn, parseTranscriptForAudit } = require('./supervisor-guard/detect');
+const { detectSentinelHang, detectAskUserQuestionTurn } = require('./supervisor-guard/detect');
 const { TERMINAL_ALERT_PHASES } = require('./lib/supervisor-state-schema');
 
 function readStdin() {
@@ -46,13 +40,13 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, isWorkflowStarted, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState;
+  let resolveSessionId, isWorkflowStarted, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAuditStateCas, writeAlertState;
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   let arbitrate, formatIntegratedReason;
   try {
     ({ resolveSessionId, isWorkflowStarted } = require("./workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
+    ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAuditStateCas, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
     ({ arbitrate } = require("./supervisor-guard/arbitrate"));
     ({ formatIntegratedReason } = require("./supervisor-guard/format-integrated"));
@@ -60,10 +54,10 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  // Audit modules load separately so a bug in new files doesn't disable the alert guard.
-  let collectAuditCandidatesFn = null;
+  // Audit Phase A loads separately so a bug in the new files doesn't disable the alert guard.
+  let evaluatePhaseA = null;
   try {
-    ({ collectAuditCandidates: collectAuditCandidatesFn } = require("./supervisor-guard/collect-audit-triggers"));
+    ({ evaluatePhaseA } = require("./supervisor-guard/audit-arm"));
   } catch (_) {}
 
   let sessionId = null;
@@ -153,11 +147,16 @@ if (require.main === module) {
   if (auditPhase === "done" && writeAuditState) {
     const auditVerdict = audit.audit_verdict;
     const auditCause = audit.audit_cause || null;
-    // Consume audit_phase regardless of verdict so Phase B doesn't re-fire next cycle.
-    try { writeAuditState(effectiveSupervisorStateSessionId, { audit_phase: null }); } catch (_) {}
+    const auditVerdictSummary = audit.audit_verdict_summary || null;
+    // Consume audit_phase only when it is still "done" under the lock — a racing
+    // arm sets it to "pending" between our snapshot read and the write; the CAS
+    // skips the clear so that pending run is not erased (#2256 stale-clear race).
+    try {
+      writeAuditStateCas(effectiveSupervisorStateSessionId, "done", { audit_phase: null });
+    } catch (_) {}
     const auditCandidate = {
       verdict: auditVerdict || "CONTINUE",
-      reason: auditCause || `Audit mode strategic review: ${auditVerdict || "CONTINUE"} verdict.`,
+      reason: auditVerdictSummary || auditCause || `Audit mode strategic review: ${auditVerdict || "CONTINUE"} verdict.`,
     };
     // Clear alert_armed_at before alertWouldFire so a C2-only alert doesn't build a BLOCK
     // candidate that would beat the audit WARN in arbitration.
@@ -260,47 +259,41 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  // (audit) Phase A: arm audit if a trigger fires and it hasn't already run for this cause.
-  if (collectAuditCandidatesFn && writeAuditState && !askUserQuestionTurn) {
-    const activePendingOrRunning = auditPhase === "pending" || auditPhase === "in_progress";
-    if (!activePendingOrRunning && auditPhase !== "frozen" && alertPhase !== "closed") {
-      const transcriptForAudit = parseTranscriptForAudit(input.transcript_path || "");
-      let auditTrigger = { shouldArm: false, cause: null };
-      try { auditTrigger = collectAuditCandidatesFn(transcriptForAudit, state); } catch (_) {}
-      // Dedup: skip if audit already ran for this exact cause.
-      const lastRunCause = audit.audit_cause || null;
-      const lastRunAt = audit.audit_last_run_at || null;
-      const alreadyRanForCause = lastRunAt && auditTrigger.cause && auditTrigger.cause === lastRunCause;
-      if (auditTrigger.shouldArm && !alreadyRanForCause) {
-        try {
-          writeAuditState(effectiveSupervisorStateSessionId, {
-            audit_phase: "pending",
-            audit_armed_at: new Date().toISOString(),
-            audit_cause: auditTrigger.cause || "",
-            audit_retry_count: 0,
-          });
-        } catch (_) {}
-        const auditAgentPath = agentsDir
-          ? path.join(agentsDir, "agents", "supervisor-audit.md")
-          : "agents/supervisor-audit.md";
-        const auditArmReason = [
-          "[EM Supervisor] Audit mode strategic review triggered.",
-          `Trigger: ${auditTrigger.cause}`,
-          `Session ID: ${sessionId}`,
-          `Effective state session ID: ${effectiveSupervisorStateSessionId}`,
-          `State file: ${stateFilePath}`,
-          "",
-          "Run the audit mode strategic review agent (Task tool or Agent tool):",
-          `  Agent file: ${auditAgentPath}`,
-          "",
-          "The agent reads the state file and plan artifacts, then writes a verdict.",
-          "After it completes, continue the workflow — the next Stop event surfaces the result.",
-        ].join("\n");
-        try {
-          process.stdout.write(JSON.stringify({ decision: "block", reason: auditArmReason }) + "\n");
-        } catch (_) {}
-        process.exit(2);
-      }
+  // (audit) Phase A: shift-left arm (#2256 S3/S4/S6). Delegated whole to
+  // supervisor-guard/audit-arm.js evaluatePhaseA — it collects every unconsumed
+  // edge transition + the TR6 level trigger from the workflow projection,
+  // dedup/coalesces into at most one armAuditRun, and returns the S4-d block
+  // reason (arm) or null (no candidates / phase-guarded / pure no-op consume).
+  if (evaluatePhaseA) {
+    let reason = null;
+    try {
+      let workflowProjection = null;
+      try {
+        const { readState: readWorkflowState } = require("./workflow-state");
+        const wf = readWorkflowState(sessionId);
+        workflowProjection = (wf && wf.current) || null;
+      } catch (_) {}
+      reason = evaluatePhaseA(effectiveSupervisorStateSessionId, state, {
+        cwd: input.cwd || process.cwd(),
+        auditPhase,
+        alertPhase,
+        askUserQuestionTurn,
+        workflowProjection,
+        meta: {
+          sessionId,
+          effectiveSid: effectiveSupervisorStateSessionId,
+          stateFilePath,
+          auditAgentPath: agentsDir
+            ? path.join(agentsDir, "agents", "supervisor-audit.md")
+            : "agents/supervisor-audit.md",
+        },
+      });
+    } catch (_) { reason = null; }
+    if (reason) {
+      try {
+        process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+      } catch (_) {}
+      process.exit(2);
     }
   }
 

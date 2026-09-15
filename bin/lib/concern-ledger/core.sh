@@ -134,13 +134,90 @@ cl_exec_completeness() {
     esac
 }
 
-# cl_declared_producers <format> — the producers a complete round must contain.
-# An empty list means "whatever single producer staged this round".
+# _cl_exec_label <exec-label> — the reviewer-facing execution label recorded in
+# its own column of the delta header (distinct from cl_exec_completeness, which
+# feeds the completeness min): PERFORMED when the reviewer ran to completion,
+# PARTIAL when it ran but its scope was cut short, ABSENT when it produced no
+# review at all. A TRUNCATED/BASE-* codex round therefore reads PARTIAL here
+# while still projecting to PARTIAL completeness above.
+_cl_exec_label() {
+    case "$1" in
+        PERFORMED|COMPLETE) printf 'PERFORMED' ;;
+        TRUNCATED|PARTIAL|BASE-*) printf 'PARTIAL' ;;
+        *) printf 'ABSENT' ;;
+    esac
+}
+
+# cl_declared_producers <format> — the producers a complete round MUST contain
+# (every one of them, COMPLETE). An empty list means "whatever single producer
+# staged this round is enough". #2276 folds review-security-shared from a
+# two-producer-always model to single-primary+fallback, so it now declares none:
+# codex-only or scanner-only each completes a round. The closed set of producers
+# permitted to stage at all moved to cl_allowed_producers (CPR-ORTH: "mandatory"
+# and "permitted" are different questions).
 cl_declared_producers() {
+    case "$1" in
+        *) : ;;
+    esac
+}
+
+# cl_allowed_producers <format> — the closed set of producers that may appear in
+# a round of this format at all. An empty list means "no closed set" and only
+# the lexical token check in cl_stage applies. review-security-shared admits
+# exactly its primary and its fallback, so a round is provenance-bound to one of
+# them and no third name can stage a delta or complete a round (#2276 round-2 C3).
+cl_allowed_producers() {
     case "$1" in
         review-security-shared) printf 'review-code-codex\nsecurity-scanner\n' ;;
         *) : ;;
     esac
+}
+
+# cl_round_complete_for <format> [<producer> <completeness>]... — the single
+# round-completeness judge shared by reduce.sh and `concern-ledger check-staged`
+# (CPR-SSOT: one predicate, so the two callers can never split). A round is
+# complete when: at least one producer staged; every staged producer is COMPLETE;
+# every staged producer is in cl_allowed_producers (when that set is non-empty);
+# and every producer in cl_declared_producers (when that set is non-empty) is
+# present and COMPLETE. Returns 0 when complete, 1 otherwise.
+cl_round_complete_for() {
+    local fmt="$1"; shift
+    local allowed declared p c present_any=0 complete=1
+    allowed="$(cl_allowed_producers "$fmt")"
+    declared="$(cl_declared_producers "$fmt")"
+    local -a sp_prod=() sp_comp=()
+    while [ "$#" -ge 2 ]; do
+        [ -n "$1" ] && { sp_prod+=("$1"); sp_comp+=("$2"); }
+        shift 2
+    done
+    local i
+    for i in "${!sp_prod[@]}"; do
+        p="${sp_prod[$i]}"; c="${sp_comp[$i]}"
+        present_any=1
+        if [ -n "$allowed" ]; then
+            case $'\n'"$allowed"$'\n' in
+                *$'\n'"$p"$'\n'*) ;;
+                *) complete=0 ;;
+            esac
+        fi
+        [ "$c" = "COMPLETE" ] || complete=0
+    done
+    [ "$present_any" -eq 1 ] || complete=0
+    if [ -n "$declared" ]; then
+        while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            local found=0
+            for i in "${!sp_prod[@]}"; do
+                if [ "${sp_prod[$i]}" = "$p" ] && [ "${sp_comp[$i]}" = "COMPLETE" ]; then
+                    found=1; break
+                fi
+            done
+            [ "$found" -eq 1 ] || complete=0
+        done <<CL_DECLARED_EOF
+$declared
+CL_DECLARED_EOF
+    fi
+    [ "$complete" -eq 1 ]
 }
 
 # cl_admission <format> <round> — open | closed

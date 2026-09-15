@@ -1,41 +1,21 @@
 #!/usr/bin/env bash
 # tests/bin-concern-ledger-finalize.sh
-# Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
+# Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, finalize, fail-closed, atomic-write, json-artifact, table-driven, scope:common, pwsh-not-required
 # lang-check: ignore -- NASTY_TEXT below deliberately embeds a non-ASCII fixture value
-
-# TL2 dispatcher for the non-convergence artifact and its fail-CLOSED
-# termination path (#1992 / #1996). Drives the real bin/concern-ledger CLI over
-# ledger fixtures written by hand, so the serialization and the atomic
-# replacement are observed at the filesystem rather than inferred.
-# Cases live in tests/bin-concern-ledger-finalize/ (rules/coding/file-split.md).
-
-# TL3 gap (mitigation category: skill-orchestration)
-#   Not covered here, and covered nowhere below TL3:
-#     - The consuming skills actually obeying exit 7. Cases 8/9 grep SKILL.md
-#       for the exit-7 row and for the check-finalized sentence; a skill whose
-#       table lists exit 7 but whose prose still emits
-#       WORKFLOW_MARK_STEP_review_security_complete on the failure branch still
-#       passes here. Only a real /review-code-security or /make-detail-plan run
-#       against an injected finalize failure catches that.
-
-#     - A real out-of-space / killed-mid-write filesystem. The serialization
-#       failure is injected by shadowing `awk`, and the unwritable destination
-#       is injected by placing a directory at the artifact path (chmod 555 is a
-#       no-op on Windows, so it cannot be used as the injection — CPR-UNV).
-#     - Real concurrency between a finalize and a competing writer on the same
-#       destination path.
-
-#   Mitigation: the day-to-day runner for the skill wiring is a manual
-#   /review-code-security run; the exit-7 propagation itself is exercised at
-#   TL2 by case 6(e) through the real bin/run-codex-review-loop.
+# TL2 dispatcher for the non-convergence artifact and its fail-CLOSED termination
+# path (#1992 / #1996). Cases: tests/bin-concern-ledger-finalize/.
+# TL3 gap (skill-orchestration): a skill whose table lists exit 7 but whose prose
+# still emits the completion sentinel passes cases 8/9; a real out-of-space
+# filesystem and real finalize concurrency are unreached too. Mitigation: a
+# manual /review-code-security run, plus case 6(e) at TL2.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 LOOP_BIN="$AGENTS_ROOT/bin/run-codex-review-loop"
-LEDGER_BIN="$AGENTS_ROOT/bin/review-code-ledger"
+REFKIND_LIB="$AGENTS_ROOT/bin/lib/codex-review-loop/ref-kind-input.sh"
 
 PASS=0
 FAIL=0
@@ -296,7 +276,7 @@ NASTY_TEXT=$'a "quoted" \\backslash\ttab \001ctl 日本語 and a | pipe'
 # Implementation presence. Reported as a FAILURE (never PASS, never a silent
 # skip) so the suite exits non-zero until /write-code lands the CLI.
 # ---------------------------------------------------------------------------
-for _f in "$CLI" "$LIB" "$LEDGER_BIN"; do
+for _f in "$CLI" "$LIB" "$REFKIND_LIB"; do
     if [ ! -f "$_f" ]; then
         echo "SKIP-BLOCKED: ${_f#"$AGENTS_ROOT/"} not implemented yet"
         fail "implementation missing: ${_f#"$AGENTS_ROOT/"} (every case below fails for this reason)"

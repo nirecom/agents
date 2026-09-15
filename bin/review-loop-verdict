@@ -4,7 +4,11 @@
 # number, per-severity residual counts, budget, and optional risk signal.
 #
 # Usage: review-loop-verdict <round> <high> <medium> <low>
-#                            [--budget-remaining N] [--risk-signal <value>]
+#                            [--cap N] [--budget-remaining N] [--risk-signal <value>]
+#
+# --cap N — the round at which CONTINUE gives way to the ceiling decision
+#           (AUTO_EXTEND / ESCALATE / HIGH_UNRESOLVED). Integer >= 1. Default 2.
+#           run-codex-review-loop passes its own CAP through unchanged.
 #
 # Exit codes (internal — consumed by run-codex-review-loop):
 #   0 — APPROVED
@@ -31,9 +35,13 @@ shift 4
 
 BUDGET_REMAINING=""
 RISK_SIGNAL=""
+CAP="2"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --cap)
+      [[ $# -ge 2 ]] || die "--cap requires a value"
+      CAP="$2"; shift 2 ;;
     --budget-remaining)
       [[ $# -ge 2 ]] || die "--budget-remaining requires a value"
       BUDGET_REMAINING="$2"; shift 2 ;;
@@ -46,6 +54,9 @@ done
 
 is_nonneg_int() { [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]; }
 
+# CAP is the decision threshold, not a count — it must be a positive integer.
+[[ "$CAP" =~ ^[1-9][0-9]*$ ]] || die "--cap must be a positive integer: $CAP"
+
 is_nonneg_int "$ROUND" || die "round must be a non-negative integer: $ROUND"
 is_nonneg_int "$HIGH"  || die "high must be a non-negative integer: $HIGH"
 is_nonneg_int "$MED"   || die "medium must be a non-negative integer: $MED"
@@ -54,25 +65,25 @@ is_nonneg_int "$LOW"   || die "low must be a non-negative integer: $LOW"
 [[ "$ROUND" -ge 1 ]] || die "round must be >= 1: $ROUND"
 
 # Verdict matrix (priority order):
-#   1. high == 0 && medium == 0          -> APPROVED   (LOW alone never blocks)
-#   2. round < 2 && (high>0 || med>0)    -> CONTINUE
-#   3. round >= 2 && high > 0 && budget > 0 -> AUTO_EXTEND
-#   4. round >= 2 && high > 0 && budget == 0 || budget empty:
-#        risk signal present             -> ESCALATE
-#        no risk signal                  -> HIGH_UNRESOLVED
-#   5. round >= 2 && high == 0 && med>0  -> APPROVED   (MEDIUM downgrades at cap)
+#   1. high == 0 && medium == 0             -> APPROVED   (LOW alone never blocks)
+#   2. round < CAP && (high>0 || med>0)     -> CONTINUE
+#   3. round >= CAP && high > 0 && budget > 0 -> AUTO_EXTEND
+#   4. round >= CAP && high > 0 && budget == 0 || budget empty:
+#        risk signal present                -> ESCALATE
+#        no risk signal                     -> HIGH_UNRESOLVED
+#   5. round >= CAP && high == 0 && med>0   -> APPROVED   (MEDIUM downgrades at cap)
 
 if [[ "$HIGH" -eq 0 && "$MED" -eq 0 ]]; then
   printf 'APPROVED\n'
   exit 0
 fi
 
-if [[ "$ROUND" -lt 2 ]]; then
+if [[ "$ROUND" -lt "$CAP" ]]; then
   printf 'CONTINUE\n'
   exit 1
 fi
 
-# round >= 2
+# round >= CAP
 if [[ "$HIGH" -gt 0 ]]; then
   if [[ "$BUDGET_REMAINING" =~ ^[0-9]+$ && "$BUDGET_REMAINING" -gt 0 ]]; then
     printf 'AUTO_EXTEND\n'
@@ -87,6 +98,6 @@ if [[ "$HIGH" -gt 0 ]]; then
   exit 6
 fi
 
-# round >= 2 && high == 0 && med > 0
+# round >= CAP && high == 0 && med > 0
 printf 'APPROVED\n'
 exit 0

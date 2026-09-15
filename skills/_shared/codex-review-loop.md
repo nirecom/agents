@@ -16,7 +16,7 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | RAW_FILE | `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` |
 | CONCERNS_LOG | `<PLANS_DIR>/<session-id>-outline-concerns-log.md` | `<PLANS_DIR>/<session-id>-concerns-log.md` |
 | DEBUG_LOG | `<PLANS_DIR>/<session-id>-outline-debug.log` | `<PLANS_DIR>/<session-id>-detail-debug.log` |
-| CAP | 1 | 2 |
+| CAP | 2 | 2 |
 | MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
@@ -31,39 +31,46 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | RAW_FILE | `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` |
 | CONCERNS_LOG | `<PLANS_DIR>/<session-id>-security-plan-concerns-log.md` | `<PLANS_DIR>/<session-id>-test-review-concerns-log.md` |
 | DEBUG_LOG | `<PLANS_DIR>/<session-id>-security-plan-debug.log` | `<PLANS_DIR>/<session-id>-test-review-debug.log` |
-| CAP | 1 | 1 |
-| MAX_EXTENSIONS | 0 | 0 |
+| CAP | 2 | 2 |
+| MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | (none — review-only) | (none — review-only) |
 | REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | first readable of `outline` → `intent` | first readable of `detail` → `outline` → `intent` |
 | NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
 
-## Single-round review-only formats
+## Round-continuing review-only formats
 
-`security-plan` and `test-review` have no PLANNER_AGENT.
-CAP=1 / MAX_EXTENSIONS=0 — single round only; no extension budget.
-A NON_APPROVED_VERDICT (exit 1) is TERMINAL — the caller presents concerns and stops; no re-delegation to a planner.
-`review-tests` fires `WORKFLOW_REVIEW_TESTS_WARNINGS` on exit 1; `review-plan-security` presents concerns and proposes mitigations.
+`security-plan`, `test-review`, and `security-code` have no PLANNER_AGENT.
+CAP=2 / MAX_EXTENSIONS=1 — the same 2+1 round cap as the planner formats (#2276): at most CAP + MAX_EXTENSIONS = 3 rounds; no code path allows a 4th.
+A NON_APPROVED_VERDICT (exit 1) is round-continuing: the caller addresses the concerns, then re-invokes the skill for the next round. The round counter survives the restart, so the re-invocation is counted as round 2 (then round 3 after an AUTO_EXTEND), never a fresh round 1.
+`review-tests` fires `WORKFLOW_REVIEW_TESTS_WARNINGS` on the terminal exits; `review-plan-security` presents concerns and proposes mitigations; `review-code-security` re-runs its reviewer.
 Exit 0 = APPROVED (review-tests fires `WORKFLOW_REVIEW_TESTS_COMPLETE`).
-Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback.
+Exit 2 / 5 / 6 CAN occur under the unified cap (ESCALATE, AUTO_EXTEND, HIGH_UNRESOLVED) — they no longer "do not occur".
+Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback (for `security-code`, the `security-scanner` subagent, re-run at the same round via `--prestaged-report`).
 Exit 4 = HALT — same as Contract B; no fallback.
+
+## FORMAT vs LEDGER_FORMAT
+
+Two distinct tokens, resolved per `FORMAT` in `bin/lib/codex-review-loop/format-params.sh`:
+
+- `FORMAT` (the loop label: `outline-plan`, `detail-plan`, `security-plan`, `test-review`, `security-code`) selects the reviewer, the CAP/MAX_EXTENSIONS, the round-number/last-round files, and the built-marker.
+- `LEDGER_FORMAT` (the `--format` token passed to `bin/concern-ledger`) selects the concern-ledger file family (ledger, delta, unresolved-concerns, cap-snapshot, finalize paths). For the four planner/review-only formats it equals `FORMAT`; for `security-code` it is `review-security-shared`, the ledger shared with `review-code-codex` and `security-scanner`.
 
 ## Round Counter (ROUND_NUMBER)
 
 `ROUND_NUMBER` is an orchestrator-tracked integer independent of `EXTENSIONS_USED`.
 
-- Outline stage (CAP=1 / MAX_EXTENSIONS=1): ROUND_NUMBER is 1 on the initial review and 2 after a cap-menu `extend` / `AUTO_EXTEND`.
-- Detail stage (CAP=2 / MAX_EXTENSIONS=1): ROUND_NUMBER reaches 2 on the second review within the same `EXTENSIONS_USED=0` budget; if the user extends, ROUND_NUMBER reaches 3 while `EXTENSIONS_USED=1`.
+- Every stage runs the unified CAP=2 / MAX_EXTENSIONS=1 budget: ROUND_NUMBER reaches 2 on the second review within the same `EXTENSIONS_USED=0` budget; if the loop extends, ROUND_NUMBER reaches 3 while `EXTENSIONS_USED=1`. Round 3 is the last — no code path allows a round 4.
 
 ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
-`bin/run-codex-review-loop` owns the counter at `<PLANS_DIR>/<session-id>-<format>-round-number.txt`; stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats; exit 1 for single-round formats) and `<PLANS_DIR>/<session-id>-<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for multi-round formats) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
+`bin/run-codex-review-loop` owns the counter at `<PLANS_DIR>/<session-id>-<format>-round-number.txt`; stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats) and `<PLANS_DIR>/<session-id>-<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for every format, review-only included — #2276 S9-c) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
 
 `--force-round <N>` overrides the recorded counter for recovery and test use only — it announces itself on stderr and bypasses the sequence check. No shipped skill caller uses it; the flag is reserved for manual recovery from a corrupt counter and for test harnesses that need to start at an arbitrary round.
 
 ## Concern-ID Ledger
 
-`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/<session-id>-<format>-concern-ledger.txt`. The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
+`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/<session-id>-<ledger_format>-concern-ledger.txt` (LEDGER_FORMAT, resolved per FORMAT — see "FORMAT vs LEDGER_FORMAT"). The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
 
 Schema, lifecycle states, binding tiers, and the category vocabulary: `skills/_shared/concern-ledger.md` (SSOT). Full concern text is stored verbatim (no truncation).
 
@@ -77,7 +84,7 @@ The ledger is deleted on APPROVED (exit 0) and ESCALATE (exit 2), and persists a
 
 Before the ledger is dropped on an ending that never converged (ESCALATE, or CONTINUE at the cap), the wrapper finalizes it into `<PLANS_DIR>/<session-id>-<format>-unresolved-concerns.json`. That write is fail-CLOSED: when it does not succeed the wrapper returns exit 7 instead of the would-be verdict, so no caller emits its completion sentinel over concerns nobody can read.
 
-Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, HIGH_UNRESOLVED→6, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
+Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--cap N] [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict; the wrapper passes its own CAP through so the decision point (`round < CAP` → CONTINUE) tracks the unified cap. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, HIGH_UNRESOLVED→6, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
 
 ## Per-round protocol
 

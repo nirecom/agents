@@ -1,17 +1,13 @@
 # Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
-# Tests: bin/review-code-codex, bin/resolve-merge-base.sh, skills/review-code-security/scripts/run-quality-gates.sh
+# Tests: bin/review-code-codex, bin/resolve-merge-base.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, exclusion, stop-at-first-skip, cross-reference, path-encoding, scope:issue-specific, pwsh-not-required, TL2
 # lang-check: ignore — P15 fixture uses a non-ASCII filename intentionally, to test that git's octal-escaping of such names doesn't drop them from the priority set.
 # P10-P16 (#1976 / #1750): WHICH paths are judged, not how many lines fit. Split out of path-priority.sh at the 500-line hard limit; fixtures/helpers/shared vars come from path-priority/helpers.sh, path-priority.sh, and the suite entrypoint respectively.
 # TL3 gap: real codex CLI arg/stdin handling and live model context limits are untested; P8/P12 stub resolve-merge-base.sh so `warn` is an asserted input; P15's non-ASCII path encoding is only exercised as this runner's own filesystem happens to encode it. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
-# ---------------------------------------------------------------------------
-# P10 — a path can be in the committed range AND still carry changes the committed range
-#       cannot show. Judging exclusion by "the path is absent from the body" gets this case
-#       exactly backwards: the path IS in the body, and the staged edit on top of it is the
-#       part nobody reviewed. Small enough that nothing is truncated, so the EXCLUDED report
-#       has to stand on its own rather than riding along with TRUNCATED.
-# ---------------------------------------------------------------------------
+# P10 — a path can be in the committed range AND still carry changes it cannot show: the path
+#       IS in the body, and the staged edit on top of it is the part nobody reviewed. Small
+#       enough that nothing truncates, so the EXCLUDED report must stand on its own.
 PP_R10="$(pp_new_repo pp-p10)"
 pp_gen "$PP_R10/mixed.txt" 10 "pp-p10-committed"
 git -C "$PP_R10" add mixed.txt
@@ -128,71 +124,84 @@ else
 fi
 PP_ENV=()
 
-# ---------------------------------------------------------------------------
-# P12/P13 — two independent readers of the same warn value. run-quality-gates.sh asks the
-#       resolver and prints `## merge-base: NOTE`; review-code-codex asks it again for its own
-#       PRIORITY-UNTRUSTED decision. Two call sites, one fact: if they can disagree, the
-#       combined report tells the reader two different things about one baseline. P13 adds
-#       the ordering, because a caveat that arrives after the finding it qualifies is read
-#       as an afterthought.
-# ---------------------------------------------------------------------------
+# P12/P13 — two independent readers of one warn value: run-quality-gates.sh prints
+#       `## merge-base: NOTE`, and review-code-codex — reached since #2276 through
+#       `run-codex-review-loop --format security-code` rather than from the gate script —
+#       decides PRIORITY-UNTRUSTED. If they can disagree, the reader is told two different
+#       things about one baseline. P13 keeps the ordering claim inside the reviewer's own
+#       report, where both lines still live: a caveat after the finding reads as an
+#       afterthought.
 PP_GATE_DIR="$TMPDIR_BASE/pp-gates-agents"
-mkdir -p "$PP_GATE_DIR/bin/lib/concern-ledger"
-cp "$AGENTS_ROOT/bin/review-code-codex" "$PP_GATE_DIR/bin/review-code-codex"
-cp "$AGENTS_ROOT/bin/lib/codex-core.sh" "$PP_GATE_DIR/bin/lib/codex-core.sh"
-# codex-core.sh sources codex-timeout.sh for codex_timeout_resolve; without it the resolved
-# timeout is empty and `timeout "" codex exec ...` fails with "invalid time interval ''",
-# which review-code-codex reports as FAILED rather than PERFORMED.
-cp "$AGENTS_ROOT/bin/lib/codex-timeout.sh" "$PP_GATE_DIR/bin/lib/codex-timeout.sh"
-# run-quality-gates.sh calls review-code-codex through this ledger-aware wrapper (#1992/#1996)
-# rather than directly, so the fixture must carry the wrapper and its own dependencies too —
-# otherwise the gate reports "review-code-ledger: NOT FOUND" and the codex reviewer never runs.
-cp "$AGENTS_ROOT/bin/review-code-ledger" "$PP_GATE_DIR/bin/review-code-ledger"
-cp "$AGENTS_ROOT/bin/concern-ledger" "$PP_GATE_DIR/bin/concern-ledger"
-cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$PP_GATE_DIR/bin/lib/concern-ledger.sh"
-cp "$AGENTS_ROOT/bin/lib/concern-ledger/"*.sh "$PP_GATE_DIR/bin/lib/concern-ledger/"
+# Unlike the direct-reviewer rows (pp_run runs the REAL bin/review-code-codex and uses
+# AGENTS_CONFIG_DIR only for the resolver stub), run-codex-review-loop resolves its ENTIRE
+# toolchain — the reviewer, build-codex-context, the ledger CLI, the merge-base resolver, and
+# every library each of them sources — through $AGENTS_CONFIG_DIR/bin. A curated subset always
+# leaves one more dependency missing (the loop dies at a pre-flight `source` or a tool lookup
+# before review-code-codex is ever reached, and P12/P13 see an empty report), so the fixture
+# config dir mirrors bin/ wholesale. The resolver stub written per-iteration below then overlays
+# bin/resolve-merge-base.sh on top of this mirror to drive the merge-base warn value.
+mkdir -p "$PP_GATE_DIR/bin" "$PP_GATE_DIR/rules"
+cp -R "$AGENTS_ROOT/bin/." "$PP_GATE_DIR/bin/"
+# run-codex-review-loop pre-flight requires $AGENTS_CONFIG_DIR/rules/core-principles.md as
+# mandatory context (bin/run-codex-review-loop:39-40); build-codex-context reads it too.
+cp "$AGENTS_ROOT/rules/core-principles.md" "$PP_GATE_DIR/rules/core-principles.md"
 PP_GATES="$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
+PP_SECLOOP="$AGENTS_ROOT/bin/run-codex-review-loop"
+PP_SECLOOP_SEQ=0
 
 pp_run_gates() { # <repo> ; prints the combined gate-runner output
     (cd "$1" && _timeout env PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
         AGENTS_CONFIG_DIR="$PP_GATE_DIR" bash "$PP_GATES" 2>/dev/null) || true
 }
 
-PP_GATE_OUT_WARN=""
+pp_run_secloop() { # <repo> ; prints the security-code loop's reviewer report
+    PP_SECLOOP_SEQ=$((PP_SECLOOP_SEQ + 1))
+    local plans="$TMPDIR_BASE/pp-secloop-plans-$PP_SECLOOP_SEQ"
+    local tradeoffs="$TMPDIR_BASE/pp-secloop-tradeoffs.md"
+    mkdir -p "$plans"
+    printf 'none\n' > "$tradeoffs"
+    (cd "$1" && _timeout env PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
+        AGENTS_CONFIG_DIR="$PP_GATE_DIR" bash "$PP_SECLOOP" --format security-code \
+        --session-id "ppsec$PP_SECLOOP_SEQ" --plans-dir "$plans" \
+        --cap 2 --max-extensions 1 --extensions-used 0 \
+        --accepted-tradeoffs "$tradeoffs" --repo-root "$1" 2>/dev/null) || true
+}
+
+PP_REVIEW_OUT_WARN=""
 for pp_warn in post-session-head none; do
     pp_write_resolver_stub "$PP_GATE_DIR" "$pp_warn"
-    pp_out="$(pp_run_gates "$PP_BIG")"
-    [ "$pp_warn" = "post-session-head" ] && PP_GATE_OUT_WARN="$pp_out"
-    # An agreement of two silences is not agreement: if the ledger wrapper was never found, or
-    # the codex review never ran, both readers report "no" by default and P12 would pass on a
-    # row that proves nothing. Require the row to show the reviewer actually reached its verdict
-    # before trusting the NOTE/PRIORITY-UNTRUSTED comparison below.
-    if pp_has "$pp_out" "review-code-ledger: NOT FOUND"; then
-        fail "P12[warn=$pp_warn]: review-code-ledger was NOT FOUND, so the gate never ran the codex reviewer — this row cannot prove NOTE/PRIORITY-UNTRUSTED agreement. Output: $pp_out"
+    pp_gate_out="$(pp_run_gates "$PP_BIG")"
+    pp_review_out="$(pp_run_secloop "$PP_BIG")"
+    [ "$pp_warn" = "post-session-head" ] && PP_REVIEW_OUT_WARN="$pp_review_out"
+    # An agreement of two silences is not agreement: if the loop never reached the reviewer,
+    # both readers report "no" by default and P12 would pass on a row that proves nothing.
+    if ! pp_has "$pp_review_out" "^## Codex Review: PERFORMED"; then
+        fail "P12[warn=$pp_warn]: the codex review was not PERFORMED, so this row cannot prove NOTE/PRIORITY-UNTRUSTED agreement. Output: $pp_review_out"
         continue
     fi
-    if ! pp_has "$pp_out" "^## Codex Review: PERFORMED"; then
-        fail "P12[warn=$pp_warn]: the codex review was not PERFORMED, so this row cannot prove NOTE/PRIORITY-UNTRUSTED agreement. Output: $pp_out"
+    # The counterpart of the move: the gate must not be a second reviewer call site.
+    if pp_has "$pp_gate_out" "^## Codex Review: "; then
+        fail "P12[warn=$pp_warn]: run-quality-gates.sh still runs a codex review of its own, so the diff is reviewed twice. Output: $pp_gate_out"
         continue
     fi
     pp_note=no; pp_untrusted=no
-    pp_has "$pp_out" "^## merge-base: NOTE" && pp_note=yes
-    pp_has "$pp_out" "^## Codex Review Scope: PRIORITY-UNTRUSTED" && pp_untrusted=yes
+    pp_has "$pp_gate_out" "^## merge-base: NOTE" && pp_note=yes
+    pp_has "$pp_review_out" "^## Codex Review Scope: PRIORITY-UNTRUSTED" && pp_untrusted=yes
     if [ "$pp_note" = "$pp_untrusted" ]; then
         pass "P12[warn=$pp_warn]: the gate runner's NOTE ($pp_note) and review-code-codex's PRIORITY-UNTRUSTED ($pp_untrusted) agree about one baseline"
     else
-        fail "P12[warn=$pp_warn]: the two independent readers of warn=$pp_warn disagree — NOTE=$pp_note, PRIORITY-UNTRUSTED=$pp_untrusted. Output: $pp_out"
+        fail "P12[warn=$pp_warn]: the two independent readers of warn=$pp_warn disagree — NOTE=$pp_note, PRIORITY-UNTRUSTED=$pp_untrusted. Gate: $pp_gate_out Review: $pp_review_out"
     fi
 done
 
-pp_note_line="$(printf '%s\n' "$PP_GATE_OUT_WARN" | grep -n -m1 "^## merge-base: NOTE" | cut -d: -f1 || true)"
-pp_unt_line="$(printf '%s\n' "$PP_GATE_OUT_WARN" | grep -n -m1 "^## Codex Review Scope: PRIORITY-UNTRUSTED" | cut -d: -f1 || true)"
-if [ -z "$pp_note_line" ] || [ -z "$pp_unt_line" ]; then
-    fail "P13: the combined output is missing the NOTE line ($pp_note_line) or the PRIORITY-UNTRUSTED line ($pp_unt_line), so their order cannot be asserted"
-elif [ "$pp_note_line" -lt "$pp_unt_line" ]; then
-    pass "P13: the baseline NOTE precedes the PRIORITY-UNTRUSTED line it explains"
+pp_unt_line="$(printf '%s\n' "$PP_REVIEW_OUT_WARN" | grep -n -m1 "^## Codex Review Scope: PRIORITY-UNTRUSTED" | cut -d: -f1 || true)"
+pp_verdict_line="$(printf '%s\n' "$PP_REVIEW_OUT_WARN" | grep -n -m1 "^## Codex Review: " | cut -d: -f1 || true)"
+if [ -z "$pp_unt_line" ] || [ -z "$pp_verdict_line" ]; then
+    fail "P13: the reviewer report is missing the PRIORITY-UNTRUSTED line ($pp_unt_line) or the verdict header ($pp_verdict_line), so their order cannot be asserted"
+elif [ "$pp_unt_line" -lt "$pp_verdict_line" ]; then
+    pass "P13: the baseline caveat precedes the verdict header it qualifies"
 else
-    fail "P13: the NOTE is at line $pp_note_line, after PRIORITY-UNTRUSTED at line $pp_unt_line"
+    fail "P13: PRIORITY-UNTRUSTED is at line $pp_unt_line, after the verdict header at line $pp_verdict_line"
 fi
 
 # ---------------------------------------------------------------------------

@@ -1,20 +1,18 @@
 #!/usr/bin/env node
-// PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_*>> sentinel, surface
-// the relevant plan/PR context above the permission dialog so the user has the
-// information they need to Allow or Deny inline.
-//
-// Sentinels handled:
-//   <<WORKFLOW_CONFIRM_INTENT[: reason]>>          — intent plan
-//   <<WORKFLOW_CONFIRM_OUTLINE[: reason]>>         — outline plan
-//   <<WORKFLOW_CONFIRM_DETAIL[: reason]>>          — detail plan
-//
-// Output protocol: emits { "systemMessage": "..." } only. Exit code 0 always
-// (fail-open; we never block the user's approval flow).
+// PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>
+// sentinel, surface the relevant plan/PR context above the permission dialog so the
+// user can Allow or Deny inline. Sentinel patterns: hooks/lib/sentinel-patterns.js.
+// Output protocol: emits { "systemMessage": "..." } only, always exit 0 (fail-open —
+// we never block the user's approval flow).
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 
+const sentinelPatterns = require("./lib/sentinel-patterns");
+// #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
+// The CONFIRM patterns are unanchored, so the joined command text finds the sentinel in any element.
+const { isCommandTool, commandTextOf } = require("./lib/tool-command-text");
 const { peekTurnMarkers } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
@@ -36,18 +34,24 @@ function readStdin() {
 
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
-// Parse the sentinel out of a Bash command string.
-// Returns { stage, url? } or null if no sentinel matches.
+// #2256 S1-a: the CONFIRM patterns are owned by hooks/lib/sentinel-patterns.js.
+// This hook inspects a raw Bash command, not a lone echo, so the SSOT regex is
+// reused with its `^echo "` / `"$` anchors dropped rather than re-spelled here.
+function unanchoredEcho(re) {
+  return new RegExp(re.source.replace(/^\^echo "/, "").replace(/"\$$/, ""));
+}
+
+const CONFIRM_STAGE_PATTERNS = [
+  { stage: "intent", re: unanchoredEcho(sentinelPatterns.CONFIRM_INTENT_LOOKSLIKE_RE) },
+  { stage: "outline", re: unanchoredEcho(sentinelPatterns.CONFIRM_OUTLINE_LOOKSLIKE_RE) },
+  { stage: "detail", re: unanchoredEcho(sentinelPatterns.CONFIRM_DETAIL_LOOKSLIKE_RE) },
+];
+
+// Returns { stage } or null if no sentinel matches.
 function parseSentinel(command) {
   if (typeof command !== "string" || command.length === 0) return null;
-  if (/<<WORKFLOW_CONFIRM_INTENT(?:: [^>]+)?>>/.test(command)) {
-    return { stage: "intent" };
-  }
-  if (/<<WORKFLOW_CONFIRM_OUTLINE(?:: [^>]+)?>>/.test(command)) {
-    return { stage: "outline" };
-  }
-  if (/<<WORKFLOW_CONFIRM_DETAIL(?:: [^>]+)?>>/.test(command)) {
-    return { stage: "detail" };
+  for (const entry of CONFIRM_STAGE_PATTERNS) {
+    if (entry.re.test(command)) return { stage: entry.stage };
   }
   return null;
 }
@@ -93,9 +97,9 @@ if (require.main === module) {
   let input = {};
   try { input = JSON.parse(readStdin()); } catch { noopExit(); }
 
-  if (input.tool_name !== "Bash") noopExit();
+  if (!isCommandTool(input.tool_name)) noopExit();
 
-  const command = (input.tool_input && input.tool_input.command) || "";
+  const command = commandTextOf(input.tool_name, input.tool_input);
   const parsed = parseSentinel(command);
   if (!parsed) noopExit();
 

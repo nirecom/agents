@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-2025-module-load-failclosed.sh
-# Tests: bin/lib/concern-ledger.sh, bin/concern-ledger, bin/build-codex-context, bin/run-codex-review-loop, skills/review-code-security/scripts/open-concern-round.sh
+# Tests: bin/lib/concern-ledger.sh, bin/concern-ledger, bin/build-codex-context, bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, library-load, fail-closed, incomplete-install, security, scope:issue-specific, pwsh-not-required
 #
 # None of these scripts runs under `set -e`, so an unchecked `source` leaves
@@ -14,7 +14,7 @@ set -uo pipefail
 # broken install does it — by not being there, or by not parsing.
 
 # TL3 gap (mitigation category: cost)
-#   Not covered behaviourally: bin/review-code-ledger's own guard. Reaching it
+#   Not covered behaviourally: the ref-kind input helper's own guard. Reaching it
 #   needs a full codex review first — minutes of billed reviewer time per row.
 #   Mitigation: its two guard lines are pinned structurally below, alongside
 #   the sibling wrappers that are exercised for real.
@@ -80,8 +80,6 @@ mktree() {
     # reached — a fixture gap, not the behaviour under test.
     cp -r "$AGENTS_ROOT/hooks" "$d/hooks"
     echo "# core principles stub" > "$d/rules/core-principles.md"
-    cp "$AGENTS_ROOT/skills/review-code-security/scripts/open-concern-round.sh" \
-        "$d/skills/review-code-security/scripts/"
     printf '%s' "$d"
 }
 
@@ -216,32 +214,61 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4: and allocating no round number for a round that never ran" \
         "no-round" "$([ -e "$P4L/$SID-$FMT-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
 
-    P4O="$(mkplans plans-open)"
+    P4S="$(mkplans plans-secloop)"
     rc=0
-    # #2270: bare SESSION_ID is no longer an input to the bin/resolve-session-id bridge;
-    # supply the CC-native name so the sid resolves and the safe-path check is reached.
-    O4O="$(AGENTS_CONFIG_DIR="$D4" CLAUDE_CODE_SESSION_ID="$SID" PLANS_DIR="$P4O" run_with_timeout bash \
-        "$D4/skills/review-code-security/scripts/open-concern-round.sh" 2>&1)" || rc=$?
-    assert_eq "4: open-concern-round keeps its exit-0 contract" "0" "$rc"
-    assert_eq "4: but says out loud that the round is unnumbered" \
-        "yes" "$(printf '%s' "$O4O" | grep -q -F -e 'ROUND=0' && printf yes || printf no)"
-    assert_eq "4: and gives the reason on the NOT-STAGED line" \
-        "yes" "$(printf '%s' "$O4O" | grep -q -F -e 'NOT-STAGED — the safe-path library is missing' && printf yes || printf no)"
+    O4S="$(AGENTS_CONFIG_DIR="$D4" run_with_timeout "$D4/bin/run-codex-review-loop" \
+        --format security-code --session-id "$SID" --plans-dir "$P4S" \
+        --cap 2 --max-extensions 1 --extensions-used 0 \
+        --accepted-tradeoffs "$P4S/outline.md" 2>&1)" || rc=$?
+    assert_eq "4: the security-code format halts on the same absence (CPR-ORTH)" "4" "$rc"
+    assert_eq "4: saying which library it needed" \
+        "yes" "$(printf '%s' "$O4S" | grep -q -F -e 'required library missing' && printf yes || printf no)"
+    assert_eq "4: and allocating no round number for a round that never ran" \
+        "no-round" "$([ -e "$P4S/$SID-security-code-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
+}
+
+# 4b. The intact counterpart of the row above. #2276 moved round numbering for the
+#     security review into the loop, and a refusal that also refuses when nothing is
+#     wrong proves nothing — so the same call on a complete tree must number round 1.
+{
+    D4B="$(mktree secloop-ok)"
+    printf '%s\n' '#!/usr/bin/env bash' 'printf "base=main\nstate=RECORDED\nsource=recorded-baseline\n"' \
+        'printf "base_is_head=0\nsafe_base=HEAD\nwarn=none\nalt_base=0000000\ndetail=-\n"' 'exit 0' \
+        > "$D4B/bin/resolve-merge-base.sh"
+    chmod +x "$D4B/bin/resolve-merge-base.sh"
+    printf '%s\n' '#!/usr/bin/env bash' 'echo "## Codex Review: PERFORMED"' 'echo ""' \
+        'echo "## Concern Delta"' 'echo "(none)"' 'exit 0' \
+        > "$D4B/bin/review-code-codex"
+    chmod +x "$D4B/bin/review-code-codex"
+
+    P4B2="$(mkplans plans-secloop-ok)"
+    rc=0
+    O4B2="$(AGENTS_CONFIG_DIR="$D4B" run_with_timeout "$D4B/bin/run-codex-review-loop" \
+        --format security-code --session-id "$SID" --plans-dir "$P4B2" \
+        --cap 2 --max-extensions 1 --extensions-used 0 \
+        --accepted-tradeoffs "$P4B2/outline.md" 2>&1)" || rc=$?
+    assert_eq "4b: a complete tree reaches a verdict rather than the load guard" \
+        "reached" "$(printf '%s' "$O4B2" | grep -q -F -e 'required library missing' && printf 'halted-on-load' || printf reached)"
+    assert_eq "4b: and the loop numbers the first security-code round 1" \
+        "1" "$(tr -dc '0-9' < "$P4B2/$SID-security-code-last-round.txt" 2>/dev/null)"
+    assert_eq "4b: the ledger file is keyed by the ledger format, not the loop label" \
+        "yes" "$(grep -qF 'FP_LEDGER_FORMAT="review-security-shared"' "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 2>/dev/null && printf yes || printf no)"
 }
 
 echo ""
 echo "--- load 5: the guards themselves ---"
 
-# 5. bin/review-code-ledger is the fifth caller and the one this file cannot
-#    drive (Skipped-Because: reaching its guard needs a full codex review),
-#    so its two lines are pinned where they are written. The entrypoint's five
-#    checked sources are pinned for the same reason a per-module row exists:
-#    the loss of one check is invisible in the other four.
+# 5. The ref-kind input helper inherited the deleted wrapper's role as the fifth
+#    caller, and it is the one this file cannot drive (Skipped-Because: reaching
+#    its guard needs a full codex review), so its two lines are pinned where they
+#    are written. The entrypoint's five checked sources are pinned for the same
+#    reason a per-module row exists: one lost check is invisible in the other four.
 {
-    assert_eq_nz "5: review-code-ledger checks the library is there before sourcing it" \
-        "1" "$(grep -c -F 'the safe-path library is missing' "$AGENTS_ROOT/bin/review-code-ledger" | tr -d ' ')"
+    REFKIND="$AGENTS_ROOT/bin/lib/codex-review-loop/ref-kind-input.sh"
+    assert_eq_nz "5: ref-kind-input checks the library is there before sourcing it" \
+        "1" "$(grep -c -F 'the safe-path library is missing' "$REFKIND" | tr -d ' ')"
     assert_eq_nz "5: and checks that sourcing it worked" \
-        "1" "$(grep -c -F 'the safe-path library failed to load' "$AGENTS_ROOT/bin/review-code-ledger" | tr -d ' ')"
+        "1" "$(grep -c -F 'the safe-path library failed to load' "$REFKIND" | tr -d ' ')"
     assert_eq_nz "5: the entrypoint checks the return value of every module it sources" \
         "5" "$(grep -c -E '^if ! source "\$CL_LIB_DIR/' "$AGENTS_ROOT/bin/lib/concern-ledger.sh" | tr -d ' ')"
     assert_eq_nz "5: and the CLI checks the entrypoint's own" \

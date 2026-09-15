@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+"use strict";
+
+// #2256 S5-d — record a human override of a standing TR5 BLOCK hold. The hold is
+// released only while the override still matches the run it was taken against AND
+// the working tree has not moved since (freshness_key pin). Exit 2 is the single
+// caller-visible "refused" signal: reason too short, run id is not the last
+// terminal run, or that run did not actually return BLOCK.
+
+const { readState, recordBlockOverride } = require("../hooks/lib/supervisor-state-writer");
+const { lastTerminalRun } = require("../hooks/lib/audit-ledger");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const MIN_REASON_LEN = 20;
+const EXIT_REFUSED = 2;
+
+const VALUE_FLAGS = new Set(["--session-id"]);
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-record-block-override] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-record-block-override <run-NNNN> <reason> [--session-id <sid>]"
+  );
+  process.exit(1);
+}
+
+function refuse(msg) {
+  console.error(`[supervisor-record-block-override] REFUSED: ${msg}`);
+  process.exit(EXIT_REFUSED);
+}
+
+const args = {};
+const positional = [];
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  const tok = argv[i];
+  if (!tok.startsWith("--")) { positional.push(tok); continue; }
+  if (!VALUE_FLAGS.has(tok)) usage(`unknown flag: ${tok}`);
+  if (i + 1 >= argv.length) usage(`${tok} requires a value`);
+  args[tok.slice(2)] = argv[i + 1];
+  i++;
+}
+
+if (positional.length < 2) usage("requires <run-id> <reason>");
+const runId = positional[0];
+const reason = positional[1];
+
+const sid = args["session-id"] ||
+  process.env.WORKFLOW_SESSION_ID ||
+  process.env.CLAUDE_CODE_SESSION_ID ||
+  process.env.CLAUDE_SESSION_ID;
+if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (could not auto-resolve)");
+
+// Reason gate first: a too-short reason is refused before any state is touched,
+// so a refused override can never leave a partial record behind.
+if (typeof reason !== "string" || reason.trim().length < MIN_REASON_LEN) {
+  refuse(`reason must be at least ${MIN_REASON_LEN} characters; got ${reason ? reason.trim().length : 0}.`);
+}
+
+let state;
+try {
+  state = readState(sid);
+} catch (e) {
+  refuse(`could not read supervisor state for session ${sid}.`);
+}
+if (!state) refuse(`no supervisor state for session ${sid}.`);
+
+const audit = state.audit || {};
+const terminal = lastTerminalRun(audit);
+if (!terminal) refuse("no terminal audit run exists to override.");
+if (terminal.id !== runId) {
+  refuse(`run id ${runId} is not the last terminal run (${terminal.id || "<none>"}).`);
+}
+if (terminal.verdict !== "BLOCK") {
+  refuse(`the last terminal run's verdict is ${terminal.verdict || "<none>"}, not BLOCK — nothing to override.`);
+}
+
+// Pin the freshness key the override was taken against — read straight off the
+// terminal run, so recording needs no git and no working-tree recomputation.
+const freshnessKey = typeof terminal.freshness_key === "string" && terminal.freshness_key.length > 0
+  ? terminal.freshness_key
+  : null;
+
+const actor = process.env.USER || process.env.USERNAME || process.env.LOGNAME || "unknown";
+
+const ok = recordBlockOverride(sid, {
+  audit_run_id: runId,
+  freshness_key: freshnessKey,
+  reason: reason.trim(),
+  actor,
+});
+
+if (ok !== true) {
+  console.error("[supervisor-record-block-override] ERROR: failed to write the override record.");
+  process.exit(1);
+}
+console.log(JSON.stringify({ recorded: true, run_id: runId, freshness_key: freshnessKey, actor }));
+process.exit(0);

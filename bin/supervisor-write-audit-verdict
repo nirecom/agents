@@ -1,59 +1,94 @@
 #!/usr/bin/env node
 "use strict";
 
-const path = require("path");
-const { spawnSync } = require("child_process");
+// #2256 S2-h — verdict writer with compare-and-set on the audit run identity.
+// Separate from bin/supervisor-write-audit because a verdict is not a patch:
+// it either belongs to the currently armed run or must be discarded. Exit 3 is
+// the caller-visible signal for "your run was superseded" — distinct from the
+// generic exit 1 so a wrapper can retry rather than treat it as a crash.
+
+const { finalizeAuditRun, writeAuditState, readState } = require("../hooks/lib/supervisor-state-writer");
 const { AUDIT_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
-const USAGE = "Usage: node bin/supervisor-write-audit-verdict <CONTINUE|WARN|BLOCK> <cause> [--session-id <sid>]";
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const EXIT_STALE_IDENTITY = 3;
 
-function fail(msg) {
-  console.error(`[supervisor-write-audit-verdict] ERROR: ${msg}`);
-  console.error(USAGE);
+const VALUE_FLAGS = new Set(["--session-id", "--audit-run-id", "--verdict", "--verdict-summary"]);
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-write-audit-verdict] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-write-audit-verdict [--session-id <sid>]" +
+    " [--audit-run-id <run-NNNN>] --verdict <CONTINUE|WARN|BLOCK> [--verdict-summary <text>]" +
+    "\n   or: node bin/supervisor-write-audit-verdict <CONTINUE|WARN|BLOCK> <summary> [--session-id <sid>]"
+  );
   process.exit(1);
 }
 
+const args = {};
+const positional = [];
 const argv = process.argv.slice(2);
-const verdict = argv[0];
-const cause = argv[1];
-
-if (!verdict || verdict.startsWith("--")) {
-  fail(`verdict must be one of ${AUDIT_VERDICT_VALUES.join("|")}`);
-}
-if (!AUDIT_VERDICT_VALUES.includes(verdict)) {
-  fail(`verdict must be one of ${AUDIT_VERDICT_VALUES.join("|")}`);
-}
-if (!cause || cause.startsWith("--")) {
-  fail("cause is required");
-}
-
-// Parse optional --session-id <sid> from remaining argv (after argv[1]).
-let sessionId = null;
-for (let i = 2; i < argv.length; i++) {
+for (let i = 0; i < argv.length; i++) {
   const tok = argv[i];
-  if (tok === "--session-id") {
-    if (i + 1 >= argv.length) fail("--session-id requires a value");
-    sessionId = argv[i + 1];
-    i++;
-    continue;
+  if (!tok.startsWith("--")) { positional.push(tok); continue; }
+  if (!VALUE_FLAGS.has(tok)) usage(`unknown flag: ${tok}`);
+  if (i + 1 >= argv.length) usage(`${tok} requires a value`);
+  args[tok.slice(2)] = argv[i + 1];
+  i++;
+}
+
+// Positional form <verdict> <summary>: the second argument is the verdict
+// SUMMARY, never the arm cause (#2256 S1-b) — audit_cause keeps the value the
+// arm wrote. Both positionals are required so a lone verdict stays an error.
+if (positional.length > 0) {
+  if (positional.length < 2) usage("positional form requires <verdict> <summary>");
+  if (args.verdict === undefined) args.verdict = positional[0];
+  if (args["verdict-summary"] === undefined) args["verdict-summary"] = positional[1];
+}
+
+const sid = args["session-id"] ||
+  process.env.WORKFLOW_SESSION_ID ||
+  process.env.CLAUDE_CODE_SESSION_ID ||
+  process.env.CLAUDE_SESSION_ID;
+if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (could not auto-resolve)");
+
+const runId = args["audit-run-id"];
+
+const verdict = args.verdict;
+if (!AUDIT_VERDICT_VALUES.includes(verdict)) {
+  usage(`--verdict must be one of ${AUDIT_VERDICT_VALUES.filter((v) => v !== null).join("|")}`);
+}
+
+const summary = args["verdict-summary"] === undefined ? null : args["verdict-summary"];
+
+// No run identity supplied: write as a plain state patch. Guard: if a run is
+// currently armed (pending/in_progress) the caller must pass --audit-run-id so
+// the CAS path can reject a stale write (#2256 S2-h).
+if (!runId) {
+  let currentPhase = null;
+  try {
+    const s = readState(sid);
+    currentPhase = (s && s.audit && s.audit.audit_phase) || null;
+  } catch (_) {}
+  if (currentPhase === "pending" || currentPhase === "in_progress") {
+    console.error(
+      `[supervisor-write-audit-verdict] ERROR: a run is currently armed (phase=${currentPhase}) ` +
+      "but --audit-run-id was not supplied. Pass --audit-run-id to use the compare-and-set path."
+    );
+    process.exit(1);
   }
-  fail(`unknown flag: ${tok}`);
+  const ok = writeAuditState(sid, { audit_phase: "done", audit_verdict: verdict, audit_verdict_summary: summary });
+  console.log(JSON.stringify({ accepted: ok === true, audit_run_id: null }));
+  process.exit(ok === true ? 0 : 1);
 }
 
-const writerPath = path.resolve(__dirname, "..", "bin", "supervisor-write-audit");
-const childArgs = [
-  writerPath,
-  "--set-audit-phase", "done",
-  "--set-audit-verdict", verdict,
-  "--audit-cause", cause,
-];
-if (sessionId) {
-  childArgs.push("--session-id", sessionId);
-}
+const result = finalizeAuditRun(sid, {
+  audit_run_id: runId,
+  verdict,
+  verdict_summary: summary,
+});
 
-const result = spawnSync(process.execPath, childArgs, { stdio: "inherit" });
-if (result.error) {
-  console.error(`[supervisor-write-audit-verdict] ERROR: ${result.error.message}`);
-  process.exit(1);
-}
-process.exit(result.status == null ? 1 : result.status);
+console.log(JSON.stringify(result));
+if (result.accepted === true) process.exit(0);
+if (result.reason === "identity-mismatch") process.exit(EXIT_STALE_IDENTITY);
+process.exit(1);

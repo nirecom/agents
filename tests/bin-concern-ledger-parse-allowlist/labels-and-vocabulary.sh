@@ -8,20 +8,25 @@
 echo ""
 echo "--- parse 4: section-level COMPLETE / PARTIAL / ABSENT ---"
 
+# The staging header gained a 5th delta column, the exec label (#2276), so the
+# parse label these cases assert on is now field 6, not 5. Field 5 carries the
+# exec label (PERFORMED for a report with no explicit --exec).
 new_env
 NONE_R="$TMPDIR_BASE/none.txt"
 mk_report "$NONE_R" "(none)"
 stage "$NONE_R" 1 pnone
 NONE_DF="$(delta_file "$PLANS" "$SID" 1 pnone)"
 assert_eq "4: an explicit '(none)' body is COMPLETE with no records" \
-    "COMPLETE recs=0" "$(staging_field "$NONE_DF" 5) recs=$(rec_count "$NONE_DF")"
+    "COMPLETE recs=0" "$(staging_field "$NONE_DF" 6) recs=$(rec_count "$NONE_DF")"
+assert_eq "4: the exec-label column defaults to PERFORMED for that round" \
+    "PERFORMED" "$(staging_field "$NONE_DF" 5)"
 
 EMPTY_R="$TMPDIR_BASE/emptysec.txt"
 mk_report "$EMPTY_R" ""
 stage "$EMPTY_R" 1 pempty
 EMPTY_DF="$(delta_file "$PLANS" "$SID" 1 pempty)"
 assert_eq "4: a Concern Delta section with an empty body is PARTIAL" \
-    "PARTIAL recs=0" "$(staging_field "$EMPTY_DF" 5) recs=$(rec_count "$EMPTY_DF")"
+    "PARTIAL recs=0" "$(staging_field "$EMPTY_DF" 6) recs=$(rec_count "$EMPTY_DF")"
 
 # No section at all and no bullets anywhere: ABSENT. Written directly rather
 # than through mk_report, which always emits the section header.
@@ -30,7 +35,7 @@ printf '# Report\n\nnothing structured here at all.\n' > "$NOSEC"
 stage "$NOSEC" 1 nosec
 NOSEC_DF="$(delta_file "$PLANS" "$SID" 1 nosec)"
 assert_eq "4: a report with neither a section nor a bullet is ABSENT" \
-    "ABSENT" "$(staging_field "$NOSEC_DF" 5)"
+    "ABSENT" "$(staging_field "$NOSEC_DF" 6)"
 assert_eq "4: an ABSENT parse yields an ABSENT completeness" \
     "ABSENT" "$(staging_field "$NOSEC_DF" 3)"
 
@@ -45,7 +50,7 @@ stage "$MIXED" 1 mixed
 MIXED_DF="$(delta_file "$PLANS" "$SID" 1 mixed)"
 assert_eq "4: one bad bullet makes the round PARTIAL without discarding the good one" \
     "PARTIAL recs=1 unparsed=1" \
-    "$(staging_field "$MIXED_DF" 5) recs=$(rec_count "$MIXED_DF") unparsed=$(unparsed_count "$MIXED_DF")"
+    "$(staging_field "$MIXED_DF" 6) recs=$(rec_count "$MIXED_DF") unparsed=$(unparsed_count "$MIXED_DF")"
 
 # ---------------------------------------------------------------------------
 # 5. The vocabulary constant itself. A category silently dropped from the list

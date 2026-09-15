@@ -26,11 +26,11 @@ Alert mode (`agents/supervisor.md`, model: Sonnet) handles C1/C2/C3 triggers. In
 
 ### Audit mode (S-3, #720)
 
-Audit mode (`agents/supervisor-audit.md`, model: Opus) handles stage-boundary and severity-threshold triggers. Information scope: all stages + finding history. Two triggers arm `audit_armed_at`: (a) stage-boundary — `<<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>` sentinel in the most recent assistant turn; (b) severity-threshold — `alert.cumulative_severity` reaches `AUDIT_SEVERITY_THRESHOLD` (`error`).
+Audit mode (`agents/supervisor-audit.md`, model: Opus) handles step-completion and severity-threshold triggers. Information scope: all stages + finding history. Triggers are the SSOT in `hooks/lib/audit-triggers.js`: TR1–TR5 are **edge** triggers on a step-completion transition (`clarify_intent` / `outline` / `detail` / `write_code` / `user_verification`), and TR6 is the one **level** trigger — `alert.cumulative_severity` reaching `AUDIT_SEVERITY_THRESHOLD` (`error`). Cause labels are `step-complete:<step>` or `severity-threshold:<level>`. Each arm mints an audit run identity and records the run in the audit ledger; see [claude-code/supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md).
 
 Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `state.audit.audit_verdict`, written via `bin/supervisor-write-audit-verdict`. The verdict is combined with any concurrent alert verdict by `hooks/supervisor-guard/arbitrate.js` (rule table: BLOCK wins, WARN aggregates, otherwise allow) before the Stop hook emits a single block-or-allow decision.
 
-**Lifecycle (two-phase):** *arm* — Stop hook detects trigger, writes `audit_phase=pending` + `audit_armed_at` + `audit_cause`, then blocks with a prompt to invoke the audit agent. *surface* — the agent runs, writes `audit_phase=done` + `audit_verdict`; the next Stop event reads the verdict, surfaces it through `arbitrate()`, then clears `audit_phase=null` so the next stage boundary can re-arm. Anti-thrash: `incrementAuditRetryCount` auto-freezes the session after `AUDIT_RETRY_THRESHOLD` (2) consecutive failures. Alert and audit freeze independently.
+**Lifecycle (two-phase):** *arm* — Stop hook detects trigger, writes `audit_phase=pending` + `audit_armed_at` + `audit_cause`, then blocks with a prompt to invoke the audit agent. *surface* — the agent runs, writes `audit_phase=done` + `audit_verdict`; the next Stop event reads the verdict, surfaces it through `arbitrate()`, then clears `audit_phase=null` so the next arm trigger can re-arm. Anti-thrash: `incrementAuditRetryCount` auto-freezes the session after `AUDIT_RETRY_THRESHOLD` (2) consecutive failures. Alert and audit freeze independently.
 
 **Why:** Layer 1 is a passive observation layer. It does not intervene in the workflow or block any action. Three reporting paths feed findings into the state file: (A) hooks auto-report block events; (B) skills self-report fallback/degradation paths; (C) session-close runs a retrospective pass before the Final Report. Alert mode is an active review: the `supervisor-guard.js` Stop hook fires a `decision:block` when findings are present and `alert_phase` is not `done`/`paused`/`closed`, invoking the alert supervisor. At most one alert review runs per session. Audit mode triggers on stage boundaries and severity-threshold, providing cross-stage strategic oversight.
 
@@ -100,10 +100,13 @@ The file is directly inspectable for debugging.
 | `audit_phase` | `null`/`"pending"`/`"in_progress"`/`"done"`/`"frozen"` | Lifecycle SSOT |
 | `audit_verdict` | string or null | `"CONTINUE"` / `"WARN"` / `"BLOCK"` |
 | `audit_armed_at` | ISO string or null | Timestamp when audit was armed |
-| `audit_cause` | string or null | Trigger: `stage-boundary:CONFIRM_<STAGE>` or `severity-threshold:<level>` |
+| `audit_cause` | string or null | Trigger: `step-complete:<step>` or `severity-threshold:<level>` (coalesced causes are joined) |
+| `audit_verdict_summary` | string or null | Human-readable summary of the audit verdict; surfaced in `supervisor-guard.js` Phase B block reason in preference over `audit_cause` (#2256 C36) |
 | `audit_last_run_at` | ISO string or null | Timestamp of last audit execution |
 | `audit_retry_count` | integer | Consecutive failure count; frozen after `AUDIT_RETRY_THRESHOLD` (2) |
 | `findings[]` | Finding[] | Audit findings |
+
+The audit ledger, run identity, freshness key, TR5 two-stage hold, and the pre-merge freshness backstop extend this `audit` block; their schema and rationale are the SSOT in [claude-code/supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md).
 
 **Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done`, `paused`, or `closed` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits when `alert_phase` is `done` or `closed` — `paused` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`), while `closed` is a permanent session-close terminal that never re-arms. When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
 
@@ -115,9 +118,9 @@ The file is directly inspectable for debugging.
 
 Helper modules: `hooks/lib/supervisor-finding-status.js` and `hooks/lib/codex-review-parse.js`.
 
-**Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — pure function for audit mode trigger detection (stage-boundary + severity-threshold). Uses `AUDIT_SEVERITY_THRESHOLD` constant.
+**Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — scans workflow-state step-completion transitions (not the transcript) and returns the armed triggers, reading the table in `hooks/lib/audit-triggers.js`. Uses `AUDIT_SEVERITY_THRESHOLD` constant for TR6.
 
-**"escalation" terminology abolished:** The three concepts previously unified as "escalation" are now distinct: (1) **severity-threshold** — `AUDIT_SEVERITY_THRESHOLD` level check (`cumulative_severity === "error"`); (2) **recurrence-patterns** — same failure mode across multiple alert reviews (detected by audit mode); (3) **arming** — `ensureAlertScheduled` / `audit_armed_at` set.
+**"escalation" terminology abolished:** The three concepts previously unified as "escalation" are now distinct: (1) **severity-threshold** — `AUDIT_SEVERITY_THRESHOLD` level check (`cumulative_severity === "error"`); (2) **recurrence patterns** — same failure mode across multiple alert reviews (detected by audit mode); (3) **arming** — `ensureAlertScheduled` / `audit_armed_at` set.
 
 **Schema validation failures:** logged to `console.error` only — when the state file cannot be written, no finding is recorded for that case (known observation hole).
 

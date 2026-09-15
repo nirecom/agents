@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # bin/run-codex-review-loop
-# Wrapper for steps b (context build) + c (review-plan-codex) + d (verdict
-# parse) of skills/_shared/codex-review-loop.md.
+# Wrapper for steps b (context build) + c (reviewer) + d (verdict parse) of
+# skills/_shared/codex-review-loop.md. Per-format behaviour (which reviewer, how
+# its output is parsed, whether the input is a path or a ref, which ledger token,
+# whether the scanner fallback is allowed) lives in the fp_resolve() table
+# sourced from the FP_LIB path resolved below.
 #
 # Exit codes (SSOT table: skills/_shared/codex-review-loop.md):
 #   0 APPROVED (or silent LAND)  1 NON_APPROVED_VERDICT  2 ESCALATE
@@ -9,8 +12,14 @@
 #   4 wrapper/config/parser failure -> caller MUST halt, no fallback
 #   5 AUTO_EXTEND (caller increments EXTENSIONS_USED, re-enters)
 #   6 HIGH_UNRESOLVED (high-severity concerns remain at budget ceiling)
+#   7 FINALIZE-FAILED (the unresolved-concerns artifact could not be written)
 set -uo pipefail
 REDUCE_COMMITTED=false
+PRESTAGED_MODE=0
+# 1 only for a prestaged pass that ALLOCATED its own round (the scanner fallback
+# entered with no --round: #2276 S8-d). A prestaged JOIN (--round given) leaves
+# this 0 so settle_round_counter never touches a counter the reviewer pass owns.
+PRESTAGED_ADVANCED=0
 
 die() {
   echo "run-codex-review-loop: script error: $1" >&2
@@ -48,6 +57,10 @@ LEDGER_OVERRIDE=""
 EXTRA_CTX=()
 REPO_ROOT_ARG=""
 RISK_SIGNAL=""
+BASE_STATE_ARG=""
+PRESTAGED_REPORT=""
+PRESTAGED_PRODUCER=""
+PRESTAGED_EXEC=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -91,9 +104,29 @@ while [[ $# -gt 0 ]]; do
     --risk-signal)
       require_value "--risk-signal" "${2:-}"
       RISK_SIGNAL="$2"; shift 2 ;;
+    # ref-kind only: pin the reviewer's base-state (SUSPECT|FALLBACK|UNRESOLVED|
+    # CLEAN) instead of letting rk_build_args auto-resolve the merge-base. The
+    # reviewer then emits "## Codex Review Scope: BASE-<state>" and the exec
+    # label auto-derives to PARTIAL for a non-CLEAN base (#2276 S8). --base is an
+    # accepted alias so a caller can pass either spelling.
+    --base|--base-state)
+      require_value "$1" "${2:-}"
+      BASE_STATE_ARG="$2"; shift 2 ;;
     --force-round)
       require_value "--force-round" "${2:-}"
       FORCE_ROUND="$2"; shift 2 ;;
+    # The scanner fallback re-enters the loop with a report it already produced
+    # (#2276 S8-d). All three prestaged flags are required together; the pass
+    # joins the current round without a reviewer run or a counter advance.
+    --prestaged-report)
+      require_value "--prestaged-report" "${2:-}"
+      PRESTAGED_REPORT="$2"; shift 2 ;;
+    --prestaged-producer)
+      require_value "--prestaged-producer" "${2:-}"
+      PRESTAGED_PRODUCER="$2"; shift 2 ;;
+    --prestaged-exec)
+      require_value "--prestaged-exec" "${2:-}"
+      PRESTAGED_EXEC="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -101,7 +134,6 @@ done
 [[ -n "$FORMAT" ]]    || die "--format is required"
 [[ -n "$SID" ]]       || die "--session-id is required"
 [[ -n "$PLANS_DIR" ]] || die "--plans-dir is required"
-[[ -n "$DRAFT" ]]     || die "--draft-file is required"
 [[ -n "$CAP" ]]       || die "--cap is required"
 [[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
 [[ -n "$TRADEOFFS" ]] || die "--accepted-tradeoffs is required"
@@ -111,26 +143,67 @@ fi
 if [[ -n "$ROUND" ]]; then
   [[ "$ROUND" =~ ^[1-9][0-9]*$ ]] || { echo "run-codex-review-loop: --round must be a positive integer" >&2; exit 4; }
 fi
+# Did the caller name the round, or did the loop derive it from the counter?
+# The round >= 2 ledger-absent guard (see below) distinguishes the two: an
+# explicitly named round asserts prior state that must be there, while an
+# auto-derived resume of the persisted counter (#2276 S9-c) treats a missing
+# ledger as "the prior cycle left nothing to carry" and opens the cycle.
+ROUND_EXPLICIT=0
+if [[ -n "${ROUND:-}" ]] || [[ -n "${FORCE_ROUND:-}" ]]; then
+  ROUND_EXPLICIT=1
+fi
 
-case "$FORMAT" in
-  detail-plan|outline-plan|security-plan|test-review) ;;
-  *) die "--format must be detail-plan, outline-plan, security-plan, or test-review" ;;
-esac
+# --- Per-format parameters (fp_resolve): the one allowlist for --format ---
+FP_LIB="$AGENTS_CONFIG_DIR/bin/lib/codex-review-loop/format-params.sh"
+[[ -f "$FP_LIB" ]] || die "required library missing: $FP_LIB"
+# shellcheck source=/dev/null
+source "$FP_LIB" || die "required library failed to load: $FP_LIB"
+fp_resolve "$FORMAT" || die "--format must be detail-plan, outline-plan, security-plan, test-review, or security-code"
+LEDGER_FORMAT="$FP_LEDGER_FORMAT"
+INPUT_KIND="$FP_INPUT_KIND"
+PARSE_MODE="$FP_PARSE_MODE"
+PRESTAGED_POLICY="$FP_PRESTAGED"
+REVIEWER_BIN="$FP_REVIEWER"
+CL_PRODUCER_NAME="$FP_REVIEWER"
+
+# --- Prestaged (scanner fallback) flag validation ---
+if [[ -n "$PRESTAGED_REPORT$PRESTAGED_PRODUCER$PRESTAGED_EXEC" ]]; then
+  [[ -n "$PRESTAGED_REPORT" && -n "$PRESTAGED_PRODUCER" && -n "$PRESTAGED_EXEC" ]] \
+    || die "--prestaged-report, --prestaged-producer and --prestaged-exec are required together"
+  [[ "$PRESTAGED_POLICY" == "allow" ]] \
+    || die "--prestaged-report is not permitted for format: $FORMAT"
+  # The exec label must be one concern-ledger recognises: an unknown token would
+  # otherwise fall through cl_exec_completeness's default to ABSENT and stage a
+  # silently-degraded round. Reject it here (#2276 S8-d / P6).
+  case "$PRESTAGED_EXEC" in
+    PERFORMED|COMPLETE|TRUNCATED|PARTIAL|ABSENT|BASE-*) : ;;
+    *) die "--prestaged-exec must be one of PERFORMED|COMPLETE|TRUNCATED|PARTIAL|ABSENT|BASE-* (got: $PRESTAGED_EXEC)" ;;
+  esac
+  PRESTAGED_MODE=1
+fi
+
+# --draft-file is a path-kind concern only: ref-kind reviewers diff the tree.
+# A --draft-file handed to a ref-kind format is refused (fail-closed), never
+# silently ignored: the caller believes it named the review input (#2276 S8-b).
+if [[ "$INPUT_KIND" == "path" ]]; then
+  [[ -n "$DRAFT" ]] || die "--draft-file is required"
+else
+  [[ -z "$DRAFT" ]] || die "--draft-file is not accepted for ref-kind format: $FORMAT"
+fi
 
 # Validated here, not at the ledger CLI: this wrapper builds and *creates*
 # $PLANS_DIR/$SID-... itself — the context file, the built-marker, the round
 # counter, the last-round file and the round lock — long before any concern-
 # ledger code runs, so guarding only the CLI leaves this prefix open (#2025 C9).
-# $FORMAT needs no check: it is already an allowlist above. die = exit 4, whose
-# contract is "halt, do not fall back to a subagent" — a bad session id is a
-# configuration fault, not a reviewer that misbehaved.
 SAFE_TOKEN_LIB="$AGENTS_CONFIG_DIR/bin/lib/safe-plans-path.sh"
 [[ -f "$SAFE_TOKEN_LIB" ]] || die "required library missing: $SAFE_TOKEN_LIB"
 # shellcheck source=/dev/null
 source "$SAFE_TOKEN_LIB" || die "required library failed to load: $SAFE_TOKEN_LIB"
 sp_valid_token "$SID" || die "--session-id must match [A-Za-z0-9._-]+ and contain no '..' or separators (got: $SID)"
 
-[[ -f "$DRAFT" ]]     || die "draft file does not exist: $DRAFT"
+if [[ "$INPUT_KIND" == "path" ]]; then
+  [[ -f "$DRAFT" ]] || die "draft file does not exist: $DRAFT"
+fi
 [[ -d "$PLANS_DIR" ]] || die "plans dir does not exist: $PLANS_DIR"
 
 if [[ -z "$REPO_ROOT_ARG" ]]; then
@@ -142,18 +215,21 @@ if [[ -n "$REPO_ROOT_ARG" ]] && [[ ! -d "$REPO_ROOT_ARG" ]]; then
 fi
 
 BUILDER="$AGENTS_CONFIG_DIR/bin/build-codex-context"
-REVIEWER="$AGENTS_CONFIG_DIR/bin/review-plan-codex"
+REVIEWER="$AGENTS_CONFIG_DIR/bin/$REVIEWER_BIN"
 [[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"
-[[ -f "$REVIEWER" ]] || die "review-plan-codex not found: $REVIEWER"
+[[ -f "$REVIEWER" ]] || die "reviewer not found: $REVIEWER"
 
 mkdir -p "$PLANS_DIR" || die "cannot create PLANS_DIR: $PLANS_DIR"
 
 CONTEXT_OUT="$PLANS_DIR/$SID-codex-context.md"
 MARKER="$PLANS_DIR/$SID-codex-context.$FORMAT.built"
+# The ledger is addressed by the shared ledger token, the round counter by the
+# loop format: security-code and the security-plan review share one ledger while
+# keeping separate round counters (#2276 S8-a).
 if [[ -n "$LEDGER_OVERRIDE" ]]; then
   LEDGER="$LEDGER_OVERRIDE"
 else
-  LEDGER="$PLANS_DIR/$SID-$FORMAT-concern-ledger.txt"
+  LEDGER="$PLANS_DIR/$SID-$LEDGER_FORMAT-concern-ledger.txt"
 fi
 
 # --- Round counter management: SSOT for ROUND allocation (P2-2b/c) ---
@@ -162,87 +238,45 @@ LAST_ROUND_FILE="$PLANS_DIR/$SID-$FORMAT-last-round.txt"
 ROUND_LOCK="$ROUND_FILE.lock"
 ROUND_LOCK_HELD=0
 
-acquire_round_lock() {
-  local i=0
-  until mkdir "$ROUND_LOCK" 2>/dev/null; do
-    i=$(( i + 1 ))
-    if (( i > 100 )); then
-      echo "run-codex-review-loop: another review round is in flight for ${SID}/${FORMAT} (lock: ${ROUND_LOCK}); refusing to allocate a duplicate round number" >&2
-      exit 4
-    fi
-    sleep "${LOCK_SLEEP:-0.1}" 2>/dev/null || sleep 1
-  done
-  ROUND_LOCK_HELD=1
-}
-release_round_lock() {
-  (( ROUND_LOCK_HELD == 1 )) && rmdir "$ROUND_LOCK" 2>/dev/null || true
-  ROUND_LOCK_HELD=0
-}
-acquire_round_lock_besteffort() {
-  mkdir "$ROUND_LOCK" 2>/dev/null && ROUND_LOCK_HELD=1 || true
-  return 0
-}
+# --- Sourced helper modules (rules/coding/file-split.md Pattern A) ---
+CRL_LIB="$AGENTS_CONFIG_DIR/bin/lib/codex-review-loop"
+# shellcheck source=bin/lib/codex-review-loop/round-counter.sh
+source "$CRL_LIB/round-counter.sh"  || die "required library failed to load: round-counter.sh"
+# shellcheck source=bin/lib/codex-review-loop/ledger-verdict.sh
+source "$CRL_LIB/ledger-verdict.sh" || die "required library failed to load: ledger-verdict.sh"
+# shellcheck source=bin/lib/codex-review-loop/path-parse.sh
+source "$CRL_LIB/path-parse.sh"     || die "required library failed to load: path-parse.sh"
+# shellcheck source=bin/lib/codex-review-loop/ref-kind-input.sh
+source "$CRL_LIB/ref-kind-input.sh" || die "required library failed to load: ref-kind-input.sh"
+# shellcheck source=bin/lib/codex-review-loop/verdict-dispatch.sh
+source "$CRL_LIB/verdict-dispatch.sh" || die "required library failed to load: verdict-dispatch.sh"
+# shellcheck source=bin/lib/codex-review-loop/prestaged-pass.sh
+source "$CRL_LIB/prestaged-pass.sh"  || die "required library failed to load: prestaged-pass.sh"
 
-# A converged review has no further use for its ledger, but $LEDGER can be
-# $LEDGER_OVERRIDE — an arbitrary --ledger path with no containment check of
-# its own. Deleting it unconditionally would let an out-of-bounds override
-# unlink a file outside $PLANS_DIR, the same destructive-operation class
-# cl_finalize already guards with sp_contained_rm (#2025 C6/C8). An override
-# that resolves outside $PLANS_DIR is left in place rather than deleted.
-cleanup_ledger() {
-  sp_contained_rm "$LEDGER" "$PLANS_DIR" 2>/dev/null || true
-}
+resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}) or beside the wrapper ($(dirname "$(dirname "$0")")); set AGENTS_CONFIG_DIR to your agents checkout"
 
-read_round_file() {
-  local raw
-  raw="$(cat "$ROUND_FILE" 2>/dev/null)" || return 1
-  [[ "$raw" =~ ^[0-9]+$ ]] || return 1
-  (( ${#raw} <= 3 )) || return 1
-  printf '%s' "$((10#$raw))"
-}
-
-write_round_file() {
-  # Published through the shared primitive: the old "$ROUND_FILE.tmp.$$" was a
-  # predictable name in a shared directory, and mv onto a directory succeeds
-  # by moving the temp inside it (#2025 C6).
-  local v="$1"
-  printf '%s\n' "$v" | sp_publish_stdin "$ROUND_FILE" || die "cannot publish round counter: $ROUND_FILE"
-}
-
-_srn_terminate() {
-  # Best-effort as before, but published rather than redirected into (C6).
-  printf '%s\n' "$ROUND" | sp_publish_stdin "$LAST_ROUND_FILE" || true
-  rm -f "$ROUND_FILE"
-}
-_srn_rollback() {
-  if [[ "${REDUCE_COMMITTED:-false}" == "true" ]]; then
-    _srn_terminate
-    return
-  fi
-  if [[ -n "${ROUND_PREV:-}" ]]; then
-    if (( ROUND_FILE_EXISTED == 1 )); then
-      write_round_file "$ROUND_PREV" || true
-    else
-      rm -f "$ROUND_FILE"
-    fi
-  fi
-}
-settle_round_counter() {
-  local rc="$1"
-  [[ -n "${ROUND_FILE:-}" ]] || return 0
-  acquire_round_lock_besteffort
-  case "$rc" in
-    0|2|6) _srn_terminate ;;
-    1)     case "${FORMAT:-}" in security-plan|test-review) (( ROUND >= CAP )) && _srn_terminate ;; esac ;;
-    5)     : ;;
-    *)     _srn_rollback ;;
+# The scanner may only stage under a producer the ledger format admits (#2276 C3).
+if (( PRESTAGED_MODE == 1 )); then
+  PRESTAGED_ALLOWED="$(cl_allowed_producers_list)"
+  case $'\n'"$PRESTAGED_ALLOWED"$'\n' in
+    *$'\n'"$PRESTAGED_PRODUCER"$'\n'*) : ;;
+    *) die "--prestaged-producer not permitted for format ${FORMAT}: $PRESTAGED_PRODUCER" ;;
   esac
-  release_round_lock
-}
+fi
 
 FINAL_RC=4
 trap 'settle_round_counter "$FINAL_RC"; release_round_lock; rm -f "${TMP_OUT:-}"' EXIT
 
+# PRESTAGED (scanner fallback) pass — joins the current round, no reviewer run,
+# no counter advance (#2276 S8-d). Body extracted to prestaged-pass.sh under
+# rules/coding/file-split.md Pattern A; run_prestaged_pass exits the process.
+if (( PRESTAGED_MODE == 1 )); then
+  run_prestaged_pass
+fi
+
+# ===========================================================================
+# REVIEWER pass — allocate the round, run the reviewer, fold its findings.
+# ===========================================================================
 acquire_round_lock
 
 ROUND_FILE_EXISTED=0
@@ -291,107 +325,69 @@ if [[ ! -f "$MARKER" ]]; then
   : | sp_publish_stdin "$MARKER" || die "cannot create marker: $MARKER"
 fi
 
-ARGS=(
-  --input "$DRAFT"
-  --format "$FORMAT"
-  --session-id "$SID"
-  --log-dir "$PLANS_DIR"
-  --cap "$CAP"
-  --max-extensions "$MAX_EXT"
-  --extensions-used "$EXT_USED"
-  --accepted-tradeoffs "$TRADEOFFS"
-  --round "$ROUND"
-)
-
-if [[ "$ROUND" -ge 2 ]]; then
-  if [[ ! -f "$LEDGER" ]]; then
-    echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER}); refusing to restart concern IDs from C1 (see #748/#776/#2068)" >&2
-    exit 4
-  fi
-  ARGS+=(--ledger "$LEDGER")
-fi
-
-if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
-  ARGS+=(--context "$CONTEXT_OUT")
-fi
-
-for ctx in "${EXTRA_CTX[@]+"${EXTRA_CTX[@]}"}"; do
-  [[ -z "$ctx" ]] && continue
-  if [[ -f "$ctx" && -s "$ctx" ]]; then
-    ARGS+=(--context "$ctx")
-  fi
-done
-
-ARGS+=(--context "$CORE_PRINCIPLES")
-
-if [[ "${CODEX_MCP_FS:-}" != "off" ]] && [[ -n "$REPO_ROOT_ARG" ]]; then
-  ARGS+=(--repo-root "$REPO_ROOT_ARG")
-fi
-
-# --project-root is the NFR lookup root, a separate concern from the MCP
-# filesystem sandbox: it is forwarded even when CODEX_MCP_FS is off.
-if [[ -n "$REPO_ROOT_ARG" ]]; then
-  ARGS+=(--project-root "$REPO_ROOT_ARG")
+# The round >= 2 ledger guard is shared by both input kinds: an *explicitly*
+# named round >= 2 (--round / --force-round) with no ledger would restart
+# concern IDs from C1, so it is refused (see #748/#776/#2068). An auto-derived
+# resume of the persisted counter (#2276 S9-c) is not that failure: the counter
+# only survives a non-terminal round, and a missing ledger there means the prior
+# cycle produced nothing to carry, so the loop opens the cycle rather than
+# refusing. The caller of a review-only format never passes --round, so this
+# relaxation is confined to the counter-resume path.
+if [[ "$ROUND" -ge 2 ]] && [[ ! -f "$LEDGER" ]] && (( ROUND_EXPLICIT == 1 )); then
+  echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER}); refusing to restart concern IDs from C1 (see #748/#776/#2068)" >&2
+  exit 4
 fi
 
 TMP_OUT=$(mktemp) || die "mktemp failed"
+
+if [[ "$INPUT_KIND" == "path" ]]; then
+  path_build_args
+else
+  # ref-kind (security-code): review-code-codex diffs the tree; no --input.
+  rk_build_args
+fi
 
 bash "$REVIEWER" "${ARGS[@]}" > "$TMP_OUT"
 RV=$?
 
 if [[ $RV -ne 0 ]]; then
-  echo "run-codex-review-loop: codex unavailable (review-plan-codex exited $RV)" >&2
+  echo "run-codex-review-loop: codex unavailable ($REVIEWER_BIN exited $RV)" >&2
   exit 3
 fi
 
-HEADER=$(awk 'NF{print; exit}' "$TMP_OUT" | tr -d '\r')
+# S8-f unified every shared reviewer (review-plan-codex and review-code-codex)
+# on the single label "## Codex Review: <status>", so the header is matched by
+# that exact prefix — never by first-line position, which a "## Codex Review
+# Scope:" preamble line would otherwise capture. The retired "## Codex Plan
+# Review:" label no longer exists in the tree and is deliberately not accepted:
+# a stale reviewer emitting it yields an empty HEADER -> unrecognized -> exit 4.
+HEADER=$(grep -m1 '^## Codex Review: ' "$TMP_OUT" | tr -d '\r')
+STATUS="${HEADER##*Review: }"
 
-case "$HEADER" in
-  "## Codex Plan Review: PERFORMED")
+case "$STATUS" in
+  PERFORMED)
     : ;;
-  "## Codex Plan Review: FAILED — round cap reached"*)
+  "FAILED — round cap reached"*)
     echo "run-codex-review-loop: round cap reached" >&2
     exit 2 ;;
-  "## Codex Plan Review: SKIPPED"*)
+  SKIPPED*)
+    # The reviewer explained on stdout why it produced no review; the author
+    # must see that before the fallback fires, so emit it, then exit 3.
+    cat "$TMP_OUT"
     echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
     exit 3 ;;
-  "## Codex Plan Review: FAILED"*)
+  FAILED*)
+    cat "$TMP_OUT"
     echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
     exit 3 ;;
   *)
     die "unrecognized status header: $HEADER" ;;
 esac
 
-VERDICT=$(awk '
-  /<!-- begin-codex-output/ { inblock=1; next }
-  /<!-- end-codex-output -->/ { inblock=0; next }
-  inblock && NF { print; exit }
-' "$TMP_OUT" | tr -d '\r')
-
-if [[ -z "$VERDICT" ]]; then
-  echo "run-codex-review-loop: codex unavailable or verdict malformed (empty verdict block)" >&2
-  exit 3
-fi
-
-# Validate verdict matches expected non-APPROVED keyword for the format
-if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
-  case "$FORMAT" in
-    detail-plan)
-      [[ "$VERDICT" == "NEEDS_REVISION" ]] || {
-        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-        exit 3
-      } ;;
-    outline-plan)
-      [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]] || {
-        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-        exit 3
-      } ;;
-    security-plan|test-review)
-      [[ "$VERDICT" == "NEEDS_REVISION" ]] || {
-        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-        exit 3
-      } ;;
-  esac
+if [[ "$INPUT_KIND" == "path" ]]; then
+  path_verdict
+else
+  rk_synthetic_verdict
 fi
 
 # --- BEGIN concern-ID ledger + verdict-script block (issues #673 / #1992 / #1996) ---
@@ -401,138 +397,43 @@ fi
 # findings, and the mapping from a tally to a verdict.
 FINAL_EXIT=0
 HIGH_N=0; MED_N=0; LOW_N=0
-CL_CLI=""
-CL_PRODUCER_NAME="review-plan-codex"
 
-# shellcheck source=bin/lib/codex-review-loop/ledger-verdict.sh
-. "$(dirname "$0")/lib/codex-review-loop/ledger-verdict.sh"
-
+# A round enters the stage+reduce+dispatch path whenever the reviewer raised
+# concerns (non-APPROVED). It ALSO enters when the verdict is APPROVED but this
+# is a ref-kind (anchored) format whose ledger already holds open concerns from
+# a prior round: an empty codex delta is itself a signal (codex ran and
+# re-raised nothing), so the ledger tally plus the per-producer provenance gate
+# must decide whether those concerns resolve or persist stale (#2276 S8-d / N4).
+# Silently deleting a ledger that still holds open concerns is never correct — a
+# codex-only APPROVED pass must not erase a scanner-owned concern. Path-kind
+# APPROVED, and a ref-kind APPROVED with no open concerns to adjudicate, keep the
+# clean-exit shortcut (cleanup_ledger, exit 0).
+NEEDS_LEDGER_PASS=0
 if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
-  resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}) or beside the wrapper ($(dirname "$(dirname "$0")")); set AGENTS_CONFIG_DIR to your agents checkout"
+  NEEDS_LEDGER_PASS=1
+elif [[ "$INPUT_KIND" != "path" ]] && (( ROUND >= 2 )) && [[ -f "$LEDGER" ]] \
+     && grep -qE '^C[0-9]+\|' "$LEDGER"; then
+  NEEDS_LEDGER_PASS=1
+fi
+
+if (( NEEDS_LEDGER_PASS == 1 )); then
   # Exclusively created beside TMP_OUT, not the predictable "${TMP_OUT}.delta":
-  # that name is derivable from a mktemp in the shared $TMPDIR, and the `: >`
-  # that followed it would have written through a symlink pre-placed there,
-  # truncating whatever it pointed at (#2025 C6). Same prescription as every
-  # other member of that class in this codebase.
+  # that name is derivable from a mktemp in the shared $TMPDIR (#2025 C6).
   DELTA_SRC="$(sp_mktemp_beside "$TMP_OUT")" \
     || die "cannot stage the round's concerns beside: $TMP_OUT"
 
-  if [[ "$ROUND" == "1" ]]; then
-    # Round 1: the reviewer numbers its own findings; this loop assigns the
-    # concern IDs the later rounds refer back to.
-    ID_COUNTER=0
-    TRANSFORMED_CONTENT=""
-    INBLOCK=0
-
-    while IFS= read -r line; do
-      if [[ "$line" =~ ^\<!--[[:space:]]*begin-codex-output ]]; then
-        INBLOCK=1
-        TRANSFORMED_CONTENT+="$line"$'\n'
-        continue
-      fi
-      if [[ "$line" =~ ^\<!--[[:space:]]*end-codex-output ]]; then
-        INBLOCK=0
-        TRANSFORMED_CONTENT+="$line"$'\n'
-        continue
-      fi
-      if [[ "$INBLOCK" -eq 1 ]] && \
-         [[ "$line" =~ ^(C[0-9]+|[0-9]+)\.[[:space:]]\[(HIGH|MEDIUM|LOW)\][[:space:]](.+)$ ]]; then
-        SEV="${BASH_REMATCH[2]}"
-        TEXT="${BASH_REMATCH[3]}"
-        VALIDATOR="${AGENTS_CONFIG_DIR}/bin/validate-hook-scope-concern"
-        if [[ -x "$VALIDATOR" ]]; then
-          REJECT_REASON=""
-          if ! REJECT_REASON="$("$VALIDATOR" "$TEXT" 2>&1)"; then
-            echo "run-codex-review-loop: auto-rejected concern ($(( ID_COUNTER + 1 ))): $REJECT_REASON" >&2
-            TRANSFORMED_CONTENT+="<!-- auto-rejected: ${REJECT_REASON}: ${TEXT} -->"$'\n'
-            continue
-          fi
-        fi
-        ID_COUNTER=$((ID_COUNTER + 1))
-        CN="C${ID_COUNTER}"
-        printf '%s. [%s] %s\n' "$ID_COUNTER" "$SEV" "$TEXT" >> "$DELTA_SRC"
-        TRANSFORMED_CONTENT+="${CN}. [${SEV}] ${TEXT}"$'\n'
-      elif [[ "$INBLOCK" -eq 1 ]] && [[ "$line" =~ ^[0-9]+\.[[:space:]] ]]; then
-        # Numbered line that did not match the full [HIGH|MEDIUM|LOW] format — format violation.
-        echo "run-codex-review-loop: severity format violation in concern: $line" >&2
-        exit 4
-      else
-        TRANSFORMED_CONTENT+="$line"$'\n'
-      fi
-    done < "$TMP_OUT"
-
-    if [[ $ID_COUNTER -eq 0 ]]; then
-      echo "run-codex-review-loop: NEEDS_REVISION with no parseable concerns" >&2
-      exit 4
+  if [[ "$INPUT_KIND" == "path" ]]; then
+    if [[ "$ROUND" == "1" ]]; then
+      parse_round1_numbered
+    else
+      parse_round2_cnref
     fi
-
-    # A round 1 that arrives on top of a live ledger is a new cycle, not a
-    # collision: the previous cycle is archived rather than renumbered over.
-    # Fail closed. Swallowing this rc left the ledger un-archived and still
-    # live, and the stage/reduce below then folded round 1 into the previous
-    # cycle's entries — the cycle history destroyed silently, at rc 0.
-    if ! ledger_cli begin-round --round 1 >/dev/null; then
-      echo "run-codex-review-loop: the previous concern cycle could not be archived (round 1 on a live ledger at ${LEDGER}); refusing to reduce round 1 into it" >&2
-      rm -f "$DELTA_SRC"
-      exit 4
-    fi
-    PARSER="numbered"
-    printf '%s' "$TRANSFORMED_CONTENT" > "$TMP_OUT"
-
+    STAGE_EXEC_ARGS=(--exec PERFORMED --parser "$PARSER")
   else
-    # Round 2+: the reviewer may only speak about IDs the ledger already holds.
-    [[ -f "$LEDGER" ]] || {
-      echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER})" >&2
-      exit 4
-    }
-
-    declare -A LEDGER_IDS
-    while IFS='|' read -r LID _; do
-      case "$LID" in ''|'#'*) continue ;; esac
-      LEDGER_IDS["$LID"]=1
-    done < "$LEDGER"
-
-    DISCARDED=()
-    RETAINED_CONTENT=""
-    INBLOCK=0
-
-    while IFS= read -r line; do
-      if [[ "$line" =~ ^\<!--[[:space:]]*begin-codex-output ]]; then
-        INBLOCK=1
-        RETAINED_CONTENT+="$line"$'\n'
-        continue
-      fi
-      if [[ "$line" =~ ^\<!--[[:space:]]*end-codex-output ]]; then
-        INBLOCK=0
-        RETAINED_CONTENT+="$line"$'\n'
-        continue
-      fi
-      if [[ "$INBLOCK" -eq 1 ]] && [[ "$line" =~ ^(C[0-9]+):[[:space:]]*(.*)$ ]]; then
-        CID="${BASH_REMATCH[1]}"
-        STATUS="${BASH_REMATCH[2]}"
-        if [[ -v LEDGER_IDS["$CID"] ]]; then
-          RETAINED_CONTENT+="$line"$'\n'
-          # Only the lines that report a concern as still open become delta
-          # records; an entry nobody restates is closed out by its absence.
-          if [[ ! "$STATUS" =~ ^resolved($|[[:space:]]) ]]; then
-            printf '%s\n' "$line" >> "$DELTA_SRC"
-          fi
-        else
-          DISCARDED+=("$CID")
-        fi
-      else
-        RETAINED_CONTENT+="$line"$'\n'
-      fi
-    done < "$TMP_OUT"
-
-    if (( ${#DISCARDED[@]} > 0 )); then
-      DISCARDED_STR=$(printf '%s\n' "${DISCARDED[@]}" | sort -V | paste -sd ',' - | sed 's/,/, /g')
-      printf 'run-codex-review-loop: discarded new concern IDs in round %s: %s\n' \
-        "$ROUND" "$DISCARDED_STR" >&2
-    fi
-
-    PARSER="cnref"
-    printf '%s' "$RETAINED_CONTENT" > "$TMP_OUT"
+    # ref-kind: the whole raw output is the anchored delta; the exec label is
+    # auto-derived from the reviewer header, so NO --exec is passed.
+    rk_stage_anchored
+    STAGE_EXEC_ARGS=(--parser "$PARSER")
   fi
 
   CL_NO_OPEN_CONCERNS="<!-- concern-ledger: no open concerns in round ${ROUND} -->"
@@ -542,7 +443,10 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
   fi
 
   if ! ledger_cli stage --round "$ROUND" --producer "$CL_PRODUCER_NAME" \
-        --exec PERFORMED --parser "$PARSER" --from-report "$DELTA_SRC" >/dev/null 2>&1; then
+        "${STAGE_EXEC_ARGS[@]}" --from-report "$DELTA_SRC" >/dev/null 2>&1; then
+    # The reviewer's own review still reaches the author even though the ledger
+    # write failed: the halt (exit 4) is a wrapper fault, not a lost review.
+    cat "$TMP_OUT"
     echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
     rm -f "$DELTA_SRC"
     exit 4
@@ -562,8 +466,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
   fi
 
   # The tally the verdict reads is the ledger's own view of what is still open,
-  # not a count of this round's bullets: an entry the reviewer stopped
-  # mentioning has been resolved, and one it re-raised is still one concern.
+  # not a count of this round's bullets.
   for _kv in $TALLY; do
     case "$_kv" in
       open_high=*)   HIGH_N="${_kv#*=}" ;;
@@ -575,61 +478,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
   [[ "$MED_N"  =~ ^[0-9]+$ ]] || MED_N=0
   [[ "$LOW_N"  =~ ^[0-9]+$ ]] || LOW_N=0
 
-  VERDICT_BIN="${AGENTS_CONFIG_DIR}/bin/review-loop-verdict"
-  [[ -x "$VERDICT_BIN" ]] || {
-    echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
-    exit 4
-  }
-  BUDGET_REMAINING=$(( MAX_EXT - EXT_USED ))
-  VERDICT_ARGS=("$ROUND" "$HIGH_N" "$MED_N" "$LOW_N" "--budget-remaining" "$BUDGET_REMAINING")
-  [[ -n "$RISK_SIGNAL" ]] && VERDICT_ARGS+=("--risk-signal" "$RISK_SIGNAL")
-  VERDICT_DECISION=$("$VERDICT_BIN" "${VERDICT_ARGS[@]}")
-  VERDICT_RC=$?
-  : "${VERDICT_DECISION:=}"
-
-  case "$VERDICT_RC" in
-    0)
-      cleanup_ledger
-      FINAL_EXIT=0
-      ;;
-    1)
-      if declare -f codex_core_hard_cap_check > /dev/null 2>&1; then
-        if ! codex_core_hard_cap_check "$ROUND" "$CAP" "$EXT_USED" "$MAX_EXT" > /dev/null 2>&1; then
-          finalize_ledger escalate "hard round cap reached without convergence" 2
-          FINAL_EXIT=2
-        else
-          FINAL_EXIT=1
-        fi
-      else
-        FINAL_EXIT=1
-      fi
-      ;;
-    2)
-      finalize_ledger escalate "risk signal present at the budget ceiling" 2
-      FINAL_EXIT=2
-      ;;
-    6) finalize_ledger terminal \
-         "high-severity concerns remain unresolved at the budget ceiling" 6
-       FINAL_EXIT=6 ;;
-    4)
-      echo "run-codex-review-loop: review-loop-verdict argument error (round=$ROUND high=$HIGH_N med=$MED_N low=$LOW_N)" >&2
-      exit 4
-      ;;
-    5)
-      # AUTO_EXTEND: keep ledger — loop continues
-      FINAL_EXIT=5
-      ;;
-    *)
-      echo "run-codex-review-loop: review-loop-verdict unexpected exit: $VERDICT_RC" >&2
-      exit 4
-      ;;
-  esac
-
-  # The last round the caller is allowed to run has ended unresolved: there is
-  # no next round to carry the ledger, so this is where it is finalized.
-  if [[ "$FINAL_EXIT" == "1" ]] && (( ROUND >= CAP )); then
-    finalize_ledger terminal "round cap reached without convergence" 1
-  fi
+  dispatch_codex_verdict
 else
   cleanup_ledger
   FINAL_EXIT=0

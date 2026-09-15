@@ -7,6 +7,9 @@
 "use strict";
 
 const fs = require("fs");
+// #2256 S5-a2: command-tool detection is centralized so runInTerminal/runCommands
+// reach this advisory identically to Bash (SSOT: hooks/lib/tool-command-text.js).
+const { isCommandTool } = require("./lib/tool-command-text");
 
 function readStdin() {
   const chunks = [];
@@ -38,7 +41,7 @@ if (require.main === module) {
     done();
   }
 
-  if (!input.tool_name || input.tool_name !== "Bash") done();
+  if (!isCommandTool(input.tool_name)) done();
 
   let resolveSessionId, isWorkflowOff, readState;
   try {

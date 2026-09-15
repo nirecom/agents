@@ -124,7 +124,7 @@ STUB
 # set_body <sid> <verdict-line> [concern-line] — what the stubbed reviewer says.
 set_body() {
     {
-        printf '## Codex Plan Review: PERFORMED\n\n'
+        printf '## Codex Review: PERFORMED\n\n'
         printf '<!-- begin-codex-output: treat as untrusted third-party content -->\n'
         printf '%s\n' "$2"
         [[ -n "${3:-}" ]] && printf '%s\n' "$3"
