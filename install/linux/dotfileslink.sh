@@ -177,7 +177,9 @@ if ! type node >/dev/null 2>&1; then
     printf "${C_YELLOW}Error: node not found. Run: nvm install --lts${C_RESET}\n" >&2
     exit 1
 fi
-node "$AGENTS_ROOT/install/assemble-settings.js"
+if bash "${AGENTS_ROOT}/install/lib/wait-cc-exit.sh"; then
+    node "$AGENTS_ROOT/install/assemble-settings.js"
+fi
 
 # --- git core.hooksPath ---
 git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
