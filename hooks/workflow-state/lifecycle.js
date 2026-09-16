@@ -2,7 +2,7 @@
 // SSOT for "did THIS session genuinely start the workflow?" — an allow-list
 // on the settling event's origin, not a denylist on session-inherit, so
 // cross-session state replay never counts as adoption. Rationale + full
-// origin list: docs/architecture/claude-code/workflow.md#exemptions (#1794).
+// origin list: docs/architecture/claude-code/workflow-runtime.md#exemptions (#1794).
 const { readState, isGenuineProvenance } = require("./state-io");
 const {
   STEP_IN_FLIGHT_ALLOWLIST,
@@ -16,7 +16,7 @@ const {
 const ADOPTION_EVENT_KINDS = ["step_status"];
 
 // Origins representing a genuine, THIS-SESSION action settling a step. See
-// docs/architecture/claude-code/workflow.md#exemptions for what each origin
+// docs/architecture/claude-code/workflow-runtime.md#exemptions for what each origin
 // is and why session-inherit / next-step auto-persist origins are excluded.
 const ADOPTION_ORIGINS = ["mark-step", "migration-v1-to-v2", "reset-sentinel"];
 
@@ -81,7 +81,7 @@ const WRITE_CODE_IN_FLIGHT_TTL_MS = 4 * 60 * 60 * 1000;
 // Deliberately scoped to `write_code` ALONE, and kept as its own predicate even
 // after #2013 added the allowlist-scoped sibling below (CPR-UNV: the exception
 // stays named and bounded). Fail-CLOSED via isFreshInFlightEntry.
-// Detail: docs/architecture/claude-code/workflow.md#exemptions.
+// Detail: docs/architecture/claude-code/workflow-runtime.md#exemptions.
 function isWriteCodeInFlight(sid) {
   try {
     const state = readState(sid);

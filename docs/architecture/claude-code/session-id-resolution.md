@@ -3,7 +3,7 @@
 What this file owns: the boundary between the two identifier families, why the resolver is
 supplied-only, the `bin/resolve-session-id` bridge's rc contract, and the contract of the static
 guard. The chain's 4-tier shape is described in
-[workflow.md](workflow.md#bashcli-side-resolution) and is not repeated here.
+[workflow-runtime.md](workflow-runtime.md#bashcli-side-resolution) and is not repeated here.
 
 ## Two identifier families that share one variable name
 

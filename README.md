@@ -20,6 +20,11 @@ the dev workflow as a deterministic next-step-driven state machine. After each s
 the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook physically
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 
+The same state machine runs in several modes depending on the work. **WF-CODE** is the standard
+implementation flow with all 16 steps active; **WF-META** is a planning-only variant for
+meta-label issues that auto-skips the implementation steps (7–14). The full per-mode step lists
+live in [docs/architecture/claude-code/workflow.md](docs/architecture/claude-code/workflow.md#workflow-types-in-next-step---list).
+
 ```mermaid
 flowchart TD
     classDef terminal  fill:#16a34a,stroke:#14532d,color:#fff,font-weight:bold
@@ -97,32 +102,6 @@ flowchart TD
     class S0_SC,S0_SH,P2b_R,P2c_R,S6a,S6b parallel
     class S0_R,P2b_L,P2c_L,S5,S7,UV,Push,WE,IC required
 ```
-
-Inspect the step list and current session state with `bin/workflow/next-step --list`:
-
-**WF-CODE** (standard implementation — all 16 steps active):
-```
- 1  workflow_init       Initialize session state and GitHub issue
- 2  clarify_intent      Interview and write intent.md
- 3  research            Run survey-code and/or deep-research
- 4  outline             Propose high-level approaches
- 5  detail              File-level implementation plan
- 6  branching_complete  Create feature branch and worktree
- 7  write_tests         Write tests for planned changes
- 8  review_tests        Review test coverage adequacy
- 9  write_code          Implement the planned changes
-10  run_tests           Run test suite and security review
-11  review_security     Adversarial security review and code quality gates
-12  docs                Update docs and changelog
-13  user_verification   User verifies the implementation
-14  cleanup             Remove worktree and merge branch
-15  pre_final_report_gate  Final report and session close
-16  final_report        Final report delivered (terminal)
-```
-
-Meta-label issues run a planning-only variant (**WF-META**) that auto-skips the implementation
-steps 7–14. Its step list and the full derivation rules are documented in
-[docs/architecture/claude-code/workflow.md](docs/architecture/claude-code/workflow.md#workflow-types-in-next-step---list).
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
   satisfies the corresponding steps — no manual marker required.
