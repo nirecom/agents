@@ -8,7 +8,7 @@
 //
 // #1794: the markStep() auto-persist calls below carry explicit origins (not
 // ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart from a
-// user-driven markStep. Detail: docs/architecture/claude-code/workflow.md#exemptions.
+// user-driven markStep. Detail: docs/architecture/claude-code/workflow-runtime.md#exemptions.
 
 const fs = require("fs");
 const {
