@@ -4,15 +4,22 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $env:SYSTEM_OPS_APPROVED = "1"
 
-fnm env --shell powershell | Out-String | Invoke-Expression
-
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-    throw "fnm is installed but npm not found. Run: fnm install --lts"
-}
-
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     Write-Host "Claude Code is already installed." -ForegroundColor DarkGray
+    & pwsh -NoProfile -File (Join-Path $env:AGENTS_ROOT "install\lib\wait-cc-exit.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Claude Code still running — skipping update."
+        exit 0
+    }
+    claude update
+    if ($LASTEXITCODE -ne 0) { Write-Warning "claude update failed; retry manually." }
+    exit 0
 } else {
+    fnm env --shell powershell | Out-String | Invoke-Expression
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Write-Warning "fnm is installed but npm not found. Run: fnm install --lts"
+        exit 1
+    }
     Write-Host "Installing Claude Code..."
     npm install -g @anthropic-ai/claude-code
     if ($LASTEXITCODE -eq 0) {

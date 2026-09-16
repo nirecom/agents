@@ -15,6 +15,11 @@ NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 if type codex >/dev/null 2>&1; then
     printf "${C_GRAY}Codex is already installed.${C_RESET}\n"
+    if ! bash "$(dirname "${BASH_SOURCE[0]}")/../lib/wait-cc-exit.sh"; then
+        printf "Claude Code still running — skipping update.\n" >&2
+        exit 0
+    fi
+    codex update || true
     exit 0
 fi
 

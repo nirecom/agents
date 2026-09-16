@@ -8,6 +8,8 @@
 # (CPR-ORTH symmetry), and the generated path must stay untracked (.gitignore).
 #
 # Layer: TL2 (static/grep over the real installer sources; no installer execution).
+set -u
+
 # TL3 gap (what this test does NOT catch):
 # - Whether the symlink is actually created on a real Windows host (Developer Mode /
 #   admin privileges, MSYS winsymlinks) and on a real POSIX host.
@@ -17,8 +19,6 @@
 # deferred by user decision for this session (see outline.md).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer.
-
-set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PS_FILE="$AGENTS_DIR/install/win/dotfileslink.ps1"
@@ -215,6 +215,275 @@ if [ "$_win_count" = "1" ] && [ "$_sh_count" = "1" ]; then
     pass "L6: wf-init link declared exactly once per installer (win=$_win_count, posix=$_sh_count)"
 else
     fail "L6: duplicate/missing wf-init declaration (win=$_win_count, posix=$_sh_count; expected 1 each)"
+fi
+
+# --- CC process guard (issue #2284) ---
+# Both dotfileslink installers must wait for a live Claude Code process to exit before
+# rewriting settings.json, and skip the assemble-settings.js call when the wait times
+# out. Detector shape: the wait-cc-exit reference precedes the assemble-settings call,
+# with a skip (exit 0 / return) between the two.
+
+# Line number of the first *executable* wait-cc-exit reference; empty when absent.
+# A commented-out reference is documentation, never a guard.
+_wait_ref_line() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    grep -nE 'wait-cc-exit\.(sh|ps1)' "$file" \
+        | grep -vE '^[0-9]+:[[:space:]]*#' | head -n1 | cut -d: -f1
+}
+
+# Line number of the assemble-settings.js invocation; empty when absent.
+_assemble_line() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    grep -nE 'assemble-settings\.js' "$file" | head -n1 | cut -d: -f1
+}
+
+# The guard must run before the write.
+_guard_precedes_assemble() {
+    local file="$1" w a
+    w="$(_wait_ref_line "$file")"
+    a="$(_assemble_line "$file")"
+    [ -n "$w" ] && [ -n "$a" ] && [ "$w" -lt "$a" ]
+}
+
+# On timeout the write must be skipped: a skip path must appear in the guard's immediate
+# neighbourhood (bounded to 6 lines) and the guard's exit code must be consumed by a branch.
+# Scanning the whole range from guard to assemble is a false-green trap because
+# dotfileslink.sh already contains unrelated `exit 0` and `return` lines in that span.
+#
+# Two patterns are accepted:
+#   POSIX: `if ! bash .../wait-cc-exit.sh; then … exit 0; fi`
+#           `bash .../wait-cc-exit.sh || { …; exit 0; }`
+#   PS:     `& pwsh … wait-cc-exit.ps1` then `if ($LASTEXITCODE -ne 0) { …; exit 0 }`
+#
+_guard_skips_assemble() {
+    local file="$1" w a to _bound=false _guard_line
+    w="$(_wait_ref_line "$file")"
+    a="$(_assemble_line "$file")"
+    [ -n "$w" ] && [ -n "$a" ] && [ "$w" -lt "$a" ] || return 1
+
+    _guard_line="$(sed -n "${w}p" "$file")"
+
+    # Pattern 2 — positive-if (narrow skip): `if bash .../wait-cc-exit; then assemble; fi`
+    # Assemble is inside the then-block; no exit 0 needed. hooksPath/doc-append still run.
+    # Accept when guard line is a positive `if` (no `!`) with the wait-cc-exit call.
+    if printf '%s' "$_guard_line" | grep -Eq '^[[:space:]]*if[[:space:]]' \
+    && ! printf '%s' "$_guard_line" | grep -q '!' \
+    && [ "$((a - w))" -le 6 ]; then
+        return 0
+    fi
+
+    # Pattern 1 — exit-on-timeout: guard bound + exit 0 within 6 lines.
+    # Guard exit code must be bound — POSIX (if/||) OR PowerShell ($LASTEXITCODE within 3 lines).
+    printf '%s' "$_guard_line" | grep -Eq '(^[[:space:]]*(if|while|until)[[:space:]]|\|\|)' && _bound=true
+    if ! $_bound; then
+        sed -n "${w},$((w + 3))p" "$file" | grep -Eq '(\$LASTEXITCODE|if[[:space:]]*\()' || return 1
+    fi
+    to=$((w + 6))
+    [ "$to" -ge "$a" ] && to=$((a - 1))
+    [ "$to" -ge "$w" ] || return 1
+    sed -n "${w},${to}p" "$file" \
+        | grep -Eq '(exit[[:space:]]+0|(^|[[:space:]]|;|\{)return([[:space:]]|;|\}|$))'
+}
+
+# Line of the DOTFILESLINK_LINKS_ONLY early-exit — the scope anchor for the guard.
+# The guard must appear AFTER this line so a timeout skips only the settings write,
+# not symlink creation or links-only mode.
+_dotfiles_links_only_line() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    grep -n 'DOTFILESLINK_LINKS_ONLY' "$file" \
+        | grep -vE '^[0-9]+:[[:space:]]*#' | tail -n1 | cut -d: -f1
+}
+
+# Guard must appear AFTER the DOTFILESLINK_LINKS_ONLY exit.
+_guard_scope_ok_dotfiles() {
+    local file="$1" w sl
+    w="$(_wait_ref_line "$file")"
+    sl="$(_dotfiles_links_only_line "$file")"
+    [ -n "$w" ] && [ -n "$sl" ] && [ "$w" -gt "$sl" ]
+}
+
+# --- B1: POSIX installer calls the guard before assemble-settings.js ---
+if _guard_precedes_assemble "$SH_FILE"; then
+    pass "B1: dotfileslink.sh calls wait-cc-exit.sh before node assemble-settings.js"
+else
+    fail "B1: dotfileslink.sh has no wait-cc-exit.sh call preceding assemble-settings.js"
+fi
+
+# --- B2: POSIX installer skips the write when the guard times out ---
+if _guard_skips_assemble "$SH_FILE"; then
+    pass "B2: dotfileslink.sh skips assemble-settings.js on a wait-cc-exit timeout"
+else
+    fail "B2: dotfileslink.sh has no skip path between wait-cc-exit.sh and assemble-settings.js"
+fi
+
+# --- B2b: POSIX guard is scoped after DOTFILESLINK_LINKS_ONLY (not at script top) ---
+if _guard_scope_ok_dotfiles "$SH_FILE"; then
+    pass "B2b: dotfileslink.sh guard is placed after the DOTFILESLINK_LINKS_ONLY exit"
+else
+    fail "B2b: dotfileslink.sh guard precedes DOTFILESLINK_LINKS_ONLY exit — would block links-only mode"
+fi
+
+# --- B3: Windows installer calls the guard before assemble-settings.js ---
+if _guard_precedes_assemble "$PS_FILE"; then
+    pass "B3: dotfileslink.ps1 calls wait-cc-exit.ps1 before assemble-settings.js"
+else
+    fail "B3: dotfileslink.ps1 has no wait-cc-exit.ps1 call preceding assemble-settings.js"
+fi
+
+# --- B4: Windows installer skips the write when the guard times out ---
+if _guard_skips_assemble "$PS_FILE"; then
+    pass "B4: dotfileslink.ps1 skips assemble-settings.js on a wait-cc-exit timeout"
+else
+    fail "B4: dotfileslink.ps1 has no skip path between wait-cc-exit.ps1 and assemble-settings.js"
+fi
+
+# --- B4b: PS guard is scoped after DOTFILESLINK_LINKS_ONLY (not at script top) ---
+if _guard_scope_ok_dotfiles "$PS_FILE"; then
+    pass "B4b: dotfileslink.ps1 guard is placed after the DOTFILESLINK_LINKS_ONLY exit"
+else
+    fail "B4b: dotfileslink.ps1 guard precedes DOTFILESLINK_LINKS_ONLY exit — would block links-only mode"
+fi
+
+# --- B5: mutation probes — detectors must discriminate, not merely be red today ---
+
+# B5a: removing the guard reference must make B1 red.
+_mut_guard="$TMP_DIR/dotfileslink-no-guard.sh"
+grep -vE 'wait-cc-exit\.(sh|ps1)' "$SH_FILE" > "$_mut_guard"
+_mut_guard_found=0
+_guard_precedes_assemble "$_mut_guard" && _mut_guard_found=1
+if [ "$_mut_guard_found" = "0" ]; then
+    pass "B5a: B1 detector reports absent after guard removal"
+else
+    fail "B5a: B1 detector is false-green after guard removal"
+fi
+
+# B5b: a synthetic caller where the skip path is absent must make B2 red.
+# This catches the HIGH-2 false-green: a file that calls the guard but ignores the exit code.
+_mut_noskip="$TMP_DIR/dotfileslink-noskip.sh"
+cat > "$_mut_noskip" << 'NOSKIP_EOF'
+#!/bin/bash
+set -euo pipefail
+bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh" || true
+node "$AGENTS_ROOT/install/assemble-settings.js"
+NOSKIP_EOF
+_mut_noskip_skips=0
+_guard_skips_assemble "$_mut_noskip" && _mut_noskip_skips=1
+if [ "$_mut_noskip_skips" = "0" ]; then
+    pass "B5b: B2 detector reports no skip when guard exit code is discarded (|| true)"
+else
+    fail "B5b: B2 detector is false-green when guard exit code is discarded"
+fi
+
+# B5c: a synthetic caller where the guard is correct must make B2 green.
+_mut_good="$TMP_DIR/dotfileslink-good.sh"
+cat > "$_mut_good" << 'GOOD_EOF'
+#!/bin/bash
+set -euo pipefail
+if ! bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
+    echo "CC still running; skipping settings write." >&2
+    exit 0
+fi
+node "$AGENTS_ROOT/install/assemble-settings.js"
+GOOD_EOF
+_mut_good_skips=0
+_guard_skips_assemble "$_mut_good" && _mut_good_skips=1
+if [ "$_mut_good_skips" = "1" ]; then
+    pass "B5c: B2 detector reports skip present on a correctly guarded caller"
+else
+    fail "B5c: B2 detector gives false-red on a correctly guarded caller"
+fi
+
+# B5h: narrow-skip SH — positive-if pattern (assemble in then-block, hooksPath outside) → B2 green.
+_mut_narrow_sh="$TMP_DIR/dotfileslink-narrow.sh"
+cat > "$_mut_narrow_sh" << 'NARROW_SH_EOF'
+#!/bin/bash
+set -euo pipefail
+[ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
+if bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
+    node "$AGENTS_ROOT/install/assemble-settings.js"
+fi
+git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
+NARROW_SH_EOF
+_mut_narrow_sh_skips=0
+_guard_skips_assemble "$_mut_narrow_sh" && _mut_narrow_sh_skips=1
+if [ "$_mut_narrow_sh_skips" = "1" ]; then
+    pass "B5h: B2 detector accepts narrow-skip (positive-if with assemble in then-block)"
+else
+    fail "B5h: B2 detector false-negative on narrow-skip pattern (positive-if)"
+fi
+
+# B5f: too-early SH — guard before DOTFILESLINK_LINKS_ONLY must fail _guard_scope_ok_dotfiles.
+_mut_early_sh="$TMP_DIR/dotfileslink-too-early.sh"
+cat > "$_mut_early_sh" << 'EARLY_SH_EOF'
+#!/bin/bash
+set -euo pipefail
+if ! bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
+    echo "CC still running; skipping settings write." >&2
+    exit 0
+fi
+[ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
+_link_one "$AGENTS_ROOT/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+node "$AGENTS_ROOT/install/assemble-settings.js"
+EARLY_SH_EOF
+_mut_early_sh_scope=0
+_guard_scope_ok_dotfiles "$_mut_early_sh" && _mut_early_sh_scope=1
+if [ "$_mut_early_sh_scope" = "0" ]; then
+    pass "B5f: B2b scope detector rejects a too-early SH guard (before DOTFILESLINK_LINKS_ONLY)"
+else
+    fail "B5f: B2b scope detector is false-green for a too-early SH guard"
+fi
+
+# B5g: too-early PS — guard before DOTFILESLINK_LINKS_ONLY must fail _guard_scope_ok_dotfiles.
+_mut_early_ps="$TMP_DIR/dotfileslink-too-early.ps1"
+cat > "$_mut_early_ps" << 'EARLY_PS_EOF'
+& pwsh -NoProfile -File "$PSScriptRoot/../../install/lib/wait-cc-exit.ps1"
+if ($LASTEXITCODE -ne 0) { Write-Warning "CC running; skipping."; exit 0 }
+if ($env:DOTFILESLINK_LINKS_ONLY -eq "1") { exit 0 }
+$links = @(@{ Source = "skills/workflow-init"; Dest = "$AgentsRoot\skills\wf-init" })
+foreach ($link in $links) { }
+node "$PSScriptRoot/../../install/assemble-settings.js"
+EARLY_PS_EOF
+_mut_early_ps_scope=0
+_guard_scope_ok_dotfiles "$_mut_early_ps" && _mut_early_ps_scope=1
+if [ "$_mut_early_ps_scope" = "0" ]; then
+    pass "B5g: B4b scope detector rejects a too-early PS guard (before DOTFILESLINK_LINKS_ONLY)"
+else
+    fail "B5g: B4b scope detector is false-green for a too-early PS guard"
+fi
+
+# B5d: PS good — guard with $LASTEXITCODE check must make B4 green.
+_mut_good_ps="$TMP_DIR/dotfileslink-good.ps1"
+cat > "$_mut_good_ps" << 'GOOD_PS_EOF'
+& pwsh -NoProfile -File "$PSScriptRoot/../../install/lib/wait-cc-exit.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "CC still running; skipping settings write."
+    exit 0
+}
+node "$PSScriptRoot/../../install/assemble-settings.js"
+GOOD_PS_EOF
+_mut_good_ps_skips=0
+_guard_skips_assemble "$_mut_good_ps" && _mut_good_ps_skips=1
+if [ "$_mut_good_ps_skips" = "1" ]; then
+    pass "B5d: B4 detector reports skip present on a correctly guarded PS caller"
+else
+    fail "B5d: B4 detector gives false-red on a correctly guarded PS caller"
+fi
+
+# B5e: PS noskip — guard without $LASTEXITCODE check must make B4 red.
+_mut_noskip_ps="$TMP_DIR/dotfileslink-noskip.ps1"
+cat > "$_mut_noskip_ps" << 'NOSKIP_PS_EOF'
+& pwsh -NoProfile -File "$PSScriptRoot/../../install/lib/wait-cc-exit.ps1"
+node "$PSScriptRoot/../../install/assemble-settings.js"
+NOSKIP_PS_EOF
+_mut_noskip_ps_skips=0
+_guard_skips_assemble "$_mut_noskip_ps" && _mut_noskip_ps_skips=1
+if [ "$_mut_noskip_ps_skips" = "0" ]; then
+    pass "B5e: B4 detector reports no skip when PS guard exit code is not checked"
+else
+    fail "B5e: B4 detector is false-green when PS guard exit code is not checked"
 fi
 
 echo "---"

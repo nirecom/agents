@@ -146,6 +146,11 @@ if ($staleItem -and ($staleItem.Attributes -band [IO.FileAttributes]::ReparsePoi
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     throw "node not found. Install fnm and run: fnm install --lts"
 }
+& pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Claude Code still running — skipping settings.json write."
+    exit 0
+}
 & node (Join-Path $AgentsRoot "install\assemble-settings.js")
 if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
 
