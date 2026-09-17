@@ -479,3 +479,7 @@ Changes: Hardened `session-sync-init.sh`/`.ps1` against a malicious or misconfig
 ### FEATURE: PR #2298 (2026-09-14)
 Background: fix(#2279,#2213): stop WI-10 lookahead from poisoning /resume-session's own heir
 Changes: Fixed: `/resume-session --from` (and `--list`) now correctly detect adoptable sessions on a fresh session instead of being blocked by an internal workflow-init timing artifact.;Fixed: the workflow's premature-stop safeguard no longer silences a genuinely stalled step just because an unrelated step is still in its startup window.
+
+### FEATURE: feat(#2284): installers wait for CC exit before update (2026-09-17)
+Background: Install scripts could corrupt the CC binary when Claude Code was running during an update.
+Changes: Installers now wait up to 30 s for Claude Code to exit before running claude update or codex update, preventing binary corruption when CC is running during an install or update.
