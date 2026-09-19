@@ -4,6 +4,7 @@
 // Extract the argument following `git -C` from a command string.
 // Returns the unquoted path string, or null if -C is absent or quote is unterminated.
 function parseGitCArg(command) {
+  if (!command || typeof command !== "string") return null;
   const m = command.match(/git\s+-C\s+(["']?)(\S.*)/);
   if (!m) return null;
   const quote = m[1];
@@ -18,16 +19,12 @@ function parseGitCArg(command) {
 }
 
 // Extract the absolute literal path following a leading `cd` command.
-// Form: `cd <absolute-path> [&&|;|whitespace] ...`
-// Returns unquoted path or null when:
-//   - no leading `cd`
-//   - unterminated quote
-//   - relative path (./foo, foo)
-//   - tilde (~) path
+// Form: `cd <absolute-path> [&&|;|whitespace] ...`. First cd only:
+// `cd /a && cd /b && git` returns /a (conservative). Returns null when:
+//   - no leading `cd`, unterminated quote, relative path, or tilde (~) path
 //   - shell-variable reference ($X, ${X}) — hooks see the raw command string
 //     BEFORE Bash variable expansion; env-var paths cannot be resolved here.
 //     Callers must fall back to process.cwd() in that case.
-// First cd only: for `cd /a && cd /b && git`, returns /a (conservative).
 function parseCdCommand(command) {
   if (!command || typeof command !== "string") return null;
   const m = command.match(/^\s*cd\s+(["']?)(\S.*)/);
@@ -53,16 +50,11 @@ function parseCdCommand(command) {
 
 /**
  * Extracts the cd target from a `bash/sh/zsh/dash -c '<body>'` command string.
- * Returns the absolute path of the first cd in the body, or null when:
- *   - command does not match bash/sh/zsh/dash -\w*c\w* '<body>' form
- *   - body has no leading cd, or cd target is relative/tilde/env-var
- * Fail-safe: unrecognized forms return null (caller falls back to parseCdCommand).
- * pwsh/fish/double-quote body intentionally not supported.
- *
+ * Returns absolute path of first cd in body, or null when form unmatched, or
+ * body cd target is relative/tilde/env-var. Fail-safe: unrecognized → null
+ * (caller falls back to parseCdCommand). pwsh/fish/double-quote body unsupported.
  * Flag-set matches isReadOnlyInterpreterC() in bash-write-patterns.js: -\w*c\w*
- * accepts -c / -lc / -xc / -cx / -lxc / etc. (common login-shell + verbose
- * combinations). Mismatch with that sibling parser caused #566 HIGH — `bash -lc`
- * fell through to process.cwd() and bypassed the cd-scope fix.
+ * (-c/-lc/-xc/etc). Mismatch caused #566 HIGH — `bash -lc` bypassed cd-scope fix.
  */
 function parseCdCommandInInterpreter(command) {
   if (!command || typeof command !== "string") return null;
@@ -74,14 +66,11 @@ function parseCdCommandInInterpreter(command) {
 }
 
 /**
- * Parses the leading "git [global-opts...]" portion of a command and returns
- * { subcommand, rest }. Skips global git options that may appear before the
- * subcommand verb: --no-pager, -C <path>, -c k=v, --git-dir=<x>, --work-tree=<x>,
- * --namespace=<x>, --exec-path[=<x>], --paginate, -p, --bare, --no-replace-objects,
- * --literal-pathspecs, --config-env, --super-prefix.
- *
- * Returns { subcommand: null, rest: "" } when no subcommand is found.
- * Quote-aware (handles "..." and '...').
+ * Parses leading "git [global-opts...]" and returns { subcommand, rest }.
+ * Skips global git options before the subcommand verb (--no-pager, -C <path>,
+ * -c k=v, --git-dir=, --work-tree=, --namespace=, --exec-path[=], --paginate,
+ * -p, --bare, --no-replace-objects, --literal-pathspecs, --config-env, --super-prefix).
+ * Returns { subcommand: null, rest: "" } when none found. Quote-aware.
  */
 // SSOT (CPR-SSOT): git global flags that consume the next token as their value (when
 // not given via =value). Imported by hooks/lib/bash-write-patterns/patterns.js
@@ -92,6 +81,7 @@ const FLAGS_WITH_ARG = new Set([
 ]);
 
 function parseGitGlobalOptions(command) {
+  if (!command || typeof command !== "string") return { subcommand: null, rest: "" };
   const tail = command.replace(/^\s*git\b\s*/, "");
   // Tokenize quote-aware
   const tokens = tail.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
@@ -113,24 +103,14 @@ function parseGitGlobalOptions(command) {
 }
 
 /**
- * Extract the scope-redirecting git GLOBAL options (-C / --work-tree / --git-dir)
- * from a SINGLE segment's already-tokenized, quote-resolved argv (the `argv` field
- * of a command-ir segment, i.e. the tokens AFTER cmd0="git"). Only options BEFORE
- * the subcommand verb are honored — a value-position or post-subcommand occurrence
- * (e.g. `git commit -C <ref>`, `git log --work-tree` after a subcommand) is not a
- * global scope selector and is ignored.
- *
- * This is the SEGMENT-LOCAL, quote-aware replacement for the raw-regex
- * parseGitCPath / parseGitPathFlag whole-command scanners: because it reads the
- * segment's OWN argv, a scope flag in a DIFFERENT segment or inside quoted text
- * cannot leak in (fixes cross-segment + quoted --work-tree mis-scope).
- *
- * Returns { workTree, cIn, gitDir, sawScopeFlag }:
- *   - workTree / cIn / gitDir: the string value of the LAST such flag seen, or null.
- *   - sawScopeFlag: true when ANY of -C / --work-tree / --git-dir appeared as a
- *     global option (used by callers to trigger fail-closed handling when the value
- *     is unresolvable).
- * gitArgv MUST be the token array after cmd0 (does not include the literal "git").
+ * Extract scope-redirecting git GLOBAL options (-C / --work-tree / --git-dir)
+ * from a SINGLE segment's tokenized, quote-resolved argv (tokens AFTER cmd0="git").
+ * Only options BEFORE the subcommand verb are honored; value-position or
+ * post-subcommand occurrences are ignored. Segment-local + quote-aware replacement
+ * for the raw-regex whole-command scanners, so a flag in another segment or inside
+ * quotes cannot leak in. Returns { workTree, cIn, gitDir, sawScopeFlag }: last flag
+ * value or null; sawScopeFlag true when any appeared (triggers fail-closed when
+ * value unresolvable). gitArgv MUST be the token array after cmd0 (excludes "git").
  */
 function extractGitScopeFlagsFromArgv(gitArgv) {
   const result = { workTree: null, cIn: null, gitDir: null, sawScopeFlag: false };
@@ -171,6 +151,7 @@ function extractGitScopeFlagsFromArgv(gitArgv) {
  * Quote-aware (strips matching outer quotes from the key=value token).
  */
 function parseGitConfigValues(command, key) {
+  if (!command || typeof command !== "string") return [];
   const tail = command.replace(/^\s*git\b\s*/, "");
   const tokens = tail.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
   const FLAGS_WITH_ARG_NO_EQ = new Set([

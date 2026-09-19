@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/feat-2218-repo-dir-guard.sh
 # Tests: bin/workflow/lib/next-step/repo-dir-guard.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/next-step
-# Tags: next-step, repo-dir, fail-fast, cross-session, worktree-identity, regression-2218, scope:issue-specific, pwsh-not-required, TL1
+# Tags: next-step, repo-dir, fail-fast, cross-session, worktree-identity, regression-2218, regression-2316, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2218 Step 9 — next-step's repoDir is resolved from the CALLING process, so a cross-session `--session <other-sid>` invocation would otherwise evaluate another session's workflow against this worktree's evidence. The guard decides, per verdict, whether that is silently fine (`same`), provably fine (`sibling-worktree` + identical content), or must stop the evaluation outright.
 
@@ -259,7 +259,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # leaves the presence-check bug invisible.
 run_R5_cli() {
     require_module "$TARGET" || return 0
-    local tmp own other repo main rc out result
+    local tmp own other repo main rc out result other_state other_before
     tmp="$(make_tmp)"
     # repo (== the linked worktree) is what CLAUDE_PROJECT_DIR points at for
     # every probe below — i.e. what next-step resolves as its OWN repoDir.
@@ -327,8 +327,21 @@ markStep('$ownmain', 'workflow_init', 'complete');
     [ "$out" = "continue" ] || result="$result omitted-session:$out"
     out="$(probe "$own" "$own")"
     [ "$out" = "continue" ] || result="$result explicit-own-sid:$out"
+    # C2 read-only guarantee: the cross-session different-repo attempt below must
+    # fail fast WITHOUT mutating the TARGET session's persisted state. Snapshot
+    # other-sid's state-file bytes immediately before the probe and byte-compare
+    # after — a read-only guard leaves the file identical (state-io writes each
+    # session to $CLAUDE_WORKFLOW_DIR/<sid>.json).
+    other_state="$tmp/wf/$other.json"
+    other_before="$tmp/other-state-before.json"
+    cp "$other_state" "$other_before" 2>/dev/null || true
     out="$(probe "$own" "$other")"
     [ "$out" = "fail-fast" ] || result="$result explicit-other-sid:$out"
+    if [ ! -f "$other_state" ] || [ ! -f "$other_before" ]; then
+        result="$result target-state-capture-missing"
+    elif ! cmp -s "$other_before" "$other_state"; then
+        result="$result target-state-mutated"
+    fi
     # SIBLING-self-call: recorded cwd is $main (a real sibling of $repo, not
     # $repo itself), so the SAME-verdict short-circuit above does NOT apply —
     # the guard must reach the SIBLING branch's content-equivalence check.
