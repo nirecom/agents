@@ -483,3 +483,7 @@ Changes: Fixed: `/resume-session --from` (and `--list`) now correctly detect ado
 ### FEATURE: feat(#2284): installers wait for CC exit before update (2026-09-17)
 Background: Install scripts could corrupt the CC binary when Claude Code was running during an update.
 Changes: Installers now wait up to 30 s for Claude Code to exit before running claude update or codex update, preventing binary corruption when CC is running during an install or update.
+
+### FEATURE: PR #2320 (2026-09-19)
+Background: feat(#2223): add project NFR injection and complexity-judge unification
+Changes: Project-specific NFR is now referenced as acceptance and severity calibration criteria across all planner, writer, and reviewer agents. A new `bin/project-nfr-block` CLI and `agents/lib/nfr-severity-calibration.md` directive distribute the NFR block to CC fallback reviewers and planners. Complexity judging is unified via a new `complexity-judge` subagent and `normalize-judge-signals` CLI.
