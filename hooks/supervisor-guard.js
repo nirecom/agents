@@ -167,9 +167,6 @@ if (require.main === module) {
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&
       !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen" &&
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       (cumSev === "error" || hangDetected || alertArmedAt);
     if (alertWouldFire) {
       let alertReason;
@@ -206,11 +203,7 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen"
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
-  ) {
+  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
     const reason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
@@ -222,11 +215,7 @@ if (require.main === module) {
   }
 
   // (3)
-  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen"
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
-  ) {
+  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const reason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
@@ -248,9 +237,6 @@ if (require.main === module) {
   // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
   // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
   if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      alertPhase !== "frozen" &&
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       isLegacyLayer2State) {
     const additionalContext = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
