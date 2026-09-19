@@ -1,22 +1,9 @@
 #!/bin/bash
-# bin/github-issues/wip-state.sh — WIP signaling for issue #N via Projects v2.
-#
-# Verbs:
-#   set <N>:   write fingerprint THEN Status=In Progress; then write lock file.
-#   check <N>: print same|other|none on stdout.
-#   clear <N>: Status=Done + clear fingerprint + delete lock (idempotent).
-#   abandon <N>: Status=Todo + clear fingerprint + delete lock (OPEN issues only).
-#   setup:     one-shot field/option ID discovery; append to $AGENTS_CONFIG_DIR/.env.
-#
-# Fingerprint: sha256(session_id + ":" + N)[:8]. Issue-salted. Collision risk
-# for N parallel sessions ≈ N²/2^33 (N=1000: <0.001%). Practical N=1–3.
-#
-# GraphQL usage: writes via `gh project item-edit` only (no mutations).
-# Reads use `gh api graphql` queries because `gh project item-list` does not
-# reliably surface both a single-select Status value AND a custom text field
-# value for a given item in one call.
-#
-# Run from inside the target repo's worktree (gh uses cwd-based repo resolution).
+# bin/github-issues/wip-state.sh — WIP signaling for issues via GitHub Projects v2.
+# Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup
+# Fingerprint: sha256(sid+":"+N)[:8]; collision at N=1000: <0.001%.
+# GraphQL: writes via gh project item-edit; reads via gh api graphql.
+# Run from the target repo's worktree. setup writes to $AGENTS_CONFIG_DIR/.env.
 
 set -uo pipefail
 
@@ -27,7 +14,7 @@ SID_SET=0
 REPO_OVERRIDE=""
 
 usage() {
-    sed -n '2,18p' "$0" >&2
+    sed -n '2,6p' "$0" >&2
     exit "${1:-2}"
 }
 
@@ -97,12 +84,6 @@ if [[ -n "$REPO_OVERRIDE" ]]; then
     fi
 fi
 
-# --- BEGIN temporary: WIP_STATE_* .env → resolve-project.sh cache migration ---
-# .env auto-source. Claude Code's Bash subprocess shell does not propagate
-# .env automatically, so a `setup`-written WIP_STATE_*_ID would still be
-# invisible to a same-session `set`/`check`/`clear`. Source defensively.
-# Field IDs are now resolved on demand by resolve-project.sh; .env WIP_STATE_*
-# values are deprecated but still honored this session (precedence over resolver).
 load_env_file() {
     [ -z "${AGENTS_CONFIG_DIR:-}" ] && return 0
     local envfile="$AGENTS_CONFIG_DIR/.env"
@@ -120,12 +101,6 @@ load_env_file() {
     return 0
 }
 load_env_file
-if [ -n "${WIP_STATE_STATUS_FIELD_ID:-}" ] || [ -n "${WIP_STATE_TODO_OPTION_ID:-}" ] \
-   || [ -n "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] || [ -n "${WIP_STATE_DONE_OPTION_ID:-}" ] \
-   || [ -n "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ]; then
-    echo "warn: .env WIP_STATE_* values are deprecated. They are still honored for this session, but please remove them from \$AGENTS_CONFIG_DIR/.env. Field IDs are now resolved on demand from GitHub Projects by resolve-project.sh." >&2
-fi
-# --- END temporary: WIP_STATE_* .env → resolve-project.sh cache migration ---
 
 BOARD_CARD_REPO_OVERRIDE="${REPO_OVERRIDE:-}"
 export BOARD_CARD_REPO_OVERRIDE

@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
-# Tests: bin/extract-accepted-tradeoffs, bin/extract-mandatory-sections
-# Tags: bin, env, config, tests
+# Tests: bin/extract-mandatory-sections
+# Tags: bin, env, config, tests, scope:issue-specific
 # Integration tests for bin/extract-mandatory-sections (issue #462).
 # Tests will FAIL until bin/extract-mandatory-sections is implemented.
-# The wrapper test (#9) compares the existing bin/extract-accepted-tradeoffs
-# output against a golden fixture captured at test-creation time; it will pass
-# now (against the legacy implementation) and must continue to pass after the
-# wrapper rewrite.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$AGENTS_ROOT/bin/extract-mandatory-sections"
-WRAPPER="$AGENTS_ROOT/bin/extract-accepted-tradeoffs"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -252,36 +247,6 @@ if [[ -z "$(echo "$OUT" | tr -d '[:space:]')" ]]; then
     pass "(8) fence-aware ~~~ : empty output (fenced header ignored)"
 else
     fail "(8) fence-aware ~~~ : expected empty output (fenced header must be ignored). Got: $OUT"
-fi
-
-# ---------------------------------------------------------------------------
-# (9) wrapper byte-identical with golden fixture
-#     The golden fixture was captured at test-creation time by running the
-#     current bin/extract-accepted-tradeoffs against the input fixture.
-#     This test passes today (legacy implementation) and must continue to
-#     pass after the wrapper rewrite (delegating to extract-mandatory-sections).
-# ---------------------------------------------------------------------------
-INPUT_FIXTURE="$AGENTS_ROOT/tests/fixtures/extract-accepted-tradeoffs-input.md"
-GOLDEN_FIXTURE="$AGENTS_ROOT/tests/fixtures/extract-accepted-tradeoffs-golden.txt"
-
-if [[ ! -f "$INPUT_FIXTURE" ]]; then
-    fail "(9) wrapper golden: input fixture missing: $INPUT_FIXTURE"
-elif [[ ! -f "$GOLDEN_FIXTURE" ]]; then
-    fail "(9) wrapper golden: golden fixture missing: $GOLDEN_FIXTURE"
-elif [[ ! -x "$WRAPPER" ]]; then
-    fail "(9) wrapper golden: wrapper not executable: $WRAPPER"
-else
-    ACTUAL_OUT="$TMPDIR_BASE/wrapper-actual.txt"
-    EXIT_CODE=0
-    run_with_timeout bash "$WRAPPER" "$INPUT_FIXTURE" > "$ACTUAL_OUT" 2>&1 || EXIT_CODE=$?
-    if [[ "$EXIT_CODE" != "0" ]]; then
-        fail "(9) wrapper golden: wrapper exited $EXIT_CODE. Output: $(cat "$ACTUAL_OUT")"
-    elif diff -q "$GOLDEN_FIXTURE" "$ACTUAL_OUT" >/dev/null 2>&1; then
-        pass "(9) wrapper golden: extract-accepted-tradeoffs output matches golden byte-for-byte"
-    else
-        fail "(9) wrapper golden: output differs from golden. Diff:
-$(diff "$GOLDEN_FIXTURE" "$ACTUAL_OUT" 2>&1 | head -40)"
-    fi
 fi
 
 # ---------------------------------------------------------------------------

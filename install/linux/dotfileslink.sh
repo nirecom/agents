@@ -230,18 +230,6 @@ EOF
 chmod +x ~/.local/bin/repo-visibility
 printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
 
-# --- BEGIN temporary: cc-session-title launcher cleanup ---
-# Remove stale launchers from the cc-session-title removal (PRs #303, #313, #331).
-# Idempotent: rm -f silently no-ops when the file is absent.
-# Safe to delete this block after all developer machines have run dotfileslink once.
-for stale in ~/.local/bin/cc-session-title ~/.local/bin/cc-session-title.cmd ~/.local/bin/cc-session-title.py; do
-    if [ -e "$stale" ] || [ -L "$stale" ]; then
-        rm -f "$stale"
-        printf "${C_YELLOW}Removed stale launcher: $stale${C_RESET}\n"
-    fi
-done
-# --- END temporary: cc-session-title launcher cleanup ---
-
 # --- PATH-exposed bin/ command symlinks ---
 # The command set is declared once in install/path-exposed-commands.txt and looped over
 # here; install/win/dotfileslink.ps1 consumes the same file (CPR-SSOT single source of truth,

@@ -24,10 +24,18 @@ paths:
 
 ## Migration Code Blocks
 
-Temporary migration code must be wrapped with `# --- BEGIN temporary: <old> → <new> migration ---` / `# --- END temporary: ... ---` markers.
+Temporary migration code must be wrapped with markers that include the description, addition date, and a deletion condition.
 
-- Description format: `<old path/name> → <new path/name> migration`
+Required BEGIN-line format: `# --- BEGIN temporary: <old> → <new> migration added YYYY-MM-DD ---`
+Required field immediately after BEGIN: `# deletion-condition: <human-readable condition>`
+Required END-line format: `# --- END temporary: <old> → <new> migration ---`
+
+- Description: `<old path/name> → <new path/name> migration` — must contain ` → ` (or ` -> ` for JS files using `//` comment prefix)
+- Comment prefix: `#` for shell/Python files, `//` for JavaScript files
+- `added YYYY-MM-DD`: ISO date the block was introduced; linter warns when > 90 days old
+- `deletion-condition`: machine-checkable or human-verifiable condition under which the block can be removed
 - Grep-friendly: `grep -r "BEGIN temporary"` finds all migration blocks for cleanup
+- Existing blocks (pre-#1987) are exempt from retroactive field addition; apply when next editing the file
 
 See also `rules/installer.md` for installer and system configuration rules.
 

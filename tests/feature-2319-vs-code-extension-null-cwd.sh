@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lang-check: ignore
 # tests/feature-2319-vs-code-extension-null-cwd.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/supervisor-check.js, hooks/workflow-gate/user-verified-audit.js
 # Tags: supervisor, tr5, freshness, premerge, null-cwd, vscode-extension, regression-2319, scope:issue-specific, pwsh-not-required, TL2

@@ -83,12 +83,6 @@ function migrateLegacyState(state) {
   const now = new Date().toISOString();
   if (!state.created_at) state.created_at = now;
   if (!state.last_updated) state.last_updated = now;
-  // --- BEGIN temporary: alert_phase "frozen" → "paused" migration (#1166) ---
-  if (state.alert && typeof state.alert === "object" && !Array.isArray(state.alert) &&
-      state.alert.alert_phase === "frozen") {
-    state.alert.alert_phase = "paused";
-  }
-  // --- END temporary: alert_phase "frozen" → "paused" migration (#1166) ---
   return state;
 }
 

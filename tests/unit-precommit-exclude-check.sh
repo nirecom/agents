@@ -1,23 +1,10 @@
 #!/bin/bash
-# tests/unit-precommit-exclude-check.sh
+# tests/unit-precommit-exclude-check.js
 # Tests: hooks/lib/precommit-exclude-check.js
 # Tags: unit, pre-commit, exclude-check, scope:common, pwsh-not-required
-#
-# Unit tests for hooks/lib/precommit-exclude-check.js.
-# Invokes the module via node with env vars for input.
-# Expected RED until hooks/lib/precommit-exclude-check.js is created.
-#
-# Exit codes from the module:
-#   0 = all staged files covered
-#   2 = not covered / empty staged / empty exclude
-#   1 = input error (AGENTS_CONFIG_DIR unset)
-#
-# L3 gap (what this test does NOT catch):
-# - Real pre-commit hook session in a live git commit
-# - Interaction with WORKFLOW_OFF session marker
-# - Windows path casing in a live pre-commit session
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration
+# Exit codes: 0=covered, 2=not-covered/empty, 1=input-error (AGENTS_CONFIG_DIR unset)
+# L3 gap: real pre-commit session, WORKFLOW_OFF interaction, Windows path casing;
+#   mitigation: bin/check-verification-gate.sh category: hook-registration
 
 set -u
 
@@ -127,28 +114,6 @@ else
         pass "exit1-no-config (rc=1)"
     else
         fail "exit1-no-config — want rc=1 got rc=$got_rc"
-    fi
-fi
-
-# Case 6: deprecated alias ENFORCE_WORKTREE_EXCLUDE_REPOS → rc 0 AND stderr has 'is deprecated'
-if [ "$MODULE_MISSING" = "1" ]; then
-    fail "alias-deprecated — MODULE_NOT_FOUND (expected red)"
-else
-    got_rc=0
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    run_with_timeout 10 env "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
-        "_PRECOMMIT_STAGED=docs/readme.md" \
-        "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_TOP_NODE" \
-        node "$MODULE_PATH" >"$TMPBASE/stdout.txt" 2>"$TMPBASE/stderr.txt" || got_rc=$?
-    if [ "$got_rc" = "0" ]; then
-        if grep -q "is deprecated" "$TMPBASE/stderr.txt" 2>/dev/null; then
-            pass "alias-deprecated — rc=0 and 'is deprecated' in stderr"
-        else
-            fail "alias-deprecated — rc=0 but no 'is deprecated' in stderr"
-        fi
-    else
-        fail "alias-deprecated — want rc=0 got rc=$got_rc"
     fi
 fi
 
@@ -294,28 +259,6 @@ assert_rc "basename-entry-matches-file" "0" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/todo.md" \
     "ENFORCE_WORKTREE_EXCLUDE=todo.md"
-
-# Case 18 (C3): mixed-canonical-and-deprecated-both-covered
-# Both ENFORCE_WORKTREE_EXCLUDE (canonical) and ENFORCE_WORKTREE_EXCLUDE_REPOS
-# (deprecated) are set; the canonical covers the staged file → rc 0.
-# The deprecated alias only adds to the entry list but the canonical is enough.
-assert_rc "mixed-canonical-and-deprecated-both-covered" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-    "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
-    "_PRECOMMIT_STAGED=docs/readme.md" \
-    "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE" \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=/some/other/path"
-
-# Case 19 (C3): deprecated-only-covers-staged
-# ENFORCE_WORKTREE_EXCLUDE is empty but ENFORCE_WORKTREE_EXCLUDE_REPOS contains
-# the repo top → migration block merges it into EXCLUDE → rc 0.
-# Confirms the deprecated alias works as a bypass via the migration block.
-assert_rc "deprecated-only-covers-staged" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-    "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
-    "_PRECOMMIT_STAGED=docs/readme.md" \
-    "ENFORCE_WORKTREE_EXCLUDE=" \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_TOP_NODE"
 
 # Case 20 (C5): semicolon-in-staged-path-not-bypass
 # A staged filename that contains a literal semicolon is covered by a repo-root

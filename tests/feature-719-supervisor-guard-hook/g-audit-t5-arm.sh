@@ -1,5 +1,7 @@
 # tests/feature-719-supervisor-guard-hook/g-audit-t5-arm.sh
-# G-T5-1..G-T5-3: T5 — Phase A L3 arming via severity-threshold (#1044).
+# Tests: hooks/supervisor-guard.js
+# Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
+# G-T5-1, G-T5-2, G-T5-4: T5 — Phase A L3 arming via severity-threshold (#1044).
 # Probes whether the shouldSkipForSeverity guard has been removed from
 # supervisor-guard.js. When the guard is still present, T5 paths are
 # unreachable (cumSev=error + l2_phase=done|frozen short-circuit) so SKIP.
@@ -92,40 +94,9 @@ run_g_t5_2() {
     fi
 }
 
-# G-T5-3 — cumSev=error + alert_phase=frozen -> same arm behavior as G-T5-1.
-run_g_t5_3() {
-    local label="G-T5-3: cumSev=error + alert_phase=frozen + fresh audit -> arm audit (block)"
-    require_source "$HOOK" "$label" || return
-    require_t5_guard_removed "$label" || return
-    local tmp out rc audit_phase
-    tmp="$(mktemp -d)"
-    seed_audit_state_t5 "$tmp" "g-t5-3-sid" \
-        "{ alert_phase: 'frozen', alert_armed_at: null, cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
-        "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
-    out=$(echo '{"stop_hook_active":false,"session_id":"g-t5-3-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
-    rc=$?
-    audit_phase=$(read_audit_field_t5 "$tmp" "g-t5-3-sid" "audit_phase")
-    rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -q '"decision":"block"' ) && [ "$audit_phase" = "pending" ]; then
-        pass "$label"
-    else
-        fail "$label (rc=$rc, audit_phase=$audit_phase, out=$out)"
-    fi
-}
-
-# G-T5-4 — Phase A guard: alert_phase=closed + cumSev=error + auditPhase=null
-#           + activePendingOrRunning=false → Phase A must NOT arm (#1432).
-#
-# Branches (2) and (3) already guard alertPhase=closed (exit 0 without block).
-# Phase A (audit-arm) did not have this guard, allowing it to fire erroneously
-# when branches (2)/(3) short-circuit. After the fix, alertPhase=closed is also
-# excluded from Phase A.
-#
-# Feature-detection: probe whether supervisor-guard.js Phase A contains the
-# alertPhase-closed guard by running the scenario and checking that audit_phase
-# stays null (no arm). If Phase A fires (audit_phase=pending), the guard is absent
-# and we report SKIP (fix not yet applied).
+# G-T5-4 — alertPhase=closed + cumSev=error + auditPhase=null → Phase A must NOT arm (#1432).
+# Branches (2)/(3) guard closed. Phase A must also exclude closed. If Phase A arms (audit_phase=pending),
+# the fix is not yet applied → SKIP.
 run_g_t5_4() {
     local label="G-T5-4: alertPhase=closed + cumSev=error + auditPhase=null → Phase A must NOT arm (#1432)"
     require_source "$HOOK" "$label" || return

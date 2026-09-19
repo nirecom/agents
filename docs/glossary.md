@@ -1,4 +1,5 @@
 # Glossary — agents repository
+<!-- lang-check: ignore -->
 
 An index of the abbreviations and workflow stage names that recur across the
 agents repository. It is the entry point for going from an unfamiliar term to

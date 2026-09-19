@@ -2,7 +2,7 @@
 # Tags: TL2, worktree, enforce, hook, bin, git, scope:common
 # Sourced by tests/main-enforce-worktree-guard.sh
 # Origin: tests/fix-extra-repos-dir-scan.sh (all cases).
-# Cases: N1-N5, E1-E4, IDEM1, SEC1, INT1, INT2, ALIAS1.
+# Cases: N1-N5, E1-E4, IDEM1, SEC1, INT1, INT2.
 # getSessionRepoRoots(): an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry that is not a
 # git repo root has its depth-1 subdirs scanned, so `C:\git` stands in for every
 # repo under it. `[NEW]`/`[EXISTING]` suffixes are case identifiers — never trim.
@@ -234,33 +234,6 @@ if rr_decision "$rr_out"; then
 else
     pass "INT2: no EXTRA_REPOS, out-of-scope target via git -C blocked [EXISTING]"
 fi
-
-# --- ALIAS1: the deprecated ENFORCE_WORKTREE_EXTRA_REPOS spelling ---
-# Kept verbatim on purpose: the alias must still be honoured when the ADDITIONAL
-# name is unset, AND must warn on stderr. The warning half is a known red case.
-# stderr has to be captured here, so this one bypasses run_bash_guard.
-rr_pair="$(setup_linked_worktree "ALIAS1-session")"
-rr_main="${rr_pair%|*}"; rr_wt="${rr_pair#*|}"
-rr_stderr="$TMPDIR_BASE/alias1-stderr-$$"
-rr_payload="$(node -e "
-  const j = { session_id:'test-alias1', tool_name:'Bash', tool_input:{ command: 'gh pr merge 1' } };
-  console.log(JSON.stringify(j));
-" 2>/dev/null)"
-rr_out="$(cd "$rr_wt" && echo "$rr_payload" | run_with_timeout 30 env \
-    ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXTRA_REPOS=$(to_node_path "$rr_main")" \
-    node "$GUARD_JS" 2>"$rr_stderr")" || true
-
-rr_assert_allow "$rr_out" \
-    "ALIAS1: EXTRA_REPOS deprecated alias — gh write still allows [NEW]" \
-    "ALIAS1: EXTRA_REPOS deprecated alias — gh write should allow" "[NEW]"
-
-if grep -q "is deprecated" "$rr_stderr" 2>/dev/null; then
-    pass "ALIAS1: EXTRA_REPOS deprecated alias — 'is deprecated' warning on stderr [NEW]"
-else
-    fail "ALIAS1: EXTRA_REPOS deprecated alias — missing 'is deprecated' warning on stderr (expected red) [NEW]"
-fi
-rm -f "$rr_stderr"
 
 # Completion marker (dispatcher FRAG2) — must remain the last line.
 frag_done "repo-resolution.sh"

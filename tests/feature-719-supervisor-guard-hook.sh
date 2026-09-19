@@ -1,16 +1,8 @@
 #!/bin/bash
 # tests/feature-719-supervisor-guard-hook.sh
 # Tests: hooks/supervisor-guard.js
-# Tags: supervisor, em-supervisor, hook, layer2, stop
-# RED for issue #719.
-# L3 gap (what this test does NOT catch):
-# - hook registration in settings.json Stop hooks — if supervisor-guard.js is not wired,
-#   L2 sentinel-hang and escape-hatch detection are fully absent but these tests still pass
-#   because they invoke the hook script directly
-# - real Claude Code transcript format differences — tests use minimal crafted JSONL;
-#   live session transcripts may have additional fields or a different JSONL structure
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
-#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
+# Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
+# L3 gap: hook registration, live transcript format; mitigation: bin/check-verification-gate.sh hook-registration
 
 set -u
 
@@ -65,7 +57,6 @@ run_g_b5
 run_g_b6
 run_g_t5_1
 run_g_t5_2
-run_g_t5_3
 run_g_t5_4
 run_g_c3a
 run_g_c3b

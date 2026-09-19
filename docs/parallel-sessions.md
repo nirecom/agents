@@ -186,6 +186,10 @@ commands. The CWD repo is always included.
 - **`gh repo edit --default-branch main` fails:** Step 2b treats this as warn-only and continues — the push still completes. Manual recovery: `gh repo edit --default-branch main` (or set it via the GitHub web UI under Settings → General → Default branch).
 - **Bootstrap push fails (exit 3 from `bootstrap-complete.sh`):** no cleanup runs; investigate the push error (auth, branch protection, etc.), fix, and re-run `/worktree-end`.
 
+## Migration Code Block Format
+
+See `rules/coding.md` (Migration Code Blocks section) for the required format of temporary migration code blocks, including the `added YYYY-MM-DD` date field and `deletion-condition:` field that must accompany each block.
+
 ## Troubleshooting
 
 **Bash write blocked on main worktree:**
