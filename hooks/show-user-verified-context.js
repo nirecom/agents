@@ -12,6 +12,7 @@ const { spawnSync } = require("child_process");
 // #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
 // USER_VERIFIED_RE is unanchored, so the joined command text finds a sentinel in any element.
 const { isCommandTool, commandTextOf } = require("./lib/tool-command-text");
+const { resolveInputCwd } = require("./lib/resolve-cwd");
 
 
 // Match the reason-bearing form only — the bare form was removed from the contract (#404).
@@ -36,11 +37,7 @@ function noopExit() { process.stdout.write(""); process.exit(0); }
 // process.cwd(). CLAUDE_PROJECT_DIR is intentionally excluded — it points to the
 // main worktree, causing gh pr view to find no PR when emitting from a linked worktree.
 function resolveCwd(input) {
-  const tiCwd = input.tool_input && input.tool_input.cwd;
-  if (tiCwd && typeof tiCwd === "string" && tiCwd.trim()) {
-    return tiCwd.trim();
-  }
-  return process.cwd();
+  return resolveInputCwd(input.tool_input && input.tool_input.cwd);
 }
 
 function getStagedFiles(cwd) {

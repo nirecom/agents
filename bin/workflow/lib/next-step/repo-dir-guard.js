@@ -12,6 +12,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { readState } = require("../../../../hooks/workflow-state/state-io");
+const { toWindowsPath } = require("../../../../hooks/lib/branch-diff");
 
 const VERDICTS = Object.freeze({
   SAME: "same",
@@ -180,6 +181,24 @@ function assertRepoDirMatchesSession(sid, repoDir, opts) {
       `repo-context-unverified: session ${sid} recorded no cwd, so ${repoDir} cannot be confirmed as its repo\n`
     );
     return { ok: true, verdict, verifiedEquivalent: false, reason: "repo-context-unverified" };
+  }
+
+  if (
+    verdict === VERDICTS.INDETERMINATE &&
+    !isExplicitSessionOverride &&
+    typeof recordedCwd === "string" &&
+    !fs.existsSync(toWindowsPath(recordedCwd))
+  ) {
+    // #2316: a deleted worktree (e.g. after /worktree-end) leaves a recorded cwd
+    // git can no longer describe → INDETERMINATE. Fail open ONLY for a self-call
+    // whose recorded path is gone from disk — symmetric to UNKNOWN and to the
+    // SIBLING branch above. A cross-session override never earns the deleted-path
+    // pass (#2319: it would let another worktree grade this session), and an
+    // INDETERMINATE where the path still exists (R4 broken-git) stays fail-fast.
+    process.stderr.write(
+      `repo-context-worktree-deleted: session ${sid} recorded cwd ${recordedCwd} no longer exists; failing open\n`
+    );
+    return { ok: true, verdict, verifiedEquivalent: false, reason: "repo-context-worktree-deleted" };
   }
 
   return { ok: false, verdict, verifiedEquivalent: false, reason: verdict };

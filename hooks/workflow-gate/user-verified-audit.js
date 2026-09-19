@@ -115,6 +115,11 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
   const approveFn = opts.approveFn;
   const blockFn = opts.blockFn;
 
+  // Defense layer (#2319): a null CWD reaches computeFreshnessKey → freshness_key:null
+  // → infinite TR5 arm. The primary fix is workflow-gate.js Step 1; this is
+  // defense-in-depth for any other null-CWD path.
+  const cwd = hookCwd || process.cwd();
+
   let resolved;
   try {
     resolved = resolveSupervisorState(sessionId);
@@ -149,7 +154,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
 
     let freshness = null;
     try {
-      freshness = computeFreshnessKey(hookCwd, plansDir, planSessionId);
+      freshness = computeFreshnessKey(cwd, plansDir, planSessionId);
     } catch (_) {
       freshness = null;
     }
@@ -159,7 +164,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       const result = armAuditRun(effectiveSid, {
         tr_ids: ["TR5"],
         cause: stepCompleteCause("user_verification"),
-        cwd: hookCwd,
+        cwd: cwd,
         plans_dir: plansDir,
         plan_session_id: planSessionId,
         sub_checks: subCheckIds,

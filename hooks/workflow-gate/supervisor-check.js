@@ -111,7 +111,18 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
 
   try {
     const audit = state.audit || {};
-    const repoDir = hookCwd || resolveRepoDirFn(null, null);
+    // Defense layer (#2319): the canonical fix supplies a non-null hookCwd
+    // (workflow-gate.js Step 1, CPR-SSOT). If a future null-CWD path still
+    // reaches here, keep resolveRepoDirFn exceptions off the outer fail-closed
+    // catch by falling back to process.cwd().
+    let repoDir = hookCwd;
+    if (!repoDir) {
+      try {
+        repoDir = resolveRepoDirFn(null, null);
+      } catch (_) {
+        repoDir = process.cwd();
+      }
+    }
     const plansDir = process.env.WORKFLOW_PLANS_DIR || (os.homedir() + "/.workflow-plans");
 
     // Plan artifact files are keyed by the workflow session id (wsid, the

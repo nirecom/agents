@@ -1,20 +1,14 @@
 #!/bin/bash
 # tests/fix-296-hook-cwd-drift-parse-cd.sh
 # Tests: hooks/lib/parse-git-args.js
-# Tags: hook, bin, git, tests
-#
-# Tests for hooks/lib/parse-git-args.js — exports parseCdCommand(str)
-# which extracts the absolute path from a leading "cd <path> && ..."
-# (or "cd <path> ; ...") in a command string. Returns null when:
-#   - command does not start with cd (whitespace allowed)
-#   - cd argument is relative
-#   - cd argument contains an environment variable ($VAR / ${VAR})
-#   - cd argument contains tilde expansion
-#   - quote is unterminated
-#   - input is null/empty
-#
-# TDD: written before parseCdCommand is implemented. Pre-impl, every case
-# below fails with NOT_EXPORTED. Post-impl, every case should PASS.
+# Tags: hook, bin, git, tests, scope:common
+# parseCdCommand(str): extracts the absolute path from a leading "cd <path> && ..."/";",
+# null for non-cd / relative / env-var / tilde / unterminated-quote / null/empty input.
+# parseGitCArg(str): extracts the `git -C <path>` argument; null on absence/unterminated
+# quote and (post-#2319 CPR-ORTH null guard, detail plan Step 2 / T2) null/non-string
+# input rather than throwing — the symmetric guard parseCdCommand already carries.
+# TDD: pre-impl the parseCdCommand cases fail NOT_EXPORTED; the parseGitCArg null-guard
+# cases fail (throw) until Step 2 lands. Do not weaken.
 
 set -u
 
@@ -165,6 +159,93 @@ test_p17() {
     esac
 }
 test_p17
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T2 — parseGitCArg null guard (#2319 Step 2, CPR-ORTH with parseCdCommand).
+# parseGitCArg must return null (never throw) on null / non-string input, and
+# still parse a valid `git -C <path>`. Without the guard `command.match(...)`
+# throws, which propagates out of resolveRepoDir(null,null) and lands the
+# pre-merge backstop in its fail-closed catch (#2319 symptom 2).
+# ─────────────────────────────────────────────────────────────────────────────
+
+RESOLVE_MODULE="${_AGENTS_DIR_NODE}/hooks/workflow-gate/repo-resolution.js"
+
+# call_gitc <command-string> — JSON-encoded parseGitCArg(arg), or NOT_EXPORTED / ERROR.
+call_gitc() {
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        const fn = m.parseGitCArg;
+        if (typeof fn !== 'function') { console.log('NOT_EXPORTED'); process.exit(2); }
+        console.log(JSON.stringify(fn(process.argv[1])));
+      } catch(e) { console.log('ERROR: '+e.message); }
+    " -- "$1" 2>/dev/null
+}
+
+# call_gitc_arg <js-literal> — parseGitCArg(<js-literal>) where the literal is a
+# real JS value (null, 123, {}) that argv strings cannot express.
+call_gitc_arg() {
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        const fn = m.parseGitCArg;
+        if (typeof fn !== 'function') { console.log('NOT_EXPORTED'); process.exit(2); }
+        console.log(JSON.stringify(fn($1)));
+      } catch(e) { console.log('ERROR: '+e.message); }
+    " 2>/dev/null
+}
+
+# G1: a valid `git -C <path>` still parses (guard must not break the happy path).
+r="$(call_gitc 'git -C /tmp/foo status')"
+[ "$r" = '"/tmp/foo"' ] && pass "G1: parseGitCArg('git -C /tmp/foo status') -> /tmp/foo" \
+    || fail "G1: expected \"/tmp/foo\", got $r"
+
+# G2: null input must return null, not throw.
+r="$(call_gitc_arg 'null')"
+case "$r" in
+    ERROR*) fail "G2: parseGitCArg(null) threw: $r" ;;
+    NOT_EXPORTED) fail "G2: parseGitCArg not exported" ;;
+    null) pass "G2: parseGitCArg(null) -> null (no throw)" ;;
+    *) fail "G2: parseGitCArg(null) expected 'null', got '$r'" ;;
+esac
+
+# G3: non-string (number) input must return null, not throw.
+r="$(call_gitc_arg '123')"
+case "$r" in
+    ERROR*) fail "G3: parseGitCArg(123) threw: $r" ;;
+    NOT_EXPORTED) fail "G3: parseGitCArg not exported" ;;
+    null) pass "G3: parseGitCArg(123) -> null (no throw)" ;;
+    *) fail "G3: parseGitCArg(123) expected 'null', got '$r'" ;;
+esac
+
+# G4: resolveRepoDir(null, null) must reach the Tier4 fallback (a resolved repo
+# dir) instead of throwing at parseGitCArg — the downstream consequence the guard
+# unblocks (#2319 symptom 2). Asserted as "no throw + non-empty return", which is
+# stable regardless of which Tier4 candidate (CLAUDE_PROJECT_DIR / process.cwd() /
+# an additionalDirectory) actually wins.
+if [ -f "$AGENTS_DIR/hooks/workflow-gate/repo-resolution.js" ]; then
+    TIER4_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t wf296t)"
+    TIER4_NODE="$(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$TIER4_DIR"; else printf '%s' "$TIER4_DIR"; fi)"
+    r="$(
+        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        export CLAUDE_PROJECT_DIR="$TIER4_NODE"
+        run_with_timeout 30 node -e "
+      try {
+        const { resolveRepoDir } = require('$RESOLVE_MODULE');
+        const out = resolveRepoDir(null, null);
+        console.log(typeof out === 'string' && out.length ? 'RET:'+out : 'EMPTY:'+String(out));
+      } catch(e) { console.log('THREW: '+e.message); }
+    " 2>/dev/null
+    )"
+    rm -rf "$TIER4_DIR" 2>/dev/null || true
+    case "$r" in
+        RET:*) pass "G4: resolveRepoDir(null,null) reaches Tier4 and returns a repo dir (no throw)" ;;
+        THREW*) fail "G4: resolveRepoDir(null,null) threw: $r" ;;
+        *) fail "G4: resolveRepoDir(null,null) returned no dir: '$r'" ;;
+    esac
+else
+    fail "G4: hooks/workflow-gate/repo-resolution.js not found"
+fi
 
 echo ""
 echo "─────────────────────────────────────────"
