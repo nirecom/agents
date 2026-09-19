@@ -3,24 +3,24 @@
 // repo create|edit). `gh api` write commands also covered. `gh repo rename|archive|delete` excluded.
 
 const { stripQuotedArgs, stripInlineBodyArg } = require("./strip-quoted-args");
-const { vocabularyFor } = require("./gh-flag-vocab");
+// #2307: the gh scan regexes now live in forge/github.js (CPR-SSOT); scan-target
+// recognition is delegated to each forge's tracker via the router.
+const { GH_API_WRITE_REGEX, GH_REPO_WRITE_REGEX } = require("./forge/github");
+const { GLAB_API_WRITE_REGEX } = require("./forge/gitlab");
+const { FORGE_DESCRIPTORS } = require("./forge-router");
 
-// `new` is GitHub CLI's own built-in alias for `create` on both `pr` and
-// `issue`: the two spellings run the SAME command, so a vocabulary that knows
-// only `create` hands `gh issue new` a free pass past every caller of this
-// regex — including the outbound secret scan. edit/close/comment/review have no
-// such alias and are left spelled exactly as gh spells them.
-const FORGE_SCAN_TARGET_REGEX =
-  /\bgh\b\s+(?:pr\s+(?:create|new|edit|close|comment|review)|issue\s+(?:create|new|edit|close|comment))\b/;
-
-const GH_API_WRITE_REGEX =
-  /\bgh\b\s+api\b.*?(?:-X\s+(?:POST|PATCH|PUT|DELETE)|--method(?:\s+|=)(?:POST|PATCH|PUT|DELETE))/i;
-
-const GH_REPO_WRITE_REGEX = /\bgh\b\s+repo\s+(?:create|edit)\b/;
-
+// A command is a forge-write scan target when ANY forge's tracker claims it —
+// gh (github) or glab (gitlab) issue/MR writes and their api-write forms.
 function isForgeScanTarget(command) {
   if (typeof command !== "string" || command.length === 0) return false;
-  return FORGE_SCAN_TARGET_REGEX.test(command) || GH_API_WRITE_REGEX.test(command) || GH_REPO_WRITE_REGEX.test(command);
+  return Object.values(FORGE_DESCRIPTORS).some((d) => d.tracker.isForgeScanTarget(command));
+}
+
+// True when the command is a GitHub-specific forge scan target (gh issue/pr/api).
+// Used by scan-outbound to decide whether the CWD codehost private-repo gate applies.
+function isGithubForgeScanTarget(command) {
+  if (typeof command !== "string" || command.length === 0) return false;
+  return FORGE_DESCRIPTORS.github.tracker.isForgeScanTarget(command);
 }
 
 function isRepoWriteTarget(command) {
@@ -75,10 +75,12 @@ function extractHeredocs(command, out) {
   }
 }
 
-// Extract -f / -F / --field key=value payloads and --input @file paths from gh api write commands.
+// Extract -f / -F / --field / --raw-field key=value payloads and --input @file
+// paths from gh/glab api write commands. API_PAYLOAD_FLAGS is the authority
+// for which flags carry payloads; this regex must stay in sync with it.
 function extractApiFieldTexts(command, inline, filePaths) {
-  // -f key=val, -F key=val, --field key=val — capture the value after =
-  const reField = /(?:^|\s)(?:-f|-F|--field)\s+[^=\s]+=(\S+)/g;
+  // -f key=val, -F key=val, --field key=val, --raw-field key=val — capture value after =
+  const reField = /(?:^|\s)(?:-f|-F|--field|--raw-field)\s+[^=\s]+=(\S+)/g;
   let m;
   while ((m = reField.exec(command)) !== null) {
     inline.push(m[1]);
@@ -96,7 +98,7 @@ function extractTexts(command) {
   if (typeof command !== "string" || command.length === 0) {
     return { inline, filePaths };
   }
-  if (GH_API_WRITE_REGEX.test(command)) {
+  if (GH_API_WRITE_REGEX.test(command) || GLAB_API_WRITE_REGEX.test(command)) {
     extractApiFieldTexts(command, inline, filePaths);
     return { inline, filePaths };
   }
@@ -179,7 +181,7 @@ function extractRepoFlag(command) {
 function extractRepoSelectors(argv) {
   const out = [];
   if (!Array.isArray(argv)) return out;
-  const vocab = vocabularyFor(argv);
+  const vocab = FORGE_DESCRIPTORS.github.tracker.vocabularyFor(argv);
   let pending = null; // what the PREVIOUS flag does with this token
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
@@ -299,4 +301,4 @@ function isGhApiWriteFromFlags(flags) {
   return hasPayload;
 }
 
-module.exports = { isForgeScanTarget, isRepoWriteTarget, extractTexts, extractRepoFlag, extractRepoSelectors, isGhApiWriteFromFlags, GH_API_WRITE_REGEX, GH_REPO_WRITE_REGEX };
+module.exports = { isForgeScanTarget, isGithubForgeScanTarget, isRepoWriteTarget, extractTexts, extractRepoFlag, extractRepoSelectors, isGhApiWriteFromFlags, GH_API_WRITE_REGEX, GH_REPO_WRITE_REGEX };

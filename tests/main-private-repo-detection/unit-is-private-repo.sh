@@ -85,3 +85,20 @@ REPO_GHE=$(setup_repo_with_origin "git@github.company.com:team/project.git")
 result=$(run_is_private_repo "$REPO_GHE")
 if [ "$result" = "true" ]; then pass "github.company.com → treat as private"
 else fail "github.company.com → treat as private — got: $result"; fi
+
+echo ""
+echo "=== D1: gitlab.com host — #2307 forge-abstraction baseline ==="
+
+# D1 pins the canonical public GitLab host, the exact host #2307's forge router
+# routes to the GitLab codehost descriptor. Behavior: parseOriginOwnerRepo
+# returns non-github-host, so isPrivateRepo treats it as private (true) — the
+# fail-safe that never leaks a private repo name to gh. The mock answers "false"
+# throughout, so a `true` result proves the non-github branch fired, not gh.
+# #2307 PRESERVES this: the gitlab codehost descriptor is a no-op returning true
+# (fail-safe retained, no GitHub fallback; per the detail plan). This stays a
+# stable regression pin — do NOT flip it to false.
+setup_mock_gh_public
+REPO_GITLAB_DOTCOM=$(setup_repo_with_origin "git@gitlab.com:owner/repo.git")
+result=$(run_is_private_repo "$REPO_GITLAB_DOTCOM")
+if [ "$result" = "true" ]; then pass "D1 gitlab.com → treat as private (#2307 preserves true)"
+else fail "D1 gitlab.com → treat as private — got: $result"; fi
