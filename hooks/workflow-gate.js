@@ -24,6 +24,7 @@ const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 // commit unreachable.
 const NON_GATE_STEPS = ["research", "pre_final_report_gate", "final_report"];
 const { parseGitConfigValues } = require("./lib/parse-git-args");
+const { resolveInputCwd } = require("./lib/resolve-cwd");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");
 const {
@@ -154,6 +155,13 @@ if (require.main === module) {
   // layers — Bash/runInTerminal `&&` chains stay order-independent all-or-nothing,
   // and the runCommands array also rejects a non-sentinel element after a sentinel.
   const sentinelAnalysis = analyzeSentinelCommand(toolName, toolInput);
+
+  // #2319: single resolved CWD for freshness computation, shared by BOTH the
+  // USER_VERIFIED audit gate (inside the uvHit block) and the pre-merge backstop
+  // (outside it), so it must live in the outer scope. Distinct from rawSentinelCwd,
+  // which stays raw-null for the premature guard. resolveInputCwd is the SSOT.
+  const freshnessCwd = normalizeForWindows(resolveInputCwd(toolInput.cwd));
+
   if (sentinelAnalysis.sentinelPresent) {
     if (!sentinelAnalysis.clean) {
       block(
@@ -208,8 +216,7 @@ if (require.main === module) {
       // #2256 S5-b/c: TR5 user_verification audit gate — authoritative when
       // supervisor state resolves (arms/holds via blockWithoutError, or approves),
       // else a no-op.
-      const uvCwd = rawSentinelCwd ? normalizeForWindows(rawSentinelCwd) : null;
-      checkUserVerifiedAudit(sessionId, uvCwd, { approveFn: approve, blockFn: blockWithoutError });
+      checkUserVerifiedAudit(sessionId, freshnessCwd, { approveFn: approve, blockFn: blockWithoutError });
     }
   }
 
@@ -228,7 +235,7 @@ if (require.main === module) {
     // denies (via blockWithoutError, which exits) otherwise. Only when no
     // supervisor state exists does it return non-authoritative and we fall
     // through to the legacy workflow user_verification merge gate.
-    const backstop = checkSupervisorPreMerge(sessionId, mergeHit.kind, normalizeForWindows(toolInput.cwd), {
+    const backstop = checkSupervisorPreMerge(sessionId, mergeHit.kind, freshnessCwd, {
       blockFn: blockWithoutError,
       resolveRepoDirFn: resolveRepoDir,
     });
@@ -445,55 +452,8 @@ if (require.main === module) {
 
   if (incomplete.length === 0) approve();
 
-  const SKILL_MAP = {
-    workflow_init: '/workflow-init  OR for docs-only: echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"',
-    clarify_intent: '/clarify-intent  OR if intent is clear: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    outline: '/make-outline-plan  OR if unnecessary: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    detail:  '/make-detail-plan   OR if unnecessary: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    branching_complete: 'Read rules/branch.md + rules/worktree.md (on-demand-only), then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: {name}|worktree: {path}>>"',
-    write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>> on adequate coverage; re-editing tests/ after a passing review invalidates the pairing — re-run /review-tests)',
-    run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run `bash tests/run-all.sh <files>` directly — the PostToolUse hook (workflow-run-tests.js) marks complete only from its RUN_CONTRACT line. Ad-hoc test commands (e.g. `pytest tests/`) no longer auto-complete: they demote run_tests to pending. When every staged file is human-facing documentation: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>" (rejected otherwise).',
-    review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
-    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to /worktree-end Step 4; premature emit without an open PR is hard-blocked by workflow-gate — see issue #577) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
-  };
-
-  const lines = [
-    docsOnly && incomplete.length === 1 && incomplete[0] === "user_verification"
-      ? "workflow-gate: docs-only commit — only user_verification is required."
-      : `workflow-gate: the following workflow steps are not complete: ${incomplete.join(", ")}`,
-    "",
-    "To mark a step complete:",
-  ];
-
-  for (const step of incomplete) {
-    if (SKILL_MAP[step]) {
-      lines.push(`  ${step}: run ${SKILL_MAP[step]}`);
-    } else {
-      lines.push(
-        `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
-      );
-    }
-    if (step === "review_tests" && incompleteReasons[step] === "stale-token") {
-      lines.push(
-        "    (note: tests were re-edited after a passing review — staged-tests fingerprint changed; re-run /review-tests)"
-      );
-    }
-    if (step === "review_tests" && incompleteReasons[step] === "stale-wsid") {
-      lines.push(
-        "    (note: stale-wsid — workflow session ID (wsid) changed since /review-tests was run; re-run /review-tests in the current session)"
-      );
-    }
-    if (step === "review_tests" && incompleteReasons[step] === "warnings-pending") {
-      lines.push(
-        "    (note: /review-tests reported coverage warnings — re-run /write-tests to address gaps, then /review-tests again)"
-      );
-    }
-  }
-
-  block(lines.join("\n"));
+  const { buildIncompleteStepsMessage } = require("./workflow-gate/incomplete-steps-message");
+  block(buildIncompleteStepsMessage(incomplete, incompleteReasons, docsOnly));
 }
 
 module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories, parseDetailFilesToModify, checkSupervisorPreMerge };

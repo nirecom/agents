@@ -55,7 +55,7 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    - `test_destinations`: one entry per case group, keyed by that group's complete source set — `append <path>` or `new`.
      All `new` groups in this run consolidate into a single new file.
      On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
-     `append` is mandatory even when the appended case is expected to push the target past the 500-line HARD limit — never split or redirect to a new file to dodge it; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
+     `append` is mandatory when the verdict is `append`; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST instruct: Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules.
    The subagent prompt MUST instruct: Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules.

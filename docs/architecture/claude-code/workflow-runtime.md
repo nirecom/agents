@@ -151,7 +151,10 @@ a time.
 `resolveSessionId()` answers "which session am *I*?" and nothing else — never repurpose it to
 name an upstream session a cross-session command was pointed at. `/resume-session --from` passes
 that id explicitly, and `bin/workflow/lib/next-step/repo-dir-guard.js` distinguishes the two by
-value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present.
+value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present. That
+distinction gates the guard's INDETERMINATE verdict at the worktree-end → session-close boundary:
+when the worktree directory has been deleted, only a self-call fails open so session-close can
+proceed; an explicit cross-session override fails fast instead of silently fail-open (#2316).
 
 Identifier-family boundaries, why filesystem inference was removed from the chain, the bridge
 rc contract, and the static guard against bypassing the resolver:
@@ -181,6 +184,7 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 | State file corrupted (bad JSON) | block |
 | Step `pending` or `in_progress` | block |
 | Non-skippable step marked `skipped` | block |
+| `toolInput.cwd` null / non-string (e.g. VS Code extension) | resolve via `process.cwd()` (`hooks/lib/resolve-cwd.js` `resolveInputCwd`), not block (#2319) |
 
 ## next-step-driven sequencing
 
