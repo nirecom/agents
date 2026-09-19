@@ -11,7 +11,10 @@ GitHub remotes. The gate short-circuits gracefully on non-GitHub origins
 unknown (rc=2) as fail-open to preserve existing behavior under transient
 detection failures.
 
-Canonical detector: `bin/is-github-dotcom-remote`.
+Canonical detector: `bin/is-github-dotcom-remote`. Since #2307 it classifies the
+host through the shared `detectForgeType()` in `hooks/lib/parse-remote-url.js`
+(SSOT), via the sibling `bin/is-github-dotcom-remote.js`. The wrapper stays a pure
+URL classifier — it never consults `AGENTS_CONFIG_DIR`.
 
 Shared detection wrapper: `bin/detect-non-github.sh` — wraps the canonical detector with a context-specific skip message and normalized exit codes (0 = proceed, 1 = skip). Use this wrapper in SKILL.md consumers instead of inlining the case block.
 
@@ -20,6 +23,23 @@ Shared detection wrapper: `bin/detect-non-github.sh` — wraps the canonical det
 | 0 | GitHub remote | proceed with `gh` |
 | 1 | non-GitHub remote | set `NON_GITHUB=1`, skip `gh` |
 | 2 | unknown / error | fail-open (treat as 0) |
+
+## Forge routing (#2307)
+
+`hooks/lib/forge-router.js` is the SSOT for forge resolution. It splits two
+independent axes and routes each to a descriptor; an unresolvable axis lands on a
+no-op stub, never on the GitHub handler (the no-fallback security invariant).
+
+| Axis | Resolver | Members | Fail-safe |
+|---|---|---|---|
+| Codehost (repo hosting) | `resolveCodehostDescriptor(remoteUrl)` | github (gh), gitlab/unknown (stub) | stub: `isPrivateRepo` false, `hasOpenPrForBranch` true |
+| Tracker (issues/MRs) | `resolveTrackerDescriptor(env, codehostType)` | github (gh), gitlab (glab), jira/unknown (stub) | stub: `isForgeScanTarget` false |
+
+Tracker axis: `FORGE_TRACKER` (from `.env`, read via `readTrackerConfig`) selects
+the tracker explicitly; unset/empty follows the codehost; an explicit but
+unregistered value resolves to the unknown/stub tracker, never the codehost.
+`detect-non-github.sh` still keys off the codehost host only — a non-GitHub
+codehost skips `gh`, independent of which tracker is configured.
 
 ## Protocol
 

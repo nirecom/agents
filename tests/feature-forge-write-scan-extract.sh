@@ -279,6 +279,19 @@ else
     fail "run_2053_tables was not defined by its part file"
 fi
 
+# Section 2307 (glab forge-write baseline) is its own part, outside the 2053 loop.
+if [ -f "$PARTS_DIR/cases-2307-glab.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$PARTS_DIR/cases-2307-glab.sh"
+else
+    fail "section 2307 part file missing: $PARTS_DIR/cases-2307-glab.sh"
+fi
+if declare -F run_2307_glab >/dev/null; then
+    run_2307_glab
+else
+    fail "run_2307_glab was not defined by its part file"
+fi
+
 echo ""
 echo "================================"
 if [ "$ERRORS" -eq 0 ]; then

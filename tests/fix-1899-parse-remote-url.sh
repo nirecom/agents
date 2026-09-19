@@ -2,41 +2,12 @@
 # tests/fix-1899-parse-remote-url.sh
 # Tests: hooks/lib/parse-remote-url.js, hooks/lib/is-private-repo.js
 # Tags: parse-remote-url, origin-resolution, table-driven, parser, regex, security, path-traversal, secret-redaction, TL1, scope:issue-specific
-#
-# Dispatch + aggregate entrypoint for the fix-1899-parse-remote-url split suite.
-# All cases live in tests/fix-1899-parse-remote-url/ per rules/coding/file-split.md
-# (the flat file reached 499 lines against a 500-line HARD limit). Each split
-# group also runs standalone.
-#
-# Issue #1899 — repository identity was resolved through `gh repo view`, which
-# consults ALL remotes and can answer with `upstream` when both `origin` and
-# `upstream` exist. The fix moves URL parsing into one pure module,
-# hooks/lib/parse-remote-url.js, so every JS caller derives owner/repo from the
-# ORIGIN URL alone with one shared, testable contract.
-#
-# Split groups (original group letters in parentheses):
-#   parse-origin.sh        (A)     parseOriginOwnerRepo verdict table
-#   host-and-repo-id.sh    (B, C)  extractHost / extractRepoId
-#   module-contract.sh     (D, E)  purity + is-private-repo backward compat
-#   owner-repo-charset.sh  (F,G,J) F1 owner/repo charset + traversal boundary
-#   redaction.sh           (H, I)  F2/F3 credential redaction
-#   authority.sh           (NEW)   F-B userinfo anchoring — CPR-ORTH mirror of
-#                                  tests/fix-1899-origin-repo-resolver/authority.sh
-#   mutation-probe.sh      (M)     OWNER_RE/REPO_RE mutation probe — proves the
-#                                  charset cases above are load-bearing
-#
-# Owner/repo contract pinned here (bin/github-issues/lib/origin-repo.sh must agree
-# — CPR-ORTH): owner = GitHub login charset, leading [A-Za-z0-9] then
-# [A-Za-z0-9-], length 1..39, no dots/underscores; repo = [A-Za-z0-9._-]{1,100}
-# and never exactly "." or "..".
-#
-# TL3 gap (what this TL1 suite does NOT catch):
-#   - Whether any caller actually passes the ORIGIN url (vs. some other remote)
-#     into parseOriginOwnerRepo — that seam is covered by
-#     tests/fix-1899-origin-repo-resolver.sh and the driver/route-decision cases.
-#   - Real `git remote get-url origin` output shapes on a live checkout.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Dispatch + aggregate entrypoint for the split suite (the flat file hit the
+# 500-line HARD limit; rules/coding/file-split.md). Split groups = the
+# SPLIT_GROUPS array below (SSOT); each also runs standalone. #1899 origin-only
+# owner/repo contract and its CPR-ORTH twin live in hooks/lib/parse-remote-url.js
+# + bin/github-issues/lib/origin-repo.sh. TL3 seam / live-remote gap: covered by
+# tests/fix-1899-origin-repo-resolver.sh + WORKFLOW_USER_VERIFIED preflight.
 
 set -uo pipefail
 
@@ -56,6 +27,7 @@ SPLIT_GROUPS=(
     "redaction.sh"
     "authority.sh"
     "mutation-probe.sh"
+    "detect-forge-type.sh"
 )
 
 TOTAL_PASS=0

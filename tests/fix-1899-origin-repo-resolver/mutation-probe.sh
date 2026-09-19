@@ -3,33 +3,12 @@
 # Tests: bin/github-issues/lib/origin-repo.sh
 # Tags: origin-resolution, github-issues, mutation-probe, table-driven, parser, regex, security, path-traversal, TL2, scope:issue-specific
 #
-# Group M of the fix-1899-origin-repo-resolver split suite — the mutation probe,
-# and the CPR-ORTH mirror of tests/fix-1899-parse-remote-url/mutation-probe.sh.
-#
-# Why the bash half needs its own probe: origin-repo.sh does NOT share a regex
-# with the JS module — the contract is mirrored by hand in four separate `[[ ]]`
-# tests (owner charset, "."/".." guard, repo charset, length arithmetic). Killing
-# the JS constants says nothing about these. Worse, a bash case can go green for
-# the wrong reason: the resolver returns rc 2 as soon as
-# bin/is-github-dotcom-remote declines the host, and rc 2 never reaches the
-# charset gate at all — so a widened bash regex would still show "rc != 0".
-# This group proves those four decisions are LOAD-BEARING: each mutation rewrites
-# exactly one of them in a temporary copy of the library and asserts that at
-# least one case which passes against the real library now FAILS against the copy.
-#
-# The copy is placed inside a reconstructed bin/github-issues/lib/ tree with
-# bin/is-github-dotcom-remote alongside it, because the library resolves that
-# helper through "${BASH_SOURCE[0]}/../../". A bare copy in a flat temp dir would
-# fail the helper lookup, return rc 2 everywhere, and make every mutant look
-# "killed" for a reason that has nothing to do with the regex.
-#
-# The control mutant closes the other half: an inert comment edit must kill
-# NOTHING, so a kill can only come from the charset change.
-#
-# Cases are reused verbatim from owner-repo-charset.sh (groups F and G).
-#
-# TL2 (real git fixtures, real bash). TL3 gap: none specific to this group — it
-# asserts a property of the TEST SUITE, not of a live environment.
+# Group M: mutation probe for origin-repo.sh — CPR-ORTH mirror of
+# tests/fix-1899-parse-remote-url/mutation-probe.sh.
+# Proves the four hand-mirrored bash charset/length decisions are load-bearing.
+# mk_mutant() reconstructs a bin/github-issues/lib/ tree with is-github-dotcom-remote
+# (and its Node sibling + parse-remote-url.js, #2307) so the helper resolves correctly.
+# Cases reused from owner-repo-charset.sh (groups F and G). TL2; TL3 gap: none.
 
 set -u
 
@@ -105,6 +84,11 @@ mk_mutant() {
     mkdir -p "$base/bin/github-issues/lib"
     cp "$AGENTS_DIR/bin/is-github-dotcom-remote" "$base/bin/is-github-dotcom-remote"
     chmod +x "$base/bin/is-github-dotcom-remote" 2>/dev/null || true
+    # is-github-dotcom-remote delegates to its .js sibling (#2307): copy both
+    # and their Node dependency so the fixture helper resolves correctly.
+    cp "$AGENTS_DIR/bin/is-github-dotcom-remote.js" "$base/bin/is-github-dotcom-remote.js" 2>/dev/null || true
+    mkdir -p "$base/hooks/lib"
+    cp "$AGENTS_DIR/hooks/lib/parse-remote-url.js" "$base/hooks/lib/parse-remote-url.js" 2>/dev/null || true
     out="$base/bin/github-issues/lib/origin-repo.sh"
     printf '%s\n' "${ORIGIN_SRC/"$search"/"$replace"}" > "$out"
     printf '%s' "$out"

@@ -20,8 +20,8 @@ run_2053_additive_exports() {
     # means the module grew a second, unreviewed entry point.
     expect_expr "existing 6 exports all still present" "true" \
         '["isForgeScanTarget","isRepoWriteTarget","extractTexts","extractRepoFlag","GH_API_WRITE_REGEX","GH_REPO_WRITE_REGEX"].every(k => k in m)'
-    expect_expr "export set is exactly the 6 existing + the 2 new" \
-        '"GH_API_WRITE_REGEX,GH_REPO_WRITE_REGEX,extractRepoFlag,extractRepoSelectors,extractTexts,isForgeScanTarget,isGhApiWriteFromFlags,isRepoWriteTarget"' \
+    expect_expr "export set is exactly the 6 existing + the 2 new + isGithubForgeScanTarget (#2307)" \
+        '"GH_API_WRITE_REGEX,GH_REPO_WRITE_REGEX,extractRepoFlag,extractRepoSelectors,extractTexts,isForgeScanTarget,isGhApiWriteFromFlags,isGithubForgeScanTarget,isRepoWriteTarget"' \
         'Object.keys(m).sort().join(",")'
     expect_expr "isForgeScanTarget is still a function" '"function"' 'typeof m.isForgeScanTarget'
     expect_expr "isRepoWriteTarget is still a function" '"function"' 'typeof m.isRepoWriteTarget'

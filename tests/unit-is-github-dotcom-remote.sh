@@ -204,6 +204,18 @@ assert_eq "E[tab-only-url]" "2" "$?"
 assert_eq "B[url-table-rows-executed]" "$U_ROWS_EXPECTED" "$U_ROWS"
 assert_eq "B[repo-table-rows-executed]" "$R_ROWS_EXPECTED" "$R_ROWS"
 
+# ---- C: AGENTS_CONFIG_DIR-independence (#2307 forge abstraction) -------------
+# #2307 routes host classification through a forge descriptor, but this command must
+# stay a pure URL classifier that never consults AGENTS_CONFIG_DIR -- its verdict is
+# identical with that variable unset. github.com -> 0 and gitlab.com -> 1 (a confident
+# "other host", never the 2 fail-open) both hold without it. Placed after the budget
+# asserts so U_ROWS/R_ROWS stay pinned to their table counts.
+# NOTE: asserts CURRENT behavior; #2307 preserves this contract, it does not change it.
+env -u AGENTS_CONFIG_DIR bash "$SUBJECT" --url https://github.com/owner/repo.git >/dev/null 2>&1
+assert_eq "C1[config-dir-unset/github.com=0]" "0" "$?"
+env -u AGENTS_CONFIG_DIR bash "$SUBJECT" --url https://gitlab.com/owner/repo.git >/dev/null 2>&1
+assert_eq "C2[config-dir-unset/gitlab.com=1-not-2]" "1" "$?"
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 exit "$FAIL"
