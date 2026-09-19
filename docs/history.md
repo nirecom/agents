@@ -462,3 +462,7 @@ Changes: shared install/lib/wait-cc-exit.{sh,ps1} helpers poll for a live Claude
 ### FEATURE: PR #2321 — feature/2307-forge (2026-09-19, 2f8c89992fa30fc142c17addaf654836b4f534bb, #2321)
 Background: feat(#2307): forge abstraction layer — 2-axis router (codehost + tracker)
 Changes: feat(#2307): forge abstraction layer — 2-axis router (codehost + tracker); forge-router.js descriptor registry, github/gitlab/stub forge modules, glab-flag-vocab.js, detectForgeType in parse-remote-url.js, scan-outbound.js CWD privacy gate for glab (C9/C10/C11/C12 security fixes) <!-- compose-doc-append-sentinel: branch=feature/2307-forge pr=#2321 -->
+
+### FEATURE: PR #2320 — feature/2223-nfr-planner-writer-reviewer (2026-09-19, c99c866413f603a49fefe392b66dc6790385a672, #2320)
+Background: feat(#2223): add project NFR injection and complexity-judge unification
+Changes: feat(#2223): Add mechanism for project-specific NFR to be referenced as acceptance and severity calibration criteria across all planner, writer, and reviewer agents. Appends severity-calibration instruction to codex_core_project_nfr_block() (Scope 1); adds bin/project-nfr-block CLI and agents/lib/nfr-severity-calibration.md to distribute the NFR block to 5 CC fallback reviewers plus outline-planner, detail-planner, write-tests, and write-code (Scope 2/3); adds complexity-judge subagent and bin/workflow/normalize-judge-signals CLI unifying 4 complexity-dispatch sites (Scope 4). <!-- compose-doc-append-sentinel: branch=feature/2223-nfr-planner-writer-reviewer pr=#2320 -->
