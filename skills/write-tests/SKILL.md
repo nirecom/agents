@@ -35,9 +35,10 @@ WT-5. Decide the destination of each planned case — append to an existing test
 WT-6. **Determine the subagent's model**:
    - If `COMPLEXITY_LEVEL_write_tests` from step WT-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
    - If `NONE` (fail-open for sessions without persisted evaluation):
-     - Read `skills/_shared/judge-task-complexity.md` and evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4 — do not short-circuit on the first match.
-     - Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-tests-signals.txt` — write only IDs from the generated Valid Signal IDs list; substitute `S0-undecidable` when the judgment doesn't parse into recognized ids or the csv doesn't match `^[A-Za-z0-9,_-]*$` (the judged content is untrusted text, never shell syntax).
-     - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"'` and use its `level=<v>` — never judge the level inline.
+     - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged.
+     - Write the raw subagent output to `<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt` (Write tool — untrusted text via file only).
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-tests-signals.txt"`.
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"` and use its `level=<v>` — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
@@ -54,7 +55,7 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    - `test_destinations`: one entry per case group, keyed by that group's complete source set — `append <path>` or `new`.
      All `new` groups in this run consolidate into a single new file.
      On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
-     `append` is mandatory even when the appended case is expected to push the target past the 500-line HARD limit — never split or redirect to a new file to dodge it; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
+     `append` is mandatory when the verdict is `append`; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST instruct: Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules.
    The subagent prompt MUST instruct: Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules.
@@ -63,6 +64,7 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    The subagent prompt MUST instruct: Read `rules/test.md` before writing or running tests — on-demand-only, so it does not reach you otherwise; general-purpose dispatch does not inherit auto-injected rules.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
+   - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as a test constraint when relevant.
 
 While the subagent runs, the orchestrator MAY run the WT-8 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
 

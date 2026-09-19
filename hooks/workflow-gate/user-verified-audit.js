@@ -115,6 +115,11 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
   const approveFn = opts.approveFn;
   const blockFn = opts.blockFn;
 
+  // Defense layer (#2319): a null CWD reaches computeFreshnessKey → freshness_key:null
+  // → infinite TR5 arm. The primary fix is workflow-gate.js Step 1; this is
+  // defense-in-depth for any other null-CWD path.
+  const cwd = hookCwd || process.cwd();
+
   let resolved;
   try {
     resolved = resolveSupervisorState(sessionId);
@@ -147,16 +152,9 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       }
     } catch (_) {}
 
-    // When toolInput.cwd is absent (Bash tool does not expose it in its schema),
-    // hookCwd is null and computeFreshnessKey would always return null freshness_key,
-    // causing the gate to arm indefinitely.  Fall back to process.cwd() so the hook
-    // process's own CWD (set to the workspace root by Claude Code) is used instead.
-    // Both freshness computation and arm share the same effective CWD so keys are
-    // consistent between arm time and sentinel-eval time. (#2256 C-null-cwd-trap)
-    const effectiveCwd = hookCwd || process.cwd();
     let freshness = null;
     try {
-      freshness = computeFreshnessKey(effectiveCwd, plansDir, planSessionId);
+      freshness = computeFreshnessKey(cwd, plansDir, planSessionId);
     } catch (_) {
       freshness = null;
     }
@@ -166,7 +164,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       const result = armAuditRun(effectiveSid, {
         tr_ids: ["TR5"],
         cause: stepCompleteCause("user_verification"),
-        cwd: effectiveCwd,
+        cwd: cwd,
         plans_dir: plansDir,
         plan_session_id: planSessionId,
         sub_checks: subCheckIds,

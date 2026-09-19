@@ -1,7 +1,7 @@
 ---
 name: detail-reviewer
 description: CC fallback implementation-plan reviewer for make-detail-plan; invoked when codex CLI is unusable. Thorough — surfaces minor issues as well as major ones.
-tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
+tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
 ---
@@ -92,6 +92,7 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 
 ## Rules
 
+- Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 - Be thorough. The user has explicitly asked for a strict reviewer that surfaces even minor issues.
 - Do not write the revised plan yourself — that is the planner's job.
 - Do not call Edit/Write.

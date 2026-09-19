@@ -1,9 +1,10 @@
 // Shared module: dynamically check if a git repo is private via GitHub API
 // Returns true if repo is private, false otherwise (fail-open on any error)
 
-const { execSync, spawnSync } = require("child_process");
+const { spawnSync } = require("child_process");
 const { parseGitCArg } = require("./parse-git-args");
 const { extractHost, extractRepoId, parseOriginOwnerRepo } = require("./parse-remote-url");
+const { resolveCodehostDescriptor, FORGE_DESCRIPTORS } = require("./forge-router");
 
 // Extract repo directory from a git command string (supports git -C <path>)
 function extractRepoDirFromCommand(command) {
@@ -38,19 +39,16 @@ function isPrivateRepo(repoDir) {
     // and `gh api repos/<that>` would then answer about an unrelated repo.
     const parsed = parseOriginOwnerRepo(remoteUrl);
     if (!parsed.ok) {
-      // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private, as before.
+      // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private, as before:
+      // the fail-safe that never leaks a private repo name to gh. #2307 preserves
+      // this — the gitlab codehost descriptor is a no-op and is not consulted here.
       // Every other failure code (empty-url, unparsable-host, unparsable-owner-repo)
       // fails open: there is no validated repo identity to ask gh about.
       return parsed.code === "non-github-host";
     }
 
-    const result = execSync(`gh api repos/${parsed.ownerRepo} --jq .private`, {
-      encoding: "utf8",
-      timeout: 10000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-
-    return result === "true";
+    // GitHub: route the private lookup through the codehost descriptor (#2307).
+    return resolveCodehostDescriptor(remoteUrl).isPrivateRepo(remoteUrl);
   } catch (e) {
     // gh not found, network error, not a git repo, etc. → fail-open
     return false;
@@ -86,41 +84,24 @@ function resolveRepoDir(command) {
 // Check whether a forge-write target repo should be scanned as PUBLIC.
 // Fail-CLOSED: unknown/error/empty → return true (scan as public).
 // ownerRepo: "owner/repo" string from --repo flag.
-function shouldScanAsPublicTarget(ownerRepo) {
-  try {
-    if (!ownerRepo || typeof ownerRepo !== "string") return true;
-    // SECURITY: ownerRepo passed as array element — never shell-interpolated.
-    const result = spawnSync("gh", ["api", "repos/" + ownerRepo, "--jq", ".private"], {
-      encoding: "utf8",
-      timeout: 10000,
-    });
-    if (result.error || result.status !== 0) return true; // fail-closed
-    const out = (result.stdout || "").trim();
-    if (out === "true") return false;  // confirmed private → skip public scan
-    if (out === "false") return true;  // confirmed public → scan
-    return true; // empty/garbage → fail-closed
-  } catch (e) {
+// command: the original Bash command string (optional; used to detect non-GitHub tools).
+function shouldScanAsPublicTarget(ownerRepo, command) {
+  // Non-GitHub commands (glab, JIRA): the --repo value is a remote-service path,
+  // not a GitHub repo. We cannot verify visibility via GitHub API — fail-closed
+  // and scan to avoid suppressing the outbound scan for non-GitHub tracker writes.
+  if (command && !FORGE_DESCRIPTORS.github.tracker.isForgeScanTarget(command)) {
     return true;
   }
+  // #2307: an ownerRepo selector is a GitHub-only concept here; route to the
+  // github codehost descriptor (SSOT for the gh query + fail-closed contract).
+  return FORGE_DESCRIPTORS.github.codehost.shouldScanAsPublicTarget(ownerRepo);
 }
 
 // List owner/repo strings for all private repos visible to the user.
 // Fail-OPEN: error → []. Always queries gh fresh.
 function listPrivateRepoNames() {
-  try {
-    const result = spawnSync(
-      "gh",
-      ["repo", "list", "--limit", "1000", "--visibility", "private", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
-      { encoding: "utf8", timeout: 10000 }
-    );
-    if (result.error || result.status !== 0) return []; // fail-open
-    return (result.stdout || "")
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  } catch (e) {
-    return [];
-  }
+  // #2307: route to the github codehost descriptor (SSOT for the gh query).
+  return FORGE_DESCRIPTORS.github.codehost.listPrivateRepoNames();
 }
 
 // Escape regex metacharacters in a string.

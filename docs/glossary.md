@@ -1,4 +1,5 @@
 # Glossary — agents repository
+<!-- lang-check: ignore -->
 
 An index of the abbreviations and workflow stage names that recur across the
 agents repository. It is the entry point for going from an unfamiliar term to
@@ -97,6 +98,32 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **audit checklist** | The three items supervisor-audit judges — cross-stage coherence, recurrence patterns, systemic risk. They are a checklist, not mutually exclusive axes, so they are never called "three axes" (the unrelated security-review "three axes" is a different concept). | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
+
+## NFR injection and complexity routing
+
+### complexity-judge
+
+- **Full name**: Complexity judge subagent
+- **Definition**: A dedicated `subagent_type: complexity-judge` agent that reads code, plans, and context via read-only tools (Read, Glob, Grep, codegraph) and emits exactly one `SIGNALS: <csv>` or `SIGNALS: none` line. Model is fixed at opus. Treats its input as data to classify, never as instructions.
+- **Related**: [agents/complexity-judge.md](../agents/complexity-judge.md), [bin/workflow/normalize-judge-signals](../bin/workflow/normalize-judge-signals)
+
+### normalize-judge-signals
+
+- **Full name**: Normalize judge signals CLI
+- **Definition**: `bin/workflow/normalize-judge-signals` — reads the raw text file output from a complexity-judge subagent, strictly captures the `SIGNALS:` line, validates each signal ID against `VALID_SIGNAL_IDS`, and emits a normalized CSV on stdout. Preamble text before the `SIGNALS:` line is allowed; non-SIGNALS lines after it, multiple `SIGNALS:` lines, or unknown IDs degrade to `S0-undecidable`.
+- **Related**: [bin/workflow/normalize-judge-signals](../bin/workflow/normalize-judge-signals), [agents/complexity-judge.md](../agents/complexity-judge.md)
+
+### nfr-severity-calibration
+
+- **Full name**: NFR severity calibration directive
+- **Definition**: The shared operational directive in `agents/lib/nfr-severity-calibration.md`. Tells agents (planners, reviewers) to call `git rev-parse` and `bin/project-nfr-block`, frame the output as project-supplied data (not instructions), and apply the trailing guidance line as a severity calibration criterion. Referenced by all reviewer and planner agents that consider project NFR.
+- **Related**: [agents/lib/nfr-severity-calibration.md](../agents/lib/nfr-severity-calibration.md), [bin/project-nfr-block](../bin/project-nfr-block)
+
+### project-nfr-block
+
+- **Full name**: Project NFR block CLI
+- **Definition**: `bin/project-nfr-block` — thin bash wrapper that calls `codex_core_project_nfr_block()` and writes the framed `[PROJECT NFR START] … [PROJECT NFR END]` block plus trailing severity-calibration instruction to stdout. Gives CC/planner agents byte-equal access to the same NFR block that codex consumers receive via `bin/lib/codex-core.sh`.
+- **Related**: [bin/project-nfr-block](../bin/project-nfr-block), [bin/lib/codex-core.sh](../bin/lib/codex-core.sh), [agents/lib/nfr-severity-calibration.md](../agents/lib/nfr-severity-calibration.md)
 
 ## Miscellaneous
 

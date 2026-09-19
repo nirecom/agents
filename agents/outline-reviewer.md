@@ -1,7 +1,7 @@
 ---
 name: outline-reviewer
 description: CC fallback approach reviewer for make-outline-plan; invoked when codex CLI is unusable. Checks direction and coverage only — never implementation details.
-tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
+tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
 ---
@@ -74,6 +74,7 @@ C2: unresolved — <reason>
 
 ## Rules
 
+- Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 - Be decisive. Do not withhold approval because of minor stylistic preferences.
 - Only use `MISSING_ALTERNATIVE` when a genuinely distinct high-level alternative is absent.
 - Never request `NEEDS_RESEARCH` — if you lack context, approve and note the gap in your justification.
