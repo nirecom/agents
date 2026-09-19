@@ -458,3 +458,7 @@ Changes: Shift-left the EM Supervisor pre-merge audit gate ahead of the USER_VER
 ### FEATURE: feat(#2284): add wait-cc-exit guard to install scripts (2026-09-17, 47d482cf)
 Background: Install scripts (claude update / codex update) could corrupt the CC binary when Claude Code was running during an install or update operation, because the installer did not check whether CC was active before proceeding.
 Changes: shared install/lib/wait-cc-exit.{sh,ps1} helpers poll for a live Claude Code process (3 s × 10 polls = 30 s max) before running claude update or codex update; all 6 installers (claude-code.sh, codex.sh, dotfileslink.sh on Linux; claude-code.ps1, codex.ps1, dotfileslink.ps1 on Windows) updated; testability via WAIT_CC_POLL_INTERVAL / WAIT_CC_MAX_POLLS / MOCK_PGREP_MODE (bash) / WAIT_CC_PROCESS_OVERRIDE (PS) overrides
+
+### FEATURE: PR #2321 — feature/2307-forge (2026-09-19, 2f8c89992fa30fc142c17addaf654836b4f534bb, #2321)
+Background: feat(#2307): forge abstraction layer — 2-axis router (codehost + tracker)
+Changes: feat(#2307): forge abstraction layer — 2-axis router (codehost + tracker); forge-router.js descriptor registry, github/gitlab/stub forge modules, glab-flag-vocab.js, detectForgeType in parse-remote-url.js, scan-outbound.js CWD privacy gate for glab (C9/C10/C11/C12 security fixes) <!-- compose-doc-append-sentinel: branch=feature/2307-forge pr=#2321 -->
