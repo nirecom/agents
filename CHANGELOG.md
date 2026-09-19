@@ -487,3 +487,7 @@ Changes: Installers now wait up to 30 s for Claude Code to exit before running c
 ### FEATURE: PR #2320 (2026-09-19)
 Background: feat(#2223): add project NFR injection and complexity-judge unification
 Changes: Project-specific NFR is now referenced as acceptance and severity calibration criteria across all planner, writer, and reviewer agents. A new `bin/project-nfr-block` CLI and `agents/lib/nfr-severity-calibration.md` directive distribute the NFR block to CC fallback reviewers and planners. Complexity judging is unified via a new `complexity-judge` subagent and `normalize-judge-signals` CLI.
+
+### FEATURE: PR #2322 (2026-09-19)
+Background: fix(#2319,#2316): null cwd fallback + repo-dir-guard INDETERMINATE fix
+Changes: Fixed: the workflow no longer stalls when Claude Code runs inside the VS Code extension, which reports a null working directory. (#2319);Fixed: closing a session after its worktree is removed no longer aborts the workflow. (#2316)
