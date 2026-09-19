@@ -16,6 +16,7 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 
 ## Rules
 
+- Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
 - The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.

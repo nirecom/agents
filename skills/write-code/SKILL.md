@@ -23,9 +23,9 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
 
 WCD-3. If `COMPLEXITY_LEVEL_write_code` from step WCD-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
    - If `NONE` (fail-open):
-     - Read `skills/_shared/judge-task-complexity.md` and evaluate the signals.
-     - Use the **Write tool** (never Bash) to write the resulting CSV, alone and unquoted, to `<PLANS_DIR>/<session-id>-write-code-signals.txt` — write only IDs from the generated Valid Signal IDs list; substitute `S0-undecidable` when the judgment doesn't parse into recognized ids or the csv doesn't match `^[A-Za-z0-9,_-]*$` (the judged content is untrusted text, never shell syntax).
-     - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"'` and use its `level=<v>` — never judge the level inline.
+     - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-code-signals.txt"`.
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"` and use its `level=<v>` — never judge the level inline.
    Emit in Claude text output (NOT Bash echo): `> Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
@@ -36,12 +36,12 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model deri
    - Directive: "Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules."
    - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."
    - Directive: "Read `rules/ops.md` before any destructive or system-state-changing command inside self-repair — general-purpose dispatch does not inherit auto-injected rules; on-demand-only, so it does not reach you otherwise."
+   - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as an implementation constraint when relevant.
    - Lint/typecheck recipe table (see below).
    - Self-repair cap: 3 iterations; if still failing after 3, surface tool output verbatim.
    - Lint-tool absence policy: when a tool is unavailable, skip that check AND emit `<tool> not found — check skipped` in the final summary. Never omit this notice.
    - Scope-expansion policy: if editing reveals additional files not in the original list need changes, include them in the final summary with a reason. Do NOT prompt mid-edit; do NOT silently expand scope.
    - Prohibitions: no diffs shown in the conversation; no mid-edit confirmation prompts.
-
 WCD-5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
 
 WCD-5a. Run `skills/write-code/scripts/self-check-siblings.sh "<what changed>" "<why>"` — CPR-E2C sibling-sweep reminder.

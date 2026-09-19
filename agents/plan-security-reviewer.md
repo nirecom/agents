@@ -1,7 +1,7 @@
 ---
 name: plan-security-reviewer
 description: CC fallback security-plan reviewer for review-plan-security; invoked when codex CLI is unusable.
-tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
+tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
 ---
@@ -40,6 +40,7 @@ NEEDS_REVISION
 
 ## Rules
 
+Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
 Suppress a concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including `## Accepted Tradeoffs`) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.

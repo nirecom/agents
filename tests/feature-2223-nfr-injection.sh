@@ -444,7 +444,8 @@ assert_file_has "T2223C-security-code-loop-nfr-present" "$CAPTURE" "$NFR_SENTINE
 # Order is load-bearing: loop-forwarding defines the fixtures Parts E-H reuse.
 # ---------------------------------------------------------------------------
 for _case in loop-forwarding cli-guards-and-caps utf8-tail-trim \
-             prompt-tmpfile-cleanup env-file-access production-entry-point; do
+             prompt-tmpfile-cleanup env-file-access production-entry-point \
+             severity-criterion; do
     _case_file="$AGENTS_DIR/tests/feature-2223-nfr-injection/$_case.sh"
     if [ -f "$_case_file" ]; then
         . "$_case_file"
