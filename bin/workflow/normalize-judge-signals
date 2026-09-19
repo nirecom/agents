@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/normalize-judge-signals
+// Strictly capture-and-normalize the complexity-judge subagent's raw output
+// into a signals CSV consumable by derive-complexity-level.
+//
+// Usage:
+//   normalize-judge-signals --raw-file <path> --out <signals-file>
+//
+// The raw judge output is untrusted text and only ever reaches this process
+// via fs.readFileSync — never a shell — so it cannot be interpreted as command
+// syntax. Any malformed / ambiguous / out-of-vocabulary input degrades to the
+// single token `S0-undecidable`; a `none` payload degrades to the empty CSV.
+// The out file is always written (fail-open); only a write failure exits non-zero.
+
+const fs = require("fs");
+
+// Valid signal IDs (SSOT mirror of the complexity-routing signal vocabulary).
+// S0-undecidable is deliberately NOT valid as INPUT — an S0 input is malformed
+// and routes to the S0 output token like any other unrecognized id.
+const VALID_SIGNAL_IDS = new Set([
+  "S1-multi-file",
+  "S1b-wide-change",
+  "S2-architecture",
+  "S3-security",
+  "S4-installer",
+  "S5-breaking",
+  "S6-long-plan",
+]);
+
+const SIGNALS_PREFIX = "SIGNALS:";
+const CHARSET_RE = /^[A-Za-z0-9,_-]*$/;
+
+function usage(msg) {
+  if (msg) process.stderr.write("normalize-judge-signals: " + msg + "\n");
+  process.stderr.write(
+    "usage: normalize-judge-signals --raw-file <path> --out <signals-file>\n"
+  );
+  process.exit(2);
+}
+
+function requireValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
+  return v;
+}
+
+function parseArgs(argv) {
+  const out = { rawFile: undefined, out: undefined };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--raw-file") {
+      out.rawFile = requireValue(argv, i, "--raw-file");
+      i++;
+    } else if (a === "--out") {
+      out.out = requireValue(argv, i, "--out");
+      i++;
+    } else {
+      usage("unknown argument: " + a);
+    }
+  }
+  return out;
+}
+
+// Write the resolved CSV to the out file and exit 0. A write failure is the
+// only non-zero exit (exit 1) — everything else fails open to a written file.
+function writeOutAndExit(outPath, value) {
+  try {
+    fs.writeFileSync(outPath, value);
+  } catch (e) {
+    process.stderr.write(
+      "normalize-judge-signals: could not write out file: " + outPath + " (" + e.code + ")\n"
+    );
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.rawFile) usage("--raw-file is required");
+  if (!args.out) usage("--out is required");
+
+  // Unreadable raw input is malformed, not a crash: fail open to S0.
+  let raw;
+  try {
+    raw = fs.readFileSync(args.rawFile, "utf8");
+  } catch (e) {
+    process.stderr.write(
+      "normalize-judge-signals: raw file unreadable (" + e.code + "); emitting S0-undecidable\n"
+    );
+    return writeOutAndExit(args.out, "S0-undecidable");
+  }
+
+  // Strict one-line extraction. A SIGNALS line is one whose trimmed form starts
+  // with the prefix. Any other non-blank line is a mixed-line violation.
+  const lines = raw.split(/\r?\n/);
+  const signalsLines = [];
+  let hasForeignLine = false;
+  let sawSignalsLine = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (t === "") continue;
+    if (t.startsWith(SIGNALS_PREFIX)) {
+      signalsLines.push(t);
+      sawSignalsLine = true;
+    } else if (sawSignalsLine) {
+      // non-blank non-SIGNALS line after the SIGNALS line: mixed output
+      hasForeignLine = true;
+    }
+    // non-blank non-SIGNALS lines before the SIGNALS line are allowed as preamble
+  }
+
+  if (hasForeignLine) return writeOutAndExit(args.out, "S0-undecidable");
+  if (signalsLines.length !== 1) return writeOutAndExit(args.out, "S0-undecidable");
+
+  const payload = signalsLines[0].slice(SIGNALS_PREFIX.length).trim();
+  if (payload.toLowerCase() === "none") return writeOutAndExit(args.out, "");
+
+  // Canonical CSV parse: split on comma, trim each field (drops the legitimate
+  // inter-field padding the judge emits, e.g. "S1-multi-file, S3-security").
+  const fields = payload.split(",").map((f) => f.trim());
+  const normalizedCsv = fields.join(",");
+
+  // Charset pre-filter on the normalized value — catches shell metacharacters
+  // and any whitespace embedded inside a field (only inter-field padding was
+  // stripped above). Runs before field-level validation.
+  if (!CHARSET_RE.test(normalizedCsv)) return writeOutAndExit(args.out, "S0-undecidable");
+
+  // Field-by-field validation: reject empty fields and any id outside the
+  // valid vocabulary (S0-undecidable as input is out-of-vocabulary → S0).
+  for (const f of fields) {
+    if (f === "" || !VALID_SIGNAL_IDS.has(f)) {
+      return writeOutAndExit(args.out, "S0-undecidable");
+    }
+  }
+
+  return writeOutAndExit(args.out, normalizedCsv);
+}
+
+main();

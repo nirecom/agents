@@ -8,26 +8,21 @@ owner so the two cannot drift apart (CPR-SSOT).
 Substitute `<SESSION_ID>` and `<PLANS_DIR>` with literal values before issuing
 any command below. Each step is one standalone Bash call.
 
-## Step 1 — Judge
+## Step 1 — Dispatch complexity-judge
 
-Read `skills/_shared/judge-task-complexity.md` and evaluate every signal against
-the confirmed intent.md (S6 is approximated from the intent.md line count alone —
-outline.md does not exist yet).
+Dispatch `subagent_type: complexity-judge` with: `intent.md` path + task context.
+(S6 is approximated from the intent.md line count alone — outline.md does not exist yet at this stage.)
 
 Also evaluate so_c1 / so_c2 (criteria: `skills/_shared/judge-plan-skip.md`) from
-intent.md. Both are needed regardless of the internal `SKIP_MODE`, which is not
-known until Step 3 returns.
+intent.md inline — these are plan-skip criteria, not complexity signals, and are
+not passed to the judge.
 
-## Step 2 — Write the signals file
+Write the raw judge output to `<PLANS_DIR>/<SESSION_ID>-complexity-judge-raw.txt`
+(Write tool — untrusted text via file only).
 
-Use the **Write tool** — never Bash — to write the judged CSV, alone and
-unquoted, to `<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt`.
+## Step 2 — Normalize signals
 
-Write only IDs from the generated Valid Signal IDs list. Substitute
-`S0-undecidable` when the judged CSV does not match `^[A-Za-z0-9,_-]*$` — the
-judge's line is untrusted text, never shell syntax.
-
-Never splice the CSV into a Bash command; the file is the only transport.
+Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<SESSION_ID>-complexity-judge-raw.txt" --out "<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt"`.
 
 ## Step 3 — Record and dispatch
 
