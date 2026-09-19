@@ -69,14 +69,14 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# d. SKILL.md contains judge-task-complexity
+# d. SKILL.md dispatches complexity-judge subagent
 # ---------------------------------------------------------------------------
-echo "=== d. SKILL.md contains judge-task-complexity ==="
+echo "=== d. SKILL.md dispatches complexity-judge subagent ==="
 if require_file "$WRITE_CODE_SKILL"; then
-    if has_fixed "judge-task-complexity" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md contains 'judge-task-complexity'"
+    if has_fixed "complexity-judge" "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md contains 'complexity-judge'"
     else
-        fail "SKILL.md missing 'judge-task-complexity'"
+        fail "SKILL.md missing 'complexity-judge'"
     fi
 fi
 
@@ -188,39 +188,39 @@ if require_file "$NODEJS_RULES"; then
 fi
 
 # ---------------------------------------------------------------------------
-# m. Control-flow ordering: CONFIRM_CODE < judge-task-complexity < Agent tool
+# m. Control-flow ordering: CONFIRM_CODE < complexity-judge < Agent tool
 # ---------------------------------------------------------------------------
 echo "=== m. Control-flow ordering in SKILL.md ==="
 if require_file "$WRITE_CODE_SKILL"; then
     line_confirm=$(grep -n "CONFIRM_CODE" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    line_judge=$(grep -n "judge-task-complexity" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+    line_judge=$(grep -n "complexity-judge" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
     line_agent=$(grep -n "Agent" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
 
     if [ -z "$line_confirm" ] || [ -z "$line_judge" ] || [ -z "$line_agent" ]; then
-        fail "control-flow ordering: could not find all three anchors (CONFIRM_CODE=$line_confirm, judge-task-complexity=$line_judge, Agent=$line_agent)"
+        fail "control-flow ordering: could not find all three anchors (CONFIRM_CODE=$line_confirm, complexity-judge=$line_judge, Agent=$line_agent)"
     else
         if [ "$line_confirm" -lt "$line_judge" ] && [ "$line_judge" -lt "$line_agent" ]; then
-            pass "control-flow ordering: CONFIRM_CODE (L$line_confirm) < judge-task-complexity (L$line_judge) < Agent (L$line_agent)"
+            pass "control-flow ordering: CONFIRM_CODE (L$line_confirm) < complexity-judge (L$line_judge) < Agent (L$line_agent)"
         else
-            fail "control-flow ordering wrong: CONFIRM_CODE=L$line_confirm, judge-task-complexity=L$line_judge, Agent=L$line_agent (expected ascending)"
+            fail "control-flow ordering wrong: CONFIRM_CODE=L$line_confirm, complexity-judge=L$line_judge, Agent=L$line_agent (expected ascending)"
         fi
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# n. SKILL.md contains "Model selected:" AND path to judge-task-complexity SKILL.md
+# n. SKILL.md contains "Model selected:" AND references complexity-judge dispatch
 # ---------------------------------------------------------------------------
-echo "=== n. SKILL.md contains 'Model selected:' and judge-task-complexity/SKILL.md path ==="
+echo "=== n. SKILL.md contains 'Model selected:' and complexity-judge dispatch ==="
 if require_file "$WRITE_CODE_SKILL"; then
     if has_fixed "Model selected:" "$WRITE_CODE_SKILL"; then
         pass "SKILL.md contains 'Model selected:'"
     else
         fail "SKILL.md missing 'Model selected:'"
     fi
-    if has_fixed "skills/_shared/judge-task-complexity.md" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md contains path 'skills/_shared/judge-task-complexity.md'"
+    if has_fixed "subagent_type: complexity-judge" "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md dispatches 'subagent_type: complexity-judge'"
     else
-        fail "SKILL.md missing path 'skills/_shared/judge-task-complexity.md'"
+        fail "SKILL.md missing 'subagent_type: complexity-judge' dispatch"
     fi
 fi
 
@@ -286,19 +286,19 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# WCD-READ-2: read-session-facts precedes judge-task-complexity (WCD-0's
-# bundled read happens before the manual signal-judgment fallback is read)
+# WCD-READ-2: read-session-facts precedes complexity-judge dispatch (WCD-0's
+# bundled read happens before the NONE-fallback dispatches the subagent)
 # ---------------------------------------------------------------------------
-echo "=== WCD-READ-2: read-session-facts precedes judge-task-complexity ==="
+echo "=== WCD-READ-2: read-session-facts precedes complexity-judge dispatch ==="
 if require_file "$WRITE_CODE_SKILL"; then
     line_read=$(grep -n "read-session-facts" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    line_judge=$(grep -n "judge-task-complexity" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+    line_judge=$(grep -n "complexity-judge" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
     if [ -z "$line_read" ] || [ -z "$line_judge" ]; then
-        fail "WCD-READ-2. could not find both anchors (read-session-facts=$line_read, judge-task-complexity=$line_judge)"
+        fail "WCD-READ-2. could not find both anchors (read-session-facts=$line_read, complexity-judge=$line_judge)"
     elif [ "$line_read" -lt "$line_judge" ]; then
-        pass "WCD-READ-2. read-session-facts (L$line_read) precedes judge-task-complexity (L$line_judge)"
+        pass "WCD-READ-2. read-session-facts (L$line_read) precedes complexity-judge (L$line_judge)"
     else
-        fail "WCD-READ-2. ordering wrong: read-session-facts=L$line_read, judge-task-complexity=L$line_judge (expected read first)"
+        fail "WCD-READ-2. ordering wrong: read-session-facts=L$line_read, complexity-judge=L$line_judge (expected read first)"
     fi
 fi
 

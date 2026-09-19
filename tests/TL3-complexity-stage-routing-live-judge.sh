@@ -58,6 +58,50 @@ else
     grep -E '^FAIL:' "$OUT_FILE" | sed 's/^/    /' || true
 fi
 
+# ---------------------------------------------------------------------------
+# T-LIVE-CJ-1 (#2223 scope 4) — live seam: spawn the opus-fixed complexity-judge
+# on a simple intent, capture its raw output, normalize it, and confirm routing
+# derives a valid level. Past the top RUN_TL3/claude gates this must not skip.
+# ---------------------------------------------------------------------------
+unset CLAUDECODE
+NORMALIZE_CLI="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
+DERIVE_CLI="$AGENTS_DIR/bin/workflow/derive-complexity-level"
+RUN_TO="$AGENTS_DIR/bin/run-with-timeout.sh"
+if [ ! -f "$NORMALIZE_CLI" ] || [ ! -f "$DERIVE_CLI" ]; then
+    fail "T-LIVE-CJ-1 — normalize/derive CLI missing; scope 4 not implemented"
+else
+    CJ_TMP="$(mktemp -d)"
+    CJ_INTENT="$CJ_TMP/intent.md"
+    printf '# Intent\n\nAdd a single log line to one existing function.\n' > "$CJ_INTENT"
+    CJ_RAW="$CJ_TMP/judge-raw.txt"
+    CJ_SIGNALS="$CJ_TMP/signals.txt"
+    CJ_PROMPT="Judge the complexity signals for the intent in $CJ_INTENT. Emit only the single SIGNALS: line."
+    cj_rc=0
+    if [ -x "$RUN_TO" ]; then
+        bash "$RUN_TO" 180 claude -p --subagent complexity-judge "$CJ_PROMPT" > "$CJ_RAW" 2>/dev/null || cj_rc=$?
+    else
+        claude -p --subagent complexity-judge "$CJ_PROMPT" > "$CJ_RAW" 2>/dev/null || cj_rc=$?
+    fi
+    if [ "$cj_rc" -ne 0 ] || [ ! -s "$CJ_RAW" ]; then
+        fail "T-LIVE-CJ-1 — complexity-judge spawn produced no output (rc=$cj_rc)"
+    else
+        node "$NORMALIZE_CLI" --raw-file "$CJ_RAW" --out "$CJ_SIGNALS" >/dev/null 2>&1 || true
+        # C3: a single-log-line, one-file intent has no complexity signals, so the
+        # judge must emit `SIGNALS: none` -> empty CSV -> level exactly `low`. A
+        # `medium`/`high` here means either the judge over-fired or the pipeline
+        # fell through to the S0-undecidable fail-open — both are real regressions,
+        # so accepting them (the old low|medium|high match) would be too permissive.
+        cj_signals="$(tr -d '[:space:]' < "$CJ_SIGNALS" 2>/dev/null)"
+        cj_level="$(node "$DERIVE_CLI" --stage detail --signals-file "$CJ_SIGNALS" 2>/dev/null | tr -d '[:space:]')"
+        if [ -z "$cj_signals" ] && [ "$cj_level" = "low" ]; then
+            pass "T-LIVE-CJ-1 — trivial intent yielded empty signals and level=low"
+        else
+            fail "T-LIVE-CJ-1 — expected empty signals + level=low (signals='${cj_signals:-empty}' level='${cj_level:-empty}')"
+        fi
+    fi
+    rm -rf "$CJ_TMP"
+fi
+
 echo ""
 echo "=== Results ==="
 if [ "$ERRORS" -eq 0 ]; then

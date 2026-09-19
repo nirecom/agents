@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# CLI wrapper so CC agents and planners can call codex_core_project_nfr_block
+# via a single Bash tool invocation (agents cannot source bash functions directly).
+# Output is byte-equal to the direct codex-path call of the same function.
+set -euo pipefail
+_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=lib/codex-core.sh
+source "$_dir/lib/codex-core.sh"
+codex_core_project_nfr_block "${1:-}"

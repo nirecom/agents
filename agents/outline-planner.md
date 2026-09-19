@@ -14,6 +14,8 @@ Given the clarified intent from `<session-id>-intent.md`, propose **2-3 mutually
 
 ## Constraints
 
+- Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
+
 **Strictly forbidden in your output:**
 - File paths (e.g., `src/foo.ts`, `agents/skills/...`)
 - Function or method names

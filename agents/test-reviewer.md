@@ -1,7 +1,7 @@
 ---
 name: test-reviewer
 description: CC fallback test-coverage reviewer for review-tests; invoked when codex CLI is unusable.
-tools: Read, Glob, Grep, mcp__codegraph__codegraph_explore
+tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
 model: opus
 effort: high
 ---
@@ -47,6 +47,7 @@ NEEDS_REVISION
 
 ## Rules
 
+Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 Do not call Edit/Write.
 Approve only when no coverage gaps remain.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

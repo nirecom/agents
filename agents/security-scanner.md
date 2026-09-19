@@ -37,6 +37,7 @@ Apply the three security axes (Information Leakage / Third-Party Access / Extern
 
 ## Rules
 
+- Before scanning, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 - Never modify any project files — read-only.
 - No WebSearch or WebFetch — local code analysis only. The tool list does not include them.
 - Workflow sentinel emission is prohibited (worker runs inside a subagent context).

@@ -46,7 +46,7 @@ CAP5_FILE="$TMP_ROOT/cap5.txt"
 nfr_block_caps "$CFG_CAP" "$PROJ_CAP" 5 20000 > "$CAP5_FILE"
 cap5_lines="$(wc -l < "$CAP5_FILE" 2>/dev/null | tr -d ' ')"
 [ -n "$cap5_lines" ] || cap5_lines=0
-assert_eq "T2223E-lines-5-block-size" "8" "$cap5_lines"
+assert_eq "T2223E-lines-5-block-size" "9" "$cap5_lines"
 assert_file_has "T2223E-lines-5-keeps-head" "$CAP5_FILE" "$NFR_SENTINEL line 1"
 assert_file_lacks "T2223E-lines-5-drops-tail" "$CAP5_FILE" "filler line 50"
 assert_one_frame "T2223E-lines-5" "$CAP5_FILE"
@@ -117,8 +117,8 @@ while [ "$i" -le "$EDGE_LINES" ]; do EDGE_VALUE="$EDGE_VALUE\\nedge line $i"; i=
 CFG_EDGE="$(make_cfg edgelines "PROJECT_NFR=\"$EDGE_VALUE\"")"
 PROJ_EDGE="$(make_project edgelines)"
 
-# block_lines <file> — the frame is START + label + payload + END, so a block of
-# N payload lines is N + 3 lines; the constant is asserted, never assumed.
+# block_lines <file> — the frame is START + label + payload + END + instruction,
+# so a block of N payload lines is N + 4 lines; the constant is asserted, never assumed.
 block_lines() {
     local n
     n="$(wc -l < "$1" 2>/dev/null | tr -d ' ')"
@@ -127,14 +127,14 @@ block_lines() {
 
 AT_FILE="$TMP_ROOT/edge-lines-at.txt"
 nfr_block_caps "$CFG_EDGE" "$PROJ_EDGE" "$EDGE_LINES" 20000 > "$AT_FILE"
-assert_eq "T2223E2-lines-at-limit-block-size" "$((EDGE_LINES + 3))" "$(block_lines "$AT_FILE")"
+assert_eq "T2223E2-lines-at-limit-block-size" "$((EDGE_LINES + 4))" "$(block_lines "$AT_FILE")"
 assert_file_has "T2223E2-lines-at-limit-keeps-head" "$AT_FILE" "$EDGE_HEAD"
 assert_file_has "T2223E2-lines-at-limit-keeps-last" "$AT_FILE" "edge line $EDGE_LINES"
 assert_one_frame "T2223E2-lines-at-limit" "$AT_FILE"
 
 OVER_FILE="$TMP_ROOT/edge-lines-over.txt"
 nfr_block_caps "$CFG_EDGE" "$PROJ_EDGE" "$((EDGE_LINES - 1))" 20000 > "$OVER_FILE"
-assert_eq "T2223E2-lines-one-over-block-size" "$((EDGE_LINES + 2))" "$(block_lines "$OVER_FILE")"
+assert_eq "T2223E2-lines-one-over-block-size" "$((EDGE_LINES + 3))" "$(block_lines "$OVER_FILE")"
 assert_file_lacks "T2223E2-lines-one-over-drops-exactly-one" "$OVER_FILE" "edge line $EDGE_LINES"
 assert_file_has "T2223E2-lines-one-over-keeps-the-rest" "$OVER_FILE" "edge line $((EDGE_LINES - 1))"
 assert_one_frame "T2223E2-lines-one-over" "$OVER_FILE"
