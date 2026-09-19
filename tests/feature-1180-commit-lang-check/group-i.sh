@@ -1,4 +1,6 @@
 # tests/feature-1180-commit-lang-check/group-i.sh
+# Tests: hooks/pre-commit
+# Tags: lang-enforce, commit-hook, scope:issue-specific
 # Group I — L2 integration (invoke hooks/pre-commit directly): CL-I1..CL-I7.
 # Sourced by the dispatcher after lib.sh; relies on its shared harness.
 
@@ -71,22 +73,17 @@ else
     fail "CL-I5b: expected block+marker with ENFORCE_WORKTREE=off, rc=$PC_RC (RED until /write-code)"
 fi
 
-# CL-I5a: ENFORCE_WORKTREE=on but worktree gate bypassed via the IMPLEMENTED
-# ENFORCE_WORKTREE_EXCLUDE_REPOS mechanism (not the unimplemented .workflow-off
-# marker — that bypass is itself pending TDD on this branch, see
-# feature-workflow-off-bypass-pre-commit.sh tests B/C). Excluding the repo lets
-# the hook proceed past the gate while ENFORCE_WORKTREE=on, so the UNCONDITIONAL
-# language check is reached. Proves the language check runs regardless of
-# ENFORCE_WORKTREE. The assertion requires the language marker specifically, and
-# separately guards against the worktree-gate message so a gate confound (which
-# would also be rc!=0) can never produce a false pass.
+# CL-I5a: ENFORCE_WORKTREE=on but worktree gate bypassed via ENFORCE_WORKTREE_EXCLUDE
+# mechanism. Excluding the repo lets the hook proceed past the gate while ENFORCE_WORKTREE=on,
+# so the UNCONDITIONAL language check is reached. Proves language check runs regardless of
+# ENFORCE_WORKTREE. Guards against worktree-gate confound (also rc!=0).
 _i5a_repo="$(make_git_repo i5a)"
 printf 'const msg = "日本語テスト";\n' > "$_i5a_repo/test.js"
 git -C "$_i5a_repo" add test.js
 _i5a_out="$(run_precommit "$_i5a_repo" \
     "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "ENFORCE_WORKTREE=on" \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$_i5a_repo" \
+    "ENFORCE_WORKTREE_EXCLUDE=$_i5a_repo" \
     "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _i5a_gate=0

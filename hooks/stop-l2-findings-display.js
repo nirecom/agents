@@ -77,9 +77,6 @@ if (require.main === module) {
       phase === "done" ||
       phase === "paused" ||
       phase === "closed" ||
-      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
-      phase === "frozen" ||
-      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       (phase === "pending" && al.last_run_at != null);
     if (!isCompleted) process.exit(0);
 

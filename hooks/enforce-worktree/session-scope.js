@@ -10,7 +10,6 @@ const { resolveRepoRoot } = require("./git-repo-detection");
 // process). Issue #321 — payload-derived repo resolution.
 let _payloadDerivedPaths = [];
 
-const _warnedDeprecated = new Set();
 
 function setPayloadDerivedPaths(paths) {
   _payloadDerivedPaths = (paths || []).filter(Boolean);
@@ -39,18 +38,6 @@ function getSessionRepoRoots() {
     const r = resolveRepoRoot(p);
     if (r) roots.add(r);
   }
-  // --- BEGIN temporary: ENFORCE_WORKTREE_EXTRA_REPOS → ENFORCE_WORKTREE_ADDITIONAL_REPOS migration ---
-  if (process.env.ENFORCE_WORKTREE_EXTRA_REPOS && !process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS) {
-    if (!_warnedDeprecated.has("ENFORCE_WORKTREE_EXTRA_REPOS")) {
-      process.stderr.write(
-        "enforce-worktree: ENFORCE_WORKTREE_EXTRA_REPOS is deprecated; " +
-        "rename to ENFORCE_WORKTREE_ADDITIONAL_REPOS in your .env\n"
-      );
-      _warnedDeprecated.add("ENFORCE_WORKTREE_EXTRA_REPOS");
-    }
-    process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS = process.env.ENFORCE_WORKTREE_EXTRA_REPOS;
-  }
-  // --- END temporary: ENFORCE_WORKTREE_EXTRA_REPOS → ENFORCE_WORKTREE_ADDITIONAL_REPOS migration ---
   const extra = (process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS || "")
     .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
