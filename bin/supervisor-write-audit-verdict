@@ -48,8 +48,8 @@ if (positional.length > 0) {
 
 const sid = args["session-id"] ||
   process.env.WORKFLOW_SESSION_ID ||
-  process.env.CLAUDE_CODE_SESSION_ID ||
-  process.env.CLAUDE_SESSION_ID;
+  process.env.CLAUDE_CODE_SESSION_ID || // session-id-ssot: waived (cli-entry-point) — CLI fallback chain; resolveSessionId() unavailable at entry-point
+  process.env.CLAUDE_SESSION_ID; // session-id-ssot: waived (cli-entry-point) — CLI fallback chain; resolveSessionId() unavailable at entry-point
 if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (could not auto-resolve)");
 
 const runId = args["audit-run-id"];

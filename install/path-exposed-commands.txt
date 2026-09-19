@@ -16,7 +16,6 @@
 review-code-codex
 review-plan-codex
 get-config-var
-extract-accepted-tradeoffs
 review-prompt-size
 review-code-size
 review-env-example

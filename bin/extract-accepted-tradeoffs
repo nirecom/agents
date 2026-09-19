@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Thin wrapper: extracts the body of '## Accepted Tradeoffs' from a markdown file.
-# Usage: extract-accepted-tradeoffs <file>
-# Delegates to extract-mandatory-sections (body-only mode for backward compatibility).
-set -uo pipefail
