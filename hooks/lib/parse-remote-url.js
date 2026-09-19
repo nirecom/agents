@@ -77,6 +77,22 @@ function redactUserinfo(url) {
     .replace(/^[^@/\s]+@/, "***@");
 }
 
+// Forge classification by host (#2307). One registered host per forge; any host
+// not listed — including github.com/gitlab.com look-alikes — classifies unknown.
+const FORGE_HOST_TYPES = { [GITHUB_HOST]: "github", "gitlab.com": "gitlab" };
+
+// Classify a remote URL's forge from its host alone. Always returns an object
+// with { type, host }; a null/empty/non-string input or an unreadable host is
+// { type: "unknown", host: null } — it never returns null and never throws.
+function detectForgeType(url) {
+  if (typeof url !== "string") return { type: "unknown", host: null };
+  const rawHost = extractHost(url);
+  if (!rawHost) return { type: "unknown", host: null };
+  const host = rawHost.toLowerCase();
+  const type = Object.prototype.hasOwnProperty.call(FORGE_HOST_TYPES, host) ? FORGE_HOST_TYPES[host] : "unknown";
+  return { type, host };
+}
+
 function failure(code, message) {
   return { ok: false, code, message };
 }
@@ -137,4 +153,4 @@ function parseOriginOwnerRepo(remoteUrl) {
   return { ok: true, ownerRepo: `${owner}/${repo}`, owner, repo, host: GITHUB_HOST };
 }
 
-module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, isValidOwner, isValidRepo, GITHUB_HOST };
+module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, isValidOwner, isValidRepo, GITHUB_HOST, detectForgeType, FORGE_HOST_TYPES };

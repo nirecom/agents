@@ -6,7 +6,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName } = require("./lib/is-private-repo");
-const { isForgeScanTarget, extractTexts, extractRepoFlag, isRepoWriteTarget } = require("./lib/forge-write-extract");
+const { isForgeScanTarget, isGithubForgeScanTarget, extractTexts, extractRepoFlag, isRepoWriteTarget } = require("./lib/forge-write-extract");
 const { parseGitCArg } = require("./lib/parse-git-args");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
@@ -111,8 +111,10 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
       // Target-visibility resolution for Bash forge-write branch
       const targetRepo = extractRepoFlag(command);
       if (targetRepo !== null) {
-        // --repo flag present: resolve visibility from the explicit target
-        isPrivate = !(await Promise.resolve(shouldScanAsPublicTarget(targetRepo)));
+        // --repo flag present: resolve visibility from the explicit target.
+        // Pass the command so non-GitHub tools (glab) always scan: their --repo
+        // is not a GitHub path and must not be checked via gh api (#2307).
+        isPrivate = !(await Promise.resolve(shouldScanAsPublicTarget(targetRepo, command)));
       } else {
         // No --repo flag: fall back to cwd-based resolution
         let repoDir = null;
@@ -130,6 +132,9 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
           } catch (_) { /* fall-open */ }
         }
         isPrivate = isPrivateRepo(repoDir);
+        // Non-GitHub tracker commands (glab, JIRA) send data to a remote service
+        // regardless of the CWD repo's GitHub visibility — always scan (#2307).
+        if (isPrivate && !isGithubForgeScanTarget(command)) { isPrivate = false; }
       }
       // gh repo create/edit: target repo may not exist yet (create) or uses positional arg
       // without --repo (edit). Visibility resolution via extractRepoFlag/cwd is unreliable.

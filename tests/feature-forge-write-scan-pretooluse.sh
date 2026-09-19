@@ -2,22 +2,13 @@
 # Tests: bin/scan-outbound.sh, bin/scan-outbound.sh., hooks/lib, hooks/lib/bash-write-patterns.js, hooks/lib/forge-write-extract.js, hooks/lib/is-private-repo.js, hooks/lib/parse-git-args.js, hooks/scan-outbound.js, hooks/scan-outbound.js.
 # Tags: scan, filter, outbound, hook, intent
 # Integration tests for the forge-write-scan extension to hooks/scan-outbound.js.
-#
-# Post-implementation contract under test:
-#   - For Bash gh forge-write commands (issue/pr create|edit|close|comment + pr review),
-#     scan --body / --title / --body-file / heredoc text through bin/scan-outbound.sh.
-#   - rc=1 -> block + "Private information"
-#   - rc=2 -> block + "Ask the user"
-#   - rc=0 -> approve
-#   - Private repo -> approve (skip)
-#   - Non-existent --body-file -> approve (fail-open, scanner returns 0 on empty)
-#   - Out-of-scope (gh repo *, gh issue list, gh api ...) -> approve
-#   - Existing paths (git commit message, Edit/Write) keep working unchanged.
-#
-# Until hooks/lib/forge-write-extract.js is implemented in source, a no-op
-# stub is dropped into FAKE_AGENTS so the hook can load. With the stub the
-# block-expected forge tests will all FAIL — that is intentional, the script
-# still runs to completion and reports counts.
+# Contract (gh forge-write issue/pr create|edit|close|comment, pr review): scan
+# --body/--title/--body-file/heredoc via bin/scan-outbound.sh — rc=1 blocks
+# "Private information", rc=2 blocks "Ask the user"; rc=0, private repo, missing
+# --body-file, out-of-scope (gh repo *, gh issue list, gh api) approve; git commit
+# and Edit/Write regression paths stay unchanged. When forge-write-extract.js is
+# absent a no-op stub loads so the hook can require it and gh block-expected cases
+# FAIL by design. glab cases (16-17) are intended RED until #2307 adds glab scan.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -308,6 +299,25 @@ run_hook "$(cat <<'JSON'
 JSON
 )"
 expect_block_with "gh issue create non-EOF heredoc hard hit -> block" "Private information"
+
+echo ""
+echo "=== 16) glab issue create with hard match -> block + 'Private information' (intended RED) ==="
+# GitLab CLI; issue body is --description (gh uses --body). glab is not yet a scan
+# target, so the hook APPROVES and this block-expected case FAILS until #2307.
+run_hook "$(cat <<'JSON'
+{"tool_name":"Bash","tool_input":{"command":"glab issue create --description \"oops forbiddenword42 leaked\""}}
+JSON
+)"
+expect_block_with "glab issue create hard hit -> block (intended RED)" "Private information"
+
+echo ""
+echo "=== 17) glab mr create with hard match -> block + 'Private information' (intended RED) ==="
+# GitLab merge requests are `glab mr create`; same intended RED as case 16.
+run_hook "$(cat <<'JSON'
+{"tool_name":"Bash","tool_input":{"command":"glab mr create --description \"forbiddenword42 in mr\""}}
+JSON
+)"
+expect_block_with "glab mr create hard hit -> block (intended RED)" "Private information"
 
 echo ""
 echo "================================"

@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { resolveCodehostDescriptor } = require("../lib/forge-router");
 
 // findGhInPath: locate the gh executable by searching PATH via Node's filesystem API.
 // This is needed on Windows (MSYS2/Git Bash) where PATH may contain Windows-format
@@ -68,35 +69,15 @@ function isBranchDirectlyMerged(repoDir) {
 }
 
 // hasOpenPrForBranch: returns true iff the current branch has an OPEN or MERGED PR.
-// Called with { cwd: repoDir } so gh resolves the correct branch context.
-// Exit-code semantics for `gh pr view`:
-//   exit 0  → PR found; parse stdout for state
-//   exit 1  → no PR for this branch (legitimate "not found")
-//   exit >1 → gh error (auth failure, network, not installed) → fail-open (true)
-// See issue #577.
+// #2307: routes through the forge codehost descriptor for the repo's origin, so a
+// GitHub repo runs the gh check while a non-GitHub repo hits the no-op stub. A
+// remote that cannot be read fails open (true) so the premature guard stays active.
 function hasOpenPrForBranch(repoDir) {
-  // Resolve gh path via Node fs so Windows-format PATH entries (C:/path) work
-  // even when bash cannot translate them at runtime (mixed POSIX/Windows PATH).
-  // Invoke through bash so both bash scripts (test mocks) and Windows PE
-  // executables run. Pass ghArg as bash $1 (not interpolated into the script
-  // string) to prevent shell injection from paths with special characters.
-  const ghPath = findGhInPath();
-  const ghArg = ghPath ? toMsys2Path(ghPath) : "gh";
-  let r;
-  try {
-    r = spawnSync(
-      "bash", ["-c", '"$1" pr view --json state -q .state', "--", ghArg],
-      { cwd: repoDir, encoding: "utf8", timeout: 8000 }
-    );
-  } catch (e) {
-    return true; // fail-open: spawn error (bash not found, etc.)
-  }
-  if (r && r.status === 0) {
-    const state = (r.stdout || "").trim();
-    return state === "OPEN" || state === "MERGED";
-  }
-  if (r && r.status === 1) return false; // no PR found for this branch
-  return true; // fail-open: gh error (auth failure, network error, not installed)
+  const remote = spawnSync("git", ["-C", repoDir, "remote", "get-url", "origin"], { encoding: "utf8", timeout: 5000 });
+  if (!remote || remote.error || remote.status !== 0) return true;
+  const url = (remote.stdout || "").trim();
+  if (!url) return true;
+  return resolveCodehostDescriptor(url).hasOpenPrForBranch(repoDir);
 }
 
 module.exports = { findGhInPath, toMsys2Path, hasOpenPrForBranch, isBranchDirectlyMerged };
