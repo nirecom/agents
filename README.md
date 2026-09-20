@@ -335,6 +335,7 @@ The installer brings in everything marked **✓** automatically; the rest must a
 |------|---------|:--:|
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` | — |
 | [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) | Third-party code-intelligence: a pre-built symbol graph agents query instead of a Read/Grep sweep | ✓ wired in, but off by default — set `CODEGRAPH=on` in `.env` and re-run the installer ([docs](docs/codegraph.md)) |
+| [RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) | Compresses Bash command output before it reaches the model to reduce LLM token usage; set `RTK=on` in `.env` to enable | ✓ installed and configured when `RTK=on`; off by default |
 
 ## Configuration
 

@@ -242,9 +242,9 @@ T32_CASES
 # re-serialised the document with its keys reordered satisfies every count in this suite and
 # is invisible in a 244-line diff -- and losing `deny` turns an editing slip into a permission
 # grant. So the whole document except permissions.allow is compared against its own before,
-# minus the PreToolUse entries that register hooks/bash-guard.js (#2134) and the two #2278 lang
-# gates (gate-plan-lang.js, gate-worktree-notes-lang.js) -- each excised by exact value, so any
-# OTHER hooks drift still fails the comparison.
+# minus the PreToolUse entries that register hooks/bash-guard.js (#2134), hooks/rtk-rewrite.js
+# (#2326), and the two #2278 lang gates (gate-plan-lang.js, gate-worktree-notes-lang.js) -- each
+# excised by exact value, so any OTHER hooks drift still fails the comparison.
 T45_BEFORE="$TMPROOT/t45-before.json"
 T45_BASELINE="unresolved"
 T45_MARKER=""
@@ -317,6 +317,10 @@ t45_compare() { # <delta|deep|keys|perm> -> token
           {
             matcher: "Bash",
             hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/bash-guard.js\"", timeout: 5 }]
+          },
+          {
+            matcher: "Bash",
+            hooks: [{ type: "command", command: "node \"$AGENTS_CONFIG_DIR/hooks/rtk-rewrite.js\"", timeout: 5 }]
           },
           langGate("gate-plan-lang.js"),
           langGate("gate-worktree-notes-lang.js")
