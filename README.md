@@ -175,13 +175,29 @@ wired to the framework (CLAUDE.md, hooks, skills, and the pinned Claude model ve
 all in effect) and pushes the session-sync repo when the window closes:
 
 ```bash
-codes            # open the current directory
+codes                # open the current directory
 codes path/to/repo   # open a specific repo or .code-workspace
 ```
 
 Inside VS Code, start Claude Code (or GitHub Copilot) as usual — the hook-enforced workflow is
 already active. `codes` works identically in bash (`bin/codes-launch.sh`) and PowerShell
 (`bin/codes-launch.ps1`).
+
+### Sentinels
+
+The same hook that blocks `git commit` uses **sentinels** to know when a step is
+complete. During a session you may be asked to approve a command like:
+
+```
+echo "<<WORKFLOW_USER_VERIFIED: issue #123 reviewed and confirmed>>"
+```
+
+Sentinels are marker strings of the form `<<WORKFLOW_...>>` that hooks detect to drive
+workflow state transitions — step completions, skip declarations, mode switches. The
+`ask` permission dialog is intentional: it ensures the model cannot mark a step done
+or override a gate without explicit user confirmation.
+
+See [docs/glossary.md](docs/glossary.md) and [docs/architecture/claude-code/workflow-runtime.md](docs/architecture/claude-code/workflow-runtime.md) for details.
 
 ## Features
 
