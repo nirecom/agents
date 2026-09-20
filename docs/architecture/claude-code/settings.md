@@ -96,6 +96,18 @@ See `docs/security-policy.md` for the full pattern list.
   either marker. **Fail-open** is the one named exception to hooks/'s deny-on-doubt
   default: an unparseable stdin payload, a `judgeBashCommand` throw, or `parse()`
   reporting `parseFailure` all approve silently rather than invent a verdict.
+- `rtk-rewrite.js` (PreToolUse, matcher: `Bash`) — when `RTK=on` in `.env`, rewrites
+  eligible Bash commands to pipe their output through the RTK binary before it reaches
+  the model, compressing repeated tokens to reduce LLM input size. Default OFF
+  (`RTK=off`). Four passthrough guards (all returning `{}` — no modification): G-a
+  (`isAgentsEmit`) passes framework scripts under `AGENTS_CONFIG_DIR` unchanged; G-b
+  (`isMachineReadable`) passes commands producing porcelain/structured output (e.g.
+  `git status --porcelain`, `git log --format=…`) unchanged; G-c (`isComposite`)
+  passes compound commands (pipes, redirects, newlines, command substitution)
+  unchanged; G-d (`isShellBuiltin`) passes shell builtins (`cd`, `echo`, `export`,
+  etc.) unchanged. Only a single, non-machine-readable, non-framework, non-builtin
+  command is wrapped. RTK binary path is resolved and config deployed by
+  `install/lib/rtk-config-deploy.js`; guard logic lives in `hooks/rtk-rewrite.js`.
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing

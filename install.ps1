@@ -130,6 +130,8 @@ Invoke-InstallStep "Installing pwsh (PowerShell) and Pester" "$AgentsRoot\instal
 
 Invoke-InstallStep "Configuring CodeGraph" "$AgentsRoot\install\win\codegraph.ps1"
 
+Invoke-InstallStep "Configuring RTK" "$AgentsRoot\install\win\rtk.ps1"
+
 Write-Host ""
 if ($script:FailedSteps.Count -gt 0) {
     Write-Host "=== Failed ($($script:FailedSteps.Count) step(s)) ===" -ForegroundColor Red

@@ -131,6 +131,21 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 - **Definition**: `bin/project-nfr-block` — thin bash wrapper that calls `codex_core_project_nfr_block()` and writes the framed `[PROJECT NFR START] … [PROJECT NFR END]` block plus trailing severity-calibration instruction to stdout. Gives CC/planner agents byte-equal access to the same NFR block that codex consumers receive via `bin/lib/codex-core.sh`.
 - **Related**: [bin/project-nfr-block](../bin/project-nfr-block), [bin/lib/codex-core.sh](../bin/lib/codex-core.sh), [agents/lib/nfr-severity-calibration.md](../agents/lib/nfr-severity-calibration.md)
 
+## Tools and utilities
+
+### RTK
+
+- **Full name**: Rust Token Killer (RTK)
+- **Definition**: An optional transparent proxy CLI that compresses Bash command
+  output before it reaches the model, reducing LLM input token usage. Activated by
+  setting `RTK=on` in `.env`; disabled by default. The hook `hooks/rtk-rewrite.js`
+  applies it selectively — composite commands, machine-readable output (e.g.
+  `git log --format`, porcelain flags), framework scripts under `AGENTS_CONFIG_DIR`,
+  and shell builtins are always passed through unchanged. Four passthrough guards:
+  G-a (`isAgentsEmit`), G-b (`isMachineReadable`), G-c (`isComposite`),
+  G-d (`isShellBuiltin`).
+- **Related**: [`hooks/rtk-rewrite.js`](../hooks/rtk-rewrite.js), [`.env.example`](../.env.example)
+
 ## Miscellaneous
 
 ### IR
