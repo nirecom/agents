@@ -20,7 +20,9 @@ if (Test-Path $_repairScript) {
 }
 $syncScript = "$AgentsRoot\bin\session-sync.ps1"
 $waitScript = "$AgentsRoot\bin\wait-vscode-window.ps1"
-$target = if ($args.Count -gt 0) { $args[0] } else { '.' }
+# Default to current directory when no argument is given — mirrors `code` bare behaviour.
+$_effectiveArgs = if ($args.Count -gt 0) { $args } else { @('.') }
+$target = $_effectiveArgs[0]
 if ($target -match '\.code-workspace$') {
     $name = [IO.Path]::GetFileNameWithoutExtension((Resolve-Path $target).Path)
 } else {
@@ -59,7 +61,7 @@ if (Test-Path $_getCfg) {
     } catch {}
 }
 $global:LASTEXITCODE = $_prevEc
-$codeArgs = ($args | ForEach-Object { _codesQuote "$_" }) -join ' '
+$codeArgs = ($_effectiveArgs | ForEach-Object { _codesQuote "$_" }) -join ' '
 # Clear gateway env vars in the CHILD pwsh only (not $env: here, which would also wipe
 # the caller's shell) — prevents a leftover code-ccgw.ps1 session from misrouting a
 # native `codes` launch. #2083

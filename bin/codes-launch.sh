@@ -27,6 +27,8 @@ _any_vscode_window() {
     fi
 }
 
+# Default to current directory when no argument is given — mirrors `code` bare behaviour.
+[ $# -eq 0 ] && set -- "."
 target="${1:-.}"
 if [[ "$target" == *.code-workspace ]]; then
     name="$(basename "$target" .code-workspace)"
