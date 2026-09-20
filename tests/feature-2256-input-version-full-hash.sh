@@ -31,6 +31,7 @@ done
 run_section "digest-format.sh" 180
 run_section "content-kinds.sh" 300
 run_section "artifact-and-freshness.sh" 180
+run_section "null-collapse-characterization.sh" 180
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

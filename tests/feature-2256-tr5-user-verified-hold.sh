@@ -37,6 +37,7 @@ fi
 run_section "stage1-hold.sh" 300
 run_section "override-record.sh" 300
 run_section "stage2-freshness.sh" 300
+run_section "null-freshness-short-circuit.sh" 300
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
