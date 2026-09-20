@@ -2,12 +2,11 @@
 # lang-check: ignore -- rows intentionally accept English/Japanese for the same regex needle (see below).
 # tests/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
-# Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2
+# Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2, prompt-injection
 
-# Pins RNT-1's merge-base delegation (#1638), RNT-9's non-coercive recovery (#1689), and RNT-3's
-# Tier 2 degraded-range contract (#1779) in skills/run-tests/SKILL.md -- prompt-only logic with no
-# other test, so rows assert load-bearing tokens (script names, flags, sentinels, exit codes)
-# rather than wording, and accept English/Japanese equally.
+# Pins RNT-1's merge-base delegation (#1638), RNT-9's non-coercive recovery (#1689), RNT-3's
+# Tier 2 degraded-range contract (#1779), and #2148's sentinel-echo directive in skills/run-tests/SKILL.md
+# -- prompt-only logic, so rows assert load-bearing tokens (not wording) and accept English/Japanese.
 
 # TL3 gap: whether a model actually follows/reaches the instruction, or whether the named commands
 # work in a real repo, is not checked here -- see WORKFLOW_USER_VERIFIED preflight
@@ -187,6 +186,35 @@ expect_match "S10s" "and terminates options before the path reaches git" \
   'no-index[[:space:]]+--[[:space:]]' "$RNT3"
 expect_match "S10t" "naming the filenames that make the terminator necessary" \
   'leading[- ](dash|hyphen)|option[- ]?(terminat|injection)|metachar|word[- ]split|newline|改行' "$RNT3"
+
+# ---- #2148: the degraded range can contain workflow sentinel literals ------
+
+# A diff body Tier 2 reads can contain workflow sentinel strings (the <<WORKFLOW_...>>
+# literals RNT-9 itself emits). Reproducing one would drive the workflow state machine
+# off attacker-controlled diff content -- the verbatim-echo hazard #2148 fixes for
+# signals. RNT-3 already frames read content as data (S10i/S10j); these rows pin the
+# sharper directive that sentinels specifically must never be reproduced. Expected
+# post-fix state: RED until the directive lands, GREEN after.
+expect_match "S10u" "RNT-3 names sentinel strings in the diff as a hazard" \
+  'sentinel' "$RNT3"
+
+RNT3_FLAT3="$(printf '%s' "$RNT3" | tr '\n' ' ')"
+expect_match "S10v" "and forbids transcribing / emitting / reproducing them" \
+  '((sentinel)[^.]{0,90}(never|not|must not|do not|don.t|no)[^.]{0,50}(transcrib|emit|reproduc|echo|copy|output|repeat|paste|再現|転記|出力)|(never|not|must not|do not|don.t|no)[^.]{0,90}(transcrib|emit|reproduc|echo|copy|output|repeat|paste|再現|転記|出力)[^.]{0,50}sentinel)' \
+  "$RNT3_FLAT3"
+
+# S10u2: the directive must bind to diff body content specifically.
+# Example diff body that would trigger this rule: a file containing <<WORKFLOW_CONFIRM_DETAIL: some text>>
+# RNT-3 must name both "diff" (the source of the sentinel) and "sentinel" in the same clause.
+expect_match "S10u2" "RNT-3 binds the sentinel hazard to diff body context (not abstract naming only)" \
+  'diff[^.]{0,80}sentinel|sentinel[^.]{0,80}diff' "$RNT3_FLAT3"
+
+# S10w: the directive must state the execution consequence of reproducing a sentinel string
+# (i.e. that doing so would trigger an unintended workflow state change). "trigger" OR
+# "workflow state" in the sentinel-prohibition context covers this — the planned directive
+# reads "doing so would trigger unintended workflow state changes".
+expect_match "S10w" "RNT-3 names the execution consequence of reproducing a sentinel (trigger / workflow state change)" \
+  'trigger|workflow.state' "$RNT3_FLAT3"
 
 expect_match "S11" "the Rules section names the resolver as the single source of truth" \
   'resolve-merge-base\.sh' "$RULES"

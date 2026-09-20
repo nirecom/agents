@@ -14,19 +14,15 @@
 // The out file is always written (fail-open); only a write failure exits non-zero.
 
 const fs = require("fs");
+const path = require("path");
+const { SIGNAL_IDS } = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state", "complexity-routing.js")
+);
 
-// Valid signal IDs (SSOT mirror of the complexity-routing signal vocabulary).
-// S0-undecidable is deliberately NOT valid as INPUT — an S0 input is malformed
-// and routes to the S0 output token like any other unrecognized id.
-const VALID_SIGNAL_IDS = new Set([
-  "S1-multi-file",
-  "S1b-wide-change",
-  "S2-architecture",
-  "S3-security",
-  "S4-installer",
-  "S5-breaking",
-  "S6-long-plan",
-]);
+// SIGNAL_IDS is the SSOT vocabulary and excludes S0-undecidable, so an S0 input
+// stays out-of-vocabulary and routes to the S0 output token like any other
+// unrecognized id.
+const VALID_SIGNAL_IDS = new Set(SIGNAL_IDS);
 
 const SIGNALS_PREFIX = "SIGNALS:";
 const CHARSET_RE = /^[A-Za-z0-9,_-]*$/;

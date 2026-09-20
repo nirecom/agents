@@ -239,10 +239,12 @@ empty-object false
 EOF
 }
 
-# SS-6: the classifier's one consumer. A verdict that never changed what gets
-# persisted would be an unused function; this pins the wiring in both
-# directions — a secret-shaped unrecognized token is DROPPED, a benign
-# unrecognized token beside it is KEPT verbatim.
+# SS-6: the classifier's one consumer under the #2148 allowlist. isSecretShaped is
+# now a defense-in-depth layer, not the deciding filter: persistence is allowlist-
+# only, so EVERY unrecognized token — secret-shaped or benign — collapses into the
+# single UNRECOGNIZED(N) count rather than being echoed back. Here all four inputs
+# are unrecognized (no SIGNAL_IDS member among them), so N=4 and nothing persists
+# verbatim; the secret-shaped pair can no longer leak through the benign siblings.
 d2099ss_reaches_persistence_filter() {
     local got
     got=$(run_node '
@@ -256,8 +258,8 @@ const out = cr.canonicalizeSignalsForPersistence([
 ]);
 console.log(out.join("|"));
 ')
-    assert_eq "SS-6 canonicalizeSignalsForPersistence drops the secret-shaped tokens and keeps the benign ones" \
-        "benign-unknown-token|another-benign-token" "$got"
+    assert_eq "SS-6 allowlist collapses every unrecognized token (secret-shaped or not) to UNRECOGNIZED(N)" \
+        "UNRECOGNIZED(4)" "$got"
 }
 
 d2099ss_export_surface
