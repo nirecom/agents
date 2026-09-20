@@ -26,6 +26,9 @@ CLAUDE.local.md
 # Installer-created directory symlink: /wf-init alias for /workflow-init (#1743)
 skills/wf-init
 
+# Synced skill bundles — machine-local, managed by skill-sync, never committed
+skills/synced/
+
 # CodeGraph's local index — machine-local build artifact, never shared
 .codegraph/
 
