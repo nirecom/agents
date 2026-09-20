@@ -136,15 +136,8 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 ### RTK
 
 - **Full name**: Rust Token Killer (RTK)
-- **Definition**: An optional transparent proxy CLI that compresses Bash command
-  output before it reaches the model, reducing LLM input token usage. Activated by
-  setting `RTK=on` in `.env`; disabled by default. The hook `hooks/rtk-rewrite.js`
-  applies it selectively — composite commands, machine-readable output (e.g.
-  `git log --format`, porcelain flags), framework scripts under `AGENTS_CONFIG_DIR`,
-  and shell builtins are always passed through unchanged. Four passthrough guards:
-  G-a (`isAgentsEmit`), G-b (`isMachineReadable`), G-c (`isComposite`),
-  G-d (`isShellBuiltin`).
-- **Related**: [`hooks/rtk-rewrite.js`](../hooks/rtk-rewrite.js), [`.env.example`](../.env.example)
+- **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage. Set `RTK=on` in `.env` to enable; off by default.
+- **Related**: [github.com/rtk-ai/rtk](https://github.com/rtk-ai/rtk)
 
 ## Miscellaneous
 
