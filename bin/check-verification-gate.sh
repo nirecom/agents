@@ -2,18 +2,10 @@
 # bin/check-verification-gate.sh
 # Tests: bin/check-verification-gate.sh
 # Tags: verification-gate, risk-category, user-verified, pwsh-required
-#
 # Risk-category classifier for the WORKFLOW_USER_VERIFIED preflight gate (#833).
-# Reads a list of file paths (staged files by default) and emits zero or more
-# risk-category verdict lines on stdout, sorted lexicographically by token.
-#
-# Stdout line format (TAB-separated):
-#   CATEGORY: <token>\tQUESTION: <question text>
-#
-# Exit codes:
-#   0  verdict produced (stdout may be empty)
-#   2  usage error
-#   3  internal error
+# Reads file paths (staged by default); emits risk-category verdict lines on
+# stdout, TAB-separated "CATEGORY: <token>\tQUESTION: <text>", sorted by token.
+# Exit codes: 0 verdict produced (stdout may be empty); 2 usage; 3 internal error.
 
 set -euo pipefail
 
@@ -120,28 +112,24 @@ elif [[ "$MODE" == "auto" ]]; then
     fi
     if [[ -z "$staged" ]]; then
         # Fallback: staged is empty (e.g., ENFORCE_WORKTREE=on, commit already landed).
-        # The base comes from bin/resolve-merge-base.sh rather than from a default-branch
-        # search of this script's own (#1638): five callers each deriving their own base gave
-        # five answers to one question, and this one runs at commit/merge time where a wrong
-        # answer silently removes the questions the user was about to be asked.
-        #
-        # --no-fetch because this runs SYNCHRONOUSLY inside the <<WORKFLOW_USER_VERIFIED>>
-        # preflight. A network wait there is a wait the user sits through.
-        #
-        # Every degradation lands on `git diff HEAD` and RAISES a flag rather than leaving the
-        # file set empty. This is the one consumer where the safe direction is inverted: an
-        # empty classification produces NO questions, which reads as "nothing needs verifying".
+        # Base comes from bin/resolve-merge-base.sh (SSOT for all five callers, #1638),
+        # with --no-fetch since this runs synchronously inside the USER_VERIFIED preflight.
+        # Every degradation lands on `git diff HEAD` and RAISES a flag rather than leaving
+        # the file set empty: an empty classification would produce NO questions here,
+        # which reads as "nothing needs verifying" — the one consumer where empty is unsafe.
         mb_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/resolve-merge-base.sh"
         mb_state=""
         mb_base=""
+        mb_base_is_head=""
         if [[ -r "$mb_helper" ]]; then
             mb_rc=0
             mb_out="$(bash "$mb_helper" -C . --format kv --no-fetch 2>/dev/null)" || mb_rc=$?
             if [[ "$mb_rc" -eq 0 ]]; then
                 while IFS='=' read -r mb_k mb_v; do
                     case "$mb_k" in
-                        base)  mb_base="$mb_v" ;;
-                        state) mb_state="$mb_v" ;;
+                        base)         mb_base="$mb_v" ;;
+                        state)        mb_state="$mb_v" ;;
+                        base_is_head) mb_base_is_head="$mb_v" ;;
                     esac
                 done <<< "$mb_out"
             else
@@ -161,7 +149,10 @@ elif [[ "$MODE" == "auto" ]]; then
 
         case "$mb_state" in
             RECORDED|RESOLVED)
-                if [[ -n "$mb_base" && "$mb_base" != "-" ]]; then
+                if [[ "$mb_base_is_head" == "true" ]]; then
+                    MERGE_BASE_DEGRADED=1
+                    staged="$(degraded_scope_files)"
+                elif [[ -n "$mb_base" && "$mb_base" != "-" ]]; then
                     staged="$(git diff "${mb_base}...HEAD" --name-only 2>/dev/null || true)"
                 else
                     MERGE_BASE_DEGRADED=1

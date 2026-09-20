@@ -235,7 +235,7 @@ d2099h_assert_sig_invalid() {
         return
     fi
     assert_contains "$desc — receipt" "RECORDED_COMPLEXITY" "$out"
-    assert_eq "$desc — reads back as undecidable-high with the token kept verbatim" \
+    assert_eq "$desc — reads back as undecidable-high, unrecognized tokens collapsed to UNRECOGNIZED(count)" \
         "level=high;signals=$want_signals;" \
         "$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null | tr '\n' ';')"
     assert_eq "$desc — one event, no skip annotation" "ce=1 skip=0" "$(d2099_side_effects "$sid")"
@@ -273,20 +273,21 @@ d2099h_signals_normalization() {
             "$zero" "$(d2099h_sig_outcome "$variant")"
     done
 
-    # (c) genuinely invalid tokens. The expected read-back is the payload's own
-    # tokens, trimmed and de-duplicated but NEVER dropped (D1 step 4 then step 5):
-    # a laundered payload would read back identical to the clean canonical set,
-    # which is how an unknown token turns into a silent low downstream.
+    # (c) genuinely invalid tokens. The expected read-back collapses unrecognized
+    # tokens to UNRECOGNIZED(count) (#2148 allowlist): verbatim storage is
+    # eliminated to prevent prompt-injection echo. The level remains
+    # undecidable-high — UNRECOGNIZED routes identically to a single unknown token
+    # per D1 step 5.
     local want
     while IFS='|' read -r variant want; do
         [ -n "$variant" ] || continue
         d2099h_assert_sig_invalid "H-SIG-INV [$variant] keeps its unrecognized token and routes undecidable-high" \
             "$want" "$variant"
     done <<'INV'
-S1-multi-file,NOT-A-SIGNAL,S2-architecture|S1-multi-file,NOT-A-SIGNAL,S2-architecture
-S1-multi-file,S99-invented,S2-architecture|S1-multi-file,S99-invented,S2-architecture
-S1-multi-file,LEVEL: low,S2-architecture|S1-multi-file,LEVEL: low,S2-architecture
-S1-multi-file,S2-architecture; rm -rf /|S1-multi-file,S2-architecture; rm -rf /
+S1-multi-file,NOT-A-SIGNAL,S2-architecture|UNRECOGNIZED(1)
+S1-multi-file,S99-invented,S2-architecture|UNRECOGNIZED(1)
+S1-multi-file,LEVEL: low,S2-architecture|UNRECOGNIZED(1)
+S1-multi-file,S2-architecture; rm -rf /|UNRECOGNIZED(1)
 INV
 
     # Determinism: the same untidy payload twice must not drift.
@@ -331,16 +332,15 @@ console.log(ids.join(","));
     assert_eq "H-SIG-BIG-1 ... appending exactly one evaluation and no skip annotation" \
         "ce=1 skip=0" "$(d2099_side_effects "$sid")"
 
-    # Canonicalized, not truncated: the 401 ids are distinct and already tidy, so
-    # the stored list must equal the input verbatim. Compared by count+checksum
-    # because the literal is 4000+ chars and a failure message must stay readable.
+    # Allowlist collapses all 401 unrecognized tokens to a single UNRECOGNIZED(401)
+    # marker (#2148). The level remains undecidable-high.
     stored=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null \
         | grep -m1 '^signals=' | cut -d= -f2-)
-    assert_eq "H-SIG-BIG-2 ... keeping every token, in order, neither truncated nor deduplicated away (element count)" \
-        "$(printf '%s' "$huge" | tr ',' '\n' | wc -l | tr -d ' ')" \
-        "$(printf '%s' "$stored" | tr ',' '\n' | wc -l | tr -d ' ')"
-    assert_eq "H-SIG-BIG-3 ... and byte-identical to the payload that was sent (checksum)" \
-        "$(printf '%s' "$huge" | cksum)" "$(printf '%s' "$stored" | cksum)"
+    assert_eq "H-SIG-BIG-2 ... all unrecognized tokens collapse to a single UNRECOGNIZED(N) marker (element count=1)" \
+        "1" \
+        "$(printf '%s' "$stored" | awk -F, '{print NF}')"
+    assert_eq "H-SIG-BIG-3 ... stored value is exactly UNRECOGNIZED(401)" \
+        "UNRECOGNIZED(401)" "$stored"
 
     # Every token is outside SIGNAL_IDS, so D1 step 5 routes undecidable on ALL
     # THREE stages — the same answer one unknown token produces. A stage that

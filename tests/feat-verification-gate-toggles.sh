@@ -1,23 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/user-verified.md, .env.example, docs/ops.md, rules/test.md, bin/check-verification-gate.sh, bin/select-tests.sh
-# Tags: run-tl3, run-tl4, verification-gate, user-verified, scope:common
-# Permanent test guarding the orthogonality of two toggles:
-#   RUN_TL3 — test execution / selection gate (bin/select-tests.sh)
-#   RUN_TL4 — verification-gate AskUserQuestion gate (skills/_shared/user-verified.md)
-# Neither toggle may leak into the other's surface. The classifier
-# (bin/check-verification-gate.sh) stays env-var free.
-# Provenance: gate introduced in #1405 (then RUN_E2E/RUN_TL3), split onto RUN_TL4 in #1586.
-#
-# TL3 gap (what this test does NOT catch):
-# - The real `claude -p` commit/merge-flow path where RUN_TL4=off actually
-#   suppresses the AskUserQuestion is never exercised — this is a structural
-#   (grep/section-extraction) test only. A live session would confirm the ask is
-#   not raised while the classifier still runs for its log-only trace.
-# - Nor does it catch RUN_TL3=on wrongly re-activating the ask at runtime; only
-#   the absence of the RUN_TL3 literal from the ask wiring is asserted (case 2).
-# Closest-to-action mitigation: case 4 asserts the RUN_TL4 reader reference
-# precedes the check-verification-gate.sh invocation (guard-before-classifier
-# ordering), the ordering property the runtime path relies on.
+# Tags: run-tl3, run-tl4, verification-gate, user-verified, scope:common, dup-group-keep:size-hard-limit
+# Guards orthogonality of RUN_TL3 (test selection) vs RUN_TL4 (verification-gate ask). TL3 gap: real claude -p path not exercised; structural/grep assertions only.
 
 set -u
 
@@ -304,18 +288,7 @@ else
     fi
 fi
 
-# Case 13 — bin/review-env-example --all reports PERFORMED and emits zero
-#           `^HARD: ./.env.example:` lines.
-#
-#           Exit code alone is NOT evidence of cleanliness: --all always exits 0
-#           even with HARD findings, and no-arg diff mode exits 0 on four SKIPPED
-#           paths (vacuously green forever once .env.example leaves the diff).
-#           Stdout is the primary judgment; the `^HARD:` anchor is mandatory
-#           because a clean run still prints an advisory line containing "HARD".
-#           `--all` is exclusive with `--base`; do not combine them.
-#           Exit 0 is asserted as an extra guard — not sufficient, but necessary:
-#           a wrapper failure or 60s timeout could otherwise leave a truncated
-#           but marker-bearing stdout that passes both stdout checks.
+# Case 13 — review-env-example --all: PERFORMED + zero HARD + exit 0 (stdout primary; exit code insufficient alone — see bin/review-env-example).
 echo "=== Case 13: review-env-example --all PERFORMED + zero HARD ==="
 if [ ! -f "$REVIEW_ENV_EXAMPLE" ]; then
     fail "13. review-env-example not found at $REVIEW_ENV_EXAMPLE"

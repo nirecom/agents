@@ -12,7 +12,7 @@
 // Exits 0 in both cases; exits 1 on bad args.
 
 const path = require("path");
-const { readComplexityEvaluation, ROUTING_STAGES } = require(
+const { readComplexityEvaluation, ROUTING_STAGES, canonicalizeSignalsForPersistence } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 
@@ -66,7 +66,8 @@ function main() {
   }
 
   if (ce) {
-    const signalsLine = "signals=" + (ce.signals.length ? ce.signals.join(",") : "none") + "\n";
+    const safeSignals = canonicalizeSignalsForPersistence(ce.signals);
+    const signalsLine = "signals=" + (safeSignals.length ? safeSignals.join(",") : "none") + "\n";
     if (stage !== null) {
       const level = ce.levels && (ce.levels[stage] === "high" || ce.levels[stage] === "low")
         ? ce.levels[stage]

@@ -232,9 +232,11 @@ it: `base_is_head=true` plus three working-tree counts (`uncommitted_lines`, `un
 / `FALLBACK` / `UNRESOLVED`) is unchanged — these fields are only ever populated once a base has
 already been trusted (`RESOLVED`/`RECORDED`), never used to launder a distrusted one. Each
 consumer decides what to do with a non-empty working tree on its own terms: `select-tests.sh`
-and RNT-3 both fall back to diffing the working tree directly when `base_is_head=true`. Other
-kv consumers (`bin/check-verification-gate.sh` notably) that do not yet read `base_is_head` keep
-their pre-existing behavior — the field is additive, not a breaking change to the kv contract.
+and RNT-3 both fall back to diffing the working tree directly when `base_is_head=true`.
+`bin/check-verification-gate.sh` now also reads `base_is_head=true` and calls `degraded_scope_files`
+instead of running the zero-diff committed-range path (#1811). Other kv consumers that do not yet
+read the field keep their pre-existing behavior — the field is additive, not a breaking change to
+the kv contract.
 
 `cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
 `git_branch` is `null` for non-git directories and detached HEAD.
@@ -294,6 +296,13 @@ verdict per stage so each step routes on its own evidence:
   `detail`, `write_tests`, `write_code`), each `"high"` or `"low"`. `recordComplexityEvaluation`
   (`state-io/session-fields.js`) derives both `level` and `levels` from the same `signals` input
   in one call, so they can never disagree with each other or be written out of sync.
+- **`signals` canonicalization (#2148).** `recordComplexityEvaluation` passes the raw judge
+  output through `canonicalizeSignalsForPersistence` before writing: all-recognized input is
+  deduplicated and stored verbatim; any unrecognized token collapses the entire array to a single
+  `UNRECOGNIZED(<count>)` marker so no verbatim injection text ever reaches persisted state. The
+  read CLI (`bin/workflow/read-complexity-evaluation`) re-applies the same canonicalization at
+  read time. `readComplexityFacts` (session facts) filters to `SIGNAL_IDS` members only before
+  injecting into the WT/WCD prompt, so `UNRECOGNIZED(N)` markers never reach LLM context.
 - **Optional field, not a breaking change.** `REQUIRED_FIELDS.complexity_evaluation` in
   `state-io/events.js` stays `["level", "signals"]` — `levels` is validated only when present
   (exact `ROUTING_STAGES` key set, each value `"high"`/`"low"`, or `InvalidEventError`), so

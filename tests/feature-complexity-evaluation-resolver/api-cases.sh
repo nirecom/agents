@@ -142,29 +142,29 @@ assert_eq "CE-9d. ...while the projection still folds to a single record" \
 # C7 — schema edge cases (all S1-S6 present, duplicates, unknown, long, ISO)
 # ==========================================================================
 echo ""
-echo "=== CE-SCHEMA-1: all S1..S6 signals round-trip ==="
+echo "=== CE-SCHEMA-1: all six valid SIGNAL_IDs round-trip ==="
 SID="ceall-$$"
-node_record "$SID" '["S1","S2","S3","S4","S5","S6"]' >/dev/null
-assert_eq "CE-SCHEMA-1. all six signals preserved" '["S1","S2","S3","S4","S5","S6"]' "$(node_read_field "$SID" signals)"
+node_record "$SID" '["S1-multi-file","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"]' >/dev/null
+assert_eq "CE-SCHEMA-1. all six valid SIGNAL_IDs preserved verbatim" '["S1-multi-file","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"]' "$(node_read_field "$SID" signals)"
 
 echo ""
-echo "=== CE-SCHEMA-2: duplicate signal ids preserved verbatim (no dedup) ==="
+echo "=== CE-SCHEMA-2: duplicate valid signal ids are deduplicated ==="
 SID="cedup-$$"
-node_record "$SID" '["S1","S1","S2"]' >/dev/null
-assert_eq "CE-SCHEMA-2. duplicates stored as-is" '["S1","S1","S2"]' "$(node_read_field "$SID" signals)"
+node_record "$SID" '["S1-multi-file","S1-multi-file","S2-architecture"]' >/dev/null
+assert_eq "CE-SCHEMA-2. valid duplicates are deduplicated" '["S1-multi-file","S2-architecture"]' "$(node_read_field "$SID" signals)"
 
 echo ""
-echo "=== CE-SCHEMA-3: unknown signal name stored (no value validation) ==="
+echo "=== CE-SCHEMA-3: unknown signal name collapses to UNRECOGNIZED(1) (allowlist enforcement) ==="
 SID="ceunk-$$"
 node_record "$SID" '["unknown-signal"]' >/dev/null
-assert_eq "CE-SCHEMA-3. unknown signal accepted" '["unknown-signal"]' "$(node_read_field "$SID" signals)"
+assert_eq "CE-SCHEMA-3. unknown signal collapses to UNRECOGNIZED(1)" '["UNRECOGNIZED(1)"]' "$(node_read_field "$SID" signals)"
 
 echo ""
-echo "=== CE-SCHEMA-4: very long signal string stored intact ==="
+echo "=== CE-SCHEMA-4: very long signal string collapses to UNRECOGNIZED(1) ==="
 SID="celong-$$"
 LONG="$(printf 'S%.0s' $(seq 1 300))"
 node_record "$SID" "[\"$LONG\"]" >/dev/null
-assert_eq "CE-SCHEMA-4. long signal preserved" "[\"$LONG\"]" "$(node_read_field "$SID" signals)"
+assert_eq "CE-SCHEMA-4. long unrecognized signal collapses to UNRECOGNIZED(1)" '["UNRECOGNIZED(1)"]' "$(node_read_field "$SID" signals)"
 
 echo ""
 echo "=== CE-SCHEMA-5: recorded_at is ISO 8601 ==="

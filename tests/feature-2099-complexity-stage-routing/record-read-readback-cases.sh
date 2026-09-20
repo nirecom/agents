@@ -105,7 +105,8 @@ d2099_wrapper_injection() {
     assert_eq "R-30 the payload is stored as data and routes undecidable-high" "level=high" "$out"
 
     out=$(d2099_projected_ce "$sid")
-    assert_contains "R-31 the raw persisted record still holds the payload text verbatim" "touch" "$out"
+    assert_not_contains "R-31 the raw persisted record does NOT store the payload text verbatim (allowlist collapses it)" "touch" "$out"
+    assert_contains "R-31b UNRECOGNIZED(1) marker appears in the record instead" "UNRECOGNIZED(1)" "$out"
 
     if [ -e "$canary" ]; then
         fail "R-32 the read path executed the stored payload (canary appeared after read-back)"
