@@ -16,13 +16,10 @@ const { readGateFacts } = require("./gate-facts");
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { readComplexityEvaluation } = require("../../../../hooks/workflow-state");
 const { normalizeCwd } = require("../../../../hooks/lib/path-normalize");
+const { SIGNAL_IDS } = require("../../../../hooks/workflow-state/complexity-routing");
 
 const NONE = "NONE";
 const LEVELS = ["high", "low"];
-// State values are written by other tools and printed into a transcript the model
-// parses as facts, so anything that could break the KEY=VALUE line structure or
-// read as prose is dropped rather than escaped.
-const SIGNAL_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 function resolvePlansDir() {
   let raw;
@@ -68,7 +65,7 @@ function readComplexityFacts(sessionId) {
     };
   }
   const signals = Array.isArray(ce.signals)
-    ? ce.signals.filter((s) => typeof s === "string" && SIGNAL_ID_RE.test(s))
+    ? ce.signals.filter((s) => typeof s === "string" && SIGNAL_IDS.includes(s))
     : [];
   return {
     COMPLEXITY_LEVEL_write_tests: levelOf(ce.levels, "write_tests"),

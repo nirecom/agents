@@ -109,8 +109,14 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 ### normalize-judge-signals
 
 - **Full name**: Normalize judge signals CLI
-- **Definition**: `bin/workflow/normalize-judge-signals` — reads the raw text file output from a complexity-judge subagent, strictly captures the `SIGNALS:` line, validates each signal ID against `VALID_SIGNAL_IDS`, and emits a normalized CSV on stdout. Preamble text before the `SIGNALS:` line is allowed; non-SIGNALS lines after it, multiple `SIGNALS:` lines, or unknown IDs degrade to `S0-undecidable`.
+- **Definition**: `bin/workflow/normalize-judge-signals` — reads the raw text file output from a complexity-judge subagent, strictly captures the `SIGNALS:` line, validates each signal ID against `SIGNAL_IDS` from `hooks/workflow-state/complexity-routing.js` (SSOT; #2148 unified the prior `VALID_SIGNAL_IDS` duplicate), and emits a normalized CSV on stdout. Preamble text before the `SIGNALS:` line is allowed; non-SIGNALS lines after it, multiple `SIGNALS:` lines, or unknown IDs degrade to `S0-undecidable`.
 - **Related**: [bin/workflow/normalize-judge-signals](../bin/workflow/normalize-judge-signals), [agents/complexity-judge.md](../agents/complexity-judge.md)
+
+### UNRECOGNIZED(N)
+
+- **Full name**: Unrecognized-count persistence marker
+- **Definition**: The canonical storage form for a signals array that contains one or more tokens outside `SIGNAL_IDS`. Written by `canonicalizeSignalsForPersistence` — no verbatim unknown text is ever persisted (#2148 injection guard). `N` is the count of non-`SIGNAL_IDS` tokens in the original input. The marker appears in `complexity_evaluation.signals` and in the `signals=` line of `read-complexity-evaluation` output; it is filtered out before reaching any LLM prompt (`readComplexityFacts` passes only `SIGNAL_IDS` members).
+- **Related**: [hooks/workflow-state/complexity-routing.js](../hooks/workflow-state/complexity-routing.js), [docs/architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
 
 ### nfr-severity-calibration
 

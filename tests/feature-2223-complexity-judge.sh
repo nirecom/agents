@@ -231,26 +231,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# R1 — complexity-routing.js is untouched by this feature (routing is #2099's
-# responsibility; scope 4 swaps the judge and the normalize step only).
+# R1 — the routing vocabulary this feature depends on is intact. The #2148
+# allowlist fix legitimately edits complexity-routing.js on this branch, so a
+# merge-base no-diff check no longer holds; what scope 4 actually relies on is
+# the shared signal vocabulary, which must survive that edit. Assert the
+# structural invariants (SSOT contract) rather than byte-equality vs a base.
 # ---------------------------------------------------------------------------
-base=""
-for ref in main origin/main; do
-    base="$(git -C "$AGENTS_DIR" merge-base HEAD "$ref" 2>/dev/null || true)"
-    [[ -n "$base" ]] && break
-done
-if [[ -n "$base" ]] && git -C "$AGENTS_DIR" cat-file -e "$base:$ROUTING_JS" 2>/dev/null; then
-    if git -C "$AGENTS_DIR" diff --quiet "$base" -- "$ROUTING_JS"; then
-        pass "T2223CJ-R1-routing-untouched"
-    else
-        fail "T2223CJ-R1-routing-untouched — $ROUTING_JS changed vs merge-base; routing is out of scope"
-    fi
+if grep -qF 'UNDECIDABLE_SIGNAL = "S0-undecidable"' "$AGENTS_DIR/$ROUTING_JS" 2>/dev/null; then
+    pass "T2223CJ-R1a-routing-undecidable-token-intact"
 else
-    if grep -qF 'UNDECIDABLE_SIGNAL = "S0-undecidable"' "$AGENTS_DIR/$ROUTING_JS" 2>/dev/null; then
-        pass "T2223CJ-R1-routing-untouched (structural fallback: no merge base)"
-    else
-        fail "T2223CJ-R1-routing-untouched — routing invariant token missing and no merge base to diff against"
-    fi
+    fail "T2223CJ-R1a-routing-undecidable-token-intact — S0-undecidable SSOT token missing from $ROUTING_JS"
+fi
+
+r1_ids="$(run_with_timeout 30 node -e '
+const cr = require(process.argv[1]);
+const ok = Array.isArray(cr.SIGNAL_IDS) && cr.SIGNAL_IDS.length === 7
+  && ["S1-multi-file","S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"].every(s => cr.SIGNAL_IDS.includes(s));
+process.stdout.write(ok ? "ok" : "bad:" + JSON.stringify(cr.SIGNAL_IDS));
+' "$AGENTS_DIR/$ROUTING_JS" 2>&1 || true)"
+if [[ "$r1_ids" == "ok" ]]; then
+    pass "T2223CJ-R1b-routing-signal-vocabulary-intact"
+else
+    fail "T2223CJ-R1b-routing-signal-vocabulary-intact — SIGNAL_IDS not the 7-member SSOT set (got: $r1_ids)"
 fi
 
 echo ""

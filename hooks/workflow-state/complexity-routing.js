@@ -11,8 +11,6 @@
 // at load but only RECORDS its verdict; derivation throws at CALL time instead,
 // and each caller owns its own fail-open direction.
 
-const { isSecretShaped } = require("./complexity-routing/secret-shape");
-
 const ROUTING_STAGES = Object.freeze(["detail", "write_tests", "write_code"]);
 
 // Signal vocabulary. S1-S6 keep the rubric's spellings since #1350;
@@ -189,28 +187,26 @@ function normalizeSignals(signals) {
   return set;
 }
 
-// canonicalizeSignalsForPersistence(signals) -> string[]. Storage-shape
-// canonicalization for the PERSISTED signals field ONLY (level derivation
-// keeps consuming the raw array so a malformed input still fails high).
-// All-recognized input -> deduplicated tokens, first-occurrence order
-// (#2099 H-SIG). Otherwise a token is dropped whole if it has a control char,
-// embeds the record CLI's own receipt marker, or matches a known provider
-// hard-secret shape (#2099 Finding A/LI-3/LI-6) — see isSecretShaped. A
-// benign unrecognized token with none of those traits is kept verbatim.
+// Matches the canonical single-marker form produced by this function.
+// Idempotency guard: ["UNRECOGNIZED(N)"] re-canonicalizes to itself.
+// Mixed forms (valid IDs alongside a marker) are NOT canonical — recount.
+const UNRECOGNIZED_MARKER_RE = /^UNRECOGNIZED\(\d+\)$/;
+
+// canonicalizeSignalsForPersistence(signals) — storage-shape canonicalization
+// for the PERSISTED signals field (#2099 H-SIG, #2148 injection guard).
+// All-recognized -> deduplicated SIGNAL_IDs. Any unknown -> UNRECOGNIZED(count).
+// Idempotent for ["UNRECOGNIZED(N)"] only; forged mixed forms are recounted.
 function canonicalizeSignalsForPersistence(signals) {
   if (!Array.isArray(signals)) return [];
   const present = normalizeSignals(signals);
   if (present !== null) return Array.from(present);
-  const CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/;
-  const RECEIPT_MARKER = "RECORDED_COMPLEXITY";
-  return signals
-    .map((raw) => String(raw).trim())
-    .filter((token) =>
-      token.length > 0 &&
-      !CONTROL_CHAR_RE.test(token) &&
-      !token.includes(RECEIPT_MARKER) &&
-      !isSecretShaped(token)
-    );
+  const tokens = signals.map((raw) => String(raw).trim()).filter((t) => t.length > 0);
+  // Idempotent only for the canonical single-marker output form.
+  if (tokens.length === 1 && UNRECOGNIZED_MARKER_RE.test(tokens[0])) {
+    return tokens;
+  }
+  const unrecognizedCount = tokens.filter((t) => !SIGNAL_IDS.includes(t)).length;
+  return ["UNRECOGNIZED(" + unrecognizedCount + ")"];
 }
 
 // deriveStageLevel(stage, signals) -> "high" | "low". Decision order is FIXED
