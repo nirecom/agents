@@ -1,13 +1,5 @@
-param(
-    [switch]$Develop,
-    [switch]$Full,
-    [switch]$Base,      # kept for backward compat — treated as -Develop
-    [switch]$Toolchain  # kept for backward compat — treated as -Develop
-)
-
 # Agents framework installer for Windows (PowerShell)
-# Usage: .\install.ps1 [-Develop] [-Full]
-#   -Develop : also install Codex CLI
+# Usage: .\install.ps1
 
 if ($IsWindows -eq $false) {
     Write-Host "Error: install.ps1 must not run on Linux/macOS. Use install.sh instead." -ForegroundColor Red
@@ -86,9 +78,7 @@ Invoke-InstallStep "Creating symlinks" "$AgentsRoot\install\win\dotfileslink.ps1
 
 Invoke-InstallStep "Installing Claude Code" "$AgentsRoot\install\win\claude-code.ps1"
 
-if ($Develop -or $Full -or $Base -or $Toolchain) {
-    Invoke-InstallStep "Installing Codex" "$AgentsRoot\install\win\codex.ps1"
-}
+Invoke-InstallStep "Installing Codex" "$AgentsRoot\install\win\codex.ps1"
 
 # --- BEGIN session-sync gate ---
 # One-time idempotent bootstrap (git init, .gitattributes/.gitignore write, remote
