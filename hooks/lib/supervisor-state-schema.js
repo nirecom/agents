@@ -41,6 +41,14 @@ const AUDIT_RETRY_THRESHOLD = 2;
 // Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers audit arming.
 const AUDIT_SEVERITY_THRESHOLD = "warning";
 
+// Self-recovering short-circuit (#2323): the explicit allow-list of terminal verdicts
+// for which a null code-side freshness_key (input_version unresolvable) approves the
+// WE-8 sentinel instead of re-arming forever. Only CONTINUE is approved — WARN,
+// BLOCK, missing/malformed verdicts remain fail-closed (arm). To widen this set,
+// define the justification and add the verdict explicitly; never derive by filtering
+// AUDIT_VERDICT_VALUES (that would admit WARN and future values fail-open).
+const NON_BLOCK_TERMINAL_VERDICTS = ["CONTINUE"];
+
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
   return {
@@ -249,6 +257,7 @@ module.exports = {
   ALERT_RETRY_THRESHOLD,
   AUDIT_PHASE_VALUES,
   AUDIT_VERDICT_VALUES,
+  NON_BLOCK_TERMINAL_VERDICTS,
   AUDIT_RETRY_THRESHOLD,
   AUDIT_SEVERITY_THRESHOLD,
   createEmptyState,
