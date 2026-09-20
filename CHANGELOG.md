@@ -491,3 +491,7 @@ Changes: Project-specific NFR is now referenced as acceptance and severity calib
 ### FEATURE: PR #2322 (2026-09-19)
 Background: fix(#2319,#2316): null cwd fallback + repo-dir-guard INDETERMINATE fix
 Changes: Fixed: the workflow no longer stalls when Claude Code runs inside the VS Code extension, which reports a null working directory. (#2319);Fixed: closing a session after its worktree is removed no longer aborts the workflow. (#2316)
+
+### FEATURE: PR #2330 (2026-09-20)
+Background: fix(#2323): null freshness_key infinite-arm loop when AGENTS_CONFIG_DIR is stale
+Changes: fix: TR5 audit gate no longer re-arms the WE-8 sentinel indefinitely when AGENTS_CONFIG_DIR is stale — a prior CONTINUE audit verdict now short-circuits the null-freshness arm loop so the user can advance (#2323)
