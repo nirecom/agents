@@ -21,6 +21,7 @@ const {
   triggerById,
   stepCompleteCause,
 } = require("../lib/audit-triggers");
+const { NON_BLOCK_TERMINAL_VERDICTS } = require("../lib/supervisor-state-schema");
 
 const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
 
@@ -184,6 +185,16 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     const tr5Idx = tr5Run ? tr5AuditLedger.indexOf(tr5Run) : -1;
     const laterBlockExists = tr5Run && tr5Idx >= 0 && hasLaterTerminalBlock(state.audit, tr5Idx);
 
+    // #2323 self-recovering short-circuit: when the code-side freshness_key cannot be
+    // computed (input_version === null, e.g. no merge-base / detached HEAD / shallow
+    // clone), re-arming on every emission creates an infinite loop. Approve the sentinel
+    // instead when the last TR5 terminal run is in the explicit allow-list (CONTINUE only),
+    // no later standing BLOCK exists, and the null is specifically a code-side null
+    // (input_version null — not an artifact-side null, which stays fail-closed).
+    const nonBlockTerminal = tr5Run && NON_BLOCK_TERMINAL_VERDICTS.includes(tr5Run.verdict);
+    const codeSideUncomputable = freshness && freshness.freshness_key == null && freshness.input_version == null;
+    const selfRecovering = nonBlockTerminal && !laterBlockExists && codeSideUncomputable;
+
     if (tr5Run && (tr5Run.verdict === "BLOCK" || laterBlockExists)) {
       // An override can only release a BLOCK carried by the TR5 run itself,
       // and only when no later TR6 BLOCK exists. A later BLOCK is an independent
@@ -193,7 +204,14 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
         approveFn();
         return { authoritative: true };
       }
-      if (!currentFk) return arm(ALL_SUB_CHECK_IDS.slice(), false);
+      // selfRecovering is structurally always false here (BLOCK verdict or laterBlockExists
+      // guarantees nonBlockTerminal=false or !laterBlockExists=false), so this check never
+      // fires; it is present for CPR-ORTH symmetry with Stage 2 so both null-arm sites
+      // share identical guards and future restructuring cannot leave one unprotected.
+      if (!currentFk) {
+        if (selfRecovering) { approveFn(); return { authoritative: true }; }
+        return arm(ALL_SUB_CHECK_IDS.slice(), false);
+      }
       if (tr5Run.freshness_key === currentFk) {
         blockFn(holdReason());
         return { authoritative: true };
@@ -203,7 +221,13 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
 
     // Stage 2 — diff-based re-audit for a missing/non-BLOCK terminal run.
     if (!tr5Run) return arm(ALL_SUB_CHECK_IDS.slice(), false);
-    if (!currentFk) return arm(ALL_SUB_CHECK_IDS.slice(), false);
+    if (!currentFk) {
+      // Primary fix for #2323: a null code-side freshness_key would otherwise re-arm
+      // the WE-8 sentinel on every emission, looping forever. When selfRecovering is
+      // true (CONTINUE terminal + no later BLOCK + input_version null), approve instead.
+      if (selfRecovering) { approveFn(); return { authoritative: true }; }
+      return arm(ALL_SUB_CHECK_IDS.slice(), false);
+    }
 
     const { truncated, narrowed } = snapshotStale(audit, plansDir, planSessionId);
     if (truncated || narrowed) return arm(ALL_SUB_CHECK_IDS.slice(), true);
