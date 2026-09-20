@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/check-verification-gate.sh
 # Tags: verification-gate, base-is-head, scope:common
-# Group E: bin/check-verification-gate.sh base_is_head=true fix (#1811).
-# Split from tests/feat-verification-gate-toggles.sh (size-hard-limit).
 
 set -u
 
@@ -42,7 +40,6 @@ export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
 unset AGENTS_CONFIG_DIR 2>/dev/null || true
 
-# make_gate_bin <bindir> [kv ...]: copy real gate + stub resolve-merge-base.sh.
 # The gate resolves its sibling via BASH_SOURCE, so a copy (not symlink) is required.
 make_gate_bin() {
     local bindir="$1"; shift
