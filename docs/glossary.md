@@ -131,6 +131,14 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 - **Definition**: `bin/project-nfr-block` — thin bash wrapper that calls `codex_core_project_nfr_block()` and writes the framed `[PROJECT NFR START] … [PROJECT NFR END]` block plus trailing severity-calibration instruction to stdout. Gives CC/planner agents byte-equal access to the same NFR block that codex consumers receive via `bin/lib/codex-core.sh`.
 - **Related**: [bin/project-nfr-block](../bin/project-nfr-block), [bin/lib/codex-core.sh](../bin/lib/codex-core.sh), [agents/lib/nfr-severity-calibration.md](../agents/lib/nfr-severity-calibration.md)
 
+## Tools and utilities
+
+### RTK
+
+- **Full name**: Rust Token Killer (RTK)
+- **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage. Set `RTK=on` in `.env` to enable; off by default.
+- **Related**: [github.com/rtk-ai/rtk](https://github.com/rtk-ai/rtk)
+
 ## Miscellaneous
 
 ### IR
