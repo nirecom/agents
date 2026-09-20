@@ -18,6 +18,7 @@ const {
   splitSegmentsWithSeparators,
   tokenizeSegment,
 } = require("./lib/command-parser");
+const { isUnderPath } = require("./lib/path-match");
 
 const GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
   "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path",
@@ -49,6 +50,23 @@ const SHELL_BUILTINS = new Set([
 
 function passthrough() {
   return {};
+}
+
+// Peel `env` and its flags/VAR=val pairs to expose the actual command tokens.
+// Returns the trimmed tokens array, or null if nothing remains after peeling.
+function peelEnvTokens(tokens) {
+  let i = 1; // skip "env" itself
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (t === "--") { i++; break; }
+    if (t === "-i" || t === "--ignore-environment" || t === "-0" || t === "--null") { i++; continue; }
+    // value-taking flags: -u/--unset NAME, -C/--chdir DIR
+    if ((t === "-u" || t === "--unset" || t === "-C" || t === "--chdir") && i + 1 < tokens.length) { i += 2; continue; }
+    if (t.startsWith("-")) { i++; continue; }
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) { i++; continue; } // VAR=val
+    break;
+  }
+  return i < tokens.length ? tokens.slice(i) : null;
 }
 
 // RTK on/off resolves through bin/get-config-var (exit 1 = explicit ON).
@@ -129,34 +147,41 @@ function isAgentsEmit(cmd) {
     resolvedAgentsDir = path.resolve(agentsDir);
   }
   const binNames = getBinNames(agentsDir);
-  const underAgents = (p) => {
-    const rel = path.relative(resolvedAgentsDir, p);
-    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-  };
-  try {
-    return hasCommandHead(cmd, (tokens) => {
-      const head = tokens[0];
-      if (!head) return false;
-      if (head.includes("/") || head.includes("\\")) {
+  const underAgents = (p) => isUnderPath(p, resolvedAgentsDir);
+  const checkTokens = (toks) => {
+    const head = toks[0];
+    if (!head) return false;
+    if (head.includes("/") || head.includes("\\")) {
+      let resolved;
+      try { resolved = path.resolve(head); } catch (_e) { return false; }
+      try { resolved = fs.realpathSync(resolved); } catch (_e) { /* use unresolved */ }
+      return underAgents(resolved);
+    }
+    if (binNames.has(head)) return true;
+    // Also match when a script runner's first path argument is an agents script.
+    if (SCRIPT_RUNNERS.has(head)) {
+      for (let i = 1; i < toks.length; i++) {
+        const t = toks[i];
+        if (t.startsWith("-")) continue;
+        if (!t.includes("/") && !t.includes("\\")) break;
         let resolved;
-        try { resolved = path.resolve(head); } catch (_e) { return false; }
+        try { resolved = path.resolve(t); } catch (_e) { break; }
         try { resolved = fs.realpathSync(resolved); } catch (_e) { /* use unresolved */ }
         return underAgents(resolved);
       }
-      if (binNames.has(head)) return true;
-      // Also match when a script runner's first path argument is an agents script.
-      if (SCRIPT_RUNNERS.has(head)) {
-        for (let i = 1; i < tokens.length; i++) {
-          const t = tokens[i];
-          if (t.startsWith("-")) continue; // skip flags like --harmony
-          if (!t.includes("/") && !t.includes("\\")) break; // bare name, not a path
-          let resolved;
-          try { resolved = path.resolve(t); } catch (_e) { break; }
-          try { resolved = fs.realpathSync(resolved); } catch (_e) { /* use unresolved */ }
-          return underAgents(resolved);
-        }
+    }
+    return false;
+  };
+  try {
+    return hasCommandHead(cmd, (tokens) => {
+      // Peel env prefix to reach the actual command head.
+      let toks = tokens;
+      if (toks.length > 0 && toks[0] === "env") {
+        const peeled = peelEnvTokens(toks);
+        if (!peeled || peeled.length === 0) return false;
+        toks = peeled;
       }
-      return false;
+      return checkTokens(toks);
     });
   } catch (_e) {
     return false;
@@ -191,11 +216,18 @@ function gitMachineReadable(tokens) {
 function isMachineReadable(cmd) {
   try {
     return hasCommandHead(cmd, (tokens) => {
-      if (tokens.length === 0) return false;
-      const base = tokens[0].replace(/\\/g, "/").split("/").pop();
-      if (base === "git") return gitMachineReadable(tokens);
-      for (let k = 1; k < tokens.length; k++) {
-        const t = tokens[k];
+      // Peel env prefix and strip .exe suffix to reach the actual command base.
+      let toks = tokens;
+      if (toks.length > 0 && toks[0] === "env") {
+        const peeled = peelEnvTokens(toks);
+        if (!peeled || peeled.length === 0) return false;
+        toks = peeled;
+      }
+      if (toks.length === 0) return false;
+      const base = toks[0].replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "");
+      if (base === "git") return gitMachineReadable(toks);
+      for (let k = 1; k < toks.length; k++) {
+        const t = toks[k];
         if (MACHINE_FLAGS.has(t) || MACHINE_FLAGS_WITH_VALUE.has(t)) return true;
         if (t.includes("=")) {
           const name = t.slice(0, t.indexOf("="));
@@ -224,7 +256,14 @@ function isComposite(cmd) {
 function isShellBuiltin(cmd) {
   const tokens = tokenizeSegment(cmd);
   if (tokens.length === 0) return true;
-  const first = tokens[0];
+  // Peel env prefix — `env echo ...` should still match as a builtin invocation.
+  let effectiveTokens = tokens;
+  if (tokens[0] === "env") {
+    const peeled = peelEnvTokens(tokens);
+    if (!peeled || peeled.length === 0) return false;
+    effectiveTokens = peeled;
+  }
+  const first = effectiveTokens[0];
   if (first.includes("=") && !first.startsWith("-")) return true; // FOO=bar ...
   return SHELL_BUILTINS.has(first);
 }
