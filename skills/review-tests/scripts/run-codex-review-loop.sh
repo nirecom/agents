@@ -121,6 +121,7 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
+  --class-members "$PLANS_DIR/$SESSION_ID-intent.md"
   --repo-root "$REPO_ROOT_VAL"
 )
 
