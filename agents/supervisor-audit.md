@@ -52,7 +52,7 @@ Apply decision criteria to the transcript and state-file history only.
 
 Work through the checklist below; any single failure justifies WARN, repeated or compounding failures justify BLOCK:
 
-1. **Cross-stage coherence** — does the work at the current stage faithfully descend from the prior stage? Outline matches intent? Detail matches outline? Code matches detail? Named pattern — Issues→Class-members gap: `## Issues` entries N > `## Class members` entries M at any stage (intent/outline/detail) is a cross-stage coherence failure. Flag when N > 0 and M < N.
+1. **Cross-stage coherence** — does the work at the current stage faithfully descend from the prior stage? Outline matches intent? Detail matches outline? Code matches detail? Named pattern — Issues→Class-members gap: in intent.md (the Class members SSOT, #2228), `## Issues` entries N > `## Class members` entries M is a cross-stage coherence failure. Flag when N > 0 and M < N.
 2. **Recurrence patterns** — has the same failure mode recurred across multiple alert mode reviews? Is the session looping on a problem rather than resolving it?
 3. **Systemic risk** — has the work begun to violate `rules/core-principles.md` in ways that single-finding alert mode reviews missed (e.g., creeping duplication of an SSOT, symmetry violations across a class of files)?
 

@@ -2,7 +2,7 @@
 
 0. **Adaptive skip evaluation.** Before drafting, evaluate all three conditions against the outline.md content provided.
    - Condition 1: The Adopted approach section explicitly lists concrete file paths and their specific change content.
-   - Condition 2: Every `## Class members` entry with `triage: MUST` has a concrete file mention in the outline body.
+   - Condition 2: Every `## Class members` entry with `triage: MUST` (read from intent.md, the Class members SSOT) has a concrete file mention in the outline body.
    - Condition 3: No design decision remains open — no new abstraction, no responsibility reassignment, no unresolved API choice.
    If ALL three conditions are met, emit the literal string `<<DETAIL_SKIPPABLE_BY_PLANNER: outline already provides file-level clarity>>` as the very first line of your draft — before the Delivery plan, before any section heading, before any other content. Then continue drafting the full plan normally.
    If ANY condition is not met, do not emit the sentinel. Draft the full plan via the normal procedure.
@@ -23,7 +23,7 @@
 3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
-     Section heading literals follow PLAN_LANG (set in $AGENTS_CONFIG_DIR/.env). When PLAN_LANG=english or unset, prefer "Delivery plan" / "Background" / "Files to modify" verbatim so the assemble-mandatory.sh stripper recognizes them.
+     Schema H2 headings always use their canonical English names ("Delivery plan" / "Background" / "Files to modify" verbatim) regardless of PLAN_LANG; only body text follows PLAN_LANG.
      Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — these are added
      automatically; planner-authored copies are stripped before the final write.
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
