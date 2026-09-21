@@ -2,7 +2,6 @@
 name: review-docs
 description: Verify staged doc changes satisfy line-limit and README section-order gates before commit; symmetric to review-code-security.
 model: sonnet
-effort: high
 ---
 
 Verify that documentation changed in this session satisfies the doc conciseness gates before the commit gate enforces them. Symmetric to `/review-code-security`: an evidence-bound review step gated on the staged blobs, not on recorded status.
