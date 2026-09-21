@@ -507,3 +507,7 @@ Changes: Added tests/lib/harness.sh — shared test harness for top-level tests;
 ### FEATURE: PR #2358 (2026-09-21)
 Background: fix(#2347): delegate RTK config validation to rtk binary, drop hardco...
 Changes: Fixed (#2347): the RTK installer now delegates config management to the RTK binary (`rtk config` / `rtk config --create`) instead of writing a hardcoded config schema, so installs produce configs accepted by current RTK (v0.48.0+) and obsolete configs are migrated automatically.
+
+### FEATURE: PR #2364 (2026-09-22)
+Background: feat(#2356,#2345,#2346,#2350): delegate rtk-rewrite to rtk hook claude, add RTK_AUDIT guard log
+Changes: Add `RTK_AUDIT=on` toggle: records a JSONL audit line to `~/.agents/logs/rtk-guard-audit.log` each time an RTK guard rejects or rewrites a Bash command. Off by default; set in `.env`.;RTK rewrite now delegates to `rtk hook claude` so RTK's own audit path is used when RTK is enabled — previously the hook bypassed it.;Fix: `bash -c`, `alias`, and `typeset` commands now correctly bypass RTK wrapping (#2345).;Fix: agents scripts invoked via absolute-path interpreter (e.g. `/usr/bin/node /path/to/emit`) now correctly bypass RTK wrapping (#2346).;Fix: `env`-prefixed commands (e.g. `env VAR=1 git ...`, `/usr/bin/env git ...`) are now correctly peeled so the inner command is evaluated by all guards (#2350).
