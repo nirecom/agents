@@ -99,6 +99,14 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 
+## Concern ledger
+
+### DISCRIM
+
+- **Full name**: Concern discriminator (ledger field 7)
+- **Definition**: An 8-hex prefix of SHA-256 over the case-folded, token-sorted concern text, frozen at first sight and recomputed deterministically from the text alone. The same concern maps to the same DISCRIM regardless of which cycle or session assigned it an ID.
+- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md)
+
 ## NFR injection and complexity routing
 
 ### complexity-judge

@@ -36,10 +36,14 @@ RMB_EOF
   [[ -n "$base" ]]  && ARGS+=(--base "$base")
   [[ -n "$state" ]] && ARGS+=(--base-state "$state")
 
-  # Round >= 2: the reviewer may only speak about IDs the ledger already holds,
-  # so it is handed the rendered prior — the same text cl_render_prior produces
-  # for the CLI (N1: one implementation).
-  if (( ROUND >= 2 )); then
+  # The reviewer may only speak about IDs the ledger already holds, so it is
+  # handed the rendered prior — the same text cl_render_prior produces for the
+  # CLI (N1: one implementation). Handed on round >= 2, and ALSO on round 1 when
+  # the ledger already holds prior C-entries: a re-review of committed work
+  # (#2344) opens as round 1 but must still carry the prior concerns forward.
+  local have_prior_entries=0
+  if [[ -f "$LEDGER" ]] && grep -qE '^C[0-9]+\|' "$LEDGER"; then have_prior_entries=1; fi
+  if (( ROUND >= 2 )) || (( have_prior_entries == 1 )); then
     prior="$(ledger_cli render-prior 2>/dev/null || true)"
     if [[ -n "$prior" ]]; then
       priortmp="$(sp_mktemp_beside "$TMP_OUT")" \

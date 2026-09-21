@@ -171,6 +171,10 @@ PARSE_MODE="$FP_PARSE_MODE"
 PRESTAGED_POLICY="$FP_PRESTAGED"
 REVIEWER_BIN="$FP_REVIEWER"
 CL_PRODUCER_NAME="$FP_REVIEWER"
+# Exported so cl_reduce's per-entry provenance gate can tell an intentional
+# scanner-ABSENT format (0) from one where a missing scanner means "not run" (1,
+# fail-closed, #2344).
+export FP_SCANNER_REQUIRED="$FP_SCANNER_REQUIRED"
 
 # --- Prestaged (scanner fallback) flag validation ---
 if [[ -n "$PRESTAGED_REPORT$PRESTAGED_PRODUCER$PRESTAGED_EXEC" ]]; then
@@ -406,18 +410,21 @@ HIGH_N=0; MED_N=0; LOW_N=0
 
 # A round enters the stage+reduce+dispatch path whenever the reviewer raised
 # concerns (non-APPROVED). It ALSO enters when the verdict is APPROVED but this
-# is a ref-kind (anchored) format whose ledger already holds open concerns from
-# a prior round: an empty codex delta is itself a signal (codex ran and
-# re-raised nothing), so the ledger tally plus the per-producer provenance gate
-# must decide whether those concerns resolve or persist stale (#2276 S8-d / N4).
-# Silently deleting a ledger that still holds open concerns is never correct — a
-# codex-only APPROVED pass must not erase a scanner-owned concern. Path-kind
-# APPROVED, and a ref-kind APPROVED with no open concerns to adjudicate, keep the
-# clean-exit shortcut (cleanup_ledger, exit 0).
+# is a ref-kind (anchored) format whose ledger already holds prior C-entries: an
+# empty codex delta is itself a signal (codex ran and re-raised nothing), so the
+# ledger tally plus the per-producer provenance gate must decide whether those
+# concerns resolve or persist stale (#2276 S8-d / N4). This holds on ROUND=1 too:
+# an APPROVED re-review of committed work (#2344) opens as round 1 but must still
+# reduce against the prior entries rather than delete them — so the guard keys on
+# the presence of prior C-rows, not on ROUND >= 2. Silently deleting a ledger
+# that still holds open concerns is never correct — a codex-only APPROVED pass
+# must not erase a scanner-owned concern. Path-kind APPROVED, and a ref-kind
+# APPROVED with no prior entries to adjudicate, keep the clean-exit shortcut
+# (cleanup_ledger, exit 0).
 NEEDS_LEDGER_PASS=0
 if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
   NEEDS_LEDGER_PASS=1
-elif [[ "$INPUT_KIND" != "path" ]] && (( ROUND >= 2 )) && [[ -f "$LEDGER" ]] \
+elif [[ "$INPUT_KIND" != "path" ]] && [[ -f "$LEDGER" ]] \
      && grep -qE '^C[0-9]+\|' "$LEDGER"; then
   NEEDS_LEDGER_PASS=1
 fi

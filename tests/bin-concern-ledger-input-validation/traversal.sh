@@ -176,8 +176,8 @@ TABLE
         > "$PLANS/sess3b-review-security-shared-round-1-delta-review-code-codex.txt"
     assert_eq "3b: an accepted address still reduces into the ledger --ledger named" \
         "rc=0" "rc=$(glob_sub reduce sess3b review-security-shared)"
-    assert_eq_nz "3b: and the reduction really reached that ledger" \
-        "1" "$(grep -c 'stale' "$LED3B" | tr -d ' ')"
+    assert_eq "3b: and the reduction really reached that ledger" \
+        "resolved" "$(grep -m1 -E '^C1\|' "$LED3B" 2>/dev/null | cut -d'|' -f3)"
     assert_eq "3b: check-staged accepts the round the single COMPLETE producer staged" \
         "0" "$(glob_sub check-staged sess3b review-security-shared)"
     CS3B_MISS="$(bash "$CLI" check-staged --ledger "$LED3B" --plans-dir "$PLANS" \

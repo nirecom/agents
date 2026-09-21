@@ -124,7 +124,7 @@ echo "--- prompt-injection 6: both paths take their prior text from one source -
         'PRIOR_TEXT="${PRIOR_TEXT//\[PRIOR CONCERNS END\]/(PRIOR CONCERNS END)}"' \
         "$(cat "$CODEX_BIN")"
     assert_eq_nz "6: render-prior routes its body through the shared defanger" \
-        "1" "$(grep -c -F '_cl_defang_untrusted' "$AGENTS_ROOT/bin/lib/concern-ledger/render.sh" | tr -d ' ')"
+        "2" "$(grep -c -F '_cl_defang_untrusted' "$AGENTS_ROOT/bin/lib/concern-ledger/render.sh" | tr -d ' ')"
     assert_contains "6: and the defanger is where the substitution actually lives" \
         '(PRIOR CONCERNS END)' "$(cat "$AGENTS_ROOT/bin/lib/concern-ledger/core.sh")"
 }
@@ -159,7 +159,7 @@ echo "--- prompt-injection 6b: every rendered surface, not just the two prompts 
     # clean by emptying the concern it was attached to.
     TALLY62="$(bash "$CLI" tally --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" 2>/dev/null)"
     assert_eq_nz "6b: the tally still counts all three payload-bearing concerns" \
-        "open_high=1 open_medium=1 open_low=1 reopened=0 resolved=0" \
+        "open_high=1 open_medium=1 open_low=1 reopened=0 resolved=0 rejected=0" \
         "$(printf '%s' "$TALLY62" | tr -d '\r\n')"
     assert_eq "6b: and the tally line carries no forged marker of its own" \
         "sentinel=no delimiter=no" \
