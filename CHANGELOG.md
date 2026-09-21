@@ -503,3 +503,7 @@ Changes: **RTK output compression** — new opt-in feature. Set `RTK=on` in `.en
 ### FEATURE: PR #2348 (2026-09-21)
 Background: feat(#2080): add shared test harness tests/lib/harness.sh
 Changes: Added tests/lib/harness.sh — shared test harness for top-level tests; the pre-commit hook now requires new test files to source it, eliminating per-file boilerplate
+
+### FEATURE: PR #2358 (2026-09-21)
+Background: fix(#2347): delegate RTK config validation to rtk binary, drop hardco...
+Changes: Fixed (#2347): the RTK installer now delegates config management to the RTK binary (`rtk config` / `rtk config --create`) instead of writing a hardcoded config schema, so installs produce configs accepted by current RTK (v0.48.0+) and obsolete configs are migrated automatically.
