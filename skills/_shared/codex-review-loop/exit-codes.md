@@ -25,7 +25,8 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter review loop (no user dialog). |
 | 6 | **HIGH_UNRESOLVED** — budget ceiling with unresolved HIGH concerns and no risk signal | Present unresolved HIGH concern summary → stop loop; do not proceed to the write/confirm phase. Invoke `review-loop-summarize-concerns --budget-remaining 0` with the live ledger (not a cap-snapshot — the ledger is finalized but not deleted). |
 | 7 | **FINALIZE_FAILED** — the unresolved-concerns artifact could not be written | **HALT.** Surface the `## Concern Ledger: FINALIZE-FAILED` line (it names the recovered ledger copy) and the would-be verdict it replaced. Do NOT emit the step's completion sentinel and do NOT fall back to `REVIEWER_AGENT`. Re-run after fixing the cause; the ledger is intact. |
-| 8 | **review-tests wrapper only** — re-invoked after a terminal exit with tests unchanged | **HALT.** The terminal guard in `skills/review-tests/scripts/run-codex-review-loop.sh` detected no change in the staged-tests fingerprint since the last terminal exit. |
+| 8 | **all three wrappers** — re-invoked after a terminal exit with the reviewed content unchanged | **HALT.** The terminal guard detected no change in the reviewed-content fingerprint since the last terminal exit. |
+| 9 | **all three wrappers** — exit 6 termination occurred; content changed but residual HIGH not accepted; re-run blocked | **HALT.** The fingerprint changed after an exit 6 terminal, but no exit6-accept marker exists. Accept the residual HIGH (create the marker, or the `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` sentinel for review-tests) before re-running. |
 
 **Note: exit 6 means HIGH_UNRESOLVED in both contracts** — internal exit 6 (from `review-loop-verdict`) maps directly to public exit 6; the meaning is the same in both directions.
 
@@ -65,6 +66,7 @@ Append to `CONCERNS_LOG`: a `## Round <N> (<ISO-timestamp>)` header, `Verdict: <
 - **Public exit 5 → caller increments `EXTENSIONS_USED` and re-enters review loop (AUTO_EXTEND path).**
 - **Public exit 6 → caller presents unresolved HIGH concern summary and stops the loop (HIGH_UNRESOLVED path); does not proceed to write/confirm phase.**
 - **Public exit 7 → caller HALTS, withholds the completion sentinel, and reports the FINALIZE-FAILED line.**
+- **Public exit 9 → caller HALTS: exit 6 termination occurred and content changed, but residual HIGH is not accepted; accept it (marker file, or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run.**
 
 ## Rationale: why a wrapper and not prose
 

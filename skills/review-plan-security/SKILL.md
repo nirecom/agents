@@ -14,11 +14,12 @@ RPS-2. Invoke `"$AGENTS_CONFIG_DIR/skills/review-plan-security/scripts/run-codex
 - exit 0 APPROVED → RPS-5 (no RISK items).
 - exit 1 NEEDS_REVISION → save stdout to `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-security-plan-last-round.txt`); present concerns via RPS-3; address them, then re-run `/review-plan-security` — the round counter survives, so the re-run is counted as the next round.
 - exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; stop → RPS-3.
-- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-security-plan-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; stop → RPS-3.
+- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-security-plan-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; stop → RPS-3. 残存 HIGH を accept（`touch "${PLANS_DIR}/${SESSION_ID}-review-plan-security-exit6-accepted.txt"` or AskUserQuestion）後でなければ再実行不可。
 - exit 3 → silently launch `plan-security-reviewer` subagent; its APPROVED verdict → RPS-5; its NEEDS_REVISION verdict → RPS-3.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback agent.
 - exit 5 AUTO_EXTEND → same as exit 1 (concerns remain within the extension budget): present via RPS-3, address, re-run.
 - exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.
+- exit 9 → HALT。exit 6 終端後、plan が変化したが未 accept。accept（`touch "${PLANS_DIR}/${SESSION_ID}-review-plan-security-exit6-accepted.txt"` or AskUserQuestion）後に再実行。
 RPS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including their `## Accepted Tradeoffs`).
 - Raising a topic the plan does not address is never grounds to reject.
 - Rejecting obliges naming the specific governing decision; a reject carrying no cited decision is a procedure violation.

@@ -29,6 +29,9 @@ For each rejected concern, record the verdict durably so it does not re-surface 
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — advisory lint gates only; non-zero per gate is a warning. Append `(N gates NOT FOUND)` when any `## <gate>: NOT FOUND` line appears. Report findings (APPROVED: no RISK items; NEEDS_REVISION: summarize mitigations). On exit 0 (APPROVED) the loop deletes the ledger — skip `check-finalized`. On any other exit: confirm finalized via `bin/concern-ledger check-finalized`; if unfinalized, or wrapper returned exit 1 or exit 7, do not emit the sentinel. On the APPROVED / all-rejected path emit (as a standalone Bash call): `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`.
 
+On exit 6 (HIGH_UNRESOLVED): must accept residual HIGH before re-running. Either `touch "${PLANS_DIR}/${SESSION_ID}-security-code-exit6-accepted.txt"`, or present AskUserQuestion — create the marker if accepted, terminate if rejected.
+On exit 9: HALT. exit 6 termination occurred and the code changed but residual HIGH is not accepted. Run the same accept procedure, then re-run. Exit-code reference: `skills/_shared/codex-review-loop.md`.
+
 ## Patterns by Axis
 
 ### Axis 1: Information Leakage

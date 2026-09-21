@@ -51,9 +51,11 @@ RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-l
 - exit 0 APPROVED → RT-5 COMPLETE.
 - exit 1 NEEDS_REVISION → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); present gaps; suggest specific test cases → RT-5 WARNINGS. WARNINGS is blocking: address the gaps, re-stage tests, and re-run `/review-tests` — the round counter survives, so the re-run is counted as the next round.
 - exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; present summary → RT-5 WARNINGS.
-- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-5 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`).
+- exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-test-review-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; present unresolved HIGH concerns → RT-5 WARNINGS (do not emit `WORKFLOW_REVIEW_TESTS_COMPLETE`). accept マーカー作成 or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` 後でなければ再実行不可。
 - Exits 2 and 6 are terminal: after RT-5 WARNINGS, do NOT re-invoke write-tests or re-run `/review-tests` — accept remaining gaps via `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"` or address them in a new session.
 - exit 8 → terminal guard was previously armed (test files unchanged since last terminal); HALT.
+- exit 9 → HALT。exit 6 終端後、対象が変化したが未 accept。accept（マーカー or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED`）後に再実行。
+- 二つの accept 経路が存在する: (1) sentinel = write-code のブロック解除 + guard クリア; (2) マーカー = shell からのみ可視。
 - exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 AUTO_EXTEND → same as exit 1 (gaps remain within the extension budget): present gaps → RT-5 WARNINGS; address and re-run.
