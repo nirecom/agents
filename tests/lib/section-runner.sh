@@ -2,34 +2,12 @@
 # tests/lib/section-runner.sh — fold a standalone section file's result into a parent total.
 # Tests: tests/lib/section-runner.sh
 # Tags: test-infrastructure, section-runner, shared-lib, scope:common
-#
-# tests/run-all.sh globs "$TESTS_DIR"/*.sh — TOP-LEVEL ONLY — so a file under
-# tests/<family>/ is dead code in CI unless its top-level parent reaches it.
-#
-# Two wiring styles exist here and are NOT interchangeable:
-#
-#   sourced   (tests/feat-1699-meta-parent-guard.sh)
-#             Sections are fragments sharing the parent's PASS/FAIL/pass()/fail() and mock.
-#             Correct when every section shares one seam and a per-section mock would drift.
-#
-#   subprocess (this helper; also feature-1733-state-event-stream.sh's run_sub)
-#             Sections are standalone programs with their own mock, $WORK, EXIT trap and
-#             counters. Correct when sourcing would COLLIDE: bash keeps one EXIT trap per
-#             shell, so sourcing N such files leaks N-1 temp dirs — enough to redden
-#             feat-1761-candidate-body-safety/tmpfile-residue.sh T6 on a sibling's leftovers.
-#
-# This helper implements the subprocess style with one combined total and no way for a
-# section failure to be swallowed.
-#
-# Contract required of a section file:
-#   - runs standalone: `bash <section>` exits 0 (all pass) or non-zero (any fail)
-#   - prints exactly one line matching: ^Results: <N> passed, <M> failed
-# A section that violates either is reported as a parent-level FAIL rather than skipped,
-# so "the section stopped running" can never read as "the section had nothing to say".
-#
-# Caller must define, before sourcing this file: PASS, FAIL, pass(), fail(),
-# SECTION_DIR, and RWT (path to bin/run-with-timeout.sh).
-
+# Subprocess-style: each section is a standalone program (own mock/EXIT trap/counters),
+# so sourcing N would leak N-1 temp dirs (one EXIT trap per shell); this helper keeps
+# one combined total with no swallowed failure. Section contract: `bash <section>` exits
+# 0/non-zero and prints one `^Results: <N> passed, <M> failed` line (else parent FAIL).
+# Caller defines SECTION_DIR; sourcing tests/lib/harness.sh first supplies PASS, FAIL,
+# pass(), fail(), and RWT. Full wiring-style rationale (sourced vs subprocess): git history.
 # run_section <file.sh> [timeout-seconds]
 run_section() {
     local file="$1" secs="${2:-180}"

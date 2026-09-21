@@ -495,3 +495,11 @@ Changes: Fixed: the workflow no longer stalls when Claude Code runs inside the V
 ### FEATURE: PR #2330 (2026-09-20)
 Background: fix(#2323): null freshness_key infinite-arm loop when AGENTS_CONFIG_DIR is stale
 Changes: fix: TR5 audit gate no longer re-arms the WE-8 sentinel indefinitely when AGENTS_CONFIG_DIR is stale — a prior CONTINUE audit verdict now short-circuits the null-freshness arm loop so the user can advance (#2323)
+
+### FEATURE: PR #2341 (2026-09-21)
+Background: feat(#2326): introduce RTK transparent output-compression hook
+Changes: **RTK output compression** — new opt-in feature. Set `RTK=on` in `.env` to wrap Bash command output with RTK before it reaches the model, reducing token usage for output-heavy commands. Off by default; composite commands, machine-readable output, framework scripts, and shell builtins are always passed through unchanged.
+
+### FEATURE: PR #2348 (2026-09-21)
+Background: feat(#2080): add shared test harness tests/lib/harness.sh
+Changes: Added tests/lib/harness.sh — shared test harness for top-level tests; the pre-commit hook now requires new test files to source it, eliminating per-file boilerplate
