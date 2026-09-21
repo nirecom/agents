@@ -12,9 +12,15 @@ set -euo pipefail
 # rc, line 2 = staged-tests fingerprint at that moment (same computeStagedTestsToken
 # SSOT the gate uses for stale-review detection).
 TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-terminal.txt"
+# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
+# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
+# Equivalent accept path to the WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel.
+EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-review-tests-exit6-accepted.txt"
 # Dedicated exit code for "re-invoked after a terminal exit with tests unchanged".
 # Does not collide with bin/run-codex-review-loop's codes (0-7).
 EXIT_REINVOKE_AFTER_TERMINAL=8
+# exit 6 termination occurred, content changed, but residual HIGH not accepted → re-run blocked.
+EXIT_EXIT6_UNACCEPTED=9
 
 # Exits 4, 7 and 8 leave this script without reaching the completion sentinel
 # that records every other outcome, so a resumed session would find no trace of
@@ -87,6 +93,10 @@ if [[ -f "$TERMINAL_FILE" ]]; then
     echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and tests/ are unchanged. Re-looping now would defeat the 2+1 round cap. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-create/re-stage tests/ and run again." >&2
     record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
+  fi
+  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
+    printf '[review-tests] Tests changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (both are equivalent accept paths).\n  Accept the residual HIGH by one of the above, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    exit "$EXIT_EXIT6_UNACCEPTED"
   fi
   # Fingerprint mismatch = tests were re-edited = legitimate restart → auto-clear.
   rm -f "$TERMINAL_FILE"
