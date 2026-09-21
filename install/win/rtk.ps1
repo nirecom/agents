@@ -50,3 +50,6 @@ if (Get-Command rtk -ErrorAction SilentlyContinue) {
         Write-Warning "rtk config verification failed (non-fatal)."
     }
 }
+
+# Reset exit code — all failures above are non-fatal warnings; the step must not fail.
+exit 0
