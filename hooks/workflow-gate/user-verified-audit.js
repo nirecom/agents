@@ -57,11 +57,34 @@ function snapshotStale(audit, plansDir, planSessionId) {
   return { truncated, narrowed };
 }
 
+// Exclude recurrence-patterns from an arm set when freshness_key is null (both
+// code-side and artifact-side null). recurrence-patterns has input:"diff" and
+// earliest_tr:"TR5"; its inputKeyForSubCheck returns null when freshness_key is
+// null, so isSubCheckSettled is always false (fail-closed) — including it in the
+// arm set causes an infinite re-arm loop (#2360).
+function filterNullKeySubChecks(ids, freshness) {
+  if (freshness && freshness.freshness_key == null) {
+    return ids.filter((id) => id !== "recurrence-patterns");
+  }
+  return ids;
+}
+
+// Approve an artifact-side null session when the last TR5 run recorded a
+// trigger_input_keys.TR5 that matches the current input_version. Fail-closed:
+// absent, null, or non-string stored key returns false — no fallback to
+// run.input_version (#2360).
+function inputVersionMatches(tr5Run, currentInputVersion) {
+  if (!tr5Run || !tr5Run.trigger_input_keys || typeof tr5Run.trigger_input_keys !== "object") return false;
+  const stored = tr5Run.trigger_input_keys.TR5;
+  if (stored == null || typeof stored !== "string") return false;
+  return stored === currentInputVersion;
+}
+
 // The judgment set an arm must cover: TR5's own sub-checks, plus every sub-check
 // whose earliest trigger is at or before TR5 that is not currently settled.
 function armJudgmentSet(audit, freshness, planSessionId, plansDir) {
   const own = new Set(triggerById("TR5").sub_checks);
-  return ALL_SUB_CHECK_IDS.filter((id) => {
+  return filterNullKeySubChecks(ALL_SUB_CHECK_IDS, freshness).filter((id) => {
     if (own.has(id)) return true;
     const spec = SUB_CHECKS[id];
     if (!spec || TR_RANK[spec.earliest_tr] > TR_RANK.TR5) return false;
@@ -193,7 +216,9 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     // (input_version null — not an artifact-side null, which stays fail-closed).
     const nonBlockTerminal = tr5Run && NON_BLOCK_TERMINAL_VERDICTS.includes(tr5Run.verdict);
     const codeSideUncomputable = freshness && freshness.freshness_key == null && freshness.input_version == null;
-    const selfRecovering = nonBlockTerminal && !laterBlockExists && codeSideUncomputable;
+    const artifactSideNull = freshness && freshness.freshness_key == null && freshness.input_version != null;
+    const artifactSideApprove = artifactSideNull && inputVersionMatches(tr5Run, freshness.input_version);
+    const selfRecovering = nonBlockTerminal && !laterBlockExists && (codeSideUncomputable || artifactSideApprove);
 
     if (tr5Run && (tr5Run.verdict === "BLOCK" || laterBlockExists)) {
       // An override can only release a BLOCK carried by the TR5 run itself,
@@ -210,13 +235,13 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       // share identical guards and future restructuring cannot leave one unprotected.
       if (!currentFk) {
         if (selfRecovering) { approveFn(); return { authoritative: true }; }
-        return arm(ALL_SUB_CHECK_IDS.slice(), false);
+        return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
       }
       if (tr5Run.freshness_key === currentFk) {
         blockFn(holdReason());
         return { authoritative: true };
       }
-      return arm(ALL_SUB_CHECK_IDS.slice(), false);
+      return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
     }
 
     // Stage 2 — diff-based re-audit for a missing/non-BLOCK terminal run.
@@ -226,7 +251,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       // the WE-8 sentinel on every emission, looping forever. When selfRecovering is
       // true (CONTINUE terminal + no later BLOCK + input_version null), approve instead.
       if (selfRecovering) { approveFn(); return { authoritative: true }; }
-      return arm(ALL_SUB_CHECK_IDS.slice(), false);
+      return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
     }
 
     const { truncated, narrowed } = snapshotStale(audit, plansDir, planSessionId);

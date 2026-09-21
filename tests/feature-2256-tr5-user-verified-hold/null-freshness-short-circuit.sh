@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/feature-2256-tr5-user-verified-hold/null-freshness-short-circuit.sh
-# Tests: hooks/workflow-gate/user-verified-audit.js, hooks/lib/supervisor-state-schema.js, hooks/workflow-gate/supervisor-check.js
-# Tags: supervisor, tr5, freshness, null-arm, self-recovering, infinite-loop, TL2, scope:issue-specific
+# Tests: hooks/workflow-gate/user-verified-audit.js, hooks/lib/supervisor-state-schema.js, hooks/workflow-gate/supervisor-check.js, hooks/supervisor-guard/audit-arm.js
+# Tags: supervisor, tr5, freshness, null-arm, self-recovering, infinite-loop, artifact-side, TL2, scope:issue-specific
 # #2323 — a null freshness_key (code side uncomputable: no merge base) must not re-arm
 # the WE-8 sentinel forever. selfRecovering short-circuit approves a prior CONTINUE
 # terminal TR5; every other verdict/state stays fail-closed. Scenarios 1 & 3(i) FAIL
@@ -75,6 +75,60 @@ process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-00
 "
 }
 
+# terminal_null_artifact <verdict> <trigger_iv> — artifact-side null: freshness_key=null,
+# input_version non-null, trigger_input_keys.TR5=<trigger_iv>.
+terminal_null_artifact() {
+    VERD="$1" TIV="$2" node -e "
+const e = {
+  id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
+  trigger_input_keys: { TR5: process.env.TIV },
+};
+process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-0011', audit_verdict_summary: process.env.VERD }));
+"
+}
+
+# terminal_null_artifact_null_tiv <verdict> — artifact-side null with TR5: null (explicit JS null).
+terminal_null_artifact_null_tiv() {
+    VERD="$1" node -e "
+const e = {
+  id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
+  trigger_input_keys: { TR5: null },
+};
+process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-0011', audit_verdict_summary: null }));
+"
+}
+
+# terminal_null_artifact_num_tiv <verdict> — artifact-side null with TR5: 42 (non-string number).
+terminal_null_artifact_num_tiv() {
+    VERD="$1" node -e "
+const e = {
+  id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
+  trigger_input_keys: { TR5: 42 },
+};
+process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-0011', audit_verdict_summary: null }));
+"
+}
+
+# terminal_null_artifact_input_ver <verdict> <iv> — artifact-side null with run.input_version
+# present but no trigger_input_keys (tests no-fallback behavior in inputVersionMatches).
+terminal_null_artifact_input_ver() {
+    VERD="$1" IV="$2" node -e "
+const e = {
+  id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
+  input_version: process.env.IV,
+};
+process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-0011', audit_verdict_summary: null }));
+"
+}
+
 # --- premise guard: the null repo really produces a null code side (no false-green) ---
 REPO_NULL="$(mk_null_repo "$WORK/repo-null")"
 assert_eq "0a: the null-repo fixture has a null input_version" "$(input_version_at "$REPO_NULL")" "null"
@@ -138,8 +192,85 @@ assert_eq "9b: no TR5+null arms the audit phase (arm() was invoked)" \
 rm -f "$WORK/plans/$SID-outline.md"
 assert_ne "10: with a plan artifact missing the code side is still computable (non-null)" \
     "$(input_version)" "null"
+# --- 10c/10d: filterNullKeySubChecks unit — artifact-side null excludes recurrence-patterns ---
+# FAIL-BEFORE-FIX: armJudgmentSet / buildJudgmentSet do not yet filter on freshness_key==null.
+result_10c="$(AN="$AGENTS_NODE" node -e "
+const m = require(process.env.AN + '/hooks/workflow-gate/user-verified-audit.js');
+const freshness = { freshness_key: null, input_version: 'abc123', artifact_keys: {} };
+const ids = m.armJudgmentSet({}, freshness, 'test', '/nonexistent');
+process.stdout.write(JSON.stringify(ids));
+" 2>/dev/null)"
+assert_nomatch "10c: armJudgmentSet artifact-side null excludes recurrence-patterns" \
+    "$result_10c" '"recurrence-patterns"'
+assert_match "10c-b: armJudgmentSet still includes detail-code" "$result_10c" '"detail-code"'
+
+result_10d="$(AN="$AGENTS_NODE" node -e "
+const { buildJudgmentSet, coalesce } = require(process.env.AN + '/hooks/supervisor-guard/audit-arm.js');
+const candidates = [{ tr_id: 'TR5', sub_checks: ['recurrence-patterns','detail-code','scope-drift','systemic-risk'], cause: 'step-complete:user_verification' }];
+const coalesced = coalesce(candidates);
+const freshness = { freshness_key: null, input_version: 'abc123', artifact_keys: {} };
+const ids = buildJudgmentSet({}, coalesced, freshness, 'test', '/nonexistent');
+process.stdout.write(JSON.stringify(ids));
+" 2>/dev/null)"
+assert_nomatch "10d: buildJudgmentSet artifact-side null excludes recurrence-patterns" \
+    "$result_10d" '"recurrence-patterns"'
+assert_match "10d-b: buildJudgmentSet still includes detail-code" "$result_10d" '"detail-code"'
+
+# --- 10e: Stage 1 BLOCK terminal + artifact-side null — arm excludes recurrence-patterns ---
+# FAIL-BEFORE-FIX: Stage 1 direct arm still includes recurrence-patterns before filterNullKeySubChecks.
+# outline.md was deleted above (line ~138); freshness_key is null, input_version is non-null.
+rm -f "$WORK/plans/$SID-outline.md"
+seed_state "$(terminal_null BLOCK)" >/dev/null
+out_10e="$(gate "$SENTINEL_UV")"
+assert_eq "10e: BLOCK + artifact-side null still blocks (fail-closed)" \
+    "$(decision_of "$out_10e")" "block"
+assert_nomatch "10e-b: Stage 1 arm reason excludes recurrence-patterns" \
+    "$(reason_of "$out_10e")" "recurrence-patterns"
+write_plans
+
+# --- 11: CONTINUE + artifact-side null + matching trigger_input_keys.TR5 → approved ---
+# FAIL-BEFORE-FIX: selfRecovering does not cover artifact-side null before the fix.
+rm -f "$WORK/plans/$SID-outline.md"
+IV_11="$(input_version)"
+seed_state "$(terminal_null_artifact CONTINUE "$IV_11")" >/dev/null
+assert_eq "11: CONTINUE + artifact-side null + matching trigger_input_keys.TR5 → approved" \
+    "$(decision_of "$(gate "$SENTINEL_UV")")" "approve"
+write_plans
+
+# --- 11b-11e: inputVersionMatches fail-closed cases — block regardless of fix ---
+# 11b: stale trigger_input_keys.TR5 — stored key predates current input_version → block.
+rm -f "$WORK/plans/$SID-outline.md"
+seed_state "$(terminal_null_artifact CONTINUE "stale-iv-not-matching-current")" >/dev/null
+assert_eq "11b: CONTINUE + artifact-side null + stale trigger_input_keys.TR5 → block" \
+    "$(decision_of "$(gate "$SENTINEL_UV")")" "block"
+write_plans
+
+# 11c: trigger_input_keys.TR5 is null (explicit JS null) → fail-closed.
+rm -f "$WORK/plans/$SID-outline.md"
+seed_state "$(terminal_null_artifact_null_tiv CONTINUE)" >/dev/null
+assert_eq "11c: CONTINUE + artifact-side null + null trigger_input_keys.TR5 → block (fail-closed)" \
+    "$(decision_of "$(gate "$SENTINEL_UV")")" "block"
+write_plans
+
+# 11d: trigger_input_keys.TR5 is a number (non-string) → fail-closed.
+rm -f "$WORK/plans/$SID-outline.md"
+seed_state "$(terminal_null_artifact_num_tiv CONTINUE)" >/dev/null
+assert_eq "11d: CONTINUE + artifact-side null + non-string trigger_input_keys.TR5 → block (fail-closed)" \
+    "$(decision_of "$(gate "$SENTINEL_UV")")" "block"
+write_plans
+
+# 11e-a: no trigger_input_keys at all (old terminal_null path) → block (no approval without the key).
+rm -f "$WORK/plans/$SID-outline.md"
 seed_state "$(terminal_null CONTINUE)" >/dev/null
-assert_eq "11: a CONTINUE terminal with an artifact-side null is NOT approved (fail-closed)" \
+assert_eq "11e-a: CONTINUE + artifact-side null + no trigger_input_keys → block (fail-closed)" \
+    "$(decision_of "$(gate "$SENTINEL_UV")")" "block"
+write_plans
+
+# 11e-b: run.input_version present but no trigger_input_keys → block (no fallback to run.input_version).
+rm -f "$WORK/plans/$SID-outline.md"
+IV_11eb="$(input_version)"
+seed_state "$(terminal_null_artifact_input_ver CONTINUE "$IV_11eb")" >/dev/null
+assert_eq "11e-b: CONTINUE + artifact-side null + run.input_version present but no trigger_input_keys → block (no fallback)" \
     "$(decision_of "$(gate "$SENTINEL_UV")")" "block"
 write_plans
 
