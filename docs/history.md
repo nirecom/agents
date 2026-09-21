@@ -490,3 +490,7 @@ Changes: feat(#2326): introduce RTK (Rust Token Killer) transparent output-compr
 ### FEATURE: PR #2348 — feature/2080-tests-lib-harness-sh (2026-09-21, a2e025bd0e471d52ff13aa9d93e19f9c2df72537, #2348)
 Background: feat(#2080): add shared test harness tests/lib/harness.sh
 Changes: feat(#2080): add shared test harness tests/lib/harness.sh — 773/913 top-level tests duplicated pass()/fail()/skip() locally; tests/lib/harness.sh provides a single shared implementation (pass, fail, skip, assert_eq, case_begin, case_end, make_tmp, run_with_timeout, harness_isolate, harness_git_init, np) with a re-entry guard so multi-source fragments work safely; bin/check-test-frontmatter.sh extended with harness-source check (pre-commit enforced for new top-level tests); verification test tests/feature-2080-shared-harness.sh (T_PASS=59) <!-- compose-doc-append-sentinel: branch=feature/2080-tests-lib-harness-sh pr=#2348 -->
+
+### FEATURE: PR #2353 — docs/2340-feat-update-docs-readme-md (2026-09-21, 2796503300dfbcebe2a31ac268afe57b5a8d18a6, #2353)
+Background: feat(docs): enforce README conciseness rules and line limits (#2340)
+Changes: Add review_docs workflow step with bin/review-doc-gates, bin/review-doc-heading-order, bin/review-doc-size CLIs; skills/review-docs/SKILL.md; rules/docs/readme.md README section order rules; hooks/workflow-gate/review-docs-checker.js; tests/docs-2340-feat-update-docs-readme-md/ test suite. Closes #2340. <!-- compose-doc-append-sentinel: branch=docs/2340-feat-update-docs-readme-md pr=#2353 -->
