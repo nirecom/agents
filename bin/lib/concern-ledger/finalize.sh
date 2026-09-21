@@ -154,7 +154,7 @@ BEGIN {
     CTL = ""
     for (i = 1; i < 32; i++) CTL = CTL sprintf("%c", i)
     np = 0; nc = 0; nu = 0; nm = 0
-    tally = "open_high=0 open_medium=0 open_low=0 reopened=0 resolved=0"
+    tally = "open_high=0 open_medium=0 open_low=0 reopened=0 resolved=0 rejected=0"
 }
 $1 == "S" { key[$2] = $3; skey[$2] = 1; next }
 $1 == "N" { key[$2] = $3; nkey[$2] = 1; next }
@@ -192,8 +192,8 @@ END {
             (i > 1 ? "," : ""), esc(pn[i]), esc(pc[i]), esc(pe[i]), esc(pp[i])
     }
     printf "%s],\n", (np > 0 ? "\n  " : "")
-    printf "  \"counts\": { \"open_high\": %d, \"open_medium\": %d, \"open_low\": %d, \"reopened\": %d, \"resolved\": %d, \"unparsed\": %d },\n", \
-        tc["open_high"] + 0, tc["open_medium"] + 0, tc["open_low"] + 0, tc["reopened"] + 0, tc["resolved"] + 0, nu
+    printf "  \"counts\": { \"open_high\": %d, \"open_medium\": %d, \"open_low\": %d, \"reopened\": %d, \"resolved\": %d, \"rejected\": %d, \"unparsed\": %d },\n", \
+        tc["open_high"] + 0, tc["open_medium"] + 0, tc["open_low"] + 0, tc["reopened"] + 0, tc["resolved"] + 0, tc["rejected"] + 0, nu
     printf "  \"concerns\": ["
     for (i = 1; i <= nc; i++) {
         printf "%s\n    { \"id\": \"%s\", \"severity\": \"%s\", \"state\": \"%s\", \"first_round\": %d, \"last_round\": %d, \"flags\": \"%s\", \"text\": \"%s\" }", \

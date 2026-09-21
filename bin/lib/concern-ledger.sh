@@ -78,6 +78,14 @@ cl_delta_path()    { _cl_reject_bad_tokens cl_delta_path    "$2" "$3" "$4" "$5" 
 # the path the session would otherwise have used.
 cl_snapshot_beside() { printf '%s-cap-snapshot.txt' "${1%.txt}"; }
 
+# _cl_carrier_from_ledger <ledger-path> — the concerns-log carrier for an
+# already-resolved ledger path (canonical, single derivation, so a --ledger
+# override follows through to the carrier). The `-concern-carrier.md` suffix is a
+# distinct namespace from planner/reviewer discussion logs (`*-concerns-log.md`):
+# this file carries concerns (open re-derived + rejected preserved) across
+# rounds, cycles, and cleanup, keyed by DISCRIM (#2185).
+_cl_carrier_from_ledger() { printf '%s-concern-carrier.md' "${1%-concern-ledger.txt}"; }
+
 # ---------------------------------------------------------------------------
 # Binding — the only two paths to an existing ID
 # ---------------------------------------------------------------------------

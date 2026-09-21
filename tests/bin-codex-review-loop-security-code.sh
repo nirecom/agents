@@ -94,7 +94,7 @@ mk_repo() {
     git -C "$dir" commit -q -m "initial"
     git -C "$dir" branch -M main
     git -C "$dir" checkout -q -b feature-test
-    for ((i = 0; i < lines; i++)); do printf 'line %s\n' "$i" >> "$dir/reviewed.txt"; done
+    { for ((i = 0; i < lines; i++)); do printf 'line %s\n' "$i"; done; } > "$dir/reviewed.txt"
     git -C "$dir" add reviewed.txt
     git -C "$dir" commit -q -m "feature commit"
 }
@@ -301,7 +301,8 @@ for _f in "$LOOP_BIN" "$CLI" "$LIB" "$CODEX_BIN" "$WRAPPER" \
 done
 
 for _sec in exec-labels-stdout.sh prior-producers.sh prompt-contract-wiring.sh \
-            continuity.sh full-chain-integration.sh fail-closed.sh chain-failure-branches.sh; do
+            continuity.sh full-chain-integration.sh fail-closed.sh chain-failure-branches.sh \
+            concerns-log-wiring.sh; do
     if [ -f "$SUITE_DIR/$_sec" ]; then
         # shellcheck source=/dev/null
         . "$SUITE_DIR/$_sec"

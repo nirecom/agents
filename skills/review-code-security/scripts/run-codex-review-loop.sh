@@ -100,6 +100,20 @@ args=(
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
 )
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
+# CTX_CONCERNS_LOG is auto-generated from the ledger, never inherited (#2185): a
+# stale parent value would leak an old carrier into this review. LFMT is the
+# ledger-format review-security-shared (FP_LEDGER_FORMAT), NOT security-code, so
+# the carrier matches the ledger file family. rc 0 = carry, rc 3 = benign, rc 5 =
+# real failure we warn on but do not fail the review for.
+unset CTX_CONCERNS_LOG
+clog_rc=0
+CLOG_PATH="$("$AGENTS_CONFIG_DIR/bin/concern-ledger" render-concerns-log \
+  --plans-dir "$PLANS_DIR" --session-id "$SESSION_ID" --format review-security-shared)" || clog_rc=$?
+if (( clog_rc == 0 )) && [[ -n "$CLOG_PATH" && -s "$CLOG_PATH" ]]; then
+  export CTX_CONCERNS_LOG="$CLOG_PATH"
+elif (( clog_rc != 0 && clog_rc != 3 )); then
+  printf 'warning: concerns-log render failed (rc=%s); proceeding without CTX_CONCERNS_LOG\n' "$clog_rc" >&2
+fi
 for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi

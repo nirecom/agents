@@ -16,6 +16,7 @@ All paths derive from (`<PLANS_DIR>`, `<session-id>`, `<format>`) — no caller 
 | `<session-id>-<format>-concern-ledger-cap-snapshot.txt` | Ledger as it stood when the cap was reached |
 | `<session-id>-<format>-unresolved-concerns.json` | Finalize artifact, schema `unresolved-concerns/v1` |
 | `<session-id>-<format>-finalize-diagnostic.txt` | Why a finalize failed |
+| `<session-id>-<format>-concern-carrier.md` | DISCRIM-keyed carrier: open re-derived + rejected preserved, for `CTX_CONCERNS_LOG` |
 
 Formats in use: `outline-plan`, `detail-plan`, `security-plan`, `test-review`, `review-security-shared`.
 
@@ -29,7 +30,7 @@ Every other `C<N>|` line is one concern, eleven pipe-delimited fields:
 |---|---|---|
 | 1 | ID | `C<N>`, unique within the cycle, never reused |
 | 2 | SEVERITY | `HIGH` / `MEDIUM` / `LOW` |
-| 3 | STATE | `open` / `reopened` / `resolved` |
+| 3 | STATE | `open` / `reopened` / `resolved` / `rejected` |
 | 4 | FIRST_ROUND | Round the concern was first seen |
 | 5 | LAST_ROUND | Round it was last touched |
 | 6 | SLOT | The review address — 8 hex over path + anchor + category |
@@ -50,8 +51,19 @@ A round 1 that meets a live ledger opens a new cycle rather than colliding with 
 | `open` | Reported in the current round, or carried unresolved from an earlier one |
 | `reopened` | A `resolved` concern was reported again |
 | `resolved` | Absent from a round every declared producer completed |
+| `rejected` | Explicitly dismissed at triage via `concern-ledger reject`; terminal, distinct from `resolved` |
 
-Resolution is by absence, and absence only counts when the round was complete — see the fail-closed rule below.
+Resolution is by absence, and absence only counts when the round was complete — see the fail-closed rule below. A `rejected` concern is terminal: `reduce` never reopens it even when a producer re-reports it (the binding recognition #2185 depends on).
+
+## Dual authority — ledger vs carrier, and durable identity
+
+The rejection verdict lives in two places with different jobs, and the split is deliberate (CPR-SSOT).
+
+- The ledger's `rejected` STATE is a machine-readable flag for **within-cycle binding recognition only**. The rejection reason is NOT stored on the ledger row — the row stays 11 fields.
+- The `<session-id>-<format>-concern-carrier.md` carrier (append-only) is the durable transport for concerns **across rounds, cycles, and cleanup**, and the sole persistence point for rejection reasons. It qualifies as CPR-SSOT's excluded append-only stream record, not a second copy of ledger state.
+- The carrier's entry key is the **DISCRIM** (field 7), never the `C<N>` ID. DISCRIM is recomputed deterministically from the concern text, so it survives `cleanup_ledger` deleting the ledger and `cl_begin_cycle` archive-and-clear renumbering IDs from C1 — the cross-cycle collision that caused the false re-open (#2185) is structurally gone.
+- STABILITY has two tiers. **Within-cycle** (ledger present): `rejected` STATE + B2 binding mechanically block a re-mint. **Cross-cleanup** (ledger deleted or archive-cleared): the carrier's rejected lines plus `CTX_CONCERNS_LOG` are passed to the reviewer as reference — this depends on the LLM honoring the prompt, not on a mechanical block. The carrier key carries transport, not recognition; recognition stays with B1/B2.
+- `cl_begin_cycle`'s archive-and-clear model is unchanged by this. The carrier's open section is a derived view re-generated each round from the ledger; the only durable record it preserves is the rejected lines.
 
 ## Vocabulary
 
@@ -117,6 +129,7 @@ M3 is the only rule that uses the address, and it is available to merging alone:
 | `no-anchor` | Reported without an anchor; addressed by its wording alone |
 | `stale` | Not reported in the latest round, and that round could not resolve it |
 | `reopened` | Was `resolved` and came back |
+| `rejected` | Dismissed at triage; the concern's STATE is `rejected` and stays so |
 
 ## The fail-closed rule
 
@@ -142,11 +155,13 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 |---|---|
 | `begin-round --round N` | Open a new cycle when round 1 meets a live ledger |
 | `render-prior` | The still-open concerns, as the block a producer is handed |
+| `render-concerns-log` | Re-derive the DISCRIM-keyed carrier (open + preserved rejected) and print its path; exit 3 when there is nothing to carry |
+| `reject --id C<N> --reason R` | Mark one concern `rejected` (terminal) and record the reason in the carrier |
 | `stage --producer P --from-report F` | Parse one producer's report into this round's delta |
 | `check-staged --round N` | Report producers that have not completely staged this round; stdout: `<producer>:<reason>` (reasons: `missing` / `round-mismatch:<R>` / `incomplete:<LABEL>` / `producer-mismatch:<NAME>`); exit 1 when any unsatisfied, exit 0 when all satisfied. |
 | `reduce --round N` | Bind, merge, and re-state the ledger from the round's deltas |
-| `tally` | `open_high=… open_medium=… open_low=… reopened=… resolved=…` |
+| `tally` | `open_high=… open_medium=… open_low=… reopened=… resolved=… rejected=…` |
 | `finalize --mode M --reason R --round N` | Write the unresolved-concerns artifact |
 | `check-finalized` | Verify that artifact; exit 1 when it cannot be trusted |
 
-Exit codes: 0 ok, 2 usage, 5 finalize could not produce the artifact.
+Exit codes: 0 ok, 2 usage, 5 finalize could not produce the artifact. `render-concerns-log` additionally uses exit 3 for "no ledger / nothing to carry" (benign) and exit 5 for a true render/merge failure.

@@ -69,6 +69,18 @@ Staging and finalize both need every file a producer left behind for a round —
 
 `_cl_list_pattern_files` (`bin/lib/concern-ledger/core.sh`) replaces that expansion. It splits the pattern into a directory and a basename with the shared `_sp_dirname`/`_sp_basename` helpers, treats the directory as a literal path handed to `find -- <dir> -maxdepth 1 -mindepth 1 -name <base>`, and only pattern-matches the basename. A directory component is never re-interpreted as glob syntax, so a Windows path in it is just a path. The directory is also opened with a trailing separator so a symlinked plans dir is walked rather than silently treated as its own only (and immediately excluded) entry — the same failure shape as the original bug, reached through a different door. Results are NUL-delimited and sorted under a fixed `LC_ALL=C`, since a byte-order guarantee independent of the caller's locale is part of what the discovery contract now promises.
 
+## Why triage rejections are durable across cleanup
+
+Within a single review session, the `rejected` terminal STATE on a ledger row is enough: `reduce` never reopens a rejected entry, and B2 binding blocks a re-mint while the ledger lives. But the concern ledger has two natural erasure points — `cleanup_ledger` deletes it when a review ends approved, and `cl_begin_cycle` archives and clears it on the next round-1 — and both reset the C-number space. A concern rejected in cycle 1 could re-surface in cycle 2 as C1 without either B1 or B2 ever seeing the prior rejection.
+
+The carrier (`*-concern-carrier.md`) is the durable transport for that history. It is an append-only Markdown file beside the ledger, keyed on **DISCRIM** (ledger field 7: a SHA-256 prefix over the case-folded, token-sorted concern text, frozen at first sight) rather than on the `C<N>` ID. Because DISCRIM is recomputed from the concern text itself, the same concern maps to the same carrier key whether the ledger was deleted, archived, or renumbered — the cross-cycle false re-open that prompted #2185 is structurally gone.
+
+The carrier stores two things: a re-derived open section (rebuilt each round from the live ledger) and the preserved rejection lines (the only durable record the carrier owns). `_cl_merge_concerns_log` discards any carrier-only non-rejected line, so stale open entries never persist beyond the round that rendered them. The rejection reason lives in the carrier line; the ledger row stays 11 fields.
+
+`CTX_CONCERNS_LOG` exports the rendered carrier path to every review wrapper. The codex reviewer receives it as `--context`, giving it the rejection history as a reference prompt. This is the cross-cleanup suppression layer and it depends on the LLM honouring the prompt — intentionally so. A machine-enforced block at this layer would require extending `cl_bind` to consult the carrier, which conflates the ledger's binding role with the carrier's transport role. The carrier is transport; binding stays in B1/B2.
+
+The five review wrappers generate `CTX_CONCERNS_LOG` symmetrically: each runs `concern-ledger render-concerns-log` before invoking `run-codex-review-loop`, exports the carrier path on exit 0, and silently omits it on exit 3 (nothing to carry). Each wrapper unsets any inherited value first so a stale path never leaks from a parent environment.
+
 ## Why every path builder validates its tokens first
 
 `#2025` found the same gap on the write side: every function that derived a path under the plans dir — from a session ID, round number, producer name, or format — built that path first and asked no questions about the pieces. A token containing `..`, a `/` or `\`, a shell metacharacter, or a leading `-` (read as an option by the next command in the pipeline) could turn a derived path into a traversal or an injection, and each writer would have had to notice this on its own.
@@ -83,18 +95,23 @@ Writing the resulting file safely is a separate question from naming it safely, 
 
 `cl_allowed_producers review-security-shared` is the closed set `{review-code-codex, security-scanner}`: a round completes on either producer alone, but no other producer name can stage into it. Whichever runs is handed the same rendered block of still-open concerns before it starts, so "have you seen this before" is answered identically, and a still-valid concern is re-reported under the ID it already has.
 
+`FP_SCANNER_REQUIRED` distinguishes formats that carry a scanner from those that do not. For `review-security-shared` it is 1, meaning a round where the security scanner never reported is treated as fail-closed for resolution (an absent scanner is "not examined", not "nothing found"). For the four plan-review formats it is 0, meaning absence of the scanner is intentional and codex-only rounds may resolve concerns normally.
+
 ## Where the code lives
 
 | Path | Role |
 |---|---|
-| `bin/lib/concern-ledger.sh` | Library entrypoint — the two identity decisions (bind, merge) and every derived file name |
-| `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, rendering, finalize, discovery (`_cl_list_pattern_files`), token validation |
+| `bin/lib/concern-ledger.sh` | Library entrypoint — the two identity decisions (bind, merge), every derived file name, and `_cl_carrier_from_ledger` (carrier path canonical derivation) |
+| `bin/lib/concern-ledger/core.sh` | `cl_reject` (in-place STATE update + carrier upsert), `_cl_list_pattern_files`, `_cl_reject_bad_tokens` |
+| `bin/lib/concern-ledger/render.sh` | `cl_tally`, `cl_render_prior`, `cl_render_concerns_log` (open+rejected re-derivation), `_cl_merge_concerns_log` (rejected-only carrier preservation) |
+| `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, finalize, discovery, token validation |
 | `bin/lib/safe-plans-path.sh` | Shared primitive for every write under the plans dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |
 | `bin/concern-ledger` | CLI front end; the only sanctioned entry point |
 | `bin/run-codex-review-loop` | Plan / test / security-code review loops; owns the round counter and the exit-7 contract |
 | `bin/review-code-codex` | The security-code primary reviewer (diff-based); invoked by the loop's ref-kind branch |
 | `bin/review-loop-summarize-concerns` | Renders the ledger for the cap-reach dialog |
 | `skills/_shared/concern-ledger.md` | Schema and CLI specification (SSOT) |
+| `*-concern-carrier.md` (runtime) | Append-only concern carrier; lives in `PLANS_DIR` beside the ledger; DISCRIM-keyed; the sole persistence point for rejection reasons across cleanup |
 
 ## Known limits
 

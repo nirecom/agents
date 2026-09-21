@@ -447,5 +447,51 @@ _cl_placehold_empty_concerns() {
     sed -E 's/^(- [^ ]+ \[[^]]*\])[[:space:]]*$/\1 (text withheld: this concern was recorded with control-sentinel text only; reference the ID and restate it)/'
 }
 
+# ---------------------------------------------------------------------------
+# Rejection — a terminal triage verdict, preserved across cleanup by the carrier
+# ---------------------------------------------------------------------------
+# cl_reject <ledger> <id> <reason> — mark one concern rejected and record the
+# rejection in the carrier keyed by DISCRIM (#2185). The ledger row is rewritten
+# in place, line by line, touching only the target's STATE (field 3) and FLAGS
+# (field 10): headers, other C-rows, #unparsed and #merged-alt lines are emitted
+# verbatim, so this never reuses reduce's array-rebuild serializer (which depends
+# on reduce-local temps and would drop those aux lines). The reason lives only in
+# the carrier — the ledger row stays 11 fields (parse-compatible).
+cl_reject() {
+    local ledger="$1" id="$2" reason="$3"
+    [ -f "$ledger" ] || return 1
+    local tline
+    tline="$(grep -m1 -E "^${id}\|" "$ledger" 2>/dev/null)" || return 1
+    [ -n "$tline" ] || return 1
+    local f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 rest
+    IFS='|' read -r f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 rest <<< "$tline"
+    local newflag
+    newflag="$(_cl_flag_add "$f10" "rejected")"
+    {
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                "$id|"*)
+                    printf '%s|%s|rejected|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+                        "$f1" "$f2" "$f4" "$f5" "$f6" "$f7" "$f8" "$f9" "$newflag" "$rest"
+                    ;;
+                *) printf '%s\n' "$line" ;;
+            esac
+        done < "$ledger"
+    } | sp_publish_stdin "$ledger" || return 1
+    # Upsert the rejection into the carrier. Text and reason are producer- or
+    # author-authored, so both pass through the same defanger the render surfaces
+    # use before they reach the durable record.
+    local carrier dtext dreason newf
+    carrier="$(_cl_carrier_from_ledger "$ledger")"
+    dtext="$(printf '%s' "$rest" | _cl_defang_untrusted)"
+    dreason="$(printf '%s' "$reason" | _cl_defang_untrusted)"
+    newf="$(sp_mktemp_beside "$carrier")" || return 1
+    printf -- '- %s [%s] REJECTED %s — reason: %s\n' "$f7" "$f2" "$dtext" "$dreason" > "$newf" \
+        || { rm -f "$newf"; return 1; }
+    if ! _cl_merge_concerns_log "$carrier" "$newf"; then rm -f "$newf"; return 1; fi
+    rm -f "$newf"
+    return 0
+}
+
 :  # load-success rc for the entrypoint's source check
 

@@ -5,8 +5,9 @@
 # bin/review-code-codex; the loop prepends "$AGENTS_CONFIG_DIR/bin/"), parse_mode
 # (numbered-cnref|anchored), input_kind (path=--draft-file | ref=git diff),
 # ledger_format (concern-ledger --format token + ledger file names), prestaged
-# (allow|deny for --prestaged-report). fp_resolve sets the FP_* globals below and
-# returns 1 if unknown. CAP/MAX_EXTENSIONS are per-invocation flags (S9-c).
+# (allow|deny for --prestaged-report), scanner_required (0|1 fail-closed: 1 needs
+# a scanner staged before absence resolves an entry, #2344). fp_resolve sets the
+# FP_* globals below; returns 1 if unknown. CAP/MAX_EXTENSIONS are S9-c flags.
 fp_resolve() {
   local fmt="$1"
   case "$fmt" in
@@ -16,6 +17,7 @@ fp_resolve() {
       FP_INPUT_KIND="path"
       FP_LEDGER_FORMAT="$fmt"
       FP_PRESTAGED="deny"
+      FP_SCANNER_REQUIRED=0
       ;;
     security-code)
       FP_REVIEWER="review-code-codex"
@@ -23,6 +25,7 @@ fp_resolve() {
       FP_INPUT_KIND="ref"
       FP_LEDGER_FORMAT="review-security-shared"
       FP_PRESTAGED="allow"
+      FP_SCANNER_REQUIRED=1
       ;;
     *)
       return 1

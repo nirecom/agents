@@ -214,6 +214,14 @@ cl_reduce() {
         [ -n "$ld" ] || continue
         id="${gid[$ld]}"
         touched[$id]=1
+        # A rejected concern is terminal: codex re-raising it does not reopen it
+        # (the binding recognition #2185 depends on). Keep the state and re-mark
+        # the flag, and skip every open/reopen/SEV/TEXT/PRODUCERS update below.
+        if [ "${CL_E_STATE[$id]}" = "rejected" ]; then
+            CL_E_LAST[$id]="$round"
+            CL_E_FLAGS[$id]="$(_cl_flag_add "${CL_E_FLAGS[$id]}" "rejected")"
+            continue
+        fi
         oldflags="${CL_E_FLAGS[$id]}"
         flags="-"
         if [ "${CL_E_STATE[$id]}" = "resolved" ]; then
@@ -246,20 +254,22 @@ cl_reduce() {
     # --- absent entries: the two gates that must both open before a resolve ---
     local anchored_fmt=0
     [ "$fmt" = "review-security-shared" ] && anchored_fmt=1
-    # Provenance gate (anchored/review-security-shared): an untouched entry may
-    # resolve only when EVERY allowed producer staged COMPLETE this round. The
-    # shared security review has two eyes (codex + scanner); neither one alone may
-    # silently resolve a concern the other never re-examined, so a round missing a
-    # producer (the codex-only or scanner-only fallback) leaves untouched entries
-    # open+stale (#2276 S8-d). Round completeness itself stays the laxer
-    # single-producer judge (cl_round_complete_for) for check-staged parity.
-    local all_allowed_complete=1
-    if [ "$anchored_fmt" -eq 1 ]; then
-        local _ap
-        while IFS= read -r _ap; do
-            [ -n "$_ap" ] || continue
-            [ "${fcomp[$_ap]:-}" = "COMPLETE" ] || all_allowed_complete=0
-        done < <(cl_allowed_producers "$fmt")
+    # Per-entry provenance gate (#2344): each producer in PRODUCERS must be in
+    # the allowed set and staged COMPLETE this round. FP_SCANNER_REQUIRED=1 adds
+    # a ROUND-level gate: any scanner must have staged COMPLETE this round
+    # (codex-only entries resolve if the scanner ran and didn't re-raise).
+    local _allowed_set=""
+    local _scanner_req="${FP_SCANNER_REQUIRED:-0}"
+    [ "$anchored_fmt" -eq 1 ] && _allowed_set="$(cl_allowed_producers "$fmt")"
+    # Round-level scanner gate: pre-computed once before the per-entry loop.
+    local _rnd_scanner_complete=0
+    if [ "$anchored_fmt" -eq 1 ] && [ "$_scanner_req" = "1" ]; then
+        local _fk
+        for _fk in "${!fcomp[@]}"; do
+            case "$_fk" in *scanner*)
+                [ "${fcomp[$_fk]}" = "COMPLETE" ] && _rnd_scanner_complete=1 ;;
+            esac
+        done
     fi
     local amb blocked
     for id in "${CL_IDS[@]}"; do
@@ -280,7 +290,26 @@ cl_reduce() {
         blocked=0
         [ "$complete" -eq 1 ] || blocked=1
         if [ "$anchored_fmt" -eq 1 ] && _cl_flag_has "$oldflags" "no-anchor"; then blocked=1; fi
-        if [ "$anchored_fmt" -eq 1 ] && [ "$all_allowed_complete" -ne 1 ]; then blocked=1; fi
+        if [ "$anchored_fmt" -eq 1 ]; then
+            local _prov_ok=1 _ep _saw=0
+            case "${CL_E_PROD[$id]}" in
+                ,*|*,|*,,*|*[[:space:]]*) _prov_ok=0 ;;
+            esac
+            for _ep in $(printf '%s' "${CL_E_PROD[$id]}" | tr ',' ' '); do
+                [ -n "$_ep" ] || continue
+                _saw=1
+                case $'\n'"$_allowed_set"$'\n' in
+                    *$'\n'"$_ep"$'\n'*) ;;
+                    *) _prov_ok=0; continue ;;
+                esac
+                [ "${fcomp[$_ep]:-}" = "COMPLETE" ] || _prov_ok=0
+            done
+            [ "$_saw" -eq 1 ] || _prov_ok=0
+            if [ "$_scanner_req" = "1" ] && [ "$_rnd_scanner_complete" -eq 0 ]; then
+                _prov_ok=0
+            fi
+            [ "$_prov_ok" -eq 1 ] || blocked=1
+        fi
         if [ "$blocked" -eq 1 ]; then flags="$(_cl_flag_add "$flags" "stale")"; fi
         if [ "$amb" -eq 1 ]; then flags="$(_cl_flag_add "$flags" "ambiguous")"; blocked=1; fi
         [ "$blocked" -eq 0 ] && CL_E_STATE[$id]="resolved"
