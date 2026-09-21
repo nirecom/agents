@@ -1,24 +1,20 @@
 #!/usr/bin/env node
 "use strict";
-// hooks/rtk-rewrite.js — PreToolUse (matcher: Bash) hook that wraps general Bash
-// commands with the RTK binary so its runtime output compression reaches the LLM.
-// Fail-open at every boundary: any doubt returns passthrough ({}), never a wrap.
-//
-// Four guards decide when NOT to wrap:
-//   G-a isAgentsEmit      — commands that emit agents-framework control output
-//   G-b isMachineReadable — plumbing / machine-readable output (compression harms it)
-//   G-c isComposite       — pipelines, redirects, substitutions (wrap would misparse)
-//   G-d isShellBuiltin    — builtins / assignments (no external process to wrap)
+// hooks/rtk-rewrite.js — PreToolUse (Bash) hook. Delegates eligible commands to
+// `rtk hook claude`; fail-open. Five guards decide when NOT to delegate.
 
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { execFileSync, spawnSync } = require("child_process");
 const { hasCommandHead } = require("./lib/command-head");
 const {
   splitSegmentsWithSeparators,
   tokenizeSegment,
 } = require("./lib/command-parser");
 const { isUnderPath } = require("./lib/path-match");
+const { recordGuardReject } = require("./lib/rtk-guard-audit");
+
+const DELEGATE_TIMEOUT_MS = 3000;
 
 const GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
   "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path",
@@ -46,14 +42,22 @@ const SHELL_BUILTINS = new Set([
   "source", ".",
   "declare", "local", "readonly",
   "pwd", ":", "command", "builtin", "exec",
+  "alias", "typeset",
 ]);
 
 function passthrough() {
   return {};
 }
 
-// Peel `env` and its flags/VAR=val pairs to expose the actual command tokens.
-// Returns the trimmed tokens array, or null if nothing remains after peeling.
+function binBasename(token) {
+  if (typeof token !== "string") return "";
+  return token.replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "").toLowerCase();
+}
+
+function isEnvHead(token) {
+  return binBasename(token) === "env";
+}
+
 function peelEnvTokens(tokens) {
   let i = 1; // skip "env" itself
   while (i < tokens.length) {
@@ -76,6 +80,18 @@ function loadDefaultEnv() {
   const script = path.join(agentsDir, "bin", "get-config-var");
   try {
     execFileSync("bash", [script, "--is-off", "RTK", "off"], { stdio: "ignore" });
+    return false; // exit 0 => OFF
+  } catch (e) {
+    return e && e.status === 1; // exit 1 => explicit ON
+  }
+}
+
+function loadAuditEnabled() {
+  const agentsDir = process.env.AGENTS_CONFIG_DIR;
+  if (!agentsDir) return false;
+  const script = path.join(agentsDir, "bin", "get-config-var");
+  try {
+    execFileSync("bash", [script, "--is-off", "RTK_AUDIT", "off"], { stdio: "ignore" });
     return false; // exit 0 => OFF
   } catch (e) {
     return e && e.status === 1; // exit 1 => explicit ON
@@ -111,15 +127,36 @@ function resolveRtkBin(existsFn = fs.existsSync) {
   return null;
 }
 
-// Quote the binary path when it contains spaces or (on win32) backslashes.
-function buildRtkCommand(rtkBin, cmd, platform = process.platform) {
-  let bin = rtkBin;
+function quoteBin(bin, platform = process.platform) {
   if (platform === "win32") {
-    if (/[\\ ]/.test(rtkBin)) bin = '"' + rtkBin.replace(/\\/g, "/") + '"';
-  } else if (rtkBin.includes(" ")) {
-    bin = '"' + rtkBin + '"';
+    if (/[\\ ]/.test(bin)) return '"' + bin.replace(/\\/g, "/") + '"';
+    return bin;
   }
-  return bin + " " + cmd;
+  if (bin.includes(" ")) return '"' + bin + '"';
+  return bin;
+}
+
+function leadingToken(command) {
+  let i = 0;
+  while (i < command.length && /\s/.test(command[i])) i++;
+  const lead = command.slice(0, i);
+  const start = i;
+  let value = "";
+  const q = command[i];
+  if (q === '"' || q === "'") {
+    i++;
+    while (i < command.length && command[i] !== q) { value += command[i]; i++; }
+    if (i < command.length) i++; // consume closing quote
+  } else {
+    while (i < command.length && !/\s/.test(command[i])) { value += command[i]; i++; }
+  }
+  return { lead, raw: command.slice(start, i), value, rest: command.slice(i) };
+}
+
+function substituteRtkHead(command, rtkBin, platform = process.platform) {
+  const { lead, value, rest } = leadingToken(command);
+  if (binBasename(value) !== "rtk") return command;
+  return lead + quoteBin(rtkBin, platform) + rest;
 }
 
 let binNamesCache = null;
@@ -135,7 +172,6 @@ function getBinNames(agentsDir) {
 
 const SCRIPT_RUNNERS = new Set(["node", "bash", "sh"]);
 
-// G-a: commands rooted at the agents config dir (control/plumbing output).
 function isAgentsEmit(cmd) {
   const agentsDir = process.env.AGENTS_CONFIG_DIR;
   if (!agentsDir) return false;
@@ -151,15 +187,17 @@ function isAgentsEmit(cmd) {
   const checkTokens = (toks) => {
     const head = toks[0];
     if (!head) return false;
-    if (head.includes("/") || head.includes("\\")) {
+    const isRunner = SCRIPT_RUNNERS.has(binBasename(head));
+    // Path head that is NOT a script runner: judge the head itself.
+    if ((head.includes("/") || head.includes("\\")) && !isRunner) {
       let resolved;
       try { resolved = path.resolve(head); } catch (_e) { return false; }
       try { resolved = fs.realpathSync(resolved); } catch (_e) { /* use unresolved */ }
       return underAgents(resolved);
     }
     if (binNames.has(head)) return true;
-    // Also match when a script runner's first path argument is an agents script.
-    if (SCRIPT_RUNNERS.has(head)) {
+    // Script runner (even via absolute path): judge its first path argument.
+    if (isRunner) {
       for (let i = 1; i < toks.length; i++) {
         const t = toks[i];
         if (t.startsWith("-")) continue;
@@ -176,7 +214,7 @@ function isAgentsEmit(cmd) {
     return hasCommandHead(cmd, (tokens) => {
       // Peel env prefix to reach the actual command head.
       let toks = tokens;
-      if (toks.length > 0 && toks[0] === "env") {
+      if (toks.length > 0 && isEnvHead(toks[0])) {
         const peeled = peelEnvTokens(toks);
         if (!peeled || peeled.length === 0) return false;
         toks = peeled;
@@ -188,7 +226,6 @@ function isAgentsEmit(cmd) {
   }
 }
 
-// G-b: machine-readable output — git plumbing / porcelain / --json etc.
 function gitMachineReadable(tokens) {
   let i = 1;
   const n = tokens.length;
@@ -218,13 +255,13 @@ function isMachineReadable(cmd) {
     return hasCommandHead(cmd, (tokens) => {
       // Peel env prefix and strip .exe suffix to reach the actual command base.
       let toks = tokens;
-      if (toks.length > 0 && toks[0] === "env") {
+      if (toks.length > 0 && isEnvHead(toks[0])) {
         const peeled = peelEnvTokens(toks);
         if (!peeled || peeled.length === 0) return false;
         toks = peeled;
       }
       if (toks.length === 0) return false;
-      const base = toks[0].replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "");
+      const base = binBasename(toks[0]);
       if (base === "git") return gitMachineReadable(toks);
       for (let k = 1; k < toks.length; k++) {
         const t = toks[k];
@@ -241,7 +278,6 @@ function isMachineReadable(cmd) {
   }
 }
 
-// G-c: composite command lines that a bare `rtk <cmd>` prefix would misparse.
 function isComposite(cmd) {
   if (cmd.includes("\n")) return true; // newline-separated multi-statement
   const { seps } = splitSegmentsWithSeparators(cmd);
@@ -252,37 +288,72 @@ function isComposite(cmd) {
   return false;
 }
 
-// G-d: shell builtins and bare assignments (no external process to wrap).
 function isShellBuiltin(cmd) {
   const tokens = tokenizeSegment(cmd);
   if (tokens.length === 0) return true;
-  // Peel env prefix — `env echo ...` should still match as a builtin invocation.
   let effectiveTokens = tokens;
-  if (tokens[0] === "env") {
+  if (isEnvHead(tokens[0])) {
     const peeled = peelEnvTokens(tokens);
     if (!peeled || peeled.length === 0) return false;
     effectiveTokens = peeled;
   }
   const first = effectiveTokens[0];
   if (first.includes("=") && !first.startsWith("-")) return true; // FOO=bar ...
+  // bash/sh -c: the wrapped shell string cannot be meaningfully compressed.
+  const base = binBasename(first);
+  if ((base === "bash" || base === "sh") && effectiveTokens.slice(1).includes("-c")) return true;
   return SHELL_BUILTINS.has(first);
 }
 
-// Anti-double-wrap: a command already headed by rtk (optionally behind env / VAR=).
 function isRtkSelf(cmd) {
   try {
     return hasCommandHead(cmd, (tokens) => {
       let i = 0;
-      if (tokens[i] === "env") i++;
+      if (tokens.length > 0 && isEnvHead(tokens[0])) i++;
       while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
       const head = tokens[i];
       if (!head) return false;
-      const base = head.replace(/\\/g, "/").split("/").pop();
-      return base === "rtk" || base === "rtk.exe";
+      return binBasename(head) === "rtk";
     });
   } catch (_e) {
     return false;
   }
+}
+
+function firstRejectingGuard(cmd) {
+  if (isAgentsEmit(cmd)) return "agentsEmit";
+  if (isShellBuiltin(cmd)) return "shellBuiltin";
+  if (isComposite(cmd)) return "composite";
+  if (isMachineReadable(cmd)) return "machineReadable";
+  if (isRtkSelf(cmd)) return "rtkSelf";
+  return null;
+}
+
+function delegateToRtkHook(rtkBin, input, opts = {}) {
+  const spawnFn = opts.spawnFn || spawnSync;
+  const env = { ...process.env };
+  if (opts.auditOn) env.RTK_HOOK_AUDIT = "1";
+  else delete env.RTK_HOOK_AUDIT; // clear any inherited value so off stays off
+  let res;
+  try {
+    res = spawnFn(rtkBin, ["hook", "claude"], {
+      input: JSON.stringify(input),
+      encoding: "utf8",
+      timeout: DELEGATE_TIMEOUT_MS,
+      env,
+    });
+  } catch (_e) {
+    return passthrough();
+  }
+  if (!res || res.error || res.status !== 0 || !res.stdout) return passthrough();
+  let out;
+  try { out = JSON.parse(res.stdout); } catch (_e) { return passthrough(); }
+  if (!out || !out.hookSpecificOutput) return passthrough();
+  const hso = out.hookSpecificOutput;
+  if (hso.updatedInput && typeof hso.updatedInput.command === "string") {
+    hso.updatedInput.command = substituteRtkHead(hso.updatedInput.command, rtkBin);
+  }
+  return out;
 }
 
 function decide(input, opts = {}) {
@@ -296,17 +367,16 @@ function decide(input, opts = {}) {
       ? opts.rtkBin
       : resolveRtkBin(opts.existsFn || fs.existsSync);
     if (rtkBin === null || rtkBin === undefined) return passthrough();
-    if (isAgentsEmit(cmd)) return passthrough();
-    if (isShellBuiltin(cmd)) return passthrough();
-    if (isComposite(cmd)) return passthrough();
-    if (isMachineReadable(cmd)) return passthrough();
-    if (isRtkSelf(cmd)) return passthrough();
-    return {
-      hookSpecificOutput: {
-        permissionDecision: "allow",
-        updatedInput: { command: buildRtkCommand(rtkBin, cmd) },
-      },
-    };
+    const auditOn = opts.auditOn !== undefined ? opts.auditOn : loadAuditEnabled();
+    const guardName = firstRejectingGuard(cmd);
+    if (guardName) {
+      if (auditOn) {
+        try { recordGuardReject(guardName, cmd, opts.auditOpts); }
+        catch (_e) { /* fail-open: audit must not break the hook */ }
+      }
+      return passthrough();
+    }
+    return delegateToRtkHook(rtkBin, input, { auditOn, spawnFn: opts.spawnFn });
   } catch (_e) {
     return passthrough();
   }
@@ -339,9 +409,11 @@ function main() {
 
 module.exports = {
   resolveRtkBin,
-  buildRtkCommand,
+  quoteBin,
+  substituteRtkHead,
   passthrough,
   loadDefaultEnv,
+  loadAuditEnabled,
   isAgentsEmit,
   isMachineReadable,
   isComposite,
