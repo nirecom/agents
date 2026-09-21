@@ -9,7 +9,12 @@ set -euo pipefail
 # (2/6) the round counter is deleted; a bare re-run would restart at round 1 and
 # hand the same unchanged plan a fresh 2+1 budget, bypassing the shared cap.
 TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-security-plan-terminal.txt"
+# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
+# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
+EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-review-plan-security-exit6-accepted.txt"
 EXIT_REINVOKE_AFTER_TERMINAL=8
+# exit 6 termination occurred, plan changed, but residual HIGH not accepted → re-run blocked.
+EXIT_EXIT6_UNACCEPTED=9
 
 DRAFT_FILE="${PLANS_DIR}/${SESSION_ID}-detail.md"
 
@@ -35,6 +40,10 @@ if [[ -f "$TERMINAL_FILE" ]]; then
   if [[ "$CUR_FP" == "$PREV_FP" ]]; then
     echo "[review-plan-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed plan is unchanged. Re-looping now would defeat the 2+1 round cap. Address the concerns and change the plan, or accept the residual risk." >&2
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
+  fi
+  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
+    printf '[review-plan-security] exit 6 終端後に plan が変化しましたが、残存 HIGH が未 accept です。\n  accept マーカー: %s\n  作成: touch "%s"\n  または: AskUserQuestion で残存 HIGH を明示 accept してから再実行してください。\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    exit "$EXIT_EXIT6_UNACCEPTED"
   fi
   rm -f "$TERMINAL_FILE"
 fi

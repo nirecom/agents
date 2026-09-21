@@ -150,6 +150,7 @@ Quick reference (public exit codes — Contract B):
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter loop. |
 | 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |
 | 7 | FINALIZE_FAILED | HALT; surface `## Concern Ledger: FINALIZE-FAILED` line; do not emit sentinel. |
-| 8 | review-tests re-invoked after terminal | HALT; no staged-tests change detected since last terminal exit. |
+| 8 | re-invoked after terminal (all three wrappers) | HALT; no reviewed-content change detected since last terminal exit. |
+| 9 | exit 6 termination, content changed but residual HIGH not accepted (all three wrappers) | HALT; accept residual HIGH (marker file, or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
 
 Full tables (Contract A, Contract B), RAW persistence rules, RAW naming, per-round log protocol, Outcomes, and Rationale: [`skills/_shared/codex-review-loop/exit-codes.md`](codex-review-loop/exit-codes.md).

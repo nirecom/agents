@@ -12,9 +12,14 @@ set -euo pipefail
 # fresh 2+1 budget — a 4th review round through the back door. Line 1 = terminal rc,
 # line 2 = the reviewed-diff fingerprint at that moment.
 TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-security-code-terminal.txt"
+# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
+# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
+EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-security-code-exit6-accepted.txt"
 # Dedicated code for "re-invoked after a terminal exit with the diff unchanged"; does not
 # collide with bin/run-codex-review-loop's 0-7.
 EXIT_REINVOKE_AFTER_TERMINAL=8
+# exit 6 termination occurred, content changed, but residual HIGH not accepted → re-run blocked.
+EXIT_EXIT6_UNACCEPTED=9
 
 # Fingerprint of exactly what review-code-codex reviews: the committed tip plus every
 # uncommitted change, including untracked file CONTENTS. Any real edit to the reviewed
@@ -57,6 +62,10 @@ if [[ "$PRESTAGED_RERUN" -eq 0 && -f "$TERMINAL_FILE" ]]; then
   if [[ "$CUR_FP" == "$PREV_FP" ]]; then
     echo "[review-code-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed code is unchanged. Re-looping now would defeat the 2+1 round cap. Address the concerns and change the code, or accept the residual risk." >&2
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
+  fi
+  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
+    printf '[review-code-security] exit 6 終端後にコードが変化しましたが、残存 HIGH が未 accept です。\n  accept マーカー: %s\n  作成: touch "%s"\n  または: AskUserQuestion で残存 HIGH を明示 accept してから再実行してください。\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    exit "$EXIT_EXIT6_UNACCEPTED"
   fi
   # Fingerprint mismatch = code was re-edited = a legitimate new review → auto-clear.
   rm -f "$TERMINAL_FILE"
