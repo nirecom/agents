@@ -109,6 +109,19 @@ staged_content() {
   return 1
 }
 
+# check_harness_source <label> <content>
+# Returns 0 when the staged blob contains an actual source/. line that loads
+# tests/lib/harness.sh. Comments, echo, and # Tests: headers are NOT counted.
+check_harness_source() {
+  local f="$1" content="$2"
+  if printf '%s\n' "$content" \
+       | grep -Eq '^[[:space:]]*(source|\.)[[:space:]]+([^#]*/)?tests/lib/harness\.sh'; then
+    return 0
+  fi
+  echo "MISSING_HARNESS_SOURCE: ${f}" >&2
+  return 1
+}
+
 if [[ $# -eq 0 ]]; then
   echo "Usage:" >&2
   echo "  $(basename "$0") --staged <file1> [<file2>...]" >&2
@@ -132,6 +145,21 @@ case "$mode" in
       content="$(staged_content "$f")" || continue
       extract_headers "$content"
       check_content "$f" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
+      # Harness source check: new top-level tests/*.sh files must source harness.sh.
+      # Only applies when the repo ships tests/lib/harness.sh (gradual adoption).
+      # Only applies to newly-added files (not to edits of existing files).
+      rel="$f"
+      repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+      if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
+        rel="${f#"$repo_root_hs"/}"
+      fi
+      base="${rel#tests/}"
+      if [[ "$base" != "$rel" && "$base" != */* ]] \
+         && [[ -n "$repo_root_hs" && -f "$repo_root_hs/tests/lib/harness.sh" ]]; then
+        if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+          check_harness_source "$f" "$content" || FAIL=1
+        fi
+      fi
     done
     [[ "$FAIL" -eq 1 ]] && exit 1
     exit 0
