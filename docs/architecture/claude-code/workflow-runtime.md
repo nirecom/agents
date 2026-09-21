@@ -2,7 +2,7 @@
 
 The runtime half of the workflow state machine: session-id resolution, cross-session resume,
 next-step sequencing, reset / emergency resume, sentinel notation, and the enforcement
-exemptions. The persisted state data model and the 16-step catalog live in
+exemptions. The persisted state data model and the 17-step catalog live in
 [workflow.md](workflow.md).
 
 ## Session ID flow
@@ -39,7 +39,7 @@ Session start → session-start.js (SessionStart hook)
       explicit adoption path below, never auto-inherited
     if no match found: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
-  calls bin/workflow/next-step --session <sid> → injects all 16 step statuses
+  calls bin/workflow/next-step --session <sid> → injects all 17 step statuses
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
@@ -167,7 +167,7 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 
 - **Step context-dependence** — whether a step's completion evidence lives in the worktree or in
   the session's own record. `hooks/workflow-state/state-io/step-context-class.js` owns the
-  classification for all 16 steps; `granularity: "context-independent-only"` inherits only the
+  classification for all 17 steps; `granularity: "context-independent-only"` inherits only the
   latter set, `"full"` inherits everything.
 - **Evidence class** — what the upstream actually left behind. The state file (7-day TTL) and the
   handoff artifact (no TTL) expire independently, so availability degrades through
@@ -200,7 +200,7 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
-`--list` mode renders the full 16-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
+`--list` mode renders the full 17-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 

@@ -27,6 +27,7 @@ const STEP_CONTEXT_CLASS = Object.freeze({
   run_tests: WORKTREE_DEPENDENT,
   review_security: WORKTREE_DEPENDENT,
   docs: WORKTREE_DEPENDENT,
+  review_docs: WORKTREE_DEPENDENT,
   user_verification: WORKTREE_DEPENDENT,
   cleanup: WORKTREE_DEPENDENT,
   pre_final_report_gate: WORKTREE_DEPENDENT,

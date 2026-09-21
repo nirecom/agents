@@ -7,6 +7,8 @@ paths:
   - "rules/**/*.md"
   - "skills/**/SKILL.md"
   - "agents/**/*.md"
+  - "docs/**/*.md"
+  - "README.md"
 ---
 
 # File Split Rule
@@ -29,3 +31,11 @@ Each pattern has the same axis: entrypoint-private vs shared.
 - Skill-private procedures (3+ steps): `skills/<name>/scripts/<verb>.sh`.
 - Shared across multiple skills or tools: `bin/<tool>`.
 - `rules/*.md` / `agents/*.md` / `skills/_shared/*.md`: split into a sibling `<name>/` directory when the HARD limit is exceeded.
+
+## Pattern C — Documentation files (`docs/**/*.md`, `README.md`)
+
+- WARN: >300 lines. HARD (must split): >500 lines.
+- `bin/review-doc-size` owns this threshold; the `review_docs` step blocks the commit on a HARD violation.
+- Over the limit: trim, or split the topic into a `docs/<topic>/` sibling and leave a summary + pointer (CPR-SSOT).
+- Exempt (append-only / stream records, never split on size): `history.md`, `CHANGELOG.md`, and any `_archive`/`_archived` path.
+- README.md also obeys the section-importance order in `rules/docs/readme.md`, enforced by the same step.

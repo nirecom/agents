@@ -58,7 +58,7 @@ const missing = VALID_STEPS.filter((s) => !(s in STEP_CONTEXT_CLASS));
 const extra = keys.filter((k) => !VALID_STEPS.includes(k));
 if (missing.length) problems.push('unclassified-steps:' + missing.join(','));
 if (extra.length) problems.push('unknown-keys:' + extra.join(','));
-if (VALID_STEPS.length !== 16) problems.push('valid-steps-count:' + VALID_STEPS.length);
+if (VALID_STEPS.length !== 17) problems.push('valid-steps-count:' + VALID_STEPS.length);
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
@@ -68,7 +68,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# L2 — table-driven classification of all 16 steps against detail.md Step 3.
+# L2 — table-driven classification of all 17 steps against detail.md Step 3.
 # The expected table is restated here on purpose: it is the reviewed decision,
 # not a mirror of whatever the implementation happens to say.
 run_L2() {
@@ -89,6 +89,7 @@ const EXPECTED = {
   run_tests: 'worktree-dependent',
   review_security: 'worktree-dependent',
   docs: 'worktree-dependent',
+  review_docs: 'worktree-dependent',
   user_verification: 'worktree-dependent',
   cleanup: 'worktree-dependent',
   pre_final_report_gate: 'worktree-dependent',
@@ -102,7 +103,7 @@ for (const step of Object.keys(EXPECTED)) {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "L2: all 16 steps carry the classification recorded in detail.md Step 3"
+        pass "L2: all 17 steps carry the classification recorded in detail.md Step 3"
     else
         fail "L2: expected 'OK', got '${out:-<err>}'"
     fi
