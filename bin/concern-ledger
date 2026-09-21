@@ -28,6 +28,8 @@ usage: concern-ledger <subcommand> [options]
   slot            --path P --anchor A --category C
   bind            --ledger L --delta D
   render-prior    --plans-dir D --session-id S --format F
+  render-concerns-log --plans-dir D --session-id S --format F
+  reject          --plans-dir D --session-id S --format F --id C<N> --reason R
   stage           --plans-dir D --session-id S --format F --round N
                   --producer P --from-report FILE [--exec LABEL] [--parser MODE]
   reduce          --plans-dir D --session-id S --format F --round N
@@ -45,7 +47,7 @@ SUB="${1:-}"; [ -n "$SUB" ] || usage; shift || true
 
 PLANS=""; SID=""; FORMAT=""; ROUND=""; PRODUCER=""; REPORT=""; EXEC=""
 PARSER="anchored"; MODE=""; REASON=""; CAP=""; MAXEXT="0"; USED="0"
-LEDGER_ARG=""; DELTA_ARG=""; APATH=""; AANCHOR=""; ACAT=""
+LEDGER_ARG=""; DELTA_ARG=""; APATH=""; AANCHOR=""; ACAT=""; REJECT_ID=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -67,6 +69,7 @@ while [ $# -gt 0 ]; do
         --path) APATH="${2:-}"; shift 2 ;;
         --anchor) AANCHOR="${2:-}"; shift 2 ;;
         --category) ACAT="${2:-}"; shift 2 ;;
+        --id) REJECT_ID="${2:-}"; shift 2 ;;
         -h|--help) usage ;;
         *) printf 'concern-ledger: unknown option: %s\n' "$1" >&2; usage ;;
     esac
@@ -91,6 +94,15 @@ validate_round() {
     ROUND="$((10#$ROUND))"
 }
 
+# validate_reject_id — --id must be a C<N> reference. exit 2 on bad value.
+validate_reject_id() {
+    case "$REJECT_ID" in
+        C[0-9]*) case "${REJECT_ID#C}" in ''|*[!0-9]*) : ;; *) return 0 ;; esac ;;
+    esac
+    printf 'concern-ledger: --id must be a concern reference C<N> (got: %s)\n' "$REJECT_ID" >&2
+    exit 2
+}
+
 # validate_report — for stage: --from-report must exist and be non-empty.
 validate_report() {
     [ "$SUB" = "stage" ] || return 0
@@ -108,7 +120,8 @@ validate_args() {
     case "$1" in
         slot)     need "$APATH" --path; need "$AANCHOR" --anchor; need "$ACAT" --category ;;
         bind)     need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta ;;
-        render-prior|tally|check-finalized) need_addr ;;
+        render-prior|render-concerns-log|tally|check-finalized) need_addr ;;
+        reject)   need_addr; need "$REJECT_ID" --id; need "$REASON" --reason; validate_reject_id ;;
         begin-round)    need_addr; need "$ROUND" --round ;;
         reduce)   need_addr; need "$ROUND" --round; validate_glob_tokens reduce ;;
         stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
@@ -160,6 +173,25 @@ case "$SUB" in
         LED="$(resolve_ledger)"
         [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
         cl_render_prior "$LED"
+        ;;
+    render-concerns-log)
+        # Re-derive the carrier from the current ledger, then print its path.
+        # Exit codes are three-valued: 0 the carrier holds something to carry
+        # (path on stdout), 3 nothing to carry (no ledger and no preserved
+        # rejection — benign, no output), 5 a true failure (#2185 C5).
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        CARRIER="$(_cl_carrier_from_ledger "$LED")"
+        tmp="$(sp_mktemp_beside "$CARRIER")" || exit 5
+        cl_render_concerns_log "$LED" > "$tmp" || { rm -f "$tmp"; exit 5; }
+        if ! _cl_merge_concerns_log "$CARRIER" "$tmp"; then rm -f "$tmp"; exit 5; fi
+        rm -f "$tmp"
+        if [ -s "$CARRIER" ]; then printf '%s\n' "$CARRIER"; exit 0; else exit 3; fi
+        ;;
+    reject)
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        cl_reject "$LED" "$REJECT_ID" "$REASON" || exit 5
         ;;
     begin-round)
         LED="$(resolve_ledger)"

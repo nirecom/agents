@@ -99,6 +99,26 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 
+## Concern ledger
+
+### DISCRIM
+
+- **Full name**: Concern discriminator (ledger field 7)
+- **Definition**: An 8-hex prefix of SHA-256 over the case-folded, token-sorted concern text, frozen at first sight. Serves as the durable key for the concern carrier across `cleanup_ledger` deletions and `cl_begin_cycle` archive-clears. Equal DISCRIMs mean the reviewer is describing the same thing; a rewording produces a new DISCRIM by design.
+- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
+
+### rejected (concern state)
+
+- **Full name**: Rejected concern state
+- **Definition**: A terminal STATE set via `concern-ledger reject --id C<N> --reason R` during triage. `reduce` never reopens a rejected entry; B2 binding blocks a re-mint within the same cycle. The rejection reason is not stored on the ledger row (11 fields stay fixed) — it lives in the concern carrier.
+- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
+
+### concern-carrier
+
+- **Full name**: Concern carrier file
+- **Definition**: The `<session-id>-<format>-concern-carrier.md` file — an append-only transport for concerns across rounds, cycles, and `cleanup_ledger`. Keyed on DISCRIM, not on `C<N>`. Preserves only rejection lines durably; the open section is re-derived from the live ledger each round. Exported as `CTX_CONCERNS_LOG` to give the codex reviewer rejection history as a reference prompt.
+- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
+
 ## NFR injection and complexity routing
 
 ### complexity-judge

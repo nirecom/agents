@@ -28,6 +28,8 @@ cl_read_v1_or_v2() {
 }
 
 # _cl_load_ledger <file> <round> — CL_IDS + CL_E_* from a v1 or v2 ledger.
+# STATE (field 3) is stored verbatim, so `rejected` (a valid terminal state, set
+# by cl_reject) round-trips with no change here; only v1 promotion pins `open`.
 _cl_load_ledger() {
     local f="$1" round="${2:-1}" line id
     CL_IDS=()
