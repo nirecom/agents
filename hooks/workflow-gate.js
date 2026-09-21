@@ -420,6 +420,21 @@ if (require.main === module) {
       }
     }
 
+    // --- review_docs special-case (delegated to review-docs-checker.js) ---
+    // Runs BEFORE the docs-only short-circuit below: review_docs is the one step
+    // a docs-only commit must still satisfy. Evidence-bound — recorded status is
+    // not trusted; the gates re-run against staged blobs every commit (TOCTOU-safe).
+    if (step === "review_docs") {
+      const { checkReviewDocs } = require("./workflow-gate/review-docs-checker");
+      const rd = checkReviewDocs(step, stepState, { repoDir });
+      if (rd.action === "skip") continue;
+      if (rd.action === "block") {
+        if (rd.reason) incompleteReasons[step] = rd.reason;
+        incomplete.push(step);
+        continue;
+      }
+    }
+
     if (status === "complete") continue;
     if (status === "skipped" && skippable.includes(step)) {
       // H1 (TOCTOU hardening): a recorded run_tests=skipped was only proven

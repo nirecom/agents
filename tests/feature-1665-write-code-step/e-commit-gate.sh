@@ -1,21 +1,17 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-gate.js
 # Tags: TL2, workflow, write-code, workflow-gate, commit-gate, classifier, scope:issue-specific, pwsh-not-required
-#
 # Case group E (TL2): the commit gate walks VALID_STEPS and blocks on anything
-# not settled, so write_code must NOT join NON_GATE_STEPS — an unwritten (or
-# still in-flight) implementation must not reach a commit. E3 is the symmetric
-# verdict required by CPR-ORTH: with write_code complete the gate must approve,
-# otherwise the step ships as permanent over-blocking.
-#
-# The gate runs as the real hook against a real fixture repo with a staged
-# non-docs file, so the docs-only short-circuit and the staged-tests token path
-# are both out of the way and write_code is the only variable.
+# not settled, so write_code must NOT join NON_GATE_STEPS. E3 is the CPR-ORTH
+# counterpart: with write_code complete the gate must approve.
+# The gate runs as the real hook against a fixture repo with a staged non-docs
+# file, so the docs-only short-circuit is out of the way and write_code is the
+# only variable.
 
 # gate_verdict <sid> <write_code-status> — gate stdout for a git commit attempt.
 gate_verdict() {
   local sid="$1" wc_status="$2" s spec=""
-  for s in $STEPS_16; do
+  for s in $STEPS_17; do
     [ "$s" = "write_code" ] && continue
     spec="$spec;$s=complete"
   done

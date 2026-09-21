@@ -4,7 +4,9 @@
 # Tags: plan-coverage-gate, outline, detail
 #
 # Gate CLI for plan coverage checks. Two modes:
-#   --mode outline <file>  Count gate: issues_count <= members_count required
+#   --mode outline <file>  Count gate: issues_count <= members_count required.
+#                           <file> is intent.md -- the Class members SSOT (#2228);
+#                           callers pass intent.md, never outline.md.
 #   --mode detail  <file>  Existence gate: ## Steps or ## Files to modify required when issues exist
 #
 # Issues count: bin/parse-closes-issues (canonical parser -- handles #N, repo#N, owner/repo#N)

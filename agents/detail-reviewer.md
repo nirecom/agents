@@ -28,13 +28,13 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   Flag the plan when it adds prose explanations, multi-line directives, or inlined procedural logic.
 - **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
 - **Core principles** — verify the plan applies `rules/core-principles.md`.
-- **Mandatory carry-forward verify (structural — 3-section orthogonal check per `rules/core-principles.md` CPR-ORTH):**
-  detail.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
+- **Mandatory carry-forward verify (structural — 2-section orthogonal check per `rules/core-principles.md` CPR-ORTH):**
+  detail.md MUST contain `## Issues` and `## Accepted Tradeoffs`,
   verbatim from outline.md. Missing or altered → `NEEDS_REVISION` with a `[HIGH]` concern
-  naming the absent or altered section.
+  naming the absent or altered section. (Class members is NOT carried forward into detail.md — its SSOT is intent.md, #2228.)
 - **Class members coverage (semantic):**
-  Read `## Class members` in detail.md. For each member with `triage: MUST`,
-  verify it appears in `## Steps` or `## Files to modify` (or a named subsection).
+  Read `## Class members` from intent.md (the Class members SSOT, #2228). For each member with `triage: MUST`,
+  verify it appears in detail.md's `## Steps` or `## Files to modify` (or a named subsection).
   For each member with `triage: OPTIONAL`, verify it is either addressed or
   explicitly listed in `## Out of scope`. Any unaddressed MUST member →
   `NEEDS_REVISION` with:

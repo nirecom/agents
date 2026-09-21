@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Aggregate documentation gate. Usage: review-doc-gates [--staged | --all]
+#
+# OR-folds the two doc sub-gates — review-doc-size and review-doc-heading-order —
+# resolved from this tool's own directory. --staged exits 1 when EITHER sub-gate
+# blocks, 0 only when both pass. --all is advisory (always exits 0). No mode is a
+# SKIP (exit 0). Sub-gate output is passed through for diagnostics.
+
+set -uo pipefail
+
+HDR="## Doc Gates"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+MODE=""
+BAD_ARG=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) MODE="--all"; shift ;;
+    --staged) MODE="--staged"; shift ;;
+    *) BAD_ARG=1; shift ;;
+  esac
+done
+
+if [[ "$BAD_ARG" -eq 1 || -z "$MODE" ]]; then
+  printf '%s\n' "$HDR: SKIPPED — select exactly one of --staged / --all"
+  exit 0
+fi
+
+rc=0
+
+"$SCRIPT_DIR/review-doc-size" "$MODE" || rc=1
+"$SCRIPT_DIR/review-doc-heading-order" "$MODE" || rc=1
+
+# --all is advisory: sub-gates already exit 0 in --all mode, but pin it here so
+# the aggregate can never block on an audit scan.
+if [[ "$MODE" == "--all" ]]; then
+  exit 0
+fi
+
+exit "$rc"

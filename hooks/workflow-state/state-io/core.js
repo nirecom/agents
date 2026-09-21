@@ -34,6 +34,7 @@ const VALID_STEPS = [
   "run_tests",
   "review_security",
   "docs",
+  "review_docs",
   "user_verification",
   "cleanup",
   "pre_final_report_gate",
@@ -47,7 +48,7 @@ const TERMINAL_STEPS = ["final_report"];
 // isDocsOnlyStaged fail-closed before recording it.
 // write_code (#1665) is deliberately absent: the implementation body itself has
 // no "not needed" door — a session that changes nothing never reaches it.
-const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "run_tests", "review_security", "cleanup"];
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "run_tests", "review_security", "review_docs", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // "settled" = the step needs no further action: it is either done ("complete")
@@ -91,8 +92,9 @@ function getStatePath(sessionId) {
 // stage's own output form — and must stay a literal there.
 //
 // v3 (#1665) is what a file uses to DECLARE that the code which wrote it knew
-// about the `write_code` step; see migrations/v2-to-v3.js.
-const CURRENT_STATE_VERSION = 3;
+// about the `write_code` step; see migrations/v2-to-v3.js. v4 (#2340) declares
+// the same for the `review_docs` step; see migrations/v3-to-v4.js.
+const CURRENT_STATE_VERSION = 4;
 
 // The highest `version` this release can read and write. A file above it was
 // written by a newer release and is opaque here.
@@ -154,52 +156,29 @@ function readRawState(sessionId) {
 // read — never migrated, never guessed at.
 function normalizeStateVersion(rawState) {
   if (!rawState || typeof rawState !== "object" || Array.isArray(rawState)) return rawState;
-  if (rawState.version === 3) return rawState;
+  if (rawState.version === 4) return rawState;
   if (typeof rawState.version === "number" && rawState.version > MAX_KNOWN_STATE_VERSION) {
     throw new FutureSchemaVersionError(rawState.version);
   }
   // `version` was added after the first releases: a file with no marker at all
   // (or a number below the current one) is v1 by content, so dispatch on
   // "is it vN", never on "is it v1". The stages chain — a v1 file runs through
-  // every stage in order, a v2 file joins at the stage that raises it.
-  const { migrateV1ToV2, migrateV2ToV3 } = require("./migrations");
-  if (rawState.version === 2) return migrateV2ToV3(rawState);
-  return migrateV2ToV3(migrateV1ToV2(rawState));
+  // every stage in order, a v3 file joins at the stage that raises it.
+  const { migrateV1ToV2, migrateV2ToV3, migrateV3ToV4 } = require("./migrations");
+  if (rawState.version === 3) return migrateV3ToV4(rawState);
+  if (rawState.version === 2) return migrateV3ToV4(migrateV2ToV3(rawState));
+  return migrateV3ToV4(migrateV2ToV3(migrateV1ToV2(rawState)));
 }
 
-// readState(sessionId) -> the persisted record with the derived projection
-// attached, or null. FAIL-OPEN: a corrupt or unreadable file yields null and
-// never throws, so a gate can decide for itself what an unknown state means.
-//
-// READ-ONLY, deliberately: a v1 file is normalized in memory but NEVER written
-// back. The workflow dir is shared by every session on the machine, and callers
-// read foreign session ids out of it (context-scan.js harvests them from other
-// sessions' transcripts). A v1 file may belong to a session still running an
-// older release that cannot read v2, so migrating it here corrupts that session.
-// Bringing a file forward is a WRITER's job: writeState, updateTopLevel, and
-// appendEvents all normalize under the state lock before writing, so a file
-// migrates the moment its OWN session next writes — the only safe moment.
-//
-// The projection is deep-frozen and exposed three ways for compatibility with
-// pre-#1733 callers: as `state.current`, spliced onto the top level under each
-// PROJECTION_KEYS name, and as a non-enumerable `__projectionSnapshot` used by
-// writeState to detect a caller that tried to write to the derived view.
-// --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
-// A v1 state file predating a step's introduction simply has NO entry for it, and
-// pre-#1733 readers backfilled a status for exactly three of those steps. That
-// backfill is a READ-TIME default, not history: the event stream records what a
-// session actually did, so the v1→v2 conversion must not fabricate step_status
-// events for steps the session never touched (see K-f in
-// tests/feature-1733-state-event-stream/migration-annotations.sh). The default is
-// therefore applied to the PROJECTION of a record that was v1 on disk, keyed on
-// the absence of the key in the v1 `steps` map.
-//
-// SCOPE BOUNDARY vs the v2→v3 migration stage: this block stays frozen at those
-// three v1-only steps and gains no new members. `write_code` (#1665) is missing
-// from v2 files too, and a read-time default cannot express "the writer did not
-// know this step existed" for a versioned file — that is what a schema version
-// is for, so it is resolved in migrations/v2-to-v3.js instead.
-//
+// --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults ---
+// A v1 file predating a step has NO entry for it; pre-#1733 readers backfilled
+// a status for exactly three such steps. That is a READ-TIME default, not
+// history (the stream records what a session did), so it is applied to the
+// PROJECTION of a v1-on-disk record, keyed on the key's absence — never by
+// fabricating step_status events (K-f in
+// tests/feature-1733-state-event-stream/migration-annotations.sh).
+// SCOPE: frozen at those three v1-only steps; write_code/review_docs absence is
+// a schema-version concern (migrations/v2-to-v3 & v3-to-v4), not a read default.
 // Mutates `projection.steps` in place; must run BEFORE guardProjection.
 function applyLegacyV1ReadDefaults(rawState, projection) {
   // Keyed on "was v1 on disk": v1 predates the `version` field entirely, so any
@@ -233,6 +212,14 @@ function applyLegacyV1ReadDefaults(rawState, projection) {
 }
 // --- END temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
 
+// readState(sessionId) -> persisted record + derived projection, or null.
+// FAIL-OPEN: a corrupt/unreadable file yields null, never throws. READ-ONLY: a
+// v1 file is normalized in memory but NEVER written back here (the workflow dir
+// is shared; a foreign v1 file may belong to an older-release session). Bringing
+// a file forward is a WRITER's job — writeState/updateTopLevel/appendEvents
+// normalize under the lock. The projection is deep-frozen and exposed three ways
+// for pre-#1733 callers: `state.current`, spliced PROJECTION_KEYS, and the
+// non-enumerable `__projectionSnapshot` writeState uses to catch a derived write.
 function readState(sessionId) {
   let rawState;
   try {

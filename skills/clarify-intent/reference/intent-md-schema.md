@@ -15,7 +15,7 @@ Referenced by CI-4. Format rules for `<PLANS_DIR>/<session-id>-intent.md`.
 9. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 10. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
 
-Language: write body text in `PLAN_LANG` (`$AGENTS_CONFIG_DIR/.env`) when it is a concrete non-English language; heading lines (any level) are exempt. `PLAN_LANG` unset/`any`/`english` → write in English.
+Language: write body text in `PLAN_LANG` (`$AGENTS_CONFIG_DIR/.env`) when it is a concrete non-English language; schema H2 heading lines always use their canonical English names regardless of `PLAN_LANG`. `PLAN_LANG` unset/`any`/`english` → write body text in English.
 
 ## `## Issues` schema (mandatory)
 

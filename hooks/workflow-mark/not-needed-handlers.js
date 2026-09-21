@@ -1,6 +1,6 @@
 "use strict";
 // Handles *_NOT_NEEDED step-skip sentinels: RESEARCH, OUTLINE, DETAIL, WRITE_TESTS,
-// REVIEW_SECURITY, CLARIFY_INTENT, and the deprecated DOCS_NOT_NEEDED.
+// REVIEW_SECURITY, REVIEW_DOCS, CLARIFY_INTENT, and the deprecated DOCS_NOT_NEEDED.
 // Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
@@ -28,6 +28,7 @@ const {
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   RUN_TESTS_NOT_NEEDED_RE_DQ, RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
+  REVIEW_DOCS_NOT_NEEDED_RE_DQ, REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
@@ -263,6 +264,43 @@ function handle(ctx) {
     if (!res.ok) {
       pushMessage(
         `workflow-mark: failed to write state — ${res.detail || res.message}. review_security NOT recorded.`
+      );
+    }
+    return true;
+  }
+
+  // --- REVIEW_DOCS_NOT_NEEDED handler ---
+  const reviewDocsNotNeededMatch = cmd.match(REVIEW_DOCS_NOT_NEEDED_RE_DQ);
+  const reviewDocsNotNeededLooksLike =
+    !reviewDocsNotNeededMatch && REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  if (reviewDocsNotNeededLooksLike) {
+    pushMessage(
+      `workflow-mark: malformed REVIEW_DOCS_NOT_NEEDED — ` +
+        `expected: echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: REASON>>" ` +
+        `(reason must be >=3 non-space chars, no '>')`
+    );
+    return true;
+  }
+  if (reviewDocsNotNeededMatch) {
+    const v = validateSkipReason(reviewDocsNotNeededMatch[1]);
+    if (!v.ok) {
+      pushMessage(
+        `workflow-mark: REVIEW_DOCS_NOT_NEEDED rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: {better reason}>>"`
+      );
+      return true;
+    }
+    if (!sessionId) {
+      signalFatal(
+        `workflow-mark: could not resolve session_id — review_docs NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: ${v.reason}>>"`
+      );
+      return true;
+    }
+    const res = declareSkip(sessionId, "review_docs", v.reason);
+    if (!res.ok) {
+      pushMessage(
+        `workflow-mark: failed to write state — ${res.detail || res.message}. review_docs NOT recorded.`
       );
     }
     return true;

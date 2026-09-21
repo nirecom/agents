@@ -134,7 +134,7 @@ parse_round2_cnref() {
 # draft (--input), the loop budget flags, the ledger from round 2 on, and every
 # context file. The ref-kind sibling is rk_build_args. Caller globals: ARGS
 # DRAFT FORMAT SID PLANS_DIR CAP MAX_EXT EXT_USED TRADEOFFS ROUND LEDGER
-# CONTEXT_OUT EXTRA_CTX CORE_PRINCIPLES REPO_ROOT_ARG CODEX_MCP_FS.
+# CONTEXT_OUT EXTRA_CTX CORE_PRINCIPLES REPO_ROOT_ARG CODEX_MCP_FS CLASS_MEMBERS.
 path_build_args() {
   local ctx
   ARGS=(
@@ -148,6 +148,8 @@ path_build_args() {
     --accepted-tradeoffs "$TRADEOFFS"
     --round "$ROUND"
   )
+  # Class members SSOT (intent.md, #2228): forwarded when the caller named it.
+  [[ -n "${CLASS_MEMBERS:-}" ]] && ARGS+=(--class-members "$CLASS_MEMBERS")
   [[ "$ROUND" -ge 2 ]] && ARGS+=(--ledger "$LEDGER")
   if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
     ARGS+=(--context "$CONTEXT_OUT")
