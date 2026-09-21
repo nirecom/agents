@@ -302,6 +302,155 @@ else
     fail "TC-O6-NONE-SPACE: '- ( none detected )' (spaced) → expected exit 0, got $EXIT_CODE (output: $OUT)"
 fi
 
+# TC-O-SSOT (C4): #2228 makes intent.md the single home of ## Class members; the
+# outline no longer carries that section. The coverage gate counts members from
+# whichever file it is handed, so passing the intent.md SSOT (Issues + members)
+# satisfies coverage, while the members-less outline.md does NOT — proving the
+# members live in intent.md, not the outline.
+# Part 1: intent.md carrying Issues + Class members → --mode outline → exit 0.
+F_SSOT_INTENT="$TMPDIR_BASE/ssot-intent.md"
+cat > "$F_SSOT_INTENT" << 'EOF'
+# Intent — SSOT test
+
+**Title:** class-members SSOT
+
+## Issues
+
+- #700: ssot issue
+
+## Class members
+
+- member-ssot: the sole home of class members — triage: MUST
+
+## Accepted Tradeoffs
+
+- (none)
+EOF
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_SSOT_INTENT" 2>&1) || EXIT_CODE=$?
+if [[ $GATE_EXISTS -eq 0 ]]; then
+    fail "TC-O-SSOT-a: intent.md with members → CLI missing, cannot verify"
+elif [[ $EXIT_CODE -eq 0 ]]; then
+    pass "TC-O-SSOT-a: intent.md (Issues + Class members) → --mode outline exit 0 (members read from intent.md SSOT)"
+else
+    fail "TC-O-SSOT-a: intent.md (Issues + Class members) → expected exit 0, got $EXIT_CODE (output: $OUT)"
+fi
+
+# Part 2: the post-#2228 outline.md has Issues but NO ## Class members section →
+# --mode outline → non-zero. Same Issues count as the intent above; only the
+# location of the members differs, so a non-zero here proves the gate did not
+# silently source members from anywhere but the file it was given.
+F_SSOT_OUTLINE="$TMPDIR_BASE/ssot-outline.md"
+cat > "$F_SSOT_OUTLINE" << 'EOF'
+# Outline Plan — SSOT test (no Class members section)
+
+## Issues
+
+- #700: ssot issue
+
+## Adopted approach
+
+Take approach A.
+
+## Accepted Tradeoffs
+
+- (none)
+EOF
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_SSOT_OUTLINE" 2>&1) || EXIT_CODE=$?
+if [[ $GATE_EXISTS -eq 0 ]]; then
+    fail "TC-O-SSOT-b: members-less outline.md → CLI missing, cannot verify"
+elif [[ $EXIT_CODE -ne 0 ]]; then
+    pass "TC-O-SSOT-b: outline.md without ## Class members → --mode outline non-zero (members not in the outline; SSOT is intent.md)"
+else
+    fail "TC-O-SSOT-b: members-less outline.md → expected non-zero, got 0 (output: $OUT)"
+fi
+
+# TC-O-SSOT-c (C4): the two SSOT halves side by side in ONE scenario. Every other
+# success fixture here carries BOTH Issues AND Class members in the same file; this
+# case deliberately does NOT. It builds the post-#2228 pair — intent.md WITH
+# `## Class members`, outline.md WITHOUT it (same single Issue in both) — and
+# asserts: (1) the members-bearing intent.md passes `--mode outline` (exit 0), the
+# SSOT source of members; (2) as a precondition, the companion outline.md genuinely
+# lacks the `## Class members` section, so the pass in (1) cannot have come from the
+# outline. Together this proves a members-less outline is satisfied by the intent
+# SSOT rather than by the outline carrying its own copy.
+F_C4_INTENT="$TMPDIR_BASE/c4-intent.md"
+cat > "$F_C4_INTENT" << 'EOF'
+# Intent — C4 SSOT pair
+
+## Issues
+
+- #720: c4 issue
+
+## Class members
+
+- member-c4: sole home of members — triage: MUST
+
+## Accepted Tradeoffs
+
+- (none)
+EOF
+F_C4_OUTLINE="$TMPDIR_BASE/c4-outline.md"
+cat > "$F_C4_OUTLINE" << 'EOF'
+# Outline Plan — C4 SSOT pair (no Class members section)
+
+## Issues
+
+- #720: c4 issue
+
+## Adopted approach
+
+Take approach A.
+
+## Accepted Tradeoffs
+
+- (none)
+EOF
+# Precondition: the companion outline.md must NOT carry a ## Class members section.
+if grep -q "^## Class members$" "$F_C4_OUTLINE" 2>/dev/null; then
+    fail "TC-O-SSOT-c: precondition — companion outline.md must NOT contain '## Class members' (fixture error)"
+else
+    pass "TC-O-SSOT-c: precondition — companion outline.md carries Issues but no '## Class members' section"
+fi
+# The intent.md SSOT (Issues + members) satisfies --mode outline coverage.
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_C4_INTENT" 2>&1) || EXIT_CODE=$?
+if [[ $GATE_EXISTS -eq 0 ]]; then
+    fail "TC-O-SSOT-c: intent.md-with-members + outline.md-without → CLI missing, cannot verify"
+elif [[ $EXIT_CODE -eq 0 ]]; then
+    pass "TC-O-SSOT-c: intent.md (has members) passes --mode outline exit 0 while the paired outline.md has none (members sourced from intent SSOT)"
+else
+    fail "TC-O-SSOT-c: intent.md (Issues + Class members) → expected exit 0, got $EXIT_CODE (output: $OUT)"
+fi
+
+# TC-O-SSOT-d (C4): reducing intent members below issue count → gate blocks.
+# Ensures the tool actually enforces the coverage invariant when run with the
+# intent SSOT source. Paired with TC-O-SSOT-c: both use intent.md, but here
+# the gate must BLOCK because members < issues.
+F_C4D_INTENT="$TMPDIR_BASE/c4d-intent-too-few-members.md"
+cat > "$F_C4D_INTENT" << 'EOF'
+# Intent — C4d gate-blocks scenario
+
+## Issues
+
+- #720: first issue
+- #721: second issue
+
+## Class members
+
+- member-c4d: only one member for two issues — triage: MUST
+
+## Accepted Tradeoffs
+
+- (none)
+EOF
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$GATE" --mode outline "$F_C4D_INTENT" 2>&1) || EXIT_CODE=$?
+if [[ $GATE_EXISTS -eq 0 ]]; then
+    fail "TC-O-SSOT-d: 2 issues / 1 member → CLI missing, cannot verify"
+elif [[ $EXIT_CODE -ne 0 ]]; then
+    pass "TC-O-SSOT-d: intent.md (2 issues, 1 member) → --mode outline blocks (exit non-zero)"
+else
+    fail "TC-O-SSOT-d: intent.md (2 issues, 1 member) → expected non-zero exit, got 0 (output: $OUT)"
+fi
+
 TOTAL=$((PASS + FAIL))
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"

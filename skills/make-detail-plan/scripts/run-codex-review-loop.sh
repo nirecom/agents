@@ -16,6 +16,7 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-detail.md"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
+  --class-members "$PLANS_DIR/$SESSION_ID-intent.md"
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi

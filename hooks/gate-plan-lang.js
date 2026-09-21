@@ -11,6 +11,7 @@ const path = require("path");
 const { readStdinJson, collectEditTargets, approve, block } = require("./lib/pretool-lang-gate");
 const {
   isPlanArtifactPath,
+  stageOf,
   loadPlanPolicy,
   lintPlanArtifactText,
   formatPlanLangViolations,
@@ -22,15 +23,19 @@ function main() {
   const targets = collectEditTargets(input.tool_name, input.tool_input);
   if (targets.length === 0) return approve();
 
-  const { policy, tier } = loadPlanPolicy();
-  if (tier !== "strict") return approve();
+  // Do not early-return on a non-strict policy: canonical-heading checks run
+  // regardless of policy (#2338). lintPlanArtifactText only runs body-language
+  // checks under a strict policy, so a non-strict policy is caught by heading
+  // violations alone.
+  const { policy } = loadPlanPolicy();
 
   const hits = [];
   let total = 0;
   for (const t of targets) {
     const resolved = path.resolve(t.filePath);
     if (!isPlanArtifactPath(resolved)) continue;
-    const violations = lintPlanArtifactText(t.fragment, policy);
+    const stage = stageOf(resolved);
+    const violations = lintPlanArtifactText(t.fragment, policy, stage);
     if (violations.length === 0) continue;
     total += violations.length;
     hits.push({ base: path.basename(resolved), editIndex: t.editIndex, violations });

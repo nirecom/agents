@@ -84,6 +84,8 @@ SCRIPT_DIR="$(dirname "$0")/feature-review-plan-codex"
 . "$SCRIPT_DIR/cli-args-329.sh"
 # shellcheck source=./feature-review-plan-codex/repo-root-mcp.sh
 . "$SCRIPT_DIR/repo-root-mcp.sh"
+# shellcheck source=./feature-review-plan-codex/class-members-wiring.sh
+. "$SCRIPT_DIR/class-members-wiring.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

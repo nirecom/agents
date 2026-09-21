@@ -88,14 +88,14 @@ C2: unresolved — <reason>
   revision-rounds cap is the symmetric pair. Both caps route through
   `bin/review-loop-verdict` (exit 2 = ESCALATE, exit 5 = AUTO_EXTEND). Do NOT propose
   alternative escalation flows that bypass this helper.
-- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` CPR-ORTH):**
-  outline.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
-  verbatim from intent.md. If any required section is absent or modified relative to
+- **Mandatory section carry-forward (structural — 2-section orthogonal check per `rules/core-principles.md` CPR-ORTH):**
+  outline.md MUST contain `## Issues` and `## Accepted Tradeoffs`,
+  verbatim from intent.md. If either required section is absent or modified relative to
   intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern naming the absent or
-  altered section.
+  altered section. (Class members is NOT carried forward into outline.md — its SSOT is intent.md, #2228.)
 - **Class members coverage (semantic):**
-  Read `## Class members` in the outline.md being reviewed. For each member with
-  `triage: MUST`, verify that the adopted approach / delivery plan / a named
+  Read `## Class members` from intent.md (the Class members SSOT, #2228). For each member with
+  `triage: MUST`, verify that the outline.md adopted approach / delivery plan / a named
   section explicitly addresses it. For each member with `triage: OPTIONAL`,
   verify that the plan either addresses it OR explicitly defers it under
   `## Confirmed non-goals` (either is acceptable). If any MUST member is
@@ -104,7 +104,7 @@ C2: unresolved — <reason>
   A `triage: OPTIONAL` member that is neither addressed nor explicitly deferred →
   `MISSING_ALTERNATIVE` with severity `[MED]`.
   Members with `triage: NA`, `(none detected)`, or absent — skip.
-- **Issues → Class members count gap [HIGH]:** Count list entries in `## Issues` (excluding `(none detected)`) and in `## Class members` (excluding `(none detected)`). When issues_count > 0 and members_count < issues_count, return `MISSING_ALTERNATIVE` with: `[HIGH] ## Issues has N entries but ## Class members has only M entries. Every closes_issues entry must have >= 1 Class members entry.`
+- **Issues → Class members count gap [HIGH]:** Count list entries in intent.md's `## Issues` (excluding `(none detected)`) and intent.md's `## Class members` (excluding `(none detected)`). When issues_count > 0 and members_count < issues_count, return `MISSING_ALTERNATIVE` with: `[HIGH] ## Issues has N entries but ## Class members has only M entries. Every closes_issues entry must have >= 1 Class members entry.`
 
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`

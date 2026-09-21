@@ -28,6 +28,11 @@
 <...>
 ```
 
+## Considered alternatives (rejected) — compression
+
+Each rejected approach becomes one entry: one line naming it plus one line stating the rejection reason.
+Never re-include a rejected approach's full body, description paragraphs, or field list — one entry, one reason (#2339).
+
 ## SINGLE_APPROACH_JUSTIFIED
 
 If only one approach is genuinely viable (not just the easiest), emit **only** the following as your entire reply:

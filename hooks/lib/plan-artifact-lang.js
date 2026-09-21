@@ -32,22 +32,41 @@ function resolvePlanArtifactPath(sid, stage) {
   return path.join(getWorkflowPlansDir(), base);
 }
 
+// Inverse of resolvePlanArtifactPath: derive the stage (intent/outline/detail)
+// from a resolved plan-artifact path's basename. SSOT for basename->stage so the
+// gate, checker and Stop guard classify a stage the same way. Returns null when
+// no known stage suffix matches.
+function stageOf(resolvedPath) {
+  if (typeof resolvedPath !== "string" || resolvedPath.length === 0) return null;
+  const base = path.basename(resolvedPath);
+  for (const stage of STAGES) {
+    if (base.endsWith("-" + stage + ".md")) return stage;
+  }
+  return null;
+}
+
 function loadPlanPolicy() {
   const policy = loadLangConfig("plan");
   return { policy, tier: classifyPolicy(policy) };
 }
 
-function lintPlanArtifactText(text, policy) {
+function lintPlanArtifactText(text, policy, stage) {
   if (typeof text !== "string") return [];
-  return lintPlanLang(text, policy);
+  return lintPlanLang(text, policy, stage);
 }
 
+// Re-lint the confirmed artifact. Body language checks still require a strict
+// policy, but canonical-heading checks run regardless of policy (#2338): when
+// the stage resolves, heading violations are returned even under a non-strict
+// policy, so a non-strict policy no longer short-circuits the whole re-lint.
 function relintPlanArtifact(sid, stage) {
   const { policy, tier } = loadPlanPolicy();
   const result = { skipped: null, policy, tier, artifactPath: null, violations: [] };
-  if (tier !== "strict") return Object.assign(result, { skipped: "policy" });
   const artifactPath = resolvePlanArtifactPath(sid, stage);
   if (artifactPath === null) return Object.assign(result, { skipped: "unresolved" });
+  // A non-strict policy with no resolvable stage has nothing to check: heading
+  // checks need a stage, body checks need strict. stage is resolvable here (the
+  // path resolved), so heading checks can run; keep going.
   result.artifactPath = artifactPath;
   let text;
   try {
@@ -56,7 +75,7 @@ function relintPlanArtifact(sid, stage) {
   } catch (e) {
     return Object.assign(result, { skipped: "unreadable" });
   }
-  result.violations = lintPlanArtifactText(text, policy);
+  result.violations = lintPlanArtifactText(text, policy, stage);
   return result;
 }
 
@@ -71,6 +90,7 @@ function formatPlanLangViolations(violations, max) {
 module.exports = {
   isPlanArtifactPath,
   resolvePlanArtifactPath,
+  stageOf,
   loadPlanPolicy,
   lintPlanArtifactText,
   relintPlanArtifact,

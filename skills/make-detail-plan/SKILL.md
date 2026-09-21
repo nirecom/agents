@@ -70,9 +70,9 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/ma
 
 Before composing the summary or confirm-plan prose, issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG` and read `<CONV_LANG>` from its stdout. If `<CONV_LANG>` is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
 
-On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
+On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
-Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
+Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
 After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
 

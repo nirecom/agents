@@ -41,7 +41,7 @@ MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
+   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
      Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
@@ -50,12 +50,12 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
 MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
-   After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
+   After outline-planner returns its draft (initial or revised round), the orchestrator carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
    Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
-   - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
+   - The helper extracts the 2 sections from intent.md with headers, strips any planner-authored copies (plus any planner-authored `## Class members` residue) and the planner's H1 from the draft, and writes the assembled outline.md.
+   - `## Class members` is NOT carried into outline.md — its SSOT is intent.md (#2228).
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
-   - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
-   - Legacy intent.md (pre-#462) lacking `## Class members` is handled by the helper's soft-fail path (auto-injects a stub) — no orchestrator action needed.
+   - Do NOT instruct the planner to author the mandatory sections — the helper strips planner-authored copies before the final write.
 
    Constraint: outline-planner cannot add new entries to `## Accepted Tradeoffs` — `assemble-mandatory.sh` carries the intent.md tradeoffs verbatim. Record new design decisions in `## Confirmed non-goals` or `## Constraints` instead.
 
@@ -120,8 +120,8 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - **Title** (H1): "Confirmed Approach" + `<session-id>`
 - **Mandatory sections** (assembled by `skills/_shared/assemble-mandatory.sh` from intent.md, not authored by planner):
   - `## Issues` — always present (empty placeholder allowed for Path C)
-  - `## Class members`
   - `## Accepted Tradeoffs`
+  - (`## Class members` is NOT carried into outline.md — its SSOT is intent.md, #2228)
 - **Planner-authored body sections** (drafted by outline-planner):
   - **Adopted approach**: 1 paragraph + rationale for choosing it
   - **Delivery plan**: triage rationale / execution order / split policy for the adopted approach

@@ -51,6 +51,7 @@ CAP=""
 MAX_EXT=""
 EXT_USED="0"
 TRADEOFFS=""
+CLASS_MEMBERS=""
 ROUND=""
 FORCE_ROUND=""
 LEDGER_OVERRIDE=""
@@ -89,6 +90,11 @@ while [[ $# -gt 0 ]]; do
     --accepted-tradeoffs)
       require_value "--accepted-tradeoffs" "${2:-}"
       TRADEOFFS="$2"; shift 2 ;;
+    # Class members SSOT is intent.md (#2228), a path-kind concern only; forwarded
+    # to review-plan-codex via path_build_args. Optional: absent -> empty -> not forwarded.
+    --class-members)
+      require_value "--class-members" "${2:-}"
+      CLASS_MEMBERS="$2"; shift 2 ;;
     --round)
       require_value "--round" "${2:-}"
       ROUND="$2"; shift 2 ;;

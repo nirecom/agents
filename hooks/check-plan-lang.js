@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintPlanLang } = require("./lib/lint-plan-lang");
-const { isPlanArtifactPath, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
+const { isPlanArtifactPath, stageOf, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
 const { TARGET_TOOLS } = require("./lib/pretool-lang-gate");
 
 // Read stdin, parse JSON, dispatch
@@ -25,19 +25,22 @@ process.stdin.on("end", () => {
 
   const policy = loadLangConfig("plan");
   const tier = classifyPolicy(policy);
-  if (tier === "noop") { approve(); return; }
 
   const rawContent = (payload.tool_input.content !== undefined)
     ? payload.tool_input.content
     : safeRead(resolved);
   if (typeof rawContent !== "string") { approve(); return; }
 
+  // Canonical-heading checks run regardless of policy (#2338); body-language
+  // checks still require a strict policy (enforced inside lintPlanLang). So even
+  // under noop/hint, a localized schema heading is a violation and blocks.
+  const stage = stageOf(resolved);
+  const violations = lintPlanLang(rawContent, policy, stage);
+  if (violations.length > 0) { block(violations, policy); return; }
+
   if (tier === "hint") { hint(policy); return; }
 
-  const violations = lintPlanLang(rawContent, policy);
-  if (violations.length === 0) { approve(); return; }
-
-  block(violations, policy);
+  approve();
 });
 
 function safeRead(p) {

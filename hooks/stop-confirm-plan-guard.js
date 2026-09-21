@@ -142,11 +142,14 @@ if (require.main === module) {
         const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
         const relint = relintPlanArtifact(sid, stage);
         if (relint.skipped === null && relint.violations.length > 0) {
+          // Violations may be body-language (strict policy only) or canonical
+          // schema-heading (any policy, #2338); fix both before confirming.
           process.stdout.write(JSON.stringify({
             decision: "block",
             reason: "[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
-              " violates PLAN_LANG=" + relint.policy + " (" + relint.violations.length + " line(s)) — rewrite the artifact in " +
-              relint.policy + " before CONFIRM_" + stage.toUpperCase() + ":\n" +
+              " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
+              relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
+              stage.toUpperCase() + ":\n" +
               formatPlanLangViolations(relint.violations).join("\n"),
           }));
           process.exit(2);
