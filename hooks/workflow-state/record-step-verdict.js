@@ -1,22 +1,14 @@
 "use strict";
 // The single DECLARED-class writer for workflow step status (#1644).
-//
-// Why: markStep() has two kinds of caller. Class O (observed) callers each own an
-// evidence predicate and record what the process itself saw. Class D (declared)
-// callers record what somebody ASSERTED — a *_NOT_NEEDED sentinel, a --mark
-// recovery call, a CLI --advance. Every Class D caller must apply the same
-// prohibitions, the same approval invariant and the same A-4 co-write, so those
-// rules are stated exactly once here and nowhere else.
-//
+// Class O (observed) callers own an evidence predicate and record what the
+// process saw; Class D (declared) callers record what somebody ASSERTED (a
+// *_NOT_NEEDED sentinel, a --mark recovery, a CLI --advance). Every Class D
+// caller shares the same prohibitions, approval invariant and A-4 co-write,
+// stated once here and nowhere else.
 // recordStepVerdict(sessionId, step, status, opts) -> { ok, code, message, already }
-//   code 0  recorded (or already in that state — see `already`)
-//   code 1  argument validation failure
-//   code 2  record failure: write error, missing approval, or a step the
-//           declaring path is forbidden to complete
-//   code 3  skip refused by the skip-allowance policy
-//
-// This module decides from RECORDED FACTS only (state files + config files). It
-// never reads model-authored plan prose.
+//   code 0 recorded (or already — see `already`); 1 arg validation; 2 record
+//   failure (write error / missing approval / forbidden completion); 3 skip refused.
+// Decides from RECORDED FACTS only (state + config files); never reads plan prose.
 
 const {
   VALID_STEPS,
@@ -72,6 +64,7 @@ const REPLACEMENT_SENTINEL = {
   docs: "(no skip path — stage docs/ or *.md changes)",
   clarify_intent: "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED",
   review_security: "WORKFLOW_REVIEW_SECURITY_NOT_NEEDED",
+  review_docs: "WORKFLOW_REVIEW_DOCS_NOT_NEEDED",
   write_tests: "WORKFLOW_WRITE_TESTS_NOT_NEEDED",
   run_tests: "WORKFLOW_RUN_TESTS_NOT_NEEDED",
 };
@@ -83,17 +76,13 @@ const REPLACEMENT_SENTINEL = {
 const DECLARING_GATES = ["sentinel", "advance"];
 
 // Steps whose OUTCOME axis a settled declaration also settles (#1665 / R4).
-//
 // WHY (CPR-WPH): `run_tests` carries a second axis, `run_outcome`, written by the
-// PostToolUse hook from what it observed. Settling the STATUS without settling
-// the OUTCOME leaves the two axes describing different runs — a `skipped` step
-// keeping an older `run_outcome: "fail"` masks every downstream step forever.
-//
-// CPR-UNV: the general rule ("every sentinel/CLI-sourced status is `declared`")
-// is the truer one, but it changes the audit semantics of every step and is out
-// of scope for #1665. The exception is isolated behind this named constant
-// rather than spread through the branch below; generalising it is a separate
-// issue.
+// PostToolUse hook. Settling STATUS without OUTCOME leaves the two describing
+// different runs — a `skipped` step keeping `run_outcome: "fail"` masks every
+// downstream step forever.
+// CPR-UNV: the general rule (every sentinel/CLI status is `declared`) is truer but
+// changes audit semantics for every step, out of scope for #1665; the exception is
+// isolated behind this named constant rather than spread through the branch below.
 const DECLARED_OUTCOME_STEPS = ["run_tests"];
 
 // ---- helpers ---------------------------------------------------------------
@@ -172,22 +161,13 @@ function checkSkipAllowance(sessionId, step, opts) {
     case "cleanup":
       return { ok: true, code: 0 };
     // Approval-gated pair, deliberately left unconditional on THIS gate.
-    // KNOWN GAP (tracked as a follow-up, symmetric to plan-skip-allowance.js's
-    // own documented MED-1 CONFIRM_TESTS/AGENTS_CONFIG_DIR boundary): the
-    // comment this replaced claimed "the real safety device is the A-4 verdict
-    // co-written below" — that is not true today. recordSkipVerdict() below
-    // writes skip_verdict.verdict="pending", but no gate anywhere in this
-    // codebase (workflow-gate.js's commit gate included) reads
-    // hasSpeculativeSkipPending() to block progress on an unresolved pending
-    // verdict, so the co-write is an audit annotation, not an enforcement
-    // point. A prior pass in this session made this gate call
-    // isSkipAllowedForCliPath(), matching the write_tests case below — that
-    // change was reverted: the parity contract this session's own tests pin
-    // (feature-1644-advance-transaction/projection.sh A7-skip / A14, and the
-    // C3/C6 CLI-subprocess suites) exercises exactly this unconditional path
-    // as their control/baseline across ~10+ cases, so tightening it here is a
-    // coordinated CLI-door-vs-sentinel-door redesign, not a local fix. File a
-    // follow-up issue instead of re-attempting the local patch.
+    // KNOWN GAP (follow-up): the A-4 verdict co-written below is an audit
+    // annotation, not enforcement — recordSkipVerdict() writes
+    // skip_verdict.verdict="pending", but no gate reads hasSpeculativeSkipPending()
+    // to block on it. Making this gate call isSkipAllowedForCliPath() (like
+    // write_tests) was tried and reverted: the parity contract the #1644 suites
+    // pin exercises this unconditional path as their baseline, so tightening it is
+    // a coordinated CLI-vs-sentinel redesign, not a local fix. File a follow-up.
     case "outline":
     case "detail":
       return { ok: true, code: 0 };
@@ -248,6 +228,15 @@ function checkSkipAllowance(sessionId, step, opts) {
         3,
         `record-step-verdict: ${step} skip refused — no CLI-side approval route exists. ` +
           `Ask the user and emit: echo "<<${REPLACEMENT_SENTINEL[step]}: {reason}>>"`
+      );
+    // review_docs skip is an assertion the model owns; its objective doc gates are
+    // re-checked at commit regardless, so the CLI door has no reproducible route —
+    // name the sentinel that does.
+    case "review_docs":
+      return fail(
+        3,
+        `record-step-verdict: review_docs skip refused — no CLI-side route exists. ` +
+          `Emit: echo "<<${REPLACEMENT_SENTINEL.review_docs}: {reason}>>"`
       );
     default:
       return fail(3, `record-step-verdict: ${step} skip refused — no declared-path skip route exists.`);

@@ -35,10 +35,10 @@ check_not_contains() {
   else pass "$desc"; fi
 }
 
-# The 16-step vocabulary this issue introduces: write_code sits between
-# review_tests and run_tests. Fixtures are built from THIS list on purpose — a
-# fixture that enumerates the old 15 steps could never observe the new one.
-STEPS_16="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
+# The step vocabulary these fixtures are built from. write_code sits between
+# review_tests and run_tests (#1665); review_docs between docs and
+# user_verification (#2340). Fixtures enumerate THIS list on purpose.
+STEPS_17="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs review_docs user_verification cleanup pre_final_report_gate final_report"
 
 # build_state <sid> <default-status> <overrides> [extra-top-level-json-prefix]
 #   overrides: "step=status;step=status"; the pseudo-status `absent` omits the
@@ -47,7 +47,7 @@ STEPS_16="workflow_init clarify_intent research outline detail branching_complet
 build_state() {
   local sid="$1" def="$2" ov="${3:-}" extra="${4:-}"
   local entries="" s st pair
-  for s in $STEPS_16; do
+  for s in $STEPS_17; do
     st="$def"
     for pair in ${ov//;/ }; do
       case "$pair" in "$s="*) st="${pair#*=}" ;; esac
@@ -67,9 +67,8 @@ build_state() {
 # nor an annotation — such an entry says nothing beyond the projection default.
 # The dropped step is then indistinguishable from one whose writer never knew the
 # step existed, which is exactly what the v2->v3 backfill (#1665) treats as a
-# legacy gap. A fixture that means "this session genuinely recorded the step as
-# pending" must therefore stamp it, so the migration keeps it and emits a real
-# step_status event.
+# legacy gap. A fixture meaning "this session genuinely recorded the step as
+# pending" must stamp it, so the migration keeps it and emits a step_status event.
 stamp_step_at() {
   local sid="$1" step="$2"
   STAMP_SID="$sid" STAMP_STEP="$step" run_with_timeout node -e '

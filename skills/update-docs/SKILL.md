@@ -52,6 +52,8 @@ UD-7. **Commit separately**: If docs are in a separate repo, commit each repo in
 
 ## Completion
 
+After the `docs_complete` sentinel, next-step advances to `review_docs` — run `/review-docs` to verify doc line limits and README section order before commit.
+
 After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`.
 
 ### Path A — ENFORCE_WORKTREE=on (mandatory)
