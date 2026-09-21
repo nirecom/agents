@@ -17,13 +17,14 @@ time by a PreToolUse hook. In order, they are the standard **WF-CODE** plan that
 10  run_tests           Run test suite and security review
 11  review_security     Adversarial security review and code quality gates
 12  docs                Update docs and changelog
-13  user_verification   User verifies the implementation
-14  cleanup             Remove worktree and merge branch
-15  pre_final_report_gate  Final report and session close
-16  final_report        Final report delivered (terminal)
+13  review_docs         Review doc line limits and README section order
+14  user_verification   User verifies the implementation
+15  cleanup             Remove worktree and merge branch
+16  pre_final_report_gate  Final report and session close
+17  final_report        Final report delivered (terminal)
 ```
 
-**WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps 7–14;
+**WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps 7–15;
 the per-mode rendering is under [Workflow types](#workflow-types-in-next-step---list) below.
 
 ## State file
@@ -242,7 +243,7 @@ the kv contract.
 `git_branch` is `null` for non-git directories and detached HEAD.
 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
-- `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `run_tests`, `review_security`, and `cleanup`. `run_tests` is admitted only on the docs-only route: both write-side doors (`not-needed-handlers.js`, `mark-step-handler.js`) verify `isDocsOnlyStaged` fail-closed before recording it
+- `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `run_tests`, `review_security`, `review_docs`, and `cleanup`. `run_tests` is admitted only on the docs-only route: both write-side doors (`not-needed-handlers.js`, `mark-step-handler.js`) verify `isDocsOnlyStaged` fail-closed before recording it
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 - `branching_complete`, `write_code`, and `pre_final_report_gate`: cannot be `skipped`
 
@@ -336,6 +337,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`. **Or** skipped via `echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>"` — accepted only when every staged file is human-facing docs (`isDocsOnlyStaged`); the same fact gates `MARK_STEP_run_tests_skipped` and `next-step --advance --step run_tests --skipped` |
 | `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
+| `review_docs` | `/review-docs` skill (emits `WORKFLOW_MARK_STEP_review_docs_complete`) **or** skipped via `echo "<<WORKFLOW_MARK_STEP_review_docs_skipped>>"` (no approval-gated NOT_NEEDED sentinel — the gates are objective). Evidence-bound: `workflow-gate.js` re-runs `bin/review-doc-gates --staged` on the staged doc blobs every commit and blocks on a HARD failure, even in a docs-only commit |
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |
 | `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
@@ -364,12 +366,12 @@ when CLAUDE.md skip conditions are met.
 
 ### Workflow types in `next-step --list`
 
-`bin/workflow/next-step --list` renders the 16-step plan for the session's workflow type.
-The standard **WF-CODE** rendering has all 16 steps active — the ordered list at the
+`bin/workflow/next-step --list` renders the 17-step plan for the session's workflow type.
+The standard **WF-CODE** rendering has all 17 steps active — the ordered list at the
 [top of this document](#workflow-state-machine).
 
 **WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps
-7–14 per the wf-meta auto-skip stage above:
+7–15 per the wf-meta auto-skip stage above:
 
 ```
  1  workflow_init       Initialize session state and GitHub issue
@@ -384,10 +386,11 @@ The standard **WF-CODE** rendering has all 16 steps active — the ordered list 
 [-]10  run_tests        (auto-skipped)
 [-]11  review_security  (auto-skipped)
 [-]12  docs             (auto-skipped)
-[-]13  user_verification  (auto-skipped)
-[-]14  cleanup          (auto-skipped)
-15  pre_final_report_gate  Final report and session close
-16  final_report        Final report delivered (terminal)
+[-]13  review_docs      (auto-skipped)
+[-]14  user_verification  (auto-skipped)
+[-]15  cleanup          (auto-skipped)
+16  pre_final_report_gate  Final report and session close
+17  final_report        Final report delivered (terminal)
 ```
 
 Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"` as

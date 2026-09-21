@@ -32,6 +32,7 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 - `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs reference it. Use `/update-infrastructure` skill to keep it aligned.
 - `ops.md`: Day-to-day operations and complex procedures. Never write initial install steps here — those belong in README.md.
 - Do not duplicate content across documents — cross-reference instead.
+- Doc line limits (WARN 300 / HARD 500) and README section order are enforced at the `review_docs` step — see [coding/file-split.md](coding/file-split.md) Pattern C and [docs/readme.md](docs/readme.md).
 
 ## Progressive Disclosure (Cascade)
 

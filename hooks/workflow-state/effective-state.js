@@ -1,45 +1,14 @@
 "use strict";
-// Read-only reconciled effective-state snapshot (#1148 / #1133 / #1305 / #1681).
-//
-// Callers (bin/workflow/next-step, workflow-gate, session-start) need a single
-// view that answers "what is the status of every step, once wf-meta auto-skips,
-// speculative-skip verdicts, and on-disk completion evidence are taken into
-// account?" — computed BEFORE the inconsistency scan runs, so the scan cannot
-// false-abort on a step that evidence already resolves (#1148).
-//
-// This module NEVER writes state (Approach B: read-time derivation). State files
-// remain pure records; every consumer derives its effective view here. The caller
-// persists snapshot.resolutions via markStep only after the scan has passed, and
-// ONLY for evidence resolutions — the veto-driven stages never produce a
-// resolution entry, by design.
-//
-// ORDERING (do not reorder):
-//   1. effectiveStatus(step, raw, isWfMeta) is applied FIRST, as an input gate.
-//      A step whose effective status is `skipped` (e.g. `detail` under wf-meta)
-//      is excluded from evidence resolution entirely — otherwise a wf-meta skip
-//      could still be resolved to `complete` by evidence and bypass the approval
-//      invariant at persistence time. It is an input gate, never a post-hoc
-//      display transform.
-//   2. Veto de-skip: an approval-gated step recorded `skipped` whose skip_verdict
-//      is `veto` becomes effective-pending (#1681). Without this the veto could
-//      never un-skip the step, because nothing ever rewrites the record.
-//   3. Post-veto reset: every step after the first vetoed one becomes
-//      effective-pending regardless of its record — the work downstream of a
-//      vetoed plan stage was performed on a rejected premise.
-//   4. Evidence (+ approval, for gated steps) resolution happens LAST of the
-//      per-step stages, and is skipped entirely for steps touched by stages 2-3.
-//   5. write_code resume mask (#1665) — a SECOND PASS applied after 1-4 have
-//      settled, precisely so it can override stage 4: a `docs` resolved to
-//      complete by an artifact that predates the failing run is stale too. Its
-//      causal axis is read from the RAW `state.steps`, never from the derived
-//      `steps` built at :291, which deliberately carries no `updated_seq`.
-//      Implementation: effective-state/write-code-resume.js.
-//
-// By default resolution stops at the first step that remains neither complete nor
-// skipped — that step is the current step, and steps after it keep their recorded
-// status, so a later step's evidence can never manufacture an inconsistency the
-// scan would then abort on. opts.resolveAll lifts that cutoff for callers that
-// need a complete picture (--list rendering, commit gate, session-start display).
+// Read-only reconciled effective-state snapshot (#1148/#1133/#1305/#1681).
+// Answers "status of every step once wf-meta auto-skips, speculative-skip
+// verdicts, and on-disk evidence are applied" — computed BEFORE the
+// inconsistency scan so it cannot false-abort (#1148). NEVER writes state
+// (Approach B: read-time derivation); the caller persists only evidence
+// resolutions, and only after the scan passes. ORDERING (do not reorder):
+// 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset →
+// 4 evidence(+approval) resolution → 5 write_code resume mask (second pass,
+// overrides 4). Detail: effective-state/write-code-resume.js and the #1681/
+// #1665 suites. Resolution stops at the first unsettled step unless opts.resolveAll.
 
 const { VALID_STEPS, normalizeStateVersion, isGenuineProvenance } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
@@ -66,7 +35,7 @@ const EVIDENCE_STEPS = Object.freeze([
 // `pre_final_report_gate` is likewise excluded — a meta session still closes.
 const WF_META_AUTO_SKIP = new Set([
   "branching_complete", "detail", "write_tests", "review_tests", "write_code", "run_tests",
-  "review_security", "docs", "user_verification", "cleanup",
+  "review_security", "docs", "review_docs", "user_verification", "cleanup",
 ]);
 
 function effectiveStatus(step, raw, isWfMeta) {
@@ -96,23 +65,16 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
   return verdict.approved === true;
 }
 
-// Was `step` genuinely completed by a process that saw it happen — as opposed to
-// reconstructed by a migration or synthesized by session inheritance?
-//
-// Since #1733 this is a RECORDED FACT, not a heuristic: the latest `step_status`
-// event for the step must say `complete`, and its `provenance` must not be
-// `backfilled`. `observed` (a live markStep) and `declared` (a RESET_FROM force
-// -complete) both stay genuine, preserving the pre-#1733 verdict.
-//
-// The stream is scanned rather than the folded projection on purpose: the
-// projection exposes only the FINAL status, never the provenance of the event
-// that produced it. The stream is taken off the state object the caller already
-// holds — re-reading it by `state.session_id` would answer about a DIFFERENT
-// session whenever the two disagree, which is exactly the case for a migrated
-// fixture or a transcript-recovered donor whose file name is the canonical id.
-// The events actually recorded for this state, or null when none can be read.
-// Shared by every predicate that must answer about what was RECORDED rather
-// than about what the projection derived (CPR-SSOT).
+// recordedEventsOf(state) → the events actually recorded for this state, or
+// null when none can be read. Shared by every predicate answering about what
+// was RECORDED, not what the projection derived (CPR-SSOT). The stream is read
+// off the state object the caller holds, never re-read by state.session_id — a
+// migrated fixture or transcript-recovered donor has a file name that is the
+// canonical id but a different in-memory stream. Related: hasGenuineRecorded
+// Complete (below) treats only the latest step_status=complete with a non-
+// backfilled provenance as genuine (observed/declared stay genuine), a RECORDED
+// fact scanned from the stream since #1733 — the folded projection exposes only
+// final status, never provenance.
 function recordedEventsOf(state) {
   if (!state || typeof state !== "object") return null;
   if (Array.isArray(state.events)) return state.events;
@@ -157,24 +119,15 @@ function hasGenuineRecordedComplete(state, step) {
   }
 }
 
-// evaluateResumability(state) → { eligible: boolean, reason: string|null }
-//
-// SSOT for "is this state usable by a session that continues it?" (#1305).
-//
-// WHY the shape changed: pre-#1305 this also returned scan:"stop"/"continue",
-// because the donor was picked by scanning a whole directory of transcripts and
-// the verdict had to steer that walk. Donor selection is now keyed on lineage
-// (hooks/workflow-state/inheritance.js), and the nearest ancestor that holds
-// state is the SOLE decision-maker — there is no walk left to steer, so the
-// field is gone.
-//
-// S2 (review_security complete) was REMOVED for the same reason: it existed as a
-// staleness boundary against an UNRELATED session grabbing late-stage work.
-// With descent proven, the heir IS that session's continuation, and refusing to
-// let it resume its own verified work protects nobody.
-//
-// Fail-open: any unexpected error yields eligible (inheritance is a convenience,
-// never a safety gate).
+// evaluateResumability(state) → { eligible, reason }. SSOT for "is this state
+// usable by a session that continues it?" (#1305). Pre-#1305 it also returned
+// scan:"stop"/"continue" to steer a directory walk for donor selection; that is
+// now keyed on lineage (hooks/workflow-state/inheritance.js) with the nearest
+// state-holding ancestor as sole decider, so the field is gone. S2
+// (review_security complete) was likewise REMOVED: it guarded against an
+// unrelated session grabbing late-stage work, but with descent proven the heir
+// IS this session's continuation. Fail-open: any unexpected error yields
+// eligible (inheritance is a convenience, never a safety gate).
 function evaluateResumability(state) {
   try {
     const steps = (state && state.steps) || {};

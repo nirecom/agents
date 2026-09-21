@@ -26,8 +26,8 @@ the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook 
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 
 The same state machine runs in several modes depending on the work. **WF-CODE** is the standard
-implementation flow with all 16 steps active; **WF-META** is a planning-only variant for
-meta-label issues that auto-skips the implementation steps (7–14). The full per-mode step lists
+implementation flow with all 17 steps active; **WF-META** is a planning-only variant for
+meta-label issues that auto-skips the implementation steps (7–15). The full per-mode step lists
 live in [docs/architecture/claude-code/workflow.md](docs/architecture/claude-code/workflow.md#workflow-types-in-next-step---list).
 
 ```mermaid
@@ -83,8 +83,9 @@ flowchart TD
     end
 
     S6a & S6b & SR --> S7["12 · docs"]
-    S7 --> Gate["pre-merge audit"]
-    Gate --> UV["13 · user verify"]
+    S7 --> S7d["13 · review-docs<br/>skippable"]
+    S7d --> Gate["pre-merge audit"]
+    Gate --> UV["14 · user verify"]
     UV --> Push["commit & push"]
 
     Push --> Clean{worktree or main?}

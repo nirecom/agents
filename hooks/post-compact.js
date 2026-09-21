@@ -17,6 +17,7 @@ const WORKFLOW_STEPS = [
   "write_tests",
   "review_security",
   "docs",
+  "review_docs",
   "user_verification",
   "cleanup",
 ];

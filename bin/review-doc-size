@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Documentation file size review for Markdown docs.
+# Usage: review-doc-size [--staged | --all]
+#
+# --staged: check only .md files staged in the git index. Line counts are read
+# from the staged blob via `git show :./<file>` (not the working tree), so a
+# commit that performs a split passes. Exits 1 when any staged doc exceeds the
+# HARD limit (>500 lines). Advisory WARN band is >300, <=500 lines.
+# --all: walk the working tree; advisory only, always exits 0.
+# The two modes are mutually exclusive; no mode selected is a SKIP (exit 0).
+#
+# Excluded from both modes: history.md, CHANGELOG.md, and any _archive/_archived
+# path — append-only / stream records that CPR-SSOT exempts from the size cap.
+#
+# Thresholds mirror rules/coding/file-split.md Pattern C.
+
+set -uo pipefail
+
+HARD_LIMIT=500
+WARN_LIMIT=300
+HARD_HIT=0
+HDR="## Doc-size Review"
+
+emit_skip() {
+  printf '%s\n' "$HDR: SKIPPED — $1"
+  exit 0
+}
+
+ALL_SCAN=0
+STAGED_ONLY=0
+BAD_ARG=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --staged) STAGED_ONLY=1; shift ;;
+    *) BAD_ARG=1; shift ;;
+  esac
+done
+
+[[ "$BAD_ARG" -eq 1 ]] && emit_skip "unrecognized argument"
+if [[ "$ALL_SCAN" -eq 1 && "$STAGED_ONLY" -eq 1 ]]; then
+  emit_skip "--staged and --all are mutually exclusive"
+fi
+if [[ "$ALL_SCAN" -eq 0 && "$STAGED_ONLY" -eq 0 ]]; then
+  emit_skip "no mode selected (use --staged or --all)"
+fi
+
+# .md only; exclude append-only / stream records (history, CHANGELOG, _archive).
+is_doc_target() {
+  local p="$1"
+  case "$p" in
+    *.md) ;;
+    *) return 1 ;;
+  esac
+  case "/$p" in
+    */_archive/*|*/_archived/*) return 1 ;;
+    */history.md|*/CHANGELOG.md) return 1 ;;
+  esac
+  return 0
+}
+
+count_lines_index() {
+  git show ":./${1}" 2>/dev/null | wc -l | tr -d ' '
+}
+
+count_lines_worktree() {
+  wc -l < "${1}" | tr -d ' '
+}
+
+report_one() {
+  local file="$1" lines="$2"
+  if (( lines > HARD_LIMIT )); then
+    echo "  HARD: $file — $lines lines (exceeds ${HARD_LIMIT}-line hard limit; split or trim — see rules/coding/file-split.md Pattern C)"
+    HARD_HIT=1
+  elif (( lines > WARN_LIMIT )); then
+    echo "  WARN: $file — $lines lines (exceeds ${WARN_LIMIT}-line warn threshold)"
+  else
+    echo "  INFO: $file — $lines lines"
+  fi
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  echo "$HDR: PERFORMED (all-scan mode)"
+  echo ""
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    is_doc_target "$file" || continue
+    [[ -f "$file" ]] || continue
+    report_one "$file" "$(count_lines_worktree "$file")"
+  done < <(find . -type f -name '*.md' \
+      -not -path '*/node_modules/*' \
+      -not -path '*/.git/*' 2>/dev/null | sed 's|^\./||' | sort || true)
+  echo ""
+  echo "  WARN/INFO are advisory in all-scan mode."
+  exit 0
+fi
+
+# --- staged mode ---
+echo "$HDR: PERFORMED (staged mode)"
+echo ""
+FOUND=0
+while IFS= read -r -d '' file; do
+  is_doc_target "$file" || continue
+  git cat-file -e ":./$file" 2>/dev/null || continue
+  FOUND=1
+  report_one "$file" "$(count_lines_index "$file")"
+done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+echo ""
+if [[ "$FOUND" -eq 0 ]]; then
+  echo "  (no staged docs to review)"
+fi
+echo "  HARD findings block the commit (exit 1). WARN/INFO are advisory."
+
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

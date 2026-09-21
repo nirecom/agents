@@ -21,6 +21,11 @@ run_wf_meta_tests() {
   row="$(printf '%s\n' "$list_out" | grep -E 'write_code' | head -n1 || true)"
   check_contains "D1: wf-meta renders write_code as skipped [-]" "[-]" "$row"
 
+  # #2340 CPR-ORTH sibling: review_docs is worktree-dependent and joins
+  # WF_META_AUTO_SKIP, so a planning-only session renders it skipped too.
+  row_rd="$(printf '%s\n' "$list_out" | grep -E 'review_docs' | head -n1 || true)"
+  check_contains "D6: wf-meta renders review_docs as skipped [-]" "[-]" "$row_rd"
+
   ACTION=""; NEXT_SKILL="SENTINEL"; NEXT_HINT=""; REASON=""
   out="$(run_next_step --session d-meta 2>/dev/null || true)"
   eval "$out" 2>/dev/null || true

@@ -7,15 +7,11 @@
 # The policy SSOT (hooks/lib/rules-injection-policy.js) is read AS DATA by text-matching its literal declarations — never require()d or executed, since it's contributor-editable and evaluating it from the harness would run arbitrary code on every developer's machine (same contract as bin/check-on-demand-rules.sh's P11 case in tests/bin-check-on-demand-rules.sh).
 # Fail-closed: this group never SKIPs. If the rules/ rename has not landed the contract FAILS naming the missing path — a checkout without the conversion must not pass CI with zero assertions run. Likewise an empty or unparseable SSOT array FAILS loudly instead of reducing T1-B/T1-D to zero assertions.
 
-# ---------------------------------------------------------------------------
-# Expected CONDITIONAL rules (T1-A):
-#   <repo-relative path>|<pattern>|<pattern>|...
-# Patterns are the verbatim, ordered values. This is the pinned contract — any
-# addition, removal, reorder, or edit of a pattern fails.
-# ---------------------------------------------------------------------------
+# Expected CONDITIONAL rules (T1-A): <repo-relative path>|<pattern>|...
+# Verbatim, ordered values — the pinned contract; any add/remove/reorder/edit fails.
 EXPECTED_PATHS_SPEC="$(cat <<'SPEC'
 rules/claude-config-source.md|**/docker-compose.yml|**/docker-compose.yaml|**/docker-compose.*.yml|**/docker-compose.*.yaml|**/compose.yml|**/compose.yaml|**/Dockerfile|**/Dockerfile.*|**/.env|**/.env.*
-rules/coding/file-split.md|**/*.js|**/*.ts|**/*.py|**/*.sh|rules/**/*.md|skills/**/SKILL.md|agents/**/*.md
+rules/coding/file-split.md|**/*.js|**/*.ts|**/*.py|**/*.sh|rules/**/*.md|skills/**/SKILL.md|agents/**/*.md|docs/**/*.md|README.md
 rules/coding/nodejs.md|**/*.js|**/*.ts|**/*.mjs|**/*.cjs|**/package.json|**/.nvmrc|**/.node-version
 rules/coding/python.md|**/*.py|**/pyproject.toml|**/uv.lock|**/requirements.txt|**/setup.py|**/setup.cfg
 rules/docs/architecture.md|docs/architecture.md|docs/architecture/**/*.md

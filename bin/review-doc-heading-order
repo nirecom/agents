@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# README section-order review. Usage: review-doc-heading-order [--staged | --all]
+#
+# The canonical section order and heading-alias map is the SSOT block in
+# rules/docs/readme.md (between the readme-section-order:start/end markers),
+# resolved from THIS tool's own location — never from the repo under review, so
+# the gate is identical everywhere. Each README H2 heading is normalized and
+# mapped to its class; the class ranks must be strictly increasing in document
+# order. An unknown heading (no alias) is skipped, not a violation.
+#
+# --staged: judge the staged README.md blob (git index); exit 1 on an inverted
+# order. --all: advisory, always exits 0. Modes are mutually exclusive; no mode
+# and a README absent from the staged diff are both SKIPs (exit 0).
+
+set -uo pipefail
+
+HDR="## Doc-heading-order Review"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SSOT="$SCRIPT_DIR/../rules/docs/readme.md"
+
+emit_skip() {
+  printf '%s\n' "$HDR: SKIPPED — $1"
+  exit 0
+}
+
+ALL_SCAN=0
+STAGED_ONLY=0
+BAD_ARG=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --staged) STAGED_ONLY=1; shift ;;
+    *) BAD_ARG=1; shift ;;
+  esac
+done
+
+[[ "$BAD_ARG" -eq 1 ]] && emit_skip "unrecognized argument"
+if [[ "$ALL_SCAN" -eq 1 && "$STAGED_ONLY" -eq 1 ]]; then
+  emit_skip "--staged and --all are mutually exclusive"
+fi
+if [[ "$ALL_SCAN" -eq 0 && "$STAGED_ONLY" -eq 0 ]]; then
+  emit_skip "no mode selected (use --staged or --all)"
+fi
+
+# --all is advisory: it never blocks, so short-circuit before any parsing.
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  printf '%s\n' "$HDR: PERFORMED (all-scan mode; advisory)"
+  exit 0
+fi
+
+[[ -f "$SSOT" ]] || emit_skip "SSOT rules/docs/readme.md not found"
+
+# --- parse the SSOT alias map into ALIAS_KEYS[] / ALIAS_RANK[] ---
+# One entry per alias: the normalized alias string and its class rank (order of
+# appearance in the block = importance order).
+ALIAS_KEYS=()
+ALIAS_RANK=()
+rank=0
+in_block=0
+while IFS= read -r line; do
+  case "$line" in
+    *readme-section-order:start*) in_block=1; continue ;;
+    *readme-section-order:end*) break ;;
+  esac
+  [[ "$in_block" -eq 1 ]] || continue
+  # Expect: <!-- <n> <class>: alias, alias, ... -->
+  body="${line#*<!--}"
+  body="${body%-->*}"
+  case "$body" in
+    *:*) ;;
+    *) continue ;;
+  esac
+  aliases="${body#*:}"
+  rank=$((rank + 1))
+  IFS=',' read -r -a parts <<< "$aliases"
+  for a in "${parts[@]}"; do
+    # trim + lowercase + collapse internal whitespace
+    a="$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ')"
+    a="${a# }"; a="${a% }"
+    [[ -n "$a" ]] || continue
+    ALIAS_KEYS+=("$a")
+    ALIAS_RANK+=("$rank")
+  done
+done < "$SSOT"
+
+if [[ "${#ALIAS_KEYS[@]}" -eq 0 ]]; then
+  emit_skip "SSOT readme-section-order block is empty or malformed"
+fi
+
+# rank_of <normalized-heading> — echo the class rank, or empty if unknown.
+# Exact alias match first; then substring (alias contained in the heading),
+# longest alias wins to avoid a short alias shadowing a more specific one.
+rank_of() {
+  local h="$1" i best_rank="" best_len=-1
+  for ((i = 0; i < ${#ALIAS_KEYS[@]}; i++)); do
+    if [[ "$h" == "${ALIAS_KEYS[$i]}" ]]; then
+      printf '%s' "${ALIAS_RANK[$i]}"; return 0
+    fi
+  done
+  for ((i = 0; i < ${#ALIAS_KEYS[@]}; i++)); do
+    local a="${ALIAS_KEYS[$i]}"
+    if [[ "$h" == *"$a"* ]] && (( ${#a} > best_len )); then
+      best_len=${#a}
+      best_rank="${ALIAS_RANK[$i]}"
+    fi
+  done
+  printf '%s' "$best_rank"
+}
+
+# --- README must be part of the staged change ---
+readme_staged=0
+while IFS= read -r -d '' f; do
+  [[ "$f" == "README.md" ]] && readme_staged=1
+done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+
+if [[ "$readme_staged" -eq 0 ]]; then
+  emit_skip "README.md not in the staged change"
+fi
+
+# --- walk staged README H2 headings, check strictly-increasing class rank ---
+printf '%s\n' "$HDR: PERFORMED (staged mode)"
+prev_rank=0
+violation=0
+while IFS= read -r line; do
+  case "$line" in
+    "## "*) ;;
+    *) continue ;;
+  esac
+  heading="${line#\#\# }"
+  norm="$(printf '%s' "$heading" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ')"
+  norm="${norm# }"; norm="${norm% }"
+  r="$(rank_of "$norm")"
+  [[ -n "$r" ]] || continue          # unknown heading → skipped
+  if (( r <= prev_rank )); then
+    echo "  BLOCK: section '$heading' (rank $r) is out of order — must follow the canonical order in rules/docs/readme.md"
+    violation=1
+  fi
+  prev_rank="$r"
+done < <(git show ":./README.md" 2>/dev/null || true)
+
+[[ "$violation" -eq 1 ]] && exit 1 || exit 0

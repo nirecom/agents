@@ -1,30 +1,13 @@
 #!/usr/bin/env node
-// SSOT for workflow sentinel echo recognition (regex constants + isSentinel).
-// Required by:
-//   - workflow-mark.js (PostToolUse): dispatches per-sentinel state updates
-//   - workflow-gate.js (PreToolUse):  blocks <<WORKFLOW_*>> && <other> chains
-//
-// This module exports recognition primitives only — the strict per-sentinel
-// regex constants and the isSentinel() predicate. Chain detection is NOT
-// centralized; each consumer implements it inline because the two layers
-// have intentionally different requirements:
-//
-//   - workflow-mark.js uses a naive `command.split(/\s*&&\s*/)` to dispatch
-//     each part. It applies all-or-nothing on the resulting fragments
-//     (issue #110). Behavior is left unchanged (issue #382 non-goal).
-//
-//   - workflow-gate.js uses a stricter form-aware detector: it checks for
-//     any non-sentinel residue chained via `&&` using chain-boundary anchored
-//     regexes (CHAIN_BOUNDARY_SENTINEL_*) that handle sentinel reason text
-//     containing `&&` correctly.
-//
-// Both detectors agree on the set of valid sentinels via isSentinel().
-// The asymmetry is safe because workflow-gate.js runs first: any input it
-// blocks never reaches workflow-mark.js, so the layers cannot disagree on
-// a passed-through command.
-//
-// When adding a new sentinel: define the strict DQ regex and (where applicable)
-// the LOOKSLIKE fallback, then add both tests to isSentinel().
+// SSOT for workflow sentinel echo recognition (regex constants + isSentinel/
+// isStrictSentinel). Consumers: workflow-mark.js (PostToolUse, per-sentinel
+// dispatch, naive `&&` split) and workflow-gate.js (PreToolUse, form-aware
+// chain detection via CHAIN_BOUNDARY_SENTINEL_*). Exports recognition
+// primitives only; chain detection is per-consumer and intentionally
+// asymmetric — safe because workflow-gate runs first, so any command it blocks
+// never reaches workflow-mark. Both agree on the sentinel set via isSentinel().
+// Adding a sentinel: define the strict DQ regex + LOOKSLIKE fallback, then
+// register both in isSentinel() (+ DQ in isStrictSentinel). Detail: workflow.md.
 
 "use strict";
 
@@ -55,6 +38,10 @@ const RUN_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: ([^>
 const RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED([: ].*)?>>"$/;
 const REVIEW_SECURITY_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ([^>]+)>>"$/;
 const REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED([: ].*)?>>"$/;
+// review_docs step (#2340): objective doc gates (line limits, README section
+// order). Skip carries a mandatory reason like every other _NOT_NEEDED sentinel.
+const REVIEW_DOCS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: ([^>]+)>>"$/;
+const REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
 // Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
 const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
 const CLARIFY_INTENT_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ([^>]+)>>"$/;
@@ -167,6 +154,8 @@ function isSentinel(cmd) {
     RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
+    REVIEW_DOCS_NOT_NEEDED_RE_DQ.test(cmd) ||
+    REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
@@ -225,6 +214,7 @@ function isStrictSentinel(cmd) {
     WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
     RUN_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
+    REVIEW_DOCS_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
     BRANCHING_COMPLETE_RE_DQ.test(cmd) ||
@@ -248,38 +238,14 @@ function isStrictSentinel(cmd) {
   );
 }
 
-// --- Chain-boundary form detectors (used by workflow-gate.js only) ---
-//
-// These are intentionally BROADER than any individual isSentinel() regex
-// above. They detect "anything that looks like a sentinel echo at a chain
-// boundary" rather than checking strict-vs-lookslike per category. The
-// boundary prefix `(?:^|&&\s*)` requires the echo to appear at the start of
-// the command or immediately after `&&` — this rules out sentinel-shaped
-// substrings that live inside another command's argument (e.g.
-// `printf 'echo "<<WORKFLOW_X>>"' && wc -l`), which are not real chains.
-//
-// Quote convention parity with isSentinel():
-//   - DQ form accepts all sentinel categories: [A-Za-z_]+ covers both
-//     uppercase-only names (USER_VERIFIED) and mixed-case suffix forms
-//     (MARK_STEP_docs_complete, RESET_FROM_research).
-//   - SQ form is restricted to MARK_STEP, matching MARKER_RE_SQ — no other
-//     category accepts single quotes in isSentinel(), so the detector must
-//     not accept them either (otherwise it would block chains that
-//     workflow-mark.js treats as non-sentinel, creating new asymmetry).
-//
-// Notes:
-//   - No `/g` flag — used with `.test()` only, never with `.replace()`. This
-//     avoids the stateful lastIndex hazard.
-//   - The pattern is exported for workflow-gate.js. workflow-mark.js does NOT
-//     use it; it splits naively and dispatches per the strict isSentinel()
-//     regexes.
-//
-// Character class [A-Za-z_]+ covers all current sentinel name forms:
-//   - Uppercase + underscore:        <<WORKFLOW_USER_VERIFIED>>
-//   - Mixed case (suffix lowercase): <<WORKFLOW_MARK_STEP_docs_complete>>,
-//                                    <<WORKFLOW_RESET_FROM_research>>
-// Using [A-Z_]+ alone would miss these mixed-case forms (e.g. the core
-// silent-failure case `echo "<<WORKFLOW_MARK_STEP_docs_complete>>" && rm /tmp/x`).
+// --- Chain-boundary form detectors (workflow-gate.js only) ---
+// Intentionally BROADER than any per-category isSentinel() regex: they detect a
+// sentinel-shaped echo at a chain boundary `(?:^|&&\s*)` (start or right after
+// `&&`), so a sentinel-shaped substring inside another command's argument is not
+// a false chain. DQ accepts all categories ([A-Za-z_]+ covers UPPER and
+// mixed-case suffix names); SQ is MARK_STEP-only, matching MARKER_RE_SQ. No `/g`
+// flag (used with .test() only). Exported for workflow-gate.js; workflow-mark.js
+// splits naively instead. Detail: docs/architecture/claude-code/workflow.md.
 const CHAIN_BOUNDARY_SENTINEL_DQ_RE =
   /(?:^|&&\s*)echo\s+"<<WORKFLOW_[A-Za-z_]+(?:[: ][^>]*)?>>"/;
 const CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE =
@@ -302,6 +268,7 @@ module.exports = {
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   RUN_TESTS_NOT_NEEDED_RE_DQ, RUN_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
+  REVIEW_DOCS_NOT_NEEDED_RE_DQ, REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   DOCS_NOT_NEEDED_LOOKSLIKE_RE,
   CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
   CLARIFY_INTENT_COMPLETE_RE_DQ,

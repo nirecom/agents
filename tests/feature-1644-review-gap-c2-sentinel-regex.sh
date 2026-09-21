@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/sentinel-patterns.js
 # Tags: tl1, workflow, run-tests, sentinel-patterns, regex, table-driven, mutation-probe, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C2 (HIGH) — table-driven coverage for the NEW
-# RUN_TESTS_NOT_NEEDED regex constants and for the two predicates that consume
-# them (isSentinel, isStrictSentinel). Both consumers matter and disagree by
-# design: isSentinel() decides whether workflow-mark dispatches at all (so the
-# LOOKSLIKE fallback must catch malformed forms and produce a diagnostic), while
-# isStrictSentinel() is workflow-gate's early-approve door (so it must accept
-# ONLY the exact, unchained, unredirected echo). A regression that let the strict
-# door accept a chained form would auto-approve arbitrary appended commands.
-#
-# Every row asserts all four observables at once (dq / look / sent / strict), so
-# a loosening that shifts a case from one predicate to another is caught even
-# when the coarse "is it a sentinel" answer is unchanged.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code's permission layer matches the same literal before the
-#   hook ever runs (settings.json permissions.allow is a separate matcher and is
-#   pinned statically in tests/feature-1644-run-tests-registration-sites.sh).
-# - Whether workflow-mark.js's naive `&&` splitter feeds these regexes the
-#   fragments this table assumes — that seam is covered by
-#   tests/feature-1644-review-gap-c1-run-tests-skip.sh and the main-workflow
-#   sentinel suites.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# #1644 review gap C2 (HIGH) — table-driven coverage of the NEW *_NOT_NEEDED regex
+# constants and their two consumers: isSentinel() (workflow-mark dispatch; LOOKSLIKE
+# must catch malformed forms) and isStrictSentinel() (workflow-gate early-approve;
+# accepts ONLY the exact unchained unredirected echo). Each row asserts all four
+# observables (dq/look/sent/strict) so a shift between predicates is caught.
+# TL3 gap: the permission-layer literal match (settings.json permissions.allow) and
+# workflow-mark's `&&` splitter seam are out of scope — pinned in the #1644 sibling
+# suites; checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 
 set -uo pipefail
 
@@ -191,6 +175,55 @@ kill-mandatory-reason-empty|echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: >>"|dq0-look1
 # kills: relaxing the literal name (e.g. WORKFLOW_RUN_TESTS_NOT_NEEDED[A-Z_]*),
 #        which would collide the run-tests skip with any future sibling sentinel
 kill-name-suffix|echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED_SOON: reason>>"|dq0-look0
+TABLE
+
+echo ""
+echo "=== C2-C: REVIEW_DOCS_NOT_NEEDED form table (#2340) ==="
+# CPR-ORTH sibling of the run-tests skip: a docs-only staged set needing no
+# README/heading review opens review_docs via its own sentinel. The dq/look
+# columns come from REVIEW_DOCS_NOT_NEEDED_RE_DQ / _LOOKSLIKE_RE, so this section
+# swaps the probe's constants instead of reusing the run-tests probe.
+PROBE_RD="$TMPDIR_BASE/probe-review-docs.js"
+cat > "$PROBE_RD" <<'PROBE_JS'
+"use strict";
+const P = require(process.env.PATTERNS_MODULE);
+const cmd = process.env.PROBE_CMD;
+const b = (v) => (v ? "1" : "0");
+process.stdout.write(
+  "dq" + b(P.REVIEW_DOCS_NOT_NEEDED_RE_DQ.test(cmd)) +
+  "-look" + b(P.REVIEW_DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd)) +
+  "-sent" + b(P.isSentinel(cmd)) +
+  "-strict" + b(P.isStrictSentinel(cmd))
+);
+PROBE_JS
+
+eval_subject_rd() {
+  local input="$1"
+  input="${input//\{SP\}/ }"
+  input="${input//\{PIPE\}/|}"
+  PROBE_CMD="$input" run_with_timeout node "$PROBE_RD" 2>/dev/null || echo "PROBE_FAIL"
+}
+
+while IFS='|' read -r name input want; do
+  [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+  name="${name//[[:space:]]/}"
+  want="${want//[[:space:]]/}"
+  got="$(eval_subject_rd "$input")"
+  assert_eq "$name" "$want" "$got"
+done <<'TABLE'
+# valid strict form: exact, unchained, double-quoted echo
+rd-valid-strict|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: staged set is docs only>>"|dq1-look1-sent1-strict1
+rd-valid-min-reason|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: abc>>"|dq1-look1-sent1-strict1
+# degenerate reason: a sentinel, refused by the strict early-approve door
+rd-empty-reason|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: >>"|dq0-look1-sent1-strict0
+rd-bare-no-reason|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED>>"|dq0-look1-sent1-strict0
+# residue appended after the sentinel (chained / redirected)
+rd-and-chain|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: reason>>" && ls /tmp/x|dq0-look0-sent0-strict0
+rd-trailing-redirect|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: reason>>" > /tmp/x|dq0-look0-sent0-strict0
+rd-and-chain-ends-in-sentinel|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: r1>>" && echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: r2>>"|dq0-look1-sent1-strict0
+# sibling run-tests sentinel is NOT absorbed by the review-docs pattern
+rd-sibling-run-tests|echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: reason>>"|dq0-look0-sent1-strict1
+rd-name-suffix|echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED_SOON: reason>>"|dq0-look0-sent0-strict0
 TABLE
 
 echo ""
