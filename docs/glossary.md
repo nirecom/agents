@@ -104,20 +104,8 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 ### DISCRIM
 
 - **Full name**: Concern discriminator (ledger field 7)
-- **Definition**: An 8-hex prefix of SHA-256 over the case-folded, token-sorted concern text, frozen at first sight. Serves as the durable key for the concern carrier across `cleanup_ledger` deletions and `cl_begin_cycle` archive-clears. Equal DISCRIMs mean the reviewer is describing the same thing; a rewording produces a new DISCRIM by design.
-- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
-
-### rejected (concern state)
-
-- **Full name**: Rejected concern state
-- **Definition**: A terminal STATE set via `concern-ledger reject --id C<N> --reason R` during triage. `reduce` never reopens a rejected entry; B2 binding blocks a re-mint within the same cycle. The rejection reason is not stored on the ledger row (11 fields stay fixed) — it lives in the concern carrier.
-- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
-
-### concern-carrier
-
-- **Full name**: Concern carrier file
-- **Definition**: The `<session-id>-<format>-concern-carrier.md` file — an append-only transport for concerns across rounds, cycles, and `cleanup_ledger`. Keyed on DISCRIM, not on `C<N>`. Preserves only rejection lines durably; the open section is re-derived from the live ledger each round. Exported as `CTX_CONCERNS_LOG` to give the codex reviewer rejection history as a reference prompt.
-- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md), [skills/_shared/concern-ledger.md](../skills/_shared/concern-ledger.md)
+- **Definition**: An 8-hex prefix of SHA-256 over the case-folded, token-sorted concern text, frozen at first sight and recomputed deterministically from the text alone. The same concern maps to the same DISCRIM regardless of which cycle or session assigned it an ID.
+- **Related**: [docs/architecture/concern-ledger.md](architecture/concern-ledger.md)
 
 ## NFR injection and complexity routing
 
