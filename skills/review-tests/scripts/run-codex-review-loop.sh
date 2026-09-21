@@ -95,7 +95,7 @@ if [[ -f "$TERMINAL_FILE" ]]; then
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-tests] exit 6 終端後にテストが変化しましたが、残存 HIGH が未 accept です。\n  accept マーカー: %s\n  作成: touch "%s"\n  または sentinel: WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED（どちらも等価な accept 手段）。\n  いずれかで残存 HIGH を明示 accept してから再実行してください。\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    printf '[review-tests] Tests changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (both are equivalent accept paths).\n  Accept the residual HIGH by one of the above, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
     exit "$EXIT_EXIT6_UNACCEPTED"
   fi
   # Fingerprint mismatch = tests were re-edited = legitimate restart → auto-clear.

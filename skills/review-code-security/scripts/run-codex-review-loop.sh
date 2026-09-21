@@ -64,7 +64,7 @@ if [[ "$PRESTAGED_RERUN" -eq 0 && -f "$TERMINAL_FILE" ]]; then
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-code-security] exit 6 終端後にコードが変化しましたが、残存 HIGH が未 accept です。\n  accept マーカー: %s\n  作成: touch "%s"\n  または: AskUserQuestion で残存 HIGH を明示 accept してから再実行してください。\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    printf '[review-code-security] Code changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: explicitly accept the residual HIGH via AskUserQuestion, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
     exit "$EXIT_EXIT6_UNACCEPTED"
   fi
   # Fingerprint mismatch = code was re-edited = a legitimate new review → auto-clear.
