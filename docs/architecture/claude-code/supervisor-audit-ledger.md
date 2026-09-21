@@ -148,7 +148,8 @@ sentinel is allowed.
 |---|---|---|
 | BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via `bin/supervisor-record-block-override`. |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
-| key uncomputable | — | treat as unjudged; arm a full re-audit (fail-closed). |
+| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the last terminal run is non-BLOCK and no later BLOCK exists (`selfRecovering`); arm a full re-audit otherwise. `recurrence-patterns` is excluded from the arm set because its `input_key` is always null here (infinite-arm guard, #2323). |
+| key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | **approve** when `selfRecovering` AND `trigger_input_keys.TR5` of the last terminal run matches the current `input_version`; arm a full re-audit (excluding `recurrence-patterns`) otherwise. Fail-closed: absent, null, or non-string stored key arms a re-audit (#2360). |
 
 **Stage 2 — diff-driven re-audit (including plan-artifact freshness).** Judged on
 two axes: (α) does code-side `input_version` match the last terminal run, and (β)

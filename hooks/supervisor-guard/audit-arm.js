@@ -55,11 +55,21 @@ function coalesce(candidates) {
   return { trIds, transitions, causes, ownAlways, maxEdgeRank, levelPresent };
 }
 
+// Exclude recurrence-patterns when freshness_key is null (artifact-side or code-
+// side): its inputKeyForSubCheck returns null, isSubCheckSettled is always false
+// (fail-closed), and including it creates an infinite re-arm loop (#2360).
+function filterNullKeySubChecks(ids, freshness) {
+  if (freshness && freshness.freshness_key == null) {
+    return ids.filter((id) => id !== "recurrence-patterns");
+  }
+  return ids;
+}
+
 // The coalesced judgment set: every edge trigger's own sub_checks (always), plus
 // every other not-yet-settled sub-check inside the earliest_tr window.
 function buildJudgmentSet(audit, coalesced, freshness, planSessionId, plansDir) {
   const { ownAlways, maxEdgeRank, levelPresent } = coalesced;
-  return ALL_SUB_CHECK_IDS.filter((id) => {
+  return filterNullKeySubChecks(ALL_SUB_CHECK_IDS, freshness).filter((id) => {
     if (ownAlways.has(id)) return true;
     const spec = SUB_CHECKS[id];
     if (!spec) return false;
