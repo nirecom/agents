@@ -137,7 +137,13 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 
 - **Full name**: Rust Token Killer (RTK)
 - **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage. Set `RTK=on` in `.env` to enable; off by default.
-- **Related**: [github.com/rtk-ai/rtk](https://github.com/rtk-ai/rtk)
+- **Related**: [docs/architecture/rtk.md](architecture/rtk.md)
+
+### RTK_AUDIT
+
+- **Full name**: RTK Audit Toggle
+- **Definition**: `.env` variable (`RTK_AUDIT=on|off`, default `off`). When `on`, guard rejections are logged to `~/.agents/logs/rtk-guard-audit.log`.
+- **Related**: [docs/architecture/rtk.md](architecture/rtk.md)
 
 ## Miscellaneous
 
