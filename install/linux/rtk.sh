@@ -1,5 +1,6 @@
 #!/bin/bash
-# rtk.sh - Install RTK (Rust Token Killer) and deploy its config when RTK is on
+# rtk.sh - Install RTK (Rust Token Killer) when RTK is on; validate with rtk config,
+# migrate only invalid config via rtk config --create.
 export SYSTEM_OPS_APPROVED=1
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,13 +20,6 @@ bash "$AGENTS_ROOT/bin/get-config-var" --is-off RTK off >/dev/null 2>&1 || _rtk_
 if [ "$_rtk_rc" -ne 1 ]; then
     printf "${C_GRAY}RTK is off (default).${C_RESET}\n"
     exit 0
-fi
-
-# Deploy config.toml first, before any binary check. Non-destructive/idempotent.
-if command -v node >/dev/null 2>&1; then
-    node "$AGENTS_ROOT/install/lib/rtk-config-deploy.js" </dev/null || true
-else
-    printf "${C_YELLOW}node not found. RTK config deploy skipped.${C_RESET}\n" >&2
 fi
 
 # Linux: RTK ships through Homebrew — install brew if missing, then load it.
@@ -56,8 +50,14 @@ else
     printf "${C_GREEN}RTK installed.${C_RESET}\n"
 fi
 
-# Non-destructive verification: a failure is a warning, never fatal.
-if command -v rtk >/dev/null 2>&1 && ! rtk config >/dev/null 2>&1; then
-    printf "${C_YELLOW}rtk config verification failed (non-fatal).${C_RESET}\n" >&2
+# Validate config via the RTK binary; migrate only an existing-but-invalid config.
+# rtk config exits 0 when the config is absent/empty (built-in defaults) or valid,
+# and non-zero only when a config exists but is unparseable — the sole case that
+# warrants 'rtk config --create' to migrate to RTK's current default.
+if command -v rtk >/dev/null 2>&1; then
+    if ! rtk config >/dev/null 2>&1; then
+        echo "Existing RTK config is invalid; migrating via 'rtk config --create'..."
+        rtk config --create >/dev/null 2>&1 || printf "${C_YELLOW}rtk config --create failed (non-fatal).${C_RESET}\n" >&2
+    fi
 fi
 exit 0
