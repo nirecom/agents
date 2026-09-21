@@ -82,10 +82,17 @@ require_module() {
 }
 
 # git doc-repo fixture builders
+# REPO_SEQ_FILE persists the counter across command-substitution subshells so
+# each $(new_doc_repo) call gets a unique directory (not repo-1 every time).
 REPO_SEQ=0
+REPO_SEQ_FILE="$TMPDIR_BASE/.repo_seq"
+printf '0' > "$REPO_SEQ_FILE"
 new_doc_repo() {
-  REPO_SEQ=$((REPO_SEQ + 1))
-  local repo="$TMPDIR_BASE/repo-$REPO_SEQ"
+  local seq
+  seq=$(( $(cat "$REPO_SEQ_FILE") + 1 ))
+  printf '%d' "$seq" > "$REPO_SEQ_FILE"
+  REPO_SEQ=$seq
+  local repo="$TMPDIR_BASE/repo-$seq"
   mkdir -p "$repo"
   git init -q "$repo" >/dev/null 2>&1
   git -C "$repo" config core.hooksPath /dev/null
@@ -93,7 +100,7 @@ new_doc_repo() {
   git -C "$repo" config user.name "test"
   printf 'baseline\n' > "$repo/.seed"
   git -C "$repo" add .seed >/dev/null 2>&1
-  git -C "$repo" commit -q -m baseline
+  git -C "$repo" commit -q -m baseline >/dev/null 2>&1
   printf '%s' "$repo"
 }
 
