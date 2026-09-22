@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-worktree-end-skill-gate2-static.sh
 # Tests: skills/worktree-end/SKILL.md
-# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific
+# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge
 #
 # Static contract test for Gate 2 (worktree-end pre-flight).
 # WE-2.5 was renumbered to WE-3 (and WE-3..WE-21 shifted to WE-4..WE-22) in #971.
@@ -122,12 +122,74 @@ test_5_ordering() {
     fi
 }
 
+# ============================================================================
+# GitLab forge documentation (#2308). worktree-end must document the glab MR
+# path alongside the gh PR path. Static presence + CPR-ORTH pairing assertions.
+# ============================================================================
+
+# Test 6: gitlab-remote tool preflight documents `glab --version` and detects
+# the forge via bin/detect-forge-type --field type.
+test_6_gitlab_tool_preflight() {
+    if grep -qF 'glab --version' "$SKILL_MD" \
+        && grep -qF 'bin/detect-forge-type' "$SKILL_MD" \
+        && grep -qF -- '--field type' "$SKILL_MD"; then
+        pass "6: gitlab tool preflight documents glab --version + forge detection"
+    else
+        fail "6: missing glab --version / detect-forge-type preflight"
+    fi
+}
+
+# Test 7: MR-create path documents `glab mr view` reuse and `glab mr create`.
+test_7_gitlab_mr_create() {
+    if grep -qF 'glab mr view' "$SKILL_MD" \
+        && grep -qF 'glab mr create' "$SKILL_MD"; then
+        pass "7: documents glab mr view (reuse) and glab mr create"
+    else
+        fail "7: missing glab mr view / glab mr create"
+    fi
+}
+
+# Test 8: PR number is read from the MR's `.iid` via `glab mr view --output json`.
+test_8_gitlab_iid_readback() {
+    if grep -qF 'glab mr view --output json' "$SKILL_MD" \
+        && grep -qF '.iid' "$SKILL_MD"; then
+        pass "8: PR number read from glab mr view --output json .iid"
+    else
+        fail "8: missing .iid readback from glab mr view --output json"
+    fi
+}
+
+# Test 9: merge path documents the gitlab squash-merge with source-branch removal.
+test_9_gitlab_mr_merge() {
+    if grep -qF 'glab mr merge --squash --remove-source-branch' "$SKILL_MD"; then
+        pass "9: documents glab mr merge --squash --remove-source-branch"
+    else
+        fail "9: missing glab mr merge --squash --remove-source-branch"
+    fi
+}
+
+# Test 10 (CPR-ORTH): the gh PR counterparts of the glab paths remain documented,
+# proving both forges are covered — neither branch was dropped for the other.
+test_10_github_orth_pair() {
+    if grep -qF 'gh --version' "$SKILL_MD" \
+        && grep -qF 'gh pr merge --squash --delete-branch' "$SKILL_MD"; then
+        pass "10: github PR counterparts (gh --version, gh pr merge) still documented"
+    else
+        fail "10: github ORTH counterparts missing"
+    fi
+}
+
 run_all() {
     test_1_we3_heading
     test_2_cli_literal_in_we3_section
     test_3_both_off_modes_in_we3
     test_4_rules_honor_line
     test_5_ordering
+    test_6_gitlab_tool_preflight
+    test_7_gitlab_mr_create
+    test_8_gitlab_iid_readback
+    test_9_gitlab_mr_merge
+    test_10_github_orth_pair
 }
 
 run_all

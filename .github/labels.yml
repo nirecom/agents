@@ -22,6 +22,14 @@
   color: "e4763e"
   description: "Reopened after a prior close; regression history is preserved."
 
+- name: "status:wip"
+  color: "fbca04"
+  description: "WIP marker for label-based forges (GitLab). Managed by wip-state.sh."
+
+- name: "status:done"
+  color: "0e8a16"
+  description: "Done marker for label-based forges (GitLab). Managed by wip-state.sh."
+
 - name: "intent:clarified"
   color: "1d76db"
   description: "Issue body ratified via /clarify-intent. /workflow-init Path A skips the interview."
@@ -95,3 +103,10 @@ protected:
   - question
   - wontfix
   - "help wanted"
+
+# --- Protected prefixes (never deleted by sync-labels.sh) ---
+# Dynamic per-session labels absent from the flat list above. wip-fp:<hash> is
+# created by wip-state.sh (GitLab label-based WIP) for cross-session clobber
+# protection; sync must never remove it.
+protected_prefixes:
+  - "wip-fp:"

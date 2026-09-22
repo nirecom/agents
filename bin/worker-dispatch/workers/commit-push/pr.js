@@ -10,8 +10,20 @@
 // non-GitHub-remote checks answer that before this module is reached.
 
 const { run: spawnRun } = require("../../spawn");
+// In-process forge resolution (C1): the worker is Node, so it requires the pure
+// resolver directly — runScript is bash-fixed and cannot launch a Node shebang.
+// No cycle: these modules do not require this file; readGitlabHostConfig only
+// reads .env (readEffectiveEnvFile), a side-effect-free call.
+const { resolveForgeTarget } = require("../../../../hooks/lib/parse-remote-url");
+const { readGitlabHostConfig } = require("../../../../hooks/lib/forge-router");
 
 const GH_TIMEOUT_MS = 120000;
+
+// glab api project endpoints take the path URL-encoded (`/` -> `%2F`) so a nested
+// namespace (group/subgroup/project) addresses correctly.
+function encodePath(p) {
+  return String(p).split("/").map(encodeURIComponent).join("%2F");
+}
 
 // GitHub renders a PR title of ~72 characters without truncating it in the list
 // view; the same first-line-of-the-commit rule `gh pr create --fill` follows.
@@ -138,21 +150,12 @@ function urlFrom(text) {
 }
 
 // --- outbound scan ---------------------------------------------------------
-//
-// The PR title and body used to reach GitHub through the Bash tool, so
-// hooks/scan-outbound.js (PreToolUse) read them before `gh` ever ran. A child
-// this worker spawns is not a Bash-tool command, so that hook is structurally
-// out of the picture — and nothing else stands between caller free text
-// (pr_body_template, the commit message, closes_issues refs) and a PR body that
-// may be world-visible. bin/scan-outbound.sh is therefore driven here directly,
-// the same scanner and the same `--stdin <label>` contract bin/lib/gh-outbound-guard.sh
-// uses, on the exact bytes about to be sent.
-//
-// FAIL CLOSED, like the guard it replaces: 0 is the only clean answer. 1 is a
-// hard violation, 2 is the warn tier — which is interactive-confirm material
-// this worker has no channel for, so it blocks — and 3 is a usage error, i.e.
-// the scan did not happen. A scanner that cannot be started blocks too.
-// Content travels on stdin, never argv (see spawn.js).
+// A spawned child is not a Bash-tool command, so hooks/scan-outbound.js never
+// sees this PR text; the worker runs bin/scan-outbound.sh itself, same scanner
+// and `--stdin <label>` contract as bin/lib/gh-outbound-guard.sh. FAIL CLOSED:
+// only rc 0 is clean (1 violation, 2 warn-tier with no confirm channel, 3 usage,
+// unstartable scanner all block). Content on stdin, never argv (see spawn.js).
+// Why: docs/architecture/claude-code/worker-dispatch/commit-push.md.
 const SCAN_LABEL = "pr-title-and-body";
 
 function scanOutbound(payload, ctx, content, log) {
@@ -184,9 +187,122 @@ function scanOutbound(payload, ctx, content, log) {
   return `outbound scan rejected the PR text (rc=${res.status})${detail === "" ? "" : `: ${detail}`}`;
 }
 
+// Shared in-process forge gate (C1): procedure.js's Step 8 and ensurePullRequest
+// both read origin through this one helper, so their forge verdicts cannot
+// diverge. Reads origin once via `git` (allowlisted; no credentials), then the
+// pure resolver + readGitlabHostConfig. Fail-safe { type: "unknown", project:
+// null } on any failure — the caller then skips the PR rather than guessing.
+function resolveForgeForWorktree(payload, ctx, log) {
+  let originUrl = "";
+  try {
+    const res = spawnRun(ctx.entry, {
+      anchors: ctx.anchors,
+      command: "git",
+      args: ["remote", "get-url", "origin"],
+      envScope: [],
+      cwd: payload.worktree_path,
+      timeoutMs: GH_TIMEOUT_MS,
+    });
+    if (res && res.status === 0) originUrl = String(res.stdout || "").trim();
+  } catch (e) {
+    if (log) log.push(`resolveForgeForWorktree: git could not start: ${e && e.message ? e.message : "unknown error"}`);
+    return { type: "unknown", project: null };
+  }
+  if (originUrl === "") return { type: "unknown", project: null };
+  const gitlabHost = readGitlabHostConfig(payload.worktree_path);
+  const { type, project } = resolveForgeTarget(originUrl, { gitlabHost });
+  return { type, project };
+}
+
+// GitLab MR path (mirrors the gh path below). Uses glab mr view/create subcommands
+// (CPR-ORTH with gh pr view/create); body travels on stdin (--description-file -)
+// for the same Windows cmdline-cap reason as gh's --body-file -.
+function ensureMergeRequestGitlab(payload, ctx, log, project) {
+  if (!project) {
+    return { status: "pushed", summary: `${payload.branch} pushed; PR skipped (GitLab project path unresolved)`, url: "" };
+  }
+  const enc = encodePath(project);
+  const glab = (args, input) =>
+    spawnRun(ctx.entry, {
+      anchors: ctx.anchors,
+      command: "glab",
+      args,
+      envScope: ["GITLAB_TOKEN", "GITLAB_HOST"],
+      cwd: payload.worktree_path,
+      timeoutMs: GH_TIMEOUT_MS,
+      input,
+    });
+
+  // Reuse an already-open MR for this source branch.
+  let existing = null;
+  try {
+    existing = glab(["mr", "view", "--source-branch", payload.branch, "--output", "json"]);
+  } catch (e) {
+    log.push(`glab mr view could not start: ${e && e.message ? e.message : "unknown error"}`);
+    return { status: "pushed", summary: `${payload.branch} pushed; PR step skipped (glab unavailable)`, url: "" };
+  }
+  log.push(`glab mr view -> status=${existing.status}`, existing.stdout, existing.stderr);
+  if (existing.status === 0) {
+    let parsed = null;
+    try { parsed = JSON.parse(existing.stdout); } catch (_e) {}
+    if (parsed && parsed.state === "opened" && typeof parsed.web_url === "string" && parsed.web_url !== "") {
+      return { status: "pr_reused", summary: `${payload.branch} pushed; PR reused at ${JSON.stringify(parsed)}`, url: parsed.web_url };
+    }
+  }
+
+  const title = prTitle(payload, ctx);
+  const body = prBody(payload);
+
+  const blocked = scanOutbound(payload, ctx, `${title}\n\n${body}`, log);
+  if (blocked !== null) {
+    return { status: "pushed", summary: `${payload.branch} pushed; PR withheld: ${blocked}`, url: "" };
+  }
+
+  // Resolve the target (default) branch via REST; fall back to main.
+  let target = "main";
+  try {
+    const def = glab(["api", `projects/${enc}`, "--jq", ".default_branch"]);
+    log.push(`glab default_branch -> status=${def.status}`, def.stdout, def.stderr);
+    if (def.status === 0) {
+      const d = String(def.stdout || "").trim();
+      if (d !== "" && !d.startsWith("{")) target = d;
+    }
+  } catch (_e) {
+    target = "main";
+  }
+
+  let create = null;
+  try {
+    create = glab(
+      ["mr", "create",
+       "--source-branch", payload.branch,
+       "--target-branch", target,
+       "--title", title,
+       "--description-file", "-",
+       "--yes"],
+      body,
+    );
+  } catch (e) {
+    log.push(`glab mr create could not start: ${e && e.message ? e.message : "unknown error"}`);
+    return { status: "pushed", summary: "pushed; PR creation could not start", url: "" };
+  }
+  log.push(`glab mr create -> status=${create.status}`, create.stdout, create.stderr);
+
+  const url = String(create.stdout || "").trim();
+  if (create.status !== 0 || url === "") {
+    const detail = (create.stderr || create.stdout || "").split("\n").find((l) => l.trim() !== "") || "";
+    return { status: "pushed", summary: `${payload.branch} pushed; PR creation failed: ${detail}`, url: "" };
+  }
+  return { status: "pr_created", summary: `${payload.branch} pushed; PR created at ${url}`, url };
+}
+
 // Step 9. Returns { status, summary, url, log } — never throws: a spawn refusal
-// is reported as a failed PR step over a push that already succeeded.
+// is reported as a failed PR step over a push that already succeeded. Forge is
+// resolved through the shared in-process gate; gitlab routes to the MR path.
 function ensurePullRequest(payload, ctx, log) {
+  const { type: forge, project } = resolveForgeForWorktree(payload, ctx, log);
+  if (forge === "gitlab") return ensureMergeRequestGitlab(payload, ctx, log, project);
+
   let view = null;
   try {
     view = spawnRun(ctx.entry, {
@@ -280,6 +396,7 @@ function ensurePullRequest(payload, ctx, log) {
 
 module.exports = {
   ensurePullRequest,
+  resolveForgeForWorktree,
   prTitle,
   prBody,
   titleFromCommitMessage,

@@ -3,22 +3,25 @@
 // and tracker (issue/MR system: github/gitlab/jira) — each resolve to a
 // descriptor. There is NO silent GitHub fallback: an unresolvable axis lands on a
 // no-op stub, never on the github handler (the security invariant).
-const { detectForgeType } = require("./parse-remote-url");
+const { detectForgeType, resolveForgeTarget } = require("./parse-remote-url");
 const { codehostGithub, trackerGithub } = require("./forge/github");
-const { trackerGitlab } = require("./forge/gitlab");
+const { trackerGitlab, codehostGitlab } = require("./forge/gitlab");
 const { codehostStub, trackerStub } = require("./forge/stub");
 
 const FORGE_DESCRIPTORS = {
   github: { type: "github", codehost: codehostGithub, tracker: trackerGithub },
-  gitlab: { type: "gitlab", codehost: codehostStub, tracker: trackerGitlab },
+  gitlab: { type: "gitlab", codehost: codehostGitlab, tracker: trackerGitlab },
   jira: { type: "jira", codehost: null, tracker: trackerStub },
 };
 
 // Codehost descriptor for a git remote URL, as a FLAT object: callers reach
 // .isPrivateRepo / .hasOpenPrForBranch directly. An unknown host routes to the
 // no-op stub — never the gitlab entry, to avoid misrepresenting the codehost type.
-function resolveCodehostDescriptor(remoteUrl) {
-  const { type } = detectForgeType(remoteUrl);
+// A self-hosted GitLab host (FORGE_GITLAB_HOST in .env) is honored via
+// resolveForgeTarget; there is no silent github fallback.
+function resolveCodehostDescriptor(remoteUrl, projectRoot) {
+  const gitlabHost = readGitlabHostConfig(projectRoot);
+  const { type } = resolveForgeTarget(remoteUrl, { gitlabHost });
   const desc = FORGE_DESCRIPTORS[type];
   const codehost = (desc && desc.codehost) || codehostStub;
   const resolvedType = desc ? desc.type : "unknown";
@@ -50,4 +53,17 @@ function readTrackerConfig(projectRoot) {
   return val || null;
 }
 
-module.exports = { resolveCodehostDescriptor, resolveTrackerDescriptor, readTrackerConfig, detectForgeType, FORGE_DESCRIPTORS };
+// The configured FORGE_GITLAB_HOST value (trimmed, lowercased) or null when
+// unset. .env file takes precedence; process.env is the fallback for tests and
+// container overrides where no .env file is present.
+function readGitlabHostConfig(projectRoot) {
+  const env = require("./load-env").readEffectiveEnvFile(projectRoot);
+  const fileVal = (env && typeof env.FORGE_GITLAB_HOST === "string")
+    ? env.FORGE_GITLAB_HOST.trim().toLowerCase() : null;
+  if (fileVal) return fileVal;
+  const envVal = typeof process.env.FORGE_GITLAB_HOST === "string"
+    ? process.env.FORGE_GITLAB_HOST.trim().toLowerCase() : null;
+  return envVal || null;
+}
+
+module.exports = { resolveCodehostDescriptor, resolveTrackerDescriptor, readTrackerConfig, readGitlabHostConfig, detectForgeType, FORGE_DESCRIPTORS };

@@ -183,8 +183,12 @@ group_a() {
     assert_eq "spec/no-invented-fields" "" "$(ev unknown_fields)"
 
     assert_eq "registry/write-scopes" "family-worktree,plans-dir" "$(ev write_scopes)"
-    assert_eq "registry/external-binaries" "bash,gh,git,node" "$(ev external)"
-    assert_eq "registry/script-keys" "bootstrapProbe,isGithubRemote,scanOutbound,unstagedCheck,workflowGate" "$(ev scripts)"
+    # #2308: glab joins the external binaries for pr.js's GitLab MR path.
+    assert_eq "registry/external-binaries" "bash,gh,git,glab,node" "$(ev external)"
+    # #2308: isGithubRemote dropped — forge is now resolved in-process via
+    # pr.js resolveForgeForWorktree (runScript is bash-fixed, cannot launch a
+    # Node shebang), so no isGithubRemote helper script remains.
+    assert_eq "registry/script-keys" "bootstrapProbe,scanOutbound,unstagedCheck,workflowGate" "$(ev scripts)"
     # D1: the gate must be the reviewed, merged copy — never the branch's own.
     assert_eq "registry/gate-script-rel" "hooks/workflow-gate.js" "$(ev gate_script_rel)"
     assert_eq "registry/gate-script-anchor" "acd" "$(ev gate_script_anchor)"
@@ -254,8 +258,10 @@ group_c() {
     ' "$REGISTRY_JS" 2>&1)" || out="declared=REQUIRE_FAILED"
     ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
 
+    # #2308: GITLAB_HOST + GITLAB_TOKEN join the passthrough so the dispatched
+    # glab child authenticates against a self-hosted GitLab on the MR path.
     assert_eq "env/declared-set" \
-        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
         "$(ev declared)"
     # run-stage-chain.sh / run-finalize-terminal.sh export it themselves; the
     # dispatcher must not be the one handing it out.
@@ -369,11 +375,121 @@ group_e() {
     fi
 }
 
+# ===========================================================================
+# Group F — procedure.run() STATUS FIELD, driven end-to-end with a canned spawn
+# seam (C7). Group E only proves the status TOKENS appear in the source; it can
+# never catch a run() that returns the WRONG status for a given forge outcome.
+# The gitlab-forge-f.sh F4/F5 cases drive run() but assert only the spawn
+# sequence and summary text, not run().status. This group closes that gap: it
+# replaces spawn.js with a fake and asserts the EXACT status — pr_created,
+# pr_reused, pushed — across the github, gitlab, unknown-remote and PR-skipped
+# outcomes. Mocked I/O only, so it stays TL1.
+# ===========================================================================
+group_f() {
+    local absent
+    absent="$(worker_srcs_missing)"
+    if [ -n "$absent" ]; then
+        fail "run-status/github-no-pr" "implementation missing: $absent"
+        return
+    fi
+    local F_DRIVER="$TMPD/f-status-driver.js"
+    cat > "$F_DRIVER" <<'NODE'
+"use strict";
+const path = require("path");
+const AGENTS = process.argv[2];
+const REMOTE = process.argv[3];
+const BRANCH = "feature/1673";
+const spawnPath = require.resolve(path.join(AGENTS, "bin", "worker-dispatch", "spawn.js"));
+function ok(stdout) { return { status: 0, stdout: stdout || "", stderr: "", spawnError: null, timedOut: false }; }
+function err(status, stderr) { return { status: status, stdout: "", stderr: stderr || "", spawnError: null, timedOut: false }; }
+function fakeRun(entry, opts) {
+  const cmd = opts.command;
+  const script = opts.script || "";
+  const args = opts.args || [];
+  const a = args.join(" ");
+  if (cmd === "git") {
+    if (a === "rev-parse --abbrev-ref HEAD") return ok(BRANCH);
+    if (a === "diff --cached --stat") return ok(" file.txt | 1 +\n");
+    if (args[0] === "rev-parse" && a.indexOf("@{upstream}") >= 0) return err(1, "no upstream");
+    if (args[0] === "remote" && args[1] === "get-url") return ok(REMOTE + "\n");
+    return ok("");
+  }
+  if (cmd === "node" && script === "workflowGate") return ok(JSON.stringify({ decision: "approve" }));
+  if (cmd === "bash") {
+    if (script === "bootstrapProbe") return err(1, "");
+    return ok(""); // scanOutbound / unstagedCheck clean
+  }
+  if (cmd === "gh") {
+    if (a.indexOf("pr view") >= 0) {
+      if (process.env.F_PR_EXISTS === "1") return ok(JSON.stringify({ state: "OPEN", url: "https://github.com/acme/widgets/pull/7" }) + "\n");
+      return err(1, "no pr");
+    }
+    if (a.indexOf("issue view") >= 0) return ok("Some Issue Title\n");
+    if (a.indexOf("pr create") >= 0) return ok("https://github.com/acme/widgets/pull/7\n");
+    return ok("");
+  }
+  if (cmd === "glab") {
+    if (a.indexOf("mr view") >= 0) {
+      if (process.env.F_MR_EXISTS === "1") return ok(JSON.stringify({ state: "opened", web_url: "https://gitlab.com/acme/widgets/-/merge_requests/9", iid: 9 }) + "\n");
+      return err(1, "no mr");
+    }
+    if (a.indexOf("mr create") >= 0) return ok("https://gitlab.com/acme/widgets/-/merge_requests/3\n");
+    if (a.indexOf("issue view") >= 0) return ok("Some Issue Title\n");
+    return ok("main\n"); // api projects/<enc> --jq .default_branch
+  }
+  return ok("");
+}
+require.cache[spawnPath] = {
+  id: spawnPath, filename: spawnPath, loaded: true, exports:
+  { run: fakeRun, resolveScript: () => "", scriptExists: () => true, buildEnv: () => ({}), DEFAULT_TIMEOUT_MS: 1000 },
+};
+const { run } = require(path.join(AGENTS, "bin", "worker-dispatch", "workers", "commit-push", "procedure.js"));
+const tmp = process.env.F_TMP;
+const payload = {
+  branch: BRANCH,
+  worktree_path: tmp,
+  session_id: "sess-f",
+  commit_message: "feat: a thing",
+  wip_mode: true,
+  enforce_worktree: process.env.F_ENFORCE || "on",
+  closes_issues: [],
+};
+const ctx = {
+  entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
+  anchors: { acd: path.join(tmp, "acd-none"), plansDir: tmp },
+  path: path,
+  fsguard: { writeFile: (t) => t },
+};
+let res;
+try { res = run(payload, ctx); } catch (e) { res = { status: "THREW", summary: String(e && e.message) }; }
+process.stdout.write(String(res.status));
+NODE
+    run_status() { # $1=remote $2=F_PR_EXISTS $3=F_MR_EXISTS $4=F_ENFORCE
+        local ftmp="$TMPD/f-$RANDOM"; mkdir -p "$ftmp"
+        run_with_timeout 40 env "F_TMP=$(nodepath "$ftmp")" "F_PR_EXISTS=${2:-0}" \
+            "F_MR_EXISTS=${3:-0}" "F_ENFORCE=${4:-on}" \
+            node "$(nodepath "$F_DRIVER")" "$(nodepath "$AGENTS_DIR")" "$1" 2>/dev/null
+    }
+    assert_eq "run-status/github no PR -> pr_created" "pr_created" \
+        "$(run_status 'https://github.com/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/github open PR -> pr_reused" "pr_reused" \
+        "$(run_status 'https://github.com/acme/widgets.git' 1 0 on)"
+    assert_eq "run-status/gitlab no MR -> pr_created" "pr_created" \
+        "$(run_status 'https://gitlab.com/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/gitlab open MR -> pr_reused" "pr_reused" \
+        "$(run_status 'https://gitlab.com/acme/widgets.git' 0 1 on)"
+    assert_eq "run-status/unknown remote -> pushed (PR skipped)" "pushed" \
+        "$(run_status 'https://bitbucket.org/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/enforce_worktree=off -> pushed (PR skipped)" "pushed" \
+        "$(run_status 'https://github.com/acme/widgets.git' 0 0 off)"
+}
+
 group_a
 group_b
 group_c
 group_d
 group_e
+group_f
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

@@ -27,7 +27,7 @@ const STANDARD_ARG_SPEC = ["enum-worker", "anchor-main-root", "path-plansdir"];
 
 // Every external command any worker may ever run. A worker's own `binaries.external`
 // must be a subset of this list; bin/worker-dispatch/spawn.js enforces both layers.
-const EXTERNAL_COMMANDS = ["git", "gh", "docker", "bash", "node", "uv"];
+const EXTERNAL_COMMANDS = ["git", "gh", "glab", "docker", "bash", "node", "uv"];
 
 // Child-process env allowlist. AGENTS_CONFIG_DIR is NOT here on purpose: it is set
 // explicitly from the resolved ACD anchor and never inherited.
@@ -78,6 +78,10 @@ const CHILD_ENV_ALLOWLIST = [
   // one worker's envPassthrough.
   "XDG_CONFIG_HOME",
   "GH_CONFIG_DIR",
+  // #2308: glab's config dir, same config-location-var class as GH_CONFIG_DIR —
+  // names a directory (glab reads hosts config there), never a secret. Its token
+  // is GITLAB_TOKEN, declared per-worker in envPassthrough, not here.
+  "GLAB_CONFIG_DIR",
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
@@ -298,11 +302,13 @@ const workers = {
       session_id: { type: "session-id", required: true },
     },
     binaries: {
-      external: ["git", "gh", "bash", "node"],
+      external: ["git", "gh", "glab", "bash", "node"],
       scripts: {
         unstagedCheck: { anchor: "acd", rel: "bin/check-unstaged-tracked.sh" },
         bootstrapProbe: { anchor: "acd", rel: "bin/probe-remote-bootstrap.sh" },
-        isGithubRemote: { anchor: "acd", rel: "bin/is-github-dotcom-remote" },
+        // #2308: no isGithubRemote script — forge is resolved in-process via
+        // pr.js resolveForgeForWorktree (runScript is bash-fixed, cannot launch a
+        // Node shebang). glab is declared in `external` for pr.js's MR path.
         // The PR title and body used to reach GitHub through the Bash tool, where
         // hooks/scan-outbound.js (PreToolUse) read them first. A dispatched `gh`
         // child is not a Bash-tool command, so that hook no longer sees them and
@@ -327,6 +333,12 @@ const workers = {
     envPassthrough: [
       "GH_TOKEN",
       "GITHUB_TOKEN",
+      // #2308: glab's auth token and self-host target, symmetric with GH_TOKEN.
+      // Handed only to pr.js's glab MR steps via envScope ["GITLAB_TOKEN",
+      // "GITLAB_HOST"] — never to git commit, the shell preflights, or the
+      // in-process forge check. GITLAB_HOST is a hostname, not a secret.
+      "GITLAB_TOKEN",
+      "GITLAB_HOST",
       "ENFORCE_WORKTREE",
       // The other five the gate child needs to answer as the PreToolUse hook
       // would (this one plus ENFORCE_WORKTREE above make GATE_ENV_SCOPE's six):
