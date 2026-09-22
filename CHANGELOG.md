@@ -519,3 +519,7 @@ Changes: review-code-security / review-tests / review-plan-security: fix securit
 ### FEATURE: PR #2367 (2026-09-22)
 Background: fix(#2344,#2185): concern-ledger rejected state + DISCRIM carrier + CTX_CONCERNS_LOG wiring
 Changes: Fixed: prior concerns in `review-code-security` were not resolved on re-review after fixes; corrected by relaxing the `have_prior_entries` guard and the scanner-required gate.;Concern triage rejections are now durable across review-cycle cleanups: `concern-ledger reject` marks a concern terminal and records the reason in a DISCRIM-keyed carrier file that survives `cleanup_ledger` and `cl_begin_cycle`. All five review wrapper scripts automatically generate and export `CTX_CONCERNS_LOG` from the carrier so the codex reviewer receives prior rejections as context.
+
+### FEATURE: PR #2365 (2026-09-22)
+Background: fix(#2360): TR5 audit gate infinite re-arm loop on artifact-side null sessions
+Changes: fix(#2360): TR5 user_verification audit gate no longer loops forever when the plan artifact is missing (artifact-side null freshness). Sessions with a prior CONTINUE verdict and a matching diff input version are approved without re-arming.
