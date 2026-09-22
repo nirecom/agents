@@ -16,7 +16,7 @@ STE-3. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" --dup-groups` — corpu
 ## Rules
 
 - Every STE-1..STE-3 output is printed verbatim; never summarize or filter one.
-- Candidacy is decided by target survival alone: a file qualifies once every `# Tests:` path is gone.
+- For marker-bearing files (`case_begin`/`case_end`), candidacy is per case: a case qualifies when its target is gone (`partial-orphan`); all cases gone → whole-file orphan. For files without markers, a file qualifies once every `# Tests:` path is gone.
 - Issue state never selects a candidate — it gates deletion only.
 - Held deletions are reported as `SKIP_DELETE_ISSUE_ACTIVE`, `SKIP_DELETE_METADATA_UNAVAILABLE`, or `SKIP_DELETE_AMBIGUOUS_REF`; the file stays listed and on disk.
 - 0 `CANDIDATE:`/`ORPHAN:` lines while `MALFORMED_HEADER:`/`NO_TESTS_HEADER:` lines are present means the survival axis is clear and repair still remains on the header axis.

@@ -7,8 +7,8 @@
 # --fix-headers rewrites headers in place. Pass --dry-run to report only.
 # --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory as TSV.
 # It rejects --apply, --fix-headers and --format json. See bin/lib/test-dup-group.sh.
-# Scans top-level tests/feature-NNN-*.sh; a CANDIDATE is a file whose every
-# `# Tests:` path is gone. Issue state gates deletion only (SKIP_DELETE_*).
+# Scans top-level tests/feature-NNN-*.{sh,Tests.ps1}. Unit=case: refcount 0
+# whole-unit git rm, partial-orphan excises dead blocks, else file-level fallback.
 
 set -euo pipefail
 
@@ -120,12 +120,13 @@ OFFLINE="$TRP_OFFLINE"
 DIAG_FILES=()
 DIAG_KINDS=()
 CANDIDATES=()
+PARTIAL_ORPHANS=()
 DELETE_FAILED=0
 JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests.sh report — ${TODAY}"
-  echo "# Scope: top-level tests/feature-<N>-*.sh (issue-specific)"
+  echo "# Scope: top-level tests/feature-<N>-*.{sh,Tests.ps1} (issue-specific)"
   echo "# Criteria: every '# Tests:' target is missing — issue state gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -134,15 +135,17 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for dispatcher in tests/feature-[0-9]*-*.sh; do
+for dispatcher in tests/feature-[0-9]*-*.sh tests/feature-[0-9]*-*.Tests.ps1; do
   [[ -e "$dispatcher" ]] || continue
   base="$(basename "$dispatcher")"
   [[ "$base" =~ ^feature-([0-9]+)- ]] || continue
   issue_num="${BASH_REMATCH[1]}"
 
-  # Primary filter: does the target still survive? (never the issue's state)
-  trp_survival_verdict "$REPO_ROOT" "$dispatcher" >/dev/null
+  # Primary filter: case-unit refcount (falls back to file-level survival for
+  # non-conforming/marker-less files). Never the issue's state.
+  trp_case_refcount_verdict "$REPO_ROOT" "$dispatcher" >/dev/null
   verdict="$TRP_VERDICT"
+  refcount="$TRP_REFCOUNT"
 
   case "$verdict" in
     malformed)
@@ -155,11 +158,52 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
       if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${dispatcher}"; fi
       continue
       ;;
+    partial-orphan)
+      # C4: trp_remove_orphan_cases below relies on the TRP_CASE_* state just set
+      # by trp_case_refcount_verdict — no TRP_CASE_*-mutating call may intervene.
+      po_names=()
+      for _i in "${TRP_ORPHAN_CASE_IDX[@]}"; do po_names+=("${TRP_CASE_NAMES[$_i]}"); done
+      scope="$(trp_scope_of "$base")"
+      ref="$(trp_issue_ref "$base")"
+      trp_fetch_issue_meta "$issue_num" >/dev/null
+      meta="$TRP_ISSUE_META"
+      trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
+      gate="$TRP_GATE"
+      PARTIAL_ORPHANS+=("$dispatcher")
+      if [[ "$FORMAT" == "text" ]]; then
+        echo "PARTIAL_ORPHAN: ${dispatcher} (refcount=${refcount})"
+        echo "  Surviving cases: ${refcount}"
+        echo "  Orphan cases: $(IFS=','; echo "${po_names[*]:-}")"
+      fi
+      hold_token="$(trp_gate_line_token "$gate")"
+      if [[ -n "$hold_token" ]]; then
+        if [[ "$FORMAT" == "text" ]]; then echo "${hold_token}: ${dispatcher}"; fi
+      elif [[ "$APPLY" -eq 1 ]]; then
+        _remove_rc=0
+        _removed_names=""
+        _removed_names=$(trp_remove_orphan_cases "$REPO_ROOT" "$dispatcher") || _remove_rc=$?
+        if [[ "$_remove_rc" -ne 0 ]]; then
+          DELETE_FAILED=1
+        else
+          while IFS= read -r _removed; do
+            [[ -n "$_removed" ]] || continue
+            if [[ "$FORMAT" == "text" ]]; then echo "CASE_REMOVED: ${dispatcher}: ${_removed}"; fi
+          done <<< "$_removed_names"
+        fi
+      fi
+      if [[ "$FORMAT" == "text" ]]; then echo ""; fi
+      if [[ "$FORMAT" == "json" ]]; then
+        JSON_ITEMS+=("$(printf '{"dispatcher":"%s","issue":%s,"unit_mode":"case","refcount":%s,"orphan_cases":%s,"delete_gate":"%s"}' \
+          "$(trp_json_escape "$dispatcher")" "$issue_num" "$refcount" \
+          "$(trp_json_array "${po_names[@]:-}")" "$(trp_json_escape "$gate")")")
+      fi
+      continue
+      ;;
     orphan) ;;
     *) continue ;;
   esac
 
-  trp_unit_of "$REPO_ROOT" "$dispatcher"
+  trp_unit_of "$REPO_ROOT" "$dispatcher" "$refcount"
   sibling="$TRP_SIBLING"
   sib_count="$TRP_SIBLING_COUNT"
   unit_paths=("${TRP_UNIT_PATHS[@]}")
@@ -216,8 +260,8 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
   if [[ "$FORMAT" == "json" ]]; then
     sib_json=""
     if [[ -n "$sibling" ]]; then sib_json="${sibling}/"; fi
-    JSON_ITEMS+=("$(printf '{"dispatcher":"%s","issue":%s,"state":"%s","closed_at":"%s","last_commit":"%s","dispatcher_date":"%s","sibling_date":"%s","sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
-      "$(trp_json_escape "$dispatcher")" "$issue_num" "$(trp_json_escape "$issue_state")" \
+    JSON_ITEMS+=("$(printf '{"dispatcher":"%s","issue":%s,"unit_mode":"%s","refcount":%s,"state":"%s","closed_at":"%s","last_commit":"%s","dispatcher_date":"%s","sibling_date":"%s","sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
+      "$(trp_json_escape "$dispatcher")" "$issue_num" "$(trp_json_escape "$TRP_UNIT_MODE")" "$refcount" "$(trp_json_escape "$issue_state")" \
       "$(trp_json_escape "$issue_closed_date")" "$(trp_json_escape "$last_commit")" \
       "$(trp_json_escape "$disp_date")" "$(trp_json_escape "$sib_date")" \
       "$(trp_json_escape "$sib_json")" "$sib_count" "$(trp_json_escape "$gate")")")
@@ -246,7 +290,7 @@ fi
 if [[ "$DELETE_FAILED" -eq 1 ]]; then
   exit 2
 fi
-if [[ "${#CANDIDATES[@]}" -eq 0 ]]; then
+if [[ "${#CANDIDATES[@]}" -eq 0 && "${#PARTIAL_ORPHANS[@]}" -eq 0 ]]; then
   exit 1
 fi
 exit 0
