@@ -66,18 +66,13 @@ days_ago_iso() {
 }
 
 # make_gh_stub <stub_dir> <state> [closed_at]
-#
-# gh stub for bin/audit-tests.sh. The script queries
+# gh stub for bin/audit-tests.sh, which queries
 #   gh api repos/<slug>/issues/<N> --jq '.state + " " + (.closed_at // "")'
-# and filters on the issue's closed_at (#1557) — NOT on the file's commit date.
-# The stub therefore has to emit BOTH fields: a state-only stub makes every
-# closed issue hit the "closed but closed_at unavailable — skipped" branch, so
-# no dispatcher is ever a candidate.
-#
-# closed_at defaults to a long-past date so the issue is stale under any
-# --stale-months value; cases that need a specific staleness boundary pass
-# their own value. An open issue always reports an empty closed_at, matching
-# `.closed_at // ""` against a live open issue.
+# and filters on the issue's closed_at (#1557), not the file's commit date — so
+# the stub must emit BOTH fields (a state-only stub sends every closed issue to
+# the "closed_at unavailable — skipped" branch, making no dispatcher a candidate).
+# closed_at defaults to a long-past (always-stale) date; cases needing a specific
+# staleness boundary pass their own. An open issue reports an empty closed_at.
 make_gh_stub() {
     local stub_dir="$1" state="$2" closed_at="${3:-2019-01-01T00:00:00Z}"
     local state_lc parametrized_closed_at="$closed_at"
@@ -104,12 +99,17 @@ EOF
 # (see bin/audit-tests.sh:15-19), so lib/ must sit next to wherever the script
 # was copied — NOT unconditionally at <repo>/bin/lib/. Every copy site therefore
 # passes the directory that contains its own copy of audit-tests.sh.
-# Wildcard copy (not an explicit file list) so new bin/lib/*.sh files do not
-# break these fixtures.
+# Wildcard copy (not an explicit file list) plus nested lib subdirs (e.g.
+# test-retire-predicate/case-parser.sh) so a file-split module is not left behind.
 install_audit_libs() {
     local dest="$1"
     mkdir -p "$dest/lib"
     cp "$AGENTS_ROOT"/bin/lib/*.sh "$dest/lib/"
+    local _sub
+    for _sub in "$AGENTS_ROOT"/bin/lib/*/; do
+        [[ -d "$_sub" ]] || continue
+        cp -R "${_sub%/}" "$dest/lib/"
+    done
 }
 
 setup_audit_repo() {
