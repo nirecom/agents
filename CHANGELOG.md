@@ -511,3 +511,7 @@ Changes: Fixed (#2347): the RTK installer now delegates config management to the
 ### FEATURE: PR #2364 (2026-09-22)
 Background: feat(#2356,#2345,#2346,#2350): delegate rtk-rewrite to rtk hook claude, add RTK_AUDIT guard log
 Changes: Add `RTK_AUDIT=on` toggle: records a JSONL audit line to `~/.agents/logs/rtk-guard-audit.log` each time an RTK guard rejects or rewrites a Bash command. Off by default; set in `.env`.;RTK rewrite now delegates to `rtk hook claude` so RTK's own audit path is used when RTK is enabled — previously the hook bypassed it.;Fix: `bash -c`, `alias`, and `typeset` commands now correctly bypass RTK wrapping (#2345).;Fix: agents scripts invoked via absolute-path interpreter (e.g. `/usr/bin/node /path/to/emit`) now correctly bypass RTK wrapping (#2346).;Fix: `env`-prefixed commands (e.g. `env VAR=1 git ...`, `/usr/bin/env git ...`) are now correctly peeled so the inner command is evaluated by all guards (#2350).
+
+### FEATURE: PR #2366 (2026-09-22)
+Background: fix(#2357): block exit-6 terminal guard bypass with exit 9 gate
+Changes: review-code-security / review-tests / review-plan-security: fix security bypass where changing code after exit 6 (HIGH_UNRESOLVED) auto-cleared the terminal guard and reopened a fresh review budget. New exit 9 (EXIT_EXIT6_UNACCEPTED) blocks the bypass; only an explicit accept marker allows resumption.
