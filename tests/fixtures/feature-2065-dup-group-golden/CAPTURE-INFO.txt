@@ -1,10 +1,14 @@
-captured_at_utc=2026-08-18T07:49:56Z
-agents_root=C:/git/worktrees/2065-audit-tests-tests-hooks-enforce/agents
-commit=f7a32df40b3565744be1e187136b6e83f0d049de
-branch=feature/2065-audit-tests-tests-hooks-enforce
-source=git archive f7a32df4 bin | tar -x -C "$TMP" (whole bin/ subtree into a throwaway
-       temp dir, never the live checkout; bin/lib/* is also f7a32df4), old impl driven
-       through AUDIT_TESTS_BIN / AUDIT_TESTS_COMMON_BIN
+captured_at_utc=2026-09-22T06:58:27Z
+agents_root=C:/git/worktrees/2081-retire-refcount-gc-orphan-ps1/agents
+commit=edb782743b03edfcdebf7627c1db6f9876059c0c
+branch=feature/2081-retire-refcount-gc-orphan-ps1
+rebaseline=#2081 intentionally changed the retire output: the JSON candidate/orphan
+       objects gained "unit_mode" and "refcount" (case-unit refcount verdict) and the
+       text/JSON scope widened to tests/*.{sh,Tests.ps1},test_*.py. g2/g3/g5/g6 were
+       re-captured from the live tree at the commit above; g1/g4 and every .err/.rc
+       stayed byte-identical to the original #2065 (f7a32df4) capture.
+source=live bin/ subtree at the commit above (AGENTS_ROOT), driven through AUDIT /
+       AUDIT_COMMON; original #2065 baseline was git archive f7a32df4 bin | tar -x
 observations=three per command form, each byte-compared on its own:
        <name>.out = raw stdout, <name>.err = raw stderr, <name>.rc = exit status
        stdout and stderr are NEVER merged: a report line that migrates from one

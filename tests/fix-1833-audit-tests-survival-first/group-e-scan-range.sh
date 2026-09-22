@@ -151,16 +151,18 @@ fi
 #   (a) a name the shell can mangle (embedded space) must be scanned, reported
 #       and deleted intact — an unquoted expansion would either miss it or hand
 #       `git rm` two bogus pathspecs;
-#   (b) a test-shaped file that is NOT `*.sh` (extensionless, .py, .Tests.ps1)
-#       is outside both globs today. That is a known scan hole, deliberately out
-#       of scope for #1833 — this pins the current boundary so a future glob
-#       widening is a conscious change, not an accident.
+#   (b) test-shaped files that are NOT `*.sh`: since #2081 the common scan globs
+#       widened to tests/*.Tests.ps1 and tests/test_*.py, so those two shapes ARE
+#       now in range and travel the file-level survival verdict. An extensionless
+#       file still matches no glob and is the one remaining out-of-range shape —
+#       E5d/E5e pin that boundary, E5f/E5g pin the widened globs.
 E5_REPO="$(make_repo)"
 add_test_file "$E5_REPO" "cc common with space.sh" "bin/gone-e5a.sh"
 add_test_file "$E5_REPO" "feature-521-with space.sh" "bin/gone-e5b.sh" "TL2, scope:issue-specific"
 add_test_file "$E5_REPO" "cc-plain-e5.sh" "bin/gone-e5c.sh"
-# Not *.sh — outside both globs.
+# Extensionless — matches no glob, still outside both scans.
 { printf '#!/usr/bin/env bash\n# Tests: bin/gone-e5d.sh\n'; } > "$E5_REPO/tests/extensionless-test"
+# *.Tests.ps1 and test_*.py — in the common scan range since #2081.
 { printf '# Tests: bin/gone-e5e.sh\n'; } > "$E5_REPO/tests/test_shaped_like_a_test.py"
 { printf '# Tests: bin/gone-e5f.sh\n'; } > "$E5_REPO/tests/Shaped.Tests.ps1"
 commit_repo "$E5_REPO" "filename edge-case fixture"
@@ -182,10 +184,17 @@ assert_gate_row "E5c space in filename: issue-specific scope is reported, delete
     "$E5_ISSUE_OUT" "$E5_REPO" "tests/feature-521-with space.sh" \
     candidate metadata-unavailable kept
 
-# E5d/E5e — non-.sh test-shaped files are neither reported nor touched.
-for e5_other in "extensionless-test" "test_shaped_like_a_test.py" "Shaped.Tests.ps1"; do
-    assert_eq "E5d non-.sh file is outside both scan ranges: $e5_other" \
-        "none" "$(report_of "$E5_BOTH" "tests/$e5_other")"
-    assert_eq "E5e non-.sh file survives both --apply runs: $e5_other" \
-        "kept" "$(fs_of "$E5_REPO" "tests/$e5_other")"
+# E5d/E5e — the extensionless test-shaped file is still outside both scan ranges.
+assert_eq "E5d extensionless file is outside both scan ranges: extensionless-test" \
+    "none" "$(report_of "$E5_BOTH" "tests/extensionless-test")"
+assert_eq "E5e extensionless file survives both --apply runs: extensionless-test" \
+    "kept" "$(fs_of "$E5_REPO" "tests/extensionless-test")"
+
+# E5f/E5g — *.Tests.ps1 and test_*.py are IN the common scan range since #2081:
+# reference-free orphans, so the flagless delete gate opens and they are removed.
+for e5_widened in "test_shaped_like_a_test.py" "Shaped.Tests.ps1"; do
+    assert_eq "E5f widened-glob file is scanned and reported orphan: $e5_widened" \
+        "orphan" "$(report_of "$E5_BOTH" "tests/$e5_widened")"
+    assert_eq "E5g widened-glob file is deleted by --apply: $e5_widened" \
+        "gone" "$(fs_of "$E5_REPO" "tests/$e5_widened")"
 done
