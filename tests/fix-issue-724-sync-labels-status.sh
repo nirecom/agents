@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/sync-labels.sh, tests/fixtures/gh-mock/gh
-# Tags: github, labels, sync, three-way-status
+# Tags: github, labels, sync, three-way-status, gitlab, forge, scope:common
 # Tests for issue #724 — three-way create/update/already-exists status in sync-labels.sh.
 #
 # RED: these S-series tests fail against the current sync-labels.sh (which
@@ -11,6 +11,8 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SYNC_SCRIPT="$AGENTS_DIR/bin/github-issues/sync-labels.sh"
 MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+# Capture real git before PATH gets $MOCK_DIR prepended by setup_sync_tmp.
+REAL_GIT="$(command -v git)"
 
 PASS=0
 FAIL=0
@@ -34,6 +36,20 @@ for f in gh git doc-append; do
     fi
 done
 
+# S-series forge fixture (#2308): sync-labels.sh now resolves the forge from the
+# CWD origin (detect-forge-type → `git -C . remote get-url origin`) and refuses an
+# undetected one (no github fallback). So each S case must run inside a real repo
+# whose origin is github. S_MOCK carries gh (+ doc-append) but deliberately NOT
+# git — real git must answer the origin query and cannot be shadowed by the mock.
+S_MOCK="$(mktemp -d)/s-mock"
+mkdir -p "$S_MOCK"
+for f in gh doc-append; do
+    if [ -f "$MOCK_DIR/$f" ]; then
+        cp "$MOCK_DIR/$f" "$S_MOCK/$f" 2>/dev/null || true
+        chmod +x "$S_MOCK/$f" 2>/dev/null || true
+    fi
+done
+
 # ----------------------------------------------------------------------------
 # Fixture helpers
 # ----------------------------------------------------------------------------
@@ -46,18 +62,37 @@ setup_sync_tmp() {
     LABELS_FILE="$TMP/labels.yml"
     printf '%s' "$1" > "$LABELS_FILE"
 
-    export PATH="$MOCK_DIR:$PATH"
+    # Real github repo so detect-forge-type classifies the CWD as forge=github
+    # (#2308). core.hooksPath=/dev/null keeps installed hooks from firing here.
+    "$REAL_GIT" -C "$TMP" init -q
+    "$REAL_GIT" -C "$TMP" config core.hooksPath /dev/null 2>/dev/null || true
+    "$REAL_GIT" -C "$TMP" config user.email "test@example.com"
+    "$REAL_GIT" -C "$TMP" config user.name "Test"
+    "$REAL_GIT" -C "$TMP" remote add origin "git@github.com:acme/widgets.git"
+
+    # sync-labels.sh resolves the forge from the CWD origin, so run inside the repo.
+    S_PREV_CWD="$(pwd)"
+    cd "$TMP" || return 1
+
+    # S_MOCK has gh but no git → real git answers the origin query (see S_MOCK note).
+    export PATH="$S_MOCK:$PATH"
     export GH_MOCK_LABEL_LOG="$TMP/labels.log"
     : > "$GH_MOCK_LABEL_LOG"
     unset GH_MOCK_LABEL_LIST
     unset GH_MOCK_LABEL_LIST_FAIL
+    # Force sync-labels.sh to self-resolve AGENTS_CONFIG_DIR to this worktree (where
+    # the #2308 detect-forge-type lives). An ambient value points at the main repo,
+    # which lacks the new CLI, so detect returns unknown and the forge gate rejects.
+    unset AGENTS_CONFIG_DIR
 }
 
 teardown_sync_tmp() {
+    # Leave the repo CWD before removing it (some platforms refuse to rm the CWD).
+    cd "${S_PREV_CWD:-$AGENTS_DIR}" 2>/dev/null || true
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
-    unset TMP LABELS_FILE GH_MOCK_LABEL_LOG GH_MOCK_LABEL_LIST GH_MOCK_LABEL_LIST_FAIL
+    unset TMP LABELS_FILE GH_MOCK_LABEL_LOG GH_MOCK_LABEL_LIST GH_MOCK_LABEL_LIST_FAIL S_PREV_CWD
 }
 
 # Canonical 3-label labels.yml used by S1/S2/S3/S4.
@@ -388,6 +423,9 @@ else
     fail "S14: rc=$RC gfi_deleted=$gfi_deleted gfi_deleted_out=$gfi_deleted_out cruft_deleted=$cruft_deleted cruft_deleted_out=$cruft_deleted_out out=$(cat "$OUT")"
 fi
 teardown_sync_tmp
+
+# shellcheck source=fix-issue-724-sync-labels-status/e-series.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fix-issue-724-sync-labels-status/e-series.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

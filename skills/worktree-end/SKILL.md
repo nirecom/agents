@@ -18,7 +18,7 @@ Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its 
 Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command and reuse its printed path — never assign it to a shell variable, which does not survive to the next Bash call. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 ### Step WE-2 — Pre-flight
-- `gh --version` — abort with installation guidance if not found.
+- `gh --version` — abort with installation guidance if not found; for a gitlab remote (`node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field type` = `gitlab`) check `glab --version` instead.
 - Verify linked worktree: `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`; if equal, abort.
 
 ### Step WE-3 — Unstaged tracked-file check
@@ -28,6 +28,7 @@ Run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh" "$WORKTREE_PATH"`. 
 Bootstrap probe: `bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "<WORKTREE_PATH>"` — one standalone call; read the JSON from its stdout. `preBootstrap === true` AND `classification === "empty-repo"` → WE-4b. Any other classification → normal flow.
 
 Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reuse if `OPEN`, else `gh pr create --fill`. Display URL. Read `<PR_NUMBER>` from the stdout of `gh pr view --json number --jq .number`; abort if empty.
+For a gitlab remote, use `glab mr view` (reuse if OPEN) / `glab mr create --fill` and read `<PR_NUMBER>` from `glab mr view --output json` `.iid`.
 
 ### Step WE-4b — Bootstrap mode (empty-repo only)
 1. `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/bootstrap-complete.sh" "$WORKTREE_PATH" "$BRANCH" "$OWNER_REPO"` — parse `BOOTSTRAP_COMMIT_SHA` and `DEFAULT_BRANCH_SET`. Non-zero → stop.
@@ -48,7 +49,7 @@ Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED`
 Skip the sentinel and go straight to WE-9 when this session already recorded `user_verification` as complete for this merge — check `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SID"` and treat a `REASON=` other than `user_verification` as already-recorded. Keep CWD in the linked worktree throughout WE-7; do not switch to main worktree before WE-13.
 
 ### Step WE-8 — Local merge
-Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
+Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch` (gitlab remote: `glab mr merge --squash --remove-source-branch`). Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
 
 ### Step WE-9 — Gitignored state inventory
 Backup dir is derived by the worker as `<main_root>/.worktree-backup/<branch>/` — never passed in.

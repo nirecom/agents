@@ -1,7 +1,8 @@
 "use strict";
 
-// Pure git-remote-URL parsing. No process, no filesystem — every caller that
-// needs repository identity derives it from the ORIGIN url alone (#1899).
+// Pure git-remote-URL parsing. No filesystem — every caller that needs
+// repository identity derives it from the ORIGIN url alone (#1899).
+// FORGE_GITLAB_HOST env var is consulted by resolveForgeTarget as a fallback.
 
 const GITHUB_HOST = "github.com";
 
@@ -93,6 +94,69 @@ function detectForgeType(url) {
   return { type, host };
 }
 
+// GitLab allows nested namespaces (group/subgroup/project), so a variable-depth
+// path is returned. Each segment is interpolated into `glab api projects/<path>`,
+// so a "." / ".." segment is rejected (path-traversal defense). Returns null when
+// no valid path can be extracted. Pure — no fs, no process.
+function extractProjectPath(url) {
+  if (typeof url !== "string" || url.trim() === "") return null;
+  const rawHost = extractHost(url);
+  if (!rawHost) return null;
+  let s = url.trim().replace(/\/+$/, "").replace(/\.git$/, "");
+  const scheme = s.match(SCHEME_RE);
+  let path;
+  if (scheme) {
+    let rest = s.slice(scheme[0].length);
+    const auth = rest.split("/", 1)[0];
+    if (auth.includes("@")) rest = rest.replace(/^[^/]*@/, "");
+    const slash = rest.indexOf("/");
+    if (slash < 0) return null;
+    path = rest.slice(slash + 1);
+  } else {
+    const colon = s.indexOf(":");
+    if (colon < 0) return null;
+    path = s.slice(colon + 1);
+  }
+  path = path.replace(/^\/+/, "").replace(/\/+$/, "");
+  const segs = path.split("/").filter((x) => x.length > 0);
+  if (segs.length < 2) return null;
+  for (const seg of segs) {
+    if (seg === "." || seg === "..") return null;
+    if (!/^[A-Za-z0-9._-]+$/.test(seg)) return null;
+  }
+  return segs.join("/");
+}
+
+// Forge target resolution with an optional self-hosted GitLab override. The
+// caller may resolve gitlabHost (via readGitlabHostConfig) and pass it in;
+// when absent, FORGE_GITLAB_HOST env var is used as a fallback. No filesystem.
+// An unknown host is NEVER silently reclassified as github (security invariant).
+// A recognized host with an UNRESOLVABLE project path (poisoned "."/".." segment,
+// NUL, shell metachar — extractProjectPath returns null) is downgraded to
+// type="unknown": the path is interpolated into `glab api projects/<path>` /
+// `gh api repos/<path>`, so classifying it as a forge would hand a traversal
+// payload to an authenticated call. No project → no forge (fail-safe, CPR-ORTH).
+function resolveForgeTarget(url, options) {
+  const opts = options || {};
+  if (typeof url !== "string") return { type: "unknown", host: null, project: null };
+  const rawHost = extractHost(url);
+  if (!rawHost) return { type: "unknown", host: null, project: null };
+  const host = rawHost.toLowerCase();
+  const gh = typeof opts.gitlabHost === "string" && opts.gitlabHost.trim()
+    ? opts.gitlabHost.trim().toLowerCase()
+    : (typeof process.env.FORGE_GITLAB_HOST === "string"
+      ? process.env.FORGE_GITLAB_HOST.trim().toLowerCase() : "");
+  let type;
+  if (gh && host === gh) {
+    type = "gitlab";
+  } else {
+    type = Object.prototype.hasOwnProperty.call(FORGE_HOST_TYPES, host) ? FORGE_HOST_TYPES[host] : "unknown";
+  }
+  const project = extractProjectPath(url);
+  if (project === null) return { type: "unknown", host, project: null };
+  return { type, host, project };
+}
+
 function failure(code, message) {
   return { ok: false, code, message };
 }
@@ -153,4 +217,4 @@ function parseOriginOwnerRepo(remoteUrl) {
   return { ok: true, ownerRepo: `${owner}/${repo}`, owner, repo, host: GITHUB_HOST };
 }
 
-module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, isValidOwner, isValidRepo, GITHUB_HOST, detectForgeType, FORGE_HOST_TYPES };
+module.exports = { extractHost, extractRepoId, parseOriginOwnerRepo, redactUserinfo, isValidOwner, isValidRepo, GITHUB_HOST, detectForgeType, FORGE_HOST_TYPES, resolveForgeTarget, extractProjectPath };

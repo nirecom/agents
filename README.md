@@ -248,6 +248,15 @@ The installer configures all required VS Code settings automatically.
 
 See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full design.
 
+### GitLab support
+
+github.com and gitlab.com are recognized automatically; name a self-hosted GitLab
+host in `FORGE_GITLAB_HOST` to have its remotes handled as GitLab (merge requests,
+repo visibility, and label-based WIP signaling). An unrecognized host is never
+treated as GitHub — it is skipped, not misrouted.
+
+See [docs/architecture/gitlab-support.md](docs/architecture/gitlab-support.md) for the full design.
+
 ### Cross-machine session continuity
 
 Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
@@ -355,6 +364,6 @@ This is a personal configuration repo. Issues and discussions are welcome; PRs a
 for bug fixes and portable improvements. Feature additions that are personal-workflow-specific
 are generally out of scope.
 
-## License
+### License
 
 MIT

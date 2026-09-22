@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+"use strict";
+// Thin shell-facing CLI for forge detection. Used ONLY by bash scripts (the
+// Node workers require the pure resolver in-process instead). Reads
+// FORGE_GITLAB_HOST from .env (SSOT) and folds it into resolveForgeTarget to
+// classify the origin URL. Relative require keeps it AGENTS_CONFIG_DIR-independent.
+const { execFileSync } = require("child_process");
+const { resolveForgeTarget } = require("../hooks/lib/parse-remote-url");
+const { readGitlabHostConfig } = require("../hooks/lib/forge-router");
+
+function arg(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
+}
+
+const field = arg("--field");
+let url = arg("--url");
+const repoDir = arg("--repo-dir") || process.cwd();
+
+if (field && !["type", "host", "project"].includes(field)) {
+  process.stderr.write("usage: detect-forge-type [--url <u>|--repo-dir <d>] [--field type|host|project]\n");
+  process.exit(2);
+}
+
+if (url === null) {
+  try {
+    url = execFileSync("git", ["-C", repoDir, "remote", "get-url", "origin"],
+      { encoding: "utf8", timeout: 5000 }).trim();
+  } catch (e) {
+    url = ""; // unreadable origin → fail-open to unknown
+  }
+}
+
+const gitlabHost = readGitlabHostConfig(repoDir);
+const res = resolveForgeTarget(url, { gitlabHost }); // { type, host, project }
+
+if (field) {
+  const v = res[field];
+  process.stdout.write((v === null || v === undefined ? "" : String(v)) + "\n");
+} else {
+  process.stdout.write(JSON.stringify(res) + "\n");
+}
+process.exit(0);

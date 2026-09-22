@@ -1,5 +1,8 @@
 "use strict";
 
+// On Windows, spawnSync without shell:true cannot resolve .cmd wrappers via PATHEXT.
+const WIN32 = process.platform === "win32";
+
 // GitHub forge descriptors (#2307). The gh scan regexes live here (CPR-SSOT):
 // forge-write-extract.js re-imports GH_API_WRITE_REGEX / GH_REPO_WRITE_REGEX from
 // this module instead of redeclaring them.
@@ -19,6 +22,7 @@ const codehostGithub = {
       const result = spawnSync("gh", ["api", "repos/" + parsed.ownerRepo, "--jq", ".private"], {
         encoding: "utf8",
         timeout: 10000,
+        shell: WIN32,
       });
       if (result.error || result.status !== 0) return false;
       return (result.stdout || "").trim() === "true";
@@ -33,6 +37,7 @@ const codehostGithub = {
       const result = spawnSync("gh", ["api", "repos/" + ownerRepo, "--jq", ".private"], {
         encoding: "utf8",
         timeout: 10000,
+        shell: WIN32,
       });
       if (result.error || result.status !== 0) return true;
       const out = (result.stdout || "").trim();
@@ -49,7 +54,7 @@ const codehostGithub = {
       const result = spawnSync(
         "gh",
         ["repo", "list", "--limit", "1000", "--visibility", "private", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
-        { encoding: "utf8", timeout: 10000 }
+        { encoding: "utf8", timeout: 10000, shell: WIN32 }
       );
       if (result.error || result.status !== 0) return [];
       return (result.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);

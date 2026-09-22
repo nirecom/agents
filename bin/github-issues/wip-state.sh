@@ -77,7 +77,18 @@ if [ "$CMD" = "abandon" ] && [ "$SID_SET" -eq 1 ]; then
     exit 2
 fi
 
-if [[ -n "$REPO_OVERRIDE" ]]; then
+# Forge detection (#2308). Derive the detect-forge-type path from SCRIPT_DIR so
+# it is reachable even when AGENTS_CONFIG_DIR is overridden (e.g. by tests that
+# point it at an isolated fixture dir). FORGE steers the whole verb path below.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+FORGE="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
+[ -z "$FORGE" ] && FORGE="unknown"
+
+# The --repo charset below is GitHub's owner/repo (<=1 slash); GitLab's nested
+# namespaces (group/sub/proj) would fail it, so it is skipped for gitlab, which
+# validates --repo via its own cross-repo guard. github and unknown keep it.
+if [ "$FORGE" != "gitlab" ] && [[ -n "$REPO_OVERRIDE" ]]; then
     if ! [[ "$REPO_OVERRIDE" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
         echo "Error: invalid --repo value: $REPO_OVERRIDE" >&2
         exit 2
@@ -251,6 +262,40 @@ _WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/wip-state"
 . "$_WS_DIR/cmd-setup.sh"
 # shellcheck source=wip-state/cmd-abandon.sh
 . "$_WS_DIR/cmd-abandon.sh"
+
+# GitLab dispatch (#2308). Skip the Projects v2 path (resolve-project.sh is sourced
+# above but never executed here) and route to the label-based verbs in gitlab.sh.
+# Cross-repo guard: --repo is honored only when it names the CWD's own project;
+# GitLab wip-state is CWD-local (no cross-repo Projects v2 board to target).
+if [ "$FORGE" = "gitlab" ]; then
+    GL_PROJECT="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field project 2>/dev/null)"
+    if [ -z "$GL_PROJECT" ]; then
+        echo "Error: could not resolve a GitLab project path from the origin remote" >&2
+        exit 2
+    fi
+    if [ -n "$REPO_OVERRIDE" ] && [ "$REPO_OVERRIDE" != "$GL_PROJECT" ]; then
+        echo "Error: GitLab cross-repo wip-state is not supported. Use --repo only with GitHub." >&2
+        exit 2
+    fi
+    GL_ENC="$(node -e "process.stdout.write(process.argv[1].split('/').map(encodeURIComponent).join('%2F'))" "$GL_PROJECT")"
+    export GL_PROJECT GL_ENC
+    # shellcheck source=wip-state/gitlab.sh
+    . "$_WS_DIR/gitlab.sh"
+    case "$CMD" in
+        set)     gl_cmd_set     "$N" ;;
+        check)   gl_cmd_check   "$N" ;;
+        clear)   gl_cmd_clear   "$N" ;;
+        setup)   gl_cmd_setup ;;
+        abandon) gl_cmd_abandon "$N" ;;
+    esac
+    exit 0
+fi
+
+# Unknown forge (not github / not gitlab) → reject before any gh/glab calls.
+if [ "$FORGE" != "github" ]; then
+    echo "Error: wip-state requires a GitHub or GitLab repository (detected forge: $FORGE)" >&2
+    exit 2
+fi
 
 case "$CMD" in
     set)   cmd_set   "$N" ;;

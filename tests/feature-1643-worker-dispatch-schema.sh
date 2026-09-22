@@ -3,19 +3,8 @@
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/payload.js, bin/worker-dispatch/registry.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, dispatcher, payload, schema, argv, free-text, TL1, scope:issue-specific
 
-# Issue #1643 — argv arity / worker-name enum / payload schema of the worker
-# dispatcher, plus the hard requirement that free-text worker input (history
-# background/changes bodies) reaches the worker module BYTE-IDENTICAL. Payload
-# is passed as a PLANS_DIR file (not inline argv JSON) so free text never
-# traverses the guard's UNSAFE_ARG_VALUE_RE reject set — Group C fences that.
-
-# TL3 gap (what this TL1 test does NOT catch):
-#   - A real skill (run-tests RNT-7 / update-docs UD-9) actually writing the
-#     payload file with the Write tool and invoking the CLI in one turn.
-#   - Real PLANS_DIR resolution through bin/workflow-plans-dir on the operator's
-#     machine (this test pins WORKFLOW_PLANS_DIR explicitly).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1643: worker-dispatch argv/schema/payload contract (byte-identical free-text, PLANS_DIR file path).
+# TL3 gap: real skill round-trips and PLANS_DIR resolution. Mitigation: bin/check-verification-gate.sh.
 
 set -u
 
@@ -213,8 +202,8 @@ group_c() {
             case "cmd-subst":     v = "before $(rm -rf /) `id` after"; break;
             case "shell-chain":   v = "one; two && three | four > five"; break;
             case "newlines":      v = "line1\nline2\r\nline3"; break;
-            case "japanese":      v = "\u65E5\u672C\u8A9E\u306E\u80CC\u666F\u8AAC\u660E\u3067\u3059\u3002"; break;
-            case "over-4kb":      v = "\u3042X".repeat(2600); break;
+            case "japanese":      v = "日本語の背景説明です。"; break;
+            case "over-4kb":      v = "あX".repeat(2600); break;
             default: throw new Error("unknown kind " + kind);
           }
           fs.writeFileSync(valFile, v);
@@ -277,20 +266,8 @@ group_d() {
     assert_eq "registry/worker-enum-complete" "" "$missing"
 }
 
-# Group E — credential scope and the typed `test_args` field, asserted on the
-# SSOT registry (behavioural counterpart: the buildEnv group in
-# tests/feature-1643-worker-dispatch-script-anchor.sh).
-
-# CHILD_ENV_ALLOWLIST applies to EVERY worker's children, including the
-# family-worktree-anchored tests/run-all.sh — i.e. unreviewed branch code —
-# so a credential there would leak; tokens belong only in `issue-reconcile`'s
-# envPassthrough. The allowlist also carries a POSITIVE contract this group
-# fences: a config-location var missing from it lands a child in a different
-# config dir than its parent and fails exactly like a missing credential
-# would (#1719). Admission-rule SSOT for that set is the comment block above
-# CHILD_ENV_ALLOWLIST in hooks/lib/worker-dispatch-registry.js — not restated
-# here. `test_args` is asserted here for the same reason it's typed: as
-# `text[]` it was free text that became argv for a script runner.
+# Group E: credential scope (CHILD_ENV_ALLOWLIST) and typed test_args.
+# Admission-rule SSOT: hooks/lib/worker-dispatch-registry.js.
 group_e() {
     if impl_missing "credentials/tokens-not-global" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
         return
@@ -342,7 +319,7 @@ group_e() {
       out("jobs_max", spec.jobs ? spec.jobs.max : "(absent)");
       // Config-location vars; SSOT for the admission rule is the comment block
       // above CHILD_ENV_ALLOWLIST in the registry.
-      const CONFIG_PATH_VARS = ["APPDATA", "ProgramData", "PROGRAMDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR"];
+      const CONFIG_PATH_VARS = ["APPDATA", "ProgramData", "PROGRAMDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR"];
       out("config_path_count", CONFIG_PATH_VARS.length);
       out("config_path_missing", allow ? CONFIG_PATH_VARS.filter((v) => !allow.includes(v)).join(",") : "NOT_ARRAY");
       // Data integrity, not security: a member listed twice means two people
@@ -377,7 +354,7 @@ group_e() {
 
     # Whole config-location-variable class, not just gh-related vars — the
     # allowlist is a "class" contract applied unconditionally to every worker.
-    assert_eq "config-paths/set-non-vacuous" "5" "$(ev config_path_count)"
+    assert_eq "config-paths/set-non-vacuous" "6" "$(ev config_path_count)"
     assert_eq "config-paths/all-present-in-allowlist" "" "$(ev config_path_missing)"
     assert_eq "allowlist/no-duplicate-entries" "" "$(ev allowlist_dupes)"
 
@@ -385,9 +362,36 @@ group_e() {
     # any unexpected add/remove turns red. Expected-value order follows JS's
     # default sort (UTF-16 code units): uppercase before lowercase.
     assert_eq "allowlist/exact-sorted-membership" \
-        "APPDATA,COMSPEC,ComSpec,GH_CONFIG_DIR,HOME,PATH,PATHEXT,PROGRAMDATA,Path,ProgramData,SYSTEMROOT,SystemRoot,TEMP,TMP,USERPROFILE,XDG_CONFIG_HOME" \
+        "APPDATA,COMSPEC,ComSpec,GH_CONFIG_DIR,GLAB_CONFIG_DIR,HOME,PATH,PATHEXT,PROGRAMDATA,Path,ProgramData,SYSTEMROOT,SystemRoot,TEMP,TMP,USERPROFILE,XDG_CONFIG_HOME" \
         "$(ev allowlist_sorted)"
-    assert_eq "allowlist/exact-cardinality" "16" "$(ev allowlist_count)"
+    assert_eq "allowlist/exact-cardinality" "17" "$(ev allowlist_count)"
+}
+
+# Group F: commit-push binaries.external declares glab (#2308 CPR-ORTH).
+# The worker-dispatch registry must list glab in commit-push's external
+# binaries so the dispatcher's assertCommandAllowed gate can permit it.
+# TL1 data assertion — no spawn needed.
+group_f() {
+    if impl_missing "registry/external-binaries-glab" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
+        return
+    fi
+    local out
+    out="$(node -e '
+      const reg = require(process.argv[1]);
+      const workers = reg.workers || {};
+      const cp = workers["commit-push"] || {};
+      const ext = (cp.binaries && Array.isArray(cp.binaries.external))
+        ? cp.binaries.external : null;
+      const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
+      out("binaries_field_present", ext !== null ? 1 : 0);
+      out("glab_in_external", ext && ext.includes("glab") ? 1 : 0);
+      out("glab_entry", ext ? ext.filter((b) => b === "glab").join(",") : "(absent)");
+    ' "$REGISTRY_JS" 2>&1)" || out="REQUIRE_FAILED"
+    ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
+
+    assert_eq "registry/commit-push-binaries-field-present" "1" "$(ev binaries_field_present)"
+    assert_eq "registry/commit-push-glab-in-external" "1" "$(ev glab_in_external)"
+    assert_eq "registry/commit-push-glab-entry-exact" "glab" "$(ev glab_entry)"
 }
 
 if command -v timeout >/dev/null 2>&1; then
@@ -402,6 +406,7 @@ group_b
 group_c
 group_d
 group_e
+group_f
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
