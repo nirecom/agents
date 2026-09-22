@@ -46,6 +46,11 @@ RT-1a. Check each newly added test file for a missed append target:
   - A non-`-` `viable` column is a `high`-tier gap "append candidate existed but a new file was created". A `# Tags:` `dup-group-keep:size-hard-limit` does NOT waive it — the same row disproves the tag by showing a sub-HARD target. No `dup-group-keep:<reason>` value waives anything; the only escape is the WARNINGS_ACCEPTED sentinel.
   - Validate the tag's claim, not its presence: when the file's `# Tags:` carries `dup-group-keep:size-hard-limit`, the row corroborates it only if `excluded` is non-`-` and `reason` is `size-hard-limit`. A tag on a row with `excluded` = `-` (`reason=no-candidate` — no append candidate ever existed) is an unvalidated opt-out: report it at the same `high` tier as a missed append target.
   - Feed the gaps into RT-3's review input and count them in RT-5c.
+RT-1b. Check new test files for missing case markers (deterministic gate, no codex review needed):
+  - For each file in ADDED that lives under `tests/`, run `bash "$AGENTS_CONFIG_DIR/bin/check-case-markers.sh" <file>` (Bash, one standalone command per file).
+  - Any `HIGH:` output line is a `high`-tier gap "multi-path # Tests: header with no case_begin/case_end markers".
+  - These gaps are deterministic — do not feed them into RT-3 codex input. Count them directly in RT-5c.
+  - If any RT-1b violations exist, RT-5 must emit WARNINGS regardless of codex exit code.
 RT-2. Assemble review input via the Write tool only — concatenate test file(s) and source file(s) contents into `<PLANS_DIR>/<session-id>-test-review.md`. Do not substitute Bash-based assembly for the Write tool call in this step — see `rules/shell-commands.md` Tool Selection Priority for what counts as shell-based writing. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Initialize `EXTENSIONS_USED=0`.
 RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID` (plan-artifact prefix), `PLANS_DIR`, `EXTENSIONS_USED`. The wrapper auto-adds `--context test-design.md`. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; round-continuing under the 2+1 cap):
 - exit 0 APPROVED → RT-5 COMPLETE.
