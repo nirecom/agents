@@ -122,6 +122,8 @@ Invoke-InstallStep "Setting up global gitignore (WORKTREE_NOTES.md)" "$AgentsRoo
 
 Invoke-InstallStep "Installing gh (GitHub CLI)" "$AgentsRoot\install\win\gh.ps1"
 
+Invoke-InstallStep "Installing glab (GitLab CLI)" "$AgentsRoot\install\win\glab.ps1"
+
 Invoke-InstallStep "Installing jq" "$AgentsRoot\install\win\jq.ps1"
 
 Invoke-InstallStep "Installing shellcheck" "$AgentsRoot\install\win\shellcheck.ps1"
