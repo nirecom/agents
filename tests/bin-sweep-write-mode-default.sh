@@ -204,6 +204,7 @@ B3_audit_tests_dry_run_writes_nothing() {
     cp "$AGENTS_DIR/bin/audit-tests.sh" "$repo/bin/audit-tests.sh"
     mkdir -p "$repo/bin/lib"
     cp "$AGENTS_DIR"/bin/lib/*.sh "$repo/bin/lib/"
+    cp -r "$AGENTS_DIR/bin/lib/test-retire-predicate" "$repo/bin/lib/"
     printf '#!/bin/bash\n' > "$repo/tests/feature-100-stale.sh"
     git -C "$repo" add -A
     GIT_AUTHOR_DATE="2020-01-01T00:00:00Z" GIT_COMMITTER_DATE="2020-01-01T00:00:00Z" \

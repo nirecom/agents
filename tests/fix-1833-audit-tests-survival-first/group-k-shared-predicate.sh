@@ -2,22 +2,10 @@
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, wiring, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
-#
-# CPR-SSOT (single source of truth) is the reason bin/lib/test-retire-predicate.sh
-# exists at all: BOTH audit scripts must reach the same survival predicate and
-# the same delete gate. A file-presence check cannot see the failure mode that
-# actually matters — the module gets created, and each script keeps its own
-# inline copy of the logic. That state passes "the file exists", passes every
-# behavioural case in groups A/B while the two copies happen to agree, and
-# silently diverges the first time one copy is fixed.
-#
-# Two independent proofs are asserted here:
-#   K1 static — each script carries a `source` of the module AND at least one
-#     real call site of the shared functions (a source line with no calls is a
-#     duplicated-logic script with a decorative import).
-#   K2 runtime — a COPY of bin/ whose module is instrumented with logging
-#     wrappers is executed; the wrappers only fire if control actually enters the
-#     module at run time. This is what a static grep cannot prove.
+# CPR-SSOT: both audit scripts must reach the SAME predicate + delete gate, not
+# keep inline copies (which pass "file exists" yet diverge on first fix). K1 =
+# static (source line + real call sites); K2 = runtime (an instrumented bin/
+# copy logs which shared fns actually fire — what a static grep cannot prove).
 
 # ── K1: static wiring — source line plus call sites, in both scripts ────────
 
@@ -49,10 +37,11 @@ while IFS='|' read -r k_name k_script; do
     assert_eq "K1a[$k_name] sources bin/lib/test-retire-predicate.sh" \
         "1" "$(k_greps "$k_bin" "$K_SOURCE_RE")"
 
-    # The survival predicate is the PRIMARY FILTER and the delete gate is the
-    # safety check — the two halves of the inversion. A script that sources the
-    # module but open-codes either half has not been migrated.
-    for k_fn in trp_survival_verdict trp_delete_gate; do
+    # The refcount verdict is the PRIMARY FILTER since #2081; the delete gate is
+    # the safety check. Marker-less files still reach trp_survival_verdict, but
+    # only via fallback INSIDE trp_case_refcount_verdict, so the scripts no longer
+    # call it directly. A script open-coding either half has not been migrated.
+    for k_fn in trp_case_refcount_verdict trp_delete_gate; do
         k_n="$(k_call_count "$k_bin" "$k_fn")"
         if [[ "$k_n" -ge 1 ]]; then
             pass "K1b[$k_name] calls $k_fn() (n=$k_n)"
@@ -69,13 +58,26 @@ TABLE
 # K1c — the module itself must DEFINE what the scripts call. A source line
 # pointing at a module that defines nothing is the same duplication failure with
 # an extra file.
+# Since #2081 the definitions are split: the predicate body owns the verdict/gate
+# and the case-unit refcount + removal helpers; the case boundary parser owns
+# trp_enumerate_cases in the private sibling case-parser.sh (C11).
+K_CASE_PARSER="$AGENTS_ROOT/bin/lib/test-retire-predicate/case-parser.sh"
+k_defines() { # <file> <fn> — 1 when the file defines the function, else 0
+    grep -qE "^[[:space:]]*(function[[:space:]]+)?$2[[:space:]]*\(\)" "$1" 2>/dev/null \
+        && echo 1 || echo 0
+}
 if [[ -f "$RETIRE_LIB" ]]; then
     K_UNDEF=""
-    for k_fn in trp_survival_verdict trp_delete_gate; do
-        grep -qE "^[[:space:]]*(function[[:space:]]+)?$k_fn[[:space:]]*\(\)" "$RETIRE_LIB" \
-            || K_UNDEF="$K_UNDEF $k_fn"
+    for k_fn in trp_survival_verdict trp_delete_gate trp_case_refcount_verdict trp_remove_orphan_cases; do
+        [[ "$(k_defines "$RETIRE_LIB" "$k_fn")" == "1" ]] || K_UNDEF="$K_UNDEF $k_fn"
     done
-    assert_eq "K1c the module defines every function the scripts call" "" "$K_UNDEF"
+    assert_eq "K1c predicate body defines the verdict/gate/refcount/removal fns" "" "$K_UNDEF"
+    if [[ -f "$K_CASE_PARSER" ]]; then
+        assert_eq "K1c-parser case-parser.sh sibling defines trp_enumerate_cases" \
+            "1" "$(k_defines "$K_CASE_PARSER" trp_enumerate_cases)"
+    else
+        fail "K1c-parser bin/lib/test-retire-predicate/case-parser.sh missing — NOTE: passes after write-code step"
+    fi
 else
     fail "K1c bin/lib/test-retire-predicate.sh does not exist, so nothing can be wired to it"
 fi
@@ -97,7 +99,7 @@ if [[ -f "$K_BIN_COPY/lib/test-retire-predicate.sh" ]]; then
     cat >> "$K_BIN_COPY/lib/test-retire-predicate.sh" <<'KEOF'
 
 # ── appended by tests/fix-1833-audit-tests-survival-first (runtime probe) ──
-for __trp_probe_fn in trp_survival_verdict trp_delete_gate; do
+for __trp_probe_fn in trp_survival_verdict trp_delete_gate trp_case_refcount_verdict trp_enumerate_cases trp_remove_orphan_cases; do
     if declare -F "$__trp_probe_fn" >/dev/null 2>&1; then
         eval "$(declare -f "$__trp_probe_fn" \
             | sed "1s/^$__trp_probe_fn/__trp_probe_orig_$__trp_probe_fn/")"
@@ -141,10 +143,15 @@ k_run_probe() {
 K2_AUDIT_FNS="$(k_run_probe audit "$K_BIN_COPY/audit-tests.sh")"
 K2_COMMON_FNS="$(k_run_probe common "$K_BIN_COPY/audit-tests-common.sh")"
 
-assert_eq "K2a audit-tests.sh executes both shared predicates at run time" \
-    "trp_delete_gate trp_survival_verdict" "$K2_AUDIT_FNS"
-assert_eq "K2b audit-tests-common.sh executes both shared predicates at run time" \
-    "trp_delete_gate trp_survival_verdict" "$K2_COMMON_FNS"
+# The K2 fixture uses marker-less add_test_file files, which travel the fallback
+# path: trp_case_refcount_verdict runs, calls trp_enumerate_cases (HAS_MARKERS=0),
+# delegates to trp_survival_verdict, and orphans reach trp_delete_gate — four fns
+# (sorted). trp_remove_orphan_cases fires only on --apply partial-orphan, so a
+# marker-less fixture never triggers it.
+assert_eq "K2a audit-tests.sh executes the shared predicates at run time" \
+    "trp_case_refcount_verdict trp_delete_gate trp_enumerate_cases trp_survival_verdict" "$K2_AUDIT_FNS"
+assert_eq "K2b audit-tests-common.sh executes the shared predicates at run time" \
+    "trp_case_refcount_verdict trp_delete_gate trp_enumerate_cases trp_survival_verdict" "$K2_COMMON_FNS"
 
 # K2c — the probe is only meaningful if the instrumented copy still WORKS. A
 # copy that crashed would log nothing and could be mistaken for "not wired", so

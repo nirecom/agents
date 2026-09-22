@@ -19,9 +19,9 @@ else
 fi
 
 if echo "$OUT_RCS" | grep -q "_archived/older.sh"; then
-    pass "Case 5: review-code-size --all does not exclude tests/_archived/ (fix scoped to _archive/)"
+    fail "Case 5: review-code-size --all should also exclude tests/_archived/ (archive convention covers both _archive and _archived)"
 else
-    fail "Case 5: review-code-size --all excluded tests/_archived/ — fix should only exclude _archive/"
+    pass "Case 5: review-code-size --all excludes tests/_archived/ (archive convention covers both _archive and _archived)"
 fi
 
 if echo "$OUT_RCS" | grep -q "normal/live.sh"; then

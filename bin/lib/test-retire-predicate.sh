@@ -14,6 +14,8 @@ _TRP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_TRP_DIR/test-frontmatter-constants.sh"
 # shellcheck source=test-frontmatter-fix.sh
 source "$_TRP_DIR/test-frontmatter-fix.sh"
+# shellcheck source=test-retire-predicate/case-parser.sh
+source "$_TRP_DIR/test-retire-predicate/case-parser.sh"
 
 # Configuration globals (callers may override before use).
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
@@ -31,6 +33,22 @@ TRP_TOKENS_MISSING=()
 TRP_SIBLING=""
 TRP_SIBLING_COUNT=0
 TRP_UNIT_PATHS=()
+# Case-unit globals (set by case-parser.sh + trp_case_refcount_verdict).
+# TRP_UNIT_MODE: case|file. TRP_REFCOUNT: surviving case count. TRP_GC: 1 when
+# trp_unit_of resolved a whole-unit GC target. _TRP_MARKER_MALFORMED: 1 → the
+# markers are non-conforming and the caller fell back to file-level survival.
+TRP_HAS_MARKERS=0
+TRP_CASE_COUNT=0
+TRP_CASE_TARGETS=()
+TRP_CASE_BEGIN_LINES=()
+TRP_CASE_END_LINES=()
+TRP_CASE_ALIVE=()
+TRP_CASE_NAMES=()
+TRP_REFCOUNT=0
+TRP_ORPHAN_CASE_IDX=()
+TRP_UNIT_MODE="file"
+TRP_GC=0
+_TRP_MARKER_MALFORMED=0
 
 # ── repo root ───────────────────────────────────────────────────────────────
 
@@ -68,7 +86,7 @@ trp_scope_of() {
 # and delete it without ever checking issue state.
 trp_issue_ref() {
   local name="${1##*/}"
-  local stem="${name%.sh}"
+  local stem="${name%.sh}"; stem="${stem%.Tests.ps1}"; stem="${stem%.py}"
   if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
     printf 'explicit\n'
     return 0
@@ -83,7 +101,7 @@ trp_issue_ref() {
 # trp_issue_number <filename> — the explicit issue number, or empty.
 trp_issue_number() {
   local name="${1##*/}"
-  local stem="${name%.sh}"
+  local stem="${name%.sh}"; stem="${stem%.Tests.ps1}"; stem="${stem%.py}"
   if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
     printf '%s' "${BASH_REMATCH[2]}"
   fi
@@ -158,6 +176,92 @@ trp_survival_verdict() {
   printf '%s\n' "$TRP_VERDICT"
 }
 
+# ── case-unit refcount verdict ───────────────────────────────────────────────
+
+# trp_case_refcount_verdict <repo-root> <file> — top-level entry the scan loops
+# call. Sets $TRP_VERDICT, $TRP_REFCOUNT and $TRP_UNIT_MODE. Case-conforming
+# files decide per case; malformed and marker-less files fall back to
+# trp_survival_verdict (C8 — never to undeterminable/SKIP).
+trp_case_refcount_verdict() {
+  local repo_root="${1:?trp_case_refcount_verdict: repo root required}"
+  local file="${2:?trp_case_refcount_verdict: test file required}"
+  trp_enumerate_cases "$repo_root" "$file"
+  if [[ "$_TRP_MARKER_MALFORMED" -eq 1 || "$TRP_HAS_MARKERS" -eq 0 ]]; then
+    TRP_UNIT_MODE="file"
+    trp_survival_verdict "$repo_root" "$file" >/dev/null
+    if [[ "$TRP_VERDICT" == "orphan" ]]; then TRP_REFCOUNT=0; else TRP_REFCOUNT=1; fi
+    printf '%s\n' "$TRP_VERDICT"; return 0
+  fi
+  TRP_UNIT_MODE="case"
+  if [[ "$TRP_REFCOUNT" -eq 0 ]]; then
+    TRP_VERDICT=orphan
+  elif [[ "${#TRP_ORPHAN_CASE_IDX[@]}" -gt 0 ]]; then
+    TRP_VERDICT=partial-orphan
+  else
+    TRP_VERDICT=alive
+  fi
+  printf '%s\n' "$TRP_VERDICT"
+}
+
+# trp_remove_orphan_cases <repo-root> <file> — physically excise every orphan
+# case's [begin,end] line range (--apply helper). Depends on the TRP_CASE_*
+# state left by the immediately preceding trp_case_refcount_verdict; no
+# TRP_CASE_*-mutating call may intervene (caller contract). Fail-closed.
+trp_remove_orphan_cases() {
+  local repo_root="${1:?trp_remove_orphan_cases: repo root required}"
+  local file="${2:?trp_remove_orphan_cases: test file required}"
+  if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then return 1; fi
+  if [[ ! "$TRP_CASE_COUNT" =~ ^[0-9]+$ || "$TRP_CASE_COUNT" -le 0 || "${#TRP_ORPHAN_CASE_IDX[@]}" -eq 0 ]]; then
+    echo "WARNING: trp_remove_orphan_cases: no orphan case state — skipping ${file}" >&2
+    return 1
+  fi
+  local abs="$file"
+  [[ "$abs" != /* ]] && abs="$repo_root/$file" || true
+
+  # Mark every line inside an orphan [begin,end] range for skipping (original
+  # line numbers, resolved before any rewrite, so ranges cannot shift).
+  local -A skip=()
+  local idx b e ln
+  local -a removed_names=()
+  for idx in "${TRP_ORPHAN_CASE_IDX[@]}"; do
+    b="${TRP_CASE_BEGIN_LINES[$idx]}"
+    e="${TRP_CASE_END_LINES[$idx]}"
+    removed_names+=("${TRP_CASE_NAMES[$idx]}")
+    for ((ln = b; ln <= e; ln++)); do skip["$ln"]=1; done
+  done
+
+  local tmp; tmp="$(mktemp)"
+  local lineno=0 line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    lineno=$((lineno + 1))
+    if [[ -n "${skip[$lineno]:-}" ]]; then continue; fi
+    printf '%s\n' "$line" >> "$tmp"
+  done < "$abs"
+
+  if ! bash -n "$tmp" 2>/dev/null; then
+    echo "WARNING: trp_remove_orphan_cases: rewrite failed bash -n — skipping ${file}" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+
+  local mode
+  mode="$(stat -c '%a' "$abs" 2>/dev/null || stat -f '%Lp' "$abs" 2>/dev/null || true)"
+  if [[ -n "$mode" ]]; then chmod "$mode" "$tmp" 2>/dev/null || true; fi
+  [[ -x "$abs" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
+
+  if ! mv "$tmp" "$abs"; then
+    echo "WARNING: trp_remove_orphan_cases: mv failed — ${file}" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! { git -C "$repo_root" add -- "$file" 2>/dev/null || git add -- "$abs" 2>/dev/null; }; then
+    echo "WARNING: trp_remove_orphan_cases: git add failed — ${file}" >&2
+    return 1
+  fi
+  local name
+  for name in "${removed_names[@]}"; do printf '%s\n' "$name"; done
+}
+
 # ── issue metadata ──────────────────────────────────────────────────────────
 
 # trp_init_gh <offline-flag> — resolves the repo slug once per run. A missing or
@@ -223,7 +327,9 @@ trp_delete_gate() {
   local verdict="$1" scope="$2" ref="$3" meta="$4"
   local closed_date
   : "$scope"
-  if [[ "$verdict" != "orphan" ]]; then
+  # Both whole-unit orphan and case-level partial-orphan pass the gate; the ref/
+  # meta logic below governs both identically.
+  if [[ "$verdict" != "orphan" && "$verdict" != "partial-orphan" ]]; then
     TRP_GATE="hold-metadata-unavailable"; printf '%s\n' "$TRP_GATE"; return 0
   fi
   case "$ref" in
@@ -262,15 +368,26 @@ trp_gate_line_token() {
 
 # ── deletion unit ───────────────────────────────────────────────────────────
 
-# trp_unit_of <repo-root> <test-relpath> — a test file and its populated
-# tests/<stem>/ sibling folder are ONE retire unit. Sets $TRP_SIBLING (relative,
-# no trailing slash, empty when absent), $TRP_SIBLING_COUNT and $TRP_UNIT_PATHS[].
+# trp_unit_of <repo-root> <test-relpath> <refcount> — whole-unit GC gate. Only
+# refcount==0 resolves a deletion unit (the file + its populated tests/<stem>/
+# sibling, ONE retire unit) and sets $TRP_GC=1; refcount>0 leaves nothing to GC.
+# Sets $TRP_SIBLING (relative, no trailing slash, empty when absent),
+# $TRP_SIBLING_COUNT, $TRP_UNIT_PATHS[] and $TRP_GC.
+# The ${rel%.sh} stem is .sh-only, but .ps1/.py reach here solely via the
+# refcount==0 whole-file path (C10 guarantees TRP_HAS_MARKERS=0), where the
+# absent sibling is silently ignored — a single-file unit, as intended (C9).
 trp_unit_of() {
-  local repo_root="$1" rel="$2"
+  local repo_root="$1" rel="$2" refcount="${3:-0}"
   local stem="${rel%.sh}"
   TRP_SIBLING=""
   TRP_SIBLING_COUNT=0
+  TRP_UNIT_PATHS=()
+  TRP_GC=0
+  if [[ "$refcount" -ne 0 ]]; then
+    return 0
+  fi
   TRP_UNIT_PATHS=("$rel")
+  TRP_GC=1
   if [[ -d "$repo_root/$stem" ]]; then
     TRP_SIBLING="$stem"
     TRP_SIBLING_COUNT="$(find "$repo_root/$stem" -type f 2>/dev/null | wc -l | tr -d ' ')"

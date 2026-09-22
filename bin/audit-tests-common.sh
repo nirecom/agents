@@ -7,8 +7,8 @@
 # Writes by default: a flagless run DELETES orphans (git rm); --dry-run reports
 # only. --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory
 # as TSV, identical from either entrypoint (bin/lib/test-dup-group.sh).
-# Scans top-level tests/*.sh EXCEPT tests/feature-<N>-*.sh; an ORPHAN is a file
-# whose every `# Tests:` path is gone, gated on the filename's issue reference.
+# Scans top-level tests/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
+# unit=case (refcount 0 git rm, partial-orphan excises dead blocks, else file).
 
 set -euo pipefail
 
@@ -130,12 +130,13 @@ OFFLINE="$TRP_OFFLINE"
 DIAG_FILES=()
 DIAG_KINDS=()
 ORPHANS=()
+PARTIAL_ORPHANS=()
 DELETE_FAILED=0
 JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests-common.sh report — ${TODAY}"
-  echo "# Scope: top-level tests/*.sh excluding issue-specific feature-<N>-*.sh"
+  echo "# Scope: top-level tests/*.{sh,Tests.ps1},test_*.py excluding feature-<N>-*"
   echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -144,13 +145,14 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for testfile in tests/*.sh; do
+for testfile in tests/*.sh tests/*.Tests.ps1 tests/test_*.py; do
   [[ -e "$testfile" ]] || continue
   in_common_scope "$testfile" || continue
   base="$(basename "$testfile")"
 
-  trp_survival_verdict "$REPO_ROOT" "$testfile" >/dev/null
+  trp_case_refcount_verdict "$REPO_ROOT" "$testfile" >/dev/null
   verdict="$TRP_VERDICT"
+  refcount="$TRP_REFCOUNT"
 
   case "$verdict" in
     malformed)
@@ -163,6 +165,50 @@ for testfile in tests/*.sh; do
       if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${testfile}"; fi
       continue
       ;;
+    partial-orphan)
+      # C4: trp_remove_orphan_cases below relies on the TRP_CASE_* state just set
+      # by trp_case_refcount_verdict — no TRP_CASE_*-mutating call may intervene.
+      po_names=()
+      for _i in "${TRP_ORPHAN_CASE_IDX[@]}"; do po_names+=("${TRP_CASE_NAMES[$_i]}"); done
+      scope="$(trp_scope_of "$base")"
+      ref="$(trp_issue_ref "$base")"
+      meta="none"
+      if [[ "$ref" == "explicit" ]]; then
+        trp_fetch_issue_meta "$(trp_issue_number "$base")" >/dev/null
+        meta="$TRP_ISSUE_META"
+      fi
+      trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
+      gate="$TRP_GATE"
+      PARTIAL_ORPHANS+=("$testfile")
+      if [[ "$FORMAT" == "text" ]]; then
+        echo "PARTIAL_ORPHAN: ${testfile} (refcount=${refcount})"
+        echo "  Surviving cases: ${refcount}"
+        echo "  Orphan cases: $(IFS=','; echo "${po_names[*]:-}")"
+      fi
+      hold_token="$(trp_gate_line_token "$gate")"
+      if [[ -n "$hold_token" ]]; then
+        if [[ "$FORMAT" == "text" ]]; then echo "${hold_token}: ${testfile}"; fi
+      elif [[ "$APPLY" -eq 1 ]]; then
+        _remove_rc=0
+        _removed_names=""
+        _removed_names=$(trp_remove_orphan_cases "$REPO_ROOT" "$testfile") || _remove_rc=$?
+        if [[ "$_remove_rc" -ne 0 ]]; then
+          DELETE_FAILED=1
+        else
+          while IFS= read -r _removed; do
+            [[ -n "$_removed" ]] || continue
+            if [[ "$FORMAT" == "text" ]]; then echo "CASE_REMOVED: ${testfile}: ${_removed}"; fi
+          done <<< "$_removed_names"
+        fi
+      fi
+      if [[ "$FORMAT" == "text" ]]; then echo ""; fi
+      if [[ "$FORMAT" == "json" ]]; then
+        JSON_ITEMS+=("$(printf '{"file":"%s","unit_mode":"case","refcount":%s,"orphan_cases":%s,"delete_gate":"%s"}' \
+          "$(trp_json_escape "$testfile")" "$refcount" \
+          "$(trp_json_array "${po_names[@]:-}")" "$(trp_json_escape "$gate")")")
+      fi
+      continue
+      ;;
     orphan) ;;
     *) continue ;;
   esac
@@ -171,7 +217,7 @@ for testfile in tests/*.sh; do
   tokens_missing=("${TRP_TOKENS_MISSING[@]:-}")
   tests_csv="$TRP_TESTS_CSV"
 
-  trp_unit_of "$REPO_ROOT" "$testfile"
+  trp_unit_of "$REPO_ROOT" "$testfile" "$refcount"
   sibling="$TRP_SIBLING"
   sib_count="$TRP_SIBLING_COUNT"
   unit_paths=("${TRP_UNIT_PATHS[@]}")
@@ -216,8 +262,8 @@ for testfile in tests/*.sh; do
   if [[ "$FORMAT" == "json" ]]; then
     sib_json=""
     if [[ -n "$sibling" ]]; then sib_json="${sibling}/"; fi
-    JSON_ITEMS+=("$(printf '{"file":"%s","tests_paths":%s,"missing_paths":%s,"sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
-      "$(trp_json_escape "$testfile")" \
+    JSON_ITEMS+=("$(printf '{"file":"%s","unit_mode":"%s","refcount":%s,"tests_paths":%s,"missing_paths":%s,"sibling":"%s","sibling_file_count":%s,"delete_gate":"%s"}' \
+      "$(trp_json_escape "$testfile")" "$(trp_json_escape "$TRP_UNIT_MODE")" "$refcount" \
       "$(trp_json_array "${tokens_all[@]}")" \
       "$(trp_json_array "${tokens_missing[@]}")" \
       "$(trp_json_escape "$sib_json")" "$sib_count" "$(trp_json_escape "$gate")")")
@@ -246,7 +292,7 @@ fi
 if [[ "$DELETE_FAILED" -eq 1 ]]; then
   exit 2
 fi
-if [[ "${#ORPHANS[@]}" -eq 0 ]]; then
+if [[ "${#ORPHANS[@]}" -eq 0 && "${#PARTIAL_ORPHANS[@]}" -eq 0 ]]; then
   exit 1
 fi
 exit 0
