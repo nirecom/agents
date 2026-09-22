@@ -1,5 +1,5 @@
 # audit-tests-common.sh report — <DATE>
-# Scope: top-level tests/*.sh excluding issue-specific feature-<N>-*.sh
+# Scope: top-level tests/*.{sh,Tests.ps1},test_*.py excluding feature-<N>-*
 # Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only
 # Cutoff: <DATE> (stale-months: 3)
 # Mode: OFFLINE (orphans are still reported; deletion of issue-referencing files is held)

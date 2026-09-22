@@ -1,5 +1,5 @@
 # audit-tests.sh report — <DATE>
-# Scope: top-level tests/feature-<N>-*.sh (issue-specific)
+# Scope: top-level tests/feature-<N>-*.{sh,Tests.ps1} (issue-specific)
 # Criteria: every '# Tests:' target is missing — issue state gates deletion only
 # Cutoff: <DATE> (stale-months: 3)
 # Mode: OFFLINE (candidates are still reported; deletion of issue-referencing files is held)
