@@ -101,4 +101,8 @@ Changes: fix(#2360): TR5 audit gate re-armed indefinitely on artifact-side null 
 
 ### FEATURE: PR #2368 — docs/2308-gitlab-forge-codehost-cli-wip (2026-09-22, 47043ca76d78e5c62dc39b9cf0f01bfa55ef96f8, #2368)
 Background: feat(#2308): add GitLab forge support with detect-forge-type CLI and ...
-Changes: feat(#2308): added detect-forge-type CLI and FORGE_GITLAB_HOST env var for self-hosted GitLab auto-detection; implemented codehostGitlab (isPrivateRepo/shouldScanAsPublicTarget/WIP label management) and wip-state/gitlab.sh for MR WIP state; added corresponding tests <!-- compose-doc-append-sentinel: branch=docs/2308-gitlab-forge-codehost-cli-wip pr=#2368 -->
+Changes: feat(#2308): added detect-forge-type CLI and FORGE_GITLAB_HOST env var for self-hosted GitLab auto-detection; implemented codehostGitlab (isPrivateRepo/shouldScanAsPublicTarget/WIP label management) and wip-state/gitlab.sh for MR WIP state; added corresponding tests <!-- compose-doc-append-sentinel: branch=docs/2308-gitlab-forge-codehost-cli-wip pr=#2368 -->
+
+### FEATURE: PR #2371 — feature/2081-retire-refcount-gc-orphan-ps1 (2026-09-22, 8325688ae26d06fddcf1fa49c9eadf7161476bc8, #2371)
+Background: fix(#2081,#1864): retire predicate case-unit refcount GC, orphan case removal, and .ps1/.py scan extension
+Changes: #2081: retire predicate migrated to case-unit refcount GC; orphan case physical removal (trp_remove_orphan_cases) added; scan extension to .ps1/.py in bin/audit-tests.sh and bin/audit-tests-common.sh. PR #2371 squash-merged 2026-09-22.;#1864: .Tests.ps1 and test_*.py scan gap closed; bin/audit-tests.sh and bin/audit-tests-common.sh now include these extensions in survival audit scope. PR #2371 squash-merged 2026-09-22. <!-- compose-doc-append-sentinel: branch=feature/2081-retire-refcount-gc-orphan-ps1 pr=#2371 -->
