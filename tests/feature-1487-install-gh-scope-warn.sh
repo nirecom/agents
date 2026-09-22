@@ -84,12 +84,14 @@ FAKE_ROOT="$TMP/fake-agents-root"
 mkdir -p "$FAKE_ROOT/install/linux"
 mkdir -p "$FAKE_ROOT/mock-bin"
 
-# NOP sub-scripts
-for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh global-gitignore.sh codex.sh gh.sh jq.sh; do
+# NOP sub-scripts — must cover every sub-script install.sh calls unconditionally or conditionally.
+for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh \
+             global-gitignore.sh codex.sh gh.sh jq.sh shellcheck.sh pwsh.sh codegraph.sh rtk.sh glab.sh; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/install/linux/$_stub"
     chmod +x "$FAKE_ROOT/install/linux/$_stub"
 done
 unset _stub
+
 
 # profile-snippet.sh placeholder (referenced in the profile-sourcing section)
 printf '# agents profile snippet\n' > "$FAKE_ROOT/profile-snippet.sh"
