@@ -515,3 +515,7 @@ Changes: Add `RTK_AUDIT=on` toggle: records a JSONL audit line to `~/.agents/log
 ### FEATURE: PR #2366 (2026-09-22)
 Background: fix(#2357): block exit-6 terminal guard bypass with exit 9 gate
 Changes: review-code-security / review-tests / review-plan-security: fix security bypass where changing code after exit 6 (HIGH_UNRESOLVED) auto-cleared the terminal guard and reopened a fresh review budget. New exit 9 (EXIT_EXIT6_UNACCEPTED) blocks the bypass; only an explicit accept marker allows resumption.
+
+### FEATURE: PR #2367 (2026-09-22)
+Background: fix(#2344,#2185): concern-ledger rejected state + DISCRIM carrier + CTX_CONCERNS_LOG wiring
+Changes: Fixed: prior concerns in `review-code-security` were not resolved on re-review after fixes; corrected by relaxing the `have_prior_entries` guard and the scanner-required gate.;Concern triage rejections are now durable across review-cycle cleanups: `concern-ledger reject` marks a concern terminal and records the reason in a DISCRIM-keyed carrier file that survives `cleanup_ledger` and `cl_begin_cycle`. All five review wrapper scripts automatically generate and export `CTX_CONCERNS_LOG` from the carrier so the codex reviewer receives prior rejections as context.
