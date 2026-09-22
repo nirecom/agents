@@ -69,6 +69,7 @@ CP_UPSTREAM='{"match":"symbolic-full-name","status":0,"stdout":"origin/feature/1
 CP_STAGED='{"match":"diff --cached","stdout":" README.md | 1 +\n 1 file changed"}'
 CP_UNSTAGED='{"match":"unstagedCheck","status":0}'
 CP_BOOTSTRAP='{"match":"bootstrapProbe","stdout":"{\"preBootstrap\":false,\"classification\":\"normal\"}"}'
+CP_REMOTEURL='{"match":"remote get-url","status":0,"stdout":"https://github.com/acme/widgets.git\n"}'
 CP_ISGH='{"match":"isGithubRemote","status":0}'
 CP_PRVIEW='{"match":"pr view","status":1,"stderr":"no pull requests found"}'
 CP_ISSUEVIEW='{"match":"issue view","status":0,"stdout":"an issue title\n"}'
@@ -76,7 +77,7 @@ CP_SCAN='{"match":"scanOutbound","status":0}'
 CP_PRCREATE='{"match":"pr create","status":0,"stdout":"https://github.com/o/r/pull/7\n"}'
 CP_CATCHALL='{"status":0,"stdout":""}'
 
-CP_RULES_BASE="$CP_GATE,$CP_HEAD,$CP_UPSTREAM,$CP_STAGED,$CP_UNSTAGED,$CP_BOOTSTRAP,$CP_ISGH,$CP_PRVIEW,$CP_ISSUEVIEW,$CP_SCAN,$CP_PRCREATE"
+CP_RULES_BASE="$CP_GATE,$CP_HEAD,$CP_UPSTREAM,$CP_STAGED,$CP_UNSTAGED,$CP_BOOTSTRAP,$CP_REMOTEURL,$CP_ISGH,$CP_PRVIEW,$CP_ISSUEVIEW,$CP_SCAN,$CP_PRCREATE"
 
 # ===========================================================================
 # Group B — commit-push. One full run: commit, push, and the PR step.
@@ -96,7 +97,7 @@ group_b() {
     assert_eq "B/upstream-probe-carries-nothing" "(empty)" "$(q scope 'symbolic-full-name')"
     assert_eq "B/unstaged-script-carries-nothing" "(empty)" "$(q scope unstagedCheck)"
     assert_eq "B/bootstrap-script-carries-the-ssh-socket" "SSH_AUTH_SOCK" "$(q scope bootstrapProbe)"
-    assert_eq "B/is-github-script-carries-nothing" "(empty)" "$(q scope isGithubRemote)"
+    assert_eq "B/forge-check-git-carries-nothing" "(empty)" "$(q scope 'remote get-url')"
     assert_eq "B/outbound-scan-carries-nothing" "(empty)" "$(q scope scanOutbound)"
 
     assert_eq "B/gate-carries-its-six-workflow-vars" "$GATE_SCOPE" "$(q scope workflowGate)"

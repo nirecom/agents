@@ -46,7 +46,18 @@ N="${1:-}"
 [[ -z "$N" ]] && usage
 [[ "$N" =~ ^[0-9]+$ ]] || usage
 
-# Validate --repo format before any use (prevents flag-injection into gh).
+# Forge detection (#2308). GitLab Free has no Projects v2 board — status labels
+# are the board and wip-state.sh owns them. Nothing here applies, so exit 0.
+AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+FORGE="$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
+[ -z "$FORGE" ] && FORGE="unknown"
+if [ "$FORGE" = "gitlab" ]; then
+    echo "info: ensure-board-card: GitLab has no Projects v2 board — status labels are managed by wip-state.sh; skipping (exit 0)" >&2
+    exit 0
+fi
+
+# Validate --repo format before any use (prevents flag-injection into gh). The
+# charset is GitHub's; gitlab already returned above, so this stays github/unknown.
 if [[ -n "$REPO_ARG" ]]; then
     if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
         echo "Error: invalid --repo value: $REPO_ARG" >&2

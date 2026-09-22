@@ -10,7 +10,7 @@
 // step is for and why it fails the way it does:
 // docs/architecture/claude-code/worker-dispatch/commit-push.md
 
-const { ensurePullRequest } = require("./pr");
+const { ensurePullRequest, resolveForgeForWorktree } = require("./pr");
 const { firstLine, isProtectedBranch, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
 const { pushToRemote } = require("./push");
 
@@ -159,13 +159,17 @@ function run(payload, ctx) {
   const pushed = pushToRemote(ctx, payload, branch, pushArgs, log);
   if (pushed.status !== "ok") return finish(pushed.status, pushed.summary);
 
-  // Step 8 — no PR on the direct-main flow, and none against a non-GitHub remote.
+  // Step 8 — no PR on the direct-main flow, and none against a non-GitHub/GitLab
+  // remote. Forge is resolved in-process via the shared pr.js helper (C1):
+  // runScript is bash-fixed and cannot launch the Node detect-forge-type shebang,
+  // and sharing one helper with pr.js makes the two verdicts unable to diverge.
+  // No silent github fallback — unknown/unreadable origin skips the PR.
   if (payload.enforce_worktree === "off") {
     return finish("pushed", `${branch} pushed; PR skipped (ENFORCE_WORKTREE=off)`);
   }
-  const isGithub = runScript(ctx, payload, "isGithubRemote", [], log);
-  if (isGithub === null || isGithub.status !== 0) {
-    return finish("pushed", `${branch} pushed; PR skipped (non-GitHub remote)`);
+  const { type: forge } = resolveForgeForWorktree(payload, ctx, log);
+  if (forge !== "github" && forge !== "gitlab") {
+    return finish("pushed", `${branch} pushed; PR skipped (non-GitHub/GitLab remote)`);
   }
 
   // Step 9 — idempotent PR step: pr_reused when one is already OPEN, otherwise

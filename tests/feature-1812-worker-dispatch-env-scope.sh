@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/feature-1812-worker-dispatch-env-scope.sh
 # Tests: bin/worker-dispatch/spawn.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/workers/doc-append.js
-# Tags: worker-dispatch, spawn, env-scope, credential-scope, ssh-auth-sock, gh-token, security, TL2, scope:issue-specific
+# Tags: worker-dispatch, spawn, env-scope, credential-scope, ssh-auth-sock, gh-token, security, scan-outbound, pr, TL2, scope:issue-specific
 #
 # Issue #1812 / #1744 — PER-CALL credential scope. Declaring SSH_AUTH_SOCK
 # (commit-push) and GH_TOKEN/GITHUB_TOKEN (doc-append) in envPassthrough handed
@@ -105,6 +105,8 @@ SID="wd1812-envscope-session"
 # process — no real `gh`, `git` or ssh-agent child runs in this file.
 FAKE_GH_TOKEN="ghp-FAKE1812-not-a-real-token"
 FAKE_GITHUB_TOKEN="github-pat-FAKE1812-not-a-real-token"
+FAKE_GITLAB_TOKEN="glpat-FAKE1812-not-a-real-token"
+FAKE_GITLAB_HOST="gitlab.example.com"
 FAKE_SSH_SOCK="/tmp/fake-1812-agent.sock"
 FAKE_AWS_SECRET="AKIAFAKE1812-not-a-real-secret"
 
@@ -146,6 +148,8 @@ PART_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1812-worker-dispatch-env-scope"
 . "$PART_DIR/group-push-ladder.sh"
 # shellcheck source=./feature-1812-worker-dispatch-env-scope/group-real-child.sh
 . "$PART_DIR/group-real-child.sh"
+# shellcheck source=./feature-1812-worker-dispatch-env-scope/group-pr-scan.sh
+. "$PART_DIR/group-pr-scan.sh"
 
 group_a
 group_b
@@ -159,6 +163,7 @@ group_b4_exhaustion_via_ladder
 group_b3
 group_c
 group_d
+group_pr_scan
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

@@ -34,21 +34,30 @@ function isPrivateRepo(repoDir) {
 
     if (!remoteUrl) return false;
 
-    // Host and repo id come from ONE parse of the same URL: a separately
-    // extracted repo id can name a repository the host check never validated,
-    // and `gh api repos/<that>` would then answer about an unrelated repo.
-    const parsed = parseOriginOwnerRepo(remoteUrl);
-    if (!parsed.ok) {
-      // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private, as before:
-      // the fail-safe that never leaks a private repo name to gh. #2307 preserves
-      // this — the gitlab codehost descriptor is a no-op and is not consulted here.
-      // Every other failure code (empty-url, unparsable-host, unparsable-owner-repo)
-      // fails open: there is no validated repo identity to ask gh about.
-      return parsed.code === "non-github-host";
+    // #2308: resolve the forge and branch on it. No silent github fallback.
+    const desc = resolveCodehostDescriptor(remoteUrl); // { type, ...codehost methods }
+    if (desc.type === "github") {
+      // Host and repo id come from ONE parse of the same URL: a separately
+      // extracted repo id can name a repository the host check never validated,
+      // and `gh api repos/<that>` would then answer about an unrelated repo.
+      const parsed = parseOriginOwnerRepo(remoteUrl);
+      if (!parsed.ok) return false; // github but unparsable → fail-open
+      return desc.isPrivateRepo(remoteUrl);
     }
-
-    // GitHub: route the private lookup through the codehost descriptor (#2307).
-    return resolveCodehostDescriptor(remoteUrl).isPrivateRepo(remoteUrl);
+    if (desc.type === "gitlab") {
+      // codehostGitlab runs end-to-end (C5). A self-hosted GitLab must have been
+      // declared via FORGE_GITLAB_HOST for this branch to be reached.
+      return desc.isPrivateRepo(remoteUrl);
+    }
+    // type="unknown": resolveForgeTarget could not classify the host (unrecognized
+    // host, null host from a local path, or a recognised host with a poisoned/empty
+    // project path). Fall back to parseOriginOwnerRepo's fine-grained codes:
+    //   non-github-host  → treat as private (unclassified remote host)
+    //   unparsable-host  → fail-open (local bare-repo remote — no network leakage)
+    //   unparsable-owner-repo → fail-open (github.com URL with bad path)
+    const parsed = parseOriginOwnerRepo(remoteUrl);
+    if (!parsed.ok) return parsed.code === "non-github-host";
+    return true; // parsed ok but forge unknown — shouldn't happen; treat as private
   } catch (e) {
     // gh not found, network error, not a git repo, etc. → fail-open
     return false;
@@ -86,22 +95,35 @@ function resolveRepoDir(command) {
 // ownerRepo: "owner/repo" string from --repo flag.
 // command: the original Bash command string (optional; used to detect non-GitHub tools).
 function shouldScanAsPublicTarget(ownerRepo, command) {
-  // Non-GitHub commands (glab, JIRA): the --repo value is a remote-service path,
-  // not a GitHub repo. We cannot verify visibility via GitHub API — fail-closed
-  // and scan to avoid suppressing the outbound scan for non-GitHub tracker writes.
-  if (command && !FORGE_DESCRIPTORS.github.tracker.isForgeScanTarget(command)) {
-    return true;
+  // #2308: select the codehost descriptor by the command's forge classification.
+  // ownerRepo is a path selector (no host), so resolveForgeTarget(url) cannot be
+  // used; the existing "classify the command" pattern is extended symmetrically.
+  // Empty command or a GitHub forge write → github codehost (unchanged SSOT/contract).
+  if (!command || FORGE_DESCRIPTORS.github.tracker.isForgeScanTarget(command)) {
+    return FORGE_DESCRIPTORS.github.codehost.shouldScanAsPublicTarget(ownerRepo);
   }
-  // #2307: an ownerRepo selector is a GitHub-only concept here; route to the
-  // github codehost descriptor (SSOT for the gh query + fail-closed contract).
-  return FORGE_DESCRIPTORS.github.codehost.shouldScanAsPublicTarget(ownerRepo);
+  // GitLab forge write (glab) → gitlab codehost descriptor for visibility (C5, end-to-end).
+  if (FORGE_DESCRIPTORS.gitlab.tracker.isForgeScanTarget(command)) {
+    return FORGE_DESCRIPTORS.gitlab.codehost.shouldScanAsPublicTarget(ownerRepo);
+  }
+  // Unknown tool → fail-closed: scan as public (unchanged conservative behavior).
+  return true;
 }
 
 // List owner/repo strings for all private repos visible to the user.
-// Fail-OPEN: error → []. Always queries gh fresh.
+// Fail-OPEN: error → []. Always queries the codehost fresh.
 function listPrivateRepoNames() {
-  // #2307: route to the github codehost descriptor (SSOT for the gh query).
-  return FORGE_DESCRIPTORS.github.codehost.listPrivateRepoNames();
+  // #2308: route through the CWD origin's codehost descriptor (github/gitlab/stub)
+  // so private names on either forge are captured for outbound redaction (CPR-ORTH).
+  try {
+    const r = spawnSync("git", ["remote", "get-url", "origin"], { encoding: "utf8", timeout: 5000 });
+    if (r.error || r.status !== 0) return [];
+    const url = (r.stdout || "").trim();
+    if (!url) return [];
+    return resolveCodehostDescriptor(url).listPrivateRepoNames();
+  } catch (e) {
+    return [];
+  }
 }
 
 // Escape regex metacharacters in a string.
