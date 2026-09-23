@@ -109,4 +109,8 @@ Changes: #2081: retire predicate migrated to case-unit refcount GC; orphan case 
 
 ### FEATURE: PR #2376 — feature/sweep-issues-20260921141913 (2026-09-23, c8d469f27a5bf4115afce0ab1b1a68bfa3d0a49d, #2376)
 Background: feat(#2363): sweep-issues all-bands loop, shared band-loop library, snapshot mechanism
-Changes: feat(#2363): sweep-issues all-bands loop — added --all-bands/--max-bands flags, bin/lib/sweep-band-loop.sh SSOT library, snapshot mechanism (single gh issue list fetch shared across all bands), CI contract fields (band_index="all", bands_swept, total_bands) in summary.sh, and 32 tests across two new test files <!-- compose-doc-append-sentinel: branch=feature/sweep-issues-20260921141913 pr=#2376 -->
+Changes: feat(#2363): sweep-issues all-bands loop — added --all-bands/--max-bands flags, bin/lib/sweep-band-loop.sh SSOT library, snapshot mechanism (single gh issue list fetch shared across all bands), CI contract fields (band_index="all", bands_swept, total_bands) in summary.sh, and 32 tests across two new test files <!-- compose-doc-append-sentinel: branch=feature/sweep-issues-20260921141913 pr=#2376 -->
+
+### FEATURE: PR #2377 — feature/929-agents (2026-09-23, 16be5629499af2c2a51628b230c73179f90b4c77, #2377)
+Background: feat(#929): supervisor codex engine + C1/C2/C3 label rename
+Changes: #929: Retire C1 critic (`bin/supervisor-review-codex` deleted); introduce shared codex engine `bin/supervisor-findings-codex` (alert + audit) with STATUS-channel output and `hooks/lib/supervisor-codex-parse.js` C4 rejection rules; add `session_start_context.transcript_path` persistence; make audit verdict+findings an atomic CAS write; rename C1/C2/C3 trigger labels to `sentinel-hang`/`scheduled-review`/`off-proposal`. <!-- compose-doc-append-sentinel: branch=feature/929-agents pr=#2377 -->
