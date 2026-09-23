@@ -90,13 +90,15 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
   const lines = [];
   const convLang = getConvLangInjection();
   if (convLang) lines.push(convLang);
-  const isC1 = typeof cause === "string" && cause.indexOf("C1") === 0;
-  const isC3 = typeof cause === "string" && cause.indexOf("C3") === 0;
+  // #929: alert causes are non-numeric slugs — "sentinel-hang", "scheduled-review",
+  // and off-proposal causes carry an "off proposal" token.
+  const isC1 = cause === "sentinel-hang";
+  const isC3 = typeof cause === "string" && cause.includes("off proposal");
   const causeLabel = isC1
-    ? "C1 stop_hook_active sentinel hang detected"
+    ? "stop_hook_active sentinel hang detected"
     : isC3
-    ? `C3 off-proposal detected (${cause})`
-    : "C2 scheduled review";
+    ? `off-proposal detected (${cause})`
+    : "scheduled review";
 
   lines.push(`[EM Supervisor] Alert mode review required (${causeLabel}).`);
   if (isC1) {
@@ -127,7 +129,7 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   const lines = [];
   const convLang = getConvLangInjection();
   if (convLang) lines.push(convLang);
-  lines.push("[EM Supervisor] C3: OFF proposal pre-detected.");
+  lines.push("[EM Supervisor] OFF proposal pre-detected.");
   lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the off-proposal.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);

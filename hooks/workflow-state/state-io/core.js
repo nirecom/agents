@@ -372,6 +372,10 @@ function createInitialState(sessionId, ctx) {
     session_start_context: {
       cwd: ctx && typeof ctx.cwd === "string" ? ctx.cwd : null,
       git_branch: ctx && ctx.git_branch !== undefined ? ctx.git_branch : null,
+      // #929: the transcript JSONL path the session started with, so the
+      // supervisor engines can build their prompt from the real transcript
+      // even when no --transcript arg is threaded. Non-string → null.
+      transcript_path: ctx && typeof ctx.transcript_path === "string" ? ctx.transcript_path : null,
     },
     workflow_type: "wf-code",
     events: [],

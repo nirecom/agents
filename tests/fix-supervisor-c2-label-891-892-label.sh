@@ -2,7 +2,8 @@
 # tests/fix-supervisor-c2-label-891-892-label.sh
 # Tests: hooks/supervisor-guard.js, agents/supervisor.md
 # Tags: supervisor, em-supervisor, layer2, fix
-# RED for issue #879 (label rename from "C2 escape-hatch use" to "C2 scheduled-review").
+# RED for #929 (label rename "C2 scheduled-review" -> non-numeric "scheduled-review");
+# the "C2 escape-hatch use" absence checks (from #879) are preserved and stay GREEN.
 
 set -u
 
@@ -43,8 +44,8 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 }
 
 run_l1a() {
-    local label="L1-a: hooks/supervisor-guard.js contains literal 'C2 scheduled-review'"
-    if grep -q 'C2 scheduled-review' "$HOOK"; then
+    local label="L1-a: hooks/supervisor-guard.js uses non-numeric 'scheduled-review' (no C2 prefix)"
+    if grep -q 'scheduled-review' "$HOOK" && ! grep -q 'C2 scheduled-review' "$HOOK"; then
         pass "$label"
     else
         fail "$label"
@@ -61,8 +62,8 @@ run_l1b() {
 }
 
 run_l1c() {
-    local label="L1-c: agents/supervisor.md contains 'C2 scheduled-review'"
-    if grep -q 'C2 scheduled-review' "$SUPERVISOR_MD"; then
+    local label="L1-c: agents/supervisor.md uses non-numeric 'scheduled-review' (no C2 prefix)"
+    if grep -q 'scheduled-review' "$SUPERVISOR_MD" && ! grep -q 'C2 scheduled-review' "$SUPERVISOR_MD"; then
         pass "$label"
     else
         fail "$label"
@@ -79,7 +80,7 @@ run_l1d() {
 }
 
 run_l1e() {
-    local label="L1-e: block-reason interpolates 'Alert mode review required (C2 scheduled review)'"
+    local label="L1-e: block-reason interpolates 'Alert mode review required (scheduled review)'"
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state "$tmp" "l1e-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
@@ -87,7 +88,7 @@ run_l1e() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -q 'Alert mode review required (C2 scheduled review)' ); then
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -q 'Alert mode review required (scheduled review)' ) && ! ( echo "$out" | grep -q 'C2 scheduled review' ); then
         pass "$label"
     else
         fail "$label (rc=$rc, out=$out)"

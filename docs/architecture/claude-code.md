@@ -22,7 +22,7 @@ The EM (Engineering Manager) Supervisor is a single logical supervisor with two 
 
 ### Alert mode (S-2, #719)
 
-Alert mode (`agents/supervisor.md`, model: Sonnet) handles C1/C2/C3 triggers. Information scope: current session turn. Three triggers arm `alert_armed_at`: C1 sentinel hang, C2 scheduled-review, C3 off-proposal (WORKTREE_OFF or WORKFLOW_OFF).
+Alert mode (`agents/supervisor.md`, model: Sonnet) handles the three alert triggers. Information scope: current session turn. Three triggers arm `alert_armed_at`, labelled with non-numeric slugs: `sentinel-hang`, `scheduled-review`, and off-proposal (`worktree-off proposal` or `workflow-off proposal`).
 
 ### Audit mode (S-3, #720)
 
@@ -41,7 +41,7 @@ Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `sta
 Pure-function module; no I/O or side effects. Exports:
 `formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath)` for the cumSev=error branch.
 `formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath)` for the alertArmedAt/hang branch.
-`formatWorktreeOffProposalReason(...)` for C3 block reason.
+`formatWorktreeOffProposalReason(...)` for the off-proposal block reason.
 
 **Hook auto-report (`hooks/lib/supervisor-emit.js`):**
 
@@ -85,7 +85,7 @@ The file is directly inspectable for debugging.
 |---|---|---|
 | `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings with severity >= warning re-arm alert mode from this state; `paused→pending` re-arm resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
 | `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/paused/closed |
-| `alert_cause` | string or null | Trigger label: `"C1 sentinel hang"`, `"C2 scheduled-review"`, `"C3 worktree-off proposal"`, or `"C3 workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
+| `alert_cause` | string or null | Trigger label (non-numeric slug): `"sentinel-hang"`, `"scheduled-review"`, `"worktree-off proposal"`, or `"workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last alert execution |
 | `cumulative_severity` | string or null | Highest severity across alert findings |
 | `alert_retry_count` | integer | Consecutive failure count; paused after `ALERT_RETRY_THRESHOLD` (2) |
@@ -110,13 +110,15 @@ The audit ledger, run identity, freshness key, TR5 two-stage hold, and the pre-m
 
 **Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done`, `paused`, or `closed` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits when `alert_phase` is `done` or `closed` — `paused` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`), while `closed` is a permanent session-close terminal that never re-arms. When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
 
-**Alert three-phase output protocol (#929):**
+**Alert output protocol (#929, Codex-primary single pass):**
 
-1. **Draft** — Append each finding with `--finding-status draft` (keeps `alert_phase=pending`).
-2. **Adversarial review** — Run `bin/supervisor-review-codex` (Codex per-item AGREE/DISAGREE).
-3. **Adjudicate and finalize** — Single call: `supervisor-write-alert --confirm-finding-ids <csv> --drop-finding-ids <csv> --set-alert-phase done`. `cumulative_severity` is computed from confirmed findings only.
+Alert mode generates findings through the shared engine `bin/supervisor-findings-codex --mode alert`, which emits a STATUS channel (line 1 = `STATUS: SUCCESS|SKIPPED|FAILED`; `OUTFILE: <path>` printed only on SUCCESS) and branches:
 
-Helper modules: `hooks/lib/supervisor-finding-status.js` and `hooks/lib/codex-review-parse.js`.
+1. **SKIPPED / FAILED** (Codex unavailable or errored) — fallback: apply the JD checklist manually and record each finding via `bin/supervisor-write-alert --finding-*`.
+2. **SUCCESS** — read the `OUTFILE` line and ingest the validated JSONL via `bin/supervisor-write-alert --ingest-generated-jsonl <OUTFILE>`; Claude adds no findings independently.
+3. **Finalize** — single call: `bin/supervisor-write-alert --last-run-at <iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done`. `--set-alert-phase done` is mandatory (#961).
+
+Helper module: `hooks/lib/supervisor-codex-parse.js` (STATUS-channel parser shared by alert and audit modes). The prior three-phase draft/adversarial/adjudicate protocol and its `bin/supervisor-review-codex` critic are retired.
 
 **Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — scans workflow-state step-completion transitions (not the transcript) and returns the armed triggers, reading the table in `hooks/lib/audit-triggers.js`. Uses `AUDIT_SEVERITY_THRESHOLD` constant for TR6.
 

@@ -7,13 +7,33 @@
 // the caller-visible signal for "your run was superseded" — distinct from the
 // generic exit 1 so a wrapper can retry rather than treat it as a crash.
 
+const fs = require("fs");
 const { finalizeAuditRun, writeAuditState, readState } = require("../hooks/lib/supervisor-state-writer");
 const { AUDIT_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 const EXIT_STALE_IDENTITY = 3;
 
-const VALUE_FLAGS = new Set(["--session-id", "--audit-run-id", "--verdict", "--verdict-summary"]);
+const VALUE_FLAGS = new Set(["--session-id", "--audit-run-id", "--verdict", "--verdict-summary", "--findings-jsonl"]);
+
+// #929: parse a JSONL findings file (one finding object per line). Malformed
+// lines are skipped fail-open; audit-run.js re-validates each against the schema
+// and only merges them on CAS success, so a stale run never leaks a finding.
+function parseFindingsJsonl(file) {
+  let raw;
+  try { raw = fs.readFileSync(file, "utf8"); }
+  catch (e) { return []; }
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t.length === 0) continue;
+    try {
+      const obj = JSON.parse(t);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) out.push(obj);
+    } catch (e) { /* skip malformed line */ }
+  }
+  return out;
+}
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-audit-verdict] ERROR: ${msg}`);
@@ -82,10 +102,13 @@ if (!runId) {
   process.exit(ok === true ? 0 : 1);
 }
 
+const findings = args["findings-jsonl"] ? parseFindingsJsonl(args["findings-jsonl"]) : [];
+
 const result = finalizeAuditRun(sid, {
   audit_run_id: runId,
   verdict,
   verdict_summary: summary,
+  findings,
 });
 
 console.log(JSON.stringify(result));

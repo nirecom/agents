@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PostToolUse hook (Bash matcher): EM Supervisor alert mode finding-presence gate.
-// - If command is a C2 escape-hatch (ENFORCE_*_OFF sentinel) and alert_armed_at
+// - If command is a scheduled-review escape-hatch (ENFORCE_*_OFF sentinel) and alert_armed_at
 //   is not already set, set alert_armed_at = now (trigger alert review at Stop).
 // - Emit an additionalContext advisory when cumulative_severity is set.
 // - Fail-open everywhere; never exit 2 (PostToolUse must not block).

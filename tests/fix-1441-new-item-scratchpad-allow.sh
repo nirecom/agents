@@ -3,19 +3,11 @@
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/lib/bash-write-targets/helpers.js, hooks/lib/claude-scratchpad-base.js
 # Tags: enforce-worktree, new-item, scratchpad, plans-dir, ir-migration, scope:issue-specific, pwsh-not-required
 #
-# Regression canary for #1441 / #1290 / #923: after PR #1420 (WRITE_PATTERNS→IR
-# migration) regressed enforce-worktree, the fix restored the sanctioned allow paths.
-# This test asserts the post-fix allow/block contract permanently. Each case is one of
-# two kinds: ALLOW-expected (sanctioned command must pass from main/non-git CWD) or
-# BLOCK-expected (in-repo / bypass / cross-session writes must be denied). If the source
-# fix is reverted, the ALLOW-expected cases go RED — that is the canary's purpose.
-#
-# L3 gap (what this test does NOT catch):
-# - Hook registration: tests call enforce-worktree.js directly as a Node.js process,
-#   not via the real Claude Code PreToolUse hook chain. L3 would verify the hook
-#   actually fires and returns the correct verdict when claude -p runs a Bash command.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Regression canary for #1441/#1290/#923: PR #1420 (WRITE_PATTERNS→IR) regressed
+# enforce-worktree; the fix restored the sanctioned allow paths. Asserts the post-fix
+# allow/block contract — ALLOW-expected cases go RED if the fix is reverted.
+# L3 gap: calls enforce-worktree.js directly, not via the real PreToolUse chain;
+# hook-registration is covered at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh).
 
 set -u
 
@@ -167,12 +159,12 @@ test_already_green() {
 test_restored_allows() {
     local got
     # P4: stdout redirect to $SCRATCHPAD env-var (root cause A: expandStaticShellTokens)
-    got="$(run_hook_env "bash \"bin/supervisor-review-codex\" --generate > \"\$SCRATCHPAD/sup-out.jsonl\"" "SCRATCHPAD=${FAKE_SCRATCHPAD_NODE}")"
-    if is_allow "$got"; then pass "P4: bash --generate > \$SCRATCHPAD/sup-out.jsonl → allow"; else fail "P4: should allow (got: $got)"; fi
+    got="$(run_hook_env "bash \"bin/supervisor-write-alert\" > \"\$SCRATCHPAD/sup-out.jsonl\"" "SCRATCHPAD=${FAKE_SCRATCHPAD_NODE}")"
+    if is_allow "$got"; then pass "P4: bash supervisor-write-alert > \$SCRATCHPAD/sup-out.jsonl → allow"; else fail "P4: should allow (got: $got)"; fi
 
     # P4b: brace form ${SCRATCHPAD} (expandStaticShellTokens must handle both $VAR and ${VAR})
-    got="$(run_hook_env "bash \"bin/supervisor-review-codex\" --generate > \"\${SCRATCHPAD}/sup-out2.jsonl\"" "SCRATCHPAD=${FAKE_SCRATCHPAD_NODE}")"
-    if is_allow "$got"; then pass "P4b: bash --generate > \${SCRATCHPAD}/sup-out2.jsonl (brace form) → allow"; else fail "P4b: should allow (got: $got)"; fi
+    got="$(run_hook_env "bash \"bin/supervisor-write-alert\" > \"\${SCRATCHPAD}/sup-out2.jsonl\"" "SCRATCHPAD=${FAKE_SCRATCHPAD_NODE}")"
+    if is_allow "$got"; then pass "P4b: bash supervisor-write-alert > \${SCRATCHPAD}/sup-out2.jsonl (brace form) → allow"; else fail "P4b: should allow (got: $got)"; fi
 
     # NI-1/NI-3/NI-alias: New-Item external dir (root cause B: isAllowedNewItemCommand)
     got="$(run_hook "New-Item -ItemType Directory -Force -Path \"${EXT_WORKTREE_WIN}\"")"; if is_allow "$got"; then pass "NI-1: New-Item -ItemType Directory -Force -Path <ext> → allow"; else fail "NI-1: should allow (got: $got)"; fi
@@ -198,7 +190,7 @@ test_invariant_block() {
     local got
     # INV-P4-unset: $SCRATCHPAD redirect with SCRATCHPAD env var UNSET — BLOCK (fail-closed
     # on unresolvable $VAR). Guards against a future fix blanket-allowing $VAR-prefixed redirects.
-    got="$(run_hook_unset "bash \"bin/supervisor-review-codex\" --generate > \"\$SCRATCHPAD/x\"" SCRATCHPAD)"
+    got="$(run_hook_unset "bash \"bin/supervisor-write-alert\" > \"\$SCRATCHPAD/x\"" SCRATCHPAD)"
     if is_block "$got"; then pass "INV-P4-unset: \$SCRATCHPAD redirect with var unset → block"; else fail "INV-P4-unset: should block (got: $got)"; fi
 
     # INV-P4-inrepo: primary bypass vector — SCRATCHPAD set to an IN-REPO path. The fix

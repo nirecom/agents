@@ -13,7 +13,6 @@ set -uo pipefail
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLAN_BIN="$AGENTS_ROOT/bin/review-plan-codex"
 CODE_BIN="$AGENTS_ROOT/bin/review-code-codex"
-SUP_BIN="$AGENTS_ROOT/bin/supervisor-review-codex"
 LOOP_BIN="$AGENTS_ROOT/bin/run-codex-review-loop"
 
 PASS=0; FAIL=0
@@ -128,16 +127,11 @@ run_bin "$CODE_BIN" --base 'evil;rm -rf /'
 assert_contains "B: review-code-codex rejected base ref names the label" \
     "## Codex Review: FAILED — invalid --base ref" "$LAST_OUT"
 
-# --- C. sibling and repo-wide invariants ------------------------------------
+# --- C. repo-wide invariant -------------------------------------------------
+# (#929: the former "supervisor-review-codex keeps its own label" sibling pin was
+#  removed with that bin; only the repo-wide "Codex Plan Review" sweep remains.)
 echo ""
-echo "--- C: sibling label and repo-wide sweep ---"
-
-if [ -f "$SUP_BIN" ]; then
-    assert_eq "C: supervisor-review-codex keeps its own label (out of scope)" \
-        "1" "$(grep -c 'codex_core_init "Supervisor Alert Mode Codex Review"' "$SUP_BIN" 2>/dev/null || true)"
-else
-    fail "C: bin/supervisor-review-codex is missing — its label cannot be pinned"
-fi
+echo "--- C: repo-wide sweep ---"
 
 # This suite is excluded from the sweep on purpose: case D drives the retired
 # header through the loop to prove it is rejected, so the literal must live here.

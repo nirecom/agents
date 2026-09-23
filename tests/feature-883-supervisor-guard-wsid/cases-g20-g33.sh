@@ -300,8 +300,11 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
     fi
 }
 
+# NOTE: RED until write-code renames the alert cause labels (C1→sentinel-hang etc.)
+#   in supervisor-guard.js + supervisor-report-format.js (#929); the reason still
+#   carries the "C1" prefix today, so the "no C1" assertion fails.
 run_g32() {
-    require_source "$HOOK" "G32: C1 sentinel hang in transcript blocks with C1 label in reason" || return
+    require_source "$HOOK" "G32: sentinel-hang in transcript blocks with non-numeric label in reason" || return
     local tmp out rc sid tmp_node transcript_path_native
     tmp="$(mktemp -d)"
     sid="g32-sid"
@@ -322,10 +325,10 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && echo "$out" | grep -q "C1"; then
-        pass "G32: C1 sentinel hang in transcript blocks with C1 label in reason"
+    if [ $rc -eq 2 ] && echo "$out" | grep -q "sentinel hang" && ! echo "$out" | grep -q "C1"; then
+        pass "G32: sentinel-hang in transcript blocks with non-numeric label in reason"
     else
-        fail "G32: C1 sentinel hang in transcript blocks with C1 label in reason (rc=$rc, out=$out)"
+        fail "G32: sentinel-hang in transcript blocks with non-numeric label in reason (rc=$rc, out=$out)"
     fi
 }
 

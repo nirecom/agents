@@ -2,18 +2,11 @@
 # tests/feature-supervisor-detail-parser.sh
 # Tests: hooks/workflow-gate.js
 # Tags: supervisor, em-supervisor, detail-parser, scope-drift, table-driven, scope:issue-specific, pwsh-not-required
-# L3 gap (what this test does NOT catch):
-# - parseDetailFilesToModify running inside a live Claude Code session with real plans-dir
-# - Real WORKFLOW_PLANS_DIR layout from an actual worktree-start session
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# T9: TABLE-DRIVEN test of parseDetailFilesToModify (new helper in workflow-gate.js)
-# and the scope-drift matching rule. Cases:
-#   (1) exact match p===d → declared
-#   (2) directory-prefix match (d="hooks/lib/", p="hooks/lib/x.js") → declared
-#   (3) (新規)/(NEW) annotation stripped → path extracted correctly
-#   (4) NEGATIVE: d="hooks/workflow-gate.js", p="hooks/workflow-gate.js.bak" → NOT declared
+# L3 gap: parseDetailFilesToModify is exercised as a unit, not inside a live session with a
+# real WORKFLOW_PLANS_DIR; hook-registration covered at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh).
+# T9: TABLE-DRIVEN test of parseDetailFilesToModify + the scope-drift rule: exact match,
+# directory-prefix match, (新規)/(NEW) annotation stripping, and negative .bak-suffix.
 
 set -u
 
@@ -191,7 +184,7 @@ T9-dir-prefix                  | hooks/lib/new-module.js                       |
 T9-new-annotation-jp           | hooks/supervisor-off-proposal-shim.js         | declared
 T9-new-annotation-en           | hooks/new-helper.js                           | declared
 T9-negative-bak-suffix         | hooks/workflow-gate.js.bak                    | drift
-T9-negative-unrelated          | bin/supervisor-review-codex                   | drift
+T9-negative-unrelated          | bin/supervisor-write-alert                    | drift
 T9-negative-partial-substring  | hooks/workflow-gate.js.backup                 | drift
 TABLE
 
