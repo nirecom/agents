@@ -523,3 +523,7 @@ Changes: Fixed: prior concerns in `review-code-security` were not resolved on re
 ### FEATURE: PR #2365 (2026-09-22)
 Background: fix(#2360): TR5 audit gate infinite re-arm loop on artifact-side null sessions
 Changes: fix(#2360): TR5 user_verification audit gate no longer loops forever when the plan artifact is missing (artifact-side null freshness). Sessions with a prior CONTINUE verdict and a matching diff input version are approved without re-arming.
+
+### FEATURE: PR #2376 (2026-09-23)
+Background: feat(#2363): sweep-issues all-bands loop, shared band-loop library, snapshot mechanism
+Changes: `sweep-issues`: add `--all-bands` to scan the full open-issue backlog in one pass; `--max-bands` caps the run; a shared snapshot eliminates redundant API calls across bands
