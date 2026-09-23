@@ -103,7 +103,7 @@ printf -- "${C_BOLD}--- Installing gh (GitHub CLI) ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/gh.sh"
 
 echo ""
-printf -- "${C_BOLD}--- Installing glab (GitLab CLI) ---${C_RESET}\n"
+printf -- "${C_BOLD}--- Installing glab (GitLab CLI) [GITLAB=on to enable] ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/glab.sh"
 
 echo ""
