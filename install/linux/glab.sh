@@ -13,8 +13,27 @@ if [ -z "${C_RESET+x}" ]; then
     fi
 fi
 
+AGENTS_ROOT="${AGENTS_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+# GITLAB is opt-in (default off): exit 1 means explicit ON; every other exit resolves to OFF.
+_gitlab_rc=0
+bash "$AGENTS_ROOT/bin/get-config-var" --is-off GITLAB off >/dev/null 2>&1 || _gitlab_rc=$?
+if [ "$_gitlab_rc" -ne 1 ]; then
+    printf "${C_GRAY}GITLAB is off (default); skipping glab installation.${C_RESET}\n"
+    exit 0
+fi
+
 if command -v glab &>/dev/null; then
-    printf "${C_GRAY}glab is already installed: $(glab --version | head -1)${C_RESET}\n"
+    echo "Updating glab (GitLab CLI)..."
+    case "$(uname -s)" in
+        Darwin)
+            brew upgrade glab || printf "${C_GRAY}glab is up to date.${C_RESET}\n"
+            ;;
+        *)
+            sudo apt-get install -y --only-upgrade glab 2>/dev/null || true
+            ;;
+    esac
+    printf "${C_GREEN}glab: $(glab --version | head -1)${C_RESET}\n"
 else
     echo "Installing glab (GitLab CLI)..."
     case "$(uname -s)" in
@@ -33,15 +52,36 @@ else
     fi
 fi
 
-# Auth: skip if glab not installed; check idempotency then prompt only in interactive sessions.
 if ! command -v glab &>/dev/null; then
     printf "${C_YELLOW}glab: not installed, skipping authentication setup.${C_RESET}\n"
-elif glab auth status &>/dev/null 2>&1; then
-    printf "${C_GRAY}glab: already authenticated — skipping glab auth login.${C_RESET}\n"
-elif [ -t 0 ]; then
-    # Non-interactive guard: only attempt login when stdin is a TTY to prevent CI hangs.
-    # [ -t 0 ] is the primary guard (|| true only handles exit-code failures, not hangs).
-    glab auth login || printf "${C_YELLOW}glab auth login did not complete; continuing installation.${C_RESET}\n"
+    exit 0
+fi
+
+# Read auth config from .env; non-interactive when both GITLAB_HOSTNAME and GITLAB_TOKEN are set.
+_hostname="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_HOSTNAME 2>/dev/null || true)"
+_token="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_TOKEN 2>/dev/null || true)"
+_subfolder="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SUBFOLDER 2>/dev/null || true)"
+_ssh_host="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SSH_HOSTNAME 2>/dev/null || true)"
+
+if [ -n "$_hostname" ] && [ -n "$_token" ]; then
+    printf "Configuring glab authentication for %s...\n" "$_hostname"
+    _auth_args=(auth login --hostname "$_hostname" --token "$_token" --api-protocol https --git-protocol ssh)
+    [ -n "$_ssh_host" ] && _auth_args+=(--ssh-hostname "$_ssh_host")
+    glab "${_auth_args[@]}"
+    if [ $? -ne 0 ]; then
+        printf "${C_YELLOW}glab auth login failed.${C_RESET}\n" >&2
+    else
+        printf "${C_GREEN}glab: authenticated.${C_RESET}\n"
+        if [ -n "$_subfolder" ]; then
+            glab config set -h "$_hostname" subfolder "$_subfolder"
+            printf "${C_GREEN}glab: subfolder set to '%s'.${C_RESET}\n" "$_subfolder"
+        fi
+    fi
 else
-    printf "${C_YELLOW}glab: non-interactive session — skipping glab auth login. Run 'glab auth login' manually later.${C_RESET}\n"
+    if glab auth status &>/dev/null 2>&1; then
+        printf "${C_GRAY}glab: already authenticated.${C_RESET}\n"
+    else
+        printf "${C_YELLOW}glab: set GITLAB_HOSTNAME and GITLAB_TOKEN in .env for automated auth,${C_RESET}\n"
+        printf "${C_YELLOW}      or run 'glab auth login --hostname <host>' manually.${C_RESET}\n"
+    fi
 fi
