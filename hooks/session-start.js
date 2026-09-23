@@ -101,6 +101,9 @@ if (sessionId) {
 
       // The new session ALWAYS starts from a clean initial state: its own
       // session_start_context, its own created_at, and an empty stream (#1733).
+      // #929: thread the transcript path into session_start_context so the
+      // supervisor codex engines can locate the transcript later.
+      ctx.transcript_path = transcriptPath;
       const newState = createInitialState(sessionId, ctx);
       // Fail-open on the hook, but NEVER silently: a throw here means no state
       // file exists for this session at all (total workflow-state loss).

@@ -103,9 +103,9 @@ if (require.main === module) {
     (Array.isArray(alertRaw.findings) && alertRaw.findings.length > 0);
   const alert = alertHasData ? alertRaw : ((state && state.layer2) || alertRaw);
   const isLegacyLayer2State = !alertHasData && !!(state && state.layer2);
-  // #1794: C2 scheduled-review only arms once workflow-init has completed.
+  // #1794: scheduled-review only arms once workflow-init has completed.
   // Zeroing it here closes both branch (3) and the audit Phase B alertWouldFire
-  // term at once. C1 hang / cumSev=error / audit are unaffected (out of scope).
+  // term at once. sentinel-hang / cumSev=error / audit are unaffected (out of scope).
   // fail-open (locked constraint 2): when undecidable, drop the arm (never block).
   // Deliberately opposite of C4's row-level semantics (throw -> not exempt) — see 3-4.
   let alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
@@ -173,7 +173,7 @@ if (require.main === module) {
       if (cumSev === "error") {
         alertReason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
       } else {
-        const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
+        const cause = hangDetected ? "sentinel-hang" : "scheduled-review";
         alertReason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
       }
       alertCandidate = { verdict: "BLOCK", reason: alertReason };
@@ -217,7 +217,7 @@ if (require.main === module) {
   // (3)
   if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
-    const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
+    const cause = hangDetected ? "sentinel-hang" : "scheduled-review";
     const reason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
