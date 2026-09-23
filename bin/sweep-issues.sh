@@ -1,43 +1,14 @@
 #!/usr/bin/env bash
 #
-# bin/sweep-issues.sh — /sweep family member: open-issue triage sweeper.
-#
-# Usage: bin/sweep-issues.sh [--dry-run|--apply] [--deep] [--repo OWNER/REPO]
-#                            [--repo-root DIR]
-#                            [--band-size N] [--band-index K] [--ci-mode]
-#                            [--verify-candidates FILE | --decisions FILE]
-#
-# TWO REPOSITORIES, ONE RUN: issues come from --repo, but path staleness (SI-2)
-# and the SI-4 evidence run are probed against a checkout on disk. Those are only
-# the same thing when the working tree IS --repo. When --repo names something
-# else, --repo-root must name the checkout to probe; otherwise the run aborts
-# rather than reporting one repository's issues against another's files.
-#
-# Writes by default. --dry-run suppresses EVERY write, including the tier-1
-# closes. --deep is an orthogonal axis: it opts tier 2 in, and never changes the
-# write mode. It does NOT widen the candidate set — SI-2 scans identically with
-# and without it. What it changes is what happens to the tier-2 candidates:
-# without it they are reported and dropped; with it they are handed to the
-# skill's human gate and can reach passes 2 and 3.
-#
-# Three exclusive passes (AskUserQuestion is a Claude tool and cannot be called
-# from bash, so the human gates live in skills/sweep-issues/SKILL.md and this
-# script is ALWAYS non-interactive):
-#
-#   pass 1  no flag / --deep      SI-1 band → SI-2 stale scan → SI-3 candidate
-#                                 report → SI-7 meta-parent scan → tier-1 close
-#   pass 2  --verify-candidates   SI-4 evidence for the survivors TSV only
-#   pass 3  --decisions           SI-6 close execution and nothing else
-#
-# --verify-candidates and --decisions are the skill↔script protocol for passes 2
-# and 3, not user-facing flags: a user runs `/sweep-issues --deep` and SKILL.md
-# issues these calls with the TSVs it wrote. They each REQUIRE --deep (exit 2
-# otherwise) and are mutually exclusive (exit 2). Requiring --deep for pass 3 is
-# what makes "tier 2 only fires when --deep is explicit" true at the machine
-# level even if a pass-3 call is issued on its own.
-#
-# The judgement axis table (which axis maps to which close action) lives in
-# bin/sweep-issues/close-batch.sh's header and is not restated here.
+# bin/sweep-issues.sh — /sweep family open-issue triage sweeper. See usage() for
+# flags, skills/sweep-issues/SKILL.md for the human-gate protocol.
+# TWO REPOS, ONE RUN: issues come from --repo; path staleness (SI-2) and SI-4
+# evidence probe --repo-root (working tree by default); a mismatch aborts. Writes
+# by default; --dry-run suppresses every write. --deep only routes tier-2
+# candidates to the human gate, never changing write mode or scan set. Three
+# exclusive, always-non-interactive passes: pass 1 (no flag/--deep) scans/closes
+# tier 1; pass 2 (--verify-candidates), pass 3 (--decisions) are the --deep-gated,
+# mutually exclusive skill↔script protocol. SSOT: close-batch.sh's header.
 
 set -euo pipefail
 
@@ -49,16 +20,24 @@ source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 sweep_write_mode_init
 # shellcheck source=./sweep-issues/summary.sh
 source "$SI_DIR/summary.sh"
+# shellcheck source=lib/sweep-band-loop.sh
+source "$SCRIPT_DIR/lib/sweep-band-loop.sh"
 
 DEEP=0
 CI_MODE=0
 BAND_SIZE=100
 BAND_INDEX=0
+BAND_INDEX_EXPLICIT=0
 REPO=""
 REPO_EXPLICIT=0
 REPO_ROOT=""
 VERIFY_TSV=""
 DECISIONS_TSV=""
+ALL_BANDS=0
+MAX_BANDS=0
+bands_swept=0
+total_bands=0
+SNAP=""
 
 usage() {
   cat <<'EOF'
@@ -78,6 +57,10 @@ Normally invoked as /sweep-issues, which forwards these flags verbatim.
                         tree (default: the working tree).
   --band-size N         Issues per band (default 100).
   --band-index K        Zero-based band to sweep (default 0).
+  --all-bands           Fetch the issue list once, then scan every band in this
+                        run (one tier-1 pass, one aggregated tier-2 gate).
+  --max-bands N         With --all-bands, cap the sweep at the first N bands and
+                        warn that coverage is bounded.
   --ci-mode             Emit a one-line JSON summary instead of prose.
 EOF
   sweep_write_mode_usage_lines
@@ -101,7 +84,9 @@ while [[ $# -gt 0 ]]; do
     --apply) sweep_write_mode_apply; shift ;;
     --ci-mode) CI_MODE=1; shift ;;
     --band-size) BAND_SIZE="${2:?--band-size requires an argument}"; shift 2 ;;
-    --band-index) BAND_INDEX="${2:?--band-index requires an argument}"; shift 2 ;;
+    --band-index) BAND_INDEX="${2:?--band-index requires an argument}"; BAND_INDEX_EXPLICIT=1; shift 2 ;;
+    --all-bands) ALL_BANDS=1; shift ;;
+    --max-bands) MAX_BANDS="${2:?--max-bands requires an argument}"; shift 2 ;;
     --repo) REPO="${2:?--repo requires an argument}"; REPO_EXPLICIT=1; shift 2 ;;
     --repo-root) REPO_ROOT="${2:?--repo-root requires an argument}"; shift 2 ;;
     --verify-candidates) VERIFY_TSV="${2:?--verify-candidates requires an argument}"; shift 2 ;;
@@ -112,6 +97,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── Mode gates (before any I/O, so a misuse never half-runs) ────────────────
+
+if ! [[ "$BAND_SIZE" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'ERROR: --band-size must be a positive integer without leading zeros\n' >&2
+  exit 2
+fi
+
+if [[ "$MAX_BANDS" != "0" ]] && { [[ ! "$MAX_BANDS" =~ ^[1-9][0-9]*$ ]]; }; then
+  printf 'ERROR: --max-bands must be a positive integer\n' >&2
+  exit 2
+fi
+
+if [[ "$MAX_BANDS" -gt 0 && "$ALL_BANDS" -eq 0 ]]; then
+  printf 'WARNING: --max-bands has no effect without --all-bands\n' >&2
+fi
+
+if [[ "$BAND_INDEX_EXPLICIT" -eq 1 && "$ALL_BANDS" -eq 1 ]]; then
+  printf 'WARNING: --band-index has no effect with --all-bands (ignored)\n' >&2
+fi
 
 if [[ -n "$VERIFY_TSV" && -n "$DECISIONS_TSV" ]]; then
   printf 'ERROR: --verify-candidates and --decisions are mutually exclusive\n' >&2
@@ -225,7 +228,11 @@ fi
 
 # ─── Pass 1 — scan, report tier 2, close tier 1 ─────────────────────────────
 
-printf '# sweep-issues pass 1 (scan) — repo=%s band=%s/%s\n' "$REPO" "$BAND_INDEX" "$BAND_SIZE"
+if [[ "$ALL_BANDS" -eq 1 ]]; then
+  printf '# sweep-issues pass 1 (scan) — repo=%s all-bands band-size=%s\n' "$REPO" "$BAND_SIZE"
+else
+  printf '# sweep-issues pass 1 (scan) — repo=%s band=%s/%s\n' "$REPO" "$BAND_INDEX" "$BAND_SIZE"
+fi
 
 # Counters the summary reads. Declared before the first fallible step so the
 # abort path below can still emit a well-formed summary.
@@ -236,50 +243,107 @@ tier1_closed=0
 partial_count=0
 errors=0
 
-# SI-1. list-band.sh validates --band-size / --band-index and fetches the band;
-# both failures used to be swallowed into `[]`, which let a misuse sail on into
-# the meta-parent scan and close tier-1 issues on an empty, unvalidated band.
-# Nothing may be closed on the strength of a band we never actually got.
-band_rc=0
-band_json="$("$SI_DIR/list-band.sh" --repo "$REPO" --band-size "$BAND_SIZE" \
-  --band-index "$BAND_INDEX")" || band_rc=$?
-if [[ "$band_rc" -ne 0 ]]; then
-  printf 'ERROR: band fetch/validation failed (list-band.sh exit %s); aborting before any close\n' \
-    "$band_rc" >&2
-  errors=1
-  emit_scan_summary
-fi
-[[ -z "$band_json" ]] && band_json='[]'
+# scan_one_band — SI-1..SI-3 for one band index. Appends to the aggregation
+# arrays and counters (globals). Returns 1 on SI-1 failure (band fetch missing:
+# tier-1 must not close on an incomplete backlog). SI-2 failure is non-fatal:
+# tier-1 (meta-parent close) is independent of the stale-path scan.
+scan_one_band() {
+  local idx="$1"
+  # SI-1: fetch or slice the band. Both list-band.sh failures used to be swallowed
+  # into `[]`; nothing may be closed on the strength of a band we never got.
+  local band_rc=0
+  local band_fetch_args=(--repo "$REPO" --band-size "$BAND_SIZE" --band-index "$idx")
+  if [[ -n "$SNAP" ]]; then
+    band_fetch_args+=(--snapshot-in "$SNAP")
+  fi
+  local band_json
+  band_json="$("$SI_DIR/list-band.sh" "${band_fetch_args[@]}")" || band_rc=$?
+  if [[ "$band_rc" -ne 0 ]]; then
+    printf 'ERROR: band fetch/validation failed (list-band.sh exit %s); aborting before any close\n' \
+      "$band_rc" >&2
+    errors=1
+    return 1
+  fi
+  [[ -z "$band_json" ]] && band_json='[]'
 
-scanned="$(printf '%s' "$band_json" | node -e '
+  local band_scanned
+  band_scanned="$(printf '%s' "$band_json" | node -e '
 let a;
 try { a = JSON.parse(require("fs").readFileSync(0, "utf8") || "[]"); } catch (e) { a = []; }
 process.stdout.write(String(Array.isArray(a) ? a.length : 0));
 ' || printf '0')"
+  scanned=$(( scanned + band_scanned ))
 
-# SI-2. A detector failure is not fatal (tier 1 does not depend on it) but it is
-# never silent: it is counted, so the run cannot report itself as clean.
-stale_rc=0
-stale_tsv="$(printf '%s' "$band_json" | node "$SI_DIR/scan-stale-paths.js" --repo-root "$REPO_ROOT")" || stale_rc=$?
-if [[ "$stale_rc" -ne 0 ]]; then
-  printf 'ERROR: stale-path scan failed (scan-stale-paths.js exit %s); tier 2 candidates are incomplete\n' \
-    "$stale_rc" >&2
-  errors=$(( errors + 1 ))
-  stale_tsv=""
-fi
+  # SI-2: a stale-scan failure leaves tier-2 candidates incomplete for this band.
+  # Non-fatal: tier-1 (meta-parent close) is independent of the stale-path scan.
+  local stale_rc=0
+  local stale_tsv
+  stale_tsv="$(printf '%s' "$band_json" | node "$SI_DIR/scan-stale-paths.js" --repo-root "$REPO_ROOT")" || stale_rc=$?
+  if [[ "$stale_rc" -ne 0 ]]; then
+    printf 'ERROR: stale-path scan failed (scan-stale-paths.js exit %s); tier 2 candidates are incomplete\n' \
+      "$stale_rc" >&2
+    errors=$(( errors + 1 ))
+    stale_tsv=""
+    # SI-2 is not fatal: tier-1 (meta-parent close) is independent of the stale-path
+    # scan. Errors counter is set above so the summary reflects the failure.
+  fi
 
-# SI-3 does NOT machine-classify. Separating "artifact not built yet" from
-# "target deleted by a refactor" is exactly what the human gate is for.
+  # SI-3 does NOT machine-classify. Separating "artifact not built yet" from
+  # "target deleted by a refactor" is exactly what the human gate is for.
+  if [[ -n "$stale_tsv" ]]; then
+    while IFS=$'\t' read -r t_number t_status t_missing t_total t_tokens; do
+      [[ -z "${t_number// /}" ]] && continue
+      printf 'TIER2-CANDIDATE: issue=%s tokens=%s class=undetermined\n' "$t_number" "${t_tokens:--}"
+      tier2_numbers+=("$t_number")
+      tier2_tokens+=("${t_tokens:-}")
+      tier2_count=$(( tier2_count + 1 ))
+    done <<< "$stale_tsv"
+  fi
+  return 0
+}
+
+# Aggregation arrays the tier-2 gate and scan_one_band share.
 tier2_numbers=()
 tier2_tokens=()
-if [[ -n "$stale_tsv" ]]; then
-  while IFS=$'\t' read -r t_number t_status t_missing t_total t_tokens; do
-    [[ -z "${t_number// /}" ]] && continue
-    printf 'TIER2-CANDIDATE: issue=%s tokens=%s class=undetermined\n' "$t_number" "${t_tokens:--}"
-    tier2_numbers+=("$t_number")
-    tier2_tokens+=("${t_tokens:-}")
-    tier2_count=$(( tier2_count + 1 ))
-  done <<< "$stale_tsv"
+
+if [[ "$ALL_BANDS" -eq 1 ]]; then
+  # --all-bands: fetch the issue list once into a snapshot, then iterate bands.
+  SNAP="$(mktemp)"
+  trap 'rm -f "${SNAP:-}"' EXIT
+
+  snap_count_rc=0
+  total="$("$SI_DIR/list-band.sh" --repo "$REPO" --count --snapshot-out "$SNAP")" || snap_count_rc=$?
+  if [[ "$snap_count_rc" -ne 0 ]]; then
+    printf 'ERROR: snapshot fetch failed (list-band.sh exit %s); aborting before any close\n' \
+      "$snap_count_rc" >&2
+    errors=1
+    emit_scan_summary
+  fi
+
+  mapfile -t bands < <(sweep_band_indices "$total" "$BAND_SIZE")
+  total_bands="${#bands[@]}"
+
+  if [[ "$MAX_BANDS" -gt 0 && "$total_bands" -gt "$MAX_BANDS" ]]; then
+    printf 'WARNING: --max-bands=%s applied; scanning %s of %s bands — coverage is bounded, remaining bands NOT swept\n' \
+      "$MAX_BANDS" "$MAX_BANDS" "$total_bands" >&2
+    bands=("${bands[@]:0:$MAX_BANDS}")
+  fi
+
+  band_loop_ok=1
+  for idx in "${bands[@]}"; do
+    printf '# band=%s/%s\n' "$idx" "$BAND_SIZE"
+    scan_one_band "$idx" || { band_loop_ok=0; break; }
+    bands_swept=$(( bands_swept + 1 ))
+  done
+
+  if [[ "$band_loop_ok" -eq 0 ]]; then
+    emit_scan_summary
+  fi
+else
+  # Single band (default).
+  scan_one_band "$BAND_INDEX" || emit_scan_summary
+  bands_swept=1
+  total_bands=1
 fi
 
 # SI-7 — meta parents. Pass 1 only. A failed listing means the tier-1 set is
@@ -294,7 +358,7 @@ if [[ "$meta_rc" -ne 0 ]]; then
 fi
 
 TIER1_FILE="$(mktemp)"
-trap 'rm -f "$TIER1_FILE"' EXIT
+trap 'rm -f "$TIER1_FILE" "${SNAP:-}"' EXIT
 
 if [[ -n "$meta_tsv" ]]; then
   while IFS=$'\t' read -r m_number m_verdict m_open m_title; do
