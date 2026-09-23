@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# bin/rtk-cmd — RTK=on かつ rtk バイナリ利用可能な場合は `exec rtk <cmd> [args...]`、
+# そうでなければ `exec <cmd> [args...]` で素通しする軽量ラッパー。
+# いつ使うか: docs/architecture/rtk.md "bin/rtk-cmd 採用規約" を参照。
+# Tests: tests/feature-2370-rtk-cmd.sh
+set -euo pipefail
+
+[ $# -ge 1 ] || { printf 'usage: rtk-cmd <command> [args...]\n' >&2; exit 2; }
+
+# AGENTS_CONFIG_DIR 未設定 → fail-safe-OFF: get-config-var を呼べないため素通し
+_dir="${AGENTS_CONFIG_DIR:-}"
+[ -n "$_dir" ] || exec "$@"
+
+# RTK on/off 判定 — fail-safe-OFF: exit 1 のみ ON、2/3/4 は OFF 扱い
+# hooks/rtk-rewrite.js loadDefaultEnv() の "e.status === 1 → ON" と対称
+# get-config-var の unrecognized-value パス (exit 3) が stderr に警告を出すため
+# 2>/dev/null で黙らせる: hooks/rtk-rewrite.js loadDefaultEnv() が stdio:"ignore"
+# を使うのと同じ出力透過性の方針
+# set -e 下での安全な exit code 捕捉: || で abort を防ぎつつ $? を変数に取る
+_rtk_on=0
+_gcv_ec=0
+"$_dir/bin/get-config-var" --is-off RTK off 2>/dev/null || _gcv_ec=$?
+if [ "$_gcv_ec" -eq 1 ]; then _rtk_on=1; fi
+
+# rtk バイナリ解決: RTK_BIN 環境変数優先（実行可能性を検証）、次いで PATH 検索
+# RTK_BIN が非実行可能（stale パス・ディレクトリ等）の場合はパススルーへフォールバック
+# command -v rtk で解決されたパスは実行可能が保証済み（追加の -x チェック不要）
+# hooks/rtk-rewrite.js resolveRtkBin() の探索戦略と対称
+_rtk_bin="${RTK_BIN:-}"
+if [ -n "$_rtk_bin" ]; then
+  # RTK_BIN override: 通常ファイルかつ実行可能でなければパススルーへ (stale/dir 対策)
+  # [ -x dir ] はディレクトリに true を返すため、-f と併用してディレクトリを弾く
+  { [ -f "$_rtk_bin" ] && [ -x "$_rtk_bin" ]; } || _rtk_bin=""
+else
+  _rtk_bin="$(command -v rtk 2>/dev/null || true)"
+fi
+
+# RTK=on かつバイナリあり → exec で rtk に委譲 (終了コード・stdout を透過)
+# それ以外 → 直接 exec (素通し)
+if [ "$_rtk_on" = 1 ] && [ -n "$_rtk_bin" ]; then
+  exec "$_rtk_bin" "$@"
+else
+  exec "$@"
+fi
