@@ -527,3 +527,7 @@ Changes: fix(#2360): TR5 user_verification audit gate no longer loops forever wh
 ### FEATURE: PR #2376 (2026-09-23)
 Background: feat(#2363): sweep-issues all-bands loop, shared band-loop library, snapshot mechanism
 Changes: `sweep-issues`: add `--all-bands` to scan the full open-issue backlog in one pass; `--max-bands` caps the run; a shared snapshot eliminates redundant API calls across bands
+
+### FEATURE: PR #2377 (2026-09-23)
+Background: feat(#929): supervisor codex engine + C1/C2/C3 label rename
+Changes: Supervisor findings generation now uses Codex as the primary engine (shared by alert and audit modes), replacing the retired C1 critic. Alert cause labels are now human-readable slugs (`sentinel-hang`, `scheduled-review`, `off-proposal`) instead of numeric prefixes.
