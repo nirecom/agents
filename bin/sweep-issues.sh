@@ -56,7 +56,7 @@ Normally invoked as /sweep-issues, which forwards these flags verbatim.
                         when --repo names a repository other than the working
                         tree (default: the working tree).
   --band-size N         Issues per band (default 100).
-  --band-index K        Zero-based band to sweep (default 0).
+  --band-index K        Zero-based band to sweep; when omitted all bands are swept.
   --all-bands           Fetch the issue list once, then scan every band in this
                         run (one tier-1 pass, one aggregated tier-2 gate).
   --max-bands N         With --all-bands, cap the sweep at the first N bands and
@@ -95,6 +95,10 @@ while [[ $# -gt 0 ]]; do
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
+
+if [[ "$ALL_BANDS" -eq 0 && "$BAND_INDEX_EXPLICIT" -eq 0 ]]; then
+  ALL_BANDS=1
+fi
 
 # ─── Mode gates (before any I/O, so a misuse never half-runs) ────────────────
 
@@ -340,7 +344,7 @@ if [[ "$ALL_BANDS" -eq 1 ]]; then
     emit_scan_summary
   fi
 else
-  # Single band (default).
+  # Single band (explicit --band-index K).
   scan_one_band "$BAND_INDEX" || emit_scan_summary
   bands_swept=1
   total_bands=1

@@ -433,6 +433,20 @@ C19_all_bands_deep_dry_run
 C20_verify_decisions_skip_band_fetch
 C21_all_bands_scan_fail_tier1_independent
 
+# ── C22: no flags → default is all-bands (band_index=all in CI summary) ──────
+C22_no_flags_defaults_to_all_bands() {
+    make_fixture c22
+    local out; run_sweep --band-size 2 --ci-mode; out="$OUT"
+    echo "$out" | grep -q '"band_index":"all"' \
+        && pass "C22 no flags: band_index=all (default is all-bands)" \
+        || fail "C22 no flags: band_index is not all — default not applied, out=$out"
+    echo "$out" | grep -q '"bands_swept":2' \
+        && pass "C22 no flags: bands_swept=2" \
+        || fail "C22 no flags: bands_swept!=2, out=$out"
+}
+
+C22_no_flags_defaults_to_all_bands
+
 echo ""
 echo "─────────────────────────────────────────"
 echo "Results: $PASS passed, $FAIL failed"
