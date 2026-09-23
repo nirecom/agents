@@ -69,7 +69,7 @@ if ($_hostname -and $_token) {
     } else {
         Write-Host "glab: authenticated." -ForegroundColor Green
         if ($_subfolder) {
-            glab config set -h $_hostname subfolder $_subfolder
+            glab config set --host $_hostname subfolder $_subfolder
             Write-Host "glab: subfolder set to '$_subfolder'." -ForegroundColor Green
         }
     }
