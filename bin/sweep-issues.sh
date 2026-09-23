@@ -57,10 +57,8 @@ Normally invoked as /sweep-issues, which forwards these flags verbatim.
                         tree (default: the working tree).
   --band-size N         Issues per band (default 100).
   --band-index K        Zero-based band to sweep; when omitted all bands are swept.
-  --all-bands           Fetch the issue list once, then scan every band in this
-                        run (one tier-1 pass, one aggregated tier-2 gate).
-  --max-bands N         With --all-bands, cap the sweep at the first N bands and
-                        warn that coverage is bounded.
+  --max-bands N         Cap the all-bands sweep at the first N bands and warn
+                        that coverage is bounded (no-op in single-band mode).
   --ci-mode             Emit a one-line JSON summary instead of prose.
 EOF
   sweep_write_mode_usage_lines
@@ -85,7 +83,6 @@ while [[ $# -gt 0 ]]; do
     --ci-mode) CI_MODE=1; shift ;;
     --band-size) BAND_SIZE="${2:?--band-size requires an argument}"; shift 2 ;;
     --band-index) BAND_INDEX="${2:?--band-index requires an argument}"; BAND_INDEX_EXPLICIT=1; shift 2 ;;
-    --all-bands) ALL_BANDS=1; shift ;;
     --max-bands) MAX_BANDS="${2:?--max-bands requires an argument}"; shift 2 ;;
     --repo) REPO="${2:?--repo requires an argument}"; REPO_EXPLICIT=1; shift 2 ;;
     --repo-root) REPO_ROOT="${2:?--repo-root requires an argument}"; shift 2 ;;
@@ -113,12 +110,9 @@ if [[ "$MAX_BANDS" != "0" ]] && { [[ ! "$MAX_BANDS" =~ ^[1-9][0-9]*$ ]]; }; then
 fi
 
 if [[ "$MAX_BANDS" -gt 0 && "$ALL_BANDS" -eq 0 ]]; then
-  printf 'WARNING: --max-bands has no effect without --all-bands\n' >&2
+  printf 'WARNING: --max-bands has no effect in single-band mode (explicit --band-index)\n' >&2
 fi
 
-if [[ "$BAND_INDEX_EXPLICIT" -eq 1 && "$ALL_BANDS" -eq 1 ]]; then
-  printf 'WARNING: --band-index has no effect with --all-bands (ignored)\n' >&2
-fi
 
 if [[ -n "$VERIFY_TSV" && -n "$DECISIONS_TSV" ]]; then
   printf 'ERROR: --verify-candidates and --decisions are mutually exclusive\n' >&2
@@ -311,7 +305,7 @@ tier2_numbers=()
 tier2_tokens=()
 
 if [[ "$ALL_BANDS" -eq 1 ]]; then
-  # --all-bands: fetch the issue list once into a snapshot, then iterate bands.
+  # All-bands mode: fetch the issue list once into a snapshot, then iterate bands.
   SNAP="$(mktemp)"
   trap 'rm -f "${SNAP:-}"' EXIT
 

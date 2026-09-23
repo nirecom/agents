@@ -150,7 +150,7 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 ### all-bands
 
 - **Full name**: All-bands sweep mode
-- **Definition**: The `--all-bands` flag of `bin/sweep-issues.sh`. Fetches the issue list once (a shared snapshot via `--snapshot-out`/`--snapshot-in`) then scans every band in sequence — one tier-1 close pass and one aggregated tier-2 gate for the whole backlog. `--max-bands` caps the number of bands swept.
+- **Definition**: The default sweep mode of `bin/sweep-issues.sh`. Fetches the issue list once then scans every band in sequence — one tier-1 close pass and one aggregated tier-2 gate for the whole backlog. `--max-bands` caps the number of bands swept. Single-band mode requires explicit `--band-index K`.
 - **Related**: [bin/sweep-issues.sh](../bin/sweep-issues.sh), [skills/sweep-issues/SKILL.md](../skills/sweep-issues/SKILL.md)
 
 ### RTK

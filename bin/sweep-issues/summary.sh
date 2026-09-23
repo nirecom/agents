@@ -2,7 +2,7 @@
 #
 # bin/sweep-issues/summary.sh — sourced by bin/sweep-issues.sh (reads the caller's
 # counters; never executed directly). Renders the pass-1 summary in the shape
-# --ci-mode selected, adds the --all-bands aggregate fields when ALL_BANDS=1, and
+# --ci-mode selected, adds the all-bands aggregate fields when ALL_BANDS=1, and
 # owns the run's exit status. `errors` is a REAL count of every failed sub-step
 # and incomplete close row; errors > 0 exits 1 so a cron job sees the failure.
 
