@@ -73,7 +73,7 @@ if [ -n "$_hostname" ] && [ -n "$_token" ]; then
     else
         printf "${C_GREEN}glab: authenticated.${C_RESET}\n"
         if [ -n "$_subfolder" ]; then
-            glab config set -h "$_hostname" subfolder "$_subfolder"
+            glab config set --host "$_hostname" subfolder "$_subfolder"
             printf "${C_GREEN}glab: subfolder set to '%s'.${C_RESET}\n" "$_subfolder"
         fi
     fi
