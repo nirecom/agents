@@ -141,6 +141,18 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 
 ## Tools and utilities
 
+### band
+
+- **Full name**: Issue band
+- **Definition**: A `--band-size N` slice of the open-issue backlog. Selected by zero-based `--band-index K`; the default is band 0 (the first N issues). `bin/lib/sweep-band-loop.sh` provides `sweep_band_count` and `sweep_band_indices` to iterate all bands.
+- **Related**: [bin/sweep-issues.sh](../bin/sweep-issues.sh), [bin/lib/sweep-band-loop.sh](../bin/lib/sweep-band-loop.sh)
+
+### all-bands
+
+- **Full name**: All-bands sweep mode
+- **Definition**: The `--all-bands` flag of `bin/sweep-issues.sh`. Fetches the issue list once (a shared snapshot via `--snapshot-out`/`--snapshot-in`) then scans every band in sequence — one tier-1 close pass and one aggregated tier-2 gate for the whole backlog. `--max-bands` caps the number of bands swept.
+- **Related**: [bin/sweep-issues.sh](../bin/sweep-issues.sh), [skills/sweep-issues/SKILL.md](../skills/sweep-issues/SKILL.md)
+
 ### RTK
 
 - **Full name**: Rust Token Killer (RTK)
