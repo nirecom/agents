@@ -79,7 +79,7 @@ run_f6() {
 run_f7() {
     require_source "$FORMATTER" "F7: l2Armed output uses human-readable resume instructions, not raw node -e one-liner" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "f7-sid" "'f7-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    out=$(format_l2_armed "sentinel-hang" "f7-sid" "'f7-wsid'" "agents/supervisor.md" "/tmp/state.json")
     # Must contain readable phrase
     if ! ( echo "$out" | grep -qE "To resume|Clear:" ); then
         fail "F7: l2Armed output uses human-readable resume instructions (missing To resume / Clear:) (out=$out)"
@@ -98,7 +98,7 @@ run_f7() {
 run_f8() {
     require_source "$FORMATTER" "F8: l2Armed output contains stateFilePath in a File: line" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "f8-sid" "'f8-wsid'" "agents/supervisor.md" "/tmp/sup-state-f8.json")
+    out=$(format_l2_armed "sentinel-hang" "f8-sid" "'f8-wsid'" "agents/supervisor.md" "/tmp/sup-state-f8.json")
     if echo "$out" | grep -q "File:" && echo "$out" | grep -q "/tmp/sup-state-f8.json"; then
         pass "F8: l2Armed output contains stateFilePath in a File: line"
     else
@@ -109,7 +109,7 @@ run_f8() {
 run_f9() {
     require_source "$FORMATTER" "F9: l2Armed output contains Session ID: token" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "f9-sid" "'f9-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    out=$(format_l2_armed "sentinel-hang" "f9-sid" "'f9-wsid'" "agents/supervisor.md" "/tmp/state.json")
     if echo "$out" | grep -q "Session ID: f9-sid"; then
         pass "F9: l2Armed output contains Session ID: token"
     else
@@ -120,7 +120,7 @@ run_f9() {
 run_f10() {
     require_source "$FORMATTER" "F10: l2Armed output contains Workflow session ID: token" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "f10-sid" "'f10-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    out=$(format_l2_armed "sentinel-hang" "f10-sid" "'f10-wsid'" "agents/supervisor.md" "/tmp/state.json")
     if echo "$out" | grep -q "Workflow session ID: f10-wsid"; then
         pass "F10: l2Armed output contains Workflow session ID: token"
     else
@@ -128,53 +128,85 @@ run_f10() {
     fi
 }
 
+# NOTE: RED until write-code renames the label (#929): isC1 becomes `cause === "sentinel-hang"`
+# and causeLabel drops the "C1" numeric prefix.
 run_f11() {
-    require_source "$FORMATTER" "F11: l2Armed C1 cause output contains stop_hook_active sentinel detection language" || return
+    require_source "$FORMATTER" "F11: l2Armed sentinel-hang cause output contains stop_hook_active sentinel detection language and no C1 prefix" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "f11-sid" "'f11-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -qi "sentinel" || echo "$out" | grep -q "stop_hook_active" || echo "$out" | grep -qi "hang"; then
-        pass "F11: l2Armed C1 cause output contains stop_hook_active sentinel detection language"
+    out=$(format_l2_armed "sentinel-hang" "f11-sid" "'f11-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if ( echo "$out" | grep -qi "sentinel" || echo "$out" | grep -q "stop_hook_active" || echo "$out" | grep -qi "hang" ) \
+       && ! ( echo "$out" | grep -qE "\bC1\b" ); then
+        pass "F11: l2Armed sentinel-hang cause output contains stop_hook_active sentinel detection language and no C1 prefix"
     else
-        fail "F11: l2Armed C1 cause output contains stop_hook_active sentinel detection language (out=$out)"
+        fail "F11: l2Armed sentinel-hang cause output contains stop_hook_active sentinel detection language and no C1 prefix (out=$out)"
     fi
 }
 
+# NOTE: RED until write-code renames the label (#929): the scheduled-review causeLabel
+# drops the "C2" numeric prefix.
 run_f12() {
-    require_source "$FORMATTER" "F12: l2Armed C2 cause output contains scheduled review language" || return
+    require_source "$FORMATTER" "F12: l2Armed scheduled-review cause output contains scheduled review language and no C2 prefix" || return
     local out
-    out=$(format_l2_armed "C2 scheduled-review" "f12-sid" "'f12-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -qi "scheduled"; then
-        pass "F12: l2Armed C2 cause output contains scheduled review language"
+    out=$(format_l2_armed "scheduled-review" "f12-sid" "'f12-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if ( echo "$out" | grep -qi "scheduled" ) && ! ( echo "$out" | grep -qE "\bC2\b" ); then
+        pass "F12: l2Armed scheduled-review cause output contains scheduled review language and no C2 prefix"
     else
-        fail "F12: l2Armed C2 cause output contains scheduled review language (out=$out)"
+        fail "F12: l2Armed scheduled-review cause output contains scheduled review language and no C2 prefix (out=$out)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# F13-F14: C3 worktree-off / workflow-off proposal cause (#903)
-# Mirrors F9/F10 (C1) shape: same call signature, distinct cause string.
-# RED: source branch `isC3` not yet implemented in formatL2ArmedReason.
+# F13-F14: worktree-off / workflow-off proposal cause (#903)
+# Mirrors F9/F10 shape: same call signature, distinct cause string.
+# NOTE: RED until write-code renames the label (#929): isC3 becomes
+# `cause.includes("off proposal")` and the causeLabel drops the "C3" prefix.
 # ---------------------------------------------------------------------------
 
 run_f13() {
-    require_source "$FORMATTER" "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner" || return
+    require_source "$FORMATTER" "F13: l2Armed worktree-off proposal -> output contains WORKTREE_OFF, resume one-liner, and no C3 prefix" || return
     local out
-    out=$(format_l2_armed "C3 worktree-off proposal" "f13-sid" "'f13-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -q "WORKTREE_OFF" && echo "$out" | grep -q "alert_armed_at: null"; then
-        pass "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner"
+    out=$(format_l2_armed "worktree-off proposal" "f13-sid" "'f13-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if echo "$out" | grep -q "WORKTREE_OFF" && echo "$out" | grep -q "alert_armed_at: null" \
+       && ! ( echo "$out" | grep -qE "\bC3\b" ); then
+        pass "F13: l2Armed worktree-off proposal -> output contains WORKTREE_OFF, resume one-liner, and no C3 prefix"
     else
-        fail "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner (out=$out)"
+        fail "F13: l2Armed worktree-off proposal -> output contains WORKTREE_OFF, resume one-liner, and no C3 prefix (out=$out)"
     fi
 }
 
 run_f14() {
-    require_source "$FORMATTER" "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner" || return
+    require_source "$FORMATTER" "F14: l2Armed workflow-off proposal -> output contains WORKFLOW_OFF, resume one-liner, and no C3 prefix" || return
     local out
-    out=$(format_l2_armed "C3 workflow-off proposal" "f14-sid" "'f14-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -q "WORKFLOW_OFF" && echo "$out" | grep -q "alert_armed_at: null"; then
-        pass "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner"
+    out=$(format_l2_armed "workflow-off proposal" "f14-sid" "'f14-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if echo "$out" | grep -q "WORKFLOW_OFF" && echo "$out" | grep -q "alert_armed_at: null" \
+       && ! ( echo "$out" | grep -qE "\bC3\b" ); then
+        pass "F14: l2Armed workflow-off proposal -> output contains WORKFLOW_OFF, resume one-liner, and no C3 prefix"
     else
-        fail "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner (out=$out)"
+        fail "F14: l2Armed workflow-off proposal -> output contains WORKFLOW_OFF, resume one-liner, and no C3 prefix (out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# F-woff-nonnumeric: formatWorktreeOffProposalReason drops the "C3:" prefix (#929)
+# NOTE: RED until write-code renames the label — source currently emits
+# "[EM Supervisor] C3: OFF proposal pre-detected."
+# ---------------------------------------------------------------------------
+run_f_woff_nonnumeric() {
+    require_source "$FORMATTER" "F-woff-nonnumeric: formatWorktreeOffProposalReason drops C3: prefix" || return
+    local out rc
+    out=$(run_with_timeout 5 node -e "
+const f = require('$FORMATTER_NODE');
+process.stdout.write(f.formatWorktreeOffProposalReason('woff-sid', 'woff-wsid', 'agents/supervisor.md', '/tmp/state.json'));
+" 2>/dev/null)
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        fail "F-woff-nonnumeric: formatWorktreeOffProposalReason drops C3: prefix (rc=$rc, out=$out)"
+        return
+    fi
+    if echo "$out" | grep -q "OFF proposal pre-detected" && ! ( echo "$out" | grep -q "C3:" ); then
+        pass "F-woff-nonnumeric: formatWorktreeOffProposalReason drops C3: prefix"
+    else
+        fail "F-woff-nonnumeric: formatWorktreeOffProposalReason drops C3: prefix (out=$out)"
     fi
 }
 
@@ -207,7 +239,7 @@ run_f_null_wsid_cumsev() {
 run_f_null_wsid_l2armed() {
     require_source "$FORMATTER" "F-null-wsid-l2armed: null workflowSessionId renders as UNAVAILABLE in l2Armed output" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "null-wsid-l2-sid" "null" "agents/supervisor.md" "/tmp/state.json")
+    out=$(format_l2_armed "sentinel-hang" "null-wsid-l2-sid" "null" "agents/supervisor.md" "/tmp/state.json")
     if echo "$out" | grep -q "Workflow session ID: UNAVAILABLE"; then
         pass "F-null-wsid-l2armed: null workflowSessionId renders as UNAVAILABLE in l2Armed output"
     else
@@ -332,7 +364,7 @@ const sid = process.env.TEST_SID;
 const wsid = 'q-wsid';
 const sp = 'agents/supervisor.md';
 const stp = '/tmp/state.json';
-process.stdout.write(f.formatL2ArmedReason('C1 sentinel hang', sid, wsid, sp, stp));
+process.stdout.write(f.formatL2ArmedReason('sentinel-hang', sid, wsid, sp, stp));
 " TEST_SID="test'sid" 2>/dev/null)
     rc=$?
     if [ $rc -ne 0 ]; then
@@ -354,7 +386,7 @@ run_f_state_path_special() {
     export TEST_STP="/tmp/my path/state's.json"
     out=$(run_with_timeout 5 node -e "
 const f = require('$FORMATTER_NODE');
-const cause = 'C1 sentinel hang';
+const cause = 'sentinel-hang';
 const sid = 'sp-sid';
 const wsid = 'sp-wsid';
 const sp = 'agents/supervisor.md';
@@ -389,7 +421,7 @@ require_recipe_block() {
     local probe
     probe=$(run_with_timeout 5 node -e "
 const f = require('$FORMATTER_NODE');
-const out1 = f.formatL2ArmedReason('C1 sentinel hang', 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
+const out1 = f.formatL2ArmedReason('sentinel-hang', 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
 const out2 = f.formatCumSevErrorReason([], 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
 const has1 = out1.indexOf('supervisor-write-alert') >= 0;
 const has2 = out2.indexOf('supervisor-write-alert') >= 0;
@@ -406,7 +438,7 @@ run_f_recipe_1() {
     require_source "$FORMATTER" "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
     require_recipe_block "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
     local out
-    out=$(format_l2_armed "C1 sentinel hang" "frec1-sid" "'frec1-wsid'" "agents/supervisor.md" "/tmp/state-frec1.json")
+    out=$(format_l2_armed "sentinel-hang" "frec1-sid" "'frec1-wsid'" "agents/supervisor.md" "/tmp/state-frec1.json")
     if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-alert"; then
         pass "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block"
     else
@@ -461,6 +493,7 @@ run_f11
 run_f12
 run_f13
 run_f14
+run_f_woff_nonnumeric
 run_f_empty
 run_f_null_wsid_cumsev
 run_f_null_wsid_l2armed

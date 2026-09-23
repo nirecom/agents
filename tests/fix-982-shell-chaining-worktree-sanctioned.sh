@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/enforce-worktree/main-worktree-allows/standard.js
-# Tags: worktree, enforce, hook, shell-chaining, scope:issue-specific
+# Tags: worktree, enforce, hook, shell-chaining, supervisor, scope:issue-specific
 #
 # Verifies that isAllowedWorktreeCommand allows sanctioned git-worktree commands
 # followed by a safe `&& cd <path>` tail (NEW behaviour in fix #982/#1095),
@@ -166,6 +166,45 @@ test_worktree_chaining() {
 }
 
 test_worktree_chaining
+
+# call_supervisor_bin CMD
+# Calls isAllowedSupervisorBinTool(cmd) (same standard.js module) and prints "true"/"false".
+call_supervisor_bin() {
+    local cmd="$1"
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        console.log(String(m.isAllowedSupervisorBinTool(process.argv[1])));
+      } catch (e) { console.log('ERROR: ' + e.message); }
+    " -- "$cmd" 2>/dev/null
+}
+
+# ── #929 (R3-C4): supervisor-findings-codex allowlisted from the main worktree ──
+# NOTE: RED until write-code adds `findings-codex` to the isAllowedSupervisorBinTool
+#   regex in standard.js (#929); alert/audit invocations return false today, so the
+#   two affirmative asserts fail. The write-alert regression + non-/tmp redirect
+#   guard are GREEN now (the pattern already covers write-alert) — CPR-ORTH.
+test_supervisor_findings_codex_allowlist() {
+    # New engine allowed from main worktree, no redirect → true (RED).
+    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode alert" → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode alert')" \
+        'true'
+    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode audit" → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode audit')" \
+        'true'
+
+    # Regression (GREEN): existing supervisor-write-alert stays allowed, no redirect.
+    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --ingest-generated-jsonl ..." → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --ingest-generated-jsonl /tmp/x.jsonl')" \
+        'true'
+
+    # Guard stays armed (GREEN): a redirect to a non-/tmp target is refused.
+    assert_fn_result '"...supervisor-write-alert ... > /home/x" (non-/tmp redirect) → false' \
+        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --json > /home/x')" \
+        'false'
+}
+
+test_supervisor_findings_codex_allowlist
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

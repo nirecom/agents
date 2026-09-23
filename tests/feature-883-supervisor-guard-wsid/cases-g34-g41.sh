@@ -317,7 +317,9 @@ run_g46() {
 }
 
 run_g47() {
-    require_source "$HOOK" "G47: alert_armed_at without hang takes C2 path — output contains C2 label" || return
+    # NOTE: RED until write-code renames C2→scheduled-review (#929); the reason
+    #   still emits "C2 scheduled review" today, so the "no C2" assertion fails.
+    require_source "$HOOK" "G47: alert_armed_at without hang takes scheduled-review path — non-numeric label" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g47-sid"
@@ -328,10 +330,10 @@ run_g47() {
         | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && echo "$out" | grep -q "C2 scheduled review"; then
-        pass "G47: alert_armed_at without hang takes C2 path — output contains C2 label"
+    if [ $rc -eq 2 ] && echo "$out" | grep -q "scheduled review" && ! echo "$out" | grep -q "C2"; then
+        pass "G47: alert_armed_at without hang takes scheduled-review path — non-numeric label"
     else
-        fail "G47: alert_armed_at without hang takes C2 path — output contains C2 label (rc=$rc, out=$out)"
+        fail "G47: alert_armed_at without hang takes scheduled-review path — non-numeric label (rc=$rc, out=$out)"
     fi
 }
 

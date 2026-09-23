@@ -2,22 +2,12 @@
 # Tests: hooks/lib/supervisor-report-format.js, skills/enforce-workflow-off/SKILL.md, rules/workflow-off.md
 # Tags: rules-injection, progressive-disclosure, supervisor-guard, stale-pointer, live-pointer, TL2, scope:issue-specific
 
-# WHY (CPR-WPH): when the C3 off-proposal guard fires, the supervisor is told where to look
-# up whether the bypass was sanctioned. #2037 moved that procedure — "Sanctioned-command
-# false-block recovery" — out of rules/workflow-off.md and into
-# skills/enforce-workflow-off/SKILL.md. A pointer left on the old address is the worst kind
-# of stale: rules/workflow-off.md still EXISTS, so the reviewer opens it, does not find the
-# section, and has to decide the sanctioned-vs-improvised question unaided at the exact
-# moment a guard bypass is on the table.
-
-# The output is produced by CALLING formatL2ArmedReason, never by grepping the source. A
-# grep would pass on a pointer sitting in dead code or in a branch this cause never reaches,
-# and would fail on one assembled from parts — neither is what the supervisor actually reads.
-
-# The pointer is also resolved: naming a file is not the same as the file carrying the
-# section. P4 opens the named path and looks for the named heading, so a second migration
-# that moves the section again fails here rather than in a live incident. Assumes AGENTS_DIR,
-# _AGENTS_DIR_NODE, pass(), fail() from the entry file.
+# WHY (CPR-WPH): when the off-proposal guard fires, the supervisor's alert must point at
+# where "Sanctioned-command false-block recovery" now lives (skills/enforce-workflow-off/
+# SKILL.md after #2037), not the stale rules/workflow-off.md that still exists but no longer
+# carries the section. Output is produced by CALLING formatL2ArmedReason (not grep), and P4
+# opens the named path to confirm the heading resolves. Assumes AGENTS_DIR, _AGENTS_DIR_NODE,
+# pass(), fail() from the entry file.
 
 echo ""
 echo "=== S13: the C3 alert's verify-pointer resolves to where the procedure actually lives ==="
@@ -41,9 +31,12 @@ process.stdout.write(f.formatL2ArmedReason(
 ' "$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js" "$1" 2>&1
     }
 
-    FP_C3="$(fp_render "C3 workflow-off proposal")"
-    FP_C3_WT="$(fp_render "C3 worktree-off proposal")"
-    FP_C2="$(fp_render "C2 scheduled")"
+    # NOTE: RED until write-code renames the cause labels (#929): the guard now passes
+    # non-numbered causes and the formatter's off-proposal branch keys on
+    # cause.includes("off proposal") instead of an indexOf("C3")===0 prefix.
+    FP_C3="$(fp_render "workflow-off proposal")"
+    FP_C3_WT="$(fp_render "worktree-off proposal")"
+    FP_C2="$(fp_render "scheduled-review")"
 
     # P0: the render must have produced something recognisable, otherwise every
     # contains/does-not-contain assertion below grades an error message or an empty string.
@@ -67,12 +60,12 @@ process.stdout.write(f.formatL2ArmedReason(
 
     # P3: the non-vacuity control. P1 asserts a substring is PRESENT and P2 that another is
     # ABSENT; a footer printed for every cause would satisfy P1 while saying nothing about
-    # the C3 branch, and P2 is satisfied by any string at all. Driving a NON-C3 cause through
-    # the same function must answer differently on both counts.
+    # the off-proposal branch, and P2 is satisfied by any string at all. Driving a
+    # non-off-proposal cause through the same function must answer differently on both counts.
     if printf '%s' "$FP_C2" | grep -qF "$FP_LIVE"; then
-        fail "S13-P3: the C2 (scheduled review) cause carries the same pointer, so P1 measures a constant footer rather than the C3 off-proposal branch"
+        fail "S13-P3: the scheduled-review cause carries the same pointer, so P1 measures a constant footer rather than the off-proposal branch"
     elif printf '%s' "$FP_C2" | grep -q '\[EM Supervisor\] Alert mode review required'; then
-        pass "S13-P3: a non-C3 cause renders an alert WITHOUT the pointer — P1/P2 measure the off-proposal branch, not every alert this formatter emits"
+        pass "S13-P3: a non-off-proposal cause renders an alert WITHOUT the pointer — P1/P2 measure the off-proposal branch, not every alert this formatter emits"
     else
         fail "S13-P3: the C2 cause did not render an alert at all, so it cannot serve as the control; rendered: $(printf '%s' "$FP_C2" | tr '\n' ' ' | cut -c1-220)"
     fi

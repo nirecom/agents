@@ -179,17 +179,20 @@ run_m6() {
     fi
 }
 
+# NOTE: RED until write-code drops the "C3" numeric prefix (#929): supervisor.md must
+# describe the off-proposal trigger with the non-numbered label.
 run_m7() {
-    require_source "$SUPERVISOR_MD" "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)" || return
+    require_source "$SUPERVISOR_MD" "M7: contains non-numbered off-proposal content (WORKTREE_OFF + off-proposal, no C3 prefix)" || return
     local ok=1
     contains_i "WORKTREE_OFF" || { ok=0; echo "  missing: WORKTREE_OFF"; }
-    if ! contains_i "off-proposal" && ! contains_i "C3"; then
-        ok=0; echo "  missing: off-proposal or C3"
+    contains_i "off-proposal" || { ok=0; echo "  missing: off-proposal"; }
+    if contains_i "C3 off-proposal"; then
+        ok=0; echo "  found numbered label 'C3 off-proposal' (should be non-numbered per #929)"
     fi
     if [ $ok -eq 1 ]; then
-        pass "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)"
+        pass "M7: contains non-numbered off-proposal content (WORKTREE_OFF + off-proposal, no C3 prefix)"
     else
-        fail "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)"
+        fail "M7: contains non-numbered off-proposal content (WORKTREE_OFF + off-proposal, no C3 prefix)"
     fi
 }
 

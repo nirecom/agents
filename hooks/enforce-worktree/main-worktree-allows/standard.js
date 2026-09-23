@@ -362,7 +362,7 @@ function isAllowedComposeDocAppend(cmd, repoRoot) {
  * resolve to /tmp/ (the universal output sink for supervisor tools).
  *
  * Approved scripts:
- *   bash "$AGENTS_CONFIG_DIR/bin/supervisor-review-codex" — may write to /tmp/
+ *   bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" — may write to /tmp/
  *   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" — no write targets
  *
  * Hard restriction: any redirect present must point to /tmp/.
@@ -371,7 +371,7 @@ function isAllowedSupervisorBinTool(cmd) {
   if (!cmd) return false;
 
   // Pattern: bash or node invoking a supervisor-* bin tool (quoted or unquoted AGENTS_CONFIG_DIR).
-  const supervisorBinPattern = /(?:bash|node)\s+"?\$?\{?AGENTS_CONFIG_DIR\}?\/bin\/supervisor-(?:review-codex|write-alert)/;
+  const supervisorBinPattern = /(?:bash|node)\s+"?\$?\{?AGENTS_CONFIG_DIR\}?\/bin\/supervisor-(?:findings-codex|write-alert)/;
   if (!supervisorBinPattern.test(cmd)) return false;
 
   // If there's a redirect, it must point to /tmp/.

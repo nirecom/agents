@@ -89,12 +89,12 @@ te_fake_acd() {
 # target-allow fires even though CWD is a main checkout.
 te_repo="$(setup_main_checkout "sup-rc-main")"
 te_out="$(run_bash_guard \
-    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-review-codex" --generate > /tmp/sup-output.jsonl' \
+    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" --mode alert > /tmp/sup-output.jsonl' \
     "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t1)")"
 if guard_decision "$te_out"; then
-    pass "T1: bash supervisor-review-codex --generate >/tmp/out.jsonl from main worktree: allow"
+    pass "T1: bash supervisor-findings-codex --mode alert >/tmp/out.jsonl from main worktree: allow"
 else
-    fail "T1: bash supervisor-review-codex --generate >/tmp/out.jsonl should allow (target outside session), got: $te_out"
+    fail "T1: bash supervisor-findings-codex --mode alert >/tmp/out.jsonl should allow (target outside session), got: $te_out"
 fi
 
 # T2: node invocation with no redirect — no write target is visible to the hook,
@@ -113,23 +113,23 @@ fi
 # Without this, T1 could pass because the hook stopped inspecting supervisor bins.
 te_repo="$(setup_main_checkout "sup-rc-block")"
 te_out="$(run_bash_guard \
-    "bash \"\$AGENTS_CONFIG_DIR/bin/supervisor-review-codex\" --generate > $te_repo/output.jsonl" \
+    "bash \"\$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex\" --mode alert > $te_repo/output.jsonl" \
     "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t3)")"
 if guard_decision "$te_out"; then
-    fail "T3: bash supervisor-review-codex writing into repo should block (main worktree), got allow: $te_out"
+    fail "T3: bash supervisor-findings-codex writing into repo should block (main worktree), got allow: $te_out"
 else
-    pass "T3: bash supervisor-review-codex writing into repo from main worktree: block (regression guard)"
+    pass "T3: bash supervisor-findings-codex writing into repo from main worktree: block (regression guard)"
 fi
 
 # T4: no redirect at all → no write target → allow.
 te_repo="$(setup_main_checkout "sup-rc-noredirect")"
 te_out="$(run_bash_guard \
-    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-review-codex" --list' \
+    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" --mode audit' \
     "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t4)")"
 if guard_decision "$te_out"; then
-    pass "T4: bash supervisor-review-codex --list (no redirect) from main worktree: allow"
+    pass "T4: bash supervisor-findings-codex --mode audit (no redirect) from main worktree: allow"
 else
-    fail "T4: bash supervisor-review-codex --list should allow (no write target), got: $te_out"
+    fail "T4: bash supervisor-findings-codex --mode audit should allow (no write target), got: $te_out"
 fi
 
 # A staged filename can carry a `;` the same way a command string can. Extraction
