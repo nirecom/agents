@@ -16,7 +16,7 @@ The user types at most `--deep` and `--dry-run`. Passes 2 and 3 are this skill's
 
 Read `rules/github-issues.md` before SI-1 — on-demand-only, never auto-injected; it owns the close paths, the `status:migrated` / `status:cancelled` labels, and meta-parent handling.
 
-SI-1. Run `bash "$AGENTS_CONFIG_DIR/bin/sweep-issues.sh" --all-bands` forwarding the user's other flags verbatim (pass 1).
+SI-1. Run `bash "$AGENTS_CONFIG_DIR/bin/sweep-issues.sh"` forwarding the user's other flags verbatim (pass 1).
 SI-2. Print stdout verbatim. Do not summarize or filter.
 SI-3. Stop here when the output carries no `<<<TIER2-GATE-SI3` block.
 SI-4. With the block: use `AskUserQuestion` to separate false positives (artifact not built yet) from real staleness.
@@ -38,8 +38,8 @@ SI-7. Emit `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: sweep-issues batch triage>>`, re-ru
 - Pass `--deep` on every tier-2 call (SI-5 and SI-7); omitting it exits 2.
 - The flagless run is non-interactive. Never place `AskUserQuestion` on the default path.
 - Pair `--deep` with a small band (e.g. `--band-size 20`) — SI-5 runs real tests and large bands do not finish in usable time.
-- pass-1 uses `--all-bands` to scan every band; the loop runs in the script, not here. pass-2/3 have no band concept.
-- `--all-bands --deep` aggregates all bands into one gate block; total candidates scale linearly with open-issue count. To bound the gate size, use `--max-bands N`, not `--band-size`.
+- pass-1 scans every band by default; the loop runs in the script, not here. pass-2/3 have no band concept.
+- `--deep` aggregates all-bands candidates into one gate block; total candidates scale linearly with open-issue count. To bound the gate size, use `--max-bands N`, not `--band-size`.
 - Under `--dry-run`, SI-5 reports the test it would run instead of running it; running a repository script is an effect.
 - A pass-1 run exits non-zero when any sub-step failed. Treat a non-zero exit as "this band was not swept", never as "nothing to do".
 - `--repo` must name the working tree's own repository; pass `--repo-root DIR` when sweeping a repository checked out elsewhere, or the run aborts.
