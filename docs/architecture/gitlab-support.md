@@ -9,7 +9,7 @@ Forge integration is split into two axes (#2307): a **codehost** axis (pushes,
 merge requests, repo visibility, WIP signaling) and a **tracker** axis (issues).
 The tracker axis for GitLab shipped earlier; this work implements the codehost
 axis. github.com and gitlab.com are recognized out of the box; a self-hosted
-GitLab is recognized by naming its host in `FORGE_GITLAB_HOST`.
+A self-hosted GitLab is recognized when its host is set in `GITLAB_HOSTNAME` (or `GITLAB_SSH_HOSTNAME` for SSH-only remotes).
 
 ## 2. Detection SSOT
 

@@ -46,7 +46,7 @@ function isPrivateRepo(repoDir) {
     }
     if (desc.type === "gitlab") {
       // codehostGitlab runs end-to-end (C5). A self-hosted GitLab must have been
-      // declared via FORGE_GITLAB_HOST for this branch to be reached.
+      // declared via GITLAB_HOSTNAME (or GITLAB_SSH_HOSTNAME) for this branch to be reached.
       return desc.isPrivateRepo(remoteUrl);
     }
     // type="unknown": resolveForgeTarget could not classify the host (unrecognized

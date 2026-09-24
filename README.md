@@ -251,10 +251,10 @@ See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full de
 
 ### GitLab support
 
-github.com and gitlab.com are recognized automatically; name a self-hosted GitLab
-host in `FORGE_GITLAB_HOST` to have its remotes handled as GitLab (merge requests,
-repo visibility, and label-based WIP signaling). An unrecognized host is never
-treated as GitHub — it is skipped, not misrouted.
+github.com and gitlab.com are recognized automatically; set `GITLAB_HOSTNAME` (or
+`GITLAB_SSH_HOSTNAME` for SSH remotes) to a self-hosted GitLab host to have its
+remotes handled as GitLab (merge requests, repo visibility, and label-based WIP
+signaling). An unrecognized host is never treated as GitHub — it is skipped, not misrouted.
 
 See [docs/architecture/gitlab-support.md](docs/architecture/gitlab-support.md) for the full design.
 

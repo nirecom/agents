@@ -2,11 +2,12 @@
 "use strict";
 // Thin shell-facing CLI for forge detection. Used ONLY by bash scripts (the
 // Node workers require the pure resolver in-process instead). Reads
-// FORGE_GITLAB_HOST from .env (SSOT) and folds it into resolveForgeTarget to
-// classify the origin URL. Relative require keeps it AGENTS_CONFIG_DIR-independent.
+// GITLAB_HOSTNAME (and GITLAB_SSH_HOSTNAME) from .env (SSOT) and folds them
+// into resolveForgeTarget to classify the origin URL.
+// Relative require keeps it AGENTS_CONFIG_DIR-independent.
 const { execFileSync } = require("child_process");
 const { resolveForgeTarget } = require("../hooks/lib/parse-remote-url");
-const { readGitlabHostConfig } = require("../hooks/lib/forge-router");
+const { readGitlabHostConfig, readGitlabSshHostConfig } = require("../hooks/lib/forge-router");
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -32,7 +33,8 @@ if (url === null) {
 }
 
 const gitlabHost = readGitlabHostConfig(repoDir);
-const res = resolveForgeTarget(url, { gitlabHost }); // { type, host, project }
+const gitlabSshHost = readGitlabSshHostConfig(repoDir);
+const res = resolveForgeTarget(url, { gitlabHost, gitlabSshHost }); // { type, host, project }
 
 if (field) {
   const v = res[field];
