@@ -60,27 +60,38 @@ $_subfolder = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SUBFOLDER 2>$null) 
 $_sshHost   = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SSH_HOSTNAME 2>$null) -join ""
 
 if ($_hostname -and $_token) {
-    Write-Host "Configuring glab authentication for $_hostname..."
-    $_authArgs = @("auth", "login", "--hostname", $_hostname, "--token", $_token, "--api-protocol", "https", "--git-protocol", "ssh")
-    if ($_sshHost) { $_authArgs += @("--ssh-hostname", $_sshHost) }
-    & glab @_authArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "glab auth login failed (exit code $LASTEXITCODE)."
+    # DNS reachability guard: resolve in a job with a 3s hard timeout.
+    $_dnsJob = Start-Job -ScriptBlock { param($h); [System.Net.Dns]::GetHostEntry($h) } -ArgumentList $_hostname
+    $_waited = Wait-Job -Job $_dnsJob -Timeout 3
+    if (-not $_waited -or $_dnsJob.State -ne 'Completed') {
+        Stop-Job -Job $_dnsJob
+        Remove-Job -Job $_dnsJob -Force
+        Write-Warning "Cannot reach $_hostname (DNS check timed out or failed). Skipping glab authentication."
     } else {
-        Write-Host "glab: authenticated." -ForegroundColor Green
-        if ($_subfolder) {
-            glab config set --host $_hostname subfolder $_subfolder
-            Write-Host "glab: subfolder set to '$_subfolder'." -ForegroundColor Green
+        $_dnsErr = $null
+        try { Receive-Job -Job $_dnsJob -ErrorAction Stop | Out-Null } catch { $_dnsErr = $_ }
+        Remove-Job -Job $_dnsJob -Force
+        if ($_dnsErr) {
+            Write-Warning "Cannot reach $_hostname (DNS resolution failed). Skipping glab authentication."
+        } else {
+            Write-Host "Configuring glab authentication for $_hostname..."
+            $_authArgs = @("auth", "login", "--hostname", $_hostname, "--token", $_token, "--api-protocol", "https", "--git-protocol", "ssh")
+            if ($_sshHost) { $_authArgs += @("--ssh-hostname", $_sshHost) }
+            & glab @_authArgs
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "glab auth login failed (exit code $LASTEXITCODE)."
+            } else {
+                Write-Host "glab: authenticated." -ForegroundColor Green
+                if ($_subfolder) {
+                    glab config set --host $_hostname subfolder $_subfolder
+                    Write-Host "glab: subfolder set to '$_subfolder'." -ForegroundColor Green
+                }
+            }
         }
     }
 } else {
-    glab auth status 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "glab: already authenticated." -ForegroundColor DarkGray
-    } else {
-        Write-Host "glab: set GITLAB_HOSTNAME and GITLAB_TOKEN in .env for automated auth," -ForegroundColor Yellow
-        Write-Host "      or run 'glab auth login --hostname <host>' manually." -ForegroundColor Yellow
-    }
+    Write-Host "glab: set GITLAB_HOSTNAME and GITLAB_TOKEN in .env for automated auth," -ForegroundColor Yellow
+    Write-Host "      or run 'glab auth login --hostname <host>' manually." -ForegroundColor Yellow
 }
 
 exit 0

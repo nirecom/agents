@@ -67,7 +67,7 @@ assert_project_rejected() {
 assert_eq "A1/gitlab.com -> gitlab + project" "gitlab|gitlab.com|acme/widgets" \
     "$(call_resolve 'https://gitlab.com/acme/widgets.git' '__NONE__')"
 
-# A2: FORGE_GITLAB_HOST override (gitlabHost option) resolves a custom host.
+# A2: GITLAB_HOSTNAME override (gitlabHost option) resolves a custom host.
 assert_eq "A2/custom host + gitlabHost override -> gitlab" "gitlab|gitlab.example.com|team/app" \
     "$(call_resolve 'https://gitlab.example.com/team/app.git' 'gitlab.example.com')"
 
@@ -104,13 +104,18 @@ assert_eq "C6e/resolveForgeTarget dot-segment path -> unknown (no glab dispatch)
     "$(call_resolve 'https://gitlab.com/./etc/passwd.git' '__NONE__' | cut -d'|' -f1)"
 
 # bin/detect-forge-type CLI (A6-A8): reads origin from CWD, prints {type,host,project}.
+# When ghost is not __NONE__, writes a temp .env so readEffectiveEnvFile() (which
+# prefers AGENTS_CONFIG_DIR/.env over process.env) sees the intended GITLAB_HOSTNAME.
 cli_type() {
-    local repo="$1" ghost="$2" out
+    local repo="$1" ghost="$2" out cli_cfg
     if [ ! -f "$DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
     if [ "$ghost" = "__NONE__" ]; then
         out=$(cd "$repo" && run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
     else
-        out=$(cd "$repo" && FORGE_GITLAB_HOST="$ghost" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        cli_cfg="$(mktemp -d)"
+        printf 'GITLAB_HOSTNAME=%s\n' "$ghost" > "$cli_cfg/.env"
+        out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        rm -rf "$cli_cfg" 2>/dev/null || true
     fi
     printf '%s' "$out" | run_with_timeout 20 node -e '
 let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => {
@@ -138,13 +143,18 @@ fi
 
 # cli_json <repo> <gitlabHost|__NONE__> -> "type|host|project" from the CLI's
 # full JSON output (C5: A6-A8 only checked .type, never host/project).
+# Same .env isolation as cli_type: writes a temp cfg so AGENTS_CONFIG_DIR picks up
+# the intended GITLAB_HOSTNAME from the file rather than the developer's real .env.
 cli_json() {
-    local repo="$1" ghost="$2" out
+    local repo="$1" ghost="$2" out cli_cfg
     if [ ! -f "$DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
     if [ "$ghost" = "__NONE__" ]; then
         out=$(cd "$repo" && run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
     else
-        out=$(cd "$repo" && FORGE_GITLAB_HOST="$ghost" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        cli_cfg="$(mktemp -d)"
+        printf 'GITLAB_HOSTNAME=%s\n' "$ghost" > "$cli_cfg/.env"
+        out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        rm -rf "$cli_cfg" 2>/dev/null || true
     fi
     printf '%s' "$out" | run_with_timeout 20 node -e '
 let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => {
@@ -161,15 +171,15 @@ assert_eq "C5/CLI github full JSON (host+project)" "github|github.com|acme/widge
     "$(cli_json "$REPO_GH" '__NONE__')"
 assert_eq "C5b/CLI gitlab.com subgroup full JSON" "gitlab|gitlab.com|group/sub/repo" \
     "$(cli_json "$REPO_GL_SUB" '__NONE__')"
-assert_eq "C5c/CLI self-hosted gitlab full JSON (FORGE_GITLAB_HOST)" "gitlab|gitlab.example.com|team/app" \
+assert_eq "C5c/CLI self-hosted gitlab full JSON (GITLAB_HOSTNAME)" "gitlab|gitlab.example.com|team/app" \
     "$(cli_json "$REPO_GL_SELF" 'gitlab.example.com')"
 
-# C4: FORGE_GITLAB_HOST .env SSOT — both the parse-remote-url lib (via the env,
+# C4: GITLAB_HOSTNAME .env SSOT — both the parse-remote-url lib (via the env,
 # NOT an explicit gitlabHost option) and the detect-forge-type CLI resolve the
 # SAME self-hosted origin to gitlab. A2 only exercised the explicit option; this
 # proves the env-var path (what .env actually feeds) is wired identically.
 call_resolve_env() {
-    FORGE_GITLAB_HOST="$2" run_with_timeout 20 node -e '
+    GITLAB_HOSTNAME="$2" run_with_timeout 20 node -e '
 const p = process.argv[1];
 const url = process.argv[2];
 let m;
@@ -182,14 +192,14 @@ process.stdout.write(String(r.type) + "|" + String(r.host) + "|" + String(r.proj
 ' "$PRU_JS" "$1" 2>/dev/null
 }
 
-assert_eq "C4/resolveForgeTarget reads FORGE_GITLAB_HOST env (no option)" "gitlab|gitlab.example.com|team/app" \
+assert_eq "C4/resolveForgeTarget reads GITLAB_HOSTNAME env (no option)" "gitlab|gitlab.example.com|team/app" \
     "$(call_resolve_env 'https://gitlab.example.com/team/app.git' 'gitlab.example.com')"
 # Same origin + same env var through the CLI (SSOT: one variable, both consumers).
-assert_eq "C4b/detect-forge-type CLI reads the same FORGE_GITLAB_HOST" "gitlab" \
+assert_eq "C4b/detect-forge-type CLI reads the same GITLAB_HOSTNAME" "gitlab" \
     "$(cli_type "$REPO_GL_SELF" 'gitlab.example.com')"
 
 # C4c: is-private-repo.js dispatches a self-hosted gitlab origin (recognized via
-# FORGE_GITLAB_HOST) to codehostGitlab — proven by glab reporting PUBLIC → false,
+# GITLAB_HOSTNAME) to codehostGitlab — proven by glab reporting PUBLIC → false,
 # NOT the non-github fail-safe hardcoded true. spawnSync is monkeypatched in-proc
 # (Windows-safe); git is delegated to the real binary; only glab is faked.
 IPR_ENV_DRIVER="$TMPROOT/ipr-env-driver.js"
@@ -212,17 +222,22 @@ let r;
 try { r = ipr(process.argv[3]); } catch (e) { process.stdout.write("ERR:threw:" + e.message); process.exit(0); }
 process.stdout.write(String(r));
 NODE
-c4c=$(FORGE_GITLAB_HOST="gitlab.example.com" run_with_timeout 20 node "$IPR_ENV_DRIVER" "$IPR_JS" "$REPO_GL_SELF" 2>/dev/null)
+# Use a temp cfg dir so readGitlabHostConfig() reads GITLAB_HOSTNAME from .env
+# (AGENTS_CONFIG_DIR/.env wins over process.env; the developer's real .env must
+# not interfere with the fixture hostname gitlab.example.com).
+C4C_CFG="$TMPROOT/c4c-cfg"; mkdir -p "$C4C_CFG"
+printf 'GITLAB_HOSTNAME=gitlab.example.com\n' > "$C4C_CFG/.env"
+c4c=$(AGENTS_CONFIG_DIR="$(nodepath "$C4C_CFG")" run_with_timeout 20 node "$IPR_ENV_DRIVER" "$IPR_JS" "$REPO_GL_SELF" 2>/dev/null)
 assert_eq "C4c/isPrivateRepo self-hosted gitlab + glab public -> false (dispatch)" "false" "$c4c"
 
-# C4d: isPrivateRepo reads FORGE_GITLAB_HOST from a .env FILE (not process.env).
+# C4d: isPrivateRepo reads GITLAB_HOSTNAME from a .env FILE (not process.env).
 # readGitlabHostConfig() prefers .env over process.env; this case proves the .env
 # priority path works end-to-end: no env var set, only .env declares the host.
 # The mock glab returns "public" → isPrivateRepo returns false (proves dispatch
 # reached glab rather than failing over to the hardcoded fail-safe true).
 C4D_ROOT="$TMPROOT/c4d-root"
 mkdir -p "$C4D_ROOT"
-printf 'FORGE_GITLAB_HOST=gitlab.mycompany.com\n' > "$C4D_ROOT/.env"
+printf 'GITLAB_HOSTNAME=gitlab.mycompany.com\n' > "$C4D_ROOT/.env"
 # Repo with origin pointing at the self-hosted host declared in the .env above.
 C4D_REPO=$(setup_repo_with_origin "git@gitlab.mycompany.com:team/app.git")
 IPR_FILE_DRIVER="$TMPROOT/ipr-file-driver.js"
@@ -246,15 +261,53 @@ let r;
 try { r = ipr(process.argv[3]); } catch (e) { process.stdout.write("ERR:threw:" + e.message); process.exit(0); }
 process.stdout.write(String(r));
 NODE
-# Run from C4D_ROOT with FORGE_GITLAB_HOST unset so only the .env feeds the host.
+# Run from C4D_ROOT with GITLAB_HOSTNAME unset so only the .env feeds the host.
 C4D_SCRIPT="$TMPROOT/c4d-run.sh"
 # AGENTS_CONFIG_DIR must point at C4D_ROOT so readDefaultEnvFile() reads
-# C4D_ROOT/.env; FORGE_GITLAB_HOST is explicitly unset from process.env.
-printf '#!/bin/bash\ncd "%s" && unset FORGE_GITLAB_HOST && AGENTS_CONFIG_DIR="%s" node "%s" "%s" "%s"\n' \
+# C4D_ROOT/.env; GITLAB_HOSTNAME is explicitly unset from process.env.
+printf '#!/bin/bash\ncd "%s" && unset GITLAB_HOSTNAME && AGENTS_CONFIG_DIR="%s" node "%s" "%s" "%s"\n' \
     "$C4D_ROOT" "$C4D_ROOT" "$(nodepath "$IPR_FILE_DRIVER")" "$(nodepath "$IPR_JS")" "$(nodepath "$C4D_REPO")" > "$C4D_SCRIPT"
 chmod +x "$C4D_SCRIPT"
 c4d=$(run_with_timeout 20 bash "$C4D_SCRIPT" 2>/dev/null)
 assert_eq "C4d/isPrivateRepo reads host from .env file (not process.env), glab public -> false" "false" "$c4d"
+
+# C4e: resolveForgeTarget recognizes GITLAB_SSH_HOSTNAME env var as a GitLab
+# forge host when no gitlabHost option is passed. This proves the 案1 SSH-hostname
+# path: a repo cloned via SSH from a host different from GITLAB_HOSTNAME is still
+# classified as gitlab when GITLAB_SSH_HOSTNAME is set.
+call_resolve_ssh_env() {
+    GITLAB_SSH_HOSTNAME="$2" run_with_timeout 20 node -e '
+const p = process.argv[1];
+const url = process.argv[2];
+let m;
+try { m = require(p); } catch (e) { process.stdout.write("ERR:require"); process.exit(0); }
+if (typeof m.resolveForgeTarget !== "function") { process.stdout.write("ERR:not-a-function"); process.exit(0); }
+let r;
+try { r = m.resolveForgeTarget(url, {}); } catch (e) { process.stdout.write("ERR:threw"); process.exit(0); }
+if (!r || typeof r !== "object") { process.stdout.write("ERR:not-an-object"); process.exit(0); }
+process.stdout.write(String(r.type) + "|" + String(r.host) + "|" + String(r.project));
+' "$PRU_JS" "$1" 2>/dev/null
+}
+assert_eq "C4e/resolveForgeTarget reads GITLAB_SSH_HOSTNAME env (SSH remote, no option)" "gitlab|git.mycompany.com|team/app" \
+    "$(call_resolve_ssh_env 'git@git.mycompany.com:team/app.git' 'git.mycompany.com')"
+
+# C4f: detect-forge-type CLI classifies an SSH remote via GITLAB_SSH_HOSTNAME.
+REPO_GL_SSH=$(setup_repo_with_origin "git@git.mycompany.com:team/app.git")
+cli_type_ssh() {
+    local repo="$1" shost="$2" out cli_cfg
+    if [ ! -f "$DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
+    cli_cfg="$(mktemp -d)"
+    printf 'GITLAB_SSH_HOSTNAME=%s\n' "$shost" > "$cli_cfg/.env"
+    out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+    rm -rf "$cli_cfg" 2>/dev/null || true
+    printf '%s' "$out" | run_with_timeout 20 node -e '
+let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => {
+  try { process.stdout.write(String(JSON.parse(s).type)); }
+  catch (e) { process.stdout.write("ERR:unparsable"); }
+});' 2>/dev/null
+}
+assert_eq "C4f/CLI classifies SSH remote via GITLAB_SSH_HOSTNAME" "gitlab" \
+    "$(cli_type_ssh "$REPO_GL_SSH" 'git.mycompany.com')"
 
 # Group B: codehostGitlab (forge/gitlab.js) with mocked glab.
 echo ""

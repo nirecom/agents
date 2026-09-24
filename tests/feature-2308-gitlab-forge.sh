@@ -56,14 +56,14 @@ for group in "${SPLIT_GROUPS[@]}"; do
     rm -f "$out_file"
 done
 
-# C4-env (C4): readGitlabHostConfig() reading FORGE_GITLAB_HOST from a real .env
+# C4-env (C4): readGitlabHostConfig() reading GITLAB_HOSTNAME from a real .env
 # FILE via AGENTS_CONFIG_DIR — the SSOT path gitlab-forge-abc.sh's C4/C4b never
 # hit (they export process.env instead). detect-forge-type must classify a
 # gitlab.mycompany.com origin as gitlab when ONLY a .env declares the host
 # (env var unset); the control (.env omits the key) falls back to unknown for
 # the same origin. Source: hooks/lib/forge-router.js, bin/detect-forge-type.
 echo ""
-echo "═══ C4-env: .env-file FORGE_GITLAB_HOST read path ═══"
+echo "═══ C4-env: .env-file GITLAB_HOSTNAME read path ═══"
 C4_PASS=0
 C4_FAIL=0
 c4_pass() { echo "PASS: $1"; C4_PASS=$((C4_PASS + 1)); }
@@ -75,7 +75,7 @@ C4_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 C4_DETECT_CLI="$C4_AGENTS_DIR/bin/detect-forge-type"
 C4_TMP="$(mktemp -d)"
 C4_CFG="$C4_TMP/cfg"; mkdir -p "$C4_CFG"
-printf 'FORGE_GITLAB_HOST=gitlab.mycompany.com\n' > "$C4_CFG/.env"
+printf 'GITLAB_HOSTNAME=gitlab.mycompany.com\n' > "$C4_CFG/.env"
 C4_CFG_EMPTY="$C4_TMP/cfg-empty"; mkdir -p "$C4_CFG_EMPTY"
 printf '# no forge host declared here\n' > "$C4_CFG_EMPTY/.env"
 C4_REPO="$C4_TMP/repo"; mkdir -p "$C4_REPO"
@@ -85,12 +85,12 @@ git -C "$C4_REPO" config user.email "test@example.com"
 git -C "$C4_REPO" config user.name "Test"
 git -C "$C4_REPO" remote add origin "git@gitlab.mycompany.com:team/app.git"
 
-# c4_type <cfgdir> -> the CLI's JSON .type, with process.env.FORGE_GITLAB_HOST
+# c4_type <cfgdir> -> the CLI's JSON .type, with process.env.GITLAB_HOSTNAME
 # always unset so the .env file is the ONLY possible source of the host.
 c4_type() {
     local cfg="$1" out
     if [ ! -f "$C4_DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
-    out=$(cd "$C4_REPO" && unset FORGE_GITLAB_HOST && export AGENTS_CONFIG_DIR="$cfg" && c4_rt 20 node "$C4_DETECT_CLI" 2>/dev/null)
+    out=$(cd "$C4_REPO" && unset GITLAB_HOSTNAME && export AGENTS_CONFIG_DIR="$cfg" && c4_rt 20 node "$C4_DETECT_CLI" 2>/dev/null)
     printf '%s' "$out" | c4_rt 20 node -e '
 let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
   try { process.stdout.write(String(JSON.parse(s).type)); } catch(e){ process.stdout.write("ERR:unparsable"); }
@@ -99,7 +99,7 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 
 C4_GOT="$(c4_type "$(c4_np "$C4_CFG")")"
 if [ "$C4_GOT" = "gitlab" ]; then
-    c4_pass "C4-env: .env FORGE_GITLAB_HOST=gitlab.mycompany.com -> self-hosted origin classified gitlab"
+    c4_pass "C4-env: .env GITLAB_HOSTNAME=gitlab.mycompany.com -> self-hosted origin classified gitlab"
 else
     c4_fail "C4-env: expected gitlab from .env host, got: [$C4_GOT]"
 fi

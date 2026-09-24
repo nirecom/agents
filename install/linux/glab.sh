@@ -64,24 +64,47 @@ _subfolder="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SUBFOLDER 2>/dev/nul
 _ssh_host="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SSH_HOSTNAME 2>/dev/null || true)"
 
 if [ -n "$_hostname" ] && [ -n "$_token" ]; then
-    printf "Configuring glab authentication for %s...\n" "$_hostname"
-    _auth_args=(auth login --hostname "$_hostname" --token "$_token" --api-protocol https --git-protocol ssh)
-    [ -n "$_ssh_host" ] && _auth_args+=(--ssh-hostname "$_ssh_host")
-    glab "${_auth_args[@]}"
-    if [ $? -ne 0 ]; then
-        printf "${C_YELLOW}glab auth login failed.${C_RESET}\n" >&2
+    # DNS reachability guard (3s hard timeout): getent on Linux, host on macOS.
+    _dns_rc=0
+    case "$(uname -s)" in
+        Darwin)
+            if command -v gtimeout >/dev/null 2>&1; then
+                gtimeout 3 host "$_hostname" >/dev/null 2>&1; _dns_rc=$?
+            elif command -v timeout >/dev/null 2>&1; then
+                timeout 3 host "$_hostname" >/dev/null 2>&1; _dns_rc=$?
+            else
+                # No timeout utility: background + kill-after for 3s hard limit
+                host "$_hostname" >/dev/null 2>&1 &
+                _dns_pid=$!
+                ( sleep 3; kill "$_dns_pid" 2>/dev/null ) &
+                _kill_pid=$!
+                wait "$_dns_pid" 2>/dev/null; _dns_rc=$?
+                kill "$_kill_pid" 2>/dev/null
+                wait "$_kill_pid" 2>/dev/null
+            fi
+            ;;
+        *)
+            timeout 3 getent hosts "$_hostname" >/dev/null 2>&1; _dns_rc=$?
+            ;;
+    esac
+    if [ "$_dns_rc" -ne 0 ]; then
+        printf "${C_YELLOW}WARNING: Cannot reach %s (DNS check failed). Skipping glab authentication.${C_RESET}\n" "$_hostname" >&2
     else
-        printf "${C_GREEN}glab: authenticated.${C_RESET}\n"
-        if [ -n "$_subfolder" ]; then
-            glab config set --host "$_hostname" subfolder "$_subfolder"
-            printf "${C_GREEN}glab: subfolder set to '%s'.${C_RESET}\n" "$_subfolder"
+        printf "Configuring glab authentication for %s...\n" "$_hostname"
+        _auth_args=(auth login --hostname "$_hostname" --token "$_token" --api-protocol https --git-protocol ssh)
+        [ -n "$_ssh_host" ] && _auth_args+=(--ssh-hostname "$_ssh_host")
+        glab "${_auth_args[@]}"
+        if [ $? -ne 0 ]; then
+            printf "${C_YELLOW}glab auth login failed.${C_RESET}\n" >&2
+        else
+            printf "${C_GREEN}glab: authenticated.${C_RESET}\n"
+            if [ -n "$_subfolder" ]; then
+                glab config set --host "$_hostname" subfolder "$_subfolder"
+                printf "${C_GREEN}glab: subfolder set to '%s'.${C_RESET}\n" "$_subfolder"
+            fi
         fi
     fi
 else
-    if glab auth status &>/dev/null 2>&1; then
-        printf "${C_GRAY}glab: already authenticated.${C_RESET}\n"
-    else
-        printf "${C_YELLOW}glab: set GITLAB_HOSTNAME and GITLAB_TOKEN in .env for automated auth,${C_RESET}\n"
-        printf "${C_YELLOW}      or run 'glab auth login --hostname <host>' manually.${C_RESET}\n"
-    fi
+    printf "${C_YELLOW}glab: set GITLAB_HOSTNAME and GITLAB_TOKEN in .env for automated auth,${C_RESET}\n"
+    printf "${C_YELLOW}      or run 'glab auth login --hostname <host>' manually.${C_RESET}\n"
 fi
