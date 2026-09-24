@@ -1,17 +1,11 @@
 #!/bin/bash
 # tests/refactor-enforce-worktree-split.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/config.js, hooks/enforce-worktree/git-repo-detection.js, hooks/enforce-worktree/session-scope.js, hooks/enforce-worktree/git-hooks-bypass.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/enforce-worktree/branch-delete-guard.js, hooks/enforce-worktree/main-worktree-allows.js, hooks/enforce-worktree/bash-write-scope.js, hooks/cleanup-orphan-dir.js
-# Tags: enforce-worktree, refactor, module-split, re-export, contract
+# Tags: enforce-worktree, refactor, module-split, re-export, contract, scope:issue-specific
 #
-# REGRESSION tests (1-8): verify current contract of hooks/enforce-worktree.js.
-#   These must PASS both BEFORE and AFTER the issue #712 module split.
-#
-# POST-REFACTOR contract tests (9-12): verify the target module layout exists
-#   and the renamed export (getWorktreeBaseDir -> getWorktreeBaseDirResolved)
-#   is in place. These intentionally FAIL until the refactor lands.
-#
-# Exit code reflects ONLY regression failures so the test can be checked in
-# before the refactor without breaking CI conventions for this file.
+# Tests 1-8 (regression): current enforce-worktree.js contract; PASS before AND after the #712 split.
+# Tests 9-12 (post-refactor contract): target module layout + getWorktreeBaseDir->getWorktreeBaseDirResolved rename; FAIL until the refactor lands.
+# Exit code reflects ONLY regression failures, so this can be checked in before the refactor lands.
 
 set -u
 
@@ -258,12 +252,57 @@ else
     fail_contract "cleanup-orphan-dir.js imports getWorktreeBaseDirResolved (post-rename)" "file missing"
 fi
 
+# ─── #1601 CONTRACT: persistent core.hooksPath setter detection ───────────────
+# hasGitHooksBypass must ALSO flag the persistent-setter form
+#   `git config [--local|--global] core.hooksPath <value>`
+# which permanently redirects hooks — vs the transient `-c` / `--config-env`
+# forms already covered by test 6. These FAIL until #1601 lands and, like the
+# post-refactor contract tests, do NOT affect the exit code.
+NEWBEHAVIOR_FAIL=0
+pass_newbehavior() { echo "PASS [#1601 contract]: $1"; PASS=$((PASS + 1)); }
+fail_newbehavior() {
+    echo "FAIL [#1601 contract]: $1 -- expected until #1601 lands"
+    [ -n "${2:-}" ] && echo "    detail: $2"
+    FAIL=$((FAIL + 1)); NEWBEHAVIOR_FAIL=$((NEWBEHAVIOR_FAIL + 1))
+}
+
+# hb_new_expect <bypass|clean> <label> <command>
+hb_new_expect() {
+    local want="$1" label="$2" cmd="$3" out
+    out=$(node -e "
+      const { hasGitHooksBypass } = require('${ENFORCE_JS}');
+      console.log(hasGitHooksBypass(process.argv[1]) ? 'bypass' : 'clean');
+    " -- "$cmd" 2>&1)
+    if [ "$out" = "$want" ]; then
+        pass_newbehavior "$label"
+    else
+        fail_newbehavior "$label" "expected $want, got: $out"
+    fi
+}
+
+# D2: persistent LOCAL setter → bypass (permanent hook redirect).
+hb_new_expect bypass "D2: git config --local core.hooksPath <value> → bypass" \
+    'git config --local core.hooksPath /dev/null'
+# D3: persistent GLOBAL setter → bypass.
+hb_new_expect bypass "D3: git config --global core.hooksPath <value> → bypass" \
+    'git config --global core.hooksPath /tmp/hooks'
+# D4: --unset removes the redirect, is not a bypass setter → clean.
+hb_new_expect clean "D4: git config --local --unset core.hooksPath → clean" \
+    'git config --local --unset core.hooksPath'
+# D5: --get is a read, not a setter → clean.
+hb_new_expect clean "D5: git config --get core.hooksPath → clean" \
+    'git config --get core.hooksPath'
+# D6: global options before the `config` subcommand — still detected as bypass.
+hb_new_expect bypass "D6: git -c foo=bar config --local core.hooksPath <value> → bypass" \
+    'git -c foo=bar config --local core.hooksPath /dev/null'
+
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────
 
 echo "---"
 echo "Total: PASS=$PASS FAIL=$FAIL"
 echo "Regression failures (must be 0): $REGRESSION_FAIL"
 echo "Contract failures (expected pre-refactor): $POST_REFACTOR_FAIL"
+echo "#1601 contract failures (expected pre-#1601): $NEWBEHAVIOR_FAIL"
 if [ "$REGRESSION_FAIL" -eq 0 ]; then
     exit 0
 else

@@ -86,7 +86,7 @@ hb_expect_clean "U14: plain commit" \
     'git commit -m "msg"'
 hb_expect_clean "U15: unrelated -c (user.name)" \
     'git -c user.name=foo commit -m "msg"'
-hb_expect_clean "U16: git config core.hooksPath (subcommand, not -c)" \
+hb_expect_bypass "U16: git config core.hooksPath <value> (persistent setter, #1601)" \
     'git config core.hooksPath /dev/null'
 hb_expect_clean "U17: -ccore.hooksPath=... (attached, out-of-scope)" \
     'git -ccore.hooksPath=/dev/null commit'
@@ -180,6 +180,16 @@ else
         'git commit -m "msg"' "$HB_WT"
     hb_expect_allow "I13: git status (read) allows" \
         'git status' "$HB_WT"
+    hb_expect_block "I14: git config --local core.hooksPath NUL blocks (persistent setter, Windows NUL)" \
+        'git config --local core.hooksPath NUL' "$HB_WT"
+    # Verify the hook BLOCKED the command: the worktree's core.hooksPath must remain
+    # unchanged (the persistent setter was never executed, so no config was written).
+    I14_AFTER="$(git -C "$HB_WT" config --local --get core.hooksPath 2>/dev/null || true)"
+    if [ -z "$I14_AFTER" ] || [ "$I14_AFTER" != "NUL" ]; then
+        pass "I14b: core.hooksPath not set to NUL after block (command was blocked, not executed)"
+    else
+        fail "I14b: core.hooksPath was written to NUL despite block — command may not have been blocked"
+    fi
 fi
 
 # Completion marker (dispatcher FRAG2) — must remain the last line.

@@ -1,18 +1,11 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh
 # Tags: scan, outbound, blocklist, allowlist, regression, scope:issue-specific
-# Regression tests for #1520 — loader loops in bin/scan-outbound.sh drop the
-# last line of blocklist/allowlist files that lack a trailing newline.
-#
-# Fail-before-fix: cases 1 and 2 are expected to FAIL until the loader loops
-# in bin/scan-outbound.sh (lines 41 and 54) are fixed with `|| [ -n "$line" ]`.
-# Cases 3 and 4 are baseline controls that verify normal behavior is unchanged.
-#
-# L3 gap (what this test does NOT catch):
-# - Real Claude Code session loading hooks that invoke scan-outbound.sh
-# - Interaction with actual .private-info-blocklist / .private-info-allowlist
-#   in the repo root (which may have trailing newlines on all platforms)
-# - Windows CRLF vs LF edge cases in the actual files
+# Regression (#1520): loader loops in scan-outbound.sh drop the last line of
+# blocklist/allowlist files lacking a trailing newline.
+# Cases 1-2: FAIL before fix (add `|| [ -n "$line" ]` on loader loops in scan-outbound.sh).
+# Cases 3-4: baseline controls verifying normal behavior is unchanged.
+# L3 gap: real session hooks, actual list files, Windows CRLF — not covered here.
 
 set -u
 
@@ -48,7 +41,7 @@ make_sandbox() {
 
 run_scan() {
     local sandbox="$1" content="$2"
-    printf '%s' "$content" | "$sandbox/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1
+    printf '%s' "$content" | env -u AGENTS_CONFIG_DIR "$sandbox/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1
     echo $?
 }
 
