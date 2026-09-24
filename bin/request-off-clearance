@@ -26,6 +26,9 @@ TARGET=""
 CATEGORY=""
 URGENCY="normal"
 DETAIL=""
+# Initialized here so classify_codex_failure can reference ${CODEX_ERR_FILE:-}
+# safely from the not-found path, which fires before the mktemp assignment below.
+CODEX_ERR_FILE=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -124,6 +127,114 @@ EMERGENCY sentinel: echo "<<WORKFLOW_ENFORCE_${1}_OFF_EMERGENCY: {reason}>>"
 HINT
 }
 
+# classify_codex_failure() — reads CODEX_ERR_FILE and returns one of:
+#   auth-401  network  unknown
+# Used to audit WHY the examiner failed, not to change policy.
+classify_codex_failure() {
+  local err_content=""
+  if [[ -s "${CODEX_ERR_FILE:-}" ]]; then
+    err_content="$(cat "$CODEX_ERR_FILE")"
+  fi
+  if printf '%s' "$err_content" | grep -qiE '401|unauthorized|authentication'; then
+    echo "auth-401"
+  elif printf '%s' "$err_content" | grep -qiE 'ECONNREFUSED|ENOTFOUND|ETIMEDOUT|network|connect'; then
+    echo "network"
+  else
+    echo "unknown"
+  fi
+}
+
+# human_approval_fallback <reason_class>
+# Called when the codex examiner is unavailable. Checks OFFCLR_APPROVAL_INPUT
+# first (test seam / non-interactive approval); falls back to /dev/tty when
+# available. Exits 1 with UNAVAILABLE audit when neither path produces a reason.
+human_approval_fallback() {
+  local reason_class="$1"
+  local human_reason=""
+
+  if [[ -n "${OFFCLR_APPROVAL_INPUT:-}" ]]; then
+    # Test seam / non-interactive: read reason from file path in env var.
+    if [[ -f "$OFFCLR_APPROVAL_INPUT" ]]; then
+      human_reason="$(cat "$OFFCLR_APPROVAL_INPUT")"
+    fi
+    if [[ -z "$human_reason" ]]; then
+      append_audit "UNAVAILABLE" "examiner=$reason_class human-fallback=empty-input"
+      echo "Examiner unavailable (reason: $reason_class). Human approval input is empty — no clearance granted." >&2
+      emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+      exit 1
+    fi
+  elif ( : < /dev/tty ) 2>/dev/null; then
+    echo "Examiner unavailable (reason: $reason_class). Human approval required." >&2
+    echo "Enter a one-line approval reason (or press Ctrl-C to abort):" >&2
+    read -r human_reason < /dev/tty || true
+    if [[ -z "$human_reason" ]]; then
+      append_audit "UNAVAILABLE" "examiner=$reason_class human-fallback=empty-tty"
+      echo "No approval reason provided — no clearance granted." >&2
+      emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+      exit 1
+    fi
+  else
+    append_audit "UNAVAILABLE" "examiner=$reason_class human-fallback=no-tty"
+    echo "Examiner unavailable (reason: $reason_class). No interactive terminal available for human approval." >&2
+    emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+    exit 1
+  fi
+
+  # Human provided a reason — record the examiner-unavailable event, then mint.
+  # The UNAVAILABLE record preserves the failure class in the audit trail even
+  # on the success path (C3: intent requires the specific unavailability reason).
+  append_audit "UNAVAILABLE" "examiner=$reason_class human-fallback=approved"
+  VERDICT_REASON="human-approved: $human_reason"
+  mint_and_report
+}
+
+# mint_and_report() — record the ALLOW verdict and mint the clearance token.
+# Reads shared vars (VERDICT_REASON, TARGET, CATEGORY, URGENCY, DETAIL,
+# WORKFLOW_DIR, SID, SCRIPT_DIR). Shared by the examiner ALLOW path and the
+# human-approval fallback so both mint identically.
+mint_and_report() {
+  append_audit "ALLOW" "$VERDICT_REASON"
+
+  mkdir -p "$WORKFLOW_DIR"
+  local TOKEN_PATH="$WORKFLOW_DIR/$SID.off-clearance"
+  # The mint and the stale-claim clear are one transition, run inside a SID-scoped
+  # exclusive lock, failing closed (exit 3) rather than minting outside it — see
+  # ./request-off-clearance.d/mint-token.js for the full rationale. Exit status is
+  # load-bearing and inspected below instead of letting `set -e` abort silently.
+  set +e
+  TOKEN_TARGET="$TARGET" TOKEN_CATEGORY="$CATEGORY" TOKEN_URGENCY="$URGENCY" \
+  TOKEN_REASON="$VERDICT_REASON" TOKEN_DETAIL="$DETAIL" TOKEN_PATH="$TOKEN_PATH" \
+  AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" node "$SCRIPT_DIR/request-off-clearance.d/mint-token.js"
+  local MINT_RC=$?
+  set -e
+
+  if [[ $MINT_RC -eq 3 ]]; then
+    append_audit "UNAVAILABLE" "mint lock for this session could not be acquired within 5s"
+    echo "Examiner unavailable: another request-off-clearance run holds the mint lock for this session." >&2
+    echo "Retry in a moment; if this persists, a stale lock file is cleared by the 24h transient sweep." >&2
+    emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+    exit 1
+  fi
+  if [[ $MINT_RC -ne 0 ]]; then
+    append_audit "UNAVAILABLE" "clearance token mint failed (rc=$MINT_RC)"
+    echo "Examiner unavailable: clearance token mint failed (exit $MINT_RC)." >&2
+    emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+    exit 1
+  fi
+
+  local UPPER_TARGET
+  UPPER_TARGET="$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+  cat <<GRANTED
+Examiner verdict: ALLOW — $VERDICT_REASON
+Clearance token minted: $TOKEN_PATH (single-use, expires in 15 minutes).
+Include [$CATEGORY] at the START of the OFF sentinel reason so the token binds to it:
+  echo "<<WORKFLOW_ENFORCE_${UPPER_TARGET}_OFF: [$CATEGORY] <your reason>>>"
+GRANTED
+  # Exit here so a human-approval fallback path does not fall through to the
+  # codex execution that follows in the main script body.
+  exit 0
+}
+
 # Resolve via the SAME getWorkflowDir() the shim and workflow-mark use, rather
 # than duplicating its $HOME-based fallback in bash (which can diverge from
 # Node's os.homedir() on Windows). Wrapped so a resolution failure reports
@@ -153,12 +264,12 @@ if [[ $WORKFLOW_DIR_RC -ne 0 || -z "$WORKFLOW_DIR" ]]; then
 fi
 rm -f "$WORKFLOW_DIR_ERR_FILE"
 RUBRIC="$AGENTS_CONFIG_DIR/skills/_shared/off-legitimacy-rubric.md"
+# Resolved here (before any failure path that calls mint_and_report) so that
+# mint_and_report can reference $SCRIPT_DIR even when codex is absent.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if ! command -v codex >/dev/null 2>&1; then
-  append_audit "UNAVAILABLE" "codex examiner not found on PATH"
-  echo "Examiner unavailable: codex not found on PATH."
-  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-  exit 1
+  human_approval_fallback "not-found"
 fi
 CODEX_BIN="$(command -v codex)"
 
@@ -228,7 +339,6 @@ CODEX_ERR_FILE="$(mktemp 2>/dev/null || mktemp -t offclrerr)"
 trap 'rm -f "$PROMPT_FILE" "$CODEX_ERR_FILE"' EXIT
 
 EXAMINER_TIMEOUT_SECS=180
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMEOUT_WRAPPER="$SCRIPT_DIR/run-with-timeout.sh"
 if [[ ! -x "$TIMEOUT_WRAPPER" ]]; then
   append_audit "UNAVAILABLE" "timeout wrapper missing at $TIMEOUT_WRAPPER"
@@ -244,22 +354,16 @@ set -e
 
 # 124 = GNU timeout kill; 142 = 128 + SIGALRM (perl fallback in run-with-timeout.sh).
 if [[ $CODEX_RC -eq 124 || $CODEX_RC -eq 142 ]]; then
-  append_audit "REJECT" "codex examiner timed out after ${EXAMINER_TIMEOUT_SECS}s"
-  echo "Examiner verdict: REJECT — examiner timed out after ${EXAMINER_TIMEOUT_SECS}s."
-  echo "No clearance token minted."
-  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-  exit 1
+  human_approval_fallback "timeout"
 fi
 
 if [[ $CODEX_RC -ne 0 ]]; then
-  append_audit "UNAVAILABLE" "codex examiner exited $CODEX_RC"
-  echo "Examiner failed (exit $CODEX_RC)."
   if [[ -s "$CODEX_ERR_FILE" ]]; then
     echo "--- examiner stderr ---" >&2
     cat "$CODEX_ERR_FILE" >&2
   fi
-  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-  exit 1
+  CLASS="$(classify_codex_failure)"
+  human_approval_fallback "$CLASS"
 fi
 
 # Structured parse (never regex-scraping): take the last NONCE-BOUND JSON object
@@ -296,39 +400,4 @@ if [[ "$VERDICT" != "ALLOW" ]]; then
   exit 1
 fi
 
-append_audit "ALLOW" "$VERDICT_REASON"
-
-mkdir -p "$WORKFLOW_DIR"
-TOKEN_PATH="$WORKFLOW_DIR/$SID.off-clearance"
-# The mint and the stale-claim clear are one transition, run inside a SID-scoped
-# exclusive lock, failing closed (exit 3) rather than minting outside it — see
-# ./request-off-clearance.d/mint-token.js for the full rationale. Exit status is
-# load-bearing and inspected below instead of letting `set -e` abort silently.
-set +e
-TOKEN_TARGET="$TARGET" TOKEN_CATEGORY="$CATEGORY" TOKEN_URGENCY="$URGENCY" \
-TOKEN_REASON="$VERDICT_REASON" TOKEN_DETAIL="$DETAIL" TOKEN_PATH="$TOKEN_PATH" \
-AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" node "$SCRIPT_DIR/request-off-clearance.d/mint-token.js"
-MINT_RC=$?
-set -e
-
-if [[ $MINT_RC -eq 3 ]]; then
-  append_audit "UNAVAILABLE" "mint lock for this session could not be acquired within 5s"
-  echo "Examiner unavailable: another request-off-clearance run holds the mint lock for this session." >&2
-  echo "Retry in a moment; if this persists, a stale lock file is cleared by the 24h transient sweep." >&2
-  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-  exit 1
-fi
-if [[ $MINT_RC -ne 0 ]]; then
-  append_audit "UNAVAILABLE" "clearance token mint failed (rc=$MINT_RC)"
-  echo "Examiner unavailable: clearance token mint failed (exit $MINT_RC)." >&2
-  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-  exit 1
-fi
-
-UPPER_TARGET="$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
-cat <<GRANTED
-Examiner verdict: ALLOW — $VERDICT_REASON
-Clearance token minted: $TOKEN_PATH (single-use, expires in 15 minutes).
-Include [$CATEGORY] at the START of the OFF sentinel reason so the token binds to it:
-  echo "<<WORKFLOW_ENFORCE_${UPPER_TARGET}_OFF: [$CATEGORY] <your reason>>>"
-GRANTED
+mint_and_report

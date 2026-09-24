@@ -2,7 +2,7 @@
 
 // Pure git-remote-URL parsing. No filesystem — every caller that needs
 // repository identity derives it from the ORIGIN url alone (#1899).
-// FORGE_GITLAB_HOST env var is consulted by resolveForgeTarget as a fallback.
+// GITLAB_HOSTNAME (and GITLAB_SSH_HOSTNAME) are consulted by resolveForgeTarget as fallbacks.
 
 const GITHUB_HOST = "github.com";
 
@@ -129,7 +129,8 @@ function extractProjectPath(url) {
 
 // Forge target resolution with an optional self-hosted GitLab override. The
 // caller may resolve gitlabHost (via readGitlabHostConfig) and pass it in;
-// when absent, FORGE_GITLAB_HOST env var is used as a fallback. No filesystem.
+// when absent, GITLAB_HOSTNAME env var is used as a fallback. gitlabSshHost
+// (GITLAB_SSH_HOSTNAME) is an optional secondary host for SSH remotes.
 // An unknown host is NEVER silently reclassified as github (security invariant).
 // A recognized host with an UNRESOLVABLE project path (poisoned "."/".." segment,
 // NUL, shell metachar — extractProjectPath returns null) is downgraded to
@@ -144,10 +145,14 @@ function resolveForgeTarget(url, options) {
   const host = rawHost.toLowerCase();
   const gh = typeof opts.gitlabHost === "string" && opts.gitlabHost.trim()
     ? opts.gitlabHost.trim().toLowerCase()
-    : (typeof process.env.FORGE_GITLAB_HOST === "string"
-      ? process.env.FORGE_GITLAB_HOST.trim().toLowerCase() : "");
+    : (typeof process.env.GITLAB_HOSTNAME === "string"
+      ? process.env.GITLAB_HOSTNAME.trim().toLowerCase() : "");
+  const sshGh = typeof opts.gitlabSshHost === "string" && opts.gitlabSshHost.trim()
+    ? opts.gitlabSshHost.trim().toLowerCase()
+    : (typeof process.env.GITLAB_SSH_HOSTNAME === "string"
+      ? process.env.GITLAB_SSH_HOSTNAME.trim().toLowerCase() : "");
   let type;
-  if (gh && host === gh) {
+  if ((gh && host === gh) || (sshGh && host === sshGh)) {
     type = "gitlab";
   } else {
     type = Object.prototype.hasOwnProperty.call(FORGE_HOST_TYPES, host) ? FORGE_HOST_TYPES[host] : "unknown";
