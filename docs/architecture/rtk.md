@@ -26,24 +26,25 @@ Set `RTK_AUDIT=on` in `.env` to record a JSONL line each time the hook's own
 guards reject a command. The log is written to
 `~/.agents/logs/rtk-guard-audit.log` and is independent of RTK's native audit.
 
-## bin/rtk-cmd 採用規約
+## bin/rtk-cmd adoption convention
 
-`bin/rtk-cmd` は RTK=on 時に出力圧縮の対象となるコマンド (`git`, `gh`, `grep`, `docker`
-など RTK 本家がサポートするもの) の**生の人間可読出力を Claude に意図的に emit するスクリプト**
-だけで使う軽量ラッパーである。
+`bin/rtk-cmd` is a lightweight wrapper used **only for scripts that intentionally
+emit raw human-readable output to Claude** — commands whose output RTK natively
+compresses (`git`, `gh`, `grep`, `docker`, etc.).
 
-### 使う状況
+### When to use
 
-スクリプトが `git log` や `gh issue list` などの生テキスト出力を Claude の stdout に
-そのまま流す設計の場合。例:
-    bin/rtk-cmd git log --oneline -20   # 生の git log 出力を圧縮して Claude に渡す
-    bin/rtk-cmd gh issue list           # 生の issue 一覧出力を圧縮して Claude に渡す
+The script's design is to stream raw text output (e.g. `git log`, `gh issue list`)
+directly to Claude's stdout. Examples:
 
-### 使わない状況（現行 bin/ スクリプト 195 件すべてが該当）
+    bin/rtk-cmd git log --oneline -20   # compress raw git log output before Claude reads it
+    bin/rtk-cmd gh issue list           # compress raw issue list output before Claude reads it
 
-- `--json` / `--format=` / `--numstat` などの機械可読フラグ付き呼び出し（RTK がパススルーするため無効）
-- 変数に捕捉して node/jq/awk で再整形する呼び出し（RTK は node 出力に手を出せない）
-- `grep`/`find`/`cat` を内部制御フローや判定のみに使う呼び出し（Claude に渡らない）
+### When NOT to use (all current 195 bin/ scripts fall into these categories)
 
-issue #2370 の横断調査（全 RTK 対象コマンド × bin/ 195 ファイル）でこれらが
-構造的不変条件であることを確認済み。適用先が生じた時点で使い始める。
+- Machine-readable flag calls (`--json`, `--format=`, `--numstat`, etc.) — RTK passes them through unchanged, so wrapping has no effect.
+- Calls whose output is captured into a variable and reformatted by node/jq/awk — RTK cannot compress node's output.
+- `grep`/`find`/`cat` used only for internal control flow or evaluation — output never reaches Claude.
+
+The #2370 cross-cutting survey (all RTK-eligible commands × 195 bin/ scripts) confirmed
+these as structural invariants. Adopt when a use case arises.

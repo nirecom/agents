@@ -143,7 +143,7 @@ fi
 #     is prepended so rtk stays absent. rtk is a cargo-installed binary
 #     (~/.cargo/bin etc.), never shipped in /usr/bin or /bin, so hermeticity of
 #     the "rtk absent" premise holds. This is the PATH the approved detail plan
-#     specifies (detail.md case (c) — 2-段構え hermetic approach).
+#     specifies (detail.md case (c) — two-stage hermetic approach).
 ec_c=0
 out_c=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_c" RTK_BIN="" \
   PATH="$TMPDIR_T/no-rtk-bin:/usr/bin:/bin" \
