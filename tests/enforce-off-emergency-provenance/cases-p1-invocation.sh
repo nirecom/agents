@@ -36,15 +36,15 @@ assert_owner_only "P1 marker is owner-only (0600)" "$(marker_of "$sid")"
 p1_prompt_of() { printf '%b' "$1"; }
 
 # The `-still-matches` rows PIN OBSERVED BEHAVIOUR: lookahead `(?![\w-])` lets
-# `.`/`/`/`:` suffixes through, the regex never requires/inspects a closing
+# `.`/`/`/`:` suffixes through, and the regex never requires/inspects a closing
 # `</command-name>`, so a missing close or trailing junk before one still
-# attributes, and it has no markdown awareness, so a bare command that is the WHOLE
-# of a fenced line attributes too (the near-miss table's
-# `backticked-inside-a-code-fence` covers only a PREFIXED line inside a fence).
-# Positives deliberately (over-attribution is safe - marker is
-# evidence, never a gate: P3/P4/P5/P11). `expanded-command-name-wrapper` is the
-# real TYPED-slash-command shape pre-7c40bf48 missed (#1780 M-2); live
-# counterpart: tests/TL3-hook-record-off-skill-invocation.sh.
+# attributes. Over-attribution is safe - marker is evidence, never a gate
+# (P3/P4/P5/P11). `expanded-command-name-wrapper` is the real TYPED-slash-command
+# shape pre-7c40bf48 missed (#1780 M-2). `wrapped-command-on-a-later-line` pins the
+# split contract's positive half: the <command-name> wrapper attributes on ANY
+# line, whereas a BARE command attributes only on the first (its later-line and
+# fenced forms moved to the near-miss table below); live counterpart:
+# tests/TL3-hook-record-off-skill-invocation.sh.
 while IFS='|' read -r name raw; do
     [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac
@@ -57,24 +57,24 @@ with-trailing-arguments|/enforce-workflow-off examiner is broken
 plugin-namespaced|/agents:enforce-workflow-off
 leading-whitespace|  /enforce-workflow-off
 expanded-command-name-wrapper|<command-message>enforce-workflow-off</command-message>\n<command-name>/enforce-workflow-off</command-name>
-bare-command-on-a-later-line|please read this note first\n/enforce-workflow-off
+wrapped-command-on-a-later-line|please read this note first\n<command-name>/enforce-workflow-off</command-name>
 dot-suffixed-still-matches|/enforce-workflow-off.evil
 slash-suffixed-still-matches|/enforce-workflow-off/evil
 colon-suffixed-still-matches|/enforce-workflow-off:evil
 unclosed-wrapper-tag-still-matches|<command-name>/enforce-workflow-off
 trailing-content-before-close-still-matches|<command-name>/enforce-workflow-off some junk</command-name>
-bare-command-alone-in-a-fenced-block-still-matches|here is a snippet:\n```\n/enforce-workflow-off\n```\ncan you review it?
 P1_VARIANTS
 rm -f "$(marker_of pv1v)"
 
-# `bare-command-on-a-later-line` pins the `m` flag's deliberate cost: a bare command
-# line anywhere in the prompt attributes, even when pasted. Over-attribution is the
-# safe direction - the marker is evidence, never a gate (P3/P4/P5/P11) - and it is
-# the CONTROL proving the multi-line near-misses below are not vacuous.
+# `wrapped-command-on-a-later-line` (positive, above) is the CONTROL proving the
+# multi-line near-misses here are not vacuous: the wrapper attributes on a later
+# line, so a later-line MISS is a real property of the BARE form, not the reader
+# failing to see line 2 at all.
 # Near-misses must NOT write. Three families, separated deliberately (CPR-SC):
-# prose or a different command; a mention not at the START of its line (the `m`
-# flag widened matching to every LINE, not to every POSITION); a broken or foreign
-# <command-name> wrapper (exactly ONE well-formed opening tag is tolerated).
+# prose, a different command, or a BARE command not on the first line (the split
+# contract anchors the bare form to the START of the prompt); a mention not at the
+# START of its line; a broken or foreign <command-name> wrapper (exactly ONE
+# well-formed opening tag is tolerated).
 while IFS='|' read -r name raw; do
     [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac
@@ -84,6 +84,8 @@ while IFS='|' read -r name raw; do
     assert_absent "P1 near-miss writes no marker: $name" "$(marker_of "$sid")"
 done <<'P1_NEAR_MISSES'
 prose-mention|please enforce-workflow-off for me
+bare-command-on-a-later-line|please read this note first\n/enforce-workflow-off
+bare-command-in-a-fenced-block|here is a snippet:\n```\n/enforce-workflow-off\n```\ncan you review it?
 longer-command-offline|/enforce-workflow-offline
 longer-command-off-now|/enforce-workflow-off-now
 unrelated-command|/workflow-init
@@ -110,16 +112,19 @@ P1_NEAR_MISSES
 BUF_BYTES=4096
 sid=pv1buf
 _pfx=$(printf '{"session_id":"%s","prompt":"' "$sid")
-# `\n` occupies two bytes in the JSON literal; land the command's `/` six bytes
-# before the boundary so the 21-character command name spans both chunks.
-_pad_len=$(( BUF_BYTES - 6 - ${#_pfx} - 2 ))
+# Wrapped vehicle (the split contract: a BARE command on a later line no longer
+# attributes, so the straddle must ride the <command-name> form). `\n` is two
+# bytes in the JSON literal; the extra -13 (length of `<command-name>`) lands the
+# command's `/` six bytes before the boundary so the 21-char command name still
+# spans both chunks, with the wrapper tag preceding it in chunk 1.
+_pad_len=$(( BUF_BYTES - 6 - ${#_pfx} - 2 - 13 ))
 if [ "$_pad_len" -le 0 ]; then
     fail "P1 straddle case is misconfigured - prefix already exceeds the buffer"
 else
     _pad=$(printf '%*s' "$_pad_len" ''); _pad="${_pad// /x}"
     rm -f "$(marker_of "$sid")"
     submit_prompt "$sid" "$_pad
-/enforce-workflow-off straddles the stdin buffer boundary"
+<command-name>/enforce-workflow-off straddles the buffer"
     assert_file "P1 command straddling the 4096-byte stdin boundary still writes the marker" "$(marker_of "$sid")"
     body=$(cat "$(marker_of "$sid")" 2>/dev/null)
     assert_contains "P1 straddled read yields an intact payload" '"source":"user_skill_invocation"' "$body"
@@ -134,7 +139,7 @@ sid=pv1multibuf
 _pad=$(printf '%*s' $(( BUF_BYTES * 3 )) ''); _pad="${_pad// /x}"
 rm -f "$(marker_of "$sid")"
 submit_prompt "$sid" "$_pad
-/enforce-workflow-off arrives after three full buffers"
+<command-name>/enforce-workflow-off arrives after three full buffers"
 assert_file "P1 command after three full stdin buffers still writes the marker" "$(marker_of "$sid")"
 assert_eq "P1 multi-buffer read does not fail the recorder" "0" "$LAST_RECORDER_STATUS"
 rm -f "$(marker_of "$sid")"
