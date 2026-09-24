@@ -91,9 +91,12 @@ case_end()   { :; }
 case_begin "staged-mode" "bin/check-test-frontmatter.sh"
 
 # TC1: valid # Tests + valid scope tag => exit 0
+# 2-level paths (tests/bin/) are used throughout staged-mode: a flat tests/<name>.sh
+# is now rejected outright (#1834, group 3), which would mask the check_content
+# behavior these cases target.
 R1="$(make_git_fixture)"
-write_test_body "$R1/tests/tc1.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
-run_staged "$R1" "tests/tc1.sh"
+write_test_body "$R1/tests/bin/tc1.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+run_staged "$R1" "tests/bin/tc1.sh"
 if [[ $RC -eq 0 ]]; then
   pass "TC1 valid Tests header + scope tag passes"
 else
@@ -103,8 +106,8 @@ rm -rf "$R1"
 
 # TC2: missing # Tests: header => exit 1 + MISSING_TESTS_HEADER
 R2="$(make_git_fixture)"
-write_test_body "$R2/tests/tc2.sh" '__NONE__' "$DEFAULT_TAGS"
-run_staged "$R2" "tests/tc2.sh"
+write_test_body "$R2/tests/bin/tc2.sh" '__NONE__' "$DEFAULT_TAGS"
+run_staged "$R2" "tests/bin/tc2.sh"
 if [[ $RC -eq 1 && "$ERR" == *"MISSING_TESTS_HEADER"* ]]; then
   pass "TC2 missing Tests header fails with MISSING_TESTS_HEADER"
 else
@@ -114,8 +117,8 @@ rm -rf "$R2"
 
 # TC3: bracket annotation => exit 1 + INVALID_TESTS_TOKEN
 R3="$(make_git_fixture)"
-write_test_body "$R3/tests/tc3.sh" '# Tests: bin/foo.sh (some comment)' "$DEFAULT_TAGS"
-run_staged "$R3" "tests/tc3.sh"
+write_test_body "$R3/tests/bin/tc3.sh" '# Tests: bin/foo.sh (some comment)' "$DEFAULT_TAGS"
+run_staged "$R3" "tests/bin/tc3.sh"
 if [[ $RC -eq 1 && "$ERR" == *"INVALID_TESTS_TOKEN"* ]]; then
   pass "TC3 bracket annotation fails with INVALID_TESTS_TOKEN"
 else
@@ -125,8 +128,8 @@ rm -rf "$R3"
 
 # TC4: space-separated (no comma) => exit 1 + INVALID_TESTS_TOKEN
 R4="$(make_git_fixture)"
-write_test_body "$R4/tests/tc4.sh" '# Tests: bin/foo.sh hooks/bar.js' "$DEFAULT_TAGS"
-run_staged "$R4" "tests/tc4.sh"
+write_test_body "$R4/tests/bin/tc4.sh" '# Tests: bin/foo.sh hooks/bar.js' "$DEFAULT_TAGS"
+run_staged "$R4" "tests/bin/tc4.sh"
 if [[ $RC -eq 1 && "$ERR" == *"INVALID_TESTS_TOKEN"* ]]; then
   pass "TC4 space-separated tokens fail with INVALID_TESTS_TOKEN"
 else
@@ -136,8 +139,8 @@ rm -rf "$R4"
 
 # TC5: missing # Tags: (scope) with # Tests: present => exit 1 + MISSING_SCOPE_TAG
 R5="$(make_git_fixture)"
-write_test_body "$R5/tests/tc5.sh" '# Tests: bin/foo.sh' '__NONE__'
-run_staged "$R5" "tests/tc5.sh"
+write_test_body "$R5/tests/bin/tc5.sh" '# Tests: bin/foo.sh' '__NONE__'
+run_staged "$R5" "tests/bin/tc5.sh"
 if [[ $RC -eq 1 && "$ERR" == *"MISSING_SCOPE_TAG"* ]]; then
   pass "TC5 missing scope tag fails with MISSING_SCOPE_TAG"
 else
@@ -147,8 +150,8 @@ rm -rf "$R5"
 
 # TC6: # Tests: value empty => exit 1 + MISSING_TESTS_HEADER
 R6="$(make_git_fixture)"
-write_test_body "$R6/tests/tc6.sh" '# Tests:' "$DEFAULT_TAGS"
-run_staged "$R6" "tests/tc6.sh"
+write_test_body "$R6/tests/bin/tc6.sh" '# Tests:' "$DEFAULT_TAGS"
+run_staged "$R6" "tests/bin/tc6.sh"
 if [[ $RC -eq 1 && "$ERR" == *"MISSING_TESTS_HEADER"* ]]; then
   pass "TC6 empty Tests value fails with MISSING_TESTS_HEADER"
 else
@@ -158,8 +161,8 @@ rm -rf "$R6"
 
 # TC7: multiple valid comma-separated tokens => exit 0
 R7="$(make_git_fixture)"
-write_test_body "$R7/tests/tc7.sh" '# Tests: bin/foo.sh, bin/bar.sh' "$DEFAULT_TAGS"
-run_staged "$R7" "tests/tc7.sh"
+write_test_body "$R7/tests/bin/tc7.sh" '# Tests: bin/foo.sh, bin/bar.sh' "$DEFAULT_TAGS"
+run_staged "$R7" "tests/bin/tc7.sh"
 if [[ $RC -eq 0 ]]; then
   pass "TC7 multiple valid tokens pass"
 else
@@ -206,13 +209,13 @@ rm -rf "$R10"
 # TC11: staged blob is read (staged malformed, working-tree clean) => exit 1
 R11="$(make_git_fixture)"
 # Stage a malformed version.
-write_test_body "$R11/tests/tc11.sh" '# Tests: bin/foo.sh (staged bad)' "$DEFAULT_TAGS"
+write_test_body "$R11/tests/bin/tc11.sh" '# Tests: bin/foo.sh (staged bad)' "$DEFAULT_TAGS"
 git -C "$R11" add -A >/dev/null 2>&1
 # Overwrite working tree with a clean version WITHOUT staging it.
-write_test_body "$R11/tests/tc11.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+write_test_body "$R11/tests/bin/tc11.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
 outf="$(mktemp)"; errf="$(mktemp)"
 set +e
-( cd "$R11" && bash "$SCRIPT" --staged "tests/tc11.sh" ) >"$outf" 2>"$errf"
+( cd "$R11" && bash "$SCRIPT" --staged "tests/bin/tc11.sh" ) >"$outf" 2>"$errf"
 RC=$?
 set -e
 OUT="$(cat "$outf")"; ERR="$(cat "$errf")"
@@ -373,6 +376,65 @@ if [[ $RC -eq 0 && "$ERR" != *"MISSING_HARNESS_SOURCE"* ]]; then
   pass "6b --staged new tests/hooks/ file with harness source passes (no MISSING_HARNESS_SOURCE)"
 else
   fail "6b --staged new tests/hooks/ file with harness source" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+case_end
+
+case_begin "flat-sh-rejection" "bin/check-test-frontmatter.sh"
+# --- #1834 Group 3: reject NEWLY-ADDED flat tests/<name>.sh --------------------
+# A .sh test entrypoint must live under tests/<category>/. A new flat tests/<name>.sh
+# is rejected (FLAT_TEST_SH_REJECTED) even with valid frontmatter; an existing flat
+# file (present in HEAD) is grandfathered (#2372 sweeps it later); tests/run-all.sh
+# is the infra runner and is exempt from flat-rejection; a 2-level path is accepted.
+
+# 3a: NEW flat tests/newflat.sh with VALID frontmatter => FLAT_TEST_SH_REJECTED, exit 1.
+# Validity does not save it — placement is the violation.
+R="$(make_git_fixture)"
+write_test_body "$R/tests/newflat.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+run_staged "$R" "tests/newflat.sh"
+if [[ $RC -eq 1 && "$ERR" == *"FLAT_TEST_SH_REJECTED"* ]]; then
+  pass "3a new flat tests/newflat.sh rejected (FLAT_TEST_SH_REJECTED) despite valid frontmatter"
+else
+  fail "3a new flat tests/newflat.sh rejected" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+
+# 3b: EXISTING flat file (committed to HEAD) then edited => grandfathered, NOT
+# flat-rejected. git cat-file -e HEAD:<rel> succeeds, so the newness gate skips it.
+R="$(make_git_fixture)"
+write_test_body "$R/tests/legacy-flat.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+git -C "$R" add -A >/dev/null 2>&1
+git -C "$R" commit -q -m "seed legacy flat test" >/dev/null 2>&1
+write_test_body "$R/tests/legacy-flat.sh" '# Tests: bin/foo.sh, bin/bar.sh' "$DEFAULT_TAGS"
+run_staged "$R" "tests/legacy-flat.sh"
+if [[ $RC -eq 0 && "$ERR" != *"FLAT_TEST_SH_REJECTED"* ]]; then
+  pass "3b existing flat file grandfathered (no FLAT_TEST_SH_REJECTED on edit)"
+else
+  fail "3b existing flat file grandfathered" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+
+# 3c: NEW tests/run-all.sh (infra runner) => exempt from flat-rejection.
+# Given valid frontmatter to isolate the exemption from check_content; the
+# pre-commit filter additionally excludes run-all.sh from the checker entirely.
+R="$(make_git_fixture)"
+write_test_body "$R/tests/run-all.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+run_staged "$R" "tests/run-all.sh"
+if [[ "$ERR" != *"FLAT_TEST_SH_REJECTED"* ]]; then
+  pass "3c tests/run-all.sh exempt from flat-rejection (no FLAT_TEST_SH_REJECTED)"
+else
+  fail "3c tests/run-all.sh exempt from flat-rejection" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+
+# 3d: NEW 2-level tests/bin/twolevel.sh (valid) => accepted, not flat-rejected.
+R="$(make_git_fixture)"
+write_test_body "$R/tests/bin/twolevel.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+run_staged "$R" "tests/bin/twolevel.sh"
+if [[ $RC -eq 0 && "$ERR" != *"FLAT_TEST_SH_REJECTED"* ]]; then
+  pass "3d new 2-level tests/bin/ file accepted (no FLAT_TEST_SH_REJECTED)"
+else
+  fail "3d new 2-level tests/bin/ file accepted" "rc=$RC err=<<$ERR>>"
 fi
 rm -rf "$R"
 case_end
