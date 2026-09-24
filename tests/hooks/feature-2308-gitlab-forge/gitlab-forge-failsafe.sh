@@ -141,7 +141,7 @@ assert_eq "C8c/github origin routes listPrivateRepoNames -> codehostGithub (gh l
 echo ""
 echo "=== C6: readGitlabHostConfig() .env-vs-process.env precedence ==="
 
-# forge-router.js readGitlabHostConfig(): .env FORGE_GITLAB_HOST wins; process.env
+# forge-router.js readGitlabHostConfig(): .env GITLAB_HOSTNAME wins; process.env
 # is only the fallback. C4d covered .env-only; C6 pins the CONFLICT (both set to
 # different hosts) proving the .env value is the one used.
 C6_DRIVER="$TMPROOT/c6-host-precedence-driver.js"
@@ -158,19 +158,19 @@ NODE
 C6_NEUTRAL="$TMPROOT/c6-neutral"; mkdir -p "$C6_NEUTRAL"
 # Config dir whose .env declares a host; a DIFFERENT host is exported in process.env.
 C6_CFG="$TMPROOT/c6-cfg"; mkdir -p "$C6_CFG"
-printf 'FORGE_GITLAB_HOST=gitlab.fromenvfile.example.com\n' > "$C6_CFG/.env"
+printf 'GITLAB_HOSTNAME=gitlab.fromenvfile.example.com\n' > "$C6_CFG/.env"
 # Control config dir whose .env omits the key (process.env is then the only source).
 C6_CFG_EMPTY="$TMPROOT/c6-cfg-empty"; mkdir -p "$C6_CFG_EMPTY"
 printf '# no forge host declared here\n' > "$C6_CFG_EMPTY/.env"
 
 # Both sources set, different values -> .env wins (value is lowercased by the impl).
-C6_CONFLICT="$(cd "$C6_NEUTRAL" && FORGE_GITLAB_HOST=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG")" \
+C6_CONFLICT="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6/readGitlabHostConfig .env wins over process.env on conflict" \
     "gitlab.fromenvfile.example.com" "$C6_CONFLICT"
 
 # Control: .env has no key, process.env set -> process.env value is the fallback.
-C6_FALLBACK="$(cd "$C6_NEUTRAL" && FORGE_GITLAB_HOST=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG_EMPTY")" \
+C6_FALLBACK="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG_EMPTY")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6b/readGitlabHostConfig falls back to process.env when .env omits the key" \
     "gitlab.fromprocessenv.example.com" "$C6_FALLBACK"

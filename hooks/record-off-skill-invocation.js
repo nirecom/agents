@@ -15,18 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const { getWorkflowDir } = require("./workflow-state");
 const { EMERGENCY_PROVENANCE_MARKER_KIND } = require("./lib/protected-basenames");
-const { buildProvenanceMarker } = require("./lib/off-emergency-provenance");
+const { buildProvenanceMarker, promptInvokesOffSkill } = require("./lib/off-emergency-provenance");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
-
-// Matches the user typing the skill's slash command, with or without a plugin
-// namespace prefix and with or without trailing arguments. A real invocation
-// arrives expanded, with the command on its own `<command-name>` line, so the
-// match is per-line and tolerates that one wrapper tag; the skill-body form the
-// model can also produce carries no such line and stays unattributed. The
-// namespace is matched but NOT captured: it is arbitrary prompt text, and the
-// marker records the resolved skill identity instead (#1780 M-4).
-const OFF_SKILL_INVOCATION_RE = /^[ \t]*(?:<command-name>)?\/(?:[A-Za-z0-9_-]+:)?enforce-workflow-off(?![\w-])/m;
 
 function readStdin() {
   const chunks = [];
@@ -77,7 +68,7 @@ if (require.main === module) {
   if (sessionId && SID_RE.test(sessionId)) {
     const prompt = input && typeof input.prompt === "string" ? input.prompt : "";
     try {
-      if (OFF_SKILL_INVOCATION_RE.test(prompt)) writeProvenanceMarker(sessionId);
+      if (promptInvokesOffSkill(prompt)) writeProvenanceMarker(sessionId);
       else clearProvenanceMarker(sessionId);
     } catch (_e) { /* fail-open */ }
   }
@@ -85,4 +76,4 @@ if (require.main === module) {
   console.log(JSON.stringify({}));
 }
 
-module.exports = { OFF_SKILL_INVOCATION_RE, markerPathFor, writeProvenanceMarker, clearProvenanceMarker };
+module.exports = { promptInvokesOffSkill, markerPathFor, writeProvenanceMarker, clearProvenanceMarker };

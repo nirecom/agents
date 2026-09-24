@@ -393,13 +393,13 @@ exit $code
         ok=1
         [ "$RC" -ne 0 ] || ok=0
         [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-        echo "$OUT" | grep -q "examiner timed out after 180s" || ok=0
+        echo "$ERR" | grep -q "Examiner unavailable (reason: timeout)" || ok=0
         echo "$OUT" | grep -q "WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY" || ok=0
-        grep -q "timed out" "$tmp/d-$code-supervisor-state.json" 2>/dev/null || ok=0
+        grep -q "examiner=timeout" "$tmp/d-$code-supervisor-state.json" 2>/dev/null || ok=0
         if [ "$ok" = "1" ]; then
-            pass "D2 examiner exit $code -> timeout REJECT, audited, emergency escalation offered, NO token"
+            pass "D2 examiner exit $code -> timeout fallback, UNAVAILABLE audited, emergency escalation offered, NO token"
         else
-            fail "D2 exit $code did not take the timeout branch; rc=$RC out=$(printf '%q' "$OUT")"
+            fail "D2 exit $code did not take the timeout branch; rc=$RC out=$(printf '%q' "$OUT") err=$(printf '%q' "$ERR")"
         fi
         rm -r -f "$tmp" 2>/dev/null || true
     done
@@ -416,11 +416,11 @@ exit 7
     ok=1
     [ "$RC" -ne 0 ] || ok=0
     [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$OUT" | grep -q "Examiner failed (exit 7)" || ok=0
+    echo "$ERR" | grep -q "Examiner unavailable" || ok=0
     echo "$ERR" | grep -q -- "--- examiner stderr ---" || ok=0
     echo "$ERR" | grep -q "model overloaded" || ok=0
     ! echo "$OUT" | grep -q "model overloaded" || ok=0
-    grep -q "exited 7" "$tmp/d4sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "UNAVAILABLE" "$tmp/d4sid-supervisor-state.json" 2>/dev/null || ok=0
     if [ "$ok" = "1" ]; then
         pass "D4 examiner exit 7 -> UNAVAILABLE, its stderr relayed on STDERR only, audited, NO token"
     else
@@ -435,13 +435,13 @@ exit 7
     ok=1
     [ "$RC" -ne 0 ] || ok=0
     [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$OUT" | grep -q "codex not found on PATH" || ok=0
+    echo "$ERR" | grep -q "Examiner unavailable (reason: not-found)" || ok=0
     echo "$OUT" | grep -q "WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY" || ok=0
-    grep -q "not found on PATH" "$tmp/d5sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "examiner=not-found" "$tmp/d5sid-supervisor-state.json" 2>/dev/null || ok=0
     if [ "$ok" = "1" ]; then
         pass "D5 codex absent from PATH -> UNAVAILABLE, audited, WORKTREE emergency escalation offered, NO token"
     else
-        fail "D5 absent-examiner surface wrong; rc=$RC out=$(printf '%q' "$OUT") files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
+        fail "D5 absent-examiner surface wrong; rc=$RC out=$(printf '%q' "$OUT") err=$(printf '%q' "$ERR") files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
     fi
     rm -r -f "$tmp" 2>/dev/null || true
 
