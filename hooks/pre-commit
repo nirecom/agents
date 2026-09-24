@@ -303,15 +303,18 @@ if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]
     fi
 fi
 
-# Check scope tag on staged tests/*.sh files
+# Check scope tag on staged tests/<category>/*.sh files (2-level layout)
 _staged_tests=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
     tests/_archive/*) continue ;;
-    tests/*.sh) _staged_tests="$_staged_tests $f" ;;
+    tests/lib/*) continue ;;
+    tests/hooks/*/*.sh|tests/bin/*/*.sh|tests/skills/*/*.sh|tests/agents/*/*.sh|tests/install/*/*.sh|tests/tests/*/*.sh) continue ;;  # suite sub-files — not entrypoints
+    tests/hooks/*.sh|tests/bin/*.sh|tests/skills/*.sh|tests/agents/*.sh|tests/install/*.sh|tests/tests/*.sh) _staged_tests="$_staged_tests $f" ;;
+    *) continue ;;
   esac
-done <<< "$(git diff --cached --name-only -- 'tests/*.sh')"
+done <<< "$(git diff --cached --name-only -- 'tests/')"
 if [ -n "$_staged_tests" ]; then
   # shellcheck disable=SC2086
   if ! "$_cfg_dir/bin/check-test-frontmatter.sh" --staged $_staged_tests; then
@@ -331,7 +334,7 @@ fi
 # that one is additionally gated on .prompt-extraction-allowlist, and reusing its
 # variables would silently couple this gate to a file it has nothing to do with.
 #
-# Exit-code mapping (asserted by tests/cc-pre-commit-on-demand-rules.sh):
+# Exit-code mapping (asserted by tests/hooks/cc-pre-commit-on-demand-rules.sh):
 #   1 (violations) and 2 (usage / broken invocation) -> block
 #   anything else, including a missing or non-executable checker -> warn and continue.
 # The fail-open half differs from the prompt-extraction backstop on purpose: this gate

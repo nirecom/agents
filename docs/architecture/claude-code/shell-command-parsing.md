@@ -34,7 +34,7 @@ Consumers are every production module that calls `parse()` — roughly 25 files 
 `hooks/lib/bash-write-targets/`, `hooks/block-clearance-token-write/`,
 `hooks/confirm-forge-target-ownership/`, plus `hooks/block-shell-config.js` and
 `hooks/bash-guard/`. They are not enumerated line-by-line here because `parse()` is a
-public contract pinned by `tests/feature-2134-command-ir-equivalence/`; the two
+public contract pinned by `tests/hooks/feature-2134-command-ir-equivalence/`; the two
 lineages below are enumerated because their consumer sets are meant to shrink to zero.
 
 Known gap: newlines are still not recorded as separators (`#2121` Changes 3, moved to
@@ -99,7 +99,7 @@ under `#1253`.
 
 ## Staying honest
 
-`tests/feature-2134-command-ir-equivalence/ownership-doc.sh` scans `hooks/`, `bin/`,
+`tests/hooks/feature-2134-command-ir-equivalence/ownership-doc.sh` scans `hooks/`, `bin/`,
 `install/` and `lib/` for `require()` of each lineage and compares the result against
 the marker blocks above, in both directions. Adding or removing a consumer without
 editing this page turns that test red.

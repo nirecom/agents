@@ -105,7 +105,7 @@ const MAX_KNOWN_STATE_VERSION = CURRENT_STATE_VERSION;
 // missing file is nothing to protect, but a corrupt one is the only forensic
 // record of whatever produced it, and every writer must refuse to touch it
 // rather than silently replacing it with a fresh initial state (X9 in
-// tests/feature-1733-state-event-stream/robustness.sh).
+// tests/hooks/feature-1733-state-event-stream/robustness.sh).
 class CorruptStateFileError extends Error {
   constructor(message) {
     super(message);
@@ -117,7 +117,7 @@ class CorruptStateFileError extends Error {
 // release understands. Such a file was written by a newer release (possibly a
 // concurrent session on the same machine after an upgrade) and must never be
 // downgraded in place — that would silently drop whatever the newer schema
-// added (X10 in tests/feature-1733-state-event-stream/robustness.sh).
+// added (X10 in tests/hooks/feature-1733-state-event-stream/robustness.sh).
 class FutureSchemaVersionError extends Error {
   constructor(version) {
     super(`state file has schema version ${version}, newer than this release understands (max known ${MAX_KNOWN_STATE_VERSION})`);
@@ -176,7 +176,7 @@ function normalizeStateVersion(rawState) {
 // history (the stream records what a session did), so it is applied to the
 // PROJECTION of a v1-on-disk record, keyed on the key's absence — never by
 // fabricating step_status events (K-f in
-// tests/feature-1733-state-event-stream/migration-annotations.sh).
+// tests/hooks/feature-1733-state-event-stream/migration-annotations.sh).
 // SCOPE: frozen at those three v1-only steps; write_code/review_docs absence is
 // a schema-version concern (migrations/v2-to-v3 & v3-to-v4), not a read default.
 // Mutates `projection.steps` in place; must run BEFORE guardProjection.
@@ -192,7 +192,7 @@ function applyLegacyV1ReadDefaults(rawState, projection) {
   const setStatus = (step, status) => {
     // Third hand-built step-entry site: its key set must match
     // projection.js emptyStepEntry() exactly (CPR-ORTH; pinned by
-    // tests/feature-1665-seq-cascade/b-entry-shape-parity.sh).
+    // tests/hooks/feature-1665-seq-cascade/b-entry-shape-parity.sh).
     if (!steps[step]) steps[step] = { status: "pending", updated_at: null, updated_seq: null };
     steps[step].status = status;
   };

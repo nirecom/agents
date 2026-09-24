@@ -39,7 +39,7 @@ const SCHEMA_VERSION = 3;
 // SSOT for `same_fix`: does ONE fix resolve both the proposal and the existing issue
 // the verdict names? It is a pure function of the verdict, so both producers copy it
 // rather than re-judging it. Prose twin: skills/_shared/issue-verdict-cascade.md
-// (drift-checked by tests/feat-1912-verdict-criterion-drift.sh).
+// (drift-checked by tests/skills/feat-1912-verdict-criterion-drift.sh).
 // Different axis from the confirm gate's G1: G1 asks how destructive the action is.
 // Only `reopen` is true. Every parent-attaching verdict is false for one reason: the
 // issue those verdicts name is a meta parent, a container that is never implemented

@@ -59,7 +59,7 @@ class ProjectionMutatedError extends Error {
 // step_status) a validated `status` (events.js validateEvent()). A record that
 // fails any of those checks proves the file was tampered with after the fact,
 // so the fold must not report ANY status derived from it as trustworthy —
-// see X11 in tests/feature-1733-state-event-stream/robustness.sh.
+// see X11 in tests/hooks/feature-1733-state-event-stream/robustness.sh.
 class StreamIntegrityError extends Error {
   constructor(message) {
     super(message);
@@ -74,7 +74,7 @@ const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // core.js). They are deliberately NOT unified behind a shared helper — the
 // core.js one lives inside a temporary migration block slated for wholesale
 // deletion — so their key-set parity is pinned by test instead
-// (tests/feature-1665-seq-cascade/b-entry-shape-parity.sh). Adding a field here
+// (tests/hooks/feature-1665-seq-cascade/b-entry-shape-parity.sh). Adding a field here
 // without adding it to the other two produces entries whose `updated_seq` reads
 // `undefined`, which silently defeats the write-code resume cascade (CPR-ORTH).
 function emptyStepEntry() {

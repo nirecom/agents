@@ -137,7 +137,7 @@ function declaresReaders(policyPath) {
 // The declaration's own internal consistency, checked row by row. Division of labour:
 // this file is the STATIC notation/declaration checker — whether a declared reader
 // actually carries a Read step is a semantic question owned by
-// tests/cc-on-demand-skill-ownership.sh, which walks the skills/ tree for it.
+// tests/hooks/cc-on-demand-skill-ownership.sh, which walks the skills/ tree for it.
 function checkReaderRows(root, policy, violations) {
   const rows = policy.ON_DEMAND_READERS || [];
   const unconditional = new Set(policy.EXPECTED_UNCONDITIONAL);

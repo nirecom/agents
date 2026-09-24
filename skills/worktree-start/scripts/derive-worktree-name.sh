@@ -36,7 +36,7 @@ fi
 # the full private-repo-name list must not sit in every spawned process's env.
 # PRIVATE_REPO_NAMES_CACHE_SET=1 means the list is authoritative (empty = "no
 # private repos", not "unknown"); a lookup failure fails open to empty.
-# Do NOT rename these two variables: tests/feature-worktree-start-non-interactive/helpers.sh
+# Do NOT rename these two variables: tests/skills/feature-worktree-start-non-interactive/helpers.sh
 # still exports both INTO this script (inbound contract, unchanged). Never
 # re-add `export` here for the outbound side — see hooks/lib/is-private-repo.js
 # for why exporting only one of the pair is worse than exporting neither.

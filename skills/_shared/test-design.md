@@ -42,16 +42,18 @@ Report medium and low gaps as advisory only.
 
 ## Test File Naming
 
-Name test files after the branch they belong to, replacing `/` with `-`:
+Place each test under its category, then name the file after the branch, replacing `/` with `-`:
 
 ```
-tests/<branch-type>-<branch-name>.<ext>
+tests/<category>/<branch-type>-<branch-name>.<ext>
 ```
 
-- `feature/claude-rules` → `tests/feature-claude-rules.sh`
-- `fix/ssh-keys` → `tests/fix-ssh-keys.sh`
-- main direct work: `tests/main-<name>.sh`
+- `<category>` is the top-level tree the primary subject-under-test lives in — one of the six canonical dirs: `hooks/`, `bin/`, `skills/`, `agents/`, `install/`, `tests/` (derived from the first path segment of the file the test exercises, matching its `# Tests:` frontmatter).
+- `feature/claude-rules` exercising a hook → `tests/hooks/feature-claude-rules.sh`
+- `fix/ssh-keys` exercising an install script → `tests/install/fix-ssh-keys.sh`
+- main direct work: `tests/<category>/main-<name>.sh`
 - Multiple files per feature: add a suffix (e.g., `feature-claude-rules-global.sh`)
+- `tests/lib/`, `tests/fixtures/`, `tests/_archive/` and `tests/run-all.sh` are top-level shared test infrastructure — not categories, not subject to the `tests/<category>/` placement rule. `tests/lib/` follows the same adjacent-`lib/` naming as `hooks/lib/` and `bin/lib/`; `tests/run-all.sh` is the test runner entry point whose path is a provenance-identity contract.
 
 Python (pytest) requires a `test_` prefix for auto-discovery:
 
@@ -147,7 +149,7 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 
 - Same limits as code files: WARN at >300 lines, HARD at >500 lines.
 - Split mechanism: same as code — `tests/<name>/` sibling folder with a dispatcher `.sh`. See `rules/coding/file-split.md`.
-- Canonical split example: `tests/main-workflow-skip-sentinels/` (PR #867).
+- Canonical split example: `tests/hooks/main-workflow-skip-sentinels/` (PR #867).
 - `tests/_archive/` is excluded from size checks.
 
 ## Test Naming Convention (new tests only)

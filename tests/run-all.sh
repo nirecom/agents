@@ -105,8 +105,13 @@ expand_pattern() {
 }
 
 if [ "$WANT_ALL" -eq 1 ] || [ $# -eq 0 ]; then
-  # _archive/ is auto-excluded — *.sh matches top-level files only
-  for f in "$TESTS_DIR"/*.sh; do add_work "$f"; done
+  # 2-level layout: enumerate tests/<category>/*.sh for the six canonical
+  # categories only. *.sh matches a category's own files, so split dispatchers'
+  # <name>/ sub-files — and lib/fixtures/__pycache__/_archive and run-all.sh
+  # itself (all at tests/ top level) — are excluded.
+  for cat in hooks bin skills agents install tests; do
+    for f in "$TESTS_DIR/$cat"/*.sh; do add_work "$f"; done
+  done
 else
   for pattern in "$@"; do expand_pattern "$pattern"; done
 fi

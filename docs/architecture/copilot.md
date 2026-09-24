@@ -301,8 +301,8 @@ Run the existing test suite to confirm Claude Code hooks are unaffected by the
 matcher extension:
 
 ```bash
-timeout 120 bash tests/main-workflow-gate-regex.sh
-timeout 120 bash tests/main-check-cross-platform.sh
+timeout 120 bash tests/hooks/main-workflow-gate-regex.sh
+timeout 120 bash tests/hooks/main-check-cross-platform.sh
 ```
 
 ---

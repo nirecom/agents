@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+# filename: tests/feature-772-session-start-cleanup-inherit.sh
+# Tests: hooks/session-start.js
+# Tags: session-start, cleanup, inheritance, regression, scope:issue-specific
+#
+# TL3 gap: real SessionStart hook firing in a live Claude Code host (tool-use
+# event context) and CONV_LANG/settings-drift injection branches are not
+# asserted here. C6 (additionalContext TL2 case) is the day-to-day runner;
+# the live host firing is tracked in docs/architecture/claude-code/e2e-testing.md.
+#
+# Regression tests for issue #772:
+#   When a new session inherits workflow state from a prior session,
+#   the `cleanup` step must NOT carry over verbatim. Instead, the new
+#   session marks cleanup=skipped with skip_reason="inherited-from-prior-session"
+#   because the cleanup belonged to the prior session's worktree/PR.
+#
+# RED: these tests fail against the unmodified session-start.js (which
+# performs a verbatim deep-copy of steps including cleanup).
+
+set -u
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SESSION_START="$AGENTS_DIR/hooks/session-start.js"
+GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+WORKFLOW_STATE_LIB="$AGENTS_DIR/hooks/workflow-state.js"
+
+PASS=0
+FAIL=0
+
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Windows-compatible tmpdir shared between bash and Node.js
+# ---------------------------------------------------------------------------
+_NODE_TMPDIR=$(node -e "process.stdout.write(require('os').tmpdir())" 2>/dev/null || echo "")
+if [[ "$_NODE_TMPDIR" =~ ^[A-Za-z]: ]]; then
+    _DRIVE=$(echo "$_NODE_TMPDIR" | cut -c1 | tr 'A-Z' 'a-z')
+    _REST=$(echo "$_NODE_TMPDIR" | cut -c3- | tr '\\' '/')
+    _BASH_WIN_TMPDIR="/${_DRIVE}${_REST}"
+    TMPDIR_BASE=$(mktemp -d "${_BASH_WIN_TMPDIR}/cctests772.XXXXXXXX")
+else
+    TMPDIR_BASE=$(mktemp -d)
+fi
+WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_DIR"
+export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Plans-dir isolation (#1799): supervisor-emit must never write into the
+# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_PLANS_DIR
+
+# Use a current timestamp so cleanupZombies(7) does not delete the prior state.
+NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+encode_path() { printf '%s' "$1" | tr -c 'A-Za-z0-9' '-'; }
+to_node_path() { echo "$1" | sed 's|^/\([a-zA-Z]\)/|\1:/|'; }
+
+setup_repo() {
+    local repo="$TMPDIR_BASE/repo-$RANDOM-$$"
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name "Test"
+    # Disable global core.hooksPath (points to agents/hooks pre-commit which
+    # blocks commits from the main worktree). Per-repo override wins.
+    git -C "$repo" config core.hooksPath ""
+    echo "init" > "$repo/README.md"
+    git -C "$repo" add README.md
+    git -C "$repo" commit -q -m "initial" --no-verify
+    echo "$repo"
+}
+
+write_state_file() {
+    local sid="$1" content="$2"
+    printf '%s' "$content" > "$WORKFLOW_DIR/${sid}.json"
+}
+
+# read_step_field <sid> <step> <field>
+# Reads a step field from the raw state file, preferring the legacy top-level
+# `steps` map and falling back to `.current.steps`. #1733 made the event stream
+# authoritative and `steps` a key of the derived projection; both shapes are
+# accepted so this file keeps asserting the INHERITANCE contract rather than the
+# storage layout. The heir's stream shape itself is covered in
+# tests/feature-1733-state-event-stream/session-inherit.sh.
+read_step_field() {
+    local sid="$1" step="$2" field="$3"
+    local f="$WORKFLOW_DIR/${sid}.json"
+    [ ! -f "$f" ] && echo "MISSING" && return
+    node -e "
+try {
+  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+  const steps = s.steps || (s.current && s.current.steps);
+  const st = steps && steps['$step'];
+  const v = st && st['$field'];
+  if (v === undefined || v === null) { console.log(''); }
+  else { console.log(String(v)); }
+} catch (e) { console.log('MISSING'); }
+" "$f" 2>/dev/null || echo "MISSING"
+}
+
+# Build a "prior session" state JSON with the main workflow steps complete
+# and `cleanup` at the specified status.
+#
+# review_security is deliberately "pending": the inheritance staleness boundary
+# is the verification tier (review_security onward), so a prior session sitting
+# ON that boundary is not inheritable at all and the cleanup assertions below
+# would never be reached. This fixture must stay strictly before the boundary.
+prior_state_json() {
+    local sid="$1" cleanup_status="$2"
+    cat <<EOF
+{
+  "version": 1, "session_id": "$sid", "git_branch": "main",
+  "created_at": "$NOW_ISO",
+  "steps": {
+    "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
+    "write_tests":       {"status": "complete", "updated_at": "$NOW_ISO"},
+    "review_tests":      {"status": "skipped", "updated_at": "$NOW_ISO"},
+    "review_security":   {"status": "pending", "updated_at": null},
+    "run_tests":         {"status": "complete", "updated_at": "$NOW_ISO"},
+    "docs":              {"status": "complete", "updated_at": "$NOW_ISO"},
+    "user_verification": {"status": "pending", "updated_at": null},
+    "cleanup":           {"status": "$cleanup_status", "updated_at": "$NOW_ISO"}
+  },
+  "plan_approvals": {
+    "outline": {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"},
+    "detail":  {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"}
+  }
+}
+EOF
+}
+
+# The donor's own SessionStart announce line — the breadcrumb that maps an
+# ancestor session id back to its state file.
+write_transcript_line() {
+    local jsonl_file="$1" sid="$2" state_path="$3"
+    mkdir -p "$(dirname "$jsonl_file")"
+    printf '%s\n' "{\"type\": \"attachment\", \"attachment\": {\"type\": \"hook_success\", \"hookEvent\": \"SessionStart\", \"stdout\": \"{\\\"additionalContext\\\": \\\"Current workflow session_id: $sid\\\\nState file: $state_path\\\"}\", \"exitCode\": 0, \"command\": \"node session-start.js\"}}" >> "$jsonl_file"
+}
+
+# Lineage evidence (#1305): a `forkedFrom` row naming the donor session.
+write_forked_line() {
+    local jsonl_file="$1" heir="$2" donor="$3"
+    mkdir -p "$(dirname "$jsonl_file")"
+    printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' \
+        "$heir" "$heir" "$donor" >> "$jsonl_file"
+}
+
+# Drive: simulate a NEW session starting (with NEW_SID) in a repo that has a
+# prior session (PRIOR_SID) recorded in HOME transcript dir. After invocation
+# the new session's state file should exist.
+run_session_start_new() {
+    local repo="$1" new_sid="$2" fake_home="$3"
+    local env_file="$TMPDIR_BASE/env-${new_sid}.env"
+    # Since #1305 the donor is reached through the heir's own transcript, so the
+    # payload must carry the two fields that make lineage resolvable at all:
+    # `source` (only a continuation may inherit) and `transcript_path`.
+    local cwd_enc heir_tp
+    cwd_enc=$(encode_path "$(to_node_path "$repo")")
+    heir_tp="$(to_node_path "$fake_home/.claude/projects/$cwd_enc/${new_sid}.jsonl")"
+    echo "{\"session_id\":\"$new_sid\",\"source\":\"resume\",\"transcript_path\":\"$heir_tp\"}" | \
+        HOME="$fake_home" \
+        CLAUDE_PROJECT_DIR="$repo" \
+        CLAUDE_ENV_FILE="$env_file" \
+        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$fake_home/.claude/projects")" \
+        run_with_timeout 30 node "$SESSION_START" >/dev/null 2>&1 || true
+}
+
+# Set up: prior session with given cleanup status, run new session-start,
+# return path to new state file for reading.
+# Args: <test_id> <prior_cleanup_status> [extra_prior_state_overrides_step] [override_status]
+setup_prior_and_new() {
+    local tid="$1" prior_cleanup="$2"
+    PRIOR_SID="${tid}-prior-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    NEW_SID="${tid}-new-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    FAKE_HOME="$TMPDIR_BASE/home-${tid}"
+    REPO="$(setup_repo)"
+    # The cwd of getCurrentContext() will be REPO; the transcript dir is HOME/.claude/projects/<encoded-cwd>/
+    local cwd_enc
+    cwd_enc=$(encode_path "$(to_node_path "$REPO")")
+    mkdir -p "$FAKE_HOME/.claude/projects/$cwd_enc"
+    write_state_file "$PRIOR_SID" "$(prior_state_json "$PRIOR_SID" "$prior_cleanup")"
+    write_transcript_line "$FAKE_HOME/.claude/projects/$cwd_enc/${PRIOR_SID}.jsonl" \
+        "$PRIOR_SID" "$(to_node_path "$WORKFLOW_DIR/${PRIOR_SID}.json")"
+    # #1305: the new session must be able to prove the prior one is its own
+    # ancestor. Without this forkedFrom row there is no donor to inherit from.
+    write_forked_line "$FAKE_HOME/.claude/projects/$cwd_enc/${NEW_SID}.jsonl" \
+        "$NEW_SID" "$PRIOR_SID"
+}
+
+# ============================================================================
+# Normal cases — TDD: will fail until session-start.js is modified
+# ============================================================================
+
+# C1: Prior cleanup=complete → new session cleanup=skipped, skip_reason="inherited-from-prior-session"
+setup_prior_and_new "c1" "complete"
+run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
+CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
+SKIP_REASON="$(read_step_field "$NEW_SID" "cleanup" "skip_reason")"
+if [ "$CLEANUP_STATUS" = "skipped" ] && [ "$SKIP_REASON" = "inherited-from-prior-session" ]; then
+    pass "C1: prior cleanup=complete → new cleanup=skipped + skip_reason=inherited-from-prior-session"
+else
+    fail "C1: expected cleanup=skipped + skip_reason=inherited-from-prior-session, got status=$CLEANUP_STATUS skip_reason=$SKIP_REASON"
+fi
+
+# C2: Prior cleanup=pending (the original bug — pending must be flipped to skipped too)
+setup_prior_and_new "c2" "pending"
+run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
+CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
+if [ "$CLEANUP_STATUS" = "skipped" ]; then
+    pass "C2: prior cleanup=pending → new cleanup=skipped (NOT pending)"
+else
+    fail "C2: expected cleanup=skipped, got status=$CLEANUP_STATUS"
+fi
+
+# ============================================================================
+# Edge cases
+# ============================================================================
+
+# C3: Prior cleanup=in_progress → new session cleanup=skipped
+setup_prior_and_new "c3" "in_progress"
+run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
+CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
+if [ "$CLEANUP_STATUS" = "skipped" ]; then
+    pass "C3: prior cleanup=in_progress → new cleanup=skipped"
+else
+    fail "C3: expected cleanup=skipped, got status=$CLEANUP_STATUS"
+fi
+
+# C4: Other steps (research/outline/detail) inherited unchanged
+setup_prior_and_new "c4" "complete"
+run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
+RESEARCH="$(read_step_field "$NEW_SID" "research" "status")"
+OUTLINE="$(read_step_field "$NEW_SID" "outline" "status")"
+DETAIL="$(read_step_field "$NEW_SID" "detail" "status")"
+if [ "$RESEARCH" = "complete" ] && [ "$OUTLINE" = "complete" ] && [ "$DETAIL" = "complete" ]; then
+    pass "C4: other steps (research+outline+detail) inherited unchanged as complete"
+else
+    fail "C4: expected research=outline=detail=complete, got research=$RESEARCH outline=$OUTLINE detail=$DETAIL"
+fi
+
+# ============================================================================
+# additionalContext contract (TL2)
+# ============================================================================
+
+# C6: session-start.js emits the session_id line into additionalContext.
+# This is the observable seam for that contract: the hook's own stdout. The
+# former TL3 assertion (SS-E2 in tests/TL3-hook-session-start/main.sh) asserted
+# the same string against `claude -p --output-format json` output, where
+# additionalContext never appears — wrong layer, permanently red (#1619/#1648).
+C6_SID="c6-$(printf '%04x%04x' $RANDOM $RANDOM)"
+C6_REPO="$(setup_repo)"
+C6_HOME="$TMPDIR_BASE/home-c6"
+mkdir -p "$C6_HOME/.claude/projects"
+C6_OUT=$(echo "{\"session_id\":\"$C6_SID\"}" | \
+    HOME="$C6_HOME" \
+    CLAUDE_PROJECT_DIR="$C6_REPO" \
+    CLAUDE_ENV_FILE="$TMPDIR_BASE/env-${C6_SID}.env" \
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$C6_HOME/.claude/projects")" \
+    run_with_timeout 30 node "$SESSION_START" 2>/dev/null || true)
+C6_CTX=$(printf '%s' "$C6_OUT" | node -e "
+let d='';
+process.stdin.on('data', c => d += c);
+process.stdin.on('end', () => {
+  try { process.stdout.write(String(JSON.parse(d.trim()).additionalContext || '')); }
+  catch (e) { process.stdout.write(''); }
+});
+" 2>/dev/null || true)
+if printf '%s' "$C6_CTX" | grep -qF "Current workflow session_id: $C6_SID"; then
+    pass "C6: additionalContext contains 'Current workflow session_id: <sid>'"
+else
+    fail "C6: additionalContext missing session_id line. got: $C6_CTX"
+fi
+
+# ============================================================================
+# Regression gating — workflow-gate.js accepts commit when cleanup=skipped
+# ============================================================================
+
+# C5: workflow-gate.js does not block a commit when cleanup=skipped (not pending)
+# Build a state where every step is complete except cleanup=skipped (inherited),
+# then verify workflow-gate.js does not block a generic commit on that state.
+C5_SID="c5-$(printf '%04x%04x' $RANDOM $RANDOM)"
+C5_REPO="$(setup_repo)"
+C5_STATE=$(cat <<EOF
+{
+  "version": 1, "session_id": "$C5_SID", "git_branch": "main",
+  "created_at": "$NOW_ISO",
+  "steps": {
+    "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
+    "write_tests":       {"status": "complete", "updated_at": "$NOW_ISO"},
+    "review_tests":      {"status": "skipped", "updated_at": "$NOW_ISO"},
+    "review_security":   {"status": "complete", "updated_at": "$NOW_ISO"},
+    "run_tests":         {"status": "complete", "updated_at": "$NOW_ISO"},
+    "docs":              {"status": "complete", "updated_at": "$NOW_ISO"},
+    "user_verification": {"status": "complete", "updated_at": "$NOW_ISO"},
+    "cleanup":           {"status": "skipped",  "updated_at": "$NOW_ISO", "skip_reason": "inherited-from-prior-session"}
+  },
+  "plan_approvals": {
+    "outline": {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"},
+    "detail":  {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"}
+  }
+}
+EOF
+)
+write_state_file "$C5_SID" "$C5_STATE"
+C5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $C5_REPO commit -m test\"},\"session_id\":\"$C5_SID\"}"
+C5_RESULT=$(echo "$C5_JSON" | CLAUDE_PROJECT_DIR="$C5_REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    run_with_timeout 30 node "$GATE_HOOK" 2>/dev/null || true)
+# It should not block; either approve or empty (pass-through) is acceptable.
+if echo "$C5_RESULT" | grep -q '"block"'; then
+    fail "C5: workflow-gate.js BLOCKED commit when cleanup=skipped — should approve. Result: $C5_RESULT"
+else
+    pass "C5: workflow-gate.js accepts commit when cleanup=skipped (not blocked)"
+fi
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

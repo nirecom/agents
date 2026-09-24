@@ -2,25 +2,13 @@
 # bin/select-tests.sh
 # Tests: bin/select-tests.sh
 # Tags: test-selection, pr-scoped, stem-match
-#
-# Tier 1 test selector: mechanical stem-based selection only.
-# Usage: bin/select-tests.sh --auto            (resolve via bin/resolve-merge-base.sh)
-#        bin/select-tests.sh <merge-base-ref>  (caller has already resolved; leaves no session record)
-# Output: newline-separated test file paths (may be empty), exit 0.
-# Exit 1 on missing arg or git error.
-# Exit 4 (--auto only) the merge-base is not trustworthy, or could not be asked for at all.
-#        Nothing is selected. Selecting from a wrong base produces an ordinary-looking list
-#        drawn from the wrong range, and an empty one reads as "0 tests, all green" — so the
-#        only honest outcome is to stop and say what to run to recover.
-# Never reads frontmatter — frontmatter is Tier 2 (LLM in run-tests/SKILL.md).
-# Never returns tests/_archive/ entries.
-#
-# --auto only: on a branch with NO commits of its own the resolver's base IS HEAD, so
-# `<base>...HEAD` is empty by construction while the whole change sits in the working tree
-# (#1779). In that case the selection is built from the working tree instead — `git diff HEAD`
-# (tracked, staged and unstaged alike) unioned with `git ls-files --others` (untracked) — and a
-# note saying so is printed on stderr. The degraded path keeps the same contract as the ordinary
-# one: a git failure is exit 1, never a quietly empty selection.
+# Tier 1 test selector: mechanical stem-based selection only (never reads
+# frontmatter — that is Tier 2 — and never returns tests/_archive/ entries).
+# Usage: --auto (resolve via bin/resolve-merge-base.sh) | <merge-base-ref>.
+# Output: newline test paths (may be empty), exit 0; exit 1 missing arg/git error;
+# exit 4 (--auto) merge-base untrustworthy → nothing selected (an empty list reads
+# as all-green, so we stop). No-own-commits branch: base IS HEAD (#1779) → rebuild
+# from working tree (git diff HEAD ∪ ls-files --others), stderr note; errors exit 1.
 
 set -euo pipefail
 
@@ -219,7 +207,7 @@ if [[ ${#stems[@]} -gt 0 ]]; then
         break
       fi
     done
-  done < <(find "${TESTS_DIR}" -maxdepth 1 -name "*.sh" | sort)
+  done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 -name "*.sh" 2>/dev/null | sort)
 fi
 
 # RUN_TL3=on: append TL3-*.sh (real-environment tier) — but only when the diff could
@@ -248,7 +236,7 @@ if [[ -x "${AGENTS_DIR}/bin/get-config-var" ]]; then
       while IFS= read -r tl3; do
         [[ -f "${tl3}" ]] || continue
         _emit_if_new "${tl3}"
-      done < <(find "${TESTS_DIR}" -maxdepth 1 -name "TL3-*.sh" | sort)
+      done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 -name "TL3-*.sh" 2>/dev/null | sort)
     fi
   fi
 fi

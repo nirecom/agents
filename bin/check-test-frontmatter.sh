@@ -21,6 +21,17 @@ _trim() {
   printf -v "$1" '%s' "$__v"
 }
 
+# _is_test_entrypoint <rel> — true for a test entrypoint path: flat tests/<file>.sh
+# or 2-level tests/<category>/<file>.sh (canonical category, no deeper nesting).
+_is_test_entrypoint() {
+  local rel="$1" base cat rest
+  base="${rel#tests/}"
+  [[ "$base" == "$rel" ]] && return 1
+  [[ "$base" != */* ]] && return 0
+  cat="${base%%/*}"; rest="${base#*/}"
+  [[ "$cat" =~ ^(hooks|bin|skills|agents|install|tests)$ && "$rest" == *.sh && "$rest" != */* ]]
+}
+
 # check_content <label> <tests-line> <tags-line>
 # Validates the extracted `# Tests:` and `# Tags:` header lines. Both header
 # lines are passed as strings (may be empty when absent). Returns 1 on any
@@ -153,8 +164,7 @@ case "$mode" in
       if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
         rel="${f#"$repo_root_hs"/}"
       fi
-      base="${rel#tests/}"
-      if [[ "$base" != "$rel" && "$base" != */* ]] \
+      if _is_test_entrypoint "$rel" \
          && [[ -n "$repo_root_hs" && -f "$repo_root_hs/tests/lib/harness.sh" ]]; then
         if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
           check_harness_source "$f" "$content" || FAIL=1
@@ -178,11 +188,15 @@ case "$mode" in
     fi
     shopt -s nullglob
     FAIL=0
-    # tests/*.sh glob does not match _archive/ subdirectory
-    for f in "$root/tests/"*.sh; do
-      rel="tests/$(basename "$f")"
-      extract_headers_file "$f"
-      check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
+    # 2-level layout: scan tests/<category>/*.sh for the six canonical categories.
+    # *.sh does not cross '/', so split dispatchers' <name>/ sub-files are excluded;
+    # tests/_archive/ and tests/lib/ are not categories and are not scanned.
+    for cat in hooks bin skills agents install tests; do
+      for f in "$root/tests/$cat/"*.sh; do
+        rel="${f#"$root"/}"
+        extract_headers_file "$f"
+        check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
+      done
     done
     [[ "$FAIL" -eq 1 ]] && exit 1
     exit 0

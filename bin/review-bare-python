@@ -41,32 +41,32 @@ fi
 # (Store-stub probes, fixture strings inside test JSON / bash -c examples).
 # ---------------------------------------------------------------------------
 EXCLUDED_FILES=(
-  "tests/fix-277-doc-append-merge-union.sh"
-  "tests/enforce-worktree-bash-c-cd-scope.sh"
-  "tests/feature-parallel-sessions-worktree-bash-patterns/basics.sh"
-  "tests/feature-enforce-system-ops.sh"
-  "tests/fix-enforce-worktree-main-cleanup.sh"
-  "tests/fix-992-bare-python.sh"
+  "tests/bin/fix-277-doc-append-merge-union.sh"
+  "tests/hooks/enforce-worktree-bash-c-cd-scope.sh"
+  "tests/agents/feature-parallel-sessions-worktree-bash-patterns/basics.sh"
+  "tests/hooks/feature-enforce-system-ops.sh"
+  "tests/hooks/fix-enforce-worktree-main-cleanup.sh"
+  "tests/bin/fix-992-bare-python.sh"
   # enforce-protected-marker-write part files: `python3 -c ...` appears only as
   # a hook-probe fixture string (table rows of the form label|expect|command,
   # fed to the hook as JSON and never executed). The interpreter name IS the
   # thing under test — the hook classifies on cmd0 — so rewriting these to
   # `uv run python -c` would change the shape being probed.
-  "tests/enforce-protected-marker-write/cases-round6-identity.sh"
-  "tests/enforce-protected-marker-write/cases-round6-stdin.sh"
-  "tests/enforce-protected-marker-write/cases-round7-proof.sh"
-  "tests/enforce-protected-marker-write/cases-round8-operand.sh"
+  "tests/hooks/enforce-protected-marker-write/cases-round6-identity.sh"
+  "tests/hooks/enforce-protected-marker-write/cases-round6-stdin.sh"
+  "tests/hooks/enforce-protected-marker-write/cases-round7-proof.sh"
+  "tests/hooks/enforce-protected-marker-write/cases-round8-operand.sh"
   # Same rationale as the round6-8 files above — python3 -c appears only as
   # fixture data, not an executed invocation.
-  "tests/fix-1780-round12-classifier-attack-shapes.sh"
-  "tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh"
+  "tests/hooks/fix-1780-round12-classifier-attack-shapes.sh"
+  "tests/hooks/fix-1780-round12-parser-unit-tables/cases-interpreter.sh"
   # enforce-clearance-token-write part files: same class again (CPR-ORTH). The
   # rows are `label|expect|command` fixtures handed to the hook as JSON, and the
   # interpreter word is the input the hook's verdict turns on — `uv run python`
   # is a DIFFERENT case here (the runner prefix RD2 pins), not a rewrite.
-  "tests/enforce-clearance-token-write/consumer-allow-direction-cases.sh"
-  "tests/enforce-clearance-token-write/interpreter-language-scope-cases.sh"
-  "tests/enforce-clearance-token-write/read-only-allowlist-cases.sh"
+  "tests/hooks/enforce-clearance-token-write/consumer-allow-direction-cases.sh"
+  "tests/hooks/enforce-clearance-token-write/interpreter-language-scope-cases.sh"
+  "tests/hooks/enforce-clearance-token-write/read-only-allowlist-cases.sh"
 )
 
 is_excluded() {
