@@ -136,6 +136,16 @@ function copyInclude({ mainRoot, worktreePath, includeFile }) {
       continue;
     }
 
+    // Explicit directory check: copyFileSync would throw EISDIR; surface a clear message instead
+    try {
+      if (fs.lstatSync(resolvedSrc).isDirectory()) {
+        result.errors.push(`directory candidate not copied: ${relPath} — worktree-start copies files only; list its files individually in .worktreeinclude`);
+        continue;
+      }
+    } catch (_e) {
+      // lstat failed — let copyFileSync attempt proceed and report its own error
+    }
+
     const resolvedDst = path.resolve(wtDir, relPath);
     // Destination bound check: must stay inside wtDir
     const resolvedWt = path.resolve(wtDir);
