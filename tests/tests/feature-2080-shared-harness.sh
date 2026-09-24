@@ -419,13 +419,15 @@ run_checker() { # $1=repo dir
 }
 
 # Probe: is the harness-source check extension installed? Stage one new
-# top-level test file without a harness source line; the extension must emit
-# MISSING_HARNESS_SOURCE. If it does not, the extension is absent → skip Group B.
+# categorized test file (tests/<category>/*.sh — flat tests/*.sh is rejected by
+# the #1834 gate before the harness check runs) without a harness source line;
+# the extension must emit MISSING_HARNESS_SOURCE. If it does not, the extension
+# is absent → skip Group B.
 extension_present() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/probe.sh" ""
-  git -C "$repo" add tests/probe.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/probe.sh" ""
+  git -C "$repo" add tests/bin/probe.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   case "$CK_OUT" in
     *MISSING_HARNESS_SOURCE*) return 0 ;;
@@ -433,12 +435,12 @@ extension_present() {
   esac
 }
 
-# B1: new top-level file without harness source → MISSING_HARNESS_SOURCE, exit 1.
+# B1: new categorized file without harness source → MISSING_HARNESS_SOURCE, exit 1.
 group_b1_missing() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" ""
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" ""
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   if [ "$CK_RC" -eq 1 ] && printf '%s' "$CK_OUT" | grep -q 'MISSING_HARNESS_SOURCE'; then
     t_ok "B1 missing harness → MISSING_HARNESS_SOURCE, exit 1"
@@ -461,8 +463,8 @@ expect_pass() { # $1=label $2=repo
 group_b2_source_keyword() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" "source tests/lib/harness.sh"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" "source tests/lib/harness.sh"
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   expect_pass "B2 source keyword present → passes" "$repo"
 }
 
@@ -470,8 +472,8 @@ group_b2_source_keyword() {
 group_b3_dot_keyword() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" ". tests/lib/harness.sh"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" ". tests/lib/harness.sh"
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   expect_pass "B3 dot keyword present → passes" "$repo"
 }
 
@@ -479,8 +481,8 @@ group_b3_dot_keyword() {
 group_b4_comment_only() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" "# source tests/lib/harness.sh"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" "# source tests/lib/harness.sh"
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   if [ "$CK_RC" -eq 1 ] && printf '%s' "$CK_OUT" | grep -q 'MISSING_HARNESS_SOURCE'; then
     t_ok "B4 comment-only reference → MISSING_HARNESS_SOURCE, exit 1"
@@ -493,8 +495,8 @@ group_b4_comment_only() {
 group_b5_echo_reference() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" "echo tests/lib/harness.sh"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" "echo tests/lib/harness.sh"
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   if [ "$CK_RC" -eq 1 ] && printf '%s' "$CK_OUT" | grep -q 'MISSING_HARNESS_SOURCE'; then
     t_ok "B5 echo reference only → MISSING_HARNESS_SOURCE, exit 1"
@@ -507,16 +509,16 @@ group_b5_echo_reference() {
 group_b6_header_only() {
   local repo path
   repo="$(setup_repo)"
-  path="$repo/tests/foo.sh"
-  mkdir -p "$repo/tests"
+  path="$repo/tests/bin/foo.sh"
+  mkdir -p "$repo/tests/bin"
   {
     printf '#!/usr/bin/env bash\n'
-    printf '# tests/foo.sh\n'
+    printf '# tests/bin/foo.sh\n'
     printf '# Tests: tests/lib/harness.sh\n'
     printf '# Tags: scope:issue-specific\n'
     printf 'echo fixture\n'
   } >"$path"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   if [ "$CK_RC" -eq 1 ] && printf '%s' "$CK_OUT" | grep -q 'MISSING_HARNESS_SOURCE'; then
     t_ok "B6 # Tests: header reference only → MISSING_HARNESS_SOURCE, exit 1"
@@ -529,12 +531,12 @@ group_b6_header_only() {
 group_b7_modified_existing() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/existing.sh" ""
-  git -C "$repo" add tests/existing.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/existing.sh" ""
+  git -C "$repo" add tests/bin/existing.sh >/dev/null 2>&1 || true
   git -C "$repo" -c user.email=harness@example.com -c user.name=Harness \
       commit -q -m "seed existing" >/dev/null 2>&1 || true
-  printf 'echo modified\n' >>"$repo/tests/existing.sh"
-  git -C "$repo" add tests/existing.sh >/dev/null 2>&1 || true
+  printf 'echo modified\n' >>"$repo/tests/bin/existing.sh"
+  git -C "$repo" add tests/bin/existing.sh >/dev/null 2>&1 || true
   expect_pass "B7 modified existing file (no harness) → passes" "$repo"
 }
 
@@ -561,8 +563,8 @@ group_b9_subdir_binx() {
 group_b_variable_source() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" 'source "$HARNESS"'
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" 'source "$HARNESS"'
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   run_checker "$repo"
   if [ "$CK_RC" -eq 1 ] && printf '%s' "$CK_OUT" | grep -q 'MISSING_HARNESS_SOURCE'; then
     t_ok "B variable-form source \"\$HARNESS\" → MISSING_HARNESS_SOURCE, exit 1"
@@ -577,8 +579,8 @@ group_b_variable_source() {
 group_b_path_prefix_source() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" "source \"$AGENTS_DIR/tests/lib/harness.sh\""
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" "source \"$AGENTS_DIR/tests/lib/harness.sh\""
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   expect_pass "B path-prefix source (…/tests/lib/harness.sh) → passes" "$repo"
 }
 
@@ -588,8 +590,8 @@ group_b_path_prefix_source() {
 group_b_dead_function_body() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/foo.sh" "$(printf 'unused_fn() {\n  source tests/lib/harness.sh\n}')"
-  git -C "$repo" add tests/foo.sh >/dev/null 2>&1 || true
+  make_fixture "$repo/tests/bin/foo.sh" "$(printf 'unused_fn() {\n  source tests/lib/harness.sh\n}')"
+  git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   expect_pass "B dead function body source → checker accepts (regex scan)" "$repo"
 }
 
@@ -601,8 +603,9 @@ group_b_all_mode_legacy() {
   local repo rc=0 ck_out
   repo="$(setup_repo)"
   # Commit a legacy test file without harness source (simulates a pre-#2080 file).
-  make_fixture "$repo/tests/legacy.sh" ""
-  git -C "$repo" add tests/legacy.sh >/dev/null 2>&1 || true
+  # Categorized path so the #1834 --all scan (tests/<category>/*.sh only) reaches it.
+  make_fixture "$repo/tests/bin/legacy.sh" ""
+  git -C "$repo" add tests/bin/legacy.sh >/dev/null 2>&1 || true
   git -C "$repo" -c user.email=harness@example.com -c user.name=Harness \
       commit -q -m "seed legacy" >/dev/null 2>&1 || true
   # --all mode must exit 0; the extension must not reject committed legacy files.

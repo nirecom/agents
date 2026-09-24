@@ -310,8 +310,10 @@ while IFS= read -r f; do
   case "$f" in
     tests/_archive/*) continue ;;
     tests/lib/*) continue ;;
+    tests/run-all.sh) continue ;;  # infra runner — no frontmatter, not a test entrypoint
     tests/hooks/*/*.sh|tests/bin/*/*.sh|tests/skills/*/*.sh|tests/agents/*/*.sh|tests/install/*/*.sh|tests/tests/*/*.sh) continue ;;  # suite sub-files — not entrypoints
     tests/hooks/*.sh|tests/bin/*.sh|tests/skills/*.sh|tests/agents/*.sh|tests/install/*.sh|tests/tests/*.sh) _staged_tests="$_staged_tests $f" ;;
+    tests/*.sh) _staged_tests="$_staged_tests $f" ;;  # flat tests/<name>.sh — forward so the checker rejects newly-added ones (#1834)
     *) continue ;;
   esac
 done <<< "$(git diff --cached --name-only -- 'tests/')"
