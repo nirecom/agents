@@ -69,14 +69,29 @@ run_in() {
 # TC1-TC26 sourced from sibling dir (rules/coding/file-split.md Pattern A).
 # Each fragment shares PASS/FAIL counters and fixture helpers via source.
 CASES_DIR="$SCRIPT_DIR/fix-1576-audit-tests-fix-headers"
+
+case_begin() { echo "--- group: $1 ---"; }
+case_end()   { :; }
+
+case_begin "token-classification" "bin/lib/test-frontmatter-constants.sh"
 # shellcheck source=fix-1576-audit-tests-fix-headers/token-classification-abc.sh
 source "$CASES_DIR/token-classification-abc.sh"       # TC1-TC10
+case_end
+
+case_begin "root-like-tokens-report" "bin/audit-tests.sh"
 # shellcheck source=fix-1576-audit-tests-fix-headers/root-like-tokens-report.sh
 source "$CASES_DIR/root-like-tokens-report.sh"        # TC11, TC12, TC22-TC26
+case_end
+
+case_begin "root-like-tokens-direct-match" "bin/audit-tests-common.sh"
 # shellcheck source=fix-1576-audit-tests-fix-headers/root-like-tokens-direct-match.sh
 source "$CASES_DIR/root-like-tokens-direct-match.sh"  # TC13-TC17
+case_end
+
+case_begin "apply-rewrite-extra-globs" "bin/lib/test-frontmatter-fix.sh"
 # shellcheck source=fix-1576-audit-tests-fix-headers/apply-rewrite-and-extra-globs.sh
 source "$CASES_DIR/apply-rewrite-and-extra-globs.sh"  # TC18-TC21
+case_end
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"

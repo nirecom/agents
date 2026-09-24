@@ -35,6 +35,10 @@ CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 NODEJS_RULES="$REPO_ROOT/rules/coding/nodejs.md"
 PYTHON_RULES="$REPO_ROOT/rules/coding/python.md"
 
+case_begin() { echo "--- group: $1 ---"; }
+case_end()   { :; }
+
+case_begin "skill-md-content" "skills/write-code/SKILL.md"
 # ---------------------------------------------------------------------------
 # a. skills/write-code/SKILL.md exists
 # ---------------------------------------------------------------------------
@@ -106,6 +110,9 @@ if require_file "$WRITE_CODE_SKILL"; then
     done
 fi
 
+case_end
+
+case_begin "env-and-claude-md" "CLAUDE.md"
 # ---------------------------------------------------------------------------
 # g. .env.example contains CONFIRM_CODE=
 # ---------------------------------------------------------------------------
@@ -163,6 +170,9 @@ if require_file "$CLAUDE_MD"; then
     fi
 fi
 
+case_end
+
+case_begin "coding-rules" "rules/coding/python.md"
 # ---------------------------------------------------------------------------
 # k. rules/coding/python.md retains paths: frontmatter
 # ---------------------------------------------------------------------------
@@ -187,6 +197,9 @@ if require_file "$NODEJS_RULES"; then
     fi
 fi
 
+case_end
+
+case_begin "complexity-and-gates" "skills/_shared/judge-task-complexity.md"
 # ---------------------------------------------------------------------------
 # m. Control-flow ordering: CONFIRM_CODE < complexity-judge < Agent tool
 # ---------------------------------------------------------------------------
@@ -426,6 +439,8 @@ if require_file "$WRITE_CODE_SKILL" && require_file "$RUNTIME_GATE_TEST"; then
         fail "v. tests/bin/feature-2102-session-facts/values.sh no longer pins GATE_CONFIRM_CODE — the runtime side of WCD-2's gate has no coverage anywhere"
     fi
 fi
+
+case_end
 
 # ---------------------------------------------------------------------------
 echo

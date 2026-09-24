@@ -85,6 +85,11 @@ run_all() {
 
 # --- Cases -----------------------------------------------------------------
 
+case_begin() { echo "--- group: $1 ---"; }
+case_end()   { :; }
+
+case_begin "staged-mode" "bin/check-test-frontmatter.sh"
+
 # TC1: valid # Tests + valid scope tag => exit 0
 R1="$(make_git_fixture)"
 write_test_body "$R1/tests/tc1.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
@@ -218,7 +223,9 @@ else
   fail "TC11 --staged reads staged blob (malformed) not clean working tree" "rc=$RC err=<<$ERR>>"
 fi
 rm -rf "$R11"
+case_end
 
+case_begin "two-level-layout" "bin/lib/test-frontmatter-constants.sh"
 # --- #1834 Group 2: 2-level tests/ layout (category subdirs) ---------------
 # --staged already matches subdir paths (2a-2c pass now); --all must be taught
 # to scan subdirs (2d, gated on the C4 fix); tests/_archive/ stays skipped in
@@ -322,7 +329,9 @@ else
   fail "2g --all excludes 3-level split sub-files" "rc=$RC err=<<$ERR>>"
 fi
 rm -rf "$SPLIT_R"
+case_end
 
+case_begin "harness-source-check" "bin/check-test-frontmatter.sh"
 # --- #1834 C6: harness-source check for staged NESTED (2-level) test files ----
 # Pre-fix, the harness-source check only fires for top-level tests/*.sh (the
 # base=*/* guard excludes tests/<category>/*.sh). Post-fix it must also fire for
@@ -366,6 +375,7 @@ else
   fail "6b --staged new tests/hooks/ file with harness source" "rc=$RC err=<<$ERR>>"
 fi
 rm -rf "$R"
+case_end
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"

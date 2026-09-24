@@ -82,23 +82,43 @@ SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-1665-write-code-step"
 # shellcheck source=./feature-1665-write-code-step/f-v2-to-v3.sh
 . "$SCRIPT_DIR/f-v2-to-v3.sh"
 
+case_begin() { echo "--- group: $1 ---"; }
+case_end()   { :; }
+
+case_begin "step-vocabulary" "bin/workflow/lib/next-step/steps.js"
 echo "=== A: step vocabulary (TL1) ==="
 run_vocabulary_tests
 echo ""
+case_end
+
+case_begin "list-reset" "hooks/workflow-mark/reset-handler.js"
 echo "=== B: --list + RESET_FROM (TL2) ==="
 run_list_reset_tests
 echo ""
+case_end
+
+case_begin "legacy-state" "hooks/workflow-state/effective-state.js"
 echo "=== C: legacy state recovery hint (TL2) ==="
 run_legacy_state_tests
 echo ""
+case_end
+
+case_begin "wf-meta-skip" "bin/workflow/lib/next-step/verdict.js"
 echo "=== D: wf-meta auto-skip / wf-code control (TL2) ==="
 run_wf_meta_tests
 echo ""
+case_end
+
+case_begin "commit-gate" "hooks/workflow-gate.js"
 echo "=== E: commit gate (TL2) ==="
 run_commit_gate_tests
 echo ""
+case_end
+
+case_begin "v2-to-v3-migration" "hooks/workflow-state/state-io/migrations/v2-to-v3.js"
 echo "=== F: v2 -> v3 state migration (TL2) ==="
 run_v2_to_v3_tests
+case_end
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
