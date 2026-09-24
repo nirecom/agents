@@ -134,13 +134,13 @@ exit 124
     r=$(exec_req "$tn" "ex4sid" "$body" --target worktree --category cleanup --detail "cleanup"); out="${r#*|}"
     local ok=1
     [ "$(token_count "$tmp")" -eq 0 ] || ok=0
-    echo "$out" | grep -qiE 'timed out|REJECT' || ok=0
+    echo "$out" | grep -qiE 'unavailable|EMERGENCY' || ok=0
     state_has "$tmp" "off_examination" || ok=0
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
-        pass "EX-4: examiner exit 124 → REJECT (timeout) → NO token + off_examination audit recorded"
+        pass "EX-4: examiner exit 124 → human fallback (timeout) → NO token + off_examination audit recorded"
     else
-        fail "EX-4: RED-EXPECTED: exit-124 must map to REJECT/no-token with an audit entry; out=$out"
+        fail "EX-4: RED-EXPECTED: exit-124 must map to unavailable/no-token with an audit entry; out=$out"
     fi
 }
 

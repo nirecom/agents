@@ -25,6 +25,21 @@ const EMERGENCY_PROVENANCE_MAX_AGE_MS = 10 * 60 * 1000;
 // marker dated further into the future than this is not evidence of anything.
 const EMERGENCY_PROVENANCE_FUTURE_TOLERANCE_MS = 60 * 1000;
 
+// Matches the <command-name>-wrapped form (real skill invocation on any line).
+const OFF_SKILL_INVOCATION_WRAPPED_RE = /^[ \t]*<command-name>\/(?:[A-Za-z0-9_-]+:)?enforce-workflow-off(?![\w-])/m;
+
+// Matches the bare slash-command form on the FIRST LINE ONLY (m-flag omitted).
+// Later lines are not attributed: the <command-name> wrapper is absent, so any
+// line could be model-generated prose or embedded in a fenced block.
+const OFF_SKILL_INVOCATION_BARE_RE = /^[ \t]*\/(?:[A-Za-z0-9_-]+:)?enforce-workflow-off(?![\w-])/;
+
+function promptInvokesOffSkill(prompt) {
+  return typeof prompt === "string" && (
+    OFF_SKILL_INVOCATION_WRAPPED_RE.test(prompt) ||
+    OFF_SKILL_INVOCATION_BARE_RE.test(prompt)
+  );
+}
+
 // buildProvenanceMarker(): the payload record-off-skill-invocation.js writes.
 // The prompt text itself is deliberately NOT recorded — the fact of the
 // invocation is the whole signal, and prompts may carry private content.
@@ -83,6 +98,9 @@ module.exports = {
   OFF_EMERGENCY_PROVENANCE_UNATTRIBUTED,
   EMERGENCY_PROVENANCE_MAX_AGE_MS,
   EMERGENCY_PROVENANCE_FUTURE_TOLERANCE_MS,
+  OFF_SKILL_INVOCATION_WRAPPED_RE,
+  OFF_SKILL_INVOCATION_BARE_RE,
+  promptInvokesOffSkill,
   buildProvenanceMarker,
   verifyProvenanceMarker,
 };
