@@ -157,7 +157,7 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 
 - **Full name**: Rust Token Killer (RTK)
 - **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage.
-- **Related**: [docs/architecture/rtk.md](architecture/rtk.md)
+- **Related**: [docs/architecture/rtk.md](architecture/rtk.md), [bin/rtk-cmd](../bin/rtk-cmd) (opt-in wrapper: `exec rtk <cmd>` when RTK=on and the binary is available, else passthrough)
 
 ## Miscellaneous
 
