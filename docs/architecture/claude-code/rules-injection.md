@@ -99,7 +99,7 @@ The rest of the fork population was inventoried and is out of scope. The other 1
 single CLI calls. None assembles free-form Bash, so none can reproduce RT-2's shape.
 
 The two axes must not be conflated. The invariant "general-purpose dispatch sites are exactly
-two", pinned by `tests/feature-2124-tool-selection-priority/injection-policy.sh` U8a, counts
+two", pinned by `tests/bin/feature-2124-tool-selection-priority/injection-policy.sh` U8a, counts
 `mode: "default"` sites. `context: fork` is a different axis, contributes nothing to that count,
 and leaves it unchanged.
 
@@ -163,7 +163,7 @@ on the same path — it is never executed either.
 
 ## Adopted scope
 
-The real-loader gate `tests/TL3-rules-injection-off-switch.sh` returned **G-PASS**: the
+The real-loader gate `tests/hooks/TL3-rules-injection-off-switch.sh` returned **G-PASS**: the
 reserved token genuinely suppresses auto-injection in a live session, with no `S-LEAK`
 and no missing receipt. That result is what authorized moving rules off the unconditional
 set rather than merely documenting the notation.
@@ -326,16 +326,16 @@ only — the receipt is still written.
 
 | Area | Entry point |
 |---|---|
-| Static checker + policy SSOT | `tests/bin-check-on-demand-rules.sh` |
-| Pre-commit wiring | `tests/cc-pre-commit-on-demand-rules.sh` |
-| Audit hook verdicts | `tests/cc-instructions-loaded-audit.sh` |
-| Quiescence protocol | `tests/cc-instructions-loaded-quiescence.sh` |
-| Receipt cleanup | `tests/cc-instructions-loaded-cleanup.sh` |
-| Hook registration | `tests/cc-instructions-loaded-registration.sh` |
-| Supervisor emit | `tests/cc-supervisor-emit-rules-injection.sh` |
-| Skill ownership of on-demand rules | `tests/cc-on-demand-skill-ownership.sh` |
-| Reader-row violation tokens (TL2) | `tests/bin-check-on-demand-rules/cases-readers.sh` |
-| `MINIMIZED_*` violation tokens (TL2) | `tests/bin-check-on-demand-rules/cases-minimized.sh` |
-| Escape-hatch class: disjointness, triggers, relocation round-trip (TL2) | `tests/feature-2037-minimized-escape-hatches.sh` (+ `feature-2037-minimized-escape-hatches/marker-sequence.sh`) |
-| Relocated procedures executed as documents (TL2) | `tests/feature-2037-admin-close-skill.sh` (+ `feature-2037-admin-close-skill/guard-sequence.sh`, `supervisor-report-cli.sh`) |
-| Real-loader off-switch (TL3) | `tests/TL3-rules-injection-off-switch.sh` |
+| Static checker + policy SSOT | `tests/bin/bin-check-on-demand-rules.sh` |
+| Pre-commit wiring | `tests/hooks/cc-pre-commit-on-demand-rules.sh` |
+| Audit hook verdicts | `tests/hooks/cc-instructions-loaded-audit.sh` |
+| Quiescence protocol | `tests/hooks/cc-instructions-loaded-quiescence.sh` |
+| Receipt cleanup | `tests/hooks/cc-instructions-loaded-cleanup.sh` |
+| Hook registration | `tests/install/cc-instructions-loaded-registration.sh` |
+| Supervisor emit | `tests/hooks/cc-supervisor-emit-rules-injection.sh` |
+| Skill ownership of on-demand rules | `tests/hooks/cc-on-demand-skill-ownership.sh` |
+| Reader-row violation tokens (TL2) | `tests/bin/bin-check-on-demand-rules/cases-readers.sh` |
+| `MINIMIZED_*` violation tokens (TL2) | `tests/bin/bin-check-on-demand-rules/cases-minimized.sh` |
+| Escape-hatch class: disjointness, triggers, relocation round-trip (TL2) | `tests/hooks/feature-2037-minimized-escape-hatches.sh` (+ `feature-2037-minimized-escape-hatches/marker-sequence.sh`) |
+| Relocated procedures executed as documents (TL2) | `tests/skills/feature-2037-admin-close-skill.sh` (+ `feature-2037-admin-close-skill/guard-sequence.sh`, `supervisor-report-cli.sh`) |
+| Real-loader off-switch (TL3) | `tests/hooks/TL3-rules-injection-off-switch.sh` |

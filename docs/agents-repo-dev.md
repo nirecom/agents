@@ -32,7 +32,7 @@ forcing exit right after an asynchronous write can drop the diagnostic itself
 error gives the diagnostic up — the contract is that exit code 70 always survives.
 
 **What breaks when this is violated**: `node --check bin/<name>` (syntax
-reservation) and `tests/fix-1532-node-guard-*.sh` (envelope shape, the diagnostic,
+reservation) and `tests/bin/fix-1532-node-guard-*.sh` (envelope shape, the diagnostic,
 and byte-level invariance of the bash side).
 
 **When editing**: changing the head or tail means updating all five at once with
@@ -44,7 +44,7 @@ place the mechanism is explained, so it must not be restated in the five scripts
 Extending the
 set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
-`tests/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
+`tests/bin/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
 
 ## Consolidated test suites: one dispatcher, sourced fragments
 
@@ -54,15 +54,17 @@ fixture builders, payload assembly, decision helpers. Thirteen files targeted
 `hooks/enforce-worktree.js` that way. The duplication costs tokens on every read
 and makes a harness fix a thirteen-place edit.
 
-The shape that replaces it: a dispatcher `tests/<name>.sh` owns the harness and
-sources fragments from `tests/<name>/`. `tests/main-enforce-worktree-guard.sh`
+The shape that replaces it: a dispatcher `tests/<cat>/<name>.sh` owns the harness and
+sources fragments from `tests/<cat>/<name>/`. `tests/hooks/main-enforce-worktree-guard.sh`
 is the reference implementation.
 
 **Fragments are deliberately not runnable on their own.** `tests/run-all.sh`
-globs `tests/*.sh`, and `*` does not cross `/`, so a fragment is invisible to the
-runner while the dispatcher is not. That is the mechanism that keeps each case
-counted exactly once. A fragment has no harness of its own and fails immediately
-if invoked directly.
+enumerates `tests/<cat>/*.sh` for the six canonical categories (hooks, bin,
+skills, agents, install, tests), and `*` does not cross `/`, so a fragment
+nested under `tests/<cat>/<name>/` is invisible to the runner while the
+dispatcher at `tests/<cat>/<name>.sh` is not. That is the mechanism that keeps
+each case counted exactly once. A fragment has no harness of its own and fails
+immediately if invoked directly.
 
 **Fragment-local helpers and variables carry a short prefix** (`hb_`, `wl_`,
 `br_`, …). Every fragment is sourced into the same shell, so an unprefixed name
