@@ -17,11 +17,12 @@ const FORGE_DESCRIPTORS = {
 // Codehost descriptor for a git remote URL, as a FLAT object: callers reach
 // .isPrivateRepo / .hasOpenPrForBranch directly. An unknown host routes to the
 // no-op stub — never the gitlab entry, to avoid misrepresenting the codehost type.
-// A self-hosted GitLab host (FORGE_GITLAB_HOST in .env) is honored via
-// resolveForgeTarget; there is no silent github fallback.
+// GITLAB_HOSTNAME (and optionally GITLAB_SSH_HOSTNAME) identify a self-hosted GitLab
+// host via resolveForgeTarget; there is no silent github fallback.
 function resolveCodehostDescriptor(remoteUrl, projectRoot) {
   const gitlabHost = readGitlabHostConfig(projectRoot);
-  const { type } = resolveForgeTarget(remoteUrl, { gitlabHost });
+  const gitlabSshHost = readGitlabSshHostConfig(projectRoot);
+  const { type } = resolveForgeTarget(remoteUrl, { gitlabHost, gitlabSshHost });
   const desc = FORGE_DESCRIPTORS[type];
   const codehost = (desc && desc.codehost) || codehostStub;
   const resolvedType = desc ? desc.type : "unknown";
@@ -53,17 +54,29 @@ function readTrackerConfig(projectRoot) {
   return val || null;
 }
 
-// The configured FORGE_GITLAB_HOST value (trimmed, lowercased) or null when
-// unset. .env file takes precedence; process.env is the fallback for tests and
+// GITLAB_HOSTNAME value (trimmed, lowercased) or null when unset.
+// .env file takes precedence; process.env is the fallback for tests and
 // container overrides where no .env file is present.
 function readGitlabHostConfig(projectRoot) {
   const env = require("./load-env").readEffectiveEnvFile(projectRoot);
-  const fileVal = (env && typeof env.FORGE_GITLAB_HOST === "string")
-    ? env.FORGE_GITLAB_HOST.trim().toLowerCase() : null;
+  const fileVal = (env && typeof env.GITLAB_HOSTNAME === "string")
+    ? env.GITLAB_HOSTNAME.trim().toLowerCase() : null;
   if (fileVal) return fileVal;
-  const envVal = typeof process.env.FORGE_GITLAB_HOST === "string"
-    ? process.env.FORGE_GITLAB_HOST.trim().toLowerCase() : null;
+  const envVal = typeof process.env.GITLAB_HOSTNAME === "string"
+    ? process.env.GITLAB_HOSTNAME.trim().toLowerCase() : null;
   return envVal || null;
 }
 
-module.exports = { resolveCodehostDescriptor, resolveTrackerDescriptor, readTrackerConfig, readGitlabHostConfig, detectForgeType, FORGE_DESCRIPTORS };
+// GITLAB_SSH_HOSTNAME value (trimmed, lowercased) or null when unset.
+// Used as a secondary GitLab forge host for SSH remotes that differ from GITLAB_HOSTNAME.
+function readGitlabSshHostConfig(projectRoot) {
+  const env = require("./load-env").readEffectiveEnvFile(projectRoot);
+  const fileVal = (env && typeof env.GITLAB_SSH_HOSTNAME === "string")
+    ? env.GITLAB_SSH_HOSTNAME.trim().toLowerCase() : null;
+  if (fileVal) return fileVal;
+  const envVal = typeof process.env.GITLAB_SSH_HOSTNAME === "string"
+    ? process.env.GITLAB_SSH_HOSTNAME.trim().toLowerCase() : null;
+  return envVal || null;
+}
+
+module.exports = { resolveCodehostDescriptor, resolveTrackerDescriptor, readTrackerConfig, readGitlabHostConfig, readGitlabSshHostConfig, detectForgeType, FORGE_DESCRIPTORS };
