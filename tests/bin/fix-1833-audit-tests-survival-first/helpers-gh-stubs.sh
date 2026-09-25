@@ -3,15 +3,10 @@
 # Tags: TL2, audit-tests, retire, helper, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh (before any group)
 #
-# Four flavours of a fake GitHub CLI, one per way metadata can be obtained or
-# lost. They are kept together because the differences between them ARE the
-# contract under test (see group B and group M), and a reader comparing two of
-# them should not have to open two files.
-
-# ── gh stubs ────────────────────────────────────────────────────────────────
-# The stub answers `gh repo view` with a fixed slug and
-# `gh api repos/<slug>/issues/<N>` from the $MOCK_ISSUES env var, one
-# "<num> <state> <closed_at>" record per line. Unknown numbers exit 1 (404).
+# Four fake `gh` flavours (one per way metadata is obtained or lost) — the
+# differences between them ARE the contract (see groups B and M). The stub
+# answers `gh repo view` with a fixed slug and `gh api repos/<slug>/issues/<N>`
+# from $MOCK_ISSUES ("<num> <state> <closed_at>" per line); unknown → exit 1 (404).
 
 install_gh_mock() {
     local bindir="$1"

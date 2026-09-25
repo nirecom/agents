@@ -59,9 +59,9 @@ TABLE
 # H1z — the rejected runs are the ones most likely to half-execute. Nothing may
 # have been deleted or staged by any of them.
 assert_eq "H1z rejected argv deleted nothing (common fixture)" \
-    "kept" "$(fs_of "$H1_REPO" "tests/cc-orphan-h1.sh")"
+    "kept" "$(fs_of "$H1_REPO" "tests/bin/cc-orphan-h1.sh")"
 assert_eq "H1y rejected argv deleted nothing (issue-specific fixture)" \
-    "kept" "$(fs_of "$H1_REPO" "tests/feature-901-orphan-h1.sh")"
+    "kept" "$(fs_of "$H1_REPO" "tests/bin/feature-901-orphan-h1.sh")"
 assert_eq "H1x rejected argv staged nothing" "" "$(git -C "$H1_REPO" status --porcelain)"
 
 # H1w — the symmetric positive: --stale-months IS a valid flag on both scripts
@@ -212,8 +212,8 @@ h_rmfail_contract() {
     fi
 }
 
-h_rmfail_contract "H4 audit-tests"        "$AUDIT"        "tests/feature-931-rmfail.sh"
-h_rmfail_contract "H4 audit-tests-common" "$AUDIT_COMMON" "tests/cc-rmfail.sh"
+h_rmfail_contract "H4 audit-tests"        "$AUDIT"        "tests/bin/feature-931-rmfail.sh"
+h_rmfail_contract "H4 audit-tests-common" "$AUDIT_COMMON" "tests/bin/cc-rmfail.sh"
 
 # H4g — the blast radius of a failed deletion is zero: no OTHER path may have
 # been staged or removed while the failing one was being retried.

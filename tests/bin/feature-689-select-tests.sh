@@ -50,13 +50,13 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # given file paths. Echoes the repo path.
 make_repo() {
     local repo="$1"; shift
-    mkdir -p "$repo/tests/_archive" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
+    mkdir -p "$repo/tests/_archive" "$repo/tests/bin" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
     git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
     # Seed: create empty test files so stem-matching has targets.
-    : > "$repo/tests/run-tests.sh"
-    : > "$repo/tests/feature-689-select-tests.sh"
+    : > "$repo/tests/bin/run-tests.sh"
+    : > "$repo/tests/bin/feature-689-select-tests.sh"
     : > "$repo/tests/run-tests-archived.sh"
     mv "$repo/tests/run-tests-archived.sh" "$repo/tests/_archive/run-tests-archived.sh"
     git -C "$repo" add -A
@@ -93,8 +93,8 @@ test_C2_self_select() {
     make_repo "$repo" "bin/select-tests.sh"
     local out
     out="$(cd "$repo" && run_with_timeout 120 bash "$SELECT_SH" base HEAD 2>/dev/null)"
-    if echo "$out" | grep -q "tests/feature-689-select-tests.sh"; then
-        pass "C2_self_select: bin/select-tests.sh change selects tests/feature-689-select-tests.sh"
+    if echo "$out" | grep -q "tests/bin/feature-689-select-tests.sh"; then
+        pass "C2_self_select: bin/select-tests.sh change selects tests/bin/feature-689-select-tests.sh"
     else
         fail "C2_self_select: expected tests/feature-689-select-tests.sh in output
 --- output ---

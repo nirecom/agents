@@ -2,39 +2,14 @@
 # Tests: bin/select-tests.sh, bin/resolve-merge-base.sh
 # Tags: test-selection, merge-base, zero-commit, integration, wiring, trust-state, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S20 — #1779 end to end, with NOTHING stubbed.
-#
-# Every other row in this suite replaces bin/resolve-merge-base.sh with a stub, and every row in
-# tests/feature-1638-resolve-merge-base.sh exercises the resolver with no selector attached. Both
-# suites can therefore be fully green while the two scripts disagree about the very field this
-# issue turns on: the resolver could emit `zero_commit=`, or `base_is_head=1`, or put it behind
-# `--explain` only, and the selector's stub would still say `base_is_head=true` to itself forever.
-# A stub is a copy of a contract, and a copy cannot detect that the original changed.
-#
-# So this row runs the REAL selector against the REAL resolver in a real repository, and asserts
-# only the OBSERVABLE outcome — a test file is selected for work that exists. What passes between
-# the two scripts is deliberately not asserted: naming the field here would make this a third
-# copy of the contract. If the field is renamed on both sides tomorrow, this row keeps passing,
-# which is correct; if it is renamed on one side, this row is the only thing that fails.
-#
-# RED before the fix, and for the reason the issue describes: the resolver reports RESOLVED with
-# base == HEAD, `<base>...HEAD` is empty by construction, and the selector prints nothing.
-#
-# TL3 gap (what this row does NOT catch):
-# - a real remote: the fixture has none, so the resolver's `git fetch origin main` is a no-op and
-#   the origin/main candidate is never the one that answers.
-# - a recorded session baseline (layer 1): CLAUDE_WORKFLOW_DIR is redirected to an empty
-#   directory, so only layer 2 is exercised here.
-# - Tier 2. RNT-3 is prose executed by a model; no bash row can run it. Its half of the same
-#   contract is pinned statically in tests/fix-1689-run-tests-contract.sh (S10-S10j).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-# ============================================================================
+# S20 — #1779 end to end, NOTHING stubbed. Every other row stubs resolve-merge-base.sh, and
+# feature-1638 tests the resolver with no selector — so both suites can stay green while the two
+# scripts disagree on the field this issue turns on (a stub is a copy of a contract; it can't detect
+# the original changed). This runs the REAL selector against the REAL resolver and asserts only the
+# observable outcome, never the field name (a 3rd copy). RED before the fix: RESOLVED, base == HEAD, empty range. TL3 gap (no remote / layer-1 baseline / Tier 2 prose) checked at USER_VERIFIED preflight via bin/check-verification-gate.sh.
 
-# A real zero-commit repository, built without the stub tree: `main` carries the base commit,
-# `work` is cut from it and commits nothing. The resolver finds `main` on its own, which is what
-# makes base == HEAD an outcome of the real chain rather than something a fixture asserted.
+# make_real_zero_commit_repo: a real zero-commit repo built without the stub tree — `main` holds
+# the base commit, `work` is cut from it and commits nothing, so base == HEAD comes from the real chain.
 make_real_zero_commit_repo() { # <repo>
     local repo="$1"
     mkdir -p "$repo/bin"
@@ -107,32 +82,15 @@ $err"
     fi
 }
 
-# ============================================================================
-# S28 — the same stub-free wiring, in the OTHER trustworthy state.
-#
-# S20 above lands on RESOLVED: no baseline exists, so the resolver walks the chain and finds
-# `main`. S25 (zero-commit-trust-and-faults.sh) covers RECORDED, but through a STUB that is told
-# to say `state=RECORDED` and `base_is_head=true` in the same breath — it can never disagree with
-# itself, so it proves only that the selector's RECORDED arm exists. What neither row shows is
-# that the REAL resolver, on the layer-1 path, still reports the zero-commit observation at all:
-# layer 1 returns early, before the layer-2 block where every other value is computed, and a fix
-# wired into that block would leave RECORDED reporting nothing while both suites stay green.
-#
-# The state arrives here the way it arrives in production, not by assertion: RNT-1 tells the user
-# who hits exit 4 to confirm a base and record it with bin/workflow/record-merge-base-baseline,
-# then re-run. On a branch with no commits the only base there is to confirm IS HEAD — so the
-# recorded fact and the degenerate range are the same commit, and the user who just recovered
-# from one merge-base problem is put straight back into #1779 if RECORDED is not covered. That
-# is the sequence this row replays, through the real CLI, the real resolver and the real selector.
-#
-# Both halves of the working-tree union are present (a staged tracked edit and a file that was
-# never added), so a RECORDED path that reaches only one of them fails here rather than passing
-# on the half it kept.
-#
-# RED before the fix, for S20's reason: base == HEAD makes `<base>...HEAD` empty by construction.
-#
-# TL3 gap: as S20 — no remote, and Tier 2 is prose no bash row can execute.
-# ============================================================================
+# S28 — the same stub-free wiring in the OTHER trustworthy state (RECORDED). S20 lands on RESOLVED
+# (no baseline, resolver walks the chain to `main`); S25 covers RECORDED but through a stub told to
+# say both state and base_is_head, so it can't disagree with itself. What neither shows: the REAL
+# resolver's layer-1 (recorded-baseline) path returns early, before the layer-2 block where the
+# zero-commit observation is computed — a fix wired only into layer 2 leaves RECORDED silent while
+# both suites stay green. The state arrives as in production (RNT-1 → record-merge-base-baseline →
+# re-run); on a zero-commit branch the only base to confirm IS HEAD, so a user recovering from exit
+# 4 is put straight back into #1779 if RECORDED is uncovered. Both union halves (staged tracked +
+# untracked) are present. RED before the fix (base == HEAD, empty range); TL3 gap as S20.
 
 test_S28_real_resolver_recorded_state_end_to_end() {
     local repo="$TMPDIR_BASE/s28"

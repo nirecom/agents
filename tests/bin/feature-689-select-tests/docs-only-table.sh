@@ -1,28 +1,11 @@
 # Part of tests/feature-689-select-tests.sh (sourced, not standalone).
 # Tests: bin/is-docs-only
 # Tags: docs-only, allowlist, table-driven, ssot, scope:issue-specific, pwsh-not-required, TL2
-#
-# D — bin/is-docs-only, on its own.
-#
-# The allowlist has ONE owner (DOCS_ONLY_ALLOWLIST in hooks/workflow-gate/staged-evidence.js).
-# This helper exposes it to shell callers instead of letting each one re-type the pattern, so
-# what is under test is a CLASSIFIER: for every input class it must land on exactly one of
-# three answers. That is what makes the table the right shape here (see
-# skills/_shared/test-design/parser-regex-tests.md) — the rows are inputs to one subject, and
-# a new allowlist entry is one new line rather than one new copied `if` block.
-#
-# THE EXIT CODES ARE THREE DIFFERENT FACTS, and collapsing any two is a defect:
-#   0  every path is human-facing docs               → the caller may skip behaviour tests
-#   1  at least one path is not                     → the caller must not skip
-#   2  there was no input at all                    → the caller has nothing to conclude
-#   3  the classifier could not run (no node, or the allowlist module is unreachable)
-#      → also "nothing to conclude", but for a reason the caller must resolve toward RUNNING
-#        (S12 pins the caller half). If 3 collapsed into 1 the difference between "not docs"
-#        and "cannot tell" would vanish; if it collapsed into 0, a broken install would skip
-#        every test in the suite and report green.
-#
-# WHY THE INTERESTING ROWS ARE THE MARKDOWN ONES: CLAUDE.md and SKILL.md are markdown that is
-# NOT docs. A naive `*.md` implementation gets both wrong and passes every other row.
+# D — bin/is-docs-only alone: a CLASSIFIER over the allowlist (SSOT: DOCS_ONLY_ALLOWLIST
+# in hooks/workflow-gate/staged-evidence.js; this helper exposes it so callers don't re-type
+# it). The four exit codes are four distinct facts, collapsing any two is a defect: 0 all-docs,
+# 1 some non-docs, 2 no input, 3 cannot run (→ resolve toward RUNNING; S12 pins the caller).
+# The rows that matter: CLAUDE.md/SKILL.md are .md but NOT docs — a naive `*.md` gets them wrong.
 
 # Encoded input: `;` separates paths, `@CR@` is a literal CR, `@EMPTY@` is no input at all.
 # Encoding is needed because the table is line-oriented and the inputs are multi-line.

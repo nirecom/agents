@@ -35,17 +35,17 @@ commit_repo "$DC_REPO" "common output-contract fixture"
 # ── D1 (case 23): text-mode diagnostics, both scripts, same tokens ──────────
 run_in_repo "$D_REPO" "$D_STUB" "$AUDIT" --dry-run --format text
 D1_OUT="$OUT"
-if echo "$D1_OUT" | grep -q "^MALFORMED_HEADER: tests/feature-402-malformed.sh$"; then
+if echo "$D1_OUT" | grep -q "^MALFORMED_HEADER: tests/bin/feature-402-malformed.sh$"; then
     pass "D1a audit-tests text mode emits MALFORMED_HEADER: <file>"
 else
-    fail "D1a expected 'MALFORMED_HEADER: tests/feature-402-malformed.sh' (out=<<$D1_OUT>>)"
+    fail "D1a expected 'MALFORMED_HEADER: tests/bin/feature-402-malformed.sh' (out=<<$D1_OUT>>)"
 fi
-if echo "$D1_OUT" | grep -q "^NO_TESTS_HEADER: tests/feature-403-noheader.sh$"; then
+if echo "$D1_OUT" | grep -q "^NO_TESTS_HEADER: tests/bin/feature-403-noheader.sh$"; then
     pass "D1b audit-tests text mode emits NO_TESTS_HEADER: <file>"
 else
-    fail "D1b expected 'NO_TESTS_HEADER: tests/feature-403-noheader.sh' (out=<<$D1_OUT>>)"
+    fail "D1b expected 'NO_TESTS_HEADER: tests/bin/feature-403-noheader.sh' (out=<<$D1_OUT>>)"
 fi
-if echo "$D1_OUT" | grep -qE "^(MALFORMED_HEADER|NO_TESTS_HEADER): tests/feature-404-alive.sh$"; then
+if echo "$D1_OUT" | grep -qE "^(MALFORMED_HEADER|NO_TESTS_HEADER): tests/bin/feature-404-alive.sh$"; then
     fail "D1c a well-formed live-target file must produce no diagnostic (out=<<$D1_OUT>>)"
 else
     pass "D1c a well-formed live-target file produces no diagnostic"
@@ -53,8 +53,8 @@ fi
 
 run_in_repo "$DC_REPO" "-" "$AUDIT_COMMON" --dry-run --offline --format text
 D1C_OUT="$OUT"
-if echo "$D1C_OUT" | grep -q "^MALFORMED_HEADER: tests/cc-malformed.sh$" \
-   && echo "$D1C_OUT" | grep -q "^NO_TESTS_HEADER: tests/cc-noheader.sh$"; then
+if echo "$D1C_OUT" | grep -q "^MALFORMED_HEADER: tests/bin/cc-malformed.sh$" \
+   && echo "$D1C_OUT" | grep -q "^NO_TESTS_HEADER: tests/bin/cc-noheader.sh$"; then
     pass "D1d audit-tests-common uses the identical diagnostic tokens (CPR-ORTH)"
 else
     fail "D1d audit-tests-common must emit the same MALFORMED_HEADER/NO_TESTS_HEADER tokens (out=<<$D1C_OUT>>)"
@@ -74,15 +74,15 @@ else
     fail "D2b audit-tests JSON has no diagnostics array (out=<<$D2_JSON>>)"
 fi
 D2_KINDS="$(json_query "$D2_JSON" '(d.diagnostics||[]).map(x=>x.file+"="+x.kind).sort().join(",")')"
-if [[ "$D2_KINDS" == *"tests/feature-402-malformed.sh=malformed_header"* ]]; then
+if [[ "$D2_KINDS" == *"tests/bin/feature-402-malformed.sh=malformed_header"* ]]; then
     pass "D2c diagnostics entry kind=malformed_header is keyed by file"
 else
-    fail "D2c expected {file:tests/feature-402-malformed.sh, kind:malformed_header} (got=<<$D2_KINDS>>)"
+    fail "D2c expected {file:tests/bin/feature-402-malformed.sh, kind:malformed_header} (got=<<$D2_KINDS>>)"
 fi
-if [[ "$D2_KINDS" == *"tests/feature-403-noheader.sh=no_tests_header"* ]]; then
+if [[ "$D2_KINDS" == *"tests/bin/feature-403-noheader.sh=no_tests_header"* ]]; then
     pass "D2d diagnostics entry kind=no_tests_header is keyed by file"
 else
-    fail "D2d expected {file:tests/feature-403-noheader.sh, kind:no_tests_header} (got=<<$D2_KINDS>>)"
+    fail "D2d expected {file:tests/bin/feature-403-noheader.sh, kind:no_tests_header} (got=<<$D2_KINDS>>)"
 fi
 
 # ── D3 (case 25): the common script mirrors the same JSON diagnostics shape ─
@@ -94,8 +94,8 @@ else
     fail "D3a audit-tests-common --format json output does not parse (out=<<$D3_JSON>>)"
 fi
 D3_KINDS="$(json_query "$D3_JSON" '(d.diagnostics||[]).map(x=>x.file+"="+x.kind).sort().join(",")')"
-if [[ "$D3_KINDS" == *"tests/cc-malformed.sh=malformed_header"* \
-   && "$D3_KINDS" == *"tests/cc-noheader.sh=no_tests_header"* ]]; then
+if [[ "$D3_KINDS" == *"tests/bin/cc-malformed.sh=malformed_header"* \
+   && "$D3_KINDS" == *"tests/bin/cc-noheader.sh=no_tests_header"* ]]; then
     pass "D3b audit-tests-common JSON diagnostics use the identical kind vocabulary"
 else
     fail "D3b audit-tests-common JSON diagnostics mismatch (got=<<$D3_KINDS>>)"
@@ -121,7 +121,7 @@ else
     fail "D5a audit-tests JSON lost a legacy top-level key (out=<<$D2_JSON>>)"
 fi
 D5_ITEM="$(json_query "$D2_JSON" \
-    '(function(){var c=(d.candidates||[]).find(x=>x.dispatcher==="tests/feature-401-gone.sh");
+    '(function(){var c=(d.candidates||[]).find(x=>x.dispatcher==="tests/bin/feature-401-gone.sh");
       if(!c) return "missing";
       return ["dispatcher","issue","state","closed_at","last_commit","dispatcher_date","sibling_date","sibling","sibling_file_count"].filter(k=>!(k in c)).join("|")||"ok";})()')"
 if [[ "$D5_ITEM" == "ok" ]]; then
@@ -133,7 +133,7 @@ fi
 # ── D6 (case 28): common JSON keeps file/tests_paths/missing_paths semantics ─
 D6_SHAPE="$(json_query "$D3_JSON" \
     '(function(){var items=Array.isArray(d)?d:(d.orphans||d.items||[]);
-      var o=items.find(x=>x.file==="tests/cc-gone.sh");
+      var o=items.find(x=>x.file==="tests/bin/cc-gone.sh");
       if(!o) return "missing";
       if(!Array.isArray(o.tests_paths)||!Array.isArray(o.missing_paths)) return "not-arrays";
       if(!o.missing_paths.every(p=>o.tests_paths.indexOf(p)>=0)) return "not-subset";
@@ -146,7 +146,7 @@ else
 fi
 D6_ALIVE="$(json_query "$D3_JSON" \
     '(function(){var items=Array.isArray(d)?d:(d.orphans||d.items||[]);
-      return items.some(x=>x.file==="tests/cc-alive.sh")?"leaked":"ok";})()')"
+      return items.some(x=>x.file==="tests/bin/cc-alive.sh")?"leaked":"ok";})()')"
 if [[ "$D6_ALIVE" == "ok" ]]; then
     pass "D6b a live-target file never appears in the common JSON orphan list"
 else
@@ -155,7 +155,7 @@ fi
 
 # ── D7 (case 29): the delete-gate verdict is machine-readable, not text-only ─
 D7_GATE="$(json_query "$D2_JSON" \
-    '(function(){var c=(d.candidates||[]).find(x=>x.dispatcher==="tests/feature-401-gone.sh");
+    '(function(){var c=(d.candidates||[]).find(x=>x.dispatcher==="tests/bin/feature-401-gone.sh");
       if(!c) return "missing";
       if(!("delete_gate" in c)) return "no-key";
       return c.delete_gate;})()')"

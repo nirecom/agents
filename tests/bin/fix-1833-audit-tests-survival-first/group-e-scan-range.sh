@@ -38,11 +38,11 @@ run_in_repo "$E_REPO" "-" "$AUDIT_COMMON" --dry-run --offline --format text
 E_COMMON_OUT="$OUT"
 E_COMMON_SET="$(scanned_set "$E_COMMON_OUT")"
 
-E_EXPECTED="tests/cc-plain-common.sh
-tests/feature-501-issue-scope.sh
-tests/feature-502-issue-scope.sh
-tests/feature-test-cleanup-944.sh
-tests/fix-503-common-scope.sh"
+E_EXPECTED="tests/bin/cc-plain-common.sh
+tests/bin/feature-501-issue-scope.sh
+tests/bin/feature-502-issue-scope.sh
+tests/bin/feature-test-cleanup-944.sh
+tests/bin/fix-503-common-scope.sh"
 
 # E1 (case 30) — union covers every top-level test file: no gap.
 E_UNION="$(printf '%s\n%s\n' "$E_ISSUE_SET" "$E_COMMON_SET" | grep -v '^$' | sort -u)"
@@ -62,13 +62,13 @@ else
 fi
 
 # E1c — the scope split itself: `feature-<digits>-` is issue-specific, all else common.
-if [[ "$E_ISSUE_SET" == "tests/feature-501-issue-scope.sh
-tests/feature-502-issue-scope.sh" ]]; then
+if [[ "$E_ISSUE_SET" == "tests/bin/feature-501-issue-scope.sh
+tests/bin/feature-502-issue-scope.sh" ]]; then
     pass "E1c audit-tests owns exactly the feature-<digits>- files"
 else
     fail "E1c audit-tests scope set wrong (got=<<$E_ISSUE_SET>>)"
 fi
-if echo "$E_COMMON_SET" | grep -q "^tests/feature-test-cleanup-944.sh$"; then
+if echo "$E_COMMON_SET" | grep -q "^tests/bin/feature-test-cleanup-944.sh$"; then
     pass "E1d a non-numeric feature-* name belongs to the common scope"
 else
     fail "E1d tests/feature-test-cleanup-944.sh must be scanned by audit-tests-common (got=<<$E_COMMON_SET>>)"
@@ -127,20 +127,20 @@ add_test_file "$E4_REPO" "cc-live.sh" "bin/alive.sh"
 commit_repo "$E4_REPO" "write-mode fixture"
 
 run_in_repo "$E4_REPO" "-" "$AUDIT_COMMON" --dry-run --offline --format text
-if [[ -e "$E4_REPO/tests/cc-dead.sh" ]]; then
+if [[ -e "$E4_REPO/tests/bin/cc-dead.sh" ]]; then
     pass "E4a --dry-run reports an orphan without deleting it"
 else
-    fail "E4a --dry-run deleted tests/cc-dead.sh (out=<<$OUT>>)"
+    fail "E4a --dry-run deleted tests/bin/cc-dead.sh (out=<<$OUT>>)"
 fi
 
 run_in_repo "$E4_REPO" "-" "$AUDIT_COMMON" --offline --format text
 E4_OUT="$OUT"
-if [[ ! -e "$E4_REPO/tests/cc-dead.sh" ]] && echo "$E4_OUT" | grep -q "^DELETED: tests/cc-dead.sh$"; then
+if [[ ! -e "$E4_REPO/tests/bin/cc-dead.sh" ]] && echo "$E4_OUT" | grep -q "^DELETED: tests/bin/cc-dead.sh$"; then
     pass "E4b flagless (apply-by-default) run deletes the orphan and reports DELETED:"
 else
-    fail "E4b expected flagless run to delete tests/cc-dead.sh with a DELETED: line (rc=$RC out=<<$E4_OUT>> err=<<$ERR>>)"
+    fail "E4b expected flagless run to delete tests/bin/cc-dead.sh with a DELETED: line (rc=$RC out=<<$E4_OUT>> err=<<$ERR>>)"
 fi
-if [[ -e "$E4_REPO/tests/cc-live.sh" ]]; then
+if [[ -e "$E4_REPO/tests/bin/cc-live.sh" ]]; then
     pass "E4c the live-target file survives the flagless run"
 else
     fail "E4c flagless run deleted a live-target file"
@@ -178,10 +178,10 @@ $E5_COMMON_OUT"
 # E5a/E5b — the space-bearing common-scope file is scanned, reported, and
 # actually removed (no issue reference, so the delete gate opens).
 assert_gate_row "E5a space in filename: common scope is reported and deleted intact" \
-    "$E5_COMMON_OUT" "$E5_REPO" "tests/cc common with space.sh" orphan deleted gone
+    "$E5_COMMON_OUT" "$E5_REPO" "tests/bin/cc common with space.sh" orphan deleted gone
 # E5c — its issue-specific sibling is scanned too; --offline holds the delete.
 assert_gate_row "E5c space in filename: issue-specific scope is reported, delete held" \
-    "$E5_ISSUE_OUT" "$E5_REPO" "tests/feature-521-with space.sh" \
+    "$E5_ISSUE_OUT" "$E5_REPO" "tests/bin/feature-521-with space.sh" \
     candidate metadata-unavailable kept
 
 # E5d/E5e — the extensionless test-shaped file is still outside both scan ranges.

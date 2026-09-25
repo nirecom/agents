@@ -2,50 +2,23 @@
 # Tests: bin/select-tests.sh, bin/resolve-merge-base.sh
 # Tags: test-selection, merge-base, zero-commit, degradation, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S14-S19 — #1779: the branch that has not committed yet.
-#
-# `git switch -c work` and then work. Until the first commit lands, `git merge-base main HEAD`
-# answers with HEAD itself — a CORRECT base, resolved by the ordinary path, reported as
-# RESOLVED. `<base>...HEAD` is then empty by construction, so the selector selects nothing and
-# exits 0, and run-tests reports "0 tests" over a working tree full of staged work. Nothing in
-# the chain is in an error state; that is precisely why it went unnoticed.
-#
-# This is NOT S11. There an empty range between two real commits means nothing changed, and an
-# empty selection is the right answer. Here the range is empty because there is no range, and
-# the right answer is the working tree. S11 now asserts base != HEAD so the two fixtures cannot
-# drift into each other.
-#
-# The fallback has to read BOTH halves of the working tree: `git diff HEAD` covers tracked
-# files (staged and unstaged alike) and is blind to untracked ones, so a brand-new file — the
-# most likely thing on a branch this young — would be dropped by the tracked half alone.
-# S14b/S15 are what keep the two halves from collapsing into one.
-#
-# RUN_TL3 is pinned explicitly on every row. Left unset it is read from the developer's real
-# config, and a host with RUN_TL3=on would append the whole TL3 tier, making "non-empty
-# selection" true for a reason none of these rows are about.
-# ============================================================================
+# S14-S19 (#1779): before the first commit `git merge-base main HEAD` returns HEAD — a correct
+# RESOLVED base — so `<base>...HEAD` is empty and the selector picks nothing over a working tree
+# full of staged work, with no error state (why it went unnoticed). NOT S11 (empty range between
+# two real commits vs no range at all; S11 pins base != HEAD). The fallback must read BOTH halves — `git diff HEAD` is blind to untracked new files (S14b/S15 keep them distinct).
 
-# A repository whose current branch has ZERO commits of its own: one base commit, `base` pinned
-# to it, and everything after that left in the working tree. base == HEAD by construction.
-#
-# A file argument prefixed `+` is NEW (absent from the base commit); an unprefixed one is
-# tracked by the base commit and then modified. That split is what lets one fixture express
-# "tracked change", "new file", and S14b's "both at once" without three near-copies.
-#
-# <mode> controls staging only:
-#   staged     `git add -A` after the edits — issue #1779's reported scenario
-#   unstaged   edits left in the worktree, never added
-#   untracked  no add either; asserts every file was given as new
+# make_zero_commit_repo: a branch with ZERO commits of its own — one base commit (base == HEAD),
+# the rest in the working tree. A `+`-prefixed path arg is NEW (absent from base); unprefixed is
+# tracked-then-modified. <mode>: staged (git add -A, #1779's scenario) / unstaged / untracked.
 make_zero_commit_repo() { # <repo> <mode> [ [+]path... ]
     local repo="$1" mode="$2"; shift 2
     local f p
-    mkdir -p "$repo/tests/_archive" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
+    mkdir -p "$repo/tests/_archive" "$repo/tests/bin" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
     git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
-    : > "$repo/tests/run-tests.sh"
-    : > "$repo/tests/feature-689-select-tests.sh"
+    : > "$repo/tests/bin/run-tests.sh"
+    : > "$repo/tests/bin/feature-689-select-tests.sh"
     # Pre-create the tracked files so a later edit to them is a MODIFICATION rather than an
     # addition; the `+` ones are deliberately left out of this commit.
     for f in "$@"; do
@@ -96,7 +69,7 @@ test_S14_zero_commit_unstaged_selects() {
         fail "S14_zero_commit_unstaged_selects: expected exit 0, got rc=$SA_RC
 --- stderr ---
 $SA_ERR"
-    elif ! echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh"; then
+    elif ! echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh"; then
         fail "S14_zero_commit_unstaged_selects: an unstaged change to bin/select-tests.sh on a zero-commit branch selected nothing
 --- output ---
 $SA_OUT
@@ -120,8 +93,8 @@ test_S14b_zero_commit_staged_selects_both() {
     assert_zero_commit "S14b_zero_commit_staged_selects_both" "$repo" || return
     run_auto "$repo" RESOLVED 0 BASE_IS_HEAD=true RUN_TL3=off
     local missing=""
-    echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh" || missing="$missing [select-tests stem]"
-    echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh" || missing="$missing [zero-commit stem]"
+    echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh" || missing="$missing [select-tests stem]"
+    echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh" || missing="$missing [zero-commit stem]"
     if [ "$SA_RC" != "0" ]; then
         fail "S14b_zero_commit_staged_selects_both: expected exit 0, got rc=$SA_RC
 --- stderr ---
@@ -153,7 +126,7 @@ test_S15_zero_commit_untracked_selects() {
         fail "S15_zero_commit_untracked_selects: expected exit 0, got rc=$SA_RC
 --- stderr ---
 $SA_ERR"
-    elif echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh"; then
+    elif echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh"; then
         pass "S15_zero_commit_untracked_selects: an untracked-only new file is still picked up"
     else
         fail "S15_zero_commit_untracked_selects: the new untracked file was dropped from the fallback set
@@ -177,7 +150,7 @@ test_S16_zero_commit_field_absent_still_falls_back() {
         fail "S16_zero_commit_field_absent_still_falls_back: expected exit 0, got rc=$SA_RC
 --- stderr ---
 $SA_ERR"
-    elif ! echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh"; then
+    elif ! echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh"; then
         fail "S16_zero_commit_field_absent_still_falls_back: with base_is_head absent the selector fell back to the empty range
 --- output ---
 $SA_OUT

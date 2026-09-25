@@ -3,12 +3,10 @@
 # Tags: TL2, audit-tests, retire, security, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# Both values flow from repository content into shell code that runs `git rm`:
-# the `# Tests:` token (attacker-controlled by anyone who can land a test file)
-# and the filename itself. An `eval`, an unquoted expansion, or a `$(...)` that
-# reaches a subshell turns a nightly report-only cron into arbitrary execution.
-# Two independent guarantees are asserted: nothing executes, and the JSON stays
-# well-formed (an unescaped quote is how injected content escapes a consumer).
+# Both the `# Tests:` token and the filename flow from repo content into code that
+# runs `git rm` — an eval, an unquoted expansion, or a `$(...)` turns a report-only
+# cron into arbitrary execution. Two guarantees are asserted: nothing executes, and
+# the JSON stays well-formed (an unescaped quote is how injected content escapes a consumer).
 
 I_SENTINEL="$TMPDIR_BASE/i-sentinel"
 mkdir -p "$I_SENTINEL"
@@ -41,10 +39,10 @@ export MOCK_ISSUES="941 open "
 # whose names are supposed to be escaped, leaving the escaping code path
 # unexercised and the assertions vacuously green.
 I_HOSTILE_NAMES=(
-    'cc-inj-$(touch pwned-subshell)-name.sh'
-    'cc-inj-`touch pwned-backtick`-name.sh'
-    'cc-inj-;semicolon.sh'
-    "cc-inj-'quoted'.sh"
+    'bin/cc-inj-$(touch pwned-subshell)-name.sh'
+    'bin/cc-inj-`touch pwned-backtick`-name.sh'
+    'bin/cc-inj-;semicolon.sh'
+    "bin/cc-inj-'quoted'.sh"
 )
 
 # ── I2: JSON stays well-formed AND the hostile names round-trip ─────────────
@@ -125,7 +123,7 @@ assert_eq "I1b no injected command ran from a filename" "" "${I1_PWNED% }"
 
 # I1c — the `bin/*` header must be treated as one literal token, not expanded
 # against the working tree (expansion would silently mark it alive).
-if echo "$I_C_OUT" | grep -qE "^(ORPHAN|MALFORMED_HEADER|NO_TESTS_HEADER): tests/cc-inj-glob\.sh"; then
+if echo "$I_C_OUT" | grep -qE "^(ORPHAN|MALFORMED_HEADER|NO_TESTS_HEADER): tests/bin/cc-inj-glob\.sh"; then
     pass "I1c a glob-shaped token is classified, not shell-expanded"
 else
     fail "I1c tests/cc-inj-glob.sh produced no verdict at all (out=<<$I_C_OUT>>)"
