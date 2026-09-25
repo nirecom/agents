@@ -462,14 +462,14 @@ echo "$OUT" | grep -F -q -- "root:" && fail "path traversal: stdout contains 'ro
 echo "$OUT" | grep -F -q -- "/bin/bash" && fail "path traversal: stdout contains '/bin/bash' — possible /etc/passwd leak. Output: $OUT" || pass "path traversal: stdout free of '/bin/bash' leak"
 
 # shellcheck source=tests/feature-811-review-loop-summarize-concerns/cases-16-17.sh
-. "$AGENTS_ROOT/tests/feature-811-review-loop-summarize-concerns/cases-16-17.sh"
+. "$AGENTS_ROOT/tests/bin/feature-811-review-loop-summarize-concerns/cases-16-17.sh"
 
 # ---------------------------------------------------------------------------
 # v2 ledger rendering (issue #1992). Split out to keep this file under the
 # file-split HARD limit; the v1 cases above stay as the compatibility pin.
 # ---------------------------------------------------------------------------
 # shellcheck source=tests/feature-811-review-loop-summarize-concerns/v2-render.sh
-. "$AGENTS_ROOT/tests/feature-811-review-loop-summarize-concerns/v2-render.sh"
+. "$AGENTS_ROOT/tests/bin/feature-811-review-loop-summarize-concerns/v2-render.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

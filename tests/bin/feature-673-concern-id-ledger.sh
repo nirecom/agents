@@ -432,7 +432,7 @@ C52: unresolved — new3"
 # file-split HARD limit.
 # ---------------------------------------------------------------------------
 # shellcheck source=tests/feature-673-concern-id-ledger/v2-ledger.sh
-. "$AGENTS_WORKTREE/tests/feature-673-concern-id-ledger/v2-ledger.sh"
+. "$AGENTS_WORKTREE/tests/bin/feature-673-concern-id-ledger/v2-ledger.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

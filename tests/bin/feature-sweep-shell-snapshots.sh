@@ -382,11 +382,11 @@ T6_second_run_is_a_no_op() {
 # (CLI and PATH classifier tables), T17-T19 (adversarial inputs) and T20 (marker
 # SSOT mutation) live in sibling part files — rules/coding/file-split.md
 # Pattern A. Each self-invokes its cases at source time.
-. "$AGENTS_DIR/tests/feature-sweep-shell-snapshots/age-and-flag-guards.sh"
-. "$AGENTS_DIR/tests/feature-sweep-shell-snapshots/age-boundary-and-io.sh"
-. "$AGENTS_DIR/tests/feature-sweep-shell-snapshots/classifier-tables.sh"
-. "$AGENTS_DIR/tests/feature-sweep-shell-snapshots/adversarial-inputs.sh"
-. "$AGENTS_DIR/tests/feature-sweep-shell-snapshots/marker-ssot-mutation.sh"
+. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/age-and-flag-guards.sh"
+. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/age-boundary-and-io.sh"
+. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/classifier-tables.sh"
+. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/adversarial-inputs.sh"
+. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/marker-ssot-mutation.sh"
 
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -267,23 +267,23 @@ assert_block "PR1612-attack finalize loop-step with decision 'accept|evil'" \
     "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept|evil\")\""
 
 # shellcheck source=tests/fix-1569-quote-span-regression/rules-hook.sh
-. "$AGENTS_DIR/tests/fix-1569-quote-span-regression/rules-hook.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/rules-hook.sh"
 run_rule_hook_cases
 
 # shellcheck source=tests/fix-1569-quote-span-regression/arg-tail-module.sh
-. "$AGENTS_DIR/tests/fix-1569-quote-span-regression/arg-tail-module.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh"
 run_arg_tail_module_cases
 
 # shellcheck source=tests/fix-1569-quote-span-regression/case-pattern.sh
-. "$AGENTS_DIR/tests/fix-1569-quote-span-regression/case-pattern.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/case-pattern.sh"
 run_case_pattern_cases
 
 # shellcheck source=tests/fix-1569-quote-span-regression/fold-ok-gate.sh
-. "$AGENTS_DIR/tests/fix-1569-quote-span-regression/fold-ok-gate.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh"
 run_fold_ok_gate_cases
 
 # shellcheck source=tests/fix-1569-quote-span-regression/canary.sh
-. "$AGENTS_DIR/tests/fix-1569-quote-span-regression/canary.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/canary.sh"
 run_canary_cases
 
 echo ""

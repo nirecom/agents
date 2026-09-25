@@ -34,9 +34,9 @@ fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 skip() { echo "SKIP: $1" >&2; }
 
 # shellcheck source=tests/TL3-review-tests-fork-directive-order/helpers.sh
-. "$AGENTS_DIR/tests/TL3-review-tests-fork-directive-order/helpers.sh"
+. "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/helpers.sh"
 # shellcheck source=tests/TL3-review-tests-fork-directive-order/main.sh
-. "$AGENTS_DIR/tests/TL3-review-tests-fork-directive-order/main.sh"
+. "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/main.sh"
 
 echo ""
 echo "=== Results ==="

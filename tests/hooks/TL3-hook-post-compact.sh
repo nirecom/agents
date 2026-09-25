@@ -16,7 +16,7 @@ AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 command -v claude >/dev/null 2>&1 || exit 77
 
 # shellcheck source=tests/TL3-hook-post-compact/main.sh
-. "$AGENTS_DIR/tests/TL3-hook-post-compact/main.sh"
+. "$AGENTS_DIR/tests/hooks/TL3-hook-post-compact/main.sh"
 
 # TL3 gap only — no assertable real invocation. Exit skipped.
 exit 77

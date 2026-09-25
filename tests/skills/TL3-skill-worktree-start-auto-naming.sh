@@ -26,11 +26,11 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
 # shellcheck source=tests/TL3-skill-worktree-start-auto-naming/helpers.sh
-. "$AGENTS_DIR/tests/TL3-skill-worktree-start-auto-naming/helpers.sh"
+. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh"
 # shellcheck source=tests/TL3-skill-worktree-start-auto-naming/case-session.sh
-. "$AGENTS_DIR/tests/TL3-skill-worktree-start-auto-naming/case-session.sh"
+. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh"
 # shellcheck source=tests/TL3-skill-worktree-start-auto-naming/case-headless.sh
-. "$AGENTS_DIR/tests/TL3-skill-worktree-start-auto-naming/case-headless.sh"
+. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh"
 
 echo ""
 echo "=== Results ==="

@@ -278,9 +278,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # need $PRELUDE, run_case, require_module and $HEIR_CWD, so they are sourced here
 # rather than at the top of the file.
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/feat-2218-upstream-search/adoptability.sh"
+. "$AGENTS_DIR/tests/hooks/feat-2218-upstream-search/adoptability.sh"
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/feat-2218-upstream-search/list-vs-from.sh"
+. "$AGENTS_DIR/tests/hooks/feat-2218-upstream-search/list-vs-from.sh"
 
 build_fixture
 run_U1

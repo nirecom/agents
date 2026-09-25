@@ -233,19 +233,19 @@ kv() { printf '%s\n' "$HB_OUT" | sed -n "s/^$1=//p" | head -1; }
 # the fixtures, the state driver and the invocation helper above are shared by all three.
 
 # shellcheck source=./feature-1638-resolve-merge-base/recorded-baseline.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/recorded-baseline.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/recorded-baseline.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/resolution-and-anomaly.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/resolution-and-anomaly.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/resolution-and-anomaly.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/writer-and-degradation.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/writer-and-degradation.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/writer-and-degradation.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/branching-integration.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/branching-integration.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/branching-integration.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/thresholds-and-edges.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/thresholds-and-edges.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/thresholds-and-edges.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/baseline-errors.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/baseline-errors.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/baseline-errors.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/approval-cli.sh
-. "$AGENTS_DIR/tests/feature-1638-resolve-merge-base/approval-cli.sh"
+. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/approval-cli.sh"
 
 # ---- run --------------------------------------------------------------------
 

@@ -7,7 +7,7 @@
 # The fixture builders and the prompt/breakdown observation helpers, shared with the sibling
 # parts sourced at the bottom of this file. Sourced FIRST because every row below uses them.
 # shellcheck source=./path-priority/helpers.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/helpers.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/helpers.sh"
 
 pp_install_capturing_mock
 
@@ -358,14 +358,14 @@ fi
 # reuse every helper and fixture above. Order is load-bearing only in that helpers.sh must
 # already be sourced, which it is.
 # shellcheck source=./path-priority/exclusion-and-cross-reference.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/exclusion-and-cross-reference.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/exclusion-and-cross-reference.sh"
 # shellcheck source=./path-priority/budget-and-breakdown.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/budget-and-breakdown.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/budget-and-breakdown.sh"
 # shellcheck source=./path-priority/config-threshold.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/config-threshold.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/config-threshold.sh"
 # shellcheck source=./path-priority/path-edges-and-security.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/path-edges-and-security.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/path-edges-and-security.sh"
 # shellcheck source=./path-priority/failure-and-leakage.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/failure-and-leakage.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/failure-and-leakage.sh"
 # shellcheck source=./path-priority/concerns-file-parsing.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority/concerns-file-parsing.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/concerns-file-parsing.sh"

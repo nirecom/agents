@@ -19,9 +19,9 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
 # shellcheck source=tests/TL3-hook-workflow-mark/helpers.sh
-. "$AGENTS_DIR/tests/TL3-hook-workflow-mark/helpers.sh"
+. "$AGENTS_DIR/tests/hooks/TL3-hook-workflow-mark/helpers.sh"
 # shellcheck source=tests/TL3-hook-workflow-mark/main.sh
-. "$AGENTS_DIR/tests/TL3-hook-workflow-mark/main.sh"
+. "$AGENTS_DIR/tests/hooks/TL3-hook-workflow-mark/main.sh"
 
 echo ""
 echo "=== Results ==="

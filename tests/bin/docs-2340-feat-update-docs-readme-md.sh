@@ -123,12 +123,12 @@ run_tool() {
 }
 
 # source each case group
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/a-review-doc-size.sh"
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/b-review-doc-heading-order.sh"
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/c-review-doc-gates.sh"
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/d-staged-doc-changes.sh"
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/e-review-docs-checker.sh"
-. "$AGENTS_DIR/tests/docs-2340-feat-update-docs-readme-md/f-v3-to-v4-migration.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/a-review-doc-size.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/b-review-doc-heading-order.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/c-review-doc-gates.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/d-staged-doc-changes.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/e-review-docs-checker.sh"
+. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/f-v3-to-v4-migration.sh"
 
 echo "=== GROUP A: bin/review-doc-size (staged/all, thresholds, exclusions) ==="
 run_group_a

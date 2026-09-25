@@ -165,13 +165,13 @@ run_table() {
 }
 
 # shellcheck source=tests/fix-1630-config-dir-resolver/seams.sh
-. "$AGENTS_DIR/tests/fix-1630-config-dir-resolver/seams.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/seams.sh"
 # shellcheck source=tests/fix-1630-config-dir-resolver/resolver-units.sh
-. "$AGENTS_DIR/tests/fix-1630-config-dir-resolver/resolver-units.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/resolver-units.sh"
 # shellcheck source=tests/fix-1630-config-dir-resolver/standard-predicates.sh
-. "$AGENTS_DIR/tests/fix-1630-config-dir-resolver/standard-predicates.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/standard-predicates.sh"
 # shellcheck source=tests/fix-1630-config-dir-resolver/debug-and-cache.sh
-. "$AGENTS_DIR/tests/fix-1630-config-dir-resolver/debug-and-cache.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/debug-and-cache.sh"
 
 run_seam_cases
 run_resolver_unit_cases

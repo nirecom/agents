@@ -367,7 +367,7 @@ assert_eq_nz "7: and the incomplete case identically" \
     "$(cs_check "$OKP" ok2 1)" "$(printf '%s' "$BS2" | sed 's/bs2/ok2/')"
 
 # shellcheck source=./bin-concern-ledger-cli-contract/check-staged-discovery.sh
-. "$AGENTS_ROOT/tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh"
+. "$AGENTS_ROOT/tests/bin/bin-concern-ledger-cli-contract/check-staged-discovery.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

@@ -276,7 +276,7 @@ run_L8() {
 # make_tmp/np, the module path variables and the pass/fail counters, so it is
 # sourced here rather than at the top of the file.
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/fix-2279-lookahead-pending-readers/allowlist-matrix.sh"
+. "$AGENTS_DIR/tests/hooks/fix-2279-lookahead-pending-readers/allowlist-matrix.sh"
 
 run_L1
 run_L2

@@ -828,7 +828,7 @@ teardown_tmp
 # The rest of the merge-base state table lives in a sourced part: this file is already past the
 # 500-line hard split limit, and the W rows share every V helper above.
 # shellcheck source=./feature-833-check-verification-gate/merge-base-states.sh
-. "$AGENTS_DIR/tests/feature-833-check-verification-gate/merge-base-states.sh"
+. "$AGENTS_DIR/tests/bin/feature-833-check-verification-gate/merge-base-states.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
