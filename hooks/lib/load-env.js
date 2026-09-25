@@ -269,7 +269,7 @@ function applyLocalOverlayToProcessEnv(before) {
 // SELECTION POLICY is not (CPR-SC): an explicit AGENTS_CONFIG_DIR is the sole
 // settings source and never falls through, or a child pointed at a test config
 // dir would get the real repo's .env injected.
-// Pinned by tests/fix-389-load-env-default-fallback T389-7.
+// Pinned by tests/hooks/fix-389-load-env-default-fallback T389-7.
 function loadDefaultEnv() {
   const before = Object.assign({}, process.env);
   const loaded = loadDefaultEnvGlobal();

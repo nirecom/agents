@@ -1,0 +1,397 @@
+#!/bin/bash
+# tests/feature-workflow-init-driver/_lib.sh — shared helper library, NOT a test file.
+# Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
+# Tags: workflow-init, driver, routing, directive-contract, meta-classify, origin-resolution, scope:issue-specific
+# Source from sibling tests: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# Injection seams the driver MUST honor (SSOT): ./HARNESS-CONTRACT.md
+
+set -u
+
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENTS_DIR="$(cd "$_LIB_DIR/../../.." && pwd)"
+DRIVER="${WID_DRIVER_OVERRIDE:-$AGENTS_DIR/bin/workflow/workflow-init-driver}"
+TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+
+PASS=0
+FAIL=0
+
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+
+# MSYS → POSIX (/tmp/...) so paths work both in bash PATH entries and in Node I/O.
+# cygpath -u converts C:/... to /tmp/... which Node on Windows resolves correctly via
+# MSYS2 path mapping, and which bash PATH splitting preserves (no drive-letter colon split).
+to_native() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s' "$1"; fi
+}
+
+require_sut() {
+    if [ ! -f "$DRIVER" ]; then
+        echo "SUT missing: bin/workflow/workflow-init-driver not yet implemented (TDD red phase)"
+        exit 1
+    fi
+}
+
+ROOT_TMP="$(to_native "$(mktemp -d)")"
+trap 'rm -rf "$ROOT_TMP"' EXIT
+ORIG_PATH="$PATH"
+_CASE_N=0
+
+# --- per-case environment ---------------------------------------------------
+setup_case() {  # <session-id>
+    SID="$1"
+    _CASE_N=$((_CASE_N + 1))
+    CASE_DIR="$ROOT_TMP/case-$_CASE_N"
+    PLANS="$CASE_DIR/plans"
+    CFG="$CASE_DIR/agents-config"
+    MOCKBIN="$CASE_DIR/mock-bin"
+    RESP="$CASE_DIR/gh-responses"
+    WIPD="$CASE_DIR/wip"
+    GH_LOG="$CASE_DIR/gh-calls.log"
+    mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
+        "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    _init_case_repo
+    _write_gh_mock
+    _write_wip_mock
+    _write_cfg_prims
+    export WORKFLOW_PLANS_DIR="$PLANS"
+    export AGENTS_CONFIG_DIR="$CFG"
+    export CLAUDE_SESSION_ID="$SID"
+    # CLAUDE_CODE_SESSION_ID is exported by the developer's live session and the
+    # driver reads it (#2270), so an inherited value would decide the case.
+    unset NON_GITHUB CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    export PATH="$MOCKBIN:$ORIG_PATH"
+}
+
+teardown_case() {
+    export PATH="$ORIG_PATH"
+    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
+}
+
+# --- git fixture (#1899) -----------------------------------------------------
+# Repo identity is derived from the checkout's ORIGIN remote, not `gh repo view`,
+# so every case needs a real git repo. Origin deliberately names a DIFFERENT repo
+# than the mock's `repo view` answer (mockorg/mockrepo), so an accidental
+# fallback to the API path is visible.
+CASE_ORIGIN_URL="https://github.com/originorg/originrepo.git"
+CASE_ORIGIN_OWNER_REPO="originorg/originrepo"
+
+_init_case_repo() {
+    git -C "$CASE_DIR" init -q
+    # MANDATORY per rules/test/fixture-isolation.md.
+    git -C "$CASE_DIR" config core.hooksPath /dev/null
+    git -C "$CASE_DIR" config user.email "fixture@example.com"
+    git -C "$CASE_DIR" config user.name "Fixture"
+    git -C "$CASE_DIR" remote add origin "$CASE_ORIGIN_URL"
+}
+
+case_set_origin() {  # <url>
+    git -C "$CASE_DIR" remote remove origin 2>/dev/null || true
+    git -C "$CASE_DIR" remote add origin "$1"
+}
+case_add_upstream() {  # <url>
+    git -C "$CASE_DIR" remote remove upstream 2>/dev/null || true
+    git -C "$CASE_DIR" remote add upstream "$1"
+}
+case_unset_origin() {
+    git -C "$CASE_DIR" remote remove origin 2>/dev/null || true
+}
+
+# --- mocks -------------------------------------------------------------------
+_write_gh_mock() {
+    cat > "$MOCKBIN/gh" <<MOCKGH1
+#!/bin/bash
+echo "\$*" >> "$GH_LOG"
+RESP="$RESP"
+MOCKGH1
+    cat >> "$MOCKBIN/gh" <<'MOCKGH2'
+cmd="${1:-}"; sub="${2:-}"
+if [ "$cmd" = "issue" ] && [ "$sub" = "view" ]; then
+    shift 2; N=""; JSONF=""; SAWJSON=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --json) if [ $# -ge 2 ]; then SAWJSON=1; JSONF="$2"; shift 2; else shift; fi ;;
+            --repo|--jq) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+            -*) shift ;;
+            *) [ -z "$N" ] && N="$1"; shift ;;
+        esac
+    done
+    N="${N#\#}"
+    rc=0; [ -f "$RESP/issue-view-$N.rc" ] && rc="$(cat "$RESP/issue-view-$N.rc")"
+    if [ "$rc" != "0" ]; then
+        # Real gh prints whatever the API/CLI said on the failure path, and that text is
+        # outside this repo's control. `issue-view-<N>.err` is the seam for staging such
+        # a payload verbatim; without it the mock keeps its own default diagnostic.
+        if [ -f "$RESP/issue-view-$N.err" ]; then cat "$RESP/issue-view-$N.err" >&2
+        else echo "mock-gh: forced failure for issue $N" >&2; fi
+        exit "$rc"
+    fi
+    if [ -f "$RESP/issue-view-$N.json" ]; then
+        # Real gh returns ONLY the projected fields. A fixture that hands back
+        # `comments` no matter what was asked for makes every downstream comment
+        # assertion pass even when the --json list never requested the field, so the
+        # projection is honoured here for that one key (#2063).
+        node -e '
+const fs = require("fs");
+const raw = fs.readFileSync(process.argv[1], "utf8");
+const sawJson = process.argv[2] === "1";
+// A deliberately malformed payload is its own test seam — pass it through untouched.
+let obj;
+try { obj = JSON.parse(raw); } catch (e) { process.stdout.write(raw); process.exit(0); }
+const asked = (process.argv[3] || "").split(",").map((s) => s.trim());
+if (sawJson && obj && typeof obj === "object" && !Array.isArray(obj) && !asked.includes("comments")) {
+    delete obj.comments;
+}
+process.stdout.write(JSON.stringify(obj) + "\n");
+' "$RESP/issue-view-$N.json" "$SAWJSON" "$JSONF"
+        exit 0
+    fi
+    echo "mock-gh: no fixture for issue $N" >&2; exit 1
+fi
+if [ "$cmd" = "issue" ] && [ "$sub" = "reopen" ]; then
+    # Symmetric with the issue-view seam: `issue-reopen-<N>.rc` forces a non-zero exit
+    # (permission denied, rate limit, network), `issue-reopen-<N>.err` stages the
+    # third-party STDERR text that failure prints (#2063 C23).
+    RN="${3:-}"; RN="${RN#\#}"
+    rc=0; [ -f "$RESP/issue-reopen-$RN.rc" ] && rc="$(cat "$RESP/issue-reopen-$RN.rc")"
+    if [ "$rc" != "0" ]; then
+        if [ -f "$RESP/issue-reopen-$RN.err" ]; then cat "$RESP/issue-reopen-$RN.err" >&2
+        else echo "mock-gh: forced reopen failure for issue $RN" >&2; fi
+        exit "$rc"
+    fi
+    exit 0
+fi
+if [ "$cmd" = "repo" ] && [ "$sub" = "view" ]; then
+    if printf '%s' "$*" | grep -q -- "--jq"; then echo "mockorg/mockrepo"
+    else echo '{"nameWithOwner":"mockorg/mockrepo"}'; fi
+    exit 0
+fi
+if [ "$cmd" = "api" ]; then
+    if [[ "${2:-}" =~ issues/([0-9]+)/sub_issues ]]; then
+        M="${BASH_REMATCH[1]}"
+        # Forced-failure seam, symmetric with issue-view-<N>.rc: a non-zero exit
+        # simulates a real API failure (rate limit, 404, network).
+        rc=0; [ -f "$RESP/sub-issues-$M.rc" ] && rc="$(cat "$RESP/sub-issues-$M.rc")"
+        if [ "$rc" != "0" ]; then echo "mock-gh: forced sub_issues failure for issue $M" >&2; exit "$rc"; fi
+        if [ -f "$RESP/sub-issues-$M.json" ]; then cat "$RESP/sub-issues-$M.json"; else echo "[]"; fi
+        exit 0
+    fi
+    echo "{}"; exit 0
+fi
+echo "mock-gh: unhandled args: $*" >&2
+exit 1
+MOCKGH2
+    chmod +x "$MOCKBIN/gh"
+}
+
+_write_wip_mock() {
+    cat > "$CFG/bin/github-issues/wip-state.sh" <<MOCKWIP1
+#!/bin/bash
+WIPD="$WIPD"
+MOCKWIP1
+    cat >> "$CFG/bin/github-issues/wip-state.sh" <<'MOCKWIP2'
+VERB=""; N=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session-id|--repo) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+        -*) shift ;;
+        *) if [ -z "$VERB" ]; then VERB="$1"; elif [ -z "$N" ]; then N="$1"; fi; shift ;;
+    esac
+done
+N="${N#\#}"
+echo "$VERB $N" >> "$WIPD/calls.log"
+case "$VERB" in
+    check)
+        rc=0
+        [ -f "$WIPD/check-rc" ] && rc="$(cat "$WIPD/check-rc")"
+        [ -f "$WIPD/check-rc-$N" ] && rc="$(cat "$WIPD/check-rc-$N")"
+        if [ "$rc" != "0" ]; then echo "wip-state mock: forced check error for #$N" >&2; exit "$rc"; fi
+        if [ -f "$WIPD/state-$N" ]; then cat "$WIPD/state-$N"; else echo "none"; fi
+        exit 0 ;;
+    set)
+        rc=0
+        [ -f "$WIPD/set-rc" ] && rc="$(cat "$WIPD/set-rc")"
+        [ -f "$WIPD/set-rc-$N" ] && rc="$(cat "$WIPD/set-rc-$N")"
+        if [ "$rc" = "0" ]; then echo "same" > "$WIPD/state-$N"; fi
+        exit "$rc" ;;
+    clear|abandon) exit 0 ;;
+esac
+echo "wip-state mock: unhandled verb '$VERB'" >&2
+exit 2
+MOCKWIP2
+    chmod +x "$CFG/bin/github-issues/wip-state.sh"
+}
+
+_write_cfg_prims() {
+    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
+    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
+    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
+    cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FILT'
+#!/bin/bash
+# Passthrough filter mock: emit every issue-number arg back as '#N' (no filtering).
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --repo-map) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+        -*) shift ;;
+        *) echo "#${1#\#}"; shift ;;
+    esac
+done
+exit 0
+FILT
+    chmod +x "$CFG/bin/resolve-session-id" "$CFG/bin/parse-issue-tokens" \
+        "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+}
+
+# --- fixtures ----------------------------------------------------------------
+mock_issue() {  # <N> <STATE> [labels-csv] [title]
+    local n="$1" state="$2" labels_csv="${3:-}" title="${4:-Issue $1}" labels="" l
+    local IFS=','
+    for l in $labels_csv; do labels="$labels{\"name\":\"$l\"},"; done
+    labels="[${labels%,}]"
+    printf '{"number":%s,"title":"%s","body":"Body of issue %s","labels":%s,"state":"%s","createdAt":"2026-07-01T00:00:00Z","comments":[]}\n' \
+        "$n" "$title" "$n" "$labels" "$state" > "$RESP/issue-view-$n.json"
+}
+# Replace the `comments` VALUE of an existing issue-view-<N>.json fixture with the
+# raw text given. The payload is spliced in verbatim rather than re-serialized, so
+# it can be healthy JSON, structurally defective JSON (null elements, non-string
+# body, missing author), a non-array value, or syntactically broken text — the
+# corruption seams driver-issue-comments.sh needs. The literal `__DELETE__`
+# removes the key entirely (the "current version but no comments field" shape).
+mock_issue_comments() {  # <N> <comments-json-or-__DELETE__>
+    node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const raw = process.argv[2];
+const base = JSON.parse(fs.readFileSync(p, "utf8"));
+delete base.comments;
+let s = JSON.stringify(base);
+if (raw !== "__DELETE__") {
+  s = s === "{}" ? "{\"comments\":" + raw + "}" : s.slice(0, -1) + ",\"comments\":" + raw + "}";
+}
+fs.writeFileSync(p, s + "\n");
+' "$RESP/issue-view-$1.json" "$2"
+}
+mock_issue_rc() { echo "$2" > "$RESP/issue-view-$1.rc"; }        # <N> <rc>
+# The text the forced failure prints on STDERR, replacing the mock's own diagnostic.
+# gh's failure output is third-party text that can carry a token, a signed URL, or any
+# other secret the transport leaked, so this is the seam for proving none of it reaches
+# an artifact (driver-issue-comments/corrupt-shapes.sh C16). Only read when .rc is non-zero.
+mock_issue_stderr() { printf '%s\n' "$2" > "$RESP/issue-view-$1.err"; }  # <N> <stderr-text>
+# `gh issue reopen <N>` failure seam (#2063 C23): the reopen is a WRITE against the
+# authoritative remote, so its failure arm needs its own forced-error seam rather than
+# borrowing the read path's.
+mock_reopen_rc() { echo "$2" > "$RESP/issue-reopen-$1.rc"; }              # <N> <rc>
+mock_reopen_stderr() { printf '%s\n' "$2" > "$RESP/issue-reopen-$1.err"; }  # <N> <stderr-text>
+mock_sub_issues() { printf '%s\n' "$2" > "$RESP/sub-issues-$1.json"; }  # <N> <json>
+mock_sub_issues_rc() { echo "$2" > "$RESP/sub-issues-$1.rc"; }          # <N> <rc>
+set_wip() { echo "$2" > "$WIPD/state-$1"; }                      # <N> same|none|other
+set_wip_check_rc() { echo "$1" > "$WIPD/check-rc"; }             # <rc> (all N)
+set_wip_set_rc() { echo "$1" > "$WIPD/set-rc"; }                 # <rc> (all N)
+
+# --- SUT invocation ----------------------------------------------------------
+run_driver() {  # [driver args...] — sets DRIVER_OUT / DRIVER_RC / DRIVER_ERR
+    local errf="$CASE_DIR/driver-stderr.log"
+    DRIVER_OUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$DRIVER" "$@" 2>"$errf")"
+    DRIVER_RC=$?
+    DRIVER_ERR=""
+    [ -f "$errf" ] && DRIVER_ERR="$(cat "$errf")"
+    return 0
+}
+
+# --- directive / checkpoint accessors -----------------------------------------
+get_kv() {  # <KEY> — reads from $DRIVER_OUT; strips optional single-quote wrapping
+    local key="$1" line val
+    line="$(printf '%s\n' "$DRIVER_OUT" | grep -m1 "^${key}=")" || { printf ''; return 1; }
+    val="${line#"${key}"=}"
+    val="${val%$'\r'}"
+    case "$val" in
+        \'*\') val="${val#\'}"; val="${val%\'}" ;;
+    esac
+    printf '%s' "$val"
+}
+
+count_gh_calls() {  # <ERE> — count matching lines in the gh call log
+    if [ -f "$GH_LOG" ]; then grep -Ec -- "$1" "$GH_LOG" || true; else echo 0; fi
+}
+
+wip_set_calls() {  # print 'set <N>' lines recorded by the wip-state mock
+    if [ -f "$WIPD/calls.log" ]; then grep '^set ' "$WIPD/calls.log" || true; else printf ''; fi
+}
+
+wip_calls() {  # print every verb line recorded by the wip-state mock
+    if [ -f "$WIPD/calls.log" ]; then cat "$WIPD/calls.log"; else printf ''; fi
+}
+
+ckpt_get() {  # <ckpt-path> <dot.path> — prints value; <missing>/<unreadable> on error
+    if [ -z "$1" ] || [ ! -f "$1" ]; then printf '<unreadable>'; return 0; fi
+    node -e '
+const fs = require("fs");
+let v;
+try { v = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch (e) { process.stdout.write("<unreadable>"); process.exit(0); }
+for (const k of process.argv[2].split(".")) { if (v == null) break; v = v[k]; }
+if (v === undefined || v === null) process.stdout.write("<missing>");
+else if (typeof v === "object") process.stdout.write(JSON.stringify(v));
+else process.stdout.write(String(v));
+' "$1" "$2" 2>/dev/null || printf '<unreadable>'
+}
+
+pct_decode() {  # <encoded> — prints decoded string; rc!=0 when malformed
+    node -e 'try{process.stdout.write(decodeURIComponent(process.argv[1]))}catch(e){process.exit(3)}' "$1"
+}
+
+# OPTIONS_DISPLAY is ONE percent-encoded directive value whose options are joined
+# with a literal "|". Decode FIRST, then split: splitting the encoded form would
+# miss a "|" that an untrusted sub-issue title smuggled in, which is the exact
+# forged-option failure driver-meta-classify.sh M15 / driver-untrusted-title.sh
+# M24 exist to catch.
+opts_field_count() {  # <encoded-OPTIONS_DISPLAY>
+    node -e 'process.stdout.write(String(decodeURIComponent(process.argv[1] || "").split("|").length));' "$1"
+}
+opts_field() {  # <encoded-OPTIONS_DISPLAY> <0-based-index> — '<none>' when absent
+    node -e 'const a = decodeURIComponent(process.argv[1] || "").split("|"); const i = Number(process.argv[2]); process.stdout.write(a[i] === undefined ? "<none>" : a[i]);' "$1" "$2"
+}
+
+# --- assertions ----------------------------------------------------------------
+assert_kv() {  # <label> <KEY> <want>
+    local got
+    got="$(get_kv "$2")" || true
+    if [ "$got" = "$3" ]; then pass "$1"; else fail "$1: want $2=$3 got $2='$got' (rc=$DRIVER_RC)"; fi
+}
+
+assert_nonempty_kv() {  # <label> <KEY>
+    local got
+    got="$(get_kv "$2")" || true
+    if [ -n "$got" ]; then pass "$1"; else fail "$1: $2= missing/empty (rc=$DRIVER_RC)"; fi
+}
+
+assert_single_action_line() {  # <label>
+    local c
+    c="$(printf '%s\n' "$DRIVER_OUT" | grep -c '^ACTION=')" || true
+    if [ "$c" = "1" ]; then pass "$1"; else fail "$1: expected exactly 1 ACTION= line, got $c"; fi
+}
+
+assert_ckpt() {  # <label> <ckpt-path> <dot.path> <want>
+    local got
+    got="$(ckpt_get "$2" "$3")"
+    if [ "$got" = "$4" ]; then pass "$1"; else fail "$1: want $3=$4 got '$got'"; fi
+}
+
+# A crash and a controlled rejection agree on every negative observable — neither
+# reports done, neither writes artifacts. Only the error streams separate them, and a
+# node crash reports on stderr, which no directive assertion reads. Both are checked.
+assert_no_uncaught() {  # <label>
+    local hit=""
+    printf '%s\n' "$DRIVER_OUT" | grep -qE 'TypeError|ReferenceError|^ +at ' && hit="stdout"
+    printf '%s\n' "$DRIVER_ERR" | grep -qE 'TypeError|ReferenceError|^ +at ' && hit="${hit:+$hit+}stderr"
+    if [ -z "$hit" ]; then
+        pass "$1"
+    else
+        fail "$1: an uncaught error surfaced on $hit: out='$(printf '%s' "$DRIVER_OUT" | head -c 120)' err='$(printf '%s' "$DRIVER_ERR" | head -c 200)'"
+    fi
+}
+
+finish() {
+    echo ""
+    echo "Results: $PASS passed, $FAIL failed"
+    [ "$FAIL" -eq 0 ]
+}

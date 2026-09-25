@@ -6,7 +6,7 @@
 // Registration contract: settings.json must register this hook in BOTH
 // "Edit|Write|MultiEdit|editFiles" and "Bash|runInTerminal|runCommands"
 // PreToolUse matcher groups (pinned by
-// tests/feature-1611-append-only-archive-guard.sh T1-R).
+// tests/hooks/feature-1611-append-only-archive-guard.sh T1-R).
 "use strict";
 const fs = require("fs");
 // Detection lives in hooks/lib/history-path-check.js.

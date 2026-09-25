@@ -341,7 +341,7 @@ The scan is existential and order-independent in one direction: once a
 genuine adoption-worthy event has been appended anywhere in the stream, later
 auto/backfilled noise (or even a `reset-sentinel` rollback) can never erase
 that the session did, at some point, genuinely engage with the workflow —
-see `tests/feature-1794-stop-guard-exemptions/i-adoption-predicate.sh` (I11)
+see `tests/hooks/feature-1794-stop-guard-exemptions/i-adoption-predicate.sh` (I11)
 for the locked-in truth table.
 
 ### Delegated-step in-flight allow-list (`STEP_IN_FLIGHT_ALLOWLIST`, #2013)
@@ -381,7 +381,7 @@ Boundary properties, and where each is enforced:
   `resume-session` — is never marked in-flight for any step, lookahead or
   not: a meta-operation skill inspects workflow state rather than performing
   it, so treating its own dispatch as work would taint the very state it is
-  trying to read. `tests/TL3-hook-skill-dispatch-payload.sh` owns verifying
+  trying to read. `tests/hooks/TL3-hook-skill-dispatch-payload.sh` owns verifying
   that the host's real `tool_input.skill` payload shape still matches what
   `skillNameOf` expects.
 - **Subagents are excluded.** A dispatch made *from inside* a subagent carries

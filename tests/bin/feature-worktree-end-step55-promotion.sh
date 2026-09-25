@@ -1,0 +1,412 @@
+#!/bin/bash
+# tests/feature-worktree-end-step55-promotion.sh
+# Tests: bin/worktree-notes-triage.js
+# Tags: worktree, end, cleanup, hook, bin, TL2, scope:common
+#
+# Worktree-end Step WE-11 promotion feature (historically labelled "Step 5.5"
+# before the WE-<N> renumbering; the filename keeps the old token for git blame
+# continuity, the assertions do not).
+#
+# F1–F7 SKIP-gracefully when bin/worktree-notes-triage.js is absent. R1 has been
+# replaced post-#771: the renderer (bin/worktree-final-report.js) is abolished,
+# so R1 now asserts its absence rather than golden output.
+#
+# The `## ManualReminders` section added by #530 is covered separately in
+# tests/feature-530-manual-reminders-triage-exclusion.sh — split out when this
+# file crossed the 500-line HARD limit.
+#
+# TL3 gap (what this test does NOT catch):
+# - Whether WE-11 in a live /worktree-end run actually calls this CLI at all,
+#   and calls it before the worktree is removed — after removal the notes file
+#   is gone and the findings are lost silently.
+# - Whether the numbers passed to `annotate` are the issue numbers /issue-create
+#   really created, rather than numbers invented by the model.
+# - Whether the Bash-tool hooks (enforce-worktree) permit these invocations as
+#   written from the worktree being torn down.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+
+set -u
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+else
+    _AGENTS_DIR_NODE="$AGENTS_DIR"
+fi
+TRIAGE_BIN="${_AGENTS_DIR_NODE}/bin/worktree-notes-triage.js"
+LIB_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-notes-sections.js"
+
+FIXTURE_NOTES="${_AGENTS_DIR_NODE}/tests/fixtures/worktree-notes-sample.md"
+
+PASS=0; FAIL=0; SKIP=0
+
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
+
+run_with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$1" "${@:2}"
+    elif command -v perl >/dev/null 2>&1; then
+        perl -e 'alarm shift; exec @ARGV' "$@"
+    else
+        "${@:2}"
+    fi
+}
+
+require_bin() {
+    if [ ! -f "$TRIAGE_BIN" ]; then
+        skip "$1 (bin/worktree-notes-triage.js not implemented yet)"
+        return 1
+    fi
+    return 0
+}
+
+TMPDIR_BASE="$(node -e "
+const os=require('os'),path=require('path'),fs=require('fs');
+const d=path.join(os.tmpdir(),'wt-promote-'+process.pid).replace(/\\\\/g,'/');
+fs.mkdirSync(d,{recursive:true});
+console.log(d);
+" 2>/dev/null)"
+[ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
+trap 'node -e "require(\"fs\").rmSync(process.argv[1], {recursive:true,force:true})" -- "$TMPDIR_BASE" 2>/dev/null' EXIT
+
+node_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -m "$1"
+    else
+        echo "$1"
+    fi
+}
+
+# Copy the sample fixture into a fresh temp dir, named WORKTREE_NOTES.md.
+# Echoes the absolute (node-friendly) path.
+make_notes_copy() {
+    local subdir="$1"
+    local dir="$TMPDIR_BASE/$subdir"
+    mkdir -p "$dir"
+    cp "$FIXTURE_NOTES" "$dir/WORKTREE_NOTES.md"
+    node_path "$dir/WORKTREE_NOTES.md"
+}
+
+# Echo a path to a fresh empty-state notes file (all sections "- (none)").
+make_empty_notes() {
+    local subdir="$1"
+    local dir="$TMPDIR_BASE/$subdir"
+    mkdir -p "$dir"
+    cat > "$dir/WORKTREE_NOTES.md" <<'EOF'
+# Worktree Notes
+Branch: test
+Created: 2026-05-22
+Path: /tmp/test
+WORKTREE_BASE_DIR: (default)
+
+## Gitignored files copied from main
+- (none)
+
+## BugsFound
+- (none)
+
+## RelatedTasks
+- (none)
+
+## NextTasks
+- (none)
+
+## History Notes
+- (none)
+EOF
+    node_path "$dir/WORKTREE_NOTES.md"
+}
+
+# ============ Tests ============
+
+# ---- R1 (post-#771): renderer binary must be absent ----
+test_R1_renderer_bin_absent() {
+    local f="$AGENTS_DIR/bin/worktree-final-report.js"
+    if [ ! -f "$f" ]; then
+        pass "R1_renderer_bin_absent: bin/worktree-final-report.js is absent (renderer abolished in #771)"
+    else
+        fail "R1_renderer_bin_absent: bin/worktree-final-report.js still exists (should be deleted in #771)"
+    fi
+}
+
+# ---- F1: triage list — entries with correct lineNumbers, hasMarker=false ----
+test_F1_triage_list_basic() {
+    require_bin "F1: triage list basic" || return
+
+    local notes; notes="$(make_notes_copy "f1")"
+    local out
+    out="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+
+    # Expect 3 entries (BugsFound, RelatedTasks, NextTasks — 1 each), all hasMarker=false.
+    local len
+    len="$(node -e "
+        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        catch (e) { process.stdout.write('ERR'); }
+    " -- "$out" 2>/dev/null)"
+    local any_marker
+    any_marker="$(node -e "
+        try {
+            const j = JSON.parse(process.argv[1]);
+            process.stdout.write(String(j.some(e => e.hasMarker === true)));
+        } catch (e) { process.stdout.write('ERR'); }
+    " -- "$out" 2>/dev/null)"
+
+    if [ "$len" = "3" ] && [ "$any_marker" = "false" ]; then
+        pass "F1: triage list returns 3 entries, all hasMarker=false"
+    else
+        fail "F1: len=$len any_marker=$any_marker (out=$out)"
+    fi
+}
+
+# ---- F2: triage list on all-none sections → [] ----
+test_F2_triage_list_all_none() {
+    require_bin "F2: triage list all-none" || return
+
+    local notes; notes="$(make_empty_notes "f2")"
+    local out
+    out="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+
+    if [ "$out" = "[]" ]; then
+        pass "F2: triage list with all '- (none)' sections returns []"
+    else
+        fail "F2: expected '[]', got: $out"
+    fi
+}
+
+# ---- F3: triage annotate writes marker; entry removed from list (promoted → filtered) ----
+test_F3_triage_annotate_then_list() {
+    require_bin "F3: triage annotate → list" || return
+
+    local notes; notes="$(make_notes_copy "f3")"
+
+    # First, get the lineNumber of the BugsFound entry.
+    local list_before
+    list_before="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+    local target_line
+    target_line="$(node -e "
+        try {
+            const j = JSON.parse(process.argv[1]);
+            // Pick the first entry — annotate it.
+            process.stdout.write(String(j[0].lineNumber));
+        } catch (e) { process.stdout.write('ERR'); }
+    " -- "$list_before" 2>/dev/null)"
+
+    if [ "$target_line" = "ERR" ] || [ -z "$target_line" ]; then
+        fail "F3: could not read first entry lineNumber (list=$list_before)"
+        return
+    fi
+
+    # Annotate.
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$notes" "$target_line" 789 >/dev/null 2>&1
+    local code=$?
+    if [ "$code" != "0" ]; then
+        fail "F3: triage annotate failed (exit $code)"
+        return
+    fi
+
+    # Verify the marker landed in the file.
+    if ! grep -q "<!-- promoted: #789 -->" "$notes" 2>/dev/null; then
+        fail "F3: marker '<!-- promoted: #789 -->' not present in $notes after annotate"
+        return
+    fi
+
+    # Re-list. list returns only unpromoted entries, so the annotated entry must
+    # be absent (filtered as a promoted entry — hasMarker=true entries are triage
+    # candidates no more; see triage.js cmdList filter and test A5).
+    local list_after
+    list_after="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+    local found
+    found="$(node -e "
+        try {
+            const j = JSON.parse(process.argv[1]);
+            const target = parseInt(process.argv[2], 10);
+            const e = j.find(x => x.lineNumber === target);
+            process.stdout.write(e ? 'FOUND' : 'NOT_FOUND');
+        } catch (e) { process.stdout.write('ERR'); }
+    " -- "$list_after" "$target_line" 2>/dev/null)"
+
+    if [ "$found" = "NOT_FOUND" ]; then
+        pass "F3: triage annotate writes marker; promoted entry absent from list"
+    else
+        fail "F3: post-annotate entry still in list (got: $found list=$list_after)"
+    fi
+}
+
+# ---- F4: list after annotation is shorter by 1 (promoted entry filtered out) ----
+test_F4_list_excludes_marked() {
+    require_bin "F4: list excludes marked entries" || return
+
+    local notes; notes="$(make_notes_copy "f4")"
+
+    # Annotate the first entry.
+    local list_before
+    list_before="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+    local target_line
+    target_line="$(node -e "
+        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j[0].lineNumber)); }
+        catch (e) { process.stdout.write('ERR'); }
+    " -- "$list_before" 2>/dev/null)"
+    local len_before
+    len_before="$(node -e "
+        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        catch (e) { process.stdout.write('ERR'); }
+    " -- "$list_before" 2>/dev/null)"
+
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$notes" "$target_line" 42 >/dev/null 2>&1
+
+    local list_after
+    list_after="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
+    local len_after
+    len_after="$(node -e "
+        try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
+        catch (e) { process.stdout.write('ERR'); }
+    " -- "$list_after" 2>/dev/null)"
+    # list returns only unpromoted entries; annotated entry must be gone (count drops by 1).
+    local expected_after=$((len_before - 1))
+
+    if [ "$len_after" = "$expected_after" ]; then
+        pass "F4: list after annotation is shorter by 1 (promoted entry filtered)"
+    else
+        fail "F4: len_before=$len_before len_after=$len_after expected=$expected_after"
+    fi
+}
+
+# ---- F5: triage annotate with lineNumber=0 → non-zero exit ----
+test_F5_triage_annotate_invalid_line() {
+    require_bin "F5: triage annotate invalid lineNumber" || return
+
+    local notes; notes="$(make_notes_copy "f5")"
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$notes" 0 99 >/dev/null 2>&1
+    local code=$?
+
+    if [ "$code" != "0" ]; then
+        pass "F5: triage annotate lineNumber=0 → non-zero exit ($code)"
+    else
+        fail "F5: expected non-zero exit, got 0"
+    fi
+}
+
+# ---- F6 (security): path traversal cannot reach a REAL outside notes file ----
+# The protected resource must exist and hold recognisable content: pointing the
+# CLI at a path that does not exist proves nothing, because "rejected" and "file
+# not found" are the same nonzero exit.
+#
+# Note on path shape: the current guard tests `path.normalize(p)`, and normalize
+# collapses `..` inside an ABSOLUTE path — so `<tmp>/a/../protected/...` arrives
+# indistinguishable from a direct path and sails through. Only the RELATIVE form
+# keeps its leading `..` and is caught. Both are exercised, and the contract is
+# the same for both: a path whose raw string contains `..` must be refused
+# before normalization, and the protected file must be neither disclosed nor
+# modified. Case (b) is the RED half — it fails today by writing to the
+# protected file.
+file_md5_of() {
+    node -e "
+        const c = require('crypto'), fs = require('fs');
+        try { process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex')); }
+        catch (e) { process.stdout.write('NOFILE'); }
+    " -- "$1" 2>/dev/null
+}
+
+test_F6_path_traversal_rejected() {
+    require_bin "F6: path traversal rejected" || return
+
+    local token="F6LEAK-3ab91d-PROTECTED"
+    local protected_dir="$TMPDIR_BASE/f6-protected"
+    local work_dir="$TMPDIR_BASE/f6-work"
+    mkdir -p "$protected_dir" "$work_dir"
+    cat > "$protected_dir/WORKTREE_NOTES.md" <<EOF
+# Worktree Notes
+Branch: victim
+Created: 2026-05-22
+
+## BugsFound
+- $token do not disclose this line
+
+## RelatedTasks
+- (none)
+
+## NextTasks
+- (none)
+
+## History Notes
+- (none)
+EOF
+    cp "$FIXTURE_NOTES" "$work_dir/WORKTREE_NOTES.md"
+    local before; before="$(file_md5_of "$protected_dir/WORKTREE_NOTES.md")"
+    local failures=""
+
+    # (a) relative traversal — the form the guard can see.
+    local rel="../f6-protected/WORKTREE_NOTES.md" out code
+    out="$( cd "$work_dir" && run_with_timeout 30 node "$TRIAGE_BIN" list "$rel" 2>&1 )"
+    code=$?
+    [ "$code" != "0" ] || failures="$failures rel-list-exit=0"
+    case "$out" in *"$token"*) failures="$failures rel-list-disclosed-content" ;; esac
+
+    ( cd "$work_dir" && run_with_timeout 30 node "$TRIAGE_BIN" annotate "$rel" 6 1 >/dev/null 2>&1 )
+    code=$?
+    [ "$code" != "0" ] || failures="$failures rel-annotate-exit=0"
+
+    # (b) absolute traversal — normalizes to the same file; the contract asserted
+    #     here is confinement of WRITES, not of reads.
+    # node_path() runs the whole string through `cygpath -m`, which silently
+    # collapses `..` inside an existing path — the literal traversal segment
+    # would never reach the CLI. Convert only the base directory, then append
+    # the `../` suffix as a plain string so the raw `..` survives intact on
+    # both Windows/git-bash and POSIX.
+    local abs_base; abs_base="$(node_path "$TMPDIR_BASE")"
+    local abs="$abs_base/f6-work/../f6-protected/WORKTREE_NOTES.md"
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$abs" 6 1 >/dev/null 2>&1
+
+    # (c) the protected file must be byte-identical after every attempt, with no
+    #     half-written temp file left beside it.
+    [ "$(file_md5_of "$protected_dir/WORKTREE_NOTES.md")" = "$before" ] \
+        || failures="$failures protected-file-modified"
+    ls "$protected_dir"/*.tmp >/dev/null 2>&1 && failures="$failures tmp-residue"
+
+    if [ -z "$failures" ]; then
+        pass "F6: traversal to an existing outside WORKTREE_NOTES.md is refused; the file is neither disclosed nor modified"
+    else
+        fail "F6: traversal guard leaked —$failures"
+    fi
+}
+
+# ---- F7 (security): basename != WORKTREE_NOTES.md → non-zero exit ----
+test_F7_wrong_basename_rejected() {
+    require_bin "F7: wrong basename rejected" || return
+
+    local dir="$TMPDIR_BASE/f7"
+    mkdir -p "$dir"
+    : > "$dir/some-other-file.md"
+    local wrong; wrong="$(node_path "$dir/some-other-file.md")"
+
+    run_with_timeout 30 node "$TRIAGE_BIN" list "$wrong" >/dev/null 2>&1
+    local code_list=$?
+    run_with_timeout 30 node "$TRIAGE_BIN" annotate "$wrong" 1 1 >/dev/null 2>&1
+    local code_anno=$?
+
+    if [ "$code_list" != "0" ] && [ "$code_anno" != "0" ]; then
+        pass "F7: non-WORKTREE_NOTES.md basename rejected (list=$code_list, annotate=$code_anno)"
+    else
+        fail "F7: expected non-zero for both, got list=$code_list annotate=$code_anno"
+    fi
+}
+
+# ============ Run all ============
+
+test_R1_renderer_bin_absent
+test_F1_triage_list_basic
+test_F2_triage_list_all_none
+test_F3_triage_annotate_then_list
+test_F4_list_excludes_marked
+test_F5_triage_annotate_invalid_line
+test_F6_path_traversal_rejected
+test_F7_wrong_basename_rejected
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
+echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
+
+exit $FAIL

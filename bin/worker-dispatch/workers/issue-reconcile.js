@@ -13,7 +13,7 @@
 // plain script cannot paper over that, so paging is expressed the way gh
 // actually supports it — a single `--limit` bounded scan, with the cap surfaced
 // in the summary when it is reached rather than being passed off as a full scan.
-// tests/TL3-worker-dispatch-gh-contract.sh fences both directions against the
+// tests/bin/TL3-worker-dispatch-gh-contract.sh fences both directions against the
 // real binary, including a source scan for the phantom flag — so do not name it
 // here even in prose.
 

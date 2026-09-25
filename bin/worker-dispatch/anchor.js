@@ -15,7 +15,7 @@
 //
 // This module never reads the process working directory and never asks git for a
 // toplevel — the caller's location must not be able to influence any anchor.
-// tests/feature-1643-worker-dispatch-anchor.sh asserts both by source scan.
+// tests/bin/feature-1643-worker-dispatch-anchor.sh asserts both by source scan.
 
 const fs = require("fs");
 const path = require("path");

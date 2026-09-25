@@ -21,6 +21,31 @@ _trim() {
   printf -v "$1" '%s' "$__v"
 }
 
+# _is_test_entrypoint <rel> — true for a test entrypoint path: flat tests/<file>.sh
+# or 2-level tests/<category>/<file>.sh (canonical category, no deeper nesting).
+_is_test_entrypoint() {
+  local rel="$1" base cat rest
+  base="${rel#tests/}"
+  [[ "$base" == "$rel" ]] && return 1
+  [[ "$base" != */* ]] && return 0
+  cat="${base%%/*}"; rest="${base#*/}"
+  [[ "$cat" =~ ^(hooks|bin|skills|agents|install|tests)$ && "$rest" == *.sh && "$rest" != */* ]]
+}
+
+# _is_flat_test_sh <rel> — true for a flat tests/<file>.sh (depth-1, no category
+# subdir), excluding the run-all.sh infra runner. New flat .sh tests are rejected
+# (#1834): a .sh test entrypoint must live under tests/<category>/. .Tests.ps1 and
+# test_*.py stay top-level and are out of scope.
+_is_flat_test_sh() {
+  local rel="$1" base
+  base="${rel#tests/}"
+  [[ "$base" == "$rel" ]] && return 1      # not under tests/
+  [[ "$base" == */* ]] && return 1          # has a subdir → 2-level, not flat
+  [[ "$base" == *.sh ]] || return 1         # only .sh entrypoints
+  [[ "$base" == "run-all.sh" ]] && return 1 # infra runner exempt
+  return 0
+}
+
 # check_content <label> <tests-line> <tags-line>
 # Validates the extracted `# Tests:` and `# Tags:` header lines. Both header
 # lines are passed as strings (may be empty when absent). Returns 1 on any
@@ -142,19 +167,29 @@ case "$mode" in
         */tests/*.sh|tests/*.sh) ;;
         *) continue ;;
       esac
+      # Compute the repo-relative path once; reused by both the flat-layout
+      # rejection and the harness-source check below.
+      rel="$f"
+      repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+      if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
+        rel="${f#"$repo_root_hs"/}"
+      fi
+      # 2-level enforcement (#1834): a NEWLY-ADDED flat tests/<name>.sh is rejected —
+      # .sh test entrypoints must live under tests/<category>/. Existing flat files
+      # are grandfathered (swept by #2372); .Tests.ps1 / test_*.py stay top-level;
+      # run-all.sh is the infra runner (both handled by _is_flat_test_sh).
+      if _is_flat_test_sh "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        echo "FLAT_TEST_SH_REJECTED: ${f} (new .sh tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
+        FAIL=1
+        continue
+      fi
       content="$(staged_content "$f")" || continue
       extract_headers "$content"
       check_content "$f" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
       # Harness source check: new top-level tests/*.sh files must source harness.sh.
       # Only applies when the repo ships tests/lib/harness.sh (gradual adoption).
       # Only applies to newly-added files (not to edits of existing files).
-      rel="$f"
-      repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-      if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
-        rel="${f#"$repo_root_hs"/}"
-      fi
-      base="${rel#tests/}"
-      if [[ "$base" != "$rel" && "$base" != */* ]] \
+      if _is_test_entrypoint "$rel" \
          && [[ -n "$repo_root_hs" && -f "$repo_root_hs/tests/lib/harness.sh" ]]; then
         if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
           check_harness_source "$f" "$content" || FAIL=1
@@ -178,11 +213,15 @@ case "$mode" in
     fi
     shopt -s nullglob
     FAIL=0
-    # tests/*.sh glob does not match _archive/ subdirectory
-    for f in "$root/tests/"*.sh; do
-      rel="tests/$(basename "$f")"
-      extract_headers_file "$f"
-      check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
+    # 2-level layout: scan tests/<category>/*.sh for the six canonical categories.
+    # *.sh does not cross '/', so split dispatchers' <name>/ sub-files are excluded;
+    # tests/_archive/ and tests/lib/ are not categories and are not scanned.
+    for cat in hooks bin skills agents install tests; do
+      for f in "$root/tests/$cat/"*.sh; do
+        rel="${f#"$root"/}"
+        extract_headers_file "$f"
+        check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
+      done
     done
     [[ "$FAIL" -eq 1 ]] && exit 1
     exit 0
