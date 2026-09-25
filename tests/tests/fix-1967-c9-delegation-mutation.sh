@@ -45,8 +45,8 @@
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBJECT="$AGENTS_DIR/tests/feature-confirm-flags-static.sh"
-OWNER="$AGENTS_DIR/tests/install-path-exposed-commands.sh"
+SUBJECT="$AGENTS_DIR/tests/skills/feature-confirm-flags-static.sh"
+OWNER="$AGENTS_DIR/tests/install/install-path-exposed-commands.sh"
 
 PASS=0
 FAIL=0

@@ -27,7 +27,7 @@ if command -v cygpath >/dev/null 2>&1; then
 else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
-CASE_DIR="$AGENTS_DIR/tests/feature-workflow-off-session-override"
+CASE_DIR="$AGENTS_DIR/tests/hooks/feature-workflow-off-session-override"
 
 PASS=0
 FAIL=0

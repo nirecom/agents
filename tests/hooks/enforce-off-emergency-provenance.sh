@@ -239,7 +239,7 @@ run_emergency() { # <sid> <cmd> -> driver JSON on stdout
 # provenance_in <file>: the provenance value recorded in a marker/audit JSON.
 provenance_in() { grep -o '"provenance":"[a-z_]*"' "$1" 2>/dev/null | head -1 | sed 's/.*:"//; s/"$//'; }
 
-PARTS_DIR="$AGENTS_DIR/tests/enforce-off-emergency-provenance"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-off-emergency-provenance"
 # shellcheck source=./enforce-off-emergency-provenance/cases-p1-invocation.sh
 . "$PARTS_DIR/cases-p1-invocation.sh"
 # shellcheck source=./enforce-off-emergency-provenance/cases-p2-p8-lifecycle.sh

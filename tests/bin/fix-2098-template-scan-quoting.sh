@@ -31,7 +31,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
 TASK_YML="$TEMPLATE_DIR/task.yml"
 INCIDENT_YML="$TEMPLATE_DIR/incident.yml"
-SIBLING="$AGENTS_DIR/tests/fix-2098-issue-template-schema.sh"
+SIBLING="$AGENTS_DIR/tests/bin/fix-2098-issue-template-schema.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

@@ -342,7 +342,7 @@ run_MD2() {
 }
 
 # ===== examiner robustness cases (EX-*) live in the sibling part file =====
-PARTS_DIR="$AGENTS_DIR/tests/feat-1608-off-clearance-mint"
+PARTS_DIR="$AGENTS_DIR/tests/bin/feat-1608-off-clearance-mint"
 # shellcheck source=./feat-1608-off-clearance-mint/cases-examiner.sh
 . "$PARTS_DIR/cases-examiner.sh"
 

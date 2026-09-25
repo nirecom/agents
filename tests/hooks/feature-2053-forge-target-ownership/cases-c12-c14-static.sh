@@ -59,7 +59,7 @@ run_block_c12_c14() {
     # R3-NUL-4: nul_scan only walks .js files, so a raw NUL planted in one of
     # THIS suite's own .sh files — this file included — would pass R3-NUL-1
     # silently. Scope matches the class, not just the guard's own language.
-    local TESTDIR="$AGENTS_DIR/tests/feature-2053-forge-target-ownership"
+    local TESTDIR="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership"
     local sh_offenders
     sh_offenders="$(nul_scan_sh "$(npath "$TESTDIR")")"
     if [ -z "$sh_offenders" ]; then

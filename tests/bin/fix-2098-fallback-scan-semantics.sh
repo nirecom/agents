@@ -26,8 +26,8 @@ SKIP=0
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
 TASK_YML="$TEMPLATE_DIR/task.yml"
-SCHEMA_SIB="$AGENTS_DIR/tests/fix-2098-issue-template-schema.sh"
-NOPREFILL_SIB="$AGENTS_DIR/tests/fix-2098-issue-template-no-prefill.sh"
+SCHEMA_SIB="$AGENTS_DIR/tests/bin/fix-2098-issue-template-schema.sh"
+NOPREFILL_SIB="$AGENTS_DIR/tests/bin/fix-2098-issue-template-no-prefill.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

@@ -115,7 +115,7 @@ section_body() { # <file> <heading-literal>
     sed -n "${start},${end}p" "$f"
 }
 
-PART_DIR="$AGENTS_DIR/tests/feature-2124-tool-selection-priority"
+PART_DIR="$AGENTS_DIR/tests/bin/feature-2124-tool-selection-priority"
 
 . "$AGENTS_DIR/tests/lib/read-directive-negation.sh"
 . "$PART_DIR/section-contract.sh"

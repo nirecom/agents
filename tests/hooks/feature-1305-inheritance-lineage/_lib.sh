@@ -4,7 +4,7 @@
 # Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"
-PROBE_JS="$AGENTS_DIR/tests/feature-1305-inheritance-lineage/probe.js"
+PROBE_JS="$AGENTS_DIR/tests/hooks/feature-1305-inheritance-lineage/probe.js"
 
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 

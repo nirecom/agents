@@ -16,7 +16,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-CASE_DIR="$AGENTS_DIR/tests/feature-2169-workflow-not-started-notify-gate"
+CASE_DIR="$AGENTS_DIR/tests/hooks/feature-2169-workflow-not-started-notify-gate"
 
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 

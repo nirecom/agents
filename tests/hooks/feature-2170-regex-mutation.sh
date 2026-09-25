@@ -14,7 +14,7 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 export AGENTS_DIR
 export AGENTS_CONFIG_DIR="$AGENTS_DIR"
-MUT="$AGENTS_DIR/tests/feature-2170-regex-mutation/mutate.js"
+MUT="$AGENTS_DIR/tests/hooks/feature-2170-regex-mutation/mutate.js"
 command -v node >/dev/null 2>&1 || exit 77
 [ -f "$MUT" ] || exit 77
 

@@ -85,4 +85,4 @@ fi
 # The nested form the #2223 suites themselves use: the hook only ever sees the
 # literal outer command string, so an invocation inside a test script is unseen.
 assert_eq "T2223AD-nested-invocation-not-seen-by-hook" "approve" \
-    "$(hook_verdict "bash $AGENTS_DIR/tests/feature-2223-local-env-overlay.sh")"
+    "$(hook_verdict "bash $AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay.sh")"

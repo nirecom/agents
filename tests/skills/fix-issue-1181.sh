@@ -17,7 +17,7 @@ WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
 ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
 META_CLASSIFY_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
 DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-SECTION_BULK="$AGENTS_DIR/tests/feature-issue-create-skill/section-dispatch-bulk.sh"
+SECTION_BULK="$AGENTS_DIR/tests/agents/feature-issue-create-skill/section-dispatch-bulk.sh"
 
 PASS=0
 FAIL=0

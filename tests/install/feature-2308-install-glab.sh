@@ -49,7 +49,7 @@ GLAB_SH_OK=0
 # ---------------------------------------------------------------------------
 # Sections 1–4: Linux/macOS tests (install.sh / install/linux/glab.sh)
 # ---------------------------------------------------------------------------
-_SUBDIR="$AGENTS_DIR/tests/feature-2308-install-glab"
+_SUBDIR="$AGENTS_DIR/tests/install/feature-2308-install-glab"
 if [ "$_on_windows_bash" = "0" ]; then
     source "$_SUBDIR/linux-auth.sh"
     source "$_SUBDIR/linux-dns.sh"

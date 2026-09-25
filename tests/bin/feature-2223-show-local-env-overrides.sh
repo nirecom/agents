@@ -471,7 +471,7 @@ fi
 # and counters above; split off to stay under the 500-line HARD limit of
 # rules/coding/file-split.md, the same shape feature-2223-local-env-overlay uses.
 # ---------------------------------------------------------------------------
-CASES_DIR="$AGENTS_DIR/tests/feature-2223-show-local-env-overrides"
+CASES_DIR="$AGENTS_DIR/tests/bin/feature-2223-show-local-env-overrides"
 for _case in resolution security degradation readonly; do
     _case_file="$CASES_DIR/$_case.sh"
     if [ -f "$_case_file" ]; then

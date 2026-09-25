@@ -78,7 +78,7 @@ _r13_kv() {
 _r13_expect() { assert_eq "R13 $1 == $2" "$2" "$(_r13_kv "$1")"; }
 
 run_R13_onunknown_direction() {
-    local probe="$AGENTS_DIR/tests/enforce-protected-marker-write/round13-onunknown-probe.js"
+    local probe="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write/round13-onunknown-probe.js"
     if [ ! -f "$probe" ]; then
         fail "R13 probe helper missing at $probe - the whole section is vacuous"
         return

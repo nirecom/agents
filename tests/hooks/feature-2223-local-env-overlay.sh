@@ -238,7 +238,7 @@ TABLE
 # because this one exceeded the 500-line HARD limit of rules/coding/file-split.md.
 # Sourced (not executed) so the cases share the helpers, fixtures and counters
 # defined above.
-CASES_FILE="$AGENTS_DIR/tests/feature-2223-local-env-overlay/blocklist-coverage.sh"
+CASES_FILE="$AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay/blocklist-coverage.sh"
 if [ -f "$CASES_FILE" ]; then
     . "$CASES_FILE"
 else
@@ -417,7 +417,7 @@ assert_eq "T2223R-meta-path-blocklist-still-wins" "on" "$(eek "$META_ROOT" ENFOR
 
 # The Bash-tool door in front of env-effective-kv --allow-dump. Same sibling-file
 # form as the blocklist cases above; sourced last because it uses to_node_path.
-DUMP_CASES_FILE="$AGENTS_DIR/tests/feature-2223-local-env-overlay/allow-dump-guard.sh"
+DUMP_CASES_FILE="$AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay/allow-dump-guard.sh"
 if [ -f "$DUMP_CASES_FILE" ]; then
     . "$DUMP_CASES_FILE"
 else

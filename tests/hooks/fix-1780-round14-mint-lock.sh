@@ -142,7 +142,7 @@ fi
 # shellcheck source=./lib/examiner-stub.sh
 . "$AGENTS_DIR/tests/lib/examiner-stub.sh"
 
-PARTS_DIR="$AGENTS_DIR/tests/fix-1780-round14-mint-lock"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1780-round14-mint-lock"
 # shellcheck source=./fix-1780-round14-mint-lock/cases-lock-primitive.sh
 . "$PARTS_DIR/cases-lock-primitive.sh"
 # shellcheck source=./fix-1780-round14-mint-lock/cases-lock-protected.sh

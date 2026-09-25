@@ -68,7 +68,7 @@ PRUNE_REQUIRE="./bin/vscode-cc-repair/prune"
 EXECUTE_REQUIRE="./bin/vscode-cc-repair/prune/execute"
 LIB_DIR="$AGENTS_DIR/bin/vscode-cc-repair"
 LIB_REL="bin/vscode-cc-repair"
-PARTS_DIR="$AGENTS_DIR/tests/bin-vscode-cc-repair-prune"
+PARTS_DIR="$AGENTS_DIR/tests/bin/bin-vscode-cc-repair-prune"
 
 if [ ! -f "$SCRIPT" ]; then
   echo "SKIP (RED): $SCRIPT not yet implemented — TDD RED phase"

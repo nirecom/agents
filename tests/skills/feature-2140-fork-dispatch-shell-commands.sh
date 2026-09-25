@@ -93,7 +93,7 @@ ROWS_EXPECTED=20  # G1..G18 (plus G17c) negative-control rows -- see negative-co
 # Closest-to-action mitigation: a real fork-dispatch E2E (rules/test/claude-e2e.md) and the
 # per-session receipt written by hooks/instructions-loaded-audit.js.
 
-PART_DIR="$AGENTS_DIR/tests/feature-2140-fork-dispatch-shell-commands"
+PART_DIR="$AGENTS_DIR/tests/skills/feature-2140-fork-dispatch-shell-commands"
 
 . "$AGENTS_DIR/tests/lib/read-directive-negation.sh"
 . "$PART_DIR/review-tests-checks.sh"

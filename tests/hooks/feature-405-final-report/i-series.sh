@@ -147,7 +147,7 @@ $out"
 }
 
 test_I14_dispatcher_propagates_crashed_child_exit_code() {
-    local dispatcher="$AGENTS_DIR/tests/feature-405-final-report.sh"
+    local dispatcher="$AGENTS_DIR/tests/hooks/feature-405-final-report.sh"
     if [ ! -f "$dispatcher" ]; then
         skip "I14_dispatcher_propagates_crashed_child_exit_code (dispatcher not found)"
         return

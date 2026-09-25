@@ -11,7 +11,7 @@ set -uo pipefail
 # "issue this" vs "quote this" by regex). Only L4 stops a compound command physically.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PART_DIR="$AGENTS_DIR/tests/feature-2134-bash-guard"
+PART_DIR="$AGENTS_DIR/tests/hooks/feature-2134-bash-guard"
 PROBE_JS="$PART_DIR/judge-probe.js"
 
 # THE CONTRACT UNDER TEST. bash-guard is a PRESENTATION guard, not a safety guard.

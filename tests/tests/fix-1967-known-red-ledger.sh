@@ -27,7 +27,7 @@
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBJECT="$AGENTS_DIR/tests/feature-confirm-flags-static.sh"
+SUBJECT="$AGENTS_DIR/tests/skills/feature-confirm-flags-static.sh"
 EXPECTED_XFAIL=7
 
 PASS=0

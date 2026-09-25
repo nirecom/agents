@@ -15,7 +15,7 @@
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-PARTS_DIR="$AGENTS_DIR/tests/feature-2053-forge-target-ownership"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership"
 HOOK="$AGENTS_DIR/hooks/confirm-forge-target-ownership.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 

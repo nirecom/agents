@@ -234,7 +234,7 @@ rm -rf "$TMP" 2>/dev/null || true
 # is reached from here. parser-cases.sh was already unwired before this change; it is
 # folded in with the other two rather than left as a half-fixed instance of the same
 # defect (CPR-E2C/CPR-E2E).
-SECTION_DIR="$AGENTS_DIR/tests/enforce-clearance-token-write"
+SECTION_DIR="$AGENTS_DIR/tests/hooks/enforce-clearance-token-write"
 # shellcheck source=tests/lib/section-runner.sh
 . "$AGENTS_DIR/tests/lib/section-runner.sh"
 run_section "parser-cases.sh" 120

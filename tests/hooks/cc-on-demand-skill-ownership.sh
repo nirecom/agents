@@ -263,7 +263,7 @@ else
 fi
 
 # --- A: require-safety for the reporter itself (sibling folder, file-split Pattern A) ---
-RS_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-require-safety.sh"
+RS_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh"
 if [ -f "$RS_CASES" ]; then
     # shellcheck source=./cc-on-demand-skill-ownership/cases-require-safety.sh
     . "$RS_CASES"
@@ -273,7 +273,7 @@ fi
 
 # --- C3: reject-context — whether a mention inside a fence / HTML comment / #-line may
 # count as ownership. Runs before C1 so the mapping is read against a stated detector. ---
-RC_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-reject-context.sh"
+RC_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-reject-context.sh"
 if [ -f "$RC_CASES" ]; then
     # shellcheck source=/dev/null
     . "$RC_CASES"
@@ -283,7 +283,7 @@ fi
 
 # --- O: order axis — whether a Read placed AFTER the governed action still counts as
 # ownership. Orthogonal to the reject-context axis above (WHERE vs WHEN). ---
-OA_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-order-axis.sh"
+OA_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-order-axis.sh"
 if [ -f "$OA_CASES" ]; then
     # shellcheck source=/dev/null
     . "$OA_CASES"
@@ -293,7 +293,7 @@ fi
 
 # --- HW: the rules whose owner is a HOOK rather than a SKILL.md. Same ownership question,
 # different delivery mechanism, so it is graded by invoking the hooks. ---
-HW_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-hook-wiring.sh"
+HW_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-hook-wiring.sh"
 if [ -f "$HW_CASES" ]; then
     # shellcheck source=/dev/null
     . "$HW_CASES"
@@ -303,7 +303,7 @@ fi
 
 # --- C1: the exact rule -> required-consumer mapping. In the sibling folder to keep
 # this entry file under the 300-line WARN (rules/coding/file-split.md Pattern A). ---
-REQ_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-required.sh"
+REQ_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-required.sh"
 if [ -f "$REQ_CASES" ]; then
     # shellcheck source=/dev/null
     . "$REQ_CASES"

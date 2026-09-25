@@ -31,7 +31,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-CASE_DIR="$AGENTS_DIR/tests/feature-2013-step-in-flight-automark"
+CASE_DIR="$AGENTS_DIR/tests/hooks/feature-2013-step-in-flight-automark"
 
 # Fixture isolation (rules/test/fixture-isolation.md): never let a spawned node
 # resolve the developer's live session or the real ~/.workflow-plans.

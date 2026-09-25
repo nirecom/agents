@@ -70,7 +70,7 @@ chmod +x "$REPO/captured.sh" "$REPO/control.sh"
 # settings.json (round 13, C9): a hand-written matcher would test this file's author,
 # not the artifact that ships. real-hook-entry.js itself is covered at TL2 by
 # tests/feature-2170-capture-echo-guard/part6-settings.sh E-5.
-ENTRY_DRV="$AGENTS_DIR/tests/feature-2170-capture-echo-guard/real-hook-entry.js"
+ENTRY_DRV="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
 AGENTS_DIR="$AGENTS_DIR" node "$ENTRY_DRV" --emit "block-capture-echo.js" > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
     echo "FAIL: block-capture-echo.js is not registered in the real settings.json" >&2

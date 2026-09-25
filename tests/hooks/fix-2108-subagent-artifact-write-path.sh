@@ -256,7 +256,7 @@ assert_eq "H0-rc gate_decision maps a non-zero exit to crash" "crash" \
     "$(gate_decision "$(run_hook_capture "" node -e "process.exit(3)")")"
 
 # ---- case parts (rules/coding/file-split.md: sibling <name>/ folder) --------
-PARTS="$AGENTS_DIR/tests/fix-2108-subagent-artifact-write-path"
+PARTS="$AGENTS_DIR/tests/hooks/fix-2108-subagent-artifact-write-path"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-allowlist.sh
 . "$PARTS/cases-allowlist.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-plans-containment.sh

@@ -435,7 +435,7 @@ fi
 # because this one crossed the 300-line WARN (rules/coding/file-split.md Pattern A); the
 # axis is document-vs-behaviour, and it is sourced from here so EWO_ABS and the helpers
 # above stay in scope. ---
-E10_CASES="$AGENTS_DIR/tests/feature-2037-minimized-escape-hatches/marker-sequence.sh"
+E10_CASES="$AGENTS_DIR/tests/hooks/feature-2037-minimized-escape-hatches/marker-sequence.sh"
 if [ -f "$E10_CASES" ]; then
     # shellcheck source=/dev/null
     . "$E10_CASES"

@@ -196,7 +196,7 @@ else
 fi
 
 # ---- case parts (rules/coding/file-split.md: sibling <name>/ folder) -------
-PARTS_DIR="$AGENTS_DIR/tests/enforce-protected-marker-write"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write"
 # shellcheck source=./enforce-protected-marker-write/cases-location.sh
 . "$PARTS_DIR/cases-location.sh"
 # shellcheck source=./enforce-protected-marker-write/cases-normalize.sh

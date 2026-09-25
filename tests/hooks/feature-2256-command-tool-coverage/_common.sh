@@ -18,7 +18,7 @@ SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
 WFSTATE_MODULE="$HOOKS_NODE/workflow-state"
 export WFSTATE_MODULE
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-MKPAYLOAD="$AGENTS_DIR/tests/feature-2256-command-tool-coverage/mkpayload.js"
+MKPAYLOAD="$AGENTS_DIR/tests/hooks/feature-2256-command-tool-coverage/mkpayload.js"
 PROBE="$AGENTS_NODE/tests/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0

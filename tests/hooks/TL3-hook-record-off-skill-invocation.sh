@@ -102,7 +102,7 @@ MARKER3="$WFDIR/$SID3.$MARKER_KIND"
 OVERRIDE_MARKER3="$WFDIR/$SID3.workflow-off"
 AUDIT3="$PLANSDIR/$SID3-supervisor-state.json"
 
-PARTS_DIR="$AGENTS_DIR/tests/TL3-hook-record-off-skill-invocation"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/TL3-hook-record-off-skill-invocation"
 # The capture wrapper, the Bash guard, the project settings.json that registers
 # them next to the real consumer, and the environment the live turns run under.
 # shellcheck source=./TL3-hook-record-off-skill-invocation/fixture-hooks.sh

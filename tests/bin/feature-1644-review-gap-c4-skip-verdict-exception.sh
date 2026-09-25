@@ -43,7 +43,7 @@ RSV="$AGENTS_DIR_N/bin/workflow/record-skip-verdict"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
 PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
-SIBLING_TEST="$AGENTS_DIR/tests/feature-1644-sibling-cli-advance.sh"
+SIBLING_TEST="$AGENTS_DIR/tests/bin/feature-1644-sibling-cli-advance.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

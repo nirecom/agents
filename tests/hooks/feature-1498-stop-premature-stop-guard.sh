@@ -42,7 +42,7 @@ require_source() {
     return 0
 }
 
-SCRIPT_DIR="$AGENTS_DIR/tests/feature-1498-stop-premature-stop-guard"
+SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-1498-stop-premature-stop-guard"
 
 # shellcheck source=./feature-1498-stop-premature-stop-guard/state-seeds.sh
 . "$SCRIPT_DIR/state-seeds.sh"
