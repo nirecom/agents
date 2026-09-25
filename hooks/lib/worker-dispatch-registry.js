@@ -2,7 +2,7 @@
 // hooks/lib/worker-dispatch-registry.js — SSOT (PURE DATA) for the plain-script worker dispatcher (#1643).
 // Consumed by: hooks/enforce-worktree/main-worktree-allows/* (worker-name enum only) and bin/worker-dispatch/* (full spec).
 // HARD INVARIANT: zero deps, not even a node builtin — must load before bin/worker-dispatch/ exists;
-// tests/feature-1643-worker-dispatch-schema.sh asserts this by source scan.
+// tests/bin/feature-1643-worker-dispatch-schema.sh asserts this by source scan.
 // Entry shape: name / argSpec (per-worker, not shared by reference, so #1673's close-family can diverge) /
 // payloadSpec (field -> capability type, see bin/worker-dispatch/capability.js) / binaries / writeScopes / renderer.
 // renderer: status-triple | status-triple-quoted | test-runner-yaml — quoting is inherited from the
@@ -55,7 +55,7 @@ const CHILD_ENV_ALLOWLIST = [
   // GIT_CONFIG_GLOBAL/SYSTEM and SSH_AUTH_SOCK (a live signing oracle) do not qualify;
   // secrets go into the envPassthrough of the worker that needs them, not here. Fenced by
   // tests/feature-1643-worker-dispatch-{schema,script-anchor}.sh and
-  // tests/TL3-worker-dispatch-child-env-gh-auth.sh — add a member here => also add it there.
+  // tests/bin/TL3-worker-dispatch-child-env-gh-auth.sh — add a member here => also add it there.
 
   // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.

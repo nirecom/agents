@@ -90,7 +90,7 @@ function generateAllowlist(rows) {
   const lines = [
     "# .prompt-extraction-allowlist — frozen baseline of pre-existing prompt bloat.",
     "# Format: <kind> <path> <count>   (kind: code-fence | inline-procedure)",
-    "# Ratchet: counts may shrink, never grow (tests/feature-1642-prompt-extraction-static-guards.sh).",
+    "# Ratchet: counts may shrink, never grow (tests/bin/feature-1642-prompt-extraction-static-guards.sh).",
     "# Regenerate with: bin/check-prompt-extraction --all --write-allowlist",
   ];
   for (const r of sorted) {

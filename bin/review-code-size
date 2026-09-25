@@ -123,7 +123,8 @@ if [[ "$STAGED_ONLY" -eq 1 ]]; then
     if echo "$file" | grep -qE "\.($_EXT_PATTERN)$" \
       && ! echo "$file" | grep -q 'node_modules/' \
       && ! echo "$file" | grep -q '\.git/' \
-      && ! echo "$file" | grep -q '_archive/'; then
+      && ! echo "$file" | grep -q '_archive/' \
+      && ! echo "$file" | grep -q '_archived/'; then
       TARGETS="${TARGETS}${file}"$'\n'
     fi
   done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)

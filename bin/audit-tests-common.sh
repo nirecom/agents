@@ -113,7 +113,7 @@ in_common_scope() {
 }
 
 if [[ "$FIX_HEADERS" -eq 1 ]]; then
-  for testfile in tests/*.sh; do
+  for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh; do
     [[ -e "$testfile" ]] || continue
     in_common_scope "$testfile" || continue
     _fix_headers_report "$testfile"
@@ -136,7 +136,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests-common.sh report — ${TODAY}"
-  echo "# Scope: top-level tests/*.{sh,Tests.ps1},test_*.py excluding feature-<N>-*"
+  echo "# Scope: tests/<cat>/*.sh (six categories) + top-level tests/*.Tests.ps1,test_*.py excluding feature-<N>-*"
   echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -145,7 +145,7 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for testfile in tests/*.sh tests/*.Tests.ps1 tests/test_*.py; do
+for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh tests/*.Tests.ps1 tests/test_*.py; do
   [[ -e "$testfile" ]] || continue
   in_common_scope "$testfile" || continue
   base="$(basename "$testfile")"

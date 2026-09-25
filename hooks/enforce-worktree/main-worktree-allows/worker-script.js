@@ -40,7 +40,7 @@ const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 // three entries on exactly that ground (bin/issue-close-gate.sh,
 // bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/parent-body-update.sh):
 // their sole callers are run-stage-chain.sh and run-initial.sh, which the
-// worker dispatcher spawns. tests/fix-1600-sanctioned-coverage-audit.sh pins
+// worker dispatcher spawns. tests/hooks/fix-1600-sanctioned-coverage-audit.sh pins
 // both halves — the surviving set, and the absence of any Bash-tool call site
 // for the three that left.
 const SANCTIONED = [

@@ -69,7 +69,7 @@ closed on, never as "no session":
 | 127 | `node` not found on `PATH` |
 
 `bin/run-codex-review-loop --format security-code` (which invokes `bin/review-code-codex`) and
-`tests/fix-882-resolve-worktree-path/cases-2270-bridge-rc.sh` both read this table as
+`tests/hooks/fix-882-resolve-worktree-path/cases-2270-bridge-rc.sh` both read this table as
 authoritative rather than restating the contract themselves.
 
 ## The static guard

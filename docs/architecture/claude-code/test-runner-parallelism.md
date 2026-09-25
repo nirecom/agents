@@ -75,12 +75,12 @@ which ones: a test **declares** it.
 
 The declaration is written immediately after the `# Tags:` line, inside the first 10
 lines. That position is not cosmetic — `bin/check-table-driven.sh` and
-`tests/feature-689-frontmatter-convention.sh` both search only `head -10`, so the
+`tests/skills/feature-689-frontmatter-convention.sh` both search only `head -10`, so the
 line must not push `# Tests:` or `# Tags:` out of that window. The runner, by
 contrast, scans the first **20** lines. Write narrow, read wide: a *missed*
 declaration is the one fatal failure mode, so reception is deliberately more lenient
 than emission. The narrow writer rule is enforced by
-`tests/feature-1832-run-all-parallel/h-serial-header-convention.sh`.
+`tests/tests/feature-1832-run-all-parallel/h-serial-header-convention.sh`.
 
 When the cursor reaches a declared file the runner raises a **serial barrier**: it
 announces the drain on stderr, reaps until zero jobs are in flight, replays
@@ -315,7 +315,7 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
-| `tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |
+| `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |
 | `skills/_shared/test-design.md` | Author-facing `# Serial:` rules |
 | `skills/run-tests/SKILL.md` | Operator-facing `/run-tests` procedure and payload rules |
 

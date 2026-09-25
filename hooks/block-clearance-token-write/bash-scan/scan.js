@@ -48,7 +48,7 @@ const MAX_NESTED_SCAN_DEPTH = 3;
 
 // parseWithSubstitutionSpans(cmd): the span-preserving parse, fail-soft to null on a
 // thrown parse error. The call below is the ONE sanctioned site that enables the
-// preserveSubstitutionSpans option (tests/fix-1780-round11-substitution-additivity.sh
+// preserveSubstitutionSpans option (tests/hooks/fix-1780-round11-substitution-additivity.sh
 // X1/X2) — any other hook needing a substitution-span-aware IR must call this
 // function rather than passing the option itself, so the blast radius of that
 // option stays reviewable from this one file.
