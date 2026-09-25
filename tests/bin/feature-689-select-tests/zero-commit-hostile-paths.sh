@@ -2,40 +2,14 @@
 # Tests: bin/select-tests.sh
 # Tags: test-selection, merge-base, zero-commit, degradation, path-edge-cases, injection, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S27 — the filenames the working-tree fallback is handed.
-#
-# The committed range is produced by ONE git command whose output the selector already parses
-# line by line. The degraded set is produced by two, unioned, and every reasonable way of writing
-# that union — a pipeline, a `for` over unquoted output, an `xargs`, a `sort -u` fed by
-# substitution — has a different way of mangling a path that is not a plain word:
-#
-#   space              word-splits into two paths, neither of which exists
-#   leading dash       is read as an OPTION by the next command in the pipeline (`grep -zc...`,
-#                      `sort -zc-dash`), which is argument injection with a filename as the payload
-#   shell metacharacters   `$( )`, `&`, `;`, `'` — an unquoted expansion executes them
-#   embedded newline   desynchronises line-based parsing: one path becomes two lines
-#
-# None of these is exotic on a branch that has not committed yet; that is exactly where scratch
-# files and half-named new files live. And every one of them fails QUIETLY: the run still exits 0
-# and still prints a list, just not the right one.
-#
-# The three nameable cases are asserted positively — a matching test file must appear in stdout.
-# The newline case cannot be: git quotes control characters in `ls-files` / `diff --name-only`
-# output, so the correct behaviour is that the path is skipped rather than selected. What it must
-# never do is take the rest of the set down with it, so that row asserts the CONTROL file is
-# still selected and the run still exits 0.
-#
-# Windows refuses filenames containing characters below 0x20, so the newline fixture is created
-# opportunistically and the row reports SKIP where the filesystem will not hold it. Under MSYS the
-# creation SUCCEEDS but the newline is transliterated to a private-use codepoint, so what the row
-# actually exercises there is "a path git has to quote" rather than a literal newline — the same
-# assertion, one notch weaker. Its full form is a POSIX-host observation.
-# ============================================================================
+# S27 — the working-tree fallback unions two git commands, and every naive union (pipeline,
+# unquoted `for`, xargs, sort) mangles a non-word path: space word-splits, a leading dash is
+# read as an OPTION (argument injection), shell metachars execute unquoted, an embedded newline
+# desyncs line parsing. All fail QUIETLY (exit 0, wrong list). Three cases assert positively; the
+# newline case (git quotes it; Windows/MSYS can't hold a literal one) only asserts CONTROL survives + exit 0.
 
-# The hostile source paths, their resulting stems, and the fake test file each must select.
-# `bin/<name>.sh` is used throughout because bin/ is the selector's simplest stem rule — the row
-# is about the path surviving the pipeline, not about which stem rule applies to it.
+# The hostile source paths and the fake `bin/<name>.sh` test each must select. bin/ is the
+# simplest stem rule — the row tests the path surviving the pipeline, not which stem rule applies.
 ZC_HOSTILE_NAMES=(
     'zc space'
     '-zc-dash'
@@ -53,7 +27,7 @@ test_S27_zero_commit_hostile_filenames() {
     # leaving them behind would change what every later row can select.
     for n in "${ZC_HOSTILE_NAMES[@]}"; do
         src="$repo/bin/${n}.sh"
-        want="tests/feature-1779-${n}.sh"
+        want="tests/bin/feature-1779-${n}.sh"
         if ! printf 'change\n' > "$src" 2>/dev/null || [ ! -e "$src" ]; then
             skip "S27_zero_commit_hostile_filenames[$n]: this filesystem will not hold the name"
             continue
@@ -103,7 +77,7 @@ $err"
     fi
     # The control. If this is missing the run selected nothing at all and every assertion below
     # would be reporting the #1779 bug rather than a quoting defect.
-    if ! printf '%s\n' "$out" | grep -qF "tests/feature-689-select-tests.sh"; then
+    if ! printf '%s\n' "$out" | grep -qF "tests/bin/feature-689-select-tests.sh"; then
         fail "S27_zero_commit_hostile_filenames: the ordinary staged change selected nothing, so nothing about the hostile names is proven
 --- output ---
 $out
@@ -139,7 +113,7 @@ $err"
         local line extra=""
         while IFS= read -r line; do
             [ -z "$line" ] && continue
-            case "$line" in *"tests/feature-689-select-tests.sh") continue ;; esac
+            case "$line" in *"tests/bin/feature-689-select-tests.sh") continue ;; esac
             local known=0 w
             for w in ${wants[@]+"${wants[@]}"}; do
                 case "$line" in *"$w") known=1 ;; esac

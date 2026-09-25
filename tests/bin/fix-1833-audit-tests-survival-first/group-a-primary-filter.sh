@@ -64,7 +64,7 @@ while IFS='|' read -r a_name a_file a_want; do
     a_name="${a_name//[[:space:]]/}"
     a_file="${a_file//[[:space:]]/}"
     a_want="${a_want//[[:space:]]/}"
-    assert_eq "A-survival[$a_name] (rc=$A_RC)" "$a_want" "$(report_of "$A_OUT" "tests/$a_file")"
+    assert_eq "A-survival[$a_name] (rc=$A_RC)" "$a_want" "$(report_of "$A_OUT" "tests/bin/$a_file")"
 done <<'TABLE'
 # name              | fixture file                 | want report
 all-missing-open    | feature-101-allmissing.sh    | candidate
@@ -129,7 +129,7 @@ while IFS='|' read -r a_name a_file a_want; do
     a_file="${a_file//[[:space:]]/}"
     a_want="${a_want//[[:space:]]/}"
     assert_eq "A-survival-common[$a_name] (rc=$A_COMMON_RC)" "$a_want" \
-        "$(report_of "$A_COMMON_OUT" "tests/$a_file")"
+        "$(report_of "$A_COMMON_OUT" "tests/bin/$a_file")"
 done <<'TABLE'
 # name             | fixture file  | want report
 all-missing        | cc-gone.sh    | orphan

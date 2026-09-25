@@ -2,29 +2,13 @@
 # tests/fix-1833-audit-tests-survival-first.sh
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-#
-# TL2 contract test for #1833 — the retire-candidate PRIMARY FILTER moves from
-# "issue CLOSED + closed_at older than N months" to "every `# Tests:` token's
-# target is gone (format-OK, missing, no rename)". Issue state is demoted to a
-# DELETE-TIME safety check that can hold a deletion but can never create or
-# suppress a candidate.
-#
-# Fail-before-fix (BUGFIX session): bin/lib/test-retire-predicate.sh does not
-# exist yet and neither script implements the inverted order, so most cases here
-# are EXPECTED TO FAIL until the fix lands.
-#
-# Everything runs against throwaway git fixture repos under $TMPDIR_BASE with a
-# `gh` PATH stub; the real tests/ tree and the real GitHub API are never inputs.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real `gh api` transport, auth, rate-limiting and 404-from-another-repo
-#   behavior: the stub always answers instantly and locally.
-# - Real `gh repo view` slug resolution against github.com.
-# - The nightly GitHub Actions cron actually running both scripts on a runner
-#   (sweep.yml is grepped, not executed).
-# - Real-scale `find_renamed_path` cost over a multi-thousand-commit history.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+
+# TL2 contract for #1833: the retire PRIMARY FILTER moves from "issue CLOSED +
+# stale" to "every `# Tests:` target is gone"; issue state becomes a delete-time
+# check that can hold a deletion but never create or suppress a candidate. Cases
+# run against throwaway git fixtures with a `gh` stub, never the real tests/ tree
+# or GitHub API. The TL3 gap (real gh transport/resolution, the live cron,
+# real-scale find_renamed_path) is checked at USER_VERIFIED preflight via bin/check-verification-gate.sh.
 
 set -uo pipefail
 
@@ -77,39 +61,53 @@ make_repo() {
     echo "$root"
 }
 
+# fixture_relpath <name> — repo-relative path for a fixture test file. Since the
+# tests/ tree became 2-level, a flat name lands under the bin/ category subdir
+# (the audit scripts only scan category dirs); a name that already carries a
+# subdir (e.g. _archive/… or a caller-chosen category) is taken verbatim.
+fixture_relpath() {
+    case "$1" in
+        */*) printf 'tests/%s' "$1" ;;
+        *)   printf 'tests/bin/%s' "$1" ;;
+    esac
+}
+
 # add_test_file <root> <name> <tests-header-value> [tags]
 add_test_file() {
-    local root="$1" name="$2" hdr="$3" tags="${4:-TL2, scope:common}"
-    mkdir -p "$(dirname "$root/tests/$name")"
+    local root="$1" name="$2" hdr="$3" tags="${4:-TL2, scope:common}" rel
+    rel="$(fixture_relpath "$name")"
+    mkdir -p "$(dirname "$root/$rel")"
     {
         printf '#!/usr/bin/env bash\n'
         printf '# Tests: %s\n' "$hdr"
         printf '# Tags: %s\n' "$tags"
         printf 'echo fixture\n'
-    } > "$root/tests/$name"
+    } > "$root/$rel"
 }
 
 # add_test_file_nohdr <root> <name> — no `# Tests:` line at all.
 add_test_file_nohdr() {
-    local root="$1" name="$2"
-    mkdir -p "$(dirname "$root/tests/$name")"
+    local root="$1" name="$2" rel
+    rel="$(fixture_relpath "$name")"
+    mkdir -p "$(dirname "$root/$rel")"
     {
         printf '#!/usr/bin/env bash\n'
         printf '# Tags: TL2, scope:common\n'
         printf 'echo fixture\n'
-    } > "$root/tests/$name"
+    } > "$root/$rel"
 }
 
 # add_test_file_emptyhdr <root> <name> — `# Tests:` present but with no value.
 add_test_file_emptyhdr() {
-    local root="$1" name="$2"
-    mkdir -p "$(dirname "$root/tests/$name")"
+    local root="$1" name="$2" rel
+    rel="$(fixture_relpath "$name")"
+    mkdir -p "$(dirname "$root/$rel")"
     {
         printf '#!/usr/bin/env bash\n'
         printf '# Tests:\n'
         printf '# Tags: TL2, scope:common\n'
         printf 'echo fixture\n'
-    } > "$root/tests/$name"
+    } > "$root/$rel"
 }
 
 # add_src <root> <relpath> — creates a real (alive) target path.
@@ -329,7 +327,7 @@ run_gate_table() {
         want_report="${want_report//[[:space:]]/}"
         want_gate="${want_gate//[[:space:]]/}"
         want_fs="${want_fs//[[:space:]]/}"
-        assert_gate_row "$prefix[$name]" "$out" "$root" "tests/$file" \
+        assert_gate_row "$prefix[$name]" "$out" "$root" "tests/bin/$file" \
             "$want_report" "$want_gate" "$want_fs"
     done
 }

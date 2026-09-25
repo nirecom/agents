@@ -2,12 +2,11 @@
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, skills/sweep-tests/SKILL.md
 # Tags: TL2, audit-tests, retire, zero-result, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
-#
-# The whole point of #1833 is that the healthy steady state is "nothing to
-# retire". That state is therefore the most-executed path in production and the
-# one most likely to regress unnoticed: an empty candidate array must still be
-# valid JSON, the exit code must stay 1 (= no findings, NOT an error), and the
-# /sweep-tests prompt must tell the reader how to read a 0-line report.
+
+# The healthy steady state is "nothing to retire" — the most-executed path in
+# production and the one most likely to regress unseen. An empty candidate array
+# must still be valid JSON, the exit code must stay 1 (no findings, NOT an
+# error), and /sweep-tests must teach the reader how to read a 0-line report.
 
 # ── F1: every target alive — findings and diagnostics are both empty ────────
 
@@ -104,17 +103,12 @@ fi
 if [[ -f "$LOCAL_SKILL_MD" ]]; then
     F3_SKILL="$(cat "$LOCAL_SKILL_MD")"
 
-    # F3a — the zero-result reading rule. Merely finding the token
-    # MALFORMED_HEADER somewhere in the file proves nothing: it already appears
-    # in the STE-1/STE-2 vocabulary, so that check is green before the fix
-    # lands. What has to be present is ONE line that carries the whole
-    # interpretation — "0 CANDIDATE/ORPHAN lines" AND "MALFORMED_HEADER lines
-    # present" AND the conclusion that work remains on the other axis — and it
-    # has to sit after STE-3, where the reader meets the report.
-    #
-    # The regex is anchored on the three tokens rather than on prose wording so
-    # it survives an editorial rewrite, but it cannot be satisfied by any two of
-    # the three appearing on separate lines.
+    # F3a — the zero-result reading rule. The token MALFORMED_HEADER alone proves
+    # nothing (already in the STE-1/STE-2 vocabulary, green before the fix); what
+    # must be present is ONE line carrying "0 CANDIDATE/ORPHAN lines" AND
+    # "MALFORMED_HEADER present" AND the conclusion that work remains on another
+    # axis, and it must sit after STE-3. The regex anchors on the three tokens so
+    # it survives a rewrite, but is not satisfied by any two on separate lines.
     F3_ZERO_LINE="$(printf '%s\n' "$F3_SKILL" \
         | grep -nE '(CANDIDATE|ORPHAN)' \
         | grep -E 'MALFORMED_HEADER' \

@@ -3,21 +3,10 @@
 # Tags: TL2, audit-tests, retire, regression-family, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# Every other group uses invented fixture names (feature-701-*, cc-orphan-*).
-# Synthetic names cannot show a naming-shaped bug: `trp_scope_of` and
-# `trp_issue_ref` both key on the BASENAME, so a family whose real names carry
-# an embedded digit, a hyphenated multi-word stem, or a trailing number can be
-# routed to the wrong script or the wrong issue-reference class while every
-# synthetic fixture still passes.
-#
-# The names below are taken verbatim from the two families that survive in the
-# live tests/ tree today and that #1833 exists to make sweepable:
-#   feat-migrate-repo-*  — /migrate-repo coverage, common scope, hyphenated stem
-#   feature-canary*      — canary fixtures whose stem starts with `feature-` but
-#                          is NOT `feature-<N>-`, so they belong to the COMMON
-#                          script; misrouting them means neither script owns them
-#                          and they can never be retired (the #1833 false
-#                          negative in its purest form).
+# Synthetic fixture names can't expose naming-shaped bugs: trp_scope_of and
+# trp_issue_ref key on the BASENAME. The names below are verbatim from two live
+# families #1833 must make sweepable — feat-migrate-repo-* (common scope, hyphenated stem)
+# and feature-canary* (starts `feature-` but not `feature-<N>-`, so common script; misrouting means they never retire).
 
 L_REPO="$(make_repo)"
 add_src "$L_REPO" "bin/migrate-repo-alive.sh"
@@ -61,8 +50,8 @@ while IFS='|' read -r l_name l_file l_want; do
     [[ -z "${l_name//[[:space:]]/}" || "$l_name" =~ ^[[:space:]]*# ]] && continue
     l_name="${l_name//[[:space:]]/}"; l_file="${l_file//[[:space:]]/}"
     l_want="${l_want//[[:space:]]/}"
-    assert_eq "L1b[$l_name] --dry-run verdict for tests/$l_file" \
-        "$l_want" "$(report_of "$L_DRY_TABLE_OUT" "tests/$l_file")"
+    assert_eq "L1b[$l_name] --dry-run verdict for tests/bin/$l_file" \
+        "$l_want" "$(report_of "$L_DRY_TABLE_OUT" "tests/bin/$l_file")"
 done <<'TABLE'
 # name              | fixture file                          | want report
 migrate-preflight   | feat-migrate-repo-preflight.sh        | orphan
@@ -100,10 +89,10 @@ assert_eq "L2a --apply deletes exactly the 4 authorised family members (rc=$L2_R
 # A plain `rm` would leave the paths as unstaged deletions (` D`), which is the
 # difference between a sweep the user can review and one they cannot.
 assert_eq "L2b the index holds exactly the four staged family deletions" \
-"D  tests/feat-migrate-repo-dry-run.sh
-D  tests/feat-migrate-repo-preflight.sh
-D  tests/feature-canary5-6git.sh
-D  tests/feature-canary6a-pkgmgr-interpc.sh" \
+"D  tests/bin/feat-migrate-repo-dry-run.sh
+D  tests/bin/feat-migrate-repo-preflight.sh
+D  tests/bin/feature-canary5-6git.sh
+D  tests/bin/feature-canary6a-pkgmgr-interpc.sh" \
 "$(git -C "$L_REPO" status --porcelain | sort)"
 
 # L2c — audit-tests.sh, run over the same tree, must still delete nothing: the
@@ -113,6 +102,6 @@ assert_eq "L2c audit-tests.sh deletes none of the family files" \
     "0" "$(count_lines "$OUT" DELETED)"
 assert_eq "L2d the surviving family members are untouched by audit-tests.sh" \
     "kept kept" \
-    "$(fs_of "$L_REPO" "tests/feat-migrate-repo-state.sh") $(fs_of "$L_REPO" "tests/feat-migrate-repo-commit-446.sh")"
+    "$(fs_of "$L_REPO" "tests/bin/feat-migrate-repo-state.sh") $(fs_of "$L_REPO" "tests/bin/feat-migrate-repo-commit-446.sh")"
 
 unset MOCK_ISSUES

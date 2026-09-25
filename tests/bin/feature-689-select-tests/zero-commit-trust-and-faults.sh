@@ -2,40 +2,22 @@
 # Tests: bin/select-tests.sh, bin/resolve-merge-base.sh
 # Tags: test-selection, merge-base, zero-commit, degradation, trust-state, fault-injection, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S25-S26 — the two things S14-S24 leave open about the working-tree fallback:
-# WHICH TRUST STATE it fires under, and WHAT IT DOES when one half of it fails.
-#
-#   S25  every zero-commit row so far pins state=RESOLVED. RECORDED is the OTHER trustworthy
-#        state (auto-merge-base.sh's header names both), it arrives by a different path in the
-#        resolver — a baseline the session recorded, not a chain the resolver walked — and it
-#        is the state a #1779 session lands in the moment the user records a base to get past
-#        exit 4. A fallback wired only into the RESOLVED arm reproduces the bug for exactly the
-#        users who already hit one merge-base problem. CPR-ORTH: the treatment given one member of
-#        the trustworthy pair belongs to the other.
-#
-#   S26  the degraded set is TWO git commands unioned. S19 kills the whole repository and gets
-#        exit 1; that says nothing about one half failing while the other answers, which is the
-#        shape that produces a PARTIAL set — a plausible-looking selection with the untracked
-#        (or the tracked) half silently missing. Partial is worse than absent here: the run
-#        reports tests, they pass, and the unexamined half of the change ships. So each half is
-#        failed on its own and the required answer is the same as S19's — exit 1, empty stdout.
-#
-# RUN_TL3 is pinned on every row for the reason given in zero-commit.sh.
-# ============================================================================
+# S25-S26 — the two gaps S14-S24 leave about the working-tree fallback: which trust state it fires
+# under, and what happens when one half fails. S25: RECORDED is the OTHER trustworthy state (a
+# session-recorded baseline — where a #1779 user lands after recording a base to clear exit 4), so a
+# fallback wired only into RESOLVED reproduces the bug for them (CPR-ORTH). S26: the degraded set
+# unions TWO git commands; one half failing yields a PARTIAL set (worse than absent — it ships), so each half is failed alone and must give exit 1 + empty stdout like S19.
 
-# S25: #1779's fixture, state=RECORDED. Both halves are present (a modified tracked file and a
-# brand-new one) so the row fails if RECORDED reaches only part of the fallback rather than none
-# of it, and the degradation notice is asserted alongside — without it, a selection could only
-# have come from the committed range, which is empty here.
+# S25: #1779's fixture, state=RECORDED, both halves present (modified tracked + brand-new file),
+# so it fails if RECORDED reaches only part of the fallback; the degradation notice is asserted too.
 test_S25_zero_commit_recorded_state_degrades() {
     local repo="$TMPDIR_BASE/s25"
     make_zero_commit_repo "$repo" staged "bin/select-tests.sh" "+bin/zero-commit.sh" || return
     assert_zero_commit "S25_zero_commit_recorded_state_degrades" "$repo" || return
     run_auto "$repo" RECORDED 0 BASE_IS_HEAD=true RUN_TL3=off
     local missing=""
-    echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh" || missing="$missing [tracked stem]"
-    echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh" || missing="$missing [untracked stem]"
+    echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh" || missing="$missing [tracked stem]"
+    echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh" || missing="$missing [untracked stem]"
     if [ "$SA_RC" != "0" ]; then
         fail "S25_zero_commit_recorded_state_degrades: expected exit 0, got rc=$SA_RC
 --- stderr ---

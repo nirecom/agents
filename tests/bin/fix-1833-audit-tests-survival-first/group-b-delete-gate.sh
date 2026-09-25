@@ -3,12 +3,10 @@
 # Tags: TL2, audit-tests, retire, delete-gate, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# Scan ownership (`^feature-[0-9]+-` → audit-tests.sh, everything else →
-# audit-tests-common.sh) and issue-reference strength (explicit / ambiguous /
-# none) are two INDEPENDENT axes. A common-scope file that carries an explicit
-# issue number must still be protected by that issue's state; an issue-specific
-# file with no reachable metadata must still be held. Collapsing the axes is the
-# accident this group exists to prevent.
+# Scan ownership (`^feature-[0-9]+-` → audit-tests.sh, else → common) and
+# issue-reference strength (explicit / ambiguous / none) are INDEPENDENT axes:
+# a common-scope file with an explicit issue is still gated by it, an
+# issue-specific file with no metadata is still held. Collapsing them is the bug.
 
 B_TODAY_CLOSED="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -38,7 +36,7 @@ closed-recent   | feature-202-closedrecent.sh     | candidate | issue-active | k
 open            | feature-203-open.sh             | candidate | issue-active | kept
 TABLE
 
-if git -C "$B_REPO" status --porcelain | grep -qE '^D  tests/feature-201-closedstale\.sh$'; then
+if git -C "$B_REPO" status --porcelain | grep -qE '^D  tests/bin/feature-201-closedstale\.sh$'; then
     pass "B1b deletion is staged in the index (git rm, not plain rm)"
 else
     fail "B1b deletion not staged: $(git -C "$B_REPO" status --porcelain)"
@@ -102,7 +100,7 @@ run_in_repo "$BO_REPO" "-" "$AUDIT" --offline --apply --format text
 BO_OUT="$OUT"; BO_RC="$RC"
 
 assert_gate_row "B3a --offline reports the candidate but holds the deletion" \
-    "$BO_OUT" "$BO_REPO" "tests/feature-401-gone.sh" \
+    "$BO_OUT" "$BO_REPO" "tests/bin/feature-401-gone.sh" \
     candidate metadata-unavailable kept
 if [[ "$BO_RC" -eq 0 ]]; then
     pass "B3b --offline with a candidate exits 0"
@@ -123,7 +121,7 @@ commit_repo "$BO2_REPO" "offline common fixture"
 
 run_in_repo "$BO2_REPO" "-" "$AUDIT_COMMON" --offline --apply --format text
 assert_gate_row "B3e --offline + no issue reference still deletes (metadata inapplicable)" \
-    "$OUT" "$BO2_REPO" "tests/fix-foo-offline.sh" orphan deleted gone
+    "$OUT" "$BO2_REPO" "tests/bin/fix-foo-offline.sh" orphan deleted gone
 
 # ── B4: gh reachable but the issue lookup fails ─────────────────────────────
 # `gh repo view` succeeds so the script stays ONLINE; every `gh api` call fails,
@@ -139,7 +137,7 @@ unset MOCK_ISSUES
 
 run_in_repo "$BF_REPO" "$BF_STUB" "$AUDIT" --apply --format text
 assert_gate_row "B4 failed issue lookup reports the candidate and holds the deletion" \
-    "$OUT" "$BF_REPO" "tests/feature-501-gone.sh" \
+    "$OUT" "$BF_REPO" "tests/bin/feature-501-gone.sh" \
     candidate metadata-unavailable kept
 
 # ── B5: --stale-months still moves the delete-gate boundary ─────────────────
@@ -160,10 +158,10 @@ export MOCK_ISSUES="601 closed $B_120D"
 
 run_in_repo "$BS_REPO" "$BS_STUB" "$AUDIT" --dry-run --stale-months 6 --format text
 assert_gate_row "B5a --stale-months 6 keeps the candidate but holds the deletion" \
-    "$OUT" "$BS_REPO" "tests/feature-601-gone.sh" candidate issue-active kept
+    "$OUT" "$BS_REPO" "tests/bin/feature-601-gone.sh" candidate issue-active kept
 
 run_in_repo "$BS_REPO" "$BS_STUB" "$AUDIT" --apply --stale-months 3 --format text
 assert_gate_row "B5b --stale-months 3 authorises deletion of the same 120-day-old issue" \
-    "$OUT" "$BS_REPO" "tests/feature-601-gone.sh" candidate deleted gone
+    "$OUT" "$BS_REPO" "tests/bin/feature-601-gone.sh" candidate deleted gone
 
 unset MOCK_ISSUES

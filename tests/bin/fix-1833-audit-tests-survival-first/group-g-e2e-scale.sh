@@ -3,13 +3,10 @@
 # Tags: TL2, audit-tests, retire, e2e-scale, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# Groups A/B isolate one verdict per fixture. This group does the opposite: ONE
-# repository holding 14 files that span every verdict at once, scanned by both
-# scripts, then actually applied. Two failure modes only show up here:
-#   - a filter that is correct per-file but over/under-counts in aggregate
-#     (asserted as an exact candidate COUNT, not mere membership), and
-#   - an apply pass whose blast radius exceeds the reported candidate set
-#     (asserted as the exact deleted set + the exact surviving file list).
+# Groups A/B isolate one verdict per fixture; this does the opposite — ONE repo of
+# 14 files spanning every verdict, scanned by both scripts then applied. Two
+# aggregate-only failures surface here: a per-file-correct filter that miscounts
+# (exact candidate COUNT), and an apply whose blast radius exceeds the reported set (exact deleted + surviving list).
 
 G_REPO="$(make_repo)"
 add_src "$G_REPO" "bin/alive-g1.sh"
@@ -57,7 +54,7 @@ feature-707-noheader.sh
 feature-cleanup-902.sh
 fix-801-orphan-open.sh"
 
-g_tests_ls() { ( cd "$G_REPO/tests" && ls -1 ./*.sh 2>/dev/null | sed 's|^\./||' | sort ); }
+g_tests_ls() { ( cd "$G_REPO/tests/bin" && ls -1 ./*.sh 2>/dev/null | sed 's|^\./||' | sort ); }
 
 assert_eq "G0 fixture starts with all 14 test files present" "$G_ALL_FILES" "$(g_tests_ls)"
 
@@ -91,7 +88,7 @@ g_report_table() { # <label-prefix> <output> — reads `name|file|want` rows
     while IFS='|' read -r name file want; do
         [[ -z "${name//[[:space:]]/}" || "$name" =~ ^[[:space:]]*# ]] && continue
         name="${name//[[:space:]]/}"; file="${file//[[:space:]]/}"; want="${want//[[:space:]]/}"
-        assert_eq "$prefix[$name]" "$want" "$(report_of "$out" "tests/$file")"
+        assert_eq "$prefix[$name]" "$want" "$(report_of "$out" "tests/bin/$file")"
     done
 }
 
@@ -169,10 +166,10 @@ assert_eq "G2c the surviving tests/ tree is exactly the expected 10 files" \
 # stray rewrite of a header, no accidentally staged source file.
 G_STAGED="$(git -C "$G_REPO" status --porcelain | sort)"
 assert_eq "G2d the index holds exactly the four expected staged deletions" \
-"D  tests/cc-orphan-a.sh
-D  tests/cc-orphan-b.sh
-D  tests/feature-703-orphan-stale.sh
-D  tests/feature-704-orphan-stale.sh" "$G_STAGED"
+"D  tests/bin/cc-orphan-a.sh
+D  tests/bin/cc-orphan-b.sh
+D  tests/bin/feature-703-orphan-stale.sh
+D  tests/bin/feature-704-orphan-stale.sh" "$G_STAGED"
 
 # The protected sources were never touched.
 assert_eq "G2e alive targets still exist after --apply" \

@@ -2,30 +2,13 @@
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, offline-fallback, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
-#
-# Group B covers the EXPLICIT `--offline` flag and the case where `gh api`
-# returns non-zero. This group covers the three INVOLUNTARY ways metadata goes
-# missing on a real host, which are separate code paths:
-#   M1  `gh` is not installed at all — no directory on $PATH provides it, so the
-#       `command -v gh` guard is what has to fire; nothing ever execs.
-#   M2  `gh` runs but `gh repo view` exits non-zero — the slug never resolves, so
-#       there is no URL to query. (Distinct from group B's B4, where the slug DID
-#       resolve and only the per-issue lookup failed.)
-#   M3  `gh` answers, but slower than $GH_TIMEOUT — run-with-timeout.sh kills it.
-#
-# All three must land on the SAME contract, and it has two halves that are easy
-# to get individually right and jointly wrong:
-#   (a) candidates stay VISIBLE — a host without gh must still get a full report,
-#       otherwise the sweep silently under-reports and #1833 recurs offline;
-#   (b) deletion of anything carrying an issue reference is HELD as
-#       SKIP_DELETE_METADATA_UNAVAILABLE — never deleted, and never quietly
-#       reclassified as "no issue reference, safe to delete".
-# Asserting only (a) permits a script that deletes blind; asserting only (b)
-# permits a script that drops the file from the report entirely.
 
-# m_fixture <label> — a repo with one issue-referencing file (metadata APPLIES,
-# so it must be held) and one reference-free file (metadata is INAPPLICABLE, so
-# it must still be deleted). Echoes the repo root.
+# Beyond group B's explicit `--offline` flag, three INVOLUNTARY paths lose metadata
+# (gh absent, `gh repo view` non-zero, gh slower than $GH_TIMEOUT) and all must land
+# on ONE contract: candidates stay VISIBLE, and issue-referencing files are HELD as SKIP_DELETE_METADATA_UNAVAILABLE (never deleted, never reclassified).
+
+# m_fixture <label> — repo with one issue-referencing file (held) and one
+# reference-free file (deleted). Echoes the repo root.
 m_fixture() {
     local root
     root="$(make_repo)"
@@ -43,13 +26,13 @@ m_assert_fallback() {
     local label="$1" a_out="$2" c_out="$3" root="$4"
 
     assert_gate_row "$label a: issue-specific candidate stays visible, deletion held" \
-        "$a_out" "$root" "tests/feature-1201-gone.sh" \
+        "$a_out" "$root" "tests/bin/feature-1201-gone.sh" \
         candidate metadata-unavailable kept
     assert_gate_row "$label b: common orphan with an issue ref stays visible, deletion held" \
-        "$c_out" "$root" "tests/fix-1202-gone.sh" \
+        "$c_out" "$root" "tests/bin/fix-1202-gone.sh" \
         orphan metadata-unavailable kept
     assert_gate_row "$label c: a reference-free orphan is still deleted (metadata inapplicable)" \
-        "$c_out" "$root" "tests/cc-noref-gone.sh" \
+        "$c_out" "$root" "tests/bin/cc-noref-gone.sh" \
         orphan deleted gone
     # The held file must not be silently dropped from the report: "no line at
     # all" is the failure this row exists to separate from "held".
@@ -160,7 +143,7 @@ M3B_OUT="$OUT"
 # metadata-unavailable" would also accept `none` — which is what a script that
 # never reported the file at all produces, i.e. the assertion would pass today,
 # before the fix, for the opposite reason.
-M3B_GATE="$(gate_of "$M3B_OUT" "tests/feature-1201-gone.sh")"
+M3B_GATE="$(gate_of "$M3B_OUT" "tests/bin/feature-1201-gone.sh")"
 case "$M3B_GATE" in
     deleted|issue-active)
         pass "M3e a generous pinned GH_TIMEOUT lets the same slow stub resolve metadata (gate=$M3B_GATE)" ;;

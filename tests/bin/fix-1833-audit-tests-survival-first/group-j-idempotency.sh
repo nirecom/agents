@@ -3,12 +3,10 @@
 # Tags: TL2, audit-tests, retire, idempotency, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# /sweep-tests and the nightly cron both re-run against a tree that may already
-# be swept. After the first pass the candidate is gone from the working tree but
-# still present in HEAD until the commit lands, which is exactly the window in
-# which a re-scan can try to `git rm` a path that is no longer there. The second
-# run must therefore report nothing, delete nothing, add nothing to the index,
-# and exit 1 (no findings) rather than surfacing a git error.
+# A second --apply re-runs against a maybe-swept tree: after the first pass the
+# candidate is gone from the working tree but still in HEAD until the commit lands
+# — the window where a re-scan can `git rm` a vanished path. The second run must
+# report/delete/stage nothing and exit 1 (no findings), not surface a git error.
 
 J_REPO="$(make_repo)"
 add_src "$J_REPO" "bin/alive-j.sh"
@@ -31,9 +29,9 @@ run_in_repo "$J_REPO" "$J_STUB" "$AUDIT_COMMON" --apply --format text
 J1C_OUT="$OUT"; J1C_RC="$RC"
 
 assert_gate_row "J1a first pass deletes the issue-specific orphan" \
-    "$J1_OUT" "$J_REPO" "tests/feature-951-orphan.sh" candidate deleted gone
+    "$J1_OUT" "$J_REPO" "tests/bin/feature-951-orphan.sh" candidate deleted gone
 assert_gate_row "J1b first pass deletes the common orphan" \
-    "$J1C_OUT" "$J_REPO" "tests/cc-orphan-j.sh" orphan deleted gone
+    "$J1C_OUT" "$J_REPO" "tests/bin/cc-orphan-j.sh" orphan deleted gone
 assert_eq "J1c first pass exits 0 on both scripts (findings present)" "0 0" "$J1_RC $J1C_RC"
 
 J_STATE_AFTER_1="$(git -C "$J_REPO" status --porcelain | sort)"
@@ -68,7 +66,7 @@ assert_eq "J2e the index is unchanged by the second pass" \
 # J2f — and the files that were never candidates are still untouched.
 assert_eq "J2f live-target files survived both passes" \
     "kept kept" \
-    "$(fs_of "$J_REPO" "tests/feature-952-alive.sh") $(fs_of "$J_REPO" "tests/cc-alive-j.sh")"
+    "$(fs_of "$J_REPO" "tests/bin/feature-952-alive.sh") $(fs_of "$J_REPO" "tests/bin/cc-alive-j.sh")"
 
 # ── J3: --dry-run after --apply is likewise clean ──────────────────────────
 # The report-only path shares the scan loop, so it needs its own confirmation

@@ -2,29 +2,13 @@
 # Tests: bin/select-tests.sh, bin/is-docs-only
 # Tags: test-selection, merge-base, docs-only, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S — `--auto`: the selector resolving its own merge-base, and refusing to guess.
-#
-# #1638. The caller used to pass a base in, computed by whoever happened to be calling, and
-# a wrong one produced a selection that looked ordinary: files listed, exit 0, nothing said.
-# With `--auto` the selector asks the shared resolver instead, and the resolver answers with
-# a STATE as well as a base. The states are not interchangeable:
-#
-#   RECORDED / RESOLVED  the base is trustworthy — select normally.
-#   SUSPECT / FALLBACK   the base resolved but is not trustworthy. Selecting from it would
-#                        produce a plausible-looking list derived from the wrong range, so
-#                        the run ABORTS (exit 4) with stdout empty and the recovery command
-#                        on stderr. An empty selection would be worse than an abort here:
-#                        run-tests would report "0 tests, all green".
-#   exit 3 (UNRESOLVED)  there is no base at all. Nothing can be selected and nothing is
-#                        wrong with the selector, so this is exit 0 with an empty selection.
-#
-# The SUSPECT/FALLBACK abort and the UNRESOLVED empty-but-fine case are deliberately
-# different exit codes, and S4/S6/S7 are what keep them from collapsing into each other.
-#
-# #1689 also lands here (S10-S12): the TL3 append now asks bin/is-docs-only rather than
-# re-deriving the allowlist, and when that helper cannot answer, the append happens anyway.
-# ============================================================================
+# S — `--auto`: the selector resolves its OWN merge-base and refuses to guess (#1638).
+# The resolver returns a base AND a state, and the states are not interchangeable:
+# RECORDED/RESOLVED select normally; SUSPECT/FALLBACK abort (exit 4, empty stdout,
+# recovery on stderr) because a wrong base yields a plausible-but-wrong list; exit 3
+# UNRESOLVED means no base at all — exit 0 with an empty selection, nothing wrong.
+# S4/S6/S7 keep the abort and the empty-but-fine case from collapsing together.
+# #1689 (S10-S12): the TL3 append asks bin/is-docs-only, and appends anyway when it can't answer.
 
 IS_DOCS_ONLY="${AGENTS_DIR}/bin/is-docs-only"
 FAKE=""
@@ -39,14 +23,14 @@ make_fake_agents() {
     mkdir -p "$FAKE"
     cp -r "$AGENTS_DIR/bin" "$FAKE/bin"
     cp -r "$AGENTS_DIR/hooks" "$FAKE/hooks"
-    mkdir -p "$FAKE/tests"
-    : > "$FAKE/tests/feature-689-select-tests.sh"
+    mkdir -p "$FAKE/tests/bin"
+    : > "$FAKE/tests/bin/feature-689-select-tests.sh"
     # #1779's second stem. A non-TL3 name is required: the zero-commit rows below assert on a
     # stem match with RUN_TL3=off, and a TL3-* name could not tell a stem match apart from the
     # tier append.
-    : > "$FAKE/tests/feature-1779-zero-commit.sh"
-    : > "$FAKE/tests/TL3-fake-alpha.sh"
-    : > "$FAKE/tests/TL3-fake-beta.sh"
+    : > "$FAKE/tests/bin/feature-1779-zero-commit.sh"
+    : > "$FAKE/tests/bin/TL3-fake-alpha.sh"
+    : > "$FAKE/tests/bin/TL3-fake-beta.sh"
     # The resolver is replaced by a stub driven from the environment, so a row states the
     # state it wants instead of building a repository that happens to produce it.
     cat > "$FAKE/bin/resolve-merge-base.sh" <<'STUB'
@@ -285,17 +269,15 @@ $SA_OUT"
     fi
 }
 
-# S11 (#1689): an EMPTY diff appends nothing either. This is the state a broken merge-base
-# produces, and appending the whole expensive tier to it was how a resolution failure got to
-# look like a busy, healthy run.
+# S11 (#1689): an EMPTY diff appends nothing either — including TL3. This is what a
+# broken merge-base produces, and appending the whole tier to it was how a resolution
+# failure looked like a busy, healthy run.
 #
-# NOT the #1779 case, and the distinction is the whole reason S14 exists. make_repo commits a
-# real (--allow-empty) HEAD on top of `base`, so base != HEAD: commits EXIST and the range
-# between them happens to be empty, which genuinely means "nothing changed". #1779 is the
-# opposite — no commits at all, so the range is empty by construction while the working tree
-# is full of work. An empty selection is right here and wrong there. The base != HEAD
-# assertion below guards the fixture: if make_repo ever stopped making that second commit,
-# this row would quietly become a zero-commit row asserting the bug is correct behaviour.
+# NOT the #1779 case (the reason S14 exists): make_repo commits a real --allow-empty HEAD
+# on top of `base`, so base != HEAD — commits EXIST and the range between them is genuinely
+# empty. #1779 is the opposite: no commits, empty range by construction, working tree full.
+# The base != HEAD assertion below guards against fixture drift silently turning this into a
+# zero-commit row.
 test_S11_auto_empty_diff_skips_tl3() {
     local repo="$TMPDIR_BASE/s11"
     make_repo "$repo"

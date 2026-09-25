@@ -3,16 +3,9 @@
 # Tags: TL2, audit-tests, retire, cwd-independence, scope:issue-specific
 # Sourced by tests/fix-1833-audit-tests-survival-first.sh
 #
-# classify_tests_header() evaluates `[[ -e "$eff" ]]` relative to the CURRENT
-# WORKING DIRECTORY. audit-tests.sh happens to cd into the repo root first;
-# audit-tests-common.sh does not. Routing both through one shared predicate
-# without passing the repo root explicitly would make every live target look
-# missing when the caller runs from elsewhere — and, with apply-by-default,
-# would delete the entire tests/ tree. These cases pin the repo-root contract.
-#
-# The caller runs from a non-repo temp dir and designates the repo via
-# GIT_DIR / GIT_WORK_TREE, which is exactly how a hook or a wrapper invokes a
-# script without changing directory.
+# classify_tests_header() tests `[[ -e "$eff" ]]` relative to CWD; audit-tests.sh
+# cd's to the repo root, common does not. Sharing one predicate without passing
+# the root explicitly makes live targets look missing — apply-by-default then deletes the whole tests/ tree.
 
 # c_fixture — repo with alive targets in both scopes plus one true orphan.
 c_fixture() {
@@ -36,10 +29,10 @@ if [[ "$C1_RC" -ne 2 ]] && ! echo "$C1_OUT" | grep -q "cc-alive.sh"; then
 else
     fail "C1 audit-tests-common misjudged a live target from outside the repo (rc=$C1_RC out=<<$C1_OUT>> err=<<$ERR>>)"
 fi
-if echo "$C1_OUT" | grep -q "^ORPHAN: tests/cc-orphan.sh$"; then
+if echo "$C1_OUT" | grep -q "^ORPHAN: tests/bin/cc-orphan.sh$"; then
     pass "C1b the genuine orphan is still detected from a repo-outside CWD"
 else
-    fail "C1b expected ORPHAN for tests/cc-orphan.sh from outside the repo (rc=$C1_RC out=<<$C1_OUT>>)"
+    fail "C1b expected ORPHAN for tests/bin/cc-orphan.sh from outside the repo (rc=$C1_RC out=<<$C1_OUT>>)"
 fi
 
 # C2 — issue-specific script, same conditions.
@@ -56,7 +49,7 @@ fi
 C3_REPO="$(c_fixture)"
 run_outside_repo "$C3_REPO" "-" "$AUDIT_COMMON" --apply --offline --format text
 C3_OUT="$OUT"; C3_RC="$RC"
-if [[ -e "$C3_REPO/tests/cc-alive.sh" && -e "$C3_REPO/tests/feature-701-alive.sh" ]]; then
+if [[ -e "$C3_REPO/tests/bin/cc-alive.sh" && -e "$C3_REPO/tests/bin/feature-701-alive.sh" ]]; then
     pass "C3a repo-outside --apply deleted no file with a live target"
 else
     fail "C3a repo-outside --apply destroyed live-target files (rc=$C3_RC out=<<$C3_OUT>>)"

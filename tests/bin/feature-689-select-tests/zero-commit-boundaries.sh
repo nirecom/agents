@@ -2,31 +2,14 @@
 # Tests: bin/select-tests.sh
 # Tags: test-selection, merge-base, zero-commit, degradation, gitignore, parser, table-driven, scope:issue-specific, pwsh-not-required, TL2
 
-# ============================================================================
-# S21-S24 — the EDGES of the working-tree fallback: where it must not reach, and what the
-# kv parser does with every value of base_is_head it can be handed.
-#
-# S14-S19 pin the fallback where it is supposed to fire. These rows pin the other three sides
-# of it, all of which fail silently rather than loudly:
-#
-#   S21  an ordinary branch WITH commits, whose working tree happens to be dirty. The fallback
-#        must not fire; if it did, every normal run would start selecting tests for scratch
-#        files nobody is asking about — and, worse, would narrow to the working tree and lose
-#        the committed range entirely on a clean checkout.
-#   S22  a gitignored file is not work. Build output and local scratch live there.
-#   S23  and it stays invisible even when the fallback IS firing for other reasons.
-#   S24  the parser table. `base_is_head` arrives as text from another process; `true`, `false`,
-#        nothing at all and something unrecognised are four different inputs and the selector's
-#        answer to each has to be a decision rather than an accident of shell truthiness.
-#
-# RUN_TL3 is pinned on every row for the reason given in zero-commit.sh: unpinned, a host with
-# RUN_TL3=on appends the whole tier and every "the selection is empty" assertion below becomes
-# false for a reason none of these rows are about.
-# ============================================================================
+# S21-S24 — the EDGES of the working-tree fallback (S14-S19 pin where it fires; these pin the
+# other three sides, all failing SILENTLY): S21 an ordinary branch with commits + dirty tree — the
+# fallback must NOT fire (else it selects scratch and loses the committed range); S22 a gitignored
+# file is not work; S23 it stays invisible even when the fallback IS firing; S24 the kv parser —
+# base_is_head arrives as text and true/false/absent/garbage need decisions, not shell-truthiness.
 
 # The degradation notice the selector prints when it switches to the working tree. Matching the
-# notice rather than the selection is what lets a row tell "the fallback did not fire" apart from
-# "the fallback fired and found nothing" — two outcomes with identical stdout.
+# notice (not the selection) tells "fallback did not fire" apart from "fired and found nothing".
 ZC_DEGRADE_RE='base_is_head|zero[- ]commit|working tree|uncommitted'
 
 zc_check() { # <row> <desc> <want> <got>
@@ -54,7 +37,7 @@ test_S21_normal_branch_field_absent_ignores_worktree() {
     run_auto "$repo" RESOLVED 0 BASE_IS_HEAD=omit RUN_TL3=off
 
     local missing=""
-    echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh" || missing="$missing [committed-range stem]"
+    echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh" || missing="$missing [committed-range stem]"
     if [ "$SA_RC" != "0" ]; then
         fail "S21_normal_branch_field_absent_ignores_worktree: expected exit 0, got rc=$SA_RC
 --- stderr ---
@@ -63,7 +46,7 @@ $SA_ERR"
         fail "S21_normal_branch_field_absent_ignores_worktree: missing$missing — the committed range was lost
 --- output ---
 $SA_OUT"
-    elif echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh"; then
+    elif echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh"; then
         fail "S21_normal_branch_field_absent_ignores_worktree: an uncommitted decoy leaked into the selection on a branch that has commits
 --- output ---
 $SA_OUT
@@ -129,7 +112,7 @@ test_S22_gitignored_file_is_not_a_change() {
         fail "S22_gitignored_file_is_not_a_change: expected exit 0, got rc=$SA_RC
 --- stderr ---
 $SA_ERR"
-    elif echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh"; then
+    elif echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh"; then
         fail "S22_gitignored_file_is_not_a_change: the ignored file produced a stem match
 --- output ---
 $SA_OUT"
@@ -154,13 +137,13 @@ test_S23_gitignored_excluded_from_a_live_fallback() {
         fail "S23_gitignored_excluded_from_a_live_fallback: expected exit 0, got rc=$SA_RC
 --- stderr ---
 $SA_ERR"
-    elif ! echo "$SA_OUT" | grep -q "tests/feature-689-select-tests.sh"; then
+    elif ! echo "$SA_OUT" | grep -q "tests/bin/feature-689-select-tests.sh"; then
         fail "S23_gitignored_excluded_from_a_live_fallback: the staged change selected nothing, so the exclusion below proves nothing
 --- output ---
 $SA_OUT
 --- stderr ---
 $SA_ERR"
-    elif echo "$SA_OUT" | grep -q "tests/feature-1779-zero-commit.sh"; then
+    elif echo "$SA_OUT" | grep -q "tests/bin/feature-1779-zero-commit.sh"; then
         fail "S23_gitignored_excluded_from_a_live_fallback: the ignored file joined a working fallback set
 --- output ---
 $SA_OUT"
@@ -195,26 +178,14 @@ $SA_OUT"
     fi
 }
 
-# S24: the kv parser, one row per value it can receive.
-#
-# `base_is_head` crosses a process boundary as text, and the selector's parser is hand-written.
-# Four inputs, and three of them are ways of saying "the resolver did not answer":
-#
-#   true     the resolver observed base == HEAD. Believe it.
-#   false    the resolver observed otherwise. Believe that too — this is the value every
-#            ordinary branch carries, and a selector that degraded on it would narrow every
-#            run to the working tree.
-#   absent   a resolver older than the fix. Reading absence as `false` restores the bug
-#            permanently and silently, so the selector observes the fact itself instead.
-#   garbage  an unrecognised value is not evidence of anything, so it takes the SAME path as
-#            absent. The failure this rules out is a truthiness test — `[[ -n $v ]]` reads
-#            `garbage` as yes and `[[ $v != false ]]` reads it as yes as well, and either one
-#            would degrade an ordinary branch on a single typo in the resolver.
-#
-# The last three inputs are therefore run against BOTH a zero-commit repository and an ordinary
-# one: the two self-derived answers are what makes "settles it locally" different from "assumes".
-# The range actually taken is read off the degradation notice, and the selection is asserted
-# alongside it so a row cannot be satisfied by a notice printed over an empty set.
+# S24: the kv parser, one row per value base_is_head can receive. It crosses a process boundary as
+# text into a hand-written parser; four inputs, three of them ways of saying "the resolver did not
+# answer": true (base == HEAD — believe it); false (believe that too — every ordinary branch carries
+# it, degrading on it narrows every run to the working tree); absent (old resolver — reading it as
+# `false` restores the bug silently, so the selector observes the fact itself); garbage (same path
+# as absent — a truthiness test reads it as yes and would degrade an ordinary branch on one typo).
+# The last three run against BOTH a zero-commit and an ordinary repo; the range is read off the
+# degradation notice and the selection is asserted alongside so a notice over an empty set can't pass.
 test_S24_base_is_head_parser_table() {
     local name value kind want_range want_sel repo n=0
     local got_range got_sel
