@@ -95,9 +95,9 @@ rcs_seed() { printf '%s\n' "$1" > "$(rcs_counter)"; }
 # rcs_seed_delta <round> — a delta from a round that already happened.
 rcs_seed_delta() { printf 'seeded round %s delta\n' "$1" > "$(rcs_delta "$1")"; }
 
-. "$AGENTS_ROOT/tests/feature-2068-round-counter-ssot/counter-ownership.sh"
-. "$AGENTS_ROOT/tests/feature-2068-round-counter-ssot/round-argument-guards.sh"
-. "$AGENTS_ROOT/tests/feature-2068-round-counter-ssot/fail-close-and-concurrency.sh"
+. "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/counter-ownership.sh"
+. "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/round-argument-guards.sh"
+. "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/fail-close-and-concurrency.sh"
 
 # --- #2357 exit-9 gate for review-plan-security ---
 # The #2276 fingerprint auto-clear lets a caller edit the plan to clear an exit-6

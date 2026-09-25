@@ -193,7 +193,7 @@ build_finalize_terminal() {
 # suites cannot drift on what the retired shapes look like.
 # ============================================================================
 # shellcheck source=./fix-1600-finalize-worker-overlay/allow-cases.sh
-. "$AGENTS_DIR/tests/fix-1600-finalize-worker-overlay/allow-cases.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1600-finalize-worker-overlay/allow-cases.sh"
 
 test_allow_initial
 test_allow_loop_step_enum "accept"
@@ -202,18 +202,18 @@ test_allow_finalize_terminal
 test_allow_initial_env_order_swapped
 
 # shellcheck source=./fix-1630-overlay-cross-validation/xv-families.sh
-. "$AGENTS_DIR/tests/fix-1630-overlay-cross-validation/xv-families.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/xv-families.sh"
 run_xv_family_cases
 
 
 # shellcheck source=./fix-1630-overlay-cross-validation/strip-units.sh
-. "$AGENTS_DIR/tests/fix-1630-overlay-cross-validation/strip-units.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/strip-units.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/path-edges.sh
-. "$AGENTS_DIR/tests/fix-1630-overlay-cross-validation/path-edges.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/path-edges.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/mutation.sh
-. "$AGENTS_DIR/tests/fix-1630-overlay-cross-validation/mutation.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/mutation.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/metachar-args.sh
-. "$AGENTS_DIR/tests/fix-1630-overlay-cross-validation/metachar-args.sh"
+. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh"
 
 run_strip_unit_cases
 run_path_edge_cases

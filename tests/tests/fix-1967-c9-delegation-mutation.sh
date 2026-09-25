@@ -470,6 +470,6 @@ m5_focused_execution
 
 # M6/M7 mutate the SSOT DATA rather than the test source (rules/coding/file-split.md:
 # a sibling module, because this file is already past the 300-line WARN threshold).
-. "$AGENTS_DIR/tests/fix-1967-c9-delegation-mutation/ssot-fixture.sh"
+. "$AGENTS_DIR/tests/tests/fix-1967-c9-delegation-mutation/ssot-fixture.sh"
 
 finish

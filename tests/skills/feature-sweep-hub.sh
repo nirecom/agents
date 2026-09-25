@@ -430,7 +430,7 @@ T14_sweep_hub_worktree_on_references_last_dispatch
 # sibling part file — rules/coding/file-split.md Pattern A. It self-invokes its
 # cases at source time and uses the pass/fail helpers defined above.
 # shellcheck source=tests/feature-sweep-hub/skill-host-integration.sh
-. "$AGENTS_DIR/tests/feature-sweep-hub/skill-host-integration.sh"
+. "$AGENTS_DIR/tests/skills/feature-sweep-hub/skill-host-integration.sh"
 
 echo ""
 echo "─────────────────────────────────────────"

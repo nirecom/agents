@@ -429,22 +429,22 @@ fi
 # Cases 15-17 (uncommitted / untracked collection) live in a sourced part: this file is past
 # the 500-line hard split limit, and they reuse TMPDIR_BASE, MOCK_BIN and _timeout above.
 # shellcheck source=./feature-review-code-codex/uncommitted-and-untracked.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/uncommitted-and-untracked.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/uncommitted-and-untracked.sh"
 
 # The X-series truncation/base-state scope rows (#1638) live in a sourced part for the same
 # reason, and must run after the cases above to preserve the original execution order.
 # shellcheck source=./feature-review-code-codex/truncation-scope.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/truncation-scope.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/truncation-scope.sh"
 
 # The remaining merge-base scope rows live in a sourced part: this file is already past the
 # 500-line hard split limit, and they reuse REPO, MOCK_BIN and _timeout above.
 # shellcheck source=./feature-review-code-codex/base-state-scope.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/base-state-scope.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/base-state-scope.sh"
 
 # The #1976/#1750 path-priority rows come last: they reuse the exact-size fixtures the
 # boundary rows above built (Y_AT_REPO / Y_OVER_REPO) rather than rebuilding them.
 # shellcheck source=./feature-review-code-codex/path-priority.sh
-. "$AGENTS_ROOT/tests/feature-review-code-codex/path-priority.sh"
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

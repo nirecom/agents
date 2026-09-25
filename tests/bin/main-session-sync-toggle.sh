@@ -370,7 +370,7 @@ tc_env_example_comment_wording
 # observable. See tests/main-session-sync-toggle/installer-exec.sh for why the
 # static T17/T18 assertions above cannot stand alone.
 # shellcheck source=main-session-sync-toggle/installer-exec.sh
-. "$AGENTS_DIR/tests/main-session-sync-toggle/installer-exec.sh"
+. "$AGENTS_DIR/tests/bin/main-session-sync-toggle/installer-exec.sh"
 
 printf '\nPASS: %d FAIL: %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

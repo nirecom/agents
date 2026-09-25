@@ -449,7 +449,7 @@ run_H11() {
 # H12-H17 (CLI UX) live in a sibling fragment: this file is already near the
 # 500-line HARD limit (rules/coding/file-split.md Pattern A).
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/feat-2218-handoff-artifact/cli-ux.sh"
+. "$AGENTS_DIR/tests/hooks/feat-2218-handoff-artifact/cli-ux.sh"
 
 run_H1
 run_H2

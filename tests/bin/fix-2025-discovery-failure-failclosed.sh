@@ -281,7 +281,7 @@ echo "--- discovery 5: one helper owns all three, so one fix covers them ---"
 }
 
 # shellcheck source=./fix-2025-discovery-failure-failclosed/real-and-scope.sh
-. "$AGENTS_ROOT/tests/fix-2025-discovery-failure-failclosed/real-and-scope.sh"
+. "$AGENTS_ROOT/tests/bin/fix-2025-discovery-failure-failclosed/real-and-scope.sh"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
