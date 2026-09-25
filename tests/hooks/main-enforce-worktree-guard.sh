@@ -250,7 +250,7 @@ BASELINE_REPO="$(setup_main_checkout "baseline")"
 export BASELINE_REPO
 
 # ── fragments ───────────────────────────────────────────────────────────────
-FRAGMENT_DIR="$AGENTS_DIR/tests/main-enforce-worktree-guard"
+FRAGMENT_DIR="$AGENTS_DIR/tests/hooks/main-enforce-worktree-guard"
 
 # Completion ledger: every fragment's LAST line is `frag_done <its own basename>`.
 # The `.` exit status cannot stand in for this — a bare `return` yields the status

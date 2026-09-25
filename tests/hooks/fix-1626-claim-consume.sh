@@ -95,7 +95,7 @@ catch(e){process.stdout.write('ABSENT');}" "$1" 2>/dev/null; }
 
 # ---- case parts ------------------------------------------------------------
 
-PARTS_DIR="$AGENTS_DIR/tests/fix-1626-claim-consume"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1626-claim-consume"
 
 # shellcheck source=./fix-1626-claim-consume/cases-claim.sh
 . "$PARTS_DIR/cases-claim.sh"

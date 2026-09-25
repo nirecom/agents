@@ -86,7 +86,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 missing_lib() { printf '<MISSING:%s>' "$LIB_REL_LIST"; }
 have_lib() { [ -f "$LIB_DIR/settings-allow-rules.js" ]; }
 
-PART_DIR="$AGENTS_DIR/tests/prompt-bash-node-calling-convention"
+PART_DIR="$AGENTS_DIR/tests/install/prompt-bash-node-calling-convention"
 
 # home-canary.sh is sourced FIRST and only defines functions: canary_setup repoints HOME and
 # every home-shaped variable at a seeded fixture BEFORE any other part spawns a subprocess.

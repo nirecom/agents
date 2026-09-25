@@ -308,7 +308,7 @@ fi
 # the guard sequence for issue-close-verified, and everything about supervisor-report.
 # Both are sourced rather than run standalone so the extracted sentinel commands and the
 # fixture helpers above stay in scope. ---
-SR_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/supervisor-report-cli.sh"
+SR_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/supervisor-report-cli.sh"
 if [ -f "$SR_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/supervisor-report-cli.sh
     . "$SR_CASES"
@@ -319,7 +319,7 @@ fi
 # S11/S12/S13 are their own files rather than additions to supervisor-report-cli.sh, which
 # is already past the 300-line WARN. Each carries one axis: --detail payload safety, the
 # doc-vs-schema enum set equality, and the C3 alert's verify-pointer.
-DI_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/detail-injection.sh"
+DI_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/detail-injection.sh"
 if [ -f "$DI_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/detail-injection.sh
     . "$DI_CASES"
@@ -327,7 +327,7 @@ else
     fail "IMPLEMENTATION MISSING: $DI_CASES (--detail shell-injection cases)"
 fi
 
-EC_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/enum-completeness.sh"
+EC_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/enum-completeness.sh"
 if [ -f "$EC_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/enum-completeness.sh
     . "$EC_CASES"
@@ -335,7 +335,7 @@ else
     fail "IMPLEMENTATION MISSING: $EC_CASES (enum completeness oracle)"
 fi
 
-FP_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/formatter-pointer.sh"
+FP_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/formatter-pointer.sh"
 if [ -f "$FP_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/formatter-pointer.sh
     . "$FP_CASES"
@@ -343,7 +343,7 @@ else
     fail "IMPLEMENTATION MISSING: $FP_CASES (C3 alert verify-pointer cases)"
 fi
 
-GUARD_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/guard-sequence.sh"
+GUARD_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"
 if [ -f "$GUARD_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/guard-sequence.sh
     . "$GUARD_CASES"

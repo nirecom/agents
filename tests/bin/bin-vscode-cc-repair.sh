@@ -35,7 +35,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$AGENTS_DIR/bin/vscode-cc-repair/index.js"
 REQUIRE_PATH="./bin/vscode-cc-repair/index.js"
-PARTS_DIR="$AGENTS_DIR/tests/bin-vscode-cc-repair"
+PARTS_DIR="$AGENTS_DIR/tests/bin/bin-vscode-cc-repair"
 
 if [ ! -f "$SCRIPT" ]; then
   echo "SKIP (RED): $SCRIPT not yet implemented — TDD RED phase"

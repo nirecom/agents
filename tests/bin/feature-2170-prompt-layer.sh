@@ -13,7 +13,7 @@ set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 export AGENTS_DIR
-SCAN="$AGENTS_DIR/tests/feature-2170-prompt-layer/scan-docs.js"
+SCAN="$AGENTS_DIR/tests/bin/feature-2170-prompt-layer/scan-docs.js"
 command -v node >/dev/null 2>&1 || exit 77
 
 PASS=0

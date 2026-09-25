@@ -205,7 +205,7 @@ case "$STUB_USER" in
              "got JSON: $STUB_USER" ;;
     *)  pass "C4-2 the stub does not emit a JSON object where TL2 models plain text" ;;
 esac
-TL2_FILE="$AGENTS_DIR/tests/feature-2053-forge-target-ownership.sh"
+TL2_FILE="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership.sh"
 if grep -q '\*"api user"\*).*GH_STUB_LOGIN' "$TL2_FILE" 2>/dev/null \
    && ! grep -q '\*"api user"\*).*{"login"' "$TL2_FILE" 2>/dev/null; then
     pass "C4-3 the TL2 stub still models the same plain-login contract"

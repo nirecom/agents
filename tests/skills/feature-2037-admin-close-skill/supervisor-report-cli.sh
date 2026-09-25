@@ -301,4 +301,4 @@ fi
 # --- S9: the guard sequence. Split into a sibling file because this one crossed the
 # 300-line WARN (rules/coding/file-split.md Pattern A); sourced from here so the extracted
 # sentinel commands and the fixture helpers above stay in scope. ---
-GUARD_CASES="$AGENTS_DIR/tests/feature-2037-admin-close-skill/guard-sequence.sh"
+GUARD_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"

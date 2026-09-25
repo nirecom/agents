@@ -181,7 +181,7 @@ assert_eq "H1 harness reports BLOCK for a canonical category-A command" \
 assert_eq "H2 harness reports ALLOW for an ordinary command" \
     "ALLOW" "$(run_cmd 'ls -la')"
 
-PARTS_DIR="$AGENTS_DIR/tests/enforce-system-ops-classifier"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-system-ops-classifier"
 # shellcheck source=./enforce-system-ops-classifier/cases-categories.sh
 . "$PARTS_DIR/cases-categories.sh"
 # shellcheck source=./enforce-system-ops-classifier/cases-anchoring.sh

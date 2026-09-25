@@ -74,7 +74,7 @@ check_not_contains "RV-16d: second run not an abort" "ACTION=abort" "$OUT2"
 # These cases FAIL on the unfixed code (count >> 1) and PASS after the fix
 # (count == 1).
 # ---------------------------------------------------------------------------
-HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
+HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
 NEXT_STEP_N="$(cygpath -m "$NEXT_STEP" 2>/dev/null || echo "$NEXT_STEP")"
 
 echo ""
@@ -268,7 +268,7 @@ check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL
 echo ""
 echo "=== RV-36: hardening #3/#7 — applyRecordedVerdictSkip reads skip_judgment exactly once ==="
 
-RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
+RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
 
 # Build fixture: valid outline record for rv36.
 RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "

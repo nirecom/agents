@@ -22,7 +22,7 @@ set -u
 #   Tradeoffs settles this wiring as static-only verification, so no sweep is executed.
 # Closest-to-action: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh.
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_DIR="$AGENTS_DIR/tests/feature-codegraph-wiring-static"
+SCRIPT_DIR="$AGENTS_DIR/tests/install/feature-codegraph-wiring-static"
 TMPDIR_LOCAL="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_LOCAL"' EXIT
 

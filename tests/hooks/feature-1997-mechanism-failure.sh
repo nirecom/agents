@@ -43,7 +43,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-_FRAG="$AGENTS_DIR/tests/feature-1997-mechanism-failure"
+_FRAG="$AGENTS_DIR/tests/hooks/feature-1997-mechanism-failure"
 # shellcheck source=/dev/null
 . "$_FRAG/helpers.sh"
 # shellcheck source=/dev/null

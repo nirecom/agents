@@ -16,7 +16,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-CASE_DIR="$AGENTS_DIR/tests/feature-1794-stop-guard-exemptions"
+CASE_DIR="$AGENTS_DIR/tests/hooks/feature-1794-stop-guard-exemptions"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

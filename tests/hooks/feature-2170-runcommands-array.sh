@@ -21,7 +21,7 @@ NODE_AGENTS_DIR="$AGENTS_DIR"
 if command -v cygpath >/dev/null 2>&1; then
     NODE_AGENTS_DIR="$(cygpath -m "$AGENTS_DIR")"
 fi
-SUITE="$AGENTS_DIR/tests/feature-2170-capture-echo-guard"
+SUITE="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard"
 command -v node >/dev/null 2>&1 || exit 77
 [ -f "$SUITE/mk-event.js" ] || exit 77
 

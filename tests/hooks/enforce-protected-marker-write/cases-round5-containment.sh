@@ -53,7 +53,7 @@ _r5_try_symlink() {
 }
 
 run_R5_containment() {
-    local probe="$AGENTS_DIR/tests/enforce-protected-marker-write/round5-containment-probe.js"
+    local probe="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write/round5-containment-probe.js"
     if [ ! -f "$probe" ]; then
         fail "R5-C probe helper missing at $probe - containment section is vacuous"
         return

@@ -20,7 +20,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$AGENTS_DIR/install/linux/dotfileslink.sh"
 PROFILE_SH="$AGENTS_DIR/profile-snippet.sh"
-SIBLING_SH="$AGENTS_DIR/tests/feature-697-dotfileslink-link-one.sh"
+SIBLING_SH="$AGENTS_DIR/tests/install/feature-697-dotfileslink-link-one.sh"
 
 PASS=0
 FAIL=0

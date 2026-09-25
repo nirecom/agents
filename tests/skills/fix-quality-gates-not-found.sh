@@ -58,7 +58,7 @@ RUNNER_REL="skills/review-code-security/scripts/run-quality-gates.sh"
 RUNNER="$AGENTS_DIR/$RUNNER_REL"
 SKILL_REL="skills/review-code-security/SKILL.md"
 SKILL_MD="$AGENTS_DIR/$SKILL_REL"
-PARTS_DIR="$AGENTS_DIR/tests/fix-quality-gates-not-found"
+PARTS_DIR="$AGENTS_DIR/tests/skills/fix-quality-gates-not-found"
 
 PASS=0
 FAIL=0

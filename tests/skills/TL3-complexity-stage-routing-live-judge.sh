@@ -16,7 +16,7 @@ AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
-SUITE="$AGENTS_DIR/tests/feature-2099-complexity-stage-routing.sh"
+SUITE="$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh"
 [ -f "$SUITE" ] || { echo "FAIL: the #2099 suite is missing at $SUITE"; exit 1; }
 
 ERRORS=0

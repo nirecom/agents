@@ -85,7 +85,7 @@ u10_write_tests_coding_row_promotion() {
 # U11 STATIC GUARD: the two readers above must never regress to `require(POLICY)`. A canary
 # fixture would only catch the spelling actually exercised, so the source is asserted directly
 # (same shape as cases-require-safety.sh A3, and U11b proves the grep can still fire).
-SELF="$AGENTS_DIR/tests/feature-2124-tool-selection-priority/injection-policy.sh"
+SELF="$AGENTS_DIR/tests/bin/feature-2124-tool-selection-priority/injection-policy.sh"
 
 # Scanning the whole file would count the guard's OWN pattern and mutation literals, so the scan
 # stops at this marker -- everything above it is the predicate region where the node -e programs

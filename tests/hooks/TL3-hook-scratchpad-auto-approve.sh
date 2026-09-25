@@ -76,7 +76,7 @@ printf 'echo hello from the scratchpad\nmkdir -p "%s/safe-ran"\n' "$MARKS_M" > "
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
 # what fails here. real-hook-entry.js is itself covered at TL2 by part6-settings.sh E-5.
-ENTRY_DRV="$AGENTS_DIR/tests/feature-2170-capture-echo-guard/real-hook-entry.js"
+ENTRY_DRV="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
 AGENTS_DIR="$AGENTS_DIR" node "$ENTRY_DRV" --emit "preuse-auto-approve.js" > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
     echo "FAIL: preuse-auto-approve.js is not registered in the real settings.json" >&2

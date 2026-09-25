@@ -234,7 +234,7 @@ fi
 # this one crossed the 300-line WARN (rules/coding/file-split.md Pattern A); it is
 # sourced from here rather than from the entry file so REQUIRED_TABLE and the helpers
 # above stay in scope. ---
-MENTION_CASES="$AGENTS_DIR/tests/cc-on-demand-skill-ownership/cases-mention-axis.sh"
+MENTION_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-mention-axis.sh"
 if [ -f "$MENTION_CASES" ]; then
     # shellcheck source=/dev/null
     . "$MENTION_CASES"

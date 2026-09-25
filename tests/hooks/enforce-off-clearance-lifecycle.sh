@@ -57,7 +57,7 @@ if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGE
 
 SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PROBE="$AGENTS_DIR/tests/enforce-off-clearance-lifecycle/probe.js"
+PROBE="$AGENTS_DIR/tests/hooks/enforce-off-clearance-lifecycle/probe.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -146,7 +146,7 @@ assert_verdict() {
     else fail "$label want=$want got=$got  [raw=$(printf '%.200s' "$raw")]"; fi
 }
 
-PARTS_DIR="$AGENTS_DIR/tests/enforce-off-clearance-lifecycle"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-off-clearance-lifecycle"
 # shellcheck source=./enforce-off-clearance-lifecycle/cases-multi-sentinel.sh
 . "$PARTS_DIR/cases-multi-sentinel.sh"
 # shellcheck source=./enforce-off-clearance-lifecycle/cases-single-use.sh

@@ -8,7 +8,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUITE_DIR="$AGENTS_DIR/tests/feature-2284-install-cc-claude-codex-cli"
+SUITE_DIR="$AGENTS_DIR/tests/install/feature-2284-install-cc-claude-codex-cli"
 
 FAIL=0
 for _sub in "$SUITE_DIR/wait-helper.sh" "$SUITE_DIR/install-update.sh" "$SUITE_DIR/exec-integration.sh"; do

@@ -19,7 +19,7 @@ set -u
 # preflight via bin/check-verification-gate.sh category: installer.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PARTS="$AGENTS_DIR/tests/feature-2150-spawn-shimmed-cli"
+PARTS="$AGENTS_DIR/tests/hooks/feature-2150-spawn-shimmed-cli"
 PROBE="$PARTS/probe.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 MODULE_REL="hooks/lib/spawn-shimmed-cli.js"

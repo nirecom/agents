@@ -7,7 +7,7 @@
 # (rules/test/claude-e2e.md: both branches of a config-gated behaviour need
 # coverage). Nothing below spends a token: it drives the gate, never the judge.
 
-D2099G_LANE="$AGENTS_DIR/tests/TL3-complexity-stage-routing-live-judge.sh"
+D2099G_LANE="$AGENTS_DIR/tests/skills/TL3-complexity-stage-routing-live-judge.sh"
 
 # GATE-1: with RUN_TL3 off the lane must SKIP the runner's way — exit 77, which
 # tests/run-all.sh counts as SKIP. Exit 0 would be the false green: a lane that
@@ -54,7 +54,7 @@ d2099g_harness() {
         printf 'fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }\n'
         printf 'pass() { echo "PASS: $1"; }\n'
         printf 'skip() { echo "SKIP: $1"; }\n'
-        sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/feature-2099-complexity-stage-routing.sh"
+        sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh"
         # Everything else the sourced file touches before its gate, neutralized.
         printf 'assert_eq() { :; }\nassert_contains() { :; }\nassert_not_contains() { :; }\n'
         printf 'run_with_timeout() { :; }\nto_node_path() { echo "$1"; }\nnew_session() { echo gate; }\n'
@@ -67,7 +67,7 @@ d2099g_harness() {
 
 d2099g_gate_branches() {
     local out lifted
-    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/feature-2099-complexity-stage-routing.sh" | grep -c 'D2099_REQUIRE_LIVE')
+    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh" | grep -c 'D2099_REQUIRE_LIVE')
     if [ "$lifted" -lt 1 ]; then
         fail "GATE-5 the dispatcher's gated_skip could not be lifted (or no longer reads D2099_REQUIRE_LIVE) — the branches below would test a stub"
         return

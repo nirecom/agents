@@ -72,7 +72,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
 
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PARTS_DIR="$AGENTS_DIR/tests/fix-1780-round12-parser-unit-tables"
+PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1780-round12-parser-unit-tables"
 PROBE="$PARTS_DIR/probe.js"
 MUTATE="$PARTS_DIR/mutate.js"
 PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"

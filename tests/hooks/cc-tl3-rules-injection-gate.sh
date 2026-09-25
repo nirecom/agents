@@ -10,7 +10,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HELPERS="$AGENTS_DIR/tests/TL3-rules-injection-off-switch/helpers.sh"
+HELPERS="$AGENTS_DIR/tests/hooks/TL3-rules-injection-off-switch/helpers.sh"
 HOOK="$AGENTS_DIR/hooks/instructions-loaded-audit.js"
 RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
 
@@ -259,7 +259,7 @@ fi
 
 # --- C5: post-quiescence sticky verdict. Split into the sibling folder to keep this
 # entry file under the 300-line WARN (rules/coding/file-split.md Pattern A). ---
-ORCH="$AGENTS_DIR/tests/cc-tl3-rules-injection-gate/cases-orchestration.sh"
+ORCH="$AGENTS_DIR/tests/hooks/cc-tl3-rules-injection-gate/cases-orchestration.sh"
 if [ -f "$ORCH" ]; then
     # shellcheck source=/dev/null
     . "$ORCH"

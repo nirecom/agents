@@ -148,7 +148,7 @@ have_lib() {
     [ -f "$LIB_DIR/settings-deploy.js" ]
 }
 
-PART_DIR="$AGENTS_DIR/tests/feature-2119-settings-allow-ssot"
+PART_DIR="$AGENTS_DIR/tests/install/feature-2119-settings-allow-ssot"
 
 # home-canary.sh is sourced FIRST and only defines functions: canary_setup repoints HOME and
 # every home-shaped variable at a seeded fixture BEFORE any other part spawns a subprocess, so
