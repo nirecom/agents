@@ -9,8 +9,8 @@
 
 FD_REPO="$(make_repo)"
 add_src "$FD_REPO" "bin/fd-x.sh"
-add_test_file "$FD_REPO" "fd-one.sh" "bin/fd-x.sh"
-add_test_file "$FD_REPO" "fd-two.sh" "bin/fd-x.sh"
+add_test_file "$FD_REPO" "bin/fd-one.sh" "bin/fd-x.sh"
+add_test_file "$FD_REPO" "bin/fd-two.sh" "bin/fd-x.sh"
 commit_repo "$FD_REPO" "flag defaults fixture"
 
 # Both entrypoints carry the same argv loop, so per CPR-ORTH every row runs twice.

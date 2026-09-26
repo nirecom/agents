@@ -11,17 +11,17 @@ VC_REPO="$(make_repo)"
 add_src "$VC_REPO" "bin/vc-a.sh"
 add_src "$VC_REPO" "bin/vc-b.sh"
 
-add_test_file "$VC_REPO" "vc-ok-a.sh" "bin/vc-a.sh"
-add_test_file "$VC_REPO" "vc-ok-b.sh" "bin/vc-a.sh"
-add_test_file "$VC_REPO" "vc-malformed.sh" "bin/vc a.sh"
+add_test_file "$VC_REPO" "bin/vc-ok-a.sh" "bin/vc-a.sh"
+add_test_file "$VC_REPO" "bin/vc-ok-b.sh" "bin/vc-a.sh"
+add_test_file "$VC_REPO" "bin/vc-malformed.sh" "bin/vc a.sh"
 
-add_test_file_raw "$VC_REPO" "vc-notests.sh" <<'VC_NOHDR'
+add_test_file_raw "$VC_REPO" "bin/vc-notests.sh" <<'VC_NOHDR'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 echo fixture
 VC_NOHDR
 
-add_test_file_raw "$VC_REPO" "vc-duplicate.sh" <<'VC_DUP'
+add_test_file_raw "$VC_REPO" "bin/vc-duplicate.sh" <<'VC_DUP'
 #!/usr/bin/env bash
 # Tests: bin/vc-a.sh
 # Tags: TL2, scope:common
@@ -29,7 +29,7 @@ add_test_file_raw "$VC_REPO" "vc-duplicate.sh" <<'VC_DUP'
 echo fixture
 VC_DUP
 
-add_test_file_raw "$VC_REPO" "vc-late.sh" <<'VC_LATE'
+add_test_file_raw "$VC_REPO" "bin/vc-late.sh" <<'VC_LATE'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 : filler 03
@@ -55,12 +55,12 @@ while IFS='|' read -r vc_name vc_file vc_want; do
     vc_want="${vc_want//[[:space:]]/}"
     assert_eq "VC1[$vc_name] verdict" "$vc_want" "$(verdict_of "$VC_OUT" "tests/$vc_file")"
 done <<'VC_TABLE'
-ok-grouped-a  | vc-ok-a.sh      | ok
-ok-grouped-b  | vc-ok-b.sh      | ok
-malformed     | vc-malformed.sh | malformed_header
-no-header     | vc-notests.sh   | no_tests_header
-duplicate     | vc-duplicate.sh | duplicate_header
-late          | vc-late.sh      | late_header
+ok-grouped-a  | bin/vc-ok-a.sh      | ok
+ok-grouped-b  | bin/vc-ok-b.sh      | ok
+malformed     | bin/vc-malformed.sh | malformed_header
+no-header     | bin/vc-notests.sh   | no_tests_header
+duplicate     | bin/vc-duplicate.sh | duplicate_header
+late          | bin/vc-late.sh      | late_header
 VC_TABLE
 
 # VC2 — the closed set is closed: an unrecognized reason token means the
@@ -78,7 +78,7 @@ assert_eq "VC3 a skip reason with a single member is still reported" \
 # VC4 — the four skipped files must not appear in any group row, and the two
 # well-formed files must. This is the partition invariant of the whole format.
 assert_eq "VC4a no skipped file leaks into a group row" \
-    "0" "$( for vc_f in vc-malformed.sh vc-notests.sh vc-duplicate.sh vc-late.sh; do
+    "0" "$( for vc_f in bin/vc-malformed.sh bin/vc-notests.sh bin/vc-duplicate.sh bin/vc-late.sh; do
                 file_group_axes "$VC_OUT" "tests/$vc_f"
             done | grep -c . || true )"
 assert_eq "VC4b the two well-formed files form the only group" \

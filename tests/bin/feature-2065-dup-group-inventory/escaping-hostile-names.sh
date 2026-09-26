@@ -12,10 +12,10 @@ add_src "$EH_REPO" "bin/eh-x.sh"
 
 # Comma in the FILENAME: the round-trip target. The member list is comma-joined,
 # so an unescaped comma here would silently split one member into two.
-add_test_file "$EH_REPO" "eh,comma-a.sh" "bin/eh-x.sh"
-add_test_file "$EH_REPO" "eh,comma-b.sh" "bin/eh-x.sh"
+add_test_file "$EH_REPO" "bin/eh,comma-a.sh" "bin/eh-x.sh"
+add_test_file "$EH_REPO" "bin/eh,comma-b.sh" "bin/eh-x.sh"
 # Space in the filename: legal on every filesystem, and a classic word-split bug.
-add_test_file "$EH_REPO" "eh space a.sh" "bin/eh-x.sh"
+add_test_file "$EH_REPO" "bin/eh space a.sh" "bin/eh-x.sh"
 commit_repo "$EH_REPO" "hostile names fixture"
 
 run_dup "$EH_REPO" "$AUDIT"
@@ -27,9 +27,9 @@ EH_FILES="$(row_files "$EH_OUT" token "bin/eh-x.sh")"
 assert_eq "EH1a the token group holds all three hostile-named files" \
     "3" "$(esc_count "$EH_FILES")"
 assert_eq "EH1b a comma inside a filename survives the escape round-trip" \
-    "yes" "$(row_has_member "$EH_OUT" token "bin/eh-x.sh" "tests/eh,comma-a.sh")"
+    "yes" "$(row_has_member "$EH_OUT" token "bin/eh-x.sh" "tests/bin/eh,comma-a.sh")"
 assert_eq "EH1c a space inside a filename survives the escape round-trip" \
-    "yes" "$(row_has_member "$EH_OUT" token "bin/eh-x.sh" "tests/eh space a.sh")"
+    "yes" "$(row_has_member "$EH_OUT" token "bin/eh-x.sh" "tests/bin/eh space a.sh")"
 assert_eq "EH1d the escaped member list contains no bare comma inside a member" \
     "3" "$(esc_members "$EH_FILES" | grep -c . || true)"
 
@@ -38,12 +38,12 @@ assert_eq "EH1d the escaped member list contains no bare comma inside a member" 
 if [[ "$IS_POSIX_FS" -eq 1 ]]; then
     EH_BS_REPO="$(make_repo)"
     add_src "$EH_BS_REPO" "bin/eh-x.sh"
-    if add_test_file "$EH_BS_REPO" 'eh\back-a.sh' "bin/eh-x.sh" 2>/dev/null \
-       && add_test_file "$EH_BS_REPO" 'eh\back-b.sh' "bin/eh-x.sh" 2>/dev/null; then
+    if add_test_file "$EH_BS_REPO" 'bin/eh\back-a.sh' "bin/eh-x.sh" 2>/dev/null \
+       && add_test_file "$EH_BS_REPO" 'bin/eh\back-b.sh' "bin/eh-x.sh" 2>/dev/null; then
         commit_repo "$EH_BS_REPO" "backslash fixture"
         run_dup "$EH_BS_REPO" "$AUDIT"
         assert_eq "EH2 a backslash in a filename survives the escape round-trip" \
-            "yes" "$(row_has_member "$OUT" token "bin/eh-x.sh" 'tests/eh\back-a.sh')"
+            "yes" "$(row_has_member "$OUT" token "bin/eh-x.sh" 'tests/bin/eh\back-a.sh')"
     else
         skip "EH2 the filesystem refused a backslash in a filename"
     fi
@@ -57,15 +57,15 @@ fi
 EH_CTL_REPO="$(make_repo)"
 add_src "$EH_CTL_REPO" "bin/eh-x.sh"
 EH_CTL_OK=1
-add_test_file "$EH_CTL_REPO" "$(printf 'eh\ttab-a.sh')" "bin/eh-x.sh" 2>/dev/null || EH_CTL_OK=0
-add_test_file "$EH_CTL_REPO" "$(printf 'eh\ttab-b.sh')" "bin/eh-x.sh" 2>/dev/null || EH_CTL_OK=0
-if [[ "$EH_CTL_OK" -eq 1 && -f "$EH_CTL_REPO/tests/$(printf 'eh\ttab-a.sh')" ]]; then
+add_test_file "$EH_CTL_REPO" "$(printf 'bin/eh\ttab-a.sh')" "bin/eh-x.sh" 2>/dev/null || EH_CTL_OK=0
+add_test_file "$EH_CTL_REPO" "$(printf 'bin/eh\ttab-b.sh')" "bin/eh-x.sh" 2>/dev/null || EH_CTL_OK=0
+if [[ "$EH_CTL_OK" -eq 1 && -f "$EH_CTL_REPO/tests/bin/$(printf 'eh\ttab-a.sh')" ]]; then
     commit_repo "$EH_CTL_REPO" "control-char fixture"
     run_dup "$EH_CTL_REPO" "$AUDIT"
     assert_eq "EH3a a TAB in a filename does not break the 4-column grid" \
         "0" "$(bad_col_rows "$OUT")"
     assert_eq "EH3b a TAB in a filename survives the escape round-trip" \
-        "yes" "$(row_has_member "$OUT" token "bin/eh-x.sh" "$(printf 'tests/eh\ttab-a.sh')")"
+        "yes" "$(row_has_member "$OUT" token "bin/eh-x.sh" "$(printf 'tests/bin/eh\ttab-a.sh')")"
 else
     skip "EH3 this filesystem refused a TAB in a filename — TSV column integrity under control characters is unverified here"
 fi
@@ -75,10 +75,10 @@ fi
 EH_INJ_REPO="$(make_repo)"
 EH_SENTINEL="$TMPDIR_BASE/eh-injection-sentinel"
 rm -f "$EH_SENTINEL"
-add_test_file "$EH_INJ_REPO" "eh-inj-semi.sh" "bin/x.sh; touch $EH_SENTINEL"
-add_test_file "$EH_INJ_REPO" "eh-inj-subst.sh" "\$(touch $EH_SENTINEL)"
-add_test_file "$EH_INJ_REPO" "eh-inj-tick.sh" "\`touch $EH_SENTINEL\`"
-add_test_file "$EH_INJ_REPO" "eh-inj-tab.sh" "$(printf 'bin/eh\tx.sh')"
+add_test_file "$EH_INJ_REPO" "bin/eh-inj-semi.sh" "bin/x.sh; touch $EH_SENTINEL"
+add_test_file "$EH_INJ_REPO" "bin/eh-inj-subst.sh" "\$(touch $EH_SENTINEL)"
+add_test_file "$EH_INJ_REPO" "bin/eh-inj-tick.sh" "\`touch $EH_SENTINEL\`"
+add_test_file "$EH_INJ_REPO" "bin/eh-inj-tab.sh" "$(printf 'bin/eh\tx.sh')"
 commit_repo "$EH_INJ_REPO" "injection fixture"
 
 run_dup "$EH_INJ_REPO" "$AUDIT"
@@ -90,10 +90,10 @@ while IFS='|' read -r eh_name eh_file eh_want; do
     eh_want="${eh_want//[[:space:]]/}"
     assert_eq "EH4[$eh_name] verdict" "$eh_want" "$(verdict_of "$EH_INJ_OUT" "tests/$eh_file")"
 done <<'EH_TABLE'
-semicolon      | eh-inj-semi.sh  | malformed_header
-substitution   | eh-inj-subst.sh | malformed_header
-backtick       | eh-inj-tick.sh  | malformed_header
-tab-in-token   | eh-inj-tab.sh   | malformed_header
+semicolon      | bin/eh-inj-semi.sh  | malformed_header
+substitution   | bin/eh-inj-subst.sh | malformed_header
+backtick       | bin/eh-inj-tick.sh  | malformed_header
+tab-in-token   | bin/eh-inj-tab.sh   | malformed_header
 EH_TABLE
 
 assert_eq "EH5a no header value was ever evaluated as a command" \

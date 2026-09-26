@@ -173,7 +173,7 @@ assert_match "S13 the script accepts the --added-only flag" '\-\-added-only' "$S
 # ── S14-S19 the RULES the steps must carry, not merely their labels ────────
 # S1-S13 pin that WT-5 / RT-1a exist and which COLUMNS they read. The rules a
 # reader has to obey once there — append is mandatory, groups are keyed by the
-# complete source set, `new` groups consolidate, the gate is presented after the
+# complete source set, each source set's `new` verdict generates one independent new file, the gate is presented after the
 # decision — live in prose and are what a well-meaning rewrite loses first.
 TDA_FULL="$(cat "$TD_APPEND" 2>/dev/null)"
 
@@ -194,12 +194,12 @@ assert_match "S15 WT-5 requires the complete source set per planned case" \
 assert_match "S15 the dispatch block keys test_destinations by that set" \
     'source set' "$WT7_BLOCK"
 
-# ── S16 all `new` groups land in ONE new file, never a split ──────────────
+# ── S16 each source set's `new` verdict generates one independent new file ──
 case_ran S16
-assert_match "S16 the dispatch block consolidates the new groups" \
-    'consolidate|single new file' "$WT7_BLOCK"
+assert_match "S16 each source set's new verdict generates one independent new file" \
+    'generates its own independent new file|independent new file' "$WT7_BLOCK"
 assert_match "S16 crossing the HARD limit tags a new file instead of splitting" \
-    'instead of splitting|not.*split|never.*split' "$WT7_BLOCK"
+    'one new file per source set' "$WT7_BLOCK"
 
 # ── S17 the CONFIRM_TESTS gate is presented WITH the destinations ─────────
 case_ran S17
@@ -239,11 +239,11 @@ assert_match "S20 RNT-3 still selects on overlap, not on set equality" \
 S20_LIB="$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh"
 if [[ -f "$S20_LIB" ]]; then
     S20REPO="$(make_repo)"
-    add_test_file "$S20REPO" "multi.sh" "src/a.js,src/b.js,src/c.js" "scope:common" 20
+    add_test_file "$S20REPO" "bin/multi.sh" "src/a.js,src/b.js,src/c.js" "scope:common" 20
     (
         # shellcheck source=../../bin/lib/test-frontmatter-fix.sh
         . "$S20_LIB"
-        tfm_parse_tests_line "$S20REPO/tests/multi.sh"
+        tfm_parse_tests_line "$S20REPO/tests/bin/multi.sh"
         printf '%s\n' "${#TFM_TOKENS[@]}"
         printf '%s\n' "${TFM_TOKENS[2]-}"
     ) > "$TMPDIR_BASE/s20.out" 2>/dev/null

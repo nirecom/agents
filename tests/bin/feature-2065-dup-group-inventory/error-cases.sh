@@ -8,13 +8,13 @@
 
 EC_REPO="$(make_repo)"
 add_src "$EC_REPO" "bin/ec-ok.sh"
-add_test_file "$EC_REPO" "ec-space.sh" "bin/ec a.sh"
-add_test_file "$EC_REPO" "ec-paren.sh" "bin/ec-ok.sh (helper)"
-add_test_file "$EC_REPO" "ec-glob.sh" "bin/*.sh"
-add_test_file "$EC_REPO" "ec-mixed.sh" "bin/ec-ok.sh, bin/ec b.sh"
-add_test_file "$EC_REPO" "ec-empty.sh" ""
+add_test_file "$EC_REPO" "bin/ec-space.sh" "bin/ec a.sh"
+add_test_file "$EC_REPO" "bin/ec-paren.sh" "bin/ec-ok.sh (helper)"
+add_test_file "$EC_REPO" "bin/ec-glob.sh" "bin/*.sh"
+add_test_file "$EC_REPO" "bin/ec-mixed.sh" "bin/ec-ok.sh, bin/ec b.sh"
+add_test_file "$EC_REPO" "bin/ec-empty.sh" ""
 
-add_test_file_raw "$EC_REPO" "ec-noheader.sh" <<'EC_NOHDR'
+add_test_file_raw "$EC_REPO" "bin/ec-noheader.sh" <<'EC_NOHDR'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 echo fixture
@@ -36,12 +36,12 @@ while IFS='|' read -r ec_name ec_file ec_want; do
     assert_eq "EC1[$ec_name] contributes to no group axis" \
         "" "$(file_group_axes "$EC_OUT" "tests/$ec_file")"
 done <<'EC_TABLE'
-embedded-space   | ec-space.sh    | malformed_header
-parenthesis      | ec-paren.sh    | malformed_header
-glob             | ec-glob.sh     | malformed_header
-one-bad-of-two   | ec-mixed.sh    | malformed_header
-empty-value      | ec-empty.sh    | no_tests_header
-missing-header   | ec-noheader.sh | no_tests_header
+embedded-space   | bin/ec-space.sh    | malformed_header
+parenthesis      | bin/ec-paren.sh    | malformed_header
+glob             | bin/ec-glob.sh     | malformed_header
+one-bad-of-two   | bin/ec-mixed.sh    | malformed_header
+empty-value      | bin/ec-empty.sh    | no_tests_header
+missing-header   | bin/ec-noheader.sh | no_tests_header
 EC_TABLE
 
 # EC2 — malformed content is data, not a crash: the run completes and the only

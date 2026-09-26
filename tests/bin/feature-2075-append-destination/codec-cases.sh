@@ -103,4 +103,105 @@ K3_TABLE
     assert_eq "K5 the decoder recovers the original payload" "$K5_RAW" "$(tdg_unescape_field "$K5_ESC")"
 fi
 
+# ── A1-A6 tdg_scan_corpus canonical-category allowlist (#2396) ───────────────
+# A1: canonical category (bin/) IS included in corpus.
+# A2: _archive/ is NOT in corpus (not a canonical category).
+# A3: rel field is tests/<canonical-category>/<name>.sh form.
+# A4: 4-component paths are NOT in corpus (too deep).
+# A5: tests/lib/ is NOT in corpus (lib/ is shared infra, not a category).
+# A6: non-canonical split dir (fix-1532-node-guard) is NOT in corpus.
+if ! declare -F tdg_scan_corpus >/dev/null 2>&1; then
+    for _akid in A1 A2 A3 A4 A5 A6; do
+        case_ran "$_akid"
+        fail "$_akid tdg_scan_corpus is not defined — corpus-glob cases cannot run"
+    done
+else
+    A1R="$(make_repo)"
+    add_test_file "$A1R" "bin/foo.sh" "src/a.js" "scope:common" 20
+    A1_OUT="$(tdg_scan_corpus "$A1R")"
+
+    case_ran A1
+    if printf '%s\n' "$A1_OUT" | grep -q 'tests/bin/foo.sh'; then
+        pass "A1 canonical-category test (tests/bin/) appears in corpus"
+    else
+        fail "A1 tests/bin/foo.sh not found in corpus — canonical-category scan not applied"
+    fi
+
+    A2R="$(make_repo)"
+    add_test_file "$A2R" "_archive/foo.sh" "src/a.js" "scope:common" 20
+    add_test_file "$A2R" "bin/keep.sh" "src/a.js" "scope:common" 20
+    A2_OUT="$(tdg_scan_corpus "$A2R")"
+
+    case_ran A2
+    if printf '%s\n' "$A2_OUT" | grep -q 'tests/_archive/foo.sh'; then
+        fail "A2 tests/_archive/foo.sh appeared in corpus — not a canonical category"
+    else
+        pass "A2 tests/_archive/foo.sh is NOT in corpus"
+    fi
+    if printf '%s\n' "$A2_OUT" | grep -q 'tests/bin/keep.sh'; then
+        pass "A2 tests/bin/keep.sh IS in corpus (canonical category bin/)"
+    else
+        fail "A2 tests/bin/keep.sh not found — canonical-category sibling should be in corpus"
+    fi
+
+    A3R="$(make_repo)"
+    add_test_file "$A3R" "bin/bar.sh" "src/b.js" "scope:common" 20
+    A3_OUT="$(tdg_scan_corpus "$A3R")"
+
+    case_ran A3
+    if printf '%s\n' "$A3_OUT" | grep -q 'tests/bin/bar.sh'; then
+        pass "A3 rel field is in tests/<canonical-category>/<name>.sh form"
+    else
+        fail "A3 rel field wrong — expected tests/bin/bar.sh, got: $(printf '%q' "$A3_OUT")"
+    fi
+
+    # ── A4 4-component paths are NOT in corpus (canonical dirs contain only .sh) ─
+    A4R="$(make_repo)"
+    add_test_file "$A4R" "bin/name.sh" "src/a.js" "scope:common" 20
+    add_test_file "$A4R" "bin/name/frag.sh" "src/a.js" "scope:common" 20
+    A4_OUT="$(tdg_scan_corpus "$A4R")"
+
+    case_ran A4
+    if printf '%s\n' "$A4_OUT" | grep -q 'tests/bin/name.sh'; then
+        pass "A4 tests/bin/name.sh (3-component canonical) IS in corpus"
+    else
+        fail "A4 tests/bin/name.sh not found — expected it in corpus"
+    fi
+    if printf '%s\n' "$A4_OUT" | grep -q 'tests/bin/name/frag.sh'; then
+        fail "A4 tests/bin/name/frag.sh (4-component) appeared in corpus — too deep"
+    else
+        pass "A4 tests/bin/name/frag.sh (4-component) is NOT in corpus"
+    fi
+
+    # ── A5 tests/lib/foo.sh is NOT in corpus (lib/ is not a canonical category) ─
+    A5R="$(make_repo)"
+    add_test_file "$A5R" "lib/foo.sh" "src/a.js" "scope:common" 20
+    A5_OUT="$(tdg_scan_corpus "$A5R")"
+
+    case_ran A5
+    if printf '%s\n' "$A5_OUT" | grep -q 'tests/lib/foo.sh'; then
+        fail "A5 tests/lib/foo.sh appeared in corpus — lib/ is shared infra (#1834)"
+    else
+        pass "A5 tests/lib/foo.sh is NOT in corpus (lib/ not a canonical category)"
+    fi
+
+    # ── A6 non-canonical dir (split fragment) NOT in corpus ──────────────────
+    A6R="$(make_repo)"
+    add_test_file "$A6R" "fix-1532-node-guard/foo.sh" "src/a.js" "scope:common" 20
+    add_test_file "$A6R" "bin/bar.sh" "src/a.js" "scope:common" 20
+    A6_OUT="$(tdg_scan_corpus "$A6R")"
+
+    case_ran A6
+    if printf '%s\n' "$A6_OUT" | grep -q 'tests/fix-1532-node-guard/foo.sh'; then
+        fail "A6 tests/fix-1532-node-guard/ appeared in corpus — non-canonical dir"
+    else
+        pass "A6 tests/fix-1532-node-guard/ is NOT in corpus (non-canonical category)"
+    fi
+    if printf '%s\n' "$A6_OUT" | grep -q 'tests/bin/bar.sh'; then
+        pass "A6 canonical sibling tests/bin/bar.sh IS in corpus"
+    else
+        fail "A6 tests/bin/bar.sh not found — canonical category should still be scanned"
+    fi
+fi
+
 grp_done "codec-cases.sh"

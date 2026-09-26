@@ -17,16 +17,16 @@ add_src "$NC_REPO" "bin/nc-solo.sh"
 add_src "$NC_REPO" "bin/nc-other.sh"
 
 # Pair 1 — identical whole value: both axes.
-add_test_file "$NC_REPO" "nc-same-a.sh" "bin/nc-x.sh, bin/nc-y.sh"
-add_test_file "$NC_REPO" "nc-same-b.sh" "bin/nc-x.sh, bin/nc-y.sh"
+add_test_file "$NC_REPO" "bin/nc-same-a.sh" "bin/nc-x.sh, bin/nc-y.sh"
+add_test_file "$NC_REPO" "bin/nc-same-b.sh" "bin/nc-x.sh, bin/nc-y.sh"
 # Pair 2 — same first token, different whole value: token axis only.
-add_test_file "$NC_REPO" "nc-tok-a.sh" "bin/nc-z.sh, bin/nc-x.sh"
-add_test_file "$NC_REPO" "nc-tok-b.sh" "bin/nc-z.sh, bin/nc-other.sh"
+add_test_file "$NC_REPO" "bin/nc-tok-a.sh" "bin/nc-z.sh, bin/nc-x.sh"
+add_test_file "$NC_REPO" "bin/nc-tok-b.sh" "bin/nc-z.sh, bin/nc-other.sh"
 # Pair 3 — same value, differing only in inter-token whitespace.
-add_test_file "$NC_REPO" "nc-ws-a.sh" "bin/nc-w.sh, bin/nc-v.sh"
-add_test_file "$NC_REPO" "nc-ws-b.sh" "bin/nc-w.sh,bin/nc-v.sh"
+add_test_file "$NC_REPO" "bin/nc-ws-a.sh" "bin/nc-w.sh, bin/nc-v.sh"
+add_test_file "$NC_REPO" "bin/nc-ws-b.sh" "bin/nc-w.sh,bin/nc-v.sh"
 # Singleton — unique value, unique first token: neither axis.
-add_test_file "$NC_REPO" "nc-solo.sh" "bin/nc-solo.sh"
+add_test_file "$NC_REPO" "bin/nc-solo.sh" "bin/nc-solo.sh"
 commit_repo "$NC_REPO" "normal cases fixture"
 
 run_dup "$NC_REPO" "$AUDIT"
@@ -44,13 +44,13 @@ while IFS='|' read -r nc_name nc_file nc_axes; do
     assert_eq "NC1[$nc_name] axis membership" "$nc_axes" \
         "$(file_group_axes "$NC_OUT" "tests/$nc_file")"
 done <<'NC_TABLE'
-same-line-a      | nc-same-a.sh | full,token
-same-line-b      | nc-same-b.sh | full,token
-first-token-only | nc-tok-a.sh  | token
-first-token-only | nc-tok-b.sh  | token
-whitespace-a     | nc-ws-a.sh   | full,token
-whitespace-b     | nc-ws-b.sh   | full,token
-singleton        | nc-solo.sh   |
+same-line-a      | bin/nc-same-a.sh | full,token
+same-line-b      | bin/nc-same-b.sh | full,token
+first-token-only | bin/nc-tok-a.sh  | token
+first-token-only | bin/nc-tok-b.sh  | token
+whitespace-a     | bin/nc-ws-a.sh   | full,token
+whitespace-b     | bin/nc-ws-b.sh   | full,token
+singleton        | bin/nc-solo.sh   |
 NC_TABLE
 
 # NC2 — counts. The x/y pair also shares its first token with nc-tok-a.sh, so
@@ -69,7 +69,7 @@ assert_eq "NC2d differing whole values produce no full group for the token pair"
 assert_eq "NC3a the singleton's value forms no full row" \
     "no" "$(row_exists "$NC_OUT" full "bin/nc-solo.sh")"
 assert_eq "NC3b the singleton is well-formed, so it has no skip reason" \
-    "ok" "$(verdict_of "$NC_OUT" "tests/nc-solo.sh")"
+    "ok" "$(verdict_of "$NC_OUT" "tests/bin/nc-solo.sh")"
 
 # NC4 — the `files` column is a stable, sorted member list, so a reader can
 # diff two inventories without spurious churn.

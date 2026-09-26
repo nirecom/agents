@@ -4,7 +4,7 @@
 
 ## The rule
 
-- **Default is append.** When an existing top-level `tests/*.sh` already names the planned case's source set S in its `# Tests:` header, the case goes there; a new file is created only when no such candidate exists.
+- **Default is append.** When an existing categorized `tests/<category>/<name>.sh` already names the planned case's source set S in its `# Tests:` header, the case goes there; a new file is created only when no such candidate exists.
 - **Same-set rule.** A candidate qualifies only when `S ⊆ T`, T being that candidate's own `# Tests:` set — appending to a file that overlaps S partially is prohibited.
 - **Appending never widens T**, so the orphan premise of `bin/lib/test-retire-predicate.sh` survives the append untouched.
 - **HARD limit.** A new file is created, tagged `dup-group-keep:size-hard-limit` in `# Tags:`, when: (a) every candidate already exceeds the HARD limit, or (b) appending the planned cases would push the best candidate past the HARD limit (`rules/coding/file-split.md`).

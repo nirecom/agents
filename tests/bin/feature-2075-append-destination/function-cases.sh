@@ -2,7 +2,7 @@
 # Tests: bin/lib/test-route-destination.sh
 # Tags: scope:issue-specific
 # Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
-# Cases F1-F7 (TL1): direct calls into the source-only routing library, for the
+# Cases F1-F8 (TL1): direct calls into the source-only routing library, for the
 # boundaries the CLI's TSV cannot express — rejection statuses, key equality and
 # the rank/viable predicates as standalone functions.
 # F6/F7 deliberately assert only encoding-agnostic properties (permutation,
@@ -12,7 +12,7 @@
 f2075_join() { local IFS=","; printf '%s' "$*"; }
 
 if [[ ! -f "$ROUTE_LIB" ]]; then
-    for _fid in F1 F2 F3 F4 F5 F6 F7; do
+    for _fid in F1 F2 F3 F4 F5 F6 F7 F8; do
         case_ran "$_fid"
         fail "$_fid bin/lib/test-route-destination.sh is missing — function-level cases cannot run"
     done
@@ -36,10 +36,20 @@ else
     assert_eq "F2 absolute path is rejected" "1" "$(f2075_rc trd_canonicalize_set F2SET "/etc/passwd")"
     assert_eq "F2 parent-escaping token is rejected" "1" "$(f2075_rc trd_canonicalize_set F2SET2 "../outside.js")"
     assert_eq "F2 a well-formed token is accepted" "0" "$(f2075_rc trd_normalize_token "src/ok.js")"
+    # F2 extended: table-driven trd_normalize_token, accepted and rejected patterns (C4/#2290)
+    for _f2tok in "src/ok.js" "a.ts" "lib/foo.rs"; do
+        assert_eq "F2 accept $_f2tok" "0" "$(f2075_rc trd_normalize_token "$_f2tok")"
+    done
+    for _f2tok in "/etc/x" "../x" "src/a b.js"; do
+        assert_eq "F2 reject $_f2tok" "1" "$(f2075_rc trd_normalize_token "$_f2tok")"
+    done
 
-    # ── F3 trd_is_top_level_test decides by path components, not by glob ────
+    # ── F3 trd_is_top_level_test decides by canonical category allowlist ─────
+    # tests/bin/bar.sh (canonical category bin) → exit 0 after the fix (#2396).
+    # tests/_archive/foo.sh, tests/lib/foo.sh → exit 1 (not canonical).
+    # tests/fix-1532-node-guard/foo.sh → exit 1 (non-canonical split dir).
     case_ran F3
-    for _pair in "tests/a.sh:0" "tests/part/bar.sh:1" "bin/a.sh:1" "tests/a.txt:1" "tests:1" "a.sh:1"; do
+    for _pair in "tests/a.sh:1" "tests/bin/bar.sh:0" "tests/hooks/x.sh:0" "tests/skills/y.sh:0" "tests/_archive/foo.sh:1" "tests/lib/foo.sh:1" "tests/fix-1532-node-guard/foo.sh:1" "bin/a.sh:1" "tests/a.txt:1" "tests:1" "a.sh:1"; do
         _p="${_pair%%:*}"
         _want="${_pair#*:}"
         trd_is_top_level_test "$_p"
@@ -61,16 +71,16 @@ else
     # ── F5 trd_file_lines ───────────────────────────────────────────────────
     case_ran F5
     F5REPO="$(make_repo)"
-    add_test_file "$F5REPO" "a.sh" "a.js" "scope:common" 37
-    assert_eq "F5 line count of a known fixture" "37" "$(trd_file_lines "$F5REPO/tests/a.sh")"
+    add_test_file "$F5REPO" "bin/a.sh" "a.js" "scope:common" 37
+    assert_eq "F5 line count of a known fixture" "37" "$(trd_file_lines "$F5REPO/tests/bin/a.sh")"
     assert_eq "F5 unreadable file is a non-zero status" "1" \
         "$(f2075_rc trd_file_lines "$F5REPO/tests/does-not-exist.sh")"
 
     # ── F6/F7 rank and viable, fed by the real producer ─────────────────────
     F6REPO="$(make_repo)"
-    add_test_file "$F6REPO" "exact.sh" "a.js" "scope:common" 40
-    add_test_file "$F6REPO" "e1.sh" "a.js,b.js" "scope:common" 20
-    add_test_file "$F6REPO" "e2.sh" "a.js,b.js,c.js" "scope:common" 12
+    add_test_file "$F6REPO" "bin/exact.sh" "a.js" "scope:common" 40
+    add_test_file "$F6REPO" "bin/e1.sh" "a.js,b.js" "scope:common" 20
+    add_test_file "$F6REPO" "bin/e2.sh" "a.js,b.js,c.js" "scope:common" 12
     F2075_OLDPWD="$PWD"
     cd "$F6REPO" || fail "F6 could not enter the fixture repo"
     trd_load_corpus "$F6REPO"
@@ -89,7 +99,7 @@ else
         "$(printf '%s\n' "${F6RANKED[@]}" | LC_ALL=C sort)"
     assert_eq "F6 ranking is idempotent" \
         "$(printf '%s\n' "${F6RANKED[@]}")" "$(printf '%s\n' "${F6RANKED2[@]}")"
-    if [[ "${F6RANKED[0]-}" == *"tests/exact.sh"* ]]; then
+    if [[ "${F6RANKED[0]-}" == *"tests/bin/exact.sh"* ]]; then
         pass "F6 the exact match ranks first"
     else
         fail "F6 the exact match did not rank first — head was '${F6RANKED[0]-}'"
@@ -105,12 +115,53 @@ else
     declare -a F7MID=()
     trd_viable_candidates F7MID F6RANKED 21
     assert_eq "F7 a mid limit keeps only the candidates under it" "2" "${#F7MID[@]}"
-    if [[ "${#F7MID[@]}" -gt 0 && "$(printf '%s\n' "${F7MID[@]}")" == *"tests/exact.sh"* ]]; then
+    if [[ "${#F7MID[@]}" -gt 0 && "$(printf '%s\n' "${F7MID[@]}")" == *"tests/bin/exact.sh"* ]]; then
         fail "F7 kept the 40-line candidate under a 21-line limit"
     else
         pass "F7 the over-limit candidate is absent from the viable set"
     fi
     cd "$F2075_OLDPWD" || true
+
+    # ── F8 tdg_scan_corpus is called exactly once across multiple trd_candidates ─
+    # Note: this test relies on trd_load_corpus's global-variable memoization.
+    # trd_load_corpus calls tdg_scan_corpus inside a process substitution
+    # (`< <(...)`), so any counter variable incremented there stays in the
+    # subshell. A temp file persists the count across that boundary.
+    case_ran F8
+    if ! declare -F tdg_scan_corpus >/dev/null 2>&1; then
+        fail "F8 tdg_scan_corpus is not defined — corpus-count test cannot run"
+    elif ! declare -F trd_candidates >/dev/null 2>&1; then
+        fail "F8 trd_candidates is not defined — corpus-count test cannot run"
+    else
+        F8REPO="$(make_repo)"
+        add_test_file "$F8REPO" "bin/p.sh" "p.js" "scope:common" 20
+        add_test_file "$F8REPO" "bin/q.sh" "q.js" "scope:common" 20
+        add_test_file "$F8REPO" "bin/r.sh" "r.js" "scope:common" 20
+        # Use a temp file so the increment survives the process-substitution subshell.
+        F8_COUNT_FILE="$(mktemp "${TMPDIR_BASE}/tmp.XXXXXX")"
+        printf '0' > "$F8_COUNT_FILE"
+        # Rename the original body, then wrap with a file-based counter.
+        eval "$(declare -f tdg_scan_corpus | sed 's/^tdg_scan_corpus ()/tdg_scan_corpus_f8_orig ()/')"
+        tdg_scan_corpus() {
+            local _c; _c="$(cat "$F8_COUNT_FILE")"
+            printf '%d' $((_c + 1)) > "$F8_COUNT_FILE"
+            tdg_scan_corpus_f8_orig "$@"
+        }
+        F8_OLD_PWD="$PWD"
+        cd "$F8REPO" || fail "F8 could not enter fixture repo"
+        trd_load_corpus "$F8REPO"
+        declare -a F8C1=() F8C2=() F8C3=()
+        trd_candidates F8C1 "$(trd_set_key "p.js")" ""
+        trd_candidates F8C2 "$(trd_set_key "q.js")" ""
+        trd_candidates F8C3 "$(trd_set_key "r.js")" ""
+        TDG_SCAN_COUNT="$(cat "$F8_COUNT_FILE")"
+        rm -f "$F8_COUNT_FILE"
+        # Restore original by reverting the rename.
+        eval "$(declare -f tdg_scan_corpus_f8_orig | sed 's/^tdg_scan_corpus_f8_orig ()/tdg_scan_corpus ()/')"
+        unset -f tdg_scan_corpus_f8_orig
+        assert_eq "F8 tdg_scan_corpus called once despite 3 trd_candidates calls" "1" "$TDG_SCAN_COUNT"
+        cd "$F8_OLD_PWD" || true
+    fi
 fi
 
 grp_done "function-cases.sh"

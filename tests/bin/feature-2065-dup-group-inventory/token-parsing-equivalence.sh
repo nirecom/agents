@@ -12,28 +12,28 @@ add_src "$TP_REPO" "bin/tp-a.sh"
 add_src "$TP_REPO" "bin/tp-b.sh"
 
 # Same logical value, two spellings: padded around the tokens vs. canonical.
-add_test_file "$TP_REPO" "feature-9101-pad.sh" "  bin/tp-a.sh ,  bin/tp-b.sh " "TL2, scope:issue-specific"
-add_test_file "$TP_REPO" "feature-9102-plain.sh" "bin/tp-a.sh, bin/tp-b.sh" "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9101-pad.sh" "  bin/tp-a.sh ,  bin/tp-b.sh " "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9102-plain.sh" "bin/tp-a.sh, bin/tp-b.sh" "TL2, scope:issue-specific"
 
 # Root-like tokens: each is regex-valid and `[[ -e ]]`-true, so a regex-only
 # classifier would call them `ok` and build a bogus group out of them.
-add_test_file "$TP_REPO" "tp-root-dot.sh" "."
-add_test_file "$TP_REPO" "tp-root-dotdot.sh" ".."
-add_test_file "$TP_REPO" "tp-root-slash.sh" "/"
-add_test_file "$TP_REPO" "tp-root-dotslash.sh" "./"
-add_test_file "$TP_REPO" "tp-root-dotdotslash.sh" "../"
+add_test_file "$TP_REPO" "bin/tp-root-dot.sh" "."
+add_test_file "$TP_REPO" "bin/tp-root-dotdot.sh" ".."
+add_test_file "$TP_REPO" "bin/tp-root-slash.sh" "/"
+add_test_file "$TP_REPO" "bin/tp-root-dotslash.sh" "./"
+add_test_file "$TP_REPO" "bin/tp-root-dotdotslash.sh" "../"
 
 # Empty CSV elements in all three positions. Both tokens exist, so the ONLY
 # thing separating these from feature-9102-plain.sh is the hole in the CSV.
-add_test_file "$TP_REPO" "feature-9103-empty-mid.sh" "bin/tp-a.sh,,bin/tp-b.sh" "TL2, scope:issue-specific"
-add_test_file "$TP_REPO" "feature-9104-empty-lead.sh" ",bin/tp-a.sh" "TL2, scope:issue-specific"
-add_test_file "$TP_REPO" "feature-9105-empty-trail.sh" "bin/tp-a.sh," "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9103-empty-mid.sh" "bin/tp-a.sh,,bin/tp-b.sh" "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9104-empty-lead.sh" ",bin/tp-a.sh" "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9105-empty-trail.sh" "bin/tp-a.sh," "TL2, scope:issue-specific"
 # The splitter appends a sentinel element and drops it by POSITION. These three
 # are the shapes that would break a sentinel matched by VALUE instead, or a
 # splitter that only special-cased one trailing comma.
-add_test_file "$TP_REPO" "feature-9106-empty-space.sh" "bin/tp-a.sh, ,bin/tp-b.sh" "TL2, scope:issue-specific"
-add_test_file "$TP_REPO" "feature-9107-empty-double-trail.sh" "bin/tp-a.sh,," "TL2, scope:issue-specific"
-add_test_file "$TP_REPO" "feature-9108-sentinel-literal.sh" "bin/tp-a.sh,#" "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9106-empty-space.sh" "bin/tp-a.sh, ,bin/tp-b.sh" "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9107-empty-double-trail.sh" "bin/tp-a.sh,," "TL2, scope:issue-specific"
+add_test_file "$TP_REPO" "bin/feature-9108-sentinel-literal.sh" "bin/tp-a.sh,#" "TL2, scope:issue-specific"
 commit_repo "$TP_REPO" "token-parsing fixture"
 
 run_dup "$TP_REPO" "$AUDIT"
@@ -43,7 +43,7 @@ TP_FULLKEY="bin/tp-a.sh,bin/tp-b.sh"
 assert_eq "TP1a padded and canonical spellings land in one full group" \
     "2" "$(row_count "$TP_OUT" full "$TP_FULLKEY")"
 assert_eq "TP1b the padded file is a member of both axes (same line, same first token)" \
-    "full,token" "$(file_group_axes "$TP_OUT" "tests/feature-9101-pad.sh")"
+    "full,token" "$(file_group_axes "$TP_OUT" "tests/bin/feature-9101-pad.sh")"
 assert_eq "TP1c trimming produced no leading/trailing space inside the key" \
     "0" "$(axis_keys "$TP_OUT" full | grep -cE '(^ | $|, | ,)' || true)"
 
@@ -65,11 +65,11 @@ while IFS='|' read -r tp_name tp_file tp_want; do
     assert_eq "TP3[$tp_name] appears in no group axis" \
         "" "$(file_group_axes "$TP_OUT" "tests/$tp_file")"
 done <<'TP_TABLE'
-dot            | tp-root-dot.sh          | malformed_header
-dotdot         | tp-root-dotdot.sh       | malformed_header
-slash          | tp-root-slash.sh        | malformed_header
-dotslash       | tp-root-dotslash.sh     | malformed_header
-dotdotslash    | tp-root-dotdotslash.sh  | malformed_header
+dot            | bin/tp-root-dot.sh          | malformed_header
+dotdot         | bin/tp-root-dotdot.sh       | malformed_header
+slash          | bin/tp-root-slash.sh        | malformed_header
+dotslash       | bin/tp-root-dotslash.sh     | malformed_header
+dotdotslash    | bin/tp-root-dotdotslash.sh  | malformed_header
 TP_TABLE
 
 # TP4 — the root-like files share no first token, so nothing may group them.
@@ -98,12 +98,12 @@ while IFS='|' read -r tp_name tp_file tp_want; do
     assert_eq "TP7[$tp_name] appears in no group axis" \
         "" "$(file_group_axes "$TP_OUT" "tests/$tp_file")"
 done <<'TP_EMPTY_TABLE'
-mid-comma      | feature-9103-empty-mid.sh    | malformed_header
-leading-comma  | feature-9104-empty-lead.sh   | malformed_header
-trailing-comma | feature-9105-empty-trail.sh  | malformed_header
-space-only     | feature-9106-empty-space.sh  | malformed_header
-double-trail   | feature-9107-empty-double-trail.sh | malformed_header
-sentinel-char  | feature-9108-sentinel-literal.sh   | malformed_header
+mid-comma      | bin/feature-9103-empty-mid.sh    | malformed_header
+leading-comma  | bin/feature-9104-empty-lead.sh   | malformed_header
+trailing-comma | bin/feature-9105-empty-trail.sh  | malformed_header
+space-only     | bin/feature-9106-empty-space.sh  | malformed_header
+double-trail   | bin/feature-9107-empty-double-trail.sh | malformed_header
+sentinel-char  | bin/feature-9108-sentinel-literal.sh   | malformed_header
 TP_EMPTY_TABLE
 
 # TP8 — acceptance-set invariance. The structural verdict of TP7 belongs to
@@ -127,7 +127,7 @@ assert_eq "TP8b the retire pass reports none of the three empty-element forms" \
 # three spellings must land on the SAME verdict as the canonical `a.sh, b.sh`
 # file, which is the definition of "the acceptance set did not move".
 tp_survival() { ( . "$RETIRE_LIB" >/dev/null 2>&1; trp_survival_verdict "$TP_REPO" "tests/$1" ); }
-TP_SURV_BASELINE="$(tp_survival "feature-9102-plain.sh")"
+TP_SURV_BASELINE="$(tp_survival "bin/feature-9102-plain.sh")"
 while IFS='|' read -r tp_name tp_file; do
     [[ -z "${tp_name//[[:space:]]/}" || "$tp_name" =~ ^[[:space:]]*# ]] && continue
     tp_name="${tp_name//[[:space:]]/}"
@@ -135,11 +135,11 @@ while IFS='|' read -r tp_name tp_file; do
     assert_eq "TP9[$tp_name] survival verdict matches the canonical spelling" \
         "$TP_SURV_BASELINE" "$(tp_survival "$tp_file")"
 done <<'TP_SURV_TABLE'
-mid-comma      | feature-9103-empty-mid.sh
-leading-comma  | feature-9104-empty-lead.sh
-trailing-comma | feature-9105-empty-trail.sh
-space-only     | feature-9106-empty-space.sh
-double-trail   | feature-9107-empty-double-trail.sh
+mid-comma      | bin/feature-9103-empty-mid.sh
+leading-comma  | bin/feature-9104-empty-lead.sh
+trailing-comma | bin/feature-9105-empty-trail.sh
+space-only     | bin/feature-9106-empty-space.sh
+double-trail   | bin/feature-9107-empty-double-trail.sh
 TP_SURV_TABLE
 
 # TP9d pins the baseline itself: if the canonical spelling ever stopped being
