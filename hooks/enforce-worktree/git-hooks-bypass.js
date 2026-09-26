@@ -35,7 +35,7 @@ function envVarPrefixesGit(cmd, startPos) {
     }
     return null;
   };
-  const gitMatch = findNextTopLevel(/\bgit\b/);
+  const gitMatch = findNextTopLevel(/\bgit(?:\.exe)?\b/i);
   const sepMatch = findNextTopLevel(/[;|&]/);
   if (!gitMatch) return false;
   if (!sepMatch) return true;
@@ -43,22 +43,14 @@ function envVarPrefixesGit(cmd, startPos) {
 }
 
 /**
- * True if cmd attempts to bypass git hooks via:
- *   - git -c core.hooksPath=<value>              (Pass A2, unquoted)
- *   - git -c "core.hooksPath=<value>"            (Pass B, double-quoted value)
- *   - git -c 'core.hooksPath=<value>'            (Pass B, single-quoted value)
- *   - git --config-env=core.hooksPath=VAR        (Pass A1, env-var indirection)
- *   - git --config-env core.hooksPath=VAR        (Pass A1, separated)
- *   - GIT_CONFIG_PARAMETERS=<value-containing-core.hooksPath> git ...
- *                                                 (Pass C1, env-var prefix)
- *   - GIT_CONFIG_KEY_<n>=core.hooksPath ... git ... (Pass C2, batch env-var)
- *
- * Out of scope: bash/sh/pwsh wrapper bypass, shell variable/alias/command-substitution
- * bypass, persistent git config writes. See plan for rationale.
+ * True if cmd attempts to bypass git hooks: transient `-c core.hooksPath=`
+ * (A2/B), `--config-env=core.hooksPath` (A1), GIT_CONFIG_PARAMETERS/KEY_n env
+ * prefixes (C1/C2), or the persistent `git config [scope] core.hooksPath <value>`
+ * setter (Pass D, #1601). Out of scope: wrapper/alias/command-substitution bypass.
  */
 function hasGitHooksBypass(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  if (!/\bgit\b/.test(cmd)) return false;
+  if (!/\bgit(?:\.exe)?\b/i.test(cmd)) return false;
   if (
     !/core\.hooksPath/i.test(cmd) &&
     !/--config-env\b/i.test(cmd) &&
@@ -69,19 +61,20 @@ function hasGitHooksBypass(cmd) {
 
   const G =
     "(?:\\s+(?:--[A-Za-z][\\w-]*(?:=\\S+)?|-[A-Za-z]\\S*)(?:\\s+[^-\\s]\\S*)?)*";
+  const GIT = "\\bgit(?:\\.exe)?\\b";
 
   const stripped = stripQuotedArgs(cmd);
 
   // Pass A1: --config-env=core.hooksPath= or --config-env core.hooksPath=
-  if (new RegExp("\\bgit\\b" + G + "\\s+--config-env(?:=|\\s+)core\\.hooksPath\\s*=", "i").test(stripped))
+  if (new RegExp(GIT + G + "\\s+--config-env(?:=|\\s+)core\\.hooksPath\\s*=", "i").test(stripped))
     return true;
 
   // Pass A2: -c core.hooksPath= (unquoted)
-  if (new RegExp("\\bgit\\b" + G + "\\s+-c\\s+core\\.hooksPath\\s*=", "i").test(stripped))
+  if (new RegExp(GIT + G + "\\s+-c\\s+core\\.hooksPath\\s*=", "i").test(stripped))
     return true;
 
   // Pass B: -c "core.hooksPath=…" / -c 'core.hooksPath=…' (raw cmd, loop all matches)
-  const reB = new RegExp("\\bgit\\b" + G + "\\s+-c\\s+[\"']core\\.hooksPath\\s*=", "ig");
+  const reB = new RegExp(GIT + G + "\\s+-c\\s+[\"']core\\.hooksPath\\s*=", "ig");
   for (let mB; (mB = reB.exec(cmd)) !== null; ) {
     if (!isPositionInsideQuotes(cmd, mB.index)) return true;
   }
@@ -106,6 +99,22 @@ function hasGitHooksBypass(cmd) {
   for (let mC2; (mC2 = reC2.exec(cmd)) !== null; ) {
     if (isPositionInsideQuotes(cmd, mC2.index)) continue;
     if (envVarPrefixesGit(cmd, mC2.index + mC2[0].length)) return true;
+  }
+
+  // Pass D (#1601): persistent setter `git config [scope] core.hooksPath <value>`.
+  // A value token after core.hooksPath marks a write; --unset/--get/--list are
+  // reads/removals (they leave no value token) and stay clean.
+  const reD = new RegExp(
+    GIT + G + "\\s+config\\b([^;|&]*?)\\bcore\\.hooksPath\\b\\s+(\\S+)",
+    "i"
+  );
+  const mD = reD.exec(stripped);
+  if (mD) {
+    const between = mD[1] || "";
+    const value = mD[2];
+    const isReadOrUnset =
+      /--unset(?:-all)?\b|--get(?:-all|-regexp|-urlmatch)?\b|--list\b|--edit\b|(?:^|\s)-[le]\b/i.test(between);
+    if (!isReadOrUnset && !/^--/.test(value)) return true;
   }
 
   return false;

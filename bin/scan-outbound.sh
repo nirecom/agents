@@ -2,16 +2,20 @@
 # Scan content for private information patterns
 # Usage:
 #   scan-outbound.sh [--stdin [label]] [file ...]
+#   scan-outbound.sh --manifest   (RS-framed multi-file stream: RS+path+RS+len+LF+bytes...)
 #   --stdin: read from stdin (optional label for output)
+#   --manifest: read RS(0x1e)+path+RS+byteLen+LF+bytes frames from stdin
 #   file args: scan named files
-# Exit: 0 = clean, 1 = hard violation, 2 = warn-only (no hard), 3 = usage error
+# Exit: 0 = clean, 1 = hard violation, 2 = warn-only (no hard), 3 = usage error, 4 = blocklist resolution error (fail-closed)
 # NOTE: exit 3 was previously exit 2 (usage error). Bumped to free exit 2 for warn-only.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ALLOWLIST="$SCRIPT_DIR/../.private-info-allowlist"
-BLOCKLIST="$SCRIPT_DIR/../.private-info-blocklist"
+# Anchor: AGENTS_CONFIG_DIR when set (handles linked worktrees where gitignored
+# dotfiles exist only in the main repo root, not the worktree root); falls back
+# to SCRIPT_DIR/.. for direct invocation and test sandboxes that unset it.
+_anchor="${AGENTS_CONFIG_DIR:-$SCRIPT_DIR/..}"; ALLOWLIST="$_anchor/.private-info-allowlist"; BLOCKLIST="$_anchor/.private-info-blocklist"
 
 VIOLATIONS=0
 WARNINGS=0
@@ -20,7 +24,7 @@ LABEL="stdin"
 
 # Parse arguments
 if [ $# -eq 0 ]; then
-    echo "Usage: scan-outbound.sh [--stdin [label]] [file ...]" >&2
+    echo "Usage: scan-outbound.sh [--stdin [label]] [--manifest] [file ...]" >&2
     exit 3
 fi
 
@@ -31,13 +35,18 @@ if [ "$1" = "--stdin" ]; then
         LABEL="$1"
         shift
     fi
+elif [ "$1" = "--manifest" ]; then
+    MODE="manifest"
+    shift
 else
     MODE="files"
 fi
 
 # Load allowlist patterns (skip comments and empty lines)
 ALLOW_PATTERNS=()
-if [ -f "$ALLOWLIST" ]; then
+if [ ! -f "$ALLOWLIST" ]; then
+    printf 'Warning: allowlist not found at %s — proceeding without allowlist\n' "$ALLOWLIST" >&2
+elif [ -f "$ALLOWLIST" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line%$'\r'}"
         [[ -z "$line" || "$line" =~ ^# ]] && continue
@@ -49,7 +58,10 @@ fi
 # Lines starting with `warn:` are soft-block patterns; others are hard.
 BLOCK_HARD_PATTERNS=()
 BLOCK_WARN_PATTERNS=()
-if [ -f "$BLOCKLIST" ]; then
+if [ ! -f "$BLOCKLIST" ]; then
+    printf 'Error: blocklist not found at expected path (AGENTS_CONFIG_DIR resolution) — cannot scan\n' >&2
+    exit 4
+elif [ -f "$BLOCKLIST" ]; then
     _bl_lineno=0
     while IFS= read -r line || [ -n "$line" ]; do
         _bl_lineno=$((_bl_lineno + 1))
@@ -310,8 +322,25 @@ scan_content() {
     done
 }
 
+# Scan a RS(0x1e)-framed manifest stream from stdin.
+# Frame format: RS + repo-relative-path + RS + byte-length (decimal) + LF + raw-bytes
+scan_manifest() {
+    local _rs _header _trimmed _mpath _mlen
+    _rs=$(printf '\036')
+    while IFS= read -r _header; do
+        _trimmed="${_header#"$_rs"}"
+        _mpath="${_trimmed%%"$_rs"*}"
+        _mlen="${_trimmed##*"$_rs"}"
+        [ -z "$_mpath" ] && continue
+        [ -z "$_mlen" ] && continue
+        scan_content "$_mpath" < <(dd bs=1 count="$_mlen" 2>/dev/null)
+    done
+}
+
 if [ "$MODE" = "stdin" ]; then
     scan_content "$LABEL"
+elif [ "$MODE" = "manifest" ]; then
+    scan_manifest
 else
     for f in "$@"; do
         if [ -f "$f" ]; then

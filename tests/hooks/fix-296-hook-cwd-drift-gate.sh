@@ -1,19 +1,12 @@
 #!/bin/bash
 # tests/fix-296-hook-cwd-drift-gate.sh
 # Tests: hooks/workflow-gate.js
-# Tags: workflow, gate, hook, bin, git
-#
-# Tests for hooks/workflow-gate.js resolveRepoDir(command) — verifies that
-# the existing `git -C <path>` resolution still wins, AND that a leading
-# `cd <abs-path> && git commit ...` is honored before the staged-changes
-# scan (issue #296).
-#
-# resolveRepoDir IS already a function in workflow-gate.js but is NOT yet
-# in module.exports — the fix will add it and also wire parseCdCommand into
-# its precedence chain (between `git -C` and the staged-changes scan).
-#
-# Pre-implementation, every W-case fails with NOT_EXPORTED (clean failure,
-# not a node crash).
+# Tags: workflow, gate, hook, bin, git, scope:issue-specific
+# Tests resolveRepoDir(command) for the #296 fix: `git -C <path>` still wins and
+# a leading `cd <abs> && git commit ...` is honored before the staged-changes
+# scan. resolveRepoDir exists but is unexported pre-fix, so each W-case fails
+# NOT_EXPORTED (clean). E3 (#1602): setup must never write core.hooksPath into
+# the real repo.
 
 set -u
 
@@ -25,11 +18,10 @@ else
 fi
 WG="${_AGENTS_DIR_NODE}/hooks/workflow-gate.js"
 
-PASS=0
-FAIL=0
-
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -60,6 +52,20 @@ norm_path() {
 # against the fixture (it would otherwise refuse on commits from main).
 # ─────────────────────────────────────────────────────────────────────────────
 
+# safe_repo_config <maindir> <hooksnull> (#1602) — apply fixture git config with
+# every write anchored to `git -C <maindir>`, and only when <maindir> is a real
+# freshly-created repo. The pre-fix `( cd "$MAIN"; git config core.hooksPath X )`
+# fell through to the caller's cwd (the real agents repo) whenever `cd` failed
+# under `set +e`; anchoring + the `.git` guard removes that escape.
+safe_repo_config() {
+    local main="$1" hooks="$2"
+    [ -n "$main" ] && [ -d "$main/.git" ] || return 3
+    git -C "$main" config --local core.hooksPath "$hooks" || return 1
+    git -C "$main" config --local user.email t@example.com || return 1
+    git -C "$main" config --local user.name "T" || return 1
+    return 0
+}
+
 setup_repo() {
     TMPDIR_G="$(mktemp -d 2>/dev/null || mktemp -d -t gate_test)"
     MAIN="$TMPDIR_G/main"
@@ -67,15 +73,13 @@ setup_repo() {
     HOOKS_NULL="$TMPDIR_G/null-hooks"
     mkdir -p "$HOOKS_NULL"
     git init -q "$MAIN"
-    (
-        cd "$MAIN"
-        git config core.hooksPath "$HOOKS_NULL"
-        git config user.email t@example.com
-        git config user.name "T"
-        echo a > a.txt
-        git add a.txt
-        git -c commit.gpgsign=false commit -q -m init
-    )
+    if ! safe_repo_config "$MAIN" "$HOOKS_NULL"; then
+        echo "FAIL: setup_repo could not initialize MAIN fixture repo ($MAIN)"
+        echo ""; echo "Results: 0 passed, 1 failed"; exit 1
+    fi
+    printf 'a\n' > "$MAIN/a.txt"
+    git -C "$MAIN" add a.txt
+    git -C "$MAIN" -c commit.gpgsign=false commit -q -m init
     git -C "$MAIN" -c core.hooksPath="$HOOKS_NULL" worktree add -q "$LINKED" -b test/gate-296 >/dev/null 2>&1
 
     # Create a stub HOME so node's os.homedir() never resolves to the real
@@ -212,6 +216,29 @@ unstage_all "$LINKED"
 stage_in "$MAIN" "w6"
 assert_resolve_eq "W6" "cd \"$LINKED_LITERAL\" && git commit -m x" "$LINKED_NODE"
 unstage_all "$MAIN"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E3 (#1602): an empty/invalid MAIN must never redirect a core.hooksPath write
+#   into the caller's cwd repo. safe_repo_config refuses (rc=3) before any write,
+#   so the pre-fix `cd`-fallthrough that could touch the real agents repo is gone.
+# ─────────────────────────────────────────────────────────────────────────────
+test_E3() {
+    local victim before after rc
+    victim="$TMPDIR_G/e3-victim"
+    git init -q "$victim" 2>/dev/null
+    git -C "$victim" config --local core.hooksPath "$HOOKS_NULL"
+    before="$(git -C "$victim" config --local --get core.hooksPath 2>/dev/null)"
+    ( cd "$victim" && safe_repo_config "" "/tmp/should-never-write" ); rc=$?
+    [ "$rc" -eq 3 ] || fail "E3a: safe_repo_config accepted empty MAIN (rc=$rc)"
+    ( cd "$victim" && safe_repo_config "$victim/not-a-git-subdir" "/tmp/should-never-write" )
+    after="$(git -C "$victim" config --local --get core.hooksPath 2>/dev/null)"
+    if [ "$before" = "$after" ]; then
+        pass "E3: invalid MAIN never writes core.hooksPath into the cwd repo (#1602)"
+    else
+        fail "E3: cwd repo core.hooksPath mutated by invalid MAIN (before=$before after=$after)"
+    fi
+}
+test_E3
 
 echo ""
 echo "─────────────────────────────────────────"
