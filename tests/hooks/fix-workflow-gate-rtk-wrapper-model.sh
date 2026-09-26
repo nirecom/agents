@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-workflow-gate-rtk-wrapper-model.sh
 # Tests: hooks/lib/commit-detect.js, hooks/lib/merge-detect.js, hooks/workflow-gate.js
-# Tags: TL1, hook, workflow-gate, commit, merge, rtk, wrapper, scope:permanent
+# Tags: TL1, hook, workflow-gate, commit, merge, rtk, wrapper, scope:common
 # #2393 CPR-E2C: workflow-gate judged commit/merge by head-anchored raw regex, so
 # `rtk git commit` / `env git commit` / `rtk gh pr merge` skipped the gate. The fix
 # extracts isCommitCommand(ir) + extractCommitSegmentText(ir) into commit-detect.js

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-worktree-remove-linked.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js
-# Tags: TL1, hook, enforce, worktree, worktree-remove, linked, scope:permanent
+# Tags: TL1, hook, enforce, worktree, worktree-remove, linked, scope:common
 # #838 (via #2393): `git -C <main> worktree remove <wt2>` is gated on
 # isMainCheckout(CWD), so a session standing in a linked worktree cannot clean up
 # a sibling worktree even with an explicit -C at the main checkout. D1/D1b are

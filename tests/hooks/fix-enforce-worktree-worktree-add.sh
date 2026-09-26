@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-worktree-add.sh
 # Tests: hooks/enforce-worktree.js, hooks/bash-guard.js, skills/worktree-start/SKILL.md
-# Tags: TL1, hook, enforce, worktree, worktree-add, bash-guard, regression, scope:permanent
+# Tags: TL1, hook, enforce, worktree, worktree-add, bash-guard, regression, scope:common
 # #1174 (via #2393): /worktree-start once generated a cd-first `cd X && git
 # worktree add` shape that the guards reject. The skill now emits the isolated
 # form (WS-6); these cases pin that the canonical form passes BOTH bash-guard

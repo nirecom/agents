@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-rtk-fail-open.sh
 # Tests: hooks/lib/bash-write-patterns/segment-utils.js, hooks/lib/bash-write-patterns/git-write-ir.js, hooks/enforce-worktree/write-detector.js, hooks/enforce-worktree.js
-# Tags: TL1, hook, enforce, worktree, rtk, wrapper, security, scope:permanent
+# Tags: TL1, hook, enforce, worktree, rtk, wrapper, security, scope:common
 # #2393: WRAPPER_SPECS lacks an `rtk` entry, so `rtk git commit` is never peeled
 # and detectWritePredicate returns null (fail-open ALLOW). The fix registers rtk
 # with passthroughDispatchVerbs / shellBodyVerbs / nativeVerbs. Native-verb cases

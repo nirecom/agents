@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-git-c-tilde.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/git-repo-detection.js
-# Tags: TL1, hook, enforce, worktree, git-c, tilde, scope:permanent
+# Tags: TL1, hook, enforce, worktree, git-c, tilde, scope:common
 # #1563 (via #2393): resolveScopeValue treats a `~`-prefixed -C value as
 # AMBIGUOUS, falls back to the CWD repo (main) and BLOCKs a write aimed at an
 # external repo under $HOME. E1 is RED until `~` is statically expanded; `$VAR`

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-session-state-scope.sh
 # Tests: hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/handle-edit-write.js
-# Tags: TL1, hook, enforce, worktree, workflow-state, session-scope, security, scope:permanent
+# Tags: TL1, hook, enforce, worktree, workflow-state, session-scope, security, scope:common
 # #1324 (via #2393): the workflow dir sits outside every session repo, so Guard 5
 # and the Bug2 allow path wave through writes to ANOTHER session's state file.
 # G2/G3/G6/G-U* are RED until targetsHitOtherSessionWorkflowState is OR-ed into

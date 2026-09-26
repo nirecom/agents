@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-enforce-worktree-gh-cross-repo.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js
-# Tags: TL1, hook, enforce, worktree, gh, issue-create, cross-repo, scope:permanent
+# Tags: TL1, hook, enforce, worktree, gh, issue-create, cross-repo, scope:common
 # #1246 (via #2393): the #713 gate blocks every bare `gh issue create` from the
 # main worktree, even when --repo/-R/GH_REPO names a DIFFERENT repo managed via
 # ENFORCE_WORKTREE_ADDITIONAL_REPOS. F6* are RED until the gate resolves the
