@@ -56,24 +56,34 @@ run_c7() { # $1 = mode ; $2 = method ; $3 = arg
     C7_MODE="$1" run_with_timeout 20 node "$C7_DRIVER" "$GITLAB_JS" "$2" "$3" 2>/dev/null
 }
 
+case_begin "failsafe-is-private-repo-nonzero" "hooks/lib/forge/gitlab.js"
 # isPrivateRepo — glab exits non-zero (gitlab.js:47) -> true (private, fail-closed).
 assert_eq "C7/isPrivateRepo glab non-zero -> true (fail-closed private)" "true" \
     "$(run_c7 nonzero isPrivateRepo 'https://gitlab.com/acme/widgets.git')"
+case_end
+case_begin "failsafe-is-private-repo-throw" "hooks/lib/forge/gitlab.js"
 # isPrivateRepo — spawnSync throws (gitlab.js:50 catch) -> true.
 assert_eq "C7b/isPrivateRepo glab throws -> true (fail-closed private)" "true" \
     "$(run_c7 throw isPrivateRepo 'https://gitlab.com/acme/widgets.git')"
+case_end
 
+case_begin "failsafe-scan-public-target-nonzero" "hooks/lib/forge/gitlab.js"
 # shouldScanAsPublicTarget — glab exits non-zero (gitlab.js:59) -> true (scan).
 assert_eq "C7c/shouldScanAsPublicTarget glab non-zero -> true (fail-closed scan)" "true" \
     "$(run_c7 nonzero shouldScanAsPublicTarget 'acme/widgets')"
+case_end
+case_begin "failsafe-scan-public-target-throw" "hooks/lib/forge/gitlab.js"
 # shouldScanAsPublicTarget — spawnSync throws (gitlab.js:62 catch) -> true.
 assert_eq "C7d/shouldScanAsPublicTarget glab throws -> true (fail-closed scan)" "true" \
     "$(run_c7 throw shouldScanAsPublicTarget 'acme/widgets')"
+case_end
 
+case_begin "failsafe-has-open-pr-spawn-error" "hooks/lib/forge/gitlab.js"
 # hasOpenPrForBranch — spawn result carries r.error / glab unavailable
 # (gitlab.js:83) -> true (assume an MR may exist; do not push a duplicate).
 assert_eq "C7e/hasOpenPrForBranch glab unavailable (r.error) -> true (fail-safe)" "true" \
     "$(run_c7 spawnerror hasOpenPrForBranch "$TMPROOT")"
+case_end
 
 # ============================================================================
 # C8: is-private-repo.js#listPrivateRepoNames() forge routing
@@ -122,18 +132,24 @@ run_c8() { # $1 = repo dir ; $2 = log file
 C8_REPO_GL=$(setup_repo_with_origin "git@gitlab.com:acme/widgets.git")
 C8_REPO_GH=$(setup_repo_with_origin "git@github.com:acme/widgets.git")
 
+case_begin "list-private-repos-gitlab-routing" "hooks/lib/is-private-repo.js"
 C8_GL_LOG="$TMPROOT/c8-gl.log"; : > "$C8_GL_LOG"
 assert_eq "C8/gitlab origin routes listPrivateRepoNames -> codehostGitlab (glab list)" \
     '["gitlab-only/repo"]' "$(run_c8 "$C8_REPO_GL" "$C8_GL_LOG")"
+case_end
+case_begin "list-private-repos-gitlab-glab-called" "hooks/lib/is-private-repo.js"
 if grep -q "glab" "$C8_GL_LOG" 2>/dev/null; then
     pass "C8b/gitlab origin actually consulted glab (not gh)"
 else
     fail "C8b/gitlab origin actually consulted glab — log=[$(cat "$C8_GL_LOG" 2>/dev/null)]"
 fi
+case_end
 
+case_begin "list-private-repos-github-routing" "hooks/lib/is-private-repo.js"
 C8_GH_LOG="$TMPROOT/c8-gh.log"; : > "$C8_GH_LOG"
 assert_eq "C8c/github origin routes listPrivateRepoNames -> codehostGithub (gh list)" \
     '["github-only/repo"]' "$(run_c8 "$C8_REPO_GH" "$C8_GH_LOG")"
+case_end
 
 # ============================================================================
 # C6: readGitlabHostConfig() .env vs process.env precedence CONFLICT
@@ -163,16 +179,20 @@ printf 'GITLAB_HOSTNAME=gitlab.fromenvfile.example.com\n' > "$C6_CFG/.env"
 C6_CFG_EMPTY="$TMPROOT/c6-cfg-empty"; mkdir -p "$C6_CFG_EMPTY"
 printf '# no forge host declared here\n' > "$C6_CFG_EMPTY/.env"
 
+case_begin "read-gitlab-host-config-env-conflict" "hooks/lib/forge-router.js"
 # Both sources set, different values -> .env wins (value is lowercased by the impl).
 C6_CONFLICT="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6/readGitlabHostConfig .env wins over process.env on conflict" \
     "gitlab.fromenvfile.example.com" "$C6_CONFLICT"
+case_end
 
+case_begin "read-gitlab-host-config-env-fallback" "hooks/lib/forge-router.js"
 # Control: .env has no key, process.env set -> process.env value is the fallback.
 C6_FALLBACK="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG_EMPTY")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6b/readGitlabHostConfig falls back to process.env when .env omits the key" \
     "gitlab.fromprocessenv.example.com" "$C6_FALLBACK"
+case_end
 
 finish
