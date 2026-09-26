@@ -1,15 +1,16 @@
 # tests/feature-2119-settings-allow-ssot/deploy-symlink-policy.sh
-# Tests: install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
+# Tests: install/lib/settings-deploy.js, install/assemble-settings.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
-# T43: what the single writer does when the deploy target is a SYMLINK. Sourced AFTER generator.sh.
+# T43: what the single writer does when the deploy target is a SYMLINK. Sourced AFTER fixture.sh.
 
 T43_TOOL="bin/fx-tool"
 T43_SENTINEL='Bash(second-pass-only *)'
+T43_BASE='Bash(t43-base-marker *)'
 
 # WHY THE AXIS IS "WHERE THE LINK LANDS", NOT "IS IT A LINK". The installers REMOVE this link
 # (install/win/dotfileslink.ps1, install/linux/dotfileslink.sh), both calling it stale, so a write
-# THROUGH one resolving back into the checkout puts hundreds of generated allow rules into the
-# repository's own tracked settings.json -- the state #2119 removes. Hence: in-repo link is
+# THROUGH one resolving back into the checkout rewrites the repository's own tracked
+# settings.json with the deployed product -- the state #2119 removes. Hence: in-repo link is
 # detached; a link landing OUTSIDE is a deliberate arrangement and is written through as before.
 # Cutting on "is it a link" would break the deliberate ones too (CPR-UNV).
 # Authoritative rationale: the A1 section of the #2119 detail plan.
@@ -76,40 +77,32 @@ t43_mechanism() { # -> ok | NOT-A-LINK | FAILED:<code>
     t43_mklink "$d/real.json" "$d/link.json"
 }
 
-# stderr is captured SEPARATELY from stdout here (run_gen / run_assemble fold them together): the
+# stderr is captured SEPARATELY from stdout here (run_assemble folds them together): the
 # detach is a warning on a run that SUCCEEDS, so "reported on stderr" and "exited zero" have to be
 # two independent observations rather than one merged blob.
-t43_run() { # <asm|gen> <fixture>
+t43_run() { # <asm> <fixture>
     local fx="$2"
     T43_ERR="$fx/stderr.txt"
     T43_RC=0
-    if [ "$1" = "asm" ]; then
-        ( cd "$fx" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
-          HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
-          CLAUDE_CONFIG_DIR="$fx/home/.claude" \
-          run_with_timeout 60 node install/assemble-settings.js ) \
-          > "$fx/stdout.txt" 2> "$T43_ERR" || T43_RC=$?
-    else
-        ( cd "$fx" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
-          HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
-          CLAUDE_CONFIG_DIR="$fx/home/.claude" \
-          run_with_timeout 60 node install/gen-settings-allow.js --write ) \
-          > "$fx/stdout.txt" 2> "$T43_ERR" || T43_RC=$?
-    fi
+    ( cd "$fx" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+      HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
+      CLAUDE_CONFIG_DIR="$fx/home/.claude" \
+      run_with_timeout 60 node install/assemble-settings.js ) \
+      > "$fx/stdout.txt" 2> "$T43_ERR" || T43_RC=$?
 }
 
 # Verdict: rc/state/orig/content/note/fresh. A field a case cannot speak to stays `-`, so every row
 # below names a real observation of that case rather than a default that happened to line up.
-t43_case() { # <asm|gen> <shape> -> verdict | sentinel
-    have_gen || { missing_gen; return; }
+t43_case() { # <asm> <shape> -> verdict | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
-    local dir target ext repo_before repo_after rc state orig content note fresh first
+    local dir target ext repo_before repo_after rc state orig content note fresh
     local inside_dir="" inside_before="-" inside_after="-" inside="-"
     dir="$(mk_fixture "t43-$1-$2")"
     mk_tool "$dir" "$T43_TOOL" env-bash
     write_ssot "$dir" "$T43_TOOL"
-    write_settings "$dir" --
+    printf '%s\n' "$T43_BASE" > "$dir/pre.txt"
+    write_settings "$dir" "$dir/pre.txt"
     # Deployed healthy FIRST: only then is "the previous deployment survived" a claim about
     # something that exists, and only then does the target start out as a plain regular file.
     run_assemble "$dir"
@@ -141,11 +134,12 @@ t43_case() { # <asm|gen> <shape> -> verdict | sentinel
             t43_mkdirlink "$inside_dir" "$dir/home/.claude" > /dev/null ;;
     esac
     # The second deploy must produce DIFFERENT bytes, or "rewritten" and "never touched" are the
-    # same observation. The fail-closed row breaks the generator instead of moving the sentinel.
+    # same observation. The fail-closed row breaks the BASE instead of moving the sentinel (the
+    # SSOT list no longer feeds the deploy since #2264, so breaking it would fail nothing).
     if [ "$2" = "failclosed" ]; then
-        rm -f "$dir/install/settings-allow-commands.txt"
+        printf '%s\n' '{ "permissions": { "allow": "Bash(not-an-array *)" } }' > "$dir/settings.json"
     else
-        printf '%s\n' "$T43_SENTINEL" > "$dir/pre.txt"
+        printf '%s\n%s\n' "$T43_BASE" "$T43_SENTINEL" > "$dir/pre.txt"
         write_settings "$dir" "$dir/pre.txt"
     fi
     repo_before="$(file_digest "$dir/settings.json")"
@@ -162,8 +156,7 @@ t43_case() { # <asm|gen> <shape> -> verdict | sentinel
     content="RULES-MISSING"
     fresh="STALE"
     deployed_allow_dump "$dir" "$dir/allow.txt"
-    first="$(expected_path_rules bash "$T43_TOOL" "$dir" | sed -n 1p)"
-    grep -Fxq -- "$first" "$dir/allow.txt" 2>/dev/null && content="rules-present"
+    grep -Fxq -- "$T43_BASE" "$dir/allow.txt" 2>/dev/null && content="rules-present"
     grep -Fxq -- "$T43_SENTINEL" "$dir/allow.txt" 2>/dev/null && fresh="overwritten"
     if grep -Eqi 'symlink|symbolic link' "$T43_ERR" 2>/dev/null; then note="noted"; else note="silent"; fi
     printf '%s/%s/%s/%s/%s/%s/%s' "$rc" "$state" "$orig" "$content" "$note" "$fresh" "$inside"
@@ -195,8 +188,6 @@ t43_setup() {
         T43_VERDICTS="$T43_VERDICTS asm-parent-into-repo=$(t43_case asm parent-into-repo)
 "
     fi
-    T43_VERDICTS="$T43_VERDICTS gen-into-repo=$(t43_case gen into-repo)
-"
 }
 
 t43_slot() { # <slot> -> verdict
@@ -233,36 +224,32 @@ t43_symlink_table() {
     done <<'T43_CASES'
 asm-plain-file|1|zero|CONTROL: an ordinary regular deploy target is untouched by any of this -- the assembler still exits 0
 asm-plain-file|2|regular|and the target is still a regular file, so symlink handling did not convert a plain file into something else
-asm-plain-file|4|rules-present|carrying the generated spellings
+asm-plain-file|4|rules-present|carrying the base's rules
 asm-plain-file|6|overwritten|and the NEW base content, which is what makes "the file was rewritten" an observation rather than an assumption
 asm-absent|1|zero|CONTROL: no deploy target at all is the first-install path, and still exits 0 with a symlink branch standing in front of the write
 asm-absent|2|regular|creating a plain regular file, never a link
-asm-absent|4|rules-present|with the generated spellings in it
+asm-absent|4|rules-present|with the base's rules in it
 asm-into-repo|1|zero|a link resolving INSIDE the agents repository is not an error: the deploy succeeds
-asm-into-repo|2|regular|but it is DETACHED -- the deployed path is a regular file afterwards, because writing through it would push the generated rules back into the repository's own settings.json, the exact state #2119 removes
+asm-into-repo|2|regular|but it is DETACHED -- the deployed path is a regular file afterwards, because writing through it would rewrite the repository's own settings.json, the exact state #2119 removes
 asm-into-repo|3|orig-identical|and the repository original is byte-identical: the link was removed, not followed
-asm-into-repo|4|rules-present|while the deployed path itself carries the generated rules, so detaching cost the user nothing
+asm-into-repo|4|rules-present|while the deployed path itself carries the base's rules, so detaching cost the user nothing
 asm-into-repo|5|noted|and one stderr line names the link, because a file silently replacing a link is a change the operator must be able to find afterwards
 asm-outside-repo|1|zero|a link resolving OUTSIDE the repository is somebody's deliberate arrangement and deploys normally
 asm-outside-repo|2|link|and is STILL a link afterwards: the axis is where the link lands, not whether it is a link, so a deliberate one is left alone
-asm-outside-repo|4|rules-present|with the file behind it now holding the generated rules -- written THROUGH the link, as before
+asm-outside-repo|4|rules-present|with the file behind it now holding the base's rules -- written THROUGH the link, as before
 asm-broken|1|zero|a link whose target does not resolve at all still deploys successfully
 asm-broken|2|regular|falling to the DETACH side: a broken link cannot be honoured, so the write must not chase it
-asm-broken|4|rules-present|and the deployed path carries the generated rules
+asm-broken|4|rules-present|and the deployed path carries the base's rules
 asm-broken|5|noted|with the link named on stderr, the same way the in-repo detach is
-asm-failclosed|1|nonzero|D3 BEFORE A1: with generation broken, the deploy fails closed even though the target is a detachable in-repo link
+asm-failclosed|1|nonzero|D3 BEFORE A1: with the base's permissions.allow broken, the deploy fails closed even though the target is a detachable in-repo link
 asm-failclosed|2|link|and the link is STILL a link -- the fail-closed check runs BEFORE the detach, so a failing deploy never unlinks something it then cannot replace
 asm-failclosed|3|orig-identical|leaving the repository original byte-identical, which is what "nothing was written" means here
 asm-parent-into-repo|1|nonzero|THE PARENT IS THE LINK: `~/.claude` itself resolves into the checkout, which a leaf-only lstat never sees. Unlinking is not available -- removing a directory link orphans everything else under it -- so this shape falls to the module's fail-closed side and the deploy REFUSES
-asm-parent-into-repo|3|orig-identical|leaving the repository original byte-identical: the whole point is that the generated rules never reach the checkout's own tracked settings.json
+asm-parent-into-repo|3|orig-identical|leaving the repository original byte-identical: the whole point is that the deployed product never reaches the checkout's own tracked settings.json
 asm-parent-into-repo|7|inside-untouched|and the file BEHIND the link is untouched too, which is the observation the repository digest alone cannot make -- a write that landed there would still leave `$dir/settings.json` identical
 asm-parent-into-repo|4|rules-present|the previous deployment still stands: refusing wrote nothing, so the operator is left with the last good file rather than a truncated one
 asm-parent-into-repo|6|STALE|and it is the OLD deployment, not a fresh one -- the second pass's base sentinel never reached it, which is what "nothing was written" means for this row
 asm-parent-into-repo|5|noted|with the link named on stderr, because a refusal the operator cannot locate is indistinguishable from a hang
-gen-into-repo|1|zero|CPR-ORTH: gen-settings-allow.js --write reaches the same single writer and succeeds on the same in-repo link
-gen-into-repo|2|regular|detaching it the same way
-gen-into-repo|3|orig-identical|leaving the same repository original untouched
-gen-into-repo|4|rules-present|with the same rules deployed, so neither entry point is the one that writes back into the checkout
 T43_CASES
 }
 

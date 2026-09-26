@@ -1,5 +1,5 @@
 # tests/feature-2119-settings-allow-ssot/ssot-structure.sh
-# Tests: install/settings-allow-commands.txt, install/path-exposed-commands.txt, install/lib/settings-allow-rules.js
+# Tests: install/settings-allow-commands.txt, install/path-exposed-commands.txt, hooks/lib/allow-command-list.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T0-T3b: the SSOT file itself. Sourced by tests/feature-2119-settings-allow-ssot.sh, which
 # owns PASS/FAIL/ROWS, assert_eq, ssot_entries and every path variable used here.
@@ -17,8 +17,8 @@ t0_ssot_exists() {
 }
 
 # The interpreter is never written in the SSOT; it is read from the shebang. The resolution
-# the generator must implement is spelled out here as the reference: `env <x>` takes the
-# following token, and anything that is not bash or node is unresolved (fail-closed).
+# hooks/lib/allow-command-list.js must implement is spelled out here as the reference: `env <x>`
+# takes the following token, and anything that is not bash or node is unresolved (no allow).
 resolve_shebang() { # <file> -> bash|node|unresolved
     local line first
     [ -f "$1" ] || { printf 'unresolved'; return; }
@@ -62,9 +62,9 @@ t1b_shebangs_resolve() {
     assert_eq "T1b: every SSOT entry's shebang resolves to bash or node (anything else is fail-closed)" "" "$bad"
 }
 
-# T2a is the conservative-charset gate. Each entry is interpolated into thirty permission
-# rules, so a `..`, a leading slash, a drive letter or a glob metacharacter would WIDEN a
-# rule rather than merely name a file -- the one place here where a typo is a security change
+# T2a is the conservative-charset gate. Each entry is a path bash-guard auto-approves (#2264),
+# so a `..`, a leading slash, a drive letter or a glob metacharacter would WIDEN the approved
+# set rather than merely name a file -- the one place here where a typo is a security change
 # and not a broken build.
 t2a_charset() {
     if [ "$SSOT_PRESENT" != "yes" ]; then
@@ -169,11 +169,11 @@ T3B_CASES
 }
 
 # T46 -- THE READER, NOT THE FILE. Every row above reads the SSOT through ssot_entries, and the
-# spelling library reads both list files again in production: split on \n, strip TRAILING
+# allow-command-list.js reads both list files again in production: split on \n, strip TRAILING
 # whitespace only, drop empty lines and lines whose first non-blank character is `#`. Neither
 # reader is exercised by the real files, which are tidy. A disagreement between them is silent
-# and one-directional: an entry the harness drops but the generator keeps becomes 30 permission
-# rules that no test in this suite ever looks at, and the reverse hides a real entry from T1a's
+# and one-directional: an entry the harness drops but the reader keeps becomes an auto-approved
+# path that no test in this suite ever looks at, and the reverse hides a real entry from T1a's
 # existence check and T2a's charset gate. Each row therefore pins the parse AND the agreement.
 T46_DIR="$TMPROOT/t46"
 
@@ -192,7 +192,7 @@ t46_write() { # <case> <file>
 }
 
 # The production contract restated here, the way resolve_shebang restates the interpreter rule:
-# importing the generator's own reader could only prove it equals itself.
+# importing allow-command-list.js's own reader could only prove it equals itself.
 t46_reference() { # <file> -> comma-joined entries
     node -e '
       const fs = require("fs");
@@ -212,7 +212,7 @@ t46_probe() { # <case> -> [entries] | DISAGREE...
     if [ "$1" = "absent-file" ]; then rm -f "$f"; else t46_write "$1" "$f"; fi
     h="$(ssot_entries "$f" | tr '\n' ',' | sed -e 's/,$//')"
     r="$(t46_reference "$f")"
-    [ "$h" = "$r" ] || { printf 'DISAGREE harness[%s] generator[%s]' "$h" "$r"; return; }
+    [ "$h" = "$r" ] || { printf 'DISAGREE harness[%s] reader[%s]' "$h" "$r"; return; }
     printf '[%s]' "$h"
 }
 
@@ -223,12 +223,12 @@ t46_reader_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T46[$id]: $label" "$want" "$(t46_probe "$id")"
     done <<'T46_CASES'
-crlf|[bin/a,bin/b]|a CRLF file parses to the same entries as an LF one -- a surviving \r would be interpolated into every rule and match nothing
+crlf|[bin/a,bin/b]|a CRLF file parses to the same entries as an LF one -- a surviving \r would become part of the entry and match nothing
 crlf-no-final|[bin/a,bin/b]|CRLF plus a comment, a blank line and no final newline at once: the last entry is still read
 trailing-space|[bin/a,bin/b]|trailing spaces and tabs are stripped, so an invisible edit does not become a distinct entry
 no-final-newline|[bin/a,bin/b]|a file whose last line has no newline still yields that last entry rather than dropping it
 indented-comment|[bin/a]|a `#` after leading spaces or a tab is still a comment: the first NON-BLANK character decides
-leading-space|[  bin/a,bin/b]|leading whitespace is NOT stripped -- it stays part of the entry so T2a's charset gate rejects it instead of a rule being silently built from a trimmed path
+leading-space|[  bin/a,bin/b]|leading whitespace is NOT stripped -- it stays part of the entry so T2a's charset gate rejects it instead of a trimmed path being silently approved
 inline-hash|[bin/a # not-a-comment,bin/b]|`#` after text starts no comment: only a whole-line comment is dropped, so a `#` in a path cannot truncate an entry
 blank-only|[]|a file of nothing but blank and whitespace-only lines reads as zero entries, not as one empty entry
 empty-file|[]|a zero-byte file reads as zero entries

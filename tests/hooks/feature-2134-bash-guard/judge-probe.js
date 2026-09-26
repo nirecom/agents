@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 // tests/feature-2134-bash-guard/judge-probe.js
 // One-line stdout probe over the bash-guard modules, used by every cases-*.sh here.
-// Usage: node judge-probe.js <mode> <cmd-file> [sessionId] [toolName] [settingsPath]
+// Usage: node judge-probe.js <mode> <cmd-file> [sessionId] [toolName]
+// Env (all optional): BG_PROBE_TOOL_CWD_JSON / BG_PROBE_INPUT_CWD_JSON put a JSON value at
+// tool_input.cwd / input.cwd (JSON so a number or object reaches readCwd() as-is);
+// BG_PROBE_CTX_CWD_JSON is ctx.cwd for the in-process self-script / notify-hits modes;
+// BG_PROBE_AGENTS_ROOT is the fixture agents root handed to matchSelfScript's options.
 "use strict";
 
-// Command text arrives in a FILE, never argv: quotes, backticks, `$(...)`, heredoc
-// bodies and newlines must reach the module byte-for-byte, and a shell argument
-// would rewrite the very literals under test.
-
-// Targets are written test-first, so tryRequire() returns null for an absent module
-// and the probe prints `<MISSING:...>` (a throw prints `<THREW:...>`). Both land on
-// assert_eq's `got` side: the suite fails RED naming the artifact instead of
-// crashing and taking the remaining rows with it.
+// Command text arrives in a FILE, never argv: quotes, backticks, `$(...)`, heredoc bodies
+// and newlines must reach the module byte-for-byte. tryRequire() returns null for an absent
+// module and the probe prints `<MISSING:...>` (a throw prints `<THREW:...>`), so a
+// test-first target fails RED naming the artifact instead of crashing the suite.
 
 const fs = require("fs");
 const path = require("path");
 
-const AGENTS = path.resolve(__dirname, "..", "..");
+const AGENTS = path.resolve(__dirname, "..", "..", "..");
 
 const missing = [];
 function tryRequire(rel) {
@@ -44,7 +44,6 @@ const mode = process.argv[2];
 const cmdFile = process.argv[3];
 const sessionId = process.argv[4] || "sid-bg-armed";
 const toolName = process.argv[5] || "Bash";
-const settingsPath = process.argv[6] || null;
 
 let commandText = "";
 if (cmdFile && cmdFile !== "-") {
@@ -54,22 +53,31 @@ if (cmdFile && cmdFile !== "-") {
     out("<MISSING:cmd-file " + cmdFile + ">");
   }
 }
-// The writer appends no trailing newline; strip one defensively so an
-// editor-added newline cannot re-shape a `cat <<EOF` case.
 commandText = commandText.replace(/\n$/, "");
+
+function envJson(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return { set: false };
+  return { set: true, value: JSON.parse(raw) };
+}
 
 const guardEntry = () => tryRequire("hooks/bash-guard.js");
 const judgeMod = () => tryRequire("hooks/bash-guard/judge.js");
 const detectMod = () => tryRequire("hooks/bash-guard/detect.js");
-const exemptMod = () => tryRequire("hooks/bash-guard/exemptions.js");
+const allowMod = () => tryRequire("hooks/bash-guard/allow.js");
 const literalsMod = () => tryRequire("hooks/bash-guard/forbidden-literals.js");
 const reasonsMod = () => tryRequire("hooks/bash-guard/reasons.js");
 const gateMod = () => tryRequire("hooks/lib/early-write-gate.js");
-const allowMod = () => tryRequire("hooks/lib/settings-allow-match.js");
 const irMod = () => tryRequire("hooks/lib/command-ir.js");
 
 function judgeInput() {
-  return { tool_name: toolName, session_id: sessionId, tool_input: { command: commandText } };
+  const toolInput = { command: commandText };
+  const toolCwd = envJson("BG_PROBE_TOOL_CWD_JSON");
+  if (toolCwd.set) toolInput.cwd = toolCwd.value;
+  const input = { tool_name: toolName, session_id: sessionId, tool_input: toolInput };
+  const inputCwd = envJson("BG_PROBE_INPUT_CWD_JSON");
+  if (inputCwd.set) input.cwd = inputCwd.value;
+  return input;
 }
 
 function hitKey(h) {
@@ -88,34 +96,37 @@ function buildCtx() {
   if (!ir || typeof ir.parse !== "function") return null;
   const parsed = ir.parse(commandText);
   const analysis = typeof ir.analysisOf === "function" ? ir.analysisOf(parsed) : null;
-  return { ir: parsed, analysis, commandText };
+  const ctxCwd = envJson("BG_PROBE_CTX_CWD_JSON");
+  return { ir: parsed, analysis, commandText, cwd: ctxCwd.set ? ctxCwd.value : null };
 }
 
-function remainingHits(exemptions) {
+// xargs-pipe now lives inside detect() (#2264 Step 3), so detect() alone is the surviving set.
+function detectedHits() {
   const d = detectMod();
-  const x = exemptMod();
   const ctx = buildCtx();
-  if (!d || !x || !ctx || typeof d.detect !== "function" || typeof x.applyExemptions !== "function") return null;
-  const hits = d.detect(ctx.ir);
-  return exemptions ? x.applyExemptions(hits, ctx, exemptions) : x.applyExemptions(hits, ctx);
+  if (!d || !ctx || typeof d.detect !== "function") return null;
+  return d.detect(ctx.ir);
 }
 
 function idsOf(hits) {
   return Array.from(new Set(hits.map((h) => String(h && h.literalId)))).sort().join(",");
 }
 
+function sortedValues(obj) {
+  return Object.keys(obj || {}).map((k) => k + "=" + obj[k]).sort().join(",");
+}
+
 try {
   switch (mode) {
+    // verdict \t code \t literalId|notifyId. The 4-value verdict is allow|deny|notify|passThrough.
     case "judge": {
       const m = judgeMod();
       if (!m || typeof m.judgeBashCommand !== "function") sentinel();
       const v = m.judgeBashCommand(judgeInput());
-      out([v && v.verdict, v && v.code, v && v.literalId].map((x) => (x == null ? "-" : x)).join("\t"));
+      const id = v && (v.literalId != null ? v.literalId : v.notifyId);
+      out([v && v.verdict, v && v.code, id].map((x) => (x == null ? "-" : x)).join("\t"));
       break;
     }
-    // sample: the deny's reproduced offending-text fragment (not the whole command line).
-    // A separate mode from "judge" so cases-detect.sh's D-namespace assertion can read it
-    // without re-threading the tab-column layout every other "judge" caller depends on.
     case "judge-sample": {
       const m = judgeMod();
       if (!m || typeof m.judgeBashCommand !== "function") sentinel();
@@ -131,9 +142,8 @@ try {
       break;
     }
 
-    // Fail-open under hostile input: a null command, and an input whose `command` getter
-    // throws. Neither may produce a deny; a presentation guard that stops work on its own
-    // bug is worse than one that misses a case.
+    // Fail-open under hostile input: neither shape may produce a deny, AND neither may produce
+    // an allow -- allow bypasses the permission prompt, so an exception must land on passThrough.
     case "judge-null-command":
     case "judge-throwing-input": {
       const m = judgeMod();
@@ -150,41 +160,60 @@ try {
       out(String(v && v.verdict));
       break;
     }
-
-    case "raw-hits": {
-      const d = detectMod();
-      const ctx = buildCtx();
-      if (!d || !ctx || typeof d.detect !== "function") sentinel();
-      out(d.detect(ctx.ir).map(hitKey).join(","));
+    // A throwing cwd getter reached AFTER parse succeeds: the catch must still land on passThrough.
+    case "judge-throwing-cwd": {
+      const m = judgeMod();
+      if (!m || typeof m.judgeBashCommand !== "function") sentinel();
+      const toolInput = { command: commandText };
+      Object.defineProperty(toolInput, "cwd", { get() { throw new Error("hostile cwd"); }, enumerable: true });
+      let v;
+      try {
+        v = m.judgeBashCommand({ tool_name: "Bash", session_id: sessionId, tool_input: toolInput });
+      } catch (e) {
+        out("<THREW:" + (e && e.message ? e.message : String(e)) + ">");
+      }
+      out(String(v && v.verdict));
       break;
     }
+
+    case "raw-hits":
     case "hits": {
-      const rest = remainingHits(null);
-      if (rest === null) sentinel();
-      out(rest.map(hitKey).join(","));
+      const hits = detectedHits();
+      if (hits === null) sentinel();
+      out(hits.map(hitKey).join(","));
       break;
     }
     case "hit-ids": {
-      const rest = remainingHits(null);
-      if (rest === null) sentinel();
-      out(idsOf(rest));
+      const hits = detectedHits();
+      if (hits === null) sentinel();
+      out(idsOf(hits));
       break;
     }
 
-    // Dummy hit-scoped exemption excusing ONLY "pipe": every other hit must stand.
-    // Contract: applyExemptions(hits, ctx, exemptions) takes the list as an
-    // optional third argument so one exemption can be exercised in isolation.
-    case "dummy-exemption": {
-      const dummy = [{ id: "dummy-pipe-only", scope: "hit", excuses: ["pipe"], applies: () => true }];
-      const rest = remainingHits(dummy);
-      if (rest === null) sentinel();
-      out(idsOf(rest));
+    // detectIneffective(ir, ctx) -> sorted notifyId list; the hit shape is also checked so a
+    // sample carrying command text fails here rather than leaking into a transcript.
+    case "notify-hits": {
+      const d = detectMod();
+      const ctx = buildCtx();
+      if (!d || !ctx || typeof d.detectIneffective !== "function") {
+        if (d && typeof d.detectIneffective !== "function") missing.push("detect.js#detectIneffective");
+        sentinel();
+      }
+      const hits = d.detectIneffective(ctx.ir, ctx) || [];
+      const bad = hits.filter((h) => !h || h.sample != null || !h.at || h.at.kind !== "segment");
+      if (bad.length > 0) out("<BAD-HIT-SHAPE:" + JSON.stringify(bad) + ">");
+      out(Array.from(new Set(hits.map((h) => String(h.notifyId)))).sort().join(","));
       break;
     }
-    case "exemption-ids": {
-      const x = exemptMod();
-      if (!x || !Array.isArray(x.EXEMPTIONS)) sentinel();
-      out(x.EXEMPTIONS.map((e) => e.id + ":" + e.scope).sort().join(","));
+
+    // matchSelfScript(ir, ctx, {root}) -> the ALLOW code, or "null".
+    case "self-script": {
+      const a = allowMod();
+      const ctx = buildCtx();
+      if (!a || !ctx || typeof a.matchSelfScript !== "function") sentinel();
+      const root = process.env.BG_PROBE_AGENTS_ROOT || undefined;
+      const r = a.matchSelfScript(ctx.ir, ctx, root ? { root } : undefined);
+      out(r == null ? "null" : typeof r === "object" ? String(r.code) : String(r));
       break;
     }
 
@@ -200,8 +229,6 @@ try {
       out(String(Array.from(new Set(list.map((e) => e.row))).length));
       break;
     }
-    // id -> doc-row-index map, read straight off each entry's own `.row` field (not
-    // re-derived from "ids" + a guessed fold) so a real generator drift shows up here.
     case "id-row-map": {
       const list = literalList(literalsMod());
       if (!list) sentinel();
@@ -224,19 +251,24 @@ try {
       out(codes.slice().sort().join(","));
       break;
     }
+    // KEY=VALUE pairs of the three non-deny registries, sorted; "<ABSENT>" when not exported.
+    case "pass-through-codes":
+    case "notify-codes":
+    case "allow-codes": {
+      const m = reasonsMod();
+      if (!m) sentinel();
+      const key = { "pass-through-codes": "PASS_THROUGH_CODES", "notify-codes": "NOTIFY_CODES", "allow-codes": "ALLOW_CODES" }[mode];
+      const reg = m[key];
+      if (!reg || typeof reg !== "object") out("<ABSENT:" + key + ">");
+      out((Object.isFrozen(reg) ? "" : "<NOT-FROZEN>") + sortedValues(reg));
+      break;
+    }
 
     case "gate": {
       const m = gateMod();
       if (!m || typeof m.earlyWriteGateStatus !== "function") sentinel();
       const s = m.earlyWriteGateStatus(sessionId);
       out([s && s.active, (s && s.pendingTier) || "-", (s && s.inactiveReason) || "-"].join("\t"));
-      break;
-    }
-
-    case "allow-match": {
-      const m = allowMod();
-      if (!m || typeof m.isAllowRuleMatch !== "function") sentinel();
-      out(String(m.isAllowRuleMatch(commandText, settingsPath ? { settingsPath } : undefined)));
       break;
     }
 
@@ -270,6 +302,19 @@ try {
       const m = guardEntry();
       if (!m) sentinel();
       out(typeof m.judgeBashCommand);
+      break;
+    }
+
+    // The exact stdout hooks/bash-guard.js writes for judgeInput(), newlines escaped; the
+    // envelope builder is not exported, so the real entrypoint is spawned. passThrough -> "".
+    case "allow-envelope-stdout": {
+      const hook = path.join(AGENTS, "hooks", "bash-guard.js");
+      if (!fs.existsSync(hook)) out("<MISSING:hooks/bash-guard.js>");
+      const r = require("child_process").spawnSync(process.execPath, [hook], {
+        input: JSON.stringify(judgeInput()), encoding: "utf8", timeout: 20000,
+      });
+      if (r.error) threw(r.error);
+      out(String(r.stdout || "").replace(/\n$/, "").replace(/\n/g, "\\n"));
       break;
     }
 

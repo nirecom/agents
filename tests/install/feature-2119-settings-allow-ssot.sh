@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-2119-settings-allow-ssot.sh
-# Tests: install/settings-allow-commands.txt, install/lib/settings-allow-rules.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js, hooks/lib/settings-drift.js, hooks/post-merge, hooks/post-checkout, settings.json, docs/architecture/claude-code/settings.md
+# Tests: install/settings-allow-commands.txt, hooks/lib/allow-command-list.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, hooks/lib/settings-drift.js, hooks/post-merge, hooks/post-checkout, settings.json, docs/architecture/claude-code/settings.md
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
 set -uo pipefail
@@ -26,28 +26,24 @@ PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
 
 # THE CONTRACT UNDER TEST. One declarative file names the commands and nothing else -- no
 # interpreter (read from the shebang), no rule strings, no bare-form flag (decided by
-# install/path-exposed-commands.txt). install/lib/settings-allow-rules.js owns the template
-# table in ONE place and expands each entry into 24 path spellings plus 6 bare spellings, as
-# adjacent argument-bearing / argument-less PAIRS (16 path spellings until #2201 added the four
-# QUOTED absolute-path families -- the spelling the model issues whenever it quotes a path). install/lib/settings-assembly.js merges
-# base + extension + generated; install/lib/settings-deploy.js is the single writer of
-# ~/.claude/settings.json. The generated rules are INJECTED AT DEPLOY TIME and never live in
-# the repository's settings.json, so there is nothing left for a human to hand-maintain.
+# install/path-exposed-commands.txt). Since #2264 hooks/lib/allow-command-list.js reads both
+# lists and bash-guard answers those commands with permissionDecision "allow"; the generator
+# and its settings.json spellings are gone. install/lib/settings-assembly.js merges base +
+# extension ONLY; install/lib/settings-deploy.js is the single writer of ~/.claude/settings.json.
 
-GEN_REL="install/gen-settings-allow.js"
-GEN="$AGENTS_DIR/$GEN_REL"
 ASSEMBLE_REL="install/assemble-settings.js"
 ASSEMBLE="$AGENTS_DIR/$ASSEMBLE_REL"
 SETTINGS_REL="settings.json"
 SETTINGS="$AGENTS_DIR/$SETTINGS_REL"
 LIB_DIR="$AGENTS_DIR/install/lib"
-LIB_REL_LIST="install/lib/settings-allow-rules.js, settings-assembly.js, settings-deploy.js"
+LIB_REL_LIST="install/lib/settings-assembly.js, settings-deploy.js"
 
 # OUT OF SCOPE: install/path-exposed-commands.txt itself (read to decide bare forms, never
 # modified); wrapper launchers such as bin/run-with-timeout.sh, whose trailing ` *` template
 # would allow-list every command reachable through them; gh-write and git-state-changing
-# commands; and the developer's OWN ~/.claude/settings.json, which home-canary.sh pins as
-# untouched even though these cases now really do deploy (into fixture-private homes).
+# commands; and WRITING the developer's OWN ~/.claude/settings.json, which home-canary.sh pins
+# as untouched even though these cases now really do deploy (into fixture-private homes).
+# T53 only READS that file.
 
 PASS=0
 FAIL=0
@@ -60,11 +56,14 @@ SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
+# Label-only markers (tests/lib/harness.sh is not sourced): targets are for static grep.
+case_begin() { :; }
+case_end() { :; }
 
-# SKIPPED: asserting that the generated spellings actually stop the permission engine from
-#          prompting -- i.e. running each of the 30 forms in a live Claude Code session.
-# Because: an approved `ask` leaves no observable record, so a passive after-the-fact check
-#          cannot distinguish "matched an allow rule" from "the user pressed yes".
+# SKIPPED: asserting that bash-guard's allow actually stops the permission prompt in a live
+#          Claude Code session.
+# Because: an approved `ask` leaves no observable record; tests/hooks/TL3-hook-bash-guard-envelope.sh
+#          owns that live measurement.
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -73,15 +72,11 @@ assert_eq() {
 }
 
 # TL3 gap (what this test does NOT catch):
-# - Whether the permission engine matches the generated spellings at all -- rule matching is
+# - Whether the platform honours a PreToolUse permissionDecision "allow" without prompting --
 #   the engine's behaviour, exercised only by a real session.
-# - Whether the ARGUMENT-LESS exact-match spellings are ACCEPTED by that engine: this suite
-#   proves they are generated and that no prefix form is emitted, but "an exact
-#   `Bash(node bin/workflow/next-step)` rule stops the prompt" is measurable only live --
-#   which is exactly the measurement that opened this issue.
-# - Whether a spelling that matches here is the spelling the model actually issues.
-# - Whether the `cd "$AGENTS_CONFIG_DIR" && ...` forms are needed: the non-splitting of `&&`
-#   is taken from docs/architecture/claude-code/settings.md, not measured here.
+# - Whether the spelling the model actually issues is the one bash-guard recognises.
+# - Whether the installer entry points and a genuine git event reach the assembler as the
+#   fixture callers in hook-callers.sh do.
 
 ROWS=0
 
@@ -95,14 +90,14 @@ ROWS=0
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS_EXPECTED=637 # T3a 4 + T3b 25 + T46 10 + T4 33 + T4-empty 2 + T4-dup 2 + T5 4 + T6 3
-                   # + T7b 2 + T7c 2 + T11 4 + T12 3 + T25 6 + T13 15 + T14 24 + T15 6
-                   # + T16 5 + T17 18 + T27 13 + T28 14 + T29 20 + T30 13 + T22 3
-                   # + T23 39 + T31 187 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8
-                   # + T37 8 + T38 5 + T39 3 + T40 16 + T41 17 + T42 14 + T43 33 + T44 12
-                   # + T47 4 + T49 30
-                   # T26 (27) and T48 (37) moved to tests/prompt-bash-node-calling-convention.sh:
-                   # both assert a class-level invariant that outlives this issue-specific suite.
+ROWS_EXPECTED=229 # ssot-structure 39 (T3a 4 + T3b 25 + T46 10) + write-and-drift 4 (T6 3 + T7 1)
+                   # + settings-preservation 7 + merger-contract 14 + input-validation 15
+                   # + provider-purity 14 + assembler-failclosed 18 (T29 12 + T36 6)
+                   # + deploy-preconditions 17 (T40 8 + T41 9) + deploy-symlink-policy 29
+                   # + drift-detection 13 + docs-contract 27 (T23 16 + stale 11) + retirement 7
+                   # + hook-callers 15 (T37 10 + T38 5) + assembly-ownership 7 + T22 3
+                   # T51/T52 (migration pins) are plain assert rows, outside this budget.
+                   # #2264 retired the generator parts (T4/T5/T7b/T7c/T14-T17/T25/T31/T42/T44/T49).
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/sa-2119.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -137,13 +132,10 @@ ssot_entries() { # <file>
 # the T10 budget stays meaningful. The lib sentinel is separate from the CLI one on purpose:
 # a CLI present without its modules fails as MODULE_NOT_FOUND, and every rc=2 row in the
 # suite would otherwise read that crash as successful input validation.
-missing_gen()      { printf '<MISSING:%s>' "$GEN_REL"; }
 missing_lib()      { printf '<MISSING:%s>' "$LIB_REL_LIST"; }
 missing_assemble() { printf '<MISSING:%s>' "$ASSEMBLE_REL"; }
 
-have_gen() { [ -f "$GEN" ]; }
 have_lib() {
-    [ -f "$LIB_DIR/settings-allow-rules.js" ] &&
     [ -f "$LIB_DIR/settings-assembly.js" ] &&
     [ -f "$LIB_DIR/settings-deploy.js" ]
 }
@@ -158,28 +150,22 @@ PART_DIR="$AGENTS_DIR/tests/install/feature-2119-settings-allow-ssot"
 canary_setup
 
 . "$PART_DIR/ssot-structure.sh"
-. "$PART_DIR/generator.sh"
+. "$PART_DIR/fixture.sh"
 . "$PART_DIR/write-and-drift.sh"
 . "$PART_DIR/settings-preservation.sh"
 . "$PART_DIR/merger-contract.sh"
-. "$PART_DIR/orphan-preservation.sh"
 . "$PART_DIR/input-validation.sh"
-. "$PART_DIR/orphan-classifier.sh"
-. "$PART_DIR/orphan-negative.sh"
-. "$PART_DIR/cli-contract.sh"
-. "$PART_DIR/template-pairs.sh"
-. "$PART_DIR/argless-and-prefix.sh"
 . "$PART_DIR/provider-purity.sh"
 . "$PART_DIR/assembler-failclosed.sh"
 . "$PART_DIR/deploy-preconditions.sh"
 . "$PART_DIR/deploy-symlink-policy.sh"
 . "$PART_DIR/drift-detection.sh"
 . "$PART_DIR/docs-contract.sh"
-. "$PART_DIR/rt0-calling-convention.sh"
-. "$PART_DIR/quoted-root-space.sh"
-. "$PART_DIR/real-repo-expansion.sh"
 . "$PART_DIR/retirement.sh"
 . "$PART_DIR/hook-callers.sh"
+. "$PART_DIR/assembly-ownership.sh"
+. "$PART_DIR/no-generated-spellings.sh"  # T51 (one synthetic entry)
+. "$PART_DIR/real-spellings-gone.sh"     # T52 (every real SSOT entry) + T53 (real deployment); not ROWS-counted
 
 t22_home_canary
 

@@ -8,11 +8,28 @@
 // where a backtick is a line continuation — reading that with a bash parser would produce
 // confident false denials. Fail-open reaches the process boundary: stdin this hook cannot
 // parse produces NO envelope at all rather than a verdict invented from nothing.
-
 const fs = require("fs");
 const { judgeBashCommand } = require("./bash-guard/judge");
 
 module.exports = { judgeBashCommand };
+
+// Verdict -> stdout envelope. passThrough writes nothing, so the host's own permission
+// rules decide; only allow may carry permissionDecision "allow".
+const ENVELOPES = Object.freeze({
+  deny: (v) => ({ decision: "block", reason: v.message }),
+  notify: (v) => ({
+    systemMessage: v.message,
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: v.message },
+  }),
+  allow: (v) => ({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "allow",
+      permissionDecisionReason: "bash-guard " + v.code,
+    },
+  }),
+  passThrough: () => null,
+});
 
 function readStdin() {
   const chunks = [];
@@ -40,11 +57,11 @@ function main() {
   } catch (_e) {
     process.exit(0);
   }
-  if (verdict && verdict.verdict === "deny") {
-    console.log(JSON.stringify({ decision: "block", reason: verdict.message }));
-  } else {
-    console.log(JSON.stringify({ decision: "approve" }));
-  }
+  const build = verdict && Object.prototype.hasOwnProperty.call(ENVELOPES, verdict.verdict)
+    ? ENVELOPES[verdict.verdict]
+    : ENVELOPES.passThrough;
+  const envelope = build(verdict);
+  if (envelope) console.log(JSON.stringify(envelope));
   process.exit(0);
 }
 

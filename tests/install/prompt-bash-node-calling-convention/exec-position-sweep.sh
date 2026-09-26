@@ -1,5 +1,5 @@
-# tests/prompt-bash-node-calling-convention/exec-position-sweep.sh
-# Tests: install/settings-allow-commands.txt, install/lib/settings-allow-rules.js
+# tests/install/prompt-bash-node-calling-convention/exec-position-sweep.sh
+# Tests: install/settings-allow-commands.txt, hooks/lib/allow-command-list.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # T50-T57: the execution-position sweep. Sourced AFTER exec-position-fixtures.sh, which owns
 # the fixture trees, the runner and the reducer.
@@ -61,8 +61,8 @@ T51[verdict-ok]|main|file-summary|rules/fx-ok-control.md|2:ok@3,ok@5|POSITIVE CO
 T51[verdict-no-interpreter]|main|file-summary|rules/fx-deviant-no-interpreter.md|1:no-interpreter@3|the bare quoted path with nothing in front of it is REACHED and reported as no-interpreter, the exact shape #2262 opened on
 T51[verdict-unexpected-prefix]|main|file-summary|rules/fx-deviant-unexpected-prefix.md|1:unexpected-prefix@3|a launcher that is neither bash nor node is reported as unexpected-prefix, not silently accepted
 T51[verdict-wrong-interpreter]|main|file-summary|rules/fx-deviant-wrong-interpreter.md|1:wrong-interpreter@3|node in front of a bash-shebang entry is reported as wrong-interpreter, so the rule that would match is not the rule that exists
-T51[verdict-unresolvable-entry]|orphan|file-summary|rules/fx-unresolvable.md|1:unresolvable-entry@3|CPR-ORTH: the fourth deviant verdict is reachable too -- an SSOT entry the generator emits no interpreter-bearing rule for fails closed rather than reading as ok
-T51[verdict-unresolvable-control]|orphan|file-summary|rules/fx-orphan-control.md|1:ok@3|CONTROL: in the same tree an entry the generator DOES cover still reads ok, so the row above is about the missing rule and not a dead stub
+T51[verdict-unresolvable-entry]|orphan|file-summary|rules/fx-unresolvable.md|1:unresolvable-entry@3|CPR-ORTH: the fourth deviant verdict is reachable too -- an SSOT entry that resolves to no interpreter fails closed rather than reading as ok
+T51[verdict-unresolvable-control]|orphan|file-summary|rules/fx-orphan-control.md|1:ok@3|CONTROL: in the same tree an entry that DOES resolve still reads ok, so the row above is about the missing rule and not a dead stub
 T52[exclusion-prose]|main|file-summary|rules/fx-exclusion-prose.md|1:ok@6|EXCLUSION CLASS: two prose mentions outside any code span yield nothing, and only the sentinel command line on line 6 is reported
 T52[exclusion-argument]|main|file-summary|rules/fx-exclusion-argument.md|1:ok@7|EXCLUSION CLASS: cat, git add and cp name the file rather than run it, so none of the three is reported and only the line 7 sentinel is
 T52[exclusion-allow-rule]|main|file-summary|rules/fx-exclusion-allow-rule.md|1:ok@7|EXCLUSION CLASS: the Bash(...) allow-rule strings this repo quotes verbatim are not command lines, so only the line 7 sentinel is reported
@@ -131,7 +131,7 @@ noargv|T54[failclosed-no-argv]|2/usage|SECURITY, FAIL-CLOSED: invoked with no ag
 no-ssot|T54[failclosed-missing-ssot]|fail-closed|a missing install/settings-allow-commands.txt aborts with no JSON on stdout -- an empty occurrence list would otherwise read as zero offenders
 traversal|T54[failclosed-traversal-entry]|fail-closed|CWE-22: an SSOT entry containing .. aborts the sweep rather than being interpolated into a scan of a path outside the agents root
 metachar|T54[failclosed-metachar-entry]|fail-closed|CWE-78: an SSOT entry carrying shell metacharacters aborts too, so a hostile line in the SSOT cannot widen what the sweep calls acceptable
-no-lib|T54[failclosed-missing-lib]|fail-closed|and a missing spelling library aborts instead of treating every entry as unresolvable or as ok
+no-lib|T54[failclosed-missing-lib]|fail-closed|and a missing allow-list reader aborts instead of treating every entry as unresolvable or as ok
 rerun-identical|T56[hygiene-rerun-identical]|identical|IDEMPOTENCY: a second sweep of the same tree emits byte-identical JSON, so the ordering the rows above pin is stable rather than filesystem-dependent
 rerun-exit|T56[hygiene-rerun-exit]|0|and the second run exits 0 as well, so the identity above is not two identical crashes
 tree-unchanged|T56[hygiene-tree-readonly]|unchanged|the scanned tree is byte-identical after two sweeps -- the sweep reads prompt assets and writes nothing into them

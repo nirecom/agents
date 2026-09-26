@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-2280-settings-deny-anchor.sh
-# Tests: settings.json, hooks/lib/settings-allow-match.js
+# Tests: settings.json
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 #
 # Run wrapped: bin/run-with-timeout.sh 120 bash tests/feature-2280-settings-deny-anchor.sh
@@ -12,13 +12,12 @@ set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SETTINGS="$AGENTS_DIR/settings.json"
-ALLOW_MATCH_MODULE="$AGENTS_DIR/hooks/lib/settings-allow-match.js"
 PART_DIR="$AGENTS_DIR/tests/install/feature-2280-settings-deny-anchor"
 
 # CONTRACT: MUST-trigger rules are anchored to the four git invocation forms (bare /
 # `git -C *` / `git -c *` / `git --no-pager`). OPTIONAL rm/find/sudo/docker/aws family
 # keeps leading `*` (sudo/env/xargs prefix safety). cd-compound forms are NOT matched
-# (P13-P37 = NO-MATCH); bash-guard's anySegmentDenyMatched handles them instead.
+# (P13-P37 = NO-MATCH); bash-guard denies the chain operator itself instead.
 # OUT OF SCOPE: deployed ~/.claude/settings.json drift, JSON re-assembly, #2266 redesign.
 
 PASS=0
@@ -37,8 +36,8 @@ assert_eq() {
 }
 
 # TL3 gap (what this test does NOT catch):
-# - Whether the HOST permission engine reaches the same verdict: this suite mirrors
-#   hooks/lib/settings-allow-match.js, itself a documented approximation of the host.
+# - Whether the HOST permission engine reaches the same verdict: matcher.sh is an
+#   approximation of the host's glob matching, pinned only by the C1-C14 table.
 # - Whether a deny verdict actually blocks the tool call in a live session.
 # - Whether `runInTerminal` / `runCommands` (VS Code terminal) consult these rules at all --
 #   a known hole recorded in docs/architecture/claude-code/settings.md.
@@ -130,12 +129,12 @@ t_row_well_formed_selftest
 
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
-# crosscheck 14x2=28 + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
+# crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
 # refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
 # C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4.
-ROWS_EXPECTED=175
+ROWS_EXPECTED=161
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

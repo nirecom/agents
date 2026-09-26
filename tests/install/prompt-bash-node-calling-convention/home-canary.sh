@@ -1,12 +1,12 @@
-# tests/prompt-bash-node-calling-convention/home-canary.sh
-# Tests: install/lib/settings-allow-rules.js
+# tests/install/prompt-bash-node-calling-convention/home-canary.sh
+# Tests: hooks/lib/allow-command-list.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 
 CANARY_HOME=""
 CANARY_BEFORE=""
 
 # T22 -- READ-ONLY, ASSERTED. Every part of this suite claims to only READ: the sweep scans
-# prompt assets, the template probes require a pure string module, the RT-0 probes grep text.
+# prompt assets, the judge probe requires a pure module, the RT-0 probes grep text.
 # The cheapest place for that claim to break is the home directory, which no fixture path can
 # pin because subprocesses inherit it -- so it is repointed at a seeded canary before any part
 # runs and compared byte for byte after all of them have.

@@ -50,31 +50,38 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   Use case: follow-up commits that tick a checkbox in `docs/todo.md`, append to
   `docs/history.md`, or refresh the user-visible description in root `README.md`.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
-- `bash-guard.js` (PreToolUse, matcher: `Bash`) — denies command-line issuance of a
-  forbidden compound-shell literal (`&&`/`;`, `|`, backtick/`$(...)`, `{ ... }`, `<<`,
-  `>`/`>>`, leading `FOO=1 cmd` env-prefix) per `rules/shell-commands.md` "Command-Line
-  Issuance Discipline" (#2134). **Matcher is bare `Bash`**, unlike most hooks in this
-  table (`Bash|runInTerminal|runCommands`) — `runInTerminal`/`runCommands` can drive
-  pwsh, where a backtick is a line continuation and `{ }` a script block, so reading
-  that with a bash parser would produce confident false denials; those tools are
-  deliberately out of scope (a documented hole, see "Known limitations" in [settings.md](../settings.md)), not an
-  oversight. Detection parses via the shared command IR (`hooks/lib/command-ir`), never
-  a regex over raw text. Two exemptions, precisely scoped
-  (`hooks/bash-guard/exemptions.js`): a pipe into `xargs` is forgiven at that hit only;
-  a command already matched by a `permissions.allow` `Bash(<pattern>)` rule (via
-  `hooks/lib/settings-allow-match.js`, semantics in "Permission glob matching" in [settings.md](../settings.md))
-  clears the whole line. Reason codes are `hooks/bash-guard/reasons.js`'s `BG-<LITERAL-ID>`
-  deny codes plus `BG-TOOL-OUT-OF-SCOPE` / `BG-INTERLOCK-QUIET` / `BG-ALLOW-RULE` /
-  `BG-PARSE-FAILURE` / `BG-NO-HIT` allow attributions — a namespace disjoint from
-  workflow-gate's `T-A..T-E` tiers. **Interlock (C6)**: stays quiet while the
-  early-write gate is actually blocking (`hooks/lib/early-write-gate.js`
-  `earlyWriteGateStatus(sessionId).active`, the same SSOT `workflow-gate/early-gate.js`
-  reads), so the two guards never talk over each other; the interlock tracks that
-  gate's EFFECTIVE state, not the `WORKFLOW_OFF`/`WORKTREE_OFF` marker directly — see
-  `marker-bypass-contract.md`, which also records that this hook is never bypassed by
-  either marker. **Fail-open** is the one named exception to hooks/'s deny-on-doubt
-  default: an unparseable stdin payload, a `judgeBashCommand` throw, or `parse()`
-  reporting `parseFailure` all approve silently rather than invent a verdict.
+- `bash-guard.js` (PreToolUse, matcher: `Bash`) — classifies each Bash command into one of
+  four verdicts, in priority order: **deny** → **notify** → **allow** → **passThrough**.
+  **Matcher is bare `Bash`**, unlike most hooks in this table (`Bash|runInTerminal|runCommands`)
+  — `runInTerminal`/`runCommands` can drive pwsh, where a backtick is a line continuation and
+  `{ }` a script block, so reading that with a bash parser would produce confident false denials;
+  those tools are deliberately out of scope (a documented hole, see "Known limitations" in [settings.md](../settings.md)), not an
+  oversight. Detection parses via the shared command IR (`hooks/lib/command-ir`), never a regex
+  over raw text.
+  - **deny**: forbidden compound-shell literal (`&&`/`;`, `|`, backtick/`$(...)`, `{ ... }`,
+    `<<`, `>`/`>>`, leading `FOO=1 cmd` env-prefix) per `rules/shell-commands.md`.
+    A pipe into `xargs` is forgiven at that hit only (xargs-pipe exemption in
+    `hooks/bash-guard/detect.js`). Output: `{decision:"block", reason}`.
+  - **notify** (non-blocking): ineffective issuance form detected. Three classes —
+    L1 sentinel without `echo`, L2 sentinel in wrong form (unknown or LOOKSLIKE-only pattern;
+    LOOKSLIKE forms are left to `workflow-mark.js`'s existing handlers to avoid double-notification),
+    L3 script path without interpreter prefix. Output: `{systemMessage: msg}`.
+    Reason codes: `BG-NOTIFY-SENTINEL-NO-ECHO` / `BG-NOTIFY-SENTINEL-UNRECOGNIZED` / `BG-NOTIFY-SCRIPT-NO-INTERPRETER`.
+  - **allow**: command is an agents-own script from `install/settings-allow-commands.txt` or a
+    bare name from `install/path-exposed-commands.txt`. IR-normalizes cwd and path to check
+    against both lists via `hooks/lib/allow-command-list.js`. Requires a valid absolute `cwd`
+    for repo-relative forms; absent or non-absolute `cwd` falls through to passThrough.
+    Output: `{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"allow",
+    permissionDecisionReason:"bash-guard BG-ALLOW-*"}}`.
+    Reason codes: `BG-ALLOW-SELF-SCRIPT` / `BG-ALLOW-SELF-BARE`.
+  - **passThrough**: no verdict to report; silent exit 0, normal permission flow continues.
+    Reason codes: `BG-TOOL-OUT-OF-SCOPE` / `BG-INTERLOCK-QUIET` / `BG-PARSE-FAILURE` / `BG-NO-HIT`.
+  Reason-code namespace is disjoint from workflow-gate's `T-A..T-E` tiers.
+  **Interlock (C6)**: stays quiet while the early-write gate is actually blocking
+  (`hooks/lib/early-write-gate.js` `earlyWriteGateStatus(sessionId).active`), so the two
+  guards never talk over each other — see `marker-bypass-contract.md`, which also records
+  that this hook is never bypassed by `WORKFLOW_OFF`/`WORKTREE_OFF`.
+  **Fail-open**: unparseable stdin, `judgeBashCommand` throw, or `parse()` failure → passThrough.
 - `rtk-rewrite.js` (PreToolUse, matcher: `Bash`) — when `RTK=on` in `.env`, rewrites
   eligible Bash commands to pipe their output through the RTK binary before it reaches
   the model, compressing repeated tokens to reduce LLM input size. Default OFF

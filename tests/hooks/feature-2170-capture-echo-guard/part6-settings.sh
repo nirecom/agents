@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Tests: settings.json, hooks/lib/tool-command-text.js, install/gen-settings-allow.js, install/settings-allow-commands.txt
+# Tests: settings.json, hooks/lib/tool-command-text.js, install/settings-allow-commands.txt
 # Tags: capture-echo-guard, hook-registration, settings-json, static-check, scope:issue-specific, pwsh-not-required
 # Section E — settings.json consistency (static/TL2). Mandatory integration coverage
 # item #1/#2 of skills/_shared/test-design.md: a unit test of the hook cannot fail when
 # the registration is missing, so the real settings.json is loaded here.
-# E-1/E-2 correctly FAIL against pre-fix state; E-3/E-4 must PASS today.
+# E-1/E-2 correctly FAIL against pre-fix state; E-4 must PASS today (E-3 retired with
+# install/gen-settings-allow.js in #2264).
 
 set -uo pipefail
 
@@ -41,11 +42,6 @@ auto_matcher="$(node "$DRIVER" --matcher-for "preuse-auto-approve.js")"
 has_tok() { case "|$1|" in *"|$2|"*) printf 'yes' ;; *) printf 'no' ;; esac; }
 assert_eq "E-2b-auto-approve-keeps-monitor"       "yes" "$(has_tok "$auto_matcher" "Monitor")"
 assert_eq "E-2c-auto-approve-keeps-enterworktree" "yes" "$(has_tok "$auto_matcher" "EnterWorktree")"
-
-# E-3: permissions.allow is untouched by this work (no drift against the SSOT list).
-gen_rc=0
-node "$AGENTS_DIR/install/gen-settings-allow.js" --check >/dev/null 2>&1 || gen_rc=$?
-assert_eq "E-3-gen-settings-allow-check-clean" "0" "$gen_rc"
 
 # E-4: the SSOT file buildRemedy reads is present and non-empty.
 ssot_state="missing"

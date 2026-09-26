@@ -1,7 +1,7 @@
 # tests/feature-2119-settings-allow-ssot/hook-callers.sh
 # Tests: hooks/post-merge, hooks/post-checkout, install/assemble-settings.js, install/lib/settings-deploy.js
 # Tags: install, settings, permissions, hook, caller, scope:issue-specific, pwsh-not-required, TL2
-# T37: the two git-hook CALLERS driven against the REAL assembler. Sourced AFTER generator.sh.
+# T37: the two git-hook CALLERS driven against the REAL assembler. Sourced AFTER fixture.sh.
 
 POST_MERGE_REL="hooks/post-merge"
 POST_CHECKOUT_REL="hooks/post-checkout"
@@ -9,15 +9,16 @@ POST_CHECKOUT_REL="hooks/post-checkout"
 # WHY NOT THE STUB. tests/fix-846-settings-drift-hooks.sh drives both hooks against a stub that
 # only touches a sentinel, which isolates TRIGGER logic and is worth keeping. What it can never
 # see is the half this change actually alters: that the real assembler accepts the arguments the
-# hook passes, that the deployed settings under the caller's HOME really gains the generated
-# rules, that a failing assembler leaves the previous deployment alone (D3 fail-closed), and that
+# hook passes, that the deployed settings under the caller's HOME really gains the base's new
+# rule, that a failing assembler leaves the previous deployment alone (D3 fail-closed), and that
 # its diagnostic now reaches the operator with the `2>/dev/null` gone. S14 already runs the real
 # assembler against a temporary HOME, so none of that needs a real machine -- only the installer
 # entry points and a genuine git event do, and those stay documented as the residual TL3 gap.
 
-# Anchored on the fixture command's own name: only the assembler names the entry it choked on,
-# so a hook that prints its own generic "assembler failed" line cannot satisfy this.
-T37_SEEN_ERE='fx-bad'
+# Anchored on the assembler's own wording for the broken field: a hook that prints its own
+# generic "assembler failed" line cannot satisfy this.
+T37_SEEN_ERE='permissions\.allow'
+T37_MARKER='Bash(t37-marker *)'
 
 t37_have() { # -> ok | sentinel-text
     have_lib || { missing_lib; return; }
@@ -44,7 +45,6 @@ t37_sandbox() { # <dir>
     cp "$AGENTS_DIR/$POST_CHECKOUT_REL" "$d/hooks/post-checkout"
     chmod +x "$d/hooks/post-merge" "$d/hooks/post-checkout" 2>/dev/null || true
     cp "$ASSEMBLE" "$d/install/assemble-settings.js"
-    if have_gen; then cp "$GEN" "$d/install/gen-settings-allow.js"; fi
     cp "$AGENTS_DIR"/install/lib/*.js "$d/install/lib/" 2>/dev/null || true
     printf '%s\n' '# fixture PATH-exposed list (never the real one)' > "$d/install/path-exposed-commands.txt"
     mk_tool "$d" bin/fx-tool env-bash
@@ -57,16 +57,17 @@ t37_sandbox() { # <dir>
     ENFORCE_WORKTREE=off git -C "$d" commit -q -m "seed"
 }
 
-# One commit carrying the change the hook is supposed to react to. The three healthy kinds edit
-# a file the SSOT reader ignores the content of, so the trigger is exercised without changing
-# what the assembler should produce; `failure` instead admits a shebang-less command, which is
+# One commit carrying the change the hook is supposed to react to. `settings` adds a marker
+# rule to the base; ssot/cmdfile/unrelated touch paths that no longer trigger (#2264: the lists
+# feed bash-guard, and stage 2 is gone); `failure` makes permissions.allow a string, which is
 # how the REAL assembler is made to fail without touching a single source file.
-t37_mutate() { # <dir> <ssot|cmdfile|unrelated|failure>
+t37_mutate() { # <dir> <settings|ssot|cmdfile|unrelated|failure>
     case "$2" in
-        ssot)      printf '%s\n' '# edited for the caller probe' >> "$1/install/settings-allow-commands.txt" ;;
+        settings)  printf '%s\n' "$T37_MARKER" > "$1/t37.txt"; write_settings "$1" "$1/t37.txt"; rm -f "$1/t37.txt" ;;
+        ssot)      printf '%s\n' 'bin/fx-added' >> "$1/install/settings-allow-commands.txt" ;;
         cmdfile)   printf '%s\n' '# edited for the caller probe' >> "$1/bin/fx-tool" ;;
         unrelated) printf '%s\n' 'edited for the caller probe' >> "$1/docs/unrelated.md" ;;
-        failure)   mk_tool "$1" bin/fx-bad none; write_ssot "$1" bin/fx-tool bin/fx-bad ;;
+        failure)   printf '%s\n' '{ "permissions": { "allow": "Bash(not-an-array *)" } }' > "$1/settings.json" ;;
     esac
     git -C "$1" add -A
     ENFORCE_WORKTREE=off git -C "$1" commit -q -m "probe change: $2"
@@ -85,11 +86,11 @@ t37_run_hook() { # <dir> <merge|checkout> <sha-prev> <sha-new> -> hook output on
     fi
 }
 
-# Verdict slots: <deploy>/<rules>/<diag>. `rules` asks whether the deployed file carries a rule
-# the SSOT command actually expands to, so "the hook wrote something" cannot pass for "the hook
-# wrote the generated rules". `diag` is computed only where a diagnostic is due.
-t37_case() { # <merge|checkout> <ssot|cmdfile|unrelated|failure> -> verdict | sentinel
-    local ok d target before after out state rules diag first base sha_prev sha_new
+# Verdict slots: <deploy>/<marker>/<diag>. `marker` asks whether the deployed file carries the
+# rule the `settings` change added, so "the hook wrote something" cannot pass for "the hook
+# deployed the new base". `diag` is computed only where a diagnostic is due.
+t37_case() { # <merge|checkout> <settings|ssot|cmdfile|unrelated|failure> -> verdict | sentinel
+    local ok d target before after out state rules diag base sha_prev sha_new
     ok="$(t37_have)"
     [ "$ok" = "ok" ] || { printf '%s' "$ok"; return; }
     d="$TMPROOT/t37-$1-$2"
@@ -116,8 +117,7 @@ t37_case() { # <merge|checkout> <ssot|cmdfile|unrelated|failure> -> verdict | se
     rules="-"
     if [ -f "$target" ]; then
         deployed_allow_dump "$d" "$d/allow.txt"
-        first="$(expected_path_rules bash bin/fx-tool "$d" | sed -n 1p)"
-        if grep -Fxq -- "$first" "$d/allow.txt" 2>/dev/null; then rules="rules-present"; else rules="RULES-MISSING"; fi
+        if grep -Fxq -- "$T37_MARKER" "$d/allow.txt" 2>/dev/null; then rules="marker"; else rules="no-marker"; fi
     fi
     diag="-"
     if [ "$2" = "failure" ]; then
@@ -133,14 +133,16 @@ t37_caller_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T37[$hook/$kind]: $label" "$want" "$(t37_case "$hook" "$kind")"
     done <<'T37_CASES'
-merge|ssot|changed/rules-present/-|post-merge on an SSOT change runs the REAL assembler and the caller's own ~/.claude/settings.json gains the generated spellings -- the stub suite only ever proved a sentinel file was touched
-checkout|ssot|changed/rules-present/-|CPR-ORTH: post-checkout does the same across a branch switch, through the same real assembler
-merge|cmdfile|changed/rules-present/-|post-merge on a change to an SSOT-LISTED command file deploys too: stage 2 of the trigger is worthless if the assembler it reaches cannot produce the rules
-checkout|cmdfile|changed/rules-present/-|and post-checkout on that same dynamic match
-merge|unrelated|absent/-/-|NEGATIVE CONTROL post-merge: a path in neither trigger stage leaves the home untouched, so the four rows above are not passing because the hook always deploys
-checkout|unrelated|absent/-/-|NEGATIVE CONTROL post-checkout: the same, which is what makes "changed" evidence
-merge|failure|unchanged/rules-present/seen|post-merge merging an SSOT that admits a shebang-less command keeps the ALREADY-deployed settings byte-identical (D3 fail-closed) and lets the assembler's own reason -- which names bin/fx-bad -- reach the operator, because the `2>/dev/null` that hid it is gone
-checkout|failure|unchanged/rules-present/seen|CPR-ORTH: post-checkout fails closed on the same broken SSOT and stays just as audible
+merge|settings|changed/marker/-|post-merge on a settings.json change runs the REAL assembler and the caller's own ~/.claude/settings.json gains the new base rule -- the stub suite only ever proved a sentinel file was touched
+checkout|settings|changed/marker/-|CPR-ORTH: post-checkout does the same across a branch switch, through the same real assembler
+merge|ssot|absent/-/-|#2264: post-merge on an allow-list edit no longer deploys -- the list feeds bash-guard at runtime, and the trigger regex dropped it
+checkout|ssot|absent/-/-|CPR-ORTH: post-checkout ignores the same allow-list edit
+merge|cmdfile|absent/-/-|#2264: stage 2 is gone -- an edit to an SSOT-LISTED command file no longer triggers post-merge
+checkout|cmdfile|absent/-/-|and post-checkout ignores that same edit
+merge|unrelated|absent/-/-|NEGATIVE CONTROL post-merge: a path outside the trigger leaves the home untouched
+checkout|unrelated|absent/-/-|NEGATIVE CONTROL post-checkout: the same
+merge|failure|unchanged/no-marker/seen|post-merge merging a settings.json whose permissions.allow is a string keeps the ALREADY-deployed settings byte-identical (D3 fail-closed) and lets the assembler's own reason reach the operator, because the `2>/dev/null` that hid it is gone
+checkout|failure|unchanged/no-marker/seen|CPR-ORTH: post-checkout fails closed on the same broken base and stays just as audible
 T37_CASES
 }
 

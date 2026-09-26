@@ -1,9 +1,12 @@
 # tests/feature-2119-settings-allow-ssot/home-canary.sh
-# Tests: install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
+# Tests: install/lib/settings-deploy.js, install/assemble-settings.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
 CANARY_HOME=""
 CANARY_BEFORE=""
+# The home the canary replaced, kept for T53's READ-ONLY look at the real deployment.
+CANARY_REAL_HOME=""
+CANARY_REAL_USERPROFILE=""
 
 # T22 -- THE OTHER settings.json. The developer running this suite has a DEPLOYED
 # ~/.claude/settings.json, and this feature's whole subject is writing one. Every fixture is
@@ -13,10 +16,12 @@ CANARY_BEFORE=""
 # part runs, and compared byte for byte after all of them have.
 # CONTRACT FOR EVERY OTHER PART: rules are injected AT DEPLOY TIME, so lines in this suite
 # really do write a ~/.claude/settings.json. Any such line MUST pass a fixture-private HOME
-# (and USERPROFILE) PER SUBPROCESS -- see run_gen / run_assemble in generator.sh. A part that
+# (and USERPROFILE) PER SUBPROCESS -- see run_assemble in fixture.sh. A part that
 # forgets deploys INTO the canary, and T22 turns red rather than staying silent.
 canary_setup() {
     CANARY_HOME="$TMPROOT/canary-home"
+    CANARY_REAL_HOME="${HOME:-}"
+    CANARY_REAL_USERPROFILE="${USERPROFILE:-}"
     mkdir -p "$CANARY_HOME/.claude"
     printf '%s\n' '{ "permissions": { "allow": ["Bash(canary-do-not-touch *)"] } }' \
         > "$CANARY_HOME/.claude/settings.json"

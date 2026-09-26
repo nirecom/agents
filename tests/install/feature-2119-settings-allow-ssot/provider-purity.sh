@@ -1,7 +1,7 @@
 # tests/feature-2119-settings-allow-ssot/provider-purity.sh
-# Tests: install/lib/settings-assembly.js, install/lib/settings-allow-rules.js, hooks/lib/settings-drift.js
+# Tests: install/lib/settings-assembly.js, hooks/lib/allow-command-list.js, hooks/lib/settings-drift.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
-# T28: the expectation provider writes nothing, ever. Sourced AFTER generator.sh.
+# T28: the expectation provider writes nothing, ever. Sourced AFTER fixture.sh.
 
 T28_FX=""
 T28_TREE=""
@@ -56,8 +56,8 @@ t28_run_build() {
           catch (e) { console.log("THREW/THREW:" + String(e.message).split("\n")[0]); process.exit(0); }
           const det = JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(b) === JSON.stringify(c);
           const allow = ((c.settings || {}).permissions || {}).allow || [];
-          const inj = allow.indexOf("Bash(bash bin/fx-tool)") !== -1;
-          console.log((det ? "yes" : "NON-DETERMINISTIC") + "/" + (inj ? "yes" : "NOTHING-INJECTED"));
+          const inj = allow.indexOf("Bash(extension-only *)") !== -1;
+          console.log((det ? "yes" : "NON-DETERMINISTIC") + "/" + (inj ? "yes" : "EXTENSION-MISSING"));
         ' -- "$(node_path "$T28_FX")") 2>&1 )"
     ta="$(repo_tree_manifest "$T28_FX")"
     ha="$(tree_manifest "$T28_FX/home")"
@@ -80,7 +80,7 @@ t28_run_require() {
         run_with_timeout 30 node -e '
           const root = process.argv[1];
           try { require(root + "/install/lib/settings-assembly.js"); } catch (e) {}
-          try { require(root + "/install/lib/settings-allow-rules.js"); } catch (e) {}
+          try { require(root + "/install/lib/settings-deploy.js"); } catch (e) {}
         ' -- "$(node_path "$T28_FX")" ) >/dev/null 2>&1
     ta="$(repo_tree_manifest "$T28_FX")"
     ha="$(tree_manifest "$T28_FX/home")"
@@ -104,8 +104,8 @@ t28_dynamic_table() {
 tree|unchanged|three buildAssembledSettings calls leave the fixture repo tree byte-identical
 home|unchanged|and leave the fixture HOME byte-identical, so nothing was deployed as a side effect of asking for the expectation
 determinism|yes|the same input returns the same document three times, so a caller can compare two runs and mean it
-injected|yes|POSITIVE CONTROL: the returned document really does carry the generated rules, so the three rows above are not passing on a builder that does nothing
-require|unchanged|requiring both provider modules, with no call at all, writes nothing -- a top-level side effect would fire once per session-start hook
+injected|yes|POSITIVE CONTROL: the returned document really does carry the extension rule, so the three rows above are not passing on a builder that does nothing
+require|unchanged|requiring the provider and the deploy module, with no call at all, writes nothing -- a top-level side effect would fire once per session-start hook
 T28_DYN_CASES
 }
 
@@ -128,10 +128,10 @@ asm-write|install/lib/settings-assembly.js|writeFileSync|the provider returns a 
 asm-mkdir|install/lib/settings-assembly.js|mkdirSync|creating the deploy directory belongs to the writer, not the provider
 asm-append|install/lib/settings-assembly.js|appendFileSync|and neither does appending to anything
 asm-rm|install/lib/settings-assembly.js|rmSync|nor removing anything
-rules-write|install/lib/settings-allow-rules.js|writeFileSync|the spelling layer is pure string work
-rules-mkdir|install/lib/settings-allow-rules.js|mkdirSync|with no filesystem of its own to prepare
-rules-append|install/lib/settings-allow-rules.js|appendFileSync|CPR-ORTH: the same four APIs are checked on both provider modules
-rules-rm|install/lib/settings-allow-rules.js|rmSync|so a write added to either one is caught by the same rule
+list-write|hooks/lib/allow-command-list.js|writeFileSync|the SSOT list reader (#2264) runs on every Bash call and is read-only
+list-mkdir|hooks/lib/allow-command-list.js|mkdirSync|with no filesystem of its own to prepare
+list-append|hooks/lib/allow-command-list.js|appendFileSync|CPR-ORTH: the same four APIs are checked on both read-only modules
+list-rm|hooks/lib/allow-command-list.js|rmSync|so a write added to either one is caught by the same rule
 T28_STATIC_CASES
     ROWS=$((ROWS + 1))
     assert_eq "T28[drift-edge]: $DRIFT_SRC_REL does not reference settings-deploy -- the detection path must not acquire an edge to the writing layer, in either direction" \

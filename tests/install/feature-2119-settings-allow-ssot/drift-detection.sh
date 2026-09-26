@@ -13,10 +13,10 @@ T30_E=""
 T30_SESSION=""
 
 # T30 -- OPPOSITE POLARITY, SAME PROVIDER (CPR-SC: the receiver decides the polarity, not the
-# provider). This path runs at every session start, so it must never throw and never block:
-# a generator it cannot use degrades to "judge what base and extension still let me judge, and
-# say so", not to silence and not to a crash. The rows below separate the five situations that
-# a single "it didn't blow up" check would blur into one.
+# provider). This path runs at every session start, so it must never throw and never block.
+# Since #2264 the expected set is base + extension ONLY: the SSOT lists feed bash-guard at
+# runtime and no longer reach settings.json, so a broken list is not a drift input at all and
+# the generatorUnavailable key the old generator needed is gone with it.
 t30_root() { # <name> -> fixture root with a hooks/lib of its own
     local d
     d="$(mk_fixture "t30-$1")"
@@ -70,14 +70,10 @@ t30_ask() { # <json> <mode> [needle] -> token
         try { o = JSON.parse(d); } catch (e) { console.log("NOT-JSON:" + d.slice(0, 140)); return; }
         if (o.THREW !== undefined) { console.log("THREW:" + o.THREW); return; }
         if (mode === "drifted") { console.log(String(o.drifted)); return; }
-        if (mode === "generator-unavailable") {
-          // The plan carries the REASON, not a boolean: settings-drift.js adds
-          // `generatorUnavailable: generatorError` and session-start.js prints
-          // `"  reason: " + d.generatorUnavailable`. A bare `true` would satisfy the flag
-          // and render an empty reason line, so the wrong shape reports as itself.
-          const g = o.generatorUnavailable;
-          if (g === undefined) { console.log("no"); return; }
-          console.log(typeof g === "string" && g.length > 0 ? "yes" : "BAD-SHAPE:" + JSON.stringify(g));
+        if (mode === "gen-key") {
+          // The key itself must be gone, not merely empty: a reader that still branches on it
+          // keeps a dead generator path alive in session-start.js.
+          console.log("generatorUnavailable" in o ? "PRESENT:" + JSON.stringify(o.generatorUnavailable) : "absent");
           return;
         }
         if (mode === "source-unreadable") { console.log(o.sourceUnreadable === true ? "yes" : "no"); return; }
@@ -94,28 +90,24 @@ t30_ask() { # <json> <mode> [needle] -> token
 t30_setup() {
     local d
     if ! have_lib || [ ! -f "$ASSEMBLE" ]; then return; fi
-    d="$(t30_root missing-generated)"
-    t30_edit_deployed "$d" 'Bash(bash bin/fx-tool)' '--'
+    d="$(t30_root missing-ext)"
+    t30_edit_deployed "$d" 'Bash(ext-hand-written *)' '--'
     T30_A="$(t30_detect "$d")"
 
     d="$(t30_root user-added)"
     t30_edit_deployed "$d" '--' 'Bash(user-added-locally *)'
     T30_B="$(t30_detect "$d")"
 
-    # The SSOT is replaced by a DIRECTORY: unreadable at the OS level, so the failure happens
-    # inside the provider rather than being something the fixture could have spelled as data.
-    d="$(t30_root generator-broken)"
+    # The SSOT is replaced by a DIRECTORY, AND a base rule is deleted: the base finding must
+    # still be reported, and the broken list must not surface at all.
+    d="$(t30_root list-broken)"
     t30_edit_deployed "$d" 'Bash(base-hand-written *)' '--'
     rm -f "$d/install/settings-allow-commands.txt"
     mkdir -p "$d/install/settings-allow-commands.txt"
     T30_C="$(t30_detect "$d")"
 
-    # The SAME breakage with NOTHING ELSE wrong. Slot c breaks the generator AND deletes a base
-    # rule, so `drifted:true` there is equally explained by either cause; only the pair of
-    # fixtures makes the two independently observable (CPR-ORTH, protection-fix-tests Pattern 4).
-    # Base and extension reached the deployed file before the break, so one-directional
-    # containment finds nothing missing while the generator is still unusable.
-    d="$(t30_root generator-broken-intact)"
+    # The SAME breakage with NOTHING ELSE wrong: a broken list alone is not drift (CPR-ORTH).
+    d="$(t30_root list-broken-intact)"
     rm -f "$d/install/settings-allow-commands.txt"
     mkdir -p "$d/install/settings-allow-commands.txt"
     T30_E="$(t30_detect "$d")"
@@ -149,33 +141,33 @@ t30_detect_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T30[$id]: $label" "$want" "$(t30_probe "$slot" "$mode")"
     done <<'T30_CASES'
-gen-missing-drifted|a|drifted|true|deleting ONE generated rule from the deployed file is drift -- the detector now judges the generated half, not just base and extension
+ext-missing-drifted|a|drifted|true|deleting the extension rule from the deployed file is drift -- the expected set is base + extension
 user-added-ok|b|drifted|false|a rule the user added to the deployed file is NOT drift: the check is one-directional containment, so a local addition is not reported as damage
-broken-still-judges|c|drifted|true|with the generator unusable the check carries on from base and extension alone, and still catches the base rule that went missing
-broken-flag|c|generator-unavailable|yes|and says so: generatorUnavailable carries the REASON string session-start.js prints, so "no findings" is never confused with "could not look"
-intact-broken-not-drifted|e|drifted|false|a broken generator with base and extension INTACT is not drift -- the expected set shrinks to what base and extension still supply, and the deployed file already contains all of it
-intact-broken-flag|e|generator-unavailable|yes|yet the same run still flags the unusable generator: the flag tracks the generator, not the verdict, so `drifted:false` plus the flag is a reachable state
-healthy-flag-absent|a|generator-unavailable|no|CONTROL: a usable generator sets no flag at all, so the two rows above cannot be passing on a field that is simply always present
+broken-list-still-judges|c|drifted|true|with the SSOT list unreadable the check still judges base and extension, and catches the base rule that went missing
+broken-list-no-key|c|gen-key|absent|#2264: no generatorUnavailable key is reported -- the list no longer feeds settings.json, so its breakage is not this detector's business
+intact-broken-not-drifted|e|drifted|false|a broken list with base and extension INTACT is not drift
+intact-broken-no-key|e|gen-key|absent|and carries no generatorUnavailable key either, so session-start has nothing generator-shaped left to print
+healthy-no-key|a|gen-key|absent|CONTROL: the healthy fixture carries no such key, so the retirement is total rather than conditional
 fake-root-quiet|d|drifted|false|a tree with no install layer at all does not throw -- the session-start path must survive a repo the module was merely copied into
 fake-root-flag|d|source-unreadable|yes|and reports sourceUnreadable, the existing shape the fix-846 suite already pins
 T30_CASES
     ROWS=$((ROWS + 1))
-    assert_eq "T30[gen-missing-named]: the deleted generated rule is named in missingPermissions.allow, so the warning can say which rule went" \
-        "listed" "$(t30_probe a missing-allow 'Bash(bash bin/fx-tool)')"
+    assert_eq "T30[ext-missing-named]: the deleted extension rule is named in missingPermissions.allow, so the warning can say which rule went" \
+        "listed" "$(t30_probe a missing-allow 'Bash(ext-hand-written *)')"
     ROWS=$((ROWS + 1))
-    assert_eq "T30[broken-named]: and with the generator unusable the surviving base finding is still named" \
+    assert_eq "T30[broken-named]: and with the list unreadable the base finding is still named" \
         "listed" "$(t30_probe c missing-allow 'Bash(base-hand-written *)')"
-    # The other direction of the same pair: slot c names the base rule because the fixture
-    # removed it, slot e must name NOTHING. A classifier that reported the generator failure
-    # itself as a missing permission would pass every row above and fail only this one.
+    # The other direction of the same pair: slot e must name NOTHING. A classifier that
+    # reported the list failure as a missing permission would fail only this row.
     ROWS=$((ROWS + 1))
-    assert_eq "T30[intact-broken-nothing-named]: with base and extension intact the unusable generator adds no entry to missingPermissions.allow -- the failure is reported as generatorUnavailable, never as a phantom missing rule" \
+    assert_eq "T30[intact-broken-nothing-named]: with base and extension intact the broken list adds no entry to missingPermissions.allow" \
         "NOT-LISTED:0" "$(t30_probe e missing-allow 'Bash(base-hand-written *)')"
 }
 
-# The last row follows the whole path rather than the module: a flag nothing reads is the same
-# as no flag at all, and hooks/session-start.js is where the user would ever see it. The hooks
-# tree is copied into a fixture root so agentsRoot resolves there, never at the real repo.
+# The last row follows the whole path rather than the module: hooks/session-start.js is where
+# the user would see a warning. The hooks tree is copied into a fixture root so agentsRoot
+# resolves there, never at the real repo. With the list broken and nothing drifted, the
+# session start must say NOTHING about a generator (#2264: there is none to fail).
 t30_session_setup() {
     local d="$TMPROOT/t30-session"
     mkdir -p "$d/home/.claude" "$d/install"
@@ -193,18 +185,17 @@ t30_session_setup() {
         run_with_timeout 30 node "$(node_path "$d/$SESSION_START_REL")") 2>&1 )"
 }
 
-t30_session_probe() { # -> warned|NOT-WARNED|sentinel
+t30_session_probe() { # -> quiet|GENERATOR-WARNED|sentinel
     have_lib || { missing_lib; return; }
     printf '%s' "$T30_SESSION" | run_with_timeout 10 node -e '
       let d = "";
       process.stdin.on("data", (c) => (d += c));
       process.stdin.on("end", () => {
         let o;
-        try { o = JSON.parse(d); } catch (e) { console.log("NOT-JSON:" + d.slice(0, 140)); return; }
+        try { o = JSON.parse(d); } catch (e) { o = {}; }
         const ctx = String(o.additionalContext || (o.hookSpecificOutput || {}).additionalContext || "");
-        const names = /allow[- ]?rule|gen-settings-allow|settings-allow-commands|generat/i.test(ctx);
-        const says = /fail|unavailable|could not|cannot|error/i.test(ctx);
-        console.log(names && says ? "warned" : "NOT-WARNED:" + ctx.slice(0, 160));
+        const gen = /gen-settings-allow|generator/i.test(ctx);
+        console.log(gen ? "GENERATOR-WARNED:" + ctx.slice(0, 160) : "quiet");
       });
     ' 2>&1
 }
@@ -214,9 +205,9 @@ t30_session_table() {
     while IFS='|' read -r id label; do
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
-        assert_eq "T30[$id]: $label" "warned" "$(t30_session_probe)"
+        assert_eq "T30[$id]: $label" "quiet" "$(t30_session_probe)"
     done <<'T30_SESSION_CASES'
-session-warning|hooks/session-start.js surfaces the unusable generator in additionalContext, so a machine whose allow rules cannot be rebuilt tells its user instead of degrading quietly
+session-no-generator-warning|hooks/session-start.js prints no generator warning when the SSOT list is broken -- the list feeds bash-guard, not the deployed settings, so there is nothing for session start to rebuild
 T30_SESSION_CASES
 }
 

@@ -1,10 +1,10 @@
-# tests/prompt-bash-node-calling-convention/exec-position-fixtures.sh
-# Tests: install/lib/settings-allow-rules.js, install/settings-allow-commands.txt
+# tests/install/prompt-bash-node-calling-convention/exec-position-fixtures.sh
+# Tests: hooks/lib/allow-command-list.js, install/settings-allow-commands.txt
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # Fixture trees, sweep runner and JSON reducer for T50-T57. Sourced by the dispatcher, which
 # owns PASS/FAIL/ROWS and assert_eq.
 
-SWEEP_JS_REL="tests/prompt-bash-node-calling-convention/exec-position-sweep.js"
+SWEEP_JS_REL="tests/install/prompt-bash-node-calling-convention/exec-position-sweep.js"
 SWEEP_JS="$AGENTS_DIR/$SWEEP_JS_REL"
 FX_ROOT=""
 FX_MAIN=""
@@ -19,39 +19,30 @@ missing_sweep() { printf '<MISSING:%s>' "$SWEEP_JS_REL"; }
 # EVERY FIXTURE IS TEST-OWNED. The deviant verdicts have to come from prompt text that really
 # carries the defect, and the only text guaranteed to carry it is text this file writes: a
 # mutation of a real repo asset would corrupt the tree the T50 zero-offender rows read.
+ALLOW_LIB_REL="hooks/lib/allow-command-list.js"
+
 fx_real_lib() { # <fixture-root> -- re-export, not a copy: the real module is root-parameterised
     local real
-    real="$(node_path "$AGENTS_DIR/install/lib/settings-allow-rules.js")"
-    printf '%s\n' "// Test-owned re-export of the REAL spelling library, asked about the fixture root." \
-        "module.exports = require('$real');" > "$1/install/lib/settings-allow-rules.js"
+    real="$(node_path "$AGENTS_DIR/$ALLOW_LIB_REL")"
+    printf '%s\n' "// Test-owned re-export of the REAL allow-list reader, asked about the fixture root." \
+        "module.exports = require('$real');" > "$1/$ALLOW_LIB_REL"
 }
 
-# The ONE verdict the real generator cannot produce: it emits an interpreter-bearing rule for
-# every entry it accepts, so `expected === null` needs a generator that skips one. This stub
-# is that generator -- it emits real rules for every entry except the one named fx-orphan, so
-# the sweep's fail-closed branch is exercised without the real module being made wrong.
+# The ONE verdict the real reader cannot produce for a bash/node shebang: `expected === null`
+# needs an interpreter lookup that fails for one entry. This stub delegates to the real module
+# for everything except fx-orphan, so the sweep's fail-closed branch is exercised without the
+# real module being made wrong.
 fx_stub_lib() { # <fixture-root>
+    local real
+    real="$(node_path "$AGENTS_DIR/$ALLOW_LIB_REL")"
     printf '%s\n' \
         '"use strict";' \
-        '// TEST-OWNED STUB. Emits one interpreter-bearing rule per SSOT entry, except fx-orphan.' \
-        'const fs = require("fs");' \
-        'const path = require("path");' \
-        'const readEntries = (root) => fs.readFileSync(path.join(root, "install", "settings-allow-commands.txt"), "utf8")' \
-        '    .split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.length > 0 && !/^\s*#/.test(l));' \
-        'const interpreterOf = (root, entry) => {' \
-        '    const first = fs.readFileSync(path.join(root, entry), "utf8").split("\n", 1)[0];' \
-        '    return /node/.test(first) ? "node" : "bash";' \
-        '};' \
-        'const generatedAllowRules = ({ agentsRoot }) => {' \
-        '    const rules = [];' \
-        '    for (const e of readEntries(agentsRoot)) {' \
-        '        if (e.indexOf("fx-orphan") !== -1) continue;' \
-        '        rules.push("Bash(" + interpreterOf(agentsRoot, e) + " \"$AGENTS_CONFIG_DIR/" + e + "\")");' \
-        '    }' \
-        '    return { rules: rules, bareEmitted: false };' \
-        '};' \
-        'module.exports = { generatedAllowRules: generatedAllowRules };' \
-        > "$1/install/lib/settings-allow-rules.js"
+        '// TEST-OWNED STUB. The real reader, except fx-orphan resolves to no interpreter.' \
+        "const real = require('$real');" \
+        'module.exports = Object.assign({}, real, {' \
+        '    interpreterOf: (root, entry) => (entry.indexOf("fx-orphan") !== -1 ? null : real.interpreterOf(root, entry)),' \
+        '});' \
+        > "$1/$ALLOW_LIB_REL"
 }
 
 # fx-bash-tool-extra is a NODE tool whose entry is a superstring of the bash one: the sweep must
@@ -66,7 +57,7 @@ fx_bin() { # <fixture-root>
 }
 
 fx_scaffold() { # <fixture-root> <real|stub>
-    mkdir -p "$1/install/lib" "$1/rules" "$1/agents" "$1/skills/_shared" "$1/skills/fx-skill"
+    mkdir -p "$1/install" "$1/hooks/lib" "$1/rules" "$1/agents" "$1/skills/_shared" "$1/skills/fx-skill"
     fx_bin "$1"
     printf '%s\n' '# fixture: no PATH-exposed commands' > "$1/install/path-exposed-commands.txt"
     if [ "$2" = stub ]; then fx_stub_lib "$1"; else fx_real_lib "$1"; fi
@@ -304,7 +295,7 @@ fx_failclosed_setup() {
     d="$FX_ROOT/metachar"; fx_scaffold "$d" real; fx_ssot "$d" 'bin/fx-bash-tool; rm -rf /'
     fx_run metachar "$d"
     d="$FX_ROOT/no-lib"; fx_scaffold "$d" real; fx_ssot "$d" 'bin/fx-bash-tool'
-    rm -f "$d/install/lib/settings-allow-rules.js"
+    rm -f "$d/$ALLOW_LIB_REL"
     fx_run no-lib "$d"
 }
 

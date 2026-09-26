@@ -2,13 +2,13 @@
 # Tests: install/lib/settings-assembly.js, install/assemble-settings.js
 # Tags: install, settings, permissions, merge, scope:issue-specific, pwsh-not-required, TL2
 # T34: mergeSettings beyond permissions.allow. Sourced by tests/feature-2119-settings-allow-ssot.sh,
-# which owns PASS/FAIL/ROWS and assert_eq; the fixture helpers come from generator.sh.
+# which owns PASS/FAIL/ROWS and assert_eq; the fixture helpers come from fixture.sh.
 
 T34_FX=""
 T34_RC="unrun"
 
 # WHY A SEPARATE PART. settings-preservation.sh drives the extension through `permissions.allow`
-# only -- the one key the generated rules also land in. Extraction into settings-assembly.js moves
+# only. Extraction into settings-assembly.js moves
 # the merge of every OTHER key across a module boundary, and a merge that silently drops `hooks`
 # or lets base win over extension is invisible to an allow-only fixture while quietly disarming
 # the developer's hooks. Wants below are read off the CURRENT install/assemble-settings.js:

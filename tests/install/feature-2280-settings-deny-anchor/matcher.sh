@@ -1,12 +1,11 @@
 # tests/feature-2280-settings-deny-anchor/matcher.sh
-# Tests: settings.json, hooks/lib/settings-allow-match.js
+# Tests: settings.json
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
-# Deny-side mirror of hooks/lib/settings-allow-match.js:62-83 (patternToRegExp); an
-# approximation itself (allow-side origin), so regression-cases.sh cross-checks this
-# mirror against the real module rather than trusting it standalone.
-# DIVERGENCE (intentional): isAllowRuleMatch fails OPEN on unreadable/malformed
-# settings; this deny-side mirror fails LOUD instead (ERROR:unreadable-settings,
-# E1/E1b below) so a broken config never masks a #2280-class bug as an allow-all.
+# Deny-side approximation of the host's Bash(...) glob matching (patternToRegExp, ported
+# from the retired hooks/lib/settings-allow-match.js). regression-cases.sh pins its
+# semantics row by row (C1-C14) rather than trusting it standalone.
+# Fails LOUD on unreadable/malformed settings (ERROR:unreadable-settings, E1/E1b) so a
+# broken config never masks a #2280-class bug as an allow-all.
 
 DENY_MATCH_JS='
 const fs = require("fs");

@@ -1,7 +1,7 @@
 # tests/feature-2134-bash-guard/cases-message.sh
 # Tests: hooks/bash-guard/message.js, hooks/bash-guard/reasons.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, message, reason-codes, remediation, scope:issue-specific, pwsh-not-required, TL2
-# M1-M5: what the deny actually says, and the code namespace. Sourced by the dispatcher.
+# M1-M8: what the deny and notify say, and the code namespaces. Sourced by the dispatcher.
 
 # WHY THE MESSAGE IS TESTED AT ALL. A presentation guard that only says "denied" trades one
 # compound command for a round of guessing -- #2120 is the precedent. The deny has to carry the
@@ -41,8 +41,30 @@ assert_contains "M2: a heredoc deny names the heredoc literal" "heredoc" "$BG_HE
 assert_not_contains "M2: a heredoc deny does not name an unrelated literal" \
     "chain-and" "$BG_HEREDOC_MSG"
 
-# M3: an allow carries no message. A guard that narrates its silence is noise on every command.
-assert_eq "M3: an allow produces no message" "" "$(probe judge-message 'git status')"
+# M3: a passThrough carries no message. A guard that narrates its silence is noise on every command.
+assert_eq "M3: a passThrough produces no message" "" "$(probe judge-message 'git status')"
+
+# M7: the three non-deny registries (#2264). Each is frozen, disjoint from REASON_CODES, and
+# BG-ALLOW-RULE is gone with the command-scoped exemption it attributed.
+m7_row() {
+    ROWS=$((ROWS + 1))
+    assert_eq "M7/$1: reasons.js exports the exact frozen registry" "$2" "$(probe "$1" '')"
+}
+m7_row pass-through-codes "INTERLOCK_QUIET=BG-INTERLOCK-QUIET,NO_HIT=BG-NO-HIT,PARSE_FAILURE=BG-PARSE-FAILURE,TOOL_OUT_OF_SCOPE=BG-TOOL-OUT-OF-SCOPE"
+m7_row notify-codes "SCRIPT_NO_INTERPRETER=BG-NOTIFY-SCRIPT-NO-INTERPRETER,SENTINEL_NO_ECHO=BG-NOTIFY-SENTINEL-NO-ECHO,SENTINEL_UNRECOGNIZED=BG-NOTIFY-SENTINEL-UNRECOGNIZED"
+m7_row allow-codes "SELF_BARE=BG-ALLOW-SELF-BARE,SELF_SCRIPT=BG-ALLOW-SELF-SCRIPT"
+assert_not_contains "M7: BG-ALLOW-RULE is retired from every registry" "BG-ALLOW-RULE" \
+    "$(probe pass-through-codes '')$(probe notify-codes '')$(probe allow-codes '')"
+
+# M8: a notify message names the fix and ends with its code tag, and never echoes the command.
+m8_msg="$(probe judge-message '"<<WORKFLOW_MARK_STEP_m8canary_complete>>"')"
+ROWS=$((ROWS + 1))
+assert_contains "M8: the L1 notify message ends with its [bash-guard <code>] tag" \
+    "[bash-guard BG-NOTIFY-SENTINEL-NO-ECHO]" "$m8_msg"
+ROWS=$((ROWS + 1))
+assert_contains "M8: the L1 notify message tells the model to issue it through echo" "echo" "$m8_msg"
+ROWS=$((ROWS + 1))
+assert_not_contains "M8: the notify message does not echo the command text back" "m8canary" "$m8_msg"
 
 # M4: every reason code lives in the BG- namespace. The workflow-gate tiers own T-A..T-E, and a
 # collision would make one code mean two things in the transcript.

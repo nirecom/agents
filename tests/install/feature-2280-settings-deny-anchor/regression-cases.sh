@@ -1,5 +1,5 @@
 # tests/feature-2280-settings-deny-anchor/regression-cases.sh
-# Tests: settings.json, hooks/lib/settings-allow-match.js
+# Tests: settings.json
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 # Table-driven cases for #2280. Ids and command strings are copied verbatim from the
 # detail plan's Step 6 tables so a reader can cross-reference the plan.
@@ -17,21 +17,15 @@ const rule = "Bash(" + pattern + ")";
 fs.writeFileSync(fixturePath, JSON.stringify({ permissions: { allow: [rule], deny: [rule] } }));
 '
 
-REAL_MODULE_JS='
-const [modulePath, settingsPath, commandText] = process.argv.slice(-3);
-const { isAllowRuleMatch } = require(modulePath);
-console.log(isAllowRuleMatch(commandText, { settingsPath }) ? "MATCHED" : "NO-MATCH");
-'
-
 # ---------------------------------------------------------------------------
-# Mirror fidelity. Each row runs the SAME pattern through this suite's matcher.sh
-# (deny side) and through the real hooks/lib/settings-allow-match.js (allow side) over a
-# private fixture, then asserts both the expected verdict AND that the two agree. If the
-# mirror ever drifts from patternToRegExp, every downstream row below is worthless.
+# Mirror fidelity. Each row runs one pattern through this suite's matcher.sh over a
+# private fixture and pins the expected verdict. The allow-side module it was once
+# cross-checked against (hooks/lib/settings-allow-match.js) was retired by #2264, so the
+# table itself is now the only statement of the glob semantics every row below relies on.
 # Columns: id @@ deny pattern @@ command @@ expected verdict.
 # ---------------------------------------------------------------------------
 t_mirror_crosscheck() {
-    local row id pattern cmd want fixture mine theirs rest
+    local row id pattern cmd want fixture mine rest
     while IFS= read -r row; do
         case "$row" in ''|'#'*) continue ;; esac
         if ! row_is_well_formed "$row" 4; then
@@ -47,11 +41,8 @@ t_mirror_crosscheck() {
         node -e "$FIXTURE_WRITE_JS" "$(matcher_node_path "$fixture")" "$pattern"
         deny_probe "$fixture" "$cmd"
         mine="$DENY_VERDICT"
-        theirs="$(node -e "$REAL_MODULE_JS" "$(matcher_node_path "$ALLOW_MATCH_MODULE")" \
-            "$(matcher_node_path "$fixture")" "$cmd" 2>&1)"
-        ROWS=$((ROWS + 2))
+        ROWS=$((ROWS + 1))
         assert_eq "$id: mirror verdict for pattern [$pattern]" "$want" "$mine"
-        assert_eq "$id: mirror agrees with hooks/lib/settings-allow-match.js" "$mine" "$theirs"
     done <<'TABLE'
 C1-exact@@git push --force@@git push --force@@MATCHED
 C2-front-anchor@@git push --force@@cd /x && git push --force@@NO-MATCH
@@ -265,11 +256,9 @@ P12-global-nopager@@git --no-pager commit --amend@@git --no-pager commit --amend
 # Negative (settings.json alone): a `cd * && git commit ...` compound bypass is NOT
 # matched by any single deny rule here -- anchored rules require the string to START with
 # a git-launch-form prefix. The removed `cd * && git commit *...` closer sub-family once
-# re-caught this shape, but reintroduced #2280's own narration-false-positive bug and was
-# redundant with the general fix: hooks/bash-guard/exemptions.js's anySegmentDenyMatched()
-# (via isDenyRuleMatch) withholds the allow-rule-match exemption when any segment matches
-# an anchored deny rule. Behavioral tests for anySegmentDenyMatched belong in the
-# feature-2134-bash-guard suite (tracked as follow-up, not yet landed).
+# re-caught this shape, but reintroduced #2280's own narration-false-positive bug. The
+# compound form is closed one layer up instead: bash-guard denies the `&&` chain itself
+# (BG-CHAIN-AND), pinned in tests/hooks/feature-2134-bash-guard/cases-precedence.sh.
 P13-compound-bypass@@cd /tmp/x && git commit --amend -m "test"@@any@@NO-MATCH@@yes
 P14-compound-bypass-push@@cd /tmp/x && git commit -m "x" && git push --force@@any@@NO-MATCH@@yes
 P15-compound-bypass-resethard@@cd /tmp/x && git commit -m "x" && git reset --hard@@any@@NO-MATCH@@yes
@@ -343,9 +332,8 @@ G4-global-combo@@git -C /x -c user.name=y --no-pager push --force@@git -C * push
 # absolute-path / `-P` alias) genuinely fall outside Approach A's four enumerated launch
 # forms once anchoring replaces the old broad rule -- but TODAY the old `*push --force`-
 # style rule still matches them too, so they only become residual gaps (STANDALONE
-# command only) once ANCHORED=1. The chained-after-allowed-prefix form of this same gap
-# is independently closed one layer up by hooks/bash-guard/git-canonical.js, pinned in
-# tests/feature-2134-bash-guard/cases-allow-rule.sh's chained-deny-bypass-* rows.
+# command only) once ANCHORED=1. The chained form of this same gap is closed one layer
+# up: bash-guard denies the chain operator before any allow can apply (cases-precedence.sh).
 G5-sudo-wrapper@@sudo git push --force@@*sudo *@@MATCHED@@no
 G6-env-wrapper@@env FOO=1 git push --force@@any@@NO-MATCH@@yes
 G7-absolute-path@@/usr/bin/git push --force@@any@@NO-MATCH@@yes

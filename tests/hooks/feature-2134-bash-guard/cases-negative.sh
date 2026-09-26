@@ -18,7 +18,7 @@ n1_non_hits() {
         ROWS=$((ROWS + 1))
 
         got="$(verdict_of "$cmd")"
-        assert_eq "N1/$name: not denied" "allow" "$got"
+        assert_eq "N1/$name: not denied (passes through)" "passThrough" "$got"
 
         got="$(probe hit-ids "$cmd")"
         assert_eq "N1/$name: no hit was ever created (non-hit, not an exemption)" "" "$got"
@@ -42,10 +42,11 @@ n1_non_hits
 
 # N2: the sanctioned `bash -c '... && ...'` form used across skills/_shared. The `&&` sits
 # inside single quotes, so it is not a separator -- if this ever denies, roughly eight prompt
-# assets stop working and the workflow blocks itself the way #2120 did.
+# assets stop working and the workflow blocks itself the way #2120 did. The `bash -c` wrapper
+# is not matched by the self-script allow (#2265), so it passes through rather than allows.
 assert_eq "N2: an && inside single quotes is not a separator" \
-    "allow" "$(verdict_of "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" RUN_TL4 on'")"
+    "passThrough" "$(verdict_of "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" RUN_TL4 on'")"
 
 # N3: an escaped separator in unquoted context. The pre-#2121 lexer mis-split this, which is
 # why the new parser is a prerequisite for the guard rather than an independent change.
-assert_eq "N3: an escaped && is not a separator" "allow" "$(verdict_of 'echo a \&\& b')"
+assert_eq "N3: an escaped && is not a separator" "passThrough" "$(verdict_of 'echo a \&\& b')"

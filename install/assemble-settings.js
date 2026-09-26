@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // assemble-settings.js
 // Deploys ~/.claude/settings.json as a real file (no symlink) from agents/settings.json (base)
-// + agents/settings-extension.json (extension) + the generated allow rules.
+// + agents/settings-extension.json (extension).
 // The merge contract lives in install/lib/settings-assembly.js and the write in
 // install/lib/settings-deploy.js — this file is only the CLI over them.
 'use strict';

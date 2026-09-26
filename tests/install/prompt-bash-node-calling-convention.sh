@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # tests/prompt-bash-node-calling-convention.sh
-# Tests: install/lib/settings-allow-rules.js, install/settings-allow-commands.txt, skills/review-tests/SKILL.md, hooks/bash-guard/judge.js
+# Tests: hooks/lib/allow-command-list.js, install/settings-allow-commands.txt, skills/review-tests/SKILL.md, hooks/bash-guard/judge.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 
 set -uo pipefail
 
-# THE SUBJECT. A permission allow rule matches the WHOLE command string, and every generated
-# spelling puts a LITERAL interpreter token in execution position -- `bash "<path>"`, never
-# `"<path>"` on its own. So a prompt asset that tells the model to run
-# `"$AGENTS_CONFIG_DIR/bin/foo"` directly instructs a command line no rule can match, and the
-# step falls back to `ask`. WHICH commands are in scope is owned by
-# install/settings-allow-commands.txt (CPR-SSOT); the spellings by
-# install/lib/settings-allow-rules.js; the calling convention the model is told to use, by the
+# THE SUBJECT. bash-guard's self-script allow path admits a listed command only with a LITERAL
+# interpreter token in execution position -- `bash "<path>"`, never `"<path>"` on its own. So a
+# prompt asset that tells the model to run `"$AGENTS_CONFIG_DIR/bin/foo"` directly instructs a
+# command line the guard cannot admit, and the step falls back to `ask`. WHICH commands are in
+# scope is owned by install/settings-allow-commands.txt (CPR-SSOT); the interpreter each resolves
+# to by hooks/lib/allow-command-list.js; the calling convention the model is told to use, by the
 # prompt assets themselves. This suite holds the three in agreement.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,8 +21,6 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SSOT_REL="install/settings-allow-commands.txt"
 SSOT="$AGENTS_DIR/$SSOT_REL"
-LIB_REL_LIST="install/lib/settings-allow-rules.js"
-LIB_DIR="$AGENTS_DIR/install/lib"
 
 PASS=0
 FAIL=0
@@ -57,8 +54,9 @@ ROWS=0
 
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; the final
 # assertion pins the exact total, so an empty table or an early return cannot report green.
-ROWS_EXPECTED=132 # T26 27 + T48 37 + T50 4 + T51 6 + T52 7 + T53 3 + T54 5 + T55 6
+ROWS_EXPECTED=105 # T48 37 + T50 4 + T51 6 + T52 7 + T53 3 + T54 5 + T55 6
                   # + T56 4 + T57 5 + T58 9 + T59 8 + T60 8 + T22 3
+                  # (T26 retired with install/lib/settings-allow-rules.js in #2264)
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/pbn-cc.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -80,12 +78,6 @@ run_with_timeout() {
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-# MISSING-ARTIFACT SENTINEL. A case whose implementation does not exist yet must fail with a
-# message naming the artifact, never crash the run: the helper returns a sentinel string that
-# flows into assert_eq's "got" side, so the table keeps executing and the budget stays meaningful.
-missing_lib() { printf '<MISSING:%s>' "$LIB_REL_LIST"; }
-have_lib() { [ -f "$LIB_DIR/settings-allow-rules.js" ]; }
-
 PART_DIR="$AGENTS_DIR/tests/install/prompt-bash-node-calling-convention"
 
 # home-canary.sh is sourced FIRST and only defines functions: canary_setup repoints HOME and
@@ -95,7 +87,6 @@ PART_DIR="$AGENTS_DIR/tests/install/prompt-bash-node-calling-convention"
 . "$PART_DIR/home-canary.sh"
 canary_setup
 
-. "$PART_DIR/template-pairs.sh"
 . "$PART_DIR/rt0-calling-convention.sh"
 . "$PART_DIR/exec-position-fixtures.sh"
 . "$PART_DIR/exec-position-sweep.sh"

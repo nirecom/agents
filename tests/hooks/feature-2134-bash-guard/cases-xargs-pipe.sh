@@ -1,13 +1,14 @@
 # tests/feature-2134-bash-guard/cases-xargs-pipe.sh
-# Tests: hooks/bash-guard/exemptions.js, hooks/bash-guard/detect.js, hooks/lib/command-ir.js
-# Tags: hook, bash-guard, exemptions, xargs, separator-links, scope:issue-specific, pwsh-not-required, TL2
-# X1-X7: the one hit-scoped exemption. Sourced by tests/feature-2134-bash-guard.sh.
+# Tests: hooks/bash-guard/detect.js, hooks/lib/command-ir.js
+# Tags: hook, bash-guard, xargs, separator-links, scope:issue-specific, pwsh-not-required, TL2
+# X1-X7: the xargs-pipe carve-out, now a rule inside detect(). Sourced by the dispatcher.
 
-# WHY THIS EXEMPTION EXISTS. intent.md's approved Scope excludes "via xargs", so
+# WHY THIS CARVE-OUT EXISTS. intent.md's approved Scope excludes "via xargs", so
 # `find . -name '*.tmp' | xargs rm` must not be denied. Round 1 implemented that as a
 # whole-command all-clear, which also forgave every other literal on the line; the correction
-# is a HIT-scoped exemption that removes exactly the `|` immediately left of xargs. Rows b-d
-# are the proof that the narrowing holds: a redirect, a non-xargs pipe and a chain survive.
+# removes exactly the `|` immediately left of xargs. #2264 moved it from exemptions.js into
+# detect() unchanged; rows b-d prove the narrowing holds: a redirect, a non-xargs pipe and a
+# chain survive. A clean xargs pipe has no hit and nothing to allow, so it passes through.
 
 x1_xargs_pipe() {
     local name cmd want_verdict want_ids got
@@ -25,11 +26,11 @@ x1_xargs_pipe() {
         got="$(probe hit-ids "$cmd")"
         assert_eq "X1/$name: exact surviving hit-id set (sorted)" "$want_ids" "$got"
     done <<'TABLE'
-a-plain-xargs   ~ find . -name '*.tmp' | xargs rm           ~ allow ~
+a-plain-xargs   ~ find . -name '*.tmp' | xargs rm           ~ passThrough ~
 b-with-redirect ~ find . -name '*.tmp' | xargs rm > out.log ~ deny  ~ redirect-out
 c-second-pipe   ~ ls | grep x | xargs rm                    ~ deny  ~ pipe
 d-with-chain    ~ echo a | xargs -0 rm && ls                ~ deny  ~ chain-and
-e-abs-path      ~ find . -type f | /usr/bin/xargs rm        ~ allow ~
+e-abs-path      ~ find . -type f | /usr/bin/xargs rm        ~ passThrough ~
 TABLE
 }
 
@@ -47,7 +48,7 @@ assert_eq "X6: the pipe left of a non-xargs command is the hit that survives" \
 # X7: position linkage, not index arithmetic. `& git.exe status` and `git pull &` each yield
 # one segment and one separator, so `segments[i+1]` cannot tell them apart; only
 # separatorLinks knows which side is empty. A regression to index arithmetic fails here, and
-# the xargs exemption silently forgives the wrong pipe.
+# the xargs carve-out silently forgives the wrong pipe.
 assert_eq "X7a: a LEADING separator links to a right segment and a null left segment" \
     "0:&:-:0" "$(probe links '& git.exe status')"
 assert_eq "X7b: a TRAILING separator links to a left segment and a null right segment" \

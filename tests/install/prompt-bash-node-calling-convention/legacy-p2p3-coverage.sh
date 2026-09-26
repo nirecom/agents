@@ -7,7 +7,7 @@
 # per-SSOT-entry sweep cannot see because they name no SSOT entry at all. Sourced by the
 # dispatcher, which owns PASS/FAIL/ROWS and assert_eq.
 
-JP_PROBE_REL="tests/prompt-bash-node-calling-convention/judge-verdict-probe.js"
+JP_PROBE_REL="tests/install/prompt-bash-node-calling-convention/judge-verdict-probe.js"
 JP_PROBE="$AGENTS_DIR/$JP_PROBE_REL"
 
 # T58 -- WHAT THE SWEEP CANNOT ANSWER. The sweep reads prompt text and judges the token in
@@ -40,7 +40,7 @@ jp_command() { # <key> -> the command literal
     esac
 }
 
-jp_verdict() { # <command> -> allow | deny | <sentinel>
+jp_verdict() { # <command> -> allow | deny | notify | passThrough | <sentinel>
     [ -f "$JP_PROBE" ] || { printf '<MISSING:%s>' "$JP_PROBE_REL"; return; }
     run_with_timeout 30 node "$JP_PROBE" "$(node_path "$AGENTS_DIR")" "$1" 2>&1
 }
@@ -52,15 +52,15 @@ t58_judge_table() {
         ROWS=$((ROWS + 1))
         assert_eq "$id: $label" "$want" "$(jp_verdict "$(jp_command "$key")")"
     done <<'T58_CASES'
-detect-non-github-stage|T58[allow:detect-non-github.sh/stage]|allow|the converted issue-close-stage call is judged allow by the real guard, its trailing OR-recovery clause included -- the discipline document lists the AND chain and not the OR one, so the clause the prompt actually carries is not what makes a site ask
-detect-non-github-commit|T58[allow:detect-non-github.sh/commit-push]|allow|CPR-ORTH: the sibling call in commit-push, whose recovery clause assigns instead of exiting, is judged allow too
+detect-non-github-stage|T58[passThrough:detect-non-github.sh/stage]|passThrough|the converted issue-close-stage call with its trailing OR-recovery clause is two segments, so the self-script allow path (single segment only) does not admit it and the guard neither denies it -- the OR chain is not a forbidden literal, so the permission engine decides
+detect-non-github-commit|T58[passThrough:detect-non-github.sh/commit-push]|passThrough|CPR-ORTH: the sibling call in commit-push, whose recovery clause assigns instead of exiting, is passed through the same way
 concern-ledger|T58[allow:concern-ledger]|allow|the check-finalized call three skills share is judged allow with its four flag operands
 assemble-mandatory|T58[allow:assemble-mandatory.sh]|allow|and so is the assembly call, whose three operands are unexpanded $PLANS_DIR/$SESSION_ID variables rather than literal paths
 check-issues-class-coverage|T58[allow:check-issues-class-coverage]|allow|the class-coverage gate is judged allow
 detect-scope-change|T58[allow:detect-scope-change.sh]|allow|the scope-change gate is judged allow
 resolve-worktree-path|T58[allow:resolve-worktree-path]|allow|the argument-less RT-0 call, the shortest converted form there is, is judged allow
 select-staged-files|T58[allow:select-staged-files.sh]|allow|as is the other argument-less one, so the verdict is not a property of one lucky command
-control-chain|T58[control-deny]|deny|ATTRIBUTABILITY CONTROL: the SAME converted call with && echo done appended comes back deny through the same probe -- without this row a judge reached through a wrong envelope, or a settings file granting everything, would score all eight rows above allow for the wrong reason
+control-chain|T58[control-deny]|deny|ATTRIBUTABILITY CONTROL: the SAME converted call with && echo done appended comes back deny through the same probe -- without this row a judge reached through a wrong envelope, or a settings file granting everything, would score the six allow rows above allow for the wrong reason
 T58_CASES
 }
 

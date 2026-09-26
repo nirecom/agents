@@ -197,8 +197,8 @@ $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 # --- PATH-exposed bin/ commands (cmd + bash shim) ---
 # Command set: install/path-exposed-commands.txt (CPR-SSOT; install/linux/dotfileslink.sh
 # consumes the same file, CPR-ORTH). Do NOT hand-write a launcher pair — add to the list file.
-# Shim's `exec <interpreter>` must match the target's own shebang; mirrors resolveInterpreter()
-# in install/lib/settings-allow-rules.js (canonical bash/node detection).
+# Shim's `exec <interpreter>` must match the target's own shebang; mirrors interpreterOf()
+# in hooks/lib/allow-command-list.js (canonical bash/node detection).
 function Resolve-PathExposedInterpreter {
     param([string]$Command)
     $scriptPath = Join-Path $AgentsRoot "bin\$Command"

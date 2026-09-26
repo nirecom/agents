@@ -2,18 +2,12 @@
 
 // The SINGLE writer of ~/.claude/settings.json.
 //
-// Both CLIs (install/assemble-settings.js and install/gen-settings-allow.js --write) come
-// through here, so the deploy has one polarity rather than two that can disagree.
-//
-// FAIL-CLOSED: when the spelling layer could not produce the generated rules, the previous
-// deployed file is strictly safer than a fresh one missing several hundred allow rules — a
-// permission regression that reports success. So nothing is written at all.
+// install/assemble-settings.js comes through here, so the deploy has one polarity.
 
 const fs = require('fs');
 const path = require('path');
 
 const assembly = require('./settings-assembly');
-const allowRules = require('./settings-allow-rules');
 
 const { GenError } = assembly;
 
@@ -71,19 +65,15 @@ const detachDecision = (outPath, agentsRoot) => {
 
 // Written IN PLACE rather than through a temp file and a rename so the detach decision above sits
 // immediately in front of the one write, with nothing between deciding and doing.
-const deployAssembledSettings = ({ agentsRoot = allowRules.DEFAULT_ROOT, homeDir } = {}) => {
+const deployAssembledSettings = ({ agentsRoot = assembly.DEFAULT_ROOT, homeDir } = {}) => {
     const built = assembly.buildAssembledSettings({ agentsRoot });
-    if (built.generatorError) {
-        throw new GenError(`generated allow rules are unavailable: ${built.generatorError} ` +
-            '- nothing was deployed, so the previous settings.json is left untouched');
-    }
     const outPath = assembly.deployedSettingsPath(homeDir);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     const decision = detachDecision(outPath, agentsRoot);
     if (decision.refuse) {
         throw new GenError(`${path.dirname(outPath)} is a symlink resolving to ${decision.dirReal}, ` +
-            `inside the agents checkout at ${decision.root} - deploying would write the generated ` +
-            'allow rules into the repository\'s own tracked settings.json. Nothing was written, so ' +
+            `inside the agents checkout at ${decision.root} - deploying would write the assembled ` +
+            'settings into the repository\'s own tracked settings.json. Nothing was written, so ' +
             'the previous deployment stands; replace that directory link with a real directory ' +
             '(both installers already remove stale links of this kind) and deploy again');
     }

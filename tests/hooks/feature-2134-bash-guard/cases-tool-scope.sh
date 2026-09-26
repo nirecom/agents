@@ -19,10 +19,10 @@ t1_out_of_scope_tools() {
         ROWS=$((ROWS + 1))
 
         got="$(verdict_of 'git status && ls | grep x' 'sid-bg-armed' "$tool")"
-        assert_eq "T1/$name: a compound payload on tool_name=$tool is allowed" "allow" "$got"
+        assert_eq "T1/$name: a compound payload on tool_name=$tool passes through" "passThrough" "$got"
 
         got="$(probe judge 'git status && ls | grep x' 'sid-bg-armed' "$tool")"
-        assert_contains "T1/$name: the allow is attributed to the out-of-scope reason code" \
+        assert_contains "T1/$name: the pass-through is attributed to the out-of-scope reason code" \
             "BG-TOOL-OUT-OF-SCOPE" "$got"
     done <<'TABLE'
 run-in-terminal ~ runInTerminal
@@ -38,9 +38,10 @@ assert_eq "T2: the identical payload on tool_name=Bash is denied (T1 is not vacu
     "deny" "$(verdict_of 'git status && ls | grep x' 'sid-bg-armed' 'Bash')"
 
 # T3: a write tool is out of scope too -- the guard reads tool_input.command, which Edit
-# does not have, and must not invent a verdict from an absent field.
+# does not have, and must not invent a verdict from an absent field -- least of all an allow,
+# which would skip the permission prompt for a tool the guard never read.
 assert_eq "T3: a non-command tool is out of scope" \
-    "allow" "$(verdict_of 'irrelevant' 'sid-bg-armed' 'Edit')"
+    "passThrough" "$(verdict_of 'irrelevant' 'sid-bg-armed' 'Edit')"
 
 # T4: registration. The PreToolUse group that runs hooks/bash-guard.js carries the bare
 # matcher "Bash". This is the structural half of the TL3 gap recorded in the dispatcher.

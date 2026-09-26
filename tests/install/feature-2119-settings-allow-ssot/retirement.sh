@@ -46,7 +46,7 @@ t33_retirement_table() {
         ROWS=$((ROWS + 1))
         assert_eq "T33[$id]: $label" "$want" "$(t33_probe "$id")"
     done <<'T33_CASES'
-reviewer-gone|deleted|bin/review-settings-allow is gone from the tree -- the generated rules have no hand-maintained mirror left for it to review
+reviewer-gone|deleted|bin/review-settings-allow is gone from the tree -- there is no hand-maintained mirror of the allow list left for it to review
 precommit-no-invocation|unwired|hooks/pre-commit no longer invokes the retired reviewer, so a settings.json commit cannot be blocked by a drift that can no longer exist
 precommit-no-gate|gate-removed|hooks/pre-commit carries no `_sa_` gate remnant either -- the whole block left, not just the call line
 precommit-parses|parses|hooks/pre-commit still passes `bash -n` after the block was cut out (an unbalanced fi would disable EVERY pre-commit check, not only this one)
@@ -78,9 +78,10 @@ t39_sandbox() { # <dir> <absent|finding>
     git -C "$d" config user.name "Test"
     git -C "$d" config commit.gpgsign false
     cp "$PRECOMMIT" "$d/hooks/pre-commit"
-    cp "$AGENTS_DIR/hooks/lib/load-env.sh" "$d/hooks/lib/load-env.sh"
+    # Every lib the hook sources at load time, or it dies before any gate runs.
+    cp "$AGENTS_DIR/hooks/lib/load-env.sh" "$AGENTS_DIR/hooks/lib/precommit-tests-frontmatter.sh" \
+       "$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh" "$d/hooks/lib/"
     printf '%s\n' '# fixture SSOT' 'bin/fx-tool' > "$d/install/settings-allow-commands.txt"
-    printf '%s\n' '#!/usr/bin/env node' > "$d/install/gen-settings-allow.js"
     printf '%s\n' '{}' > "$d/settings.json"
     git -C "$d" add -A
     ENFORCE_WORKTREE=off git -C "$d" commit -q -m "seed"

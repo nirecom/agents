@@ -4,7 +4,7 @@
 // execution position, or the wrong interpreter). Scope is driven from
 // install/settings-allow-commands.txt (CPR-SSOT); rationale: docs/architecture/claude-code/settings.md.
 // Scans code spans only (fenced blocks + inline `...`) -- a prose mention is not a command line.
-// Sole consumer: tests/prompt-bash-node-calling-convention/exec-position-sweep.sh.
+// Sole consumer: tests/install/prompt-bash-node-calling-convention/exec-position-sweep.sh.
 // Contract: argv[1] is the agents root; stdout is {"occurrences":[{file,line,entry,prevToken,
 // expected,status}]}; a malformed SSOT throws (fail-closed, non-zero exit) rather than reporting
 // an empty sweep.
@@ -18,7 +18,7 @@ if (!agentsRoot) {
     process.exit(2);
 }
 
-const rulesLib = require(path.join(agentsRoot, 'install', 'lib', 'settings-allow-rules.js'));
+const allowList = require(path.join(agentsRoot, 'hooks', 'lib', 'allow-command-list.js'));
 
 const readSsotEntries = () => {
     const file = path.join(agentsRoot, 'install', 'settings-allow-commands.txt');
@@ -29,18 +29,15 @@ const readSsotEntries = () => {
         .filter((line) => line.length > 0 && !/^\s*#/.test(line));
 };
 
-// install/ is out of scope for this diff (resolveInterpreter is a private, unexported
-// function there) -- so the expected interpreter per entry is read back from the same
-// generatedAllowRules() output settings.json itself is built from, never re-derived here.
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
+// The expected interpreter per entry is the one bash-guard's allow path itself resolves
+// (interpreterOf), never re-derived here. loadAllowTargets silently drops a malformed entry, so
+// a raw entry it did not keep is a hostile or broken SSOT line: abort instead of sweeping past it.
 const buildInterpreterMap = (entries) => {
-    const { rules } = rulesLib.generatedAllowRules({ agentsRoot });
+    const kept = new Set(allowList.loadAllowTargets(agentsRoot).entries);
     const map = new Map();
     for (const entry of entries) {
-        const re = new RegExp(`^Bash\\((bash|node) "\\$AGENTS_CONFIG_DIR/${escapeRegex(entry)}"\\)$`);
-        const hit = rules.find((r) => re.test(r));
-        map.set(entry, hit ? re.exec(hit)[1] : null);
+        if (!kept.has(entry)) throw new Error(`malformed SSOT entry: ${JSON.stringify(entry)}`);
+        map.set(entry, allowList.interpreterOf(agentsRoot, entry));
     }
     return map;
 };
