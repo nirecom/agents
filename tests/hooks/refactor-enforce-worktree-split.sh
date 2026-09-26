@@ -10,6 +10,8 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -61,6 +63,7 @@ run_node() {
 }
 
 # ─── REGRESSION TESTS ────────────────────────────────────────────────────────
+case_begin "regression-1-8" "hooks/enforce-worktree.js"
 
 # 1. enforce-worktree.js loads without error
 out=$(node -e "require('${ENFORCE_JS}'); console.log('OK');" 2>&1)
@@ -189,8 +192,10 @@ elif [ "$out" = "SKIP" ]; then
 else
     fail_regression "isAllowedNewItemDirectory allows outside-repo New-Item" "$out"
 fi
+case_end
 
 # ─── POST-REFACTOR CONTRACT TESTS ────────────────────────────────────────────
+case_begin "post-refactor-contract-9-12" "hooks/enforce-worktree/config.js"
 
 # 9. hooks/enforce-worktree/ directory exists
 if [ -d "$ENFORCE_DIR" ]; then
@@ -251,8 +256,10 @@ if [ -f "$CLEANUP_JS" ]; then
 else
     fail_contract "cleanup-orphan-dir.js imports getWorktreeBaseDirResolved (post-rename)" "file missing"
 fi
+case_end
 
 # ─── #1601 CONTRACT: persistent core.hooksPath setter detection ───────────────
+case_begin "1601-hookspath-setter-d2-d6" "hooks/enforce-worktree/git-hooks-bypass.js"
 # hasGitHooksBypass must ALSO flag the persistent-setter form
 #   `git config [--local|--global] core.hooksPath <value>`
 # which permanently redirects hooks — vs the transient `-c` / `--config-env`
@@ -295,6 +302,7 @@ hb_new_expect clean "D5: git config --get core.hooksPath → clean" \
 # D6: global options before the `config` subcommand — still detected as bypass.
 hb_new_expect bypass "D6: git -c foo=bar config --local core.hooksPath <value> → bypass" \
     'git -c foo=bar config --local core.hooksPath /dev/null'
+case_end
 
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────
 
