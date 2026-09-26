@@ -5,9 +5,13 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName } = require("./lib/is-private-repo");
+const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName, toNativePath } = require("./lib/is-private-repo");
 const { isForgeScanTarget, isGithubForgeScanTarget, extractTexts, extractRepoFlag, isRepoWriteTarget } = require("./lib/forge-write-extract");
-const { parseGitCArg } = require("./lib/parse-git-args");
+const { parseGitCArg, FLAGS_WITH_ARG } = require("./lib/parse-git-args");
+const { parse } = require("./lib/command-ir");
+const { resolveGitArgvForSegment } = require("./lib/bash-write-patterns/git-write-ir");
+const { resolveCommitRepoDir, extractInlineBashWriteContent } = require("./lib/commit-target");
+const { extractStagedFilesRelative } = require("./lib/bash-write-targets/staged");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
 function readStdin() {
@@ -141,25 +145,87 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
       // Fail-safe: always scan regardless of cwd visibility.
       if (isRepoWriteTarget(command)) { isPrivate = false; }
     } else {
-      // Check git commit messages
-      const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
-      if (!commitMatch) {
-        approve();
+      // IR-based commit detection and staged-content scan.
+      const ir = parse(command);
+      let foundCommit = false;
+      for (const seg of (ir && !ir.parseFailure && ir.segments) || []) {
+        const gitArgv = resolveGitArgvForSegment(seg);
+        if (!gitArgv) continue;
+        let i = 0;
+        while (i < gitArgv.length && typeof gitArgv[i] === "string" && gitArgv[i][0] === "-") {
+          const tok = gitArgv[i];
+          const eq = tok.indexOf("=");
+          const key = eq === -1 ? tok : tok.slice(0, eq);
+          i += (FLAGS_WITH_ARG.has(key) && eq === -1) ? 2 : 1;
+        }
+        if (i < gitArgv.length && gitArgv[i] === "commit") { foundCommit = true; break; }
       }
-      // Extract commit message: support -m "msg", -m 'msg', and heredoc $(cat <<'EOF'...EOF)
-      const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\nEOF/);
-      if (heredocMatch) {
-        content = heredocMatch[1];
+
+      if (!foundCommit) {
+        // Non-forge, non-commit: scan inline file-write content if present.
+        content = extractInlineBashWriteContent(command);
+        if (!content) { approve(); }
+        let inlineRepoDir = null;
+        const cPath = parseGitCArg(command);
+        if (cPath) inlineRepoDir = cPath;
+        else if (toolInput.cwd) inlineRepoDir = toolInput.cwd;
+        else if (process.env.HOOK_CWD) inlineRepoDir = process.env.HOOK_CWD;
+        isPrivate = isPrivateRepo(inlineRepoDir);
       } else {
-        const msgMatch = command.match(/(?:-m\s+)(["'])([\s\S]*?)\1/);
-        content = msgMatch ? msgMatch[2] : "";
+        // git commit: scan staged files via manifest (message-independent).
+        const commitRepoDir = resolveCommitRepoDir(command, toolInput.cwd);
+        isPrivate = isPrivateRepo(toNativePath(commitRepoDir));
+
+        if (!isPrivate) {
+          const relFiles = extractStagedFilesRelative(toNativePath(commitRepoDir));
+          if (relFiles === null) {
+            block("Staged file enumeration failed (git error) — commit scan blocked fail-closed");
+          }
+          if (relFiles.length > 0) {
+            const rs = Buffer.from("\x1e");
+            const frames = [];
+            for (const rel of relFiles) {
+              const blob = spawnSync("git", ["show", ":" + rel], {
+                cwd: toNativePath(commitRepoDir), timeout: 5000,
+              });
+              if (blob.error || blob.status !== 0) {
+                block("Staged file blob unreadable: " + rel);
+              }
+              const blobBuf = blob.stdout;
+              if (blobBuf.indexOf(0) !== -1) continue; // skip binary
+              const pathBuf = Buffer.from(rel, "utf8");
+              const lenBuf = Buffer.from(String(blobBuf.length), "utf8");
+              frames.push(Buffer.concat([rs, pathBuf, rs, lenBuf, Buffer.from("\n"), blobBuf]));
+            }
+            if (frames.length > 0) {
+              const mRes = spawnSync("bash", [shellPath(SCANNER), "--manifest"], {
+                input: Buffer.concat(frames),
+                timeout: 10000,
+                env: { ...process.env, AGENTS_CONFIG_DIR: process.env.AGENTS_CONFIG_DIR || AGENTS_DIR },
+              });
+              if (mRes.error || mRes.status === null) {
+                block("Staged manifest scanner failed: " + (mRes.error ? mRes.error.message : "no status"));
+              }
+              const mStatus = mRes.status;
+              const mOut = ((mRes.stdout || Buffer.alloc(0)).toString("utf8") + (mRes.stderr || Buffer.alloc(0)).toString("utf8")).trim();
+              if (mStatus === 4) block("Private-info blocklist unresolvable (rc=4) — staged scan blocked");
+              if (mStatus === 1) block("Private information detected in staged files (run git diff --cached to inspect). Unstage the file before committing.");
+              if (mStatus === 2) block("Possible private information detected in staged files (run git diff --cached to inspect). Ask the user if safe to proceed.");
+              if (mStatus !== 0) block("Staged scanner unexpected rc=" + mStatus + " — staged content not shown to avoid echoing private data");
+            }
+          }
+        }
+
+        // Also scan commit message if present (backward compat).
+        const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\nEOF/);
+        if (heredocMatch) {
+          content = heredocMatch[1];
+        } else {
+          const msgMatch = command.match(/(?:-m\s+)(["'])([\s\S]*?)\1/);
+          content = msgMatch ? msgMatch[2] : "";
+        }
+        if (!content) { approve(); }
       }
-      if (!content) {
-        approve();
-      }
-      // git commit: resolve via existing helper
-      const repoDir = resolveRepoDir(command);
-      isPrivate = isPrivateRepo(repoDir);
     }
   }
 
@@ -198,6 +264,7 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
         input: content,
         encoding: "utf8",
         timeout: 10000,
+        env: { ...process.env, AGENTS_CONFIG_DIR: process.env.AGENTS_CONFIG_DIR || AGENTS_DIR },
       });
     }
     const offensiveResult = spawnSync("node", [shellPath(OFFENSIVE_SCANNER), "--stdin", shellPath(label)], {
@@ -227,6 +294,9 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
 
     // Hard-block precedence: private-info hard > offensive hard > usage error >
     // private-info warn > offensive warn > approve.
+    if (outboundStatus === 4) {
+      block(`Private-info blocklist unresolvable (rc=4) — cannot scan:\n${outboundOut}`);
+    }
     if (outboundStatus === 3) {
       block(`Scanner usage error (rc=3):\n${outboundOut}`);
     }

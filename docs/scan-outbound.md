@@ -227,6 +227,27 @@ exits 0 so CC can verify before proceeding to remaining IDs (override with `--ca
 to make room for the warn-only exit code. Scripts that invoke `scan-outbound.sh` directly
 and test for `exit 2` as a usage-error indicator must be updated.
 
+## Periodic Hooks Neutralization Audit (#1603)
+
+`bin/audit-hookspath-neutralization.sh` detects repos whose `core.hooksPath` has been
+set locally to a value that disables or bypasses hook dispatch. Run it periodically or
+after any `git config core.hooksPath` change across all known checkout roots.
+
+**Usage:**
+```
+bash bin/audit-hookspath-neutralization.sh --roots C:/git C:/git/worktrees
+```
+
+**When to run:**
+- After a new checkout or worktree is created
+- When `hasGitHooksBypass` blocks a `git config core.hooksPath` command (investigate why)
+- As part of periodic maintenance (recommended: weekly, or via Windows Scheduled Task / cron)
+
+**Output:** `NEUTRALIZED: <path> (hooksPath=<value>)` for each repo whose local
+`core.hooksPath` disables hooks. Zero output means all checked repos have active hooks.
+
+The script is report-only and never modifies any repository configuration.
+
 ## Related
 
 For code-level security vulnerability scanning (injection, traversal, SQL, etc.), see `/review-code-security`.
