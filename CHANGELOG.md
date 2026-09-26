@@ -555,3 +555,7 @@ Changes: glab install: when `GITLAB_HOSTNAME` and `GITLAB_TOKEN` are set but the
 ### FEATURE: PR #2399 (2026-09-26)
 Background: fix(#2397,#2398): anchor case_begin predicate and guard edge inputs in check-case-markers.sh
 Changes: `bin/check-case-markers.sh` now exits 1 with a stderr message when called with no arguments or a non-existent path, instead of silently exiting 0 with a false "clean" result (#2398);`bin/check-case-markers.sh` correctly rejects test files that define `case_begin()` as a function without ever calling it; the predicate is now anchored to the invocation form (#2397)
+
+### FEATURE: PR #2405 (2026-09-26)
+Background: fix(#2395): repair 1691 hollow-pass test path refs after tests/ 2-level restructuring
+Changes: Repaired 1,691 test files that contained stale flat-path references after the tests/ 2-level restructuring; the test suite now accurately reports coverage gaps instead of silently passing with 0 assertions.
