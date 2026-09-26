@@ -6,10 +6,6 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
 . "$AGENTS_DIR/tests/lib/harness.sh"
 
 check_absent() {

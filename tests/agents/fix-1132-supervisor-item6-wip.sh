@@ -12,15 +12,11 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
 RUBRIC="$AGENTS_DIR/skills/_shared/off-legitimacy-rubric.md"
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
 has() { grep -qiE "$2" "$1" 2>/dev/null; }
-
-. "$AGENTS_DIR/tests/lib/harness.sh"
 
 case_begin "rubric-ssot" "skills/_shared/off-legitimacy-rubric.md"
 # --- rubric SSOT file exists ---

@@ -3,12 +3,8 @@
 # Tags: history, docs, github, issues, bin
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
-
-pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
-
 . "$AGENTS_DIR/tests/lib/harness.sh"
+LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
 
 case_begin "extract-field-lib" "bin/github-issues/lib/extract-field.sh"
 # Smoke 1: lib itself is sourceable and extract_field works end-to-end via lib

@@ -4,6 +4,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/harness.sh"
 BACKFILL_SCRIPT="$REPO_ROOT/bin/github-issues/migration/backfill-project-link.sh"
 GH_MOCK="$REPO_ROOT/tests/fixtures/migration/gh-mock.sh"
 
@@ -32,8 +33,6 @@ teardown_fixture() {
 ok() { PASS=$((PASS+1)); echo "PASS: $1"; }
 ng() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
 assert() { local n="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$n"; else ng "$n"; fi; }
-
-. "$REPO_ROOT/tests/lib/harness.sh"
 
 case_begin "gh-exists" "bin/gh"
 [ -f "$REPO_ROOT/bin/gh" ] && ok "bin/gh exists" || ok "bin/gh absent (mock-only dependency)"
