@@ -7,6 +7,12 @@
 # `$APPLY` inverts the mode: bare --dup-groups would exit 2 and only
 # `--dup-groups --dry-run` would work. The guard must read FIX_APPLY.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "flag-defaults-series" "bin/audit-tests.sh"
 
 FD_REPO="$(make_repo)"

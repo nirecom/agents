@@ -7,6 +7,12 @@
 # that both consumers must agree on trimming, and that format validity stays the
 # COMPOSITE predicate (regex AND NOT root-like) rather than the regex alone.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "token-parsing-series" "bin/lib/test-frontmatter-fix.sh"
 
 TP_REPO="$(make_repo)"

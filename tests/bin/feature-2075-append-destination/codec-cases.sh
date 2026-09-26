@@ -10,6 +10,11 @@
 # The `\\t` vs `\t` distinction is the one the plan names as the silent-corruption
 # risk: a `${var//}` chain cannot tell them apart, a left-to-right scan can.
 
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 if ! declare -F tdg_unescape_field >/dev/null 2>&1 || ! declare -F tdg_split_escaped_csv >/dev/null 2>&1; then
     for _kid in K1 K2 K3 K4 K5; do
         case_ran "$_kid"

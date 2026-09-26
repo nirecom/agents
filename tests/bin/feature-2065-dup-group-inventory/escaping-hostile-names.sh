@@ -7,6 +7,12 @@
 # itself must be encoded per element. Backslash is escaped first, otherwise the
 # encoding of the other four is ambiguous on decode.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "escaping-series" "bin/lib/test-dup-group.sh"
 
 EH_REPO="$(make_repo)"

@@ -6,6 +6,12 @@
 # actually raising the gap is TL4 and stays out of scope (plan: Confirmed non-goals),
 # so these pin the SHAPE RT-1a and WT-5 must keep for that judgement to be possible.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 # label_block <file> <start-ere> <stop-ere> — the step body from its label line up
 # to the next sibling label. Sub-labels are indented, so `^WT-[0-9]` stops only at
 # the next integer step.

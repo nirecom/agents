@@ -7,6 +7,12 @@
 # a scan range of `tests/bin/*.sh` only — nested fragments carry their own headers
 # and would otherwise invent groups that no reviewer can act on.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "contract-series" "bin/lib/test-dup-group.sh"
 
 CC_REPO="$(make_repo)"

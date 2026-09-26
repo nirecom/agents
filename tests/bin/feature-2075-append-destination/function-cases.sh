@@ -9,6 +9,12 @@
 # idempotence, subset, path containment): the plan fixes the candidate array's
 # ELEMENT format nowhere, so asserting a layout here would pin an invention.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 f2075_join() { local IFS=","; printf '%s' "$*"; }
 
 if [[ ! -f "$ROUTE_LIB" ]]; then

@@ -6,6 +6,12 @@
 # real subprocess against a throwaway fixture corpus handed over with --root, so
 # the live tests/ corpus never takes part in a verdict.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "H1-H12" "bin/find-tests-for-source.sh"
 
 # ── H1 exact match ──────────────────────────────────────────────────────────

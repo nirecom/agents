@@ -7,6 +7,12 @@
 # finds files that merely share their primary target (candidates for a review).
 # A file can be in both, one, or neither.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "normal-series" "bin/lib/test-dup-group.sh"
 
 NC_REPO="$(make_repo)"

@@ -7,6 +7,12 @@
 # silently accepted. Both are structural malformations that must become skip
 # rows instead of quietly seeding a group from the first value.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "structural-series" "bin/lib/test-dup-group.sh"
 
 SI_REPO="$(make_repo)"

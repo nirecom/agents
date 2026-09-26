@@ -8,6 +8,12 @@
 # because the combined file crosses the HARD line limit; the functional cut is
 # "core routing contract" (H) vs. "edge/robustness inputs" (this file).
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 # run_helper_at <cwd> <args...> — run_helper's sibling for the cases that must
 # NOT hand over --root. Same capture contract (OUT / ERR / RC).
 run_helper_at() {

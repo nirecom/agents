@@ -9,6 +9,11 @@
 # rewritten to match a new implementation — a mismatch is an S1 design defect,
 # not a test defect. A golden that is absent is a FAIL, never a SKIP.
 
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "golden-series" "bin/lib/test-frontmatter-fix.sh"
 
 GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-$AGENTS_ROOT/tests/fixtures/feature-2065-dup-group-golden}"

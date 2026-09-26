@@ -7,6 +7,12 @@
 # reason that is correct in isolation can still be shadowed when its neighbours
 # are present in the same run.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "verdict-series" "bin/lib/test-dup-group.sh"
 
 VC_REPO="$(make_repo)"

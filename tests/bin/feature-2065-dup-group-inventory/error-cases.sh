@@ -6,6 +6,12 @@
 # CONTENT is data the mode must classify and keep running on, while a bad
 # COMMAND LINE is an operator error the mode must refuse outright with rc 2.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 case_begin "error-series" "bin/lib/test-dup-group.sh"
 
 EC_REPO="$(make_repo)"
