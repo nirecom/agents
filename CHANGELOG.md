@@ -543,3 +543,7 @@ Changes: Removed single-point-of-failure in the `enforce-workflow-off` escape ha
 ### FEATURE: PR #2385 (2026-09-26)
 Background: fix(#1937): worktree-backup copies gitignored dirs via conditional --directory flag
 Changes: Fixed: `worktree-backup` worker now correctly enumerates gitignored directories when `dir_expand` is enabled; previously, plain (non-opaque) gitignored directories were not expanded on Windows because `git ls-files` returned individual files rather than directory entries.
+
+### FEATURE: PR #2384 (2026-09-26)
+Background: feat(#1593,#1601,#1602,#1603): fix Windows git.exe detection, staged-scan renames, hookspath audit
+Changes: Staged private-info scan now catches renamed files and correctly detects `git.exe` as the git binary on Windows — two scan-evasion gaps closed.;New `bin/audit-hookspath-neutralization.sh` audits repos whose local `core.hooksPath` disables or bypasses hook dispatch; documented in `docs/scan-outbound.md`.;Hook block messages for staged-file violations no longer echo matched content verbatim, preventing private data from appearing in the hook response.
