@@ -207,7 +207,7 @@ if [[ ${#stems[@]} -gt 0 ]]; then
         break
       fi
     done
-  done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 -name "*.sh" 2>/dev/null | sort)
+  done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 \( -name "*.sh" -o -name "*.Tests.ps1" -o -name "test_*.py" \) 2>/dev/null | sort)
 fi
 
 # RUN_TL3=on: append TL3-*.sh (real-environment tier) — but only when the diff could

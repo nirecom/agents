@@ -7,7 +7,7 @@
 # --fix-headers rewrites headers in place. Pass --dry-run to report only.
 # --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory as TSV.
 # It rejects --apply, --fix-headers and --format json. See bin/lib/test-dup-group.sh.
-# Scans top-level tests/feature-NNN-*.{sh,Tests.ps1}. Unit=case: refcount 0
+# Scans tests/<category>/feature-NNN-*.{sh,Tests.ps1}. Unit=case: refcount 0
 # whole-unit git rm, partial-orphan excises dead blocks, else file-level fallback.
 
 set -euo pipefail
@@ -126,7 +126,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests.sh report — ${TODAY}"
-  echo "# Scope: tests/<cat>/feature-<N>-*.sh (six categories) + top-level tests/feature-<N>-*.Tests.ps1 (issue-specific)"
+  echo "# Scope: tests/<cat>/feature-<N>-*.sh and tests/<cat>/feature-<N>-*.Tests.ps1 (six categories, issue-specific)"
   echo "# Criteria: every '# Tests:' target is missing — issue state gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -135,7 +135,7 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for dispatcher in tests/hooks/feature-[0-9]*-*.sh tests/bin/feature-[0-9]*-*.sh tests/skills/feature-[0-9]*-*.sh tests/agents/feature-[0-9]*-*.sh tests/install/feature-[0-9]*-*.sh tests/tests/feature-[0-9]*-*.sh tests/feature-[0-9]*-*.Tests.ps1; do
+for dispatcher in tests/hooks/feature-[0-9]*-*.sh tests/bin/feature-[0-9]*-*.sh tests/skills/feature-[0-9]*-*.sh tests/agents/feature-[0-9]*-*.sh tests/install/feature-[0-9]*-*.sh tests/tests/feature-[0-9]*-*.sh tests/hooks/feature-[0-9]*-*.Tests.ps1 tests/bin/feature-[0-9]*-*.Tests.ps1 tests/skills/feature-[0-9]*-*.Tests.ps1 tests/agents/feature-[0-9]*-*.Tests.ps1 tests/install/feature-[0-9]*-*.Tests.ps1 tests/tests/feature-[0-9]*-*.Tests.ps1; do
   [[ -e "$dispatcher" ]] || continue
   base="$(basename "$dispatcher")"
   [[ "$base" =~ ^feature-([0-9]+)- ]] || continue

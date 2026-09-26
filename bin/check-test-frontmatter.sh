@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Validates the frontmatter of tests/*.sh files: the `# Tests:` header (present,
+# Validates the frontmatter of test entrypoints (*.sh / *.Tests.ps1 / test_*.py
+# under tests/): the `# Tests:` header (present,
 # non-empty, each comma-separated token matching FRONTMATTER_TOKEN_VALID_RE) and
 # the `# Tags:` scope tag (scope:issue-specific or scope:common).
 # Usage:
@@ -34,8 +35,7 @@ _is_test_entrypoint() {
 
 # _is_flat_test_sh <rel> — true for a flat tests/<file>.sh (depth-1, no category
 # subdir), excluding the run-all.sh infra runner. New flat .sh tests are rejected
-# (#1834): a .sh test entrypoint must live under tests/<category>/. .Tests.ps1 and
-# test_*.py stay top-level and are out of scope.
+# (#1834): a .sh test entrypoint must live under tests/<category>/.
 _is_flat_test_sh() {
   local rel="$1" base
   base="${rel#tests/}"
@@ -44,6 +44,16 @@ _is_flat_test_sh() {
   [[ "$base" == *.sh ]] || return 1         # only .sh entrypoints
   [[ "$base" == "run-all.sh" ]] && return 1 # infra runner exempt
   return 0
+}
+
+# _is_flat_test_nonsh <rel> — sibling of _is_flat_test_sh for a flat tests/*.Tests.ps1
+# or tests/test_*.py; new ones are rejected (#2392) under FLAT_TEST_REJECTED.
+_is_flat_test_nonsh() {
+  local rel="$1" base
+  base="${rel#tests/}"
+  [[ "$base" == "$rel" ]] && return 1
+  [[ "$base" == */* ]] && return 1
+  [[ "$base" == *.Tests.ps1 || "$base" == test_*.py ]]
 }
 
 # check_content <label> <tests-line> <tags-line>
@@ -165,6 +175,7 @@ case "$mode" in
       case "$f" in
         */tests/_archive/*|tests/_archive/*) continue ;;
         */tests/*.sh|tests/*.sh) ;;
+        */tests/*.Tests.ps1|tests/*.Tests.ps1|*/tests/test_*.py|tests/test_*.py|*/tests/*/test_*.py|tests/*/test_*.py) ;;
         *) continue ;;
       esac
       # Compute the repo-relative path once; reused by both the flat-layout
@@ -176,10 +187,16 @@ case "$mode" in
       fi
       # 2-level enforcement (#1834): a NEWLY-ADDED flat tests/<name>.sh is rejected —
       # .sh test entrypoints must live under tests/<category>/. Existing flat files
-      # are grandfathered (swept by #2372); .Tests.ps1 / test_*.py stay top-level;
-      # run-all.sh is the infra runner (both handled by _is_flat_test_sh).
+      # are grandfathered (swept by #2372); run-all.sh is the infra runner (exempted
+      # by _is_flat_test_sh). _is_flat_test_nonsh applies the same rule to
+      # .Tests.ps1 / test_*.py (#2392).
       if _is_flat_test_sh "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
         echo "FLAT_TEST_SH_REJECTED: ${f} (new .sh tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
+        FAIL=1
+        continue
+      fi
+      if _is_flat_test_nonsh "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        echo "FLAT_TEST_REJECTED: ${f} (new .Tests.ps1 / test_*.py tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
         FAIL=1
         continue
       fi
@@ -213,11 +230,11 @@ case "$mode" in
     fi
     shopt -s nullglob
     FAIL=0
-    # 2-level layout: scan tests/<category>/*.sh for the six canonical categories.
-    # *.sh does not cross '/', so split dispatchers' <name>/ sub-files are excluded;
-    # tests/_archive/ and tests/lib/ are not categories and are not scanned.
+    # 2-level layout: scan tests/<category>/{*.sh,*.Tests.ps1,test_*.py} for the six
+    # canonical categories. Globs do not cross '/', so split dispatchers' <name>/
+    # sub-files are excluded; tests/_archive/ and tests/lib/ are not scanned.
     for cat in hooks bin skills agents install tests; do
-      for f in "$root/tests/$cat/"*.sh; do
+      for f in "$root/tests/$cat/"*.sh "$root/tests/$cat/"*.Tests.ps1 "$root/tests/$cat/"test_*.py; do
         rel="${f#"$root"/}"
         extract_headers_file "$f"
         check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
