@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
 # Section P - payload shape and malformed stdin, including the runCommands
 # join-separator behaviour pair.
 

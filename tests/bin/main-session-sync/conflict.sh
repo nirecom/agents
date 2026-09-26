@@ -1,6 +1,6 @@
 # Tests: bin/session-sync.sh
 # Tags: bin, git, session-sync, conflict, rebase, scope:common
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 #
 # `_git_config_user` now lives in the dispatcher (suite-wide fixture, #1564).
 

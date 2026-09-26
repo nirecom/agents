@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-local-env-overlay.sh
+# tests/hooks/feature-2223-local-env-overlay.sh
 # Tests: hooks/lib/local-env.js, hooks/lib/load-env.js, hooks/lib/plan-confirm-flag.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, trust-boundary, pwsh-not-required
 # Issue #2223 — the 2-layer global/.env + project-local override resolver.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-wip-continuation.sh
+# tests/bin/feature-workflow-init-driver/driver-wip-continuation.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js
 # Tags: workflow-init, driver, wip-check, checkpoint-resume, continuation, scope:issue-specific
 

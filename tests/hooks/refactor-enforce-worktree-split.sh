@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-enforce-worktree-split.sh
+# tests/hooks/refactor-enforce-worktree-split.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/config.js, hooks/enforce-worktree/git-repo-detection.js, hooks/enforce-worktree/session-scope.js, hooks/enforce-worktree/git-hooks-bypass.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/enforce-worktree/branch-delete-guard.js, hooks/enforce-worktree/main-worktree-allows.js, hooks/enforce-worktree/bash-write-scope.js, hooks/cleanup-orphan-dir.js
 # Tags: enforce-worktree, refactor, module-split, re-export, contract, scope:issue-specific
 #

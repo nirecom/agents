@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2075-append-destination.sh
+# tests/bin/feature-2075-append-destination.sh
 # Tests: bin/find-tests-for-source.sh,bin/lib/test-route-destination.sh,bin/lib/test-dup-group.sh,skills/write-tests/SKILL.md,skills/review-tests/SKILL.md,skills/review-tests/scripts/select-staged-files.sh,skills/_shared/test-design/append-vs-new.md,skills/run-tests/SKILL.md,bin/lib/test-frontmatter-fix.sh,bin/resolve-worktree-path,install/settings-allow-commands.txt
 # Tags: scope:issue-specific
 # Dispatcher for #2075 (append-vs-new destination routing): shared fixtures only.
@@ -197,7 +197,7 @@ assert_row() {
     assert_eq "$1 viable" "$6" "$(list_files "$(col "$2" 7)")"
 }
 
-# ── Completion ledger (GRP pattern, from tests/feature-2065-dup-group-inventory.sh)
+# ── Completion ledger (GRP pattern, from tests/bin/feature-2065-dup-group-inventory.sh)
 # Each case file's LAST line is `grp_done <its own basename>`; a file that bails
 # after its fixture setup still sources "successfully", so only the ledger proves
 # the whole family ran.

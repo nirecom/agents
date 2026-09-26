@@ -1,7 +1,7 @@
 # Group E: rename-aware survival (a moved target still counts as alive) (#2081)
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # Case survival is exists(target) but rename-aware via find_renamed_path: a case
 # whose target was git-renamed is still surviving, so a unit of only-renamed

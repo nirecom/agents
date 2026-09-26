@@ -17,7 +17,7 @@
 # actually occur in the wild. I11 pins event ORDERING. I14 pins the fail-CLOSED
 # contract for malformed input (detail.md D5).
 #
-# Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 
 # pred_eval <js> — runs <js> (which must define `rows` as [label, state, want][])
 # against the WORKTREE copy of lifecycle.js. In scope for <js>:

@@ -1,4 +1,4 @@
-# tests/prompt-bash-node-calling-convention/legacy-p2p3-coverage.sh
+# tests/install/prompt-bash-node-calling-convention/legacy-p2p3-coverage.sh
 # Tests: hooks/bash-guard/judge.js, skills, skills/_shared
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # T58-T59: the two risk classes tests/feature-2132-prompt-issuance.sh covered and #2262 deleted
@@ -7,7 +7,7 @@
 # per-SSOT-entry sweep cannot see because they name no SSOT entry at all. Sourced by the
 # dispatcher, which owns PASS/FAIL/ROWS and assert_eq.
 
-JP_PROBE_REL="tests/prompt-bash-node-calling-convention/judge-verdict-probe.js"
+JP_PROBE_REL="tests/install/prompt-bash-node-calling-convention/judge-verdict-probe.js"
 JP_PROBE="$AGENTS_DIR/$JP_PROBE_REL"
 
 # T58 -- WHAT THE SWEEP CANNOT ANSWER. The sweep reads prompt text and judges the token in

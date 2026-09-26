@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1763-confirm-gate-matrix.sh
+# tests/skills/feat-1763-confirm-gate-matrix.sh
 # Tests: skills/issue-create/scripts/eval-confirm-gate.sh, skills/issue-create/SKILL.md
 # Tags: issue-create, confirm-gate, truth-table, worth-filing, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

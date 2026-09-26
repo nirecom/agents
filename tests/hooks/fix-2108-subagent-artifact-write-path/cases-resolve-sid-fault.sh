@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state/session-id.js, hooks/lib/active-session-ids.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
 # Tags: active-session-ids, resolve-session-id, fail-closed, fault-injection, structured-editor, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section C16 — resolveSessionId() faulted AT ITS OWN CALL SITE inside
 # observeActiveSessionIds() (active-session-ids.js:71-79). C15 replaces

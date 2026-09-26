@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/i-identity-throw.sh
+# tests/hooks/feature-1665-run-outcome/i-identity-throw.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/provenance-identity.js
 # Tags: workflow, run-outcome, fail-safe, exception-path, local-catch, hook, TL2, scope:issue-specific
 #

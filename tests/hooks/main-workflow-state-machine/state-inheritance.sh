@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 # Case group: Section 1 — State Inheritance.
 # Sourced by main-workflow-state-machine.sh; relies on helpers from common.sh.
-# Tests: tests/main-workflow-state-machine.sh
+# Tests: tests/hooks/main-workflow-state-machine.sh
 # Tags: scope:common
 
 run_state_inheritance_tests() {
     # ---------------------------------------------------------------------------
     # Section 1: State Inheritance
-    # (Smoke — full gate matrix in tests/feature-1305-inheritance-lineage.sh)
+    # (Smoke — full gate matrix in tests/hooks/feature-1305-inheritance-lineage.sh)
     #
     # Since #1305 a donor is reached through the heir's OWN transcript lineage,
     # never through a cwd+branch scan, so every case here seeds a heir sid with

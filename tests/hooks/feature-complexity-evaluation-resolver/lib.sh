@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-complexity-evaluation-resolver/lib.sh
+# tests/hooks/feature-complexity-evaluation-resolver/lib.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: complexity, resolver, state-io, helpers, scope:issue-specific
 # Shared setup + helpers for feature-complexity-evaluation-resolver.sh.

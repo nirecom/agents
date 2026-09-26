@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/issue-create-phase0a.sh
+# tests/bin/feature-1340-issue-setup/issue-create-phase0a.sh
 # Tests: bin/github-issues/issue-create.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-setup, issue-create, github-issues, scope:issue-specific
 #

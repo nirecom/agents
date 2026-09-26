@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/prompt-contract-wiring.sh
+# tests/bin/bin-codex-review-loop-security-code/prompt-contract-wiring.sh
 # Tests: agents/security-scanner.md, skills/review-code-security/SKILL.md, bin/run-codex-review-loop
 # Tags: concern-ledger, security-scanner, prompt-contract, drift-guard, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 #
 # Every other case retypes the scanner's report shape, so test and prompt file
 # become two copies of one contract and a reworded marker leaves them green

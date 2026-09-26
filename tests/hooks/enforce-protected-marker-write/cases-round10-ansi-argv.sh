@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-10 HIGH-2: ANSI-C ESCAPES IN *ARGUMENT* POSITION.
 #
 # Round-9 taught the decoder `$'…'`, but only the REDIRECT path kept the raw,

@@ -1,5 +1,5 @@
 # d-skill-dispatch.sh — B13-B21: the Skill-tool dimension of the WI-10
-# lookahead (#2279). Sourced by tests/feature-2013-step-in-flight-automark.sh.
+# lookahead (#2279). Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh.
 # Tests: hooks/postuse-step-in-flight-mark.js, hooks/stop-confirm-plan-guard.js, settings.json
 # Tags: step-in-flight, posttooluse, automark, wi-10-lookahead, skill-dispatch, resume-session, regression-2279, scope:issue-specific, pwsh-not-required, TL2
 

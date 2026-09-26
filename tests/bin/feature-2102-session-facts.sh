@@ -15,7 +15,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBDIR="$REPO_ROOT/tests/feature-2102-session-facts"
+SUBDIR="$REPO_ROOT/tests/bin/feature-2102-session-facts"
 ALLOW_SSOT="$REPO_ROOT/install/settings-allow-commands.txt"
 CLI_REL="bin/workflow/read-session-facts"
 CLI="$REPO_ROOT/$CLI_REL"

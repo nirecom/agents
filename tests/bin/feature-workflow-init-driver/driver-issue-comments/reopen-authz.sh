@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-issue-comments/reopen-authz.sh
+# tests/bin/feature-workflow-init-driver/driver-issue-comments/reopen-authz.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/issue-comments.js
 # Tags: workflow-init, driver, issue-comments, checkpoint-resume, answer-validation, reopen, prompt-injection, scope:issue-specific
 

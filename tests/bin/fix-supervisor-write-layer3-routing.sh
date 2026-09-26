@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-write-layer3-routing.sh
+# tests/bin/fix-supervisor-write-layer3-routing.sh
 # Tests: bin/supervisor-write-audit
 # Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):

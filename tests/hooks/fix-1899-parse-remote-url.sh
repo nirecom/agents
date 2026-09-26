@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url.sh
+# tests/hooks/fix-1899-parse-remote-url.sh
 # Tests: hooks/lib/parse-remote-url.js, hooks/lib/is-private-repo.js
 # Tags: parse-remote-url, origin-resolution, table-driven, parser, regex, security, path-traversal, secret-redaction, TL1, scope:issue-specific
 # Dispatch + aggregate entrypoint for the split suite (the flat file hit the
@@ -7,7 +7,7 @@
 # SPLIT_GROUPS array below (SSOT); each also runs standalone. #1899 origin-only
 # owner/repo contract and its CPR-ORTH twin live in hooks/lib/parse-remote-url.js
 # + bin/github-issues/lib/origin-repo.sh. TL3 seam / live-remote gap: covered by
-# tests/fix-1899-origin-repo-resolver.sh + WORKFLOW_USER_VERIFIED preflight.
+# tests/bin/fix-1899-origin-repo-resolver.sh + WORKFLOW_USER_VERIFIED preflight.
 
 set -uo pipefail
 

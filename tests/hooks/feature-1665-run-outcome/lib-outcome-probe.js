@@ -1,5 +1,5 @@
 "use strict";
-// tests/feature-1665-run-outcome/lib-outcome-probe.js
+// tests/hooks/feature-1665-run-outcome/lib-outcome-probe.js
 //
 // TL1 driver for hooks/workflow-run-tests/outcome.js.
 //

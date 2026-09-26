@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-codex-timeout-ssot.sh
+# tests/bin/feature-codex-timeout-ssot.sh
 # Tests: bin/lib/codex-timeout.sh, bin/lib/codex-core.sh, bin/review-plan-codex, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: scope:common, codex, timeout, ssot, config-resolution, regression-guard, pwsh-not-required, TL2
 #

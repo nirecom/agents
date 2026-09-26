@@ -1,4 +1,4 @@
-# tests/enforce-off-emergency-provenance/cases-p1-invocation.sh
+# tests/hooks/enforce-off-emergency-provenance/cases-p1-invocation.sh
 # P1: the marker is written ONLY for a real skill invocation - variants,
 # near-misses, and the stdin-buffer-boundary straddle/clear/idempotency cases.
 # Sourced by ../enforce-off-emergency-provenance.sh; relies on that file's
@@ -44,7 +44,7 @@ p1_prompt_of() { printf '%b' "$1"; }
 # split contract's positive half: the <command-name> wrapper attributes on ANY
 # line, whereas a BARE command attributes only on the first (its later-line and
 # fenced forms moved to the near-miss table below); live counterpart:
-# tests/TL3-hook-record-off-skill-invocation.sh.
+# tests/hooks/TL3-hook-record-off-skill-invocation.sh.
 while IFS='|' read -r name raw; do
     [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac

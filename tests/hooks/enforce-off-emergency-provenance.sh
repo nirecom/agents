@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/enforce-off-emergency-provenance.sh
+# tests/hooks/enforce-off-emergency-provenance.sh
 # Tests: hooks/record-off-skill-invocation.js, hooks/lib/off-emergency-provenance.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js, settings.json
 # Tags: off-clearance, emergency-off, provenance, audit, userpromptsubmit, session-marker, security, scope:common, pwsh-not-required, TL2, hook-registration
 # TL3 gap: synthetic stdin here, so real UserPromptSubmit firing for a typed
 # slash command (P9 is static-only) and same-turn ordering are covered live by
-# tests/TL3-hook-record-off-skill-invocation.sh instead.
+# tests/hooks/TL3-hook-record-off-skill-invocation.sh instead.
 # Defends #1780 M-2: the provenance marker is the only evidence that a HUMAN
 # opened the EMERGENCY OFF escape hatch - written only on a real invocation
 # (P1), unable to vouch later (P2/P3/P5/P6), never a GATE on the override
@@ -161,7 +161,7 @@ submit_prompt_sidless() {
 
 # File modes are not real everywhere (Git Bash on Windows reports 644 whatever
 # was chmod'd), so the 0600 assertion is PROBED for and skipped by name where it
-# would be meaningless - same idiom as tests/fix-2025-recovery-artifact-mode.sh.
+# would be meaningless - same idiom as tests/bin/fix-2025-recovery-artifact-mode.sh.
 file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
 MODES_OK=no
 : > "$CAPDIR/.mode-probe"

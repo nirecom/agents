@@ -1,4 +1,4 @@
-# Part of tests/feature-689-select-tests.sh (sourced, not standalone).
+# Part of tests/bin/feature-689-select-tests.sh (sourced, not standalone).
 # Tests: bin/select-tests.sh, bin/is-docs-only
 # Tags: test-selection, merge-base, docs-only, scope:issue-specific, pwsh-not-required, TL2
 

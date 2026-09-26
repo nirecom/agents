@@ -1,4 +1,4 @@
-# tests/feature-2280-settings-deny-anchor/matcher.sh
+# tests/install/feature-2280-settings-deny-anchor/matcher.sh
 # Tests: settings.json, hooks/lib/settings-allow-match.js
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 # Deny-side mirror of hooks/lib/settings-allow-match.js:62-83 (patternToRegExp); an

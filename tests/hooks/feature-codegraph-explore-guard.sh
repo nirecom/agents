@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-codegraph-explore-guard.sh
+# tests/hooks/feature-codegraph-explore-guard.sh
 # Tests: hooks/block-dotenv.js, hooks/block-credentials.js
 # Tags: codegraph, hook, security, credential-guard, mcp, classifier, TL2, pwsh-not-required, scope:issue-specific
 # G1-G5 (#2150 review) — mcp__codegraph__codegraph_explore is Read-equivalent and is
@@ -17,7 +17,7 @@ TOOL="mcp__codegraph__codegraph_explore"
 
 # TL3 gap (what this test does NOT catch):
 # - whether Claude Code really routes this tool name through PreToolUse at run time
-#   (the matcher wiring is pinned statically by tests/feature-codegraph-wiring-static.sh).
+#   (the matcher wiring is pinned statically by tests/install/feature-codegraph-wiring-static.sh).
 # - whether the real codegraph MCP server would have returned the file it was asked for.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, category: installer.
 

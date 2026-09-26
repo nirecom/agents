@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lang-check: ignore — pre-existing Japanese "Plan Step 3-3" comment at line 152, unrelated to this session's diff
-# tests/fix-1579-reporter-model-keyword-scan.sh
+# tests/bin/fix-1579-reporter-model-keyword-scan.sh
 # Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml, hooks/lib/model-match.js, bin/model-match.js
 # Tags: scope:issue-specific
 # TL2 — no real GitHub API calls; tests script logic only.

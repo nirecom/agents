@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2169-workflow-not-started-notify-gate.sh
+# tests/hooks/feature-2169-workflow-not-started-notify-gate.sh
 # Tests: hooks/user-prompt-submit-mechanism-check.js, hooks/lib/stop-exemption-policy.js, hooks/postuse-step-in-flight-mark.js, hooks/workflow-state/lifecycle.js, hooks/lib/mechanism-failure.js
 # Tags: stall-detection, user-prompt-submit, prompt-notify, pre-workflow-init, wi-10-lookahead, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 
@@ -41,7 +41,7 @@ TTL_MS=$((4 * 60 * 60 * 1000))
 # shellcheck source=/dev/null
 . "$CASE_DIR/p-breadth.sh"
 
-# Sourced-fragment sanity gate — see tests/feature-1794-stop-guard-exemptions.sh
+# Sourced-fragment sanity gate — see tests/hooks/feature-1794-stop-guard-exemptions.sh
 # for the rationale (a fragment that dies half-way through leaves some
 # functions defined and the rest missing, which `set -u` alone won't catch).
 require_defined() {

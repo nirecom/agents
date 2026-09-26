@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2148-signals-allowlist-persistence.sh
+# tests/hooks/feature-2148-signals-allowlist-persistence.sh
 # Tests: hooks/workflow-state/complexity-routing.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/normalize-judge-signals
 # Tags: complexity-routing, signals-allowlist, prompt-injection, scope:issue-specific
 # Security fix #2148: persisted complexity `signals` is an ALLOWLIST; an unrecognized

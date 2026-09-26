@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/combination-escalation-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/combination-escalation-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, combination-escalation, set-membership, table-driven, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

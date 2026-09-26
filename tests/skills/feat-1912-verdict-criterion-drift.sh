@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-verdict-criterion-drift.sh
+# tests/skills/feat-1912-verdict-criterion-drift.sh
 # Tests: skills/_shared/issue-verdict-cascade.md, bin/github-issues/lib/validate-review-verdict.js, agents/issue-create-survey-worker.md, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, cascade, same-fix, ssot, drift, prompt-assembly, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

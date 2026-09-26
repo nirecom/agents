@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1763-issue-create-wiring.sh
+# tests/bin/feat-1763-issue-create-wiring.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, skills/issue-create/scripts/eval-confirm-gate.sh, skills/issue-create/SKILL.md
 # Tags: issue-create, verdict, review, worth-filing, confirm-gate, wiring, cross-module, integration, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

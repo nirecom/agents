@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/interpreter-language-scope-cases.sh
+# tests/hooks/enforce-clearance-token-write/interpreter-language-scope-cases.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/lib/protected-basenames.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, read-only-allowlist, interpreter-scan, language-scope, ruby, stdin-route, heredoc, here-string, table-driven, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host (tests/TL3-hook-clearance-token-write.sh covers it).
+# - The hook firing on a real host (tests/hooks/TL3-hook-clearance-token-write.sh covers it).
 # - Whether a real ruby spawns a shell for a leading '|' (asserted from Kernel#open docs).
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.

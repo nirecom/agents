@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-round4-emitter-ambiguity.sh
+# tests/hooks/fix-1273-round4-emitter-ambiguity.sh
 # Tests: hooks/workflow-run-tests/exec-model.js, hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, classifier, provenance, worker-dispatch, security, TL1, TL2, scope:common
 #
@@ -54,7 +54,7 @@
 # Layering: N1a/N1d classifier rows are TL1 (exec-model.js required directly);
 # every `*-must-not-complete-run-tests` row is TL2 (real hook process, real
 # workflow-state file), mirroring the H2a/M1 TL2 pattern in
-# tests/fix-1273-round3-provenance-identity.sh.
+# tests/hooks/fix-1273-round3-provenance-identity.sh.
 #
 # RED-FIRST: rows named `*-must-*` assert the SAFE / post-fix outcome and report
 # FAIL against pre-fix code. `control-*` rows were GREEN before the fix and pin
@@ -64,7 +64,7 @@
 #   - Whether a real Bash tool call actually delivers a compound command's two
 #     stdouts concatenated in the order these fixtures assume; here the stdout is
 #     synthesised, because the hook's provenance decision — not the shell — is
-#     under test. tests/TL3-worker-dispatch-run-tests.sh is the gated tier for
+#     under test. tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for
 #     the real-invocation shape.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.

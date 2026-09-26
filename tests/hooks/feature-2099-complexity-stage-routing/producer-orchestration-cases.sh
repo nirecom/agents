@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/producer-orchestration-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/producer-orchestration-cases.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, bin/workflow/record-complexity-and-skip, bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, producers, integration, skip-dispatch, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

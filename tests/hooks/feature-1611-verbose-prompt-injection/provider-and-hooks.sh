@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-1611-verbose-prompt-injection/provider-and-hooks.sh
+# tests/hooks/feature-1611-verbose-prompt-injection/provider-and-hooks.sh
 # Tests: hooks/lib/verbose-prompt.js, hooks/session-start.js, hooks/post-compact.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
-# Fragment of tests/feature-1611-verbose-prompt-injection.sh (sourced, cases run at
+# Fragment of tests/hooks/feature-1611-verbose-prompt-injection.sh (sourced, cases run at
 # source time). Groups D (provider), G (SessionStart), H (PostCompact); D09/G01b/H01c
 # pin the #2278 sentence. Defines VP_TEXT / VP_TEXT_OK + inject/hook_out/contains for
 # later fragments (source before adversarial-and-hygiene.sh). Parent supplies WFDIR,

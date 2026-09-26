@@ -1,14 +1,14 @@
 #!/bin/bash
-# tests/fix-unblock-branch-d.sh
+# tests/hooks/fix-unblock-branch-d.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js, hooks/lib/command-parser.js, hooks/enforce-worktree/branch-delete-guard.js
 # Tags: worktree, enforce, hook, branch-delete, redirect, scope:common
 #
-# Dispatcher only — all test bodies live in tests/fix-unblock-branch-d/.
-# Shared helpers / fixtures live in tests/fix-unblock-branch-d/_lib.sh.
+# Dispatcher only — all test bodies live in tests/hooks/fix-unblock-branch-d/.
+# Shared helpers / fixtures live in tests/hooks/fix-unblock-branch-d/_lib.sh.
 # See file-split.md Pattern A: this entrypoint is dispatch + aggregate only.
 #
 # Each split group is runnable standalone, e.g.:
-#   bash tests/fix-unblock-branch-d/unit.sh
+#   bash tests/hooks/fix-unblock-branch-d/unit.sh
 # The dispatcher runs each group as a child bash process and aggregates the
 # "Results: N passed, M failed" line each emits, plus exit codes.
 

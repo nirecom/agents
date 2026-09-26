@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/injection-execution.sh
+# tests/bin/feature-1894-comment-block-size/injection-execution.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, injection, command-execution, side-effect, paths, extensions, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 

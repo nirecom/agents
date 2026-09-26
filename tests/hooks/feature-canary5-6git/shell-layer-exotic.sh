@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/shell-layer-exotic.sh
+# tests/hooks/feature-canary5-6git/shell-layer-exotic.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/classify.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, classify, write-patterns, ir-migration, interpreter-c, security, scope:issue-specific, hook-registration, pwsh-not-required
 #

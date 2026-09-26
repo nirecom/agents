@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-1364-cpr-principles.sh
+# tests/bin/refactor-1364-cpr-principles.sh
 # Tests: rules/core-principles.md, CLAUDE.md, agents/supervisor.md, skills/survey-history/SKILL.md, agents/detail-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, skills/survey-code/SKILL.md
 # Tags: core-principles, refactor, scope:common
 #
@@ -84,9 +84,9 @@ cpr_occurrences() {
     grep -oE "$1([^A-Za-z0-9]|\$)" "$2" 2>/dev/null | wc -l | tr -d ' '
 }
 
-# shellcheck source=tests/refactor-1364-cpr-principles/structure.sh
+# shellcheck source=tests/bin/refactor-1364-cpr-principles/structure.sh
 . "$FRAGMENT_DIR/structure.sh"
-# shellcheck source=tests/refactor-1364-cpr-principles/mapping.sh
+# shellcheck source=tests/bin/refactor-1364-cpr-principles/mapping.sh
 . "$FRAGMENT_DIR/mapping.sh"
 
 # ============================================================================

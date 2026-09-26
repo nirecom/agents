@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-injection/loop-forwarding.sh
+# tests/bin/feature-2223-nfr-injection/loop-forwarding.sh
 # Tests: bin/run-codex-review-loop, bin/review-plan-codex
 # Tags: scope:issue-specific, TL2, codex, nfr, pwsh-not-required
-# Case file for tests/feature-2223-nfr-injection.sh — sourced from it, never run
+# Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Sourced first among the siblings: the fixtures it builds (REPO_LOOP, CFG_LOOP,
 # run_loop, arg_after) are what Part H in cli-guards-and-caps.sh reuses.

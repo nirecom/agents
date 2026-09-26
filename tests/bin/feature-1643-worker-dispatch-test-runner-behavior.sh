@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-test-runner-behavior.sh
+# tests/bin/feature-1643-worker-dispatch-test-runner-behavior.sh
 # Tests: bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, test-runner, status-derivation, parser, bounds, table-driven, TL2, scope:issue-specific
 
@@ -17,7 +17,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - The real tests/run-all.sh output format drifting away from
 #     `FAIL: <script> (exit N)` / `Results: ...`. Only a real suite run shows
-#     that; tests/TL3-worker-dispatch-run-tests.sh is the gated tier for it.
+#     that; tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for it.
 #   - A real OS-level timeout kill (SIGTERM handling by spawnSync).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.

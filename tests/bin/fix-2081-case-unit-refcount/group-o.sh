@@ -1,7 +1,7 @@
 # Group O: apply-by-default — no flag fires removal on both entrypoints (C4) (#2081)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, e2e, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # sweep-write-mode is apply-by-default: a flagless run writes, --dry-run reports
 # only, --apply is a backward-compatible synonym. Every other mutation group

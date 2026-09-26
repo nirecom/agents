@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1616-parent-body-update-stdout.sh
+# tests/bin/fix-1616-parent-body-update-stdout.sh
 # Tests: bin/github-issues/parent-body-update.sh
 # Tags: parent-body-update, issue-close, github, stdout-contract, gh-cli, scope:common, pwsh-not-required
 #

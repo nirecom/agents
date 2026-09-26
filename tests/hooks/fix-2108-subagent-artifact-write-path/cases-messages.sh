@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-messages.js, hooks/lib/subagent-detect.js
 # Tags: workflow-gate, early-gate, subagent, block-message, sentinel, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section B — block wording (Scope 3 of #2108). The verdict stays `block` in both
 # contexts; what branches is the REMEDY. A subagent can neither invoke a skill nor

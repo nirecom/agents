@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-plans-path-contracts.sh
+# tests/bin/fix-2025-plans-path-contracts.sh
 # Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/build-codex-context, bin/lib/codex-review-loop/format-params.sh, bin/lib/safe-plans-path.sh
 # Tags: safe-plans-path, path-traversal, missing-library, exit-codes, wrapper-contract, security, scope:issue-specific, pwsh-not-required
 #

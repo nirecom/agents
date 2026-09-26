@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/gh-stub.sh
+# tests/bin/feature-sweep-worktrees/gh-stub.sh
 # is_pr_merged behavior tests against stubbed gh CLI: T12, T13, T14.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 

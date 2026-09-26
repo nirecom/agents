@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/find-tests-for-source.sh, bin/lib/test-route-destination.sh, bin/lib/test-dup-group.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases H1-H18b (TL2): every assertion drives bin/find-tests-for-source.sh as a
 # real subprocess against a throwaway fixture corpus handed over with --root, so
 # the live tests/ corpus never takes part in a verdict.

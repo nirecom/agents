@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/find-tests-for-source.sh, bin/lib/test-route-destination.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases B/G/V/E/I (TL2): boundary values (B) and CLI-surface robustness
 # (G root-detect, V injection, E malformed input, I idempotency) against the
 # same target/harness as helper-cases.sh's H family — split out here only

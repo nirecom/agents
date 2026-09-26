@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-296-hook-cwd-drift-gate.sh
+# tests/hooks/fix-296-hook-cwd-drift-gate.sh
 # Tests: hooks/workflow-gate.js
 # Tags: workflow, gate, hook, bin, git, scope:issue-specific
 # Tests resolveRepoDir(command) for the #296 fix: `git -C <path>` still wins and

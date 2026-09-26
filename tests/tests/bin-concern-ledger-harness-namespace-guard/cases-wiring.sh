@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer.sh, tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer.sh, tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, wiring, robustness, TL2, scope:common
 # A correct guard nobody calls protects nothing: G6 pins the dispatcher's six check
 # points. G9/G10 pin what the guard must survive once it is called — an assert that
@@ -49,7 +49,7 @@ expect_silent "G10: twelve consecutive check points on an untouched namespace st
 
 echo ""
 echo "=== G15: the guard armed inside the REAL dispatcher, not a stand-in ==="
-# G15 — G6 only greps source text; nothing runs tests/bin-concern-ledger-reducer.sh
+# G15 — G6 only greps source text; nothing runs tests/bin/bin-concern-ledger-reducer.sh
 # itself, so an unarmed CLG_USABLE (e.g. a CLG_DIR mkdir race) would leave every real
 # check point a silent no-op with G6a/G6b still green.
 # The real, UNMODIFIED dispatcher is sourced (never edited/copied) into an isolated

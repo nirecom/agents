@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # The assertion vocabulary and the unit-probe seam, shared by every case block.
 
 # Sourced by the dispatcher after the fixtures exist — it reads BASE, RWT,

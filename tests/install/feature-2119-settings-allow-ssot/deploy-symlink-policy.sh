@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/deploy-symlink-policy.sh
+# tests/install/feature-2119-settings-allow-ssot/deploy-symlink-policy.sh
 # Tests: install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T43: what the single writer does when the deploy target is a SYMLINK. Sourced AFTER generator.sh.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/refactor-1692-hooks-lib-orphan-dirs.sh
+# tests/hooks/refactor-1692-hooks-lib-orphan-dirs.sh
 # Tests: hooks/supervisor-guard.js, hooks/supervisor-guard/arbitrate.js, hooks/supervisor-guard/collect-audit-triggers.js, hooks/supervisor-guard/format-integrated.js
 # Tags: refactor, file-split, supervisor-guard, scope:issue-specific, pwsh-not-required, TL1
 #

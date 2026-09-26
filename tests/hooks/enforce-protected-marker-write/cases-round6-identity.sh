@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-6 unit layer: the INTERPRETER-IDENTITY SSOT behind the stdin routing.
 #
 # The hook-level cases in cases-round6-stdin.sh prove the routes are closed for

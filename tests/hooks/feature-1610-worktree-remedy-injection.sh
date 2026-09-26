@@ -1,6 +1,6 @@
 #!/bin/bash
 # lang-check: ignore — intentional non-ASCII path fixture in the R3/awkward legitimate-path case below.
-# tests/feature-1610-worktree-remedy-injection.sh
+# tests/hooks/feature-1610-worktree-remedy-injection.sh
 # Tests: hooks/enforce-worktree/worktree-remedy.js, hooks/enforce-worktree.js, hooks/enforce-worktree/handle-edit-write.js
 # Tags: enforce-worktree, worktree-remedy, injection, security, hook, TL2, pwsh-not-required, scope:common
 #
@@ -46,7 +46,7 @@ suite_status() { if [ "$FAIL" -gt 0 ]; then echo 1; else echo 0; fi; }
 finish() { echo ""; echo "Results: $PASS passed, $FAIL failed"; exit "$(suite_status)"; }
 
 # Absence is a deletion, not "not implemented yet" — fail, never skip (same rule as
-# Section P0 of tests/feature-1610-workflow-gate-worktree-entry.sh).
+# Section P0 of tests/hooks/feature-1610-workflow-gate-worktree-entry.sh).
 for f in "$REMEDY" "$EW_HOOK" "$EW_EDIT"; do
     [ -f "$f" ] || fail "setup: required source file is missing: $f"
 done

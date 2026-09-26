@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-intent-to-issue.sh
+# tests/bin/fix-1591-intent-to-issue.sh
 # Tests: bin/github-issues/lib/intent-to-issue.sh
 # Tags: intent, github, issues, scan-outbound, scope:issue-specific, layer:TL2
 #

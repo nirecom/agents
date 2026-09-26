@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1223-git-reset-path-arg-false-positive.sh
+# tests/hooks/fix-1223-git-reset-path-arg-false-positive.sh
 # Tests: hooks/lib/bash-write-patterns/patterns.js
 # Tags: hook, git-write, scope:issue-specific
 #

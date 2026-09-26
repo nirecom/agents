@@ -58,7 +58,7 @@ if [ "$RIL_ABORT" -eq 0 ]; then
     base_n="$(printf '%s\n' "$RIL_EXPECTED" | grep -c '[^[:space:]]' || true)"
 
     # C4: the RUN-BASE decision table (subprocess rc first) lives in helpers.sh so the
-    # same logic is exercised at TL2 by tests/cc-tl3-rules-injection-gate.sh.
+    # same logic is exercised at TL2 by tests/hooks/cc-tl3-rules-injection-gate.sh.
     base_dir_exists=0; [ -d "$base_dir" ] && base_dir_exists=1
     base_target=0
     printf '%s\n' "$RIL_EXPECTED" | grep -q 'probe-target.md' && base_target=1
@@ -161,7 +161,7 @@ fi
 # These used to be two independent `if` blocks, each deciding on its own while
 # RIL_VERDICT stayed at G-PASS-PENDING — so a failed G4 did not stop G5 from printing
 # the pass token. The decision is now made once, in ril_post_quiescence() (decisions.sh,
-# exercised branch-by-branch at TL2 by tests/cc-tl3-rules-injection-gate.sh), and this
+# exercised branch-by-branch at TL2 by tests/hooks/cc-tl3-rules-injection-gate.sh), and this
 # block only renders its output. The pass token reaches stdout solely as the value of
 # VERDICT= below.
 RIL_Q3_REQUIRED=30
@@ -196,7 +196,7 @@ fi
 # a model self-report, not a filesystem fact. Division of labor: this gate registers InstructionsLoaded in its OWN
 # fixture settings.json, never the real ~/.claude registration (breaks fixture isolation; pre-merge it points at MAIN
 # anyway) — PRODUCTION registration (settings.json key, command, timeout, emitter) is proven instead by
-# tests/cc-instructions-loaded-registration.sh. Also out of scope, deliberately: per-skill-family Read behaviour with
+# tests/install/cc-instructions-loaded-registration.sh. Also out of scope, deliberately: per-skill-family Read behaviour with
 # injection off is TL4 territory (one live session per family; this gate proves only the MECHANISM); and host honouring
-# of `paths:` has no invocable loader seam, so tests/cc-rules-injection-scope-conventions.sh's static assertion proves
+# of `paths:` has no invocable loader seam, so tests/bin/cc-rules-injection-scope-conventions.sh's static assertion proves
 # only the intended config, never host obedience.

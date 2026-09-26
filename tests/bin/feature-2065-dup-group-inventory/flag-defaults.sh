@@ -1,7 +1,7 @@
 # S12 category 4: flag defaults and the APPLY=1 trap (#2065, S3)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, dup-groups, cli, flags, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # `sweep_write_mode_init` sets APPLY=1 BEFORE argv parsing, so `$APPLY` means
 # "not --dry-run", never "the user passed --apply". A guard written against
 # `$APPLY` inverts the mode: bare --dup-groups would exit 2 and only

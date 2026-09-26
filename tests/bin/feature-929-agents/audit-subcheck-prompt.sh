@@ -1,4 +1,4 @@
-# audit-subcheck-prompt.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# audit-subcheck-prompt.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: bin/supervisor-findings-codex audit PROMPT construction (R3-C1).
 # NOTE: RED until write-code creates bin/supervisor-findings-codex (#929); the
 #   capturing codex shim is never invoked, so no prompt is captured and the

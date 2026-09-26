@@ -1,7 +1,7 @@
 # Group M: automatic offline fallback — gh absent, gh broken, gh too slow (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, offline-fallback, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 
 # Beyond group B's explicit `--offline` flag, three INVOLUNTARY paths lose metadata
 # (gh absent, `gh repo view` non-zero, gh slower than $GH_TIMEOUT) and all must land

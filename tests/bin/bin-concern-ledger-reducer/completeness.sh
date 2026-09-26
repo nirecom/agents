@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/completeness.sh
+# tests/bin/bin-concern-ledger-reducer/completeness.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 # Detail-plan Test plan cases 13, 14, 15 — the 3-valued completeness signal
 # (COMPLETE > PARTIAL > ABSENT), the anchored parse label, and the fact that the
 # parse label never demotes the plan-side Cn-reference path.

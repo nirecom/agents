@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-premerge-backstop.sh
+# tests/hooks/feature-2256-premerge-backstop.sh
 # Tests: hooks/workflow-gate/supervisor-check.js, hooks/workflow-gate.js
 # Tags: supervisor, premerge, backstop, freshness-key, TL2, scope:issue-specific
 

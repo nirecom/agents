@@ -1,7 +1,7 @@
 # Group H: CLI boundaries — bad argv, numeric edges, missing tests/, failed git rm (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, cli-errors, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Both scripts delete by default, so every path that ends in "I could not
 # understand the request" must end in exit 2 with nothing removed. The numeric

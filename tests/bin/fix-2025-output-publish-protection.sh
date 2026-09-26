@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-output-publish-protection.sh
+# tests/bin/fix-2025-output-publish-protection.sh
 # Tests: bin/build-codex-context, bin/run-codex-review-loop, bin/lib/safe-plans-path.sh
 # Tags: codex, review-loop, publish, atomic-write, session-id, security, scope:issue-specific, pwsh-not-required
 #

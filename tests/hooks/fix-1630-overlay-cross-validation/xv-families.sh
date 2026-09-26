@@ -1,4 +1,4 @@
-# tests/fix-1630-overlay-cross-validation/xv-families.sh
+# tests/hooks/fix-1630-overlay-cross-validation/xv-families.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
 #
@@ -14,7 +14,7 @@
 # at unit level by strip-units.sh (STRIP-*) and metachar-args.sh (ARG-tok-*),
 # which remain the non-vacuous half of this suite.
 #
-# Sourced by tests/fix-1630-overlay-cross-validation.sh.
+# Sourced by tests/hooks/fix-1630-overlay-cross-validation.sh.
 #
 # Fixture variables (XV_REPO / XV_ACD / XV_PLANS / XV_OTHER / XV_SIBLING /
 # XV_SCRIPTS / XV_STATE / XV_OUTCOME) are assigned as GLOBALS on purpose:

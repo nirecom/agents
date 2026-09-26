@@ -1,8 +1,8 @@
-# tests/unit-quote-spans/deep-recursion.sh
+# tests/hooks/unit-quote-spans/deep-recursion.sh
 # Tests: hooks/lib/quote-spans/transform.js, hooks/lib/strip-quoted-args.js
 # Tags: hook, quote-spans, parser, unit, security, robustness, scope:common
 #
-# Sourced by tests/unit-quote-spans.sh. Section: deeply NESTED input.
+# Sourced by tests/hooks/unit-quote-spans.sh. Section: deeply NESTED input.
 #
 # Defect: renderSpan and renderList are mutually recursive, one JS stack frame
 # per nesting level, with no depth cap. A command carrying enough nested `$(`

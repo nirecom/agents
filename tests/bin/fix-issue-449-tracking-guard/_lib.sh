@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-issue-449-tracking-guard/_lib.sh
+# tests/bin/fix-issue-449-tracking-guard/_lib.sh
 # Shared helpers for the fix-issue-449-tracking-guard split test suite.
 #
 # Sourced by each split file (d-series.sh / ggl-series.sh) so they can also

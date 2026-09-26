@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/path-resolution.sh
+# tests/hooks/feature-1894-hook-comment-block/path-resolution.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/path-normalize.js
 # Tags: comment-block-size, hook, pretooluse, path-resolution, worktree, windows, regression, scope:issue-specific, scope:feature-1894, layer:TL2
 

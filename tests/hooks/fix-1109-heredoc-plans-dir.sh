@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1109-heredoc-plans-dir.sh
+# tests/hooks/fix-1109-heredoc-plans-dir.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/lib/bash-write-targets/cp-mv.js, hooks/lib/bash-write-targets/redirect.js
 # Tags: worktree, enforce, hook, heredoc, plans-dir, shell-expansion, fix-1109, fix-983, fix-1025, fix-1040, scope:issue-specific
 #

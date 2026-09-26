@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-main-cleanup.sh
+# tests/hooks/fix-enforce-worktree-main-cleanup.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
 # Tags: worktree, enforce, hook, bin, git, security, interpreter-wrapper, fix-802, scope:common
 # Tests for isAllowedMainWorktreeCleanup() — #297; isAllowedWorktreeCommand — #778, #802

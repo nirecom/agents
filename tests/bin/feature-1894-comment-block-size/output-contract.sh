@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/output-contract.sh
+# tests/bin/feature-1894-comment-block-size/output-contract.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, cli, exit-code, guards, idempotency, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 

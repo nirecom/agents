@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1396-labels-severity-model.sh
+# tests/bin/feature-1396-labels-severity-model.sh
 # Tests: .github/labels.yml, skills/issue-create/SKILL.md
 # Tags: scope:issue-specific
 # L3 gap (what this test does NOT catch):

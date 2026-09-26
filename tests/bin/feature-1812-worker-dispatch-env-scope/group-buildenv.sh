@@ -1,11 +1,11 @@
-# Part of tests/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, spawn, env-scope, credential-scope, security, TL2, scope:issue-specific
 #
 # Group A — the envScope PARAMETER of buildEnv, on the real registry entries.
 # Membership only: which declared names reach the returned env. Value handling
 # is one code path for every member and is already fenced by
-# tests/feature-1643-worker-dispatch-script-anchor/group-env-branches.sh.
+# tests/bin/feature-1643-worker-dispatch-script-anchor/group-env-branches.sh.
 ENVSCOPE_PROBE="$TMPD/envscope-probe.js"
 cat > "$ENVSCOPE_PROBE" <<'PROBEJS'
 "use strict";

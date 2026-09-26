@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/d6-fallback-cascade.sh
+# tests/skills/feature-worktree-start-non-interactive/d6-fallback-cascade.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/scan-outbound.sh
 # Tags: worktree, start, outbound-scan, fallback, TL2, scope:issue-specific
 

@@ -1,4 +1,4 @@
-# Part of tests/feature-1638-resolve-merge-base.sh (sourced, not standalone).
+# Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: bin/resolve-merge-base.sh
 # Tags: merge-base, anomaly-detection, thresholds, config, boundary, scope:issue-specific, pwsh-not-required, TL2
 #

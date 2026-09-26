@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/active-session-ids.js
 # Tags: protected-basename, classifier, session-marker, forge-state, stem-rule, spelling, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Sections C1 + C1b — the stem rule (Scope 4 of #2108). Today the classifier matches
 # the basename SUFFIX only; the stem is never examined, so every artifact whose name

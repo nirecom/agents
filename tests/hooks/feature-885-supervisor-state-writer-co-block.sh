@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-supervisor-state-writer-co-block.sh
+# tests/hooks/feature-885-supervisor-state-writer-co-block.sh
 # Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor-state-writer, co-blocked-by, back-annotation, axis-a, feature-885
 # Tests for issue #885 — appendFinding back-annotates co_blocked_by when the

@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/main-enforce-worktree-guard.sh
+# tests/hooks/main-enforce-worktree-guard.sh
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, pre-commit, scope:common, enforce-worktree, workflow, supervisor, orphan-cwd, bash-c, fail-closed, context-populate, block-extras, axis-a, env, shell, windows, tests, merge, cross-repo, issue-525, feature-885
-# Fragments in tests/main-enforce-worktree-guard/ are sourced into THIS shell,
+# Fragments in tests/hooks/main-enforce-worktree-guard/ are sourced into THIS shell,
 # so every fragment-local name needs a short per-fragment prefix.
 # TL3 gap: cases feed hand-built stdin to `node hooks/enforce-worktree.js`, so a
 # dropped settings.json registration or a diverged host payload shape stays
-# green. Covered elsewhere: tests/fix-1780-round4-write-tool-parity.sh section R
+# green. Covered elsewhere: tests/hooks/fix-1780-round4-write-tool-parity.sh section R
 # (static registration) and bin/check-verification-gate.sh category
 # hook-registration.
 
@@ -260,29 +260,29 @@ FRAG_DONE=""
 frag_done() { FRAG_DONE="${FRAG_DONE}$1
 "; }
 
-# shellcheck source=tests/main-enforce-worktree-guard/merge-gate.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/merge-gate.sh
 . "$FRAGMENT_DIR/merge-gate.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/hooks-bypass-detection.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/hooks-bypass-detection.sh
 . "$FRAGMENT_DIR/hooks-bypass-detection.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/orphan-cwd-fail-closed.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/orphan-cwd-fail-closed.sh
 . "$FRAGMENT_DIR/orphan-cwd-fail-closed.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/block-reporting.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/block-reporting.sh
 . "$FRAGMENT_DIR/block-reporting.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/sanctioned-bypass.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/sanctioned-bypass.sh
 . "$FRAGMENT_DIR/sanctioned-bypass.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/target-extraction.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/target-extraction.sh
 . "$FRAGMENT_DIR/target-extraction.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/interpreter-readonly.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/interpreter-readonly.sh
 . "$FRAGMENT_DIR/interpreter-readonly.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/worktree-lifecycle.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/worktree-lifecycle.sh
 . "$FRAGMENT_DIR/worktree-lifecycle.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/push-range-basic.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/push-range-basic.sh
 . "$FRAGMENT_DIR/push-range-basic.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/push-range-cross-repo.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/push-range-cross-repo.sh
 . "$FRAGMENT_DIR/push-range-cross-repo.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/repo-resolution.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/repo-resolution.sh
 . "$FRAGMENT_DIR/repo-resolution.sh"
-# shellcheck source=tests/main-enforce-worktree-guard/exclude-and-session-scope.sh
+# shellcheck source=tests/hooks/main-enforce-worktree-guard/exclude-and-session-scope.sh
 . "$FRAGMENT_DIR/exclude-and-session-scope.sh"
 
 # ── fragment-set integrity ──────────────────────────────────────────────────

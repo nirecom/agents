@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash/digest-format.sh
+# tests/hooks/feature-2256-input-version-full-hash/digest-format.sh
 # Tests: hooks/lib/diff-fingerprint.js
 # Tags: supervisor, input-version, sha256, digest-length, TL2, scope:issue-specific
 # #2256 round-2 C4: every digest is a full 64-hex sha256, never truncated and never sha1.
-# Parent: tests/feature-2256-input-version-full-hash.sh
+# Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

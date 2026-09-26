@@ -1,12 +1,12 @@
 #!/bin/bash
-# Tests: skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md, skills/update-docs/SKILL.md, skills/worktree-start/SKILL.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md, tests/install-path-exposed-commands.sh
+# Tests: skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md, skills/update-docs/SKILL.md, skills/worktree-start/SKILL.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md, tests/install/install-path-exposed-commands.sh
 # Tags: worktree, start, outline, planning, detail, xfail-ledger, TL2, scope:common
 # Static grep-based checks for the confirm-flags feature wiring.
 
 # Verifies that the gated skills reference the helper script, that the matching
 # CONFIRM_* flag names exist in .env.example, that the PATH-exposure contract for
 # `get-config-var` is still OWNED by a live check in
-# tests/install-path-exposed-commands.sh, and that legacy chat-emit / summary lines
+# tests/install/install-path-exposed-commands.sh, and that legacy chat-emit / summary lines
 # have been removed while load-bearing instructions are preserved.
 
 # Section 9 no longer greps the two installer scripts for the literal string
@@ -27,7 +27,7 @@
 #   here greps SKILL.md TEXT, and the shim is written by installers that never run.
 # - Whether a skill that greps green really gates at run time -- a bare-name call that
 #   exits 127 is swallowed by the surrounding `|| true`, invisible to a static check.
-# - Whether section 9's delegate, tests/install-path-exposed-commands.sh, actually
+# - Whether section 9's delegate, tests/install/install-path-exposed-commands.sh, actually
 #   PASSES: it costs 348-460 s and is only grepped from here, never executed.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh categories: installer (PATH exposure) and
@@ -140,12 +140,12 @@ WRITE_CODE_SKILL="$REPO_ROOT/skills/write-code/SKILL.md"
 UPDATE_DOCS_SKILL="$REPO_ROOT/skills/update-docs/SKILL.md"
 ENV_EXAMPLE="$REPO_ROOT/.env.example"
 # OWNER_TEST_OVERRIDE is a test seam, never set in a normal run: it lets
-# tests/fix-1967-c9-delegation-mutation.sh point section 9 at a MUTATED temp copy of
+# tests/tests/fix-1967-c9-delegation-mutation.sh point section 9 at a MUTATED temp copy of
 # the owner test and prove that C9-a..C9-d actually go red when the delegate is
 # deleted, unhooked from the run list, renamed away from `get-config-var`, or
 # hollowed out. The C9 predicates stay defined here and only here (CPR-SSOT); the
 # mutation harness re-runs this same file rather than transcribing them.
-OWNER_TEST="${OWNER_TEST_OVERRIDE:-$REPO_ROOT/tests/install-path-exposed-commands.sh}"
+OWNER_TEST="${OWNER_TEST_OVERRIDE:-$REPO_ROOT/tests/install/install-path-exposed-commands.sh}"
 
 require_file() { # <id> <path>
     if [ ! -f "$2" ]; then
@@ -332,7 +332,7 @@ fi
 # 9. The get-config-var PATH-exposure contract is delegated, and alive (#1967)
 # ---------------------------------------------------------------------------
 # This section does NOT re-assert the fact that `get-config-var` is on the shared
-# list. That fact's owner is T8 in tests/install-path-exposed-commands.sh, which
+# list. That fact's owner is T8 in tests/install/install-path-exposed-commands.sh, which
 # reads install/path-exposed-commands.txt directly (CPR-SSOT); a copy here would be
 # a second, driftable transcription of exactly what #1967 was about.
 
@@ -401,7 +401,7 @@ if require_file "REQFILE-owner-test" "$OWNER_TEST"; then
     # budget (t8c_row_budget) for exactly that; these two rows keep the budget from being
     # deleted or unhooked, the same way C9-a/C9-b do for the delegate itself. Proof that the
     # budget actually FIRES on an empty or unreachable loop is the M5 group of
-    # tests/fix-1967-c9-delegation-mutation.sh, which executes it against a mutated copy.
+    # tests/tests/fix-1967-c9-delegation-mutation.sh, which executes it against a mutated copy.
     if grep -qE '^t8c_row_budget\(\)' "$OWNER_TEST"; then
         pass "C9-g" "the owner test defines t8c_row_budget(), the executed-row budget for T8/T8b"
     else

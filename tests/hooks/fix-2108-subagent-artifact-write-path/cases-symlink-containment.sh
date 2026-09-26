@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate/early-gate-allowlist.js, hooks/lib/claude-scratchpad-base.js, hooks/enforce-worktree/git-repo-detection.js, hooks/workflow-gate.js
 # Tags: workflow-gate, early-gate, allowlist, scratchpad, plans-dir, symlink, containment, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 # Section A22 — the allowlist roots are LEXICAL prefixes, so a symlink placed inside one
 # is a path that passes containment while resolving somewhere else entirely. A21 covers
 # the textual escapes (`..`, sibling-prefix, case); this covers the FILESYSTEM one, which

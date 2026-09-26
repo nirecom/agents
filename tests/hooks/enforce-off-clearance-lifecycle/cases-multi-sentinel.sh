@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-off-clearance-lifecycle.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-off-clearance-lifecycle.sh (rules/coding/file-split.md).
 # Section M - L-1: one tool call may carry at most ONE activating OFF sentinel.
 #
 # The gate must see exactly the units the ACTIVATION layer sees. hooks/workflow-mark.js

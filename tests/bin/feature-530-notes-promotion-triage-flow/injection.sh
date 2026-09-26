@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow/injection.sh
+# tests/bin/feature-530-notes-promotion-triage-flow/injection.sh
 # Tests: bin/worktree-notes-triage.js, hooks/lib/worktree-notes-sections.js, skills/_shared/notes-promotion.md
 # Tags: notes-promotion, worktree-notes, triage, security, prompt-injection, untrusted-input, TL2, scope:issue-specific
 #

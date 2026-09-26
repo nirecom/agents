@@ -1,7 +1,7 @@
 # Group G: realistic multi-file end-to-end pass over one repository (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, e2e-scale, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Groups A/B isolate one verdict per fixture; this does the opposite — ONE repo of
 # 14 files spanning every verdict, scanned by both scripts then applied. Two

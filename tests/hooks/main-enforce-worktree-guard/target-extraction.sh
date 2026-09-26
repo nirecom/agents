@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, supervisor, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-bash-rm-target-extraction.sh (all cases),
 #         tests/feature-supervisor-bin-tool-allow.sh (all cases),
 #         tests/fix-enforce-worktree-bundle-a.sh (extraction security cases;

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-closed-first.sh
+# tests/bin/feature-workflow-init-driver/driver-closed-first.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: workflow-init, driver, routing, closed-detection, phase-order, scope:issue-specific
 

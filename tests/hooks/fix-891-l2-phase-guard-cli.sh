@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-891-l2-phase-guard-cli.sh
+# tests/hooks/fix-891-l2-phase-guard-cli.sh
 # Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/workflow-state.js, hooks/workflow-state/lifecycle.js
 # Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli, workflow-started
 # L3 gap (what this test does NOT catch):
@@ -195,7 +195,7 @@ run_g38() {
 # step_status event — but these cases only seed and assert the SUPERVISOR state under
 # WORKFLOW_PLANS_DIR and the hook's exit code, never the workflow state file. The
 # assertions therefore hold unchanged; the event-stream side is covered by
-# tests/feature-1733-state-event-stream/final-report-step.sh.
+# tests/hooks/feature-1733-state-event-stream/final-report-step.sh.
 run_g39() {
     require_source "$HOOK" "G39: alert_phase=paused + final_report sentinel as last tool_use -> exit 0" || return
     local tmp out rc tp

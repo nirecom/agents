@@ -1,11 +1,11 @@
-# tests/unit-quote-spans/edges.sh
+# tests/hooks/unit-quote-spans/edges.sh
 # Tests: hooks/lib/quote-spans/scan.js, hooks/lib/quote-spans/query.js
 # Tags: hook, quote-spans, parser, unit, edge-cases, security, scope:common
 #
 # STATUS: RED until C1 lands — every row fails with
 # `ERROR: require quote-spans.js: Cannot find module ...`.
 #
-# Sourced by tests/unit-quote-spans.sh. String-level edge coverage:
+# Sourced by tests/hooks/unit-quote-spans.sh. String-level edge coverage:
 #   - non-string / null / undefined scanner inputs (must not throw; must be
 #     fail-closed, because a hook that throws is a hook that stops guarding)
 #   - trailing lone backslashes at end-of-string and at end-of-span

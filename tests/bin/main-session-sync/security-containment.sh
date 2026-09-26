@@ -1,6 +1,6 @@
 # Tests: install/linux/session-sync-init.sh
 # Tags: bin, install, git, session-sync, security, installer, scope:issue-specific
-# Part of tests/main-session-sync.sh; sourced after security.sh, whose _sec_run /
+# Part of tests/bin/main-session-sync.sh; sourced after security.sh, whose _sec_run /
 # _sec_old_root / _sec_temp_leftovers helpers it reuses.
 
 # TL3 gap (skills/_shared/test-design.md): TL2 — every case here needs a real

@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/feature-sweep-plans/core.sh
+# tests/bin/feature-sweep-plans/core.sh
 # Tests: bin/sweep-plans.sh, skills/sweep-plans/SKILL.md
 # Tags: sweep, plans, workflow-plans, maintenance, bin, scope:common
 #
 # Core sweep-plans tests: candidate grouping, apply/dry-run, subdir
 # preservation, JSON shape. SWEEP_AGE_DAYS validation lives in validation.sh.
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-plans/core.sh
+#   bash tests/bin/feature-sweep-plans/core.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

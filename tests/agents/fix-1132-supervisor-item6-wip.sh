@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1132-supervisor-item6-wip.sh
+# tests/agents/fix-1132-supervisor-item6-wip.sh
 # Tests: agents/supervisor.md, skills/_shared/off-legitimacy-rubric.md
 # Tags: supervisor, off-legitimacy, rubric, wip-mode, content-assertion, scope:issue-specific, pwsh-not-required, TL1
 #

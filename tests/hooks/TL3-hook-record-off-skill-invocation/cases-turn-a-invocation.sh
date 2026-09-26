@@ -1,4 +1,4 @@
-# tests/TL3-hook-record-off-skill-invocation/cases-turn-a-invocation.sh
+# tests/hooks/TL3-hook-record-off-skill-invocation/cases-turn-a-invocation.sh
 # Turn A (a real typed /enforce-workflow-off slash command in a live session) and
 # the production-command fidelity replay that follows it. Sourced by
 # ../TL3-hook-record-off-skill-invocation.sh; relies on that file's shared

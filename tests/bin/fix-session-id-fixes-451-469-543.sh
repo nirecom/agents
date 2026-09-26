@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-session-id-fixes-451-469-543.sh
+# tests/bin/fix-session-id-fixes-451-469-543.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: session-id, wip-state, cleanup-zombies
 #

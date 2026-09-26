@@ -27,7 +27,7 @@
 # exception alongside record-skip-verdict). This test file must not fix it.
 # ############################################################################
 #
-# Sibling boundary (no duplication): tests/feature-1644-sibling-cli-advance.sh
+# Sibling boundary (no duplication): tests/bin/feature-1644-sibling-cli-advance.sh
 # S9 (legacy pass-through), S10 (exit-3 normalization), S12 (auto vs judgment on
 # outline) and S13c/d (argument errors) already exist. Added here: the detail
 # target's --c3 delegation, the explicit-false so_c1/so_c2 override, the
@@ -55,7 +55,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

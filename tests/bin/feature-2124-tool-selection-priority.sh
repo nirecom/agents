@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2124-tool-selection-priority.sh
+# tests/bin/feature-2124-tool-selection-priority.sh
 # Tests: rules/shell-commands.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md, hooks/lib/rules-injection-policy.js
 # Tags: rules, prompt, injection, dispatch, scope:issue-specific, pwsh-not-required, TL2
 
@@ -68,7 +68,7 @@ FAIL=0
 # - Whether the norm outranks the platform reminder in practice once both are present: the
 #   reminder is re-injected mid-session and is the more recent text.
 # - Whether a general-purpose subagent really performs the Read its dispatch line orders.
-# Closest-to-action mitigation: the real-loader gate in tests/TL3-rules-injection-off-switch.sh
+# Closest-to-action mitigation: the real-loader gate in tests/hooks/TL3-rules-injection-off-switch.sh
 # and the per-session receipt written by hooks/instructions-loaded-audit.js.
 
 ROWS=0

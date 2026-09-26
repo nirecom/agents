@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, real-git, error-propagation, false-green, TL2, scope:common
 #
 # D8 pins the SPELLINGS that would let a fixture failure pass unnoticed; the F block runs

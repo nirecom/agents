@@ -7,7 +7,7 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 # Dispatch + aggregate entrypoint for the feature-workflow-init-driver split
-# suite. All logic lives in tests/feature-workflow-init-driver/ per
+# suite. All logic lives in tests/bin/feature-workflow-init-driver/ per
 # rules/coding/file-split.md Pattern A. Each split group also runs standalone.
 
 set -uo pipefail

@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-finalize/convergence-after-nonconverged.sh
+# tests/bin/bin-concern-ledger-finalize/convergence-after-nonconverged.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
 # Tags: concern-ledger, finalize, convergence, non-converged-cycle, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh (after loop-integration.sh and
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh (after loop-integration.sh and
 # cap-outline-detail.sh, whose helpers are reused).
 
 # A non-converged round leaves a durable 'converged: false' file on a fixed

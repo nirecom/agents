@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/gaps-adversarial.sh
+# tests/hooks/feature-canary5-6git/gaps-adversarial.sh
 # Tests: hooks/lib/bash-write-patterns/segment-utils.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/git-write-ir.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-targets.js, hooks/enforce-worktree/git-repo-detection.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, git-write, wrapper-peel, interpreter-c, security, scope:issue-specific, hook-registration, pwsh-not-required
 #

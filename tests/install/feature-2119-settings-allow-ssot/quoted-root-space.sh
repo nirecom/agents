@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/quoted-root-space.sh
+# tests/install/feature-2119-settings-allow-ssot/quoted-root-space.sh
 # Tests: install/lib/settings-allow-rules.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T49: the quoted families under a root containing a SPACE, and under shell/glob metacharacters.

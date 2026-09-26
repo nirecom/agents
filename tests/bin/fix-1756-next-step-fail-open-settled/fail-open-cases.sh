@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1756-next-step-fail-open-settled/fail-open-cases.sh
+# filename: tests/bin/fix-1756-next-step-fail-open-settled/fail-open-cases.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, fail-open, settled-status, TL2, scope:common
 #
-# Case file — sourced by tests/fix-1756-next-step-fail-open-settled.sh, which
+# Case file — sourced by tests/bin/fix-1756-next-step-fail-open-settled.sh, which
 # owns every helper and fixture fragment used here. Do not run standalone.
 #
 # F1-F3, F5: RED behavioral cases for #1756 (settled write_tests must terminate

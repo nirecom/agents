@@ -6,7 +6,7 @@
 # boundaries duplicates and near-limit lengths sit on (S24). The resolver
 # normalises `\` to `/` before deciding containment, so a backslash payload is a
 # first-class attack input on this host, not a curiosity.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
 echo "=== Resolver argument boundaries: backslash traversal, empty strings, limits ==="
 
 # TL3 gap (what this file does NOT catch): a real NTFS host reached through a

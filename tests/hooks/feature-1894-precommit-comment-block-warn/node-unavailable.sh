@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-precommit-comment-block-warn/node-unavailable.sh
+# tests/hooks/feature-1894-precommit-comment-block-warn/node-unavailable.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, pre-commit, node, degraded, skipped, fail-open, announce, scope:issue-specific, scope:feature-1894, layer:TL2
 

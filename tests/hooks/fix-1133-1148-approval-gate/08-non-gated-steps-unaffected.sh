@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, regression, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G08: regression net — non-gated steps are unaffected by the approval gate.
 # Only outline/detail are in APPROVAL_GATED_STEPS. Every other step must still

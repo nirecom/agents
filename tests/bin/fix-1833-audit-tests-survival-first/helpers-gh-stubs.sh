@@ -1,7 +1,7 @@
 # Helper: `gh` PATH stubs shared by every group (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, helper, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh (before any group)
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh (before any group)
 #
 # Four fake `gh` flavours (one per way metadata is obtained or lost) — the
 # differences between them ARE the contract (see groups B and M). The stub

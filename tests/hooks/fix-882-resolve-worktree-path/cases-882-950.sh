@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, skills/review-tests/scripts/select-staged-files.sh
 # Tags: scope:issue-specific, pwsh-not-required, worktree, session-id
-# Part of tests/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
 # Cases A-L: the original #882 worktree-aware selection contract (A-H) plus the
 # #950 state.session_worktree fallback (I-L). Fixture, env isolation and every
 # shared helper live in the dispatcher; this part only holds the assertions.

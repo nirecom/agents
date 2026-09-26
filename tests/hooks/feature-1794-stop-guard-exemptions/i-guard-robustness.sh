@@ -16,7 +16,7 @@
 #        verdict in BOTH directions — no flapping, no accumulating side effect
 #        that silently arms or disarms it on a later invocation.
 #
-# Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 
 # ---------------------------------------------------------------------------
 # I12: inherited-only heir + a real C1 sentinel-hang transcript, and NO

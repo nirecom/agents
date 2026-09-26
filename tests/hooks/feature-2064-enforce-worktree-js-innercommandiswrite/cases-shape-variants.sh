@@ -1,7 +1,7 @@
 # Tests: hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/dispatch-provenance.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, write-detector, dispatch-provenance, scope:issue-specific
 # Sections 11-16 — input-shape variants: line continuations, backticks, heredoc delimiter forms, nested substitutions, deep nesting, CRLF twins.
-# Sourced by tests/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
+# Sourced by tests/hooks/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
 
 # Section 11 — C1. The VERBATIM production dispatch, with real backslash line
 # continuations, so `--body "$(cat <<'EOF'` and the closing `)" \` sit on their

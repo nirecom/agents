@@ -1,5 +1,5 @@
 # list-vs-from.sh — U14: one fixture, both paths. Sourced by
-# tests/feat-2218-upstream-search.sh.
+# tests/hooks/feat-2218-upstream-search.sh.
 # Tests: hooks/workflow-state/upstream-search.js, bin/lib/resume-session/upstream-view.js
 # Tags: session-upstream, upstream-search, resume-session, adoptability, granularity, cross-check, prompt-injection, regression-2279, scope:issue-specific, pwsh-not-required, TL2
 
@@ -295,7 +295,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 }
 
 # U19 — the `--list` half of the prompt-injection contract T23 pins for `--from`
-# (tests/feature-resume-session-468.sh; test-design.md "Prompt injection",
+# (tests/bin/feature-resume-session-468.sh; test-design.md "Prompt injection",
 # OWASP LLM01). `--list` surfaces two fields `--from` never does: `title`, lifted
 # verbatim from a donor's `**Title:**` line, and `sid`/`artifacts`, lifted from a
 # donor's FILENAME — both written by another session, both untrusted. T23's

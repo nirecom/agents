@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-end-no-inline-js.sh
+# tests/skills/feature-worktree-end-no-inline-js.sh
 # Tests: skills/worktree-end/SKILL.md, skills/worktree-end/scripts, skills/worktree-end/scripts/
 # Tags: worktree, end, cleanup, skill, bin
 #

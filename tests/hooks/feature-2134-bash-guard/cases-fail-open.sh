@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-fail-open.sh
+# tests/hooks/feature-2134-bash-guard/cases-fail-open.sh
 # Tests: hooks/bash-guard/judge.js, hooks/bash-guard.js, hooks/lib/command-ir.js
 # Tags: hook, bash-guard, fail-open, error-handling, scope:issue-specific, pwsh-not-required, TL2
 # O1-O4: the named exception to deny-on-doubt. Sourced by the dispatcher.

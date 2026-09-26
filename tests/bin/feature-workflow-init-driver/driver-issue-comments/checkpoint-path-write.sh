@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-issue-comments/checkpoint-path-write.sh
+# tests/bin/feature-workflow-init-driver/driver-issue-comments/checkpoint-path-write.sh
 # Tests: bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/workflow-init-driver
 # Tags: workflow-init, driver, checkpoint, path-separator, win32, fail-closed, scope:issue-specific
 

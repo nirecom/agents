@@ -1,7 +1,7 @@
 # S12 category 8: escaping and hostile names (#2065, S2 escape contract)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, escaping, security, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # TSV has exactly two structural characters (TAB, LF) and this format adds a
 # third (the `,` that joins members), so all three plus the escape character
 # itself must be encoded per element. Backslash is escaped first, otherwise the

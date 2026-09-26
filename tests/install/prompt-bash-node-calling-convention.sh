@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/prompt-bash-node-calling-convention.sh
+# tests/install/prompt-bash-node-calling-convention.sh
 # Tests: install/lib/settings-allow-rules.js, install/settings-allow-commands.txt, skills/review-tests/SKILL.md, hooks/bash-guard/judge.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 

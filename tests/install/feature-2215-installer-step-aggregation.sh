@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2215-installer-step-aggregation.sh
+# tests/install/feature-2215-installer-step-aggregation.sh
 # Tests: install.ps1
 # Tags: installer, powershell, step-aggregation, fail-safe, TL2, pwsh-required, scope:issue-specific
 # install.ps1 missed a sub-script `exit N` and aborted at the first `throw`;

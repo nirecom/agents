@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/fail-closed-cli-and-resolver.sh
+# tests/bin/bin-codex-review-loop-security-code/fail-closed-cli-and-resolver.sh
 # Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/resolve-session-id
 # Tags: concern-ledger, fail-closed, error-injection, orthogonality, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code/fail-closed.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code/fail-closed.sh.
 # The two layers below the loop: the CLI's own silent stage failure, and a
 # session resolver that faults while the loop is deciding which session to file
 # the round under. Split out of fail-closed.sh for size (Pattern A).

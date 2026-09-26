@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-717-workflow-gate-split.sh
+# tests/hooks/refactor-717-workflow-gate-split.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/path-normalize.js, hooks/workflow-gate/staged-evidence.js, hooks/workflow-gate/gh-detect.js, hooks/workflow-gate/worktree-context.js, hooks/workflow-gate/repo-resolution.js
 # Tags: refactor, workflow-gate, module-split, exports
 #

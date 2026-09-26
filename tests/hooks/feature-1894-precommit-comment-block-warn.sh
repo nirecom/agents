@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-precommit-comment-block-warn.sh
+# tests/hooks/feature-1894-precommit-comment-block-warn.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, hook, git, block, guard, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
 
@@ -26,7 +26,7 @@
 # run_commit write config into $cfg/.env and keep those names out of the
 # child env; *_ambient does both, driving the hostile direction explicitly.
 # Dispatcher: harness here, cases in
-# tests/feature-1894-precommit-comment-block-warn/*.sh.
+# tests/hooks/feature-1894-precommit-comment-block-warn/*.sh.
 
 # TL3 gap: installer deployment into a real core.hooksPath (part 3 only
 # proves git fires the hook for a self-pointed fixture repo); real `gh api`

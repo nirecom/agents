@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-13 / codex security scanner "C": THE DETECTION DIRECTION OF CONTAINMENT.
 #
 # THE HOLE. hooks/block-clearance-token-write/bash-target-context.js asks

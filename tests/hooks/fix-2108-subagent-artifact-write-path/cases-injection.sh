@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/lib/claude-scratchpad-base.js
 # Tags: workflow-gate, early-gate, scratchpad, allowlist, path-traversal, separator, injection, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section E — ATTACK SHAPES against the new scratchpad allowlist
 # (skills/_shared/test-design/protection-fix-tests.md Pattern 2). Section A proves the

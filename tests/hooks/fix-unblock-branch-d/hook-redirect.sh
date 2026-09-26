@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-unblock-branch-d/hook-redirect.sh
+# tests/hooks/fix-unblock-branch-d/hook-redirect.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js
 # Tags: worktree, enforce, hook, branch-delete, redirect, sweep, security, integration, scope:common
 #
@@ -13,7 +13,7 @@
 #     that redirect stripping does not open a chaining bypass.
 #
 # Runnable standalone:
-#   bash tests/fix-unblock-branch-d/hook-redirect.sh
+#   bash tests/hooks/fix-unblock-branch-d/hook-redirect.sh
 #
 # Mutation-probe: AFTER the source fix lands, run
 #   bin/mutation-probe.sh hooks/lib/command-parser.js

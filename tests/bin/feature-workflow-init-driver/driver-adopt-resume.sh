@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-adopt-resume.sh
+# tests/bin/feature-workflow-init-driver/driver-adopt-resume.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/adopt-prior-state.js, bin/workflow/lib/workflow-init/checkpoint.js
 # Tags: workflow-init, driver, checkpoint-resume, adopt-prior-state, scope:issue-specific
 

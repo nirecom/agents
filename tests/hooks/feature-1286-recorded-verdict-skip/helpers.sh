@@ -49,7 +49,7 @@ export WORKFLOW_PLANS_DIR="$PLANS_GLOBAL_DIR_N"
 # Empty config dir so the gate hook's load-env.js finds no .env — CONFIRM_* env
 # vars then reflect only what the test explicitly sets (load-env.js treats the
 # parent repo's .env CONFIRM_DETAIL=off as authoritative otherwise). Mirrors the
-# T14 isolation pattern in tests/feature-gate-plan-skip-sentinel.sh.
+# T14 isolation pattern in tests/hooks/feature-gate-plan-skip-sentinel.sh.
 EMPTY_CONFIG_DIR="$TMPDIR_BASE/empty-config"
 mkdir -p "$EMPTY_CONFIG_DIR"
 
@@ -104,7 +104,7 @@ write_state() {
 # projection introduced by #1733, which turned skip_judgment / skip_verdict into
 # step_annotation events). The recorded-verdict contract asserted here is unchanged;
 # the annotation-event side is covered by
-# tests/feature-1733-state-event-stream/annotation-fold.sh.
+# tests/hooks/feature-1733-state-event-stream/annotation-fold.sh.
 read_state_field() {
   local sid="$1" step="$2" field="$3"
   local state_file="$WORKFLOW_DIR/${sid}.json"

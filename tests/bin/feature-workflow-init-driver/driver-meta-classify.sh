@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-meta-classify.sh
+# tests/bin/feature-workflow-init-driver/driver-meta-classify.sh
 # Tests: bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/workflow-init-driver
 # Tags: workflow-init, driver, meta-classify, pagination, scope:issue-specific
 

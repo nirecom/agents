@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-precommit-comment-block-warn/failopen-placement-static.sh
+# tests/hooks/feature-1894-precommit-comment-block-warn/failopen-placement-static.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size, rules/coding/file-split.md
 # Tags: comment-block-size, pre-commit, hook, fail-open, ordering, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 

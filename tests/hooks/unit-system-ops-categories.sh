@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/unit-system-ops-categories.sh
+# tests/hooks/unit-system-ops-categories.sh
 # Tests: hooks/lib/system-ops-categories.js
 # Tags: unit, system-ops, classifier, table-driven, security, scope:common, pwsh-not-required
 # Unit coverage of getBlockCategory() — the pure predicate extracted from

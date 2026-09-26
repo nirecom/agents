@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-enforce-worktree-exclude.sh
+# tests/hooks/feature-enforce-worktree-exclude.sh
 # Tests: hooks/lib/glob-match.js, hooks/pre-commit
 # Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific
 #
@@ -68,7 +68,7 @@ run_with_timeout() {
 }
 
 # Create a throwaway main worktree (no linked worktree).
-# Mirrors the helper used by tests/fix-enforce-worktree-gh-whitelist.sh.
+# Mirrors the helper used by tests/hooks/fix-enforce-worktree-gh-whitelist.sh.
 setup_main_checkout() {
     local name="$1"
     local repo="$TMPDIR_BASE/$name"

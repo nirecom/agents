@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # n9-duration-ledger-env.sh — ledger env hygiene, and a run that measures nothing.
-# Tests: tests/run-all.sh, bin/lib/run-all-durations.sh, tests/feature-1832-run-all-parallel/_lib.sh
+# Tests: tests/run-all.sh, bin/lib/run-all-durations.sh, tests/tests/feature-1832-run-all-parallel/_lib.sh
 # Tags: tests, bin, parallel, ledger, TL2, scope:issue-specific
 
 # WHY: the ledger cases SOURCE bin/lib/run-all-durations.sh into the test process, so its whole

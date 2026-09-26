@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js
 # Tags: forge-ownership, gh, github, pre-tool-use, hook, security, TL3, run-e2e, scope:issue-specific
-# Part of tests/TL3-hook-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/TL3-hook-forge-target-ownership.sh (rules/coding/file-split.md).
 # The assertion half: everything that reads the two live turns.
 
 # Sourced, not executed — it reads GUARD, LOG_A/LOG_B, TOK_A/TOK_B, RC_A/RC_B,

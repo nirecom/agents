@@ -1,7 +1,7 @@
 # S12 category 6: malformed input and mode-exclusivity guards (#2065, S3)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, dup-groups, cli, guards, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # Two distinct failure families, kept apart on purpose (CPR-SC): malformed
 # CONTENT is data the mode must classify and keep running on, while a bad
 # COMMAND LINE is an operator error the mode must refuse outright with rc 2.

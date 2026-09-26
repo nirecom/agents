@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-811-review-loop-summarize-concerns.sh
+# tests/bin/feature-811-review-loop-summarize-concerns.sh
 # Tests: bin/review-loop-summarize-concerns
 # Tags: feature, cap-menu, summarize-concerns, scope:issue-specific, pwsh-not-required
 #

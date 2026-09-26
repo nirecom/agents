@@ -1,7 +1,7 @@
-# tests/feature-603-run-codex-review-loop/round-counter-ownership.sh
+# tests/bin/feature-603-run-codex-review-loop/round-counter-ownership.sh
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
-# Sourced by tests/feature-603-run-codex-review-loop.sh.
+# Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 26-30: the wrapper-owned round counter (#2068) — self-numbering, refused rounds, --round/--force-round exclusivity, missing ledger, and rollback on exit 3.
 
 # ---------------------------------------------------------------------------

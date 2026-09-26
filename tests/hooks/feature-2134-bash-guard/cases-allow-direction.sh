@@ -1,7 +1,7 @@
-# tests/feature-2134-bash-guard/cases-allow-direction.sh
+# tests/hooks/feature-2134-bash-guard/cases-allow-direction.sh
 # Tests: hooks/bash-guard/detect.js, hooks/bash-guard/judge.js, hooks/bash-guard/forbidden-literals.js
 # Tags: hook, bash-guard, classifier, false-positive, scope:issue-specific, pwsh-not-required, TL2
-# A1: the sanctioned-input half of the classifier. Sourced by tests/feature-2134-bash-guard.sh.
+# A1: the sanctioned-input half of the classifier. Sourced by tests/hooks/feature-2134-bash-guard.sh.
 
 # CPR-ORTH counterpart of cases-detect.sh (protection-fix-tests.md Pattern 4, origin #1425):
 # a guard that only ever proves it BLOCKS ships over-blocking. Every literal id gets a

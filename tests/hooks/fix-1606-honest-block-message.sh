@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1606-honest-block-message.sh
+# tests/hooks/fix-1606-honest-block-message.sh
 # Tests: hooks/supervisor-off-proposal-shim.js
 # Tags: supervisor, off-proposal, shim, honest-message, buildReason, scope:issue-specific, pwsh-not-required, TL1
 #

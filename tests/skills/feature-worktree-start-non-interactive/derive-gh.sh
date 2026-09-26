@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/derive-gh.sh
+# tests/skills/feature-worktree-start-non-interactive/derive-gh.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, gh, classifier, label, TL2, scope:issue-specific
 # gh-classifier cases (B8, B9, B13a, B13b) for derive-worktree-name.sh D4.
@@ -13,7 +13,7 @@ ensure_stubdir
 # B8/B9 stub `gh` executables are created at their case sites (they capture into
 # case-specific files). The production script resolves `gh` from PATH — there is no
 # env-var executable seam — so the stubs follow the repo's PATH-shim convention
-# (see tests/feature-issue-635-pr-approval-hook.sh U14): a temp bin dir prepended
+# (see tests/agents/feature-issue-635-pr-approval-hook.sh U14): a temp bin dir prepended
 # onto PATH for the duration of the call under test only.
 
 # --- gh-path fixture repo (B8/B9) ------------------------------------------

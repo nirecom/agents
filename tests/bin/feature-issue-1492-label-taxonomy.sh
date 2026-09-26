@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-issue-1492-label-taxonomy.sh
+# tests/bin/feature-issue-1492-label-taxonomy.sh
 # Tests: .github/labels.yml, bin/github-issues/migrate-model-labels.sh
 # Tags: scope:issue-specific
 # L3 gap (what this test does NOT catch):

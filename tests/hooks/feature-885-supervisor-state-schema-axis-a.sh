@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-supervisor-state-schema-axis-a.sh
+# tests/hooks/feature-885-supervisor-state-schema-axis-a.sh
 # Tests: hooks/lib/supervisor-state-schema.js
 # Tags: supervisor-state-schema, finding-schema, axis-a, feature-885
 # Tests for issue #885 — Axis A finding schema extension.

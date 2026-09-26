@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/read-only-allowlist-cases.sh
+# tests/hooks/enforce-clearance-token-write/read-only-allowlist-cases.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write/bash-target-context/classify.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, classifier, read-only-allowlist, interpolation, redos, flag-cluster, table-driven, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host. Covered by tests/TL3-hook-clearance-token-write.sh.
+# - The hook firing on a real host. Covered by tests/hooks/TL3-hook-clearance-token-write.sh.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 # Split from tests/enforce-off-clearance-write.sh (rules/coding/file-split.md Pattern A).
@@ -311,10 +311,10 @@ rm -r -f "$TMP2" 2>/dev/null || true
 # NOT PORTED from the pre-split single-file version (so nobody goes looking):
 # - WR5/WR8-13, H2-*, H3-*, SA5-*, F1C-*: argv-scan.js / interpreter-scan.js /
 #   assignment-text.js internals, covered end-to-end AND at unit level by
-#   tests/fix-1780-round11-substitution-additivity.sh,
-#   tests/fix-1780-round12-classifier-attack-shapes.sh,
-#   tests/fix-1780-round12-parser-unit-tables/cases-*.sh and
-#   tests/enforce-protected-marker-write/cases-round{8,9}-*.sh.
+#   tests/hooks/fix-1780-round11-substitution-additivity.sh,
+#   tests/hooks/fix-1780-round12-classifier-attack-shapes.sh,
+#   tests/hooks/fix-1780-round12-parser-unit-tables/cases-*.sh and
+#   tests/hooks/enforce-protected-marker-write/cases-round{8,9}-*.sh.
 # - DIFF-* (differential vs a pre-#1780 checkout): the trees have since merged.
 # - 'deno eval' known bypass: NOT in the parent file's KB1/KB2 block (four commands,
 #   none deno). Recorded here, as the DB-deno-subcmd Skipped-Because row above.

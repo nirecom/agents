@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/write-tests/SKILL.md, skills/review-tests/SKILL.md, skills/_shared/test-design.md, skills/_shared/test-design/append-vs-new.md, install/settings-allow-commands.txt, skills/review-tests/scripts/select-staged-files.sh, skills/run-tests/SKILL.md, bin/lib/test-frontmatter-fix.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases S1-S13: the static / script-level half of the contract. The reviewer LLM
 # actually raising the gap is TL4 and stays out of scope (plan: Confirmed non-goals),
 # so these pin the SHAPE RT-1a and WT-5 must keep for that judgement to be possible.

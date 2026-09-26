@@ -1,5 +1,5 @@
 # t-hook-integration.sh — T1-T11 integration tests for stop-premature-stop-guard.js
-# Sourced by tests/feature-1498-stop-premature-stop-guard.sh
+# Sourced by tests/hooks/feature-1498-stop-premature-stop-guard.sh
 
 # ---------------------------------------------------------------------------
 # T1: workflow active (ACTION=invoke) → decision:block in stdout

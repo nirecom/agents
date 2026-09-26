@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/payload-shapes.sh
+# tests/hooks/feature-1894-hook-comment-block/payload-shapes.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/write-tools.js
 # Tags: comment-block-size, hook, pretooluse, payload, multiedit, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
 

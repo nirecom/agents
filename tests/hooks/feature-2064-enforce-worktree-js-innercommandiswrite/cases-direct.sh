@@ -138,7 +138,7 @@ S8k detectWritePredicate real dispatch (EXPECTED-FAIL-BEFORE-FIX) | detect | N2a
 TABLE
 
 # Section 9 — existing-behavior preservation.
-# Mirrors N1a-N1e of tests/fix-1424-1425-1448-write-detector.sh (that file is NOT
+# Mirrors N1a-N1e of tests/hooks/fix-1424-1425-1448-write-detector.sh (that file is NOT
 # edited; it is run separately and its baseline recorded). Q4 mirrors N1d and Q5
 # mirrors N1e — the two the fix is most likely to disturb.
 echo ""

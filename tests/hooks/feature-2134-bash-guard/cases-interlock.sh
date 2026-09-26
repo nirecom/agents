@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-interlock.sh
+# tests/hooks/feature-2134-bash-guard/cases-interlock.sh
 # Tests: hooks/lib/early-write-gate.js, hooks/bash-guard/judge.js, hooks/workflow-gate/early-gate.js
 # Tags: hook, bash-guard, early-write-gate, workflow-off, precedence, scope:issue-specific, pwsh-not-required, TL2
 # I1-I4: the early-write-gate interlock and its bypass precedence. Sourced by the dispatcher.

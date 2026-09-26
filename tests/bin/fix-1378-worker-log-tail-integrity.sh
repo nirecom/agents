@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1378-worker-log-tail-integrity.sh
+# tests/bin/fix-1378-worker-log-tail-integrity.sh
 # Tests: bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/emit.js
 # Tags: worker-dispatch, test-runner, log-tail, contract, TL2, scope:common
 #
@@ -25,7 +25,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - The real tests/run-all.sh output format drifting away from
 #     `Results: ...` / `RUN_CONTRACT: ...`. Only a real suite run shows that;
-#     tests/TL3-worker-dispatch-run-tests.sh is the gated tier for it.
+#     tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for it.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 

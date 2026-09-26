@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/fail-closed.sh
+# tests/bin/bin-codex-review-loop-security-code/fail-closed.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger, bin/lib/concern-ledger.sh
 # Tags: concern-ledger, fail-closed, stale-ledger, error-injection, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 #
 # The interesting failure is not "no ledger" but a stage or reduce that fails
 # while a valid ledger from the round before is still on disk: nothing in the

@@ -2,7 +2,7 @@
 # Tests: hooks/block-capture-echo.js, hooks/block-capture-echo/shape.js, hooks/block-capture-echo/remedy.js, hooks/preuse-auto-approve.js, hooks/preuse-auto-approve/scratchpad-script.js, hooks/lib/claude-scratchpad-base.js, hooks/lib/command-ir.js, hooks/lib/tool-command-text.js, settings.json, install/settings-allow-commands.txt
 # Tags: capture-echo-guard, issuance-discipline, pretooluse, shape-predicate, scratchpad-allow, symlink-traversal, hook-registration, scope:issue-specific, pwsh-not-required
 # Dispatcher for the #2170 capture-echo guard suite; parts live under
-# tests/feature-2170-capture-echo-guard/ (rules/coding/file-split.md Pattern A).
+# tests/hooks/feature-2170-capture-echo-guard/ (rules/coding/file-split.md Pattern A).
 # TL3 gap (what this test does NOT catch):
 # - Live PreToolUse dispatch: part2 spawns the hook as a subprocess and part5 checks
 #   settings.json statically; neither observes the hook actually firing in a session.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-unblock-branch-d/integration.sh
+# tests/hooks/fix-unblock-branch-d/integration.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js
 # Tags: worktree, enforce, hook, branch-delete, redirect, integration, scope:common
 #
@@ -10,7 +10,7 @@
 # while non-feature branches with a redirect suffix must still BLOCK.
 #
 # Runnable standalone:
-#   bash tests/fix-unblock-branch-d/integration.sh
+#   bash tests/hooks/fix-unblock-branch-d/integration.sh
 #
 # L3 gap (what this test does NOT catch):
 # - Whether a real Claude Code Bash tool invocation appends exactly the

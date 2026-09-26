@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/lib/claude-scratchpad-base.js
 # Tags: workflow-gate, early-gate, scratchpad, plans-dir, allowlist, classifier, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section A — the early gate's write allowlist (Scope 1+2 of #2108). The allowlist
 # sits BEFORE both tiers, so Tier 1 (workflow_init pending) and Tier 2 (clarify_intent

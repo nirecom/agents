@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, session-sync, frequency-guard, boundary, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher.
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher.
 # Semantics SSOT: the plan's frequency-guard section (elapsed < 1800 suppresses).
 
 # Relative backdating cannot pin 1800: it is host-dependent AND the wall clock

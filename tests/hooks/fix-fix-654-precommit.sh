@@ -64,7 +64,7 @@ run_with_timeout() {
 }
 
 # Create a throwaway main worktree wired to the agents-repo pre-commit hook.
-# Modeled on tests/feature-enforce-worktree-exclude.sh#setup_main_checkout.
+# Modeled on tests/hooks/feature-enforce-worktree-exclude.sh#setup_main_checkout.
 setup_main_checkout() {
     local name="$1"
     local repo="$TMPDIR_BASE/$name"

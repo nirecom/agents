@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-capture-env.sh
+# tests/skills/feature-capture-env.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh, skills/worktree-end/scripts/write-env-json.js
 # Tags: worktree, end, cleanup, skill, bin, scope:common
 #

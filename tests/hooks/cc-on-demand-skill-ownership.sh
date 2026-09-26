@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-on-demand-skill-ownership.sh
+# tests/hooks/cc-on-demand-skill-ownership.sh
 # Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, rules/test.md, rules/docs.md, rules/github-issues.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, mapping, real-tree, mutation-probe, TL2, scope:common
 

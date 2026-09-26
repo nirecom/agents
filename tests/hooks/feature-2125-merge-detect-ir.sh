@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2125-merge-detect-ir.sh
+# tests/hooks/feature-2125-merge-detect-ir.sh
 # Tests: hooks/lib/merge-detect.js, hooks/lib/command-ir.js, hooks/lib/shell-segments.js
 # Tags: hook, merge-detect, command-ir, canary, enforce-worktree, table-driven, TL1, pwsh-not-required, scope:issue-specific
 

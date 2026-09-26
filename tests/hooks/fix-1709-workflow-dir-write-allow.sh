@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1709-workflow-dir-write-allow.sh
+# tests/hooks/fix-1709-workflow-dir-write-allow.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: enforce-worktree, non-git-cwd, workflow-state-dir, fail-closed, symlink, default-path, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

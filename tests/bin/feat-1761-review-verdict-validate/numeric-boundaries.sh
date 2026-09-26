@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-review-verdict-validate/numeric-boundaries.sh
+# tests/bin/feat-1761-review-verdict-validate/numeric-boundaries.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, validator, boundary, numbers, table-driven, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
@@ -9,7 +9,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Section of tests/feat-1761-review-verdict-validate.sh (subprocess; see
+# Section of tests/bin/feat-1761-review-verdict-validate.sh (subprocess; see
 # tests/lib/section-runner.sh).
 #
 # Numbers arrive as raw JSON, where JS has no integer type. The existing tables sample

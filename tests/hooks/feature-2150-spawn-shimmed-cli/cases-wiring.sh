@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/spawn-shimmed-cli.js, bin/codegraph-lifecycle.js, install/codegraph-mcp.js
 # Tags: codegraph, win32-shim, spawn, security, command-injection, wiring, unit, scope:issue-specific
-# Sections A and W of tests/feature-2150-spawn-shimmed-cli.sh. A runs the module
+# Sections A and W of tests/hooks/feature-2150-spawn-shimmed-cli.sh. A runs the module
 # for real — argv fidelity and the planted-payload attack. W pins the wiring: a
 # helper only both production callers actually go through can protect them.
 

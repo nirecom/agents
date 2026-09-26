@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/generator.sh
+# tests/install/feature-2119-settings-allow-ssot/generator.sh
 # Tests: install/lib/settings-allow-rules.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T4-T5 plus the fixture helpers and the expected-template contract every later part reuses.
@@ -12,7 +12,7 @@ DEPLOYED_SUBPATH="home/.claude/settings.json"
 # makes every success case die of MODULE_NOT_FOUND and every rc=2 case pass FOR THE WRONG
 # REASON. HOME: rules are now INJECTED AT DEPLOY TIME into ~/.claude/settings.json, so each
 # fixture carries a private home and run_gen/run_assemble pass HOME + USERPROFILE per
-# subprocess (the pattern at tests/fix-846-settings-drift.sh). The suite-wide canary HOME
+# subprocess (the pattern at tests/hooks/fix-846-settings-drift.sh). The suite-wide canary HOME
 # stays untouched even though these cases really deploy -- which is what makes T22 evidence.
 mk_fixture() { # <name> -> fixture dir
     local dir="$TMPROOT/$1"

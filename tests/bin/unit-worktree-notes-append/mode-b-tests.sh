@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/unit-worktree-notes-append/mode-b-tests.sh
+# tests/bin/unit-worktree-notes-append/mode-b-tests.sh
 # Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js
 # Tags: worktree-notes, append-cli, mode-b, severity, TL2, scope:common
 #
-# Sourced by tests/unit-worktree-notes-append.sh — not a standalone runner.
+# Sourced by tests/bin/unit-worktree-notes-append.sh — not a standalone runner.
 # Uses the parent's helpers: pass/fail/skip, require_helper, setup_tmp,
 # cleanup_tmp, run_with_timeout, HELPER_JS.
 #

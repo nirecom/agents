@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-inheritance-equivalence.sh
+# tests/hooks/feat-2218-inheritance-equivalence.sh
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/inheritance/adopt.js, hooks/workflow-state/inheritance.js
 # Tags: session-inherit, inheritance-granularity, equivalence-pin, regression-1305, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 

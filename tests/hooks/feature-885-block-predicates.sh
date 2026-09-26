@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-block-predicates.sh
+# tests/hooks/feature-885-block-predicates.sh
 # Tests: hooks/lib/block-predicates.js
 # Tags: block-predicates, inline-skill-re, ssot, feature-885
 # Original tests for #885 verified INLINE_SKILL_RE was exported as SSOT.

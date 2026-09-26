@@ -1,7 +1,7 @@
 # S12 category 7: the output contract — scope, ordering, purity (#2065, S2/S11)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, contract, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # The inventory is a corpus-wide fact, so it must not inherit either
 # entrypoint's audience filter: the same TSV from both, no scope filtering, and
 # a scan range of `tests/*.sh` only — nested fragments carry their own headers

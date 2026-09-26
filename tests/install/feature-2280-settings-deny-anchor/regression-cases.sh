@@ -1,9 +1,9 @@
-# tests/feature-2280-settings-deny-anchor/regression-cases.sh
+# tests/install/feature-2280-settings-deny-anchor/regression-cases.sh
 # Tests: settings.json, hooks/lib/settings-allow-match.js
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 # Table-driven cases for #2280. Ids and command strings are copied verbatim from the
 # detail plan's Step 6 tables so a reader can cross-reference the plan.
-# Sourced by tests/feature-2280-settings-deny-anchor.sh, which owns PASS/FAIL/PEND/ROWS.
+# Sourced by tests/install/feature-2280-settings-deny-anchor.sh, which owns PASS/FAIL/PEND/ROWS.
 # Delimiter is `@@`, not the `|` of skills/_shared/test-design/parser-regex-tests.md:
 # `IFS='|'` keeps field-edge whitespace, which would make C11's deliberately padded
 # command invisible to a reader. Row shape is therefore checked per row instead.

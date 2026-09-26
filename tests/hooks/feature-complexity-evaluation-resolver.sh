@@ -19,16 +19,16 @@ fi
 
 # Setup, presence probes, counters, and helpers live in the sibling lib
 # (rules/coding/file-split.md Pattern A — entrypoint-private module).
-# shellcheck source=tests/feature-complexity-evaluation-resolver/lib.sh
+# shellcheck source=tests/hooks/feature-complexity-evaluation-resolver/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-complexity-evaluation-resolver/lib.sh"
 
 # Cases — sourced fragments (Pattern A split; rules/coding/file-split.md).
 # They execute at source time, so this order IS the execution order.
-# shellcheck source=tests/feature-complexity-evaluation-resolver/api-cases.sh
+# shellcheck source=tests/hooks/feature-complexity-evaluation-resolver/api-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-complexity-evaluation-resolver/api-cases.sh"
-# shellcheck source=tests/feature-complexity-evaluation-resolver/cli-cases.sh
+# shellcheck source=tests/hooks/feature-complexity-evaluation-resolver/cli-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-complexity-evaluation-resolver/cli-cases.sh"
-# shellcheck source=tests/feature-complexity-evaluation-resolver/shim-cases.sh
+# shellcheck source=tests/hooks/feature-complexity-evaluation-resolver/shim-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-complexity-evaluation-resolver/shim-cases.sh"
 
 echo ""

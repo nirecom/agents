@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/class-members-history.sh
+# tests/hooks/feature-1733-state-event-stream/class-members-history.sh
 # Tests: hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js
 # Tags: workflow-state, event-stream, append-only, history, plan-approval, complexity, session-model, scope:issue-specific, pwsh-not-required, TL2
 
@@ -13,7 +13,7 @@
 # category in bin/check-verification-gate.sh.
 
 CASE_TAG="cls"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo "== H1: two complexity evaluations -> both events kept, current holds the latest =="

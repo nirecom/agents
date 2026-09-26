@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-precommit-comment-block-warn/commit-integration.sh
+# tests/hooks/feature-1894-precommit-comment-block-warn/commit-integration.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, git-commit, hooks-path, block, leak, spoofing, scope:issue-specific, scope:feature-1894, layer:TL2
 
