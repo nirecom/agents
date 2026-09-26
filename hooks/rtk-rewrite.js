@@ -98,12 +98,17 @@ function loadAuditEnabled() {
   }
 }
 
-function resolveRtkBin(existsFn = fs.existsSync) {
+function whichRtkOnPath() {
+  const finder = process.platform === "win32" ? "where.exe" : "which";
+  const out = execFileSync(finder, ["rtk"], { encoding: "utf8" });
+  return out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) || null;
+}
+
+// whichFn: `() => string | null` PATH lookup, injectable for host-independent tests; a throw is not-found.
+function resolveRtkBin(existsFn = fs.existsSync, whichFn = null) {
   if (process.env.RTK_BIN) return process.env.RTK_BIN;
   try {
-    const finder = process.platform === "win32" ? "where.exe" : "which";
-    const out = execFileSync(finder, ["rtk"], { encoding: "utf8" });
-    const first = out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0);
+    const first = (whichFn || whichRtkOnPath)();
     if (first) return first;
   } catch (_e) { /* rtk not on PATH */ }
   const brewCandidates = [
@@ -365,7 +370,7 @@ function decide(input, opts = {}) {
     if (!rtkOn) return passthrough();
     const rtkBin = opts.rtkBin !== undefined
       ? opts.rtkBin
-      : resolveRtkBin(opts.existsFn || fs.existsSync);
+      : resolveRtkBin(opts.existsFn || fs.existsSync, opts.whichFn || null);
     if (rtkBin === null || rtkBin === undefined) return passthrough();
     const auditOn = opts.auditOn !== undefined ? opts.auditOn : loadAuditEnabled();
     const guardName = firstRejectingGuard(cmd);

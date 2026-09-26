@@ -10,6 +10,56 @@
 
 const { parseGitGlobalOptions } = require("./parse-git-args");
 const { parse, analysisOf } = require("./command-ir");
+const { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb, commandBasename } = require("./bash-write-patterns/segment-utils");
+const { quoteIfNeeded } = require("./commit-detect");
+
+const RECONSTRUCTED_HEADS = new Set(["gh", "git"]);
+
+// Rewrite a wrapped segment (`rtk gh pr merge`, `env git push`) to its effective
+// `gh ...` / `git ...` text so the head-anchored checks below see it. An AMBIGUOUS
+// peel falls back to the raw argv after the first gh/git token (fail-closed).
+function effectiveSegmentText(segment) {
+  const ir = parse(segment);
+  if (ir.parseFailure === true || !Array.isArray(ir.segments) || ir.segments.length === 0) return segment;
+  const seg = ir.segments[0];
+  const head = commandBasename(resolveEffectiveCommand(seg));
+  if (RECONSTRUCTED_HEADS.has(head)) return head + " " + resolveEffectiveArgv(seg).map(quoteIfNeeded).join(" ");
+  // Handle sh -c shell body produced by `rtk run "gh pr merge …"` via shellBodyVerbs
+  if (head === "sh" || head === "bash") {
+    const ea = resolveEffectiveArgv(seg);
+    if (ea[0] === "-c" && typeof ea[1] === "string") return ea[1];
+  }
+  let hidden = null;
+  scanWrappedVerb(seg, (tok, rest) => {
+    const base = commandBasename(tok);
+    if (!RECONSTRUCTED_HEADS.has(base)) return false;
+    const candidate = base + " " + rest.map(quoteIfNeeded).join(" ");
+    if (!checkText(candidate).hit) return false;
+    hidden = candidate;
+    return true;
+  });
+  return hidden !== null ? hidden : segment;
+}
+
+function checkSegment(segment) {
+  if (!segment) return { hit: false, kind: null };
+  const direct = checkText(segment);
+  if (direct.hit) return direct;
+  const effective = effectiveSegmentText(segment);
+  if (effective === segment) return { hit: false, kind: null };
+  // Parse the effective text so compound shell bodies (e.g. `echo ok && git push origin main`)
+  // are split into their constituent segments before classification.
+  const ir = parse(effective);
+  const texts =
+    !ir.parseFailure && Array.isArray(ir.segments) && ir.segments.length > 0
+      ? segmentTexts(ir)
+      : [effective];
+  for (const t of texts) {
+    const r = checkText(t);
+    if (r.hit) return r;
+  }
+  return { hit: false, kind: null };
+}
 
 function getProtectedBranches() {
   const env = (process.env.DEFAULT_BRANCHES || "")
@@ -19,7 +69,7 @@ function getProtectedBranches() {
   return env.length ? env : ["main", "master"];
 }
 
-function checkSegment(segment) {
+function checkText(segment) {
   if (!segment) return { hit: false, kind: null };
 
   // gh pr merge — any flags (--auto, --squash, --rebase, --merge, --delete-branch, etc.)

@@ -10,7 +10,7 @@
 // Windows NUL is deliberately not excluded — pwsh null-sinks have their own patterns.
 
 "use strict";
-const { resolveEffectiveCommand, resolveEffectiveArgv } = require("./segment-utils");
+const { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb, commandBasename } = require("./segment-utils");
 // Git write detection lives in a sibling module (#1401 file-split): patterns.js
 // exceeded the 500-line HARD limit, so the git-write classifier was extracted.
 const { isGitWriteIR, resolveGitSubArgv } = require("./git-write-ir");
@@ -148,22 +148,50 @@ function resolveGhSubArgv(ghArgv) {
   return ghArgv.slice(i);
 }
 
-// Resolve the effective gh argv for one segment (direct, env-prefix, or VAR=val-prefix).
-// argv in IR excludes cmd0 — it starts with the first argument after the command name.
+// Resolve the effective gh argv for one segment through the shared wrapper model
+// (VAR=val / env / rtk / nohup / command ...). argv in IR excludes cmd0.
 function resolveGhSegmentArgv(seg) {
   if (!seg || typeof seg.cmd0 !== "string") return null;
   if (seg.cmd0 === "gh") return seg.argv; // argv already excludes cmd0
-  if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
-    // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
-    const synthSeg = { cmd0: seg.argv[0], argv: seg.argv.slice(1) };
-    if (resolveEffectiveCommand(synthSeg) === "gh") return resolveEffectiveArgv(synthSeg);
-    return null;
-  }
-  if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
-    // `VAR=val gh ...` form (inline env assignment as cmd0)
-    if (resolveEffectiveCommand(seg) === "gh") return resolveEffectiveArgv(seg);
-  }
+  if (commandBasename(resolveEffectiveCommand(seg)) === "gh") return resolveEffectiveArgv(seg);
   return null;
+}
+
+// True when one gh argv (excluding `gh`) is a write. Global flags before the
+// subcommand are skipped first (#1296 retire; see resolveGhSubArgv).
+function isGhWriteArgv(ghArgv) {
+  if (!Array.isArray(ghArgv) || ghArgv.length === 0) return false;
+  const subArgv = resolveGhSubArgv(ghArgv);
+  if (subArgv.length === 0) return false;
+
+  const sub0 = subArgv[0];
+  const sub1 = subArgv[1];
+  const sub2 = subArgv[2];
+
+  if (sub0 === "pr" && sub1 === "merge") return true;
+  if (sub0 === "issue" && sub1 === "delete") return true;
+  if (sub0 === "repo" && sub1 === "delete") return true;
+  if (sub0 === "release" && sub1 != null && /^(?:create|delete|edit|upload)$/.test(sub1)) return true;
+  if (sub0 === "issue" && sub1 === "create") return true;
+
+  if (sub0 === "api") {
+    // gh api -X METHOD / --method METHOD (order-tolerant, matches the retired regex).
+    for (let i = 1; i < subArgv.length; i++) {
+      const tok = subArgv[i];
+      if (tok === "-X" || tok === "--method") {
+        const method = subArgv[i + 1];
+        if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
+      // -X=? preserves the retired gh-api-mutate regex's -X= (equals) coverage (#1296)
+      } else if (/^-X=?(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
+        return true;
+      }
+    }
+    // gh api PUT repos/.../contents/...
+    if (sub1 === "PUT" && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/contents\//.test(sub2)) return true;
+    // gh api POST|PATCH repos/.../git/{blobs,trees,commits,refs}
+    if ((sub1 === "POST" || sub1 === "PATCH") && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/git\/(?:blobs|trees|commits|refs)/.test(sub2)) return true;
+  }
+  return false;
 }
 
 // isGhWriteIR: IR-owned gh write detector. The kind:"gh" WRITE_PATTERNS group
@@ -174,47 +202,15 @@ function isGhWriteIR(ir) {
 
   for (const seg of ir.segments) {
     const ghArgv = resolveGhSegmentArgv(seg);
-    if (!ghArgv || ghArgv.length === 0) continue;
-
-    // Skip leading gh global flags (and their values) so sub0/sub1 read from the
-    // effective subcommand position — closes the global-flag-before-subcommand
-    // bypass (#1296 retire; see resolveGhSubArgv). Composes with the env-prefix /
-    // VAR=val resolution above (that ran first, so subArgv starts after `gh`).
-    const subArgv = resolveGhSubArgv(ghArgv);
-    if (subArgv.length === 0) continue;
-
-    const sub0 = subArgv[0];
-    const sub1 = subArgv[1];
-    const sub2 = subArgv[2];
-
-    if (sub0 === "pr" && sub1 === "merge") return true;
-    if (sub0 === "issue" && sub1 === "delete") return true;
-    if (sub0 === "repo" && sub1 === "delete") return true;
-    if (sub0 === "release" && sub1 != null && /^(?:create|delete|edit|upload)$/.test(sub1)) return true;
-    if (sub0 === "issue" && sub1 === "create") return true;
-
-    if (sub0 === "api") {
-      // gh api -X METHOD / --method METHOD (loop is order-tolerant, matches the
-      // retired regex; iterate the effective subArgv so global flags before `api`
-      // are already stripped).
-      for (let i = 1; i < subArgv.length; i++) {
-        const tok = subArgv[i];
-        if (tok === "-X" || tok === "--method") {
-          const method = subArgv[i + 1];
-          if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
-        // -X=? preserves the retired gh-api-mutate regex's -X= (equals) coverage (#1296)
-        } else if (/^-X=?(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
-          return true;
-        }
-      }
-      // gh api PUT repos/.../contents/...
-      if (sub1 === "PUT" && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/contents\//.test(sub2)) return true;
-      // gh api POST|PATCH repos/.../git/{blobs,trees,commits,refs}
-      if ((sub1 === "POST" || sub1 === "PATCH") && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/git\/(?:blobs|trees|commits|refs)/.test(sub2)) return true;
+    if (ghArgv) {
+      if (isGhWriteArgv(ghArgv)) return true;
+      continue;
     }
+    // Fail-closed safety net for an AMBIGUOUS wrapper peel (mirrors isGitWriteIR).
+    if (scanWrappedVerb(seg, (tok, rest) => commandBasename(tok) === "gh" && isGhWriteArgv(rest))) return true;
   }
 
   return false;
 }
 
-module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, isKnownDispatchPath, resolveGhSegmentArgv, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR, isGitWriteIR, resolveGitSubArgv, resolveGhSubArgv };
+module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, isKnownDispatchPath, resolveGhSegmentArgv, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR, isGhWriteArgv, isGitWriteIR, resolveGitSubArgv, resolveGhSubArgv };
