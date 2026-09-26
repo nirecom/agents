@@ -34,7 +34,20 @@ function getVerbosePromptInjection(sessionId) {
   }
 }
 
+// Returns true when this session's frozen flag indicates verbose-prompt mode.
+// Used by worktree-backup payload builder to gate dir_expand.
+function isVerbosePromptSession(sessionId) {
+  try {
+    if (!isUsableSessionId(sessionId)) return false;
+    const state = readState(sessionId);
+    return !!(state && state.verbose_prompt === true);
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
   VERBOSE_PROMPT_TEXT,
   getVerbosePromptInjection,
+  isVerbosePromptSession,
 };

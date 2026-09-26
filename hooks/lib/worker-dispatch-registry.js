@@ -175,11 +175,15 @@ const workers = {
       branch: { type: "branch", required: true },
       backup_dir: { type: "derived-backup-dir", required: false },
       docker_check: { type: "bool", required: false, default: true },
+      // Verbose-model sessions set this true; when true, gitignored directories are
+      // expanded into their files and read/enumeration budgets apply. Env overrides:
+      // WORKTREE_BACKUP_MAX_FILES (2000), WORKTREE_BACKUP_MAX_BYTES (50MB), WORKTREE_BACKUP_MAX_ENUMERATE (20000).
+      dir_expand: { type: "bool", required: false, default: false },
       session_id: { type: "session-id", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
     },
     binaries: { external: ["git", "docker"], scripts: {} },
-    envPassthrough: ["WORKTREE_BASE_DIR"],
+    envPassthrough: ["WORKTREE_BASE_DIR", "WORKTREE_BACKUP_MAX_FILES", "WORKTREE_BACKUP_MAX_BYTES", "WORKTREE_BACKUP_MAX_ENUMERATE"],
     writeScopes: ["backup-dir", "plans-dir"],
     renderer: "status-triple-quoted",
   },
