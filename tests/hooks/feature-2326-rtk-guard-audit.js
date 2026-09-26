@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// tests/feature-2326-rtk-rewrite/test-rtk-guard-audit.js
+// tests/hooks/feature-2326-rtk-guard-audit.js
 // No-framework Node tests for the NEW hooks/lib/rtk-guard-audit.js writer +
 // file-lock rotation. TEST-FIRST: the module does not exist yet, so require()
 // fails and every case reports RED (module not loaded). All log/lock paths are

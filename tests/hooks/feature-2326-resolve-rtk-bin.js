@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// tests/feature-2326-rtk-rewrite/test-resolve-rtk-bin.js
+// tests/hooks/feature-2326-resolve-rtk-bin.js
 // Pure Node.js (no framework) tests for resolveRtkBin(existsFn) priority order
 // and the main-flow passthrough when no binary resolves.
 
