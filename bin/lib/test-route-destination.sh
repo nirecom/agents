@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/lib/test-route-destination.sh — source-only; not executable. Decides
-# whether a planned test case appends to an existing top-level tests/*.sh file
-# or needs a new one. The same-token-set rule lives in
+# whether a planned test case appends to an existing categorized
+# tests/<category>/<name>.sh file or needs a new one. The same-token-set rule lives in
 # skills/_shared/test-design/append-vs-new.md. Corpus scanning is delegated to
 # tdg_scan_corpus, structural validation to tdg_classify and token extraction to
 # tfm_parse_tests_line (CPR-SSOT). The 500-line HARD default is owned by
@@ -84,17 +84,29 @@ trd_set_key() {
   printf '%s' "$out"
 }
 
-# trd_is_top_level_test <root-relative path> — decided by path COMPONENT count.
-# A `tests/*.sh` glob would also accept tests/part/bar.sh, which sits outside
-# tdg_scan_corpus' range contract.
+# trd_is_top_level_test <root-relative path> — is the path inside the corpus
+# range contract: tests/<canonical-category>/<name>.sh (3 components only).
+# Uses _TDG_CANONICAL_CATEGORIES (CPR-SSOT) — available because this file
+# sources test-dup-group.sh above. Non-canonical directories (split-test
+# fragments, _archive, lib) are rejected. Flat tests/<name>.sh (2 components)
+# are NOT in the corpus range.
+# "top_level" is a legacy name from the flat-structure era; it means "in corpus".
 trd_is_top_level_test() {
   local p="${1-}"
   [[ -n "$p" ]] || return 1
   local -a parts=()
   IFS='/' read -r -a parts <<< "$p"
-  [[ "${#parts[@]}" -eq 2 ]] || return 1
   [[ "${parts[0]}" == "tests" ]] || return 1
-  [[ "${parts[1]}" == *.sh && "${parts[1]}" != ".sh" ]] || return 1
+  if [[ "${#parts[@]}" -eq 3 ]]; then
+    local _cat _found=0
+    for _cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
+      [[ "${parts[1]}" == "$_cat" ]] && { _found=1; break; }
+    done
+    [[ "$_found" -eq 1 ]] || return 1
+    [[ "${parts[2]}" == *.sh && "${parts[2]}" != ".sh" ]] || return 1
+  else
+    return 1
+  fi
   return 0
 }
 

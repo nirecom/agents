@@ -129,15 +129,18 @@ tdg_classify() {
 }
 
 # tdg_scan_corpus <repo-root> — emits `axis<TAB>key<TAB>escaped-file` per
-# membership. The scan range is `<repo-root>/tests/*.sh` only: `*` does not cross
-# `/`, so sibling fragments (tests/<stem>/*.sh) and tests/_archive/ are outside
-# it by construction. That exclusion is a contract, not an accident.
+# membership. The scan range is the six canonical test categories (#1834):
+# tests/{hooks,bin,skills,agents,install,tests}/*.sh. Non-canonical directories
+# (split-test fragments, _archive, lib, fixtures) are excluded by allowlist.
+# That range is a contract, not an accident.
+_TDG_CANONICAL_CATEGORIES=(hooks bin skills agents install tests)
 tdg_scan_corpus() {
   local root="${1:?tdg_scan_corpus: repo root required}"
-  local f rel esc_file full_key tok
-  for f in "$root"/tests/*.sh; do
+  local f rel esc_file full_key tok cat
+  for cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
+    for f in "$root"/tests/"$cat"/*.sh; do
     [[ -f "$f" ]] || continue
-    rel="tests/${f##*/}"
+    rel="${f#"$root"/}"
     esc_file="$(tdg_escape_field "$rel")"
     tdg_classify "$f" >/dev/null
     if [[ "$TDG_VERDICT" != "ok" ]]; then
@@ -150,6 +153,7 @@ tdg_scan_corpus() {
     done
     printf 'full\t%s\t%s\n' "$full_key" "$esc_file"
     printf 'token\t%s\t%s\n' "$(tdg_escape_field "${TFM_TOKENS[0]}")" "$esc_file"
+  done
   done
 }
 

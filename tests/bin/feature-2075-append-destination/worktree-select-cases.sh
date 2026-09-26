@@ -8,6 +8,14 @@
 # Fixture shape follows tests/fix-882-resolve-worktree-path.sh: real linked
 # worktree + a workflow state file whose cwd points at it.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "worktree-select-series" "skills/review-tests/scripts/select-staged-files.sh"
+
 if ! command -v node >/dev/null 2>&1; then
     for _wid in W1 W2; do
         case_ran "$_wid"
@@ -99,5 +107,15 @@ else
 
     git -C "$W_MAIN" worktree remove --force "$W_LINKED" >/dev/null 2>&1 || true
 fi
+
+case_end
+
+case_begin "worktree-resolve-path-coverage" "bin/resolve-worktree-path"
+if [[ -f "$AGENTS_ROOT/bin/resolve-worktree-path" ]]; then
+    pass "P0-ext bin/resolve-worktree-path exists (used by this test suite)"
+else
+    fail "P0-ext bin/resolve-worktree-path missing"
+fi
+case_end
 
 grp_done "worktree-select-cases.sh"

@@ -7,6 +7,12 @@
 # escaped, so they travel through the environment rather than `awk -v` (which
 # would re-interpret their backslash escapes).
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 row_field() { # <output> <axis> <key> <colnum>
     TDG_A="$2" TDG_K="$3" TDG_C="$4" awk -F'\t' '
         substr($0,1,1)=="#" { next }
