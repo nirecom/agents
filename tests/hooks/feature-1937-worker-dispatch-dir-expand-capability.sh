@@ -16,6 +16,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1937_CAP_INNER:-}" ]; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
@@ -118,9 +120,6 @@ group_omitted_is_accepted() {
         *) pass "omit/no-dir_expand-complaint" ;;
     esac
 }
-
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
 
 case_begin "registry-shape" "hooks/lib/worker-dispatch-registry.js"
 group_registry_shape

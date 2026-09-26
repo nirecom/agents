@@ -18,6 +18,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WT1937_INNER:-}" ]; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
@@ -416,9 +418,6 @@ case_16_dir_expand_explicit_false() {
     if paths_has "state/secret.txt"; then pass "c16/plain-dir-file-copied"; else fail "c16/plain-dir-file-copied" "state/secret.txt absent — plain dir files should be copied when dir_expand off"; fi
     if paths_has "keep.txt"; then pass "c16/sibling-file-copied"; else fail "c16/sibling-file-copied" "keep.txt absent from manifest"; fi
 }
-
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
 
 case_begin "c1-backward-compat" "bin/worker-dispatch/workers/worktree-backup.js"
 case_1_backward_compat

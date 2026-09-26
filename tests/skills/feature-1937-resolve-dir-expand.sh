@@ -13,6 +13,9 @@
 set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+AGENTS_DIR="$REPO_DIR"
+# shellcheck source=../lib/harness.sh
+. "$REPO_DIR/tests/lib/harness.sh"
 SCRIPT_JS="$REPO_DIR/skills/worktree-end/scripts/resolve-dir-expand.js"
 VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
 to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
@@ -68,9 +71,6 @@ resolve() {
         CLAUDE_WORKFLOW_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         $envkv node "$SCRIPT_N" "$@" </dev/null 2>/dev/null
 }
-
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
 
 if [ ! -f "$SCRIPT_JS" ]; then
     fail "0-resolver-script-exists" "not implemented yet: $SCRIPT_JS"
