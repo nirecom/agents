@@ -141,4 +141,8 @@ Changes: fix(#2397): anchored the `case_begin` detection predicate in `bin/check
 
 ### FEATURE: PR #2406 — feature/2396-write-tests-routing-categorized-tests (2026-09-26, 3ec600a2b9f9c2184fc2815e41a7afedd8299175, #2406)
 Background: fix(#2396,#2289,#2290): fix corpus scanner and routing predicate for categorized test layout; fix WT-7 aggregation wording; add test coverage follow-ups
-Changes: fix corpus scanner and routing predicate for categorized test layout (closes #2396, #2289, #2290); fix WT-7 aggregation wording; add test coverage follow-ups — PR #2406 merged 2026-09-26 <!-- compose-doc-append-sentinel: branch=feature/2396-write-tests-routing-categorized-tests pr=#2406 -->
+Changes: fix corpus scanner and routing predicate for categorized test layout (closes #2396, #2289, #2290); fix WT-7 aggregation wording; add test coverage follow-ups — PR #2406 merged 2026-09-26 <!-- compose-doc-append-sentinel: branch=feature/2396-write-tests-routing-categorized-tests pr=#2406 -->
+
+### FEATURE: PR #2405 — feature/2395-tests-2-50-test-path (2026-09-26, 622ae66aabbf452ad378391854d27735f2209346, #2405)
+Background: fix(#2395): repair 1691 hollow-pass test path refs after tests/ 2-level restructuring
+Changes: Fix hollow-pass test path references introduced by the tests/ 2-level restructuring (#1834): updated 1,691 test files across all categories (agents, bin, hooks, skills, install) to replace broken flat-path constructors with their 2-level equivalents; eliminated 50 scanner-detected hollow-pass cases where tests were fake-greening with 0 assertions due to non-existent source paths. (#2395) <!-- compose-doc-append-sentinel: branch=feature/2395-tests-2-50-test-path pr=#2405 -->
