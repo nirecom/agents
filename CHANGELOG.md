@@ -547,3 +547,11 @@ Changes: Fixed: `worktree-backup` worker now correctly enumerates gitignored dir
 ### FEATURE: PR #2384 (2026-09-26)
 Background: feat(#1593,#1601,#1602,#1603): fix Windows git.exe detection, staged-scan renames, hookspath audit
 Changes: Staged private-info scan now catches renamed files and correctly detects `git.exe` as the git binary on Windows — two scan-evasion gaps closed.;New `bin/audit-hookspath-neutralization.sh` audits repos whose local `core.hooksPath` disables or bypasses hook dispatch; documented in `docs/scan-outbound.md`.;Hook block messages for staged-file violations no longer echo matched content verbatim, preventing private data from appearing in the hook response.
+
+### FEATURE: PR #2390 (2026-09-26)
+Background: fix(#2388): add case_begin/case_end markers to gitlab-forge tests
+Changes: glab install: when `GITLAB_HOSTNAME` and `GITLAB_TOKEN` are set but the host cannot be reached (DNS check fails within 3 seconds), auth is now skipped with a warning instead of timing out or probing cached credentials silently.;forge: `FORGE_GITLAB_HOST` is removed; set `GITLAB_HOSTNAME` (or `GITLAB_SSH_HOSTNAME` for SSH-only remotes) to identify a self-hosted GitLab instance for both `glab` auth and forge routing. **Migration required** if `FORGE_GITLAB_HOST` was set.
+
+### FEATURE: PR #2399 (2026-09-26)
+Background: fix(#2397,#2398): anchor case_begin predicate and guard edge inputs in check-case-markers.sh
+Changes: `bin/check-case-markers.sh` now exits 1 with a stderr message when called with no arguments or a non-existent path, instead of silently exiting 0 with a false "clean" result (#2398);`bin/check-case-markers.sh` correctly rejects test files that define `case_begin()` as a function without ever calling it; the predicate is now anchored to the invocation form (#2397)

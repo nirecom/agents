@@ -8,6 +8,12 @@
 # because the combined file crosses the HARD line limit; the functional cut is
 # "core routing contract" (H) vs. "edge/robustness inputs" (this file).
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
 # run_helper_at <cwd> <args...> — run_helper's sibling for the cases that must
 # NOT hand over --root. Same capture contract (OUT / ERR / RC).
 run_helper_at() {
@@ -24,14 +30,16 @@ run_helper_at() {
     rm -f "$outf" "$errf"
 }
 
+case_begin "edge-series" "bin/find-tests-for-source.sh"
+
 # ── B1 one line under the limit still appends ──────────────────────────────
 R="$(make_repo)"
-add_test_file "$R" "edge.sh" "src/x.js" "scope:common" 499
+add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 499
 run_helper --root "$R" --hard-max 500 --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 case_ran B1
 assert_eq "B1 exit code" "0" "$RC"
-assert_row "B1" "$ROW" "append" "exact" "tests/edge.sh" "tests/edge.sh"
+assert_row "B1" "$ROW" "append" "exact" "tests/bin/edge.sh" "tests/bin/edge.sh"
 assert_eq "B1 target_lines is the 499-line count" "499" "$(col "$ROW" 5)"
 assert_eq "B1 nothing was excluded at 499" "-" "$(list_files "$(col "$ROW" 8)")"
 
@@ -40,23 +48,23 @@ assert_eq "B1 nothing was excluded at 499" "-" "$(list_files "$(col "$ROW" 8)")"
 # 500 is still compliant and must remain viable — only a candidate that
 # EXCEEDS the limit (see H12 at 501) is excluded.
 R="$(make_repo)"
-add_test_file "$R" "edge.sh" "src/x.js" "scope:common" 500
+add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 500
 run_helper --root "$R" --hard-max 500 --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 case_ran B2
 assert_eq "B2 exit code" "0" "$RC"
-assert_row "B2" "$ROW" "append" "exact" "tests/edge.sh" "tests/edge.sh"
+assert_row "B2" "$ROW" "append" "exact" "tests/bin/edge.sh" "tests/bin/edge.sh"
 assert_eq "B2 target_lines is exactly 500" "500" "$(col "$ROW" 5)"
 assert_eq "B2 nothing was excluded at exactly 500" "-" "$(list_files "$(col "$ROW" 8)")"
 
 # ── B3 the same pair against the BUILT-IN default, with no --hard-max ──────
 # H12 pins 501 (over); this pins 499 (under). Only both together prove 500.
 R="$(make_repo)"
-add_test_file "$R" "edge.sh" "src/x.js" "scope:common" 499
+add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 499
 run_helper --root "$R" --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 case_ran B3
-assert_row "B3" "$ROW" "append" "exact" "tests/edge.sh" "tests/edge.sh"
+assert_row "B3" "$ROW" "append" "exact" "tests/bin/edge.sh" "tests/bin/edge.sh"
 assert_eq "B3 the helper never invents a split verdict for a near-limit target" \
     "append" "$(col "$ROW" 2)"
 
@@ -66,14 +74,14 @@ assert_eq "B3 the helper never invents a split verdict for a near-limit target" 
 case_ran B4
 for _bkind in duplicate_header late_header malformed_header; do
     R="$(make_repo)"
-    add_test_file "$R" "good.sh" "src/x.js" "scope:common" 20
+    add_test_file "$R" "bin/good.sh" "src/x.js" "scope:common" 20
     add_broken_test_file "$R" "broken.sh" "$_bkind"
     run_helper --root "$R" --sources "src/x.js"
     ROW="$(row_n "$OUT" 1)"
     assert_eq "B4[$_bkind] exit code" "0" "$RC"
-    assert_row "B4[$_bkind]" "$ROW" "append" "exact" "tests/good.sh" "tests/good.sh"
+    assert_row "B4[$_bkind]" "$ROW" "append" "exact" "tests/bin/good.sh" "tests/bin/good.sh"
     assert_eq "B4[$_bkind] the broken file never joins the candidate list" \
-        "tests/good.sh" "$(list_files "$(col "$ROW" 6)")"
+        "tests/bin/good.sh" "$(list_files "$(col "$ROW" 6)")"
     assert_eq "B4[$_bkind] and it is not silently parked in excluded either" \
         "-" "$(list_files "$(col "$ROW" 8)")"
 done
@@ -92,28 +100,51 @@ for _bkind in duplicate_header late_header malformed_header; do
         "-" "$(list_files "$(col "$ROW" 8)")"
 done
 
+# ── B6 --hard-max INT_MAX: a valid candidate is still reachable ────────────
+R="$(make_repo)"
+add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
+run_helper --root "$R" --hard-max 2147483647 --sources "src/x.js"
+ROW="$(row_n "$OUT" 1)"
+case_ran B6
+assert_eq "B6 exit code" "0" "$RC"
+assert_row "B6" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
+
+# ── B7 very long source token does not crash the helper ────────────────────
+R="$(make_repo)"
+add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
+_b7_src="src/"
+for _b7i in {1..241}; do _b7_src="${_b7_src}x"; done
+_b7_src="${_b7_src}.js"
+run_helper --root "$R" --sources "$_b7_src"
+case_ran B7
+if [[ "$RC" -eq 0 || "$RC" -eq 2 ]]; then
+    pass "B7 very long source token exits $RC without crashing"
+else
+    fail "B7 very long source token exited $RC — expected 0 or 2"
+fi
+
 # ── G1 source mode resolves the repo root from the CWD ─────────────────────
 R="$(make_repo)"
-add_test_file "$R" "a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
 run_helper_at "$R" --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 case_ran G1
 assert_eq "G1 exit code with --root omitted" "0" "$RC"
-assert_row "G1" "$ROW" "append" "exact" "tests/a.sh" "tests/a.sh"
+assert_row "G1" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
 
 # ── G2 test-file mode, from a SUBDIRECTORY (git root, not the CWD) ─────────
-add_test_file "$R" "self.sh" "src/x.js" "scope:common" 30
-run_helper_at "$R/tests" --test-file "tests/self.sh"
+add_test_file "$R" "bin/self.sh" "src/x.js" "scope:common" 30
+run_helper_at "$R/tests" --test-file "tests/bin/self.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran G2
 assert_eq "G2 exit code from a subdirectory" "0" "$RC"
-assert_row "G2" "$ROW" "append" "exact" "tests/a.sh" "tests/a.sh"
-assert_eq "G2 the path is still reported relative to the git root" "tests/a.sh" \
+assert_row "G2" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
+assert_eq "G2 the path is still reported relative to the git root" "tests/bin/a.sh" \
     "$(dcol "$ROW" 4)"
 
 # ── V1 embedded traversal is rejected, not normalized away ─────────────────
 R="$(make_repo)"
-add_test_file "$R" "a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
 case_ran V1
 for _v1 in "src/../x.js" "./../x.js" "src/../../etc/passwd"; do
     run_helper --root "$R" --sources "$_v1"
@@ -140,20 +171,20 @@ fi
 
 # ── E1 repeated --test-file: one row each, in order, each self-excluding ───
 R="$(make_repo)"
-add_test_file "$R" "self.sh" "src/x.js" "scope:common" 20
-add_test_file "$R" "other.sh" "src/x.js" "scope:common" 30
-run_helper --root "$R" --test-file "tests/self.sh" --test-file "tests/other.sh"
+add_test_file "$R" "bin/self.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/other.sh" "src/x.js" "scope:common" 30
+run_helper --root "$R" --test-file "tests/bin/self.sh" --test-file "tests/bin/other.sh"
 case_ran E1
 assert_eq "E1 one row per --test-file" "2" "$(nrows "$OUT")"
-assert_row "E1 row1" "$(row_n "$OUT" 1)" "append" "exact" "tests/other.sh" "tests/other.sh"
-assert_row "E1 row2" "$(row_n "$OUT" 2)" "append" "exact" "tests/self.sh" "tests/self.sh"
+assert_row "E1 row1" "$(row_n "$OUT" 1)" "append" "exact" "tests/bin/other.sh" "tests/bin/other.sh"
+assert_row "E1 row2" "$(row_n "$OUT" 2)" "append" "exact" "tests/bin/self.sh" "tests/bin/self.sh"
 
 # ── E2 a --test-file that does not exist ───────────────────────────────────
 # The plan fixes no verdict name for this input, so the assertion is the
 # contract that holds either way: no crash, and never an append target for a
 # file whose `# Tests:` set could not be read.
 case_ran E2
-run_helper --root "$R" --test-file "tests/nope.sh"
+run_helper --root "$R" --test-file "tests/bin/nope.sh"
 if [[ "$RC" == "0" || "$RC" == "2" ]]; then
     pass "E2 a nonexistent --test-file is a handled input (rc $RC)"
 else
@@ -171,14 +202,16 @@ assert_no_append() {
 assert_no_append "E2 an unreadable query never yields append" "$OUT"
 
 # ── E3 a --test-file that exists but cannot be read ────────────────────────
+# cycle2-C6 gap: on Windows/NTFS and some Docker volumes chmod 000 is silently
+# ignored; E3 auto-skips there and the unreadable-input path is a known gap.
 case_ran E3
-E3F="$R/tests/locked.sh"
-add_test_file "$R" "locked.sh" "src/x.js" "scope:common" 20
+E3F="$R/tests/bin/locked.sh"
+add_test_file "$R" "bin/locked.sh" "src/x.js" "scope:common" 20
 chmod 000 "$E3F" 2>/dev/null || true
 if [[ -r "$E3F" ]]; then
     skip "E3 this filesystem ignores chmod 000 — unreadable-input path not exercised"
 else
-    run_helper --root "$R" --test-file "tests/locked.sh"
+    run_helper --root "$R" --test-file "tests/bin/locked.sh"
     if [[ "$RC" == "0" || "$RC" == "2" ]]; then
         pass "E3 an unreadable --test-file is a handled input (rc $RC)"
     else
@@ -198,13 +231,13 @@ done
 
 # ── E5 --hard-max at zero, negative and far above every candidate ──────────
 R="$(make_repo)"
-add_test_file "$R" "a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
 case_ran E5
 run_helper --root "$R" --hard-max 0 --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 assert_eq "E5 --hard-max 0 exit code" "0" "$RC"
 assert_row "E5 zero" "$ROW" "new" "size-hard-limit" "-" "-"
-assert_eq "E5 --hard-max 0 excludes every candidate" "tests/a.sh" \
+assert_eq "E5 --hard-max 0 excludes every candidate" "tests/bin/a.sh" \
     "$(list_files "$(col "$ROW" 8)")"
 run_helper --root "$R" --hard-max "-1" --sources "src/x.js"
 assert_eq "E5 a negative --hard-max is a usage error" "2" "$RC"
@@ -212,13 +245,26 @@ assert_eq "E5 a negative --hard-max prints no row" "" "$OUT"
 run_helper --root "$R" --hard-max 999999 --sources "src/x.js"
 ROW="$(row_n "$OUT" 1)"
 assert_eq "E5 an oversized --hard-max exit code" "0" "$RC"
-assert_row "E5 oversized" "$ROW" "append" "exact" "tests/a.sh" "tests/a.sh"
+assert_row "E5 oversized" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
+
+# ── E6 exit-3 when the tests/ directory is absent (C5/#2290) ───────────────
+R="$(make_repo)"
+rm -rf "$R/tests"
+run_helper --root "$R" --sources "src/x.js"
+case_ran E6
+assert_eq "E6 missing tests/ dir exits 3" "3" "$RC"
+assert_eq "E6 missing tests/ dir prints no row" "" "$OUT"
+if printf '%s\n' "$ERR" | grep -q 'tests'; then
+    pass "E6 error message mentions tests/"
+else
+    fail "E6 error message does not mention tests/ — got: $(printf '%q' "$ERR")"
+fi
 
 # ── I1 idempotency: identical query, unchanged corpus, identical bytes ─────
 R="$(make_repo)"
-add_test_file "$R" "a.sh" "src/x.js,src/y.js" "scope:common" 20
-add_test_file "$R" "b.sh" "src/x.js" "scope:common" 30
-add_test_file "$R" "we,ird.sh" "src/x.js" "scope:common" 40
+add_test_file "$R" "bin/a.sh" "src/x.js,src/y.js" "scope:common" 20
+add_test_file "$R" "bin/b.sh" "src/x.js" "scope:common" 30
+add_test_file "$R" "bin/we,ird.sh" "src/x.js" "scope:common" 40
 run_helper --root "$R" --sources "src/x.js" --sources "src/q.js"
 I1_FIRST="$OUT"
 I1_RC="$RC"
@@ -231,5 +277,15 @@ if [[ -n "$I1_FIRST" ]]; then
 else
     fail "I1 both runs produced empty output — the idempotency comparison was vacuous"
 fi
+
+case_end
+
+case_begin "edge-route-destination-coverage" "bin/lib/test-route-destination.sh"
+if [[ -f "$ROUTE_LIB" ]]; then
+    pass "P0-ext bin/lib/test-route-destination.sh exists (used by this test suite)"
+else
+    fail "P0-ext bin/lib/test-route-destination.sh missing"
+fi
+case_end
 
 grp_done "edge-cases.sh"
