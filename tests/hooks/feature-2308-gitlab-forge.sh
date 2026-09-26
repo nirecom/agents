@@ -18,6 +18,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_FEAT2308_FORGE_INNER:-}" ]; th
 fi
 
 SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2308-gitlab-forge"
+AGENTS_DIR_DISPATCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR_DISPATCH/tests/lib/harness.sh"
 
 SPLIT_GROUPS=(
     "gitlab-forge-abc.sh"
@@ -97,19 +99,23 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 });' 2>/dev/null
 }
 
+case_begin "c4-env-dotenv-classifies-gitlab" "hooks/lib/forge-router.js"
 C4_GOT="$(c4_type "$(c4_np "$C4_CFG")")"
 if [ "$C4_GOT" = "gitlab" ]; then
     c4_pass "C4-env: .env GITLAB_HOSTNAME=gitlab.mycompany.com -> self-hosted origin classified gitlab"
 else
     c4_fail "C4-env: expected gitlab from .env host, got: [$C4_GOT]"
 fi
+case_end
 
+case_begin "c4-env-ctrl-no-key-falls-back" "hooks/lib/forge-router.js"
 C4_CTRL="$(c4_type "$(c4_np "$C4_CFG_EMPTY")")"
 if [ "$C4_CTRL" = "unknown" ]; then
     c4_pass "C4-env-ctrl: .env without the key + no env var -> same origin falls back to unknown"
 else
     c4_fail "C4-env-ctrl: expected unknown without the .env host, got: [$C4_CTRL]"
 fi
+case_end
 
 rm -rf "$C4_TMP" 2>/dev/null || true
 echo "Results: $C4_PASS passed, $C4_FAIL failed"
