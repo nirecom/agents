@@ -1,9 +1,10 @@
 #!/bin/bash
-# Sourced by hooks/pre-commit. Validates staged tests/<category>/*.sh frontmatter
-# and rejects newly-added flat tests/*.sh (#1834), printing a CAUSE-SPECIFIC block
-# message. check-test-frontmatter.sh returns exit 1 for every failure, so the cause
-# is read from its stderr codes: FLAT_TEST_SH_REJECTED = wrong location; the four
-# MISSING_*/INVALID_* codes = frontmatter shape. Both may fire in one run.
+# Sourced by hooks/pre-commit. Validates staged test entrypoints (*.sh / *.Tests.ps1 /
+# test_*.py) under tests/<category>/ and rejects newly-added flat ones (#1834, #2392),
+# printing a CAUSE-SPECIFIC block message. check-test-frontmatter.sh returns exit 1 for
+# every failure, so the cause is read from its stderr codes: FLAT_TEST_SH_REJECTED /
+# FLAT_TEST_REJECTED = wrong location; the MISSING_*/INVALID_* codes = frontmatter shape.
+# Both may fire in one run.
 
 # _precommit_check_tests_frontmatter — reads $_cfg_dir (ambient, as load-env.sh does).
 # rc 0 = ok / nothing staged; rc 1 = block the commit.
@@ -18,7 +19,10 @@ _precommit_check_tests_frontmatter() {
             tests/run-all.sh) continue ;;  # infra runner — no frontmatter, not a test entrypoint
             tests/hooks/*/*.sh|tests/bin/*/*.sh|tests/skills/*/*.sh|tests/agents/*/*.sh|tests/install/*/*.sh|tests/tests/*/*.sh) continue ;;  # suite sub-files — not entrypoints
             tests/hooks/*.sh|tests/bin/*.sh|tests/skills/*.sh|tests/agents/*.sh|tests/install/*.sh|tests/tests/*.sh) _staged_tests+=("$f") ;;
+            tests/hooks/*/*.Tests.ps1|tests/bin/*/*.Tests.ps1|tests/skills/*/*.Tests.ps1|tests/agents/*/*.Tests.ps1|tests/install/*/*.Tests.ps1|tests/tests/*/*.Tests.ps1|tests/*/*/test_*.py) continue ;;
+            tests/hooks/*.Tests.ps1|tests/bin/*.Tests.ps1|tests/skills/*.Tests.ps1|tests/agents/*.Tests.ps1|tests/install/*.Tests.ps1|tests/tests/*.Tests.ps1|tests/hooks/test_*.py|tests/bin/test_*.py|tests/skills/test_*.py|tests/agents/test_*.py|tests/install/test_*.py|tests/tests/test_*.py) _staged_tests+=("$f") ;;
             tests/*.sh) _staged_tests+=("$f") ;;  # flat tests/<name>.sh — forward so the checker rejects newly-added ones (#1834)
+            tests/*.Tests.ps1|tests/test_*.py) _staged_tests+=("$f") ;;  # flat — forwarded for FLAT_TEST_REJECTED (#2392)
             *) continue ;;
         esac
     done < <(git diff --cached --name-only -z -- 'tests/' 2>/dev/null || true)
@@ -37,13 +41,13 @@ _precommit_check_tests_frontmatter() {
     echo ""
 
     # Cause-specific summaries, keyed on the checker's stderr codes (both may fire).
-    if printf '%s\n' "$_out" | grep -q 'FLAT_TEST_SH_REJECTED'; then
-        echo "Commit blocked: new tests/*.sh placed directly under tests/."
-        echo "A .sh test entrypoint must live under tests/<category>/ (categories: hooks bin skills agents install tests)."
+    if printf '%s\n' "$_out" | grep -qE 'FLAT_TEST_SH_REJECTED|FLAT_TEST_REJECTED'; then
+        echo "Commit blocked: new test entrypoint placed directly under tests/."
+        echo "A test entrypoint (.sh / .Tests.ps1 / test_*.py) must live under tests/<category>/ (categories: hooks bin skills agents install tests)."
         echo "Move it into the matching category dir, e.g. tests/hooks/<name>.sh."
     fi
     if printf '%s\n' "$_out" | grep -qE 'MISSING_TESTS_HEADER|INVALID_TESTS_TOKEN|MISSING_SCOPE_TAG|MISSING_HARNESS_SOURCE'; then
-        echo "Commit blocked: staged tests/*.sh file(s) fail frontmatter validation."
+        echo "Commit blocked: staged test file(s) fail frontmatter validation."
         echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
     fi
     return 1

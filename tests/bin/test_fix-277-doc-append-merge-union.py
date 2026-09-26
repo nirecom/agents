@@ -1,3 +1,5 @@
+# Tests: bin/doc-append.py
+# Tags: bin, python, scope:issue-specific
 """Tests for issue #277 — doc-append rebase conflict fix (Approach C).
 
 Covers:
@@ -20,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DOC_APPEND_PATH = REPO_ROOT / "bin" / "doc-append.py"
 
 

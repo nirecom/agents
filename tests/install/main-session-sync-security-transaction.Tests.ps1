@@ -7,8 +7,8 @@
 # become addressable and a failure can be injected at an exact rename.
 
 BeforeAll {
-    . (Join-Path $PSScriptRoot "lib\session-sync-security-common.ps1")
-    . (Join-Path $PSScriptRoot "lib\session-sync-transaction-common.ps1")
+    . (Join-Path $PSScriptRoot "..\lib\session-sync-security-common.ps1")
+    . (Join-Path $PSScriptRoot "..\lib\session-sync-transaction-common.ps1")
 }
 
 AfterAll {

@@ -170,6 +170,101 @@ test_C6_docs_only_empty() {
     fi
 }
 
+# C7 (#2392): tests/<category>/<stem>.Tests.ps1 and test_<stem>.py are stem-matched like .sh;
+# a sub-folder file stays out (maxdepth 1). A fake tree is needed because the selector reads
+# the tests/ dir next to its OWN location; only select-tests.sh is copied, so the TL3 append
+# (bin/get-config-var) is absent and cannot add noise.
+test_C7_nonsh_stem_match() {
+    local fake="$TMPDIR_BASE/c7-agents" repo="$TMPDIR_BASE/c7-repo" out miss=""
+    mkdir -p "$fake/bin" "$fake/tests/bin/sub" "$repo/bin"
+    cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    : > "$fake/tests/bin/widget-probe.Tests.ps1"
+    : > "$fake/tests/bin/test_widget-probe.py"
+    : > "$fake/tests/bin/sub/test_widget-probe.py"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    : > "$repo/README.md"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    echo "change" > "$repo/bin/widget-probe.sh"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
+    echo "$out" | grep -q "tests/bin/widget-probe\.Tests\.ps1$" || miss="$miss .Tests.ps1"
+    echo "$out" | grep -q "tests/bin/test_widget-probe\.py$" || miss="$miss test_*.py"
+    echo "$out" | grep -q "tests/bin/sub/" && miss="$miss sub-folder-leaked"
+    if [ -z "$miss" ]; then
+        pass "C7_nonsh_stem_match: tests/bin/<stem>.Tests.ps1 and test_<stem>.py selected, sub/ excluded"
+    else
+        fail "C7_nonsh_stem_match: problems:$miss
+--- output ---
+$out"
+    fi
+}
+
+# C8 (#2392): non-matching stems for .Tests.ps1 and test_*.py are NOT selected.
+# Changed path has stem "foo"; test tree has "bar.*" — those files must not appear.
+test_C8_nonsh_stem_no_match() {
+    local fake="$TMPDIR_BASE/c8-agents" repo="$TMPDIR_BASE/c8-repo" out extra=""
+    mkdir -p "$fake/bin" "$fake/tests/bin" "$repo/bin"
+    cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    : > "$fake/tests/bin/bar.Tests.ps1"
+    : > "$fake/tests/bin/test_bar.py"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    : > "$repo/README.md"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    echo "change" > "$repo/bin/foo.sh"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
+    echo "$out" | grep -q "tests/bin/bar\.Tests\.ps1" && extra="$extra bar.Tests.ps1"
+    echo "$out" | grep -q "tests/bin/test_bar\.py"    && extra="$extra test_bar.py"
+    if [ -z "$extra" ]; then
+        pass "C8_nonsh_stem_no_match: non-matching .Tests.ps1 and test_*.py not selected"
+    else
+        fail "C8_nonsh_stem_no_match: unexpected files in output:$extra
+--- output ---
+$out"
+    fi
+}
+
+# C9 (#2392): non-test entrypoint files (helper.ps1, helper.py) are never selected.
+# tests/bin/helper.ps1 does not match *.Tests.ps1, and tests/bin/helper.py does not
+# match test_*.py — neither must appear in output even when the changed stem matches.
+test_C9_non_entrypoint_ignored() {
+    local fake="$TMPDIR_BASE/c9-agents" repo="$TMPDIR_BASE/c9-repo" out extra=""
+    mkdir -p "$fake/bin" "$fake/tests/bin" "$repo/bin"
+    cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    : > "$fake/tests/bin/helper.ps1"
+    : > "$fake/tests/bin/helper.py"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    : > "$repo/README.md"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    echo "change" > "$repo/bin/helper.sh"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
+    echo "$out" | grep -q "tests/bin/helper\.ps1" && extra="$extra helper.ps1"
+    echo "$out" | grep -q "tests/bin/helper\.py"  && extra="$extra helper.py"
+    if [ -z "$extra" ]; then
+        pass "C9_non_entrypoint_ignored: helper.ps1 and helper.py not selected (not *.Tests.ps1 / test_*.py)"
+    else
+        fail "C9_non_entrypoint_ignored: non-entrypoint files leaked into selection:$extra
+--- output ---
+$out"
+    fi
+}
+
 # shellcheck source=./feature-689-select-tests/auto-merge-base.sh
 . "$AGENTS_DIR/tests/bin/feature-689-select-tests/auto-merge-base.sh"
 # shellcheck source=./feature-689-select-tests/docs-only-table.sh
@@ -192,6 +287,9 @@ test_C3_empty_diff
 test_C4_no_args
 test_C5_archive_excluded
 test_C6_docs_only_empty
+test_C7_nonsh_stem_match
+test_C8_nonsh_stem_no_match
+test_C9_non_entrypoint_ignored
 
 make_fake_agents
 test_S1_positional_form_unchanged

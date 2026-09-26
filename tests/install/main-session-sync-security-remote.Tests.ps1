@@ -10,7 +10,7 @@
 # Mitigation: checked at WORKFLOW_USER_VERIFIED preflight, category installer.
 
 BeforeAll {
-    . (Join-Path $PSScriptRoot "lib\session-sync-security-common.ps1")
+    . (Join-Path $PSScriptRoot "..\lib\session-sync-security-common.ps1")
 
     $script:Trusted = "https://example.invalid/trusted.git"
     $script:ExtUrl = 'ext::sh -c "touch pwned"'

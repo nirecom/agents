@@ -1,3 +1,5 @@
+# Tests: bin/doc-append-plain.py
+# Tags: bin, python, scope:common
 """Tests for bin/doc-append-plain.py.
 
 Runs the script as a subprocess (the script's argparse + sys.exit boundary is
@@ -16,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "bin" / "doc-append-plain.py"
 
 

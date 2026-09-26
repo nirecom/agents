@@ -1,7 +1,7 @@
 # Tests: profile-snippet.ps1, bin/get-config-var.ps1
 # Tags: profile-snippet, session-sync, toggle, pwsh-required, subprocess, scope:common
 #
-# Real-process companion to tests/main-profile-codes.Tests.ps1 (which mocks
+# Real-process companion to tests/install/main-profile-codes.Tests.ps1 (which mocks
 # Start-Process): runs the snippet in a real child pwsh with real git repos
 # and recording stubs on PATH, so fetch, merge, editor launch, and push are
 # observed as side effects, not asserted strings.
@@ -19,7 +19,7 @@ BeforeDiscovery {
 
 Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip:(-not $script:CanRunSubprocessTests) {
     BeforeAll {
-        $script:AgentsDir = Split-Path -Parent $PSScriptRoot
+        $script:AgentsDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
         # A mirror of the agents tree plus a private HOME. profile-snippet.ps1
         # pins $env:AGENTS_CONFIG_DIR to its own parent, so a copy of the snippet

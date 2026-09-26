@@ -1,12 +1,16 @@
 # Tests: bin/confirm-off.ps1
 # Tags: pwsh-required, bin, env, config, scope:common
 # Pester L1 tests for bin/confirm-off.ps1 — pwsh counterpart of bin/confirm-off.
-# Pre-implementation: all assertions will fail until /write-code lands
-# bin/confirm-off.ps1.
+# L3 gap (what this test does NOT catch):
+# - Real ~/.local/bin/confirm-off(.ps1) symlink and a live-AGENTS_CONFIG_DIR pwsh run.
+# - WSL bash PATH resolution for #677: confirm-off.ps1 is reachable from WSL only via
+#   the AGENTS_CONFIG_DIR absolute path; the WSL→Windows call is not reproduced.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: pwsh-required
 
 Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
     BeforeAll {
-        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:helper = Join-Path $script:repoRoot 'bin\confirm-off.ps1'
         $script:gcvHelper = Join-Path $script:repoRoot 'bin\get-config-var.ps1'
         $script:loadEnv = Join-Path $script:repoRoot 'hooks\lib\load-env.js'

@@ -1,12 +1,10 @@
-# tests/feature-worktreeinclude.Tests.ps1
+# Tests: bin/worktree-copy-include.js
+# Tags: bin, worktree, pwsh-required, scope:common
 #
 # Windows-specific path-handling tests for the .worktreeinclude file-copy
 # feature. Verifies that the bin script normalizes Windows backslash paths
 # and produces JSON parseable by ConvertFrom-Json.
-#
-# Source under test (test-first — may not yet exist):
-#   bin/worktree-copy-include.js
-#
+
 # These tests spawn `node bin/worktree-copy-include.js` with a JSON payload
 # whose path fields contain Windows-style backslashes. Contract: the script
 # normalizes backslashes to forward slashes internally, executes the copy,
@@ -14,7 +12,7 @@
 
 Describe "bin/worktree-copy-include.js Windows path normalization" {
     BeforeAll {
-        $script:agentsDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+        $script:agentsDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
         $script:binJs     = Join-Path $script:agentsDir "bin\worktree-copy-include.js"
         $script:tmpBase   = Join-Path ([System.IO.Path]::GetTempPath()) ("wti-pester-" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))
         New-Item -ItemType Directory -Path $script:tmpBase -Force | Out-Null

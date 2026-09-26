@@ -1,27 +1,10 @@
-# tests/feature-697-dotfileslink-link-one.Tests.ps1
 # Tests: install/win/dotfileslink.ps1, profile-snippet.ps1
 # Tags: installer, dotfileslink, _link_one, watchlist, scope:issue-specific, pwsh-required, bugfix-987
-#
-# L2 design note:
-# install/win/dotfileslink.ps1 hard-codes $HOME for the destination path. $HOME is a
-# PowerShell read-only automatic variable that CANNOT be reassigned in a child shell.
-# That means there is no way to run the real installer against a sandbox $HOME without
-# either (a) modifying the source or (b) writing into the developer's real ~/.claude/.
-# Option (b) would corrupt the developer's environment, so the behavioral assertions
-# below verify intent at the source-text level (static regex checks against the
-# installer script). Dynamic end-to-end runs belong in the L3 install/uninstall smoke
-# on a clean Windows VM after install.ps1 changes — they are out of scope here.
-#
-# L3 gap (what this test does NOT catch):
-# - real Developer Mode toggle vs Admin invocation
-# - real symlink-privilege denial in a non-Admin, non-Dev-Mode session
-# - real $PROFILE auto-load behavior with profile-snippet.ps1
-# - real New-Item SymbolicLink failure with rollback (only reachable by induced fault
-#   on a real $HOME — covered by the bash _link_one rollback test as a proxy)
-# Closest-to-action mitigation: install/uninstall smoke run on native Windows after install.ps1 changes.
-#
-# Some assertions for behaviors implemented under WF-CODE-5 may use Set-ItResult -Skip
-# when source code is not yet updated, so they show as skipped instead of failing.
+# L2: the installer hard-codes read-only $HOME, so a sandboxed run is impossible
+# without writing the real ~/.claude/; assertions are static regex checks instead.
+# L3 gap: real Developer Mode vs Admin, real symlink-privilege denial, real $PROFILE
+# auto-load, and real SymbolicLink failure + rollback (bash _link_one test is the
+# proxy). Mitigation: install/uninstall smoke on native Windows after install.ps1 changes.
 
 if ($env:OS -ne "Windows_NT") {
     Write-Host "SKIP: Windows-only test"
@@ -31,7 +14,7 @@ if ($env:OS -ne "Windows_NT") {
 Describe "dotfileslink.ps1 _link_one behavior (static)" {
 
     BeforeAll {
-        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
         $script:scriptPath  = Join-Path $script:agentsDir "install\win\dotfileslink.ps1"
         $script:profilePath = Join-Path $script:agentsDir "profile-snippet.ps1"
         $script:scriptText  = Get-Content -LiteralPath $script:scriptPath -Raw

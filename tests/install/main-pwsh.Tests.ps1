@@ -1,16 +1,15 @@
-# tests/main-pwsh.Tests.ps1
+# Tests: install/win/pwsh.ps1
+# Tags: installer, pwsh-required, scope:common, TL2
 # Pester 5 behavioral tests for install/win/pwsh.ps1
-#
-# Strategy for top-level scripts with internal function definitions:
-# Since Get-LatestPwshRelease is defined AND called within the same script
-# invocation, Pester Mock cannot intercept the internal call (the script-local
-# function definition shadows any parent-scope mock). Instead, behavioral tests
-# use a ScriptBlock wrapper that injects test doubles (fake implementations of
-# Get-Command, Get-LatestPwshRelease, winget, Invoke-WebRequest, Start-Process)
-# before running the equivalent script logic.
+# TL3 gap: real winget/MSI execution on a Windows host; only unit/stub assertions run here.
+# Strategy: Get-LatestPwshRelease is defined AND called within one script invocation,
+# so a Pester Mock cannot intercept it (the script-local definition shadows it).
+# Behavioral tests instead run the equivalent logic in a ScriptBlock wrapper that
+# injects test doubles (Get-Command, Get-LatestPwshRelease, winget, Invoke-WebRequest,
+# Start-Process).
 
 BeforeAll {
-    $script:ScriptPath    = (Resolve-Path "$PSScriptRoot\..\install\win\pwsh.ps1").Path
+    $script:ScriptPath    = (Resolve-Path "$PSScriptRoot\..\..\install\win\pwsh.ps1").Path
     $script:ScriptContent = Get-Content $script:ScriptPath -Raw
     # Mirror the new source logic: prefer the installed binary's version over the session version.
     $installedPwsh = "$env:ProgramFiles\PowerShell\7\pwsh.exe"

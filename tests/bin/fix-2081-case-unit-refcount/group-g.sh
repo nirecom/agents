@@ -86,17 +86,30 @@ case_end
 EOF
 mkdir -p "$GC_REPO/tests/cc-allorphan-g"
 printf '#!/usr/bin/env bash\necho sib\n' > "$GC_REPO/tests/cc-allorphan-g/part.sh"
-# dead common .Tests.ps1 and test_*.py (marker-less, extension guard).
-add_raw "$GC_REPO" "cc-dead-g.Tests.ps1" <<'EOF'
+# dead common .Tests.ps1 and test_*.py (marker-less, extension guard); #2392 scans
+# them under tests/<category>/ only, so they live in tests/bin/.
+add_raw "$GC_REPO" "bin/cc-dead-g.Tests.ps1" <<'EOF'
 # Tests: bin/gc-dead.ps1
 # Tags: TL2, scope:common
 Describe 'x' { It 'runs' { $true | Should -Be $true } }
 EOF
-add_raw "$GC_REPO" "test_g_apply.py" <<'EOF'
+add_raw "$GC_REPO" "bin/test_g_apply.py" <<'EOF'
 # Tests: bin/gc-dead.py
 # Tags: TL2, scope:common
 def test_x():
     assert True
+EOF
+# Non-matching names — helper.ps1 ≠ *.Tests.ps1; helper.py ≠ test_*.py.
+add_raw "$GC_REPO" "bin/helper.ps1" <<'EOF'
+# Tests: bin/gc-dead.ps1
+# Tags: TL2, scope:common
+Write-Host "helper"
+EOF
+add_raw "$GC_REPO" "bin/helper.py" <<'EOF'
+# Tests: bin/gc-dead.py
+# Tags: TL2, scope:common
+def helper():
+    pass
 EOF
 commit_repo "$GC_REPO" "group-g common-entrypoint apply fixtures"
 
@@ -120,17 +133,34 @@ assert_eq "G4d both unit paths staged as deletions" \
 "D  tests/cc-allorphan-g.sh
 D  tests/cc-allorphan-g/part.sh" "$GC_STAGED"
 
-# NOTE: passes after write-code step — #1864 adds .Tests.ps1/test_*.py to the
-# common scan globs; before that they are not scanned and nothing fires.
-if line_has "$GC_OUT" DELETED "tests/cc-dead-g.Tests.ps1"; then
+# NOTE: passes after the #2392 write-code step — the common scan globs move from
+# top-level tests/*.Tests.ps1 / tests/test_*.py to tests/<category>/.
+if line_has "$GC_OUT" DELETED "tests/bin/cc-dead-g.Tests.ps1"; then
     pass "G5 dead common .Tests.ps1 deleted via --apply"
 else
     fail "G5 expected DELETED for dead .Tests.ps1 — NOTE: passes after write-code step (out=<<$GC_OUT>>)"
 fi
-if line_has "$GC_OUT" DELETED "tests/test_g_apply.py"; then
+if line_has "$GC_OUT" DELETED "tests/bin/test_g_apply.py"; then
     pass "G5b dead test_*.py deleted via --apply"
 else
     fail "G5b expected DELETED for dead test_*.py — NOTE: passes after write-code step (out=<<$GC_OUT>>)"
 fi
+
+# G5c/G5d — helper.ps1 / helper.py in tests/bin/ do NOT match *.Tests.ps1 / test_*.py;
+# audit-common must not report or delete them (pattern mismatch).
+if ! line_has "$GC_OUT" DELETED "tests/bin/helper.ps1"; then
+    pass "G5c helper.ps1 is not reported as DELETED (pattern mismatch)"
+else
+    fail "G5c audit-common must not delete tests/bin/helper.ps1 (out=<<$GC_OUT>>)"
+fi
+assert_eq "G5d helper.ps1 survives --apply (not in scan range)" \
+    "kept" "$(fs_of "$GC_REPO" "tests/bin/helper.ps1")"
+if ! line_has "$GC_OUT" DELETED "tests/bin/helper.py"; then
+    pass "G5e helper.py is not reported as DELETED (pattern mismatch)"
+else
+    fail "G5e audit-common must not delete tests/bin/helper.py (out=<<$GC_OUT>>)"
+fi
+assert_eq "G5f helper.py survives --apply (not in scan range)" \
+    "kept" "$(fs_of "$GC_REPO" "tests/bin/helper.py")"
 
 unset MOCK_ISSUES

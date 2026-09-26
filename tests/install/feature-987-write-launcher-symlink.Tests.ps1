@@ -1,4 +1,4 @@
-# tests/feature-987-write-launcher-symlink.Tests.ps1
+# tests/install/feature-987-write-launcher-symlink.Tests.ps1
 # Tests: install/win/dotfileslink.ps1
 # Tags: installer, dotfileslink, Write-Launcher, bugfix-987, pwsh-required, scope:issue-specific
 #
@@ -21,7 +21,7 @@ Describe "Write-Launcher behavior (dynamic)" {
     # via bin/check-verification-gate.sh category: installer
 
     BeforeAll {
-        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
         $script:scriptPath  = Join-Path $script:agentsDir "install\win\dotfileslink.ps1"
         $script:ScriptContent = Get-Content -LiteralPath $script:scriptPath -Raw
 

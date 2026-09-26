@@ -1,3 +1,5 @@
+# Tests: bin/github-issues/issue-to-history.sh
+# Tags: bin, python, scope:common
 """Tests for issue #733 Fix 3 — issue-to-history.sh idempotency grep.
 
 Covers the idempotency check at L139 of bin/github-issues/issue-to-history.sh.
@@ -21,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "github-issues" / "issue-to-history.sh"
 
 

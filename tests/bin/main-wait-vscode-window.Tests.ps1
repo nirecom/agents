@@ -1,7 +1,9 @@
+# Tests: bin/wait-vscode-window.ps1
+# Tags: bin, pwsh-required, scope:common
 # Tests for bin/wait-vscode-window.ps1 and title matching logic
 
 BeforeAll {
-    $AgentsDir = Split-Path -Parent $PSScriptRoot
+    $AgentsDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $script:WaitScript = Join-Path $AgentsDir "bin\wait-vscode-window.ps1"
 }
 

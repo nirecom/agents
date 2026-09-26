@@ -1,9 +1,11 @@
+# Tests: install/win/dotfileslink.ps1
+# Tags: installer, dotfileslink, pwsh-required, scope:common
 # Structural tests for install/win/dotfileslink.ps1 — verifies claude-global\agents symlink entry
 # Does NOT execute the install script (would touch real $HOME).
 
 Describe "dotfileslink.ps1 claude-global\agents symlink entry" {
     BeforeAll {
-        $script:scriptPath = Join-Path $PSScriptRoot "..\install\win\dotfileslink.ps1"
+        $script:scriptPath = Join-Path $PSScriptRoot "..\..\install\win\dotfileslink.ps1"
         $script:content = Get-Content -Raw -LiteralPath $script:scriptPath
     }
 

@@ -1,29 +1,10 @@
 # Tests: bin/doc-rotate.py, bin/doc-append.py, install/linux/dotfileslink.sh
 # Tags: scope:issue-specific
-#
-# Regression tests for issue #1073: doc-rotate.py / doc-append.py CHANGELOG.md
-# rotation must use a CHANGELOG-specific archive (changelog/<year>.md), NOT the
-# history/<year>.md stream. history/index.md must NOT be generated. The ## Archived
-# block must not be duplicated on repeated rotation.
-#
-# L3 gap (what this test does NOT catch):
-# - Real MSYS/Git Bash environment: MSYS_NO_PATHCONV=1 actually suppressing path conversion
-# - Real dotfileslink.sh execution creating ~/.local/bin/doc-append with the correct content
-# - doc-append CLI invocation via the actual installed bash wrapper (T1 uses doc-append.py directly)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: installer
-#
-# Expected behavior (post-fix):
-#   - doc-rotate.py on CHANGELOG.md writes to changelog/<year>.md, not history/<year>.md
-#   - history/index.md is NOT generated when rotating CHANGELOG.md
-#   - Archive file header is "# Changelog <year>", not "# History <year>"
-#   - Re-rotating a CHANGELOG.md that already has ## Archived does NOT duplicate the header
-#   - doc-append CHANGELOG.md auto-rotation follows the same CHANGELOG-specific rules
-#   - doc-rotate.py CHANGELOG.md --rebuild-index exits 0 with a warning (no index for CHANGELOG)
-#   - doc-rotate.py history.md --rebuild-index still works (guard does not affect history)
-#   - T9: dotfileslink.sh source contains MSYS_NO_PATHCONV=1 (static check)
-#
-# Expected to fail until source is fixed (doc-rotate.py / doc-append.py).
+# Issue #1073: CHANGELOG.md rotation archives to changelog/<year>.md ("# Changelog
+# <year>"), never history/, builds no index, and never duplicates ## Archived.
+# L3 gap: real MSYS path conversion, real dotfileslink.sh install of doc-append,
+# and the installed wrapper CLI; checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: installer.
 
 from __future__ import annotations
 
@@ -34,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DOC_ROTATE_PATH = REPO_ROOT / "bin" / "doc-rotate.py"
 DOC_APPEND_PATH = REPO_ROOT / "bin" / "doc-append.py"
 DOTFILESLINK_PATH = REPO_ROOT / "install" / "linux" / "dotfileslink.sh"

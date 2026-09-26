@@ -132,7 +132,7 @@ if ($linkFailed -gt 0) {
     Write-Warning "Symlink failures: $linkFailed"
     exit 1
 }
-# Test affordance — see tests/feature-697-dotfileslink-link-one.Tests.ps1
+# Test affordance — see tests/install/feature-697-dotfileslink-link-one.Tests.ps1
 if ($env:DOTFILESLINK_LINKS_ONLY -eq "1") { exit 0 }
 
 # --- Assemble ~/.claude/settings.json from base + extension ---

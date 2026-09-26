@@ -106,3 +106,61 @@ else
     pass "A6: _archive/lib/run-all.sh/suite-subfiles are excluded — staging them is a gate no-op (rc 0, no output)"
 fi
 case_end
+
+# A7-A9 (#2392): .Tests.ps1 / test_*.py get the same classification as .sh — category-direct is
+# validated, a suite sub-file is skipped, a new flat file is forwarded and location-rejected.
+case_begin "A7-A9-nonsh-classification" "hooks/lib/precommit-tests-frontmatter.sh"
+_a7_fail=""
+for _nm in x.Tests.ps1 test_x.py; do
+    # A7: headerless category-direct file must reach the checker → frontmatter block.
+    R="$TMPBASE/a7_$_nm"; init_fixture "$R"
+    write_staged_nofm "$R" "tests/bin/$_nm"
+    run_fm_check "$R"
+    if [ "$RC" -ne 1 ] || ! printf '%s' "$OUT" | grep -qF "$FM_MSG"; then
+        _a7_fail="$_a7_fail [A7 tests/bin/$_nm: want rc 1 + frontmatter msg, got rc $RC]"
+    fi
+    # A8: headerless suite sub-file must be filtered before the checker → no-op.
+    R="$TMPBASE/a8_$_nm"; init_fixture "$R"
+    write_staged_nofm "$R" "tests/bin/sub/$_nm"
+    run_fm_check "$R"
+    if [ "$RC" -ne 0 ] || [ -n "$OUT" ]; then
+        _a7_fail="$_a7_fail [A8 tests/bin/sub/$_nm: want rc 0 + no output, got rc $RC]"
+    fi
+    # A9: new flat file with VALID frontmatter → FLAT_TEST_REJECTED + location msg only.
+    R="$TMPBASE/a9_$_nm"; init_fixture "$R"
+    mkdir -p "$R/tests"
+    printf '%s\n' '# Tests: hooks/pre-commit' '# Tags: scope:common' > "$R/tests/$_nm"
+    git -C "$R" add -- "tests/$_nm" >/dev/null 2>&1
+    run_fm_check "$R"
+    if [ "$RC" -ne 1 ] || ! printf '%s' "$OUT" | grep -qF 'FLAT_TEST_REJECTED' \
+       || ! printf '%s' "$OUT" | grep -qF "$LOC_MSG" || printf '%s' "$OUT" | grep -qF "$FM_MSG"; then
+        _a7_fail="$_a7_fail [A9 tests/$_nm: want rc 1 + FLAT_TEST_REJECTED + location msg only, got rc $RC out '$(printf '%s' "$OUT" | tr '\n' ' ')']"
+    fi
+done
+if [ -n "$_a7_fail" ]; then
+    fail "A7-A9: .Tests.ps1/test_*.py classification" "$_a7_fail"
+else
+    pass "A7-A9: .Tests.ps1/test_*.py — category-direct validated, sub-file skipped, new flat file location-rejected"
+fi
+case_end
+
+# A10 (#2392): non-test entrypoints (helper.ps1, helper.py) are silently ignored —
+# files not matching *.Tests.ps1 or test_*.py must pass through the gate as a no-op.
+case_begin "A10-non-entrypoint-ignored" "hooks/lib/precommit-tests-frontmatter.sh"
+_a10_fail=""
+for _nm in helper.ps1 helper.py; do
+    R="$TMPBASE/a10_$_nm"; init_fixture "$R"
+    write_staged_nofm "$R" "tests/bin/$_nm"
+    run_fm_check "$R"
+    if [ "$RC" -ne 0 ]; then
+        _a10_fail="$_a10_fail [tests/bin/$_nm: want rc 0, got $RC]"
+    elif [ -n "$OUT" ]; then
+        _a10_fail="$_a10_fail [tests/bin/$_nm: want no output, got '$(printf '%s' "$OUT" | tr '\n' ' ')']"
+    fi
+done
+if [ -n "$_a10_fail" ]; then
+    fail "A10: non-test entrypoints ignored" "gate not silent:$_a10_fail"
+else
+    pass "A10: helper.ps1 and helper.py are not test entrypoints — gate is a no-op (rc 0, no output)"
+fi
+case_end

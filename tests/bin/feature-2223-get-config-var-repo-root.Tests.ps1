@@ -22,7 +22,7 @@ Set-StrictMode -Version Latest
 
 Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
     BeforeAll {
-        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:helper = Join-Path $script:repoRoot 'bin\get-config-var.ps1'
         $script:tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("gcv2223-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
         New-Item -ItemType Directory -Path $script:tmp -Force | Out-Null

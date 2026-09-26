@@ -1,27 +1,10 @@
-# tests/fix-969-965-dotfileslink-hardening.Tests.ps1
-# Tests: install/win/dotfileslink.ps1, profile-snippet.ps1, tests/feature-697-dotfileslink-link-one.Tests.ps1
+# Tests: install/win/dotfileslink.ps1, profile-snippet.ps1, tests/install/feature-697-dotfileslink-link-one.Tests.ps1
 # Tags: installer, dotfileslink, profile-snippet, scope:issue-specific, pwsh-required, bugfix-969, bugfix-965
-#
-# Covers:
-# - T1-1: $EffectiveHome honors DOTFILESLINK_HOME_OVERRIDE (static)
-# - T1-2: DOTFILESLINK_SKIP_PRIV_CHECK affordance (static)
-# - T1-3: DOTFILESLINK_FAIL_AT_INDEX affordance (static)
-# - T2-1: $item.LinkType captured before Remove-Item (static)
-# - T2-2: rollback uses captured $oldLinkType (not hardcoded SymbolicLink) (static)
-# - T2-3: dynamic rollback — induced failure restores backup (Start-Process pwsh)
-# - T2-4: dynamic rollback — Junction restored as Junction (LinkType preserved)
-# - T4-4/T4-5/T4-6: profile-snippet.ps1 watchlist detects dangling and replaced entries
-# - T5-1: stale "(pending implementation)" suffix removed from sibling Tests.ps1
-#
-# L3 gap (what this test does NOT catch):
-# - Real Developer Mode toggle in a fresh Windows session
-# - Real Junction creation by `cmd /c mklink /J` from cmd.exe (we use New-Item Junction)
-# - Real $PROFILE auto-load behavior with profile-snippet.ps1
-# Closest-to-action mitigation: install/uninstall smoke run on native Windows after
-# install.ps1 changes (manual user verification).
-#
-# Dynamic tests that require source-level affordances skip via Set-ItResult -Skip
-# when the source code has not yet been updated.
+# Covers (T-ids on each It): HOME override / priv-check / fail-at-index affordances,
+# LinkType-preserving rollback (static + dynamic), profile-snippet watchlist dangling
+# and replaced entries, and the stale sibling "(pending implementation)" suffix.
+# L3 gap: real Developer Mode toggle, real `cmd /c mklink /J` junctions, real $PROFILE
+# auto-load. Mitigation: install/uninstall smoke on native Windows after install.ps1 changes.
 
 if ($env:OS -ne "Windows_NT") {
     Write-Host "SKIP: Windows-only test"
@@ -31,10 +14,10 @@ if ($env:OS -ne "Windows_NT") {
 Describe "dotfileslink.ps1 hardening (#969 / #965)" {
 
     BeforeAll {
-        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+        $script:agentsDir   = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
         $script:scriptPath  = Join-Path $script:agentsDir "install\win\dotfileslink.ps1"
         $script:profilePath = Join-Path $script:agentsDir "profile-snippet.ps1"
-        $script:siblingTest = Join-Path $script:agentsDir "tests\feature-697-dotfileslink-link-one.Tests.ps1"
+        $script:siblingTest = Join-Path $script:agentsDir "tests\install\feature-697-dotfileslink-link-one.Tests.ps1"
         $script:scriptText  = Get-Content -LiteralPath $script:scriptPath -Raw
         $script:profileText = if (Test-Path -LiteralPath $script:profilePath) {
             Get-Content -LiteralPath $script:profilePath -Raw
