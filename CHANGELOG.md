@@ -567,3 +567,7 @@ Changes: Test suite now discovers and runs Pester (.Tests.ps1) and pytest (test_
 ### FEATURE: PR #2410 (2026-09-26)
 Background: feat(#2393,#2352,#838,#1174,#1246,#1324,#1563): fix enforce-worktree rtk validation, linked-worktree guards, cross-session state protection, gh issue scope
 Changes: enforce-worktree now validates `rtk`-wrapped git commands: `rtk git commit`, `rtk git push`, and similar forms are correctly blocked from the main worktree (previously failed open).;Linked-worktree guard fixes: `git worktree remove` and `git worktree add` no longer trigger false-positive BLOCK from a linked checkout.;Cross-session state protection: writes to another session's workflow-state files are now blocked from all worktrees.;`gh issue create` enforcement: attempts to create issues in unmanaged repositories are blocked from the main worktree.
+
+### FEATURE: PR #2418 (2026-09-27)
+Background: fix(#2408): remove .env bash-source from wip-state.sh; fix wip-check final-line validation
+Changes: Fixed a silent WIP state failure (70+ sessions affected): wip-state.sh no longer sources .env via bash, and workflow-init now validates check output before applying WIP status.
