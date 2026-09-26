@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-copy-behavior.sh
+# tests/bin/feature-1643-worker-dispatch-copy-behavior.sh
 # Tests: bin/worker-dispatch/workers/worktree-copy.js, bin/worker-dispatch.js, bin/worktree-write-notes.js
 # Tags: worker-dispatch, worktree-copy, status-derivation, table-driven, TL2, scope:issue-specific
 # Issue #1643 — worktree-copy derives ONE status from three sequential CLIs;
@@ -18,6 +18,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_CB_INNER:-}" ]; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
@@ -128,9 +130,7 @@ process.stdout.write(row&&row.extraEnv?String(row.extraEnv[process.argv[3]]):"(n
 ' "$(nodepath "$CALLLOG")" "$1" "$2"
 }
 
-# ===========================================================================
-# Group 1 — the real chain: WORKTREE_NOTES.md must actually exist afterwards
-# ===========================================================================
+case_begin "real-chain" "bin/worker-dispatch.js"
 group_real_chain() {
     local p
     p="$(write_payload wc-real "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"artifact_dir\":\"$PLANS\"}")"
@@ -149,10 +149,10 @@ group_real_chain() {
         *) fail "real/summary-reports-the-notes-write" "summary='$(field_of summary)'" ;;
     esac
 }
+group_real_chain
+case_end
 
-# ===========================================================================
-# Group 2 — status derivation table over the three CLI outcomes
-# ===========================================================================
+case_begin "status-table" "bin/worker-dispatch/workers/worktree-copy.js"
 group_status_table() {
     local name rules want_status want_sub p got
     while IFS='|' read -r name rules want_status want_sub; do
@@ -178,10 +178,10 @@ copy-errors      | [{"match":"includeFilter","stdout":"{\\"copied\\":[],\\"denie
 notes-fails      | [{"match":"includeFilter","stdout":"$OK_COPY"},{"match":"writeNotes","status":1,"stderr":"notes CLI refused"},{}] | failed | WORKTREE_NOTES.md write failed
 TABLE
 }
+group_status_table
+case_end
 
-# ===========================================================================
-# Group 3 — the copied list has to reach the notes CLI, not just the summary
-# ===========================================================================
+case_begin "copied-reaches-notes" "bin/worker-dispatch/workers/worktree-copy.js"
 group_copied_reaches_notes() {
     local p
     p="$(write_payload wc-env "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"session_id\":\"sess-copy-1\",\"artifact_dir\":\"$PLANS\"}")"
@@ -193,10 +193,10 @@ group_copied_reaches_notes() {
     assert_eq "wire/sibling-parse-uses-the-session-intent" "1" \
         "$(grep -c '"script":"parseWorktrees"' "$CALLLOG" | tr -d ' ')"
 }
+group_copied_reaches_notes
+case_end
 
-# ===========================================================================
-# Group 4 — a lost log must not downgrade a completed copy
-# ===========================================================================
+case_begin "log-failure-non-fatal" "bin/worker-dispatch.js"
 group_log_failure_non_fatal() {
     local p blocker
     blocker="$PLANS_RAW/blocked-artifacts"
@@ -213,16 +213,10 @@ group_log_failure_non_fatal() {
         *) fail "logfail/summary-unchanged" "summary='$(field_of summary)'" ;;
     esac
 }
+group_log_failure_non_fatal
+case_end
 
-# ===========================================================================
-# Group 5 (#1937, CPR-ORTH) — a gitignored DIRECTORY candidate must not crash
-#   the copy. copyInclude is the shared copy engine, so the opaque-directory
-#   skip that loses worktree-backup content afflicts it too: an opaque dir (a
-#   gitignored dir made a single ls-files entry by an embedded repo) reaches
-#   fs.copyFileSync today and fails with a raw "Failed to copy <dir>". The fix
-#   must report the directory candidate cleanly while the sibling plain
-#   gitignored file still copies.
-# ===========================================================================
+case_begin "copyinclude-directory-candidate" "bin/worker-dispatch/workers/worktree-copy.js"
 group_copyinclude_directory_candidate() {
     local WC_ROOT="$TMPD/wc-dir"
     local WC_MAIN="$WC_ROOT/main"
@@ -267,27 +261,6 @@ fs.writeFileSync(process.argv[4], JSON.stringify(r||{}));
         *) fail "wc-dir/directory-reported-cleanly" "errors=$errs" ;;
     esac
 }
-
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
-
-case_begin "real-chain" "bin/worker-dispatch.js"
-group_real_chain
-case_end
-
-case_begin "status-table" "bin/worker-dispatch/workers/worktree-copy.js"
-group_status_table
-case_end
-
-case_begin "copied-reaches-notes" "bin/worker-dispatch/workers/worktree-copy.js"
-group_copied_reaches_notes
-case_end
-
-case_begin "log-failure-non-fatal" "bin/worker-dispatch.js"
-group_log_failure_non_fatal
-case_end
-
-case_begin "copyinclude-directory-candidate" "bin/worker-dispatch/workers/worktree-copy.js"
 group_copyinclude_directory_candidate
 case_end
 

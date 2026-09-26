@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1937-worktree-backup-dir-expand.sh
-# Tests: bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch.js
+# Tests: bin/worker-dispatch/workers/worktree-backup.js
 # Tags: worker-dispatch, worktree-backup, dir_expand, read-budget, enumeration-budget, TL2, scope:issue-specific
 #
 # Issue #1937: gitignored directories are lost when a worktree is deleted. With
@@ -117,6 +117,7 @@ EXEC_P() { printf '{"mode":"execute","worktree_path":"%s","branch":"%s","docker_
 #   its contents absent, the sibling gitignored file still copied. PASSES today
 #   (the backward-compatibility pin).
 # ===========================================================================
+case_begin "c1-backward-compat" "bin/worker-dispatch/workers/worktree-backup.js"
 case_1_backward_compat() {
     mk c1 'state/\nkeep.txt\n'
     printf 'KEEP\n' > "$LINKED_RAW/keep.txt"
@@ -129,10 +130,13 @@ case_1_backward_compat() {
     if paths_has "keep.txt"; then pass "c1/sibling-file-copied"; else fail "c1/sibling-file-copied" "paths=$(manifest_paths)"; fi
     if paths_has "state/inner.txt"; then fail "c1/dir-contents-not-copied" "state/inner.txt present"; else pass "c1/dir-contents-not-copied"; fi
 }
+case_1_backward_compat
+case_end
 
 # ===========================================================================
 # Case 2 — dir_expand:true expands a plain gitignored dir into its files.
 # ===========================================================================
+case_begin "c2-expand-true" "bin/worker-dispatch/workers/worktree-backup.js"
 case_2_expand_true() {
     mk c2 'state/\n'
     mkdir -p "$LINKED_RAW/state/sub"
@@ -154,10 +158,13 @@ case_2_expand_true() {
         fail "c2/nested-file-content" "backup not found: $BACKUP_RAW/state/sub/b.txt"
     fi
 }
+case_2_expand_true
+case_end
 
 # ===========================================================================
 # Case 3 — manifest paths are forward-slash normalized regardless of nesting.
 # ===========================================================================
+case_begin "c3-forward-slash" "bin/worker-dispatch/workers/worktree-backup.js"
 case_3_forward_slash() {
     mk c3 'state/\n'
     mkdir -p "$LINKED_RAW/state/deep/deeper"
@@ -169,10 +176,13 @@ case_3_forward_slash() {
         *) fail "c3/forward-slash-nested-path" "nested path missing: $(manifest_paths)" ;;
     esac
 }
+case_3_forward_slash
+case_end
 
 # ===========================================================================
 # Case 4 — [BUDGET] a single over-limit file is not read/preserved -> partial.
 # ===========================================================================
+case_begin "c4-single-huge" "bin/worker-dispatch/workers/worktree-backup.js"
 case_4_single_huge() {
     mk c4 'state/\n'
     mkdir -p "$LINKED_RAW/state"
@@ -181,10 +191,13 @@ case_4_single_huge() {
     assert_eq "c4/status-partial" "partial" "$(field_of status)"
     if summary_has "NOT preserved"; then pass "c4/summary-warns-not-preserved"; else fail "c4/summary-warns-not-preserved" "summary='$(field_of summary)'"; fi
 }
+case_4_single_huge
+case_end
 
 # ===========================================================================
 # Case 5 — [BUDGET] cumulative FILE COUNT across dirs trips the shared budget.
 # ===========================================================================
+case_begin "c5-file-count" "bin/worker-dispatch/workers/worktree-backup.js"
 case_5_file_count() {
     mk c5 'd1/\nd2/\n'
     mkdir -p "$LINKED_RAW/d1" "$LINKED_RAW/d2"
@@ -199,11 +212,14 @@ case_5_file_count() {
     esac
     if summary_has "NOT preserved"; then pass "c5/summary-warns-not-preserved"; else fail "c5/summary-warns-not-preserved" "summary='$(field_of summary)'"; fi
 }
+case_5_file_count
+case_end
 
 # ===========================================================================
 # Case 6 — [BUDGET] a worktree-internal symlink-to-file must be counted, not
 #   read past the budget (regression pin). Needs real symlinks.
 # ===========================================================================
+case_begin "c6-symlink-budget" "bin/worker-dispatch/workers/worktree-backup.js"
 case_6_symlink_budget() {
     if [ "$SYMLINK_OK" -ne 1 ]; then skip "c6/symlink-budget" "no real symlink support"; return; fi
     mk c6 'state/\n'
@@ -214,11 +230,14 @@ case_6_symlink_budget() {
     assert_eq "c6/status-partial" "partial" "$(field_of status)"
     if summary_has "NOT preserved"; then pass "c6/summary-warns-not-preserved"; else fail "c6/summary-warns-not-preserved" "summary='$(field_of summary)'"; fi
 }
+case_6_symlink_budget
+case_end
 
 # ===========================================================================
 # Case 7 — [C1] over-limit LEGACY input with dir_expand OFF: budgets do NOT
 #   apply, every file copies, no NOT-preserved warning. PASSES today.
 # ===========================================================================
+case_begin "c7-legacy-no-budget" "bin/worker-dispatch/workers/worktree-backup.js"
 case_7_legacy_no_budget() {
     mk c7 'sa.txt\nsb.txt\nsc.txt\n'
     printf 'A\n' > "$LINKED_RAW/sa.txt"
@@ -230,11 +249,14 @@ case_7_legacy_no_budget() {
     else fail "c7/all-files-copied-despite-caps" "paths=$(manifest_paths)"; fi
     if summary_has "NOT preserved"; then fail "c7/no-warning-when-off" "summary='$(field_of summary)'"; else pass "c7/no-warning-when-off"; fi
 }
+case_7_legacy_no_budget
+case_end
 
 # ===========================================================================
 # Case 8 — [C2] a non-regular file (FIFO) is skipped with an issue, regular
 #   siblings still copy, worktree-end is not blocked. Needs mkfifo.
 # ===========================================================================
+case_begin "c8-non-regular" "bin/worker-dispatch/workers/worktree-backup.js"
 case_8_non_regular() {
     if [ "$FIFO_OK" -ne 1 ]; then skip "c8/non-regular-file" "no mkfifo support"; return; fi
     mk c8 'state/\n'
@@ -249,11 +271,14 @@ case_8_non_regular() {
         *) fail "c8/issue-non-regular-skipped" "issues=$(manifest_issues)" ;;
     esac
 }
+case_8_non_regular
+case_end
 
 # ===========================================================================
 # Case 9 — [C3] the enumeration budget is ONE counter shared across all dirs;
 #   3 dirs x 3 files = 9 > cap 5 truncates and records exactly one issue.
 # ===========================================================================
+case_begin "c9-enumeration-budget" "bin/worker-dispatch/workers/worktree-backup.js"
 case_9_enumeration_budget() {
     mk c9 'e1/\ne2/\ne3/\n'
     local d f
@@ -267,11 +292,14 @@ case_9_enumeration_budget() {
     n="$(node -e 'try{const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String((m.issues||[]).filter(s=>String(s).indexOf("enumeration budget reached")>=0).length))}catch(e){process.stdout.write("-1")}' "$(nodepath "$BACKUP_RAW/manifest.json")" 2>/dev/null)"
     assert_eq "c9/enumeration-issue-recorded-exactly-once" "1" "$n"
 }
+case_9_enumeration_budget
+case_end
 
 # ===========================================================================
 # Case 10 — [ZEROFILE] zero regular files preserved but issues exist -> the
 #   status is "partial" (a manifest is written), never "skipped".
 # ===========================================================================
+case_begin "c10-zerofile-partial" "bin/worker-dispatch/workers/worktree-backup.js"
 case_10_zerofile_partial() {
     mk c10 'state/\n'
     mkdir -p "$LINKED_RAW/state"
@@ -282,12 +310,15 @@ case_10_zerofile_partial() {
     else fail "c10/manifest-written-despite-zero-files" "no manifest at $BACKUP_RAW"; fi
     if summary_has "NOT preserved"; then pass "c10/summary-warns-not-preserved"; else fail "c10/summary-warns-not-preserved" "summary='$(field_of summary)'"; fi
 }
+case_10_zerofile_partial
+case_end
 
 # ===========================================================================
 # Case 11 — [2PASS] execute re-inventories at the authoritative moment; a file
 #   added AFTER dry_run is still preserved by execute (Pass 2 is not bound to
 #   Pass 1's set). dir_expand omitted, so this PASSES today.
 # ===========================================================================
+case_begin "c11-live-reinventory" "bin/worker-dispatch/workers/worktree-backup.js"
 case_11_live_reinventory() {
     mk c11 'late.txt\n'
     dispatch "{\"mode\":\"dry_run\",\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"docker_check\":false,\"artifact_dir\":\"$PLANS\"}"
@@ -296,12 +327,15 @@ case_11_live_reinventory() {
     dispatch "$(EXEC_P '')"
     if paths_has "late.txt"; then pass "c11/execute-preserves-post-dry-run-file"; else fail "c11/execute-preserves-post-dry-run-file" "paths=$(manifest_paths)"; fi
 }
+case_11_live_reinventory
+case_end
 
 # ===========================================================================
 # Case 12 — a symlinked directory inside an expanded dir is not recursed into
 #   (no escape): the sibling real file copies, the symlink target's out-of-tree
 #   content never enters the backup. Needs real symlinks.
 # ===========================================================================
+case_begin "c12-symlink-dir-no-escape" "bin/worker-dispatch/workers/worktree-backup.js"
 case_12_symlink_dir_no_escape() {
     if [ "$SYMLINK_OK" -ne 1 ]; then skip "c12/symlink-dir-no-escape" "no real symlink support"; return; fi
     mk c12 'state/\n'
@@ -315,10 +349,13 @@ case_12_symlink_dir_no_escape() {
     if grep -rqF "ESCAPED-SECRET" "$BACKUP_RAW" 2>/dev/null; then fail "c12/no-symlink-escape" "out-of-tree content entered backup"
     else pass "c12/no-symlink-escape"; fi
 }
+case_12_symlink_dir_no_escape
+case_end
 
 # ===========================================================================
 # Case 13 — [C5] dir and its child both gitignored: expand deduplicates them.
 # ===========================================================================
+case_begin "c13-dup-gitignore" "bin/worker-dispatch/workers/worktree-backup.js"
 case_13_dup_gitignore() {
     mk c13 'state/\nstate/a.txt\n'
     mkdir -p "$LINKED_RAW/state"
@@ -344,10 +381,13 @@ case_13_dup_gitignore() {
         fail "c13/file-content-intact" "backup file not found at $BACKUP_RAW/state/a.txt"
     fi
 }
+case_13_dup_gitignore
+case_end
 
 # ===========================================================================
 # Case 14 — [C6] budget boundary: exactly-at-limit is preserved, over is not.
 # ===========================================================================
+case_begin "c14-budget-boundary" "bin/worker-dispatch/workers/worktree-backup.js"
 case_14_budget_boundary() {
     # Byte boundary: cap=5, file1=5 bytes (kept), file2=3 bytes (cut, 5+3>5)
     mk c14b 'd1/\n'
@@ -371,10 +411,13 @@ case_14_budget_boundary() {
     cnt="$(manifest_paths | tr ',' '\n' | grep -c 'e1/' 2>/dev/null || echo 0)"
     assert_eq "c14f/exactly-2-files-kept" "2" "$cnt"
 }
+case_14_budget_boundary
+case_end
 
 # ===========================================================================
 # Case 15 — [C6] enumeration budget boundary: exactly-at-limit passes, +1 is partial.
 # ===========================================================================
+case_begin "c15-enumerate-boundary" "bin/worker-dispatch/workers/worktree-backup.js"
 case_15_enumerate_boundary() {
     # at-limit: cap=3, 3 expanded files → all enumerated, status copied/partial(ok)
     mk c15a 'ef/\n'
@@ -398,10 +441,13 @@ case_15_enumerate_boundary() {
     dispatch "$(EXEC_P ',"dir_expand":true')" "WORKTREE_BACKUP_MAX_ENUMERATE=3"
     assert_eq "c15b/over-limit-partial" "partial" "$(field_of status)"
 }
+case_15_enumerate_boundary
+case_end
 
 # ===========================================================================
 # Case 16 — [C2] dir_expand EXPLICIT FALSE: same backward-compat as omitted.
 # ===========================================================================
+case_begin "c16-dir-expand-explicit-false" "bin/worker-dispatch/workers/worktree-backup.js"
 case_16_dir_expand_explicit_false() {
     mk c16 'state/\nkeep.txt\n'
     mkdir -p "$LINKED_RAW/state"
@@ -418,68 +464,6 @@ case_16_dir_expand_explicit_false() {
     if paths_has "state/secret.txt"; then pass "c16/plain-dir-file-copied"; else fail "c16/plain-dir-file-copied" "state/secret.txt absent — plain dir files should be copied when dir_expand off"; fi
     if paths_has "keep.txt"; then pass "c16/sibling-file-copied"; else fail "c16/sibling-file-copied" "keep.txt absent from manifest"; fi
 }
-
-case_begin "c1-backward-compat" "bin/worker-dispatch/workers/worktree-backup.js"
-case_1_backward_compat
-case_end
-
-case_begin "c2-expand-true" "bin/worker-dispatch/workers/worktree-backup.js"
-case_2_expand_true
-case_end
-
-case_begin "c3-forward-slash" "bin/worker-dispatch/workers/worktree-backup.js"
-case_3_forward_slash
-case_end
-
-case_begin "c4-single-huge" "bin/worker-dispatch/workers/worktree-backup.js"
-case_4_single_huge
-case_end
-
-case_begin "c5-file-count" "bin/worker-dispatch/workers/worktree-backup.js"
-case_5_file_count
-case_end
-
-case_begin "c6-symlink-budget" "bin/worker-dispatch/workers/worktree-backup.js"
-case_6_symlink_budget
-case_end
-
-case_begin "c7-legacy-no-budget" "bin/worker-dispatch/workers/worktree-backup.js"
-case_7_legacy_no_budget
-case_end
-
-case_begin "c8-non-regular" "bin/worker-dispatch/workers/worktree-backup.js"
-case_8_non_regular
-case_end
-
-case_begin "c9-enumeration-budget" "bin/worker-dispatch/workers/worktree-backup.js"
-case_9_enumeration_budget
-case_end
-
-case_begin "c10-zerofile-partial" "bin/worker-dispatch/workers/worktree-backup.js"
-case_10_zerofile_partial
-case_end
-
-case_begin "c11-live-reinventory" "bin/worker-dispatch/workers/worktree-backup.js"
-case_11_live_reinventory
-case_end
-
-case_begin "c12-symlink-dir-no-escape" "bin/worker-dispatch/workers/worktree-backup.js"
-case_12_symlink_dir_no_escape
-case_end
-
-case_begin "c13-dup-gitignore" "bin/worker-dispatch/workers/worktree-backup.js"
-case_13_dup_gitignore
-case_end
-
-case_begin "c14-budget-boundary" "bin/worker-dispatch/workers/worktree-backup.js"
-case_14_budget_boundary
-case_end
-
-case_begin "c15-enumerate-boundary" "bin/worker-dispatch/workers/worktree-backup.js"
-case_15_enumerate_boundary
-case_end
-
-case_begin "c16-dir-expand-explicit-false" "bin/worker-dispatch/workers/worktree-backup.js"
 case_16_dir_expand_explicit_false
 case_end
 
