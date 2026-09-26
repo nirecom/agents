@@ -35,8 +35,13 @@ function wipCheck(state, agentsConfigDir, sessionId) {
     if (result.status !== 0) {
       state.wip_results[n] = "error";
     } else {
-      const wip = (result.stdout || "").trim();
-      state.wip_results[n] = wip || "none";
+      const lines = (result.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean);
+      const wip = lines[lines.length - 1] || "";
+      if (/^(none|same|other)$/.test(wip)) {
+        state.wip_results[n] = wip;
+      } else {
+        state.wip_results[n] = "error";
+      }
     }
   }
 

@@ -3,7 +3,7 @@
 # Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup
 # Fingerprint: sha256(sid+":"+N)[:8]; collision at N=1000: <0.001%.
 # GraphQL: writes via gh project item-edit; reads via gh api graphql.
-# Run from the target repo's worktree. setup writes to $AGENTS_CONFIG_DIR/.env.
+# Run from the target repo's worktree.
 
 set -uo pipefail
 
@@ -95,24 +95,6 @@ if [ "$FORGE" != "gitlab" ] && [[ -n "$REPO_OVERRIDE" ]]; then
     fi
 fi
 
-load_env_file() {
-    [ -z "${AGENTS_CONFIG_DIR:-}" ] && return 0
-    local envfile="$AGENTS_CONFIG_DIR/.env"
-    [ ! -r "$envfile" ] && return 0
-    ENV_OS_FILTER="$AGENTS_CONFIG_DIR/bin/env-os-filter"
-    set -a
-    if [ -x "$ENV_OS_FILTER" ]; then
-        # shellcheck disable=SC1090,SC1091
-        . <("$ENV_OS_FILTER" "$envfile") 2>/dev/null || echo "warn: failed to source $envfile (continuing)" >&2
-    else
-        # shellcheck disable=SC1090
-        . "$envfile" 2>/dev/null || echo "warn: failed to source $envfile (continuing)" >&2
-    fi
-    set +a
-    return 0
-}
-load_env_file
-
 BOARD_CARD_REPO_OVERRIDE="${REPO_OVERRIDE:-}"
 export BOARD_CARD_REPO_OVERRIDE
 
@@ -145,12 +127,10 @@ ensure_resolved() {
 }
 
 # ensure_wip_field_ids
-#   Populate WIP_STATE_* field/option IDs from the resolver — but never overwrite
-#   a value already provided by the deprecated .env migration block (precedence:
-#   .env wins). Runs as a preprocessing step before preflight_field_ids in the
-#   set/check/clear verbs. Resolver failure is non-fatal here: when .env already
-#   supplied the IDs, preflight still passes; otherwise the verb's own
-#   ensure_resolved call decides the exit behavior.
+#   Populate WIP_STATE_* field/option IDs from the resolver. Runs as a
+#   preprocessing step before preflight_field_ids in the set/check/clear verbs.
+#   Resolver failure is non-fatal: the verb's own ensure_resolved call decides
+#   the exit behavior.
 ensure_wip_field_ids() {
     # Soft project-scope check (warn-only) — same pattern as issue-create.sh.
     if command -v gh >/dev/null 2>&1; then
@@ -194,7 +174,7 @@ preflight_field_ids() {
     esac
     if [ "${#missing[@]}" -gt 0 ]; then
         echo "Error: missing required env vars for '$CMD': ${missing[*]}" >&2
-        echo "Hint: run 'bash $0 setup' to discover and persist them in .env" >&2
+        echo "Hint: run 'bash $0 setup' to discover and cache the required project field IDs" >&2
         exit 2
     fi
 }
