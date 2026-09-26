@@ -12,6 +12,7 @@
 
 set -u
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 require_sut
 
 # --- WP1: single issue wip=none → wip-state set invoked → done -----------------
@@ -21,6 +22,7 @@ require_sut
 # "ALL_SAME none"; SKILL.md read that as "session already owns WIP" and never
 # invoked wip-set — WIP was silently never claimed. The driver's wip-check phase
 # must evaluate: error → any_other → all_none → all_same → mixed (plan Step 6).
+case_begin "wp1-single-none-invokes-set" "bin/workflow/workflow-init-driver"
 setup_case wid-wp1
 mock_issue 400 OPEN "type:task,intent:clarified"
 # wip state intentionally unset → mock 'check' returns default 'none'
@@ -32,8 +34,10 @@ else
     fail "WP1: wip-state set NOT invoked for #400 (old ALL_SAME-none eval-order bug); calls=[$(wip_set_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP2: single issue wip=same → no set call → done ---------------------------
+case_begin "wp2-single-same-no-set" "bin/workflow/workflow-init-driver"
 setup_case wid-wp2
 mock_issue 401 OPEN "type:task"
 set_wip 401 same
@@ -45,8 +49,10 @@ else
     fail "WP2: unexpected set calls: [$(wip_set_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP3: two issues both wip=none → set called for both -----------------------
+case_begin "wp3-two-none-set-both" "bin/workflow/workflow-init-driver"
 setup_case wid-wp3
 mock_issue 402 OPEN "type:task"
 mock_issue 403 OPEN "type:task"
@@ -58,8 +64,10 @@ else
     fail "WP3: missing set call(s); calls=[$(wip_set_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP4: mixed none+same → set called only for the none one -------------------
+case_begin "wp4-mixed-none-same" "bin/workflow/workflow-init-driver"
 setup_case wid-wp4
 mock_issue 404 OPEN "type:task"
 mock_issue 405 OPEN "type:task"
@@ -72,8 +80,10 @@ else
     fail "WP4: wrong set-call set; calls=[$(wip_set_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP5: any wip=other → ask_user wip_conflict ---------------------------------
+case_begin "wp5-other-ask-conflict" "bin/workflow/workflow-init-driver"
 setup_case wid-wp5
 mock_issue 406 OPEN "type:task"
 set_wip 406 other
@@ -86,8 +96,10 @@ else
     fail "WP5: premature set calls before answer: [$(wip_set_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP6: wip-state check error rc → ask_user wip_error --------------------------
+case_begin "wp6-check-error-ask" "bin/workflow/workflow-init-driver"
 setup_case wid-wp6
 mock_issue 407 OPEN "type:task"
 set_wip_check_rc 1
@@ -95,8 +107,10 @@ run_driver '#407'
 assert_kv "WP6: wip-state check error → ACTION=ask_user" ACTION ask_user
 assert_kv "WP6: wip-state check error → ASK_ID=wip_error" ASK_ID wip_error
 teardown_case
+case_end
 
 # --- WP7: wip-state set rc=2 → ask_user wip_rc2 ----------------------------------
+case_begin "wp7-set-rc2-ask" "bin/workflow/workflow-init-driver"
 setup_case wid-wp7
 mock_issue 408 OPEN "type:task"
 # wip=none (default) so the set path is attempted; force set to fail with rc=2
@@ -105,6 +119,7 @@ run_driver '#408'
 assert_kv "WP7: wip-state set rc=2 → ACTION=ask_user" ACTION ask_user
 assert_kv "WP7: wip-state set rc=2 → ASK_ID=wip_rc2" ASK_ID wip_rc2
 teardown_case
+case_end
 
 # --- probe harness (mirrors driver-meta-classify.sh's probe()) -----------------
 # wipCheck(state, agentsConfigDir, sessionId) spawns the mocked wip-state.sh, so
@@ -129,6 +144,7 @@ assert_probe() {  # <label> <expected-exact-line>
 # --- WP8a: mixed input, meta filtered locally — #250 (meta) untouched, #251 set --
 # detail.md Step 9/2: state.issues carries BOTH (post-meta-classify META shape,
 # see M5) — wip-check filters #250 via state.label_sets, never touching it.
+case_begin "wp8a-meta-filter" "bin/workflow/workflow-init-driver"
 setup_case wid-wp8a
 probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
 const { wipCheck } = require(process.argv[2]);
@@ -148,10 +164,12 @@ else
     fail "WP8a: missing set call for #251; calls=[$(wip_calls | tr '\n' ';')]"
 fi
 teardown_case
+case_end
 
 # --- WP8b: all-meta input — filtered local set is EMPTY → no-op, no force_path_b --
 # Mirrors driver-routing.sh R14/R15: an all-meta state.issues (never stripped,
 # see M5) must not reach wip-state.sh and must not raise force_path_b (M11/M20).
+case_begin "wp8b-all-meta" "bin/workflow/workflow-init-driver"
 setup_case wid-wp8b
 probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
 const { wipCheck } = require(process.argv[2]);
@@ -167,6 +185,7 @@ else
 fi
 assert_probe "WP8b: force_path_b stays false for an all-meta working set" "force_path_b=false"
 teardown_case
+case_end
 
 # --- WP9: a pending CLOSED gate suppresses wip-check entirely (#2087) -------------
 # closed-detection now precedes wip-check in PHASE_ORDER. An issue whose very
@@ -174,6 +193,7 @@ teardown_case
 # and must certainly not have ownership claimed — while the user is still being
 # asked whether to reopen or drop it. #460 is owned by ANOTHER session, so under
 # the old order this run answered wip_conflict instead of the closed gate.
+case_begin "wp9-closed-gate-precedence" "bin/workflow/workflow-init-driver"
 setup_case wid-wp9
 mock_issue 460 CLOSED "type:task"
 set_wip 460 other
@@ -185,10 +205,7 @@ else
     pass "WP9: wip-state.sh never invoked while the closed gate was pending"
 fi
 teardown_case
-
-# case_begin / case_end — static group markers for bin/check-case-markers.sh.
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
+case_end
 
 # --- WP10: rc=0 + stdout outside {none,same,other} → ask_user wip_error (#2408) --
 # A check that exits 0 but prints an unrecognized token (e.g. stray output leaked

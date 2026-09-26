@@ -12,19 +12,9 @@ set -u
 # # TL3 gap — real glab label/state calls vs live GitLab not exercised here.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -175,10 +165,6 @@ run_wip() {
 
 REPO_GL="$(make_repo 'git@gitlab.com:acme/widgets.git')"
 
-# case_begin / case_end — static group markers for bin/check-case-markers.sh.
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
-
 echo "=== Gap 1: gl_cmd_check other / same fingerprint routing ==="
 case_begin "g1-check-token-routing" "bin/github-issues/wip-state/gitlab.sh"
 
@@ -214,6 +200,7 @@ case_end
 
 echo ""
 echo "=== Gap 2: gl_cmd_abandon (open→remove labels; closed/unknown→exit 1) ==="
+case_begin "g2-abandon-verb" "bin/github-issues/wip-state/gitlab.sh"
 
 # G2a: opened issue with status:wip + wip-fp:* → abandon removes BOTH and exits 0.
 # abandon does NOT accept --session-id, so it is omitted.
@@ -261,6 +248,7 @@ if [ "$LAST_RC" -eq 2 ] && state_has 53 "status:wip"; then
 else
     fail "G2d: expected exit 2 + status:wip retained (rc=$LAST_RC) state=[$(cat "$GLAB_STATE_DIR/labels-53" 2>/dev/null | tr '\n' ',')] err=[$LAST_ERR]"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

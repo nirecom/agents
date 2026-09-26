@@ -10,6 +10,7 @@
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # pass / fail / AGENTS_DIR provided by _lib.sh.
 TARGET_WIP="$AGENTS_DIR/bin/github-issues/wip-state.sh"
@@ -182,6 +183,7 @@ item_call_made() { grep -qE "project item-edit|fieldValues|item-add" "$MOCK_LOG"
 # in-progress + fingerprint each reach the gh calls with their EXACT resolver
 # value (proves ensure_wip_field_ids populated them before preflight).
 # ===========================================================================
+case_begin "twm2-set-field-ids" "bin/github-issues/wip-state/cmd-set.sh"
 setup_mock
 export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_V"
@@ -200,11 +202,13 @@ else
     fail "TWM-2 (set): rc=$WIP_RC item=$ITEM status=$S_OK inprog=$I_OK finger=$F_OK (expected RED — ensure_wip_field_ids not yet implemented)"
 fi
 teardown_mock
+case_end
 
 # ===========================================================================
 # TWM-2c (check): check consumes status + fingerprint. Both must reach the
 # read query with their exact resolver value.
 # ===========================================================================
+case_begin "twm2c-check-field-ids" "bin/github-issues/wip-state/cmd-check.sh"
 setup_mock
 export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_C"
@@ -222,11 +226,13 @@ else
     fail "TWM-2c (check): rc=$WIP_RC item=$ITEM status=$S_OK finger=$F_OK (expected RED — ensure_wip_field_ids not yet implemented)"
 fi
 teardown_mock
+case_end
 
 # ===========================================================================
 # TWM-2d (clear): clear consumes status + done + fingerprint. All three must
 # reach the gh calls with their exact resolver value.
 # ===========================================================================
+case_begin "twm2d-clear-field-ids" "bin/github-issues/wip-state/cmd-clear.sh"
 setup_mock
 export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_D"
@@ -245,13 +251,10 @@ else
     fail "TWM-2d (clear): rc=$WIP_RC item=$ITEM status=$S_OK done=$D_OK finger=$F_OK (expected RED — ensure_wip_field_ids not yet implemented)"
 fi
 teardown_mock
+case_end
 
 # TWM-3: retired by #2408 — load_env_file removed; .env source no longer occurs
 # TWM-4: retired by #2408 — load_env_file removed; .env source no longer occurs
-
-# case_begin / case_end — static group markers for bin/check-case-markers.sh.
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
 
 # ===========================================================================
 # SEMI-1 (#2408): a .env line whose value carries `;` (CODE_FILE_EXTENSIONS=
