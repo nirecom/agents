@@ -5,10 +5,12 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
 
-PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
+case_begin "extract-field-lib" "bin/github-issues/lib/extract-field.sh"
 # Smoke 1: lib itself is sourceable and extract_field works end-to-end via lib
 if [ -f "$LIB" ]; then
     out="$(BODY=$'## Background\n\nsmoke-bg\n\n## Changes\n\nsmoke-ch' \
@@ -17,8 +19,10 @@ if [ -f "$LIB" ]; then
 else
     fail "smoke-lib: $LIB missing"
 fi
+case_end
 
 # Smoke 2: execute issue-to-history.sh end-to-end with a synthetic H2-header issue body
+case_begin "issue-to-history-smoke" "bin/github-issues/issue-to-history.sh"
 SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
 if [ -x "$SCRIPT" ]; then
     smoke_body=$'## Background\n\nsmoke-exec-bg\n\n## Changes\n\nsmoke-exec-ch'
@@ -33,6 +37,7 @@ if [ -x "$SCRIPT" ]; then
 else
     fail "smoke-script: $SCRIPT missing or not executable"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

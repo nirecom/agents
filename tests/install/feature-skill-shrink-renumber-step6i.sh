@@ -7,11 +7,10 @@ set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-PASS=0
-FAIL=0
-
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 check_absent() {
     local label="$1"
@@ -29,15 +28,22 @@ check_absent() {
     fi
 }
 
+case_begin "claude-md-no-step6i" "CLAUDE.md"
 # C1: "Step 6i" absent from CLAUDE.md
 check_absent "C1" "Step 6i" "CLAUDE.md"
+case_end
 
+case_begin "history-no-step6i" "rules/docs/history.md"
 # C2: "Step 6i" absent from rules/docs/history.md
 check_absent "C2" "Step 6i" "rules/docs/history.md"
+case_end
 
+case_begin "changelog-no-step6i" "rules/docs/changelog.md"
 # C3: "Step 6i" absent from rules/docs/changelog.md
 check_absent "C3" "Step 6i" "rules/docs/changelog.md"
+case_end
 
+case_begin "github-issues-we20" "rules/github-issues.md"
 # C4: "WE-20" appears >= 3 times total across the four files combined
 total=0
 for rel in "CLAUDE.md" "rules/docs/history.md" "rules/docs/changelog.md" "rules/github-issues.md"; do
@@ -53,6 +59,7 @@ if [ "$total" -ge 3 ]; then
 else
     fail "C4: 'WE-20' appears only $total times across the four files (need >= 3)"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
