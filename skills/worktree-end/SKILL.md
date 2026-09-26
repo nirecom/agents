@@ -54,13 +54,15 @@ Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: 
 ### Step WE-9 — Gitignored state inventory
 Backup dir is derived by the worker as `<main_root>/.worktree-backup/<branch>/` — never passed in.
 
-Both passes dispatch the `worktree-backup` worker per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
+Resolve `dir_expand` once via `node "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/resolve-dir-expand.js"` (prints `true`/`false`) and pass its output to both passes.
+Both passes dispatch the `worktree-backup` worker per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `dir_expand` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
 
-Serial by dependency (SC-S): Pass 2 copies exactly the file set Pass 1 inventoried and reported — a parallel Pass 2 would act on an uninventoried set and both passes write the same backup directory. See `skills/_shared/subagent-concurrency.md`.
+Serial (SC-S): both passes write the same backup directory. Pass 1 is an advisory preview; Pass 2 independently re-inventories live state at deletion time — it does not reuse Pass 1's file set. See `skills/_shared/subagent-concurrency.md`.
 
-**Pass 1 — `mode: "dry_run"`**: `status: failed` → stop. File count 0 → `BACKUP_MANIFEST_PATH=(none)`, skip Pass 2.
+**Pass 1 — `mode: "dry_run"`**: `status: failed` → stop. Otherwise always proceed to Pass 2 (even when file count is 0, issues may require a partial manifest).
 
 **Pass 2 — `mode: "execute"`**: `status: failed` → stop. `status: partial` → warn and continue. `status: copied` → set `BACKUP_MANIFEST_PATH` from `artifact_path`.
+If the summary contains `NOT preserved`, emit an explicit data-loss warning to the user and prompt manual rescue before the cleanup cascade.
 
 ### Step WE-10 — Last-chance findings
 Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after this step are excluded from the Final Report.

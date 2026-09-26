@@ -1,19 +1,10 @@
 "use strict";
 // bin/worker-dispatch/workers/worktree-backup.js
 //
-// Stage 2 worker: replaces agents/worktree-backup-worker.md.
-//
-// The agent's prompt spent its longest paragraph (step 3) explaining how to
-// shape `cp` invocations so the write hook's literal resolver would recognize
-// them — no chaining, no shell variables in the destination, env-prefix form as
-// a fallback. None of that survives here: files are copied through fsguard, so
-// the destination is proven to be inside the derived backup directory by the
-// same code that answers every other write in this dispatcher, and there is no
-// command line for a hook to have to parse.
-//
-// backup_dir is derived (<main-root>/.worktree-backup/<branch>), never accepted
-// from the caller — see bin/worker-dispatch/capability.js. A caller may echo the
-// exact derived value for readability; anything else is rejected upstream.
+// Stage 2 worker (replaces agents/worktree-backup-worker.md): copies gitignored
+// and untracked worktree state through fsguard, so there is no command line for a
+// write hook to parse. backup_dir is derived (<main-root>/.worktree-backup/<branch>),
+// never accepted from the caller — see bin/worker-dispatch/capability.js.
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -23,6 +14,11 @@ const { run: spawnRun } = require("../spawn");
 
 const GIT_TIMEOUT_MS = 120000;
 const DOCKER_TIMEOUT_MS = 30000;
+
+const parseCap = (v, def) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : def; };
+const MAX_BACKUP_FILES    = parseCap(process.env.WORKTREE_BACKUP_MAX_FILES,     2000);
+const MAX_BACKUP_BYTES    = parseCap(process.env.WORKTREE_BACKUP_MAX_BYTES,     50 * 1024 * 1024);
+const MAX_ENUMERATE_FILES = parseCap(process.env.WORKTREE_BACKUP_MAX_ENUMERATE, 20000);
 
 function stamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
@@ -62,24 +58,66 @@ function git(ctx, worktreePath, args) {
 // (build state, .env-adjacent local config) plus plain untracked files. The two
 // lists are disjoint by construction, but they are unioned rather than
 // concatenated so a future git flag change cannot silently double-count.
-function inventory(ctx, worktreePath) {
-  const ignored = git(ctx, worktreePath, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]);
+function inventory(ctx, worktreePath, dirExpand) {
+  // --directory makes git return directory names instead of their contents for
+  // untracked/ignored directories. This is needed for dir_expand so that
+  // expandDir() is called on the directory entry. Without it, git returns
+  // individual files inside plain (non-opaque) ignored directories, bypassing
+  // expandDir entirely. The flag is omitted when dir_expand is off to preserve
+  // the original behavior: files inside plain ignored dirs are copied individually.
+  const dirFlag = dirExpand === true ? ["--directory"] : [];
+  const ignored = git(ctx, worktreePath, ["ls-files", "--others", "--ignored", ...dirFlag, "--exclude-standard", "-z"]);
   if (ignored.error) return { error: ignored.error };
-  const untracked = git(ctx, worktreePath, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const untracked = git(ctx, worktreePath, ["ls-files", "--others", ...dirFlag, "--exclude-standard", "-z"]);
   if (untracked.error) return { error: untracked.error };
   const modified = git(ctx, worktreePath, ["status", "--porcelain=v1", "-z"]);
   if (modified.error) return { error: modified.error };
 
   const seen = new Set();
   const candidates = [];
-  for (const rel of splitNul(ignored.stdout).concat(splitNul(untracked.stdout))) {
+  for (const raw of splitNul(ignored.stdout).concat(splitNul(untracked.stdout))) {
+    const rel = raw.endsWith("/") ? raw.slice(0, -1) : raw;
     if (seen.has(rel)) continue;
     seen.add(rel);
     candidates.push(rel);
   }
   candidates.sort();
+
+  const expansionIssues = [];
+  if (dirExpand === true) {
+    const enumBudget = { remaining: MAX_ENUMERATE_FILES };
+    let enumerationTruncated = false;
+    const expanded = [];
+    for (const rel of candidates) {
+      let st = null;
+      try { st = fs.lstatSync(path.join(worktreePath, rel)); } catch (_e) { expanded.push(rel); continue; }
+      if (st.isDirectory() && !st.isSymbolicLink()) {
+        const result = expandDir(worktreePath, rel, enumBudget);
+        for (const f of result.files) expanded.push(f);
+        for (const issue of result.irregularIssues) expansionIssues.push(issue);
+        if (result.truncated && !enumerationTruncated) {
+          enumerationTruncated = true;
+          expansionIssues.push(
+            `enumeration budget reached (${MAX_ENUMERATE_FILES} entries across all expanded gitignored directories); remaining directory contents may be lost on worktree deletion`
+          );
+        }
+      } else {
+        expanded.push(rel);
+      }
+    }
+    // Dedup (parent dir + child may both be in candidates from git ls-files)
+    const seen2 = new Set();
+    for (const rel of expanded) {
+      if (!seen2.has(rel)) { seen2.add(rel); }
+    }
+    candidates.length = 0;
+    for (const rel of seen2) candidates.push(rel);
+    candidates.sort();
+  }
+
   return {
     candidates,
+    expansionIssues,
     ignoredCount: splitNul(ignored.stdout).length,
     untrackedCount: splitNul(untracked.stdout).length,
     dirtyCount: splitNul(modified.stdout).length,
@@ -145,6 +183,47 @@ function dockerImpact(ctx, worktreePath, cwd) {
   return { checked: true, containers };
 }
 
+// Expand one gitignored directory into its constituent file/symlink rel paths.
+// Forward-slash concatenation keeps rel paths normalized regardless of OS. The
+// shared enumeration budget caps total entries across all expanded directories.
+function expandDir(worktreePath, relDir, enumBudget) {
+  const files = [];
+  const irregularIssues = [];
+  let truncated = false;
+
+  function walk(rel) {
+    if (truncated) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(path.join(worktreePath, rel), { withFileTypes: true });
+    } catch (_e) {
+      return;
+    }
+    for (const dirent of entries) {
+      if (truncated) break;
+      const childRel = rel + "/" + dirent.name;
+      if (dirent.isSymbolicLink()) {
+        if (enumBudget.remaining <= 0) { truncated = true; break; }
+        enumBudget.remaining -= 1;
+        files.push(childRel);
+      } else if (dirent.isDirectory()) {
+        walk(childRel);
+      } else if (dirent.isFile()) {
+        if (enumBudget.remaining <= 0) { truncated = true; break; }
+        enumBudget.remaining -= 1;
+        files.push(childRel);
+      } else {
+        irregularIssues.push(
+          `${childRel}: non-regular file skipped (not a regular file, directory, or symlink) — contents not preserved`
+        );
+      }
+    }
+  }
+
+  walk(relDir);
+  return { files, truncated, irregularIssues };
+}
+
 // A candidate is measured, not read, in dry-run mode. Symlinks are resolved so
 // that one pointing outside the worktree can be dropped before it is ever
 // followed — copying through it would pull in state the worktree does not own.
@@ -178,6 +257,28 @@ function describe(worktreePath, rel) {
   return { rel, abs, size: st.size, mtime: st.mtime.toISOString() };
 }
 
+// Bound the read set by file count and total bytes. Applied only when dir_expand
+// is on, since expansion is the only path that can grow the set past the budget.
+function applyReadBudget(describedFiles) {
+  const kept = [];
+  const budgetIssues = [];
+  let files = 0;
+  let bytes = 0;
+  for (const f of describedFiles) {
+    if (files + 1 > MAX_BACKUP_FILES || bytes + f.size > MAX_BACKUP_BYTES) {
+      const remaining = describedFiles.length - kept.length;
+      budgetIssues.push(
+        `budget cap reached (${MAX_BACKUP_FILES} files / ${humanSize(MAX_BACKUP_BYTES)}); ${remaining} candidate file(s) NOT preserved — contents may be lost on worktree deletion`
+      );
+      break;
+    }
+    kept.push(f);
+    files += 1;
+    bytes += f.size;
+  }
+  return { kept, budgetIssues };
+}
+
 function dryRun(payload, ctx, inv) {
   const { fsguard, anchors } = ctx;
   const worktreePath = payload.worktree_path;
@@ -186,7 +287,14 @@ function dryRun(payload, ctx, inv) {
   const described = inv.candidates.map((rel) => describe(worktreePath, rel));
   const files = described.filter((d) => d.skip === undefined);
   const skipped = described.filter((d) => d.skip !== undefined);
-  const total = files.reduce((sum, f) => sum + f.size, 0);
+  let actualFiles = files;
+  let budgetIssues = [];
+  if (payload.dir_expand === true) {
+    const budget = applyReadBudget(files);
+    actualFiles = budget.kept;
+    budgetIssues = budget.budgetIssues;
+  }
+  const total = actualFiles.reduce((sum, f) => sum + f.size, 0);
   const docker = payload.docker_check === false
     ? { checked: false, containers: [] }
     : dockerImpact(ctx, worktreePath, worktreePath);
@@ -199,13 +307,15 @@ function dryRun(payload, ctx, inv) {
       [
         `DRY RUN — ${worktreePath} (${payload.branch})`,
         `destination: ${payload.backup_dir}`,
-        `candidates: ${files.length} files, ${humanSize(total)}`,
+        `candidates: ${actualFiles.length} files, ${humanSize(total)}`,
         `  ignored: ${inv.ignoredCount}  untracked: ${inv.untrackedCount}  dirty tracked: ${inv.dirtyCount}`,
         `skipped: ${skipped.length}`,
         `docker: ${docker.checked ? `${docker.containers.length} container(s) bind-mount this worktree, ${stopped.length} stopped` : "not checked"}`,
         "",
-        ...files.map((f) => `  ${f.rel} (${humanSize(f.size)})`),
+        ...actualFiles.map((f) => `  ${f.rel} (${humanSize(f.size)})`),
         ...skipped.map((s) => `  [skip] ${s.rel} — ${s.skip}`),
+        ...inv.expansionIssues.map((i) => `  [dir] ${i}`),
+        ...budgetIssues.map((b) => `  [budget] ${b}`),
         ...docker.containers.map((c) => `  [docker] ${c.name} — ${c.status || c.state}`),
         "",
       ].join("\n")
@@ -218,11 +328,13 @@ function dryRun(payload, ctx, inv) {
     };
   }
 
+  const allIssues = inv.expansionIssues.length + budgetIssues.length;
   return {
     status: "dry_run_complete",
     summary:
-      `${files.length} files / ${humanSize(total)} to ${payload.backup_dir}` +
-      (docker.containers.length === 0 ? "" : `; ${docker.containers.length} docker bind-mount(s)`),
+      `${actualFiles.length} files / ${humanSize(total)} to ${payload.backup_dir}` +
+      (docker.containers.length === 0 ? "" : `; ${docker.containers.length} docker bind-mount(s)`) +
+      (allIssues === 0 ? "" : `; ${allIssues} directory/file(s) NOT fully preserved`),
     artifactPath: written,
   };
 }
@@ -235,9 +347,20 @@ function execute(payload, ctx, inv) {
 
   const described = inv.candidates.map((rel) => describe(worktreePath, rel));
   const pending = described.filter((d) => d.skip === undefined);
-  const notes = described.filter((d) => d.skip !== undefined).map((d) => `${d.rel}: ${d.skip}`);
+  let actualPending = pending;
+  let budgetIssues = [];
+  if (payload.dir_expand === true) {
+    const budget = applyReadBudget(pending);
+    actualPending = budget.kept;
+    budgetIssues = budget.budgetIssues;
+  }
+  const notes = described
+    .filter((d) => d.skip !== undefined)
+    .map((d) => `${d.rel}: ${d.skip}`)
+    .concat(inv.expansionIssues)
+    .concat(budgetIssues);
 
-  if (pending.length === 0) {
+  if (actualPending.length === 0 && notes.length === 0) {
     return {
       status: "skipped",
       summary: "no gitignored or untracked files to back up",
@@ -247,7 +370,7 @@ function execute(payload, ctx, inv) {
 
   const manifestFiles = [];
   let copiedBytes = 0;
-  for (const f of pending) {
+  for (const f of actualPending) {
     try {
       const data = fs.readFileSync(f.abs);
       fsguard.writeFile(path.join(backupDir, f.rel), data);
@@ -310,7 +433,7 @@ function execute(payload, ctx, inv) {
         `worktree: ${worktreePath}`,
         `branch: ${payload.branch}`,
         `backup-dir: ${backupDir}`,
-        `copied: ${manifestFiles.length} / ${pending.length} candidates (${humanSize(copiedBytes)})`,
+        `copied: ${manifestFiles.length} / ${actualPending.length} candidates (${humanSize(copiedBytes)})`,
         `manifest: ${manifestPath}`,
         `docker: ${docker.checked ? `${docker.containers.length} bind-mount(s)` : "not checked"}`,
         ...notes.map((n) => `  ${n}`),
@@ -321,19 +444,23 @@ function execute(payload, ctx, inv) {
     /* keep the reported status; the manifest already carries `issues` */
   }
 
-  const failedCopies = pending.length - manifestFiles.length;
+  const failedCopies = actualPending.length - manifestFiles.length;
+  const notPreservedCount = inv.expansionIssues.length + budgetIssues.length;
+  const dirExpandWarning = payload.dir_expand === true && notPreservedCount > 0
+    ? `; WARNING: ${notPreservedCount} path(s) NOT preserved — their contents will be LOST when the worktree is deleted`
+    : (notes.length === 0 ? "" : `; ${notes.length} issue(s) — see the manifest`);
   return {
     status: failedCopies === 0 && notes.length === 0 ? "copied" : "partial",
     summary:
       `${manifestFiles.length} files / ${humanSize(copiedBytes)} to ${backupDir}` +
       (docker.containers.length === 0 ? "" : `; ${docker.containers.length} docker bind-mount(s)`) +
-      (notes.length === 0 ? "" : `; ${notes.length} issue(s) — see the manifest`),
+      dirExpandWarning,
     artifactPath: manifestPath,
   };
 }
 
 function run(payload, ctx) {
-  const inv = inventory(ctx, payload.worktree_path);
+  const inv = inventory(ctx, payload.worktree_path, payload.dir_expand === true);
   if (inv.error !== undefined) {
     return { status: "failed", summary: `inventory failed: ${inv.error}`, artifactPath: "(none)" };
   }

@@ -1,25 +1,14 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-copy-behavior.sh
+# tests/bin/feature-1643-worker-dispatch-copy-behavior.sh
 # Tests: bin/worker-dispatch/workers/worktree-copy.js, bin/worker-dispatch.js, bin/worktree-write-notes.js
 # Tags: worker-dispatch, worktree-copy, status-derivation, table-driven, TL2, scope:issue-specific
-#
-# Issue #1643 — worktree-copy runs three CLIs in sequence and derives ONE status
-# from their combined outcome. The sibling suites cover its output SHAPE and its
-# capability surface; nothing covered which outcome maps to which status, so a
-# copy that half-failed could have reported `complete` unnoticed.
-#
-# Group 1 runs the real child CLIs so WORKTREE_NOTES.md is a real file on disk.
-# Groups 2-4 replace the process seam (tests/feature-1643-worker-dispatch-lib/
-# spawn-stub.js) to drive the failure branches, which no fixture can produce on
-# demand from the real CLIs.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real /worktree-start invocation: the skill's own argv assembly and its
-#     handling of the rendered status triple live outside this dispatcher call.
-#   - A main worktree with a real .worktreeinclude allowlist and real gitignored
-#     state; the fixture's include set is minimal.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1643 — worktree-copy derives ONE status from three sequential CLIs;
+#   this pins which combined outcome maps to which status. Group 1 uses the real
+#   CLIs; groups 2-4 stub the process seam (feature-1643-worker-dispatch-lib/
+#   spawn-stub.js); group 5 (#1937) pins the shared copy engine's opaque-directory
+#   handling. TL3 gap: real /worktree-start argv + a real .worktreeinclude
+#   allowlist, checked at WORKFLOW_USER_VERIFIED preflight via
+#   bin/check-verification-gate.sh (category: skill-orchestration).
 
 set -u
 
@@ -29,12 +18,12 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_CB_INNER:-}" ]; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
-PASS=0
-FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 assert_eq() {
@@ -139,9 +128,7 @@ process.stdout.write(row&&row.extraEnv?String(row.extraEnv[process.argv[3]]):"(n
 ' "$(nodepath "$CALLLOG")" "$1" "$2"
 }
 
-# ===========================================================================
-# Group 1 — the real chain: WORKTREE_NOTES.md must actually exist afterwards
-# ===========================================================================
+case_begin "real-chain" "bin/worker-dispatch.js"
 group_real_chain() {
     local p
     p="$(write_payload wc-real "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"artifact_dir\":\"$PLANS\"}")"
@@ -160,10 +147,10 @@ group_real_chain() {
         *) fail "real/summary-reports-the-notes-write" "summary='$(field_of summary)'" ;;
     esac
 }
+group_real_chain
+case_end
 
-# ===========================================================================
-# Group 2 — status derivation table over the three CLI outcomes
-# ===========================================================================
+case_begin "status-table" "bin/worker-dispatch/workers/worktree-copy.js"
 group_status_table() {
     local name rules want_status want_sub p got
     while IFS='|' read -r name rules want_status want_sub; do
@@ -189,10 +176,10 @@ copy-errors      | [{"match":"includeFilter","stdout":"{\\"copied\\":[],\\"denie
 notes-fails      | [{"match":"includeFilter","stdout":"$OK_COPY"},{"match":"writeNotes","status":1,"stderr":"notes CLI refused"},{}] | failed | WORKTREE_NOTES.md write failed
 TABLE
 }
+group_status_table
+case_end
 
-# ===========================================================================
-# Group 3 — the copied list has to reach the notes CLI, not just the summary
-# ===========================================================================
+case_begin "copied-reaches-notes" "bin/worker-dispatch/workers/worktree-copy.js"
 group_copied_reaches_notes() {
     local p
     p="$(write_payload wc-env "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"session_id\":\"sess-copy-1\",\"artifact_dir\":\"$PLANS\"}")"
@@ -204,10 +191,10 @@ group_copied_reaches_notes() {
     assert_eq "wire/sibling-parse-uses-the-session-intent" "1" \
         "$(grep -c '"script":"parseWorktrees"' "$CALLLOG" | tr -d ' ')"
 }
+group_copied_reaches_notes
+case_end
 
-# ===========================================================================
-# Group 4 — a lost log must not downgrade a completed copy
-# ===========================================================================
+case_begin "log-failure-non-fatal" "bin/worker-dispatch.js"
 group_log_failure_non_fatal() {
     local p blocker
     blocker="$PLANS_RAW/blocked-artifacts"
@@ -224,11 +211,56 @@ group_log_failure_non_fatal() {
         *) fail "logfail/summary-unchanged" "summary='$(field_of summary)'" ;;
     esac
 }
-
-group_real_chain
-group_status_table
-group_copied_reaches_notes
 group_log_failure_non_fatal
+case_end
+
+case_begin "copyinclude-directory-candidate" "bin/worker-dispatch/workers/worktree-copy.js"
+group_copyinclude_directory_candidate() {
+    local WC_ROOT="$TMPD/wc-dir"
+    local WC_MAIN="$WC_ROOT/main"
+    local WC_LINKED="$WC_ROOT/linked"
+    mkdir -p "$WC_MAIN" "$WC_LINKED"
+    git -C "$WC_MAIN" init -q -b main
+    git -C "$WC_MAIN" config user.email "test@example.com"
+    git -C "$WC_MAIN" config user.name "Test"
+    git -C "$WC_MAIN" config core.hooksPath /dev/null
+    printf 'statedir/\nkeep.txt\n' > "$WC_MAIN/.gitignore"
+    printf 'statedir/\nkeep.txt\n' > "$WC_MAIN/.worktreeinclude"
+    echo init > "$WC_MAIN/README.md"
+    git -C "$WC_MAIN" add .gitignore .worktreeinclude README.md >/dev/null 2>&1
+    git -C "$WC_MAIN" commit -q --no-verify -m init >/dev/null 2>&1
+    printf 'KEEP\n' > "$WC_MAIN/keep.txt"
+    mkdir -p "$WC_MAIN/statedir"
+    git -C "$WC_MAIN/statedir" init -q -b main
+    git -C "$WC_MAIN/statedir" config core.hooksPath /dev/null
+    printf 'INNER\n' > "$WC_MAIN/statedir/inner.txt"
+
+    local WC_LIB="$AGENTS_DIR/hooks/lib/worktree-copy.js"
+    if [ ! -f "$WC_LIB" ]; then fail "wc-dir/lib-present" "missing $WC_LIB"; return; fi
+    local RES="$WC_ROOT/result.json"
+    node -e '
+const {copyInclude}=require(process.argv[1]);
+const fs=require("fs");
+const r=copyInclude({mainRoot:process.argv[2], worktreePath:process.argv[3]});
+fs.writeFileSync(process.argv[4], JSON.stringify(r||{}));
+' "$(nodepath "$WC_LIB")" "$(nodepath "$WC_MAIN")" "$(nodepath "$WC_LINKED")" "$(nodepath "$RES")" 2>/dev/null
+
+    if [ -f "$WC_LINKED/keep.txt" ]; then pass "wc-dir/plain-file-still-copied"
+    else fail "wc-dir/plain-file-still-copied" "keep.txt absent in $WC_LINKED"; fi
+
+    local errs
+    errs="$(node -e 'const r=require(process.argv[1]);process.stdout.write(JSON.stringify(r.errors||[]))' "$(nodepath "$RES")" 2>/dev/null)"
+    case "$errs" in
+        *"Failed to copy statedir"*) fail "wc-dir/no-raw-copyfile-failure" "errors=$errs" ;;
+        *) pass "wc-dir/no-raw-copyfile-failure" ;;
+    esac
+    case "$errs" in
+        *"directory candidate not copied"*) pass "wc-dir/directory-reported-cleanly" ;;
+        *) fail "wc-dir/directory-reported-cleanly" "errors=$errs" ;;
+    esac
+}
+group_copyinclude_directory_candidate
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
