@@ -5,7 +5,7 @@
 # like afterwards. Shared fixtures: tests/lib/session-sync-security-common.ps1.
 
 BeforeAll {
-    . (Join-Path $PSScriptRoot "lib\session-sync-security-common.ps1")
+    . (Join-Path $PSScriptRoot "..\lib\session-sync-security-common.ps1")
 }
 
 AfterAll {

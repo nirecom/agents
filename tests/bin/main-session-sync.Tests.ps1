@@ -5,7 +5,7 @@
 # Git root is at ~/.claude/projects/ (not ~/.claude/)
 
 BeforeAll {
-    $DotfilesDir = Split-Path -Parent $PSScriptRoot
+    $DotfilesDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $InitScript = Join-Path (Join-Path $DotfilesDir "install") "win\session-sync-init.ps1"
     $SyncScript = Join-Path $DotfilesDir "bin\session-sync.ps1"
 
@@ -143,7 +143,7 @@ Describe "session-sync-init.ps1" {
 
     # The old "migrates old git root" case is gone: it created the old repo
     # without an origin, which the provenance check now refuses by design.
-    # Migration is covered by tests/main-session-sync-security.Tests.ps1.
+    # Migration is covered by tests/install/main-session-sync-security.Tests.ps1.
 }
 
 Describe "session-sync.ps1" {

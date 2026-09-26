@@ -151,20 +151,24 @@ fi
 #   (a) a name the shell can mangle (embedded space) must be scanned, reported
 #       and deleted intact — an unquoted expansion would either miss it or hand
 #       `git rm` two bogus pathspecs;
-#   (b) test-shaped files that are NOT `*.sh`: since #2081 the common scan globs
-#       widened to tests/*.Tests.ps1 and tests/test_*.py, so those two shapes ARE
-#       now in range and travel the file-level survival verdict. An extensionless
-#       file still matches no glob and is the one remaining out-of-range shape —
-#       E5d/E5e pin that boundary, E5f/E5g pin the widened globs.
+#   (b) non-`*.sh` shapes: tests/<category>/*.Tests.ps1 and test_*.py are in the
+#       common range (#2081, category-scoped by #2392); extensionless and FLAT
+#       tests/*.Tests.ps1|test_*.py are out — E5d/E5e/E5h/E5i vs E5f/E5g.
 E5_REPO="$(make_repo)"
 add_test_file "$E5_REPO" "cc common with space.sh" "bin/gone-e5a.sh"
 add_test_file "$E5_REPO" "feature-521-with space.sh" "bin/gone-e5b.sh" "TL2, scope:issue-specific"
 add_test_file "$E5_REPO" "cc-plain-e5.sh" "bin/gone-e5c.sh"
 # Extensionless — matches no glob, still outside both scans.
 { printf '#!/usr/bin/env bash\n# Tests: bin/gone-e5d.sh\n'; } > "$E5_REPO/tests/extensionless-test"
-# *.Tests.ps1 and test_*.py — in the common scan range since #2081.
-{ printf '# Tests: bin/gone-e5e.sh\n'; } > "$E5_REPO/tests/test_shaped_like_a_test.py"
-{ printf '# Tests: bin/gone-e5f.sh\n'; } > "$E5_REPO/tests/Shaped.Tests.ps1"
+# *.Tests.ps1 and test_*.py under tests/<category>/ — in the common scan range.
+{ printf '# Tests: bin/gone-e5e.sh\n'; } > "$E5_REPO/tests/bin/test_shaped_like_a_test.py"
+{ printf '# Tests: bin/gone-e5f.sh\n'; } > "$E5_REPO/tests/bin/Shaped.Tests.ps1"
+# The same shapes FLAT under tests/ — out of range since #2392.
+{ printf '# Tests: bin/gone-e5h.sh\n'; } > "$E5_REPO/tests/test_shaped_like_a_test.py"
+{ printf '# Tests: bin/gone-e5i.sh\n'; } > "$E5_REPO/tests/Shaped.Tests.ps1"
+# Non-matching names in tests/<category>/ — helper.ps1 ≠ *.Tests.ps1; helper.py ≠ test_*.py.
+{ printf '# Tests: bin/gone-e5j.sh\n'; } > "$E5_REPO/tests/bin/helper.ps1"
+{ printf '# Tests: bin/gone-e5k.sh\n'; } > "$E5_REPO/tests/bin/helper.py"
 commit_repo "$E5_REPO" "filename edge-case fixture"
 
 unset MOCK_ISSUES
@@ -190,11 +194,26 @@ assert_eq "E5d extensionless file is outside both scan ranges: extensionless-tes
 assert_eq "E5e extensionless file survives both --apply runs: extensionless-test" \
     "kept" "$(fs_of "$E5_REPO" "tests/extensionless-test")"
 
-# E5f/E5g — *.Tests.ps1 and test_*.py are IN the common scan range since #2081:
+# E5f/E5g — tests/<category>/*.Tests.ps1 and test_*.py are IN the common scan range:
 # reference-free orphans, so the flagless delete gate opens and they are removed.
+# E5h/E5i — the same names FLAT under tests/ are outside the range (#2392): never
+# reported, never deleted.
 for e5_widened in "test_shaped_like_a_test.py" "Shaped.Tests.ps1"; do
-    assert_eq "E5f widened-glob file is scanned and reported orphan: $e5_widened" \
-        "orphan" "$(report_of "$E5_BOTH" "tests/$e5_widened")"
-    assert_eq "E5g widened-glob file is deleted by --apply: $e5_widened" \
-        "gone" "$(fs_of "$E5_REPO" "tests/$e5_widened")"
+    assert_eq "E5f widened-glob file is scanned and reported orphan: bin/$e5_widened" \
+        "orphan" "$(report_of "$E5_BOTH" "tests/bin/$e5_widened")"
+    assert_eq "E5g widened-glob file is deleted by --apply: bin/$e5_widened" \
+        "gone" "$(fs_of "$E5_REPO" "tests/bin/$e5_widened")"
+    assert_eq "E5h flat file is outside the scan range: $e5_widened" \
+        "none" "$(report_of "$E5_BOTH" "tests/$e5_widened")"
+    assert_eq "E5i flat file survives both --apply runs: $e5_widened" \
+        "kept" "$(fs_of "$E5_REPO" "tests/$e5_widened")"
+done
+
+# E5j/E5k — helper.ps1 and helper.py in tests/<category>/ are outside the scan range:
+# they carry a Tests: reference but do not match *.Tests.ps1 or test_*.py.
+for e5_nonmatch in "helper.ps1" "helper.py"; do
+    assert_eq "E5j non-matching name in tests/<category>/ is not reported: bin/$e5_nonmatch" \
+        "none" "$(report_of "$E5_BOTH" "tests/bin/$e5_nonmatch")"
+    assert_eq "E5k non-matching name survives both --apply runs: bin/$e5_nonmatch" \
+        "kept" "$(fs_of "$E5_REPO" "tests/bin/$e5_nonmatch")"
 done

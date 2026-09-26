@@ -1,3 +1,5 @@
+# Tests: bin/sort-history.py
+# Tags: bin, python, scope:common
 """Tests for bin/sort-history.py pure functions."""
 
 import sys
@@ -5,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Add bin/ to path so we can import the module
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bin"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bin"))
 
 # Import from the module (filename has hyphens, use importlib)
 import importlib

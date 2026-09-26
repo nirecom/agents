@@ -1,7 +1,9 @@
+# Tests: install/win/vscode-settings.ps1
+# Tags: installer, pwsh-required, scope:common
 # Tests for install/win/vscode-settings.ps1
 
 # Evaluated at discovery time so -Skip:(-not $script:ScriptExists) works in Pester 5
-$script:ScriptPath = Join-Path $PSScriptRoot "..\install\win\vscode-settings.ps1"
+$script:ScriptPath = Join-Path $PSScriptRoot "..\..\install\win\vscode-settings.ps1"
 $script:ScriptExists = Test-Path $script:ScriptPath
 
 # The 8 keys that must appear in the output settings.json (also used in It blocks at discovery time)
@@ -18,7 +20,7 @@ $script:RequiredKeys = @(
 
 BeforeAll {
     # Recompute at runtime — $script: scope inside BeforeAll differs from file top-level scope
-    $script:ScriptPath = Join-Path $PSScriptRoot "..\install\win\vscode-settings.ps1"
+    $script:ScriptPath = Join-Path $PSScriptRoot "..\..\install\win\vscode-settings.ps1"
 
     function Invoke-VscodeSettings {
         param([string]$SettingsDir)

@@ -4,7 +4,7 @@
 # Verifies that codes uses Start-Process (not Start-Job) for terminal independence
 
 BeforeAll {
-    $AgentsDir = Split-Path -Parent $PSScriptRoot
+    $AgentsDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $ProfileScript = Join-Path $AgentsDir "profile-snippet.ps1"
     $script:ProfileContent = Get-Content $ProfileScript -Raw
     $LaunchScript = Join-Path $AgentsDir "bin\codes-launch.ps1"
@@ -164,8 +164,8 @@ Describe "codes function (profile-snippet.ps1)" {
 # tests/fix-1225-profile-snippet-guards/session-sync-gate.sh (CPR-ORTH twin;
 # value domain mirrors TC13-TC21 there). Gates only the two automatic call
 # sites (startup auto-fetch, codes() auto-push); fail-safe OFF; manual CLI is
-# NOT gated (tests/main-session-sync.Tests.ps1). TL3 gap (real profile load,
-# real VS Code/git/pwsh, PS5.1 vs pwsh7): see tests/main-profile-codes-subprocess.Tests.ps1
+# NOT gated (tests/bin/main-session-sync.Tests.ps1). TL3 gap (real profile load,
+# real VS Code/git/pwsh, PS5.1 vs pwsh7): see tests/install/main-profile-codes-subprocess.Tests.ps1
 # and bin/check-verification-gate.sh (pwsh-required).
 # ---------------------------------------------------------------------------
 Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git -ErrorAction SilentlyContinue)) {

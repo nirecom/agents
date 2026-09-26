@@ -313,6 +313,7 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read, LPT sort, duration measurement |
 | `bin/lib/run-all-parallelism.sh` | SSOT for the cache schema and its non-evaluating parser; sourced, never executed |
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
+| `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent); sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |

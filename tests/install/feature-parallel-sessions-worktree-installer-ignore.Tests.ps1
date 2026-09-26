@@ -1,6 +1,9 @@
+# Tests: install/win/global-gitignore.ps1
+# Tags: installer, worktree, pwsh-required, scope:common
+
 BeforeDiscovery {
     $ScriptPath = (Resolve-Path `
-        -Path (Join-Path $PSScriptRoot '..\install\win\global-gitignore.ps1') `
+        -Path (Join-Path $PSScriptRoot '..\..\install\win\global-gitignore.ps1') `
         -ErrorAction SilentlyContinue).Path
     $ScriptExists = [bool]$ScriptPath -and `
         ($null -ne (Get-Command pwsh -ErrorAction SilentlyContinue))
@@ -9,7 +12,7 @@ BeforeDiscovery {
 
 BeforeAll {
     $script:ScriptPath  = (Resolve-Path `
-        -Path (Join-Path $PSScriptRoot '..\install\win\global-gitignore.ps1') `
+        -Path (Join-Path $PSScriptRoot '..\..\install\win\global-gitignore.ps1') `
         -ErrorAction SilentlyContinue).Path
     $script:OrigXdg     = $env:XDG_CONFIG_HOME
     $script:OrigHome    = $env:HOME

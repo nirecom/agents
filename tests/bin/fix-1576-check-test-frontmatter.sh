@@ -439,6 +439,96 @@ fi
 rm -rf "$R"
 case_end
 
+case_begin "nonsh-placement" "bin/check-test-frontmatter.sh"
+# --- #2392: .Tests.ps1 / test_*.py follow the same tests/<category>/ rule as .sh.
+# write_nonsh_body <path> <tests-or-__NONE__> <tags-or-__NONE__> — '#' headers suit both.
+write_nonsh_body() {
+  mkdir -p "$(dirname "$1")"
+  { [[ "$2" != "__NONE__" ]] && echo "$2"; [[ "$3" != "__NONE__" ]] && echo "$3"; echo '# body'; } > "$1"
+}
+# nonsh_staged <label> <relpath> <tests> <tags> <want-rc> <want-err-substr|__EMPTY__>
+nonsh_staged() {
+  R="$(make_git_fixture)"; mkdir -p "$R/tests/lib"; echo '# stub' > "$R/tests/lib/harness.sh"
+  write_nonsh_body "$R/$2" "$3" "$4"; run_staged "$R" "$2"
+  if [[ "$6" == "__EMPTY__" ]]; then [[ $RC -eq $5 && -z "$ERR" ]]; else [[ $RC -eq $5 && "$ERR" == *"$6"* ]]; fi \
+    && pass "$1" || fail "$1" "rc=$RC err=<<$ERR>>"
+  rm -rf "$R"
+}
+for nm in x.Tests.ps1 test_x.py; do
+  # 7a new flat file => FLAT_TEST_REJECTED; 7b category file passes (harness.sh present, so the
+  # .sh-only harness rule must not leak); 7c/7d category file IS validated.
+  nonsh_staged "7a new flat tests/$nm rejected" "tests/$nm" '# Tests: bin/foo.sh' "$DEFAULT_TAGS" 1 FLAT_TEST_REJECTED
+  nonsh_staged "7b tests/bin/$nm with full frontmatter passes" "tests/bin/$nm" '# Tests: bin/foo.sh' "$DEFAULT_TAGS" 0 __EMPTY__
+  nonsh_staged "7c tests/bin/$nm missing Tests header" "tests/bin/$nm" '__NONE__' "$DEFAULT_TAGS" 1 MISSING_TESTS_HEADER
+  nonsh_staged "7d tests/bin/$nm missing scope" "tests/bin/$nm" '# Tests: bin/foo.sh' '# Tags: TL2' 1 MISSING_SCOPE_TAG
+  # 7e: EXISTING flat file (in HEAD) edited => grandfathered, no position-based rejection.
+  R="$(make_git_fixture)"
+  write_nonsh_body "$R/tests/$nm" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+  git -C "$R" add -A >/dev/null 2>&1; git -C "$R" commit -q -m seed >/dev/null 2>&1
+  write_nonsh_body "$R/tests/$nm" '# Tests: bin/foo.sh, bin/bar.sh' "$DEFAULT_TAGS"
+  run_staged "$R" "tests/$nm"
+  [[ $RC -eq 0 && "$ERR" != *"FLAT_TEST"* ]] \
+    && pass "7e existing flat tests/$nm grandfathered on edit" \
+    || fail "7e existing flat tests/$nm grandfathered" "rc=$RC err=<<$ERR>>"
+  rm -rf "$R"
+done
+
+# 7f: --all scans tests/<category>/*.Tests.ps1 and test_*.py and flags missing frontmatter.
+R="$(make_git_fixture)"
+write_nonsh_body "$R/tests/bin/bad.Tests.ps1" '__NONE__' "$DEFAULT_TAGS"
+write_nonsh_body "$R/tests/install/test_bad.py" '# Tests: bin/foo.sh' '__NONE__'
+run_all "$R"
+[[ $RC -eq 1 && "$ERR" == *"MISSING_TESTS_HEADER: tests/bin/bad.Tests.ps1"* \
+   && "$ERR" == *"MISSING_SCOPE_TAG: tests/install/test_bad.py"* ]] \
+  && pass "7f --all flags frontmatter defects in category .Tests.ps1 and test_*.py" \
+  || fail "7f --all scans category .Tests.ps1 / test_*.py" "rc=$RC err=<<$ERR>>"
+rm -rf "$R"
+case_end
+
+case_begin "nonsh-non-entrypoint" "bin/check-test-frontmatter.sh"
+# --- #2392: non-test entrypoints (helper.ps1, helper.py) must be ignored --------
+# Files not matching *.Tests.ps1 or test_*.py are not test entrypoints and must
+# never be validated or rejected by check-test-frontmatter.sh.
+
+# NE1: staged tests/bin/helper.ps1 (not *.Tests.ps1) => ignored, rc=0, no error
+R="$(make_git_fixture)"
+mkdir -p "$R/tests/bin"
+echo '# plain PS helper' > "$R/tests/bin/helper.ps1"
+run_staged "$R" "tests/bin/helper.ps1"
+if [[ $RC -eq 0 && -z "$ERR" ]]; then
+  pass "NE1 staged tests/bin/helper.ps1 (not *.Tests.ps1) is ignored (rc=0, no error)"
+else
+  fail "NE1 staged tests/bin/helper.ps1 is ignored" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+
+# NE2: staged tests/bin/helper.py (not test_*.py) => ignored, rc=0, no error
+R="$(make_git_fixture)"
+mkdir -p "$R/tests/bin"
+echo '# plain Python helper' > "$R/tests/bin/helper.py"
+run_staged "$R" "tests/bin/helper.py"
+if [[ $RC -eq 0 && -z "$ERR" ]]; then
+  pass "NE2 staged tests/bin/helper.py (not test_*.py) is ignored (rc=0, no error)"
+else
+  fail "NE2 staged tests/bin/helper.py is ignored" "rc=$RC err=<<$ERR>>"
+fi
+rm -rf "$R"
+
+# NE3: --all with helper.ps1 / helper.py alongside a valid .sh => exit 0
+# (non-entrypoints are not scanned by the glob, so no frontmatter check fires).
+R="$(make_git_fixture)"
+write_test_body "$R/tests/bin/a.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
+echo '# plain PS helper' > "$R/tests/bin/helper.ps1"
+echo '# plain Python helper' > "$R/tests/bin/helper.py"
+run_all "$R"
+if [[ $RC -eq 0 ]]; then
+  pass "NE3 --all ignores helper.ps1/helper.py alongside valid .sh (rc=0)"
+else
+  fail "NE3 --all ignores helper.ps1/helper.py" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
+fi
+rm -rf "$R"
+case_end
+
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"
 echo "# PASS=$PASS FAIL=$FAIL"

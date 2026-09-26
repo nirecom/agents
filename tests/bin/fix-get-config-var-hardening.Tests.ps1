@@ -9,7 +9,7 @@
 
 Describe 'get-config-var.ps1 --IsOff exit code matrix' {
     BeforeAll {
-        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:helper = Join-Path $script:repoRoot 'bin\get-config-var.ps1'
         $script:tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("gcv-" + [guid]::NewGuid().ToString('N').Substring(0,8))
         New-Item -ItemType Directory -Path $script:tmp -Force | Out-Null

@@ -14,8 +14,7 @@ TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
 
 export FEATURE_644_PHASE="${FEATURE_644_PHASE:-0}"
 
-# Job control puts every child in its own process group, so a whole test —
-# including anything it spawned — can be torn down with one signal.
+# Job control: each child gets its own process group, torn down with one signal.
 set -m 2>/dev/null || true
 case "$-" in *m*) PGROUP_KILL=1 ;; *) PGROUP_KILL=0 ;; esac
 
@@ -96,8 +95,7 @@ add_work() {
   return 0
 }
 
-# Empty IFS keeps pathname expansion but disables word splitting, so a
-# pattern with spaces still globs correctly without eval.
+# Empty IFS: pathname expansion without word splitting, so spaced patterns glob sans eval.
 expand_pattern() {
   local IFS='' f
   for f in $1; do add_work "$f"; done
@@ -105,12 +103,10 @@ expand_pattern() {
 }
 
 if [ "$WANT_ALL" -eq 1 ] || [ $# -eq 0 ]; then
-  # 2-level layout: enumerate tests/<category>/*.sh for the six canonical
-  # categories only. *.sh matches a category's own files, so split dispatchers'
-  # <name>/ sub-files — and lib/fixtures/__pycache__/_archive and run-all.sh
-  # itself (all at tests/ top level) — are excluded.
+  # Six categories' direct *.sh / *.Tests.ps1 / test_*.py only; sub-dirs, lib,
+  # fixtures and tests/ top level (run-all.sh itself) are excluded.
   for cat in hooks bin skills agents install tests; do
-    for f in "$TESTS_DIR/$cat"/*.sh; do add_work "$f"; done
+    for f in "$TESTS_DIR/$cat"/*.sh "$TESTS_DIR/$cat"/*.Tests.ps1 "$TESTS_DIR/$cat"/test_*.py; do add_work "$f"; done
   done
 else
   for pattern in "$@"; do expand_pattern "$pattern"; done
@@ -136,8 +132,7 @@ signal_tree() {
   return 0
 }
 
-# Bounded teardown: TERM, one grace second, then KILL — no polling, so a
-# stuck child cannot stall it.
+# Bounded teardown: TERM, one grace second, then KILL — no polling to stall on.
 cleanup_all() {
   local i pid pids=""
   [ "$CLEANUP_DONE" -eq 1 ] && return 0
@@ -189,9 +184,8 @@ detect_serial() {
 detect_serial
 
 # --- duration ledger -------------------------------------------------------
-# Submission order is Longest-Processing-Time-first over historical durations, so the
-# slowest tests start while there is still width to overlap them. Contract and rationale:
-# docs/architecture/tests/run-all-parallelism.md.
+# Submission order is Longest-Processing-Time-first over historical durations (rationale:
+# docs/architecture/tests/run-all-parallelism.md).
 PARALLELISM_LIB_OK=0
 DUR_LIB_OK=0
 LEDGER_INITED=0
@@ -371,23 +365,17 @@ neutralize_stream() {
   return 0
 }
 
+LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$AGENTS_DIR/bin/lib/run-all-launch.sh}"
+# shellcheck source=/dev/null
+[ -f "$LAUNCH_LIB" ] && . "$LAUNCH_LIB"
+command -v run_all_exec >/dev/null 2>&1 || run_all_exec() { bash "$1" >"$2" 2>"$3" </dev/null; }
+
 launch() {
   local i="$1" script="${WORK[$1]}"
   # The duration is measured child-side and written BEFORE the rc file, which stays the
   # sole completion signal — a harvest that sees <i>.rc always sees a finished <i>.dur.
   ( __t0=$SECONDS
-    case "$script" in
-      *.Tests.ps1)
-        if command -v pwsh >/dev/null 2>&1; then
-          pwsh -NoProfile -Command "Invoke-Pester -Path '$script' -CI" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null
-        else
-          printf 'SKIP: pwsh not on PATH\n' >"$WORKDIR/$i.out"
-          echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
-          echo 77 >"$WORKDIR/$i.rc"
-          exit 0
-        fi ;;
-      *) bash "$script" >"$WORKDIR/$i.out" 2>"$WORKDIR/$i.err" </dev/null ;;
-    esac
+    run_all_exec "$script" "$WORKDIR/$i.out" "$WORKDIR/$i.err"
     __rc=$?
     echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
     echo "$__rc" >"$WORKDIR/$i.rc" ) &
