@@ -161,6 +161,7 @@ grp_done() { GRP_DONE="${GRP_DONE}$1
 . "$GROUP_DIR/harness-tsv-reader.sh"
 
 # ── Preconditions ───────────────────────────────────────────────────────────
+case_begin "preconditions" "bin/lib/test-dup-group.sh"
 
 for _p in "$AUDIT:bin/audit-tests.sh" "$AUDIT_COMMON:bin/audit-tests-common.sh" \
           "$FM_CONST:bin/lib/test-frontmatter-constants.sh" "$FM_FIX:bin/lib/test-frontmatter-fix.sh" \
@@ -183,6 +184,8 @@ else
     fail "P2 FRONTMATTER_HEADER_MAX_LINE=10 not defined in $FM_CONST (not implemented yet)"
 fi
 
+case_end
+
 # shellcheck source=feature-2065-dup-group-inventory/golden-comparison.sh
 . "$GROUP_DIR/golden-comparison.sh"
 # shellcheck source=feature-2065-dup-group-inventory/token-parsing-equivalence.sh
@@ -201,6 +204,8 @@ fi
 . "$GROUP_DIR/escaping-hostile-names.sh"
 # shellcheck source=feature-2065-dup-group-inventory/verdict-coverage.sh
 . "$GROUP_DIR/verdict-coverage.sh"
+
+case_begin "suite-integrity" "bin/lib/test-dup-group.sh"
 
 # ── Case-file set integrity ─────────────────────────────────────────────────
 # The `. "$GROUP_DIR/…"` lines above are the only wiring a case file has, so a
@@ -232,6 +237,8 @@ if [[ -z "$GRP_UNFINISHED" && -z "$GRP_UNEXPECTED" ]]; then
 else
     fail "GRP2 case file completion mismatch — sourced-but-unfinished: [${GRP_UNFINISHED:-none}] marked-but-not-sourced: [${GRP_UNEXPECTED:-none}]"
 fi
+
+case_end
 
 echo ""
 echo "─────────────────────────────────────────"

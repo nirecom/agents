@@ -213,6 +213,8 @@ CASE_RAN=""
 case_ran() { CASE_RAN="${CASE_RAN} $1"; }
 
 # ── Preconditions ───────────────────────────────────────────────────────────
+case_begin "preconditions" "bin/find-tests-for-source.sh"
+
 for _p in "$HELPER:bin/find-tests-for-source.sh" "$ROUTE_LIB:bin/lib/test-route-destination.sh" \
           "$DUP_LIB:bin/lib/test-dup-group.sh" "$SELECT_SH:skills/review-tests/scripts/select-staged-files.sh" \
           "$WT_SKILL:skills/write-tests/SKILL.md" "$RT_SKILL:skills/review-tests/SKILL.md" \
@@ -230,6 +232,8 @@ for _fn in tdg_unescape_field tdg_split_escaped_csv; do
     fi
 done
 
+case_end
+
 # ── Case files ──────────────────────────────────────────────────────────────
 # shellcheck source=feature-2075-append-destination/helper-cases.sh
 . "$GROUP_DIR/helper-cases.sh"
@@ -243,6 +247,8 @@ done
 . "$GROUP_DIR/worktree-select-cases.sh"
 # shellcheck source=feature-2075-append-destination/skill-static-cases.sh
 . "$GROUP_DIR/skill-static-cases.sh"
+
+case_begin "suite-integrity" "bin/find-tests-for-source.sh"
 
 # ── Case-file set integrity ─────────────────────────────────────────────────
 GRP_PRESENT="$(ls -1 "$GROUP_DIR" 2>/dev/null | grep '\.sh$' | sort)"
@@ -289,6 +295,8 @@ if [[ -z "$CASE_MISSING" ]]; then
 else
     fail "CASE1 planned case ids that never ran: [$CASE_MISSING]"
 fi
+
+case_end
 
 echo ""
 echo "─────────────────────────────────────────"
