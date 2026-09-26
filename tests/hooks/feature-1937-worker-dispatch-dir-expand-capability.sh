@@ -21,6 +21,18 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
+assert_eq() {
+    local name="$1" want="$2" got="$3"
+    if [ "$want" = "$got" ]; then pass "$name"
+    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
+}
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
+}
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$REGISTRY_JS" ]; then
     fail "0: prerequisites missing" "dispatcher=$DISPATCH_JS registry=$REGISTRY_JS"
