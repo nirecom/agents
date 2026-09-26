@@ -4,7 +4,7 @@
 # Tags: workflow-init, driver, wip-check, scope:issue-specific
 #
 # WP1-WP7 — WIP aggregation branch tests; WP8-WP9 — #2087 phase-order effects
-# (meta-issue label filter, closed-gate precedence).
+# (meta-issue label filter, closed-gate precedence); WP10 — #2408 invalid stdout.
 #
 # TL3 gap: no live Projects v2 board writes, no real `claude -p` ask_user
 # round-trip. Mitigated at WORKFLOW_USER_VERIFIED preflight via
@@ -185,5 +185,37 @@ else
     pass "WP9: wip-state.sh never invoked while the closed gate was pending"
 fi
 teardown_case
+
+# case_begin / case_end — static group markers for bin/check-case-markers.sh.
+case_begin() { echo "--- case: $1 ($2) ---"; }
+case_end() { :; }
+
+# --- WP10: rc=0 + stdout outside {none,same,other} → ask_user wip_error (#2408) --
+# A check that exits 0 but prints an unrecognized token (e.g. stray output leaked
+# from a sourced .env) must be classified as an error, not silently treated as owned.
+case_begin "wp10-invalid-stdout" "bin/workflow/lib/workflow-init/phases/wip-check.js"
+setup_case wid-wp10
+mock_issue 411 OPEN "type:task"
+set_wip 411 garbage
+run_driver '#411'
+assert_kv "WP10: rc=0 + invalid stdout → ACTION=ask_user" ACTION ask_user
+assert_kv "WP10: rc=0 + invalid stdout → ASK_ID=wip_error" ASK_ID wip_error
+if [ -z "$(wip_set_calls)" ]; then
+    pass "WP10: no wip-state set call for an unclassifiable check result"
+else
+    fail "WP10: unexpected set calls: [$(wip_set_calls | tr '\n' ';')]"
+fi
+teardown_case
+case_end
+
+# --- WP10b: rc=0 + valid token as final line (preceding diagnostic) → accepted --
+case_begin "wp10b-multiline-valid-final" "bin/workflow/lib/workflow-init/phases/wip-check.js"
+setup_case wid-wp10b
+mock_issue 412 OPEN "type:task"
+printf 'diagnostic line\nsame\n' > "$WIPD/state-412"
+run_driver '#412'
+assert_kv "WP10b: valid final-line token after banner → ACTION=done" ACTION done
+teardown_case
+case_end
 
 finish

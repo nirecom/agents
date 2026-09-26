@@ -208,7 +208,7 @@ fi
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID"
 if [ "$LAST_RC" -eq 0 ] && [ -s "$GLAB_LOG" ] && log_has "$GLAB_LOG" "42" \
-   && printf '%s' "$LAST_OUT" | grep -qi 'wip' \
+   && printf '%s' "$LAST_OUT" | grep -qE '^(same|other)$' \
    && [ ! -s "$GH_LOG" ]; then
     pass "D2: gitlab check → glab queried for #42, reports WIP, exit 0, gh NOT called"
 else
@@ -232,8 +232,8 @@ fi
 # check verb reflects the cleared state, not a fixed literal. RED now.
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID"
-if [ "$LAST_RC" -eq 0 ] && ! printf '%s' "$LAST_OUT" | grep -qi 'wip'; then
-    pass "D3b: gitlab check after clear → non-WIP output, exit 0"
+if [ "$LAST_RC" -eq 0 ] && printf '%s' "$LAST_OUT" | grep -qxE 'none'; then
+    pass "D3b: gitlab check after clear → outputs 'none', exit 0"
 else
     fail "D3b: expected exit 0 + non-WIP output (rc=$LAST_RC) out=[$LAST_OUT]"
 fi

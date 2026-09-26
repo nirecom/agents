@@ -2,18 +2,11 @@
 # tests/feature-1340-issue-setup/wip-state-migration.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-state/cmd-set.sh, bin/github-issues/wip-state/cmd-check.sh, bin/github-issues/wip-state/cmd-clear.sh
 # Tags: issue-setup, wip-state, github-issues, scope:issue-specific
-# N/A (C6): adversarial .env WIP_STATE_* values — .env is trusted user config and this path is being DEPRECATED by the migration block; not an attacker surface.
-#
-# Tests for wip-state.sh temporary-migration block and ensure_wip_field_ids (step 4 of #1340).
-# L2: .env WIP_STATE_* + resolver rc=1 → deprecation warn + ALL values preserved exactly;
-#     empty .env + resolver → each WIP_STATE_* (status/in-progress/done/fingerprint) = exact
-#     resolver ID, across set/check/clear verbs; env value + different resolver → .env wins
-#     for every field (precedence); resolver rc=1 + .env set → preflight passes.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether wip-state.sh set/check/clear actually interact with a live GitHub Projects API.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# C6: a `;`-valued .env line must never execute commands — SEMI-1 (#2408).
+# L2: resolver → each WIP_STATE_* = exact resolver ID across set/check/clear
+#     (ensure_wip_field_ids, #1340). TWM-1/3/4 (.env sourcing) retired by #2408.
+# L3 gap: no live GitHub Projects API; mitigated by the WORKFLOW_USER_VERIFIED
+# preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -131,14 +124,6 @@ esac
 MOCK_EOF
     chmod +x "$TMP/mock-bin/gh"
 
-    # Create a minimal mock env-os-filter (just passes through)
-    mkdir -p "$TMP/bin"
-    cat > "$TMP/bin/env-os-filter" <<'FILTER_EOF'
-#!/bin/bash
-cat "$1" 2>/dev/null || true
-FILTER_EOF
-    chmod +x "$TMP/bin/env-os-filter"
-
     export PATH="$TMP/mock-bin:$PATH"
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
@@ -146,10 +131,6 @@ FILTER_EOF
     mkdir -p "$TMP/plans"
     export AGENTS_CONFIG_DIR="$TMP/agents-config"
     mkdir -p "$AGENTS_CONFIG_DIR"
-    # Create empty .env so load_env_file doesn't fail
-    touch "$AGENTS_CONFIG_DIR/.env"
-    cp "$TMP/bin/env-os-filter" "$AGENTS_CONFIG_DIR/bin/env-os-filter" 2>/dev/null || \
-        mkdir -p "$AGENTS_CONFIG_DIR/bin" && cp "$TMP/bin/env-os-filter" "$AGENTS_CONFIG_DIR/bin/env-os-filter"
 }
 
 teardown_mock() {
@@ -170,7 +151,7 @@ teardown_mock() {
 }
 
 # Run a wip-state verb as a real subprocess. The WIP_STATE_* field IDs that
-# ensure_wip_field_ids populated (from .env or resolver) are exposed as
+# ensure_wip_field_ids populated (from the resolver) are exposed as
 # arguments to the downstream `gh project item-edit` / `gh api graphql`
 # (check) calls, which the gh mock records to MOCK_LOG. Assertions then grep
 # MOCK_LOG for the EXACT id values. This avoids the source-then-exit problem
@@ -180,8 +161,11 @@ teardown_mock() {
 # pass vacuously).
 run_wip_verb() {
     local verb="$1" stderr_file="${2:-/dev/null}"
+    local -a sid_args=()
+    # clear/abandon reject --session-id; only set/check consume it.
+    case "$verb" in set|check) sid_args=(--session-id "twm-test") ;; esac
     WIP_RC=0
-    bash "$TARGET_WIP" "$verb" 999 >/dev/null 2>"$stderr_file" || WIP_RC=$?
+    bash "$TARGET_WIP" "$verb" 999 "${sid_args[@]}" >/dev/null 2>"$stderr_file" || WIP_RC=$?
 }
 
 # Assert that an exact id value reached a gh call (proves ensure_wip_field_ids
@@ -191,33 +175,7 @@ id_in_log() { grep -Fq -- "$1" "$MOCK_LOG" 2>/dev/null; }
 # that the verb progressed past preflight into the item read/write step).
 item_call_made() { grep -qE "project item-edit|fieldValues|item-add" "$MOCK_LOG" 2>/dev/null; }
 
-# ===========================================================================
-# TWM-1: .env WIP_STATE_* present → the temporary-migration block emits a
-# deprecation warning on stderr (regardless of resolver state). RED now: the
-# migration block is not yet implemented, so no deprecation warning is emitted.
-# (Exact-value passthrough with resolver rc=1 is covered by TWM-4: when the
-# resolver fails, item-edit is unreachable, so the .env values are instead
-# observed via preflight_field_ids passing.)
-# ===========================================================================
-setup_mock
-export GH_MOCK_RESOLVER_FAIL=1
-cat > "$AGENTS_CONFIG_DIR/.env" <<'ENV_EOF'
-WIP_STATE_STATUS_FIELD_ID=env-status-id
-WIP_STATE_IN_PROGRESS_OPTION_ID=env-inprog-id
-WIP_STATE_DONE_OPTION_ID=env-done-id
-WIP_STATE_FINGERPRINT_FIELD_ID=env-finger-id
-ENV_EOF
-STDERR_FILE="$TMP/twm1-stderr.log"
-run_wip_verb check "$STDERR_FILE"
-STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
-HAS_DEPRECATION_WARN=0
-echo "$STDERR_CONTENT" | grep -qiE "deprecat" && HAS_DEPRECATION_WARN=1
-if [ "$HAS_DEPRECATION_WARN" = "1" ]; then
-    pass "TWM-1: .env WIP_STATE_* present → deprecation warning emitted on stderr"
-else
-    fail "TWM-1: warn=$HAS_DEPRECATION_WARN (expected RED — temporary-migration deprecation warning not yet implemented)"
-fi
-teardown_mock
+# TWM-1: retired by #2408 — load_env_file removed; .env source no longer occurs
 
 # ===========================================================================
 # TWM-2 (set): empty .env + resolver returns known distinct IDs → status +
@@ -288,70 +246,72 @@ else
 fi
 teardown_mock
 
-# ===========================================================================
-# TWM-3: .env value set + DIFFERENT resolver value → .env value wins for every
-# field (migration precedence: resolver never overwrites a non-empty env value).
-# Assert the ENV_* ids reach gh AND the RESOLVER_* ids do NOT.
-# ===========================================================================
-setup_mock
-export GH_MOCK_RESOLVER_FAIL=0
-export GH_MOCK_RESOLVED_STATUS="RESOLVER_STATUS"
-export GH_MOCK_RESOLVED_INPROG="RESOLVER_INPROG"
-export GH_MOCK_RESOLVED_FINGER="RESOLVER_FINGER"
-cat > "$AGENTS_CONFIG_DIR/.env" <<'ENV_EOF'
-WIP_STATE_STATUS_FIELD_ID=ENV_STATUS_WINS
-WIP_STATE_IN_PROGRESS_OPTION_ID=ENV_INPROG_WINS
-WIP_STATE_DONE_OPTION_ID=ENV_DONE_WINS
-WIP_STATE_FINGERPRINT_FIELD_ID=ENV_FINGER_WINS
-ENV_EOF
-STDERR_FILE="$TMP/twm3-stderr.log"
-run_wip_verb set "$STDERR_FILE"
-ENV_STATUS_OK=0; id_in_log "ENV_STATUS_WINS" && ENV_STATUS_OK=1
-ENV_INPROG_OK=0; id_in_log "ENV_INPROG_WINS" && ENV_INPROG_OK=1
-ENV_FINGER_OK=0; id_in_log "ENV_FINGER_WINS" && ENV_FINGER_OK=1
-ITEM=0; item_call_made && ITEM=1
-RESOLVER_LEAKED=0
-{ id_in_log "RESOLVER_STATUS" || id_in_log "RESOLVER_INPROG" || id_in_log "RESOLVER_FINGER"; } && RESOLVER_LEAKED=1
-if [ "$WIP_RC" = "0" ] && [ "$ITEM" = "1" ] \
-   && [ "$ENV_STATUS_OK" = "1" ] && [ "$ENV_INPROG_OK" = "1" ] && [ "$ENV_FINGER_OK" = "1" ] \
-   && [ "$RESOLVER_LEAKED" = "0" ]; then
-    pass "TWM-3: rc=0 + item call reached; .env wins for every field (no resolver overwrite)"
-else
-    fail "TWM-3: rc=$WIP_RC item=$ITEM env_status=$ENV_STATUS_OK env_inprog=$ENV_INPROG_OK env_finger=$ENV_FINGER_OK resolver_leaked=$RESOLVER_LEAKED (expected RED — precedence guard not yet implemented)"
-fi
-teardown_mock
+# TWM-3: retired by #2408 — load_env_file removed; .env source no longer occurs
+# TWM-4: retired by #2408 — load_env_file removed; .env source no longer occurs
+
+# case_begin / case_end — static group markers for bin/check-case-markers.sh.
+case_begin() { echo "--- case: $1 ($2) ---"; }
+case_end() { :; }
 
 # ===========================================================================
-# TWM-4: resolver rc=1 + .env set → the `check` verb completes its success path
-# (preflight_field_ids passes because .env supplied the IDs; resolver failure is
-# non-fatal → prints "none" and exits 0). Robustness (C3): assert the ACTUAL rc
-# (0) AND positive stdout evidence ("none") AND the ABSENCE of the missing-env
-# error — so an unrelated early failure cannot pass this vacuously.
+# SEMI-1 (#2408): a .env line whose value carries `;` (CODE_FILE_EXTENSIONS=
+# js;sh;py;md) must not be sourced — sourcing runs `sh`/`py`/`md` as commands and
+# their output pollutes check's stdout. Sentinels on PATH record any execution.
 # ===========================================================================
+case_begin "semi1-env-semicolon-not-executed" "bin/github-issues/wip-state.sh"
 setup_mock
-export GH_MOCK_RESOLVER_FAIL=1
-cat > "$AGENTS_CONFIG_DIR/.env" <<'ENV_EOF'
-WIP_STATE_STATUS_FIELD_ID=preserved-status-id
-WIP_STATE_IN_PROGRESS_OPTION_ID=preserved-inprog-id
-WIP_STATE_DONE_OPTION_ID=preserved-done-id
-WIP_STATE_FINGERPRINT_FIELD_ID=preserved-finger-id
-ENV_EOF
-STDERR_FILE="$TMP/twm4-stderr.log"
-STDOUT_FILE="$TMP/twm4-stdout.log"
+export GH_MOCK_RESOLVER_FAIL=0
+SEMI_BIN="$TMP/semi-bin"
+SEMI_FLAGS="$TMP/semi-flags"
+SEMI_REPO="$TMP/semi-repo"
+mkdir -p "$SEMI_BIN" "$SEMI_FLAGS"
+for s in sh py md; do
+    printf '#!/bin/bash\n: > "%s/%s.ran"\necho "SENTINEL_%s_RAN"\n' "$SEMI_FLAGS" "$s" "$s" > "$SEMI_BIN/$s"
+    chmod +x "$SEMI_BIN/$s"
+done
+cat > "$SEMI_BIN/gh" <<'SEMI_GH_EOF'
+#!/bin/bash
+ARGS="$*"
+case "$ARGS" in
+  auth\ status*) echo "Logged in to github.com"; echo "Token scopes: 'repo', 'project'"; exit 0 ;;
+  repo\ view\ *--json\ owner,name*) echo "nirecom/agents"; exit 0 ;;
+  api\ graphql\ *projectsV2*) echo '{"id":"PVT_semi1","number":1,"ownerLogin":"nirecom"}'; exit 0 ;;
+  api\ graphql\ *projectItems*) exit 0 ;;
+  api\ graphql\ *)
+    case "$ARGS" in
+      *"hasNextPage"*) echo "false"; exit 0 ;;
+      *"endCursor"*) echo ""; exit 0 ;;
+      *'"In Progress")'*) echo "SEMI_INPROG"; exit 0 ;;
+      *'"Todo")'*) echo "SEMI_TODO"; exit 0 ;;
+      *'"Done")'*) echo "SEMI_DONE"; exit 0 ;;
+      *'"Status")'*|*'== "Status"'*) echo "SEMI_STATUS"; exit 0 ;;
+      *'session-fingerprint'*) echo "SEMI_FINGER"; exit 0 ;;
+      *"Content Date"*) echo "PVTF_semi"; exit 0 ;;
+      *) echo "SEMI_STATUS"; exit 0 ;;
+    esac ;;
+  *) exit 0 ;;
+esac
+SEMI_GH_EOF
+chmod +x "$SEMI_BIN/gh"
+printf 'CODE_FILE_EXTENSIONS=js;sh;py;md\n' > "$AGENTS_CONFIG_DIR/.env"
+git init -q "$SEMI_REPO"
+git -C "$SEMI_REPO" config core.hooksPath /dev/null
+git -C "$SEMI_REPO" remote add origin https://github.com/nirecom/agents.git
+STDOUT_FILE="$TMP/semi1-stdout.log"
+STDERR_FILE="$TMP/semi1-stderr.log"
 WIP_RC=0
-bash "$TARGET_WIP" check 999 >"$STDOUT_FILE" 2>"$STDERR_FILE" || WIP_RC=$?
-STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
-STDOUT_CONTENT=$(cat "$STDOUT_FILE" 2>/dev/null)
-HAS_MISSING_ERROR=0
-echo "$STDERR_CONTENT" | grep -qi "missing required env" && HAS_MISSING_ERROR=1
-PRINTED_NONE=0
-printf '%s' "$STDOUT_CONTENT" | grep -qx "none" && PRINTED_NONE=1
-if [ "$WIP_RC" = "0" ] && [ "$PRINTED_NONE" = "1" ] && [ "$HAS_MISSING_ERROR" = "0" ]; then
-    pass "TWM-4: resolver rc=1 + .env set → check rc=0, prints 'none', no missing-env error"
+( cd "$SEMI_REPO" && export PATH="$SEMI_BIN:$PATH" && run_with_timeout 60 bash "$TARGET_WIP" check 999 --session-id semi1sid ) \
+    >"$STDOUT_FILE" 2>"$STDERR_FILE" || WIP_RC=$?
+SEMI_OUT="$(cat "$STDOUT_FILE" 2>/dev/null)"
+SEMI_RAN=""
+for f in "$SEMI_FLAGS"/*.ran; do [ -e "$f" ] && SEMI_RAN="$SEMI_RAN${f##*/} "; done
+if [ -z "$SEMI_RAN" ] && [ "$WIP_RC" = "0" ] && [[ "$SEMI_OUT" =~ ^(none|same|other)$ ]]; then
+    pass "SEMI-1: ;-valued .env → check rc=0, stdout valid ($SEMI_OUT), no sentinel executed"
 else
-    fail "TWM-4: rc=$WIP_RC printed_none=$PRINTED_NONE missing_err=$HAS_MISSING_ERROR stdout='$STDOUT_CONTENT' stderr='$STDERR_CONTENT'"
+    fail "SEMI-1: rc=$WIP_RC stdout='$(printf '%s' "$SEMI_OUT" | tr '\n' ';')' sentinels_ran='$SEMI_RAN' stderr='$(head -c 300 "$STDERR_FILE" 2>/dev/null)'"
 fi
 teardown_mock
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

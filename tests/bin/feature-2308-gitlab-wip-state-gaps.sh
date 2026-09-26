@@ -4,7 +4,7 @@
 set -u
 
 # Issue #2308 — GitLab WIP verb (gitlab.sh) gaps unreached by
-# feature-2308-gitlab-wip-state.sh: Gap 1 = gl_cmd_check "wip-other" (status:wip
+# feature-2308-gitlab-wip-state.sh: Gap 1 = gl_cmd_check "other" (status:wip
 # present but stored wip-fp mismatches the checking session — the sibling reuses
 # one SID so this branch never runs); Gap 2 = gl_cmd_abandon (open→remove labels;
 # closed/unknown→exit 1) plus its `api .../issues/<N> --jq .state` read the
@@ -175,7 +175,12 @@ run_wip() {
 
 REPO_GL="$(make_repo 'git@gitlab.com:acme/widgets.git')"
 
-echo "=== Gap 1: gl_cmd_check wip-other / wip-same fingerprint routing ==="
+# case_begin / case_end — static group markers for bin/check-case-markers.sh.
+case_begin() { echo "--- case: $1 ($2) ---"; }
+case_end() { :; }
+
+echo "=== Gap 1: gl_cmd_check other / same fingerprint routing ==="
+case_begin "g1-check-token-routing" "bin/github-issues/wip-state/gitlab.sh"
 
 # G1-setup: set 42 with session A → status:wip + wip-fp:<hashA> applied.
 reset_logs; reset_state
@@ -187,24 +192,25 @@ else
 fi
 
 # G1a (primary): check 42 with a DIFFERENT session B → status:wip present but the
-# stored fingerprint is session A's → mismatch → "wip-other".
+# stored fingerprint is session A's → mismatch → "other" (#2408: same token as GitHub).
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID_B"
-if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "wip-other" ]; then
-    pass "G1a: check 42 (session B) → wip-other, exit 0"
+if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "other" ]; then
+    pass "G1a: check 42 (session B) → other, exit 0"
 else
-    fail "G1a: expected 'wip-other' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
+    fail "G1a: expected 'other' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
 fi
 
 # G1b (positive control): check 42 with the SAME session A → fingerprint matches
-# → "wip-same". Proves the verdict is fingerprint-driven, not constant.
+# → "same". Proves the verdict is fingerprint-driven, not constant.
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID_A"
-if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "wip-same" ]; then
-    pass "G1b: check 42 (session A) → wip-same, exit 0"
+if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "same" ]; then
+    pass "G1b: check 42 (session A) → same, exit 0"
 else
-    fail "G1b: expected 'wip-same' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
+    fail "G1b: expected 'same' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
 fi
+case_end
 
 echo ""
 echo "=== Gap 2: gl_cmd_abandon (open→remove labels; closed/unknown→exit 1) ==="
