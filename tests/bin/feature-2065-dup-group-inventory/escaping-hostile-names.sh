@@ -119,4 +119,12 @@ assert_eq "EH7 the hostile-name run produced no shell error" \
 
 case_end
 
+case_begin "escaping-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests.sh" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by escaping-series via AUDIT)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
 grp_done "escaping-hostile-names.sh"

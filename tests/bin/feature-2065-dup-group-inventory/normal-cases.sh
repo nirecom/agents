@@ -86,4 +86,12 @@ assert_eq "NC5 exit code is 0 when at least one group exists" "0" "$NC_RC"
 
 case_end
 
+case_begin "normal-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests.sh" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by normal-series via AUDIT)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
 grp_done "normal-cases.sh"

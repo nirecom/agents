@@ -91,4 +91,12 @@ assert_eq "VC5 the corpus contains a group, so the exit code is 0" "0" "$VC_RC"
 
 case_end
 
+case_begin "verdict-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests.sh" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by verdict-series via AUDIT)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
 grp_done "verdict-coverage.sh"

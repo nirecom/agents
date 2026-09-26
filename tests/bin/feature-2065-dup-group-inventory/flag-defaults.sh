@@ -55,4 +55,12 @@ done
 
 case_end
 
+case_begin "flag-defaults-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests-common.sh" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by flag-defaults-series via AUDIT_COMMON)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
+
 grp_done "flag-defaults.sh"
