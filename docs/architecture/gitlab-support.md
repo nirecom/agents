@@ -9,7 +9,7 @@ Forge integration is split into two axes (#2307): a **codehost** axis (pushes,
 merge requests, repo visibility, WIP signaling) and a **tracker** axis (issues).
 The tracker axis for GitLab shipped earlier; this work implements the codehost
 axis. github.com and gitlab.com are recognized out of the box; a self-hosted
-GitLab is recognized by naming its host in `FORGE_GITLAB_HOST`.
+A self-hosted GitLab is recognized when its host is set in `GITLAB_HOSTNAME` (or `GITLAB_SSH_HOSTNAME` for SSH-only remotes).
 
 ## 2. Detection SSOT
 
@@ -104,3 +104,20 @@ Subgroups are supported through the variable-depth `%2F`-encoded path.
 
 Epics, roadmap/timeline, `.gitlab-ci.yml`, and a MSYS2 path-correction helper
 for `glab` (added only if a real need appears) are out of scope here.
+
+## 10. Installer DNS reachability guard
+
+Before attempting `glab auth login`, both installer scripts check whether
+`GITLAB_HOSTNAME` resolves via DNS (3-second hard timeout). If resolution
+fails the auth step is skipped with a yellow WARNING; the glab binary itself
+is not removed. This prevents hangs when a `.env` shared from a work machine
+is applied on a personal machine that is off-VPN or otherwise cannot reach the
+corporate GitLab host.
+
+The `glab auth status` credential-probe fallback was removed from both
+installers at the same time: it could silently probe cached credentials for an
+unreachable host, bypassing the DNS guard.
+
+Timeout mechanism by platform: `timeout 3 getent hosts` on Linux; a
+`gtimeout`/`timeout`/POSIX kill-after chain on macOS; PowerShell
+`Start-Job` + `Wait-Job -Timeout 3` on Windows.

@@ -2,7 +2,7 @@
 // bin/worker-dispatch/emit.js
 //
 // THE ONLY MODULE IN THIS DISPATCHER THAT WRITES TO STDOUT.
-// tests/feature-1643-worker-dispatch-sentinel-stdout.sh asserts that by source
+// tests/bin/feature-1643-worker-dispatch-sentinel-stdout.sh asserts that by source
 // scan. Keep it that way: a single boundary is what makes sentinel
 // neutralization a property of the program rather than a habit.
 //

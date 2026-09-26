@@ -5,7 +5,7 @@
 // hook and the commit-time CLI judge files identically.
 //
 // FILE-LEVEL filter rules are duplicated in bash; drift net is
-// tests/feature-1894-hook-comment-block/filter-parity.sh. Purity contract:
+// tests/hooks/feature-1894-hook-comment-block/filter-parity.sh. Purity contract:
 // no config, no filesystem, no output — every value arrives as an argument.
 "use strict";
 

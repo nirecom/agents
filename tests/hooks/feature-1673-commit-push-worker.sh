@@ -1,0 +1,496 @@
+#!/usr/bin/env bash
+# tests/feature-1673-commit-push-worker.sh
+# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md
+# Tags: worker-dispatch, commit-push, registry, capability, payload, status-vocabulary, env-passthrough, TL1, scope:issue-specific
+#
+# Issue #1673 — the commit-push worker's DECLARED capability surface: registry
+# entry, payload types, env surface, the five D1 extraEnv vars and the status
+# vocabulary, asserted through the real capability validator or against the
+# worker source rather than by behaviour. Contract, rationale, and the TL3 gap
+# (real workflow-gate acceptance — tests/TL3-worker-dispatch-commit-push.sh):
+# docs/architecture/claude-code/worker-dispatch/commit-push.md
+
+set -u
+
+if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_TL1_INNER:-}" ]; then
+    _CP1673_TL1_INNER=1 timeout 180 bash "$0" "$@"
+    exit $?
+fi
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+CAPABILITY_JS="$AGENTS_DIR/bin/worker-dispatch/capability.js"
+ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
+WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+# commit-push.js is dispatch + re-export only (rules/coding/file-split.md
+# Pattern A); the literals groups D and E scan live in the sibling folder, so
+# both groups read the WHOLE implementation and a literal moving between these
+# files is not a behaviour change.
+WORKER_DIR="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push"
+WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js")
+SKILL_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
+
+# A shrunken file list would report an absent literal as a missing feature and,
+# worse, turn the ISSUE_CLOSE_SKILL row green because the file that could hold
+# it was never opened. Missing files are named, not silently skipped.
+worker_srcs_missing() {
+    local f out=""
+    for f in "${WORKER_SRCS[@]}"; do
+        [ -f "$f" ] || out="$out ${f#"$AGENTS_DIR/"}"
+    done
+    echo "$out" | xargs
+}
+
+PASS=0
+FAIL=0
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
+assert_eq() {
+    local name="$1" want="$2" got="$3"
+    if [ "$want" = "$got" ]; then pass "$name"
+    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
+}
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
+}
+nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
+
+for f in "$REGISTRY_JS" "$CAPABILITY_JS" "$ANCHOR_JS"; do
+    if [ ! -f "$f" ]; then
+        fail "0/prerequisite" "missing $f"
+        echo ""
+        echo "Total: PASS=$PASS FAIL=$FAIL"
+        exit 1
+    fi
+done
+
+TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/cp1673-tl1-$$")"
+mkdir -p "$TMPD"
+trap 'rm -rf "$TMPD"' EXIT
+
+MAIN_RAW="$TMPD/mainrepo"
+mkdir -p "$MAIN_RAW"
+git -C "$MAIN_RAW" init -q -b main >/dev/null 2>&1
+git -C "$MAIN_RAW" config user.email "test@example.com"
+git -C "$MAIN_RAW" config user.name "Test"
+git -C "$MAIN_RAW" config core.hooksPath /dev/null
+echo init > "$MAIN_RAW/README.md"
+git -C "$MAIN_RAW" add README.md >/dev/null 2>&1
+git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
+PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+
+MAIN="$(nodepath "$MAIN_RAW")"
+PLANS="$(nodepath "$PLANS_RAW")"
+
+# ---------------------------------------------------------------------------
+# Probe: validate a payload against the declared commit-push entry using the
+# REAL capability validator. Prints `ok=1` / `ok=0` plus `err=<joined errors>`.
+# ---------------------------------------------------------------------------
+PROBE="$TMPD/validate-probe.js"
+cat > "$PROBE" <<'PROBEJS'
+"use strict";
+const reg = require(process.argv[2]);
+const cap = require(process.argv[3]);
+const anchorMod = require(process.argv[4]);
+const entry = (reg.workers || {})["commit-push"];
+// `MISSING`, not `0`: a missing entry must not be mistaken for a rejection, or
+// every negative row below would go green on an empty registry.
+if (!entry) { process.stdout.write("ok=MISSING\nerr=ENTRY_MISSING\n"); process.exit(0); }
+const anchors = anchorMod.resolveAnchors(process.argv[5]);
+if (anchors.error) { process.stdout.write("ok=0\nerr=ANCHORS:" + anchors.error + "\n"); process.exit(0); }
+let payload;
+try { payload = JSON.parse(process.argv[6]); }
+catch (e) { process.stdout.write("ok=0\nerr=BAD_CASE_JSON\n"); process.exit(0); }
+const res = cap.validate(payload, entry, anchors);
+process.stdout.write("ok=" + (res.ok ? "1" : "0") + "\n");
+process.stdout.write("err=" + (res.errors || []).join(" | ") + "\n");
+PROBEJS
+
+VOUT=""
+validate_payload() {
+    VOUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" \
+        node "$(nodepath "$PROBE")" "$(nodepath "$REGISTRY_JS")" "$(nodepath "$CAPABILITY_JS")" \
+        "$(nodepath "$ANCHOR_JS")" "$MAIN" "$1" 2>&1)" || VOUT="ok=0
+err=PROBE_CRASHED"
+}
+vfield() { printf '%s\n' "$VOUT" | sed -n "s/^$1=//p" | head -1; }
+
+BASE_OK="\"commit_message\":\"feat: something\",\"branch\":\"feature/1673\",\"worktree_path\":\"$MAIN\",\"session_id\":\"df594809-a1cc-4035\""
+
+# ===========================================================================
+# Group A — the entry exists and declares the fields the caller sends
+# ===========================================================================
+group_a() {
+    local out
+    out="$(node -e '
+      const reg = require(process.argv[1]);
+      const w = (reg.workers || {})["commit-push"];
+      const p = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
+      if (!w) { p("present", 0); process.exit(0); }
+      p("present", 1);
+      p("in_enum", (reg.WORKER_NAMES || []).includes("commit-push") ? 1 : 0);
+      p("renderer", w.renderer);
+      const spec = w.payloadSpec || {};
+      const t = (k) => (spec[k] ? String(spec[k].type) : "(absent)");
+      const r = (k) => (spec[k] ? (spec[k].required === true ? "req" : "opt") : "(absent)");
+      for (const k of ["commit_message","branch","closes_issues","pr_body_template","wip_mode",
+                       "enforce_worktree","agents_config_dir","artifact_dir","worktree_path","session_id"]) {
+        p("type_" + k, t(k));
+        p("req_" + k, r(k));
+      }
+      p("unknown_fields", Object.keys(spec).filter((k) => ![
+        "commit_message","branch","closes_issues","pr_body_template","wip_mode",
+        "enforce_worktree","agents_config_dir","artifact_dir","worktree_path","session_id",
+      ].includes(k)).sort().join(","));
+      p("write_scopes", (w.writeScopes || []).slice().sort().join(","));
+      p("external", ((w.binaries || {}).external || []).slice().sort().join(","));
+      p("scripts", Object.keys((w.binaries || {}).scripts || {}).sort().join(","));
+      p("gate_script_rel", (((w.binaries || {}).scripts || {}).workflowGate || {}).rel || "(absent)");
+      p("gate_script_anchor", (((w.binaries || {}).scripts || {}).workflowGate || {}).anchor || "(absent)");
+    ' "$REGISTRY_JS" 2>&1)" || out="present=REQUIRE_FAILED"
+    ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
+
+    assert_eq "registry/entry-present" "1" "$(ev present)"
+    assert_eq "registry/name-in-enum" "1" "$(ev in_enum)"
+    assert_eq "registry/renderer" "status-triple-quoted" "$(ev renderer)"
+
+    assert_eq "spec/commit_message-type" "text" "$(ev type_commit_message)"
+    assert_eq "spec/commit_message-required" "req" "$(ev req_commit_message)"
+    assert_eq "spec/branch-type" "branch" "$(ev type_branch)"
+    assert_eq "spec/branch-required" "req" "$(ev req_branch)"
+    # Deviation #3: cwd can only reach the dispatcher as a family-validated path.
+    assert_eq "spec/worktree_path-type" "family-worktree" "$(ev type_worktree_path)"
+    assert_eq "spec/worktree_path-required" "req" "$(ev req_worktree_path)"
+    # Deviation #2: without it the merge gate blocks by design (fail-closed).
+    assert_eq "spec/session_id-type" "session-id" "$(ev type_session_id)"
+    assert_eq "spec/session_id-required" "req" "$(ev req_session_id)"
+    # Typed, not text[]: each element becomes `Closes #<N>` in a PR body.
+    # issue-ref[], not int[]: hooks/lib/parse-closes-issues.js — the canonical
+    # `## Issues` parser the skill tells callers to use — returns { number, repo? }
+    # records. An int[] schema rejected that documented payload, and mapping it down
+    # to bare numbers dropped the repo half of each issue's identity, collapsing two
+    # repositories' #42 into one `Closes #42`.
+    assert_eq "spec/closes_issues-type" "issue-ref[]" "$(ev type_closes_issues)"
+    assert_eq "spec/closes_issues-optional" "opt" "$(ev req_closes_issues)"
+    assert_eq "spec/pr_body_template-type" "text" "$(ev type_pr_body_template)"
+    assert_eq "spec/pr_body_template-optional" "opt" "$(ev req_pr_body_template)"
+    assert_eq "spec/wip_mode-type" "bool" "$(ev type_wip_mode)"
+    assert_eq "spec/enforce_worktree-type" "enum:on|off" "$(ev type_enforce_worktree)"
+    assert_eq "spec/agents_config_dir-type" "anchor-acd" "$(ev type_agents_config_dir)"
+    assert_eq "spec/artifact_dir-type" "path-under-plansdir" "$(ev type_artifact_dir)"
+    assert_eq "spec/no-invented-fields" "" "$(ev unknown_fields)"
+
+    assert_eq "registry/write-scopes" "family-worktree,plans-dir" "$(ev write_scopes)"
+    # #2308: glab joins the external binaries for pr.js's GitLab MR path.
+    assert_eq "registry/external-binaries" "bash,gh,git,glab,node" "$(ev external)"
+    # #2308: isGithubRemote dropped — forge is now resolved in-process via
+    # pr.js resolveForgeForWorktree (runScript is bash-fixed, cannot launch a
+    # Node shebang), so no isGithubRemote helper script remains.
+    assert_eq "registry/script-keys" "bootstrapProbe,scanOutbound,unstagedCheck,workflowGate" "$(ev scripts)"
+    # D1: the gate must be the reviewed, merged copy — never the branch's own.
+    assert_eq "registry/gate-script-rel" "hooks/workflow-gate.js" "$(ev gate_script_rel)"
+    assert_eq "registry/gate-script-anchor" "acd" "$(ev gate_script_anchor)"
+}
+
+# ===========================================================================
+# Group B — payload validation through the real capability validator
+# ===========================================================================
+group_b() {
+    local name json want
+    while IFS='|' read -r name json want; do
+        [ -z "$name" ] && continue
+        case "$name" in \#*) continue ;; esac
+        name="$(echo "$name" | xargs)"
+        want="$(echo "$want" | xargs)"
+        validate_payload "$json"
+        if [ "$(vfield ok)" != "$want" ]; then
+            fail "validate/$name" "want ok=$want got ok=$(vfield ok) errors=$(vfield err)"
+        else
+            pass "validate/$name"
+        fi
+    done <<TABLE
+full-valid                  | {$BASE_OK,"closes_issues":[{"number":1673}],"pr_body_template":"Closes #1673","wip_mode":false,"enforce_worktree":"on","artifact_dir":"$PLANS"} | 1
+minimal-valid               | {$BASE_OK} | 1
+missing-commit-message      | {"branch":"feature/1673","worktree_path":"$MAIN","session_id":"df594809-a1cc-4035"} | 0
+missing-branch              | {"commit_message":"m","worktree_path":"$MAIN","session_id":"df594809-a1cc-4035"} | 0
+missing-worktree-path       | {"commit_message":"m","branch":"feature/1673","session_id":"df594809-a1cc-4035"} | 0
+missing-session-id          | {"commit_message":"m","branch":"feature/1673","worktree_path":"$MAIN"} | 0
+enforce-worktree-out-of-enum| {$BASE_OK,"enforce_worktree":"maybe"} | 0
+enforce-worktree-empty      | {$BASE_OK,"enforce_worktree":""} | 0
+enforce-worktree-on         | {$BASE_OK,"enforce_worktree":"on"} | 1
+enforce-worktree-off        | {$BASE_OK,"enforce_worktree":"off"} | 1
+closes-issues-string-elem   | {$BASE_OK,"closes_issues":["1673"]} | 0
+closes-issues-not-array     | {$BASE_OK,"closes_issues":1673} | 0
+closes-issues-nested        | {$BASE_OK,"closes_issues":[[1673]]} | 0
+closes-issues-empty-ok      | {$BASE_OK,"closes_issues":[]} | 1
+closes-issues-refs-ok       | {$BASE_OK,"closes_issues":[{"number":1673},{"number":42,"repo":"owner/other"}]} | 1
+closes-issues-bare-int-elem | {$BASE_OK,"closes_issues":[1673]} | 0
+pr-body-template-accepted   | {$BASE_OK,"pr_body_template":"## Summary\ntext with \$(id) and \`backticks\`"} | 1
+pr-body-template-not-string | {$BASE_OK,"pr_body_template":42} | 0
+worktree-path-outside-family| {$BASE_OK,"worktree_path":"$PLANS"} | 0
+session-id-with-separator   | {"commit_message":"m","branch":"feature/1673","worktree_path":"$MAIN","session_id":"../../etc"} | 0
+unknown-field               | {$BASE_OK,"force_push":true} | 0
+TABLE
+}
+
+# ===========================================================================
+# Group C — env surface. Two independent halves of the same contract.
+# ===========================================================================
+group_c() {
+    local out
+    out="$(node -e '
+      const reg = require(process.argv[1]);
+      const w = (reg.workers || {})["commit-push"];
+      const p = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
+      const D1 = ["CLAUDE_WORKFLOW_DIR","WORKFLOW_PLANS_DIR","WORKFLOW_SESSION_ID","CLAUDE_PROJECT_DIR","DEFAULT_BRANCHES"];
+      // No early exit on a missing entry: "no ISSUE_CLOSE_SKILL" and "no missing
+      // D1 var" are both trivially true of an absent entry, so the absence is
+      // reported as a distinct value instead of as a pass.
+      const pass_ = w ? (w.envPassthrough || []) : null;
+      p("declared", pass_ ? pass_.slice().sort().join(",") : "ENTRY_MISSING");
+      p("has_issue_close_skill", pass_ ? (pass_.includes("ISSUE_CLOSE_SKILL") ? 1 : 0) : "ENTRY_MISSING");
+      p("missing_d1", pass_ ? D1.filter((v) => !pass_.includes(v)).join(",") : "ENTRY_MISSING");
+      // Non-vacuity: the global allowlist must not be smuggling these in.
+      const allow = reg.CHILD_ENV_ALLOWLIST || [];
+      p("d1_in_global_allowlist", D1.filter((v) => allow.includes(v)).join(","));
+    ' "$REGISTRY_JS" 2>&1)" || out="declared=REQUIRE_FAILED"
+    ev() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
+
+    # #2308: GITLAB_HOST + GITLAB_TOKEN join the passthrough so the dispatched
+    # glab child authenticates against a self-hosted GitLab on the MR path.
+    assert_eq "env/declared-set" \
+        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "$(ev declared)"
+    # run-stage-chain.sh / run-finalize-terminal.sh export it themselves; the
+    # dispatcher must not be the one handing it out.
+    assert_eq "env/no-issue-close-skill-passthrough" "0" "$(ev has_issue_close_skill)"
+    assert_eq "env/all-five-d1-vars-declared" "" "$(ev missing_d1)"
+    assert_eq "env/d1-vars-not-global" "" "$(ev d1_in_global_allowlist)"
+}
+
+# ===========================================================================
+# Group D — the worker sets the five D1 vars EXPLICITLY via extraEnv.
+#
+# Declaring them in envPassthrough also permits inheritance. An inherited
+# CLAUDE_WORKFLOW_DIR sends the gate child at a different session's state file,
+# where every step reads "missing" and the gate answers approve — the quiet
+# failure mode this group exists to make loud.
+# ===========================================================================
+group_d() {
+    local absent
+    absent="$(worker_srcs_missing)"
+    if [ -n "$absent" ]; then
+        fail "extraEnv/five-d1-vars" "implementation missing: $absent"
+        fail "extraEnv/no-issue-close-skill" "implementation missing: $absent"
+        return
+    fi
+    local out nodesrcs=()
+    for f in "${WORKER_SRCS[@]}"; do nodesrcs+=("$(nodepath "$f")"); done
+    out="$(node -e '
+      const fs = require("fs");
+      const src = process.argv.slice(1).map((f) => fs.readFileSync(f, "utf8")).join("\n");
+      // Collect the key names of every `extraEnv: { ... }` object literal.
+      const keys = new Set();
+      let blocks = 0;
+      const re = /extraEnv\s*:\s*\{/g;
+      let m;
+      while ((m = re.exec(src)) !== null) {
+        let depth = 1;
+        let i = m.index + m[0].length;
+        const start = i;
+        while (i < src.length && depth > 0) {
+          if (src[i] === "{") depth++;
+          else if (src[i] === "}") depth--;
+          i++;
+        }
+        blocks++;
+        const body = src.slice(start, i - 1);
+        const kre = /(?:^|[{,\s])["\x27]?([A-Za-z_][A-Za-z0-9_]*)["\x27]?\s*:/g;
+        let km;
+        while ((km = kre.exec(body)) !== null) keys.add(km[1]);
+      }
+      process.stdout.write("blocks=" + blocks + "\n");
+      process.stdout.write("keys=" + Array.from(keys).sort().join(",") + "\n");
+    ' "${nodesrcs[@]}" 2>&1)" || out="blocks=0
+keys=SCAN_FAILED"
+    local blocks keys missing
+    blocks="$(printf '%s\n' "$out" | sed -n 's/^blocks=//p' | head -1)"
+    keys="$(printf '%s\n' "$out" | sed -n 's/^keys=//p' | head -1)"
+    if [ "${blocks:-0}" -lt 1 ]; then
+        # TODO(#1673): the scan requires an `extraEnv: { ... }` object literal.
+        # If write_code assembles extraEnv into a variable first, extend the scan
+        # rather than relaxing the assertion.
+        fail "extraEnv/five-d1-vars" "no 'extraEnv: {' object literal found in the worker source"
+        fail "extraEnv/no-issue-close-skill" "no 'extraEnv: {' object literal found in the worker source"
+        return
+    fi
+    missing=""
+    for v in CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR WORKFLOW_SESSION_ID CLAUDE_PROJECT_DIR DEFAULT_BRANCHES; do
+        case ",$keys," in
+            *",$v,"*) ;;
+            *) missing="$missing $v" ;;
+        esac
+    done
+    assert_eq "extraEnv/five-d1-vars" "" "$(echo "$missing" | xargs)"
+    case ",$keys," in
+        *",ISSUE_CLOSE_SKILL,"*) fail "extraEnv/no-issue-close-skill" "ISSUE_CLOSE_SKILL set as an extraEnv key" ;;
+        *) pass "extraEnv/no-issue-close-skill" ;;
+    esac
+}
+
+# ===========================================================================
+# Group E — status vocabulary. The worker's statuses and the SKILL branch table
+# are two halves of one contract: a status the SKILL cannot branch on is a
+# block or a failure the caller silently treats as success.
+# ===========================================================================
+STATUSES="staging_incomplete staging_check_failed gate_blocked bootstrap_pending pushed pr_created pr_reused push_failed conflict"
+
+group_e() {
+    local s absent
+    absent="$(worker_srcs_missing)"
+    for s in $STATUSES; do
+        if [ ! -f "$SKILL_MD" ]; then
+            fail "skill-vocab/$s" "missing skills/commit-push/SKILL.md"
+        elif grep -qF -- "\`$s\`" "$SKILL_MD"; then
+            pass "skill-vocab/$s"
+        else
+            fail "skill-vocab/$s" "status not present in the SKILL.md branch table"
+        fi
+        if [ -n "$absent" ]; then
+            fail "worker-vocab/$s" "implementation missing: $absent"
+        elif grep -qF -- "$s" "${WORKER_SRCS[@]}" >/dev/null; then
+            pass "worker-vocab/$s"
+        else
+            fail "worker-vocab/$s" "status never produced by the worker source"
+        fi
+    done
+    # Non-vacuity guard: a status the plan does NOT define must not appear, or
+    # the grep above would pass for any string at all.
+    if [ -f "$SKILL_MD" ] && grep -qF -- '`force_pushed`' "$SKILL_MD"; then
+        fail "skill-vocab/no-undeclared-status" "'force_pushed' present in SKILL.md"
+    else
+        pass "skill-vocab/no-undeclared-status"
+    fi
+}
+
+# ===========================================================================
+# Group F — procedure.run() STATUS FIELD, driven end-to-end with a canned spawn
+# seam (C7). Group E only proves the status TOKENS appear in the source; it can
+# never catch a run() that returns the WRONG status for a given forge outcome.
+# The gitlab-forge-f.sh F4/F5 cases drive run() but assert only the spawn
+# sequence and summary text, not run().status. This group closes that gap: it
+# replaces spawn.js with a fake and asserts the EXACT status — pr_created,
+# pr_reused, pushed — across the github, gitlab, unknown-remote and PR-skipped
+# outcomes. Mocked I/O only, so it stays TL1.
+# ===========================================================================
+group_f() {
+    local absent
+    absent="$(worker_srcs_missing)"
+    if [ -n "$absent" ]; then
+        fail "run-status/github-no-pr" "implementation missing: $absent"
+        return
+    fi
+    local F_DRIVER="$TMPD/f-status-driver.js"
+    cat > "$F_DRIVER" <<'NODE'
+"use strict";
+const path = require("path");
+const AGENTS = process.argv[2];
+const REMOTE = process.argv[3];
+const BRANCH = "feature/1673";
+const spawnPath = require.resolve(path.join(AGENTS, "bin", "worker-dispatch", "spawn.js"));
+function ok(stdout) { return { status: 0, stdout: stdout || "", stderr: "", spawnError: null, timedOut: false }; }
+function err(status, stderr) { return { status: status, stdout: "", stderr: stderr || "", spawnError: null, timedOut: false }; }
+function fakeRun(entry, opts) {
+  const cmd = opts.command;
+  const script = opts.script || "";
+  const args = opts.args || [];
+  const a = args.join(" ");
+  if (cmd === "git") {
+    if (a === "rev-parse --abbrev-ref HEAD") return ok(BRANCH);
+    if (a === "diff --cached --stat") return ok(" file.txt | 1 +\n");
+    if (args[0] === "rev-parse" && a.indexOf("@{upstream}") >= 0) return err(1, "no upstream");
+    if (args[0] === "remote" && args[1] === "get-url") return ok(REMOTE + "\n");
+    return ok("");
+  }
+  if (cmd === "node" && script === "workflowGate") return ok(JSON.stringify({ decision: "approve" }));
+  if (cmd === "bash") {
+    if (script === "bootstrapProbe") return err(1, "");
+    return ok(""); // scanOutbound / unstagedCheck clean
+  }
+  if (cmd === "gh") {
+    if (a.indexOf("pr view") >= 0) {
+      if (process.env.F_PR_EXISTS === "1") return ok(JSON.stringify({ state: "OPEN", url: "https://github.com/acme/widgets/pull/7" }) + "\n");
+      return err(1, "no pr");
+    }
+    if (a.indexOf("issue view") >= 0) return ok("Some Issue Title\n");
+    if (a.indexOf("pr create") >= 0) return ok("https://github.com/acme/widgets/pull/7\n");
+    return ok("");
+  }
+  if (cmd === "glab") {
+    if (a.indexOf("mr view") >= 0) {
+      if (process.env.F_MR_EXISTS === "1") return ok(JSON.stringify({ state: "opened", web_url: "https://gitlab.com/acme/widgets/-/merge_requests/9", iid: 9 }) + "\n");
+      return err(1, "no mr");
+    }
+    if (a.indexOf("mr create") >= 0) return ok("https://gitlab.com/acme/widgets/-/merge_requests/3\n");
+    if (a.indexOf("issue view") >= 0) return ok("Some Issue Title\n");
+    return ok("main\n"); // api projects/<enc> --jq .default_branch
+  }
+  return ok("");
+}
+require.cache[spawnPath] = {
+  id: spawnPath, filename: spawnPath, loaded: true, exports:
+  { run: fakeRun, resolveScript: () => "", scriptExists: () => true, buildEnv: () => ({}), DEFAULT_TIMEOUT_MS: 1000 },
+};
+const { run } = require(path.join(AGENTS, "bin", "worker-dispatch", "workers", "commit-push", "procedure.js"));
+const tmp = process.env.F_TMP;
+const payload = {
+  branch: BRANCH,
+  worktree_path: tmp,
+  session_id: "sess-f",
+  commit_message: "feat: a thing",
+  wip_mode: true,
+  enforce_worktree: process.env.F_ENFORCE || "on",
+  closes_issues: [],
+};
+const ctx = {
+  entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
+  anchors: { acd: path.join(tmp, "acd-none"), plansDir: tmp },
+  path: path,
+  fsguard: { writeFile: (t) => t },
+};
+let res;
+try { res = run(payload, ctx); } catch (e) { res = { status: "THREW", summary: String(e && e.message) }; }
+process.stdout.write(String(res.status));
+NODE
+    run_status() { # $1=remote $2=F_PR_EXISTS $3=F_MR_EXISTS $4=F_ENFORCE
+        local ftmp="$TMPD/f-$RANDOM"; mkdir -p "$ftmp"
+        run_with_timeout 40 env "F_TMP=$(nodepath "$ftmp")" "F_PR_EXISTS=${2:-0}" \
+            "F_MR_EXISTS=${3:-0}" "F_ENFORCE=${4:-on}" \
+            node "$(nodepath "$F_DRIVER")" "$(nodepath "$AGENTS_DIR")" "$1" 2>/dev/null
+    }
+    assert_eq "run-status/github no PR -> pr_created" "pr_created" \
+        "$(run_status 'https://github.com/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/github open PR -> pr_reused" "pr_reused" \
+        "$(run_status 'https://github.com/acme/widgets.git' 1 0 on)"
+    assert_eq "run-status/gitlab no MR -> pr_created" "pr_created" \
+        "$(run_status 'https://gitlab.com/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/gitlab open MR -> pr_reused" "pr_reused" \
+        "$(run_status 'https://gitlab.com/acme/widgets.git' 0 1 on)"
+    assert_eq "run-status/unknown remote -> pushed (PR skipped)" "pushed" \
+        "$(run_status 'https://bitbucket.org/acme/widgets.git' 0 0 on)"
+    assert_eq "run-status/enforce_worktree=off -> pushed (PR skipped)" "pushed" \
+        "$(run_status 'https://github.com/acme/widgets.git' 0 0 off)"
+}
+
+group_a
+group_b
+group_c
+group_d
+group_e
+group_f
+
+echo ""
+echo "Total: PASS=$PASS FAIL=$FAIL"
+exit $((FAIL > 0 ? 1 : 0))

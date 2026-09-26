@@ -164,7 +164,7 @@ fi
 _link_one "$AGENTS_ROOT/skills/workflow-init" "$AGENTS_ROOT/skills/wf-init" \
     || printf "${C_YELLOW}Symlink failure: skills/wf-init${C_RESET}\n" >&2
 
-# Test affordance — see tests/feature-697-dotfileslink-link-one.sh
+# Test affordance — see tests/install/feature-697-dotfileslink-link-one.sh
 [ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
 
 # --- Assemble ~/.claude/settings.json from base + extension ---

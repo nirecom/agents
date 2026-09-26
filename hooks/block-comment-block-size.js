@@ -4,7 +4,7 @@
 // companion to hooks/pre-commit's backstop scan. Judgment is the POST-edit
 // file in absolute terms, not diff-relative (commit-time layer is baseline-
 // relative instead, CPR-SC). Never bypassable — no session escape-hatch state
-// read (tests/feature-1894-hook-comment-block/no-bypass.sh); config comes only
+// read (tests/hooks/feature-1894-hook-comment-block/no-bypass.sh); config comes only
 // from the config dir's .env, never process.env. Fails open on any unreadable
 // file, unreconstructable payload, or unexpected shape.
 "use strict";

@@ -190,7 +190,7 @@ function appendEvents(sessionId, eventsOrBuilder, opts = {}) {
       // Refuse to build on a stream that could not have come from appendEvents
       // alone (out-of-band seq gap/dup/reorder or a hand-edited event record) —
       // THROWS here, before anything is written, so the broken evidence stays
-      // on disk untouched (X5 in tests/feature-1733-state-event-stream/robustness.sh).
+      // on disk untouched (X5 in tests/hooks/feature-1733-state-event-stream/robustness.sh).
       assertStreamIntegrity(state.events);
 
       let produced = eventsOrBuilder;

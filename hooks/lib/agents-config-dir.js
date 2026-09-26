@@ -17,7 +17,7 @@
 // stay the sole config source, or a test/alternate config dir would silently get
 // the real repo's .env injected); this resolver decides WHO is executing, where a
 // broken env value must lose to a verified module anchor. Do not "unify" them —
-// tests/fix-389-load-env-default-fallback/config-dir-cases.sh T389-7 pins it.
+// tests/hooks/fix-389-load-env-default-fallback/config-dir-cases.sh T389-7 pins it.
 //
 // Circular-dependency note: this module must NOT require load-env.js.
 
