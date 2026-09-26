@@ -73,3 +73,62 @@ else
   fail "three-paths: expected '3 paths' in output, got: $out"
 fi
 case_end
+
+case_begin "self-def-no-call" "bin/check-case-markers.sh"
+# #2397 regression: function definition of case_begin (no call) must still trigger violation
+printf '#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\ncase_begin() { echo "noop"; }\n' > "$TMP/self-def.sh"
+out=$(bash "$SCRIPT" "$TMP/self-def.sh")
+if echo "$out" | grep -q "^HIGH:"; then
+  pass "self-def-no-call: HIGH line emitted"
+else
+  fail "self-def-no-call: expected HIGH line, got: $out"
+fi
+
+rc=0
+bash "$SCRIPT" "$TMP/self-def.sh" || rc=$?
+[[ "$rc" -eq 1 ]] && pass "self-def-no-call: exit 1" || fail "self-def-no-call: expected exit 1, got $rc"
+case_end
+
+case_begin "heredoc-call" "bin/check-case-markers.sh"
+# #2397 regression: case_begin inside a heredoc body satisfies the marker check → no violation
+cat > "$TMP/heredoc-file.sh" <<'SH'
+#!/usr/bin/env bash
+# Tests: bin/a.sh, bin/b.sh
+cat <<'INNER'
+case_begin "a" "bin/a.sh"
+INNER
+SH
+out=$(bash "$SCRIPT" "$TMP/heredoc-file.sh")
+[[ -z "$out" ]] && pass "heredoc-call: no violation" || fail "heredoc-call: unexpected output: $out"
+
+rc=0
+bash "$SCRIPT" "$TMP/heredoc-file.sh" || rc=$?
+[[ "$rc" -eq 0 ]] && pass "heredoc-call: exit 0" || fail "heredoc-call: expected exit 0, got $rc"
+case_end
+
+case_begin "no-args" "bin/check-case-markers.sh"
+# #2398 regression: zero arguments → exit 1 with non-empty stderr
+rc=0
+err=$(bash "$SCRIPT" 2>&1 >/dev/null) || rc=$?
+[[ "$rc" -eq 1 ]] && pass "no-args: exit 1" || fail "no-args: expected exit 1, got $rc"
+[[ -n "$err" ]] && pass "no-args: non-empty stderr" || fail "no-args: expected non-empty stderr, got empty"
+case_end
+
+case_begin "nonexistent-path" "bin/check-case-markers.sh"
+# #2398 regression: path that does not exist → exit 1 with "not found" in stderr
+rc=0
+err=$(bash "$SCRIPT" "$TMP/does-not-exist.sh" 2>&1 >/dev/null) || rc=$?
+[[ "$rc" -eq 1 ]] && pass "nonexistent-path: exit 1" || fail "nonexistent-path: expected exit 1, got $rc"
+echo "$err" | grep -q "not found" && pass "nonexistent-path: stderr contains 'not found'" \
+  || fail "nonexistent-path: expected 'not found' in stderr, got: $err"
+case_end
+
+case_begin "indented-call" "bin/check-case-markers.sh"
+# #2397 regression: case_begin with leading whitespace (indent) must satisfy the check
+printf '#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\n  case_begin "a" "bin/a.sh"\n' > "$TMP/indented-call.sh"
+out=$(bash "$SCRIPT" "$TMP/indented-call.sh")
+[[ -z "$out" ]] && pass "indented-call: no violation" || fail "indented-call: unexpected output: $out"
+rc=0
+bash "$SCRIPT" "$TMP/indented-call.sh" || rc=$?
+[[ "$rc" -eq 0 ]] && pass "indented-call: exit 0" || fail "indented-call: expected exit 0, got $rc"
+case_end
