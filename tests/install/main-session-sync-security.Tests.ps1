@@ -11,7 +11,7 @@
 
 # Pester binds -ForEach data at discovery time, so the fixtures are parsed here.
 $UrlCases = @(
-    Get-Content (Join-Path $PSScriptRoot "fixtures\session-sync-remote-url-table.txt") |
+    Get-Content (Join-Path $PSScriptRoot "..\fixtures\session-sync-remote-url-table.txt") |
         Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') } |
         ForEach-Object {
             $parts = $_ -split "`t"
@@ -20,7 +20,7 @@ $UrlCases = @(
 )
 
 $PatternRows = @{}
-Get-Content (Join-Path $PSScriptRoot "fixtures\session-sync-remote-url-patterns.txt") |
+Get-Content (Join-Path $PSScriptRoot "..\fixtures\session-sync-remote-url-patterns.txt") |
     Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') } |
     ForEach-Object {
         $parts = $_ -split "`t"
@@ -38,7 +38,7 @@ $PatternCases = @(
 )
 
 BeforeAll {
-    . (Join-Path $PSScriptRoot "lib\session-sync-security-common.ps1")
+    . (Join-Path $PSScriptRoot "..\lib\session-sync-security-common.ps1")
 }
 
 AfterAll {

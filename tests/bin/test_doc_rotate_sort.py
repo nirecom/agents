@@ -1,3 +1,5 @@
+# Tests: bin/doc-rotate.py
+# Tags: bin, python, scope:common
 """Tests for issue #733 Refactor 2 — doc-rotate.py sort extraction.
 
 Covers the behavior of `bin/doc-rotate.py`'s entry ordering during rotation:
@@ -20,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DOC_ROTATE_PATH = REPO_ROOT / "bin" / "doc-rotate.py"
 
 DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})")
