@@ -539,3 +539,7 @@ Changes: Added `bin/rtk-cmd`, an opt-in wrapper that delegates a command to `rtk
 ### FEATURE: PR #2382 (2026-09-24)
 Background: feat(#2374,#2173): off-clearance examiner SPOF fix + provenance regex...
 Changes: Removed single-point-of-failure in the `enforce-workflow-off` escape hatch: when the codex examiner is unavailable, `request-off-clearance` now falls back to interactive human approval instead of failing closed. Non-interactive agent environments surface the EMERGENCY sentinel path as the alternative.;Fixed provenance over-attribution: bare `/enforce-workflow-off` commands on non-first prompt lines no longer trigger the OFF-skill provenance marker.
+
+### FEATURE: PR #2385 (2026-09-26)
+Background: fix(#1937): worktree-backup copies gitignored dirs via conditional --directory flag
+Changes: Fixed: `worktree-backup` worker now correctly enumerates gitignored directories when `dir_expand` is enabled; previously, plain (non-opaque) gitignored directories were not expanded on Windows because `git ls-files` returned individual files rather than directory entries.
