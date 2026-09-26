@@ -24,6 +24,8 @@ run_helper_at() {
     rm -f "$outf" "$errf"
 }
 
+case_begin "edge-series" "bin/find-tests-for-source.sh"
+
 # ── B1 one line under the limit still appends ──────────────────────────────
 R="$(make_repo)"
 add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 499
@@ -269,5 +271,7 @@ if [[ -n "$I1_FIRST" ]]; then
 else
     fail "I1 both runs produced empty output — the idempotency comparison was vacuous"
 fi
+
+case_end
 
 grp_done "edge-cases.sh"

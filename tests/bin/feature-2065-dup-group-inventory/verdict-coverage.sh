@@ -7,6 +7,8 @@
 # reason that is correct in isolation can still be shadowed when its neighbours
 # are present in the same run.
 
+case_begin "verdict-series" "bin/lib/test-dup-group.sh"
+
 VC_REPO="$(make_repo)"
 add_src "$VC_REPO" "bin/vc-a.sh"
 add_src "$VC_REPO" "bin/vc-b.sh"
@@ -86,5 +88,7 @@ assert_eq "VC4b the two well-formed files form the only group" \
 assert_eq "VC4c the corpus has exactly one full row" \
     "1" "$(axis_row_count "$VC_OUT" full)"
 assert_eq "VC5 the corpus contains a group, so the exit code is 0" "0" "$VC_RC"
+
+case_end
 
 grp_done "verdict-coverage.sh"

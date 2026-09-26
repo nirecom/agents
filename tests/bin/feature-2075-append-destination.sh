@@ -12,6 +12,8 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+source "$AGENTS_ROOT/tests/lib/harness.sh"
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2075-append-destination"
 HELPER="$AGENTS_ROOT/bin/find-tests-for-source.sh"
 ROUTE_LIB="$AGENTS_ROOT/bin/lib/test-route-destination.sh"

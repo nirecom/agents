@@ -7,6 +7,8 @@
 # that both consumers must agree on trimming, and that format validity stays the
 # COMPOSITE predicate (regex AND NOT root-like) rather than the regex alone.
 
+case_begin "token-parsing-series" "bin/lib/test-frontmatter-fix.sh"
+
 TP_REPO="$(make_repo)"
 add_src "$TP_REPO" "bin/tp-a.sh"
 add_src "$TP_REPO" "bin/tp-b.sh"
@@ -146,5 +148,7 @@ TP_SURV_TABLE
 # `alive`, TP9a-c would compare two equally-wrong values and stay green.
 assert_eq "TP9d the canonical spelling's survival verdict is alive" \
     "alive" "$TP_SURV_BASELINE"
+
+case_end
 
 grp_done "token-parsing-equivalence.sh"

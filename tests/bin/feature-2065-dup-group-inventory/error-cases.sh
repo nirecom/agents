@@ -6,6 +6,8 @@
 # CONTENT is data the mode must classify and keep running on, while a bad
 # COMMAND LINE is an operator error the mode must refuse outright with rc 2.
 
+case_begin "error-series" "bin/lib/test-dup-group.sh"
+
 EC_REPO="$(make_repo)"
 add_src "$EC_REPO" "bin/ec-ok.sh"
 add_test_file "$EC_REPO" "bin/ec-space.sh" "bin/ec a.sh"
@@ -74,5 +76,7 @@ for ec_script in "$AUDIT" "$AUDIT_COMMON"; do
     assert_eq "EC4b[$ec_tag] the message names the repo-root resolution failure" \
         "1" "$(printf '%s\n' "$ERR" | grep -c 'not inside a git repository' || true)"
 done
+
+case_end
 
 grp_done "error-cases.sh"

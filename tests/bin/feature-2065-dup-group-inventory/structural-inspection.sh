@@ -7,6 +7,8 @@
 # silently accepted. Both are structural malformations that must become skip
 # rows instead of quietly seeding a group from the first value.
 
+case_begin "structural-series" "bin/lib/test-dup-group.sh"
+
 SI_REPO="$(make_repo)"
 add_src "$SI_REPO" "bin/si-first.sh"
 add_src "$SI_REPO" "bin/si-second.sh"
@@ -124,5 +126,7 @@ commit_repo "$SI_GATE_REPO" "frontmatter gate fixture"
 run_in_repo "$SI_GATE_REPO" "$FM_CHECK" --all "$SI_GATE_REPO"
 assert_eq "SI5 check-test-frontmatter.sh --all still accepts duplicate/late headers" \
     "0" "$RC"
+
+case_end
 
 grp_done "structural-inspection.sh"

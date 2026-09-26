@@ -7,6 +7,8 @@
 # itself must be encoded per element. Backslash is escaped first, otherwise the
 # encoding of the other four is ambiguous on decode.
 
+case_begin "escaping-series" "bin/lib/test-dup-group.sh"
+
 EH_REPO="$(make_repo)"
 add_src "$EH_REPO" "bin/eh-x.sh"
 
@@ -114,5 +116,7 @@ assert_eq "EH6c an empty tests/ directory produces no shell error" \
 
 assert_eq "EH7 the hostile-name run produced no shell error" \
     "0" "$(printf '%s\n' "$EH_ERR" | grep -ciE 'unbound variable|syntax error' || true)"
+
+case_end
 
 grp_done "escaping-hostile-names.sh"

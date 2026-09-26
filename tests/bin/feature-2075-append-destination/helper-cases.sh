@@ -6,6 +6,8 @@
 # real subprocess against a throwaway fixture corpus handed over with --root, so
 # the live tests/ corpus never takes part in a verdict.
 
+case_begin "H1-H12" "bin/find-tests-for-source.sh"
+
 # ── H1 exact match ──────────────────────────────────────────────────────────
 R="$(make_repo)"
 add_test_file "$R" "bin/a.sh" "src/x.js,src/y.js" "scope:common" 20
@@ -170,6 +172,10 @@ assert_row "H12" "$ROW" "new" "size-hard-limit" "-" "-"
 assert_eq "H12 excluded holds the 501-line candidate" "tests/bin/big.sh" \
     "$(list_files "$(col "$ROW" 8)")"
 
+case_end
+
+case_begin "H13-H13e" "bin/lib/test-route-destination.sh"
+
 # ── H13 canonical-category test file IS in corpus after the fix (#2396) ─────
 R="$(make_repo)"
 add_test_file "$R" "bin/bar.sh" "src/x.js"
@@ -203,6 +209,10 @@ case_ran H13e
 assert_eq "H13e exit code stays 0" "0" "$RC"
 assert_row "H13e" "$ROW" "skipped" "not-top-level" "-" "-"
 
+case_end
+
+case_begin "H13fg" "bin/lib/test-dup-group.sh"
+
 # ── H13g flat tests/<name>.sh shares source set — only categorized is routed ───
 R="$(make_repo)"
 add_test_file "$R" "feature-foo.sh" "src/foo.js" "scope:common" 20
@@ -225,6 +235,10 @@ assert_row "H13f" "$ROW" "append" "exact" "tests/bin/bar.sh" "tests/bin/bar.sh"
 assert_eq "H13f non-canonical file is excluded from candidates" "tests/bin/bar.sh" \
     "$(list_files "$(col "$ROW" 6)")"
 
+case_end
+
+case_begin "H13c" "bin/lib/test-route-destination.sh"
+
 # ── H13c the positive side of the same predicate ───────────────────────────
 R="$(make_repo)"
 add_test_file "$R" "bin/foo.sh" "src/x.js" "scope:common" 20
@@ -233,6 +247,10 @@ ROW="$(row_n "$OUT" 1)"
 case_ran H13c
 assert_eq "H13c exit code" "0" "$RC"
 assert_row "H13c" "$ROW" "new" "no-candidate" "-" "-"
+
+case_end
+
+case_begin "H14-H19" "bin/find-tests-for-source.sh"
 
 # ── H14a-d structural validation runs through tdg_classify, not the parser ──
 for _pair in "H14a:no_tests_header" "H14b:duplicate_header" "H14c:late_header" "H14d:malformed_header"; do
@@ -323,5 +341,7 @@ if [[ -x "$HELPER" ]]; then
 else
     fail "H19 bin/find-tests-for-source.sh is missing the execute bit (git update-index --chmod=+x bin/find-tests-for-source.sh)"
 fi
+
+case_end
 
 grp_done "helper-cases.sh"

@@ -9,6 +9,8 @@
 # rewritten to match a new implementation — a mismatch is an S1 design defect,
 # not a test defect. A golden that is absent is a FAIL, never a SKIP.
 
+case_begin "golden-series" "bin/lib/test-frontmatter-fix.sh"
+
 GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-$AGENTS_ROOT/tests/fixtures/feature-2065-dup-group-golden}"
 GC_CAPTURE_DIR="$TMPDIR_BASE/golden-capture"
 mkdir -p "$GC_CAPTURE_DIR"
@@ -144,5 +146,7 @@ assert_eq "GC10 duplicate-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-dup-header\.sh' || true)"
 assert_eq "GC11 late-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-late-header\.sh' || true)"
+
+case_end
 
 grp_done "golden-comparison.sh"

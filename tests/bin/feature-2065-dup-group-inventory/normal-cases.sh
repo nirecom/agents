@@ -7,6 +7,8 @@
 # finds files that merely share their primary target (candidates for a review).
 # A file can be in both, one, or neither.
 
+case_begin "normal-series" "bin/lib/test-dup-group.sh"
+
 NC_REPO="$(make_repo)"
 add_src "$NC_REPO" "bin/nc-x.sh"
 add_src "$NC_REPO" "bin/nc-y.sh"
@@ -81,5 +83,7 @@ assert_eq "NC4b the full-group member list holds exactly the two fixtures" \
 
 # NC5 — this fixture has duplicates, so the mode reports success.
 assert_eq "NC5 exit code is 0 when at least one group exists" "0" "$NC_RC"
+
+case_end
 
 grp_done "normal-cases.sh"

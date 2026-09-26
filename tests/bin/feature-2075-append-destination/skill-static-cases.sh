@@ -30,6 +30,8 @@ WT5_BLOCK="$(label_block "$WT_SKILL" '^WT-5\.' '^WT-[0-9]')"
 WT7_BLOCK="$(label_block "$WT_SKILL" '^WT-7\.' '^WT-[0-9]')"
 RT1A_BLOCK="$(label_block "$RT_SKILL" '^RT-1a\.' '^RT-[0-9]')"
 
+case_begin "skill-static-series" "skills/write-tests/SKILL.md"
+
 # ── S1 the new WT-5 exists and delegates the decision to the helper ────────
 case_ran S1
 assert_match "S1 write-tests SKILL.md has a WT-5 step" '^WT-5\.' "$WT_TEXT"
@@ -254,5 +256,7 @@ if [[ -f "$S20_LIB" ]]; then
 else
     fail "S20 bin/lib/test-frontmatter-fix.sh is missing — the Tier 2 token axis cannot be checked"
 fi
+
+case_end
 
 grp_done "skill-static-cases.sh"

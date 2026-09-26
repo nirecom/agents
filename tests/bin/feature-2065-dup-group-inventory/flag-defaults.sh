@@ -7,6 +7,8 @@
 # `$APPLY` inverts the mode: bare --dup-groups would exit 2 and only
 # `--dup-groups --dry-run` would work. The guard must read FIX_APPLY.
 
+case_begin "flag-defaults-series" "bin/audit-tests.sh"
+
 FD_REPO="$(make_repo)"
 add_src "$FD_REPO" "bin/fd-x.sh"
 add_test_file "$FD_REPO" "bin/fd-one.sh" "bin/fd-x.sh"
@@ -50,5 +52,7 @@ for fd_script in "$AUDIT" "$AUDIT_COMMON"; do
     assert_eq "FD3b[$fd_tag] --dup-groups --apply explains that --apply is not applicable" \
         "1" "$(printf '%s\n' "$ERR" | grep -c -- '--dup-groups is read-only; --apply is not applicable' || true)"
 done
+
+case_end
 
 grp_done "flag-defaults.sh"

@@ -7,6 +7,8 @@
 # a scan range of `tests/bin/*.sh` only — nested fragments carry their own headers
 # and would otherwise invent groups that no reviewer can act on.
 
+case_begin "contract-series" "bin/lib/test-dup-group.sh"
+
 CC_REPO="$(make_repo)"
 add_src "$CC_REPO" "bin/cc-x.sh"
 add_src "$CC_REPO" "bin/cc-y.sh"
@@ -151,5 +153,7 @@ for cc_script in "$AUDIT" "$AUDIT_COMMON"; do
     run_dup "$CC_SKIPONLY" "$cc_script"
     assert_eq "CC10c[$cc_tag] a skip-only corpus exits 1" "1" "$RC"
 done
+
+case_end
 
 grp_done "contract-cases.sh"
