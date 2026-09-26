@@ -20,22 +20,6 @@ SCRIPT_JS="$REPO_DIR/skills/worktree-end/scripts/resolve-dir-expand.js"
 VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
 to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
-assert_eq() {
-    local name="$1" want="$2" got="$3"
-    if [ "$want" = "$got" ]; then pass "$name"
-    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
-}
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
-    else "$@"; fi
-}
-
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
 WFDIR="$TMPROOT/workflow"
@@ -113,6 +97,7 @@ assert_eq "E-explicit-session-arg-wins" "true" \
 case_end
 
 # isVerbosePromptSession — the read-only boolean the resolver delegates to.
+case_begin "VP-is-verbose-prompt-session" "hooks/lib/verbose-prompt.js"
 vp_call() {
     run_with_timeout 30 env CLAUDE_WORKFLOW_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         node -e '
@@ -123,7 +108,6 @@ try { r = m.isVerbosePromptSession(process.argv[2]); } catch (e) { r = "THREW"; 
 process.stdout.write(String(r));
 ' "$VP_N" "$1" </dev/null 2>/dev/null
 }
-case_begin "VP-is-verbose-prompt-session" "hooks/lib/verbose-prompt.js"
 assert_eq "VP-true-session-returns-true" "true" "$(vp_call sid-a01)"
 assert_eq "VP-false-session-returns-false" "false" "$(vp_call sid-b01)"
 assert_eq "VP-absent-session-returns-false" "false" "$(vp_call sid-c01)"

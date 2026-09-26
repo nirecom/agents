@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1937-worker-dispatch-dir-expand-capability.sh
-# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js, bin/worker-dispatch.js
+# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, worktree-backup, dir_expand, capability, type-validation, TL2, dup-group-keep:size-hard-limit, scope:issue-specific
 #
 # Issue #1937: worktree-backup gains payload `dir_expand: bool`. This pins its
@@ -21,21 +21,6 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-assert_eq() {
-    local name="$1" want="$2" got="$3"
-    if [ "$want" = "$got" ]; then pass "$name"
-    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
-}
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$REGISTRY_JS" ]; then
     fail "0: prerequisites missing" "dispatcher=$DISPATCH_JS registry=$REGISTRY_JS"
@@ -86,6 +71,7 @@ field_of() {
 }
 
 # 1 — registry declares dir_expand as a boolean (Step 1 contract)
+case_begin "registry-shape" "hooks/lib/worker-dispatch-registry.js"
 group_registry_shape() {
     local got
     got="$(node -e '
@@ -97,8 +83,11 @@ process.stdout.write(f ? String(f.type) : "(absent)");
 ' "$(nodepath "$REGISTRY_JS")" 2>/dev/null)"
     assert_eq "registry/dir_expand-declared-as-bool" "bool" "$got"
 }
+group_registry_shape
+case_end
 
 # 2 — a non-boolean dir_expand is refused with the boolean type message
+case_begin "reject-non-bool" "bin/worker-dispatch/capability.js"
 group_reject_non_bool() {
     dispatch_backup "de-yes" \
         "{\"mode\":\"execute\",\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"docker_check\":false,\"dir_expand\":\"yes\",\"artifact_dir\":\"$PLANS\"}"
@@ -109,8 +98,11 @@ group_reject_non_bool() {
         *) fail "reject/summary-names-the-boolean-type" "summary='$(field_of summary)'" ;;
     esac
 }
+group_reject_non_bool
+case_end
 
 # 3 — dir_expand omitted must never itself be a rejection (optional field)
+case_begin "omitted-accepted" "bin/worker-dispatch/capability.js"
 group_omitted_is_accepted() {
     dispatch_backup "de-omit" \
         "{\"mode\":\"dry_run\",\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"docker_check\":false,\"artifact_dir\":\"$PLANS\"}"
@@ -120,16 +112,6 @@ group_omitted_is_accepted() {
         *) pass "omit/no-dir_expand-complaint" ;;
     esac
 }
-
-case_begin "registry-shape" "hooks/lib/worker-dispatch-registry.js"
-group_registry_shape
-case_end
-
-case_begin "reject-non-bool" "bin/worker-dispatch/capability.js"
-group_reject_non_bool
-case_end
-
-case_begin "omitted-accepted" "bin/worker-dispatch/capability.js"
 group_omitted_is_accepted
 case_end
 
