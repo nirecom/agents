@@ -4,7 +4,7 @@
 set -u
 
 # Issue #2308 — GitLab WIP verb (gitlab.sh) gaps unreached by
-# feature-2308-gitlab-wip-state.sh: Gap 1 = gl_cmd_check "wip-other" (status:wip
+# feature-2308-gitlab-wip-state.sh: Gap 1 = gl_cmd_check "other" (status:wip
 # present but stored wip-fp mismatches the checking session — the sibling reuses
 # one SID so this branch never runs); Gap 2 = gl_cmd_abandon (open→remove labels;
 # closed/unknown→exit 1) plus its `api .../issues/<N> --jq .state` read the
@@ -12,19 +12,9 @@ set -u
 # # TL3 gap — real glab label/state calls vs live GitLab not exercised here.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -175,7 +165,8 @@ run_wip() {
 
 REPO_GL="$(make_repo 'git@gitlab.com:acme/widgets.git')"
 
-echo "=== Gap 1: gl_cmd_check wip-other / wip-same fingerprint routing ==="
+echo "=== Gap 1: gl_cmd_check other / same fingerprint routing ==="
+case_begin "g1-check-token-routing" "bin/github-issues/wip-state/gitlab.sh"
 
 # G1-setup: set 42 with session A → status:wip + wip-fp:<hashA> applied.
 reset_logs; reset_state
@@ -187,27 +178,29 @@ else
 fi
 
 # G1a (primary): check 42 with a DIFFERENT session B → status:wip present but the
-# stored fingerprint is session A's → mismatch → "wip-other".
+# stored fingerprint is session A's → mismatch → "other" (#2408: same token as GitHub).
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID_B"
-if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "wip-other" ]; then
-    pass "G1a: check 42 (session B) → wip-other, exit 0"
+if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "other" ]; then
+    pass "G1a: check 42 (session B) → other, exit 0"
 else
-    fail "G1a: expected 'wip-other' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
+    fail "G1a: expected 'other' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
 fi
 
 # G1b (positive control): check 42 with the SAME session A → fingerprint matches
-# → "wip-same". Proves the verdict is fingerprint-driven, not constant.
+# → "same". Proves the verdict is fingerprint-driven, not constant.
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID_A"
-if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "wip-same" ]; then
-    pass "G1b: check 42 (session A) → wip-same, exit 0"
+if [ "$LAST_RC" -eq 0 ] && [ "$LAST_OUT" = "same" ]; then
+    pass "G1b: check 42 (session A) → same, exit 0"
 else
-    fail "G1b: expected 'wip-same' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
+    fail "G1b: expected 'same' + exit 0 (rc=$LAST_RC) out=[$LAST_OUT] err=[$LAST_ERR]"
 fi
+case_end
 
 echo ""
 echo "=== Gap 2: gl_cmd_abandon (open→remove labels; closed/unknown→exit 1) ==="
+case_begin "g2-abandon-verb" "bin/github-issues/wip-state/gitlab.sh"
 
 # G2a: opened issue with status:wip + wip-fp:* → abandon removes BOTH and exits 0.
 # abandon does NOT accept --session-id, so it is omitted.
@@ -255,6 +248,7 @@ if [ "$LAST_RC" -eq 2 ] && state_has 53 "status:wip"; then
 else
     fail "G2d: expected exit 2 + status:wip retained (rc=$LAST_RC) state=[$(cat "$GLAB_STATE_DIR/labels-53" 2>/dev/null | tr '\n' ',')] err=[$LAST_ERR]"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
