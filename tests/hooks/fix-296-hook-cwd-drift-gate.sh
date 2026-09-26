@@ -18,11 +18,10 @@ else
 fi
 WG="${_AGENTS_DIR_NODE}/hooks/workflow-gate.js"
 
-PASS=0
-FAIL=0
-
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift

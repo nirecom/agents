@@ -7,6 +7,9 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+AGENTS_DIR="$DOTFILES_DIR"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 SCANNER_SRC="$DOTFILES_DIR/bin/scan-outbound.sh"
 ERRORS=0
 
