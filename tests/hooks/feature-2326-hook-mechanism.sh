@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2326-rtk-rewrite/test-hook-mechanism.sh
+# tests/hooks/feature-2326-hook-mechanism.sh
 # Tests: hooks/rtk-rewrite.js
 # Tags: rtk, hook, pretooluse, scope:issue-specific
 #

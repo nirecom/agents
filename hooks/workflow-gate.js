@@ -13,6 +13,8 @@ const {
 } = require("./workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+const { isCommitCommand, extractCommitSegmentText } = require("./lib/commit-detect");
+const { parse } = require("./lib/command-ir");
 // #2256 S5-a1: command-tool normalization + sentinel decomposition shared with
 // workflow-mark.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
 const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
@@ -273,8 +275,9 @@ if (require.main === module) {
     approve();
   }
 
-  if (!/^git\s/.test(command)) approve();
-  if (!/\scommit(\s|$)/.test(command)) approve();
+  // #2393: IR + shared wrapper model, so `rtk git commit` / chained commits reach the gate.
+  const commandIr = parse(command);
+  if (!isCommitCommand(commandIr)) approve();
 
   const repoDir = resolveRepoDir(command, input);
   // Axis A (#885): record git_root_resolved for late-block extras.
@@ -288,7 +291,7 @@ if (require.main === module) {
   const docsOnly = isDocsOnlyStaged(repoDir);
   // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
   // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
-  const wipValues = parseGitConfigValues(command, "workflow.wip");
+  const wipValues = parseGitConfigValues(extractCommitSegmentText(commandIr), "workflow.wip");
   const isWip = wipValues.some((v) => v === "1" || v.toLowerCase() === "true");
 
   // Gate 1 (issue #269): hard-block commits when tracked files have unstaged

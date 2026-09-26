@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../lib/path-normalize");
@@ -97,34 +98,28 @@ function resolveScopeValue(raw) {
   if (raw == null) return null;
   if (typeof raw !== "string" || raw === "") return AMBIGUOUS_SCOPE;
   if (/\$/.test(raw)) return AMBIGUOUS_SCOPE;      // env-var reference (pre-expansion)
-  if (raw.startsWith("~")) return AMBIGUOUS_SCOPE; // tilde (home) — unresolved here
-  const win = toWindowsPath(raw);
+  // #1563: `~` / `~/…` is static (the shell expands it to $HOME with no runtime
+  // input), so resolve it; `~user` needs a passwd lookup and stays AMBIGUOUS.
+  let value = raw;
+  if (value.startsWith("~")) {
+    if (!/^~(?:[\\/]|$)/.test(value)) return AMBIGUOUS_SCOPE;
+    const home = os.homedir();
+    if (!home) return AMBIGUOUS_SCOPE;
+    value = home + value.slice(1);
+  }
+  const win = toWindowsPath(value);
   const isAbsolute = win.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(win);
   if (!isAbsolute) return AMBIGUOUS_SCOPE;         // relative → cannot resolve safely
   return win;
 }
 
-// Segment-aware, quote-aware git write-scope resolution (FIX A, convergence).
-// Sources -C / --work-tree / --git-dir from the GIT-WRITE SEGMENT'S OWN IR argv
-// (already tokenized + quote-resolved + segment-local) instead of a raw-regex scan
-// of the whole command. This closes two FAIL-OPEN mis-scope classes:
-//   - cross-segment: `git --work-tree /outside status && git commit` no longer
-//     attributes /outside to the later commit — the commit segment carries no
-//     scope flag, so the write scopes to the CWD repo (in-session → block).
-//   - quoted: `printf "git --work-tree /outside" && git commit` — the flag lives
-//     inside a printf argument token, never in the git segment's global options.
-//
-// Returns one of:
-//   { root: <absolute-path-or-null> }  — resolve rev-parse from this dir.
-//   { failClosed: true }               — scope flags present but unresolvable /
-//                                        relative / ambiguous: the caller must
-//                                        treat the target as IN-SESSION (CWD repo),
-//                                        never as an "outside" self-target.
-//   null                               — no git-write segment / no scope flags;
-//                                        caller falls back to cd/cwd behavior.
-// Resolve one git segment's scope flags → { root } | { failClosed } | null.
-// { failClosed } is only meaningful for WRITE segments (a write whose scope is
-// ambiguous must block); for READ segments the caller ignores failClosed.
+// Segment-aware git write-scope (FIX A): -C / --work-tree / --git-dir come from the
+// git segment's OWN IR argv, never a whole-command regex, so neither a flag in an
+// earlier segment (`git --work-tree /x status && git commit`) nor one inside a quoted
+// argument (`printf "git --work-tree /x" && git commit`) re-scopes a write.
+// Returns { root } (rev-parse from there) | { failClosed } (flags present but
+// unresolvable: caller treats the write as IN-SESSION; ignored for READ segments)
+// | null (no scope flags: caller falls back to cd/cwd).
 function scopeFromGitArgv(gitArgv) {
   const flags = extractGitScopeFlagsFromArgv(gitArgv);
   if (!flags.sawScopeFlag) return null;          // no scope redirection
@@ -278,7 +273,22 @@ function findRepoRoot(filePath) {
   }
 }
 
+// Shared object store of the repo containing `dir` (identical for a main checkout
+// and all its linked worktrees), normalized for compare; null when unresolvable.
+function getGitCommonDir(dir) {
+  try {
+    const cwd = toWindowsPath(dir);
+    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], { cwd, encoding: "utf8", timeout: 2000 });
+    if (r.error || r.status !== 0) return null;
+    const out = (r.stdout || "").trim();
+    return out ? normalizeForCompare(path.resolve(cwd, out)) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
+  getGitCommonDir,
   isMainCheckout,
   parseGitCPath,
   parseGitPathFlag,

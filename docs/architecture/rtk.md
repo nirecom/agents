@@ -48,3 +48,21 @@ directly to Claude's stdout. Examples:
 
 The #2370 cross-cutting survey (all RTK-eligible commands × 195 bin/ scripts) confirmed
 these as structural invariants. Adopt when a use case arises.
+
+## enforce-worktree validation of rtk-wrapped git commands
+
+`hooks/enforce-worktree.js` (via `hooks/lib/bash-write-patterns/segment-utils.js`)
+registers an `rtk` entry in `WRAPPER_SPECS`. Without this entry, `detectWritePredicate`
+returned `null` for any `rtk git …` command, causing `handleBashWrite` to exit
+fail-open (ALLOW from the main worktree).
+
+The entry declares three verb tiers that `peelWrappers` uses to classify rtk subcommands:
+
+| Field | Values | Meaning |
+|---|---|---|
+| `passthroughDispatchVerbs` | `proxy`, `err`, `test`, `summary` | rtk dispatches these unchanged to their own executor — treat the next argv token as the real command |
+| `shellBodyVerbs` | `run` | body is a shell string; treat it as `sh -c <body>` for write detection |
+| `nativeVerbs` | `read`, `json`, `find`, `gain`, `config`, `init`, `env`, `help`, `version` | rtk-native read-only operations; never write to the session repo |
+
+With this entry, `rtk git commit` is correctly peeled to `git commit` and blocked from
+the main worktree, while `rtk read …` is recognized as a native verb and allowed.

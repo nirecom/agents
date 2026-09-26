@@ -1,15 +1,14 @@
 "use strict";
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
-// Command wrappers that prefix a real command and transparently exec it. Peeling
-// them is a CLASS-level fix (CPR-E2C/CPR-ORTH): every write predicate uniformly
-// sees through `command git commit`, `env -u X git commit`, `nice rm f`. Each
-// entry declares valueFlags (consume a FOLLOWING token; attached `-n5`/`--adj=5`
-// are self-contained), booleanFlags (no argument), and eatAssignments (env only:
-// leading NAME=VALUE tokens are consumed). FAIL-CLOSED: an option in NEITHER set
-// and not an attached `=value` form is unclassifiable, so skipWrapperOptions
-// returns AMBIGUOUS and peelWrappers refuses to peel — see the AMBIGUOUS notes
-// on skipWrapperOptions/peelWrappers and the scanWrappedVerb safety net below.
+// Command wrappers that transparently exec a real command; peeling them lets every
+// write predicate see through `env -u X git commit`, `rtk git commit` (CPR-E2C).
+// Spec fields: valueFlags (consume the FOLLOWING token), booleanFlags (no argument),
+// eatAssignments (leading NAME=VALUE consumed). Optional (rtk): nativeVerbs stop the
+// peel, passthroughDispatchVerbs are consumed so the next token is the command,
+// shellBodyVerbs turn the rest into a synthetic `sh -c <body>`. FAIL-CLOSED: an
+// unclassifiable option makes skipWrapperOptions return AMBIGUOUS and peelWrappers
+// refuse to peel — scanWrappedVerb below is the safety net.
 const AMBIGUOUS = -2; // distinct from -1 ("no wrapped command remains")
 
 const WRAPPER_SPECS = {
@@ -41,6 +40,16 @@ const WRAPPER_SPECS = {
     valueFlags: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid"]),
     booleanFlags: new Set(["-t", "--ignore"]),
     eatAssignments: false,
+  },
+  // rtk [GLOBAL]... (VERB | proxy|err|test|summary CMD | run BODY | CMD) ... —
+  // every rtk global flag is boolean (rtk --help).
+  rtk: {
+    valueFlags: new Set(),
+    booleanFlags: new Set(["-v", "-vv", "-vvv", "--verbose", "--ultra-compact", "--skip-env", "-h", "--help", "-V", "--version"]),
+    eatAssignments: false,
+    passthroughDispatchVerbs: new Set(["proxy", "err", "test", "summary"]),
+    shellBodyVerbs: new Set(["run"]),
+    nativeVerbs: new Set(["read", "json", "find", "gain", "config", "init", "env", "help", "version"]),
   },
 };
 
@@ -130,6 +139,21 @@ function peelWrappers(cmd0, argv) {
     if (idx === -1) break; // wrapper with no wrapped command — leave as-is
     const next = curArgv[idx];
     if (typeof next !== "string" || next.length === 0) break;
+    if (spec.nativeVerbs && spec.nativeVerbs.has(next)) break;
+    if (spec.shellBodyVerbs && spec.shellBodyVerbs.has(next)) {
+      const body = curArgv.slice(idx + 1);
+      if (body.length === 0) break;
+      curCmd = "sh";
+      curArgv = ["-c", body.join(" ")];
+      break;
+    }
+    if (spec.passthroughDispatchVerbs && spec.passthroughDispatchVerbs.has(next)) {
+      const inner = curArgv[idx + 1];
+      if (typeof inner !== "string" || inner.length === 0) break;
+      curCmd = inner;
+      curArgv = curArgv.slice(idx + 2);
+      continue;
+    }
     curCmd = next;
     curArgv = curArgv.slice(idx + 1);
   }

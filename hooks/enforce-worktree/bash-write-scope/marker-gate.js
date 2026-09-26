@@ -116,8 +116,51 @@ function bashTargetsHitProtectedMarker(targets, opts) {
   });
 }
 
+// #1324: the workflow dir sits outside every session repo, so the outside-scope
+// allow paths wave through writes to ANOTHER session's `<sid>.*` state. True when
+// any target under the workflow dir has a session-id-shaped (UUID) first-component
+// stem other than this session's id; a missing session id cannot vouch for any
+// such stem (fail-closed). Non-UUID stems are shared state, left to other gates.
+const SESSION_STEM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function targetsHitOtherSessionWorkflowState(targets, sessionCtx) {
+  if (!Array.isArray(targets) || targets.length === 0) return false;
+  const nodePath = require("path");
+  const { getWorkflowDir } = require("../../workflow-state");
+  let normWf;
+  try {
+    const wfDir = getWorkflowDir();
+    if (!wfDir) return false;
+    normWf = realResolve(wfDir);
+  } catch (_) { return false; }
+  const ownSid = sessionCtx && typeof sessionCtx.sessionId === "string" ? sessionCtx.sessionId.toLowerCase() : "";
+  return targets.some((rawT) => {
+    const t = normalizeTarget(rawT);
+    if (t.malformed === true) return false; // cannot place it; other gates own malformed targets
+    let resolved = String(t.path).replace(/^["']|["']$/g, "");
+    if (resolved.includes("$") || resolved.includes("~")) {
+      const expanded = expandStaticShellTokens(resolved, { fromQuotedContext: "unquoted" });
+      if (expanded === null) return false;
+      resolved = expanded;
+    }
+    let n;
+    try { n = realResolve(resolved); } catch (_) { return false; }
+    if (!isContainedUnder(n, normWf, { allowEqual: false })) return false;
+    const first = nodePath.relative(normWf, n).split(/[\\/]/)[0];
+    const stem = first.split(".")[0].toLowerCase();
+    if (!SESSION_STEM_RE.test(stem)) return false;
+    return ownSid === "" || stem !== ownSid;
+  });
+}
+
+const OTHER_SESSION_STATE_REASON =
+  "ENFORCE_WORKTREE: write to another session's workflow state blocked.\n" +
+  "Reason: files under the workflow dir whose name stem is a different session id\n" +
+  "belong to that session; only the owning session may write them (#1324).";
+
 module.exports = {
+  OTHER_SESSION_STATE_REASON,
   PROTECTED_MARKER_BASENAME_RE,
   areAllBashTargetsUnderWorkflowDir,
   bashTargetsHitProtectedMarker,
+  targetsHitOtherSessionWorkflowState,
 };

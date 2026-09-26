@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// tests/feature-2326-rtk-rewrite/test-rtk-rewrite.js
+// tests/hooks/feature-2326-rtk-rewrite.js
 // No-framework Node tests for the rtk-rewrite decision pipeline + four guards.
 // TEST-FIRST (#2356): delegation, quote-aware head substitution, widened
 // bash/sh+interpreter+env guards and the audit toggle are NOT yet implemented,

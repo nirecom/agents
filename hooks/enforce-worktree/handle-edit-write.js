@@ -13,7 +13,7 @@
 const { getSessionRepoRoots } = require("./session-scope");
 const { getExcludePatterns, isExcluded } = require("./shared-cmd-utils");
 const { isMainCheckout, findRepoRoot } = require("./git-repo-detection");
-const { isInSessionScope } = require("./bash-write-scope");
+const { isInSessionScope, targetsHitOtherSessionWorkflowState, OTHER_SESSION_STATE_REASON } = require("./bash-write-scope");
 const { getProtectedBranches, getCurrentBranch } = require("./config");
 const { buildWorktreeRemedy } = require("./worktree-remedy");
 const { buildAltTargetRemedy } = require("../lib/alt-target-remedy");
@@ -21,7 +21,13 @@ const { buildExtras } = require("./report-extras");
 const { collectEditWritePaths } = require("../lib/write-tools");
 
 function handleEditWrite(ctx) {
-  const { input, toolName, toolInput, _toolCwd, done, reportContext, resolveSessionId } = ctx;
+  const { input, toolName, toolInput, _toolCwd, done, reportContext, resolveSessionId, sessionCtx } = ctx;
+
+  // #1324 (CPR-ORTH with handle-bash-write.js): another session's workflow state.
+  const _editTargets = collectEditWritePaths(toolInput).map((p) => ({ resolveVia: "ancestor", path: p }));
+  if (targetsHitOtherSessionWorkflowState(_editTargets, sessionCtx)) {
+    done({ block: true, reason: OTHER_SESSION_STATE_REASON });
+  }
 
   const sessionRoots = getSessionRepoRoots();
   const excludePatterns = getExcludePatterns();
