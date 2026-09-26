@@ -9,9 +9,9 @@
 
 set -u
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./lib/harness.sh
-. "$HERE/lib/harness.sh"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 harness_isolate
 
 STAGED_JS="$(np "$AGENTS_DIR/hooks/lib/bash-write-targets/staged.js")"
