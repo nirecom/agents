@@ -551,3 +551,7 @@ Changes: Staged private-info scan now catches renamed files and correctly detect
 ### FEATURE: PR #2390 (2026-09-26)
 Background: fix(#2388): add case_begin/case_end markers to gitlab-forge tests
 Changes: glab install: when `GITLAB_HOSTNAME` and `GITLAB_TOKEN` are set but the host cannot be reached (DNS check fails within 3 seconds), auth is now skipped with a warning instead of timing out or probing cached credentials silently.;forge: `FORGE_GITLAB_HOST` is removed; set `GITLAB_HOSTNAME` (or `GITLAB_SSH_HOSTNAME` for SSH-only remotes) to identify a self-hosted GitLab instance for both `glab` auth and forge routing. **Migration required** if `FORGE_GITLAB_HOST` was set.
+
+### FEATURE: PR #2399 (2026-09-26)
+Background: fix(#2397,#2398): anchor case_begin predicate and guard edge inputs in check-case-markers.sh
+Changes: `bin/check-case-markers.sh` now exits 1 with a stderr message when called with no arguments or a non-existent path, instead of silently exiting 0 with a false "clean" result (#2398);`bin/check-case-markers.sh` correctly rejects test files that define `case_begin()` as a function without ever calling it; the predicate is now anchored to the invocation form (#2397)
