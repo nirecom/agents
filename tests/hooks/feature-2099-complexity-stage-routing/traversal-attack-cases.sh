@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/traversal-attack-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/traversal-attack-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state/state-io.js
 # Tags: complexity, routing, cli, security, path-traversal, adversarial, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1236-is-public-gh-repo.sh
+# tests/hooks/feature-1236-is-public-gh-repo.sh
 # Tests: hooks/lib/is-private-repo.js
 # Tags: hook, scan, github, security, scope:issue-specific, pwsh-not-required
 #

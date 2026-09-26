@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1756-next-step-split-contract.sh
+# filename: tests/bin/fix-1756-next-step-split-contract.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, file-split, entrypoint-path, module-wiring, TL1, TL2, scope:common
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-input-validation.sh
+# tests/bin/bin-concern-ledger-input-validation.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, input-validation, path-traversal, injection, quoting, table-driven, scope:common, pwsh-not-required
 #
@@ -159,7 +159,7 @@ done
 # each file is sourced, not executed, so it shares the fixture and helpers
 # above. Order is the case numbering: 1-2, 3, then 4-6.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-input-validation"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-input-validation"
 
 # shellcheck source=./bin-concern-ledger-input-validation/domain-and-metachars.sh
 . "$SUITE_DIR/domain-and-metachars.sh"

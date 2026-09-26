@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-child-env-gh-doc-append.sh
+# tests/bin/TL3-worker-dispatch-child-env-gh-doc-append.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, gh-cli, doc-append, auth-resolution, real-environment, TL3, scope:common, dup-group-keep:size-hard-limit
 # doc-append's gh is a GRANDCHILD: the dispatcher starts `bash`, which runs
@@ -15,7 +15,7 @@ set -u
 # - Token-only hosts: the arms need a config-authenticated gh to tell "the
 #   token reached the child" from "nothing reached the child", so a host whose
 #   only credential is GH_TOKEN gates out here.
-#   Both gaps are closed by tests/TL3-worker-dispatch-doc-append-compose.sh.
+#   Both gaps are closed by tests/bin/TL3-worker-dispatch-doc-append-compose.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh.
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

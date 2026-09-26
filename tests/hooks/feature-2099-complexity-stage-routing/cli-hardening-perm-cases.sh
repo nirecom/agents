@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/cli-hardening-perm-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/cli-hardening-perm-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip
 # Tags: complexity, routing, cli, permissions, hardening, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

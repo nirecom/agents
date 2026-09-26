@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/slot-discrim.sh
+# tests/bin/bin-concern-ledger-reducer/slot-discrim.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 # Detail-plan Test plan cases 1-3: cl_slot determinism + non-collision, cl_slot_body
 # discrimination, cl_discrim freezing material. Key-generation is a parser-class
 # subject, so every case is table-driven (skills/_shared/test-design/parser-regex-tests.md).

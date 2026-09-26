@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/full-chain-integration.sh
+# tests/bin/bin-codex-review-loop-security-code/full-chain-integration.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger, skills/review-code-security/SKILL.md
 # Tags: concern-ledger, review-code-security, full-chain, integration, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 # Each link can be correct while the chain is not: the round both producers
 # share is now decided by the loop itself, so a drifting counter or a second
 # ledger splits one review into two. Two rounds end to end, then a re-entry.

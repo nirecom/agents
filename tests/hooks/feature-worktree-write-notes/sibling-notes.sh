@@ -4,15 +4,15 @@
 # Tags: worktree, notes, sibling, scope:common
 #
 # Security tests for sibling worktrees (SW-Sec*) are in
-# tests/feature-1102-sibling-worktrees/lib-tests.sh.
-# CLI-level sibling tests are in tests/feature-1102-sibling-worktrees/cli-tests.sh.
+# tests/hooks/feature-1102-sibling-worktrees/lib-tests.sh.
+# CLI-level sibling tests are in tests/hooks/feature-1102-sibling-worktrees/cli-tests.sh.
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 # L3 gap (what this test does NOT catch):
 # - Real worktree-start session populating WORKTREE_NOTES.md ## SiblingWorktrees
 #   via intent.md ## worktrees → SIBLING_WORKTREES_JSON env pipeline.
-# Covered by tests/feature-1102-sibling-worktrees.sh at the CLI boundary.
+# Covered by tests/hooks/feature-1102-sibling-worktrees.sh at the CLI boundary.
 
 # ---- SW-Notes1: writeNotes with siblingWorktrees omitted → section with (none) ----
 test_SWNotes1_omitted_siblingWorktrees_renders_none() {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-review-env-example/scope-and-flag-cases.sh
+# tests/bin/feature-review-env-example/scope-and-flag-cases.sh
 # Tests: bin/review-env-example
 # Tags: env-example, bin, style-check, cli, exclusion, scope:common
 # Sourced by ../feature-review-env-example.sh — helpers come from there.

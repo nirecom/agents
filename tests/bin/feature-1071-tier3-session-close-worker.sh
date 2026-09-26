@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1071-tier3-session-close-worker.sh
+# tests/bin/feature-1071-tier3-session-close-worker.sh
 # Tests: bin/worker-dispatch/workers/session-close-gate.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, skills/session-close/SKILL.md
 # Tags: static, worker, worker-dispatch, session-close, gate-action, TL2, scope:issue-specific
 #

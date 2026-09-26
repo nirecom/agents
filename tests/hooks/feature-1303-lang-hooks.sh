@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/feature-1303-lang-hooks.sh
+# filename: tests/hooks/feature-1303-lang-hooks.sh
 # Tests: hooks/lang-inject.js, hooks/subagent-start.js, settings.json, install/assemble-settings.js
 # Tags: hook-injection, lang-inject, subagent-start, plan-lang, scope:issue-specific, pwsh-not-required
 #
-# Dispatch entrypoint. All test logic lives in tests/feature-1303-lang-hooks/.
+# Dispatch entrypoint. All test logic lives in tests/hooks/feature-1303-lang-hooks/.
 #
 # L3 gap (what this test does NOT catch):
 # - Whether UserPromptSubmit hook actually fires in a live claude -p session

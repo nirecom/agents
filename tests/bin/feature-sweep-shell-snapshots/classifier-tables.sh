@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: bin/sweep-shell-snapshots.sh
 # Tags: sweep, shell-snapshots, cli, classifier, table-driven, scope:common, TL2
-# Part file of tests/feature-sweep-shell-snapshots.sh. Two tables in the shape
+# Part file of tests/bin/feature-sweep-shell-snapshots.sh. Two tables in the shape
 # skills/_shared/test-design/parser-regex-tests.md prescribes: T15 over the CLI
 # parser (a delete-by-default tool, so every rejected input must also leave the
 # corpus untouched) and T16 over the PATH-line classifier's string edges.

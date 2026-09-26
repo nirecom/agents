@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/feature-772-bootstrap-e2e.sh
+# filename: tests/skills/feature-772-bootstrap-e2e.sh
 # Tests: skills/worktree-end/scripts/bootstrap-complete.sh
 # Tags: bootstrap, worktree-end, e2e, new-repo
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-clarify-intent/companion-precheck-series.sh
+# tests/agents/feature-clarify-intent/companion-precheck-series.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
 # Tags: workflow, clarify-intent, companion-issues, precheck, decomposition, scope:issue-specific
 # L3 gap (what this test does NOT catch):

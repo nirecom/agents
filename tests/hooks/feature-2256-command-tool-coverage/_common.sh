@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-command-tool-coverage/_common.sh
+# tests/hooks/feature-2256-command-tool-coverage/_common.sh
 # Tests: hooks/lib/tool-command-text.js
 # Tags: test-infrastructure, fixture, shared-lib, scope:issue-specific
 # Shared fixture, payload builder and assertion preamble for the
@@ -19,7 +19,7 @@ WFSTATE_MODULE="$HOOKS_NODE/workflow-state"
 export WFSTATE_MODULE
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 MKPAYLOAD="$AGENTS_DIR/tests/hooks/feature-2256-command-tool-coverage/mkpayload.js"
-PROBE="$AGENTS_NODE/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_NODE/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0
 FAIL=0

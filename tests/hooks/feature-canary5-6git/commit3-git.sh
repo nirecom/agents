@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/commit3-git.sh
+# tests/hooks/feature-canary5-6git/commit3-git.sh
 # Tests: hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-targets/git.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/bash-write-patterns/classify.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, git-write, self-target, ir-extractor, security, scope:issue-specific, hook-registration, pwsh-not-required
 #

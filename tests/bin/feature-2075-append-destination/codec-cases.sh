@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/test-dup-group.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases K1-K5 (TL1): the reverse codec added next to tdg_escape_field. The whole
 # assertion harness of this suite decodes through these two functions, so a
 # silent decode bug would corrupt every other case's `got` side instead of

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-923-enforce-worktree-c-flag-main-worktree.sh
+# tests/hooks/fix-923-enforce-worktree-c-flag-main-worktree.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows.js
 # Tags: enforce-worktree, git-worktree, scope:issue-specific
 # RED for issue #923.

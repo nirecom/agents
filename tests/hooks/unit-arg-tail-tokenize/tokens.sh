@@ -1,11 +1,11 @@
-# tests/unit-arg-tail-tokenize/tokens.sh
+# tests/hooks/unit-arg-tail-tokenize/tokens.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js, hooks/lib/quote-spans.js
 # Tags: hook, worktree, enforce, arg-tail, parser, unit, scope:common
 #
 # STATUS: RED until C3 lands — every row fails with
 # `ERROR: require arg-tail-guard.js: Cannot find module ...`.
 #
-# Sourced by tests/unit-arg-tail-tokenize.sh (uses its probe / assert_probe /
+# Sourced by tests/hooks/unit-arg-tail-tokenize.sh (uses its probe / assert_probe /
 # assert_eq / run_table helpers, and its `%` column separator).
 # Sections 1-7: word splitting, quoted words, mixed provenance, escapes,
 # substitution bodies, ANSI-C, and the fail-closed malformed contract.

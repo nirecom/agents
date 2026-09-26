@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-end-skill-gate2-static.sh
+# tests/skills/feature-worktree-end-skill-gate2-static.sh
 # Tests: skills/worktree-end/SKILL.md
 # Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge
 #

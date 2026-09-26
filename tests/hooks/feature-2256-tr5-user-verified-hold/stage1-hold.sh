@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold/stage1-hold.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold/stage1-hold.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, hooks/lib/diff-fingerprint.js
 # Tags: supervisor, tr5, user-verified, hold, freshness, TL2, scope:issue-specific
 # #2256 S5-b stage 1 — the unresolved-BLOCK hold keyed on freshness_key.
 
-# Parent: tests/feature-2256-tr5-user-verified-hold.sh
+# Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 
 # The four branches are: BLOCK + key match deny, BLOCK + key mismatch arm,
 # non-BLOCK pass, key uncomputable full re-audit. Two regression cases follow:

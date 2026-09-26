@@ -4,7 +4,7 @@
 // execution position, or the wrong interpreter). Scope is driven from
 // install/settings-allow-commands.txt (CPR-SSOT); rationale: docs/architecture/claude-code/settings.md.
 // Scans code spans only (fenced blocks + inline `...`) -- a prose mention is not a command line.
-// Sole consumer: tests/prompt-bash-node-calling-convention/exec-position-sweep.sh.
+// Sole consumer: tests/install/prompt-bash-node-calling-convention/exec-position-sweep.sh.
 // Contract: argv[1] is the agents root; stdout is {"occurrences":[{file,line,entry,prevToken,
 // expected,status}]}; a malformed SSOT throws (fail-closed, non-zero exit) rather than reporting
 // an empty sweep.

@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C6 + C8 — the report format itself. Elsewhere the count prefix is probed one field at
 # a time (`literal=0`, `key=2`), which cannot catch a reordered, renamed or truncated
 # prefix; and the root line was only checked for the substring `root: `, which cannot

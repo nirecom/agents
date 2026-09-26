@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/concerns-log-wiring.sh
+# tests/bin/bin-codex-review-loop-security-code/concerns-log-wiring.sh
 # Tests: skills/review-code-security/scripts/run-codex-review-loop.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, skills/review-plan-security/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: CTX_CONCERNS_LOG, render-concerns-log, concerns-log, wiring, TL2, scope:issue-specific
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 # TL3 gap: real loop/codex/concern-ledger not exercised; skill wrappers driven with
 # stubs via AGENTS_CONFIG_DIR. Mitigation: full-chain-integration.sh + manual runs.
 

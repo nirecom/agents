@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/deploy-preconditions.sh
+# tests/install/feature-2119-settings-allow-ssot/deploy-preconditions.sh
 # Tests: install/assemble-settings.js, install/gen-settings-allow.js, install/lib/settings-deploy.js, install/lib/settings-assembly.js
 # Tags: install, settings, permissions, deploy, first-install, scope:issue-specific, pwsh-not-required, TL2
 # T40-T41: the two preconditions of the deploy path. Sourced AFTER assembler-failclosed.sh.

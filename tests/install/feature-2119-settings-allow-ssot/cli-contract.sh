@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/cli-contract.sh
+# tests/install/feature-2119-settings-allow-ssot/cli-contract.sh
 # Tests: install/gen-settings-allow.js, install/assemble-settings.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T17: the CLI and error contract. Sourced AFTER write-and-drift.sh, whose helpers this reuses.

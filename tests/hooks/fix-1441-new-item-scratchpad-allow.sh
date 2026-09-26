@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1441-new-item-scratchpad-allow.sh
+# tests/hooks/fix-1441-new-item-scratchpad-allow.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/lib/bash-write-targets/helpers.js, hooks/lib/claude-scratchpad-base.js
 # Tags: enforce-worktree, new-item, scratchpad, plans-dir, ir-migration, scope:issue-specific, pwsh-not-required
 #

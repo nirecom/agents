@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-injection/prompt-tmpfile-cleanup.sh
+# tests/bin/feature-2223-nfr-injection/prompt-tmpfile-cleanup.sh
 # Tests: bin/lib/codex-core.sh
 # Tags: scope:issue-specific, TL2, codex, nfr, security, secret-hygiene, pwsh-not-required
-# Case file for tests/feature-2223-nfr-injection.sh — sourced from it, never run
+# Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # The prompt tmpfile holds the project's NFR text, which can carry anything the
 # project put in its .env.local. It lives in world-listable /tmp, so the cleanup

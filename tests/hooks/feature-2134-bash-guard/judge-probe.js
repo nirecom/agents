@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tests/feature-2134-bash-guard/judge-probe.js
+// tests/hooks/feature-2134-bash-guard/judge-probe.js
 // One-line stdout probe over the bash-guard modules, used by every cases-*.sh here.
 // Usage: node judge-probe.js <mode> <cmd-file> [sessionId] [toolName] [settingsPath]
 "use strict";

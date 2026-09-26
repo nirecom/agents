@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size.sh
+# tests/bin/feature-1894-comment-block-size.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, parser, review-cli, staged, git, scope:issue-specific, scope:feature-1894, layer:TL2
 
@@ -9,7 +9,7 @@
 # cb_expect_rc, never hardcode a prefix. Threshold/extensions/kill-switch
 # resolve from the config dir's .env only, never ambient shell
 # (config-hostility.sh: run_cb_ambient). Dispatcher: harness here, cases in
-# tests/feature-1894-comment-block-size/*.sh, all via CLI stdout.
+# tests/bin/feature-1894-comment-block-size/*.sh, all via CLI stdout.
 
 # TL3 gap: hook integration, installer PATH, pack-file sizes, NTFS-illegal
 # names, symlinks, scanner footprint — see WORKFLOW_USER_VERIFIED preflight

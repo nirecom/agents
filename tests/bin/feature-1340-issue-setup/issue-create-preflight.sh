@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/issue-create-preflight.sh
+# tests/bin/feature-1340-issue-setup/issue-create-preflight.sh
 # Tests: bin/github-issues/issue-create-preflight.sh
 # Tags: issue-setup, issue-create-preflight, github-issues, scope:issue-specific
 # N/A: secret-leakage — checks read public label/project structure, not secrets; gh owns tokens.

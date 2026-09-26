@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1067-supervisor-alert-audit-arming.sh
+# tests/hooks/feature-1067-supervisor-alert-audit-arming.sh
 # Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, alert, arming, scope:issue-specific
 # Tests for issue #1067 — ensureAlertScheduled arming threshold contract.

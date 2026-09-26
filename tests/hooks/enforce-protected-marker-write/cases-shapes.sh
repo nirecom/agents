@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Sections S and R - the INPUT SHAPES a target path can arrive in.
 #
 # S (M-1): the Edit/Write/MultiEdit/editFiles family delivers its target in three

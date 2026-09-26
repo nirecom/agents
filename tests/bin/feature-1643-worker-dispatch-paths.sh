@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-paths.sh
+# tests/bin/feature-1643-worker-dispatch-paths.sh
 # Tests: bin/worker-dispatch-paths, bin/worker-dispatch/anchor.js
 # Tags: worker-dispatch, paths-resolver, worktree, anchor, main-root, TL2, scope:issue-specific
 #

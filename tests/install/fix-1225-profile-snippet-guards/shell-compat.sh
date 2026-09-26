@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, bash-compat, job-control, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
 # not run alone; uses its make_sandbox / run_driver helpers and HAVE_ZSH.
 
 # TC8 — bash-compat: the helper's leading `setopt LOCAL_OPTIONS NO_MONITOR` is

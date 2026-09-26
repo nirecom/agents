@@ -1,16 +1,16 @@
 #!/bin/bash
-# tests/fix-unblock-branch-d/_lib.sh
+# tests/hooks/fix-unblock-branch-d/_lib.sh
 # Tests: hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js, hooks/enforce-worktree.js
 # Tags: test-lib, worktree, enforce, hook, branch-delete, redirect, scope:common
 # Shared helpers and fixtures for fix-unblock-branch-d test groups.
 #
 # Sourced by:
-#   - tests/fix-unblock-branch-d/unit.sh
-#   - tests/fix-unblock-branch-d/integration.sh
-#   - tests/fix-unblock-branch-d/hook-redirect.sh
+#   - tests/hooks/fix-unblock-branch-d/unit.sh
+#   - tests/hooks/fix-unblock-branch-d/integration.sh
+#   - tests/hooks/fix-unblock-branch-d/hook-redirect.sh
 #
 # Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/fix-unblock-branch-d/unit.sh
+#   bash tests/hooks/fix-unblock-branch-d/unit.sh
 #
 # This library resolves AGENTS_DIR / MODULE / PATTERNS_MODULE / HOOK_SCRIPT,
 # defines pass / fail / run_with_timeout, the unit-test node -e callers, and the

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-gh-outbound-guard-integration.sh
+# tests/bin/fix-1591-gh-outbound-guard-integration.sh
 # Tests: bin/lib/gh-outbound-guard.sh
 # Tags: scan-outbound, security, gh, guard, integration, scope:issue-specific, layer:TL2
 #

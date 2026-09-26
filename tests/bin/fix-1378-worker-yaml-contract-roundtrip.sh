@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1378-worker-yaml-contract-roundtrip.sh
+# tests/bin/fix-1378-worker-yaml-contract-roundtrip.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch/workers/test-runner.js, hooks/workflow-run-tests.js
 # Tags: worker-dispatch, test-runner, yaml, contract, hook, TL2, scope:common
 #
@@ -30,7 +30,7 @@
 #   - What real Claude Code actually puts in `tool_response.stdout`: newline
 #     normalisation, truncation, or stderr merged into stdout. This file obtains
 #     the YAML by calling the renderer directly, so the delivered payload is
-#     assumed, not observed. tests/TL3-worker-dispatch-run-tests.sh narrows that
+#     assumed, not observed. tests/bin/TL3-worker-dispatch-run-tests.sh narrows that
 #     by one step (real dispatcher, real suite output).
 #   - Real PostToolUse delivery and whether `systemMessage` reaches the model's
 #     context (detail plan W-3) — TL4, out of scope, tracked as #1543.
@@ -82,8 +82,8 @@ unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 # seam this file exists to test — case 6's falsifiability guard included. Only a
 # resolvable, canonical emitter path lets the contract itself decide the verdict.
 # (Rejection of unresolvable/impostor emitter paths is covered by
-# tests/fix-1273-round3-provenance-identity.sh and
-# tests/main-workflow-run-tests/quoted-arg-and-provenance.sh.)
+# tests/hooks/fix-1273-round3-provenance-identity.sh and
+# tests/hooks/main-workflow-run-tests/quoted-arg-and-provenance.sh.)
 DISPATCH_CMD="node \"$AGENTS_WIN/bin/worker-dispatch.js\" test-runner \"$AGENTS_WIN\" \"$TMPD/sid-worker-test-runner.json\""
 
 # render_yaml <result-json> → the renderer's own output, verbatim.

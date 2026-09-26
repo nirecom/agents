@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-774-worktree-auto-backup.sh
+# tests/skills/fix-774-worktree-auto-backup.sh
 # Tests: skills/worktree-end/SKILL.md
 # Tags: worktree-end, backup, auto-backup, ux
 #

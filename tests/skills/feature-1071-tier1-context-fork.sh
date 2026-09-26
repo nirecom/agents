@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1071-tier1-context-fork.sh
+# tests/skills/feature-1071-tier1-context-fork.sh
 # Tests: skills/sweep-branches/SKILL.md, skills/sweep-worktrees/SKILL.md, skills/sweep-plans/SKILL.md
 # Tags: static, skill, fork, sweep, context-fork, scope:issue-specific
 #

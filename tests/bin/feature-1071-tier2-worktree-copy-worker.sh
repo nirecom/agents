@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1071-tier2-worktree-copy-worker.sh
+# tests/bin/feature-1071-tier2-worktree-copy-worker.sh
 # Tests: bin/worker-dispatch/workers/worktree-copy.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, skills/worktree-start/SKILL.md, bin/worktree-copy-include.js
 # Tags: static, worker, worker-dispatch, worktree-copy, worktree-start, TL2, scope:issue-specific
 #

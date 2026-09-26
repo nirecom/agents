@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/feature-sweep-shell-snapshots/age-and-flag-guards.sh
+# tests/bin/feature-sweep-shell-snapshots/age-and-flag-guards.sh
 # Tests: bin/sweep-shell-snapshots.sh
 # Tags: sweep, shell-snapshots, maintenance, scope:common, TL2
 #
-# Part file of tests/feature-sweep-shell-snapshots.sh — the two guards standing
+# Part file of tests/bin/feature-sweep-shell-snapshots.sh — the two guards standing
 # between a delete-by-default tool and an operator's live snapshots: the age
 # threshold (T7) and the flag parser (T9), plus the empty-directory edge (T8)
 # the same loop skeleton must survive. The parent owns PASS/FAIL, make_fixture,

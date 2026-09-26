@@ -49,7 +49,7 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # alone CANNOT isolate this suite — it must point AGENTS_CONFIG_DIR at a scratch
 # config dir whose .env contents are known. Every case here needs the gates-ON
 # baseline only, so a single scratch config is enough (the gates-OFF branch is
-# covered by tests/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh).
+# covered by tests/hooks/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh).
 # Exported BEFORE any sub-file is sourced, so every child `node` invocation in
 # the sub-files inherits it.
 CONFIG_DIR_ON="$TMPDIR_BASE/config-on"

@@ -1,6 +1,6 @@
 # m-detect.sh — M1-M5: detectStalledSteps, the pure read that classifies WHAT
 # went wrong with the workflow mechanism (#1997).
-# Sourced by tests/feature-1997-mechanism-failure.sh.
+# Sourced by tests/hooks/feature-1997-mechanism-failure.sh.
 # Tests: hooks/lib/mechanism-failure.js
 # Tags: mechanism-failure, stall-detection, regression-1997, scope:issue-specific, pwsh-not-required, TL1
 

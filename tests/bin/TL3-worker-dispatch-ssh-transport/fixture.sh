@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-ssh-transport.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-ssh-transport.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/spawn.js
 # Tags: worker-dispatch, commit-push, ssh-agent, canary, adversarial, real-environment, TL3, scope:common
 # The hostile-repository fixture: an ssh:// remote whose transport is a
@@ -135,7 +135,7 @@ stage_change() {
 # ever sees which half is exactly what the canaries answer. SSH_AGENT_PID is
 # planted alongside the socket and is expected NOWHERE: it is deliberately
 # absent from commit-push's envPassthrough (registry.js), so the offline
-# tests/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh and these rows
+# tests/bin/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh and these rows
 # assert the same least-privilege split at two tiers.
 run_worker() {
     local tag="$1"

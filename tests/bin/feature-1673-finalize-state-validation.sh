@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-finalize-state-validation.sh
+# tests/bin/feature-1673-finalize-state-validation.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize/state.js, bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, issue-close-finalize, state-file, untrusted-input, session-rebinding, security, TL2, scope:issue-specific
 #

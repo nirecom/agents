@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/o2-positional-argv.sh
+# tests/tests/feature-1832-run-all-parallel/o2-positional-argv.sh
 # Tests: tests/run-all.sh, bin/worker-dispatch/spawn.js, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, positional-args, argv, quoting, injection, table-driven, TL2, scope:issue-specific
 
@@ -17,7 +17,7 @@
 # the opposite claim (no command-substitution re-run) and must stay green.
 
 # TL3 gap: dispatcher registry/anchor/env-allowlist plumbing (pinned by
-# tests/feature-1643-worker-dispatch-test-runner-behavior.sh) and native-Windows
+# tests/bin/feature-1643-worker-dispatch-test-runner-behavior.sh) and native-Windows
 # shell argv handling. Mitigation: bin/check-verification-gate.sh preflight.
 
 set -u

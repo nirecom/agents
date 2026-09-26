@@ -1,7 +1,7 @@
 # Tests: hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/dispatch-provenance.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, write-detector, dispatch-provenance, scope:issue-specific
 # Sections 17-19 — gh Group-A verb family, narrow predicates that revoke clearance, shell-option injection.
-# Sourced by tests/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
+# Sourced by tests/hooks/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
 # Section 17: segmentDispatchKind tests GH_GROUP_A_REGEX (patterns.js SSOT); all 13 verbs + truncated --body opener.
 echo ""
 echo "=== Section 17: H1 gh Group-A verb family (GH_GROUP_A_REGEX SSOT) ==="

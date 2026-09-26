@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/skip-delegation-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/skip-delegation-cases.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, skip-conditions, ssot, delegation, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh after skip-aggregate-cases.sh

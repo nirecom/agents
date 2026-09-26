@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/lib.sh
+# tests/hooks/feature-canary5-6git/lib.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: enforce-worktree, test-helper, scope:issue-specific, pwsh-not-required
 # Shared helpers + node bridges for the canary5-6git suite parts.

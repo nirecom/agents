@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-same-fix-crosscheck/value-class-matrix.sh
+# tests/bin/feat-1912-same-fix-crosscheck/value-class-matrix.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, validator, same-fix, table-driven, matrix, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
@@ -8,7 +8,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Section of tests/feat-1912-same-fix-crosscheck.sh (run as a subprocess by the parent;
+# Section of tests/bin/feat-1912-same-fix-crosscheck.sh (run as a subprocess by the parent;
 # see tests/lib/section-runner.sh).
 #
 # The parent probes missing/null/non-boolean against `none` alone, which assumes the type

@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-ssh-transport.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-ssh-transport.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/gate.js
 # Tags: worker-dispatch, commit-push, ssh-agent, canary, adversarial, real-environment, TL3, scope:common
 # Arm 1 — the normal path #1812 exists for: a real agent-authenticated push that

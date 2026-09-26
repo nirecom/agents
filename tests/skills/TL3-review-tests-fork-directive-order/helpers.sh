@@ -13,7 +13,7 @@ run_with_timeout() {
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 # The exact same triple-predicate as directive_lineno() in
-# tests/feature-2140-fork-dispatch-shell-commands.sh (CPR-SSOT would share the function, but
+# tests/skills/feature-2140-fork-dispatch-shell-commands.sh (CPR-SSOT would share the function, but
 # that file defines it inline rather than in a sourced lib -- duplicated here at the predicate
 # level only, not the fixture/assertion level).
 rfdo_extract_directive() { # <skill-file> -> the directive line's text, or empty

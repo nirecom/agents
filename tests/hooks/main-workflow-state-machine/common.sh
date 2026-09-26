@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Shared helpers + fixtures for the main-workflow-state-machine dispatcher.
 # Sourced by main-workflow-state-machine.sh and the case-group files in this folder.
-# Tests: tests/main-workflow-state-machine.sh
+# Tests: tests/hooks/main-workflow-state-machine.sh
 # Tags: scope:common
 
 ERRORS=0

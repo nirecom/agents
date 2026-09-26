@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/helpers.sh
+# tests/hooks/feature-1665-seq-cascade/helpers.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state/write-code-resume.js
 # Tags: workflow-state, updated-seq, causal-order, write-code-resume, harness, scope:issue-specific, pwsh-not-required, TL1, TL2
 #

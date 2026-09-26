@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g16-i1.sh
+# tests/hooks/feature-534-stop-final-report-guard/g16-i1.sh
 # Tests G16, G17, G18, G19, G20, I1.
 # Sourced by feature-534-stop-final-report-guard.sh — no shebang, no runner.
 

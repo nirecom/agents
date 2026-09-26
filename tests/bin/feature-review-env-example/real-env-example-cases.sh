@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-review-env-example/real-env-example-cases.sh
+# tests/bin/feature-review-env-example/real-env-example-cases.sh
 # Tests: bin/review-env-example, .env.example, docs/parallel-sessions.md
 # Tags: env-example, bin, style-check, regression-guard, docs, scope:common
 # Sourced by ../feature-review-env-example.sh — helpers come from there.

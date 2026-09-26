@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-issue-create-dispatch-stdout.sh
+# tests/bin/unit-issue-create-dispatch-stdout.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh
 # Tags: issue-create, github, issues, bin, shell, scope:common
 #

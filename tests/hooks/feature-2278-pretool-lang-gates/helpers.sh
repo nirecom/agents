@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/feature-2278-pretool-lang-gates/helpers.sh
+# tests/hooks/feature-2278-pretool-lang-gates/helpers.sh
 # Tests: hooks/gate-plan-lang.js, hooks/gate-worktree-notes-lang.js, hooks/lib/pretool-lang-gate.js
 # Tags: lang, hook, pretooluse, plans, worktree-notes, TL2, scope:issue-specific
 # Sourced by ../feature-2278-pretool-lang-gates.sh — shared fixtures and
 # assertion helpers for the SHL-/PLG-/WNG-/SET- case files.
 # lang-check: ignore -- this file intentionally contains CJK test fixtures for language-policy tests
 
-# Same fixture identities as tests/unit-check-plan-lang.sh (TIMESTAMP + UUID forms).
+# Same fixture identities as tests/hooks/unit-check-plan-lang.sh (TIMESTAMP + UUID forms).
 FAKE_UUID="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 FAKE_TS="20260625-120000"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary6a-pkgmgr-interpc/pkg-mgr-ir.sh
+# tests/hooks/feature-canary6a-pkgmgr-interpc/pkg-mgr-ir.sh
 # Tests: hooks/lib/bash-write-targets/pkg-mgr.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js
 # Tags: scope:issue-specific, pkg-mgr, canary-6a, ir-migration, fail-closed, pwsh-not-required
 #

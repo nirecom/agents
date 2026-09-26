@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-issue-comments/_lib.sh — shared helper library, NOT a test file.
+# tests/bin/feature-workflow-init-driver/driver-issue-comments/_lib.sh — shared helper library, NOT a test file.
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/issue-comments.js, bin/workflow/lib/workflow-init/checkpoint.js
 # Tags: workflow-init, driver, issue-comments, fetch-issues, write-context, sentinel-strip, prompt-injection, scope:issue-specific
 # Source from sibling group files: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

@@ -1,4 +1,4 @@
-# tests/prompt-bash-node-calling-convention/exec-position-sweep.sh
+# tests/install/prompt-bash-node-calling-convention/exec-position-sweep.sh
 # Tests: install/settings-allow-commands.txt, install/lib/settings-allow-rules.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # T50-T57: the execution-position sweep. Sourced AFTER exec-position-fixtures.sh, which owns

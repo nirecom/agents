@@ -1,5 +1,5 @@
 # Security and validation tests for propagate-labels.sh.
-# Sourced by tests/fix-propagate-labels-fixes.sh — not run standalone.
+# Sourced by tests/bin/fix-propagate-labels-fixes.sh — not run standalone.
 
 # ===========================================================================
 # T-propagate-pat-not-in-output (#security): PAT value must not appear in any

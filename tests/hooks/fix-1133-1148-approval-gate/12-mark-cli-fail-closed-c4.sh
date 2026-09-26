@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/workflow/next-step, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, next-step, mark-cli, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G12 (C4): the `next-step --mark <step> complete` recovery CLI is fail-closed
 # for gated steps. main() calls markStep with no try/catch, so a refused

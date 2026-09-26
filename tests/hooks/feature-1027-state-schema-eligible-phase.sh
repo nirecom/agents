@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1027-state-schema-eligible-phase.sh
+# tests/hooks/feature-1027-state-schema-eligible-phase.sh
 # Tests: hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — schema fields findings_surfaced_at + alert_eligible_phase.

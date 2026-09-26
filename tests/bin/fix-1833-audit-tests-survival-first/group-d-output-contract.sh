@@ -1,7 +1,7 @@
 # Group D: output contract — diagnostics channel + JSON backward compatibility (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, output-contract, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Undecidable files (prose header, no header) must be REPORTED rather than
 # silently dropped — that silence is what let 25 of 26 common-scope "orphans"

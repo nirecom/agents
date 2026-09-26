@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/TL3-skill-worktree-start-auto-naming/helpers.sh
+# tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, helpers, fixture, claude-e2e, TL3, scope:common
 #

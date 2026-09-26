@@ -1,4 +1,4 @@
-# tests/feature-2169-workflow-not-started-notify-gate/p-wiring.sh
+# tests/hooks/feature-2169-workflow-not-started-notify-gate/p-wiring.sh
 # Tests: hooks/user-prompt-submit-mechanism-check.js, hooks/lib/stop-exemption-policy.js, hooks/workflow-state/lifecycle.js
 # Tags: stall-detection, user-prompt-submit, prompt-notify, pre-workflow-init, wi-10-lookahead, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 # P4-P5/P11-P12 (round-2 review C1/C3; round-5 review C2/C3) — cross-module wiring, fail-open proofs, same-step origin-ordering, and stop-exemption-policy fault-injection, against the real hook subprocess. See dispatcher frontmatter; depends on helpers.sh.
@@ -231,7 +231,7 @@ process.stdout.write('c4=' + c4 + ',pn=' + pn);" 2>/dev/null
 # reference). A deliberate duplicate needs a machine-checked equality, or the two
 # drift and the same session gets contradictory answers from Stop and from the
 # next prompt. Fixtures are the C-b / C-c / C-d population of
-# tests/feature-2013-step-in-flight-automark/e-lookahead-guard.sh plus the
+# tests/hooks/feature-2013-step-in-flight-automark/e-lookahead-guard.sh plus the
 # corrupt-state shape C-f adds. Expected to FAIL until the S-5 fix exports
 # isFindingExemptFromC4.
 run_P16() {

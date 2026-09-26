@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-finalize.sh
+# tests/bin/bin-concern-ledger-finalize.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, finalize, fail-closed, atomic-write, json-artifact, table-driven, scope:common, pwsh-not-required
 # lang-check: ignore -- NASTY_TEXT below deliberately embeds a non-ASCII fixture value
 # TL2 dispatcher for the non-convergence artifact and its fail-CLOSED termination
-# path (#1992 / #1996). Cases: tests/bin-concern-ledger-finalize/.
+# path (#1992 / #1996). Cases: tests/bin/bin-concern-ledger-finalize/.
 # TL3 gap (skill-orchestration): a skill whose table lists exit 7 but whose prose
 # still emits the completion sentinel passes cases 8/9; a real out-of-space
 # filesystem and real finalize concurrency are unreached too. Mitigation: a
@@ -286,7 +286,7 @@ done
 # ---------------------------------------------------------------------------
 # Cases
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-finalize"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-finalize"
 
 # shellcheck source=./bin-concern-ledger-finalize/modes-schema.sh
 . "$SUITE_DIR/modes-schema.sh"

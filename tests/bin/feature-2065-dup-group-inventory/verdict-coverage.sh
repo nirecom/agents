@@ -1,7 +1,7 @@
 # S12 category 9: every verdict in the closed set, in one corpus (#2065, S2)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, coverage, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # Earlier fragments exercise the verdicts one family at a time. This one puts
 # all five in a single corpus, because the classifier is a priority chain: a
 # reason that is correct in isolation can still be shadowed when its neighbours

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/settings-and-detect-cjk-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/settings-and-detect-cjk-cases.sh
 # Tests: settings.json, hooks/lib/detect-cjk.js, hooks/lib/lang-config.js
 # Tags: worktree, docs, static-check, detect-cjk, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

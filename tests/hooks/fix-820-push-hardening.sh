@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-820-push-hardening.sh
+# tests/hooks/fix-820-push-hardening.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/shared-cmd-utils.js
 # Tags: worktree, enforce, hook, security, interpreter, rce
 #

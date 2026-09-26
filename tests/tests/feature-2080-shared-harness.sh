@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2080-shared-harness.sh
+# tests/tests/feature-2080-shared-harness.sh
 # Tests: tests/lib/harness.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, scope:issue-specific, feature-2080-harness
 

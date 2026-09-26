@@ -2,7 +2,7 @@
 # Tests: hooks/workflow-state/plan-skip-allowance.js, hooks/lib/plan-confirm-flag.js, hooks/lib/load-env.js, bin/workflow/next-step
 # Tags: tl2, workflow, security, skip-authorization, confirm-tests, scope:issue-specific
 # Shared fixtures + assertion helpers for
-# tests/feature-1644-review-gap-c7-skip-authorization-security.sh.
+# tests/hooks/feature-1644-review-gap-c7-skip-authorization-security.sh.
 # Sourced by the dispatcher — not a standalone runner.
 
 set -uo pipefail
@@ -13,7 +13,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 NEXT_STEP="$AGENTS_DIR_N/bin/workflow/next-step"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

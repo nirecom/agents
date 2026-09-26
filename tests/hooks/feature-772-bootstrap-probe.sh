@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/feature-772-bootstrap-probe.sh
+# filename: tests/hooks/feature-772-bootstrap-probe.sh
 # Tests: hooks/lib/bootstrap-state.js
 # Tags: bootstrap, probe, session-start, new-repo
 #

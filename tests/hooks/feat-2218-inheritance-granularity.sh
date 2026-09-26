@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-inheritance-granularity.sh
+# tests/hooks/feat-2218-inheritance-granularity.sh
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/inheritance/adopt.js, hooks/workflow-state/state-io/step-context-class.js
 # Tags: session-inherit, inheritance-granularity, context-independent-only, verified-equivalent, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 

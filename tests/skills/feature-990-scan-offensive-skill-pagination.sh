@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-offensive-skill-pagination.sh
+# tests/skills/feature-990-scan-offensive-skill-pagination.sh
 # Tests: skills/scan-offensive/scripts/scan-repo.sh
 # Tags: scan, offensive, skill, pagination, jsonl, scope:issue-specific
 # RED for issue #990 — retroactive scan-repo.sh must:

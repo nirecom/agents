@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1071-tier4-reconcile-worker.sh
+# tests/bin/feature-1071-tier4-reconcile-worker.sh
 # Tests: bin/worker-dispatch/workers/issue-reconcile.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, agents/issue-create-survey-worker.md, skills/issue-create/SKILL.md, skills/issue-reconcile/SKILL.md
 # Tags: static, agent, worker, worker-dispatch, issue-reconcile, issue-create, survey-worker, TL2, scope:issue-specific
 #
@@ -14,7 +14,7 @@
 #
 # TL3 gap (what this test does NOT catch):
 # - actual survey-worker verdict classification by the LLM (requires real claude -p)
-# - a real reconcile scan over real GitHub issues (see tests/TL3-worker-dispatch-gh-contract.sh)
+# - a real reconcile scan over real GitHub issues (see tests/bin/TL3-worker-dispatch-gh-contract.sh)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 

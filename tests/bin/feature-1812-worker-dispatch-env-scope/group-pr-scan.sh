@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/commit-push/pr.js
 # Tags: worker-dispatch, pr, scan-outbound, commit-push, TL1, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-intent-title-contract.sh
+# tests/skills/fix-1591-intent-title-contract.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: skill, clarify-intent, workflow-init, docs, scan-outbound, scope:issue-specific, layer:TL1
 #

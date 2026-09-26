@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-742-mcp-fs-hardening.sh
+# tests/bin/fix-742-mcp-fs-hardening.sh
 # Tests: bin/review-plan-codex
 # Tags: review-plan-codex, repo-root, defensive-hardening, security
 #

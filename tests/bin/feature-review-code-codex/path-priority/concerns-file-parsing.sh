@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, concerns-file, cli-parsing, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # CF — table-driven coverage for the --concerns-file argument-parsing branch (review-code-codex
@@ -16,7 +16,7 @@ pp_install_capturing_mock
 
 # POSIX denial with proof it took effect. chmod is advisory on MSYS/Windows and ignored for
 # root, so a naive `chmod 000` would produce a false PASS — mirrors the pattern in
-# tests/feature-1640-count-subagents/lib.sh.
+# tests/bin/feature-1640-count-subagents/lib.sh.
 cf_deny_read() { # <path>
     chmod 000 "$1" 2>/dev/null || return 1
     head -c 1 "$1" >/dev/null 2>&1 && { chmod 644 "$1" 2>/dev/null || true; return 1; }

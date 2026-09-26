@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-capability.sh
+# tests/bin/feature-1643-worker-dispatch-capability.sh
 # Tests: bin/worker-dispatch/capability.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/spawn.js, bin/worker-dispatch/anchor.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, capability, fsguard, spawn, security, attack-matrix, TL1, scope:issue-specific
 
@@ -38,7 +38,7 @@ set -u
 # then re-exec'd an inner shell that built all of it a second time — roughly
 # doubling the runtime of the suite, against a budget the suite was already
 # close to exhausting. Matches the placement in
-# tests/feature-1643-worker-dispatch-backup-secrets.sh.
+# tests/bin/feature-1643-worker-dispatch-backup-secrets.sh.
 
 # 180s is deliberately above the 120s default of rules/test.md but well under
 # the old 420s: the run is dominated by 21 real dispatches, and a guard that

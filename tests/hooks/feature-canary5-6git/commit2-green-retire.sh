@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/commit2-green-retire.sh
+# tests/hooks/feature-canary5-6git/commit2-green-retire.sh
 # Tests: hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-targets.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, classify, green-retire, write-patterns, ir-predicate, scope:issue-specific, hook-registration, pwsh-not-required
 #

@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C1 — classifier verdict matrix and the delimiter boundary rule, driven through the
 # exported classifyValue/classify for precision. Every verdict is covered, including
 # `unknown`, and both directions of the delimiter rule are exercised: `!1`/`!0` must

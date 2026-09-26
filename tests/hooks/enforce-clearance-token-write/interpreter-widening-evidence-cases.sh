@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/interpreter-widening-evidence-cases.sh
+# tests/hooks/enforce-clearance-token-write/interpreter-widening-evidence-cases.sh
 # Tests: hooks/block-clearance-token-write/interpreter-scan.js, hooks/lib/protected-basenames.js
 # Tags: anti-cheat, off-clearance, clearance-token, interpreter-scan, flag-cluster, mention-gate, non-vacuity, mutation-evidence, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap: unit-level on the two Tier-1 predicates; the end-to-end verdicts they explain

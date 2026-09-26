@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-handoff-pressure.sh
+# tests/hooks/feat-2218-handoff-pressure.sh
 # Tests: hooks/lib/handoff-pressure.js, hooks/handoff-pressure-nudge.js, settings.json
 # Tags: handoff, context-pressure, user-prompt-submit, crisis-detection, fail-open, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

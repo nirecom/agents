@@ -1,4 +1,4 @@
-# tests/bin-concern-ledger-input-validation/format-and-producer.sh
+# tests/bin/bin-concern-ledger-input-validation/format-and-producer.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, input-validation, path-traversal, injection, quoting, table-driven, scope:common, pwsh-not-required
 

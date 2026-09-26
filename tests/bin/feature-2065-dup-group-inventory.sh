@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2065-dup-group-inventory.sh
+# tests/bin/feature-2065-dup-group-inventory.sh
 # Tests: bin/lib/test-dup-group.sh, bin/lib/test-frontmatter-fix.sh, bin/lib/test-frontmatter-constants.sh, bin/lib/test-retire-predicate.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, scope:issue-specific, audit-tests, dup-groups, frontmatter, parser, tsv, escaping
 # Dispatcher: shared harness only. Cases live in the sibling folder of the same name.

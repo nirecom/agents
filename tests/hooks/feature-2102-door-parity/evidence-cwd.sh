@@ -22,7 +22,7 @@ nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 NS="$AGENTS_DIR_N/bin/workflow/next-step"
 MARK_HOOK="$AGENTS_DIR_N/hooks/workflow-mark.js"
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"

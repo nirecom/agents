@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-458-enforce-worktree-gh-issue-comment-sentinel.sh
+# tests/hooks/fix-458-enforce-worktree-gh-issue-comment-sentinel.sh
 # Tests: hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, redirect, shell-expansion, gh, sentinel
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2284-install-cc-claude-codex-cli/wait-helper.sh
+# tests/install/feature-2284-install-cc-claude-codex-cli/wait-helper.sh
 # Sub-file: wait-cc-exit.sh/.ps1 behavioral tests (Group A) plus static assertions
 # for default values (A7/A9) and process name (A8/A10).
 # Testability contract the implementation MUST honor:

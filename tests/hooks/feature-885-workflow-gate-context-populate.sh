@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-workflow-gate-context-populate.sh
+# tests/hooks/feature-885-workflow-gate-context-populate.sh
 # Tests: hooks/workflow-gate.js
 # Tags: workflow-gate, context-populate, axis-a, feature-885
 # Tests for issue #885 — workflow-gate.js block() populates context.cwd from

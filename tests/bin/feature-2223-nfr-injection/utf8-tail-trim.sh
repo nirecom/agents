@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-injection/utf8-tail-trim.sh
+# tests/bin/feature-2223-nfr-injection/utf8-tail-trim.sh
 # Tests: bin/lib/codex-core.sh
 # Tags: scope:issue-specific, TL2, codex, nfr, utf8, pwsh-not-required
-# Case file for tests/feature-2223-nfr-injection.sh — sourced from it, never run
+# Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Split off rather than added to cli-guards-and-caps.sh because that file sits
 # within a few lines of the 500-line HARD limit of rules/coding/file-split.md.

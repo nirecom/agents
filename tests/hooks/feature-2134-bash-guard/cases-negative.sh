@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-negative.sh
+# tests/hooks/feature-2134-bash-guard/cases-negative.sh
 # Tests: hooks/bash-guard/detect.js, hooks/bash-guard/judge.js, hooks/lib/command-ir.js
 # Tags: hook, bash-guard, false-positive, quoting, escaping, scope:issue-specific, pwsh-not-required, TL2
 # N1-N3: characters that LOOK forbidden but are not operators. Sourced by the dispatcher.

@@ -1,5 +1,5 @@
 # x-lifecycle.sh — X1-X7 + T17/T18 + Z1: isWorkflowStarted, the C4/C2 restructuring
-# and the marker sweep introduced by #1794. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# and the marker sweep introduced by #1794. Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 # Tests: hooks/workflow-state/lifecycle.js, hooks/workflow-state.js, hooks/workflow-state/state-io.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js
 # Tags: stop-hook, supervisor-guard, session-marker, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
 

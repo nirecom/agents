@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2307-forge-router.sh
+# tests/hooks/feature-2307-forge-router.sh
 # Tests: hooks/lib/forge-router.js, hooks/lib/parse-remote-url.js, hooks/lib/forge/github.js, hooks/lib/forge/stub.js
 # Tags: forge, forge-router, codehost, tracker, gitlab, jira, security, scope:issue-specific, TL1
 # #2307 forge router, test-first. forge-router.js and detectForgeType() do NOT

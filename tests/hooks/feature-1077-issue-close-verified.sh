@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1077-issue-close-verified.sh
+# tests/hooks/feature-1077-issue-close-verified.sh
 # Tests: hooks/enforce-issue-close.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js
 # Tags: issue-close, enforce, hook, sentinel, scope:issue-specific
 #

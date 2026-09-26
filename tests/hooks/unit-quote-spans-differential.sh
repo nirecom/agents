@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-quote-spans-differential.sh
+# tests/hooks/unit-quote-spans-differential.sh
 # Tests: hooks/lib/quote-spans.js, hooks/lib/strip-quoted-args.js, hooks/lib/command-ir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: hook, quote-spans, differential, parser, security, regression, scope:common
 #
@@ -14,11 +14,11 @@
 #   - Phase D (foldDqNewlines vs foldNewlinesInSpans(str,["dq"])) is RED.
 #
 # Old-vs-new differential over a >=45-case corpus harvested from:
-#   tests/fix-strip-quoted-args-lib.sh, tests/unit-command-ir.sh,
-#   tests/fix-1424-1425-1448-write-detector.sh,
-#   tests/feature-parallel-sessions-worktree-bash-patterns/dq-and-strip.sh,
+#   tests/hooks/fix-strip-quoted-args-lib.sh, tests/hooks/unit-command-ir.sh,
+#   tests/hooks/fix-1424-1425-1448-write-detector.sh,
+#   tests/agents/feature-parallel-sessions-worktree-bash-patterns/dq-and-strip.sh,
 #   the 7 historical false positives (#1568 #1533 #1457 #1449 #1385 #1191, PR #1612),
-#   and the mandatory 14-case span table in tests/unit-quote-spans/structure.sh.
+#   and the mandatory 14-case span table in tests/hooks/unit-quote-spans/structure.sh.
 #
 # ORACLE INTEGRITY (phase A). The frozen copies under tests/fixtures/
 # quote-spans-frozen/ are the "old" side of every comparison below. Checking

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/skip-boolean-guard-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/skip-boolean-guard-cases.sh
 # Tests: bin/workflow/record-complexity-and-skip, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: complexity, routing, skip-dispatch, cli, boolean, arg-parsing, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-finalize/corrupted-json.sh
+# tests/bin/bin-concern-ledger-finalize/corrupted-json.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh
 # Tags: concern-ledger, finalize, check-finalized, corrupted-artifact, fail-closed, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh.
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 
 # check-finalized is the gate the loop trusts before it lets a round end: a
 # 'yes' here means the unresolved concerns were captured and the round may

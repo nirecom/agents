@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/fix-2098-issue-template-schema.sh
+# tests/bin/fix-2098-issue-template-schema.sh
 # Tests: .github/ISSUE_TEMPLATE/task.yml, .github/ISSUE_TEMPLATE/incident.yml
 # Tags: github, issues, templates, issue-forms, yaml-schema, scope:issue-specific, layer:TL1
 #
 # Real YAML parse + GitHub Issue Forms schema validation, the counterpart to
-# tests/fix-2098-issue-template-no-prefill.sh's awk-only scan: a `title:` or a
+# tests/bin/fix-2098-issue-template-no-prefill.sh's awk-only scan: a `title:` or a
 # required-textarea `value:` in any YAML-equivalent form (quoted key, flow
 # mapping) is still a prefill GitHub honours, and only a parser sees it.
 # Needs `uv run --with pyyaml`; unrunnable -> every case SKIPped, never silently passed.

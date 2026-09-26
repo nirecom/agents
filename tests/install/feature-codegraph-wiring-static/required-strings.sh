@@ -79,7 +79,7 @@ W1_TABLE
 # install/codegraph-constants.txt is unreadable/corrupted, not merely that the
 # literal string appears somewhere in codegraph-boundary.js's source text.
 # Mirrors make_constants_tree/constants_body from
-# tests/feature-codegraph-bootstrap/fixtures.sh: hooks/lib/codegraph-boundary.js
+# tests/install/feature-codegraph-bootstrap/fixtures.sh: hooks/lib/codegraph-boundary.js
 # resolves the constants file relative to itself, so each variant gets its own
 # copied hooks/lib + install tree (a shared lib dir would make every tree read
 # the SAME constants file and collapse the "unreadable constants" input class).

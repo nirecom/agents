@@ -1,8 +1,8 @@
-# tests/fix-1679-worker-eval-segment-composition/e2e-tl1-cases.sh
+# tests/hooks/fix-1679-worker-eval-segment-composition/e2e-tl1-cases.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, allowlist, security, TL1, TL2, pwsh-not-required, scope:issue-specific
 #
-# Sourced by tests/fix-1679-worker-eval-segment-composition.sh.
+# Sourced by tests/hooks/fix-1679-worker-eval-segment-composition.sh.
 # Contains the E2E1679-* (real hook process assertions) and MU1679-TL1-*
 # (direct isAllowedWorkerScriptInvocation() unit) test groups. See the
 # entrypoint file's header comment for the full issue background.

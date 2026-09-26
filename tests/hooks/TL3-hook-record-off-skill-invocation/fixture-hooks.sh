@@ -1,4 +1,4 @@
-# tests/TL3-hook-record-off-skill-invocation/fixture-hooks.sh
+# tests/hooks/TL3-hook-record-off-skill-invocation/fixture-hooks.sh
 # The fixture's HOOK SURFACE: the UserPromptSubmit capture wrapper, the PreToolUse
 # Bash guard, the minimal project settings.json that registers them alongside the
 # real consumer, and the environment the live `claude -p` turns run under.

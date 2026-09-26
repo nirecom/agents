@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/refactor-1364-cpr-principles/mapping.sh
+# tests/bin/refactor-1364-cpr-principles/mapping.sh
 # Tests: agents/supervisor.md, agents/detail-planner.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, install/win/dotfileslink.ps1, docs/architecture/claude-code/workflow.md
 # Tags: core-principles, refactor, scope:common
 #
-# Fragment of tests/refactor-1364-cpr-principles.sh — sourced by the parent, not
+# Fragment of tests/bin/refactor-1364-cpr-principles.sh — sourced by the parent, not
 # run directly. Owns the DOWNSTREAM SWEEP: legacy §N references are gone (N4), no
 # CPR-<N> numeric ID survives anywhere (G1), and every reference site carries the
 # CORRECT new semantic code in the right quantity (M1).
@@ -43,7 +43,7 @@ test_N4_downstream_no_legacy_section_ref() {
 
 # LINE-SCOPED LEGACY-ID ALLOWLIST
 # A few lines must keep a literal old-scheme CPR-<N> ID because reproducing it IS their
-# job — an assertion literal (tests/refactor-design-principles/section-b.sh B19) or the
+# job — an assertion literal (tests/agents/refactor-design-principles/section-b.sh B19) or the
 # old->new mapping table in M1's rationale below; sweeping them would destroy the checks
 # that certify the sweep. The exception is LINE-scoped, never file-scoped: a pathspec
 # exclusion would blind G1 to a genuinely stale reference newly added in those files,

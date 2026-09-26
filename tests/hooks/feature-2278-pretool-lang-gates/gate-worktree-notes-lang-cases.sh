@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2278-pretool-lang-gates/gate-worktree-notes-lang-cases.sh
+# tests/hooks/feature-2278-pretool-lang-gates/gate-worktree-notes-lang-cases.sh
 # Tests: hooks/gate-worktree-notes-lang.js, hooks/lib/pretool-lang-gate.js
 # Tags: lang, hook, pretooluse, worktree-notes, TL2, scope:issue-specific
 # Sourced by ../feature-2278-pretool-lang-gates.sh — helpers come from there.

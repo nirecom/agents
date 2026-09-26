@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-gate-block-choke-point.sh
+# tests/hooks/feat-2218-gate-block-choke-point.sh
 # Tests: hooks/workflow-gate/handoff-record.js, hooks/workflow-gate.js, hooks/lib/handoff-artifact.js
 # Tags: workflow-gate, handoff, choke-point, gate-block, fail-open, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

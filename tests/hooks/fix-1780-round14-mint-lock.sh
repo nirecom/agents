@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round14-mint-lock.sh
+# tests/hooks/fix-1780-round14-mint-lock.sh
 # Tests: hooks/lib/off-clearance-mint-lock.js, hooks/supervisor-off-proposal-shim.js, bin/request-off-clearance, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
 # Tags: off-clearance, mint-lock, concurrency, race, toctou, claim, audit-trail, fail-closed, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

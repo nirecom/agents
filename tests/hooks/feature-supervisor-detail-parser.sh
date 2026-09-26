@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-detail-parser.sh
+# tests/hooks/feature-supervisor-detail-parser.sh
 # Tests: hooks/workflow-gate.js
 # Tags: supervisor, em-supervisor, detail-parser, scope-drift, table-driven, scope:issue-specific, pwsh-not-required
 # L3 gap: parseDetailFilesToModify is exercised as a unit, not inside a live session with a

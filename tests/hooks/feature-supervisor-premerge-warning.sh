@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-premerge-warning.sh
+# tests/hooks/feature-supervisor-premerge-warning.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/supervisor-check.js, hooks/lib/audit-ledger.js
 # Tags: supervisor, em-supervisor, workflow-gate, premerge, freshness-backstop, TL2, scope:issue-specific, pwsh-not-required, hook-registration
 # TL3 gap (what this test does NOT catch):

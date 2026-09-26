@@ -4,7 +4,7 @@
 # M16-M21: the config gate, verbatim forwarding of the CLI's stdout, and every
 # failure class the hook must absorb into a silent `{}` (non-zero exit, spawn
 # ENOENT, an unresponsive child, unusable stdin).
-# Sourced by tests/feature-2215-codegraph-context-inject.sh after harness.sh.
+# Sourced by tests/hooks/feature-2215-codegraph-context-inject.sh after harness.sh.
 
 # ===========================================================================
 # M16: CODEGRAPH off / unset / invalid -> {} and stub never called

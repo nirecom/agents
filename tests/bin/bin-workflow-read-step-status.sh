@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-workflow-read-step-status.sh
+# tests/bin/bin-workflow-read-step-status.sh
 # Tests: bin/workflow/read-step-status
 # Tags: workflow, state, cli, TL2, scope:common
 #

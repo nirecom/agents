@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2280-settings-deny-anchor.sh
+# tests/install/feature-2280-settings-deny-anchor.sh
 # Tests: settings.json, hooks/lib/settings-allow-match.js
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 #
-# Run wrapped: bin/run-with-timeout.sh 120 bash tests/feature-2280-settings-deny-anchor.sh
+# Run wrapped: bin/run-with-timeout.sh 120 bash tests/install/feature-2280-settings-deny-anchor.sh
 #
 # THE INCIDENT (#2280): `*` in `Bash(*push --force*)` matched narration text, not only
 # real git invocations, causing false-positive blocks on harmless commands.

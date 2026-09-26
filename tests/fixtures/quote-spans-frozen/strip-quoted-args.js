@@ -2,7 +2,7 @@
 // FROZEN FIXTURE — verbatim copy of stripDqPreservingCmdSubst() and
 // stripQuotedArgs() from hooks/lib/strip-quoted-args.js as of PR #1577
 // (pre-#1569 quote-spans refactor). Do NOT edit. Used by
-// tests/unit-quote-spans-differential.sh as the old-implementation side.
+// tests/hooks/unit-quote-spans-differential.sh as the old-implementation side.
 // Strip DQ literal content while preserving $(...) and `...` command-substitution
 // regions. Inside a double-quoted span: literal text collapses to "", and each
 // $(...) / `...` is captured then unwrapped by replacing the wrapper chars

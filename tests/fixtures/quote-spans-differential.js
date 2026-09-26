@@ -1,7 +1,7 @@
 "use strict";
 // tests/fixtures/quote-spans-differential.js
 // Old-vs-new differential runner for #1569. Driven by
-// tests/unit-quote-spans-differential.sh, which owns the diff allowlist.
+// tests/hooks/unit-quote-spans-differential.sh, which owns the diff allowlist.
 //
 // Usage: node quote-spans-differential.js <corpus.txt> <allowlist.tsv>
 //

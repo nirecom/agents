@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/invalid-levels-atomicity-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/invalid-levels-atomicity-cases.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver/complexity.js, bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, validation, atomicity, migration, projection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh after record-read-cases.sh

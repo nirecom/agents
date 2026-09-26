@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/_lib.sh — shared scaffolding
+# tests/bin/fix-1899-origin-repo-resolver/_lib.sh — shared scaffolding
 #
 # Sourced by each split file so they also run standalone. Provides: path
 # constants, pass/fail/assert_eq helpers, run_with_timeout, an isolated TMP
@@ -18,7 +18,7 @@ _FIX1899_ORIGIN_LIB_SOURCED=1
 
 set -u
 
-# Repo root, resolved relative to this lib (tests/fix-1899-origin-repo-resolver/).
+# Repo root, resolved relative to this lib (tests/bin/fix-1899-origin-repo-resolver/).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 ORIGIN_LIB="$AGENTS_DIR/bin/github-issues/lib/origin-repo.sh"

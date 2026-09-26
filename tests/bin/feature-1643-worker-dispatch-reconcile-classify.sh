@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-reconcile-classify.sh
+# tests/bin/feature-1643-worker-dispatch-reconcile-classify.sh
 # Tests: bin/worker-dispatch/workers/issue-reconcile.js, bin/worker-dispatch.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, issue-reconcile, classifier, table-driven, mutation-probe, sentinel, history-md, TL1, TL2, scope:issue-specific
 #
@@ -20,7 +20,7 @@
 #     script or a .cmd is never resolved), so the stub is installed at
 #     bin/worker-dispatch/spawn.js's `run` via a `node -r` preload — the whole
 #     dispatcher, anchors, capability wall, fsguard and emit all stay real.
-#     tests/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated) fences the flag
+#     tests/bin/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated) fences the flag
 #     contract against the real binary.
 #   - A real docs/history.md whose entry headings drifted from the `#<N>:` form.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED

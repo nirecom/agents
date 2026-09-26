@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/scan-core-node/byte-and-cli-edges.sh
+# tests/bin/feature-1894-comment-block-size/scan-core-node/byte-and-cli-edges.sh
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, parser, node, ssot, scope:issue-specific, scope:feature-1894, layer:TL2
 # Sections N5/N6 of ../scan-core-node.sh, split out to keep that file under the

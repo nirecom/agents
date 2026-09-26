@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-923-enforce-worktree-early-exit.sh
+# tests/hooks/fix-923-enforce-worktree-early-exit.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js
 # Tags: enforce-worktree, git-worktree, scope:issue-specific
 #

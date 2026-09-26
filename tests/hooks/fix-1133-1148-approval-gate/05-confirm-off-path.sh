@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step, hooks/workflow-mark.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, outline, detail, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G05: CONFIRM_OUTLINE=off path (#1133). When the user has opted out of the
 # outline confirmation gate, approval is implicitly granted from a sanctioned

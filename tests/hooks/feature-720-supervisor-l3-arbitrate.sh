@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-720-supervisor-l3-arbitrate.sh
+# tests/hooks/feature-720-supervisor-l3-arbitrate.sh
 # Tests: hooks/supervisor-guard/arbitrate.js
 # Tags: supervisor, em-supervisor, layer3, arbitrate, unit, scope:issue-specific
 # L3 gap (what this test does NOT catch):

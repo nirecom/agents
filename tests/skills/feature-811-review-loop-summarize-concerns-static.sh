@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-811-review-loop-summarize-concerns-static.sh
+# tests/skills/feature-811-review-loop-summarize-concerns-static.sh
 # Tests: skills/_shared/cap-menu-dispatch.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md
 # Tags: feature, cap-menu, static-protocol, scope:issue-specific, pwsh-not-required
 #

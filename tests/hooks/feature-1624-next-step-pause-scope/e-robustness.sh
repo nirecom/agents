@@ -1,6 +1,6 @@
 # e-robustness.sh — E1-E3: malformed markers, hostile expires_at values, and the
 # [for=...] reason parser as a table (#1624).
-# Sourced by tests/feature-1624-next-step-pause-scope.sh.
+# Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh.
 # Tests: hooks/lib/next-step-pause-marker.js, hooks/lib/session-markers.js
 # Tags: next-step-pause, for-step, ttl, fail-closed, parser, regression-1624, scope:issue-specific, pwsh-not-required, TL1
 

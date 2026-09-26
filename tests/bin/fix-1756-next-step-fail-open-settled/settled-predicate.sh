@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1756-next-step-fail-open-settled/settled-predicate.sh
+# filename: tests/bin/fix-1756-next-step-fail-open-settled/settled-predicate.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io.js, bin/workflow/next-step
 # Tags: workflow, next-step, settled-status, table-driven, structural, TL2, scope:common
 #
-# Case file — sourced by tests/fix-1756-next-step-fail-open-settled.sh, which
+# Case file — sourced by tests/bin/fix-1756-next-step-fail-open-settled.sh, which
 # owns every helper and runs the shared module probe ($PROBE_OUT / s1_row).
 # Do not run standalone.
 #

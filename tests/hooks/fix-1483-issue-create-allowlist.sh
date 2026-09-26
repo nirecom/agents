@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1483-issue-create-allowlist.sh
+# tests/hooks/fix-1483-issue-create-allowlist.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
 #

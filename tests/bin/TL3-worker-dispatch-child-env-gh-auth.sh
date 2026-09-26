@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-child-env-gh-auth.sh
+# tests/bin/TL3-worker-dispatch-child-env-gh-auth.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, config-path, gh-cli, auth-resolution, real-environment, TL3, scope:common
 #

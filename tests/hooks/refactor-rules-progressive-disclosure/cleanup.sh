@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: rules/coding.md, rules/docs.md
 # Tags: rules, cleanup, scope:common
-# Part of tests/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
+# Part of tests/hooks/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
 # Test 9: post-conversion cleanup — relocation stub deleted, hub files unconditional.
 
 echo "=== Test 9: Cleanup and hub-file invariants ==="

@@ -1,7 +1,7 @@
 # Group A: the PRIMARY FILTER is target survival, not issue state (#1833)
 # Tests: bin/audit-tests.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, primary-filter, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # One fixture repo carries every survival verdict at once so a single run
 # proves the filter partitions the input set (CPR-SC: the six verdicts are

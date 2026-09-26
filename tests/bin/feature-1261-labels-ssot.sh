@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-1261-labels-ssot.sh
+# tests/bin/feature-1261-labels-ssot.sh
 # Tests: bin/github-issues/propagate-labels.sh
 # Tags: labels-ssot, propagation, github-issues, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the feature-1261-labels-ssot split suite.
-# All logic lives in tests/feature-1261-labels-ssot/ per rules/coding/file-split.md.
+# All logic lives in tests/bin/feature-1261-labels-ssot/ per rules/coding/file-split.md.
 # Each split group also runs standalone.
 #
 # L3 gap (what this test does NOT catch):

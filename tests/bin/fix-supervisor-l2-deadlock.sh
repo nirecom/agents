@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-l2-deadlock.sh
+# tests/bin/fix-supervisor-l2-deadlock.sh
 # Tests: bin/supervisor-report, hooks/lib/resolve-workflow-session-id.js, hooks/supervisor-guard.js, hooks/lib/supervisor-report-format.js
 # Tags: supervisor, session-id-routing, scope:issue-specific
 # L3 gap (what this test does NOT catch):

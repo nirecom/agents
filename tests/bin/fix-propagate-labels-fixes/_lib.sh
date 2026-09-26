@@ -1,5 +1,5 @@
 # Shared test infrastructure for fix-propagate-labels-fixes tests.
-# Sourced by tests/fix-propagate-labels-fixes.sh — not run standalone.
+# Sourced by tests/bin/fix-propagate-labels-fixes.sh — not run standalone.
 
 AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 TARGET="${PROPAGATE_LABELS_SH:-$AGENTS_DIR/bin/github-issues/propagate-labels.sh}"

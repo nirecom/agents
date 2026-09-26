@@ -1,4 +1,4 @@
-# tests/prompt-bash-node-calling-convention/template-pairs.sh
+# tests/install/prompt-bash-node-calling-convention/template-pairs.sh
 # Tests: install/lib/settings-allow-rules.js
 # Tags: install, settings, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # T26: the pair invariant, asserted on the template table itself. Sourced by the suite

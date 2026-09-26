@@ -1,4 +1,4 @@
-# tests/feature-2339-sweep-plan-headings/d-tests.sh
+# tests/bin/feature-2339-sweep-plan-headings/d-tests.sh
 # Sourced by feature-2339-sweep-plan-headings.sh
 # D1-D7: dry-run, --fix normalize, reorder, content preservation, non-outline, preamble.
 

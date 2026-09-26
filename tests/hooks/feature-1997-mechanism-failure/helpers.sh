@@ -3,7 +3,7 @@
 # Tags: mechanism-failure, stall-detection, supervisor-report, stall-reported, regression-1997, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
 # State seeding, detector/reporter drivers and ledger readers for the #1997
-# mechanism-failure suite. Sourced by tests/feature-1997-mechanism-failure.sh;
+# mechanism-failure suite. Sourced by tests/hooks/feature-1997-mechanism-failure.sh;
 # expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
 
 MF_NODE="$_AGENTS_DIR_NODE/hooks/lib/mechanism-failure.js"

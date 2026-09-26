@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-harness-namespace-guard.sh
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh, tests/bin-concern-ledger-reducer.sh
+# tests/tests/bin-concern-ledger-harness-namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh, tests/bin/bin-concern-ledger-reducer.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, pwsh-not-required
 set -uo pipefail
 
@@ -17,9 +17,9 @@ set -uo pipefail
 # that false-positives turns that suite red before merge.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-reducer"
 GUARD="$SUITE_DIR/namespace-guard.sh"
-DISPATCHER="$AGENTS_ROOT/tests/bin-concern-ledger-reducer.sh"
+DISPATCHER="$AGENTS_ROOT/tests/bin/bin-concern-ledger-reducer.sh"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 TIMEOUT="$AGENTS_ROOT/bin/run-with-timeout.sh"
 CASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-concern-ledger-harness-namespace-guard"

@@ -1,7 +1,7 @@
-# tests/fix-2025-safe-plans-path/contained-ops.sh
+# tests/bin/fix-2025-safe-plans-path/contained-ops.sh
 # Tests: bin/lib/safe-plans-path.sh
 # Tags: safe-plans-path, containment, symlink, security, scope:issue-specific, pwsh-not-required
-# Sourced by tests/fix-2025-safe-plans-path.sh.
+# Sourced by tests/bin/fix-2025-safe-plans-path.sh.
 
 echo ""
 echo "--- sp 6: sp_contained_* — refusal and failure are different answers ---"

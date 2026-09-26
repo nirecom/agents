@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-review-tests-choke-point.sh
+# tests/skills/feat-2218-review-tests-choke-point.sh
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh, hooks/lib/handoff-artifact.js
 # Tags: review-tests, handoff, choke-point, class-d, exit-code, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

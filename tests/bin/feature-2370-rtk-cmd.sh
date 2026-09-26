@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/feature-2370-rtk-cmd.sh
+# tests/bin/feature-2370-rtk-cmd.sh
 # Tests: bin/rtk-cmd
 # Tags: rtk, wrapper, bin, scope:issue-specific, dup-group-keep:distinct-layer
 
 # TL3 gap (what this test does NOT catch):
 # - Uses a FAKE rtk binary; does NOT verify real rtk output compression or
 #   native audit evidence (e.g., hooks/lib/rtk-guard-audit.js log entries).
-# - That residual gap is covered by tests/TL3-rtk-cmd-real-binary.sh (RUN_TL3-gated).
+# - That residual gap is covered by tests/bin/TL3-rtk-cmd-real-binary.sh (RUN_TL3-gated).
 # Closest-to-action mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED.
 
 set -euo pipefail

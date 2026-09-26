@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2134-command-ir-equivalence/consumer-contract.sh
+# tests/hooks/feature-2134-command-ir-equivalence/consumer-contract.sh
 # Tests: hooks/lib/command-ir.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/lib/bash-write-patterns.js, hooks/lib/bash-write-targets.js
 # Tags: hook, command-ir, equivalence, snapshot, consumer-contract, TL1, scope:issue-specific
 #

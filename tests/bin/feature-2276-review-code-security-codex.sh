@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2276-review-code-security-codex.sh
+# tests/bin/feature-2276-review-code-security-codex.sh
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/format-params.sh, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: review-loop, security-code, concern-ledger, prestaged, issue-2276, TL2, scope:issue-specific, pwsh-not-required
 #

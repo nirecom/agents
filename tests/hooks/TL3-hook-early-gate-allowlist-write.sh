@@ -2,7 +2,7 @@
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/lib/subagent-detect.js, hooks/lib/claude-scratchpad-base.js, hooks/block-clearance-token-write.js
 # Tags: workflow-gate, early-gate, allowlist, plans-dir, scratchpad, subagent, clearance-token, pre-tool-use, hook, security, TL3, run-e2e, scope:issue-specific
 # Real-wiring seam test for the #2108 write allowlist. The sibling
-# tests/fix-2108-subagent-artifact-write-path.sh asserts each hook's verdict from
+# tests/hooks/fix-2108-subagent-artifact-write-path.sh asserts each hook's verdict from
 # synthetic stdin; that cannot see mis-registration (wrong event/matcher/absent) and
 # cannot see whether an APPROVED write actually reaches the disk — which is the whole
 # point of #2108, a pre-init subagent left with no legal write target. The observables

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-session-id-precedence.sh
+# tests/bin/feature-workflow-init-driver/driver-session-id-precedence.sh
 # Tests: bin/workflow/workflow-init-driver, bin/resolve-session-id
 # Tags: workflow-init, driver, session-id, ssot, scope:issue-specific
 

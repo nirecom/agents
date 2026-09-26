@@ -1,7 +1,7 @@
-# tests/feature-2119-settings-allow-ssot/merger-contract.sh
+# tests/install/feature-2119-settings-allow-ssot/merger-contract.sh
 # Tests: install/lib/settings-assembly.js, install/assemble-settings.js
 # Tags: install, settings, permissions, merge, scope:issue-specific, pwsh-not-required, TL2
-# T34: mergeSettings beyond permissions.allow. Sourced by tests/feature-2119-settings-allow-ssot.sh,
+# T34: mergeSettings beyond permissions.allow. Sourced by tests/install/feature-2119-settings-allow-ssot.sh,
 # which owns PASS/FAIL/ROWS and assert_eq; the fixture helpers come from generator.sh.
 
 T34_FX=""

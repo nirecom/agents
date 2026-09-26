@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-1611-verbose-prompt-injection/adversarial-and-hygiene.sh
+# tests/hooks/feature-1611-verbose-prompt-injection/adversarial-and-hygiene.sh
 # Tests: hooks/lib/verbose-prompt.js, hooks/session-start.js, hooks/workflow-state/state-io.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
 #
-# Fragment of tests/feature-1611-verbose-prompt-injection.sh — sourced by the
+# Fragment of tests/hooks/feature-1611-verbose-prompt-injection.sh — sourced by the
 # parent, not run directly; cases run at source time. Owns groups J (adversarial
 # session IDs: traversal / shell metacharacters / control characters), K
 # (state-write failure and atomic-write hygiene) and I (CPR-SSOT drift check on

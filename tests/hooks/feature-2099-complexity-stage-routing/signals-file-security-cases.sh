@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/signals-file-security-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/signals-file-security-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, cli, security, signals-file, path-traversal, secret-leakage, adversarial, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER traversal-attack-cases.sh (d2099t_snapshot comes from there).

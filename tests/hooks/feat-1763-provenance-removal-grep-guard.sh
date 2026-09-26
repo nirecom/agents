@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1763-provenance-removal-grep-guard.sh
+# tests/hooks/feat-1763-provenance-removal-grep-guard.sh
 # Tests: hooks/lib/issue-provenance-keys.js, bin/github-issues/issue-provenance, skills/issue-create/SKILL.md, settings.json, .env.example
 # Tags: issue-create, provenance-removal, dead-code-guard, repo-wide-scan, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

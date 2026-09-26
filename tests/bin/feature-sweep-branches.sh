@@ -1,11 +1,11 @@
 #!/bin/bash
-# tests/feature-sweep-branches.sh
+# tests/bin/feature-sweep-branches.sh
 # Tests: bin/sweep-branches.sh, hooks/enforce-worktree/branch-delete-guard.js
 # Tags: sweep, branch, maintenance, bin, git, remote, scope:common
 #
 # Dispatcher only (file-split.md Pattern A) — test bodies + shared helpers
-# live in tests/feature-sweep-branches/; each group runs standalone too, e.g.
-# bash tests/feature-sweep-branches/core.sh. Aggregates each group's exit
+# live in tests/bin/feature-sweep-branches/; each group runs standalone too, e.g.
+# bash tests/bin/feature-sweep-branches/core.sh. Aggregates each group's exit
 # code and "Results: N passed, M failed" line.
 
 set -uo pipefail

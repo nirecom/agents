@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/test-route-destination.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases F1-F8 (TL1): direct calls into the source-only routing library, for the
 # boundaries the CLI's TSV cannot express — rejection statuses, key equality and
 # the rank/viable predicates as standalone functions.

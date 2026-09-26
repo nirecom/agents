@@ -1,7 +1,7 @@
 # Group M: delete-gate interactions on partial-orphan (C3) (#2081)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, e2e, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # partial-orphan must pass trp_delete_gate exactly like whole orphan. An
 # issue-specific feature-<N> file with issue N OPEN is held (hold-issue-active):

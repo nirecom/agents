@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, path-edges, deleted, renamed, filenames, injection, prompt-injection, security, scope:issue-specific, pwsh-not-required, TL2
 # S — WHAT HAPPENS WHEN THE PATHS THEMSELVES ARE THE HARD PART. The rewrite replaces "take the whole diff and cut it" with "list changed paths, then ask git for each path's chunk", which buys ordering but adds two liabilities: (1) a listed path need not exist on disk or match on both sides — deleted/renamed/empty files must survive a naive per-path `git diff` (S1); (2) every path is interpolated into a command and printed into a report a model reads as instructions — S2 covers nothing a filename says may execute or forge a report line, S3 covers the trusted/untrusted prompt boundary the untrusted material cannot move.

@@ -1,5 +1,5 @@
 "use strict";
-// Driver for tests/feature-2170-lib-extractions.sh (#2170 round-2, item C10).
+// Driver for tests/hooks/feature-2170-lib-extractions.sh (#2170 round-2, item C10).
 // Modes (print hit | miss, or a scalar); ERROR:<msg> = a predicate threw.
 //   --dotenv <cmd>     dotenv-check.js        checkBashCommand
 //   --memory <cmd>     memory-path-check.js   bashHitsMemory

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-round5-stdout-attribution.sh
+# tests/hooks/fix-1273-round5-stdout-attribution.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/exec-model.js
 # Tags: workflow, tests, runner, hook, classifier, provenance, worker-dispatch, stdout-attribution, security, TL1, TL2, scope:common
 #
@@ -41,7 +41,7 @@
 #
 # ==== H1b / N1c TENSION NOTE — READ BEFORE IMPLEMENTING THE FIX ====
 # H1b is in DIRECT tension with a row this file must not and does not edit:
-# `tests/fix-1273-round4-emitter-ambiguity.sh` case
+# `tests/hooks/fix-1273-round4-emitter-ambiguity.sh` case
 # `N1c/control-same-emitter-twice-is-not-ambiguous`, which pins "two verifying
 # positions naming the SAME emitter keep completing". H1b is exactly that shape
 # and must NOT complete. Both cannot hold under a fix expressed purely at the
@@ -72,7 +72,7 @@
 #     concatenated in the order these fixtures assume; the stdout is synthesised
 #     here because the hook's WINDOWING decision, not the shell, is under test.
 #   - Whether a real `printf` on the host emits the exact bytes assumed (Windows
-#     shell quoting, `\n` handling). tests/TL3-worker-dispatch-run-tests.sh is the
+#     shell quoting, `\n` handling). tests/bin/TL3-worker-dispatch-run-tests.sh is the
 #     gated tier for the real-invocation shape.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.

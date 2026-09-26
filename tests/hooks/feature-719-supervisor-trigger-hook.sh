@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-719-supervisor-trigger-hook.sh
+# tests/hooks/feature-719-supervisor-trigger-hook.sh
 # Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, hook, layer2
 # RED for issue #719.

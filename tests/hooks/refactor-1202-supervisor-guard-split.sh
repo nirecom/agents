@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-1202-supervisor-guard-split.sh
+# tests/hooks/refactor-1202-supervisor-guard-split.sh
 # Tests: hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js
 # Tags: supervisor, em-supervisor, hook, refactor, scope:issue-specific
 #

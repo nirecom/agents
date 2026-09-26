@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-gate-unstaged-tracked.sh
+# tests/hooks/feature-workflow-gate-unstaged-tracked.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/staged-evidence.js
 # Tags: workflow-gate, hook, gate1, unstaged-tracked, git, bin
 #

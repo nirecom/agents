@@ -3,7 +3,7 @@
 # ===========================================================================
 # Group 5: P1-P5 — Concern 3 (HIGH) + Concern 7 (MEDIUM): table-driven
 # path-prefix matching, per skills/_shared/test-design.md "Table-Driven
-# Tests" and tests/feature-833-review-tests-sentinel-ssot.sh precedent. Each
+# Tests" and tests/hooks/feature-833-review-tests-sentinel-ssot.sh precedent. Each
 # row stages exactly ONE brand-new file at <path> (no deletion at all — this
 # is a pure path-filter check, orthogonal to the #1068 deletion bug) and
 # asserts whether computeStagedTestsToken treats it as an in-scope tests/

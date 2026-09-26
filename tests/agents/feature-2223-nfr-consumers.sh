@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-consumers.sh
+# tests/agents/feature-2223-nfr-consumers.sh
 # Tests: agents/outline-reviewer.md, agents/detail-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, agents/outline-planner.md, agents/detail-planner.md, agents/lib/nfr-severity-calibration.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
 # Tags: scope:issue-specific, TL2, nfr, static, pwsh-not-required
 # Static/structural coverage for scope 2/3 consumers: the shared operational doc

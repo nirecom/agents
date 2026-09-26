@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-ask-rule.sh
+# tests/hooks/feature-workflow-off-ask-rule.sh
 # Tests: hooks/lib/sentinel-patterns.js
 # Tags: workflow, gate, hook, sentinel, settings
 #

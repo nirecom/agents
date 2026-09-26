@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/body-file-mode.sh
+# tests/bin/feat-1699-meta-parent-guard/body-file-mode.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh
 # Tags: issue-create, dispatch, sibling, tmpfile, permissions, leak, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

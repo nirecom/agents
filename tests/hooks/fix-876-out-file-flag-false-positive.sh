@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-876-out-file-flag-false-positive.sh
+# tests/hooks/fix-876-out-file-flag-false-positive.sh
 # Tests: hooks/lib/bash-write-patterns.js
 # Tags: hook, classify, scope:issue-specific
 #
