@@ -199,7 +199,10 @@ if (isCommandTool(toolName)) {
   repoRoot = result.repoRoot;
   _writeDetector = result.writeDetector;
 } else if (isEditWriteTool(toolName)) {
-  repoRoot = handleEditWrite({ input, toolName, toolInput, _toolCwd, done, reportContext: _reportContext, resolveSessionId });
+  repoRoot = handleEditWrite({
+    input, toolName, toolInput, _toolCwd, done, reportContext: _reportContext, resolveSessionId,
+    sessionCtx: { sessionId: input.session_id, transcriptPath: input.transcript_path },
+  });
 } else {
   done(); // unrecognised tool — allow
 }

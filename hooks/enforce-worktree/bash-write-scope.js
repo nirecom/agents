@@ -19,6 +19,8 @@ const {
 const {
   areAllBashTargetsUnderWorkflowDir,
   bashTargetsHitProtectedMarker,
+  targetsHitOtherSessionWorkflowState,
+  OTHER_SESSION_STATE_REASON,
 } = require("./bash-write-scope/marker-gate");
 const {
   isWriteTargetAllExcluded,
@@ -43,4 +45,6 @@ module.exports = {
   areAllWriteSegmentsOutsideSessionScope,
   isGhWriteCommand,
   bashTargetsHitProtectedMarker,
+  targetsHitOtherSessionWorkflowState,
+  OTHER_SESSION_STATE_REASON,
 };

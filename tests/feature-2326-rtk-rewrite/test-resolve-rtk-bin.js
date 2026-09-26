@@ -21,6 +21,10 @@ function check(name, fn) {
 delete process.env.RTK_BIN;
 const never = () => false;
 const only = (target) => (p) => p === target;
+// #2352: without an injectable PATH lookup the candidate cases below depended on
+// the host (a real `rtk` on PATH shadowed every candidate). whichFn contract:
+// `() => string|null`; a throw is treated as not-found.
+const notOnPath = () => { throw new Error("not on PATH"); };
 
 check("priority 0: RTK_BIN wins", () => {
   process.env.RTK_BIN = "/custom/rtk";
@@ -32,15 +36,36 @@ check("priority 0: RTK_BIN wins", () => {
 });
 
 check("homebrew apple-silicon candidate", () => {
-  assert.strictEqual(resolveRtkBin(only("/opt/homebrew/bin/rtk")), "/opt/homebrew/bin/rtk");
+  assert.strictEqual(resolveRtkBin(only("/opt/homebrew/bin/rtk"), notOnPath), "/opt/homebrew/bin/rtk");
 });
 
 check("homebrew intel candidate", () => {
-  assert.strictEqual(resolveRtkBin(only("/usr/local/bin/rtk")), "/usr/local/bin/rtk");
+  assert.strictEqual(resolveRtkBin(only("/usr/local/bin/rtk"), notOnPath), "/usr/local/bin/rtk");
 });
 
 check("linuxbrew candidate", () => {
-  assert.strictEqual(resolveRtkBin(only("/home/linuxbrew/.linuxbrew/bin/rtk")), "/home/linuxbrew/.linuxbrew/bin/rtk");
+  assert.strictEqual(resolveRtkBin(only("/home/linuxbrew/.linuxbrew/bin/rtk"), notOnPath), "/home/linuxbrew/.linuxbrew/bin/rtk");
+});
+
+check("C3. whichFn result wins over existing brew candidates", () => {
+  assert.strictEqual(resolveRtkBin(() => true, () => "/which/rtk"), "/which/rtk");
+});
+
+check("C4. whichFn → null is not-found; falls through to brew candidates", () => {
+  assert.strictEqual(resolveRtkBin(only("/opt/homebrew/bin/rtk"), () => null), "/opt/homebrew/bin/rtk");
+});
+
+check("C5. whichFn throws and no candidate exists → null (host-independent)", () => {
+  assert.strictEqual(resolveRtkBin(never, notOnPath), null);
+});
+
+check("C6. RTK_BIN still wins over whichFn", () => {
+  process.env.RTK_BIN = "/custom/rtk";
+  try {
+    assert.strictEqual(resolveRtkBin(never, () => "/which/rtk"), "/custom/rtk");
+  } finally {
+    delete process.env.RTK_BIN;
+  }
 });
 
 if (process.platform === "win32") {
@@ -51,10 +76,10 @@ if (process.platform === "win32") {
   const programsPath = path.join(local, "Programs", "rtk-ai", "rtk", "rtk.exe");
 
   check("winget Links candidate (win32)", () => {
-    assert.strictEqual(resolveRtkBin(only(linksPath)), linksPath);
+    assert.strictEqual(resolveRtkBin(only(linksPath), notOnPath), linksPath);
   });
   check("winget Programs candidate (win32)", () => {
-    assert.strictEqual(resolveRtkBin(only(programsPath)), programsPath);
+    assert.strictEqual(resolveRtkBin(only(programsPath), notOnPath), programsPath);
   });
 
   if (savedLocal === undefined) delete process.env.LOCALAPPDATA;
