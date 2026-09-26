@@ -14,22 +14,9 @@ set -u
 #     idempotency, issue-not-found) is not exercised here.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
