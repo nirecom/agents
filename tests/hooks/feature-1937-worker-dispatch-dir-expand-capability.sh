@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1937-worker-dispatch-dir-expand-capability.sh
+# tests/hooks/feature-1937-worker-dispatch-dir-expand-capability.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, worktree-backup, dir_expand, capability, type-validation, TL2, dup-group-keep:size-hard-limit, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1937-worktree-backup-dir-expand.sh
+# tests/bin/feature-1937-worktree-backup-dir-expand.sh
 # Tests: bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, worktree-backup, dir_expand, read-budget, enumeration-budget, TL2, scope:issue-specific
 #

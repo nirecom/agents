@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1937-resolve-dir-expand.sh
+# tests/skills/feature-1937-resolve-dir-expand.sh
 # Tests: skills/worktree-end/scripts/resolve-dir-expand.js, hooks/lib/verbose-prompt.js
 # Tags: worktree-end, dir_expand, verbose-prompt, session-id-resolution, TL1, scope:issue-specific
 #
