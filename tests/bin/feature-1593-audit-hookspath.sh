@@ -44,6 +44,7 @@ has() { case "$A_OUT" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
 # ─────────────────────────────────────────────────────────────────────────────
 # F1: a root holding a repo with core.hooksPath=/dev/null → flagged by path.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f1-devnull" "bin/audit-hookspath-neutralization.sh"
 R1="$BROOT/r1"; mkdir -p "$R1"
 mk_neutralized "$R1/bad1repo" /dev/null
 run_audit --roots "$R1"
@@ -54,10 +55,12 @@ elif has "bad1repo"; then
 else
     fail "F1: expected bad1repo flagged, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F2: a root holding a repo with core.hooksPath UNSET → clean, not reported.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f2-unset" "bin/audit-hookspath-neutralization.sh"
 R2="$BROOT/r2"; mkdir -p "$R2"
 mk_repo "$R2/clean2repo"
 run_audit --roots "$R2"
@@ -68,10 +71,12 @@ elif ! has "clean2repo"; then
 else
     fail "F2: clean repo wrongly flagged, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F3: a root holding a NON-git directory → skipped, no crash, nothing reported.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f3-non-git-dir" "bin/audit-hookspath-neutralization.sh"
 R3="$BROOT/r3"; mkdir -p "$R3/plain3dir"
 printf 'x\n' > "$R3/plain3dir/file.txt"
 run_audit --roots "$R3"
@@ -82,12 +87,14 @@ elif ! has "plain3dir"; then
 else
     fail "F3: non-git dir wrongly reported, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F4: mixed root (one neutralized + one clean) → only the neutralized repo is
 #     reported, AND its core.hooksPath is UNCHANGED after the run (report-only:
 #     the scanner never unsets — no implicit state change to a PUBLIC repo).
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f4-mixed-root" "bin/audit-hookspath-neutralization.sh"
 R4="$BROOT/r4"; mkdir -p "$R4"
 mk_neutralized "$R4/bad4repo" /dev/null
 mk_repo "$R4/good4repo"
@@ -101,10 +108,12 @@ elif has "bad4repo" && ! has "good4repo" && [ "$before" = "$after" ]; then
 else
     fail "F4: expected bad4repo-only report + no unset, rc=$A_RC before=[$before] after=[$after] out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F5: core.hooksPath set to empty string → flagged (empty neutralizes hook dispatch).
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f5-empty-string" "bin/audit-hookspath-neutralization.sh"
 R5="$BROOT/r5"; mkdir -p "$R5"
 mk_neutralized "$R5/empty5repo" ""
 run_audit --roots "$R5"
@@ -115,10 +124,12 @@ elif has "empty5repo"; then
 else
     fail "F5: empty-string hooksPath not detected, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F6: core.hooksPath set to NUL (Windows equivalent of /dev/null) → flagged.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f6-nul" "bin/audit-hookspath-neutralization.sh"
 R6="$BROOT/r6"; mkdir -p "$R6"
 mk_neutralized "$R6/nul6repo" "NUL"
 run_audit --roots "$R6"
@@ -129,11 +140,13 @@ elif has "nul6repo"; then
 else
     fail "F6: NUL hooksPath not detected, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F7: core.hooksPath set to an out-of-tree absolute path → flagged.
 #     Any absolute path that is not the repo's own .git/hooks is a bypass.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f7-outtree-absolute" "bin/audit-hookspath-neutralization.sh"
 R7="$BROOT/r7"; mkdir -p "$R7"
 mk_neutralized "$R7/outtree7repo" "/tmp/external-hooks"
 run_audit --roots "$R7"
@@ -144,12 +157,14 @@ elif has "outtree7repo"; then
 else
     fail "F7: out-of-tree hooksPath not detected, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # F8: core.hooksPath set to the repo's own .git/hooks (in-tree) → CLEAN, not
 #     reported. An in-tree override is not a bypass; it still exercises the
 #     installed hooks. This guards against over-reporting.
 # ─────────────────────────────────────────────────────────────────────────────
+case_begin "f8-intree-clean" "bin/audit-hookspath-neutralization.sh"
 R8="$BROOT/r8"; mkdir -p "$R8"
 git init -q "$R8/intree8repo"
 # Set hooksPath to the repo's own .git/hooks — an in-tree, non-neutralizing path.
@@ -163,6 +178,7 @@ elif ! has "intree8repo"; then
 else
     fail "F8: in-tree hooksPath wrongly flagged as neutralized, rc=$A_RC out=[$A_OUT]"
 fi
+case_end
 
 echo ""
 echo "─────────────────────────────────────────"
