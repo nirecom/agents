@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2308-ensure-board-card-gitlab.sh
+# tests/bin/feature-2308-ensure-board-card-gitlab.sh
 # Tests: bin/github-issues/ensure-board-card.sh
 # Tags: scope:issue-specific, gitlab, forge, ensure-board-card, board-card, TL2, dup-group-keep:size-hard-limit
 # Issue #2308 — the GitLab skip path of ensure-board-card.sh. GitLab Free has no

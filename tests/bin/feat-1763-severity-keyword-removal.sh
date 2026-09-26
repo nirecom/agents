@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1763-severity-keyword-removal.sh
+# tests/bin/feat-1763-severity-keyword-removal.sh
 # Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml
 # Tags: issue-create, severity, keyword-scan, label-policy, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

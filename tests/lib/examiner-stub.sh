@@ -18,10 +18,10 @@
 # one), the stub emits an empty nonce, the parser discards it, and the suite fails —
 # which is exactly the signal a nonce regression should produce.
 #
-# Sourced by: tests/feat-1608-off-clearance-mint.sh,
-#             tests/fix-1626-claim-consume/{cases-claim,cases-recovery}.sh,
-#             tests/fix-1780-round4-mint-schema.sh,
-#             tests/fix-1780-round10-verdict-nonce.sh
+# Sourced by: tests/bin/feat-1608-off-clearance-mint.sh,
+#             tests/hooks/fix-1626-claim-consume/{cases-claim,cases-recovery}.sh,
+#             tests/bin/fix-1780-round4-mint-schema.sh,
+#             tests/bin/fix-1780-round10-verdict-nonce.sh
 
 # examiner_nonce_preamble — shell lines (for injection into a stub) that consume the
 # prompt on stdin and leave the invocation nonce in $_n. Prefers the labelled

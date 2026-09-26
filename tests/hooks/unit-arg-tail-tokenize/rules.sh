@@ -1,11 +1,11 @@
-# tests/unit-arg-tail-tokenize/rules.sh
+# tests/hooks/unit-arg-tail-tokenize/rules.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js
 # Tags: hook, worktree, enforce, arg-tail, unit, security, classifier, scope:common
 #
 # STATUS: RED until C3 lands — every row fails with
 # `ERROR: require arg-tail-guard.js: Cannot find module ...`.
 #
-# Sourced by tests/unit-arg-tail-tokenize.sh. Sections 8-9: rejectsUnsafeToken
+# Sourced by tests/hooks/unit-arg-tail-tokenize.sh. Sections 8-9: rejectsUnsafeToken
 # rule-by-rule, the UNSAFE_PROFILES table, and rejectsUnsafeArgTail per profile.
 
 run_tokenize_rule_cases() {

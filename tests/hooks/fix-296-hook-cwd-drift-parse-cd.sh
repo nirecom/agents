@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-296-hook-cwd-drift-parse-cd.sh
+# tests/hooks/fix-296-hook-cwd-drift-parse-cd.sh
 # Tests: hooks/lib/parse-git-args.js
 # Tags: hook, bin, git, tests, scope:common
 # parseCdCommand(str): extracts the absolute path from a leading "cd <path> && ..."/";",

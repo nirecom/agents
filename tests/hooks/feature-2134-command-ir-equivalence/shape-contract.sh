@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2134-command-ir-equivalence/shape-contract.sh
+# tests/hooks/feature-2134-command-ir-equivalence/shape-contract.sh
 # Tests: hooks/lib/command-ir.js
 # Tags: hook, command-ir, equivalence, snapshot, TL1, scope:issue-specific
 #

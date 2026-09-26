@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tests/refactor-1581-run-tl3.sh
-# Tests: bin/select-tests.sh, .env.example, tests/TL3-hook-clearance-token-write.sh, tests/TL3-hook-forge-target-ownership.sh, tests/TL3-hook-post-compact.sh, tests/TL3-hook-session-start.sh, tests/TL3-hook-stop-confirm-plan-guard.sh, tests/TL3-hook-stop-final-report-guard.sh, tests/TL3-hook-subagent-start.sh, tests/TL3-hook-workflow-mark.sh
+# tests/bin/refactor-1581-run-tl3.sh
+# Tests: bin/select-tests.sh, .env.example, tests/hooks/TL3-hook-clearance-token-write.sh, tests/hooks/TL3-hook-forge-target-ownership.sh, tests/hooks/TL3-hook-post-compact.sh, tests/hooks/TL3-hook-session-start.sh, tests/hooks/TL3-hook-stop-confirm-plan-guard.sh, tests/hooks/TL3-hook-stop-final-report-guard.sh, tests/hooks/TL3-hook-subagent-start.sh, tests/hooks/TL3-hook-workflow-mark.sh
 # Tags: test-selection, tl3-toggle, run-tl3, scope:issue-specific
 #
 # TL3 gap: actual get-config-var/.env invocation and AGENTS_CONFIG_DIR≠AGENTS_DIR
@@ -165,7 +165,7 @@ $out"
 }
 
 # C5: RUN_TL3=on + stem match on hooks/workflow-mark.js (stems to "workflow-mark",
-# which matches tests/TL3-hook-workflow-mark.sh) → both the stem-match path and the
+# which matches tests/hooks/TL3-hook-workflow-mark.sh) → both the stem-match path and the
 # RUN_TL3 unconditional-append path try to include the same file.
 # The shared `seen` map must prevent it from appearing twice.
 # Also assert count == 1.

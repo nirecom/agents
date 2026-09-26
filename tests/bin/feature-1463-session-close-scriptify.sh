@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1463-session-close-scriptify.sh
+# tests/bin/feature-1463-session-close-scriptify.sh
 # Tests: bin/render-final-report.js, bin/session-close-detect-wf-meta.js, bin/session-close-render-sc7.js, hooks/lib/final-report-schema.js, hooks/stop-final-report-guard.js, skills/session-close/SKILL.md
 # Tags: scope:issue-specific
 #

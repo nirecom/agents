@@ -1,7 +1,7 @@
-# tests/feature-2068-round-counter-ssot/counter-ownership.sh
+# tests/bin/feature-2068-round-counter-ssot/counter-ownership.sh
 # Tests: bin/run-codex-review-loop, skills/make-detail-plan/scripts/run-codex-review-loop.sh
 # Tags: codex-review-loop, round-counter, ssot, TL2, scope:issue-specific
-# Sourced by tests/feature-2068-round-counter-ssot.sh, whose ROOT fixture,
+# Sourced by tests/bin/feature-2068-round-counter-ssot.sh, whose ROOT fixture,
 # reviewer stub and rcs_* helpers are reused.
 #
 # Ownership is only observable over a whole loop — one call cannot show whether

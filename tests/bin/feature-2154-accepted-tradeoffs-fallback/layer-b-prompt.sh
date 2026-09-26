@@ -2,10 +2,10 @@
 # Tags: codex, review, prompt-assembly, accepted-tradeoffs, scope:issue-specific
 # MOCK LAYER B (cases 7-13, 16-17) — prompt ASSEMBLY. bin/review-plan-codex runs for
 # real; only the `codex` CLI on PATH is mocked, capturing the stdin prompt
-# (precedent: tests/feature-review-plan-codex.sh MOCK_BIN + PATH prepend).
+# (precedent: tests/bin/feature-review-plan-codex.sh MOCK_BIN + PATH prepend).
 # This layer — not a source grep — owns the POSITIVE assertion that the #2154
 # limiting wording reaches codex; cases 9-11 prove it is scoped to test-review.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 echo "=== Layer B: prompt assembly (real review-plan-codex, only codex mocked) ==="
 
 MOCK_BIN="$TMPROOT/mock-bin"

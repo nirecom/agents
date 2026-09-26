@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-436-compose-doc-append.sh
+# tests/bin/feature-436-compose-doc-append.sh
 # Tests: bin/compose-doc-append-entry, hooks/lib/worktree-notes.js
 # Tags: worktree, docs, append, history, compose
 #

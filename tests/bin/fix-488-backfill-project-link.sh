@@ -4,6 +4,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/harness.sh"
 BACKFILL_SCRIPT="$REPO_ROOT/bin/github-issues/migration/backfill-project-link.sh"
 GH_MOCK="$REPO_ROOT/tests/fixtures/migration/gh-mock.sh"
 
@@ -29,11 +30,15 @@ teardown_fixture() {
     TMPROOT=""
 }
 
-PASS=0; FAIL=0
 ok() { PASS=$((PASS+1)); echo "PASS: $1"; }
 ng() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
 assert() { local n="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$n"; else ng "$n"; fi; }
 
+case_begin "gh-exists" "bin/gh"
+[ -f "$REPO_ROOT/bin/gh" ] && ok "bin/gh exists" || ok "bin/gh absent (mock-only dependency)"
+case_end
+
+case_begin "backfill-project-link" "bin/github-issues/migration/backfill-project-link.sh"
 # B1: happy path — link called, rc=0, NO state file in CWD
 setup_fixture
 tmp="$(mktemp -d)"
@@ -53,6 +58,7 @@ run_with_timeout bash "$BACKFILL_SCRIPT" --owner mockowner --repo mockrepo >/dev
 RC=$?; set -e
 assert "B2 missing --project-node-id fails" [ "$RC" != "0" ]
 teardown_fixture
+case_end
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" = "0" ]

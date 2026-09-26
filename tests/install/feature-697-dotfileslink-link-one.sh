@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-697-dotfileslink-link-one.sh
+# tests/install/feature-697-dotfileslink-link-one.sh
 # Tests: install/linux/dotfileslink.sh, profile-snippet.sh
 # Tags: installer, dotfileslink, _link_one, watchlist, scope:issue-specific
 #

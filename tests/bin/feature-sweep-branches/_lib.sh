@@ -1,14 +1,14 @@
 #!/bin/bash
-# tests/feature-sweep-branches/_lib.sh
+# tests/bin/feature-sweep-branches/_lib.sh
 # Shared helpers and fixtures for feature-sweep-branches test groups.
 #
 # Sourced by:
-#   - tests/feature-sweep-branches/core.sh
-#   - tests/feature-sweep-branches/no-pr.sh
-#   - tests/feature-sweep-branches/pr-state.sh
+#   - tests/bin/feature-sweep-branches/core.sh
+#   - tests/bin/feature-sweep-branches/no-pr.sh
+#   - tests/bin/feature-sweep-branches/pr-state.sh
 #
 # Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/feature-sweep-branches/core.sh
+#   bash tests/bin/feature-sweep-branches/core.sh
 #
 # This library:
 #   - sets `set -uo pipefail`
@@ -21,7 +21,7 @@
 
 set -uo pipefail
 
-# Resolve AGENTS_DIR relative to this library file (tests/feature-sweep-branches/_lib.sh
+# Resolve AGENTS_DIR relative to this library file (tests/bin/feature-sweep-branches/_lib.sh
 # → repo root is two levels up).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SWEEP="$AGENTS_DIR/bin/sweep-branches.sh"

@@ -1,4 +1,4 @@
-# tests/prompt-bash-node-calling-convention/rt0-calling-convention.sh
+# tests/install/prompt-bash-node-calling-convention/rt0-calling-convention.sh
 # Tests: skills/review-tests/SKILL.md
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # T48: RT-0's calling convention, as text, polarity included. Sourced by the suite dispatcher,

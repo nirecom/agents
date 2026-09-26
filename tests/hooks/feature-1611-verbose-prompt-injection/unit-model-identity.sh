@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-1611-verbose-prompt-injection/unit-model-identity.sh
+# tests/hooks/feature-1611-verbose-prompt-injection/unit-model-identity.sh
 # Tests: hooks/lib/model-identity.js, hooks/workflow-state/state-io.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
 #
-# Fragment of tests/feature-1611-verbose-prompt-injection.sh — sourced by the
+# Fragment of tests/hooks/feature-1611-verbose-prompt-injection.sh — sourced by the
 # parent, not run directly; the cases run at source time, so the parent's source
 # order IS the execution order. Owns the module preconditions and groups A
 # (extractModelIdFromHookInput shape tolerance), B (resolveModelId layer①) and

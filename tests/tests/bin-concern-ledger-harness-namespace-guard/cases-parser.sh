@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-harness-namespace-guard/scenarios.sh
+# Tests: tests/tests/bin-concern-ledger-harness-namespace-guard/scenarios.sh
 # Tags: concern-ledger, test-harness, namespace-guard, parser, table-driven, TL2, scope:common
 # G14 — the grader itself. nsg_has_collision decides nearly every expect_report in
 # this suite, so a permissive one false-greens all of them at once: a substring

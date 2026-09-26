@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/TL3-rtk-cmd-real-binary.sh
+# tests/bin/TL3-rtk-cmd-real-binary.sh
 # Tests: bin/rtk-cmd
 # Tags: rtk, wrapper, bin, tl3, scope:common, dup-group-keep:distinct-layer
 

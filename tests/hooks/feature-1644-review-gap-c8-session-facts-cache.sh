@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-1644-review-gap-c8-session-facts-cache.sh
+# tests/hooks/feature-1644-review-gap-c8-session-facts-cache.sh
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, hooks/workflow-state/state-io/core.js
 # Tags: tl2, workflow, session-facts, closes-issues, caching, security, path-traversal, idempotency, scope:issue-specific, pwsh-not-required
 #
 # #1644 review gap C8 (HIGH) — getClosesIssues() cache semantics and its
-# path-traversal guard. tests/feature-1644-session-facts.sh (G1-G8) covers the
+# path-traversal guard. tests/hooks/feature-1644-session-facts.sh (G1-G8) covers the
 # happy-path write-once contract; this file covers the four cases it does not:
 #   1. an explicitly EMPTY cached closes_issues (the "resolved-vs-unresolved"
 #      boundary of the `length > 0` condition),

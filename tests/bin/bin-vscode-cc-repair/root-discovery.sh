@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C4 + T5 — candidate-root discovery. C4 drives it through the real subprocess with an
 # injected fixture HOME/USERPROFILE, so main() cannot pass by ignoring resolveRoots;
 # T5 pins the exported table and the dedup stages.

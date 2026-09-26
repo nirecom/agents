@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-same-fix-crosscheck.sh
+# tests/bin/feat-1912-same-fix-crosscheck.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, validator, same-fix, schema-version, cascade, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

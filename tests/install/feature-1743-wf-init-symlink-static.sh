@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1743-wf-init-symlink-static.sh
+# tests/install/feature-1743-wf-init-symlink-static.sh
 # Tests: install/win/dotfileslink.ps1, install/linux/dotfileslink.sh, .gitignore
 # Tags: installer, symlink, wf-init, gitignore, dotfileslink, scope:issue-specific
 #

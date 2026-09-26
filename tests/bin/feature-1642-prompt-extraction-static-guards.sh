@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-prompt-extraction-static-guards.sh
+# tests/bin/feature-1642-prompt-extraction-static-guards.sh
 # Tests: .prompt-extraction-allowlist, install/path-exposed-commands.txt, docs/architecture/claude-code/marker-bypass-contract.md, bin/check-prompt-extraction
 # Tags: prompt-extraction, allowlist, ratchet, installer, docs, static, scope:issue-specific, scope:feature-1642, layer:TL1
 #

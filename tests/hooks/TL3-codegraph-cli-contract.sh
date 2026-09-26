@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-codegraph-cli-contract.sh
+# tests/hooks/TL3-codegraph-cli-contract.sh
 # Tests: hooks/lib/codegraph-boundary.js, bin/codegraph-lifecycle.js
 # Tags: TL3, codegraph, cli-contract, scope:issue-specific
 #

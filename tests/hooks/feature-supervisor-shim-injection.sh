@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-shim-injection.sh
+# tests/hooks/feature-supervisor-shim-injection.sh
 # Tests: hooks/supervisor-off-proposal-shim.js
 # Tags: supervisor, em-supervisor, shim, injection, adversarial, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
@@ -55,9 +55,9 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 _DIR="$(dirname "${BASH_SOURCE[0]}")/feature-supervisor-shim-injection"
-# shellcheck source=tests/feature-supervisor-shim-injection/c6-adversarial.sh
+# shellcheck source=tests/hooks/feature-supervisor-shim-injection/c6-adversarial.sh
 . "$_DIR/c6-adversarial.sh"
-# shellcheck source=tests/feature-supervisor-shim-injection/c4-c5.sh
+# shellcheck source=tests/hooks/feature-supervisor-shim-injection/c4-c5.sh
 . "$_DIR/c4-c5.sh"
 
 echo ""

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-929-codex-review-parse.sh
+# tests/hooks/feature-929-codex-review-parse.sh
 # Tests: hooks/lib/codex-review-parse.js
 # Tags: supervisor, em-supervisor, codex-review, parse, unit
 # RED for issue #929.

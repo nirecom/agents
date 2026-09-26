@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/commit-push/push.js
 # Tags: worker-dispatch, commit-push, push-retry, rebase-ladder, TL2, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-7: WHO PROVES THE PROGRAM IS ON ARGV?
 #
 # Round-6 routed stdin bodies by the receiving command's interpreter identity,

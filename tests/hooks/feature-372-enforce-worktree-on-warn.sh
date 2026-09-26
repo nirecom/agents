@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-372-enforce-worktree-on-warn.sh
+# tests/hooks/feature-372-enforce-worktree-on-warn.sh
 # Tests: hooks/stop-enforce-worktree-on-warn.js, settings.json
 # Tags: stop, hook, worktree, sentinel, emergency-sentinel, scope:issue-specific, pwsh-not-required, TL2
 # Tests for issue #372 — Stop hook that warns when a WORKFLOW_ENFORCE_WORKTREE_OFF

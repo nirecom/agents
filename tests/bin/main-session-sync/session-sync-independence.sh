@@ -1,6 +1,6 @@
 # Tests: bin/session-sync.sh
 # Tags: bin, git, session-sync, toggle, scope:issue-specific
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 # Contract: the SESSION_SYNC toggle gates ONLY the six *automatic* call sites
 # (profile-snippet startup fetch / codes() auto-push / install auto-init, each
 # in .sh and .ps1). The manual CLI `bin/session-sync.sh push|pull|status|reset`

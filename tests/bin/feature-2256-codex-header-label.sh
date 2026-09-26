@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-codex-header-label.sh
+# tests/bin/feature-2256-codex-header-label.sh
 # Tests: bin/review-plan-codex, bin/review-code-codex, bin/run-codex-review-loop
 # Tags: codex, status-header, codex-label, issue-2256, TL2, scope:issue-specific, pwsh-not-required
 #

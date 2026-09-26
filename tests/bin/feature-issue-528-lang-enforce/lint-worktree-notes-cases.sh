@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/lint-worktree-notes-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/lint-worktree-notes-cases.sh
 # Tests: hooks/lib/lint-worktree-notes-lang.js
 # Tags: worktree, docs, lint, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

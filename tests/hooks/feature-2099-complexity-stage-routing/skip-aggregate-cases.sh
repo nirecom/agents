@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/skip-aggregate-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/skip-aggregate-cases.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, hooks/workflow-state/state-io/projection.js
 # Tags: complexity, routing, skip-conditions, back-compat, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

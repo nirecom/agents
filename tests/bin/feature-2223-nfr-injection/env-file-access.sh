@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-injection/env-file-access.sh
+# tests/bin/feature-2223-nfr-injection/env-file-access.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/local-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, trust-boundary, pwsh-not-required
-# Case file for tests/feature-2223-nfr-injection.sh — sourced from it, never run
+# Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Two access-layer questions the rest of the suite substitutes for: a file the
 # process really may not read (EACCES, not "it is a directory"), and a .env.local

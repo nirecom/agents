@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-228-supervisor-report-cli.sh
+# tests/bin/feature-228-supervisor-report-cli.sh
 # Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, cli, report, scope:issue-specific
 # Tests for issue #228 — supervisor-report CLI integration tests.

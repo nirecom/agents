@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/provenance.sh
+# tests/hooks/feature-1733-state-event-stream/provenance.sh
 # Tests: hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io/events.js, hooks/workflow-mark/not-needed-handlers.js
 # Tags: workflow-state, event-stream, provenance, effective-state, genuine-complete, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -23,7 +23,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="prov"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"

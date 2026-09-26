@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/started-at-removed.sh
+# tests/hooks/feature-1733-state-event-stream/started-at-removed.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/step-timestamps.js
 # Tags: workflow-state, event-stream, started-at, removal, config-toggle, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -19,7 +19,7 @@
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
 
 CASE_TAG="noSA"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # Common body: mark one step twice (the transition that used to mint started_at), then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1733-state-event-stream.sh
+# tests/hooks/feature-1733-state-event-stream.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/lock.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: workflow-state, event-stream, append-only, migration, concurrency, dispatcher, scope:issue-specific, pwsh-not-required, TL2
 #

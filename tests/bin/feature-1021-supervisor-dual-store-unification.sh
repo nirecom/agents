@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1021-supervisor-dual-store-unification.sh
+# tests/bin/feature-1021-supervisor-dual-store-unification.sh
 # Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, dual-store, identity, cli, scope:issue-specific
 # L3 gap (what this test does NOT catch):

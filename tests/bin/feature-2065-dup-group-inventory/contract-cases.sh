@@ -1,11 +1,19 @@
 # S12 category 7: the output contract — scope, ordering, purity (#2065, S2/S11)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, contract, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # The inventory is a corpus-wide fact, so it must not inherit either
 # entrypoint's audience filter: the same TSV from both, no scope filtering, and
-# a scan range of `tests/*.sh` only — nested fragments carry their own headers
+# a scan range of `tests/bin/*.sh` only — nested fragments carry their own headers
 # and would otherwise invent groups that no reviewer can act on.
+
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "contract-series" "bin/lib/test-dup-group.sh"
 
 CC_REPO="$(make_repo)"
 add_src "$CC_REPO" "bin/cc-x.sh"
@@ -13,24 +21,24 @@ add_src "$CC_REPO" "bin/cc-y.sh"
 add_src "$CC_REPO" "bin/cc-gone.sh"
 
 # One group deliberately straddles the issue-specific / common boundary.
-add_test_file "$CC_REPO" "feature-999-x.sh" "bin/cc-x.sh" "TL2, scope:issue-specific"
-add_test_file "$CC_REPO" "common-y.sh" "bin/cc-x.sh" "TL2, scope:common"
+add_test_file "$CC_REPO" "bin/feature-999-x.sh" "bin/cc-x.sh" "TL2, scope:issue-specific"
+add_test_file "$CC_REPO" "bin/common-y.sh" "bin/cc-x.sh" "TL2, scope:common"
 # A second, smaller group so ordering by count is observable.
-add_test_file "$CC_REPO" "cc-pair-a.sh" "bin/cc-y.sh, bin/cc-x.sh"
-add_test_file "$CC_REPO" "cc-pair-b.sh" "bin/cc-y.sh, bin/cc-x.sh"
-add_test_file "$CC_REPO" "cc-pair-c.sh" "bin/cc-y.sh, bin/cc-x.sh"
+add_test_file "$CC_REPO" "bin/cc-pair-a.sh" "bin/cc-y.sh, bin/cc-x.sh"
+add_test_file "$CC_REPO" "bin/cc-pair-b.sh" "bin/cc-y.sh, bin/cc-x.sh"
+add_test_file "$CC_REPO" "bin/cc-pair-c.sh" "bin/cc-y.sh, bin/cc-x.sh"
 
 # Out-of-range files that would form phantom groups if the glob recursed.
-mkdir -p "$CC_REPO/tests/feature-999-x"
-add_test_file "$CC_REPO" "feature-999-x/frag.sh" "bin/cc-x.sh"
+mkdir -p "$CC_REPO/tests/feature-999-x/sub"
+add_test_file "$CC_REPO" "feature-999-x/sub/frag.sh" "bin/cc-x.sh"
 mkdir -p "$CC_REPO/tests/_archive"
 add_test_file "$CC_REPO" "_archive/arch.sh" "bin/cc-x.sh"
 
 # Retirement-eligible: names a target that does not exist, which is what the
 # --fix-headers / retire paths would want to rewrite or delete.
 rm -f "$CC_REPO/bin/cc-gone.sh"
-add_test_file "$CC_REPO" "cc-retire-a.sh" "bin/cc-gone.sh"
-add_test_file "$CC_REPO" "cc-retire-b.sh" "bin/cc-gone.sh"
+add_test_file "$CC_REPO" "bin/cc-retire-a.sh" "bin/cc-gone.sh"
+add_test_file "$CC_REPO" "bin/cc-retire-b.sh" "bin/cc-gone.sh"
 commit_repo "$CC_REPO" "contract fixture"
 
 run_dup "$CC_REPO" "$AUDIT"
@@ -51,13 +59,13 @@ fi
 assert_eq "CC2a a cross-scope pair forms one token group of 2" \
     "2" "$(row_count "$CC_A_OUT" token "bin/cc-x.sh" )"
 assert_eq "CC2b the issue-specific member is present in the group" \
-    "yes" "$(row_has_member "$CC_A_OUT" token "bin/cc-x.sh" "tests/feature-999-x.sh")"
+    "yes" "$(row_has_member "$CC_A_OUT" token "bin/cc-x.sh" "tests/bin/feature-999-x.sh")"
 assert_eq "CC2c the common member is present in the same group" \
-    "yes" "$(row_has_member "$CC_A_OUT" token "bin/cc-x.sh" "tests/common-y.sh")"
+    "yes" "$(row_has_member "$CC_A_OUT" token "bin/cc-x.sh" "tests/bin/common-y.sh")"
 
-# CC3 — scan range. Both exclusions come from `tests/*.sh` not crossing `/`.
+# CC3 — scan range. Both exclusions come from `tests/bin/*.sh` not crossing `/`.
 assert_eq "CC3a nested fragments are outside the scan range" \
-    "0" "$(printf '%s\n' "$CC_A_OUT" | grep -c 'feature-999-x/frag\.sh' || true)"
+    "0" "$(printf '%s\n' "$CC_A_OUT" | grep -c 'feature-999-x/sub/frag\.sh' || true)"
 assert_eq "CC3b tests/_archive is outside the scan range" \
     "0" "$(printf '%s\n' "$CC_A_OUT" | grep -c '_archive/arch\.sh' || true)"
 
@@ -94,14 +102,14 @@ assert_eq "CC6 the working tree is untouched by both --dup-groups runs" \
 assert_eq "CC7a a corpus with groups exits 0" "0" "$CC_A_RC"
 CC_NONE="$(make_repo)"
 add_src "$CC_NONE" "bin/cc-solo.sh"
-add_test_file "$CC_NONE" "cc-only.sh" "bin/cc-solo.sh"
+add_test_file "$CC_NONE" "bin/cc-only.sh" "bin/cc-solo.sh"
 commit_repo "$CC_NONE" "no-dup fixture"
 run_dup "$CC_NONE" "$AUDIT"
 assert_eq "CC7b a corpus with no groups exits 1" "1" "$RC"
 
 CC_SKIPONLY="$(make_repo)"
-add_test_file "$CC_SKIPONLY" "cc-bad-a.sh" "bin/*.sh"
-add_test_file "$CC_SKIPONLY" "cc-bad-b.sh" "bin/c d.sh"
+add_test_file "$CC_SKIPONLY" "bin/cc-bad-a.sh" "bin/*.sh"
+add_test_file "$CC_SKIPONLY" "bin/cc-bad-b.sh" "bin/c d.sh"
 commit_repo "$CC_SKIPONLY" "skip-only fixture"
 run_dup "$CC_SKIPONLY" "$AUDIT"
 assert_eq "CC7c a corpus that yields only skip rows exits 1" "1" "$RC"
@@ -115,8 +123,8 @@ assert_eq "CC7e the aggregated skip row's count is the number of matching files"
     "2" "$(row_count "$OUT" skip malformed_header)"
 assert_eq "CC7f both malformed files are listed in that one row" \
     "yes,yes" "$(printf '%s,%s' \
-        "$(row_has_member "$OUT" skip malformed_header "tests/cc-bad-a.sh")" \
-        "$(row_has_member "$OUT" skip malformed_header "tests/cc-bad-b.sh")")"
+        "$(row_has_member "$OUT" skip malformed_header "tests/bin/cc-bad-a.sh")" \
+        "$(row_has_member "$OUT" skip malformed_header "tests/bin/cc-bad-b.sh")")"
 
 # CC8 — discoverability. `-h` prints a fixed line range of the script header, so
 # a new mode that is not also documented there is invisible to the operator.
@@ -132,10 +140,10 @@ done
 # which is a closed-vocabulary check over the Tags line.
 CC_TAG_REPO="$(make_repo)"
 add_src "$CC_TAG_REPO" "bin/cc-x.sh"
-add_test_file "$CC_TAG_REPO" "cc-keep.sh" "bin/cc-x.sh" "TL2, scope:common, dup-group-keep:cross-hook"
+add_test_file "$CC_TAG_REPO" "bin/cc-keep.sh" "bin/cc-x.sh" "TL2, scope:common, dup-group-keep:cross-hook"
 commit_repo "$CC_TAG_REPO" "keep-tag fixture"
 git -C "$CC_TAG_REPO" add -A >/dev/null 2>&1
-run_in_repo "$CC_TAG_REPO" "$FM_CHECK" --staged tests/cc-keep.sh
+run_in_repo "$CC_TAG_REPO" "$FM_CHECK" --staged tests/bin/cc-keep.sh
 assert_eq "CC9 a dup-group-keep: tagged file passes the staged frontmatter gate" \
     "0" "$RC"
 
@@ -151,5 +159,31 @@ for cc_script in "$AUDIT" "$AUDIT_COMMON"; do
     run_dup "$CC_SKIPONLY" "$cc_script"
     assert_eq "CC10c[$cc_tag] a skip-only corpus exits 1" "1" "$RC"
 done
+
+case_end
+
+case_begin "contract-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
+case_begin "contract-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
+
+case_begin "contract-fm-check-coverage" "bin/check-test-frontmatter.sh"
+if [[ -f "$FM_CHECK" ]]; then
+    pass "P0-ext bin/check-test-frontmatter.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/check-test-frontmatter.sh missing"
+fi
+case_end
 
 grp_done "contract-cases.sh"

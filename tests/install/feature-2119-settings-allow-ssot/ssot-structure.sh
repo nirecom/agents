@@ -1,7 +1,7 @@
-# tests/feature-2119-settings-allow-ssot/ssot-structure.sh
+# tests/install/feature-2119-settings-allow-ssot/ssot-structure.sh
 # Tests: install/settings-allow-commands.txt, install/path-exposed-commands.txt, install/lib/settings-allow-rules.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
-# T0-T3b: the SSOT file itself. Sourced by tests/feature-2119-settings-allow-ssot.sh, which
+# T0-T3b: the SSOT file itself. Sourced by tests/install/feature-2119-settings-allow-ssot.sh, which
 # owns PASS/FAIL/ROWS, assert_eq, ssot_entries and every path variable used here.
 
 SSOT_PRESENT="no"

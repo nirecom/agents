@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-720-supervisor-l3-cli.sh
+# tests/bin/feature-720-supervisor-l3-cli.sh
 # Tests: bin/supervisor-write-audit
 # Tags: supervisor, em-supervisor, cli, layer3, scope:issue-specific
 # L3 gap (what this test does NOT catch):

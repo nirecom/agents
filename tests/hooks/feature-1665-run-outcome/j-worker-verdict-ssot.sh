@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/j-worker-verdict-ssot.sh
+# tests/hooks/feature-1665-run-outcome/j-worker-verdict-ssot.sh
 # Tests: hooks/workflow-run-tests/outcome.js, hooks/workflow-run-tests.js
 # Tags: workflow, run-outcome, ssot, parser, grep-pin, static-analysis, TL1, scope:issue-specific
 #

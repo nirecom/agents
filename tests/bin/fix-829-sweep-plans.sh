@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-829-sweep-plans.sh
+# tests/bin/fix-829-sweep-plans.sh
 # Tests: bin/sweep-plans.sh
 # Tags: sweep, plans, orphan-prefix, epoch-pid, empty-sid, fix
 #

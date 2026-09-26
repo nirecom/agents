@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-719-supervisor-guard-hook.sh
+# tests/hooks/feature-719-supervisor-guard-hook.sh
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
 # L3 gap: hook registration, live transcript format; mitigation: bin/check-verification-gate.sh hook-registration

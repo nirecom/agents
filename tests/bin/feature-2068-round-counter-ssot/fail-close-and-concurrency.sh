@@ -1,7 +1,7 @@
-# tests/feature-2068-round-counter-ssot/fail-close-and-concurrency.sh
+# tests/bin/feature-2068-round-counter-ssot/fail-close-and-concurrency.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger
 # Tags: codex-review-loop, round-counter, fail-closed, concurrency, table-driven, TL2, scope:issue-specific
-# Sourced by tests/feature-2068-round-counter-ssot.sh (ROOT fixture, rcs_* helpers).
+# Sourced by tests/bin/feature-2068-round-counter-ssot.sh (ROOT fixture, rcs_* helpers).
 #
 # A counter that guesses is worse than one that stops: "1x2" read as 12 would
 # jump the loop to a round nobody reviewed. So a damaged, contended, or

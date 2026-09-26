@@ -4,7 +4,7 @@
 # Integration regression tests for the Workflow State Machine.
 # Covers: state inheritance, cross-repo commits, RESET_FROM, USER_VERIFIED,
 # branch isolation, and structure smoke tests.
-# Usage: bash tests/main-workflow-state-machine.sh
+# Usage: bash tests/hooks/main-workflow-state-machine.sh
 #
 # Dispatcher: shared helpers/fixtures live in main-workflow-state-machine/common.sh;
 # case groups live in state-inheritance.sh, cross-repo-commit.sh, reset-from.sh,

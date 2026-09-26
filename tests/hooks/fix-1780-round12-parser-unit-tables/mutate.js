@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tests/fix-1780-round12-parser-unit-tables/mutate.js
+// tests/hooks/fix-1780-round12-parser-unit-tables/mutate.js
 // MUTATION EVIDENCE helper (skills/_shared/test-design/parser-regex-tests.md).
 //
 // A table row that passes proves nothing on its own: it may be passing because

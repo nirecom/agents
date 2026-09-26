@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, git, pre-commit, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-bundle-a.sh (Bug 1 + Bug 2 + regression,
 # EXCLUDE security, idempotency). Its extraction/security cases for compound
 # commands and staged filenames live in target-extraction.sh.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-section-runner-wiring.sh
+# tests/tests/bin-section-runner-wiring.sh
 # Tests: tests/lib/section-runner.sh
 # Tags: test-infrastructure, section-runner, wiring, meta-test, deliberate-breakage, scope:common, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

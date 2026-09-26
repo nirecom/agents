@@ -1,7 +1,7 @@
 # Group E: scan range — exactly-one ownership, archive exclusion, cron wiring (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
 # Tags: TL2, audit-tests, retire, scan-range, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # The two scripts partition tests/ by filename scope. Once both apply the same
 # survival predicate, a gap in that partition means a dead test is invisible to

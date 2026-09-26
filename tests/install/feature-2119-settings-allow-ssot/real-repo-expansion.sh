@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/real-repo-expansion.sh
+# tests/install/feature-2119-settings-allow-ssot/real-repo-expansion.sh
 # Tests: install/settings-allow-commands.txt, install/path-exposed-commands.txt, install/lib/settings-allow-rules.js, install/assemble-settings.js, settings.json
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T31-T32: the REAL repository as input, never a fixture SSOT. Sourced AFTER ssot-structure.sh

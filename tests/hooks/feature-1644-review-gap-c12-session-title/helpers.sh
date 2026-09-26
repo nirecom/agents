@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/session-title.js
 # Tags: tl2, workflow, session-title, jsonl, scope:issue-specific, pwsh-not-required
-# Shared fixtures + probe helpers for tests/feature-1644-review-gap-c12-session-title.sh.
+# Shared fixtures + probe helpers for tests/hooks/feature-1644-review-gap-c12-session-title.sh.
 # Sourced by the dispatcher — not a standalone runner.
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }

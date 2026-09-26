@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2121-heredoc-strip-widening.sh
+# tests/hooks/feature-2121-heredoc-strip-widening.sh
 # Tests: hooks/lib/strip-quoted-args.js, hooks/lib/command-ir.js, hooks/lib/bash-write-patterns.js
 # Tags: heredoc, strip-quoted-args, command-ir, parser, regex, write-detector, enforce-worktree, TL1, pwsh-not-required, scope:issue-specific, dup-group-keep:distinct-layer
 #

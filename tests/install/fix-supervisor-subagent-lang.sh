@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/fix-supervisor-subagent-lang.sh
+# filename: tests/install/fix-supervisor-subagent-lang.sh
 # Tests: settings.json, hooks/subagent-start.js, agents
 # Tags: hook-registration, pwsh-not-required, conv-lang, subagent-lang, scope:common
 #
-# Dispatch entrypoint; logic in tests/fix-supervisor-subagent-lang/.
+# Dispatch entrypoint; logic in tests/install/fix-supervisor-subagent-lang/.
 # L3 gap: subagent output language only testable via live `claude -p`. This test
 # verifies hook-shape only. Mitigation: WORKFLOW_USER_VERIFIED / hook-registration gate.
 

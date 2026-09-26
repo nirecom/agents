@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-silent-no-finding.sh
+# tests/hooks/feature-supervisor-silent-no-finding.sh
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, stop, silent, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

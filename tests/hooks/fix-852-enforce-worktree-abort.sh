@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-852-enforce-worktree-abort.sh
+# tests/hooks/fix-852-enforce-worktree-abort.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, git, security, fix-852
 # Tests for isAllowedMidOperationAbort() — issue #852.

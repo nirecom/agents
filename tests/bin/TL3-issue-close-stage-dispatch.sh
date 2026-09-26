@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-issue-close-stage-dispatch.sh
+# tests/bin/TL3-issue-close-stage-dispatch.sh
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, skills/issue-close-stage/scripts/run-stage-chain.sh, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, real-environment, linked-worktree, dry-run, TL3, scope:issue-specific
 #
@@ -18,7 +18,7 @@
 #
 # TL3 gap: no real GitHub API is contacted — the sentinel comment is never
 # actually posted, so the live `gh issue comment` URL shape stays unverified
-# here. That shape is owned by tests/TL3-worker-dispatch-gh-contract.sh's sibling
+# here. That shape is owned by tests/bin/TL3-worker-dispatch-gh-contract.sh's sibling
 # contract checks against the real binary.
 #
 # Gate: RUN_TL3=on plus git/node/bash. Exits 77 (SKIP) otherwise.

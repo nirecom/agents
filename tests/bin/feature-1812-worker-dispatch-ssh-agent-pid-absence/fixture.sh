@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh — sourced.
+# Part of tests/bin/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh — sourced.
 # Tests: bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/spawn.js
 # Tags: worker-dispatch, commit-push, ssh-agent-pid, ssh-auth-sock, git-push, canary, security, TL2, scope:issue-specific
 # The offline stand-in for an ssh:// remote: a repo-local core.sshCommand that

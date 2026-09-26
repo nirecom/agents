@@ -1,4 +1,4 @@
-# helpers.sh — sourced by tests/refactor-design-principles.sh
+# helpers.sh — sourced by tests/agents/refactor-design-principles.sh
 # Requires: AGENTS_DIR set by the caller before sourcing.
 
 if command -v cygpath >/dev/null 2>&1; then

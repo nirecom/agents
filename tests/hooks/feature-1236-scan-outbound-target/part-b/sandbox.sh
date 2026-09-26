@@ -191,7 +191,7 @@ is_approve() {
 # hook's decision JSON is surfaced to the model and captured in CI logs and test
 # transcripts. So the reason is one fixed literal that identifies nothing — the
 # CPR-ORTH counterpart of the P2/no-echo check in
-# tests/feature-check-private-repo-name.sh. Fragments are chosen to be specific
+# tests/bin/feature-check-private-repo-name.sh. Fragments are chosen to be specific
 # to the fixture name: bare "repo" is deliberately absent from the list because
 # the legitimate diagnostic text says "repository" and "repo reference".
 # assert_no_private_name_echo <case-label> <hook-output>

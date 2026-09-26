@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1391-temp-path-gate-removal.sh
+# tests/hooks/fix-1391-temp-path-gate-removal.sh
 # Tests: hooks/lib/bash-write-patterns/classify.js, hooks/enforce-worktree.js, hooks/lib/bash-write-patterns/patterns.js
 # Tags: enforce-worktree, classify, temp-path, gh-retire, scope:issue-specific
 #
@@ -85,7 +85,7 @@ echo "=== Section A: classify temp-path gate removal — new contract ==="
 # WRITE_PATTERNS entries were retired). The intermediate classify VALUE is "read";
 # in-scope BLOCKING of these writes is now enforced at the IR fast-allow layer
 # (isPosixRedirWriteIR etc.) and is verified end-to-end by the L2 hook-decision
-# cases in tests/feature-canary5-6git/commit2-green-retire.sh. These rows pin the
+# cases in tests/hooks/feature-canary5-6git/commit2-green-retire.sh. These rows pin the
 # new classify="read" contract (they also confirm the temp-path gate — which used
 # to force "read" only for temp paths — no longer special-cases temp vs non-temp).
 while IFS='|' read -r name input want; do

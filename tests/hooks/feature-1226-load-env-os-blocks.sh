@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1226-load-env-os-blocks.sh
+# tests/hooks/feature-1226-load-env-os-blocks.sh
 # Tests: hooks/lib/load-env.js
 # Tags: scope:issue-specific, load-env, env-os-blocks, os-conditional, pwsh-not-required
 # RED for issue #1226 — filterOsBlocks(text, platform) OS-conditional preprocessor.

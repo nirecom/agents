@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1805-worker-subagent-naming.sh
+# tests/skills/feature-1805-worker-subagent-naming.sh
 # Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, naming, skill-orchestration, static, prompt-contract, TL1, scope:issue-specific
 #

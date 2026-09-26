@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
 # A WORKFLOW_DIR RESOLUTION FAILURE IS AUDITED, NOT SILENT — round-14 MEDIUM.
 #
 # bin/request-off-clearance runs under `set -euo pipefail` and used to define

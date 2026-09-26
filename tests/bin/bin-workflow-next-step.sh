@@ -52,7 +52,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-workflow-next-step
 
 # run_with_timeout wraps each individual `node` invocation inside run_next_step
 # (timeout/perl-exec cannot wrap shell functions directly, so per-call bounding
-# is the portable shape — matches tests/feature-1027-state-schema-eligible-phase.sh).
+# is the portable shape — matches tests/hooks/feature-1027-state-schema-eligible-phase.sh).
 run_transitions_tests
 run_list_render_tests
 run_wf_meta_evidence_tests

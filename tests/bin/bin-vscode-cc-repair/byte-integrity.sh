@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C3 — byte integrity against accidental UTF-8 decoding. Every other fixture in this
 # suite is pure ASCII, so swapping latin1 for utf8 on the read/write pair would go
 # unnoticed. This fixture embeds bytes 0xFF 0xFE 0x80 (never valid UTF-8) inside a

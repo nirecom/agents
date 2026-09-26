@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/fix-issue-449-tracking-guard/d-series.sh
+# tests/bin/fix-issue-449-tracking-guard/d-series.sh
 # Tests: bin/github-issues/check-closes-issues-nonempty.sh, hooks/lib/parse-closes-issues.js
 # Tags: workflow, clarify-intent, planning, github, issues, scope:issue-specific
 #
 # D-series — check-closes-issues-nonempty.sh (issue #449) + session-dedup
-# extensions (D11–D16). Moved verbatim from tests/fix-issue-449-tracking-guard.sh
+# extensions (D11–D16). Moved verbatim from tests/bin/fix-issue-449-tracking-guard.sh
 # when the file crossed the 500-line HARD cap (rules/coding/file-split.md).
 #
 # Guard script that verifies the session's intent.md has a non-empty

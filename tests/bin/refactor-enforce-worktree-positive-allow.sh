@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-enforce-worktree-positive-allow.sh
+# tests/bin/refactor-enforce-worktree-positive-allow.sh
 # Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, hooks/lib/bash-write-targets.js, hooks/lib/strip-quoted-args.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-create/SKILL.md
 # Tags: worktree, enforce, hook, issue-close, finalize, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow/promotion-loop.sh
+# tests/bin/feature-530-notes-promotion-triage-flow/promotion-loop.sh
 # Tests: bin/worktree-notes-triage.js, skills/_shared/notes-promotion.md
 # Tags: notes-promotion, worktree-notes, triage, issue-create, idempotency, filesystem-errors, TL2, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-finalize-multipass.sh
+# tests/bin/feature-1673-finalize-multipass.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/workers/issue-close-finalize/state.js, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, issue-close-finalize, multi-pass, state-machine, payload-seq, atomic-write, TL2, scope:issue-specific
 #
@@ -22,7 +22,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - The real run-initial.sh / run-finalize-terminal.sh, both of which call `gh`
 #     against a live repo (covered at the single-seam tier by
-#     tests/TL3-worker-dispatch-issue-close-finalize.sh).
+#     tests/bin/TL3-worker-dispatch-issue-close-finalize.sh).
 #   - skills/issue-close-finalize/SKILL.md actually emitting -1/-2/-3 payloads in
 #     a real session.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED

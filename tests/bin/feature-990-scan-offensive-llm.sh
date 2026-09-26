@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-offensive-llm.sh
+# tests/bin/feature-990-scan-offensive-llm.sh
 # Tests: bin/scan-offensive
 # Tags: scan, offensive, llm, fail-open, scope:issue-specific
 # RED for issue #990.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/b-series.sh
+# tests/bin/feature-920-companion-issues/b-series.sh
 # Tests: skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: companion-issues, workflow-init, clarify-intent, scope:issue-specific
 #

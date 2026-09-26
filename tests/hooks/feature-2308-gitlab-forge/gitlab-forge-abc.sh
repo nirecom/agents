@@ -18,7 +18,7 @@ set -u
 
 # Group A: resolveForgeTarget + extractProjectPath (parse-remote-url.js) and the
 # bin/detect-forge-type CLI. detectForgeType() host classification is already
-# covered by tests/fix-1899-parse-remote-url/detect-forge-type.sh; this group
+# covered by tests/hooks/fix-1899-parse-remote-url/detect-forge-type.sh; this group
 # targets the NEW resolveForgeTarget/extractProjectPath and the NEW CLI.
 echo "=== Group A: resolveForgeTarget / extractProjectPath / detect-forge-type CLI ==="
 
@@ -525,7 +525,7 @@ assert_eq "C2c/hasOpenPrForBranch: no MR -> false" "false" \
 case_end
 
 # Group C: is-private-repo.js GitLab dispatch. Intentionally NOT appended to
-# tests/main-private-repo-detection/unit-is-private-repo.sh — its D1 pins
+# tests/hooks/main-private-repo-detection/unit-is-private-repo.sh — its D1 pins
 # gitlab.com -> true (a #2307 pin), conflicting with #2308's gitlab->codehostGitlab
 # dispatch. Kept here with a controlled glab mock.
 echo ""

@@ -1,6 +1,6 @@
 # Tests: install/linux/session-sync-init.sh
 # Tags: bin, install, git, session-sync, security, installer, scope:common
-# Part of tests/main-session-sync.sh; owns the helpers the other security-* parts
+# Part of tests/bin/main-session-sync.sh; owns the helpers the other security-* parts
 # reuse, so the dispatcher must source it before them.
 
 # TL3 gap (skills/_shared/test-design.md): TL2 — the installer runs for real, but

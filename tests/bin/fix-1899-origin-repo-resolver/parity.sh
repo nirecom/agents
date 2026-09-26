@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/parity.sh
+# tests/bin/fix-1899-origin-repo-resolver/parity.sh
 # Tests: bin/github-issues/lib/origin-repo.sh, hooks/lib/parse-remote-url.js, bin/is-github-dotcom-remote
 # Tags: origin-resolution, parse-remote-url, parity, cpr-orth, table-driven, parser, regex, security, TL2, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-401-extract-field-or-marker.sh
+# tests/bin/feature-401-extract-field-or-marker.sh
 # Tests: bin/github-issues/lib/extract-field.sh
 # Tags: github, issues, bin, tests, scope:issue-specific, layer:TL1
 #
@@ -96,7 +96,7 @@ fi
 # purpose: extract_field_or_marker(field) reads only $1, so bash ignores it.
 # This fixes "callers on the old signature do not break"; it does NOT verify
 # propagation. Regression cover for title-borrowing lives in
-# tests/feature-401-issue-to-history-shapes.sh NG1.
+# tests/bin/feature-401-issue-to-history-shapes.sh NG1.
 # -----------------------------------------------------------------------------
 BODY="just some plain body text with no field markers"
 export BODY

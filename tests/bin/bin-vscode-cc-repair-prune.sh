@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# tests/bin-vscode-cc-repair-prune.sh
+# tests/bin/bin-vscode-cc-repair-prune.sh
 # Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js, bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/cli.js, bin/vscode-cc-repair/patch/apply.js
 # Tags: bin, vscode, prune, session-files, scope:common, pwsh-not-required, TL2
 #
 # The `--prune-stub-sessions` path: scan ~/.claude/projects for title-only stub
 # session files and delete only those whose content is provably a subset of a
 # surviving counterpart copy. This is a NEW suite; the shipped patch path keeps its
-# own suite (tests/bin-vscode-cc-repair.sh) which must stay untouched
+# own suite (tests/bin/bin-vscode-cc-repair.sh) which must stay untouched
 # so that "the existing 10 parts are still green" remains the evidence that the
 # module migration preserved behaviour.
 #
-# Run wrapper: bin/run-with-timeout.sh 120 bash tests/bin-vscode-cc-repair-prune.sh
+# Run wrapper: bin/run-with-timeout.sh 120 bash tests/bin/bin-vscode-cc-repair-prune.sh
 # (every inner CLI / node invocation carries its own shorter timeout below).
 #
 # ISOLATION CONTRACT (intent.md Constraints — the single most important property

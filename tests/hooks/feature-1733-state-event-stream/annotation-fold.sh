@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/annotation-fold.sh
+# tests/hooks/feature-1733-state-event-stream/annotation-fold.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/review-tests.js, hooks/workflow-state/state-io/skip-verdict.js, hooks/workflow-state/skip-signal-resolver.js
 # Tags: workflow-state, event-stream, annotations, review-tests, skip-verdict, last-write-wins, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -17,7 +17,7 @@
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 CASE_TAG="ann"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo "== N1: last-write-wins per (step, key), independently across keys =="

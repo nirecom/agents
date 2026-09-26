@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: skills/sweep-shell-snapshots/SKILL.md, skills/sweep/SKILL.md, bin/sweep-shell-snapshots.sh
 # Tags: sweep, shell-snapshots, skill-host, frontmatter, integration, scope:common, TL1, TL3
-# Part file of tests/feature-sweep-hub.sh. T1-T14 there prove only that the hub's
+# Part file of tests/skills/feature-sweep-hub.sh. T1-T14 there prove only that the hub's
 # text mentions the new sub-skill; a SKILL.md that names the script in prose and
 # never runs it passes all of them. T15-T17 pin the frontmatter the skill host
 # actually reads; T18/T19 drive a real `claude -p` host so invocation, flag

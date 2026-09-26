@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing.sh
+# tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: complexity, routing, stage, workflow-state, cli, fail-open, scope:issue-specific
 # Serial: writes complexity_evaluation events into a pinned CLAUDE_WORKFLOW_DIR
@@ -26,7 +26,7 @@ pass() { echo "PASS: $1"; }
 # it records that the gap is known, and the reasoning lives at the call site.
 skip() { echo "SKIP: $1"; }
 # A closed RUN_TL3 gate SKIPs on an ordinary run, but the RUN_TL3-ON lane
-# (tests/TL3-complexity-stage-routing-live-judge.sh, which exports
+# (tests/skills/TL3-complexity-stage-routing-live-judge.sh, which exports
 # D2099_REQUIRE_LIVE=1) exists precisely to execute those cases: a gate that is
 # still closed THERE is the silent-opt-out false green, so it fails instead.
 gated_skip() {

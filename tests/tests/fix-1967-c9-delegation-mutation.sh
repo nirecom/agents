@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/fix-1967-c9-delegation-mutation.sh
-# Tests: tests/feature-confirm-flags-static.sh, tests/install-path-exposed-commands.sh
+# tests/tests/fix-1967-c9-delegation-mutation.sh
+# Tests: tests/skills/feature-confirm-flags-static.sh, tests/install/install-path-exposed-commands.sh
 # Tags: mutation-test, meta-test, static, delegation, xfail-ledger, scope:issue-specific, pwsh-not-required, TL2
 
-# THE THING UNDER TEST is section 9 of tests/feature-confirm-flags-static.sh -- the checks
+# THE THING UNDER TEST is section 9 of tests/skills/feature-confirm-flags-static.sh -- the checks
 # C9-a..C9-h that stand in for the `get-config-var` PATH-exposure contract instead
 # of re-asserting it. Section 9 does not run the owner test (348-460 s); it greps it for
 # the delegate's definition, its presence on the run list, its body, its negative control's

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/bin-review-bare-python-exemption-scope.sh
+# tests/bin/bin-review-bare-python-exemption-scope.sh
 # Tests: bin/review-bare-python
 # Tags: lint, bare-python, allowlist, exemption-scope, whole-file-exemption, grep-failure, fail-loud, error-path, mutation-probe, security, scope:common, pwsh-not-required, TL2, dup-group-keep:size-hard-limit
-# Sibling of tests/bin-review-bare-python-classifier.sh (rules/coding/file-split.md):
+# Sibling of tests/bin/bin-review-bare-python-classifier.sh (rules/coding/file-split.md):
 # that file sits at the 500-line HARD limit, so these two sections land here.
 # Section E  - how far the whole-file EXCLUDED_FILES exemption reaches INSIDE a file.
 # Section GF - what scan_file() reports when its own candidate grep fails.

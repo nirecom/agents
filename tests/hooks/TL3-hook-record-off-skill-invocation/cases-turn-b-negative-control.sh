@@ -1,4 +1,4 @@
-# tests/TL3-hook-record-off-skill-invocation/cases-turn-b-negative-control.sh
+# tests/hooks/TL3-hook-record-off-skill-invocation/cases-turn-b-negative-control.sh
 # Turn B: the negative control - prose that merely NAMES the skill, in its own
 # session, must leave no provenance marker. Sourced by
 # ../TL3-hook-record-off-skill-invocation.sh; relies on that file's shared

@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, windows, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/refactor-branching-complete-rename-worktree.sh (all cases).
 # Cases: WL-1..WL-14, NI-1..NI-7.
 # Worktree lifecycle commands are the one write-shaped family the guard must

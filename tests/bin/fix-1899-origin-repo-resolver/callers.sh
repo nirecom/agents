@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/callers.sh
+# tests/bin/fix-1899-origin-repo-resolver/callers.sh
 # Tests: bin/github-issues/lib/board-card.sh, bin/github-issues/lib/resolve-project.sh, skills/issue-close-finalize/scripts/pre-flight.sh
 # Tags: origin-resolution, github-issues, board-card, resolve-project, pre-flight, TL2, scope:issue-specific
 #
@@ -278,7 +278,7 @@ group_resolve_project() {
 #   edits, so an upstream-flavoured identity re-entering between the split and
 #   the call is the #1899 defect at the point where it does damage.
 #
-#   It is also the CWD-isolation half of the coverage: tests/feature-ensure-board-card.sh
+#   It is also the CWD-isolation half of the coverage: tests/agents/feature-ensure-board-card.sh
 #   drives the board-card path with an inline `gh` mock but from the AMBIENT
 #   checkout, so its owner/repo comes from whatever repository the suite happens
 #   to run in. Every case here runs with cwd pinned to a purpose-built fixture

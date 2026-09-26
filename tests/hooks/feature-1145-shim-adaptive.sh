@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1145-shim-adaptive.sh
+# tests/hooks/feature-1145-shim-adaptive.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: supervisor, em-supervisor, pretooluse, off-proposal, shim, we15, adaptive-message, scope:issue-specific, pwsh-not-required, hook-registration
 # L2 integration tests for the adaptive OFF-block message.

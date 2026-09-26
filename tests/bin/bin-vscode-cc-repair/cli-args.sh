@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # T4 + C6 — argument surface boundaries through the real subprocess. Every rejection
 # path is paired with a guard root that holds an unpatched fixture, so "exit 2" is
 # never accepted on its own: the fixture must still be unpatched afterwards.

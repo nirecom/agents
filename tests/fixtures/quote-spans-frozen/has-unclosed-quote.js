@@ -1,7 +1,7 @@
 "use strict";
 // FROZEN FIXTURE — verbatim copy of hasUnclosedQuote() from
 // hooks/lib/command-ir.js as of PR #1577 (pre-#1569 quote-spans refactor).
-// Do NOT edit. Used by tests/unit-quote-spans-differential.sh as the
+// Do NOT edit. Used by tests/hooks/unit-quote-spans-differential.sh as the
 // old-implementation side of the old-vs-new differential comparison.
 function hasUnclosedQuote(str) {
   let inDouble = false;

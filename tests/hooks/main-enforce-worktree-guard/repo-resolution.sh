@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-extra-repos-dir-scan.sh (all cases).
 # Cases: N1-N5, E1-E4, IDEM1, SEC1, INT1, INT2.
 # getSessionRepoRoots(): an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry that is not a

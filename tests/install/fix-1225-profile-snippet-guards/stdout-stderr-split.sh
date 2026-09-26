@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh, bin/lib/session-sync-markers.sh
 # Tags: installer, profile-snippet, stdout-stderr, session-sync, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
 # not run alone; uses its make_mirror_sandbox helper. Issue #2160: every startup
 # progress line must land on stderr, because Claude Code captures a login shell's
 # stdout into the shell snapshot and any stray line there corrupts its PATH.

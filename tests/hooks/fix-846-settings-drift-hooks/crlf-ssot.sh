@@ -1,7 +1,7 @@
-# tests/fix-846-settings-drift-hooks/crlf-ssot.sh
+# tests/hooks/fix-846-settings-drift-hooks/crlf-ssot.sh
 # Tests: hooks/post-merge, hooks/post-checkout, install/settings-allow-commands.txt
 # Tags: hook, settings, drift, post-merge, post-checkout, crlf, scope:common, pwsh-not-required, TL2
-# T48-T51. Sourced by tests/fix-846-settings-drift-hooks.sh, whose probes and helpers this reuses.
+# T48-T51. Sourced by tests/hooks/fix-846-settings-drift-hooks.sh, whose probes and helpers this reuses.
 run_crlf_table() {
     require_source "$POST_MERGE" "T48-T51: CRLF stage-2 SSOT" || return
     require_source "$POST_CHECKOUT" "T48-T51: CRLF stage-2 SSOT (post-checkout)" || return

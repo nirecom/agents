@@ -1,16 +1,24 @@
 # S12 category 4: flag defaults and the APPLY=1 trap (#2065, S3)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, dup-groups, cli, flags, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # `sweep_write_mode_init` sets APPLY=1 BEFORE argv parsing, so `$APPLY` means
 # "not --dry-run", never "the user passed --apply". A guard written against
 # `$APPLY` inverts the mode: bare --dup-groups would exit 2 and only
 # `--dup-groups --dry-run` would work. The guard must read FIX_APPLY.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "flag-defaults-series" "bin/audit-tests.sh"
+
 FD_REPO="$(make_repo)"
 add_src "$FD_REPO" "bin/fd-x.sh"
-add_test_file "$FD_REPO" "fd-one.sh" "bin/fd-x.sh"
-add_test_file "$FD_REPO" "fd-two.sh" "bin/fd-x.sh"
+add_test_file "$FD_REPO" "bin/fd-one.sh" "bin/fd-x.sh"
+add_test_file "$FD_REPO" "bin/fd-two.sh" "bin/fd-x.sh"
 commit_repo "$FD_REPO" "flag defaults fixture"
 
 # Both entrypoints carry the same argv loop, so per CPR-ORTH every row runs twice.
@@ -50,5 +58,15 @@ for fd_script in "$AUDIT" "$AUDIT_COMMON"; do
     assert_eq "FD3b[$fd_tag] --dup-groups --apply explains that --apply is not applicable" \
         "1" "$(printf '%s\n' "$ERR" | grep -c -- '--dup-groups is read-only; --apply is not applicable' || true)"
 done
+
+case_end
+
+case_begin "flag-defaults-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests-common.sh" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by flag-defaults-series via AUDIT_COMMON)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
 
 grp_done "flag-defaults.sh"

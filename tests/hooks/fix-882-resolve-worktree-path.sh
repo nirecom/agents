@@ -21,7 +21,7 @@ RESOLVER_BIN="$AGENTS_WORKTREE/bin/resolve-worktree-path"
 SELECT_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/select-staged-files.sh"
 COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-staged-tests-token.js"
 RUN_TIMEOUT="$AGENTS_WORKTREE/bin/run-with-timeout.sh"
-PARTS="$AGENTS_WORKTREE/tests/fix-882-resolve-worktree-path"
+PARTS="$AGENTS_WORKTREE/tests/hooks/fix-882-resolve-worktree-path"
 
 SESSION_ID="fix-882-test-sid"
 

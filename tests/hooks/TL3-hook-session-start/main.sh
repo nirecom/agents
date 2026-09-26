@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # TL3 seam body for session-start.js (SessionStart).
 # Sourced by ../TL3-hook-session-start.sh after helpers.sh.
-# Tests: tests/TL3-hook-session-start.sh
+# Tests: tests/hooks/TL3-hook-session-start.sh
 # Tags: scope:common
 
 echo ""
@@ -133,7 +133,7 @@ fi
 # own additionalContext and never appears in that output shape, so the assertion
 # was permanently red at the wrong seam (#1619/#1648). It was removed; the
 # contract is now covered at TL2 as case C6 in
-# tests/feature-772-session-start-cleanup-inherit.sh, which invokes
+# tests/hooks/feature-772-session-start-cleanup-inherit.sh, which invokes
 # hooks/session-start.js directly and asserts on its stdout.
 
 # TL3 gap: CONV_LANG/settings-drift injection branches depend on host env config

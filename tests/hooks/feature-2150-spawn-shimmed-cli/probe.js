@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// tests/feature-2150-spawn-shimmed-cli/probe.js
-// Row evaluator for tests/feature-2150-spawn-shimmed-cli.sh (#2150).
+// tests/hooks/feature-2150-spawn-shimmed-cli/probe.js
+// Row evaluator for tests/hooks/feature-2150-spawn-shimmed-cli.sh (#2150).
 // argv: [2] ROOT (agents dir the module is loaded FROM) [3] CASE_DIR (fixture
 // root; reported paths are relative to it) [4] DIRS_FILE (one PATH entry per
 // line, or the single token @none / @empty) [5] PATHEXT_SPEC (literal, @unset

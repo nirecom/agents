@@ -1,10 +1,10 @@
-# tests/fix-389-load-env-default-fallback/config-dir-cases.sh
+# tests/hooks/fix-389-load-env-default-fallback/config-dir-cases.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/agents-config-dir.js
 # Tags: hook, config-dir, env, resolver, unit, scope:issue-specific
 #
 # STATUS: T389-7 GREEN (the short-circuit already holds); T389-8 RED until C4
 # routes candidates through configDirCandidates(). Sourced by
-# tests/fix-389-load-env-default-fallback.sh.
+# tests/hooks/fix-389-load-env-default-fallback.sh.
 #
 # The two #1630 cases: load-env.js must NOT adopt the resolver fall-through
 # policy, and it must normalize a Windows-POSIX AGENTS_CONFIG_DIR value.

@@ -1,10 +1,10 @@
-# tests/fix-1630-config-dir-resolver/debug-and-cache.sh
+# tests/hooks/fix-1630-config-dir-resolver/debug-and-cache.sh
 # Tests: hooks/lib/agents-config-dir.js
 # Tags: hook, config-dir, resolver, debug, cache, security, scope:issue-specific
 #
 # STATUS: RED until C4 lands — every row reports
 # `ERROR: require agents-config-dir.js: Cannot find module ...`.
-# Sourced by tests/fix-1630-config-dir-resolver.sh.
+# Sourced by tests/hooks/fix-1630-config-dir-resolver.sh.
 #
 # C10 — two contracts the T4c unit rows do not reach:
 #

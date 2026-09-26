@@ -87,7 +87,7 @@ else
 fi
 
 # Case 13 (Structural): dispatcher frontmatter present in first 10 lines.
-SELF="$AGENTS_ROOT/tests/feature-973-review-e2e-coverage.sh"
+SELF="$AGENTS_ROOT/tests/bin/feature-973-review-e2e-coverage.sh"
 if head -10 "$SELF" | grep -q "^# Tests: bin/review-e2e-coverage"; then
     pass "Case 13: '# Tests: bin/review-e2e-coverage' present in first 10 lines"
 else

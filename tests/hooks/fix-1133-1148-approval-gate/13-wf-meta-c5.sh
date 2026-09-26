@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/completion-approval.js, bin/workflow/next-step, hooks/workflow-state/effective-state.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, wf-meta, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G13 (C5): the approval gate holds for wf-meta workflows too. In a wf-meta
 # session `detail` is auto-skipped, but `outline` is still an active gated step.

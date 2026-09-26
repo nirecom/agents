@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/b-entry-shape-parity.sh
+# tests/hooks/feature-1665-seq-cascade/b-entry-shape-parity.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, updated-seq, entry-shape, orthogonality, scope:issue-specific, pwsh-not-required, TL1
 #

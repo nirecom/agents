@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-audit-ledger-identity/identity-and-cas.sh
+# tests/hooks/feature-2256-audit-ledger-identity/identity-and-cas.sh
 # Tests: hooks/lib/supervisor-state-writer/audit.js, bin/supervisor-write-audit-verdict
 # Tags: supervisor, audit-run-identity, compare-and-set, TL2, scope:issue-specific
 # #2256 S2-b/S2-g: armAuditRun numbers a run in one read-modify-write; finalizeAuditRun
-# accepts only the identity it was armed with. Parent: tests/feature-2256-audit-ledger-identity.sh
+# accepts only the identity it was armed with. Parent: tests/hooks/feature-2256-audit-ledger-identity.sh
 
 set -uo pipefail
 

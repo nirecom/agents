@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/forge-write-extract.js, hooks/lib/parse-remote-url.js, hooks/lib/bash-write-patterns/segment-utils.js, hooks/lib/bash-write-patterns/patterns.js
 # Tags: hook, bin, git, pr, github, ownership, scope:common
-# Part of tests/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
 # Section 2053 — additive exports for the forge-target-ownership guard (#2053).
 #
 # The guard reuses the SAME parse primitives as the existing write-scan

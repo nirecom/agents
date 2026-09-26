@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/codegraph-lifecycle/index-health.js, bin/codegraph-lifecycle/process-identity.js
 # Tags: codegraph, lifecycle, probes, sqlite, tokenizer, scope:issue-specific
-# Oracles for tests/feature-codegraph-lifecycle.sh. They observe fixture and
+# Oracles for tests/bin/feature-codegraph-lifecycle.sh. They observe fixture and
 # post-run state independently of the CLI under test, so a case can prove its
 # own precondition held instead of passing vacuously. Sourced by harness.sh.
 

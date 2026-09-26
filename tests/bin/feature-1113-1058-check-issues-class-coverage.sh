@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1113-1058-check-issues-class-coverage.sh
+# tests/bin/feature-1113-1058-check-issues-class-coverage.sh
 # Tests: bin/check-issues-class-coverage, skills/_shared/assemble-mandatory.sh
 # Tags: scope:issue-specific
 # Dispatcher for bin/check-issues-class-coverage contract tests.
@@ -13,7 +13,7 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SELF_DIR="$AGENTS_ROOT/tests/feature-1113-1058-check-issues-class-coverage"
+SELF_DIR="$AGENTS_ROOT/tests/bin/feature-1113-1058-check-issues-class-coverage"
 
 TOTAL_PASS=0
 TOTAL_FAIL=0

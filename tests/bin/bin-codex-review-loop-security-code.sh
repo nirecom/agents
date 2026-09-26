@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/bin-codex-review-loop-security-code.sh
+# tests/bin/bin-codex-review-loop-security-code.sh
 # Tests: bin/run-codex-review-loop, bin/review-code-codex, bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/codex-review-loop/format-params.sh, bin/lib/codex-review-loop/ref-kind-input.sh, agents/security-scanner.md
 # Tags: concern-ledger, review-code, security-code, shared-ledger, exec-label, TL2, scope:common, pwsh-not-required
 # TL2 dispatcher for the shared code-review ledger on its new carrier: the real
 # bin/run-codex-review-loop --format security-code chain in a throwaway git repo
-# with only `codex` mocked. Cases: tests/bin-codex-review-loop-security-code/.
+# with only `codex` mocked. Cases: tests/bin/bin-codex-review-loop-security-code/.
 # TL3 gap: the real codex CLI wording, the SKILL.md text, the security-scanner
 # subagent (replayed as its report). Mitigation: a manual /review-code-security run.
 set -uo pipefail

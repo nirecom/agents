@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-conv-lang-block.sh
+# tests/hooks/feature-supervisor-conv-lang-block.sh
 # Tests: hooks/lib/supervisor-report-format.js, hooks/lib/conv-lang.js
 # Tags: supervisor, em-supervisor, conv-lang, block-reason, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):

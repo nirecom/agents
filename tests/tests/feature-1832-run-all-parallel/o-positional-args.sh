@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/o-positional-args.sh
+# tests/tests/feature-1832-run-all-parallel/o-positional-args.sh
 # Tests: tests/run-all.sh
 # Tags: tests, bin, parallel, positional-args, globbing, injection, TL2, scope:issue-specific
 

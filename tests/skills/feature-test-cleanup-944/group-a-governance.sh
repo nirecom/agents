@@ -1,5 +1,5 @@
 # Group A: test-design.md governance content (Cases 1-3)
-# Sourced by tests/feature-test-cleanup-944.sh
+# Sourced by tests/skills/feature-test-cleanup-944.sh
 
 if [[ -f "$TEST_DESIGN" ]]; then
     if grep -qE 'scope:[[:space:]]*issue-specific|scope:issue-specific' "$TEST_DESIGN"; then

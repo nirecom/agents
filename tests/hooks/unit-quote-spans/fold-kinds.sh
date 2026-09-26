@@ -1,11 +1,11 @@
-# tests/unit-quote-spans/fold-kinds.sh
+# tests/hooks/unit-quote-spans/fold-kinds.sh
 # Tests: hooks/lib/quote-spans/transform.js, hooks/lib/quote-spans.js
 # Tags: hook, quote-spans, transform, unit, fold, scope:common
 #
 # STATUS: RED until C1 lands — every row fails with
 # `ERROR: require quote-spans.js: Cannot find module ...`.
 #
-# Sourced by tests/unit-quote-spans.sh (uses its assert_probe / run_table /
+# Sourced by tests/hooks/unit-quote-spans.sh (uses its assert_probe / run_table /
 # assert_eq / probe helpers).
 #
 # foldNewlinesInSpans(str, kinds) takes a REQUIRED kinds selector. Nothing else

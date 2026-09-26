@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-discovery-failure-failclosed.sh
+# tests/bin/fix-2025-discovery-failure-failclosed.sh
 # Tests: bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh, bin/concern-ledger
 # Tags: concern-ledger, discovery, fail-closed, silent-loss, mechanism-failure, security, scope:issue-specific, pwsh-not-required
 #

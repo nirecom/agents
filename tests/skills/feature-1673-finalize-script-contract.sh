@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-finalize-script-contract.sh
+# tests/skills/feature-1673-finalize-script-contract.sh
 # Tests: skills/issue-close-finalize/scripts/run-loop-step.js, skills/issue-close-finalize/scripts/run-initial.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh
 # Tags: worker-dispatch, issue-close-finalize, kv-contract, argv-contract, idempotency, atomic-write, TL2, scope:issue-specific
 #

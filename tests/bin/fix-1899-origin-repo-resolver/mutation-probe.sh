@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/mutation-probe.sh
+# tests/bin/fix-1899-origin-repo-resolver/mutation-probe.sh
 # Tests: bin/github-issues/lib/origin-repo.sh
 # Tags: origin-resolution, github-issues, mutation-probe, table-driven, parser, regex, security, path-traversal, TL2, scope:issue-specific
 #
 # Group M: mutation probe for origin-repo.sh — CPR-ORTH mirror of
-# tests/fix-1899-parse-remote-url/mutation-probe.sh.
+# tests/bin/fix-1899-origin-repo-resolver/mutation-probe.sh.
 # Proves the four hand-mirrored bash charset/length decisions are load-bearing.
 # mk_mutant() reconstructs a bin/github-issues/lib/ tree with is-github-dotcom-remote
 # (and its Node sibling + parse-remote-url.js, #2307) so the helper resolves correctly.

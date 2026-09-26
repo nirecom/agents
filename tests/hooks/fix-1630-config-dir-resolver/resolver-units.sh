@@ -1,8 +1,8 @@
-# tests/fix-1630-config-dir-resolver/resolver-units.sh
+# tests/hooks/fix-1630-config-dir-resolver/resolver-units.sh
 # Tests: hooks/lib/agents-config-dir.js
 # Tags: hook, config-dir, resolver, unit, security, scope:issue-specific
 #
-# STATUS: RED until C4 lands. Sourced by tests/fix-1630-config-dir-resolver.sh.
+# STATUS: RED until C4 lands. Sourced by tests/hooks/fix-1630-config-dir-resolver.sh.
 #
 # T4c — resolver units driven through the _resolveFromCandidates seam with an
 # injected existsSync, so candidate ordering and marker validation are asserted

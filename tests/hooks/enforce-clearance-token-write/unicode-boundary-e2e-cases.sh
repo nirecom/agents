@@ -2,7 +2,7 @@
 # Tests: hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/interpreter-scan.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, unicode, mention-gate, boundary, over-blocking, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host. Covered by tests/TL3-hook-clearance-token-write.sh.
+# - The hook firing on a real host. Covered by tests/hooks/TL3-hook-clearance-token-write.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 # End-to-end companion to mention-gate-boundary-cases.sh, which measures the Tier-1 gate

@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-sweep-branches/no-pr.sh
+# tests/bin/feature-sweep-branches/no-pr.sh
 # No-PR sweep tests: routing, --delete-no-pr, young-skip, reachable/unreachable.
 # Tests: T2, T12, T13, T14, T15, T18
 #
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-branches/no-pr.sh
+#   bash tests/bin/feature-sweep-branches/no-pr.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

@@ -1,7 +1,7 @@
 # Group D: audit-tests.sh flags, edge cases, invalid args (Cases 17-27)
 # Tests: bin/audit-tests.sh
 # Tags: audit-tests, flags, cli, scope:issue-specific, TL2
-# Sourced by tests/feature-test-cleanup-944.sh
+# Sourced by tests/skills/feature-test-cleanup-944.sh
 #
 # Revised for #1833. Fixtures carry a real `# Tests:` header because target
 # survival is what makes a file a candidate. --stale-months and the issue state

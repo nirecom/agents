@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-run-tests-trust-boundary.sh
+# tests/hooks/fix-1273-run-tests-trust-boundary.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/exec-model.js
 # Tags: workflow, tests, runner, hook, classifier, security, TL1, TL2, scope:common
 #
@@ -34,7 +34,7 @@
 #   - Whether a REAL worker-dispatch run can be driven to emit the log_tail
 #     shape used by H1 (here the YAML is synthesised, because the parser and the
 #     trust decision — not the worker — are what is under test).
-#     tests/TL3-worker-dispatch-run-tests.sh is the gated tier for that.
+#     tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for that.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 

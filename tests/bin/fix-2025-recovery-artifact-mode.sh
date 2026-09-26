@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-recovery-artifact-mode.sh
+# tests/bin/fix-2025-recovery-artifact-mode.sh
 # Tests: bin/lib/concern-ledger/finalize.sh, bin/lib/safe-plans-path.sh, bin/concern-ledger
 # Tags: concern-ledger, finalize, recovery, file-mode, publish-failure, security, scope:issue-specific, pwsh-not-required
 #

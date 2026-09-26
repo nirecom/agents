@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-scope-drift-audit.sh
+# tests/hooks/feature-supervisor-scope-drift-audit.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, workflow-gate, scope-drift, audit, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap: workflow-gate.js not exercised as a real PreToolUse hook / live-session git push; checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (hook-registration). C4 (CC-UUID->wsid dual-store) skipped — T6 uses WORKFLOW_SESSION_ID env; CC-UUID resolution is an L3 gap.
-# T6/T8 (#2256 S5-e): the pre-merge gate is now a READ-ONLY freshness backstop that arms nothing (scope-drift:pre-merge arming retired). It denies unless a terminal TR5 run exists whose freshness_key still matches and whose verdict is not BLOCK. SSOT: tests/feature-2256-premerge-backstop.sh.
+# T6/T8 (#2256 S5-e): the pre-merge gate is now a READ-ONLY freshness backstop that arms nothing (scope-drift:pre-merge arming retired). It denies unless a terminal TR5 run exists whose freshness_key still matches and whose verdict is not BLOCK. SSOT: tests/hooks/feature-2256-premerge-backstop.sh.
 
 set -u
 
@@ -500,7 +500,7 @@ fs.writeFileSync(w.getStatePath('$sid'),JSON.stringify(st));
 run_c2
 
 # Note: Additional-1 (collect-audit-triggers CONFIRM_INTENT sentinel test) lives in
-# tests/feature-supervisor-atmost1.sh (co-located with other collect-audit-triggers tests).
+# tests/hooks/feature-supervisor-atmost1.sh (co-located with other collect-audit-triggers tests).
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

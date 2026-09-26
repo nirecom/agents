@@ -1,4 +1,4 @@
-# tests/feature-1180-commit-lang-check/group-u.sh
+# tests/hooks/feature-1180-commit-lang-check/group-u.sh
 # Group U — unit tests (call check() directly via node): CL-U1..CL-U8.
 # Sourced by the dispatcher after lib.sh; relies on its shared harness.
 

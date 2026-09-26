@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-output-contract.sh
+# tests/bin/feature-1643-worker-dispatch-output-contract.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/workers/worktree-copy.js, bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch/workers/issue-reconcile.js, bin/worker-dispatch/workers/session-close-gate.js
 # Tags: worker-dispatch, emit, output-contract, renderer, yaml, status-triple, stub-cli, TL2, scope:issue-specific
 #
@@ -17,7 +17,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - Real `gh` / `uv run doc-append.py` / `docker` output shapes: the domain CLIs
 #     are stubbed here. The real `gh issue list` flag contract is covered by
-#     tests/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated).
+#     tests/bin/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated).
 #   - Whether the calling SKILL.md parsers actually accept the bytes — only a real
 #     skill run exercises that.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category

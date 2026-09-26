@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-issue-close-finalize.sh
+# tests/bin/TL3-worker-dispatch-issue-close-finalize.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/anchor.js, skills/issue-close-finalize/scripts/run-initial.sh
 # Tags: worker-dispatch, issue-close-finalize, real-environment, anchor-resolution, main-worktree, TL3, scope:issue-specific
 #
@@ -19,7 +19,7 @@
 #
 # TL3 gap (what even this test does NOT catch):
 #   - The happy path of a real close: it would mutate live issues, so it stays
-#     manual. tests/feature-1673-finalize-multipass.sh covers the transitions
+#     manual. tests/bin/feature-1673-finalize-multipass.sh covers the transitions
 #     with the seam canned.
 #   - The operator's real PLANS_DIR (pinned to a temp dir here so a real session's
 #     state files are never touched).

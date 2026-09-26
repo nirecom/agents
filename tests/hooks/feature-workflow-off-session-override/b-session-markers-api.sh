@@ -1,6 +1,6 @@
 # b-session-markers-api.sh - section B: hooks/lib/session-markers.js direct
 # API (test_B1-test_B7).
-# Sourced by tests/feature-workflow-off-session-override.sh; expects helpers.sh
+# Sourced by tests/hooks/feature-workflow-off-session-override.sh; expects helpers.sh
 # (pass/fail, SESSION_MARKERS_JS, require_session_markers_js,
 # run_is_workflow_off, run_notice_text, write_marker_file) already sourced.
 

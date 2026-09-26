@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1610-stop-exit-worktree-warn.sh
+# tests/hooks/feature-1610-stop-exit-worktree-warn.sh
 # Tests: hooks/stop-exit-worktree-warn.js, hooks/postuse-native-worktree-record.js, settings.json, hooks/workflow-mark.js
 # Tags: stop, hook, worktree, exit-worktree, advisory, TL2, pwsh-not-required, scope:issue-specific
 #
@@ -252,7 +252,7 @@ run_S9() {
 # below are deliberately KEPT — with no path in the tool input the recorder must
 # fall back to the process cwd, so these cases are the standing coverage for the
 # fallback branch. The path-carrying branch and the path_source vocabulary itself
-# are covered in tests/feature-1733-state-event-stream/worktree-event.sh.
+# are covered in tests/hooks/feature-1733-state-event-stream/worktree-event.sh.
 
 R_LABELS=(
     "R1: EnterWorktree PostToolUse records worktree_entered_at"

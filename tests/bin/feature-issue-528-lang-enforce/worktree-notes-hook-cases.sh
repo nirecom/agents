@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/worktree-notes-hook-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/worktree-notes-hook-cases.sh
 # Tests: hooks/check-worktree-notes-lang.js
 # Tags: worktree, docs, hook, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

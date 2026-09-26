@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Section L - H-1: the marker guard must be LOCATION-INDEPENDENT.
 #
 # Why this is the highest-value section: enforce-worktree.js is a worktree-

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1465-scriptify-clarify-intent/check-complexity-skip.sh
+# tests/skills/feature-1465-scriptify-clarify-intent/check-complexity-skip.sh
 # Tests: skills/clarify-intent/scripts/check-complexity-skip.sh
 # Tags: scope:issue-specific
 #

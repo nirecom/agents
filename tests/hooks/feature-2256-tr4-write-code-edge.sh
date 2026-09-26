@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr4-write-code-edge.sh
+# tests/hooks/feature-2256-tr4-write-code-edge.sh
 # Tests: hooks/supervisor-guard/collect-audit-triggers.js, hooks/lib/audit-triggers.js, hooks/lib/branch-diff.js, hooks/lib/supervisor-state-writer/audit.js
 # Tags: supervisor, audit-trigger, TR4, write-code, edge-trigger, scope-drift, TL2, scope:issue-specific, pwsh-not-required
 

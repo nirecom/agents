@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/migration-concurrency.sh
+# tests/hooks/feature-1733-state-event-stream/migration-concurrency.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/state-lock.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: workflow-state, event-stream, migration, concurrency, locking, fail-open, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -18,7 +18,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="migconc"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"

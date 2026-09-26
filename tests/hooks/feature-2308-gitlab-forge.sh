@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2308-gitlab-forge.sh
+# tests/hooks/feature-2308-gitlab-forge.sh
 # Tests: hooks/lib/parse-remote-url.js, hooks/lib/forge/gitlab.js, hooks/lib/forge-router.js, hooks/lib/is-private-repo.js, bin/detect-forge-type, bin/worker-dispatch/workers/commit-push/procedure.js
 # Tags: scope:issue-specific, gitlab, forge, security, path-traversal, TL2
 # Dispatch + aggregate entrypoint for the split suite (the flat file hit the

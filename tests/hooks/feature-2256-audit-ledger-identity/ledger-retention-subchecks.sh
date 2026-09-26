@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-audit-ledger-identity/ledger-retention-subchecks.sh
+# tests/hooks/feature-2256-audit-ledger-identity/ledger-retention-subchecks.sh
 # Tests: hooks/lib/audit-ledger.js, hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-state-writer/audit.js
 # Tags: supervisor, audit-ledger, retention, sub-check, TL2, scope:issue-specific
 # #2256 S2-f/S6-b: FIFO retention must never evict the last terminal run, and dedup is
-# keyed on sub-check ids only. Parent: tests/feature-2256-audit-ledger-identity.sh
+# keyed on sub-check ids only. Parent: tests/hooks/feature-2256-audit-ledger-identity.sh
 
 set -uo pipefail
 

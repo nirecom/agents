@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2013-step-in-flight-automark.sh
+# tests/hooks/feature-2013-step-in-flight-automark.sh
 # Tests: hooks/lib/step-in-flight-policy.js, hooks/workflow-state/lifecycle.js, hooks/postuse-step-in-flight-mark.js, hooks/workflow-state/effective-state.js, hooks/stop-premature-stop-guard.js, settings.json
 # Tags: stop-hook, c4, step-in-flight, posttooluse, automark, allowlist, matrix, malformed-input, wi-10-lookahead, regression-2013, scope:issue-specific, pwsh-not-required, TL1, TL2
 
@@ -18,7 +18,7 @@ set -u
 #   shape assumed here (agent_id and tool_input.skill in particular), or
 #   UserPromptSubmit for the mechanism-check hook. A renamed matcher/event/command
 #   in settings.json would break host dispatch without any TL2 test failing.
-#   tests/TL3-hook-skill-dispatch-payload.sh covers it under RUN_TL3=on.
+#   tests/hooks/TL3-hook-skill-dispatch-payload.sh covers it under RUN_TL3=on.
 # - Whether the real Stop chain stays silent across a genuine multi-minute
 #   dispatch driven by Claude Code itself.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via

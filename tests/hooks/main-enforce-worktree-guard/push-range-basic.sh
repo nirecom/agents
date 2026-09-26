@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, git, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-push-fix-range.sh (same-repo cases).
 # Cases: the `Fix 1: …` family. Cross-repo cases: push-range-cross-repo.sh.
 # isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns): `git push` from the

@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-message.sh
+# tests/hooks/feature-2134-bash-guard/cases-message.sh
 # Tests: hooks/bash-guard/message.js, hooks/bash-guard/reasons.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, message, reason-codes, remediation, scope:issue-specific, pwsh-not-required, TL2
 # M1-M5: what the deny actually says, and the code namespace. Sourced by the dispatcher.

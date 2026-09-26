@@ -1,7 +1,7 @@
-# tests/feature-603-run-codex-review-loop/forwarding-and-repo-root.sh
+# tests/bin/feature-603-run-codex-review-loop/forwarding-and-repo-root.sh
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
-# Sourced by tests/feature-603-run-codex-review-loop.sh.
+# Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 21-22: argument forwarding to review-plan-codex and --repo-root directory validation.
 
 # ---------------------------------------------------------------------------

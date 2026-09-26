@@ -1,9 +1,9 @@
-# tests/feature-2169-workflow-not-started-notify-gate/helpers.sh
+# tests/hooks/feature-2169-workflow-not-started-notify-gate/helpers.sh
 # Tests: hooks/postuse-step-in-flight-mark.js, hooks/user-prompt-submit-mechanism-check.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io.js, hooks/lib/mechanism-failure.js
 # Tags: stall-detection, user-prompt-submit, prompt-notify, pre-workflow-init, wi-10-lookahead, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 # Shared fixture/dispatch helpers for the #2169 pre-workflow-init notify-gate
 # test suite. Sourced by the top-level
-# tests/feature-2169-workflow-not-started-notify-gate.sh dispatcher; relies on
+# tests/hooks/feature-2169-workflow-not-started-notify-gate.sh dispatcher; relies on
 # AGENTS_DIR / _AGENTS_DIR_NODE / RWT / AUTOMARK_HOOK / UPS_HOOK /
 # STATEIO_NODE / LIFECYCLE_NODE / MECHFAIL_NODE / TTL_MS being set by the
 # dispatcher before any function here is invoked.
@@ -19,7 +19,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # #2279) excludes Skill, so a Skill payload marks nothing and every caller below
 # would measure an empty state file. Renamed from dispatch_skill accordingly —
 # callers mean "produce the lookahead mark". The Skill axis lives in
-# tests/feature-2013-step-in-flight-automark/d-skill-dispatch.sh.
+# tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh.
 dispatch_lookahead() {
     printf '{"tool_name":"Agent","session_id":"%s","transcript_path":"","tool_input":{"description":"x"}}' "$2" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
@@ -29,7 +29,7 @@ dispatch_lookahead() {
 # dispatch_meta_skill <tn> <sid> — a Skill dispatch of the meta-op skill
 # `resume-session`. Marks nothing (META_OP_SKILLS + LOOKAHEAD_DISPATCH_TOOLS
 # both exclude it), so the session stays untouched — the C-d shape of
-# tests/feature-2013-step-in-flight-automark/e-lookahead-guard.sh.
+# tests/hooks/feature-2013-step-in-flight-automark/e-lookahead-guard.sh.
 dispatch_meta_skill() {
     printf '{"tool_name":"Skill","session_id":"%s","transcript_path":"","tool_input":{"skill":"resume-session"}}' "$2" \
         | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
@@ -81,7 +81,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(s));" >/dev/null 2>&1
 # STEP_IN_FLIGHT_ALLOWLIST step. dispatch_lookahead only ever marks `research`
 # (the WI-10 lookahead is hardcoded to that step pre-adoption), so P9's second
 # stalled step needs this instead. Same technique as seed_step_in_flight in
-# tests/feature-1794-stop-guard-exemptions/helpers.sh.
+# tests/hooks/feature-1794-stop-guard-exemptions/helpers.sh.
 mark_step_in_progress() {
     CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
@@ -89,7 +89,7 @@ require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
 
 # seed_workflow_off <tmp> <sid> — writes a real .workflow-off marker file
 # directly, same shape as write_marker_file() in
-# tests/feature-workflow-off-session-override/helpers.sh, so
+# tests/hooks/feature-workflow-off-session-override/helpers.sh, so
 # isWorkflowOff(sid) (hooks/lib/session-markers.js) reads true. Used by P8 to
 # activate a C4-only exemption (EXEMPTION_MATRIX["workflow-off"].c4===true)
 # alongside a genuinely-started, TTL-expired session.
@@ -99,7 +99,7 @@ seed_workflow_off() {
 
 # seed_state_corrupt <tmp> <sid> — writes syntactically-invalid JSON directly
 # as the session's state file (models M4 in
-# tests/feature-1997-mechanism-failure/m-detect.sh). No dispatch/adoption
+# tests/hooks/feature-1997-mechanism-failure/m-detect.sh). No dispatch/adoption
 # happens first: readState() returns null for this file regardless, so the
 # resulting session is pre-workflow-init by construction (verified below —
 # see the P6 comment on why state-corrupt has no "started" counterpart).
@@ -109,7 +109,7 @@ seed_state_corrupt() {
 
 # strip_timestamp <tmp> <sid> <step> — deletes the `at` field from <step>'s
 # event(s), turning an in_progress record into one with no usable timestamp
-# (models M5 in tests/feature-1997-mechanism-failure/m-detect.sh, generalized
+# (models M5 in tests/hooks/feature-1997-mechanism-failure/m-detect.sh, generalized
 # to accept a step so it works after either dispatch_lookahead alone or
 # dispatch_lookahead + complete_workflow_init).
 strip_timestamp() {

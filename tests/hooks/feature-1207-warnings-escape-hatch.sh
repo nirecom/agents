@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1207-warnings-escape-hatch.sh
+# tests/hooks/feature-1207-warnings-escape-hatch.sh
 # Tests: hooks/workflow-gate/review-tests-checker.js, hooks/workflow-state/state-io.js
 # Tags: review-tests, warnings-escape-hatch, warnings-accepted, token-preservation, scope:issue-specific
 #

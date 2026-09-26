@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh
+# tests/bin/bin-concern-ledger-cli-contract/check-staged-discovery.sh
 # Tests: bin/concern-ledger
 # Tags: concern-ledger, check-staged, discovery-helper, classifier-guard, mutation-control, windows-path, scope:issue-specific, pwsh-not-required
 
-# Sourced by tests/bin-concern-ledger-cli-contract.sh (shares its counters and
+# Sourced by tests/bin/bin-concern-ledger-cli-contract.sh (shares its counters and
 # fixtures); split out per rules/coding/file-split.md.
 
 echo ""

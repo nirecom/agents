@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash/content-kinds.sh
+# tests/hooks/feature-2256-input-version-full-hash/content-kinds.sh
 # Tests: hooks/lib/diff-fingerprint.js, hooks/lib/branch-diff.js
 # Tags: supervisor, input-version, content-hash, binary, symlink, gitlink, TL2, scope:issue-specific
 # #2256 round-2 C2: the version hashes file CONTENT, so every change git diff renders as
 # "Binary files differ" (or not at all) still moves it.
-# Parent: tests/feature-2256-input-version-full-hash.sh
+# Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/assembler-failclosed.sh
+# tests/install/feature-2119-settings-allow-ssot/assembler-failclosed.sh
 # Tests: install/assemble-settings.js, install/lib/settings-deploy.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T29: the deploy path is fail-closed, on both CLIs. Sourced AFTER generator.sh.

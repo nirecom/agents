@@ -1,7 +1,7 @@
 # section-b.sh — Section B: Static checks
 # Tests: rules/core-principles.md
 # Tags: core-principles, design, scope:common
-# Sourced by tests/refactor-design-principles.sh after helpers.sh.
+# Sourced by tests/agents/refactor-design-principles.sh after helpers.sh.
 #
 # TL3 gap (what these checks do NOT catch):
 # - Static-text assertions against rules/core-principles.md on disk; they say nothing
@@ -16,7 +16,7 @@
 
 # Body of ONE CPR section from rules/core-principles.md: lines after its
 # `## CPR-<code>` heading, up to the next `## ` heading. Local to this fragment —
-# helpers.sh carries no extractor, and reaching into tests/refactor-1364-cpr-principles.sh
+# helpers.sh carries no extractor, and reaching into tests/bin/refactor-1364-cpr-principles.sh
 # would couple two independently-runnable suites. The `([ \t]|$)` boundary is mandatory:
 # without it `E2C` matches the `CPR-E2E` heading and `UO` matches `CPR-UNV`.
 cpr_section_b() {
@@ -290,7 +290,7 @@ test_B18_no_universality_first() {
 # sweep by the line-scoped [CPR-LEGACY-ID-OK] marker — rewriting it to the new code
 # would make this case assert the opposite of its purpose. Marker contract (when one
 # may be added) is documented at CPR_LEGACY_ID_MARKER in
-# tests/refactor-1364-cpr-principles/mapping.sh.
+# tests/bin/refactor-1364-cpr-principles/mapping.sh.
 test_B19_orth_references_e2c() {
     local f="$AGENTS_DIR/rules/core-principles.md"
     if [ ! -f "$f" ]; then
@@ -306,7 +306,7 @@ test_B19_orth_references_e2c() {
     printf '%s\n' "$body" | grep -qF "CPR-E2C" \
         || problems="$problems; body does not reference CPR-E2C"
     # Targeted, not a second global numeric sweep — G1 in
-    # tests/refactor-1364-cpr-principles.sh owns residual CPR-<N> repo-wide. This
+    # tests/bin/refactor-1364-cpr-principles.sh owns residual CPR-<N> repo-wide. This
     # says only: the stale pointer must be gone from THIS section.
     if printf '%s\n' "$body" | grep -qE "CPR-4([^0-9]|$)"; then  # [CPR-LEGACY-ID-OK]
         problems="$problems; stale 'CPR-4' pointer still inside the CPR-ORTH body"  # [CPR-LEGACY-ID-OK]

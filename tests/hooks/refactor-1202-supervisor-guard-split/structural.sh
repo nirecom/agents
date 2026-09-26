@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-1202-supervisor-guard-split/structural.sh
+# tests/hooks/refactor-1202-supervisor-guard-split/structural.sh
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
 # Sections S and W - where a command POSITION is recognized. Both sections
 # probe the same seam from opposite sides: S asserts the separator anchor set
 # shared by every category regex, W asserts the interpreter-body extractor that

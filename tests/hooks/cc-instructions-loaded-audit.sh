@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-instructions-loaded-audit.sh
+# tests/hooks/cc-instructions-loaded-audit.sh
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/instructions-loaded-receipt.js, hooks/lib/rules-injection-policy.js
 # Tags: rules-injection, instructions-loaded, hook, classifier, table-driven, fail-open, security, TL2, scope:common
 

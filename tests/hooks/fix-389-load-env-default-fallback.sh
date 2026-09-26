@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-389-load-env-default-fallback.sh
+# tests/hooks/fix-389-load-env-default-fallback.sh
 # Tests: hooks/lib/load-env.js
 # Tags: env, load-env, worktree, scope:issue-specific
 # RED for issue #389.

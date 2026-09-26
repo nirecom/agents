@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-shell-snapshots.sh
+# tests/bin/feature-sweep-shell-snapshots.sh
 # Tests: bin/sweep-shell-snapshots.sh, bin/lib/session-sync-markers.sh
 # Tags: sweep, shell-snapshots, maintenance, scope:common, TL2
 #

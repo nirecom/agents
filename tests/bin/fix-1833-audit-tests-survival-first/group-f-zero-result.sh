@@ -1,7 +1,7 @@
 # Group F: the zero-result path — exit code, empty JSON collections, SKILL wording (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, skills/sweep-tests/SKILL.md
 # Tags: TL2, audit-tests, retire, zero-result, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 
 # The healthy steady state is "nothing to retire" — the most-executed path in
 # production and the one most likely to regress unseen. An empty candidate array

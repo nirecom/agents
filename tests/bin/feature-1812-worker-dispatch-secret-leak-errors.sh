@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1812-worker-dispatch-secret-leak-errors.sh
+# tests/bin/feature-1812-worker-dispatch-secret-leak-errors.sh
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/emit.js
 # Tags: worker-dispatch, doc-append, commit-push, credential-exposure, artifact-log, redaction, error-path, adversarial, security, TL2, scope:issue-specific
 #

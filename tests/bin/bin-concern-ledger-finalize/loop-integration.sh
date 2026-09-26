@@ -1,10 +1,10 @@
-# tests/bin-concern-ledger-finalize/loop-integration.sh
+# tests/bin/bin-concern-ledger-finalize/loop-integration.sh
 # Tests: bin/run-codex-review-loop, bin/review-loop-verdict, bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, finalize, run-codex-review-loop, exit-7, trigger-symmetry, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh.
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 # Detail-plan TL2 cases 6(e), 10, 11: wrapper exit-7 propagation, terminal-finalize
 # trigger symmetry across formats, and re-entry after a terminal finalize.
-# Exercised via a mock AGENTS_CONFIG_DIR (idiom of tests/feature-603-run-codex-review-loop.sh):
+# Exercised via a mock AGENTS_CONFIG_DIR (idiom of tests/bin/feature-603-run-codex-review-loop.sh):
 # the reviewer is stubbed; the loop/verdict/ledger scripts under test are real.
 
 echo ""

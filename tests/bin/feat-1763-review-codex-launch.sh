@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1763-review-codex-launch.sh
+# tests/bin/feat-1763-review-codex-launch.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

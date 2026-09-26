@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/orphan.sh
+# tests/bin/feature-sweep-worktrees/orphan.sh
 # Orphan-dir-sweep tests: T8, T8b, T8c, T9, T9b, T9c, T10, T11.
 #
 # Orphan-dir-sweep gates:

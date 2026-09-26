@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/consumer-fallback-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/consumer-fallback-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, fallback, judgment-parsing, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER

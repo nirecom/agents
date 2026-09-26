@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-296-hook-cwd-drift-cleanup.sh
+# tests/hooks/fix-296-hook-cwd-drift-cleanup.sh
 # Tests: hooks/cleanup-orphan-dir.js
 # Tags: worktree, hook, bin, git, tests
 #

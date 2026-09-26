@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/pattern-discovery.sh
+# tests/bin/bin-concern-ledger-reducer/pattern-discovery.sh
 # Tests: bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh
 # Tags: concern-ledger, reducer, pattern-discovery, glob-escape, backslash, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 
 # #2088: `compgen -G` read a Windows-separator plans dir's backslashes as glob
 # escapes and matched nothing. The fix passes the directory to `find` literally

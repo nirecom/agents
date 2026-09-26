@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/check-plan-lang-hook-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/check-plan-lang-hook-cases.sh
 # Tests: hooks/check-plan-lang.js
 # Tags: worktree, docs, hook, plan, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

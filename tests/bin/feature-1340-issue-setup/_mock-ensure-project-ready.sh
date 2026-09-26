@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/_mock-ensure-project-ready.sh — file-specific gh mock
+# tests/bin/feature-1340-issue-setup/_mock-ensure-project-ready.sh — file-specific gh mock
 # Tests: bin/github-issues/lib/ensure-project-ready.sh
 # Tags: github-issues, issue-setup, ensure-project-ready, scope:issue-specific
 #

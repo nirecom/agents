@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-hit-scope.sh
+# tests/hooks/feature-2134-bash-guard/cases-hit-scope.sh
 # Tests: hooks/bash-guard/detect.js, hooks/bash-guard/exemptions.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, exemptions, hit-scope, classifier, scope:issue-specific, pwsh-not-required, TL2
 # H1-H4: hits are per-occurrence, never a blanket boolean. Sourced by the dispatcher.

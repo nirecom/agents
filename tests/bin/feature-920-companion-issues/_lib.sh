@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/_lib.sh
+# tests/bin/feature-920-companion-issues/_lib.sh
 # Shared helpers for the feature-920-companion-issues split test suite.
 #
 # Sourced by each split file (a-series.sh / b-series.sh / c-d-series.sh) so

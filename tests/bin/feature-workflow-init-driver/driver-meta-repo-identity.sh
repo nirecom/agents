@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-meta-repo-identity.sh
+# tests/bin/feature-workflow-init-driver/driver-meta-repo-identity.sh
 # Tests: bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js
 # Tags: workflow-init, driver, meta-classify, cross-repo, repo-map, scope:issue-specific
 

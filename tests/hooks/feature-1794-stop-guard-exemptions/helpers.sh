@@ -3,7 +3,7 @@
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, regression-1794, scope:issue-specific, pwsh-not-required, TL2
 #
 # State/marker seeding and hook drivers for the #1794/#1665/#1685 stop-guard
-# exemption suite. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# exemption suite. Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 # Expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT, and the pass/fail/skip counters.
 
 STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
@@ -251,5 +251,5 @@ no_new_finding() {
 # Session-inheritance fixtures for the #1794 adoption (I) cases live in their own
 # file so neither exceeds the 300-line WARN threshold (rules/coding/file-split.md
 # Pattern A). Sourced last: it depends on STATEIO_NODE / node_path above.
-# shellcheck source=tests/feature-1794-stop-guard-exemptions/helpers/inheritance.sh
+# shellcheck source=tests/hooks/feature-1794-stop-guard-exemptions/helpers/inheritance.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers/inheritance.sh"

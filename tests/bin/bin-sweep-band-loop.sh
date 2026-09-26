@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/bin-sweep-band-loop.sh
+# tests/bin/bin-sweep-band-loop.sh
 # Tests: bin/lib/sweep-band-loop.sh
 # Tags: sweep, band-loop, scope:common, TL1
 #

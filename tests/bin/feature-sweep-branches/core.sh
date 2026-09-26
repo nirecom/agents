@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-branches/core.sh
+# tests/bin/feature-sweep-branches/core.sh
 # Core sweep tests: local-branch lifecycle, age gate, JSON shape, JS unit.
 # Remote-branch behaviors live in remote.sh; SWEEP_AGE_DAYS/--min-age-hours
 # input validation lives in validation.sh.
@@ -7,7 +7,7 @@
 # Tags: sweep, branch, maintenance, bin, git, branch-delete, redirect, scope:common
 #
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-branches/core.sh
+#   bash tests/bin/feature-sweep-branches/core.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

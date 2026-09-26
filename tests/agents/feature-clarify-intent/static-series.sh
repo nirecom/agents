@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-clarify-intent/static-series.sh
+# tests/agents/feature-clarify-intent/static-series.sh
 # Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md
 # Tags: workflow, clarify-intent, planning, intent, plans, scope:common
 # L3 gap (what this test does NOT catch):
@@ -7,7 +7,7 @@
 # Closest-to-action mitigation: N/A (content assertion; no risk category applies).
 #
 # Contract tests for clarify-intent skill (Stage 1: interactive user interview).
-# Moved verbatim from tests/feature-clarify-intent.sh when the file crossed the
+# Moved verbatim from tests/agents/feature-clarify-intent.sh when the file crossed the
 # 500-line HARD cap (rules/coding/file-split.md).
 # Exit 0 always — this is a contract test, not a CI gate yet.
 

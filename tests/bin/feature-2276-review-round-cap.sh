@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2276-review-round-cap.sh
+# tests/bin/feature-2276-review-round-cap.sh
 # Tests: bin/review-loop-verdict, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md
 # Tags: review-loop, round-cap, round-counter, issue-2276, TL2, scope:issue-specific, pwsh-not-required
 #

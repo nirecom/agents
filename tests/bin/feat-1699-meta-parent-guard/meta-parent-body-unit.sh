@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/meta-parent-body-unit.sh
+# tests/bin/feat-1699-meta-parent-guard/meta-parent-body-unit.sh
 # Tests: bin/github-issues/lib/meta-parent-body.sh
 # Tags: issue-create, meta-parent, body, unit, argv, injection, table-driven, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

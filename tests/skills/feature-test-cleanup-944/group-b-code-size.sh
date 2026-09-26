@@ -1,5 +1,5 @@
 # Group B: review-code-size _archive/ exclusion + thresholds (Cases 4-5, Sanity, 20-22)
-# Sourced by tests/feature-test-cleanup-944.sh
+# Sourced by tests/skills/feature-test-cleanup-944.sh
 
 REPO_RCS=$(make_repo)
 mkdir -p "$REPO_RCS/tests/_archive" "$REPO_RCS/tests/_archived" "$REPO_RCS/normal"

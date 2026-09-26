@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-finalize/atomic-failclosed.sh
+# tests/bin/bin-concern-ledger-finalize/atomic-failclosed.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
 # Tags: concern-ledger, finalize, fail-closed, atomic-write, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh.
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 # Detail-plan cases 5, 6(a)-(d), 7: atomic replacement, fail-CLOSED termination,
 # read-only artifact verdict. Portable fault injections: `awk` shadowed on PATH
 # (serialization failure), directory at the artifact path (unwritable dest;

@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, merge-base, base-state, truncation, boundary, prompt-order, scope:issue-specific, pwsh-not-required, TL2
 # Y (#1638) covers what X1-X6 (SUSPECT/RESOLVED) cannot: the remaining base states FALLBACK/UNRESOLVED/RECORDED (Y3-Y5, each a different review-coverage caveat), the exact `>` vs `>=` truncation boundary (Y1-Y2, built to an exact `wc -l`), and whether the scope warning precedes the adversarial preamble (Y6) — a caveat appended after the instruction is read as material, not constraint.

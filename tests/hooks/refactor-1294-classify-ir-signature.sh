@@ -250,7 +250,7 @@ echo "=== Section: classify(ir|string) shim ==="
 assert_eq "classify IR echo read"        "read"  "$(classify_ir 'echo hello')"
 # Post-#1294/#1296: classify() returns "read" for rm — its WRITE_PATTERNS entry
 # was retired; in-scope rm write BLOCKING now covered by isFileOpWriteIR fast-allow
-# (hook-level, verified at tests/feature-canary5-6git/commit2 L2 cases).
+# (hook-level, verified at tests/hooks/feature-canary5-6git/commit2 L2 cases).
 assert_eq "classify IR rm read"          "read"  "$(classify_ir 'rm -rf /tmp/x')"
 # parseFailure → write (fail-closed contract)
 assert_eq "classify IR parseFailure"     "write" "$(classify_ir 'echo \"unterminated')"

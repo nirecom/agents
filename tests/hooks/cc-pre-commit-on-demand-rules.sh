@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/cc-pre-commit-on-demand-rules.sh
+# tests/hooks/cc-pre-commit-on-demand-rules.sh
 # Tests: hooks/pre-commit, bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, on-demand-rules, pre-commit, hook-wiring, backstop, exit-codes, TL2, scope:common
 #
 # The static checker is only as good as its invocation: every other file in this series runs bin/check-on-demand-rules.sh directly, so all stay green if the hook that's supposed to call it on every commit is never wired, wired outside the agents-repo guard, or swallows its exit code — the whole point is stopping a de-injected rule BEFORE the commit lands.
-# The hook is exercised for real — actual hooks/pre-commit, in a throwaway repo that is simultaneously the repo under commit and AGENTS_CONFIG_DIR, so `_pe_is_agents_repo` resolves the same git common-dir for both and the on-demand block is genuinely reached (mirrors the fixture in tests/feature-1642-precommit-prompt-extraction.sh).
+# The hook is exercised for real — actual hooks/pre-commit, in a throwaway repo that is simultaneously the repo under commit and AGENTS_CONFIG_DIR, so `_pe_is_agents_repo` resolves the same git common-dir for both and the on-demand block is genuinely reached (mirrors the fixture in tests/hooks/feature-1642-precommit-prompt-extraction.sh).
 # Exit-code contract (detail plan S2-7): rc 1 (violations) and rc 2 (usage/broken invocation) -> commit BLOCKED; anything else, including a missing or non-executable checker, -> FAIL-OPEN.
 # Fail-open is deliberate and differs from the prompt-extraction backstop next to it, which blocks on 126/127 — asserted, not assumed, since silent behavioural drift either way is invisible from the checker's own tests. Layer: TL2 (real hooks/pre-commit + real git, isolated fixture repos).
 # TL3 gap: whether git actually invokes hooks/pre-commit via core.hooksPath on this host (executed directly here); mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.

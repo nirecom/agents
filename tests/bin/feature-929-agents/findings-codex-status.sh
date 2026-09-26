@@ -1,4 +1,4 @@
-# findings-codex-status.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# findings-codex-status.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: bin/supervisor-findings-codex (R3-C4). STATUS-channel + no-redirect contract.
 # NOTE: RED until write-code creates bin/supervisor-findings-codex (#929); the file
 #   is absent now, so every run yields empty stdout and these asserts fail.

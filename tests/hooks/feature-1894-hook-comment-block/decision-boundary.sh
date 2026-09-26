@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/decision-boundary.sh
+# tests/hooks/feature-1894-hook-comment-block/decision-boundary.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js
 # Tags: comment-block-size, hook, pretooluse, boundary, absolute-judgment, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 

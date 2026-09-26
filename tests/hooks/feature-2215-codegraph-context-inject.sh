@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2215-codegraph-context-inject.sh
+# tests/hooks/feature-2215-codegraph-context-inject.sh
 # Tests: hooks/codegraph-context-inject.js, hooks/lib/codegraph-boundary.js, hooks/lib/path-normalize.js, hooks/lib/settings-drift.js, settings.json
 # Tags: hook-injection, codegraph, prompt-hook, scope-gate, hook-registration, TL2, scope:issue-specific
 #
@@ -19,7 +19,7 @@ MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2215-codegraph
 # statically here, and the hook script is invoked directly with `node`); and
 # Windows shim resolution against a real `npm install -g` layout, beyond the
 # synthetic shim trio built below.
-# Closest-to-action mitigation: tests/TL3-codegraph-cli-contract.sh (M37-M40,
+# Closest-to-action mitigation: tests/hooks/TL3-codegraph-cli-contract.sh (M37-M40,
 # RUN_TL3-gated) runs the real CLI's `prompt-hook` / `--version` against a
 # fixture home/project, exercising the contract this file only stubs.
 

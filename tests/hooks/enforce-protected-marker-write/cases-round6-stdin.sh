@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-6: PROGRAM TEXT DELIVERED ON AN INTERPRETER'S STDIN.
 #
 # Round-5 closed here-string bodies by routing them to the SHELL scanner, which

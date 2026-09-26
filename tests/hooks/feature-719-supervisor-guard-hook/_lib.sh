@@ -1,4 +1,4 @@
-# tests/feature-719-supervisor-guard-hook/_lib.sh
+# tests/hooks/feature-719-supervisor-guard-hook/_lib.sh
 # Shared helpers for feature-719-supervisor-guard-hook tests.
 # Sourced by the entrypoint and case files; relies on `set -u` from entrypoint.
 

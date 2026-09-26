@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-833-review-tests-gate/section-g.sh
+# tests/hooks/feature-833-review-tests-gate/section-g.sh
 # Tests: hooks/workflow-gate/review-tests-checker.js, hooks/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, checker, state-io, scope:issue-specific
 #
 # Section G: checkReviewTests unit tests and markReviewTestsComplete error handling.
-# Sourced by tests/feature-833-review-tests-gate.sh. Inherits parent helpers
+# Sourced by tests/hooks/feature-833-review-tests-gate.sh. Inherits parent helpers
 # (PASS, FAIL, TMPDIR_BASE, WORKFLOW_DIR, run_with_timeout, NOW_ISO).
 
 set -u

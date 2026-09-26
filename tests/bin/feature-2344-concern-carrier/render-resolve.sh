@@ -1,7 +1,7 @@
-# tests/feature-2344-concern-carrier/render-resolve.sh
+# tests/bin/feature-2344-concern-carrier/render-resolve.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/render.sh, bin/concern-ledger
 # Tags: concern-ledger, concerns-log, carrier, render-concerns-log, issue-2344, TL1, scope:issue-specific, pwsh-not-required
-# Sourced by tests/feature-2344-concern-carrier.sh — shares its fixture + helpers.
+# Sourced by tests/bin/feature-2344-concern-carrier.sh — shares its fixture + helpers.
 # Cases D1-D3 (render / resolved / archive-clear) and D9 (resolve lifecycle).
 
 # ---------------------------------------------------------------------------

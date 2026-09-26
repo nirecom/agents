@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-uv-no-project.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-uv-no-project.sh — sourced, not run.
 # Tests: bin/compose-doc-append-entry
 # Tags: worker-dispatch, doc-append, compose, uv, supply-chain, credential-exposure, security, adversarial, canary, TL2, scope:issue-specific
 # The hostile PEP 517 fixture, the offline `gh`, the unpatched mutant and the

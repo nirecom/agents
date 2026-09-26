@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
 # Tests: hooks/enforce-system-ops.js, hooks/lib/system-ops-categories.js, settings.json
 # Tags: system-ops, mutation-probe, classifier, hook-registration, security, scope:common, pwsh-not-required
 # Section M - mutation evidence: each probe neuters exactly one category regex in

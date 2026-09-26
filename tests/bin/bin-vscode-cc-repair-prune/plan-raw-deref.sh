@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
 # Tests: bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/prune.js
 # Tags: bin, vscode, prune, execute, security, type-safety, tally, session-files, scope:common, pwsh-not-required, TL2
 #

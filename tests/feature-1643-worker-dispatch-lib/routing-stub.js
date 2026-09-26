@@ -1,7 +1,7 @@
 "use strict";
 // tests/feature-1643-worker-dispatch-lib/routing-stub.js
 //
-// `node -r` preload for tests/feature-1643-worker-dispatch-routing.sh.
+// `node -r` preload for tests/bin/feature-1643-worker-dispatch-routing.sh.
 //
 // It replaces bin/worker-dispatch/registry.js's `loadModule` so the dispatcher
 // routes to a worker whose behaviour the test chooses, while argv parsing,

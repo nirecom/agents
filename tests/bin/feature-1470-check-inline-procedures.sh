@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-1470-check-inline-procedures.sh
+# tests/bin/feature-1470-check-inline-procedures.sh
 # Tests: bin/check-inline-procedures
 # Tags: prompt, bin, quality-gate, inline-procedure, adapter, scope:issue-specific, scope:feature-1642, layer:TL2
 #
-# Detection semantics moved to tests/feature-1642-check-prompt-extraction.sh.
+# Detection semantics moved to tests/bin/feature-1642-check-prompt-extraction.sh.
 #
 # After issue #1642, bin/check-inline-procedures is a THIN ADAPTER over
 # bin/check-prompt-extraction (the single decision CLI). It owns no detection

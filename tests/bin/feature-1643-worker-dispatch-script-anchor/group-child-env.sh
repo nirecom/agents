@@ -1,4 +1,4 @@
-# Part of tests/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
+# Part of tests/bin/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
 #

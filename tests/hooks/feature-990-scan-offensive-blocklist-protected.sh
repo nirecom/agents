@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-offensive-blocklist-protected.sh
+# tests/hooks/feature-990-scan-offensive-blocklist-protected.sh
 # Tests: hooks/block-dotenv.js
 # Tags: scan, offensive, block-dotenv, protected-path, hook, scope:issue-specific
 # RED for issue #990 — block-dotenv.js must protect .offensive-content-blocklist

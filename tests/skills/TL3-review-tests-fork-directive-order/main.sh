@@ -74,5 +74,5 @@ fi
 # A spontaneous Read by either run (model already knows the convention) is possible and is
 # treated as inconclusive/non-vacuity-not-shown rather than a failure, since this gate can only
 # observe one sample per run, not the underlying probability. Closest-to-action mitigation:
-# the static text proof in tests/feature-2140-fork-dispatch-shell-commands.sh, and the
+# the static text proof in tests/skills/feature-2140-fork-dispatch-shell-commands.sh, and the
 # per-session receipt written by hooks/instructions-loaded-audit.js for the real skill.

@@ -1,7 +1,7 @@
 # Group D: refcount judgment — orphan / partial-orphan / alive (#2081)
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # refcount = surviving-case count. All cases orphan → refcount 0 / verdict
 # orphan (whole-unit GC). Some orphan → partial-orphan. None orphan → alive.

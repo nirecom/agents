@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash/_common.sh
+# tests/hooks/feature-2256-input-version-full-hash/_common.sh
 # Tests: hooks/lib/diff-fingerprint.js
 # Tags: test-infrastructure, fixture, shared-lib, scope:issue-specific
 # Shared fixture + assertion preamble for the feature-2256-input-version-full-hash sections.

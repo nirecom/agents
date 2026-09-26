@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, negative-control, TL2, scope:common, exclusions
 # What must stay OUT of the owned-name sets, and the boundary between tampering and
 # ordinary traffic. A guard that over-collects fires on its own bookkeeping or on bash

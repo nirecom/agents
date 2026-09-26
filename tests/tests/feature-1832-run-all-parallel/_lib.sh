@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/_lib.sh — shared fixture builder (SOURCE ONLY).
+# tests/tests/feature-1832-run-all-parallel/_lib.sh — shared fixture builder (SOURCE ONLY).
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/lib/run-all-durations.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, ledger, scope:issue-specific
 

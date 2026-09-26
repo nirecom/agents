@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/feature-sweep-branches/validation.sh
+# tests/bin/feature-sweep-branches/validation.sh
 # Tests: bin/sweep-branches.sh
 # Tags: sweep, branch, maintenance, bin, validation, scope:common
 #
 # SWEEP_AGE_DAYS / --min-age-hours input validation tests (split out of
 # core.sh per rules/coding/file-split.md Pattern A hard-limit).
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-branches/validation.sh
+#   bash tests/bin/feature-sweep-branches/validation.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
