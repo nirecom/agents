@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-directive-contract.sh
+# tests/bin/feature-workflow-init-driver/driver-directive-contract.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/directive.js, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/phases/write-context.js
 # Tags: workflow-init, driver, directive-contract, security, scope:issue-specific
 #

@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/argless-and-prefix.sh
+# tests/install/feature-2119-settings-allow-ssot/argless-and-prefix.sh
 # Tests: install/lib/settings-allow-rules.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T27: the issue's own acceptance condition, pinned as strings. Sourced AFTER generator.sh.

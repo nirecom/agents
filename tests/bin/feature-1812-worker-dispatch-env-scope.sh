@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1812-worker-dispatch-env-scope.sh
+# tests/bin/feature-1812-worker-dispatch-env-scope.sh
 # Tests: bin/worker-dispatch/spawn.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/workers/doc-append.js
 # Tags: worker-dispatch, spawn, env-scope, credential-scope, ssh-auth-sock, gh-token, security, scan-outbound, pr, TL2, scope:issue-specific
 #
@@ -32,9 +32,9 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # TL3 gap (what this TL2 test does NOT catch):
 #   - Whether a real `git push` child still reaches a real ssh-agent through the
 #     narrowed env — the scope is asserted, not the resulting authentication.
-#     tests/TL3-worker-dispatch-child-env-ssh-push/ covers that tier.
+#     tests/bin/TL3-worker-dispatch-child-env-ssh-push/ covers that tier.
 #   - Whether a real `gh` child authenticates from the scoped GH_TOKEN
-#     (tests/TL3-worker-dispatch-child-env-gh-doc-append/).
+#     (tests/bin/TL3-worker-dispatch-child-env-gh-doc-append/).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"

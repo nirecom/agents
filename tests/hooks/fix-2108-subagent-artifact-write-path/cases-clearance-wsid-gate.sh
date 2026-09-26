@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/protected-basenames.js, hooks/lib/resolve-workflow-session-id.js
 # Tags: off-clearance, fallback-wsid, session-marker, classifier, boundary, security, scope:issue-specific, pwsh-not-required, TL2
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 SHIM_HOOK="$AGENTS_NODE/hooks/supervisor-off-proposal-shim.js"
 OFFCLR_NODE="$AGENTS_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 RESOLVER_NODE="$AGENTS_NODE/hooks/lib/resolve-workflow-session-id.js"

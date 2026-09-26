@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/test-design/parser-regex-tests.md
 # Tags: frontmatter, table-driven, fixtures, scope:common
-# Part of tests/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
+# Part of tests/hooks/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
 # Test 0: table-driven fixtures for the check_paths_frontmatter helper itself.
 # These assertions must PASS regardless of the rules/ conversion state — they
 # exercise the validator, not the repository content.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-2098-extract-field-error-branch.sh
+# tests/bin/fix-2098-extract-field-error-branch.sh
 # Tests: bin/github-issues/lib/extract-field.sh, bin/github-issues/issue-to-history.sh
 # Tags: github, issues, extract-field, history, error-branch, scope:issue-specific, layer:TL2
 #

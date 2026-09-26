@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/lint-plan-lang-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/lint-plan-lang-cases.sh
 # Tests: hooks/lib/lint-plan-lang.js
 # Tags: worktree, docs, lint, plan, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

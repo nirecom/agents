@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1630-overlay-cross-validation.sh
+# tests/hooks/fix-1630-overlay-cross-validation.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/lib/agents-config-dir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
 #
@@ -22,7 +22,7 @@
 #          finalize script is permitted from a main worktree any more, so they
 #          now assert BLOCK and stand as retired-capability pins.
 #
-# Case groups live in tests/fix-1630-overlay-cross-validation/:
+# Case groups live in tests/hooks/fix-1630-overlay-cross-validation/:
 #   xv-families.sh — candidate-mismatch BLOCK families, VALUE-* pins, canaries
 #   strip-units.sh — stripRelSuffix units (LIVE)
 #   path-edges.sh  — path edge shapes for the segment-wise suffix strip (LIVE)
@@ -84,7 +84,7 @@ done
 
 # ----------------------------------------------------------------------------
 # Harness + fixture builders, kept name-compatible with
-# tests/fix-1600-finalize-worker-overlay.sh so its allow-cases.sh can be sourced
+# tests/hooks/fix-1600-finalize-worker-overlay.sh so its allow-cases.sh can be sourced
 # verbatim as the normal-path ALLOW regression (no case duplication).
 # ----------------------------------------------------------------------------
 json_quote() { node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$1"; }

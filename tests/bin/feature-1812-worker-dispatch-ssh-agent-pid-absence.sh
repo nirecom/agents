@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh
+# tests/bin/feature-1812-worker-dispatch-ssh-agent-pid-absence.sh
 # Tests: bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, commit-push, ssh-agent-pid, ssh-auth-sock, git-push, credential-scope, canary, security, TL2, scope:issue-specific
 #
@@ -44,7 +44,7 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 #   so OpenSSH's own env handling and the Windows named-pipe agent (which uses no
 #   SSH_AUTH_SOCK at all) stay unverified.
 # - Whether a leaked SSH_AGENT_PID would really let planted code kill the agent.
-# tests/TL3-worker-dispatch-ssh-transport.sh is the real-agent tier.
+# tests/bin/TL3-worker-dispatch-ssh-transport.sh is the real-agent tier.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh.
 

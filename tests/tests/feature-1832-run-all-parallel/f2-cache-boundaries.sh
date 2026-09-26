@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/f2-cache-boundaries.sh
+# tests/tests/feature-1832-run-all-parallel/f2-cache-boundaries.sh
 # Tests: tests/run-all.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, cache, boundary, off-by-one, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests

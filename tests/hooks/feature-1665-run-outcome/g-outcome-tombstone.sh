@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/g-outcome-tombstone.sh
+# tests/hooks/feature-1665-run-outcome/g-outcome-tombstone.sh
 # Tests: hooks/workflow-state/record-step-verdict.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow, run-outcome, record-step-verdict, tombstone, symmetry, TL1, scope:issue-specific
 #

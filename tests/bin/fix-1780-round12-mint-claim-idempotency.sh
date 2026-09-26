@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-mint-claim-idempotency.sh
+# tests/bin/fix-1780-round12-mint-claim-idempotency.sh
 # Tests: bin/request-off-clearance, hooks/lib/consume-exact-file.js
 # Tags: off-clearance, mint, claim, mint-nonce, idempotency, replay, single-use, concurrency, race, filesystem, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

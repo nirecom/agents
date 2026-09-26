@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-forge-write-scan.sh
+# tests/bin/fix-1591-forge-write-scan.sh
 # Tests: bin/github-issues/reopen-with-update.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh
 # Tags: github, issues, contents-api, git-data-api, scan-outbound, security, scope:issue-specific, layer:TL2
 #

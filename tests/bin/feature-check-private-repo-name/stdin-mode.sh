@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-check-private-repo-name/stdin-mode.sh
+# tests/bin/feature-check-private-repo-name/stdin-mode.sh
 # Tests: bin/check-private-repo-name.js
 # Tags: private-repo, outbound-scan, security, classifier, stdin, table-driven, TL2, scope:common
 # S1-S6 [F3] — PRIVATE_REPO_NAMES_STDIN=1, the third and highest-precedence name source.

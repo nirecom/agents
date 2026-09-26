@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-path-coverage-match.sh
+# tests/hooks/unit-path-coverage-match.sh
 # Tests: hooks/lib/path-coverage-match.js
 # Tags: unit, path-coverage, scope:common, pwsh-not-required
 #

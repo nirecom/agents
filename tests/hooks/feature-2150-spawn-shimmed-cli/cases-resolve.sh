@@ -2,7 +2,7 @@
 # Tests: hooks/lib/spawn-shimmed-cli.js
 # Tags: codegraph, win32-shim, path-resolution, pathext, classifier, allowlist, boundary, table-driven, unit, scope:issue-specific
 # lang-check: ignore (CJK path segments below are deliberate Unicode test data, not identifiers)
-# Sections R and P of tests/feature-2150-spawn-shimmed-cli.sh — resolveOnPath()
+# Sections R and P of tests/hooks/feature-2150-spawn-shimmed-cli.sh — resolveOnPath()
 # and pathextList(), reached through the exported spawnShimmedCli() and read off
 # the file it decided to launch. Verdicts: `direct …` the resolved file was
 # launched as-is; `node …` the batch shim was parsed and its verified JavaScript

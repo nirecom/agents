@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feat-migrate-repo-preview-capture.sh
+# tests/skills/feat-migrate-repo-preview-capture.sh
 # Tests: skills/migrate-repo/scripts/preview-and-capture.sh
 # Tags: migration, repo, preview, identity-guard, scope:issue-specific
 #

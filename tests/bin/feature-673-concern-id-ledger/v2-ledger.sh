@@ -1,7 +1,7 @@
-# tests/feature-673-concern-id-ledger/v2-ledger.sh
+# tests/bin/feature-673-concern-id-ledger/v2-ledger.sh
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop, bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/reduce.sh
 # Tags: worktree, codex, review, bin, env, scope:issue-specific
-# Sourced by tests/feature-673-concern-id-ledger.sh (appended cases 14-18).
+# Sourced by tests/bin/feature-673-concern-id-ledger.sh (appended cases 14-18).
 
 # Parent cases 1-13 must keep passing unchanged — that equivalence is the reducer
 # swap's acceptance condition. These cases pin what the swap adds: the v2 on-disk

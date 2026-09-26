@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/e-cascade.sh
+# tests/hooks/feature-1665-seq-cascade/e-cascade.sh
 # Tests: hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/effective-state.js
 # Tags: workflow-state, write-code-resume, cascade, updated-seq, derived-state, scope:issue-specific, pwsh-not-required, TL1
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-692-enforce-worktree-gh-api-and-strip-git.sh
+# tests/hooks/feature-692-enforce-worktree-gh-api-and-strip-git.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js
 # Tags: enforce-worktree, classify, gh-api, strip-quoted-args, issue-close, step-6h
 #

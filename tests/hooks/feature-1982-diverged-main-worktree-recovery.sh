@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1982-diverged-main-worktree-recovery.sh
+# tests/hooks/feature-1982-diverged-main-worktree-recovery.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js
 # Tags: enforce-worktree, main-worktree-cleanup, merge-recovery, feature-1982, scope:issue-specific
 # TL3 gap (what this test does NOT catch):

@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-1102-parse-worktrees.sh
+# tests/hooks/feature-1102-parse-worktrees.sh
 # Tests: hooks/lib/parse-worktrees.js, bin/parse-worktrees
 # Tags: parse, worktrees, intent, bin, scope:issue-specific, pwsh-not-required
 #
 # Tests for hooks/lib/parse-worktrees.js via the CLI wrapper bin/parse-worktrees.
-# Mirrors the style of tests/feature-issues-section-parser.sh (parse-via-CLI pattern).
+# Mirrors the style of tests/bin/feature-issues-section-parser.sh (parse-via-CLI pattern).
 #
 # All tests are GREEN: parse-worktrees.js is already implemented.
 #

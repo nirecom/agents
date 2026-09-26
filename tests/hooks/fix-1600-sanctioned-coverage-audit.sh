@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1600-sanctioned-coverage-audit.sh
+# tests/hooks/fix-1600-sanctioned-coverage-audit.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, security, static, TL1, scope:issue-specific
 #
@@ -24,8 +24,8 @@
 #
 # TL1 (static): the subject is a literal array in one source file plus a grep
 # over prompt text. Guard BEHAVIOR for the surviving SANCTIONED entries is
-# covered by tests/fix-959-enforce-worktree-worker-path-arg.sh, and for the
-# dispatch path by tests/feature-1643-worker-dispatch-guard.sh.
+# covered by tests/hooks/fix-959-enforce-worktree-worker-path-arg.sh, and for the
+# dispatch path by tests/hooks/feature-1643-worker-dispatch-guard.sh.
 
 set -u
 

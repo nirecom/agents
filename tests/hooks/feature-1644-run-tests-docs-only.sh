@@ -32,7 +32,7 @@ NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
 WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
 # Reused read-only probe (CPR-SSOT: one fixture-state reader for all #1644 tests).
-PROBE_N="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"

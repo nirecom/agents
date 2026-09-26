@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-issue-739-enforce-worktree-sequenced-exclude.sh
+# tests/hooks/fix-issue-739-enforce-worktree-sequenced-exclude.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/bash-write-targets.js, hooks/lib/shell-segments.js
 # Tags: worktree, enforce, hook, sequenced, backup, parsefailure, security
 #

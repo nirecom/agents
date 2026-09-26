@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/unit-is-github-dotcom-remote.sh
+# tests/bin/unit-is-github-dotcom-remote.sh
 # Tests: bin/is-github-dotcom-remote
 # Tags: bin, url-classification, table-driven, scope:common, pwsh-not-required, TL2
 #

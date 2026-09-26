@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/resolver-contract.sh
+# tests/bin/fix-1899-origin-repo-resolver/resolver-contract.sh
 # Tests: bin/github-issues/lib/origin-repo.sh, bin/github-issues/lib/resolve-project.sh
 # Tags: origin-resolution, github-issues, resolve-project, module-contract, TL2, scope:issue-specific
 #

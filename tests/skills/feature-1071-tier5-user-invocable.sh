@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1071-tier5-user-invocable.sh
+# tests/skills/feature-1071-tier5-user-invocable.sh
 # Tests: skills/issue-close-migrated/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/issue-reconcile/SKILL.md
 # Tags: static, skill, user-invocable, frontmatter, scope:issue-specific
 #

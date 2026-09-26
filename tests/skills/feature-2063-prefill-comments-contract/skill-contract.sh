@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2063-prefill-comments-contract/skill-contract.sh
+# tests/skills/feature-2063-prefill-comments-contract/skill-contract.sh
 # Tests: skills/workflow-init/SKILL.md, bin/workflow/render-issue-comments
 # Tags: workflow-init, prompt-contract, static-grep, issue-comments, tl2, scope:issue-specific
 
@@ -61,7 +61,7 @@ cat > "$W3B_SH" <<'W3BSH'
 #!/bin/bash
 # argv: <agents-dir> <checkpoint-copy-destination>
 set -u
-. "$1/tests/feature-workflow-init-driver/driver-issue-comments/_lib.sh"
+. "$1/tests/bin/feature-workflow-init-driver/driver-issue-comments/_lib.sh"
 W3B_OUT_CKPT="$2"
 [ -f "$DRIVER" ] || { echo "BOOTSTRAP=sut-missing"; exit 3; }
 setup_case wid-2063-w3b

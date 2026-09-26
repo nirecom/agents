@@ -1,4 +1,4 @@
-// Helper for tests/enforce-protected-marker-write/cases-round13-onunknown.sh.
+// Helper for tests/hooks/enforce-protected-marker-write/cases-round13-onunknown.sh.
 //
 // Lives in a FILE rather than a `node -e` body for the same reason as its
 // sibling ./round5-containment-probe.js: hooks/block-clearance-token-write.js

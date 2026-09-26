@@ -1,8 +1,8 @@
-# tests/feature-2276-review-code-security-codex/prestaged-fallback.sh
+# tests/bin/feature-2276-review-code-security-codex/prestaged-fallback.sh
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh, bin/concern-ledger
 # Tags: review-loop, security-code, prestaged, fail-closed, TL2, scope:issue-specific
 #
-# Sourced by tests/feature-2276-review-code-security-codex.sh.
+# Sourced by tests/bin/feature-2276-review-code-security-codex.sh.
 # When codex is unavailable the security-scanner report re-enters the SAME loop
 # through --prestaged-*: same round, same ledger, same verdict table, and a
 # producer set closed against anything else.

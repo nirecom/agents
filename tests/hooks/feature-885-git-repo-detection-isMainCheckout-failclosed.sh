@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-git-repo-detection-isMainCheckout-failclosed.sh
+# tests/hooks/feature-885-git-repo-detection-isMainCheckout-failclosed.sh
 # Tests: hooks/enforce-worktree/git-repo-detection.js
 # Tags: git-repo-detection, isMainCheckout, fail-closed, axis-a, feature-885
 # Tests for issue #885 — isMainCheckout() becomes trivalue:

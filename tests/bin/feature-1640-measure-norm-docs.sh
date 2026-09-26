@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1640-measure-norm-docs.sh
+# tests/bin/feature-1640-measure-norm-docs.sh
 # Tests: bin/measure-norm-docs
 # Tags: measurement, norm-docs, frontmatter-parser, cli-args, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -78,7 +78,7 @@ summary() { # <key>
 
 # POSIX read denial with proof it took effect. chmod is advisory on MSYS/Windows and
 # ignored for root, so a naive `chmod 000` would produce a false PASS. Mirrors deny_read
-# in tests/feature-1640-count-subagents.sh (CPR-ORTH).
+# in tests/bin/feature-1640-count-subagents.sh (CPR-ORTH).
 deny_read() { # <path>
     chmod 000 "$1" 2>/dev/null || return 1
     head -c 1 "$1" >/dev/null 2>&1 && { chmod 644 "$1" 2>/dev/null || true; return 1; }
@@ -264,7 +264,7 @@ else
       # at this repo's hooks/. enforce-worktree / pre-commit would then refuse every
       # fixture commit ("commits from main worktree are blocked"), leaving a repo with
       # zero commits and an unresolvable HEAD~1. Repo-wide convention — see
-      # tests/feature-1094-evidence-resolver.sh and tests/feature-1180-commit-lang-check/lib.sh.
+      # tests/hooks/feature-1094-evidence-resolver.sh and tests/hooks/feature-1180-commit-lang-check/lib.sh.
       git config core.hooksPath /dev/null
       git config commit.gpgsign false
       git config user.email "test@example.com"

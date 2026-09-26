@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write.sh
+# tests/hooks/enforce-clearance-token-write.sh
 # Tests: hooks/block-clearance-token-write.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, block-write, vector2, classifier, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap: the hook firing on a real host — this file invokes the classifier directly, so
 # N3 only asserts PreToolUse registration statically; a real turn proves it
-# (tests/TL3-hook-clearance-token-write.sh), gap-checked by bin/check-verification-gate.sh.
+# (tests/hooks/TL3-hook-clearance-token-write.sh), gap-checked by bin/check-verification-gate.sh.
 # #1608 anti-cheat (best-effort): block direct writes to <workflowDir>/<sid>.off-clearance,
 # mirroring block-memory-direct.js plus a vector2 interpreter-body heuristic. The
 # issue-provenance / .session-transcript suffixes are unreserved since #1763 (section R).

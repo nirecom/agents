@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2120-workflow-gate-block-heredoc-heredoc.sh
+# tests/hooks/feature-2120-workflow-gate-block-heredoc-heredoc.sh
 # Tests: hooks/workflow-gate/early-gate-messages.js, hooks/enforce-worktree.js, hooks/enforce-worktree/handle-edit-write.js, hooks/workflow-gate/worktree-entry-gate.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/enforce-worktree/universal-target-allow.js, hooks/lib/strip-quoted-args.js, hooks/lib/alt-target-remedy.js
 # Tags: workflow-gate, enforce-worktree, heredoc, block-message, tier3, TL2, pwsh-not-required, scope:issue-specific
 #

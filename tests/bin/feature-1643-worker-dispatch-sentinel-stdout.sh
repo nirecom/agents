@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-sentinel-stdout.sh
+# tests/bin/feature-1643-worker-dispatch-sentinel-stdout.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch.js, hooks/lib/sentinel-patterns.js
 # Tags: worker-dispatch, emit, sentinel, stdout, security, defense-in-depth, TL1, scope:issue-specific
 #

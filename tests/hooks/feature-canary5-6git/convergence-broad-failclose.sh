@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/convergence-broad-failclose.sh
+# tests/hooks/feature-canary5-6git/convergence-broad-failclose.sh
 # Tests: hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/git-write-ir.js, hooks/enforce-worktree/git-repo-detection.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, git-write, security, scope:issue-specific, hook-registration, pwsh-not-required
 #

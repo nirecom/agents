@@ -1,7 +1,7 @@
 # Group G: whole-unit GC on refcount==0 (file + sibling folder) e2e (#2081)
 # Tests: bin/audit-tests.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, e2e, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # A case-unit file whose every case is orphan → refcount 0 → verdict orphan →
 # the current whole-unit git rm (dispatcher + sibling folder). The delete gate

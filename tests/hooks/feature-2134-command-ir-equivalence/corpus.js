@@ -111,8 +111,8 @@ module.exports = [
   { id: "k04-preserve-spans-chain", label: "preserveSubstitutionSpans across a && chain", cmd: "VAR=$(echo x) && echo $VAR", opts: { preserveSubstitutionSpans: true } },
 
   // --- L: shapes existing tests actually depend on --------------------------------
-  // Source: tests/feature-1293-canary2-ir.sh, tests/unit-command-ir.sh,
-  //       tests/fix-1780-round11-substitution-additivity.sh
+  // Source: tests/hooks/feature-1293-canary2-ir.sh, tests/hooks/unit-command-ir.sh,
+  //       tests/hooks/fix-1780-round11-substitution-additivity.sh
   { id: "l01-clean-command", label: "clean command (no separators)", cmd: "git merge" },
   { id: "l02-pipe-tee", label: "pipe into tee", cmd: "git merge | tee log.txt" },
   { id: "l03-bash-c", label: "bash -c with a quoted script", cmd: "bash -c 'git stash'" },

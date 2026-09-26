@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-issue-close-stage-schema.sh
+# tests/hooks/feature-1673-issue-close-stage-schema.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js, skills/issue-close-stage/SKILL.md
 # Tags: worker-dispatch, issue-close-stage, registry, capability, payload, status-vocabulary, TL1, scope:issue-specific
 #
@@ -15,7 +15,7 @@
 #
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real /issue-close-stage turn writing the payload file and invoking the CLI.
-#     tests/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated) covers that seam.
+#     tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated) covers that seam.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 

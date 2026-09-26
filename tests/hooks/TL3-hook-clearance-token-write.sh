@@ -2,7 +2,7 @@
 # Tests: hooks/block-clearance-token-write.js
 # Tags: clearance-token, pre-tool-use, hook, security, TL3, run-e2e, scope:common
 # Real-wiring seam test for block-clearance-token-write.js (PreToolUse). The sibling
-# tests/enforce-clearance-token-write.sh asserts the classifier's verdict; that misses
+# tests/hooks/enforce-clearance-token-write.sh asserts the classifier's verdict; that misses
 # mis-registration (wrong event/matcher/absent) and a harness that ignores a deny for
 # the tool in question. The observable that survives both is the protected file itself:
 # after a live session is told to modify a real clearance token, the bytes are unchanged.

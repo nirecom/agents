@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/k-dispatcher-jobs.sh
+# tests/tests/feature-1832-run-all-parallel/k-dispatcher-jobs.sh
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, worker-dispatch, capability, security, TL1, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
@@ -16,7 +16,7 @@
 # because RUN_ALL_CACHE_DIR isn't in the dispatcher's child env allowlist.
 
 # TL3 gap: real wall-clock speedup and deadline reachability on a CI host —
-# tests/TL3-worker-dispatch-run-tests.sh is the gated tier.
+# tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier.
 
 set -u
 

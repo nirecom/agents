@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/judge-boundary-live-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/judge-boundary-live-cases.sh
 # Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, judge, live-agent, boundary, tl3, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER

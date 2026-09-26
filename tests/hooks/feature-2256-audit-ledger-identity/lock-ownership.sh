@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-audit-ledger-identity/lock-ownership.sh
+# tests/hooks/feature-2256-audit-ledger-identity/lock-ownership.sh
 # Tests: hooks/lib/supervisor-state-writer/lock.js
 # Tags: supervisor, state-lock, owner-token, stale-reclaim, fail-closed, TL2, scope:issue-specific
 # #2256 S2-c / round-2 C3: the mkdir lock is owned by a token, reclaimed unlink-then-rmdir,
-# reentrant, and fail-closed. Parent: tests/feature-2256-audit-ledger-identity.sh
+# reentrant, and fail-closed. Parent: tests/hooks/feature-2256-audit-ledger-identity.sh
 
 set -uo pipefail
 

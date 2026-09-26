@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g01-g08.sh
+# tests/hooks/feature-534-stop-final-report-guard/g01-g08.sh
 # Tests G1, G2, G3, G4, G6, G7, G8.
 # Sourced by feature-534-stop-final-report-guard.sh — no shebang, no runner.
 

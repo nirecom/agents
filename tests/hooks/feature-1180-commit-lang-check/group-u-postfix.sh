@@ -1,4 +1,4 @@
-# tests/feature-1180-commit-lang-check/group-u-postfix.sh
+# tests/hooks/feature-1180-commit-lang-check/group-u-postfix.sh
 # Group U (continued) — line-number accuracy + raw-scan cases (post-fix):
 # CL-U9, CL-U10. Sourced by the dispatcher after lib.sh.
 

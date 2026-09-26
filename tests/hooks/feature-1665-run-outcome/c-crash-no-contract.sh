@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/c-crash-no-contract.sh
+# tests/hooks/feature-1665-run-outcome/c-crash-no-contract.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/outcome.js
 # Tags: workflow, run-outcome, tombstone, fail-safe, hook, TL2, scope:issue-specific
 #

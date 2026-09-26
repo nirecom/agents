@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1665-background-work-removed.sh
+# tests/hooks/feature-1665-background-work-removed.sh
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/lib/protected-basenames.js, hooks/stop-premature-stop-guard.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-state/state-io/zombie-cleanup.js, bin/workflow/lib/next-step/verdict.js, settings.json, rules/stop-guard-exemptions.md
 # Tags: stop-hook, exemption, session-marker, sentinel, removal, background-work, step-in-flight, regression-1665, scope:issue-specific, pwsh-not-required, TL1
 

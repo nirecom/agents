@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-workflow-gate-prompt-extraction.sh
+# tests/hooks/feature-1642-workflow-gate-prompt-extraction.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/prompt-extraction-gate.js, bin/check-prompt-extraction
 # Tags: workflow-gate, hook, gate3, prompt-extraction, scope:issue-specific, scope:feature-1642, layer:TL2
 #

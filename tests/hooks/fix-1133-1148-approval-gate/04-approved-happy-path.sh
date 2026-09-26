@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step, hooks/workflow-mark.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, outline, detail, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G04: Approved happy path (#1133). A CONFIRM_OUTLINE sentinel, processed by
 # the confirm-approval-handler in workflow-mark.js, records a plan_approvals

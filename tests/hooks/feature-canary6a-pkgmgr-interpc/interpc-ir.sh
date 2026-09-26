@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary6a-pkgmgr-interpc/interpc-ir.sh
+# tests/hooks/feature-canary6a-pkgmgr-interpc/interpc-ir.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js
 # Tags: scope:issue-specific, interpreter-c, canary-6a, ir-migration, fail-closed, security, pwsh-not-required
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-open-pr-url.sh
+# tests/bin/feature-1673-open-pr-url.sh
 # Tests: bin/open-pr-url.js, hooks/lib/open-external.js, skills/commit-push/SKILL.md, hooks/pr-created-open.js
 # Tags: worker-dispatch, commit-push, pr-url, open-external, url-validation, fail-open, TL2, scope:issue-specific
 #

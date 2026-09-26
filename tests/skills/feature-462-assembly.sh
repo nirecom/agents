@@ -470,7 +470,7 @@ else
 fi
 
 # (m4) in-place mode: arg2 and arg3 are the same file, inside an allowed root. The shape
-# tests/feature-866-flatten-drafts.sh depends on -- the constraint must not break it.
+# tests/skills/feature-866-flatten-drafts.sh depends on -- the constraint must not break it.
 M_INPLACE="$M_PLANS/m-inplace.md"
 cp "$PLANNER_FIXTURE" "$M_INPLACE"
 EXIT_CODE=0

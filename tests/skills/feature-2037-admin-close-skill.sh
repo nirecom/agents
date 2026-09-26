@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2037-admin-close-skill.sh
+# tests/skills/feature-2037-admin-close-skill.sh
 # Tests: skills/issue-close-verified/SKILL.md, skills/supervisor-report/SKILL.md, hooks/workflow-mark/enforce-override-handlers.js, bin/supervisor-report
 # Tags: rules-injection, progressive-disclosure, admin-close, issue-close-verified, sentinel, executable-doc, supervisor-report, TL2, scope:issue-specific
 #

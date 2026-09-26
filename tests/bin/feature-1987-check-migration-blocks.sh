@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1987-check-migration-blocks.sh
+# tests/bin/feature-1987-check-migration-blocks.sh
 # Tests: bin/check-migration-blocks.sh, bin/lib/check-migration-blocks.js
 # Tags: migration-blocks, lint, pre-commit, scope:issue-specific, pwsh-not-required
 

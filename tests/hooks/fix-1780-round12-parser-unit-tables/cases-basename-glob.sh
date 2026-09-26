@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
 # Sections N, G and B - the basename side of the pipeline:
 #   N  normalizeCandidateBasename()  (hooks/lib/basename-glob-normalize.js)
 #   G  hasGlobMetachar() + candidateBasenameMatchesAnySuffix()

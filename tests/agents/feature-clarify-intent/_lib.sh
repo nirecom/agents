@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-clarify-intent/_lib.sh
+# tests/agents/feature-clarify-intent/_lib.sh
 # Shared helpers for the feature-clarify-intent split test suite.
 #
 # Sourced by each split file (static-series.sh / companion-precheck-series.sh)

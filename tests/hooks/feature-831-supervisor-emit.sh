@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-831-supervisor-emit.sh
+# tests/hooks/feature-831-supervisor-emit.sh
 # Tests: hooks/lib/supervisor-emit.js
 # Tags: supervisor, em-supervisor, layer1, facade, auto-report
 # Tests for issue #831 — supervisor-emit.js facade contract.

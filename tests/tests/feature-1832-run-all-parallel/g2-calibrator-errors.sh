@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/g2-calibrator-errors.sh
+# tests/tests/feature-1832-run-all-parallel/g2-calibrator-errors.sh
 # Tests: bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, calibrator, error-matrix, injection, idempotency, TL2, scope:issue-specific
 # Serial: drives the calibrator, which the sibling g-calibrator.sh also drives

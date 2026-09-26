@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/lib/workflow-plans-dir.js
 # Tags: workflow-gate, early-gate, plans-dir, allowlist, containment, path-traversal, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section A21 — PLANS_DIR CONTAINMENT (review C1). Section A proves the allowlist
 # says "yes" inside the plans dir and "no" to unrelated geography; it never attacks

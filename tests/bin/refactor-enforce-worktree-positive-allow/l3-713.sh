@@ -1,9 +1,9 @@
 
-# tests/refactor-enforce-worktree-positive-allow/l3-713.sh
+# tests/bin/refactor-enforce-worktree-positive-allow/l3-713.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/strip-quoted-args.js, hooks/lib/quote-spans.js
 # Tags: worktree, enforce, hook, issue-create, quote-spans, scope:issue-specific
 #
-# Sourced by tests/refactor-enforce-worktree-positive-allow.sh.
+# Sourced by tests/bin/refactor-enforce-worktree-positive-allow.sh.
 #
 # ============================================================================
 # L3 — #713: /issue-create callable from main worktree (T1–T10)
@@ -19,8 +19,8 @@
 # body — the embedded LF is folded so the command is still recognised as a
 # sanctioned pattern) and in L3.48 (ANSI-C quoting with skill prefix).
 # Direct unit coverage of the shared layer now lives in
-# tests/unit-quote-spans.sh (span geometry) and
-# tests/unit-quote-spans-differential.sh (old-vs-new foldDqNewlines parity),
+# tests/hooks/unit-quote-spans.sh (span geometry) and
+# tests/hooks/unit-quote-spans-differential.sh (old-vs-new foldDqNewlines parity),
 # so no dedicated helper unit test is added here; L3.46 and L3.48 remain the
 # closest-to-action coverage for the worker-script call path.
 

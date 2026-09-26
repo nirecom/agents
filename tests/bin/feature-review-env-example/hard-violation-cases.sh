@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-review-env-example/hard-violation-cases.sh
+# tests/bin/feature-review-env-example/hard-violation-cases.sh
 # Tests: bin/review-env-example
 # Tags: env-example, bin, style-check, hard, scope:common
 # Sourced by ../feature-review-env-example.sh — helpers come from there.

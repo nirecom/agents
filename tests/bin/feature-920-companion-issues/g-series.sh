@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/g-series.sh
+# tests/bin/feature-920-companion-issues/g-series.sh
 # Tests: bin/github-issues/find-companion-issues.sh, bin/github-issues/lib/companion-passes.sh
 # Tags: companion-issues, find-companion-issues, file-overlap-tag, kw-tag, scope:issue-specific
 # L3 gap (what this test does NOT catch):

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-9 HIGH-2: SPELLINGS THAT *CREATE* THE PROTECTED BASENAME.
 #
 # The candidate-basename normalizer modelled globs, NTFS streams and Windows

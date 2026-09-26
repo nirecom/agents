@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/hint-tier-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/hint-tier-cases.sh
 # Tests: hooks/lib/lang-config.js, hooks/lib/lint-plan-lang.js, hooks/check-plan-lang.js, hooks/lib/lint-worktree-notes-lang.js
 # Tags: worktree, docs, hint-tier, plan, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh AFTER

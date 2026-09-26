@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1569-quote-span-regression.sh
+# tests/hooks/fix-1569-quote-span-regression.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/arg-value-guard.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/quote-spans.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
 #
@@ -7,7 +7,7 @@
 # + rejectsUnsafeArgTail wiring). Verified against the pre-C3 tree:
 #
 # Expected to FAIL today (15 rows, all in the direct-module ARG-* / RISK10-*
-# section — tests/fix-1569-quote-span-regression/arg-tail-module.sh):
+# section — tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh):
 #   - ARG-accept dq pipe / sq pipe / dq semicolon / dq ampersand /
 #     mixed foo"|"bar / escaped \$( in dq — rule 5, the deliberate relaxation
 #     that IS the #1569 fix; today the flat metachar regex in worker-script.js
@@ -28,7 +28,7 @@
 #   - the R5-* / RISK2A-* hook-level ALLOW rows: at the hook boundary these are
 #     already allowed (the standard classifier sees no repo write), which is why
 #     the relaxation itself is pinned in the direct-module ARG-* section
-#     (tests/fix-1569-quote-span-regression/arg-tail-module.sh)
+#     (tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh)
 #   - every other BLOCK row (rules 1-4 are fail-closed today)
 #   - the remaining RISK10-* rows (sanctioned-bin profile: plain `>` / `2>&1` /
 #     `&>` all rejected under allowRedirectAmpersand:false, contrasted with the
@@ -256,33 +256,33 @@ assert_block "FP6b-attack #1191 same form, tee target moved into the MAIN worktr
 # The pairing this section provided (clean ALLOW vs. dirty BLOCK, so that
 # "reject everything" cannot pass) is not lost: it moved to the value-token
 # level, where the enum/plans-dir predicate still ships. It is asserted in
-# tests/fix-1630-overlay-cross-validation/metachar-args.sh (ARG-tok-* rejected
+# tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh (ARG-tok-* rejected
 # rows against their ARG-tok-plain/real/nested/dashes accepted controls), and at
 # hook level by the LIVE1679-* ALLOW rows in
-# tests/fix-1679-finalize-overlay-arg-contract.sh.
+# tests/hooks/fix-1679-finalize-overlay-arg-contract.sh.
 # ============================================================================
 assert_block "PR1612 finalize loop-step with clean enum decision — eval path retired (#1673)" \
     "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept\")\""
 assert_block "PR1612-attack finalize loop-step with decision 'accept|evil'" \
     "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept|evil\")\""
 
-# shellcheck source=tests/fix-1569-quote-span-regression/rules-hook.sh
+# shellcheck source=tests/hooks/fix-1569-quote-span-regression/rules-hook.sh
 . "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/rules-hook.sh"
 run_rule_hook_cases
 
-# shellcheck source=tests/fix-1569-quote-span-regression/arg-tail-module.sh
+# shellcheck source=tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh
 . "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh"
 run_arg_tail_module_cases
 
-# shellcheck source=tests/fix-1569-quote-span-regression/case-pattern.sh
+# shellcheck source=tests/hooks/fix-1569-quote-span-regression/case-pattern.sh
 . "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/case-pattern.sh"
 run_case_pattern_cases
 
-# shellcheck source=tests/fix-1569-quote-span-regression/fold-ok-gate.sh
+# shellcheck source=tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh
 . "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh"
 run_fold_ok_gate_cases
 
-# shellcheck source=tests/fix-1569-quote-span-regression/canary.sh
+# shellcheck source=tests/hooks/fix-1569-quote-span-regression/canary.sh
 . "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/canary.sh"
 run_canary_cases
 

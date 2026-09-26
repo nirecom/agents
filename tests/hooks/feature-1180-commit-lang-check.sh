@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1180-commit-lang-check.sh
+# tests/hooks/feature-1180-commit-lang-check.sh
 # Tests: hooks/lib/lint-commit-lang.js, hooks/pre-commit, hooks/lib/lang-config.js, hooks/lib/path-coverage-match.js, hooks/lib/glob-match.js
 # Tags: lang-enforce, commit-hook, scope:issue-specific
 #
@@ -18,7 +18,7 @@
 #
 # Dispatcher: this entry file (invoked by run-all.sh at this exact path) sources
 # the shared harness (lib.sh) and each case group under
-# tests/feature-1180-commit-lang-check/, in the original case order. It aggregates
+# tests/hooks/feature-1180-commit-lang-check/, in the original case order. It aggregates
 # PASS/FAIL and exits non-zero if any case failed. See rules/coding/file-split.md
 # (HARD 500-line limit) for why the cases live in sibling files.
 

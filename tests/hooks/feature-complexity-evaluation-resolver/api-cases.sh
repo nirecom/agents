@@ -1,4 +1,4 @@
-# tests/feature-complexity-evaluation-resolver/api-cases.sh
+# tests/hooks/feature-complexity-evaluation-resolver/api-cases.sh
 # Tests: hooks/workflow-state/state-io.js, hooks/workflow-state/skip-signal-resolver.js
 # Tags: L2, workflow, complexity-evaluation, scope:issue-specific
 #

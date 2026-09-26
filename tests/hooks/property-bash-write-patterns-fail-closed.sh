@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/property-bash-write-patterns-fail-closed.sh
+# tests/hooks/property-bash-write-patterns-fail-closed.sh
 # Tests: hooks/lib/bash-write-patterns.js, hooks/lib/command-ir.js
 # Tags: hook, classify, property-test, scope:issue-specific
 #

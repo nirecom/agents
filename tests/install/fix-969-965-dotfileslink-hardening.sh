@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-969-965-dotfileslink-hardening.sh
+# tests/install/fix-969-965-dotfileslink-hardening.sh
 # Tests: install/linux/dotfileslink.sh, profile-snippet.sh
 # Tags: installer, dotfileslink, profile-snippet, scope:issue-specific, pwsh-not-required, bugfix-969, bugfix-965
 #

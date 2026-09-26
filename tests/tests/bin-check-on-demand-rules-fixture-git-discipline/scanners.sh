@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh, tests/bin-check-on-demand-rules.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh, tests/bin/bin-check-on-demand-rules.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, scanners, TL2, scope:common
 # Shared primitives for this directory's case files: the text scanners D1/D2/D9 are built
 # from, the fixtures.sh body dump D8/D10/D11 read, and the table-driven assertion helpers

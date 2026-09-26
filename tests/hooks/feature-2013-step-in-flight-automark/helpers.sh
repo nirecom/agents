@@ -3,7 +3,7 @@
 # Tags: stop-hook, step-in-flight, posttooluse, regression-2013, scope:issue-specific, pwsh-not-required, TL2
 #
 # State seeding and hook drivers for the #2013 step-in-flight auto-mark suite.
-# Sourced by tests/feature-2013-step-in-flight-automark.sh; expects AGENTS_DIR,
+# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh; expects AGENTS_DIR,
 # _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
 
 STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
@@ -26,7 +26,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # outline/detail ->complete transitions are approval-gated (#1133): markStep
 # would throw UnapprovedCompletionError and silently no-op behind the
 # redirected stderr below. Record a sanctioned "reset-sentinel" approval first
-# (same pattern as APPROVE_GATED_JS in tests/feature-1733-state-event-stream)
+# (same pattern as APPROVE_GATED_JS in tests/hooks/feature-1733-state-event-stream)
 # so seeding succeeds regardless of the host's CONFIRM_OUTLINE/CONFIRM_DETAIL
 # setting.
 seed_step() {

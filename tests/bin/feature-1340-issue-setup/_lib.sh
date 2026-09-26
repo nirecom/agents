@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/_lib.sh — shared scaffolding
+# tests/bin/feature-1340-issue-setup/_lib.sh — shared scaffolding
 #
 # Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
 # run standalone. Provides the scaffolding common to all 7 split files:
@@ -25,7 +25,7 @@ _FEATURE_1340_LIB_SOURCED=1
 
 set -u
 
-# Repo root, resolved relative to this lib (tests/feature-1340-issue-setup/).
+# Repo root, resolved relative to this lib (tests/bin/feature-1340-issue-setup/).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 PASS=0

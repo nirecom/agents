@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-routing.sh
+# tests/bin/feature-workflow-init-driver/driver-routing.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
 # Tags: workflow-init, driver, routing, directive-contract, meta-classify, origin-resolution, fail-closed, scope:issue-specific
 #
@@ -238,7 +238,7 @@ teardown_case
 # secret-bearing input. parse-remote-url.js redacts the userinfo (redactUserinfo
 # → "***@") before building any message; this pins that it holds through the real
 # driver on a real git fixture. The token is a FAKE `ghp_EXAMPLEEXAMPLE`
-# placeholder, matching tests/fix-1899-parse-remote-url/redaction.sh.
+# placeholder, matching tests/hooks/fix-1899-parse-remote-url/redaction.sh.
 setup_case wid-r5f
 R5F_TOKEN='ghp_EXAMPLEEXAMPLE'
 # github.com host (so the host check passes) but no owner/repo in the path, so the

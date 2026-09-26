@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-891-l2-phase-schema-writer.sh
+# tests/hooks/fix-891-l2-phase-schema-writer.sh
 # Tests: hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, layer2, l2-phase, schema
 # L3 gap (what this test does NOT catch):

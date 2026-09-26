@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-719-supervisor-guard-hook/g1-g19.sh
+# tests/hooks/feature-719-supervisor-guard-hook/g1-g19.sh
 # Test functions G1-G19 for supervisor-guard hook.
 # _lib.sh must be sourced by the caller before sourcing this file.
 

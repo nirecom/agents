@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: bin/sweep-shell-snapshots.sh
 # Tags: sweep, shell-snapshots, security, injection, scope:common, TL2
-# Part file of tests/feature-sweep-shell-snapshots.sh. Every input this tool sees
+# Part file of tests/bin/feature-sweep-shell-snapshots.sh. Every input this tool sees
 # is attacker-adjacent: snapshot bodies are literally whatever stdout leaked into
 # a login shell, and the filenames come from the same untrusted directory. T17
 # covers hostile names, T18 hostile bodies, T19 a symlink pointing out of scope.

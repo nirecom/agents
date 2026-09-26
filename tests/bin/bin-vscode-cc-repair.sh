@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-vscode-cc-repair.sh
+# tests/bin/bin-vscode-cc-repair.sh
 # Tests: bin/vscode-cc-repair
 # Tags: bin, vscode, extension-patch, scope:common, pwsh-not-required, TL2
 #
@@ -14,7 +14,7 @@
 # - the two pre-rename concurrency branches (`raced` -> exit 0, `changed-during-patch` ->
 #   exit 1): only a real concurrent writer (VS Code auto-update, a second patch run)
 #   can land inside the re-read/rename window. See the Skipped-Because block in
-#   tests/bin-vscode-cc-repair/failclosed-paths.sh
+#   tests/bin/bin-vscode-cc-repair/failclosed-paths.sh
 # - runtime filesystem faults on the write path (.bak write, tmp write, rename,
 #   post-rename verify): same Skipped-Because block
 # Documented SKIP categories (each increments SKIP and prints why):

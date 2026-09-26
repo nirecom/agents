@@ -14,7 +14,7 @@
 # still exposes `steps` / `skip_verdict` at the top level (the projection is pasted onto
 # the returned object). No fixture reads the state FILE raw, so the append-only migration
 # needs no change here. The event-level contract for skip_verdict annotations lives in
-# tests/feature-1733-state-event-stream/annotation-fold.sh.
+# tests/hooks/feature-1733-state-event-stream/annotation-fold.sh.
 #
 # This is a dispatcher (file-split rule: >500 lines). Static cases live here;
 # behavioral suites live in the sibling feature-speculative-skip-complete/ folder.

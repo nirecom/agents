@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-929-supervisor-finding-status.sh
+# tests/hooks/feature-929-supervisor-finding-status.sh
 # Tests: hooks/lib/supervisor-finding-status.js
 # Tags: supervisor, em-supervisor, finding-status, codex-review, unit
 # RED for issue #929.

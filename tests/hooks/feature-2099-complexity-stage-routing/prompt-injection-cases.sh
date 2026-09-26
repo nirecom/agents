@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/prompt-injection-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/prompt-injection-cases.sh
 # Tests: skills/_shared/judge-task-complexity.md, hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, prompt-injection, security, adversarial, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

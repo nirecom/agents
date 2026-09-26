@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/review-tests/scripts/select-staged-files.sh, skills/review-tests/scripts/run-codex-review-loop.sh, bin/resolve-session-id
 # Tags: scope:issue-specific, pwsh-not-required, session-id, ssot, dup-group-keep:size-hard-limit
-# Part of tests/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
 # Cases BR-A..BR-C (#2270 S5-4): the two review-tests scripts receive the bridge's
 # rc, and only rc 2 means "no session". rc 3 (resolver threw) and rc 127 (node
 # absent) are faults: they must surface as exit 4 (HALT), never as exit 3, which

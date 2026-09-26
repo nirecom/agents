@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-worktree-off-clearance-state-matrix.sh
+# tests/hooks/enforce-worktree-off-clearance-state-matrix.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/handle-edit-write.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/write-tools.js
 # Tags: enforce-worktree, off-clearance, workflow-state-dir, clearance-validation, tool-parity, runinterminal, runcommands, notebookedit, editfiles, pretooluse, enforce-worktree-off, protected-branch, main-worktree, security, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 #
@@ -7,7 +7,7 @@
 # prefix is reserved for real-environment seams gated on RUN_TL3 (a live
 # `claude -p`); this file drives the hook as a real PreToolUse SUBPROCESS with
 # piped stdin — the same substrate as its two style references
-# (tests/fix-1709-workflow-dir-write-allow.sh, tests/fix-1780-round4-write-tool-parity.sh),
+# (tests/hooks/fix-1709-workflow-dir-write-allow.sh, tests/hooks/fix-1780-round4-write-tool-parity.sh),
 # both tagged TL2. It is therefore filed as TL2 and named without the TL3
 # prefix, so `ls tests/TL3-*` keeps meaning "gated, expensive, real host".
 #
@@ -16,7 +16,7 @@
 #   live session, and the OFF-clearance pipeline's real read/write of
 #   <workflowDir>/<sid>.off-clearance flowing through the registered hook.
 #   Registration itself is asserted statically in
-#   tests/fix-1780-round4-write-tool-parity.sh section R.
+#   tests/hooks/fix-1780-round4-write-tool-parity.sh section R.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 #

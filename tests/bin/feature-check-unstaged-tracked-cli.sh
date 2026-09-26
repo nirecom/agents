@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-check-unstaged-tracked-cli.sh
+# tests/bin/feature-check-unstaged-tracked-cli.sh
 # Tests: bin/check-unstaged-tracked.sh, hooks/workflow-gate/staged-evidence.js
 # Tags: cli, bin, unstaged-tracked, gate2, git
 #

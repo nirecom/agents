@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-c2-label-891-892-phase4.sh
+# tests/agents/fix-supervisor-c2-label-891-892-phase4.sh
 # Tests: agents/supervisor.md
 # Tags: supervisor, em-supervisor, layer2, fix
 # RED for issue #892 (add 6th JD checklist item for /issue-create Phase 4 detection).

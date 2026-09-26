@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
 # Section C - the category A-F classifier table and the category LABEL table.
 
 # ===========================================================================

@@ -4,7 +4,7 @@
 #
 # Contract under test — the SESSION_SYNC toggle itself, separated from the two
 # profile-snippet call sites (those live in
-# tests/fix-1225-profile-snippet-guards/session-sync-gate.sh and
+# tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh and
 # tests/main-profile-codes.Tests.ps1):
 #
 #   1. the resolver contract — which exit code bin/get-config-var --is-off
@@ -19,12 +19,12 @@
 # *automatic* profile-snippet call sites (startup auto-fetch, `codes()`
 # auto-push). Without an unconditional bootstrap the manual subcommands would
 # have no repo/remote/attributes to act on. That contract is pinned in
-# tests/main-session-sync/session-sync-independence.sh,
+# tests/bin/main-session-sync/session-sync-independence.sh,
 # tests/main-session-sync.Tests.ps1, and T20/T21 below.
 #
 # TL3 gap (what this test does NOT catch):
 # - A real `install.sh` / `install.ps1` run on a clean machine: the executed
-#   matrix in tests/main-session-sync-toggle/installer-exec.sh stubs every
+#   matrix in tests/bin/main-session-sync-toggle/installer-exec.sh stubs every
 #   install step except the gate under test, so a step whose real behaviour
 #   re-execs or reorders the installer is still unexercised.
 # - The resolver reading the user's real `.env`: it is exercised against a
@@ -296,7 +296,7 @@ tc_env_example_comment_block
 #   1. the toggle governs AUTOMATIC sync only — `bin/session-sync.sh push|pull|
 #      reset` keep working when it is off, which is the whole reason the manual
 #      subcommands are ungated (pinned in
-#      tests/main-session-sync/session-sync-independence.sh);
+#      tests/bin/main-session-sync/session-sync-independence.sh);
 #   2. the value domain, in the same `Format: off (default) | on.` shape every
 #      other boolean entry uses (RUN_TL3, ENFORCE_WORKTREE), so the shipped
 #      default is legible without reading the resolver.
@@ -367,7 +367,7 @@ tc_env_example_comment_wording
 # T20/T21 — the same installer contract proven by execution rather than by
 # source text: both installers are run as real subprocesses against a fully
 # stubbed install/ tree, and the session-sync init step's own stub is the
-# observable. See tests/main-session-sync-toggle/installer-exec.sh for why the
+# observable. See tests/bin/main-session-sync-toggle/installer-exec.sh for why the
 # static T17/T18 assertions above cannot stand alone.
 # shellcheck source=main-session-sync-toggle/installer-exec.sh
 . "$AGENTS_DIR/tests/bin/main-session-sync-toggle/installer-exec.sh"

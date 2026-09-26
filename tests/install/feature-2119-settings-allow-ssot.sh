@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2119-settings-allow-ssot.sh
+# tests/install/feature-2119-settings-allow-ssot.sh
 # Tests: install/settings-allow-commands.txt, install/lib/settings-allow-rules.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js, hooks/lib/settings-drift.js, hooks/post-merge, hooks/post-checkout, settings.json, docs/architecture/claude-code/settings.md
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
@@ -90,7 +90,7 @@ ROWS=0
 # preflight. The staged claude-global/settings.json makes bin/check-verification-gate.sh fire
 # category `hook-registration`, which is the prompt forcing that spot-check.
 # The two git-hook CALLERS are covered at TL2 by hook-callers.sh (real assembler, fixture HOME);
-# only what needs a real machine is deferred -- reason in tests/fix-846-settings-drift-hooks.sh.
+# only what needs a real machine is deferred -- reason in tests/hooks/fix-846-settings-drift-hooks.sh.
 #
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
@@ -101,7 +101,7 @@ ROWS_EXPECTED=637 # T3a 4 + T3b 25 + T46 10 + T4 33 + T4-empty 2 + T4-dup 2 + T5
                    # + T23 39 + T31 187 + T32 3 + T45 5 + T33 4 + T34 14 + T35 4 + T36 8
                    # + T37 8 + T38 5 + T39 3 + T40 16 + T41 17 + T42 14 + T43 33 + T44 12
                    # + T47 4 + T49 30
-                   # T26 (27) and T48 (37) moved to tests/prompt-bash-node-calling-convention.sh:
+                   # T26 (27) and T48 (37) moved to tests/install/prompt-bash-node-calling-convention.sh:
                    # both assert a class-level invariant that outlives this issue-specific suite.
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/sa-2119.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }

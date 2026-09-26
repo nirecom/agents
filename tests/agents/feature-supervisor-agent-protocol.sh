@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-agent-protocol.sh
+# tests/agents/feature-supervisor-agent-protocol.sh
 # Tests: agents/supervisor.md, agents/supervisor-audit.md
 # Tags: scope:issue-specific, pwsh-not-required, supervisor, em-supervisor, findings-codex
 # L3 gap (NOT caught): the real supervisor / supervisor-audit subagents following the new

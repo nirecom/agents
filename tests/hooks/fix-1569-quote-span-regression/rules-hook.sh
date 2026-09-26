@@ -1,11 +1,11 @@
-# tests/fix-1569-quote-span-regression/rules-hook.sh
+# tests/hooks/fix-1569-quote-span-regression/rules-hook.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree.js, hooks/lib/quote-spans.js
 # Tags: hook, worktree, enforce, arg-tail, quote-spans, security, regression, scope:issue-specific
 #
 # STATUS: the rule-5 ALLOW rows are RED until C3 lands (a quoted SET-A
 # metacharacter still rejects the sanctioned fast path today); every BLOCK row
 # is GREEN and must stay green. Sourced by
-# tests/fix-1569-quote-span-regression.sh.
+# tests/hooks/fix-1569-quote-span-regression.sh.
 #
 # rejectsUnsafeToken decision rules 1-6, observed through the real hook.
 
@@ -63,7 +63,7 @@ run_rule_hook_cases() {
     #          Rejecting the fast path therefore falls through to the standard
     #          classifier, which sees no write and allows, so ALLOW/BLOCK cannot
     #          distinguish rule 2 from rule 6 at this layer.
-    # Covered at: tests/unit-quote-spans.sh (ansic span shape) and the `$'a|b'` /
+    # Covered at: tests/hooks/unit-quote-spans.sh (ansic span shape) and the `$'a|b'` /
     #          `$'unclosed string` corpus rows in tests/fixtures/quote-spans-corpus.txt.
 
     # ── Risk-2a: the new bare-'(' subshell frame must not make a quoted paren

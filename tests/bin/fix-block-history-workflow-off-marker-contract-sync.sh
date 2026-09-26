@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-block-history-workflow-off-marker-contract-sync.sh
+# tests/bin/fix-block-history-workflow-off-marker-contract-sync.sh
 # Tests: docs/architecture/claude-code/marker-bypass-contract.md, hooks/, settings.json
 # Tags: docs-sync, marker-bypass, static-check, scope:common, pwsh-not-required, TL1, TL2
 # TL3 gap (what this test does NOT catch):

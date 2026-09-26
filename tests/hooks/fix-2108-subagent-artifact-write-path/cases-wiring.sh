@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/protected-basenames.js, hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/handle-bash-write.js, hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/lib/claude-scratchpad-base.js
 # Tags: protected-basename, ssot, marker-gate, session-context, enforce-worktree, block-clearance-token-write, scratchpad, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Sections C2..C4 + D — everything AROUND the stem rule. C2: exactly one stem rule
 # exists (a second copy is how the two call chains drift apart). C3: the marker gate's

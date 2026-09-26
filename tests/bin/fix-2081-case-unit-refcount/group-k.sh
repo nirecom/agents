@@ -1,7 +1,7 @@
 # Group K: idempotency — a second --apply is a clean no-op (#2081)
 # Tests: bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, idempotency, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # The nightly cron re-runs against a tree the previous pass may already have
 # swept. After the first --apply removes the orphan case block, the file holds

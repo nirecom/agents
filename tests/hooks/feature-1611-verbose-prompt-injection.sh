@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1611-verbose-prompt-injection.sh
+# tests/hooks/feature-1611-verbose-prompt-injection.sh
 # Tests: hooks/lib/model-identity.js, hooks/lib/verbose-prompt.js, hooks/workflow-state/state-io.js, hooks/session-start.js, hooks/post-compact.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
 #
@@ -154,11 +154,11 @@ try {
 # The cases execute at source time, so this order IS the execution order.
 # ---------------------------------------------------------------------------
 FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1611-verbose-prompt-injection"
-# shellcheck source=tests/feature-1611-verbose-prompt-injection/unit-model-identity.sh
+# shellcheck source=tests/hooks/feature-1611-verbose-prompt-injection/unit-model-identity.sh
 . "$FRAGMENT_DIR/unit-model-identity.sh"
-# shellcheck source=tests/feature-1611-verbose-prompt-injection/provider-and-hooks.sh
+# shellcheck source=tests/hooks/feature-1611-verbose-prompt-injection/provider-and-hooks.sh
 . "$FRAGMENT_DIR/provider-and-hooks.sh"
-# shellcheck source=tests/feature-1611-verbose-prompt-injection/adversarial-and-hygiene.sh
+# shellcheck source=tests/hooks/feature-1611-verbose-prompt-injection/adversarial-and-hygiene.sh
 . "$FRAGMENT_DIR/adversarial-and-hygiene.sh"
 
 echo ""

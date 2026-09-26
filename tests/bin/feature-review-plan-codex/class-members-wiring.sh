@@ -1,4 +1,4 @@
-# tests/feature-review-plan-codex/class-members-wiring.sh
+# tests/bin/feature-review-plan-codex/class-members-wiring.sh
 # Sub-file sourced by feature-review-plan-codex.sh (Pattern A).
 # Tests: bin/review-plan-codex --class-members wiring for #2228/Step-9.
 # Tags: codex, review, class-members, scope:issue-specific, TL2

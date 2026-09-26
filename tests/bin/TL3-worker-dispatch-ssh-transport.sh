@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-ssh-transport.sh
+# tests/bin/TL3-worker-dispatch-ssh-transport.sh
 # Tests: bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/spawn.js
 # Tags: worker-dispatch, commit-push, ssh-agent, ssh-auth-sock, git-push, adversarial, canary, security, real-environment, TL3, scope:common
 # A REAL agent-authenticated `git push` that really moves a remote ref, run

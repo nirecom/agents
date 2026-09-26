@@ -1,6 +1,6 @@
 # Tests: bin/session-sync.sh
 # Tags: bin, git, session-sync, reset, mtime, scope:common
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 
 echo ""
 echo "=== session-sync.sh reset tests ==="
@@ -118,7 +118,7 @@ fi
 # positionally, so option-shaped values are rejected as dates. GNU coreutils only
 # (Git Bash / MSYS2); BSD/macOS flag parsing is a known coverage gap.
 # Payload matrix pinned identical to bin/cc-session-mtime's in
-# tests/cc-session-mtime.sh — symmetric sinks of one class (CPR-ORTH).
+# tests/bin/cc-session-mtime.sh — symmetric sinks of one class (CPR-ORTH).
 # Table-driven per skills/_shared/test-design/parser-regex-tests.md. Columns:
 # case-name | timestamp value written into the JSONL row; @MARKER@ expands to
 # $DASHY_MARKER, a pre-existing file assertion (4) proves untouched.

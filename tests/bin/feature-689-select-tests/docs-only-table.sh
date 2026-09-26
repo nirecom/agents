@@ -1,4 +1,4 @@
-# Part of tests/feature-689-select-tests.sh (sourced, not standalone).
+# Part of tests/bin/feature-689-select-tests.sh (sourced, not standalone).
 # Tests: bin/is-docs-only
 # Tags: docs-only, allowlist, table-driven, ssot, scope:issue-specific, pwsh-not-required, TL2
 # D — bin/is-docs-only alone: a CLASSIFIER over the allowlist (SSOT: DOCS_ONLY_ALLOWLIST

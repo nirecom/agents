@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/orphan-classifier.sh
+# tests/install/feature-2119-settings-allow-ssot/orphan-classifier.sh
 # Tests: install/gen-settings-allow.js, install/path-exposed-commands.txt
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T14-T16: --check as a classifier over the DEPLOYED file. Sourced AFTER write-and-drift.sh.

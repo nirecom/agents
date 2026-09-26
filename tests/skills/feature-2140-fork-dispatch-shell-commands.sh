@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2140-fork-dispatch-shell-commands.sh
+# tests/skills/feature-2140-fork-dispatch-shell-commands.sh
 # Tests: skills/review-tests/SKILL.md, skills/refactor-prompts/SKILL.md, rules/shell-commands.md
 # Tags: rules, prompt, dispatch, fork, scope:issue-specific, pwsh-not-required, TL2
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-check-prompt-extraction/allowlist.sh
+# tests/bin/feature-1642-check-prompt-extraction/allowlist.sh
 # Tests: bin/check-prompt-extraction, bin/lib/prompt-extraction/allowlist.js
 # Tags: prompt, bin, prompt-extraction, allowlist, table-driven, write-allowlist, scope:issue-specific, scope:feature-1642, layer:TL2
 #
@@ -20,14 +20,14 @@
 #   WILDCARD = number of entries whose <count> is '*'
 #   ENTRIES  = total entry rows (diagnostic only; the ratchet does not judge on it)
 #
-# Split out of tests/feature-1642-check-prompt-extraction.sh per
+# Split out of tests/bin/feature-1642-check-prompt-extraction.sh per
 # rules/coding/file-split.md Pattern A (500-line HARD limit). Setup boilerplate is
 # duplicated deliberately: a shared helpers.sh would couple files that must stay
 # independently runnable by the test runner.
 #
 # TL3 gap (what this test does NOT catch):
 # - The committed repo-root .prompt-extraction-allowlist actually shrinking over time;
-#   that ratchet lives in tests/feature-1642-prompt-extraction-static-guards.sh.
+#   that ratchet lives in tests/bin/feature-1642-prompt-extraction-static-guards.sh.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: installer.
 
 set -u

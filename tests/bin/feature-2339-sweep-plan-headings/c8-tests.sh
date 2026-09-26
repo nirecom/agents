@@ -1,4 +1,4 @@
-# tests/feature-2339-sweep-plan-headings/c8-tests.sh
+# tests/bin/feature-2339-sweep-plan-headings/c8-tests.sh
 # Sourced by feature-2339-sweep-plan-headings.sh
 # C8: full 7-section canonical outline with unknown section — reorder, preservation, idempotency.
 

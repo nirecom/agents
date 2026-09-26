@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, tests/feature-issue-create-skill/section-dispatch-bulk.sh
+# Tests: skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, tests/agents/feature-issue-create-skill/section-dispatch-bulk.sh
 # Tags: workflow-init, meta-routing, scope:issue-specific
 #
 # Issue #1181 — workflow-init WI-8 sub-issue guard for Path META. The guard

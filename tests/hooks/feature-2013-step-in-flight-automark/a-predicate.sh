@@ -1,6 +1,6 @@
 # a-predicate.sh — A1-A15: the isStepInFlight / anyStepInFlight predicates and
 # the STEP_IN_FLIGHT_ALLOWLIST policy module they read (#2013).
-# Sourced by tests/feature-2013-step-in-flight-automark.sh.
+# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh.
 # Tests: hooks/lib/step-in-flight-policy.js, hooks/workflow-state/lifecycle.js, settings.json
 # Tags: step-in-flight, predicate, allowlist, regression-2013, scope:issue-specific, pwsh-not-required, TL1
 

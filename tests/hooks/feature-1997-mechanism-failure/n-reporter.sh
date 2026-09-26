@@ -1,6 +1,6 @@
 # n-reporter.sh — M6-M11: reportMechanismFailureOnce, the side-effecting half
 # that reports a mechanism failure exactly once (#1997).
-# Sourced by tests/feature-1997-mechanism-failure.sh.
+# Sourced by tests/hooks/feature-1997-mechanism-failure.sh.
 # Tests: hooks/lib/mechanism-failure.js, hooks/lib/protected-basenames.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/stop-premature-stop-guard.js
 # Tags: mechanism-failure, supervisor-report, stall-reported, idempotency, ordering, regression-1997, scope:issue-specific, pwsh-not-required, TL1, TL2
 

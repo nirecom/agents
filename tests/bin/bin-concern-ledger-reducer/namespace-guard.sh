@@ -1,8 +1,8 @@
 # shellcheck shell=bash
-# tests/bin-concern-ledger-reducer/namespace-guard.sh
-# Tests: tests/bin-concern-ledger-reducer.sh, bin/lib/concern-ledger.sh
+# tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer.sh, bin/lib/concern-ledger.sh
 # Tags: concern-ledger, test-harness, namespace-guard, harness-guard, TL2, scope:common
-# The namespace guard sourced by tests/bin-concern-ledger-reducer.sh — not a case file,
+# The namespace guard sourced by tests/bin/bin-concern-ledger-reducer.sh — not a case file,
 # and it emits no PASS lines of its own.
 # WHY (#2111): the library is now sourced ONCE into the harness's own shell instead of
 # once per call inside a subshell, so the isolation a fresh subshell used to give away

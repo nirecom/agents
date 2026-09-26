@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1376-context-marker-lifecycle.sh
+# tests/bin/feature-1376-context-marker-lifecycle.sh
 # Tests: bin/run-codex-review-loop
 # Tags: review-tests, codex-context, marker-lifecycle, built-marker, scope:issue-specific
 #

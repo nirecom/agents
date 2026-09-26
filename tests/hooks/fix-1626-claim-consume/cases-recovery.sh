@@ -1,4 +1,4 @@
-# Part of tests/fix-1626-claim-consume.sh (sourced, not standalone).
+# Part of tests/hooks/fix-1626-claim-consume.sh (sourced, not standalone).
 # C7-C11 — post-claim bookkeeping and recovery: workflow-mark consume,
 # cleanupZombies sweeping, crash-residue deadlock/recovery, audit-failure policy.
 
@@ -38,7 +38,7 @@ require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessa
 # ============================================================================
 # C8 — zombie cleanup: an old-mtime .claimed file must be swept, and a fresh one
 # preserved (CPR-ORTH counterpart — the sweep must not over-reap).
-# Pattern mirrors tests/fix-session-id-fixes-451-469-543/cleanup-zombies-469.sh.
+# Pattern mirrors tests/bin/fix-session-id-fixes-451-469-543/cleanup-zombies-469.sh.
 # ============================================================================
 backdate_node() {  # <file> <days>
     "$RWT" 10 node -e "

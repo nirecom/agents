@@ -6,7 +6,7 @@
 # rather than leaking through as 2/3 — codes the 0-7 review-loop protocol already
 # spends on ESCALATE / codex-unavailable — nor that the downstream reviewer is
 # never reached once the tradeoffs source is untrusted.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 echo "=== Wrapper failure path: resolver 2/3 → wrapper 4, downstream never run ==="
 
 # TL3 gap (what this file does NOT catch): bin/run-codex-review-loop is stubbed,

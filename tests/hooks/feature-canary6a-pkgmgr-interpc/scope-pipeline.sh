@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary6a-pkgmgr-interpc/scope-pipeline.sh
+# tests/hooks/feature-canary6a-pkgmgr-interpc/scope-pipeline.sh
 # Tests: hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree.js, hooks/lib/bash-write-targets/pkg-mgr.js, hooks/lib/bash-write-targets.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, enforce-worktree, scope-pipeline, hook-registration, pwsh-not-required
 #

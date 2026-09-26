@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-runtime-pretooluse.sh
+# tests/hooks/feature-2134-bash-guard/cases-runtime-pretooluse.sh
 # Tests: hooks/bash-guard.js, hooks/bash-guard/judge.js, settings.json
 # Tags: hook, bash-guard, pretooluse, runtime, subprocess, dispatcher, scope:issue-specific, pwsh-not-required, TL2
 # P1-P5: the hook driven as a real process, plus its dispatcher shape. Sourced by the dispatcher.

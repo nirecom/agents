@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-body-safety/tmpfile-residue.sh
+# tests/bin/feat-1761-candidate-body-safety/tmpfile-residue.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, review, codex, leak, tmpfile, security, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -8,7 +8,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Split out of tests/feat-1761-candidate-body-safety.sh (rules/coding/file-split.md
+# Split out of tests/bin/feat-1761-candidate-body-safety.sh (rules/coding/file-split.md
 # Pattern A). The sibling file covers the *declared* outputs (--out, stdout, stderr,
 # --log-dir). This file covers the *undeclared* one: the temp directory.
 #

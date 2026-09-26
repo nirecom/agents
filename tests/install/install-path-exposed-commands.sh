@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/install-path-exposed-commands.sh
+# tests/install/install-path-exposed-commands.sh
 # Tests: install/path-exposed-commands.txt, install/win/dotfileslink.ps1, install/linux/dotfileslink.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: install, dotfileslink, path, ssot, security-gate, scope:common, pwsh-not-required, TL2
 
@@ -342,7 +342,7 @@ EOF
 
 # EXECUTED-ROW BUDGET (#1967, review round 6). A table-driven test whose table is empty --
 # or whose loop is never reached -- reports zero assertions and still exits 0, and every
-# static delegation grep in tests/feature-confirm-flags-static.sh section 9 keeps passing
+# static delegation grep in tests/skills/feature-confirm-flags-static.sh section 9 keeps passing
 # over that shape because every string it looks for is still on the page.
 T8_ROWS=0
 T8_ROWS_EXPECTED=5   # 2 rows in T8_CASES + 3 rows in T8B_CASES

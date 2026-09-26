@@ -12,7 +12,7 @@
 
 # TL3 gap: WS-7..WS-9 out of scope (need a real worker fleet / IDE tool);
 # derivation logic is covered at TL2 by
-# tests/feature-worktree-start-non-interactive.sh (the daily runner).
+# tests/skills/feature-worktree-start-non-interactive.sh (the daily runner).
 set -euo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -25,11 +25,11 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/TL3-skill-worktree-start-auto-naming/helpers.sh
+# shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh
 . "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh"
-# shellcheck source=tests/TL3-skill-worktree-start-auto-naming/case-session.sh
+# shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh
 . "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh"
-# shellcheck source=tests/TL3-skill-worktree-start-auto-naming/case-headless.sh
+# shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh
 . "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh"
 
 echo ""

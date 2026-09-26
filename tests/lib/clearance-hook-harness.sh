@@ -4,7 +4,7 @@
 # Tags: anti-cheat, off-clearance, clearance-token, harness, shared-lib, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: none of its own — this is a library; the suites that source it carry theirs.
 # WHY THIS EXISTS (CPR-SSOT): the parent suite and every section file under
-# tests/enforce-clearance-token-write/ drive the SAME hook and need the SAME verdict
+# tests/hooks/enforce-clearance-token-write/ drive the SAME hook and need the SAME verdict
 # contract, and their private copies drifted — "no block string in stdout" scored as
 # approve, so a crash, a timeout or a garbled payload counted as a PASS. classify()
 # settles it: approve requires rc=0 AND an explicit approve decision. Caller sets

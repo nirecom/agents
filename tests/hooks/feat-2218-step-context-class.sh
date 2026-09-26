@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-step-context-class.sh
+# tests/hooks/feat-2218-step-context-class.sh
 # Tests: hooks/workflow-state/state-io/step-context-class.js, hooks/workflow-state/state-io.js
 # Tags: workflow-state, step-classification, context-independence, handoff, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-296-hook-cwd-drift-enforce.sh
+# tests/hooks/fix-296-hook-cwd-drift-enforce.sh
 # Tests: hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, bin, git, scope:issue-specific
 # Integration tests for the #296 cwd-drift fix: findRepoRootForBash() honors a

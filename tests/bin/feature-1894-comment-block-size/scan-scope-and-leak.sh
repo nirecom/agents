@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/scan-scope-and-leak.sh
+# tests/bin/feature-1894-comment-block-size/scan-scope-and-leak.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, scan-scope, gitignore, symlink, leak, empty-index, scope:issue-specific, scope:feature-1894, layer:TL2
 #

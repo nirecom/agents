@@ -2,7 +2,7 @@
 # per scope variant (#1624). C1-C10 call isPauseActive directly; a predicate that
 # is correct in isolation still fixes nothing if the guard that decides whether to
 # nudge the user never consults it with the session's current step.
-# Sourced by tests/feature-1624-next-step-pause-scope.sh.
+# Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh.
 # Tests: hooks/stop-premature-stop-guard.js, bin/workflow/lib/next-step/verdict.js, hooks/lib/session-markers.js
 # Tags: next-step-pause, for-step, stop-hook, next-step, regression-1624, scope:issue-specific, pwsh-not-required, TL2
 

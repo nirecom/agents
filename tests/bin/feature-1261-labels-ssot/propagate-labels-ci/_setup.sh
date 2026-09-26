@@ -1,4 +1,4 @@
-# tests/feature-1261-labels-ssot/propagate-labels-ci/_setup.sh
+# tests/bin/feature-1261-labels-ssot/propagate-labels-ci/_setup.sh
 # Shared mock setup/teardown helpers for propagate-labels-ci.sh
 
 setup_mock() {

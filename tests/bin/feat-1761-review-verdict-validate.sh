@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # lang-check: ignore (pre-existing Japanese fixture string, unrelated to this session's diff)
-# tests/feat-1761-review-verdict-validate.sh
+# tests/bin/feat-1761-review-verdict-validate.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, validator, table-driven, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
 # - Real `codex exec` output shape (here the raw review text is a fixture file).
-# - The shell wrapper's fail-folding (that is tests/feat-1761-verdict-replacement.sh).
+# - The shell wrapper's fail-folding (that is tests/bin/feat-1761-verdict-replacement.sh).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
@@ -371,7 +371,7 @@ fi
 
 # --- sections ------------------------------------------------------------------------
 # tests/run-all.sh globs tests/*.sh — TOP-LEVEL ONLY, so a file under
-# tests/feat-1761-review-verdict-validate/ runs in CI only because of this block.
+# tests/bin/feat-1761-review-verdict-validate/ runs in CI only because of this block.
 # Subprocess rather than sourced: each section carries its own $WORK + `trap ... EXIT`
 # and its own PASS/FAIL counters. See tests/lib/section-runner.sh for why the two
 # wiring styles are not interchangeable.

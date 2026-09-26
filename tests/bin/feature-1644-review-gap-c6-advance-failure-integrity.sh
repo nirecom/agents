@@ -41,7 +41,7 @@ RSJ="$AGENTS_DIR_N/bin/workflow/record-skip-judgment"
 SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
 RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

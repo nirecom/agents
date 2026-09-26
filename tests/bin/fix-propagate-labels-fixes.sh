@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-propagate-labels-fixes.sh
+# tests/bin/fix-propagate-labels-fixes.sh
 # Tests: bin/github-issues/propagate-labels.sh
 # Tags: scope:issue-specific, propagate-labels
 #

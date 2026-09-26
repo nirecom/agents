@@ -1,5 +1,5 @@
-# tests/feature-wip-state/origin-repo-1899.sh — split test-case fragment, NOT a
-# test file on its own; sourced by tests/feature-wip-state.sh.
+# tests/agents/feature-wip-state/origin-repo-1899.sh — split test-case fragment, NOT a
+# test file on its own; sourced by tests/agents/feature-wip-state.sh.
 # Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
 # Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
 

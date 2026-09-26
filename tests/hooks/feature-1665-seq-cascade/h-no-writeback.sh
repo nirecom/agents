@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/h-no-writeback.sh
+# tests/hooks/feature-1665-seq-cascade/h-no-writeback.sh
 # Tests: bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/effective-state/write-code-resume.js
 # Tags: workflow-state, write-code-resume, cascade, persist-resolutions, append-only, scope:issue-specific, pwsh-not-required, TL2
 #

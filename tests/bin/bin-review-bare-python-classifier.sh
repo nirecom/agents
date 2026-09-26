@@ -3,7 +3,7 @@
 # Tags: lint, bare-python, regex, allowlist, table-driven, mutation-probe, scope:common, pwsh-not-required, TL2
 #
 # Table-driven classifier coverage for bin/review-bare-python (review gap C7).
-# tests/fix-992-bare-python.sh drives the script end-to-end one scenario per
+# tests/bin/fix-992-bare-python.sh drives the script end-to-end one scenario per
 # hand-written block, so the two verdict-deciding regex constants — DETECT_RE
 # (widens -> false HARD findings block unrelated work) and SANCTION_RE (widens
 # -> real bare-interpreter calls are silently exempted) — and the
@@ -38,7 +38,7 @@ SKIP=0
 #   on a Windows host where the interpreter name resolves to the Store stub.
 # - A grep binary failing mid-scan (the source now reports it as an ERROR line
 #   and a non-clean result): observing it needs a PATH shim, which lives in the
-#   sibling suite tests/bin-review-bare-python-exemption-scope.sh, section GF.
+#   sibling suite tests/bin/bin-review-bare-python-exemption-scope.sh, section GF.
 # Closest-to-action mitigation: the Store-stub gap is checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category
 # `pwsh-required`; the git-failure direction IS covered here by the

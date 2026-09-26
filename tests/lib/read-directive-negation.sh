@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # tests/lib/read-directive-negation.sh
-# Tests: tests/feature-2140-fork-dispatch-shell-commands.sh, tests/feature-2124-tool-selection-priority.sh
+# Tests: tests/skills/feature-2140-fork-dispatch-shell-commands.sh, tests/bin/feature-2124-tool-selection-priority.sh
 # Tags: rules, prompt, dispatch, library, scope:common, pwsh-not-required, TL2
 
 # WHY (CPR-WPH): a line FORBIDDING a directive verb carries every token the "does this file ORDER

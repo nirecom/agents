@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round11-substitution-additivity.sh
+# tests/hooks/fix-1780-round11-substitution-additivity.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/lib/command-parser.js, hooks/lib/command-ir.js, hooks/lib/protected-basenames.js
 # Tags: off-clearance, session-marker, bash-scan, substitution, command-substitution, backtick, argv-operand, workflow-dir, classifier, additivity, security, pretooluse, block-write, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook in a live claude -p session; here it
 #   is a node subprocess fed synthetic stdin. Registration is covered statically by
-#   tests/enforce-protected-marker-write.sh (X6).
+#   tests/hooks/enforce-protected-marker-write.sh (X6).
 # - Real shell expansion actually creating the file. The shell's behaviour is the
 #   PREMISE; what is asserted is the hook's reading of the spelling.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via

@@ -1,4 +1,4 @@
-# tests/feature-2140-fork-dispatch-shell-commands/refactor-prompts-checks.sh
+# tests/skills/feature-2140-fork-dispatch-shell-commands/refactor-prompts-checks.sh
 # Tests: skills/refactor-prompts/SKILL.md
 # Tags: rules, prompt, dispatch, fork, scope:issue-specific, pwsh-not-required, TL2
 
@@ -48,7 +48,7 @@ f1_directive_precedes_action() { # <file> -> yes|no
 # (the scratchpad script, created via the Write tool) -- the old justification here claiming
 # otherwise was factually wrong. The real fix line ("before the first Bash command, or before
 # writing a file") carries the SAME two-trigger contract as the dispatcher's directive_lineno()
-# in tests/feature-2140-fork-dispatch-shell-commands.sh, so both triggers are required here too.
+# in tests/skills/feature-2140-fork-dispatch-shell-commands.sh, so both triggers are required here too.
 f1b_prepended_line_is_the_directive() { # <file> -> yes|no
     local f="$1" step2_ln action_ln blk
     step2_ln="$(marker_lineno "$f" '^2\. ')"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-416-classify-sentinel-reason-text.sh
+# tests/hooks/fix-416-classify-sentinel-reason-text.sh
 # Tests: hooks/lib/bash-write-patterns.js
 # Tags: classify, strip-kinds, sentinel-echo, isSentinelEchoSafe, issue-416, unsafe-reason-chars, scope:issue-specific
 #

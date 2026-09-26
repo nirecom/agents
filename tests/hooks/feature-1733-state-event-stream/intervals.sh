@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/intervals.sh
+# tests/hooks/feature-1733-state-event-stream/intervals.sh
 # Tests: hooks/workflow-state/state-io/intervals.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, intervals, measurement, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -17,7 +17,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="iv"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo "== I1: intervals tile the session with no gaps (sum == created_at -> terminal) =="

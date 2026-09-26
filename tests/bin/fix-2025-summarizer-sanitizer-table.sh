@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-summarizer-sanitizer-table.sh
+# tests/bin/fix-2025-summarizer-sanitizer-table.sh
 # Tests: bin/review-loop-summarize-concerns
 # Tags: summarize-concerns, sanitizer, sentinel-injection, prompt-injection, table-driven, parser-regex, security, v1-schema, v2-schema, scope:issue-specific, pwsh-not-required
 

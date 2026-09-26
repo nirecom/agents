@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1102-check-sibling-uncommitted.sh
+# tests/bin/feature-1102-check-sibling-uncommitted.sh
 # Tests: bin/check-sibling-uncommitted.sh
 # Tags: sibling, uncommitted, worktree, git, scope:issue-specific, pwsh-not-required
 #

@@ -13,7 +13,7 @@ _started() { pred_eval "$1" "L.isWorkflowStarted('$2')"; }
 
 # _seed_corrupt <tmp> <sid> — a state file that exists but cannot be parsed, so
 # readState returns null and detectStalledSteps classifies it `state-corrupt`
-# (the M4 shape of tests/feature-1997-mechanism-failure/m-detect.sh). No event
+# (the M4 shape of tests/hooks/feature-1997-mechanism-failure/m-detect.sh). No event
 # is ever recorded, so the session is pre-workflow-init by construction.
 _seed_corrupt() { printf '{ this is not json' > "$1/$2.json"; }
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-689-frontmatter-convention.sh
+# tests/skills/feature-689-frontmatter-convention.sh
 # Tests: skills/_shared/test-design.md
 # Tags: frontmatter, tests, bin, scope:issue-specific
 #
@@ -22,9 +22,13 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-# Files under tests/ (top-level only — excludes _archive/) with .sh extension.
+# Test entrypoints: tests/<category>/*.sh (the 2-level layout). tests/lib/ holds shared
+# helpers, not tests, and _archive/ is not a category — both stay out of scope.
 list_test_files() {
-    find "$TESTS_DIR" -maxdepth 1 -type f -name "*.sh" 2>/dev/null | sort
+    local c
+    for c in agents bin hooks install skills tests; do
+        find "$TESTS_DIR/$c" -maxdepth 1 -type f -name "*.sh" 2>/dev/null
+    done | sort
 }
 
 # Check that a file has single-line `# Tests:` AND `# Tags:` in first 10 lines.
@@ -41,7 +45,7 @@ check_frontmatter() {
     return 1
 }
 
-# C1: all tests/*.sh (excluding _archive) carry single-line `# Tests:` + `# Tags:`.
+# C1: all tests/<category>/*.sh carry single-line `# Tests:` + `# Tags:`.
 test_C1_all_files_have_frontmatter() {
     local missing=0
     local missing_files=""
@@ -90,9 +94,9 @@ test_C2_no_multiline_format() {
 # C3: three known reference files parse cleanly.
 test_C3_reference_files_parse() {
     local refs=(
-        "$TESTS_DIR/feature-608-session-close.sh"
-        "$TESTS_DIR/feature-405-final-report.sh"
-        "$TESTS_DIR/feature-worktree-end-step55-promotion.sh"
+        "$TESTS_DIR/hooks/feature-608-session-close.sh"
+        "$TESTS_DIR/hooks/feature-405-final-report.sh"
+        "$TESTS_DIR/bin/feature-worktree-end-step55-promotion.sh"
     )
     local missing=0 bad=0
     local detail=""

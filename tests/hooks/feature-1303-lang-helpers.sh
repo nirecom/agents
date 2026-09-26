@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/feature-1303-lang-helpers.sh
+# filename: tests/hooks/feature-1303-lang-helpers.sh
 # Tests: hooks/lib/lang-config.js, hooks/lib/conv-lang.js, hooks/lang-inject.js
 # Tags: hook-injection, conv-lang, plan-lang, lang-helpers, scope:issue-specific, pwsh-not-required
 #

@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/feature-sweep-plans/validation.sh
+# tests/bin/feature-sweep-plans/validation.sh
 # Tests: bin/sweep-plans.sh
 # Tags: sweep, plans, workflow-plans, maintenance, bin, validation, scope:common
 #
 # SWEEP_AGE_DAYS input validation tests (split out of the flat
 # feature-sweep-plans.sh per rules/coding/file-split.md Pattern A hard-limit).
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-plans/validation.sh
+#   bash tests/bin/feature-sweep-plans/validation.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/advance.js, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, next-step, advance, scope:issue-specific
-# Shared fixtures + assertion helpers for tests/feature-1644-advance-transaction.sh.
+# Shared fixtures + assertion helpers for tests/bin/feature-1644-advance-transaction.sh.
 # Sourced by the dispatcher — not a standalone runner.
 
 set -uo pipefail
@@ -13,7 +13,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
 WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
-PROBE_N="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"

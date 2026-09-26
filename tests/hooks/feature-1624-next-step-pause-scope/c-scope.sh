@@ -1,6 +1,6 @@
 # c-scope.sh — C1-C10: the v2 marker shape, for_step scoping, expiry, the real
 # sentinel handler, the real next-step consumer, and the audit trail (#1624).
-# Sourced by tests/feature-1624-next-step-pause-scope.sh.
+# Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh.
 # Tests: hooks/lib/next-step-pause-marker.js, hooks/workflow-mark/enforce-override-handlers/next-step-pause.js, bin/workflow/lib/next-step/verdict.js
 # Tags: next-step-pause, marker-v2, for-step, ttl, audit, regression-1624, scope:issue-specific, pwsh-not-required, TL1, TL2
 

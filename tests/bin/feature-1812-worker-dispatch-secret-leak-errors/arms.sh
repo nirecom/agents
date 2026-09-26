@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-secret-leak-errors.sh — sourced.
+# Part of tests/bin/feature-1812-worker-dispatch-secret-leak-errors.sh — sourced.
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/fsguard.js
 # Tags: worker-dispatch, doc-append, commit-push, credential-exposure, artifact-log, redaction, adversarial, security, TL2, scope:issue-specific
 # Two REAL dispatcher runs whose child fails AFTER printing a credential-shaped

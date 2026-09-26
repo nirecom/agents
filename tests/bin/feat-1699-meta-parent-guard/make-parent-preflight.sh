@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/make-parent-preflight.sh
+# tests/bin/feat-1699-meta-parent-guard/make-parent-preflight.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh
 # Tags: issue-create, dispatch, meta-parent, make-parent, error-path, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

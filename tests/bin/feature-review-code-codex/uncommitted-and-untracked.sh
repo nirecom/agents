@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, uncommitted, untracked, staged, fallback, scope:issue-specific, pwsh-not-required, TL2
 # Cases 15-17, moved verbatim out of the parent at the 500-line hard split limit. Reuses TMPDIR_BASE, MOCK_BIN, SCRIPT, _timeout, fail, pass from the parent.

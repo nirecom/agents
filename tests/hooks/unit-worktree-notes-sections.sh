@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-worktree-notes-sections.sh
+# tests/hooks/unit-worktree-notes-sections.sh
 # Tests: hooks/lib/worktree-notes-sections.js
 # Tags: worktree, workflow, hook, bin, tests
 #

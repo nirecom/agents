@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/merge.sh
+# tests/bin/bin-concern-ledger-reducer/merge.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 # Detail-plan Test plan cases 6, 7, 10, 11 — same-round delta x delta merging
 # (cl_merge_producers) and the ID-invariance guarantees that depend on it.
 # Position (M3) is merge-only: it may fold two delta lines, never bind a prior ID.

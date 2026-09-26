@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/orphan-negative.sh
+# tests/install/feature-2119-settings-allow-ssot/orphan-negative.sh
 # Tests: install/lib/settings-allow-rules.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, orphan, scope:issue-specific, pwsh-not-required, TL2
 # T42: the PATH-form orphan classifier's NEGATIVE verdict. Sourced AFTER orphan-classifier.sh.

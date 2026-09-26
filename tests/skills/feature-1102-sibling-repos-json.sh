@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1102-sibling-repos-json.sh
+# tests/skills/feature-1102-sibling-repos-json.sh
 # Tests: skills/worktree-end/scripts/sibling-repos-json.js
 # Tags: sibling, worktree, json, security, scope:issue-specific, pwsh-not-required
 #

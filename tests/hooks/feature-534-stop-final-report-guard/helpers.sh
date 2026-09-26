@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/helpers.sh
+# tests/hooks/feature-534-stop-final-report-guard/helpers.sh
 # Fixture helpers sourced by feature-534-stop-final-report-guard.sh.
 # No shebang — sourced only, not executed directly.
 # Variables PASS, FAIL, SKIP, pass(), fail(), skip(), HOOK_JS, TMPDIR_BASE,

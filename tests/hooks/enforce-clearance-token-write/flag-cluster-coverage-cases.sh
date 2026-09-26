@@ -2,7 +2,7 @@
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/lib/protected-basenames.js
 # Tags: anti-cheat, off-clearance, clearance-token, pretooluse, interpreter-scan, flag-cluster, allow-direction, negative-assertion, table-driven, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host. Covered by tests/TL3-hook-clearance-token-write.sh.
+# - The hook firing on a real host. Covered by tests/hooks/TL3-hook-clearance-token-write.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 # Split from read-only-allowlist-cases.sh at its 300-line WARN line

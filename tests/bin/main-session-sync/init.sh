@@ -1,6 +1,6 @@
 # Tests: install/linux/session-sync-init.sh
 # Tags: bin, install, git, session-sync, scope:common
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 
 echo "=== session-sync-init.sh tests ==="
 
@@ -82,7 +82,7 @@ fi
 
 # The old "migrates old git root" case is gone: it created the old repo without
 # an origin, which the provenance check now refuses by design. Migration is
-# covered by the provenance matrix in tests/main-session-sync/security.sh.
+# covered by the provenance matrix in tests/bin/main-session-sync/security.sh.
 
 # --- Normal: --no-remote flag ---
 echo "[init] --no-remote flag"

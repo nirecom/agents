@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-show-local-env-overrides/resolution.sh
+# tests/bin/feature-2223-show-local-env-overrides/resolution.sh
 # Tests: bin/show-local-env-overrides, hooks/lib/local-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, cli, resolution, pwsh-not-required
-# Case file for tests/feature-2223-show-local-env-overrides.sh — sourced from it,
+# Case file for tests/bin/feature-2223-show-local-env-overrides.sh — sourced from it,
 # never run standalone (it uses that file's helpers, fixtures and counters).
 # Holds the two resolutions the CLI performs before it can report anything —
 # which hooks/lib it loads, which project root it inspects — plus how that

@@ -1,4 +1,4 @@
-# audit-atomic-write.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# audit-atomic-write.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: bin/supervisor-write-audit-verdict, hooks/lib/supervisor-state-writer/audit-run.js (R3-C2/C5).
 # NOTE: RED until write-code adds --findings-jsonl + CAS-success findings merge (#929);
 #   the flag is unknown now, so the CLI exits 1 (usage) and no findings are written.

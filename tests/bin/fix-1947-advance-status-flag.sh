@@ -28,7 +28,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 NS="$AGENTS_DIR_N/bin/workflow/next-step"
 SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -85,7 +85,7 @@ at_outline()  { make_state "$1" "workflow_init clarify_intent research"; }
 state_snapshot() { cat "$WORKFLOW_DIR/${1}.json" 2>/dev/null || echo "SNAPSHOT_FAIL"; }
 
 # What a user CONFIRM sentinel leaves behind (mirrors seed_approval in
-# tests/fix-1133-next-step-mark-outline-detail.sh:304) — needed for the APPROVED verdict.
+# tests/hooks/fix-1133-next-step-mark-outline-detail.sh:304) — needed for the APPROVED verdict.
 seed_approval() {
   local sid="$1" step="$2"
   local artifact="$PLANS_DIR/${sid}-${step}.md"

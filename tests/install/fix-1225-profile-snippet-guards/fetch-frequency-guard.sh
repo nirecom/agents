@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, session-sync, frequency-guard, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
 # not run alone; uses make_mirror_sandbox / run_mirror_driver. Issue #2160: the
 # startup fetch runs at most every 30 minutes, gated by the mtime of the stamp
 # file ~/.claude/projects/.git/agents-last-fetch (inside .git so session-sync's
@@ -78,7 +78,7 @@ EOF
 }
 
 # TC-FREQ2 — a stale stamp lets the fetch run and is refreshed by that run.
-# Backdating uses the same GNU/BSD touch pair as tests/feature-sweep-plans.sh.
+# Backdating uses the same GNU/BSD touch pair as tests/bin/feature-sweep-plans.sh.
 tc_freq_stale_stamp_runs_and_refreshes() {
     local sb; sb="$(make_mirror_sandbox 1)"
     local stamp; stamp="$(_ffg_stamp "$sb")"

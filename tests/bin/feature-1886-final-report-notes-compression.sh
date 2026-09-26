@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1886-final-report-notes-compression.sh
+# tests/bin/feature-1886-final-report-notes-compression.sh
 # Tests: bin/render-final-report.js, bin/render-final-report/notes.js, skills/session-close/SKILL.md, skills/_shared/final-report-emission.md, rules/mid-workflow-findings.md, skills/worktree-end/SKILL.md
 # Tags: final-report, notes-compression, severity, render-cli, prompt-contract, TL2, scope:issue-specific
 #

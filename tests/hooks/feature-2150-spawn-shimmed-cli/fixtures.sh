@@ -2,7 +2,7 @@
 # Tests: hooks/lib/spawn-shimmed-cli.js
 # Tags: codegraph, win32-shim, fixtures, path-resolution, unit, scope:issue-specific
 # lang-check: ignore (CJK path segments below are deliberate Unicode test data, not identifiers)
-# Fixture builders for tests/feature-2150-spawn-shimmed-cli.sh. Every `bld_*`
+# Fixture builders for tests/hooks/feature-2150-spawn-shimmed-cli.sh. Every `bld_*`
 # takes ONE argument — the row's private case dir — and builds a real on-disk
 # PATH x PATHEXT search space in it. Nothing here is ever run by a shell.
 

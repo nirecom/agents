@@ -1,4 +1,4 @@
-# Part of tests/feature-1638-resolve-merge-base.sh (sourced, not standalone).
+# Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: bin/workflow/record-merge-base-baseline, bin/resolve-merge-base.sh, bin/select-tests.sh
 # Tags: merge-base, baseline, approval, cli, security, recovery, scope:issue-specific, pwsh-not-required, TL2
 #

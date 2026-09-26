@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow/security.sh
+# tests/bin/feature-530-notes-promotion-triage-flow/security.sh
 # Tests: bin/worktree-notes-triage.js, bin/worktree-notes-triage/resolve.js
 # Tags: notes-promotion, worktree-notes, triage, security, path-traversal, TL2, scope:issue-specific
 #

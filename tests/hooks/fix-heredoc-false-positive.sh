@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-heredoc-false-positive.sh
+# tests/hooks/fix-heredoc-false-positive.sh
 # Tests: hooks/lib/bash-write-patterns.js
 # Tags: workflow, hook, bin, windows, tests
 #

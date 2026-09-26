@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-show-local-env-overrides/degradation.sh
+# tests/bin/feature-2223-show-local-env-overrides/degradation.sh
 # Tests: bin/show-local-env-overrides, hooks/lib/load-env.js, hooks/lib/local-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, degradation, cli, pwsh-not-required
-# Case file for tests/feature-2223-show-local-env-overrides.sh — sourced from it,
+# Case file for tests/bin/feature-2223-show-local-env-overrides.sh — sourced from it,
 # never run standalone (it uses that file's helpers, fixtures and counters).
 # Holds the cases where something about the environment is degraded: a malformed
 # or Windows-native override file, and a host with no git on PATH.

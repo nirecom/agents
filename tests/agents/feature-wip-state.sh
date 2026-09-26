@@ -10,8 +10,8 @@
 #   - abandon <N>: OPEN-only; Status=Todo + fingerprint="" + delete lock (HARD writes).
 #   - setup:       one-shot ID discovery via gh api graphql; append to .env.
 #
-# 30 base cases per detail.md §"tests/feature-wip-state.sh" + 38 abandon cases.
-# Inline-gh-mock pattern from tests/feature-issue-create-skill.sh.
+# 30 base cases per detail.md §"tests/agents/feature-wip-state.sh" + 38 abandon cases.
+# Inline-gh-mock pattern from tests/agents/feature-issue-create-skill.sh.
 #
 # RED: this suite fails clean while bin/github-issues/wip-state.sh is missing.
 

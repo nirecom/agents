@@ -1,9 +1,9 @@
-# tests/feature-833-review-tests-gate/section-f.sh
+# tests/hooks/feature-833-review-tests-gate/section-f.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, wsid, scope:issue-specific
 #
 # Section F: wsid (workflow session id) match enforcement at the commit gate.
-# Sourced by tests/feature-833-review-tests-gate.sh; inherits its helpers
+# Sourced by tests/hooks/feature-833-review-tests-gate.sh; inherits its helpers
 # (see that file for PASS/FAIL/TMPDIR_BASE/WORKFLOW_DIR/GATE_HOOK/etc.).
 # Expected outcomes: F10 wsid match -> approve; F11 wsid mismatch -> block;
 # F12 legacy entry with no wsid field -> approve (backward compat).

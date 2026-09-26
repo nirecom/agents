@@ -1,7 +1,7 @@
-# tests/feature-603-run-codex-review-loop/arg-validation-and-context-build.sh
+# tests/bin/feature-603-run-codex-review-loop/arg-validation-and-context-build.sh
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
-# Sourced by tests/feature-603-run-codex-review-loop.sh.
+# Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 12-15: required-argument and draft-file validation, context-build marker idempotency, and stdout passthrough.
 
 # ---------------------------------------------------------------------------

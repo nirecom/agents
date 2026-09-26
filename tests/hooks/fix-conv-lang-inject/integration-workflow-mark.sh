@@ -16,7 +16,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 #
-# Invocation pattern follows tests/feature-workflow-mark-subagent-backstop.sh.
+# Invocation pattern follows tests/hooks/feature-workflow-mark-subagent-backstop.sh.
 # Sourced after helpers.sh; inherits TMPDIR_BASE, AGENTS_DIR, pass/fail functions.
 
 WORKFLOW_MARK="$AGENTS_DIR/hooks/workflow-mark.js"

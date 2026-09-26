@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-routing/c-series.sh
+# tests/hooks/feature-workflow-init-routing/c-series.sh
 # Tests: skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, CLAUDE.md, .github/labels.yml
 # Tags: workflow, init, routing, content-check, scope:common
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-round3-contract-scoping.sh
+# tests/hooks/fix-1273-round3-contract-scoping.sh
 # Tests: hooks/workflow-run-tests.js, bin/worker-dispatch/emit.js
 # Tags: workflow, tests, runner, hook, contract, worker-dispatch, security, TL1, TL2, scope:common
 #
@@ -44,7 +44,7 @@
 #   - Whether a real worker-dispatch run can be driven to produce these payload
 #     shapes; here the YAML is synthesised, because the hook's parser and trust
 #     decision — not the worker — are under test.
-#     tests/TL3-worker-dispatch-run-tests.sh is the gated tier for that.
+#     tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for that.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 
@@ -218,7 +218,7 @@ assert_eq "M2/control-worker-dispatch-route-keeps-log-tail-scoping" "pending" \
 #
 # workers/test-runner.js parses the suite's contract into `runContract` AND
 # strips contract lines out of `logTail` before handing the result over
-# (see tests/fix-1378-worker-log-tail-integrity.sh). So by the time
+# (see tests/bin/fix-1378-worker-log-tail-integrity.sh). So by the time
 # renderTestRunnerYaml() reaches the promotion fallback, `tailSource` can no
 # longer contain a contract line: the fallback is unreachable for every worker
 # in the dispatcher.

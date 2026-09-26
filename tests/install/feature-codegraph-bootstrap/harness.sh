@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: install/codegraph-mcp.js, install/linux/codegraph.sh
 # Tags: codegraph, installer, harness, TL2, pwsh-not-required, scope:issue-specific, dup-group-keep:size-hard-limit
-# Harness for tests/feature-codegraph-bootstrap.sh (ST-19): the os.homedir()
+# Harness for tests/install/feature-codegraph-bootstrap.sh (ST-19): the os.homedir()
 # redirection hard gate, PATH sanitising, the argv-recording stubs and run_case.
 # The dispatcher's `# Serial:` justification holds here unchanged.
 
@@ -214,7 +214,7 @@ _win_shim_sibling() {
 }
 
 # _win_cmd_shim_head / _win_cmd_shim_tail <name> — byte-faithful npm cmd-shim 8.0.0
-# output, mirrored from tests/feature-2150-spawn-shimmed-cli/fixtures-npm.sh:
+# output, mirrored from tests/hooks/feature-2150-spawn-shimmed-cli/fixtures-npm.sh:
 # CRLF, the :find_dp0 subroutine, the `endLocal & goto` prefix and the separator
 # in `"%dp0%\...`. Split in two so a payload can be spliced between them.
 _win_cmd_shim_head() {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Block Q — auth context (C49 / C52 / C55).
 
 run_block_q() {
@@ -166,5 +166,5 @@ gh issue create --repo $OWNER/agents"
     # L3 gap: only a long-lived real session proves the flag ages out.
     # Q-14(e) — Bash-tool writes to <sid>.gh-auth-dirty must be BLOCKED — is a
     # protected-basenames concern and lives in
-    # tests/enforce-protected-marker-write/cases-forge-ownership-state.sh.
+    # tests/hooks/enforce-protected-marker-write/cases-forge-ownership-state.sh.
 }

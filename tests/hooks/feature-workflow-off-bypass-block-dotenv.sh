@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-block-dotenv.sh
+# tests/hooks/feature-workflow-off-bypass-block-dotenv.sh
 # Tests: hooks/block-dotenv.js
 # Tags: dotenv, secrets, hook, workflow, bin, scope:common
 #

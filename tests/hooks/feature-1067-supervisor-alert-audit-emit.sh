@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1067-supervisor-alert-audit-emit.sh
+# tests/hooks/feature-1067-supervisor-alert-audit-emit.sh
 # Tests: hooks/lib/supervisor-emit.js
 # Tags: supervisor, em-supervisor, emit, severity, scope:issue-specific
 # Tests for issue #1067 — supervisor-emit severity re-grading contract.

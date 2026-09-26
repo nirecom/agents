@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-417-issue-close-finalize-suppress-open-subs.sh
+# tests/bin/feature-417-issue-close-finalize-suppress-open-subs.sh
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/issue-close-finalize/scripts/run-initial.sh
 # Tags: scope:issue-specific
 # Tests for issue #417 — /issue-close-finalize must skip (not error) an issue

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-1045-target-aware-redesign.sh
+# tests/hooks/refactor-1045-target-aware-redesign.sh
 # Tests: hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/session-scope.js
 # Tags: worktree, enforce, hook, target-aware, refactor-1045, scope:issue-specific
 #

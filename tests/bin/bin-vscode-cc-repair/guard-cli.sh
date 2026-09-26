@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # T3 — classifier/guard table driven through the real CLI, so the report and exit
 # wiring is covered as well as the verdict. Every refused/absent row asserts the
 # protected resource is untouched (Pattern 1): byte-identical content, unchanged

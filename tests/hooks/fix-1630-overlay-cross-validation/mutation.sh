@@ -1,4 +1,4 @@
-# tests/fix-1630-overlay-cross-validation/mutation.sh
+# tests/hooks/fix-1630-overlay-cross-validation/mutation.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, config-dir, overlay, mutation, security, scope:issue-specific
 #
@@ -20,7 +20,7 @@
 # an attacker-visible command string, so the class of defect the mutation rows
 # protected against (one of two agreement checks silently dropped) has no
 # counterpart to protect. The anchor resolution itself is covered by
-# tests/feature-1643-worker-dispatch-callers.sh and the TL3-worker-dispatch-*
+# tests/skills/feature-1643-worker-dispatch-callers.sh and the TL3-worker-dispatch-*
 # suites.
 #
 # The file is kept as an empty, explicitly-documented hook so the parent suite

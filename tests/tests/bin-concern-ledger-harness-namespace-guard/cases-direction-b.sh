@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, direction-b
 # Direction B — a case file shadowing a name the library owns. The library is sourced
 # once and nine case files land on top of it, so this is the direction that silently

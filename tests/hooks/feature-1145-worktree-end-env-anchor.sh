@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1145-worktree-end-env-anchor.sh
+# tests/hooks/feature-1145-worktree-end-env-anchor.sh
 # Tests: hooks/lib/worktree-end-env-anchor.js
 # Tags: supervisor, em-supervisor, worktree-end, env-anchor, we15, scope:issue-specific, pwsh-not-required
 # L1 unit tests for isWorktreeEndEnv(sessionId) — detects worktree-end cleanup phase

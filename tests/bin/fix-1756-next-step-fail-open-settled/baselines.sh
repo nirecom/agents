@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1756-next-step-fail-open-settled/baselines.sh
+# filename: tests/bin/fix-1756-next-step-fail-open-settled/baselines.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, exit-code, idempotency, characterization, TL2, scope:common
 #
-# Case file — sourced by tests/fix-1756-next-step-fail-open-settled.sh, which
+# Case file — sourced by tests/bin/fix-1756-next-step-fail-open-settled.sh, which
 # owns every helper and fixture fragment used here. Do not run standalone.
 #
 # X1-X3 (exit codes / idempotency / argument-parsing error paths), L1-L4

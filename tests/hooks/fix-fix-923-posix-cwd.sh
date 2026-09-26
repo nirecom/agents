@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-fix-923-posix-cwd.sh
+# tests/hooks/fix-fix-923-posix-cwd.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/git-repo-detection.js
 # Tags: enforce-worktree, git-worktree, scope:issue-specific
 #

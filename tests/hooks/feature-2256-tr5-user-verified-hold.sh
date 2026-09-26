@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, bin/supervisor-record-block-override
 # Tags: supervisor, tr5, user-verified, hold, freshness, TL2, scope:issue-specific
 
@@ -11,7 +11,7 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SECTION_DIR="$AGENTS_ROOT/tests/feature-2256-tr5-user-verified-hold"
+SECTION_DIR="$AGENTS_ROOT/tests/hooks/feature-2256-tr5-user-verified-hold"
 RWT="$AGENTS_ROOT/bin/run-with-timeout.sh"
 PASS=0
 FAIL=0

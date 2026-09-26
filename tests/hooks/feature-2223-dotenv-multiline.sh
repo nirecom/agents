@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/feature-2223-dotenv-multiline.sh
+# tests/hooks/feature-2223-dotenv-multiline.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/load-env.sh
 # Tags: scope:issue-specific, TL1, load-env, dotenv, parser, pwsh-not-required
 # RED for issue #2223 — parseEnv() multi-line quoted value grammar.
 # Table encoding: input column uses @NL@ / @CR@ for a real LF / CR so a case fits
 # one row (every backslash stays literal); want column is JSON.stringify() of the
 # expected value, or __ABSENT__ when the key must not appear in the map.
-# TL2 gap: on-disk .env behaviour lives in tests/feature-2223-local-env-overlay.sh.
+# TL2 gap: on-disk .env behaviour lives in tests/hooks/feature-2223-local-env-overlay.sh.
 
 set -u
 

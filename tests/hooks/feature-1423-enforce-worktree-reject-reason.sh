@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1423-enforce-worktree-reject-reason.sh
+# tests/hooks/feature-1423-enforce-worktree-reject-reason.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/write-detector.js
 # Tags: enforce-worktree, reject-reason, write-detector, feature-1423, scope:issue-specific
 # L3 gap (what this test does NOT catch):

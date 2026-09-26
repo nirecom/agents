@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-body-safety/field-defang.sh
+# tests/bin/feat-1761-candidate-body-safety/field-defang.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, review, codex, prompt-injection, defang, untrusted-data, security, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -11,7 +11,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Sibling of tests/feat-1761-candidate-body-safety.sh, which asserts the fence holds for
+# Sibling of tests/bin/feat-1761-candidate-body-safety.sh, which asserts the fence holds for
 # ONE field (the candidate body) against ONE payload. This file is the per-field matrix.
 #
 # The fence is only as strong as its weakest interpolation: a GitHub label is free-form

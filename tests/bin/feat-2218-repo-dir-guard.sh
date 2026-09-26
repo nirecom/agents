@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-repo-dir-guard.sh
+# tests/bin/feat-2218-repo-dir-guard.sh
 # Tests: bin/workflow/lib/next-step/repo-dir-guard.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/next-step
 # Tags: next-step, repo-dir, fail-fast, cross-session, worktree-identity, regression-2218, regression-2316, scope:issue-specific, pwsh-not-required, TL1
 

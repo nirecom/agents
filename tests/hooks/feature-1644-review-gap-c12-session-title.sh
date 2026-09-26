@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-1644-review-gap-c12-session-title.sh
+# tests/hooks/feature-1644-review-gap-c12-session-title.sh
 # Tests: hooks/lib/session-title.js
 # Tags: tl2, workflow, session-title, jsonl, idempotency, parser, scope:issue-specific, pwsh-not-required
 #
 # #1644 review gap C12 (MEDIUM) — hooks/lib/session-title.js.
-# tests/feature-299-session-titles/ already covers the happy paths (T1-T29:
+# tests/hooks/feature-299-session-titles/ already covers the happy paths (T1-T29:
 # single/multi issue titles, PR-suffix and completion idempotency once each,
 # the ⏳ overwrite guard, session-id resolution). This file extends into the
 # input-domain edges that file leaves open:

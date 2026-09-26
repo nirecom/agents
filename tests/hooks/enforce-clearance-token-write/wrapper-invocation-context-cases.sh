@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/wrapper-invocation-context-cases.sh
+# tests/hooks/enforce-clearance-token-write/wrapper-invocation-context-cases.sh
 # Tests: bin/request-off-mode-clearance, bin/request-off-clearance
 # Tags: anti-cheat, off-clearance, clearance-token, wrapper, delegation, cwd, argv, residue, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: a real user pasting the invitation from their project directory, where the cwd is a
 # real worktree and the sibling minter is the installed one; see
-# tests/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
+# tests/hooks/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
 
 set -u
 

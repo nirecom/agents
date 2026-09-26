@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/wip-state-migration.sh
+# tests/bin/feature-1340-issue-setup/wip-state-migration.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-state/cmd-set.sh, bin/github-issues/wip-state/cmd-check.sh, bin/github-issues/wip-state/cmd-clear.sh
 # Tags: issue-setup, wip-state, github-issues, scope:issue-specific
 # N/A (C6): adversarial .env WIP_STATE_* values — .env is trusted user config and this path is being DEPRECATED by the migration block; not an attacker surface.

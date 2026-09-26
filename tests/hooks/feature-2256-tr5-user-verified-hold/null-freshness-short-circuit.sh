@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold/null-freshness-short-circuit.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold/null-freshness-short-circuit.sh
 # Tests: hooks/workflow-gate/user-verified-audit.js, hooks/lib/supervisor-state-schema.js, hooks/workflow-gate/supervisor-check.js, hooks/supervisor-guard/audit-arm.js
 # Tags: supervisor, tr5, freshness, null-arm, self-recovering, infinite-loop, artifact-side, TL2, scope:issue-specific
 # #2323 — a null freshness_key (code side uncomputable: no merge base) must not re-arm
 # the WE-8 sentinel forever. selfRecovering short-circuit approves a prior CONTINUE
 # terminal TR5; every other verdict/state stays fail-closed. Scenarios 1 & 3(i) FAIL
 # before the fix (fail-before-fix); the rest are fail-closed regressions.
-# Parent: tests/feature-2256-tr5-user-verified-hold.sh
+# Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 # TL3 gap (not caught here): a real stale AGENTS_CONFIG_DIR against a live origin on a
 # CI host — fixtures reach null freshness via a fixture repo with no merge base instead.
 

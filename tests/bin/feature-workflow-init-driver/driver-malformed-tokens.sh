@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-malformed-tokens.sh
+# tests/bin/feature-workflow-init-driver/driver-malformed-tokens.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/directive.js
 # Tags: workflow-init, driver, validation, scope:issue-specific
 

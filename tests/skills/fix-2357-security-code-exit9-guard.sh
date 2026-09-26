@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2357-security-code-exit9-guard.sh
+# tests/skills/fix-2357-security-code-exit9-guard.sh
 # Tests: skills/review-code-security/scripts/run-codex-review-loop.sh
 # Tags: review-code-security, terminal-guard, exit9, fingerprint, scope:issue-specific, pwsh-not-required, TL2
 #

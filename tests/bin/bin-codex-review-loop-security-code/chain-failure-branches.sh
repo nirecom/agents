@@ -1,4 +1,4 @@
-# tests/bin-codex-review-loop-security-code/chain-failure-branches.sh
+# tests/bin/bin-codex-review-loop-security-code/chain-failure-branches.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger
 # Tags: concern-ledger, review-code-security, fail-closed, full-chain, TL2, scope:common
 # Sourced after fail-closed.sh, whose FC_ROOT shimmed tree and fc_shim helper

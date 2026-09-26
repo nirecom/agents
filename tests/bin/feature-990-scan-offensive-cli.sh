@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-offensive-cli.sh
+# tests/bin/feature-990-scan-offensive-cli.sh
 # Tests: bin/scan-offensive
 # Tags: scan, offensive, content-filter, cli, scope:issue-specific
 # RED for issue #990.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/reset-from.sh
+# tests/hooks/feature-1733-state-event-stream/reset-from.sh
 # Tests: hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, reset-from, workflow-init, append-only, regression, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -17,7 +17,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="reset"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # Seeds a realistic mid-session state: gated approvals, several complete steps with

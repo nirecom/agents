@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-unblock-branch-d/unit.sh
+# tests/hooks/fix-unblock-branch-d/unit.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js, hooks/lib/command-parser.js, hooks/enforce-worktree/branch-delete-guard.js
 # Tags: worktree, enforce, hook, branch-delete, redirect, parser, scope:common
 #
@@ -10,7 +10,7 @@
 #   - isWorktreeEndSkillForceDelete tolerance of trailing redirect suffixes
 #
 # Runnable standalone:
-#   bash tests/fix-unblock-branch-d/unit.sh
+#   bash tests/hooks/fix-unblock-branch-d/unit.sh
 #
 # L3 gap (what this test does NOT catch):
 # - Whether the PreToolUse hook actually fires and honors the redirect-tolerant

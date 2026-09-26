@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1600-finalize-worker-overlay.sh
+# tests/hooks/fix-1600-finalize-worker-overlay.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
 #
@@ -12,7 +12,7 @@
 # spawned as children of bin/worker-dispatch.js, and the overlay module was
 # deleted along with the capability. Its reusable value helpers moved unchanged
 # to hooks/enforce-worktree/arg-value-guard.js (covered by
-# tests/fix-1600-sanctioned-coverage-audit.sh and tests/fix-1630-*).
+# tests/hooks/fix-1600-sanctioned-coverage-audit.sh and tests/fix-1630-*).
 #
 # So every row here is now a BLOCK row, and the file's remaining job is to hold
 # the retired hole SHUT: no `eval` of run-initial.sh / run-loop-step.js /

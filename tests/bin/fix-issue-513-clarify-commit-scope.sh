@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-issue-513-clarify-commit-scope.sh
+# tests/bin/fix-issue-513-clarify-commit-scope.sh
 # Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, wip, board-card, scope:issue-specific
 # L3 gap (what this test does NOT catch):

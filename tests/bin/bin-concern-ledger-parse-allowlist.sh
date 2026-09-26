@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-parse-allowlist.sh
+# tests/bin/bin-concern-ledger-parse-allowlist.sh
 # Tests: bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
 # Tags: concern-ledger, parser, allowlist, severity, category, table-driven, mutation-probe, scope:common, pwsh-not-required
 #
@@ -218,7 +218,7 @@ VOCAB_N="$(printf '%s\n' $VOCAB | grep -c . 2>/dev/null || printf 0)"
 # each file is sourced, not executed, so it shares the fixture and helpers
 # above. Order is the case numbering: 1-2, 3, then 4-6.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-parse-allowlist"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-parse-allowlist"
 
 # shellcheck source=./bin-concern-ledger-parse-allowlist/severity-matrix.sh
 . "$SUITE_DIR/severity-matrix.sh"

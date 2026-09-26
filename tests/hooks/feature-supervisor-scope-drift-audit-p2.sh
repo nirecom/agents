@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-scope-drift-audit-p2.sh
+# tests/hooks/feature-supervisor-scope-drift-audit-p2.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/supervisor-check.js
 # Tags: supervisor, em-supervisor, workflow-gate, scope-drift, audit, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap: workflow-gate.js as a real PreToolUse hook + live git push are not exercised;

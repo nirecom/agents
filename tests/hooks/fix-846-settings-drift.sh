@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-846-settings-drift.sh
+# tests/hooks/fix-846-settings-drift.sh
 # Tests: hooks/lib/settings-drift.js, hooks/session-start.js
 # Tags: hook, settings, drift, session-start, scope:common
 # Issue #846 — settings.json drift detection (module + session-start). L2 narrow

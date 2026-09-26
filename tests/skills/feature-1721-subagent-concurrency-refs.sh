@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1721-subagent-concurrency-refs.sh
+# tests/skills/feature-1721-subagent-concurrency-refs.sh
 # Tests: skills/_shared/subagent-concurrency.md, skills/workflow-init/SKILL.md, skills/review-code-security/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/_shared/codex-review-loop.md, skills/write-tests/SKILL.md, skills/review-tests/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md
 # Tags: subagent-concurrency, skill-orchestration, static, regression, TL1, scope:issue-specific
 # Issue #1721 — dispatch concurrency policy (SC-P parallel / SC-S serial / SC-W wait) is stated once in skills/_shared/subagent-concurrency.md and referenced from each dispatch site instead of re-explained inline.

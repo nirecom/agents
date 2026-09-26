@@ -1,5 +1,5 @@
 # Core feature tests for propagate-labels.sh (#1546, #1545, #1548, #1565).
-# Sourced by tests/fix-propagate-labels-fixes.sh — not run standalone.
+# Sourced by tests/bin/fix-propagate-labels-fixes.sh — not run standalone.
 # Tests: bin/github-issues/propagate-labels.sh
 # Tags: scope:issue-specific, propagate-labels
 

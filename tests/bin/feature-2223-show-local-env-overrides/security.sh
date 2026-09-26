@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-show-local-env-overrides/security.sh
+# tests/bin/feature-2223-show-local-env-overrides/security.sh
 # Tests: bin/show-local-env-overrides, hooks/lib/local-env.js, hooks/lib/load-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, secret-leakage, trust-boundary, pwsh-not-required
-# Case file for tests/feature-2223-show-local-env-overrides.sh — sourced from it,
+# Case file for tests/bin/feature-2223-show-local-env-overrides.sh — sourced from it,
 # never run standalone (it uses that file's helpers, fixtures and counters).
 # Holds the cases where the override file is treated as hostile input: it comes
 # from a directory this machine did not necessarily author, and the CLI both

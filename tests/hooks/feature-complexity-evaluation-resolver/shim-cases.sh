@@ -1,4 +1,4 @@
-# tests/feature-complexity-evaluation-resolver/shim-cases.sh
+# tests/hooks/feature-complexity-evaluation-resolver/shim-cases.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js
 # Tags: L2, workflow, complexity-evaluation, legacy-shim, scope:issue-specific
 # Sourced by feature-complexity-evaluation-resolver.sh after cli-cases.sh; cases run at

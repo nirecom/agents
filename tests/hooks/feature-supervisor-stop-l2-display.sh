@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-stop-l2-display.sh
+# tests/hooks/feature-supervisor-stop-l2-display.sh
 # Tests: hooks/stop-l2-findings-display.js, hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, stop-hook, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

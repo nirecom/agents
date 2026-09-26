@@ -1,6 +1,6 @@
 # Tests: install.sh, install.ps1, install/linux/session-sync-init.sh, install/win/session-sync-init.ps1, bin/get-config-var, bin/get-config-var.ps1
 # Tags: install, installer, session-sync, toggle, pwsh-required, scope:common
-# Part of tests/main-session-sync-toggle.sh — sourced by that dispatcher; uses its AGENTS_DIR / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
+# Part of tests/bin/main-session-sync-toggle.sh — sourced by that dispatcher; uses its AGENTS_DIR / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
 # Why over the static T17-T19 greps: a correct gate, an inverted gate, a bare
 # mention and an unconditional call all share one source signature, so each
 # installer is *run* in an all-stub sandbox with the session-sync init stub as

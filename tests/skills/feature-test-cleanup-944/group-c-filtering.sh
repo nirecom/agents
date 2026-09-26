@@ -1,7 +1,7 @@
 # Group C: audit-tests.sh core filtering logic (Cases 6-16)
 # Tests: bin/audit-tests.sh
 # Tags: audit-tests, filtering, survival, scope:issue-specific, TL2
-# Sourced by tests/feature-test-cleanup-944.sh
+# Sourced by tests/skills/feature-test-cleanup-944.sh
 #
 # Revised for #1833. The primary filter is TARGET SURVIVAL, so every fixture
 # now carries a real `# Tests:` header: a dead one (bin/gone.sh, never existed)
@@ -175,7 +175,7 @@ fi
 # MAX(dispatcher_commit_date, sibling_commit_date). #1557 moved the filter to
 # `state == closed && closed_at < CUTOFF`, and #1833 moved it again to target
 # survival — `max_date` is reporting-only in both. Replacement:
-# tests/fix-1557-audit-tests-closed-at.sh TC8 (a recent last-commit does not
+# tests/bin/fix-1557-audit-tests-closed-at.sh TC8 (a recent last-commit does not
 # prevent candidacy).
 
 # Case 12: sibling folder exists → report includes sibling path + file count

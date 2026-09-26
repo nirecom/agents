@@ -1,5 +1,5 @@
 # f-skill-name.sh — F1/F2: the skillNameOf / isMetaOpDispatch boundary tables.
-# Sourced by tests/feature-2013-step-in-flight-automark.sh.
+# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh.
 # Tests: hooks/lib/step-in-flight-policy.js
 # Tags: step-in-flight, skill-dispatch, resume-session, policy, table-driven, malformed-input, regression-2279, scope:issue-specific, pwsh-not-required, TL1
 

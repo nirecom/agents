@@ -1,4 +1,4 @@
-# tests/enforce-off-emergency-provenance/cases-p2-p8-lifecycle.sh
+# tests/hooks/enforce-off-emergency-provenance/cases-p2-p8-lifecycle.sh
 # P2-P8: marker lifecycle (staleness, attribution, freshness/future bounds,
 # corruption) and the WORKTREE/WORKFLOW target symmetry (P8, CPR-ORTH).
 # Sourced by ../enforce-off-emergency-provenance.sh; relies on that file's

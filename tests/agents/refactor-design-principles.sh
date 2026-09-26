@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-design-principles.sh
+# tests/agents/refactor-design-principles.sh
 # Tests: agents/detail-reviewer.md, agents/outline-reviewer.md, hooks/workflow-mark.js, skills/make-detail-plan/SKILL.md, skills/survey-code/SKILL.md
 # Tags: workflow, outline, planning, detail, survey, scope:common
 #
@@ -13,11 +13,11 @@ set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# shellcheck source=tests/refactor-design-principles/helpers.sh
+# shellcheck source=tests/agents/refactor-design-principles/helpers.sh
 . "$AGENTS_DIR/tests/agents/refactor-design-principles/helpers.sh"
-# shellcheck source=tests/refactor-design-principles/section-a.sh
+# shellcheck source=tests/agents/refactor-design-principles/section-a.sh
 . "$AGENTS_DIR/tests/agents/refactor-design-principles/section-a.sh"
-# shellcheck source=tests/refactor-design-principles/section-b.sh
+# shellcheck source=tests/agents/refactor-design-principles/section-b.sh
 . "$AGENTS_DIR/tests/agents/refactor-design-principles/section-b.sh"
 
 # ============================================================================

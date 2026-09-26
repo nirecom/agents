@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-10 MEDIUM-1: A TARGET ASSEMBLED BY COMMAND SUBSTITUTION.
 #
 # Before this fix a write target that could not be resolved statically was simply

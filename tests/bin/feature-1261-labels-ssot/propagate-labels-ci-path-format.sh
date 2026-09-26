@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1261-labels-ssot/propagate-labels-ci-path-format.sh
+# tests/bin/feature-1261-labels-ssot/propagate-labels-ci-path-format.sh
 # Tests: bin/github-issues/propagate-labels.sh
 # Tags: labels-ssot, propagation, github-issues, scope:issue-specific
 #

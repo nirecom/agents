@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/env-nonexposure.sh
+# tests/skills/feature-worktree-start-non-interactive/env-nonexposure.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/check-private-repo-name.js
 # Tags: worktree, start, private-repo, environment, leak, security, TL2, scope:issue-specific
 # B26 [F3] — the private-repo-name list must never enter a child process's environment.

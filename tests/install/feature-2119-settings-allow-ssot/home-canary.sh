@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/home-canary.sh
+# tests/install/feature-2119-settings-allow-ssot/home-canary.sh
 # Tests: install/lib/settings-deploy.js, install/assemble-settings.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 

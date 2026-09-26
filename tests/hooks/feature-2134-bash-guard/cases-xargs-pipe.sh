@@ -1,7 +1,7 @@
-# tests/feature-2134-bash-guard/cases-xargs-pipe.sh
+# tests/hooks/feature-2134-bash-guard/cases-xargs-pipe.sh
 # Tests: hooks/bash-guard/exemptions.js, hooks/bash-guard/detect.js, hooks/lib/command-ir.js
 # Tags: hook, bash-guard, exemptions, xargs, separator-links, scope:issue-specific, pwsh-not-required, TL2
-# X1-X7: the one hit-scoped exemption. Sourced by tests/feature-2134-bash-guard.sh.
+# X1-X7: the one hit-scoped exemption. Sourced by tests/hooks/feature-2134-bash-guard.sh.
 
 # WHY THIS EXEMPTION EXISTS. intent.md's approved Scope excludes "via xargs", so
 # `find . -name '*.tmp' | xargs rm` must not be denied. Round 1 implemented that as a

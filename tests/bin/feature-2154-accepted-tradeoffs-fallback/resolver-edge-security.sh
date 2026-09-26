@@ -7,7 +7,7 @@
 # Patterns: skills/_shared/test-design/protection-fix-tests.md — every rejection
 # case asserts the protected resource (the filesystem outside PLANS_DIR) is
 # unchanged, not merely that an exit code was non-zero.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
 echo "=== Resolver error / edge / containment cases ==="
 
 # TL3 gap (TL2 substrate is not POSIX; a real POSIX host also verifies): S4 — an
@@ -140,7 +140,7 @@ assert_contained() {
 
 # CANONICAL containment (S9). assert_contained above judges the emitted path
 # LEXICALLY, so an in-directory symlink whose target is an external secret would
-# pass it — the precise false green tests/fix-2108-subagent-artifact-write-path/
+# pass it — the precise false green tests/hooks/fix-2108-subagent-artifact-write-path/
 # cases-symlink-containment.sh exists to close (its A22 rows resolve the link
 # before judging). Both sides go through the SAME tool so an msys `/c/...` vs
 # `C:/...` mismatch cannot masquerade as an escape.

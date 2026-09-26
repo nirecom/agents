@@ -1,7 +1,7 @@
 # Harness: TSV reader, escape codec, verdict extractors (#2065)
 # Tests: bin/lib/test-dup-group.sh
 # Tags: TL2, audit-tests, dup-groups, tsv, harness, scope:issue-specific
-# Sourced first by tests/feature-2065-dup-group-inventory.sh — no cases here.
+# Sourced first by tests/bin/feature-2065-dup-group-inventory.sh — no cases here.
 # Column contract (S2): axis <TAB> key <TAB> count <TAB> files, preceded by a
 # `#`-prefixed column-name comment that consumers skip. Keys and file names are
 # escaped, so they travel through the environment rather than `awk -v` (which

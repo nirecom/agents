@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-exec-position-classifier.sh
+# tests/hooks/fix-1273-exec-position-classifier.sh
 # Tests: hooks/workflow-run-tests/exec-model.js, hooks/lib/command-ir.js
 # Tags: workflow, tests, runner, hook, classifier, table-driven, TL1, scope:common
 #
@@ -23,9 +23,9 @@
 # TL3 gap (what this TL1 test does NOT catch):
 #   - Whether the hook actually consults this classifier before its provenance /
 #     contract branches (the #1273 early return at workflow-run-tests.js:171).
-#     tests/main-workflow-run-tests/detection-matrix.sh and
-#     tests/main-workflow-run-tests/quoted-arg-and-provenance.sh are the TL2 tier
-#     for that, and tests/TL3-worker-dispatch-run-tests.sh the TL3 tier.
+#     tests/hooks/main-workflow-run-tests/detection-matrix.sh and
+#     tests/hooks/main-workflow-run-tests/quoted-arg-and-provenance.sh are the TL2 tier
+#     for that, and tests/bin/TL3-worker-dispatch-run-tests.sh the TL3 tier.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 

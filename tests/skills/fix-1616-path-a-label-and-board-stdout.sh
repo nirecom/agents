@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1616-path-a-label-and-board-stdout.sh
+# tests/skills/fix-1616-path-a-label-and-board-stdout.sh
 # Tests: skills/workflow-init/scripts/path-a-label-and-board.sh
 # Tags: workflow-init, github, issues, stdout-contract, gh-cli, scope:common, pwsh-not-required
 #

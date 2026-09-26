@@ -1,11 +1,11 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/owner-repo-charset.sh
+# tests/bin/fix-1899-origin-repo-resolver/owner-repo-charset.sh
 # Tests: bin/github-issues/lib/origin-repo.sh
 # Tags: origin-resolution, github-issues, security, path-traversal, table-driven, TL2, scope:issue-specific
 #
 # Groups F, G and H of the fix-1899-origin-repo-resolver split suite — the
 # owner/repo charset contract, the bash half of the CPR-ORTH mirror whose JS half
-# is tests/fix-1899-parse-remote-url/owner-repo-charset.sh.
+# is tests/hooks/fix-1899-parse-remote-url/owner-repo-charset.sh.
 #
 # Why: F1 [HIGH] from the security review — the inline regex closing
 # resolve_origin_owner_repo admitted `.` and `..` as a WHOLE segment, so an origin

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-689-select-tests.sh
+# tests/bin/feature-689-select-tests.sh
 # Tests: bin/select-tests.sh
 # Tags: test-selection, tests, bin, git, pr, merge-base, docs-only, scope:issue-specific
 #
@@ -87,7 +87,7 @@ $out"
     fi
 }
 
-# C2: bin/select-tests.sh itself changed → selects tests/feature-689-select-tests.sh
+# C2: bin/select-tests.sh itself changed → selects tests/bin/feature-689-select-tests.sh
 test_C2_self_select() {
     local repo="$TMPDIR_BASE/c2"
     make_repo "$repo" "bin/select-tests.sh"

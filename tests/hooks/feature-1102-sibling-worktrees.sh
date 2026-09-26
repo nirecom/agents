@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1102-sibling-worktrees.sh
+# tests/hooks/feature-1102-sibling-worktrees.sh
 # Tests: hooks/lib/worktree-notes.js, bin/worktree-write-notes.js
 # Tags: worktree, sibling, security, scope:issue-specific
 #

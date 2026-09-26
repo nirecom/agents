@@ -15,7 +15,7 @@ AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
-# shellcheck source=tests/TL3-hook-post-compact/main.sh
+# shellcheck source=tests/hooks/TL3-hook-post-compact/main.sh
 . "$AGENTS_DIR/tests/hooks/TL3-hook-post-compact/main.sh"
 
 # TL3 gap only — no assertable real invocation. Exit skipped.

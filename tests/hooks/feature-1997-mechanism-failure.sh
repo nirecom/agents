@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1997-mechanism-failure.sh
+# tests/hooks/feature-1997-mechanism-failure.sh
 # Tests: hooks/lib/mechanism-failure.js, hooks/lib/protected-basenames.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/stop-premature-stop-guard.js
 # Tags: mechanism-failure, stall-detection, supervisor-report, stall-reported, idempotency, ordering, security, path-traversal, regression-1997, scope:issue-specific, pwsh-not-required, TL1, TL2
 
@@ -22,7 +22,7 @@
 # - Whether bin/supervisor-report actually lands the finding in the real
 #   supervisor state file when invoked by Claude Code's own environment
 # - Whether a real overnight session reaches this code path at all (that is the
-#   UserPromptSubmit wiring, covered by tests/feature-1979-stall-regression.sh)
+#   UserPromptSubmit wiring, covered by tests/hooks/feature-1979-stall-regression.sh)
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration
 

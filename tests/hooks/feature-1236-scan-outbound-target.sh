@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1236-scan-outbound-target.sh
+# tests/hooks/feature-1236-scan-outbound-target.sh
 # Tests: hooks/lib/forge-write-extract.js, hooks/scan-outbound.js
 # Tags: hook, scan, github, security, scope:issue-specific, pwsh-not-required
 #

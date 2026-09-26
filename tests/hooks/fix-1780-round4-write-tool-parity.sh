@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round4-write-tool-parity.sh
+# tests/hooks/fix-1780-round4-write-tool-parity.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/write-tools.js, hooks/enforce-worktree/handle-edit-write.js, hooks/enforce-worktree/handle-bash-write.js, settings.json
 # Tags: worktree, enforce-worktree, write-tools, tool-parity, notebookedit, editfiles, runcommands, runinterminal, pretooluse, security, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):

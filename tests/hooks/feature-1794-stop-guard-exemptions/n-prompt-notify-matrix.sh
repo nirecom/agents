@@ -1,4 +1,4 @@
-# n-prompt-notify-matrix.sh — N1-N3: the promptNotify column (hooks/lib/stop-exemption-policy.js) cross-checked against hooks/user-prompt-submit-mechanism-check.js (#2169). Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# n-prompt-notify-matrix.sh — N1-N3: the promptNotify column (hooks/lib/stop-exemption-policy.js) cross-checked against hooks/user-prompt-submit-mechanism-check.js (#2169). Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/user-prompt-submit-mechanism-check.js
 # Tags: stop-hook, exemption-matrix, prompt-notify, regression-2169, scope:issue-specific, pwsh-not-required, TL1
 

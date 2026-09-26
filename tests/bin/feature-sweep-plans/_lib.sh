@@ -1,4 +1,4 @@
-# tests/feature-sweep-plans/_lib.sh
+# tests/bin/feature-sweep-plans/_lib.sh
 # Tests: bin/sweep-plans.sh
 # Tags: sweep, plans, workflow-plans, maintenance, bin, scope:common
 #

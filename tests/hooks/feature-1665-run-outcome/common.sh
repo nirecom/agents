@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/common.sh
+# tests/hooks/feature-1665-run-outcome/common.sh
 # Tests: hooks/workflow-run-tests/outcome.js, hooks/workflow-run-tests.js
 # Tags: workflow, run-tests, run-outcome, helpers, TL1, TL2, scope:issue-specific
 #

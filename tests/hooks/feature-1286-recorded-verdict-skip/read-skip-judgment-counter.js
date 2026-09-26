@@ -40,7 +40,7 @@ if (!counterFile) {
 let readSkipJudgmentCallCount = 0;
 
 // Resolve module paths from this file's location.
-// this file: tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js
+// this file: tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js
 // AGENTS_DIR is two levels up.
 const AGENTS_DIR = path.resolve(__dirname, "..", "..");
 const workflowStatePath = path.join(AGENTS_DIR, "hooks", "workflow-state.js");

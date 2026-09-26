@@ -1,7 +1,7 @@
 # Tests: skills/review-plan-security/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh
 # Tags: codex, review, wrappers, accepted-tradeoffs, scope:issue-specific
 # GROUP D: Wrapper script structural checks (cases 21-25, D1-D3).
-# Sourced by tests/feature-1308-codex-review-allowlist.sh.
+# Sourced by tests/bin/feature-1308-codex-review-allowlist.sh.
 echo ""
 echo "=== Group D: Wrapper scripts ==="
 

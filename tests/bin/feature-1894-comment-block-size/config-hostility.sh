@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/config-hostility.sh
+# tests/bin/feature-1894-comment-block-size/config-hostility.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, glob, extensions, scan-scope, tmpdir, quoting, trap, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 

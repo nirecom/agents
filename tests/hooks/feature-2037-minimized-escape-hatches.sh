@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2037-minimized-escape-hatches.sh
+# tests/hooks/feature-2037-minimized-escape-hatches.sh
 # Tests: hooks/lib/rules-injection-policy.js, CLAUDE.md, rules/workflow-off.md, rules/stop-guard-exemptions.md, rules/supervisor-reporting.md, rules/worktree.md, skills/enforce-workflow-off/SKILL.md, skills/supervisor-report/SKILL.md
 # Tags: rules-injection, minimized-unconditional, escape-hatch, progressive-disclosure, relocation, frontmatter, membership, pointer, TL2, scope:issue-specific
 #

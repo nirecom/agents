@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, set-e, session-sync, frequency-guard, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher;
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher;
 # uses make_mirror_sandbox / run_mirror_driver / _ffg_stamp / HAVE_ZSH.
 # Every other case here sources with `set -e` INACTIVE; profile-snippet.sh's own
 # `_ss_rc` comment is the SSOT for why that hides a killed login shell. The three

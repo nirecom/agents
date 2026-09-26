@@ -10,7 +10,7 @@
 # Residual gap (TL1 by nature, so test-design.md's `# TL3 gap` block does not apply):
 # a command assembled by shell concatenation or a heredoc that never puts the pieces
 # adjacent. Continuations are covered (join_continuations); the runtime half of the
-# ban is tests/fix-1947-advance-status-flag.sh.
+# ban is tests/bin/fix-1947-advance-status-flag.sh.
 
 set -uo pipefail
 
@@ -395,7 +395,7 @@ echo "=== S11: write-tests SKILL.md Completion instructs staging BEFORE the adva
 # calling the CLI door -- an unstaged tests/ makes the evidence check reject fail-closed --
 # and (b) never wrap the call in `cd "$AGENTS_CONFIG_DIR" &&`, which points
 # resolveTrustedRepoDir() at the main agents worktree instead of the linked one
-# (tests/feature-2102-door-parity/evidence-cwd.sh E1b/E2b reproduce exactly that failure).
+# (tests/hooks/feature-2102-door-parity/evidence-cwd.sh E1b/E2b reproduce exactly that failure).
 WT_SKILL="skills/write-tests/SKILL.md"
 if [ ! -f "$WT_SKILL" ]; then
   fail "S11: $WT_SKILL exists -- file not found"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-check-prompt-extraction.sh
+# tests/bin/feature-1642-check-prompt-extraction.sh
 # Tests: bin/check-prompt-extraction, bin/lib/prompt-extraction/cli.js, bin/lib/prompt-extraction/fence-scanner.js, bin/lib/prompt-extraction/procedure-scanner.js
 # Tags: prompt, bin, prompt-extraction, code-fence, inline-procedure, scope:issue-specific, scope:feature-1642, layer:TL2
 #
@@ -10,9 +10,9 @@
 #   * exit-code contract: 0=clean, 1=blocking violation, 2=usage error, 3=infra error
 #
 # Split per rules/coding/file-split.md Pattern A (500-line HARD limit). Siblings:
-#   tests/feature-1642-check-prompt-extraction/target-set.sh — target enumeration
+#   tests/bin/feature-1642-check-prompt-extraction/target-set.sh — target enumeration
 #                                                              (--all / --base / exclusions)
-#   tests/feature-1642-check-prompt-extraction/allowlist.sh  — allowlist parse / match /
+#   tests/bin/feature-1642-check-prompt-extraction/allowlist.sh  — allowlist parse / match /
 #                                                              --allowlist-total / --write-allowlist
 # Setup boilerplate is duplicated across the three files deliberately: a shared
 # helpers.sh would couple files that must stay independently runnable by the runner.
@@ -20,7 +20,7 @@
 # TL3 gap (what this test does NOT catch):
 # - Whether the CLI is reachable on PATH inside a real Claude Code session
 #   (install/path-exposed-commands.txt wiring) — covered statically by
-#   tests/feature-1642-prompt-extraction-static-guards.sh T03.
+#   tests/bin/feature-1642-prompt-extraction-static-guards.sh T03.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: installer.
 
 set -u

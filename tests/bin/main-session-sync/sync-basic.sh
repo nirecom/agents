@@ -1,6 +1,6 @@
 # Tests: bin/session-sync.sh
 # Tags: bin, git, session-sync, scope:common
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 
 echo ""
 echo "=== session-sync.sh tests ==="

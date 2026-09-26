@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-instructions-loaded-quiescence.sh
+# tests/hooks/cc-instructions-loaded-quiescence.sh
 # Tests: hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, quiescence, table-driven, late-arrival, error-handling, TL2, scope:common
 
@@ -10,7 +10,7 @@
 # cases-*.sh (rules/coding/file-split.md). TL3 gap (not caught here): the real firing skew S of the host's
 # asynchronous InstructionsLoaded dispatch, which is what W = clamp(2*S, 5s, 30s) is derived from at TL3;
 # and whether a genuinely late target can arrive AFTER every sibling has quiesced on a real host — only
-# tests/TL3-rules-injection-off-switch.sh observes that. Mitigated at WORKFLOW_USER_VERIFIED preflight
+# tests/hooks/TL3-rules-injection-off-switch.sh observes that. Mitigated at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
 # CONTRACT NOTE — waitForQuiescence(dir, opts) as encoded here:

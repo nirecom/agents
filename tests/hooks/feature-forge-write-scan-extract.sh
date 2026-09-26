@@ -5,7 +5,7 @@
 # Unit tests for the forge write-scan primitives; the scan-target and
 # inline[]/filePaths[] contract is documented in the module itself (SSOT).
 # The driver reports MODULE_NOT_FOUND as "not yet implemented" per case.
-# Section 2053 = tests/feature-forge-write-scan-extract/cases-2053-{additive-exports,tables}.sh
+# Section 2053 = tests/hooks/feature-forge-write-scan-extract/cases-2053-{additive-exports,tables}.sh
 
 set -euo pipefail
 
@@ -249,7 +249,7 @@ expect_extract "gh repo edit --homepage -> inline" \
     'gh repo edit foo/bar --homepage "https://internal.example.com"' \
     'return Array.isArray(v.inline) && v.inline.some(s => s.indexOf("internal.example.com") !== -1) && Array.isArray(v.filePaths);'
 
-PARTS_DIR="$DOTFILES_DIR/tests/feature-forge-write-scan-extract"
+PARTS_DIR="$DOTFILES_DIR/tests/hooks/feature-forge-write-scan-extract"
 
 # probe-lib.sh owns the shared expression probe both section-2053 parts use.
 if [ -f "$PARTS_DIR/probe-lib.sh" ]; then

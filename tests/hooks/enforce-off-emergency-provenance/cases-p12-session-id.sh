@@ -1,4 +1,4 @@
-# tests/enforce-off-emergency-provenance/cases-p12-session-id.sh
+# tests/hooks/enforce-off-emergency-provenance/cases-p12-session-id.sh
 # P12: the session id decides the marker's PATH, so it is attacker surface -
 # traversal, malformed-character rejection, the well-formed control, and the
 # env-fallback resolution route. Sourced by ../enforce-off-emergency-provenance.sh;

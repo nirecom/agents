@@ -1,4 +1,4 @@
-# tests/feature-719-supervisor-guard-hook/g-audit-t5-arm.sh
+# tests/hooks/feature-719-supervisor-guard-hook/g-audit-t5-arm.sh
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
 # G-T5-1, G-T5-2, G-T5-4: T5 — Phase A L3 arming via severity-threshold (#1044).

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-push-fix-cleanup.sh
+# tests/hooks/fix-enforce-worktree-push-fix-cleanup.sh
 # Tests: hooks/cleanup-orphan-dir.js
 # Tags: worktree, enforce, hook, bin, symlink
 #

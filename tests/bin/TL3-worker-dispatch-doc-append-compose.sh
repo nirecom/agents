@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-doc-append-compose.sh
+# tests/bin/TL3-worker-dispatch-doc-append-compose.sh
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/compose-doc-append-entry, bin/worker-dispatch/spawn.js
 # Tags: worker-dispatch, doc-append, compose, gh-cli, gh-token, github-token, auth-resolution, real-environment, TL3, scope:common
 # The real dispatcher -> real doc-append worker -> real bin/compose-doc-append-entry

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-720-supervisor-l3-trigger.sh
+# tests/hooks/feature-720-supervisor-l3-trigger.sh
 # Tests: hooks/supervisor-guard/collect-audit-triggers.js
 # Tags: supervisor, em-supervisor, layer3, collect, unit, scope:issue-specific
 # L3 gap (what this test does NOT catch):

@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/guard.sh
+# tests/bin/feat-1699-meta-parent-guard/guard.sh
 # Tests: bin/github-issues/lib/require-meta-parent.sh, bin/github-issues/issue-create-dispatch.sh
 # Tags: issue-create, dispatch, meta-parent, guard, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

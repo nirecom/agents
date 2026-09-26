@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-847-sweep-plans-empty-prefix.sh
+# tests/bin/fix-847-sweep-plans-empty-prefix.sh
 # Tests: bin/sweep-plans.sh
 # Tags: sweep, plans, empty-sid, guard, fix, scope:issue-specific, TL2
 #

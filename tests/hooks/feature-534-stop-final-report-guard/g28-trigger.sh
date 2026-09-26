@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g28-trigger.sh
+# tests/hooks/feature-534-stop-final-report-guard/g28-trigger.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
 #
@@ -96,7 +96,7 @@ let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
 # resolves next to it regardless of where the grandparent entrypoint lives.
 # ---------------------------------------------------------------------------
 G28_FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/g28-trigger"
-# shellcheck source=tests/feature-534-stop-final-report-guard/g28-trigger/no-env-cases.sh
+# shellcheck source=tests/hooks/feature-534-stop-final-report-guard/g28-trigger/no-env-cases.sh
 . "$G28_FRAGMENT_DIR/no-env-cases.sh"
-# shellcheck source=tests/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
+# shellcheck source=tests/hooks/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
 . "$G28_FRAGMENT_DIR/env-and-failopen-cases.sh"

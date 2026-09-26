@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/docs-2340-feat-update-docs-readme-md.sh
+# tests/bin/docs-2340-feat-update-docs-readme-md.sh
 # Tests: bin/review-doc-size, bin/review-doc-heading-order, bin/review-doc-gates, hooks/lib/staged-doc-changes.js, hooks/workflow-gate/review-docs-checker.js, hooks/workflow-state/state-io/migrations/v3-to-v4.js
 # Tags: TL2, docs, review-docs, staged, git, scope:issue-specific, pwsh-not-required
 # #2340 — README conciseness + .md line limits enforced at the review_docs step.

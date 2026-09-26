@@ -1,4 +1,4 @@
-# tests/prompt-bash-node-calling-convention/home-canary.sh
+# tests/install/prompt-bash-node-calling-convention/home-canary.sh
 # Tests: install/lib/settings-allow-rules.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 
@@ -13,7 +13,7 @@ CANARY_BEFORE=""
 
 # CONTRACT FOR EVERY OTHER PART: a part that starts writing (a deploy, a cache, a lock file)
 # turns T22 red rather than silently editing the developer's real ~/.claude.
-# Kept suite-local on purpose: the sibling copy under tests/feature-2119-settings-allow-ssot/
+# Kept suite-local on purpose: the sibling copy under tests/install/feature-2119-settings-allow-ssot/
 # belongs to an issue-specific suite retired when #2119's coverage is subsumed, and a
 # scope:common suite must not lose its isolation guard to another suite's retirement.
 canary_setup() {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/lang-config-routing-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/lang-config-routing-cases.sh
 # Tests: hooks/lib/lang-config.js
 # Tags: worktree, docs, lang-config, routing, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh after

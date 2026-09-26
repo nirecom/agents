@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-strip-quoted-args-lib.sh
+# tests/hooks/fix-strip-quoted-args-lib.sh
 # Tests: hooks/lib/strip-quoted-args.js, hooks/lib/bash-write-patterns.js
 # Tags: hook, bin, tests, strip-shell-var, classify-detailed
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-mcp-fs-server.sh
+# tests/bin/feature-mcp-fs-server.sh
 # Tests: bin/mcp-fs-server.js
 # Tags: mcp, filesystem, security, path-traversal
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1067-supervisor-alert-audit-dispatch.sh
+# tests/hooks/feature-1067-supervisor-alert-audit-dispatch.sh
 # Tests: hooks/supervisor-guard.js, hooks/lib/final-report-schema.js, bin/supervisor-write-alert, bin/supervisor-write-audit, bin/supervisor-write-audit-verdict
 # Tags: supervisor, em-supervisor, dispatch, c3, alert, audit, final-report, scope:issue-specific
 # Tests for issue #1067 — guard audit dispatch references supervisor-audit.md;

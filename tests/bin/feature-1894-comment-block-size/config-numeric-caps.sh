@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/config-numeric-caps.sh
+# tests/bin/feature-1894-comment-block-size/config-numeric-caps.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, config, env, numeric-caps, staged, all-scan, boundary, scope:issue-specific, scope:feature-1894, layer:TL2
 

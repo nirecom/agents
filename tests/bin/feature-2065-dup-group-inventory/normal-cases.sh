@@ -1,7 +1,7 @@
 # S12 category 5: the happy path — how groups form on both axes (#2065, S2)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, grouping, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # The inventory has two axes because the two questions differ: `full` finds
 # files whose whole target set is identical (candidates for a merge), `token`
 # finds files that merely share their primary target (candidates for a review).

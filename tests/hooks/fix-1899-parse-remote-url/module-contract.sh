@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/module-contract.sh
+# tests/hooks/fix-1899-parse-remote-url/module-contract.sh
 # Tests: hooks/lib/parse-remote-url.js, hooks/lib/is-private-repo.js
 # Tags: parse-remote-url, origin-resolution, purity, backward-compat, TL1, scope:issue-specific
 #

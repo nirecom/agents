@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/registration.sh
+# tests/hooks/feature-1894-hook-comment-block/registration.sh
 # Tests: settings.json, hooks/block-comment-block-size.js
 # Tags: comment-block-size, hook, pretooluse, settings, registration, wiring, e2e, integration, scope:issue-specific, scope:feature-1894, layer:TL2
 

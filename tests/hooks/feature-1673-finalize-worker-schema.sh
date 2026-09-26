@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-finalize-worker-schema.sh
+# tests/hooks/feature-1673-finalize-worker-schema.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, issue-close-finalize, registry, capability, payload-spec, phase-required, TL1, scope:issue-specific
 #

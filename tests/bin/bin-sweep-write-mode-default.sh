@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/bin-sweep-write-mode-default.sh
+# tests/bin/bin-sweep-write-mode-default.sh
 # Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/sweep-supervisor-state.sh, bin/sweep-shell-snapshots.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
 # Tags: sweep, write-mode, defaults, cron, scope:common, TL2
 # Pins the apply-by-default write-mode inversion across the whole /sweep series:
@@ -153,7 +153,7 @@ TABLE
 # B1b. #1833 made audit-tests-common.sh a full member of the write-mode class,
 # so --apply is no longer rejected. --help keeps the probe side-effect-free;
 # the deletion itself is asserted on a fixture repo in
-# tests/fix-1576-audit-tests-apply.sh TC5.
+# tests/bin/fix-1576-audit-tests-apply.sh TC5.
 B1b_audit_tests_common_accepts_apply() {
     local out rc
     out="$(run_with_timeout bash "$AGENTS_DIR/bin/audit-tests-common.sh" --apply --help 2>&1)"

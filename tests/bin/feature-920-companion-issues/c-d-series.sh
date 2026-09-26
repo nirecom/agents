@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/c-d-series.sh
+# tests/bin/feature-920-companion-issues/c-d-series.sh
 # Tests: skills/clarify-intent/SKILL.md, .env.example
 # Tags: companion-issues, clarify-intent, env-example, scope:issue-specific
 #

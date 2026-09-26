@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2064-enforce-worktree-js-innercommandiswrite.sh
+# tests/hooks/feature-2064-enforce-worktree-js-innercommandiswrite.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-targets/exotic-exec.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/dispatch-provenance.js, hooks/enforce-worktree/write-detector.js, hooks/enforce-worktree/bash-write-scope/segment-checks.js
 # Tags: worktree, enforce, hook, write-detector, dispatch-provenance, newline-injection, command-substitution, exotic-exec, heredoc, classifier, table-driven, scope:issue-specific
 #

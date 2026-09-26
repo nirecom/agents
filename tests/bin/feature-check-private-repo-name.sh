@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-check-private-repo-name.sh
+# tests/bin/feature-check-private-repo-name.sh
 # Tests: bin/check-private-repo-name.js, bin/list-private-repo-names.js
 # Tags: private-repo, outbound-scan, security, classifier, worktree, TL2, scope:common
 #
@@ -24,7 +24,7 @@
 
 # TL3 gap: the live `gh repo list --visibility private` path (auth, rate limit,
 # nameWithOwner shape), and /worktree-start actually feeding the checker (covered
-# one layer up by tests/feature-worktree-start-non-interactive/env-nonexposure.sh).
+# one layer up by tests/skills/feature-worktree-start-non-interactive/env-nonexposure.sh).
 # Mitigated at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -43,7 +43,7 @@ dispatch_status() { if [ "$TOTAL_FAIL" -eq 0 ]; then echo 0; else echo 1; fi; }
 # a per-file minimum PASS count catches a truncated run that still exits 0.
 # Minimums track the current baseline — raise on new cases; only lower while
 # naming the retired cases.
-# Same mechanism as tests/feature-worktree-start-non-interactive.sh, whose
+# Same mechanism as tests/skills/feature-worktree-start-non-interactive.sh, whose
 # selftest_dispatcher() owns the crash/shrink/healthy probes.
 run_sub() {
     local sub="$1" min="$2"

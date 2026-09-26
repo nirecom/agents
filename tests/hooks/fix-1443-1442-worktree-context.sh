@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/fix-1443-1442-worktree-context.sh
+# tests/hooks/fix-1443-1442-worktree-context.sh
 # Tests: hooks/detect-worktree-conflict.js, skills/worktree-end/SKILL.md, settings.json
 # Tags: worktree-end, worktree-context, hook-registration, scope:issue-specific, pwsh-not-required
 #
 # Issue #1443 / #1442 — keep CWD in the linked worktree until WE-13, detect
 # `git worktree add`-style "already used by worktree" conflicts. The sibling
-# session-id scan (Sections B/C) lives in tests/fix-1443-1442-session-id-resolvers.sh.
+# session-id scan (Sections B/C) lives in tests/hooks/fix-1443-1442-session-id-resolvers.sh.
 #
 # FAIL-BEFORE-FIX (BUGFIX session): the implementation does NOT exist yet.
 #   - hooks/detect-worktree-conflict.js is a NEW file — Section A cases FAIL with

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-9 HIGH-1: A `-c`-CLUSTER FLAG ON A COMMAND THAT IS NOT AN INTERPRETER.
 #
 # Round 8 narrowed segmentArgvHitsProtectedArg()'s RD3 deferral from per-SEGMENT

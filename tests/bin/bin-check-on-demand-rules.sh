@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/bin-check-on-demand-rules.sh
+# tests/bin/bin-check-on-demand-rules.sh
 # Tests: bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
 # Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common
 set -u
 
 # TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail plan "1-3")
-# plus the policy SSOT constants. Dispatcher only — cases, and the fixture-policy contract note, live in tests/bin-check-on-demand-rules/ (see its fixtures.sh).
+# plus the policy SSOT constants. Dispatcher only — cases, and the fixture-policy contract note, live in tests/bin/bin-check-on-demand-rules/ (see its fixtures.sh).
 # TL3 gap (not caught here): whether hooks/pre-commit actually wires this checker in for staged
 # rules/**/*.md (checker can be perfect, still never run on a real commit); whether the host loader
 # really refuses ON_DEMAND_TOKEN — this file only proves the notation is internally consistent,
@@ -24,7 +24,7 @@ POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
 # The policy is contributor-editable declaration DATA; this suite's own harnesses read it
 # through the agents-owned reader (loadPolicyAsData) instead of require()-ing it, for the
 # same reason the checker does — running this suite on a checked-out branch must not run
-# that branch's code. CPR-ORTH sibling of tests/cc-on-demand-skill-ownership/cases-require-safety.sh.
+# that branch's code. CPR-ORTH sibling of tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh.
 READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
 
 PASS=0; FAIL=0

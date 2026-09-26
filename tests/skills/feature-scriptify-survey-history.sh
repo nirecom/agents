@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-scriptify-survey-history.sh
+# tests/skills/feature-scriptify-survey-history.sh
 # Tests: skills/survey-history/SKILL.md, skills/survey-history/scripts/keyword-only-mode.sh, skills/survey-history/scripts/history-docs-search.sh, skills/survey-history/scripts/artifact-template.sh
 # Tags: survey, history, skill, scripts, scriptify, scope:issue-specific
 #

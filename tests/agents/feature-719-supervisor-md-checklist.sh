@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-719-supervisor-md-checklist.sh
+# tests/agents/feature-719-supervisor-md-checklist.sh
 # Tests: agents/supervisor.md
 # Tags: supervisor, em-supervisor, agents, layer2, doc, scope:common
 # RED for issue #719.

@@ -1,11 +1,11 @@
 #!/bin/bash
-# tests/unit-quote-spans.sh
+# tests/hooks/unit-quote-spans.sh
 # Tests: hooks/lib/quote-spans.js, hooks/lib/quote-spans/scan.js, hooks/lib/quote-spans/query.js, hooks/lib/quote-spans/transform.js
 # Tags: hook, quote-spans, parser, unit, security, scope:common
 #
 # STATUS: RED until C1 lands (hooks/lib/quote-spans/{scan,query,transform}.js +
 # the hooks/lib/quote-spans.js barrel). EVERY assertion in this file and in
-# tests/unit-quote-spans/*.sh is expected to fail today with
+# tests/hooks/unit-quote-spans/*.sh is expected to fail today with
 # `ERROR: require quote-spans.js: Cannot find module ...` — an
 # implementation-missing failure, not a test bug.
 #

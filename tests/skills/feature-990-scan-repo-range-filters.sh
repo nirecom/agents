@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-repo-range-filters.sh
+# tests/skills/feature-990-scan-repo-range-filters.sh
 # Tests: skills/scan-offensive/scripts/scan-repo.sh
 # Tags: scan, offensive, skill, jsonl, manifest, range-filter, apply, scope:issue-specific
 # RED for issue #990 — scan-repo.sh must accept --until/--from-issue/--to-issue/--manifest-out

@@ -1,5 +1,5 @@
 # f-security.sh — F1-F2: hostile session ids reaching the pause marker (#1624).
-# Sourced by tests/feature-1624-next-step-pause-scope.sh.
+# Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh.
 # Tests: hooks/lib/next-step-pause-marker.js, hooks/lib/session-markers.js
 # Tags: next-step-pause, security, path-traversal, session-id, regression-1624, scope:issue-specific, pwsh-not-required, TL1
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-failopen.sh
+# tests/hooks/feature-supervisor-failopen.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/workflow-gate.js
 # Tags: supervisor, em-supervisor, fail-open, resilience, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

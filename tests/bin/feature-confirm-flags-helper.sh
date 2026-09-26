@@ -442,7 +442,7 @@ fi
 # pre-implementation: guards will be added by /write-code per #954.
 echo "=== Call-site: fail-closed [ -x ] guard (static check) ==="
 PHASE5="$REPO_ROOT/tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh"
-SETTINGS_E2E="$REPO_ROOT/tests/feature-robust-workflow/settings-e2e.sh"
+SETTINGS_E2E="$REPO_ROOT/tests/hooks/feature-robust-workflow/settings-e2e.sh"
 if [ -f "$PHASE5" ] && grep -q '\[ -x.*bin/get-config-var' "$PHASE5"; then
     pass "phase5: [ -x ] guard present"
 else

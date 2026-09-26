@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-supervisor-state-writer-co-block-freshness.sh
+# tests/hooks/feature-885-supervisor-state-writer-co-block-freshness.sh
 # Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor-state-writer, co-blocked-by, freshness, axis-a, feature-885
 # Tests for issue #885 — back-annotation honors a freshness window:

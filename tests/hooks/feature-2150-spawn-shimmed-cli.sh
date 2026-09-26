@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2150-spawn-shimmed-cli.sh
+# tests/hooks/feature-2150-spawn-shimmed-cli.sh
 # Tests: hooks/lib/spawn-shimmed-cli.js, bin/codegraph-lifecycle.js, install/codegraph-mcp.js, tests/lib/shim-resolve-reference.js
 # Tags: codegraph, win32-shim, spawn, path-resolution, pathext, parser, regex, table-driven, classifier, allowlist, boundary, security, command-injection, unit, TL1, pwsh-not-required, scope:issue-specific
 # Platform-neutral unit suite for #2150: the probe forges process.platform=win32,

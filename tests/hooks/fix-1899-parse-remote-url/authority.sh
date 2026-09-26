@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/authority.sh
+# tests/hooks/fix-1899-parse-remote-url/authority.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, security, authority-anchoring, table-driven, parser, regex, TL1, scope:issue-specific
 #
@@ -21,7 +21,7 @@
 # inside it (CPR-ORTH). Both sides are anchored and both are GREEN — every
 # REJECT row below PASSES today, and none of them pins an open defect. These
 # are the JS half of a CPR-ORTH mirror pair: the case NAMES and input URLs are
-# identical to tests/fix-1899-origin-repo-resolver/authority.sh so the pair is
+# identical to tests/bin/fix-1899-origin-repo-resolver/authority.sh so the pair is
 # greppable.
 #
 # What the REJECT rows are WORTH is not uniform, and the difference decides what

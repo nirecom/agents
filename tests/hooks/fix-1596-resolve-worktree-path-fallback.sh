@@ -26,7 +26,7 @@ command -v node >/dev/null 2>&1 || { echo "node not found — check skipped"; ex
 [[ -f "$RESOLVER_JS" ]] || { echo "resolve-worktree-path.js missing"; exit 1; }
 
 # Disposable fixture: main worktree + two linked worktrees. Setup lines mirror
-# tests/fix-882-resolve-worktree-path.sh (dual-pin, hooksPath, cygpath).
+# tests/hooks/fix-882-resolve-worktree-path.sh (dual-pin, hooksPath, cygpath).
 TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t rwp1596)"
 MAIN_REPO="$TMPDIR_BASE/main"
 WTA="$TMPDIR_BASE/wtA"

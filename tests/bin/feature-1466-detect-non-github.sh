@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1466-detect-non-github.sh
+# tests/bin/feature-1466-detect-non-github.sh
 # Tests: bin/detect-non-github.sh
 # Tags: non-github, scope:issue-specific
 #

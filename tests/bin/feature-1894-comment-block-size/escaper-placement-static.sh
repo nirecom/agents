@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/escaper-placement-static.sh
+# tests/bin/feature-1894-comment-block-size/escaper-placement-static.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, injection, control-bytes, escaping, static-guard, enumeration, scope:issue-specific, scope:feature-1894, layer:TL2
 #

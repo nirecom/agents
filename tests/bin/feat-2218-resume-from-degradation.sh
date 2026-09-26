@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-resume-from-degradation.sh
+# tests/bin/feat-2218-resume-from-degradation.sh
 # Tests: bin/resume-session-detect, bin/lib/resume-session/upstream-view.js, bin/lib/resume-session/transcript-fallback.js, hooks/lib/session-title.js, hooks/workflow-state/inheritance/candidates.js
 # Tags: resume-session, session-upstream, degradation, transcript-tail, granularity, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 

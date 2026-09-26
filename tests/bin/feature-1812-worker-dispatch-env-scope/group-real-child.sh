@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js
 # Tags: worker-dispatch, spawn, env-scope, credential-scope, real-child-process, security, TL2, scope:issue-specific
 # Group D — the REAL child process, the seam A and B/C leave unmeasured between
@@ -207,5 +207,5 @@ group_d() {
     # SKIPPED: a child whose own transport re-execs and re-widens the env.
     # Because: spawn.js hands the env to spawnSync once and has no re-exec path.
     # L3 gap: a real `git push` whose ssh transport re-execs (core.sshCommand,
-    # ProxyCommand) is covered by tests/TL3-worker-dispatch-ssh-transport.sh.
+    # ProxyCommand) is covered by tests/bin/TL3-worker-dispatch-ssh-transport.sh.
 }

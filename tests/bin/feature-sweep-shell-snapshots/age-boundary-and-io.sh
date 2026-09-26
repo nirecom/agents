@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: bin/sweep-shell-snapshots.sh
 # Tags: sweep, shell-snapshots, boundary, io-failure, scope:common, TL2
-# Part file of tests/feature-sweep-shell-snapshots.sh: T12 pins the exact 1440
+# Part file of tests/bin/feature-sweep-shell-snapshots.sh: T12 pins the exact 1440
 # default (T7 only straddles it, and SKIPs where relative backdating is absent);
 # T13/T14 cover the I/O failure paths. Age semantics SSOT: the plan's age gate —
 # elapsed/60 < min_age keeps, so exactly 1440 minutes is swept.

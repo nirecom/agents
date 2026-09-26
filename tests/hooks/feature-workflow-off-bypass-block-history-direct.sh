@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-workflow-off-bypass-block-history-direct.sh
+# tests/hooks/feature-workflow-off-bypass-block-history-direct.sh
 # Tests: hooks/block-history-direct.js
 # Tags: hook, workflow-off, append-only, docs, marker, TL2, scope:common
 #

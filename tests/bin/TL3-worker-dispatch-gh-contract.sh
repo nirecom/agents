@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-gh-contract.sh
+# tests/bin/TL3-worker-dispatch-gh-contract.sh
 # Tests: bin/worker-dispatch/workers/issue-reconcile.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, issue-reconcile, gh-cli, external-contract, real-environment, TL3, scope:common
 #

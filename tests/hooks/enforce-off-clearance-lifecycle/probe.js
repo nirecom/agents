@@ -1,4 +1,4 @@
-// Helper for tests/enforce-off-clearance-lifecycle.sh.
+// Helper for tests/hooks/enforce-off-clearance-lifecycle.sh.
 //
 // In a FILE rather than a `node -e` body on purpose: every string this touches
 // spells an OFF-clearance name, and hooks/block-clearance-token-write.js blocks any

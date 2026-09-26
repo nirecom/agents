@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round4-case-fold-probe.sh
+# tests/hooks/fix-1780-round4-case-fold-probe.sh
 # Tests: hooks/enforce-worktree/bash-write-scope/target-normalize.js
 # Tags: worktree, enforce-worktree, case-sensitivity, filesystem-probe, containment, fail-closed, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

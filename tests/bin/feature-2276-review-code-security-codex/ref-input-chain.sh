@@ -1,8 +1,8 @@
-# tests/feature-2276-review-code-security-codex/ref-input-chain.sh
+# tests/bin/feature-2276-review-code-security-codex/ref-input-chain.sh
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: review-loop, security-code, ref-kind, anchored-parse, TL2, scope:issue-specific, issue-2344
 #
-# Sourced by tests/feature-2276-review-code-security-codex.sh.
+# Sourced by tests/bin/feature-2276-review-code-security-codex.sh.
 # One security-code round end to end: a git ref instead of a draft path, the
 # anchored codex body staged as review-code-codex, and the artifacts landing
 # under the split ledger-format / loop-format names.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-bundle-a-targets.sh
+# tests/hooks/fix-enforce-worktree-bundle-a-targets.sh
 # Tests: hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, bin, shell, shell-expansion, redirect
 #

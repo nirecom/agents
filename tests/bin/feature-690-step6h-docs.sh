@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-690-step6h-docs.sh
+# tests/bin/feature-690-step6h-docs.sh
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/worktree-end/scripts/write-env-json.js, bin/github-issues/issue-to-history.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, bin/compose-doc-append-entry, hooks/lib/lint-worktree-notes-lang.js
 # Tags: issue-close, docs-write, step6h, consolidation, triage, scope:issue-specific
 #

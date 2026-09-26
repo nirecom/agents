@@ -1,7 +1,7 @@
 # Tests: hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/dispatch-provenance.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, write-detector, newline-injection, scope:issue-specific
 # Sections 10-10e — newline-injected writes through command substitution, innerCommandIsWrite OR-chain, frame-interior dangling-opener, unquoted expanding-frame injection.
-# Sourced by tests/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
+# Sourced by tests/hooks/feature-2064-enforce-worktree-js-innercommandiswrite.sh.
 
 # Section 10 — security-scan regression: exotic-exec write hidden on a
 # NEWLINE-INJECTED line INSIDE a `$( ... )` whose body opens with a quoted `cat`

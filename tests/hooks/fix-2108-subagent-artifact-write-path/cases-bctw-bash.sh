@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/lib/protected-basenames.js, hooks/lib/active-session-ids.js
 # Tags: block-clearance-token-write, bash-scan, interpreter-body, protected-basename, session-context, malformed-input, fail-closed, subprocess, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section C5 — the BASH branch of block-clearance-token-write, driven through the real
 # hook subprocess. dispatch.js:99 routes command tools to bashHitsProtected(), a
@@ -90,7 +90,7 @@ run_C5_bctw_bash_route() {
         "$(gate_decision "$(_c5_run "$(_c5_cmd "rm -f $dir_fwd/issue-2108-survey.gh-env")")")"
 
     # SKIPPED: the PowerShell spelling of the same two commands.
-    # Because: the pwsh scanner has its own suite (tests/enforce-protected-marker-write.sh)
+    # Because: the pwsh scanner has its own suite (tests/hooks/enforce-protected-marker-write.sh)
     # and this file's tag set declares pwsh-not-required.
     # L3 gap: whether settings.json actually routes Bash calls to this hook at all.
 }
@@ -265,7 +265,7 @@ TABLE
     # Because: nothing at TL2 can make the CLI issue the call; the gate/action wiring is
     # simulated here by construction.
     # L3 gap: whether settings.json actually routes a Bash tool call through this hook
-    # before the command runs - tests/TL3-hook-early-gate-allowlist-write.sh observes that.
+    # before the command runs - tests/hooks/TL3-hook-early-gate-allowlist-write.sh observes that.
 }
 
 run_C17_interpreter_body() {

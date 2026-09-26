@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/protected-basenames.js, hooks/lib/active-session-ids.js, hooks/block-clearance-token-write.js
 # Tags: active-session-ids, protected-basename, fail-closed, fault-injection, structured-editor, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 # Section C15 — observeActiveSessionIds() faulted AT the line that consumes it
 # (protected-basenames.js `const { sids, complete } = ...`). C12-4/C12-4b fault the layers
 # below it and reach the predicate only through active-session-ids.js's own error handling;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2339-sweep-plan-headings.sh
+# tests/bin/feature-2339-sweep-plan-headings.sh
 # Tests: bin/sweep-plan-headings.js
 # Tags: scope:issue-specific, TL2
 # lang-check: ignore -- CJK heading fixtures are built inside node here.

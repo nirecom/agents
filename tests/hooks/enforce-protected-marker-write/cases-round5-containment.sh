@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-5 codex-HIGH (containment SSOT) and MEDIUM-7 (detection-direction gate).
 #
 # THE HOLE. Two entrypoints ask the SAME question about the SAME directory:

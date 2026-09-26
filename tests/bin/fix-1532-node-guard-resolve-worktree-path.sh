@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1532-node-guard-resolve-worktree-path.sh
+# tests/bin/fix-1532-node-guard-resolve-worktree-path.sh
 # Tests: bin/get-config-var, bin/confirm-off, bin/resolve-session-id, bin/resolve-worktree-path, bin/is-github-dotcom-remote
 # Tags: bin, polyglot-guard, node-misinvocation, invariance, scope:issue-specific, pwsh-not-required, TL2
 #

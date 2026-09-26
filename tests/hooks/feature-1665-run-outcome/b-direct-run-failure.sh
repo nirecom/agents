@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/b-direct-run-failure.sh
+# tests/hooks/feature-1665-run-outcome/b-direct-run-failure.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/outcome.js
 # Tags: workflow, run-outcome, run-all, contract-priority, hook, TL2, scope:issue-specific
 #

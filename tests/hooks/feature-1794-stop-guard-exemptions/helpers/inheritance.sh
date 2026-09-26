@@ -166,7 +166,7 @@ console.log(bad.length ? 'ANCHOR_BAD:' + bad.join(' ') : 'ANCHOR_OK');"
 # write_hang_transcript <path> — a JSONL transcript whose LAST assistant turn ends
 # with a MARK_STEP Bash tool_use and no tool_use after it, i.e. the exact shape
 # hooks/supervisor-guard/detect.js detectSentinelHang() calls a C1 hang. Same
-# fixture shape as tests/feature-719-supervisor-guard-hook G11.
+# fixture shape as tests/hooks/feature-719-supervisor-guard-hook G11.
 write_hang_transcript() {
     {
         printf '%s\n' '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"go"}]}}'

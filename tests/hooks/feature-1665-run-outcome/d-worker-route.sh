@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/d-worker-route.sh
+# tests/hooks/feature-1665-run-outcome/d-worker-route.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/outcome.js, bin/worker-dispatch/emit.js
 # Tags: workflow, run-outcome, worker-dispatch, classifier, hook, TL2, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/bin-sweep-issues-tiers-all-bands.sh
+# tests/bin/bin-sweep-issues-tiers-all-bands.sh
 # Tests: bin/sweep-issues.sh, bin/sweep-issues/list-band.sh, bin/sweep-issues/summary.sh
 # Tags: sweep, issues, snapshot, scope:common, TL2, dup-group-keep:size-hard-limit
 # Split from bin-sweep-issues-tiers.sh (500-line HARD limit): pins the all-bands

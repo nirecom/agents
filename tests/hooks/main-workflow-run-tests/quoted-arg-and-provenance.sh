@@ -86,8 +86,8 @@ run_quoted_arg_and_provenance_tests() {
     #     the nonexistent-absolute-path shape is exactly what must be rejected.
     #     Positive worker-dispatch provenance (a REAL, resolvable emitter path
     #     that does complete) is covered by
-    #     tests/fix-1273-run-tests-trust-boundary.sh and by
-    #     tests/fix-1378-worker-yaml-contract-roundtrip.sh case (1).
+    #     tests/hooks/fix-1273-run-tests-trust-boundary.sh and by
+    #     tests/bin/fix-1378-worker-yaml-contract-roundtrip.sh case (1).
     # -----------------------------------------------------------------------
     SID="qwd-ok-$$-$RANDOM"
     seed_write_tests "$SID" "complete"

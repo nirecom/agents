@@ -1,7 +1,7 @@
-# tests/feature-811-review-loop-summarize-concerns/v2-render.sh
+# tests/bin/feature-811-review-loop-summarize-concerns/v2-render.sh
 # Tests: bin/review-loop-summarize-concerns
 # Tags: feature, cap-menu, summarize-concerns, v2-schema, scope:issue-specific, pwsh-not-required
-# Sourced by tests/feature-811-review-loop-summarize-concerns.sh (appended cases).
+# Sourced by tests/bin/feature-811-review-loop-summarize-concerns.sh (appended cases).
 # Cases 1-17 feed a v1 ledger (ID|SEVERITY|TEXT) and must keep passing (backward-compat
 # pin); cases here feed a v2 ledger (11-field row, TEXT last, plus #unparsed|/#merged-alt|
 # aux lines). Cap-menu UI must grow: concern lifecycle (open/resolved/reopened + rounds),

@@ -1,7 +1,7 @@
 # S12 category 3: header structure — duplicate lines and position (#2065, S1-1)
 # Tests: bin/lib/test-dup-group.sh, bin/lib/test-frontmatter-constants.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, frontmatter, structure, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # `grep -m1 '^# Tests:'` reads neither the line number nor the occurrence count,
 # so a second header line is silently dropped and a header at line 11+ is
 # silently accepted. Both are structural malformations that must become skip

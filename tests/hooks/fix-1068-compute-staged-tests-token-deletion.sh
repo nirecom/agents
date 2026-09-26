@@ -150,7 +150,7 @@
 #               and asserts no injection side effect occurs.
 #   7. MEDIUM — the P1-P5 path-prefix cases use the table-driven
 #               `while IFS='|' read` pattern per skills/_shared/test-design.md
-#               and tests/feature-833-review-tests-sentinel-ssot.sh precedent.
+#               and tests/hooks/feature-833-review-tests-sentinel-ssot.sh precedent.
 #
 # TL3 gap (what this test does NOT catch):
 # - Whether workflow-gate.js's caller correctly treats a non-null mixed-case
@@ -241,7 +241,7 @@ is_valid_hex_token() {
 # sha256_hex_prefix16 <string> — cross-platform sha256 hex digest of <string>,
 # first 16 hex chars. Mirrors computeStagedTestsToken's
 # crypto.createHash("sha256").update(content).digest("hex").slice(0, 16).
-# Precedent: tests/feature-issue-283-label-bootstrap.sh sha256_of() (file-based
+# Precedent: tests/bin/feature-issue-283-label-bootstrap.sh sha256_of() (file-based
 # variant); this is the stdin/string variant since the oracle hashes an
 # in-memory joined string, not a file.
 sha256_hex_prefix16() {

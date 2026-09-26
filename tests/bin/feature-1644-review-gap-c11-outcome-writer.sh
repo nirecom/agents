@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1644-review-gap-c11-outcome-writer.sh
+# tests/bin/feature-1644-review-gap-c11-outcome-writer.sh
 # Tests: bin/issue-close-write-outcome.js, hooks/workflow-state/session-facts.js
 # Tags: tl2, workflow, issue-close, outcome-json, idempotency, error-handling, scope:issue-specific, pwsh-not-required
 #

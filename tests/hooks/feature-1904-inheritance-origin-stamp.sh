@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1904-inheritance-origin-stamp.sh
+# tests/hooks/feature-1904-inheritance-origin-stamp.sh
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: session-inherit, provenance, regression-1904, scope:issue-specific, pwsh-not-required, TL1, TL2
 #

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/scanner-core.sh
+# tests/bin/feature-1894-comment-block-size/scanner-core.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, parser, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #
-# Part 1 of tests/feature-1894-comment-block-size.sh — the comment-line
+# Part 1 of tests/bin/feature-1894-comment-block-size.sh — the comment-line
 # recognition rule and the run-length decision boundary. Every case is probed
 # through the contracted CLI output: a NEW file (absent from HEAD) is staged, so
 # the scanner falls back to absolute state and reports `BLOCK: probe.sh — longest

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-premerge-block-reason.sh
+# tests/hooks/feature-supervisor-premerge-block-reason.sh
 # Tests: hooks/lib/supervisor-report-format.js, hooks/lib/conv-lang.js
 # Tags: supervisor, em-supervisor, premerge, block-reason, conv-lang, scope-drift, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

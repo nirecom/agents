@@ -5,7 +5,7 @@
 # THE MECHANISM (#2140/#2141): does a real model, given review-tests' top-of-Procedure
 # directive verbatim in a fork-like isolated fixture, actually Read rules/shell-commands.md
 # before its first Bash command -- and does removing the directive stop that being guaranteed?
-# Static proof of the skill's own TEXT lives in tests/feature-2140-fork-dispatch-shell-commands.sh;
+# Static proof of the skill's own TEXT lives in tests/skills/feature-2140-fork-dispatch-shell-commands.sh;
 # this gate is the live-model counterpart.
 set -uo pipefail
 
@@ -33,9 +33,9 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 skip() { echo "SKIP: $1" >&2; }
 
-# shellcheck source=tests/TL3-review-tests-fork-directive-order/helpers.sh
+# shellcheck source=tests/skills/TL3-review-tests-fork-directive-order/helpers.sh
 . "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/helpers.sh"
-# shellcheck source=tests/TL3-review-tests-fork-directive-order/main.sh
+# shellcheck source=tests/skills/TL3-review-tests-fork-directive-order/main.sh
 . "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/main.sh"
 
 echo ""

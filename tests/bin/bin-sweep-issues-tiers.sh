@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/bin-sweep-issues-tiers.sh
+# tests/bin/bin-sweep-issues-tiers.sh
 # Tests: bin/sweep-issues.sh, bin/sweep-issues/close-batch.sh, bin/sweep-issues/meta-parent-scan.sh
 # Tags: sweep, issues, tier, dry-run, deep, scope:common, TL2
 #
@@ -8,7 +8,7 @@
 #   depth      : no flag = tier 1 only, non-interactive  | --deep = emit tier 2 gate blocks
 # --deep must NOT change the write mode, and --dry-run must suppress tier 1 closes.
 #
-# Technique (after tests/feature-sweep-worktrees/gh-stub.sh): a shadow
+# Technique (after tests/bin/feature-sweep-worktrees/gh-stub.sh): a shadow
 # AGENTS_CONFIG_DIR holds real copies of bin/sweep-issues* plus RECORDING STUBS
 # for every bin/github-issues/ close helper, so both `$AGENTS_CONFIG_DIR/bin/...`
 # and `$(dirname $0)/../github-issues/...` resolution styles hit the stub. Each

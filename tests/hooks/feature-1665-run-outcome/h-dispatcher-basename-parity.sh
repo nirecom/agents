@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/h-dispatcher-basename-parity.sh
+# tests/hooks/feature-1665-run-outcome/h-dispatcher-basename-parity.sh
 # Tests: hooks/workflow-run-tests/exec-model.js, hooks/enforce-worktree/worker-dispatch-write.js
 # Tags: workflow, run-outcome, drift-detection, worker-dispatch, parity, TL1, scope:issue-specific
 #

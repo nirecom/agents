@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
 # THE MUTEX ITSELF — hooks/lib/off-clearance-mint-lock.js.
 #
 # Everything the round-14 HIGH fix rests on is the claim that this module is a

@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/docs-contract.sh
+# tests/bin/feat-1699-meta-parent-guard/docs-contract.sh
 # Tests: rules/github-issues.md, skills/issue-create/SKILL.md
 # Tags: issue-create, docs, meta-parent, admin-close-path, contract, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

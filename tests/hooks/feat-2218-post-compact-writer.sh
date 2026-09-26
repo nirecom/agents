@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-post-compact-writer.sh
+# tests/hooks/feat-2218-post-compact-writer.sh
 # Tests: hooks/post-compact.js, hooks/lib/handoff-artifact.js
 # Tags: post-compact, handoff, class-b, writer, fail-open, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

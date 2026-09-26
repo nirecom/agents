@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-commit-gate-redesign.sh
+# tests/bin/feature-commit-gate-redesign.sh
 # Tests: bin/review-code-codex, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, worktree, codex
 #

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-show-local-env-overrides/readonly.sh
+# tests/bin/feature-2223-show-local-env-overrides/readonly.sh
 # Tests: bin/show-local-env-overrides, hooks/lib/load-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, idempotency, cli, pwsh-not-required
-# Case file for tests/feature-2223-show-local-env-overrides.sh — sourced from it,
+# Case file for tests/bin/feature-2223-show-local-env-overrides.sh — sourced from it,
 # never run standalone (it uses that file's helpers, fixtures and counters).
 # Holds the read-only contract: idempotency means "same result WITHOUT side
 # effects", and this tool runs inside a repository the machine did not

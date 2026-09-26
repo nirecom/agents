@@ -1,8 +1,8 @@
-# tests/fix-1630-config-dir-resolver/standard-predicates.sh
+# tests/hooks/fix-1630-config-dir-resolver/standard-predicates.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/agents-config-dir.js
 # Tags: hook, worktree, config-dir, resolver, enforce, security, scope:issue-specific
 #
-# STATUS (pre-C4 RED gate). Sourced by tests/fix-1630-config-dir-resolver.sh.
+# STATUS (pre-C4 RED gate). Sourced by tests/hooks/fix-1630-config-dir-resolver.sh.
 #   valid-env rows    -> GREEN today (must stay green after C4).
 #   missing-env rows  -> RED today: both predicates do `if (!acd) return false;`.
 #   stale-env rows    -> RED today: the raw env value is joined with bin/... so the

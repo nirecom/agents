@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2338-plan-lang-heading.sh
+# tests/hooks/feature-2338-plan-lang-heading.sh
 # Tests: hooks/lib/lint-plan-lang.js, hooks/check-plan-lang.js, hooks/gate-plan-lang.js, hooks/stop-confirm-plan-guard.js
 # Tags: scope:issue-specific, TL1, TL2
 # lang-check: ignore -- CJK heading fixtures are built inside node here.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/a-series.sh
+# tests/bin/feature-920-companion-issues/a-series.sh
 # Tests: bin/github-issues/find-companion-issues.sh
 # Tags: companion-issues, find-companion-issues, scope:issue-specific
 #

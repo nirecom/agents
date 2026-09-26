@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/main-merge-detect.sh
+# tests/hooks/main-merge-detect.sh
 # Tests: hooks/lib/merge-detect.js, hooks/lib/parse-git-args.js
 # Tags: hook, bin, git, pr, github
 #

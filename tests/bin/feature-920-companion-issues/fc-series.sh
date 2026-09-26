@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-920-companion-issues/fc-series.sh
+# tests/bin/feature-920-companion-issues/fc-series.sh
 # Tests: bin/github-issues/find-companion-issues.sh
 # Tags: companion-issues, find-companion-issues, wip-filter, parent-filter, scope:issue-specific
 #

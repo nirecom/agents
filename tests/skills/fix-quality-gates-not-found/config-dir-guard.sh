@@ -1,4 +1,4 @@
-# Part of tests/fix-quality-gates-not-found.sh (sourced, not standalone).
+# Part of tests/skills/fix-quality-gates-not-found.sh (sourced, not standalone).
 # Tests: skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: security-gate, quality-gates, review-code-security, false-green, config-dir, scope:common, pwsh-not-required, TL2
 #

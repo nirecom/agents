@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-issue-body-append.sh
+# tests/bin/fix-1591-issue-body-append.sh
 # Tests: bin/github-issues/issue-body-append.sh
 # Tags: github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
 #

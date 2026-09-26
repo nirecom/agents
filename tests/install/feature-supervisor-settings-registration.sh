@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-settings-registration.sh
+# tests/install/feature-supervisor-settings-registration.sh
 # Tests: settings.json
 # Tags: supervisor, em-supervisor, settings-registration, scope:issue-specific, hook-registration, pwsh-not-required
 # L3 gap (what this test does NOT catch):

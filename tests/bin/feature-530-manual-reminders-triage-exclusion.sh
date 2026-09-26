@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-530-manual-reminders-triage-exclusion.sh
+# tests/bin/feature-530-manual-reminders-triage-exclusion.sh
 # Tests: bin/worktree-notes-triage.js, hooks/lib/worktree-notes.js, hooks/lib/worktree-notes-sections.js
 # Tags: notes-promotion, worktree-notes, triage, manual-reminders, bin, TL2, scope:issue-specific
 #
@@ -14,7 +14,7 @@
 # M3  the list/annotate contract WE-11 depends on does not drift when the new
 #     `resolve` subcommand lands alongside it
 #
-# Split out of tests/feature-worktree-end-step55-promotion.sh, which crossed the
+# Split out of tests/bin/feature-worktree-end-step55-promotion.sh, which crossed the
 # 500-line HARD limit; that file keeps the F/R promotion-flow cases.
 #
 # TL2: spawns the real CLI against real fixture files.

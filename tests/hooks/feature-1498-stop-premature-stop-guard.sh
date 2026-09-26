@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1498-stop-premature-stop-guard.sh
+# tests/hooks/feature-1498-stop-premature-stop-guard.sh
 # Tests: hooks/stop-premature-stop-guard.js
 # Tags: scope:issue-specific
 # Tests for issue #1498 — Stop hook stop-premature-stop-guard.js (NEW).

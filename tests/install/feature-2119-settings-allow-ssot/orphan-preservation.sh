@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/orphan-preservation.sh
+# tests/install/feature-2119-settings-allow-ssot/orphan-preservation.sh
 # Tests: install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/gen-settings-allow.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2063-prefill-comments-contract/_lib.sh
+# tests/skills/feature-2063-prefill-comments-contract/_lib.sh
 # Tests: skills/workflow-init/SKILL.md, bin/workflow/render-issue-comments
 # Tags: workflow-init, prompt-contract, static-grep, issue-comments, tl2, scope:issue-specific
 # Source from sibling group files: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

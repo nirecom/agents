@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/refactor-1508-supervisor-ccuuid-unification.sh
+# tests/bin/refactor-1508-supervisor-ccuuid-unification.sh
 # Tests: bin/supervisor-report, hooks/supervisor-guard.js, hooks/stop-l2-findings-display.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, session-id, cc-uuid, refactor, scope:issue-specific
 # L3 gap (what this test does NOT catch):

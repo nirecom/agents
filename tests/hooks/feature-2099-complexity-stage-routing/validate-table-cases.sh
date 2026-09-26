@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/validate-table-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/validate-table-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, validation, shape, table-driven, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

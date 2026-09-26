@@ -1,4 +1,4 @@
-# tests/enforce-off-emergency-provenance/cases-p13-verify-bounds.sh
+# tests/hooks/enforce-off-emergency-provenance/cases-p13-verify-bounds.sh
 # P13: the reader's bounds, at the exact millisecond they turn over. P5/P6 prove
 # the bounds exist; only these prove WHERE they are. Sourced by
 # ../enforce-off-emergency-provenance.sh; relies on that file's shared helpers

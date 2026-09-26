@@ -11,7 +11,7 @@
 set -uo pipefail
 
 # TL3 gap: this file IS the gap-closer for the day-to-day TL2 runner
-# tests/feature-2013-step-in-flight-automark/d-skill-dispatch.sh. It is
+# tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh. It is
 # RUN_TL3-gated and Anthropic-billable, so CI normally skips it; R1 below
 # always runs so the field-name agreement is checked on every invocation.
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

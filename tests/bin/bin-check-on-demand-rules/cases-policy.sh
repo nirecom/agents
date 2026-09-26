@@ -10,7 +10,7 @@
 # so neither a forgotten registration nor a stale entry can survive.
 
 # PARSE, DON'T EVALUATE (CPR-ORTH with P11 below, and with A2a in
-# tests/cc-on-demand-skill-ownership/cases-require-safety.sh): this harness used to obtain
+# tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh): this harness used to obtain
 # its constants by require()-ing the contributor-editable policy path. That made the very
 # file asserting "the checker must not execute this file" execute it itself, on every run,
 # on whatever branch a reviewer had checked out. The constants now come through the
@@ -328,7 +328,7 @@ else
 fi
 
 # --- P16: the reader matches a constant NAME unanchored (pinned in
-# tests/unit-rules-policy-reader/cases-collections.sh). The consequence the checker owns:
+# tests/hooks/unit-rules-policy-reader/cases-collections.sh). The consequence the checker owns:
 # a policy whose real ON_DEMAND_READERS is absent must never be graded against a
 # same-suffixed decoy — that would silently declare every on-demand rule owned. ---
 d="$BASE/p16-decoy"

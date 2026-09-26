@@ -1,7 +1,7 @@
 # Group B: strict-grammar fail-closed → file-level fallback (C1/C7/C8) (#2081)
 # Tests: bin/lib/test-retire-predicate/case-parser.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # Any single non-strict marker call makes the whole file malformed: case-unit
 # processing is skipped and the verdict is delegated to the file-level
@@ -118,11 +118,11 @@ commit_repo "$B8_REPO" "group-b valid suffix"
 run_enum "$B8_REPO" "tests/b8-suffix.sh"
 assert_eq "B8 valid C7 suffixes are not malformed" "0" "${_TRP_MARKER_MALFORMED:-x}"
 
-# B9 — the real tests/feature-2080-shared-harness.sh carries expansion-form
+# B9 — the real tests/tests/feature-2080-shared-harness.sh carries expansion-form
 # `case_begin "$2" "$3"`, so it must be malformed → file-level fallback and
 # therefore never retired as a case-unit orphan.
-if [[ -f "$AGENTS_ROOT/tests/feature-2080-shared-harness.sh" ]]; then
-    run_enum "$AGENTS_ROOT" "tests/feature-2080-shared-harness.sh"
+if [[ -f "$AGENTS_ROOT/tests/tests/feature-2080-shared-harness.sh" ]]; then
+    run_enum "$AGENTS_ROOT" "tests/tests/feature-2080-shared-harness.sh"
     assert_eq "B9 real feature-2080-shared-harness.sh is malformed (expansion form)" \
         "1" "${_TRP_MARKER_MALFORMED:-x}"
 else

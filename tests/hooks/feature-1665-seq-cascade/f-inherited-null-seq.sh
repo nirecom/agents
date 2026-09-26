@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/f-inherited-null-seq.sh
+# tests/hooks/feature-1665-seq-cascade/f-inherited-null-seq.sh
 # Tests: hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/inheritance/apply.js
 # Tags: workflow-state, write-code-resume, inheritance, null-seq, fail-safe, scope:issue-specific, pwsh-not-required, TL1
 #

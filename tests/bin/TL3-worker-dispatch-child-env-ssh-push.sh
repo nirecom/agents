@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-child-env-ssh-push.sh
+# tests/bin/TL3-worker-dispatch-child-env-ssh-push.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, ssh-agent, ssh-auth-sock, commit-push, auth-resolution, real-environment, TL3, scope:common, dup-group-keep:size-hard-limit
 # The SSH seam, not the gh seam: commit-push is the only worker that runs

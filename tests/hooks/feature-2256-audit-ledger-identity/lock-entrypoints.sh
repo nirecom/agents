@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-audit-ledger-identity/lock-entrypoints.sh
+# tests/hooks/feature-2256-audit-ledger-identity/lock-entrypoints.sh
 # Tests: hooks/lib/supervisor-state-writer/append.js, hooks/lib/supervisor-state-writer/alert.js, hooks/lib/supervisor-state-writer/audit.js, hooks/lib/supervisor-state-writer/shared.js
 # Tags: supervisor, state-lock, lost-update, findings, alert, TL2, scope:issue-specific
 # #2256 S2-c / round-2 C3: every write entrypoint takes the lock BEFORE its read, so no
-# pairwise interleaving loses an update. Parent: tests/feature-2256-audit-ledger-identity.sh
+# pairwise interleaving loses an update. Parent: tests/hooks/feature-2256-audit-ledger-identity.sh
 
 set -uo pipefail
 

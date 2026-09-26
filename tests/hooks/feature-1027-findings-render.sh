@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1027-findings-render.sh
+# tests/hooks/feature-1027-findings-render.sh
 # Tests: hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — formatLayer2Findings renderer (NEW module).

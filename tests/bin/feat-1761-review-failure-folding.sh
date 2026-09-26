@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-review-failure-folding.sh
+# tests/bin/feat-1761-review-failure-folding.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, codex, failure-folding, fail-closed, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -13,7 +13,7 @@
 #     everything else that fails  → review_result: invalid
 # and in EVERY case: exit 0, the survey verdict/target held verbatim in the final
 # artifact, and review.status recording the specific kind so the gate (G4) fires.
-# tests/feat-1761-verdict-replacement.sh owns the happy paths and the two headline
+# tests/bin/feat-1761-verdict-replacement.sh owns the happy paths and the two headline
 # failures; this file owns the exhaustive failure matrix.
 
 set -u

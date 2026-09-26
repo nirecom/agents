@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/resolve-worktree-path, hooks/workflow-state/resolve-worktree-path.js, hooks/workflow-state/session-id.js, bin/compute-staged-tests-token.js, skills/review-tests/scripts/select-staged-files.sh
 # Tags: scope:issue-specific, pwsh-not-required, worktree, session-id, ssot
-# Part of tests/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
 # Cases M-T + R (#2270/#1759/#658): the session id must come from the SSOT
 # resolver's supply tier, so a non-native-LLM caller that only exports
 # CLAUDE_CODE_SESSION_ID resolves the same worktree a native session does —

@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # T1/T2 — the happy-path lifecycle: already-patched no-op, dry-run, real patch,
 # idempotent re-run, and backup preservation.
 

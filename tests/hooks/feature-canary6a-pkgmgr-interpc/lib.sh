@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary6a-pkgmgr-interpc/lib.sh
+# tests/hooks/feature-canary6a-pkgmgr-interpc/lib.sh
 # Tests: hooks/lib/bash-write-targets/pkg-mgr.js, hooks/lib/bash-write-targets.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, test-helper, pwsh-not-required
 # Shared helpers + node bridges for the canary6a pkg-mgr/interpreter-c parts.

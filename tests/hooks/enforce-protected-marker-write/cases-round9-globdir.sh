@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-9 MEDIUM-1: THE WORKFLOW DIR SPELLED THE WAY PEOPLE ACTUALLY SPELL IT.
 #
 # A bulk glob commits no literal character to a protected suffix, so

@@ -1,8 +1,8 @@
-# tests/feature-2119-settings-allow-ssot/retirement.sh
+# tests/install/feature-2119-settings-allow-ssot/retirement.sh
 # Tests: bin/review-settings-allow, hooks/pre-commit
 # Tags: install, settings, permissions, retirement, scope:issue-specific, pwsh-not-required, TL2
 # T33: the reviewer and its commit-time gate are DELETED, not merely unused. Sourced by
-# tests/feature-2119-settings-allow-ssot.sh, which owns PASS/FAIL/ROWS and assert_eq.
+# tests/install/feature-2119-settings-allow-ssot.sh, which owns PASS/FAIL/ROWS and assert_eq.
 
 RETIRED_REVIEWER_REL="bin/review-settings-allow"
 RETIRED_REVIEWER="$AGENTS_DIR/$RETIRED_REVIEWER_REL"

@@ -5,7 +5,7 @@
 # Pure-function gate decision logic for TL3-rules-injection-off-switch (no filesystem,
 # no subprocess). Split out of helpers.sh to stay under the 300-line WARN threshold
 # (rules/coding/file-split.md); helpers.sh sources this file, so every consumer keeps
-# these functions. Exercised at TL2 by tests/cc-tl3-rules-injection-gate.sh, whose TL3
+# these functions. Exercised at TL2 by tests/hooks/cc-tl3-rules-injection-gate.sh, whose TL3
 # body is RUN_TL3-gated and skips on ordinary runs — without this seam it never runs.
 
 # ril_rc_label <rc> — human-readable cause for a non-zero subprocess exit.

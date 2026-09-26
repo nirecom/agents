@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-audit-stale-pending.sh
+# tests/skills/fix-supervisor-audit-stale-pending.sh
 # Tests: skills/session-close/SKILL.md
 # Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):

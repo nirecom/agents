@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-routing.sh
+# tests/bin/feature-1643-worker-dispatch-routing.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/registry.js
 # Tags: worker-dispatch, routing, exit-code-contract, prototype-pollution, fail-closed, TL1, TL2, scope:issue-specific
 #
@@ -18,8 +18,8 @@
 #
 # TL3 gap (what this TL1+TL2 test does NOT catch):
 #   - The real skills invoking the dispatcher with an argv shape no test uses;
-#     tests/feature-1643-worker-dispatch-callers.sh covers the caller side by
-#     source scan, and tests/TL3-worker-dispatch-gh-contract.sh is the gated
+#     tests/skills/feature-1643-worker-dispatch-callers.sh covers the caller side by
+#     source scan, and tests/bin/TL3-worker-dispatch-gh-contract.sh is the gated
 #     real-environment tier.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.

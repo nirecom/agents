@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-protected-marker-write.sh
+# tests/hooks/enforce-protected-marker-write.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/bash-target-context.js, hooks/block-clearance-token-write/bash-target-context/classify.js, hooks/lib/command-parser.js, hooks/lib/path-containment.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/lib/session-markers.js
 # Tags: off-clearance, session-marker, protected-basename, glob, ads, pretooluse, block-write, classifier, security, redirect-operator, parse-failure, eval, command-substitution, here-string, heredoc, stdin-program, pipe, process-substitution, interpreter, interpreter-identity, argv-operand, flag-cluster, brace-expansion, ansi-c-quoting, workflow-dir, symlink, case-fold, fail-direction, on-unknown, path-containment, cwd-tracking, pushd, popd, dir-stack, command-wrapper, gh, ownership, forge-state, scope:common, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):

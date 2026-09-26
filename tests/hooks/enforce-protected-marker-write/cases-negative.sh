@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/enforce-protected-marker-write.js, hooks/lib/protected-basenames.js
 # Tags: protected-marker, workflow-off, false-positive, classifier, interpreter-gate, scope:issue-specific, pwsh-not-required
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Section N - FALSE POSITIVES. The docs and the skill that DESCRIBE the escape hatch
 # must never be mistaken for the hatch itself: blocking them would push sessions
 # toward the very bypass this guard exists to prevent (CPR-UO/CPR-E2E). Two mechanisms

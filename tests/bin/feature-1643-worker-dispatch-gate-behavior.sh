@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-gate-behavior.sh
+# tests/bin/feature-1643-worker-dispatch-gate-behavior.sh
 # Tests: bin/worker-dispatch/workers/session-close-gate.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, session-close-gate, decision-table, table-driven, TL1, TL2, scope:issue-specific
 #

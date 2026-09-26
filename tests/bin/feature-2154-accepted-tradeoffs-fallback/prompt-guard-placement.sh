@@ -10,7 +10,7 @@
 # FIRST, which owns run_rpc / assert_in_prompt / prompt_* and the LB_* fixtures.
 echo "=== Layer B: guard-sentence placement sensitivity (case 15) ==="
 
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 # TL3 gap: the codex CLI is mocked, so whether a real model honours the in-block
 # deferral and ignores the out-of-block one is never observed — only that the
 # assembler places the bytes where the sentence's logic depends on them being

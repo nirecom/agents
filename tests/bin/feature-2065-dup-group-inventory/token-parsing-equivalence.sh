@@ -1,7 +1,7 @@
 # S12 category 2: token-parsing equivalence across the two consumers (#2065)
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/lib/test-dup-group.sh, bin/lib/test-retire-predicate.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, parser, trimming, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # S1-2 collapses two divergent tokenizers (`csv# ` strips one leading space;
 # `trp_survival_verdict` sed-trims fully) into one. The observable consequence is
 # that both consumers must agree on trimming, and that format validity stays the

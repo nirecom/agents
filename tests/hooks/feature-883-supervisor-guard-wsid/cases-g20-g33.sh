@@ -1,4 +1,4 @@
-# tests/feature-883-supervisor-guard-wsid/cases-g20-g33.sh
+# tests/hooks/feature-883-supervisor-guard-wsid/cases-g20-g33.sh
 # Test case function definitions for G20-G33. Invocations live in the dispatcher.
 
 run_g20() {

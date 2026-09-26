@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/active-session-ids.js, hooks/lib/protected-basenames.js
 # Tags: protected-basename, active-session-ids, fail-closed, cross-session, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Sections C1c + C1d — the two halves of "what happens when the effective session-id
 # set cannot be fully known". C1c: it cannot be observed at all, so the narrowing must

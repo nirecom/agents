@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-review-verdict-validate/worth-filing-and-final-sentinel.sh
+# tests/bin/feat-1761-review-verdict-validate/worth-filing-and-final-sentinel.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, validator, worth-filing, final-verdict-sentinel, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

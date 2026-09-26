@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-526-workflow-mark-null-session-fatal.sh
+# tests/hooks/fix-526-workflow-mark-null-session-fatal.sh
 # Tests: hooks/workflow-mark.js, hooks/workflow-mark
 # Tags: workflow-mark, null-session, signalFatal, exit-2, issue-526, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-preuse-off-proposal.sh
+# tests/hooks/feature-supervisor-preuse-off-proposal.sh
 # Tests: hooks/supervisor-off-proposal-shim.js
 # Tags: supervisor, em-supervisor, pretooluse, off-proposal, shim, clearance-token, reason-binding, scope:issue-specific, pwsh-not-required, hook-registration, TL1
 # TL3 gap (what this test does NOT catch):

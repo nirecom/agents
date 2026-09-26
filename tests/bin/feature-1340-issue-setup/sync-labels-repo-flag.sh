@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/sync-labels-repo-flag.sh
+# tests/bin/feature-1340-issue-setup/sync-labels-repo-flag.sh
 # Tests: bin/github-issues/sync-labels.sh
 # Tags: issue-setup, sync-labels, github-issues, scope:issue-specific
 # N/A: secret-leakage — label names/colors are public repo metadata, not secrets; gh owns token handling.

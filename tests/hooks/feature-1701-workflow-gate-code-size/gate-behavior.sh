@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/feature-1701-workflow-gate-code-size/gate-behavior.sh
+# tests/hooks/feature-1701-workflow-gate-code-size/gate-behavior.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
 #
-# Fragment of tests/feature-1701-workflow-gate-code-size.sh — sourced by the
+# Fragment of tests/hooks/feature-1701-workflow-gate-code-size.sh — sourced by the
 # parent, not run directly. Owns cases 1-7: the Gate 2 decision itself against a
 # real staged tree (hard-limit block, under-limit approve, untracked-only,
 # WORKFLOW_OFF bypass, WIP non-bypass, cross-repo bypass, post-split approve).

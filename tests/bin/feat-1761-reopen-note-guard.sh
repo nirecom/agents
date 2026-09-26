@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-reopen-note-guard.sh
+# tests/bin/feat-1761-reopen-note-guard.sh
 # Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh, bin/lib/gh-outbound-guard.sh
 # Tags: issue-create, reopen, outbound-guard, note, security, gh-mock, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -153,7 +153,7 @@ echo "=== N5: guard failure drops the note but still reopens ==="
 # Only the note's own guard call is failed. The reopen must survive it: the note is
 # supplementary explanation, and losing the explanation is not a reason to leave a
 # duplicate issue closed. Failing the body guard too would be a different scenario
-# (the #1591 fatal contract, covered by tests/fix-1591-forge-write-scan.sh).
+# (the #1591 fatal contract, covered by tests/bin/fix-1591-forge-write-scan.sh).
 run_reopen n5 4242 "$NOTE_PLAIN" 1 'reopen-comment:*'
 if [ "$RWU_ACCEPTS_NOTE" != "yes" ]; then
     fail "N5-guard-fail-still-reopens" "RED-EXPECTED: note argument not yet supported"
@@ -262,7 +262,7 @@ else
 fi
 
 # --- sections ------------------------------------------------------------------------
-# Same wiring gap as tests/feat-1761-candidate-relations.sh: dispatch-routing.sh existed
+# Same wiring gap as tests/bin/feat-1761-candidate-relations.sh: dispatch-routing.sh existed
 # but no top-level parent ran it, so tests/run-all.sh never saw its 12 assertions.
 SECTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feat-1761-reopen-note-guard"
 # shellcheck source=./lib/section-runner.sh

@@ -3,7 +3,7 @@
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
 # lang-check: ignore — FX_UNI below is an intentional non-ASCII fixture value
 # (C15-1 asserts the guard reads Unicode checkout paths correctly), not narrative text.
-# Part of tests/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Block C15 — file/string edges: awkward cwd paths, quoting, and name lengths.
 
 # WHY: an interpolated space/shell-char in `git -C <cwd>` turns a normal

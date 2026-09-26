@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: install/codegraph-mcp.js, install/linux/codegraph.sh
 # Tags: codegraph, installer, fixtures, secret-leakage, TL2, pwsh-not-required, scope:issue-specific, dup-group-keep:size-hard-limit
-# Fixture builders for tests/feature-codegraph-bootstrap.sh (ST-19): the fake
+# Fixture builders for tests/install/feature-codegraph-bootstrap.sh (ST-19): the fake
 # HOME tree, the synthetic .env and the two secret sentinels C16 tracks.
 # The dispatcher's `# Serial:` justification holds here unchanged.
 

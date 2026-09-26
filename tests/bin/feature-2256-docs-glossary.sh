@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-docs-glossary.sh
+# tests/bin/feature-2256-docs-glossary.sh
 # Tests: docs/glossary.md, skills/update-docs/SKILL.md, agents/supervisor-audit.md
 # Tags: docs, glossary, terminology, static, TL1, scope:issue-specific
 

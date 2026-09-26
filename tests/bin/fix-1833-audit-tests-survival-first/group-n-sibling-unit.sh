@@ -1,7 +1,7 @@
 # Group N: a test file plus its populated tests/<stem>/ sibling is ONE unit (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, sibling-unit, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 
 # The split-file convention this suite uses — dispatcher `tests/<stem>.sh` beside a
 # `tests/<stem>/` folder — makes the retire unit a PAIR, not a file. Two failure

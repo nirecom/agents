@@ -1,4 +1,4 @@
-# dual-id.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# dual-id.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: bin/supervisor-findings-codex ID resolution (--sid vs --wsid).
 # NOTE: RED until write-code creates bin/supervisor-findings-codex (#929); no
 #   prompt is captured, so the no-swap and UNAVAILABLE assertions fail.

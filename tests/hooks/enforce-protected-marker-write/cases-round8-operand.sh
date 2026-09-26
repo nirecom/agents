@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-8: THE PROTECTED PATH SITTING BESIDE THE INTERPRETER BODY.
 #
 # Round 8 fixed two members of ONE class: a regex whose over-matching is safe

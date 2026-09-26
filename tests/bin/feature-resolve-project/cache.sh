@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-resolve-project/cache.sh
+# tests/bin/feature-resolve-project/cache.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
 #

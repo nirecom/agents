@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-resolve-project/errors.sh
+# tests/bin/feature-resolve-project/errors.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin
 #

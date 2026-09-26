@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// Fixture generator for tests/feature-1733-state-event-stream/* (NOT a test itself).
+// Fixture generator for tests/hooks/feature-1733-state-event-stream/* (NOT a test itself).
 //
 //   node mk-v1.js <preset> > <state-file>
 //

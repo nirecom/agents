@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-not-forbidden.sh
+# tests/hooks/feature-2134-bash-guard/cases-not-forbidden.sh
 # Tests: hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/judge.js, bin/print-forbidden-literals, rules/shell-commands.md
 # Tags: hook, bash-guard, forbidden-literals, ssot, scope:issue-specific, pwsh-not-required, TL2
 # F1-F5: the boundary of the approved forbidden set. Sourced by the dispatcher.

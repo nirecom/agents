@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/backslash-reduce.sh
+# tests/bin/bin-concern-ledger-reducer/backslash-reduce.sh
 # Tests: bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh
 # Tags: concern-ledger, reducer, backslash, plans-dir, finalize, regression, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 
 # #2088: a backslash-spelled plans dir made staged deltas invisible, so the
 # reducer wrote a header-only ledger and the loop exited 4 claiming nothing

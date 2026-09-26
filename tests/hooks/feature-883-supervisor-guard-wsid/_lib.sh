@@ -1,4 +1,4 @@
-# tests/feature-883-supervisor-guard-wsid/_lib.sh
+# tests/hooks/feature-883-supervisor-guard-wsid/_lib.sh
 # Shared helpers for feature-883-supervisor-guard-wsid tests.
 # Sourced by the dispatcher; relies on `set -u` from the dispatcher.
 

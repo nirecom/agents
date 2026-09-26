@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/input-validation.sh
+# tests/install/feature-2119-settings-allow-ssot/input-validation.sh
 # Tests: install/gen-settings-allow.js, install/settings-allow-commands.txt
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 

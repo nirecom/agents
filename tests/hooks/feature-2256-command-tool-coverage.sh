@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-command-tool-coverage.sh
+# tests/hooks/feature-2256-command-tool-coverage.sh
 # Tests: hooks/lib/tool-command-text.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: supervisor, command-tool, sentinel, normalization, TL2, scope:issue-specific
 
@@ -11,7 +11,7 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SECTION_DIR="$AGENTS_ROOT/tests/feature-2256-command-tool-coverage"
+SECTION_DIR="$AGENTS_ROOT/tests/hooks/feature-2256-command-tool-coverage"
 RWT="$AGENTS_ROOT/bin/run-with-timeout.sh"
 PASS=0
 FAIL=0

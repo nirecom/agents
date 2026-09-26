@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/lib/rules-policy-reader.js, hooks/lib/rules-injection-policy.js, tests/cc-on-demand-skill-ownership.sh
+# Tests: hooks/lib/rules-policy-reader.js, hooks/lib/rules-injection-policy.js, tests/hooks/cc-on-demand-skill-ownership.sh
 # Tags: rules-injection, policy, require-safety, arbitrary-code-execution, security, canary, TL2, scope:common
 
 # WHY (CPR-WPH): hooks/lib/rules-injection-policy.js is a contributor-editable declaration file,
@@ -9,7 +9,7 @@
 # full ambient privileges — arbitrary code execution reachable through an ordinary pull request.
 
 # The checker side of the same contract is pinned by P11 in
-# tests/bin-check-on-demand-rules/cases-policy.sh — this group is its CPR-ORTH sibling for the
+# tests/bin/bin-check-on-demand-rules/cases-policy.sh — this group is its CPR-ORTH sibling for the
 # reporter side: same canary shape, same standing record. Assumes BASE, READER, run_owners(),
 # node_path(), pass(), fail() from the entry file.
 

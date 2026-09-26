@@ -1,7 +1,7 @@
 # Group C: conditional-block & imbalance fail-closed (C2/C6) (#2081)
 # Tests: bin/lib/test-retire-predicate/case-parser.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # Markers inside if/while/for/case blocks (depth>0) and any imbalance are
 # malformed → file-level fallback. C6: a top-level marker pair coexisting with a

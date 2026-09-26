@@ -158,7 +158,7 @@ write_state() {
 # projection introduced by #1733). Fixtures here are hand-written v1 files that the
 # state layer migrates lazily, so one run can observe either shape. These assertions
 # are about the APPROVAL GATE, not the storage layout — the event-stream side of
-# plan_approvals is covered by tests/feature-1733-state-event-stream/provenance.sh.
+# plan_approvals is covered by tests/hooks/feature-1733-state-event-stream/provenance.sh.
 read_state_status() {
   local sid="$1" step="$2"
   local f="$WORKFLOW_DIR/${sid}.json"

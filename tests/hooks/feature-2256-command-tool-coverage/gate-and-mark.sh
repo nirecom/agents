@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/feature-2256-command-tool-coverage/gate-and-mark.sh
+# tests/hooks/feature-2256-command-tool-coverage/gate-and-mark.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/lib/tool-command-text.js
 # Tags: supervisor, command-tool, sentinel, TR5, premerge, workflow-mark, TL2, scope:issue-specific
 # #2256 round-2 C1: the TR5 sentinel path, the chain guard, the merge backstop and the
 # workflow-mark recording must all behave identically across the command tools.
 
-# Parent: tests/feature-2256-command-tool-coverage.sh
+# Parent: tests/hooks/feature-2256-command-tool-coverage.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

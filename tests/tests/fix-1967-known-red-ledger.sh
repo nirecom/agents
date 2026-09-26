@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/fix-1967-known-red-ledger.sh
-# Tests: tests/feature-confirm-flags-static.sh
+# tests/tests/fix-1967-known-red-ledger.sh
+# Tests: tests/skills/feature-confirm-flags-static.sh
 # Tags: xfail-ledger, classifier, static, meta-test, scope:issue-specific, pwsh-not-required, TL2
 
 # THE THING UNDER TEST is not a skill or a bin/ command: it is the known-RED CLASSIFIER
-# that #1967 put into tests/feature-confirm-flags-static.sh. That file used to be red on
+# that #1967 put into tests/skills/feature-confirm-flags-static.sh. That file used to be red on
 # every run for reasons nobody was repairing, so its exit code carried no information. The
 # classifier restores the signal by sorting each check into one of five verdicts -- XFAIL,
 # FAIL, XPASS, STALE-LEDGER, invalid-id -- and colouring the exit code for four of them.

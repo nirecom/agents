@@ -1,8 +1,8 @@
-# tests/unit-quote-spans/structure.sh
+# tests/hooks/unit-quote-spans/structure.sh
 # Tests: hooks/lib/quote-spans/scan.js
 # Tags: hook, quote-spans, parser, unit, scope:common
 #
-# STATUS: RED until C1 lands. Sourced by tests/unit-quote-spans.sh (harness,
+# STATUS: RED until C1 lands. Sourced by tests/hooks/unit-quote-spans.sh (harness,
 # assert_eq, probe, run_table are defined there).
 #
 # Span-structure pins for scanSpans():

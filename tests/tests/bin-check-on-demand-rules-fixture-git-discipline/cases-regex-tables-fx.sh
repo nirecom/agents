@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, table-driven, TL2, scope:common
 # The fixtures.sh BODY scanners, row by row (skills/_shared/test-design/parser-regex-tests.md).
 # D8/D10/D12 read a body that does not exist yet, so they carry ONE spelling each at most

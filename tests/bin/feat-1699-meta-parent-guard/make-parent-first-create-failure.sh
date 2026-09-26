@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/make-parent-first-create-failure.sh
+# tests/bin/feat-1699-meta-parent-guard/make-parent-first-create-failure.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh
 # Tags: issue-create, dispatch, make-parent, orphan, failure-path, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

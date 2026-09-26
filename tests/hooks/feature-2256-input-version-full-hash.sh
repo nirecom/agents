@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash.sh
+# tests/hooks/feature-2256-input-version-full-hash.sh
 # Tests: hooks/lib/diff-fingerprint.js, hooks/lib/branch-diff.js
 # Tags: supervisor, input-version, freshness-key, content-hash, sha256, TL2, scope:issue-specific, pwsh-not-required
 
@@ -9,11 +9,11 @@
 # bin/check-verification-gate.sh category: hook-registration.
 
 # #2256 S2-e / round-2 C2+C4: the version hashes FILE CONTENT, never diff text, and the
-# digest is a full 64-hex sha256. Cases live in tests/feature-2256-input-version-full-hash/.
+# digest is a full 64-hex sha256. Cases live in tests/hooks/feature-2256-input-version-full-hash/.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SECTION_DIR="$AGENTS_ROOT/tests/feature-2256-input-version-full-hash"
+SECTION_DIR="$AGENTS_ROOT/tests/hooks/feature-2256-input-version-full-hash"
 RWT="$AGENTS_ROOT/bin/run-with-timeout.sh"
 
 PASS=0

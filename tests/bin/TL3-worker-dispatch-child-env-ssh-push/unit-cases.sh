@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-child-env-ssh-push.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-child-env-ssh-push.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, ssh-agent, commit-push, buildenv, TL3, scope:common
 # Shell side of the ungated stage-1 buildEnv cases. The names are listed here

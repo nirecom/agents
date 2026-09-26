@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/bin-sweep-issues-scan-stale-paths.sh
+# tests/bin/bin-sweep-issues-scan-stale-paths.sh
 # Tests: bin/sweep-issues/scan-stale-paths.js
 # Tags: sweep, issues, detector, stale-paths, scope:common, TL1
 #

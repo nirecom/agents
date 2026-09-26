@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1834-2level-consumer-updates.sh
+# tests/tests/feature-1834-2level-consumer-updates.sh
 # Tests: tests/run-all.sh, bin/select-tests.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: scope:issue-specific
 # TL2 (#1834): post-migration enumeration of tests/<category>/<name>.sh across

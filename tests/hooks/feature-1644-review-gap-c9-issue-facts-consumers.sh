@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1644-review-gap-c9-issue-facts-consumers.sh
+# tests/hooks/feature-1644-review-gap-c9-issue-facts-consumers.sh
 # Tests: hooks/workflow-state/session-facts.js, bin/parse-closes-issues, bin/render-final-report.js, bin/issue-close-write-outcome.js, hooks/lib/final-report-schema.js
 # Tags: tl2, workflow, session-facts, closes-issues, cross-module, final-report, issue-close, scope:issue-specific, pwsh-not-required
 #

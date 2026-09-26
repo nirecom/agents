@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-issue-449-tracking-guard/ggl-series.sh
+# tests/bin/fix-issue-449-tracking-guard/ggl-series.sh
 # Tests: bin/github-issues/clarify-guard-loop.sh, bin/github-issues/check-closes-issues-nonempty.sh
 # Tags: workflow, clarify-intent, guard-loop, github, issues, scope:issue-specific
 #

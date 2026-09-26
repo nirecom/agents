@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-concurrency.sh
+# tests/bin/bin-concern-ledger-concurrency.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, concurrency, atomic-write, shared-ledger, lost-update, scope:common, pwsh-not-required
 #

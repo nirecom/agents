@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-formatter-secrets.sh
+# tests/hooks/feature-supervisor-formatter-secrets.sh
 # Tests: hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, formatter, secrets, security, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):

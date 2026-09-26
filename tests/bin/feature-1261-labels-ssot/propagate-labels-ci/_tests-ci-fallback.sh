@@ -1,4 +1,4 @@
-# tests/feature-1261-labels-ssot/propagate-labels-ci/_tests-ci-fallback.sh
+# tests/bin/feature-1261-labels-ssot/propagate-labels-ci/_tests-ci-fallback.sh
 # CI fallback test cases for propagate-labels.sh (T-propagate-ci-fallback-*)
 
 # ===========================================================================

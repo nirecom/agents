@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/forbidden-literals-doc-sync.sh
+# tests/hooks/feature-2134-bash-guard/forbidden-literals-doc-sync.sh
 # Tests: hooks/bash-guard/forbidden-literals.js, bin/print-forbidden-literals, rules/shell-commands.md
 # Tags: hook, bash-guard, forbidden-literals, ssot, docs-code-consistency, scope:issue-specific, pwsh-not-required, TL2
 # S5-3 (detail.md): rules/shell-commands.md is a Read tool, so nothing here may write to it --
@@ -56,7 +56,7 @@ assert_eq "DS3: the 10-id-to-7-row fold is exactly this mapping (chain-and/chain
     "$DS3_GOT"
 
 # DS4: bin/print-forbidden-literals --markdown-table must reproduce these same 7 rows
-# byte-for-byte (mirrors tests/feature-2099-complexity-stage-routing/rubric-table-consistency.sh's
+# byte-for-byte (mirrors tests/hooks/feature-2099-complexity-stage-routing/rubric-table-consistency.sh's
 # generated-block byte-compare) -- RED until the tool exists (S5-3's deliverable), reported
 # attributably rather than as a silent empty-string equality.
 PFL="$AGENTS_DIR/bin/print-forbidden-literals"

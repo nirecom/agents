@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-437-compose-doc-append-idempotency.sh
+# tests/bin/feature-437-compose-doc-append-idempotency.sh
 # Tests: bin/compose-doc-append-entry
 # Tags: scope:issue-specific
 # Tests for issue #437 — compose-doc-append-entry idempotency guard.

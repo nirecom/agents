@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-check-private-repo-name/helpers.sh
+# tests/bin/feature-check-private-repo-name/helpers.sh
 # Tests: bin/check-private-repo-name.js, bin/list-private-repo-names.js
 # Tags: private-repo, outbound-scan, security, helpers, fixture, TL2, scope:common
 # Shared helpers for feature-check-private-repo-name tests.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1351-skip-conditions-from-complexity/behavioral.sh
+# tests/hooks/feature-1351-skip-conditions-from-complexity/behavioral.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L1, workflow, speculative-skip, scope:issue-specific
 #

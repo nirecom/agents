@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh, tests/bin-concern-ledger-reducer.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh, tests/bin/bin-concern-ledger-reducer.sh
 # Tags: concern-ledger, test-harness, namespace-guard, real-order, TL2, scope:common, real-order
 # G13 — the dispatcher's REAL definition order. Every scenario above installs its
 # stand-in harness names BEFORE clg_snapshot_before, but the three drivers every

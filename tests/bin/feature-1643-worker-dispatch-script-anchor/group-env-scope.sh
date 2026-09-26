@@ -1,4 +1,4 @@
-# Part of tests/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
+# Part of tests/bin/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
 #
@@ -6,7 +6,7 @@
 # covers the branches that are about VALUES rather than membership.
 #
 # Group G — buildEnv credential scope (behavioural counterpart of the static
-# registry rows in tests/feature-1643-worker-dispatch-schema.sh Group E).
+# registry rows in tests/bin/feature-1643-worker-dispatch-schema.sh Group E).
 # GH_TOKEN/GITHUB_TOKEN used to sit in the global CHILD_ENV_ALLOWLIST applied
 # to every worker — combined with Group A's family-worktree anchor, that put
 # both credentials into tests/run-all.sh, a script from the unreviewed branch

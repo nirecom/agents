@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, owned-names
 # The library-owned FUNCTION set, derived rather than transcribed (CPR-SSOT). bin/lib/
 # concern-ledger.sh owns those names; a list typed here would be a second owner that ages

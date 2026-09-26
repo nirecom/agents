@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/lib/codex-core.sh
 # Tags: codex, review, disclosure, excluded, error-handling, failure-injection, secret-leakage, logging, scope:issue-specific, pwsh-not-required, TL2
 # F1: disclosure on a mixed repo (committed range under review, plus staged/unstaged/untracked changes the range can't cover) — those files are what the author most likely believes was reviewed. F2: the rewrite's new failure modes (multiple `git diff` shell-outs vs the old in-memory `head -n`) can silently return fewer files than actually changed — PERFORMED with a quietly shorter list, not a crash. F3: withheld content must not leak via JSONL log, stderr, or temp files.

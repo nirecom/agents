@@ -1,6 +1,6 @@
 # c-guard.sh — C1-C3: the REAL C4 premature-stop guard, driven as a child
 # process over every allowlisted step (#2013).
-# Sourced by tests/feature-2013-step-in-flight-automark.sh.
+# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh.
 # Tests: hooks/stop-premature-stop-guard.js, hooks/lib/stop-exemption-policy.js, hooks/lib/step-in-flight-policy.js
 # Tags: step-in-flight, stop-hook, c4, allowlist, matrix, regression-2013, scope:issue-specific, pwsh-not-required, TL2
 
@@ -15,7 +15,7 @@
 # a single-step test while leaving the other three reproducing the bug.
 
 # _seed_row <tmp> <sid> <prereqs> <step> <state> — write the state file directly,
-# the way tests/feature-1498-stop-premature-stop-guard/state-seeds.sh does.
+# the way tests/hooks/feature-1498-stop-premature-stop-guard/state-seeds.sh does.
 #
 # markStep is NOT usable here: the approval-gated steps (outline in particular)
 # refuse a plain complete, so a markStep-built fixture leaves outline pending

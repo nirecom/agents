@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1226-env-os-filter.sh
+# tests/bin/feature-1226-env-os-filter.sh
 # Tests: bin/env-os-filter, hooks/pre-commit, bin/github-issues/wip-state.sh
 # Tags: scope:issue-specific, env-os-blocks, os-conditional, env-os-filter, pre-commit, wip-state, pwsh-not-required
 # RED for issue #1226 — bin/env-os-filter OS-conditional .env preprocessor.
@@ -14,12 +14,12 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: pwsh-required
 #
-# Non-regression: tests/fix-pre-commit-dotenv-order.sh must still pass after
+# Non-regression: tests/agents/fix-pre-commit-dotenv-order.sh must still pass after
 # write-code modifies hooks/pre-commit _load_env_file to route through
 # bin/env-os-filter. That file's existing cases are not duplicated here.
 # (Validated by the run-tests step, not here.)
 #
-# Sibling test: tests/feature-1226-load-env-os-blocks.sh covers T1226-1..13
+# Sibling test: tests/hooks/feature-1226-load-env-os-blocks.sh covers T1226-1..13
 # (filterOsBlocks unit cases). Those cases are NOT duplicated here.
 
 set -u

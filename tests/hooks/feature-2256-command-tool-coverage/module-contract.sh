@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/feature-2256-command-tool-coverage/module-contract.sh
+# tests/hooks/feature-2256-command-tool-coverage/module-contract.sh
 # Tests: hooks/lib/tool-command-text.js, hooks/lib/sentinel-patterns.js
 # Tags: supervisor, command-tool, tool-command-text, normalization, TL2, scope:issue-specific
 # #2256 S5-a1 / round-2 C1: the shared command-tool accessor and the per-element
 # matching requirement it exists to satisfy.
 
-# Parent: tests/feature-2256-command-tool-coverage.sh
+# Parent: tests/hooks/feature-2256-command-tool-coverage.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

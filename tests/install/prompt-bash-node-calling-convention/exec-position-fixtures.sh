@@ -1,10 +1,10 @@
-# tests/prompt-bash-node-calling-convention/exec-position-fixtures.sh
+# tests/install/prompt-bash-node-calling-convention/exec-position-fixtures.sh
 # Tests: install/lib/settings-allow-rules.js, install/settings-allow-commands.txt
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
 # Fixture trees, sweep runner and JSON reducer for T50-T57. Sourced by the dispatcher, which
 # owns PASS/FAIL/ROWS and assert_eq.
 
-SWEEP_JS_REL="tests/prompt-bash-node-calling-convention/exec-position-sweep.js"
+SWEEP_JS_REL="tests/install/prompt-bash-node-calling-convention/exec-position-sweep.js"
 SWEEP_JS="$AGENTS_DIR/$SWEEP_JS_REL"
 FX_ROOT=""
 FX_MAIN=""

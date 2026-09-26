@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-promotion-callsite-conditions.sh
+# tests/skills/feature-530-promotion-callsite-conditions.sh
 # Tests: skills/worktree-end/SKILL.md, skills/session-close/SKILL.md, skills/issue-close-finalize/SKILL.md, bin/worktree-notes-triage/resolve.js
 # Tags: notes-promotion, worktree-notes, skill-orchestration, static, prompt-contract, TL1, scope:issue-specific
 #
@@ -14,7 +14,7 @@
 #
 # This test pins each condition to its own block so a copy-paste between the
 # three cannot pass. It is a companion to
-# tests/feature-530-notes-promotion-protocol.sh, which checks the shared
+# tests/skills/feature-530-notes-promotion-protocol.sh, which checks the shared
 # protocol file itself.
 #
 # TL1 (static): the subject is prompt text plus the caller-name enum in

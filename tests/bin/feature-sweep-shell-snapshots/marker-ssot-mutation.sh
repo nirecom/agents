@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: bin/sweep-shell-snapshots.sh, bin/lib/session-sync-markers.sh
 # Tags: sweep, shell-snapshots, ssot, mutation, scope:common, TL2
-# Part file of tests/feature-sweep-shell-snapshots.sh. T4 only greps the sweep's
+# Part file of tests/bin/feature-sweep-shell-snapshots.sh. T4 only greps the sweep's
 # text, so a script that sources the lib and then matches its own copy of the
 # literals stays green. T20 mirrors sweep + lib, gives the lib unique marker
 # values, and reads the classifier's own reason strings back.

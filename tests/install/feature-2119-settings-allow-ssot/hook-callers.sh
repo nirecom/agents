@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/hook-callers.sh
+# tests/install/feature-2119-settings-allow-ssot/hook-callers.sh
 # Tests: hooks/post-merge, hooks/post-checkout, install/assemble-settings.js, install/lib/settings-deploy.js
 # Tags: install, settings, permissions, hook, caller, scope:issue-specific, pwsh-not-required, TL2
 # T37: the two git-hook CALLERS driven against the REAL assembler. Sourced AFTER generator.sh.
@@ -6,7 +6,7 @@
 POST_MERGE_REL="hooks/post-merge"
 POST_CHECKOUT_REL="hooks/post-checkout"
 
-# WHY NOT THE STUB. tests/fix-846-settings-drift-hooks.sh drives both hooks against a stub that
+# WHY NOT THE STUB. tests/hooks/fix-846-settings-drift-hooks.sh drives both hooks against a stub that
 # only touches a sentinel, which isolates TRIGGER logic and is worth keeping. What it can never
 # see is the half this change actually alters: that the real assembler accepts the arguments the
 # hook passes, that the deployed settings under the caller's HOME really gains the generated

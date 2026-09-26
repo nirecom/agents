@@ -3,7 +3,7 @@
 # Tags: tl2, workflow, run-tests, docs-only, skip-sentinel, classifier, workflow-gate, scope:issue-specific, pwsh-not-required
 #
 # #1644 review gap C1 (HIGH) — normal + classifier + integration coverage for the
-# NEW run_tests docs-only skip. Sibling file tests/feature-1644-run-tests-docs-only.sh
+# NEW run_tests docs-only skip. Sibling file tests/hooks/feature-1644-run-tests-docs-only.sh
 # owns the hint/first-write cases (D1-D6); this file deliberately extends past them:
 #   - the AUDIT PAYLOAD of a real sentinel write (skip_reason + provenance/origin),
 #     not merely the resulting status;
@@ -18,7 +18,7 @@
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code's live PreToolUse dispatch actually routes a `git commit`
 #   Bash call into hooks/workflow-gate.js (registration is asserted statically in
-#   tests/feature-1644-run-tests-registration-sites.sh, not through a real session).
+#   tests/hooks/feature-1644-run-tests-registration-sites.sh, not through a real session).
 # - Whether the permission layer auto-approves the RUN_TESTS_NOT_NEEDED echo
 #   literal in a real dialog.
 # - Whether /run-tests SKILL.md emits the sentinel when the model reaches its
@@ -42,7 +42,7 @@ WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
 GATE_HOOK_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
 # Reused read-only probe (CPR-SSOT: one fixture-state reader for all #1644 tests).
-PROBE_N="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"

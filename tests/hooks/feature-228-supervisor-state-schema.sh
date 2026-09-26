@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-228-supervisor-state-schema.sh
+# tests/hooks/feature-228-supervisor-state-schema.sh
 # Tests: hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, schema, unit, scope:issue-specific
 # Tests for issue #228 — supervisor-state schema module unit tests.

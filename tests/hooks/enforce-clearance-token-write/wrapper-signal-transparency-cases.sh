@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/wrapper-signal-transparency-cases.sh
+# tests/hooks/enforce-clearance-token-write/wrapper-signal-transparency-cases.sh
 # Tests: bin/request-off-mode-clearance, bin/request-off-clearance
 # Tags: anti-cheat, off-clearance, clearance-token, wrapper, delegation, signal, interrupt, residue, mint, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: a real Ctrl-C from a real terminal, where the tty sends SIGINT to the whole
-# foreground process group rather than to one pid; see tests/TL3-hook-clearance-token-write.sh,
+# foreground process group rather than to one pid; see tests/hooks/TL3-hook-clearance-token-write.sh,
 # gap-checked by bin/check-verification-gate.sh.
 
 set -u
@@ -139,7 +139,7 @@ fi
 #   asserts only the EQUIVALENCE of the two paths, leaving absolute survival out of scope.
 # TL3 gap: a real terminal's Ctrl-C delivers SIGINT to the whole foreground process group via the
 #   tty, so it reaches descendants. Verifying descendant termination in an environment with real
-#   process-group signal delivery stays in the TL3 lane of tests/TL3-hook-clearance-token-write.sh.
+#   process-group signal delivery stays in the TL3 lane of tests/hooks/TL3-hook-clearance-token-write.sh.
 skip "S4 no-surviving-descendant is not directly assertable on this host (see the Skipped-Because block above); S3 asserts wrapper/minter equivalence instead"
 
 offclr_report

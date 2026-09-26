@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-tool-scope.sh
+# tests/hooks/feature-2134-bash-guard/cases-tool-scope.sh
 # Tests: hooks/bash-guard/judge.js, hooks/bash-guard/reasons.js, settings.json
 # Tags: hook, bash-guard, tool-scope, pretooluse, registration, scope:issue-specific, pwsh-not-required, TL2
 # T1-T4: the guard answers for tool_name "Bash" and nothing else. Sourced by the dispatcher.

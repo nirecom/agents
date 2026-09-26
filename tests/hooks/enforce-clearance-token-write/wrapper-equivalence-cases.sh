@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/wrapper-equivalence-cases.sh
+# tests/hooks/enforce-clearance-token-write/wrapper-equivalence-cases.sh
 # Tests: bin/request-off-mode-clearance, bin/request-off-clearance, hooks/lib/off-clearance-invocation.js
 # Tags: anti-cheat, off-clearance, clearance-token, spelling, wrapper, delegation, arg-injection, mint, idempotency, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: a real user pasting the re-spelled invitation into a real session; see
-# tests/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
+# tests/hooks/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
 # #1821: the invitation is re-spelled so the mention gate cannot fire on it, which is only
 # safe if the SSOT names a real program and that program IS the minter. B* binds the SSOT
 # value to the file under test; E1-E3 compare argument handling; E4-E6 compare mint, REJECT

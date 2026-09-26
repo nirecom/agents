@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-parser-unit-tables/cases-interpreter.sh
+# tests/hooks/fix-1780-round12-parser-unit-tables/cases-interpreter.sh
 # Tests: hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/command-ir.js
 # Tags: off-clearance, clearance-token, interpreter, interpreter-identity, stdin-program, stdin-route, heredoc, here-string, eval, language-scope, parser, regex, table-driven, classifier, unit, scope:common, pwsh-not-required, TL1, dup-group-keep:distinct-layer
-# Part of tests/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
 # Sections I (interpreter-scan.js) and D (nested-bodies.js), sourced by the parent,
 # which owns run_table(), _expand() and the counters.
 # Section I covers interpreter identity and inline-program proof: INTERPRETER_RE

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/self-exclusion-origin.sh
+# tests/skills/feature-worktree-start-non-interactive/self-exclusion-origin.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/check-private-repo-name.js
 # Tags: worktree, start, private-repo, self-exclusion, origin-url, table-driven, security, TL2, scope:issue-specific
 # B25 — D0a's self-exclusion classifier, driven by the ORIGIN remote identity.

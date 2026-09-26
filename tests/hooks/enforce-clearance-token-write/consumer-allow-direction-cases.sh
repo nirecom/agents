@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/consumer-allow-direction-cases.sh
+# tests/hooks/enforce-clearance-token-write/consumer-allow-direction-cases.sh
 # Tests: hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-target-context/classify.js
 # Tags: anti-cheat, off-clearance, clearance-token, mention-gate, allow-direction, whitespace-path, partial-resolution, table-driven, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap: the hook firing on a real host — covered by tests/TL3-hook-clearance-token-write.sh.
+# TL3 gap: the hook firing on a real host — covered by tests/hooks/TL3-hook-clearance-token-write.sh.
 # Every case here is an ALLOW/BLOCK PAIR (CPR-ORTH). The sibling sections prove the guard
 # still catches things; a narrowing fix can only be judged against what it must STOP
 # catching, and a hardening fix only against what it must not START catching. Covers the

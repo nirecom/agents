@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-chain-guard.sh
+# tests/hooks/feature-workflow-off-chain-guard.sh
 # Tests: hooks/lib/sentinel-patterns.js., hooks/workflow-gate.js
 # Tags: workflow, gate, hook, sentinel, bin
 #

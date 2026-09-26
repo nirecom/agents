@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-body-safety/tmpfile-lifecycle.sh
+# tests/bin/feat-1761-candidate-body-safety/tmpfile-lifecycle.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, review, codex, tmpfile, permissions, signals, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -10,7 +10,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Section of tests/feat-1761-candidate-body-safety.sh (subprocess; tests/lib/section-runner.sh).
+# Section of tests/bin/feat-1761-candidate-body-safety.sh (subprocess; tests/lib/section-runner.sh).
 #
 # The sibling tmpfile-residue.sh proves the temp files are GONE at the end. Two windows
 # stay unexamined, and the candidate bodies sit in both:

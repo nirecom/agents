@@ -1,7 +1,7 @@
-# tests/feature-2134-bash-guard/cases-detect.sh
+# tests/hooks/feature-2134-bash-guard/cases-detect.sh
 # Tests: hooks/bash-guard/detect.js, hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, forbidden-literals, classifier, scope:issue-specific, pwsh-not-required, TL2
-# D1: one deny row per forbidden literal id. Sourced by tests/feature-2134-bash-guard.sh,
+# D1: one deny row per forbidden literal id. Sourced by tests/hooks/feature-2134-bash-guard.sh,
 # which owns PASS/FAIL/ROWS, assert_eq, assert_contains, probe, verdict_of and mkcmd.
 
 # The BLOCK half of the classifier (protection-fix-tests.md Pattern 4); the sanctioned-input

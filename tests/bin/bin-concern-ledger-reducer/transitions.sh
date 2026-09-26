@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/transitions.sh
+# tests/bin/bin-concern-ledger-reducer/transitions.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 # Detail-plan Test plan cases 12, 16, 17, 19 — the cl_reduce state transition table
 # (carry / resolve / new / reopen / discard / stale / ambiguous), admission policy,
 # severity aggregation, and reduce idempotency.

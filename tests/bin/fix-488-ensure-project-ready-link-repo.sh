@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/fix-488-ensure-project-ready-link-repo.sh
+# tests/bin/fix-488-ensure-project-ready-link-repo.sh
 # Tests: bin/github-issues/lib/ensure-project-ready.sh, bin/github-issues/migration/link-project.sh
 # Tags: github-issues, issue-setup, ensure-project-ready, link-project, scope:issue-specific
 #
 # Regression test for #488 (reopened): /issue-setup path never linked its
-# Projects v2 board to the repo. Mirrors tests/fix-488-create-project-link-repo.sh
+# Projects v2 board to the repo. Mirrors tests/bin/fix-488-create-project-link-repo.sh
 # (LNK-1..LNK-4); no dry-run case (ensure_project_ready() has none).
 #
 # TL3 gap: mocked gh CLI — real GraphQL link mutation + idempotency unverified.

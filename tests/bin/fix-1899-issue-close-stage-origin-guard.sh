@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1899-issue-close-stage-origin-guard.sh
+# tests/bin/fix-1899-issue-close-stage-origin-guard.sh
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, hooks/lib/parse-remote-url.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, origin-resolution, fail-closed, secret-redaction, security, table-driven, stub-seam, TL2, scope:issue-specific
 #
@@ -10,7 +10,7 @@
 # the one it meant. The fix replaces that probe with a local
 # `git remote get-url origin` read, parsed by hooks/lib/parse-remote-url.js.
 #
-# tests/feature-1673-issue-close-stage-behavior.sh cans the probe to AGREE with
+# tests/bin/feature-1673-issue-close-stage-behavior.sh cans the probe to AGREE with
 # the payload (happy path + redaction only) and never drives the guard itself.
 # The guard's value is negative: when the probe can't produce a trustworthy
 # owner/repo, the chain must NOT run — reporting `error` while still spawning it
@@ -23,7 +23,7 @@
 # `summary` and the on-disk artifact — both surfaces are asserted absent-of-token.
 # Credentials are FAKE placeholders (`ghp_EXAMPLEEXAMPLE`, under
 # bin/scan-outbound.sh's token-pattern length), same as
-# tests/fix-1899-parse-remote-url/redaction.sh.
+# tests/hooks/fix-1899-parse-remote-url/redaction.sh.
 #
 # TL2: real dispatcher, payload/capability walls, worker, and parse-remote-url.js
 # run; only the child-process seam is canned
@@ -33,7 +33,7 @@
 # `remote get-url origin` output shape differs (extra whitespace, insteadOf
 # rewriting, a URL rewritten by a credential helper) is out of reach, and no real
 # `gh` round-trip proves the resolved owner/repo is the repository GitHub itself
-# resolves. Fenced by tests/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
+# resolves. Fenced by tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 

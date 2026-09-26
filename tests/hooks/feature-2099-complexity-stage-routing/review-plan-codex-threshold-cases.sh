@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/review-plan-codex-threshold-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/review-plan-codex-threshold-cases.sh
 # Tests: bin/review-plan-codex, bin/lib/codex-core.sh, bin/get-config-var
 # Tags: complexity, routing, codex, review-plan, threshold, truncation, subprocess, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

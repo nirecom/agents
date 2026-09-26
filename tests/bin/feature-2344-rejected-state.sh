@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2344-rejected-state.sh
+# tests/bin/feature-2344-rejected-state.sh
 # Tests: bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/render.sh, bin/concern-ledger
 # Tags: concern-ledger, rejected-state, issue-2344, TL1, scope:issue-specific, pwsh-not-required, dup-group-keep:size-hard-limit
 # dup-group-keep:size-hard-limit: 435+237=672>500 HARD; excluded=- tool limit; WARNINGS_ACCEPTED.

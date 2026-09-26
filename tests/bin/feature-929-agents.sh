@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-929-agents.sh
+# tests/bin/feature-929-agents.sh
 # Tests: bin/supervisor-findings-codex, hooks/lib/supervisor-codex-parse.js, hooks/workflow-state/state-io/core.js, hooks/session-start.js, bin/supervisor-write-audit-verdict, hooks/lib/supervisor-state-writer/audit-run.js
 # Tags: supervisor, em-supervisor, codex, audit, alert, transcript, parser, atomic-write, TL2, scope:issue-specific
 #
 # #929 EM Supervisor audit mode accuracy — Codex engine + review layer.
-# Dispatcher for the split folder tests/feature-929-agents/.
+# Dispatcher for the split folder tests/bin/feature-929-agents/.
 
 set -u
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-rules-injection-scope-conventions.sh
+# tests/bin/cc-rules-injection-scope-conventions.sh
 # Tests: rules/test/fixture-isolation.md, rules/test.md, rules/test/claude-e2e.md
 # Tags: rules-injection, rules-scope, frontmatter, conventions, ssot, TL2, scope:common
 #

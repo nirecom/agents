@@ -1,6 +1,6 @@
 # a-sentinel-off.sh - section A: sentinel ingestion (workflow-mark.js) OFF/ON,
 # bare-form rejection, and transcript_path fallback (test_A1-test_A15).
-# Sourced by tests/feature-workflow-off-session-override.sh; expects helpers.sh
+# Sourced by tests/hooks/feature-workflow-off-session-override.sh; expects helpers.sh
 # (pass/fail, MARK_JS, require_mark_js, build_mark_payload*, write_marker_file,
 # run_workflow_mark*, fresh_workflow_dir) already sourced.
 

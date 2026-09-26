@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/spelling-ssot-static.sh
+# tests/hooks/enforce-clearance-token-write/spelling-ssot-static.sh
 # Tests: hooks/lib/off-clearance-invocation.js, hooks/block-clearance-token-write/dispatch.js, hooks/supervisor-off-proposal-shim.js, skills/enforce-workflow-off/SKILL.md
 # Tags: anti-cheat, off-clearance, clearance-token, ssot, spelling, multi-defense, behavioural, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: a real turn printing the invitation and a user running it; see
-# tests/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
+# tests/hooks/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
 # #1821 multi-defense — the block message INVITES a command, so a bare-substring mention
 # gate over that spelling makes the hook refuse what it just told the user to run. S0-S3:
 # one SSOT owns the spelling, S0b its bytes. S4: the VALUE survives narrowing. S1b (derived

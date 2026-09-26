@@ -1,4 +1,4 @@
-# Fixture helpers for tests/feature-973-review-e2e-coverage.sh.
+# Fixture helpers for tests/bin/feature-973-review-e2e-coverage.sh.
 # Sourced by the dispatcher; reads AGENTS_ROOT / SCRIPT / TMPDIR_BASE /
 # EMPTY_HOOKS_DIR / EMPTY_EXCLUDES / fail / pass / run_with_timeout from scope.
 

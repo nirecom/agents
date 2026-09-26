@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-924-warnings-summary-wsid-scope.sh
+# tests/hooks/fix-924-warnings-summary-wsid-scope.sh
 # Tests: hooks/workflow-gate/review-tests-checker.js
 # Tags: workflow-gate, review-tests, wsid-scope, warnings-summary, scope:issue-specific, pwsh-not-required, TL1
 #

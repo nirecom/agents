@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/bind.sh
+# tests/bin/bin-concern-ledger-reducer/bind.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 # Detail-plan Test plan cases 4, 5, 8, 9 — cross-round binding (cl_bind).
 # Core contract: only B1 (declared reference ID) and B2 (frozen DISCRIM) may bind an
 # existing ID. No positional / cardinality path exists, so a lone delta line sitting in

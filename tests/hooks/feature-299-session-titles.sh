@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-299-session-titles.sh
+# tests/hooks/feature-299-session-titles.sh
 # Tests: hooks/lib/session-title.js, bin/cc-session-title, hooks/session-start.js
 # Tags: scope:issue-specific
 #

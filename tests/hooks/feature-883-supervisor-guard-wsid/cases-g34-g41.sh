@@ -1,4 +1,4 @@
-# tests/feature-883-supervisor-guard-wsid/cases-g34-g41.sh
+# tests/hooks/feature-883-supervisor-guard-wsid/cases-g34-g41.sh
 # Test case function definitions for G34-G41 (review-gap coverage).
 # Invocations live in the dispatcher.
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1610-worktree-transition-text.sh
+# tests/skills/feature-1610-worktree-transition-text.sh
 # Tests: skills/_shared/worktree-transition.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, bin/workflow/next-step, hooks/workflow-gate/worktree-entry-gate.js, hooks/enforce-worktree/worktree-remedy.js, bin/workflow/lib/next-step/
 # Tags: prompt, skill, worktree, duplication-policy, TL1, pwsh-not-required, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-issue-comments/labels-injection.sh
+# tests/bin/feature-workflow-init-driver/driver-issue-comments/labels-injection.sh
 # Tests: bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/issue-comments.js, bin/workflow/workflow-init-driver
 # Tags: workflow-init, driver, write-context, issue-labels, sentinel-strip, prompt-injection, scope:issue-specific
 

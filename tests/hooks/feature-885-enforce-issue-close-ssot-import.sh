@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-885-enforce-issue-close-ssot-import.sh
+# tests/hooks/feature-885-enforce-issue-close-ssot-import.sh
 # Tests: hooks/enforce-issue-close.js
 # Tags: enforce-issue-close, ssot, inline-skill-re, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — INLINE_SKILL_RE moves to hooks/lib/block-predicates.js

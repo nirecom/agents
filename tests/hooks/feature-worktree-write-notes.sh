@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-write-notes.sh
+# tests/hooks/feature-worktree-write-notes.sh
 # Tests: hooks/lib/worktree-notes.js, bin/worktree-write-notes.js
 # Tags: worktree, notes, security, scope:common
 #
@@ -9,7 +9,7 @@
 # L3 gap (what this test does NOT catch):
 # - Real worktree-start session populating ## SiblingWorktrees via intent.md probe
 # - End-to-end multi-repo flow through worktree-copy-worker Step 3b
-# Covered by tests/feature-1102-sibling-worktrees.sh at the CLI boundary.
+# Covered by tests/hooks/feature-1102-sibling-worktrees.sh at the CLI boundary.
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL_PASS=0

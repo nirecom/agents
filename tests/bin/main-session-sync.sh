@@ -2,10 +2,10 @@
 # Tests: bin/session-sync.sh, install/linux/session-sync-init.sh, bin/workflow-plans-dir
 # Tags: bin, install, git, session-sync, scope:common
 # Tests for bin/session-sync.sh and install/linux/session-sync-init.sh
-# Run: bash tests/main-session-sync.sh
+# Run: bash tests/bin/main-session-sync.sh
 #
 # Layout: this file is the dispatcher. It owns the shared fixtures, helpers and
-# the result footer; the cases live in tests/main-session-sync/*.sh and are
+# the result footer; the cases live in tests/bin/main-session-sync/*.sh and are
 # sourced below in order. Split because the single file exceeded the 500-line
 # HARD limit enforced by bin/review-code-size.
 
@@ -116,32 +116,32 @@ mkdir -p "$FAKE_HOME"
 FAKE_REMOTE="$TMPDIR_BASE/remote.git"
 git init --bare "$FAKE_REMOTE" >/dev/null 2>&1
 
-# shellcheck source=tests/main-session-sync/init.sh
+# shellcheck source=tests/bin/main-session-sync/init.sh
 . "$PARTS_DIR/init.sh"
-# shellcheck source=tests/main-session-sync/sync-basic.sh
+# shellcheck source=tests/bin/main-session-sync/sync-basic.sh
 . "$PARTS_DIR/sync-basic.sh"
-# shellcheck source=tests/main-session-sync/reset.sh
+# shellcheck source=tests/bin/main-session-sync/reset.sh
 . "$PARTS_DIR/reset.sh"
-# shellcheck source=tests/main-session-sync/output-retry.sh
+# shellcheck source=tests/bin/main-session-sync/output-retry.sh
 . "$PARTS_DIR/output-retry.sh"
-# shellcheck source=tests/main-session-sync/conflict.sh
+# shellcheck source=tests/bin/main-session-sync/conflict.sh
 . "$PARTS_DIR/conflict.sh"
-# shellcheck source=tests/main-session-sync/plans.sh
+# shellcheck source=tests/bin/main-session-sync/plans.sh
 . "$PARTS_DIR/plans.sh"
-# shellcheck source=tests/main-session-sync/session-sync-independence.sh
+# shellcheck source=tests/bin/main-session-sync/session-sync-independence.sh
 . "$PARTS_DIR/session-sync-independence.sh"
 # The security-* parts reuse the helpers security.sh defines, so it comes first.
-# shellcheck source=tests/main-session-sync/security.sh
+# shellcheck source=tests/bin/main-session-sync/security.sh
 . "$PARTS_DIR/security.sh"
-# shellcheck source=tests/main-session-sync/security-remote.sh
+# shellcheck source=tests/bin/main-session-sync/security-remote.sh
 . "$PARTS_DIR/security-remote.sh"
-# shellcheck source=tests/main-session-sync/security-containment.sh
+# shellcheck source=tests/bin/main-session-sync/security-containment.sh
 . "$PARTS_DIR/security-containment.sh"
-# shellcheck source=tests/main-session-sync/security-provenance.sh
+# shellcheck source=tests/bin/main-session-sync/security-provenance.sh
 . "$PARTS_DIR/security-provenance.sh"
-# shellcheck source=tests/main-session-sync/security-migration.sh
+# shellcheck source=tests/bin/main-session-sync/security-migration.sh
 . "$PARTS_DIR/security-migration.sh"
-# shellcheck source=tests/main-session-sync/security-transaction.sh
+# shellcheck source=tests/bin/main-session-sync/security-transaction.sh
 . "$PARTS_DIR/security-transaction.sh"
 
 echo ""

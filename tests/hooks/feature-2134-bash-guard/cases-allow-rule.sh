@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-allow-rule.sh
+# tests/hooks/feature-2134-bash-guard/cases-allow-rule.sh
 # Tests: hooks/lib/settings-allow-match.js, hooks/bash-guard/exemptions.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, settings-allow, exemptions, glob, scope:issue-specific, pwsh-not-required, TL2
 # R1-R5: the one command-scoped exemption. Sourced by the dispatcher.

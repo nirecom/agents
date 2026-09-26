@@ -1,7 +1,7 @@
-# tests/feature-811-review-loop-summarize-concerns/cases-16-17.sh
+# tests/bin/feature-811-review-loop-summarize-concerns/cases-16-17.sh
 # Tests: bin/review-loop-summarize-concerns
 # Tags: feature, cap-menu, summarize-concerns, scope:issue-specific, pwsh-not-required
-# Sourced by tests/feature-811-review-loop-summarize-concerns.sh.
+# Sourced by tests/bin/feature-811-review-loop-summarize-concerns.sh.
 # Cases 16-17 moved here verbatim (no content change) to keep the parent file
 # under the file-split HARD limit of 500 lines once the v2 cases were appended.
 

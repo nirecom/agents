@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/forge-write-extract.js
 # Tags: hook, forge, glab, gitlab, scan-target, scope:issue-specific, TL1
-# Part of tests/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
 # Section 2307 — glab forge-write scan targeting. TEST-FIRST / INTENDED RED:
 # #2307 makes glab writes scan targets (security invariant; GitLab op = #2308).
 # E1/E2/E5 RED->GREEN after impl; E3 gh regression GREEN; E4 read-only false.

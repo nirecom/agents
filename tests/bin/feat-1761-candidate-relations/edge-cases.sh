@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-relations/edge-cases.sh
+# tests/bin/feat-1761-candidate-relations/edge-cases.sh
 # Tests: bin/github-issues/candidate-relations.sh, bin/github-issues/lib/candidate-relation-one.sh
 # Tags: issue-create, verdict, candidate-relations, graphql, gh-mock, edge-cases, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -7,7 +7,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Split out of tests/feat-1761-candidate-relations.sh (rules/coding/file-split.md
+# Split out of tests/bin/feat-1761-candidate-relations.sh (rules/coding/file-split.md
 # Pattern A, 300-line WARN). The sibling file owns the contracted happy/fallback
 # paths; this one owns the degenerate candidate lists and repository-level failures.
 # The setup below is duplicated deliberately: a shared helpers.sh would couple two

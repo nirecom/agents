@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/continuity.sh
+# tests/bin/bin-codex-review-loop-security-code/continuity.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger, bin/review-loop-summarize-concerns
 # Tags: concern-ledger, review-code, id-continuity, shared-ledger, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 # ID continuity across rounds driven end-to-end through the loop, plus re-reading
 # the persisted ledger from a session that shares nothing but the file.
 

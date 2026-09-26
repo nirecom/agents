@@ -1,5 +1,5 @@
 # state-seeds.sh — workflow/supervisor state seeding helpers for T1-T18 and H1-H8 tests
-# Sourced by tests/feature-1498-stop-premature-stop-guard.sh
+# Sourced by tests/hooks/feature-1498-stop-premature-stop-guard.sh
 
 # Seed a workflow state that has workflow_init=complete and clarify_intent=complete
 # and a given step ACTION by writing the next-step output into env.

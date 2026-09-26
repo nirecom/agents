@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-wip.sh
+# tests/bin/feature-workflow-init-driver/driver-wip.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: workflow-init, driver, wip-check, scope:issue-specific
 #

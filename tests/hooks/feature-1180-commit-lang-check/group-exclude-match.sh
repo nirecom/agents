@@ -1,4 +1,4 @@
-# tests/feature-1180-commit-lang-check/group-exclude-match.sh
+# tests/hooks/feature-1180-commit-lang-check/group-exclude-match.sh
 # Tests: hooks/lib/lint-commit-lang.js, hooks/lib/lang-config.js, hooks/lib/path-coverage-match.js, hooks/lib/glob-match.js
 # Tags: lang-enforce, commit-hook, code-lang-exclude, scope:issue-specific
 #

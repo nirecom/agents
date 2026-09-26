@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-959-enforce-worktree-worker-path-arg.sh
+# tests/hooks/fix-959-enforce-worktree-worker-path-arg.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
 #

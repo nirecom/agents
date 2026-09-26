@@ -1,5 +1,5 @@
 # o-security.sh — O1-O3: hostile session ids (#1997).
-# Sourced by tests/feature-1997-mechanism-failure.sh.
+# Sourced by tests/hooks/feature-1997-mechanism-failure.sh.
 # Tests: hooks/lib/mechanism-failure.js
 # Tags: mechanism-failure, security, path-traversal, session-id, regression-1997, scope:issue-specific, pwsh-not-required, TL1
 

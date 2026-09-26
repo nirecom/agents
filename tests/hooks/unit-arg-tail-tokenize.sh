@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-arg-tail-tokenize.sh
+# tests/hooks/unit-arg-tail-tokenize.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js, hooks/lib/quote-spans.js
 # Tags: hook, worktree, enforce, arg-tail, quote-spans, parser, unit, security, scope:common
 #
@@ -8,7 +8,7 @@
 # — an implementation-missing failure, not a test bug.
 #
 # tokenizeArgTail's own contract, pinned exactly rather than only through the
-# guard verdicts in tests/fix-1569-quote-span-regression/arg-tail-module.sh.
+# guard verdicts in tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh.
 # The verdict tests can only see a boolean; a tokenizer that mis-attributes a
 # piece but happens to reject the same commands would pass them all. These rows
 # pin raw / start / end / value / pieces so provenance itself is the assertion.
@@ -72,7 +72,7 @@ _trim() {
 assert_probe() {
     local name="$1" input="$2" op="$3" args="$4" want="$5" got
     # `$args` stays unquoted for word splitting but must not glob-expand
-    # (symmetric with tests/unit-quote-spans.sh); `set -f` is scoped to the
+    # (symmetric with tests/hooks/unit-quote-spans.sh); `set -f` is scoped to the
     # command substitution's subshell.
     # shellcheck disable=SC2086
     got="$(set -f; probe "$op" "$input" $args)"

@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, truncation, base-state, scope, verdict-family, scope:issue-specific, pwsh-not-required, TL2
 # The X-series (#1638), moved verbatim out of the parent at the 500-line hard split limit. Reuses TMPDIR_BASE, REPO, MOCK_BIN, SCRIPT, _timeout, fail, pass from the parent; leaves BIG_REPO set for later parts.

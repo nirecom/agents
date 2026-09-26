@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/spawn-shimmed-cli.js
 # Tags: codegraph, win32-shim, parser, regex, boundary, table-driven, unit, scope:issue-specific
-# Section V of tests/feature-2150-spawn-shimmed-cli.sh — verifiedShimTarget():
+# Section V of tests/hooks/feature-2150-spawn-shimmed-cli.sh — verifiedShimTarget():
 # the two target-extraction regexes, their cross-check, and the file/path error
 # boundary. Every row shares ONE resolvable directory and one pinned PATHEXT, so
 # resolution is never the variable; only the on-disk shim shape is.

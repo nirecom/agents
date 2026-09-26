@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-windows-permission-glob.sh
+# tests/bin/fix-windows-permission-glob.sh
 # Tests: bin/node, hooks/lib/path-match.js
 # Tags: settings, config, hook, bin, windows
 #

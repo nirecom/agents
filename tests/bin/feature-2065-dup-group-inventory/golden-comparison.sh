@@ -1,7 +1,7 @@
 # S12 category 1: golden comparison of the pre-extraction implementation (#2065)
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, golden, frontmatter, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # Proof that the S1-2 parser extraction is behavior-preserving: the OLD
 # implementation's stdout, stderr and exit status, each byte-compared on its own
 # against the new one over one fixture covering buckets (a)-(j) of S1-0. The

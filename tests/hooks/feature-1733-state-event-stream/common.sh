@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1733-state-event-stream/common.sh
+# tests/hooks/feature-1733-state-event-stream/common.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js
 # Tags: workflow-state, event-stream, state-io, harness, scope:issue-specific, pwsh-not-required, TL2
 #

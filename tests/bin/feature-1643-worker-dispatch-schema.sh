@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-schema.sh
+# tests/bin/feature-1643-worker-dispatch-schema.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/payload.js, bin/worker-dispatch/registry.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, dispatcher, payload, schema, argv, free-text, TL1, scope:issue-specific
 

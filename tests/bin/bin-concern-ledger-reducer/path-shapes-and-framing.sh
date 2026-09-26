@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/path-shapes-and-framing.sh
+# tests/bin/bin-concern-ledger-reducer/path-shapes-and-framing.sh
 # Tests: bin/lib/concern-ledger/core.sh, bin/lib/safe-plans-path.sh
 # Tags: concern-ledger, pattern-discovery, windows-path, nul-framing, table-driven, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh, after pattern-discovery.sh whose helpers it reuses.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh, after pattern-discovery.sh whose helpers it reuses.
 
 echo ""
 echo "--- reducer pd-4: both path shapes, on every host ---"

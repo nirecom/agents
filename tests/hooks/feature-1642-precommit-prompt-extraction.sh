@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-precommit-prompt-extraction.sh
+# tests/hooks/feature-1642-precommit-prompt-extraction.sh
 # Tests: hooks/pre-commit, bin/check-prompt-extraction
 # Tags: pre-commit, hook, git, prompt-extraction, backstop, scope:issue-specific, scope:feature-1642, layer:TL2
 # Issue #1642 — hooks/pre-commit backstop for the prompt-extraction gate. It arms

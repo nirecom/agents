@@ -6,7 +6,7 @@
 # overwritten (register: remove-then-add) or removed (unregister); a
 # different-shaped entry is "foreign" (O20/O21) and both verbs leave it
 # untouched. An unreadable ~/.claude.json (null) must change nothing at all.
-# Sourced by tests/feature-codegraph-bootstrap.sh after cases.sh.
+# Sourced by tests/install/feature-codegraph-bootstrap.sh after cases.sh.
 
 assert_note() {
     local name="$1" needle="$2" out; out="$(cat "$CASE_DIR/out.log" 2>/dev/null || true)"

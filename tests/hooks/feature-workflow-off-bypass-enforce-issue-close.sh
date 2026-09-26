@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-enforce-issue-close.sh
+# tests/hooks/feature-workflow-off-bypass-enforce-issue-close.sh
 # Tests: hooks/enforce-issue-close.js
 # Tags: issue-close, enforce, hook, workflow, bin, scope:common
 #

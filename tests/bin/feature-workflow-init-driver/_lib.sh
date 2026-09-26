@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/_lib.sh — shared helper library, NOT a test file.
+# tests/bin/feature-workflow-init-driver/_lib.sh — shared helper library, NOT a test file.
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/detect-issues.js, bin/workflow/lib/workflow-init/phases/fetch-issues.js, bin/workflow/lib/workflow-init/phases/wip-check.js, bin/workflow/lib/workflow-init/phases/closed-detection.js, bin/workflow/lib/workflow-init/phases/label-extract.js, bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/phases/route-decision.js, bin/workflow/lib/workflow-init/phases/write-context.js, bin/workflow/lib/workflow-init/spawn-env.js, hooks/lib/parse-remote-url.js
 # Tags: workflow-init, driver, routing, directive-contract, meta-classify, origin-resolution, scope:issue-specific
 # Source from sibling tests: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

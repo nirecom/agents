@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/worktree-event.sh
+# tests/hooks/feature-1733-state-event-stream/worktree-event.sh
 # Tests: hooks/postuse-native-worktree-record.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, worktree, path-source, provenance, fail-open, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -23,7 +23,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="wt"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"

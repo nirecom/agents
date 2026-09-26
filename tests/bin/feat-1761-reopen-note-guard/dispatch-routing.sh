@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-reopen-note-guard/dispatch-routing.sh
+# tests/bin/feat-1761-reopen-note-guard/dispatch-routing.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/reopen-with-update.sh
 # Tags: issue-create, verdict, dispatch, reopen-note, routing, table-driven, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -7,7 +7,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Split out of tests/feat-1761-reopen-note-guard.sh (rules/coding/file-split.md
+# Split out of tests/bin/feat-1761-reopen-note-guard.sh (rules/coding/file-split.md
 # Pattern A). That file asserts what reopen-with-update.sh DOES with a note. This file
 # asserts how the note GETS there — the dispatcher's routing.
 #

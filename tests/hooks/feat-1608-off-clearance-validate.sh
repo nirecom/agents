@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1608-off-clearance-validate.sh
+# tests/hooks/feat-1608-off-clearance-validate.sh
 # Tests: hooks/lib/session-markers.js
 # Tags: off-clearance, validator, evaluate-off-clearance, fail-closed, session-markers, scope:issue-specific, pwsh-not-required, TL1
 #

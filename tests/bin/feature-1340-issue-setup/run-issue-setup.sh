@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/run-issue-setup.sh
+# tests/bin/feature-1340-issue-setup/run-issue-setup.sh
 # Tests: skills/issue-setup/scripts/run-issue-setup.sh
 # Tags: issue-setup, run-issue-setup, github-issues, scope:issue-specific
 # N/A: prompt-injection/AskUserQuestion — repo-confirm prompt is interactive (SKILL.md orchestration), covered by the skill-orchestration verification-gate at user_verification, not L2-testable.
