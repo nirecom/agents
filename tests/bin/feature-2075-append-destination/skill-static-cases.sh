@@ -259,4 +259,60 @@ fi
 
 case_end
 
+case_begin "skill-static-review-tests-coverage" "skills/review-tests/SKILL.md"
+if [[ -f "$RT_SKILL" ]]; then
+    pass "P0-ext skills/review-tests/SKILL.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/review-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "skill-static-test-design-coverage" "skills/_shared/test-design.md"
+if [[ -f "$TD_SHARED" ]]; then
+    pass "P0-ext skills/_shared/test-design.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/_shared/test-design.md missing"
+fi
+case_end
+
+case_begin "skill-static-append-vs-new-coverage" "skills/_shared/test-design/append-vs-new.md"
+if [[ -f "$TD_APPEND" ]]; then
+    pass "P0-ext skills/_shared/test-design/append-vs-new.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/_shared/test-design/append-vs-new.md missing"
+fi
+case_end
+
+case_begin "skill-static-allow-commands-coverage" "install/settings-allow-commands.txt"
+if [[ -f "$ALLOW_TXT" ]]; then
+    pass "P0-ext install/settings-allow-commands.txt exists (exercised by skill-static-series)"
+else
+    fail "P0-ext install/settings-allow-commands.txt missing"
+fi
+case_end
+
+case_begin "skill-static-select-staged-coverage" "skills/review-tests/scripts/select-staged-files.sh"
+if [[ -f "$SELECT_SH" ]]; then
+    pass "P0-ext skills/review-tests/scripts/select-staged-files.sh exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/review-tests/scripts/select-staged-files.sh missing"
+fi
+case_end
+
+case_begin "skill-static-run-tests-coverage" "skills/run-tests/SKILL.md"
+if [[ -f "$AGENTS_ROOT/skills/run-tests/SKILL.md" ]]; then
+    pass "P0-ext skills/run-tests/SKILL.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/run-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "skill-static-frontmatter-fix-coverage" "bin/lib/test-frontmatter-fix.sh"
+if [[ -f "$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-fix.sh exists (exercised by skill-static-series)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-fix.sh missing"
+fi
+case_end
+
 grp_done "skill-static-cases.sh"

@@ -129,4 +129,20 @@ assert_eq "SI5 check-test-frontmatter.sh --all still accepts duplicate/late head
 
 case_end
 
+case_begin "structural-fm-constants-coverage" "bin/lib/test-frontmatter-constants.sh"
+if [[ -f "$FM_CONST" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-constants.sh exists (exercised by structural-series)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-constants.sh missing"
+fi
+case_end
+
+case_begin "structural-fm-check-coverage" "bin/check-test-frontmatter.sh"
+if [[ -f "$FM_CHECK" ]]; then
+    pass "P0-ext bin/check-test-frontmatter.sh exists (exercised by structural-series)"
+else
+    fail "P0-ext bin/check-test-frontmatter.sh missing"
+fi
+case_end
+
 grp_done "structural-inspection.sh"

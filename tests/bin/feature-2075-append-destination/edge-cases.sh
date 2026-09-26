@@ -274,4 +274,12 @@ fi
 
 case_end
 
+case_begin "edge-route-destination-coverage" "bin/lib/test-route-destination.sh"
+if [[ -f "$ROUTE_LIB" ]]; then
+    pass "P0-ext bin/lib/test-route-destination.sh exists (used by this test suite)"
+else
+    fail "P0-ext bin/lib/test-route-destination.sh missing"
+fi
+case_end
+
 grp_done "edge-cases.sh"

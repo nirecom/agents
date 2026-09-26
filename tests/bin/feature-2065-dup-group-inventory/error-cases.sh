@@ -79,4 +79,20 @@ done
 
 case_end
 
+case_begin "error-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by error-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
+case_begin "error-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by error-series)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
+
 grp_done "error-cases.sh"

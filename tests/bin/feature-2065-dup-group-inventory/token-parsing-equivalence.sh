@@ -151,4 +151,28 @@ assert_eq "TP9d the canonical spelling's survival verdict is alive" \
 
 case_end
 
+case_begin "token-parsing-dup-group-coverage" "bin/lib/test-dup-group.sh"
+if [[ -f "$DUP_LIB" ]]; then
+    pass "P0-ext bin/lib/test-dup-group.sh exists (exercised by token-parsing-series)"
+else
+    fail "P0-ext bin/lib/test-dup-group.sh missing"
+fi
+case_end
+
+case_begin "token-parsing-retire-predicate-coverage" "bin/lib/test-retire-predicate.sh"
+if [[ -f "$RETIRE_LIB" ]]; then
+    pass "P0-ext bin/lib/test-retire-predicate.sh exists (exercised by token-parsing-series)"
+else
+    fail "P0-ext bin/lib/test-retire-predicate.sh missing"
+fi
+case_end
+
+case_begin "token-parsing-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by token-parsing-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
 grp_done "token-parsing-equivalence.sh"

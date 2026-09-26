@@ -104,4 +104,12 @@ fi
 
 case_end
 
+case_begin "worktree-resolve-path-coverage" "bin/resolve-worktree-path"
+if [[ -f "$AGENTS_ROOT/bin/resolve-worktree-path" ]]; then
+    pass "P0-ext bin/resolve-worktree-path exists (used by this test suite)"
+else
+    fail "P0-ext bin/resolve-worktree-path missing"
+fi
+case_end
+
 grp_done "worktree-select-cases.sh"

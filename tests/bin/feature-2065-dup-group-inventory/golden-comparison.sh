@@ -149,4 +149,20 @@ assert_eq "GC11 late-header fixture is not reported by the retire pass" \
 
 case_end
 
+case_begin "golden-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by golden-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
+case_begin "golden-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by golden-series)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
+
 grp_done "golden-comparison.sh"

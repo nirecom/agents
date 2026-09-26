@@ -160,21 +160,17 @@ grp_done() { GRP_DONE="${GRP_DONE}$1
 # shellcheck source=feature-2065-dup-group-inventory/harness-tsv-reader.sh
 . "$GROUP_DIR/harness-tsv-reader.sh"
 
-# ── Preconditions ───────────────────────────────────────────────────────────
-case_begin "preconditions" "bin/lib/test-dup-group.sh"
+# ── Preconditions (one case_begin per # Tests: path) ────────────────────────
+case_begin "preconditions-audit-tests" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then pass "P0 bin/audit-tests.sh exists"; else fail "P0 bin/audit-tests.sh missing at $AUDIT"; fi
+case_end
 
-for _p in "$AUDIT:bin/audit-tests.sh" "$AUDIT_COMMON:bin/audit-tests-common.sh" \
-          "$FM_CONST:bin/lib/test-frontmatter-constants.sh" "$FM_FIX:bin/lib/test-frontmatter-fix.sh" \
-          "$RETIRE_LIB:bin/lib/test-retire-predicate.sh" "$FM_CHECK:bin/check-test-frontmatter.sh"; do
-    if [[ -f "${_p%%:*}" ]]; then pass "P0 ${_p#*:} exists"; else fail "P0 ${_p#*:} missing at ${_p%%:*}"; fi
-done
+case_begin "preconditions-audit-tests-common" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then pass "P0 bin/audit-tests-common.sh exists"; else fail "P0 bin/audit-tests-common.sh missing at $AUDIT_COMMON"; fi
+case_end
 
-# P1 — the new shared grouping library (S2). Absent until /write-code lands it.
-if [[ -f "$DUP_LIB" ]]; then
-    pass "P1 shared grouping library bin/lib/test-dup-group.sh exists"
-else
-    fail "P1 shared grouping library bin/lib/test-dup-group.sh missing (not implemented yet)"
-fi
+case_begin "preconditions-frontmatter-constants" "bin/lib/test-frontmatter-constants.sh"
+if [[ -f "$FM_CONST" ]]; then pass "P0 bin/lib/test-frontmatter-constants.sh exists"; else fail "P0 bin/lib/test-frontmatter-constants.sh missing at $FM_CONST"; fi
 
 # P2 — the header-position contract constant (S1-1) is the SSOT the classifier
 # keys on. Read it out of the constants file rather than assuming the value.
@@ -183,7 +179,24 @@ if grep -qE '^[[:space:]]*FRONTMATTER_HEADER_MAX_LINE=10([[:space:]]|$)' "$FM_CO
 else
     fail "P2 FRONTMATTER_HEADER_MAX_LINE=10 not defined in $FM_CONST (not implemented yet)"
 fi
+case_end
 
+case_begin "preconditions-frontmatter-fix" "bin/lib/test-frontmatter-fix.sh"
+if [[ -f "$FM_FIX" ]]; then pass "P0 bin/lib/test-frontmatter-fix.sh exists"; else fail "P0 bin/lib/test-frontmatter-fix.sh missing at $FM_FIX"; fi
+if [[ -f "$FM_CHECK" ]]; then pass "P0 bin/check-test-frontmatter.sh exists"; else fail "P0 bin/check-test-frontmatter.sh missing at $FM_CHECK"; fi
+case_end
+
+case_begin "preconditions-retire-predicate" "bin/lib/test-retire-predicate.sh"
+if [[ -f "$RETIRE_LIB" ]]; then pass "P0 bin/lib/test-retire-predicate.sh exists"; else fail "P0 bin/lib/test-retire-predicate.sh missing at $RETIRE_LIB"; fi
+case_end
+
+case_begin "preconditions-dup-group" "bin/lib/test-dup-group.sh"
+# P1 — the new shared grouping library (S2). Absent until /write-code lands it.
+if [[ -f "$DUP_LIB" ]]; then
+    pass "P1 shared grouping library bin/lib/test-dup-group.sh exists"
+else
+    fail "P1 shared grouping library bin/lib/test-dup-group.sh missing (not implemented yet)"
+fi
 case_end
 
 # shellcheck source=feature-2065-dup-group-inventory/golden-comparison.sh

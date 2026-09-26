@@ -212,16 +212,17 @@ grp_done() { GRP_DONE="${GRP_DONE}$1
 CASE_RAN=""
 case_ran() { CASE_RAN="${CASE_RAN} $1"; }
 
-# ── Preconditions ───────────────────────────────────────────────────────────
-case_begin "preconditions" "bin/find-tests-for-source.sh"
+# ── Preconditions (one case_begin per # Tests: path) ────────────────────────
+case_begin "preconditions-find-tests" "bin/find-tests-for-source.sh"
+if [[ -f "$HELPER" ]]; then pass "P0 bin/find-tests-for-source.sh exists"; else fail "P0 bin/find-tests-for-source.sh missing at $HELPER"; fi
+case_end
 
-for _p in "$HELPER:bin/find-tests-for-source.sh" "$ROUTE_LIB:bin/lib/test-route-destination.sh" \
-          "$DUP_LIB:bin/lib/test-dup-group.sh" "$SELECT_SH:skills/review-tests/scripts/select-staged-files.sh" \
-          "$WT_SKILL:skills/write-tests/SKILL.md" "$RT_SKILL:skills/review-tests/SKILL.md" \
-          "$TD_SHARED:skills/_shared/test-design.md" "$TD_APPEND:skills/_shared/test-design/append-vs-new.md" \
-          "$ALLOW_TXT:install/settings-allow-commands.txt"; do
-    if [[ -f "${_p%%:*}" ]]; then pass "P0 ${_p#*:} exists"; else fail "P0 ${_p#*:} missing at ${_p%%:*}"; fi
-done
+case_begin "preconditions-route-destination" "bin/lib/test-route-destination.sh"
+if [[ -f "$ROUTE_LIB" ]]; then pass "P0 bin/lib/test-route-destination.sh exists"; else fail "P0 bin/lib/test-route-destination.sh missing at $ROUTE_LIB"; fi
+case_end
+
+case_begin "preconditions-dup-group" "bin/lib/test-dup-group.sh"
+if [[ -f "$DUP_LIB" ]]; then pass "P0 bin/lib/test-dup-group.sh exists"; else fail "P0 bin/lib/test-dup-group.sh missing at $DUP_LIB"; fi
 
 # P1 — the reverse codec the whole assertion harness decodes through.
 for _fn in tdg_unescape_field tdg_split_escaped_csv; do
@@ -231,7 +232,51 @@ for _fn in tdg_unescape_field tdg_split_escaped_csv; do
         fail "P1 $_fn not defined by bin/lib/test-dup-group.sh (not implemented yet)"
     fi
 done
+case_end
 
+case_begin "preconditions-select-staged-files" "skills/review-tests/scripts/select-staged-files.sh"
+if [[ -f "$SELECT_SH" ]]; then pass "P0 skills/review-tests/scripts/select-staged-files.sh exists"; else fail "P0 skills/review-tests/scripts/select-staged-files.sh missing at $SELECT_SH"; fi
+case_end
+
+case_begin "preconditions-write-tests-skill" "skills/write-tests/SKILL.md"
+if [[ -f "$WT_SKILL" ]]; then pass "P0 skills/write-tests/SKILL.md exists"; else fail "P0 skills/write-tests/SKILL.md missing at $WT_SKILL"; fi
+case_end
+
+case_begin "preconditions-review-tests-skill" "skills/review-tests/SKILL.md"
+if [[ -f "$RT_SKILL" ]]; then pass "P0 skills/review-tests/SKILL.md exists"; else fail "P0 skills/review-tests/SKILL.md missing at $RT_SKILL"; fi
+case_end
+
+case_begin "preconditions-test-design-append" "skills/_shared/test-design/append-vs-new.md"
+if [[ -f "$TD_SHARED" ]]; then pass "P0 skills/_shared/test-design.md exists"; else fail "P0 skills/_shared/test-design.md missing at $TD_SHARED"; fi
+if [[ -f "$TD_APPEND" ]]; then pass "P0 skills/_shared/test-design/append-vs-new.md exists"; else fail "P0 skills/_shared/test-design/append-vs-new.md missing at $TD_APPEND"; fi
+case_end
+
+case_begin "preconditions-allow-commands" "install/settings-allow-commands.txt"
+if [[ -f "$ALLOW_TXT" ]]; then pass "P0 install/settings-allow-commands.txt exists"; else fail "P0 install/settings-allow-commands.txt missing at $ALLOW_TXT"; fi
+case_end
+
+case_begin "preconditions-run-tests-skill" "skills/run-tests/SKILL.md"
+if [[ -f "$AGENTS_ROOT/skills/run-tests/SKILL.md" ]]; then
+    pass "P0-ext skills/run-tests/SKILL.md exists (used by this test suite)"
+else
+    fail "P0-ext skills/run-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "preconditions-frontmatter-fix" "bin/lib/test-frontmatter-fix.sh"
+if [[ -f "$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-fix.sh exists (used by this test suite)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-fix.sh missing"
+fi
+case_end
+
+case_begin "preconditions-resolve-worktree-path" "bin/resolve-worktree-path"
+if [[ -f "$AGENTS_ROOT/bin/resolve-worktree-path" ]]; then
+    pass "P0-ext bin/resolve-worktree-path exists (used by this test suite)"
+else
+    fail "P0-ext bin/resolve-worktree-path missing"
+fi
 case_end
 
 # ── Case files ──────────────────────────────────────────────────────────────

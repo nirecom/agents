@@ -156,4 +156,28 @@ done
 
 case_end
 
+case_begin "contract-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
+case_begin "contract-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
+
+case_begin "contract-fm-check-coverage" "bin/check-test-frontmatter.sh"
+if [[ -f "$FM_CHECK" ]]; then
+    pass "P0-ext bin/check-test-frontmatter.sh exists (exercised by contract-series)"
+else
+    fail "P0-ext bin/check-test-frontmatter.sh missing"
+fi
+case_end
+
 grp_done "contract-cases.sh"
