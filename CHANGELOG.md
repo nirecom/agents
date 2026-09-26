@@ -559,3 +559,7 @@ Changes: `bin/check-case-markers.sh` now exits 1 with a stderr message when call
 ### FEATURE: PR #2405 (2026-09-26)
 Background: fix(#2395): repair 1691 hollow-pass test path refs after tests/ 2-level restructuring
 Changes: Repaired 1,691 test files that contained stale flat-path references after the tests/ 2-level restructuring; the test suite now accurately reports coverage gaps instead of silently passing with 0 assertions.
+
+### FEATURE: PR #2409 (2026-09-26)
+Background: feat(#2392): reorganize .Tests.ps1 and test_*.py into category subdirs
+Changes: Test suite now discovers and runs Pester (.Tests.ps1) and pytest (test_*.py) files from category subdirectories (tests/bin/, tests/install/); `run-all --all` covers all 25 moved test files. Extension-specific dispatch (pwsh/uv+pytest/bash) extracted to bin/lib/run-all-launch.sh. Three obsolete .sh wrappers removed.
