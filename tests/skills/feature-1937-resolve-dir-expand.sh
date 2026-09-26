@@ -12,7 +12,7 @@
 
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_JS="$REPO_DIR/skills/worktree-end/scripts/resolve-dir-expand.js"
 VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
 to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }

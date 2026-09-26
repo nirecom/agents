@@ -15,7 +15,7 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1937_CAP_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
