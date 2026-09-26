@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/check-issues-class-coverage
-# Tests: tests/feature-1113-1058-check-issues-class-coverage.sh
+# Tests: tests/bin/feature-1113-1058-check-issues-class-coverage.sh
 # Tags: plan-coverage-gate, outline, detail
 #
 # Gate CLI for plan coverage checks. Two modes:

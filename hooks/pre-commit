@@ -14,6 +14,14 @@ SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 . "$_cfg_dir/hooks/lib/load-env.sh"
 _load_env_file
 
+# Commit-gate blocks extracted to hooks/lib/ (rules/coding/file-split.md Pattern A:
+# shared-across-entrypoints helpers live in an adjacent lib/). Both reference the
+# ambient $_cfg_dir and exit 1 on a violation, preserving in-place blocking behavior.
+# shellcheck source=hooks/lib/precommit-tests-frontmatter.sh
+. "$_cfg_dir/hooks/lib/precommit-tests-frontmatter.sh"
+# shellcheck source=hooks/lib/precommit-agents-repo-gates.sh
+. "$_cfg_dir/hooks/lib/precommit-agents-repo-gates.sh"
+
 # ENFORCE_WORKTREE defense-in-depth: block commit from main worktree or on default branch.
 # Mirrors hooks/enforce-worktree.js logic. Bash-side because git hooks run outside Node.
 _is_enforce_worktree_on() {
@@ -303,155 +311,14 @@ if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]
     fi
 fi
 
-# Check scope tag on staged tests/*.sh files
-_staged_tests=""
-while IFS= read -r f; do
-  [ -z "$f" ] && continue
-  case "$f" in
-    tests/_archive/*) continue ;;
-    tests/*.sh) _staged_tests="$_staged_tests $f" ;;
-  esac
-done <<< "$(git diff --cached --name-only -- 'tests/*.sh')"
-if [ -n "$_staged_tests" ]; then
-  # shellcheck disable=SC2086
-  if ! "$_cfg_dir/bin/check-test-frontmatter.sh" --staged $_staged_tests; then
-    echo ""
-    echo "Commit blocked: staged tests/*.sh file(s) fail frontmatter validation."
-    echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
-    exit 1
-  fi
-fi
+# Validate staged tests/<category>/*.sh frontmatter + reject new flat tests/*.sh
+# (#1834). Cause-specific block messages: hooks/lib/precommit-tests-frontmatter.sh.
+_precommit_check_tests_frontmatter || exit 1
 
-# --- on-demand rules-injection notation gate (detail plan S2-7) -------------------
-# Why here: a rule that disables auto-injection does so with a reserved `paths:` glob
-# plus a marker comment. Nothing in the host loader validates that pairing, so the only
-# moment the drift can still be stopped cheaply is before the commit lands.
-#
-# Own agents-repo guard, deliberately independent of the prompt-extraction block above:
-# that one is additionally gated on .prompt-extraction-allowlist, and reusing its
-# variables would silently couple this gate to a file it has nothing to do with.
-#
-# Exit-code mapping (asserted by tests/cc-pre-commit-on-demand-rules.sh):
-#   1 (violations) and 2 (usage / broken invocation) -> block
-#   anything else, including a missing or non-executable checker -> warn and continue.
-# The fail-open half differs from the prompt-extraction backstop on purpose: this gate
-# guards a notation convention, not an outbound-content leak, so a checkout that
-# predates the checker must still be able to commit — but never silently.
-_od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -n "$_od_repo_top" ]; then
-    _od_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
-    _od_is_agents_repo=0
-    # -u GIT_DIR/GIT_WORK_TREE/GIT_PREFIX: git invokes this hook with those set for the
-    # repo being committed to, and an inherited GIT_DIR silently overrides -C's target
-    # directory for repo discovery -- without the unset, both calls below resolve to the
-    # committing repo regardless of $_od_cfg_dir, producing a false agents-repo match for
-    # every repo.
-    _od_agents_common="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX git -C "$_od_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
-    _od_repo_common="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX git -C "$_od_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
-    if [ -n "$_od_agents_common" ] && [ -n "$_od_repo_common" ]; then
-        _od_agents_abs="$(cd "$_od_cfg_dir" 2>/dev/null && cd "$_od_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_od_agents_common")"
-        _od_repo_abs="$(cd "$_od_repo_top" 2>/dev/null && cd "$_od_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_od_repo_common")"
-        [ "$_od_agents_abs" = "$_od_repo_abs" ] && _od_is_agents_repo=1
-    fi
-
-    if [ "$_od_is_agents_repo" = "1" ]; then
-        # NUL-delimited: without -z git applies quotePath to a name containing a
-        # newline or a non-ASCII byte, and the filename identity is destroyed before
-        # the checker ever sees it. mapfile -d '' keeps one name = one array element.
-        _od_staged=()
-        while IFS= read -r -d '' _od_f; do
-            case "$_od_f" in
-                rules/*.md|hooks/lib/rules-injection-policy.js) _od_staged+=("$_od_f") ;;
-            esac
-        done < <(git diff --cached --name-only -z 2>/dev/null || true)
-
-        # The checker runs on every agents-repo commit, not only when a rules file is
-        # staged: the notation contract is a property of the whole tree (a policy-only
-        # edit can break a rule it never touched, and some filenames git cannot even
-        # stage on this platform). The staged list is still passed so out-of-root paths
-        # are surfaced; an empty list is a valid invocation.
-        _od_checker="$_od_cfg_dir/bin/check-on-demand-rules.sh"
-        if [ ! -x "$_od_checker" ]; then
-            echo "pre-commit: check-on-demand-rules.sh missing or not executable at $_od_checker — on-demand rules notation gate skipped" >&2
-        else
-            _od_rc=0
-            _od_out="$("$_od_checker" --staged ${_od_staged[@]+"${_od_staged[@]}"} 2>&1)" || _od_rc=$?
-            case "$_od_rc" in
-                0) : ;;
-                1|2)
-                    printf '%s\n' "$_od_out"
-                    echo ""
-                    echo "Commit blocked: on-demand rules-injection notation violations (checker rc=$_od_rc)."
-                    echo "See docs/architecture/claude-code/rules-injection.md."
-                    exit 1
-                    ;;
-                *)
-                    echo "pre-commit: check-on-demand-rules.sh rc=$_od_rc — on-demand rules notation gate skipped" >&2
-                    ;;
-            esac
-        fi
-
-        # ---------- session-id SSOT gate (issue #2270) ----------
-        # Same rc convention as the block above: rc 2 is a contract breach by the caller
-        # (bad flag, rotted allowlist), not an outage, so a rename cannot silently
-        # disarm the gate. Real outages (missing/unrunnable checker, unexpected rc)
-        # leave the commit alone with a diagnostic.
-        _si_checker="$_od_cfg_dir/bin/check-session-id-ssot.sh"
-        if [ ! -x "$_si_checker" ]; then
-            echo "pre-commit: check-session-id-ssot.sh missing or not executable at $_si_checker — session-id SSOT gate skipped" >&2
-        else
-            _si_rc=0
-            _si_out="$(bash "$_si_checker" --staged 2>&1)" || _si_rc=$?
-            case "$_si_rc" in
-                0) : ;;
-                1|2)
-                    printf '%s\n' "$_si_out"
-                    echo ""
-                    echo "Commit blocked: session-id env reads bypassing the SSOT resolver (checker rc=$_si_rc)."
-                    echo "See docs/architecture/claude-code/session-id-resolution.md."
-                    exit 1
-                    ;;
-                *)
-                    echo "pre-commit: check-session-id-ssot.sh rc=$_si_rc — session-id SSOT gate skipped" >&2
-                    ;;
-            esac
-        fi
-
-        # ---------- migration-blocks gate (issue #1987) ----------
-        # _mb_staged: all staged files (excluding rules/*.md and tests/)
-        # no extension filter — extensionless files and .ps1 etc. are also included
-        _mb_staged=()
-        while IFS= read -r -d '' _mb_f; do
-            case "$_mb_f" in
-                rules/*.md) ;;   # excluded: docs only
-                tests/*)    ;;   # excluded: test files
-                *)          _mb_staged+=("$_mb_f") ;;
-            esac
-        done < <(git diff --cached --name-only -z 2>/dev/null || true)
-
-        # Blocking on axis-1/2 violations (rc 1 AND rc 2); warnings pass through (rc 0).
-        # Real outages (missing/unrunnable checker, unexpected rc) leave the commit alone.
-        _mb_checker="$_od_cfg_dir/bin/check-migration-blocks.sh"
-        if [ ! -x "$_mb_checker" ]; then
-            echo "pre-commit: check-migration-blocks.sh missing or not executable at $_mb_checker — migration blocks gate skipped" >&2
-        else
-            _mb_rc=0
-            _mb_out="$("$_mb_checker" --staged ${_mb_staged[@]+"${_mb_staged[@]}"} 2>&1)" || _mb_rc=$?
-            case "$_mb_rc" in
-                0) : ;;
-                1|2)
-                    printf '%s\n' "$_mb_out"
-                    echo ""
-                    echo "Commit blocked: migration block format violations (checker rc=$_mb_rc)."
-                    exit 1
-                    ;;
-                *)
-                    echo "pre-commit: check-migration-blocks.sh rc=$_mb_rc — migration blocks gate skipped" >&2
-                    ;;
-            esac
-        fi
-    fi
-fi
+# Agents-repo-only commit gates (on-demand rules notation #2270, session-id SSOT
+# #2270, migration blocks #1987). No-op outside the agents repo; exits 1 on a
+# violation. Full rationale + exit maps: hooks/lib/precommit-agents-repo-gates.sh.
+_precommit_agents_repo_gates
 
 # ---------- comment-block size gate (issue #1894) ----------
 # Blocking, but only on the scanner's rc 1 — that value is the verdict "staged

@@ -8,7 +8,7 @@
 // Pure functions only, no I/O. Every error path returns null / [] (fail-open).
 
 // The two extraction rules. Keep each on ONE line as a `const NAME = /re/flags;`
-// declaration — tests/feature-1611-model-match.sh mutates exactly this shape to
+// declaration — tests/hooks/feature-1611-model-match.sh mutates exactly this shape to
 // prove the parser cases depend on the regexes.
 const MODEL_ID_RE = /The exact model ID is\s+([^\r\n]*?)\s*\.?\s*$/m;
 const MODEL_NAME_RE = /You are powered by the model(?: named[ \t]+|[ \t]+(?![ \t])(?!named(?:[ \t]|\.?\s*$)))([^\r\n]*?)\s*\.?\s*$/m;
@@ -64,7 +64,7 @@ function matchKeyword(modelId, keywords) {
 // keyword → label. Order preserved from the pre-#1611 `case` block in
 // bin/github-issues/issue-create.sh; `ds4` must stay ahead of `deepseek`.
 // RHS values must exist in .github/labels.yml (pinned by
-// tests/fix-1579-reporter-model-keyword-scan.sh T15).
+// tests/bin/fix-1579-reporter-model-keyword-scan.sh T15).
 const REPORTER_MODEL_LABELS = [
   ["fable", "reporter-model:fable"],
   ["opus", "reporter-model:opus"],

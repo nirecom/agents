@@ -1,13 +1,13 @@
 # Manual Review Checklist: Non-GitHub Remote Gate
 
 Layer 2 test checklist for `bin/is-github-dotcom-remote` gate behavior.
-Automated tests in `tests/feature-gh-skip-non-github-helper.sh` and
-`tests/feature-gh-skip-non-github-static.sh` cover mechanical correctness (Layer 1).
+Automated tests in `tests/bin/feature-gh-skip-non-github-helper.sh` and
+`tests/skills/feature-gh-skip-non-github-static.sh` cover mechanical correctness (Layer 1).
 This checklist covers agent behavior that cannot be tested mechanically.
 
 ## Before review: prerequisites
 
-- [ ] Run automated tests: `bash tests/feature-gh-skip-non-github-helper.sh && bash tests/feature-gh-skip-non-github-static.sh`
+- [ ] Run automated tests: `bash tests/bin/feature-gh-skip-non-github-helper.sh && bash tests/skills/feature-gh-skip-non-github-static.sh`
 - [ ] Both test suites pass
 
 ## workflow-init gate (Step 3 routing)

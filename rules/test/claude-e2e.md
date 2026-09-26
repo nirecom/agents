@@ -38,7 +38,7 @@ When writing tests that spawn `claude -p`, three precautions are required:
 - Timeout: wrap `claude -p` in `run_with_timeout 180` per [`test/macos-timeout.md`](macos-timeout.md).
 - Output capture: prefer `--output-format json` for assertable structure; use `text` only when the assertion is on side-effect files.
 - Session ID: pass `--session-id <fixed-uuid>` so the hook's state file is deterministic.
-- Frontmatter: file carries `# Tests:` and `# Tags:` in the first 10 lines per `tests/feature-689-frontmatter-convention.sh`.
+- Frontmatter: file carries `# Tests:` and `# Tags:` in the first 10 lines per `tests/skills/feature-689-frontmatter-convention.sh`.
 - `# TL3 gap` block: required even on TL3 tests when a sibling TL2 is the day-to-day runner — document what only a real CI host catches.
 
 ## Canonical Template

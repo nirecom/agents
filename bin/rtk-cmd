@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# bin/rtk-cmd — When RTK=on and the rtk binary is available, delegates to
+# `exec rtk <cmd> [args...]`; otherwise passes through via `exec <cmd> [args...]`.
+# When to use: see docs/architecture/rtk.md "bin/rtk-cmd adoption convention".
+# Tests: tests/feature-2370-rtk-cmd.sh
+set -euo pipefail
+
+[ $# -ge 1 ] || { printf 'usage: rtk-cmd <command> [args...]\n' >&2; exit 2; }
+
+# AGENTS_CONFIG_DIR unset → fail-safe-OFF: cannot call get-config-var; pass through
+_dir="${AGENTS_CONFIG_DIR:-}"
+[ -n "$_dir" ] || exec "$@"
+
+# RTK on/off probe — fail-safe-OFF: only exit 1 means ON; 2/3/4 treated as OFF.
+# Symmetric with hooks/rtk-rewrite.js loadDefaultEnv() "e.status === 1 → ON".
+# get-config-var's unrecognized-value path (exit 3) writes a warning to stderr;
+# suppress it with 2>/dev/null — same output-transparency policy as
+# hooks/rtk-rewrite.js loadDefaultEnv() stdio:"ignore".
+# Safe exit-code capture under set -e: || prevents abort while $? is saved.
+_rtk_on=0
+_gcv_ec=0
+"$_dir/bin/get-config-var" --is-off RTK off 2>/dev/null || _gcv_ec=$?
+if [ "$_gcv_ec" -eq 1 ]; then _rtk_on=1; fi
+
+# rtk binary resolution: RTK_BIN env var first (validated for executability), then PATH.
+# RTK_BIN non-executable (stale path, directory, etc.) → fall back to passthrough.
+# Path from command -v rtk is guaranteed executable (no extra -x check needed).
+# Symmetric with hooks/rtk-rewrite.js resolveRtkBin() resolution strategy.
+_rtk_bin="${RTK_BIN:-}"
+if [ -n "$_rtk_bin" ]; then
+  # RTK_BIN override: must be a regular file AND executable; otherwise fall through to passthrough
+  # (stale/dir guard). [ -x dir ] is true for directories, so -f is required alongside -x.
+  { [ -f "$_rtk_bin" ] && [ -x "$_rtk_bin" ]; } || _rtk_bin=""
+else
+  _rtk_bin="$(command -v rtk 2>/dev/null || true)"
+fi
+
+# RTK=on and binary found → delegate to rtk via exec (exit code and stdout transparent).
+# Otherwise → exec directly (passthrough).
+if [ "$_rtk_on" = 1 ] && [ -n "$_rtk_bin" ]; then
+  exec "$_rtk_bin" "$@"
+else
+  exec "$@"
+fi

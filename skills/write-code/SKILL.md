@@ -62,7 +62,7 @@ WCD-6. Present the final edited file list + skipped-check notes + scope-expansio
 - **JSON** (no B-layer file): double-quoted keys/strings; no trailing commas; no comments; 2-space indent.
 - **YAML** (no B-layer file): 2-space indent; no tabs; quote ambiguous scalars; block style for multi-line strings.
 
-When a new standalone B-layer file is added for a language that currently has only A-layer content (PowerShell, Bash, JSON, YAML), that language's entry collapses to a bare read-directive. Test `p` in `tests/feature-write-code-skill-static.sh` enforces SSOT non-duplication for module-system guidance tokens at CI.
+When a new standalone B-layer file is added for a language that currently has only A-layer content (PowerShell, Bash, JSON, YAML), that language's entry collapses to a bare read-directive. Test `p` in `tests/skills/feature-write-code-skill-static.sh` enforces SSOT non-duplication for module-system guidance tokens at CI.
 
 ## Lint/typecheck recipes
 

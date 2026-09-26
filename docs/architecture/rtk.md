@@ -25,3 +25,26 @@ runs at full fidelity regardless of RTK being on or off.
 Set `RTK_AUDIT=on` in `.env` to record a JSONL line each time the hook's own
 guards reject a command. The log is written to
 `~/.agents/logs/rtk-guard-audit.log` and is independent of RTK's native audit.
+
+## bin/rtk-cmd adoption convention
+
+`bin/rtk-cmd` is a lightweight wrapper used **only for scripts that intentionally
+emit raw human-readable output to Claude** — commands whose output RTK natively
+compresses (`git`, `gh`, `grep`, `docker`, etc.).
+
+### When to use
+
+The script's design is to stream raw text output (e.g. `git log`, `gh issue list`)
+directly to Claude's stdout. Examples:
+
+    bin/rtk-cmd git log --oneline -20   # compress raw git log output before Claude reads it
+    bin/rtk-cmd gh issue list           # compress raw issue list output before Claude reads it
+
+### When NOT to use (all current 195 bin/ scripts fall into these categories)
+
+- Machine-readable flag calls (`--json`, `--format=`, `--numstat`, etc.) — RTK passes them through unchanged, so wrapping has no effect.
+- Calls whose output is captured into a variable and reformatted by node/jq/awk — RTK cannot compress node's output.
+- `grep`/`find`/`cat` used only for internal control flow or evaluation — output never reaches Claude.
+
+The #2370 cross-cutting survey (all RTK-eligible commands × 195 bin/ scripts) confirmed
+these as structural invariants. Adopt when a use case arises.
