@@ -314,6 +314,7 @@ fi
 # Validate staged tests/<category>/*.sh frontmatter + reject new flat tests/*.sh
 # (#1834). Cause-specific block messages: hooks/lib/precommit-tests-frontmatter.sh.
 _precommit_check_tests_frontmatter || exit 1
+_precommit_check_tests_case_markers || exit 1
 
 # Agents-repo-only commit gates (on-demand rules notation #2270, session-id SSOT
 # #2270, migration blocks #1987). No-op outside the agents repo; exits 1 on a

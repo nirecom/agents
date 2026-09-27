@@ -12,7 +12,8 @@
 const fs = require("fs");
 const path = require("path");
 const { readDefaultEnvFile } = require("./lib/load-env");
-const { normalizeCwd, resolveRepoCwd } = require("./lib/path-normalize");
+// Post-edit reconstruction is shared with block-case-markers.js (#2388).
+const { MAX_BYTES, resolveTargetPath, buildPostContent } = require("./lib/post-edit-content");
 const {
   hasScannableExtension,
   isExcludedPath,
@@ -21,11 +22,7 @@ const {
   scanText,
 } = require("./lib/comment-block-scan");
 
-// Same byte cap as the CLI: an Edit to a multi-megabyte generated file must not
-// spend the hot path scanning it. A performance guard, so its direction is
-// approve — and compiled in rather than configurable, since a settable cap is a
-// settable way to review nothing.
-const MAX_BYTES = 1000000;
+// MAX_BYTES (shared) is the CLI's byte cap too: over it the hook approves.
 // A modal message, not a report: past a handful of ranges the first one is
 // buried. The CLI report uses the same cap.
 const MAX_DETAIL_RANGES = 5;
@@ -60,70 +57,11 @@ function block(reason) {
   process.exit(0);
 }
 
-// resolveTargetPath — the file the tool is about to write, as an absolute path
-// Node can open. resolveRepoCwd() owns the cwd priority order (input.cwd beats
-// CLAUDE_PROJECT_DIR when they disagree, which is the linked-worktree signal);
-// process.cwd() is never used as a base directly, because a hook's cwd is
-// wherever Claude Code was launched from and only coincidentally the repo.
-// normalizeCwd() also converts the POSIX drive-letter shape that msys hands
-// over on Windows (e.g. a slash-c-slash prefix) into a form fs can open.
-function resolveTargetPath(input, rawPath) {
-  if (typeof rawPath !== "string" || rawPath.length === 0) return null;
-  const normalized = normalizeCwd(rawPath) || rawPath;
-  if (path.isAbsolute(normalized)) return normalized;
-  const base = resolveRepoCwd({ input });
-  if (typeof base !== "string" || base.length === 0) return null;
-  return path.resolve(base, normalized);
-}
-
-function readPre(absPath) {
-  try {
-    const st = fs.statSync(absPath);
-    if (!st.isFile() || st.size > MAX_BYTES) return null;
-    return fs.readFileSync(absPath, "utf8");
-  } catch (e) {
-    return null;
-  }
-}
-
-// applyOne — one Edit step against a buffer. null means "cannot reconstruct",
-// which the caller turns into an approve: the tool call itself is going to fail
-// on an unmatched old_string, and a policy verdict about a state that will
-// never exist is worse than no verdict.
-function applyOne(buf, edit) {
-  if (!edit || typeof edit !== "object") return null;
-  const oldStr = edit.old_string;
-  const newStr = edit.new_string;
-  if (typeof oldStr !== "string" || typeof newStr !== "string") return null;
-  if (oldStr.length === 0) return null;
-  const idx = buf.indexOf(oldStr);
-  if (idx === -1) return null;
-  if (edit.replace_all === true) return buf.split(oldStr).join(newStr);
-  return buf.slice(0, idx) + newStr + buf.slice(idx + oldStr.length);
-}
-
-// buildPost — the file content as it will be AFTER the tool runs, reconstructed
-// in memory. Nothing here touches disk for writing: a PreToolUse hook advises,
-// and a hook that materialised the post file to scan it would have performed
-// the very write it is about to refuse.
+// buildPost — compatibility alias: the post-edit content, rebuilt in memory by
+// the shared module (null = cannot rebuild → approve; an unmatched old_string
+// fails the tool call itself, so no verdict beats a verdict on a phantom state).
 function buildPost(toolName, toolInput, absPath) {
-  if (toolName === WRITE_TOOL) {
-    return typeof toolInput.content === "string" ? toolInput.content : null;
-  }
-  const pre = readPre(absPath);
-  if (pre === null) return null;
-  if (toolName === "Edit") return applyOne(pre, toolInput);
-  // MultiEdit applies its edits in sequence, each onto the previous result —
-  // the second step's old_string routinely exists only in the first step's
-  // output, so the buffer has to evolve.
-  const edits = toolInput.edits;
-  if (!Array.isArray(edits) || edits.length === 0) return null;
-  let buf = pre;
-  for (const edit of edits) {
-    buf = applyOne(buf, edit);
-    if (buf === null) return null;
-  }
-  return buf;
+  return buildPostContent(toolName, toolInput, absPath, { maxBytes: MAX_BYTES });
 }
 
 // buildReason — what a refused author is told. The hook offers no override, so

@@ -64,6 +64,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 | `hooks/block-comment-block-size.js` | PreToolUse | **No** | **No** |
+| `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
 
@@ -81,6 +82,7 @@ should use `.prompt-extraction-allowlist` instead of session markers.
 
 The private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **not**
 bypassed by markers — secret leakage protection is unconditional on the git side.
+The case-marker gate in the same hook (`_precommit_check_tests_case_markers`, #2388) is not bypassed by markers either; only `CASE_MARKERS_ENFORCE=off` in the config dir `.env` disables it.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
 
