@@ -26,8 +26,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DRIVER="$HERE/scratchpad-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
 
-PASS=0
-FAIL=0
+# Harness: provides pass/fail/skip/case_begin/case_end/run_with_timeout.
+# PASS/FAIL/SKIP initialized by harness guards.
+# assert_eq below is 3-arg (name, want, got); it overrides harness's 2-arg version.
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -90,6 +92,7 @@ inv_sess()  { env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --invok
 inv_none()  { env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --invoke "$1" 2>&1; }
 
 # --- D-1: SCRATCHPAD set (existing H2 session-scoping path) -----------------
+case_begin "D1-scratchpad-env-containment" "hooks/preuse-auto-approve/scratchpad-script.js"
 assert_eq "SP-1-allow-real-script"        "allow" "$(inv_path "bash $SP/probe.sh")"
 assert_eq "SP-1b-allow-quoted-arg"        "allow" "$(inv_path "bash \"$SP/probe.sh\"")"
 assert_eq "SP-1c-deny-non-bash"           "deny"  "$(inv_path "node $SP/probe.sh")"
@@ -119,8 +122,10 @@ assert_eq "SP-8c-deny-sibling-prefix-dir" "deny"  "$(inv_path "bash $BASE/$SLUG/
 # SP-9 (F1): SCRATCHPAD legitimately under a poisoned TEMP that lands in a git repo.
 assert_eq "SP-9-deny-repo-polluted-temp" "deny" \
     "$(env -u CLAUDE_SESSION_ID TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" SCRATCHPAD="$RSP" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
+case_end
 
 # --- D-2: no SCRATCHPAD, CLAUDE_SESSION_ID set (structural session match) ----
+case_begin "D2-session-id-containment" "hooks/lib/claude-scratchpad-base.js"
 assert_eq "SP-11-allow-session-structural" "allow" "$(inv_sess "bash $SP/probe.sh")"
 assert_eq "SP-12-deny-different-session"   "deny"  "$(inv_sess "bash $BASE/$SLUG/$OTHER/scratchpad/x.sh")"
 assert_eq "SP-13-deny-session-prefix"      "deny"  "$(inv_sess "bash $BASE/$SLUG/${SESS}-evil/scratchpad/probe.sh")"
@@ -130,8 +135,10 @@ assert_eq "SP-16-deny-wrong-leaf-dir"      "deny"  "$(inv_sess "bash $BASE/$SLUG
 assert_eq "SP-17-allow-subdirectory"       "allow" "$(inv_sess "bash $SP/sub/probe.sh")"
 assert_eq "SP-18-deny-repo-polluted-temp"  "deny" \
     "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
+case_end
 
 # --- D-3: neither set -> fail-to-ask, never a base-wide fallback -------------
+case_begin "D3-no-session-context" "hooks/lib/claude-scratchpad-base.js"
 assert_eq "SP-19-deny-no-session-context" "deny" "$(inv_none "bash $SP/probe.sh")"
 assert_eq "SP-20-root-is-null"            "null" "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --root 2>&1)"
 # Config-dependent branch coverage for the other two states of the same resolver.
@@ -150,16 +157,20 @@ assert_eq "SP-20e-root-from-claude-code-session-id" "session:$SESS" \
 # CLAUDE_SESSION_ID), CLAUDE_CODE_SESSION_ID wins when both are set.
 assert_eq "SP-20f-claude-code-session-id-outranks-claude-session-id" "session:$OTHER" \
     "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" CLAUDE_CODE_SESSION_ID="$OTHER" node "$DRIVER" --root 2>&1)"
+case_end
 
 # --- D-4: existing write-path semantics unchanged by this work ---------------
+case_begin "D4-legacy-write-path" "hooks/preuse-auto-approve/scratchpad-script.js"
 # isAllowedScratchpadTarget is the EXISTING function; with no SCRATCHPAD it still
 # falls back to the whole claude base for WRITES. This must PASS today and after.
 assert_eq "SP-21-legacy-write-path-invariance" "true" \
     "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$BASE/$SLUG/$OTHER/scratchpad/f.txt" 2>&1)"
 assert_eq "SP-21b-legacy-still-rejects-outside-base" "false" \
     "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$TMPROOT/evil.sh" 2>&1)"
+case_end
 
 # --- SP-10: AUTO_APPROVE_TOOLS kill switch (hook process boundary) -----------
+case_begin "SP10-kill-switch" "hooks/preuse-auto-approve.js"
 EV="$TMPROOT_RAW/event.json"
 OUT="$TMPROOT_RAW/out.json"
 HOOK="$AGENTS_DIR/hooks/preuse-auto-approve.js"
@@ -171,6 +182,7 @@ run_auto() {
 assert_eq "SP-10-kill-switch-off-not-allowed" "passthrough" "$(run_auto off)"
 # Pattern 4 both-direction: with the switch on, the SAME event must be auto-approved.
 assert_eq "SP-10b-kill-switch-on-allows"      "allow"       "$(run_auto on)"
+case_end
 
 # SKIPPED: real permission-prompt suppression in a live Claude Code session.
 # Because: requires a TL3 real-session run; this layer can only observe the hook's
@@ -179,6 +191,7 @@ assert_eq "SP-10b-kill-switch-on-allows"      "allow"       "$(run_auto on)"
 # in settings.json) is invisible here — part6-settings.sh checks that statically.
 
 # --- D-7: legitimate-but-awkward path spellings (C12) ------------------------
+case_begin "D7-path-spellings" "hooks/preuse-auto-approve/scratchpad-script.js"
 # The reject condition is SHELL METACHARACTERS, not "unusual characters": a scratchpad
 # under a directory with a space or with non-ASCII names is a normal Windows/Japanese
 # workstation reality (CPR-UNV) and must be auto-approved when properly quoted, while
@@ -212,6 +225,7 @@ SP-46-deny-unicode-path-glob     | bash "$SP/日本語/*.sh"                  | 
 SP-47-deny-space-path-then-chain | bash "$SP/with space/probe.sh"; rm -rf / | deny
 SP-48-deny-space-path-in-braces  | bash "$SP/{with space,x}/probe.sh"      | deny
 TABLE
+case_end
 
 # SKIPPED: direct unit assertions on resolveScriptPath(seg) for each spelling above.
 # Because: it is module-private in scratchpad-script.js, so reaching it means changing
@@ -221,6 +235,7 @@ TABLE
 # approximates — is only observable in a live session.
 
 # --- D-8: every command tool reaches the same decision (C6, CPR-ORTH) --------
+case_begin "D8-orthogonal-tools" "hooks/preuse-auto-approve.js"
 # preuse-auto-approve.js reads the command through tool-command-text.js, so Bash,
 # runInTerminal and runCommands must all earn the auto-approve — and a multi-element
 # runCommands array must NOT: only a single execution unit is one invocation.
@@ -242,14 +257,17 @@ assert_eq "SP-55-space-path-quoted-hook-allow" "allow" \
     "$(run_auto_tool Bash "bash \"$SP/with space/probe.sh\"")"
 assert_eq "SP-56-space-path-unquoted-hook-passthrough" "passthrough" \
     "$(run_auto_tool Bash "bash $SP/with space/probe.sh")"
+case_end
 
 # SP-57: an unsafe-arg command (command substitution in arg) is passthrough at the hook
 # boundary. The hook's decision is the observable at this layer; execution-side effects
 # are only measurable in a live session (TL3 gap).
+case_begin "SP57-unsafe-arg-passthrough" "hooks/preuse-auto-approve/scratchpad-script.js"
 UNSAFE_MARKER="$TMPROOT_RAW/unsafe-arg-marker"
 assert_eq "SP-57-hook-deny-unsafe-arg-passthrough" "passthrough" \
     "$(run_auto_tool Bash "bash $SP/probe.sh '\$(touch $UNSAFE_MARKER)'")"
+case_end
 
 echo ""
-echo "Section D (D-1..D-4): PASS=$PASS FAIL=$FAIL"
-exit "$FAIL"
+echo "Section D (D-1..D-4): PASS=$PASS FAIL=$FAIL SKIP=${SKIP:-0}"
+[ "$FAIL" -eq 0 ]
