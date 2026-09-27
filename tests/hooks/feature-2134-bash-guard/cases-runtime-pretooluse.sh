@@ -14,11 +14,14 @@ BG_HOOK="$AGENTS_DIR/hooks/bash-guard.js"
 BG_RUNTIME_OUT="$TMPROOT/runtime-out.txt"
 
 # bg_envelope_kind <stdout-file> -> which of the four envelopes the hook wrote (#2264):
-#   block        {"decision":"block",...}                           (deny)
-#   notify       {"decision":"approve","systemMessage":...,...}     (notify; G-b=(b2) fallback form)
-#   allow        {"hookSpecificOutput":{"permissionDecision":"allow",...}}
-#   passThrough  {"decision":"approve"} or empty stdout             (G-b=(b2) fallback form; the host decides)
+#   block              {"decision":"block",...}                           (deny)
+#   notify             {"decision":"approve","systemMessage":...,...}     (notify; G-b=(b2) fallback form)
+#   allow              {"hookSpecificOutput":{"permissionDecision":"allow",...}}
+#   passThrough-approve {"decision":"approve"}                            (G-b=(b2) fallback form -- distinct from empty stdout)
+#   passThrough        empty stdout                                       (the host decides)
 # Anything else is reported verbatim.
+# NOTE: passThrough-approve and passThrough are DISTINCT so P1 detects the regression
+# where passThrough reverts to silent (passThrough would then replace passThrough-approve).
 bg_envelope_kind() {
     BG_OUT_FILE="$(node_path "$1")" node -e '
       const raw = require("fs").readFileSync(process.env.BG_OUT_FILE, "utf8");
@@ -28,7 +31,7 @@ bg_envelope_kind() {
       if (o.decision === "block") process.stdout.write("block");
       else if (o.decision === "approve" && typeof o.systemMessage === "string" && o.systemMessage !== "") process.stdout.write("notify");
       else if (h.permissionDecision === "allow") process.stdout.write("allow");
-      else if (o.decision === "approve") process.stdout.write("passThrough");
+      else if (o.decision === "approve") process.stdout.write("passThrough-approve");
       else if (typeof o.systemMessage === "string" && o.systemMessage !== "") process.stdout.write("notify");
       else process.stdout.write("<OTHER:" + raw.trim().slice(0, 80) + ">");
     ' 2>/dev/null
@@ -67,15 +70,15 @@ p1_runtime() {
         assert_eq "P1/$name: the hook process exits 0 and emits the expected envelope" "$want" "$got"
     done <<'TABLE'
 compound-bash ~ Bash          ~ git status && ls | grep x                             ~ 0|block
-plain-bash    ~ Bash          ~ git status                                            ~ 0|passThrough
-out-of-scope  ~ runInTerminal ~ git status && ls | grep x                             ~ 0|passThrough
+plain-bash    ~ Bash          ~ git status                                            ~ 0|passThrough-approve
+out-of-scope  ~ runInTerminal ~ git status && ls | grep x                             ~ 0|passThrough-approve
 self-script   ~ Bash          ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ 0|allow
 L1-no-echo    ~ Bash          ~ "<<WORKFLOW_MARK_STEP_p1_complete>>"                  ~ 0|notify
 TABLE
 }
 
-# plain-bash / out-of-scope: passThrough outputs {"decision":"approve"} per G-b=(b2) fallback form --
-# the host treats it as a bypass (same as legacy approve), so no prompt fires.
+# plain-bash / out-of-scope: passThrough-approve ({decision:"approve"}) per G-b=(b2) fallback form.
+# The label differs from plain passThrough (empty stdout) so a revert to silent is caught by P1.
 p1_runtime
 
 # P2: the block carries its reason on the same envelope. A block with an empty reason is the
@@ -89,7 +92,7 @@ assert_contains "P2: the block envelope carries a non-empty reason" \
 # P3: malformed stdin must not stop the session. The hook is on every Bash call, so a crash
 # here is a crash on every command -- fail-open reaches all the way to the process boundary.
 assert_eq "P3: malformed stdin exits 0 and passes through (no block, no allow)" \
-    "0|passThrough" "$(bg_run_raw 'not json at all')"
+    "0|passThrough-approve" "$(bg_run_raw 'not json at all')"
 
 # P4: the entrypoint is dispatch + re-export (file-split Pattern A). Requiring it must expose
 # judgeBashCommand and do nothing else -- the probe requires it without stdin, so a module that
