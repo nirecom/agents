@@ -2,15 +2,15 @@
 # tests/install/feature-codegraph-bootstrap.sh
 # Tests: install/codegraph-mcp.js, install/linux/codegraph.sh, install/win/codegraph.ps1, install.sh, install.ps1
 # Tags: codegraph, installer, mcp-registration, env-flag, fail-safe-off, idempotency, side-effect-absence, secret-leakage, usage-error, TL2, pwsh-not-required, scope:issue-specific
-# Detail plan ST-19 (cases B1-B18). Dispatcher only: counters, assertions and the
+# Detail plan ST-19 (cases B1-B20; #2254 adds always-load.sh). Dispatcher only: counters, assertions and the
 # source order. Layer TL2 — install/linux/codegraph.sh and install/codegraph-mcp.js
 # run as real processes against a redirected HOME, a stub PATH and a synthetic
 # .env; only the three external binaries (npm / codegraph / claude) are stubs.
 set -u
 
 # TL3 gap (what this test does NOT catch):
-# - `claude mcp add --scope user` really writing mcpServers.codegraph into the
-#   real ~/.claude.json — the CLI is a stub here, so only its argv is pinned.
+# - the real `claude mcp add` write and its later rewrites keeping alwaysLoad —
+#   the CLI is an emulator here (claude-cli-emu.js); Phase 3 gate B (#2254).
 # - install/win/codegraph.ps1 completing non-interactively at the same flag
 #   verdict, and install.ps1 / install.sh reaching the per-tool script at run time.
 # - The asserted-absent side effects (CLAUDE.md replacement, hooks.UserPromptSubmit,
@@ -78,10 +78,10 @@ assert_eq "B0-b: install.sh invokes install/linux/codegraph.sh directly, so B0-a
 . "$MODULE_DIR/cases.sh"
 # shellcheck source=./feature-codegraph-bootstrap/ownership.sh
 . "$MODULE_DIR/ownership.sh"
+# shellcheck source=./feature-codegraph-bootstrap/always-load.sh
+. "$MODULE_DIR/always-load.sh"
 # shellcheck source=./feature-codegraph-bootstrap/telemetry-reset.sh
 . "$MODULE_DIR/telemetry-reset.sh"
-# shellcheck source=./feature-codegraph-bootstrap/cli-version.sh
-. "$MODULE_DIR/cli-version.sh"
 # shellcheck source=./feature-codegraph-bootstrap/win-shim.sh
 . "$MODULE_DIR/win-shim.sh"
 

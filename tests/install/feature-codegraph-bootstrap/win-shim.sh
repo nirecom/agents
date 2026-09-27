@@ -16,8 +16,8 @@ wc_fixture() {
     write_env_file "$d/cfg" present on
     printf '# no-op nvm stub\n:\n' > "$d/nvm/nvm.sh"
     write_win_claude_node "$d/bin"
-    # The register verb probes `codegraph --version` before it looks at `claude` at
-    # all, so without this stub every stderr count below would carry that warning too.
+    # codegraph on PATH, as it is after a real install: the fixture judges only how
+    # `claude` is resolved.
     write_cg_stub "$d/bin"
     "$builder" "$d/bin"
     : > "$d/claude.log"; : > "$d/codegraph.log"; : > "$d/out.log"; : > "$d/err.log"
