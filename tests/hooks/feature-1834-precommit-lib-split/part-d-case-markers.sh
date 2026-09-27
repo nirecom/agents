@@ -1,6 +1,8 @@
 # Part D — staged case-marker gate _precommit_check_tests_case_markers (#2388).
 # Sourced by tests/hooks/feature-1834-precommit-lib-split.sh; shares its helpers/globals.
 # Fixture test bodies carrying marker text live only in heredoc bodies below.
+# shellcheck source=tests/lib/harness.sh
+source "$AGENTS_DIR/tests/lib/harness.sh"
 
 echo ""
 echo "=== Part D: staged case-marker gate (#2388) ==="

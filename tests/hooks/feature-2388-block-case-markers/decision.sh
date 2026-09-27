@@ -1,5 +1,7 @@
 # Decision + multi-path MultiEdit cases for hooks/block-case-markers.js (#2388).
 # Sourced by tests/hooks/feature-2388-block-case-markers.sh; shares its helpers.
+# shellcheck source=tests/lib/harness.sh
+source "$AGENTS_DIR/tests/lib/harness.sh"
 
 echo ""
 echo "=== decision ==="
