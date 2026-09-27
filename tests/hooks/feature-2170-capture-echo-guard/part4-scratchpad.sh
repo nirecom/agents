@@ -169,11 +169,13 @@ assert_eq "SP-21b-legacy-still-rejects-outside-base" "false" \
     "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$TMPROOT/evil.sh" 2>&1)"
 case_end
 
-# --- SP-10: AUTO_APPROVE_TOOLS kill switch (hook process boundary) -----------
-case_begin "SP10-kill-switch" "hooks/preuse-auto-approve.js"
+# EV/OUT/HOOK defined outside all spans so no single span deletion leaves them orphaned.
 EV="$TMPROOT_RAW/event.json"
 OUT="$TMPROOT_RAW/out.json"
 HOOK="$AGENTS_DIR/hooks/preuse-auto-approve.js"
+
+# --- SP-10: AUTO_APPROVE_TOOLS kill switch (hook process boundary) -----------
+case_begin "SP10-kill-switch" "hooks/preuse-auto-approve.js"
 node "$HERE/mk-event.js" Bash "bash $SP/probe.sh" >"$EV"
 run_auto() {
     env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS="$1" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
@@ -234,16 +236,19 @@ case_end
 # TL3 gap: how a real shell tokenizes these spellings — the ground truth the predicate
 # approximates — is only observable in a live session.
 
-# --- D-8: every command tool reaches the same decision (C6, CPR-ORTH) --------
-case_begin "D8-orthogonal-tools" "hooks/preuse-auto-approve.js"
-# preuse-auto-approve.js reads the command through tool-command-text.js, so Bash,
-# runInTerminal and runCommands must all earn the auto-approve — and a multi-element
-# runCommands array must NOT: only a single execution unit is one invocation.
+# run_auto_tool defined outside D8 and SP57 spans: both use it, so either span can be
+# deleted without leaving the definition orphaned or the other span broken.
 run_auto_tool() {
     node "$HERE/mk-event.js" "$@" >"$EV"
     env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS=on node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
     node "$HERE/hook-out.js" "$OUT"
 }
+
+# --- D-8: every command tool reaches the same decision (C6, CPR-ORTH) --------
+case_begin "D8-orthogonal-tools" "hooks/preuse-auto-approve.js"
+# preuse-auto-approve.js reads the command through tool-command-text.js, so Bash,
+# runInTerminal and runCommands must all earn the auto-approve — and a multi-element
+# runCommands array must NOT: only a single execution unit is one invocation.
 assert_eq "SP-50-runinterminal-allow"     "allow"       "$(run_auto_tool runInTerminal "bash $SP/probe.sh")"
 assert_eq "SP-51-runcommands-single-allow" "allow"      "$(run_auto_tool runCommands "bash $SP/probe.sh")"
 assert_eq "SP-52-runcommands-multi-passthrough" "passthrough" "$(run_auto_tool runCommands "bash $SP/probe.sh" "ls")"

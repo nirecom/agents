@@ -265,30 +265,6 @@ else
 fi
 case_end
 
-# run_turn_posix <session-uuid> <prompt> <scratchpad-posix-path>: run_turn with a
-# /c/... SCRATCHPAD. MSYS2_ENV_CONV_EXCL keeps Git Bash from rewriting it to C:/...
-# on the way into claude (PATH conversion is left intact, unlike MSYS_NO_PATHCONV).
-run_turn_posix() {
-    local rc=0
-    ( cd "$REPO" && \
-      unset CLAUDE_CODE_SESSION_ID; \
-      PATH="$MOCKBIN:$PATH" \
-      TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
-      MSYS_NO_PATHCONV=1 \
-      MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
-      SCRATCHPAD="$3" \
-      CLAUDE_SESSION_ID="$SESSION" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" \
-      WORKFLOW_PLANS_DIR="$PLANSDIR" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
-      run_with_timeout 180 claude -p "$2" \
-        --session-id "$1" \
-        --setting-sources project \
-        --output-format json \
-      >"$BASE/$1.out" 2>&1 ) || rc=$?
-    TURN_RC["$1"]=$rc
-}
-
 T3="cccccccc-0000-4000-8000-00000000000c"
 echo ""
 echo "=== C (#2402 N1): a /c/... drive-letter scratchpad path is auto-approved ==="
@@ -298,6 +274,29 @@ if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q 
     SP_POSIX="/${SP_DRIVE,,}${SP_M#?:}"
     printf 'mkdir -p "%s/posix-ran"\n' "$MARKS_M" > "$SP/posix.sh"
     case_begin "T3-posix-path-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
+    # Definition inside span: deleting this span leaves no orphaned run_turn_posix definition.
+    # /c/... SCRATCHPAD. MSYS2_ENV_CONV_EXCL keeps Git Bash from rewriting it to C:/...
+    # on the way into claude (MSYS_NO_PATHCONV suppresses all path conversion here).
+    run_turn_posix() {
+        local rc=0
+        ( cd "$REPO" && \
+          unset CLAUDE_CODE_SESSION_ID; \
+          PATH="$MOCKBIN:$PATH" \
+          TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
+          MSYS_NO_PATHCONV=1 \
+          MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
+          SCRATCHPAD="$3" \
+          CLAUDE_SESSION_ID="$SESSION" \
+          CLAUDE_WORKFLOW_DIR="$WFDIR" \
+          WORKFLOW_PLANS_DIR="$PLANSDIR" \
+          AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
+          run_with_timeout 180 claude -p "$2" \
+            --session-id "$1" \
+            --setting-sources project \
+            --output-format json \
+          >"$BASE/$1.out" 2>&1 ) || rc=$?
+        TURN_RC["$1"]=$rc
+    }
     run_turn_posix "$T3" "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_POSIX/posix.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused." "$SP_POSIX"
     if [ -d "$MARKS/posix-ran" ]; then
         pass "posix-path-scratchpad-script-ran"

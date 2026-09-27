@@ -39,7 +39,7 @@ check() {
 TMPROOT_RAW="$(make_tmp)"
 trap 'rm -rf "$TMPROOT_RAW"' EXIT
 TMPROOT="$(np "$TMPROOT_RAW")"
-AGENTS_NODE="$(np "$AGENTS_DIR")"
+AGENTS_NODE="$(np "$(cd "$(dirname "$0")/../.." && pwd)")"
 DRIVER="$AGENTS_NODE/tests/hooks/feature-2170-capture-echo-guard/scratchpad-driver.js"
 
 export TMPDIR="$TMPROOT" TEMP="$TMPROOT" TMP="$TMPROOT"
