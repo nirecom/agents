@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # bin/lib/test-retire-predicate.sh — source-only; not executable.
 # SSOT for the survival-first retire predicate shared by bin/audit-tests.sh and
-# bin/audit-tests-common.sh (#1833) — neither may inline a copy (CPR-SSOT).
+# bin/audit-tests-common.sh (#1833) — neither may inline a copy (CPR-SSOT) —
+# and of the marker-placement query used by bin/check-case-markers.sh (#2388).
 # Two axes stay explicitly apart (CPR-SC): SURVIVAL (do the `# Tests:` targets
 # still exist? decides candidacy) and ISSUE METADATA (is the issue closed and
 # stale? decides only whether a candidate may be deleted).
@@ -49,6 +50,10 @@ TRP_ORPHAN_CASE_IDX=()
 TRP_UNIT_MODE="file"
 TRP_GC=0
 _TRP_MARKER_MALFORMED=0
+# Marker conformance globals (set by trp_marker_conformance).
+TRP_MARKER_STATE=""
+TRP_MARKER_LINE=""
+TRP_MARKER_REASON=""
 
 # ── repo root ───────────────────────────────────────────────────────────────
 
@@ -201,6 +206,23 @@ trp_case_refcount_verdict() {
     TRP_VERDICT=alive
   fi
   printf '%s\n' "$TRP_VERDICT"
+}
+
+# trp_marker_conformance <file> — the marker-placement query (parse phase only).
+# Sets TRP_MARKER_STATE (none|conforming|malformed|uncertain), TRP_MARKER_LINE
+# and TRP_MARKER_REASON. Always returns 0; the caller decides.
+trp_marker_conformance() {
+  trp_parse_case_markers "${1:?trp_marker_conformance: file required}"
+  TRP_MARKER_LINE="$_TRP_MARKER_MALFORMED_LINE"
+  TRP_MARKER_REASON="$_TRP_MARKER_MALFORMED_REASON"
+  if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then
+    [[ "$_TRP_MARKER_UNCERTAIN" -eq 1 ]] && TRP_MARKER_STATE=uncertain || TRP_MARKER_STATE=malformed
+  elif [[ "$TRP_HAS_MARKERS" -eq 1 ]]; then
+    TRP_MARKER_STATE=conforming
+  else
+    TRP_MARKER_STATE=none
+  fi
+  return 0
 }
 
 # trp_remove_orphan_cases <repo-root> <file> — physically excise every orphan

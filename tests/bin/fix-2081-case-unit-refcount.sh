@@ -21,10 +21,11 @@ AUDIT_COMMON="${AUDIT_TESTS_COMMON_BIN:-$AGENTS_ROOT/bin/audit-tests-common.sh}"
 RETIRE_LIB="$AGENTS_ROOT/bin/lib/test-retire-predicate.sh"
 CASE_PARSER="$AGENTS_ROOT/bin/lib/test-retire-predicate/case-parser.sh"
 
-PASS=0
-FAIL=0
-pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
-fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
+# The harness owns PASS/FAIL and pass()/fail() (#1834). assert_eq and
+# run_with_timeout are redefined below: this dispatcher's signatures differ.
+AGENTS_DIR="$AGENTS_ROOT"
+# shellcheck source=../lib/harness.sh
+source "$AGENTS_ROOT/tests/lib/harness.sh"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -201,7 +202,7 @@ if [[ ! -f "$AUDIT" ]]; then fail "precondition: bin/audit-tests.sh missing at $
 if [[ ! -f "$AUDIT_COMMON" ]]; then fail "precondition: bin/audit-tests-common.sh missing at $AUDIT_COMMON"; fi
 
 # ── Group dispatch ──────────────────────────────────────────────────────────
-for _g in a b c d e f g h i j k l m n o; do
+for _g in a b c d e f g h i j k l m n o p; do
     _gf="$GROUP_DIR/group-$_g.sh"
     if [[ -f "$_gf" ]]; then
         # shellcheck source=/dev/null

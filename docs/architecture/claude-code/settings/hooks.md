@@ -124,6 +124,13 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   lands in. Unreadable file or an `old_string` absent from disk approve (fail-open); the
   PostToolUse checker below remains the backstop. Block prefix:
   `[gate-worktree-notes-lang] WORKTREE_NOTES.md language check failed`.
+- `block-case-markers.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a
+  write leaving a NEW `.sh` test entrypoint (absent from HEAD, repo carrying `tests/lib/harness.sh`)
+  with missing or malformed `case_begin`/`case_end` markers (#2388). Each MultiEdit element is
+  judged against its own path; the post-edit content is rebuilt in memory (`hooks/lib/post-edit-content.js`)
+  and checked by `bin/check-case-markers.sh` on a temp copy. editFiles and every error path approve;
+  `hooks/pre-commit` is the backstop. Block prefix: `[block-case-markers]`. See
+  [case-marker-gate.md](../case-marker-gate.md).
 - `check-plan-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — post-write
   backstop for the plan-artifact language policy: strict tier blocks with the
   `[check-plan-lang] PLAN_LANG=<policy>` header, hint tier emits `additionalContext` only.

@@ -7,8 +7,8 @@
 // Pure helpers never throw on malformed input — callers rely on that for fail-open.
 
 const fs = require("fs");
-const path = require("path");
-const { normalizeCwd } = require("./path-normalize");
+// Re-exported from the shared post-edit module (#2388, CPR-SSOT).
+const { pathOf, normalizePath, applyEdits } = require("./post-edit-content");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
 
@@ -39,31 +39,8 @@ function isObject(v) {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-function pathOf(obj) {
-  if (!isObject(obj)) return null;
-  const keys = ["file_path", "path", "notebook_path"];
-  for (const k of keys) {
-    if (typeof obj[k] === "string" && obj[k].length > 0) return obj[k];
-  }
-  return null;
-}
-
-// Canonical form for path EQUALITY: two spellings of the same file (relative vs
-// absolute, `/c/...` vs `C:\...`, `./` segments) must collapse, or a MultiEdit
-// element hiding under an alias spelling escapes grouping and never gets linted.
-// No case folding — the repo has no case-insensitive path convention to follow.
-// Applied at comparison sites only: collectEditTargets keeps t.filePath verbatim,
-// which its own consumers (and their tests) rely on.
-function normalizePath(p) {
-  if (typeof p !== "string" || p.length === 0) return p;
-  const win = normalizeCwd(p) || p;
-  try {
-    return path.resolve(win);
-  } catch (e) {
-    return win;
-  }
-}
-
+// normalizePath is applied at comparison sites only: collectEditTargets keeps
+// t.filePath verbatim, which its own consumers (and their tests) rely on.
 function collectEditTargets(toolName, toolInput) {
   if (!TARGET_TOOLS.has(toolName) || !isObject(toolInput)) return [];
   const out = [];
@@ -98,20 +75,6 @@ function approve() {
 function block(reason) {
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(0);
-}
-
-function applyEdits(pre, edits) {
-  if (typeof pre !== "string" || !Array.isArray(edits)) return null;
-  let text = pre;
-  for (const e of edits) {
-    if (!isObject(e) || typeof e.old_string !== "string" || e.old_string.length === 0) return null;
-    if (typeof e.new_string !== "string") return null;
-    if (text.indexOf(e.old_string) === -1) return null;
-    text = e.replace_all === true
-      ? text.split(e.old_string).join(e.new_string)
-      : text.replace(e.old_string, () => e.new_string);
-  }
-  return text;
 }
 
 module.exports = { TARGET_TOOLS, readStdinJson, pathOf, normalizePath, collectEditTargets, targetPathsOf, approve, block, applyEdits };
