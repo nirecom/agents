@@ -12,6 +12,7 @@ const DELETION_COND_RE = /^\s*(#|\/\/)\s*deletion-condition:/;
 const EXCLUDE_RE = [
   /(?:^|[/\\])rules[/\\].*\.md$/,
   /(?:^|[/\\])tests[/\\]/,
+  /(?:^|[/\\])\.claude[/\\]worktrees[/\\]/,
 ];
 
 function walkTree(dir, cb) {
