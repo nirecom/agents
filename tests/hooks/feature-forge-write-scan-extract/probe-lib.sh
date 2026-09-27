@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/forge-write-extract.js, hooks/lib/parse-remote-url.js, hooks/lib/bash-write-patterns/segment-utils.js, hooks/lib/bash-write-patterns/patterns.js
 # Tags: hook, bin, git, pr, github, ownership, scope:common
-# Part of tests/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-forge-write-scan-extract.sh (rules/coding/file-split.md).
 # Shared expression probe for the section-2053 part files.
 
 # WHY it is shared: cases-2053-additive-exports.sh and cases-2053-tables.sh both

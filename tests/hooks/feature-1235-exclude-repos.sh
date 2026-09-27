@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1235-exclude-repos.sh
+# tests/hooks/feature-1235-exclude-repos.sh
 # Tests: hooks/enforce-worktree/config.js, hooks/pre-commit, hooks/enforce-worktree.js
 # Tags: enforce-worktree, hook, git, pre-commit, security, scope:issue-specific, pwsh-not-required
 # Parts: A (isRepoExcluded unit), B (pre-commit integration: B-1..B-3), C (hook JS: C-1, C-2), D (parity)

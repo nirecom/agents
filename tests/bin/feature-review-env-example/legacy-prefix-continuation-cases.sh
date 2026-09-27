@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-review-env-example/legacy-prefix-continuation-cases.sh
+# tests/bin/feature-review-env-example/legacy-prefix-continuation-cases.sh
 # Tests: bin/review-env-example
 # Tags: env-example, bin, style-check, legacy-prefix, continuation, scope:common
 # Sourced by ../feature-review-env-example.sh — helpers come from there.

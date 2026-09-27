@@ -1,8 +1,8 @@
-# tests/feature-2276-review-code-security-codex/static-contracts.sh
+# tests/bin/feature-2276-review-code-security-codex/static-contracts.sh
 # Tests: bin/lib/codex-review-loop/format-params.sh, bin/lib/concern-ledger/core.sh
 # Tags: review-loop, security-code, format-params, closed-producer-set, TL2, scope:issue-specific
 #
-# Sourced by tests/feature-2276-review-code-security-codex.sh.
+# Sourced by tests/bin/feature-2276-review-code-security-codex.sh.
 # The table row, the extracted parameters, the closed producer set, and the
 # files the migration removes — the parts that must hold before any chain runs.
 

@@ -14,7 +14,7 @@
 # helpers/inheritance.sh — i-guard-robustness.sh uses them too. The TL1 predicate
 # truth tables live in i-adoption-predicate.sh.
 #
-# Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 
 # ---------------------------------------------------------------------------
 # I1: an inherited-only heir projects workflow_init=complete while EVERY

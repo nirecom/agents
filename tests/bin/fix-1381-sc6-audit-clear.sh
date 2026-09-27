@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1381-sc6-audit-clear.sh
+# tests/bin/fix-1381-sc6-audit-clear.sh
 # Tests: bin/supervisor-write-audit, hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, sc6, audit-clear, clear-audit-phase, dual-store, scope:issue-specific, pwsh-not-required
 # L3 gap: no real claude -p Stop-hook session; session-id env propagation is bypassed (flags).

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-reducer.sh
+# tests/bin/bin-concern-ledger-reducer.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger
 # Tags: concern-ledger, reducer, bind, merge, completeness, table-driven, scope:common, pwsh-not-required
 #
 # TL1 dispatcher for the shared concern-ledger reducer (#1992 / #1996).
-# Cases are split into tests/bin-concern-ledger-reducer/ per rules/coding/file-split.md.
+# Cases are split into tests/bin/bin-concern-ledger-reducer/ per rules/coding/file-split.md.
 # Expectations come from the detail plan's ledger schema v2 / cl_reduce state
 # transition table / Test plan sections.
 set -uo pipefail
@@ -12,7 +12,7 @@ set -uo pipefail
 # TL3 gap (filesystem-semantics): the library is sourced here, not run through
 # the real CLI's argument handling, and NTFS case-insensitivity/8.3 aliases can
 # make two path spellings name one file. Mitigated by
-# tests/bin-concern-ledger-cli-contract.sh (drives the real CLI) and
+# tests/bin/bin-concern-ledger-cli-contract.sh (drives the real CLI) and
 # pattern-discovery.sh (builds a genuine backslash dir via `cygpath -w`).
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -111,7 +111,7 @@ cd "$TMPDIR_BASE" || exit 1
 # snapshot, so all of them are watched: a name born after both snapshots would
 # be in neither watched set, and a case file could replace it for free.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-reducer"
 mkdir -p "$TMPDIR_BASE/ns-guard"
 
 # Read on every cl() call, so the driver can be defined before the load it

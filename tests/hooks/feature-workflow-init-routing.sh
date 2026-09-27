@@ -6,7 +6,7 @@
 # Closest-to-action mitigation: N/A (content assertion; no risk category applies).
 #
 # Dispatch + aggregate entrypoint for the feature-workflow-init-routing split
-# suite. All logic lives in tests/feature-workflow-init-routing/ per
+# suite. All logic lives in tests/hooks/feature-workflow-init-routing/ per
 # rules/coding/file-split.md Pattern A. Each split group also runs standalone.
 
 set -uo pipefail

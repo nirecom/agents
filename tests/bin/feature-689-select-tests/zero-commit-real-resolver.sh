@@ -1,4 +1,4 @@
-# Part of tests/feature-689-select-tests.sh (sourced, not standalone).
+# Part of tests/bin/feature-689-select-tests.sh (sourced, not standalone).
 # Tests: bin/select-tests.sh, bin/resolve-merge-base.sh
 # Tags: test-selection, merge-base, zero-commit, integration, wiring, trust-state, scope:issue-specific, pwsh-not-required, TL2
 
@@ -108,7 +108,7 @@ test_S28_real_resolver_recorded_state_end_to_end() {
     make_real_zero_commit_repo "$repo"
     # The untracked half. `bin/resolve-merge-base.sh` never existed in this fixture's base commit
     # and is never added, so it appears only through `git ls-files --others`; its stem selects
-    # this repository's own tests/feature-1638-resolve-merge-base.sh.
+    # this repository's own tests/bin/feature-1638-resolve-merge-base.sh.
     printf 'brand new\n' > "$repo/bin/resolve-merge-base.sh"
 
     local head

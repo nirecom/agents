@@ -1,4 +1,4 @@
-# tests/bin-concern-ledger-parse-allowlist/category-columns.sh
+# tests/bin/bin-concern-ledger-parse-allowlist/category-columns.sh
 # Tests: bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
 # Tags: concern-ledger, parser, allowlist, severity, category, table-driven, mutation-probe, scope:common, pwsh-not-required
 

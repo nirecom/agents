@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1699-meta-parent-guard.sh
+# tests/bin/feat-1699-meta-parent-guard.sh
 # Tests: bin/github-issues/lib/require-meta-parent.sh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/lib/meta-parent-body.sh, bin/github-issues/issue-create.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-create, dispatch, meta-parent, guard, labels, preflight, sync-labels, no-delete, tmpfile, permissions, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

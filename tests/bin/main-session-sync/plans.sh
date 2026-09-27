@@ -1,6 +1,6 @@
 # Tests: bin/session-sync.sh, bin/workflow-plans-dir
 # Tags: bin, git, session-sync, plans, scope:common
-# Part of tests/main-session-sync.sh — sourced by that dispatcher, not run alone.
+# Part of tests/bin/main-session-sync.sh — sourced by that dispatcher, not run alone.
 #
 # Plans-source contract (the reason these cases all set WORKFLOW_PLANS_DIR):
 #   bin/session-sync.sh resolves its plans source via `bin/workflow-plans-dir`,

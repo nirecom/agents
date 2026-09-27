@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/mention-gate-boundary-cases.sh
+# tests/hooks/enforce-clearance-token-write/mention-gate-boundary-cases.sh
 # Tests: hooks/lib/protected-basenames.js
 # Tags: off-clearance, clearance-token, mention-gate, TOKEN_MENTION_RE, boundary, consume-claim, table-driven, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap: unit-level on the regex; the four consumers of mentionsProtectedName are

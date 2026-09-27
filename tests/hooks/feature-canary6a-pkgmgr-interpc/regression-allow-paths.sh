@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary6a-pkgmgr-interpc/regression-allow-paths.sh
+# tests/hooks/feature-canary6a-pkgmgr-interpc/regression-allow-paths.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/lib/claude-scratchpad-base.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, enforce-worktree, regression, hook-registration, pwsh-not-required
 #

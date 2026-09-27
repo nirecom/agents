@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1756-next-step-fail-open-settled.sh
+# filename: tests/bin/fix-1756-next-step-fail-open-settled.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/, hooks/workflow-state/state-io/core.js
 # Tags: workflow, next-step, fail-open, settled-status, TL2, scope:common
 #
@@ -16,7 +16,7 @@
 # CHAR-1 are guards and baselines: they pass before AND after the fix.
 #
 # DISPATCHER. This file owns every shared helper, fixture fragment and counter;
-# the cases live in tests/fix-1756-next-step-fail-open-settled/ and are sourced
+# the cases live in tests/bin/fix-1756-next-step-fail-open-settled/ and are sourced
 # (not executed) so they share this file's helpers and PASS/FAIL counters.
 # Split per rules/coding/file-split.md (Pattern A HARD limit).
 #

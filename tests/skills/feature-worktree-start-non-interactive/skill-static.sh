@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/skill-static.sh
+# tests/skills/feature-worktree-start-non-interactive/skill-static.sh
 # Tests: skills/worktree-start/SKILL.md
 # Tags: worktree, start, skill, static, TL2, scope:issue-specific
 # Static cases (TC1-TC9) against skills/worktree-start/SKILL.md.

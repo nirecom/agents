@@ -74,7 +74,7 @@ commit() {
 # run_common <root> [args...] -> sets OUT ERR RC
 # Always report-only: the script applies by default, and every case in this
 # file asserts on the REPORT. The apply-by-default behaviour itself is covered
-# by tests/bin-sweep-write-mode-default.sh and the #1833 delete-gate group.
+# by tests/bin/bin-sweep-write-mode-default.sh and the #1833 delete-gate group.
 run_common() {
   local root="$1"; shift
   local outf errf

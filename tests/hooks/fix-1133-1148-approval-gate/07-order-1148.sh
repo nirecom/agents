@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/effective-state.js, bin/workflow/next-step, hooks/workflow-state/evidence-resolver.js, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, docs, ordering, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G07: #1148 inconsistency-scan ordering. State has docs=pending while a LATER
 # step (user_verification) is complete, and staged docs evidence exists. Pre-fix

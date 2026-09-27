@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# tests/feature-2223-local-env-overlay/allow-dump-guard.sh
+# tests/hooks/feature-2223-local-env-overlay/allow-dump-guard.sh
 # Tests: hooks/lib/dotenv-check.js, hooks/block-dotenv.js, bin/env-effective-kv
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, trust-boundary, pwsh-not-required
-# Case file for tests/feature-2223-local-env-overlay.sh — sourced from it, never
+# Case file for tests/hooks/feature-2223-local-env-overlay.sh — sourced from it, never
 # run standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # --allow-dump prints every key AND value of the resolved map, so a direct
 # Bash-tool call to it is the same access class the .env read guard refuses.
 # TL3 gap: the real PreToolUse dispatch is not exercised — the hook is invoked
-# directly, as tests/main-block-dotenv.sh does.
+# directly, as tests/bin/main-block-dotenv.sh does.
 ALLOW_DUMP_GUARD_CASES_LOADED=1
 
 DUMP_HOOK="$AGENTS_DIR/hooks/block-dotenv.js"

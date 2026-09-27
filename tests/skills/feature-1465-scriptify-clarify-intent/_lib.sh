@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1465-scriptify-clarify-intent/_lib.sh
+# tests/skills/feature-1465-scriptify-clarify-intent/_lib.sh
 # Shared helpers for the feature-1465 test suite.
 # Sourced by run-completion.sh and check-complexity-skip.sh; guarded against double-sourcing.
 

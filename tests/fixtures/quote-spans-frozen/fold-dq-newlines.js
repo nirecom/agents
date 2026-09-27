@@ -2,7 +2,7 @@
 // FROZEN FIXTURE — verbatim copy of foldDqNewlines() from
 // hooks/enforce-worktree/main-worktree-allows/worker-script.js as of PR #1577
 // (pre-#1569 quote-spans refactor). Do NOT edit. Used by
-// tests/unit-quote-spans-differential.sh as the old-implementation side.
+// tests/hooks/unit-quote-spans-differential.sh as the old-implementation side.
 // Replace only real newlines that are inside DQ spans with a space.
 // Preserves $() and backtick verbatim (so the \$\( guard still fires on them).
 // Returns the original string on any exception.

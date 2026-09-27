@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/resolve-project-schema.sh
+# tests/bin/feature-1340-issue-setup/resolve-project-schema.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: issue-setup, resolve-project, github-issues, scope:issue-specific
 # N/A: secret-leakage — cached field IDs are project-structure identifiers, not secrets; gh owns token handling.

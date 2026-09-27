@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
+# tests/hooks/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
 #

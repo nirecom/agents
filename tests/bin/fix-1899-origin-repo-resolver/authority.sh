@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/authority.sh
+# tests/bin/fix-1899-origin-repo-resolver/authority.sh
 # Tests: bin/github-issues/lib/origin-repo.sh
 # Tags: origin-resolution, github-issues, security, authority-anchoring, table-driven, TL2, scope:issue-specific
 #
@@ -10,7 +10,7 @@
 # origin-repo.sh strips userinfo only from the pre-slash authority
 # (`auth="${rest%%/*}"`), mirroring the JS sibling's
 # `rest.replace(/^[^@/]+@/, "")` (CPR-ORTH) — see
-# tests/fix-1899-parse-remote-url/authority.sh for the paired table.
+# tests/hooks/fix-1899-parse-remote-url/authority.sh for the paired table.
 # Regressing to an unanchored strip flips the at-in-path-* rows to resolve
 # an attacker-controlled owner/repo instead of rejecting. Credentials in the
 # ACCEPT rows are FAKE placeholders (`TOKEN`), never a live shape.

@@ -1,7 +1,7 @@
 # Group I: injection safety — hostile `# Tests:` tokens and hostile filenames (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, security, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Both the `# Tests:` token and the filename flow from repo content into code that
 # runs `git rm` — an eval, an unquoted expansion, or a `$(...)` turns a report-only

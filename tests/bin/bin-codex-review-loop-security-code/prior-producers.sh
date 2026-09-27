@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/prior-producers.sh
+# tests/bin/bin-codex-review-loop-security-code/prior-producers.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger, agents/security-scanner.md
 # Tags: concern-ledger, review-code, prior-concerns, shared-ledger, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 # Prior-concern injection, the two-producer join into one ledger, the artifact
 # naming, and the ABSENT treatment of a report with no Concern Delta section.
 #

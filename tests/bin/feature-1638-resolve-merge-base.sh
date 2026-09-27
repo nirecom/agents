@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1638-resolve-merge-base.sh
+# tests/bin/feature-1638-resolve-merge-base.sh
 # Tests: bin/resolve-merge-base.sh, hooks/workflow-state/merge-base-baseline.js, bin/workflow/read-merge-base-baseline, bin/workflow/record-merge-base-baseline
 # Tags: merge-base, ssot, baseline, anomaly-detection, scope:issue-specific, pwsh-not-required, TL2
 #

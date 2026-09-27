@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, bin, shell, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-push-fix-interp.sh (all cases).
 # Cases: the `Fix 2: …` allow/block family below.
 # isReadOnlyInterpreterC(cmd): `bash -c` / `pwsh -Command` is allowed only when the

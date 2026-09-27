@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/fix-1681-veto-derivation.sh
+# filename: tests/bin/fix-1681-veto-derivation.sh
 # Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1027-state-writer-eligibility.sh
+# tests/hooks/feature-1027-state-writer-eligibility.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 / #997 — writer accepts new fields and ensureAlertScheduled

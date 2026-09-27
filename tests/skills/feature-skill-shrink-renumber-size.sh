@@ -6,12 +6,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-PASS=0
-FAIL=0
-
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 check_size() {
     local label="$1"
@@ -40,17 +35,42 @@ check_exists() {
     fi
 }
 
+case_begin "size-workflow-init" "skills/workflow-init/SKILL.md"
 check_size "S1" "skills/workflow-init/SKILL.md"
-check_size "S2" "skills/make-detail-plan/SKILL.md"
-check_size "S3" "skills/worktree-end/SKILL.md"
-check_size "S4" "skills/issue-close-finalize/SKILL.md"
+case_end
 
+case_begin "size-make-detail-plan" "skills/make-detail-plan/SKILL.md"
+check_size "S2" "skills/make-detail-plan/SKILL.md"
+case_end
+
+case_begin "size-worktree-end" "skills/worktree-end/SKILL.md"
+check_size "S3" "skills/worktree-end/SKILL.md"
+case_end
+
+case_begin "size-issue-close-finalize" "skills/issue-close-finalize/SKILL.md"
+check_size "S4" "skills/issue-close-finalize/SKILL.md"
+case_end
+
+case_begin "exists-research-reprompt" "skills/make-detail-plan/scripts/research-reprompt.sh"
 check_exists "S5" "skills/make-detail-plan/scripts/research-reprompt.sh"
+case_end
+
+case_begin "exists-cap-escalation-message" "skills/make-detail-plan/scripts/cap-escalation-message.sh"
 check_exists "S6" "skills/make-detail-plan/scripts/cap-escalation-message.sh"
+case_end
+
+case_begin "exists-skip-conditions" "skills/make-detail-plan/scripts/skip-conditions.sh"
 check_exists "S7" "skills/make-detail-plan/scripts/skip-conditions.sh"
+case_end
+
+case_begin "exists-surface-delivery-plan" "skills/make-detail-plan/scripts/surface-delivery-plan.sh"
 check_exists "S8" "skills/make-detail-plan/scripts/surface-delivery-plan.sh"
+case_end
+
+case_begin "exists-workflow-init-driver" "bin/workflow/workflow-init-driver"
 check_exists "S9'" "bin/workflow/workflow-init-driver"
 # S9/S10 (aggregate-wip-check.sh, closed-detection.sh) removed: absorbed into driver
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

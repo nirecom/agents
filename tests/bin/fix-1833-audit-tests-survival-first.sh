@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1833-audit-tests-survival-first.sh
+# tests/bin/fix-1833-audit-tests-survival-first.sh
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
 

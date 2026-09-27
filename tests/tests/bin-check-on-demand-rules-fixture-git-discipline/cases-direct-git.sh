@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/cases-staged.sh, tests/bin-check-on-demand-rules.sh
+# Tests: tests/bin/bin-check-on-demand-rules/cases-staged.sh, tests/bin/bin-check-on-demand-rules.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, positive-control, TL2, scope:common
 # D1 is the rule (no case file calls git itself); D5 proves D1 looked at a full file
 # list; D3/D4/D3b are the scanner's own controls, because a scan that finds nothing

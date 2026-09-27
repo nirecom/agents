@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/unit-credential-check.sh
+# tests/hooks/unit-credential-check.sh
 # Tests: hooks/lib/credential-check.js
 # Tags: unit, credentials, classifier, table-driven, security, scope:common, pwsh-not-required
 # Unit coverage of isCredentialPath() / commandTouchesCredentials() — the pure

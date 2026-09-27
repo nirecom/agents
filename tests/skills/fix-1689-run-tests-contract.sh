@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lang-check: ignore -- rows intentionally accept English/Japanese for the same regex needle (see below).
-# tests/fix-1689-run-tests-contract.sh
+# tests/skills/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
 # Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2, prompt-injection
 
@@ -223,8 +223,8 @@ expect_match "S11" "the Rules section names the resolver as the single source of
 
 # The retired MARK_STEP sentinel is replaced by the advance CLI (`--advance --step run_tests
 # --complete`), which reports `ADVANCED=run_tests status=complete` / `ADVANCE_SCOPE=` on stdout --
-# see tests/feature-1644-run-tests-docs-only.sh D5b and
-# tests/feature-1644-advance-transaction/basic.sh A1a for the same shape asserted elsewhere.
+# see tests/hooks/feature-1644-run-tests-docs-only.sh D5b and
+# tests/bin/feature-1644-advance-transaction/basic.sh A1a for the same shape asserted elsewhere.
 expect_match "S12" "RNT-9 settles a pass through the advance CLI (--step run_tests --complete), not the retired MARK_STEP sentinel" \
   '--advance[[:space:]]+--step[[:space:]]+run_tests[[:space:]]+--complete' "$RNT9"
 expect_match "S13" "and the pending sentinel on failure" \

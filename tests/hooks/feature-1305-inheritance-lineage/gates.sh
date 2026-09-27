@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/feature-1305-inheritance-lineage.sh
+# Tests: tests/hooks/feature-1305-inheritance-lineage.sh
 # Tags: scope:issue-specific
 # L-1 .. L-11 — gate ordering and evidence handling in resolveInheritanceDonor.
 # Gate order under test: A subagent → B source → C lineage → D nearest ancestor

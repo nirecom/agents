@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/h2-serial-header-boundaries.sh
+# tests/tests/feature-1832-run-all-parallel/h2-serial-header-boundaries.sh
 # Tests: tests/run-all.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, frontmatter, convention, boundary, table-driven, TL2, scope:issue-specific
 # Serial: observes real lane concurrency, so it must not share the host with another test

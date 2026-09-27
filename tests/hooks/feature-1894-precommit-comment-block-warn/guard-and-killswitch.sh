@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-precommit-comment-block-warn/guard-and-killswitch.sh
+# tests/hooks/feature-1894-precommit-comment-block-warn/guard-and-killswitch.sh
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, guard, kill-switch, argv, worktree, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
 

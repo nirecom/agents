@@ -1,5 +1,5 @@
 # section-a.sh — Section A: USER_VERIFIED sentinel tests
-# Sourced by tests/refactor-design-principles.sh after helpers.sh.
+# Sourced by tests/agents/refactor-design-principles.sh after helpers.sh.
 
 test_A1_bare_user_verified_rejected_as_malformed() {
     require_mark_js "A1" || return

@@ -1,4 +1,4 @@
-# tests/feature-1180-commit-lang-check/group-i.sh
+# tests/hooks/feature-1180-commit-lang-check/group-i.sh
 # Tests: hooks/pre-commit
 # Tags: lang-enforce, commit-hook, scope:issue-specific
 # Group I — L2 integration (invoke hooks/pre-commit directly): CL-I1..CL-I7.

@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-sweep-branches/pr-state.sh
+# tests/bin/feature-sweep-branches/pr-state.sh
 # PR-state sweep tests: open-PR preservation + unknown-state safety.
 # Tests: T16, T19
 #
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-branches/pr-state.sh
+#   bash tests/bin/feature-sweep-branches/pr-state.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

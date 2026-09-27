@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: .env.example, tests/feature-robust-workflow.sh, tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh
+# Tests: .env.example, tests/hooks/feature-robust-workflow.sh, tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh
 # Tags: env-example, tl3-toggle, run-tl3, scope:common
 # Serial: captures into the fixed paths /tmp/941-rev.out and /tmp/941-c2..c5.out, and re-runs the feature-644 phase5 suite
 # Tests for issue #941 — migrate RUN_TL3 from ad-hoc env var to .env-keyed toggle.

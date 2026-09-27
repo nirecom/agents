@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1679-write-detect-false-positives.sh
+# tests/hooks/fix-1679-write-detect-false-positives.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: enforce-worktree, classify, write-patterns, security, TL1, pwsh-not-required, scope:issue-specific
 # Serial: static-detector false positive retained for declaration parity — the two `rm -rf /tmp/x` hits are inert heredoc table data, never executed

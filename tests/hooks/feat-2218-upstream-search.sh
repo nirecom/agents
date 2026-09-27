@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-upstream-search.sh
+# tests/hooks/feat-2218-upstream-search.sh
 # Tests: hooks/workflow-state/upstream-search.js, hooks/workflow-state/inheritance/candidates.js
 # Tags: session-upstream, upstream-search, resume-session, plans-dir, dedup, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 

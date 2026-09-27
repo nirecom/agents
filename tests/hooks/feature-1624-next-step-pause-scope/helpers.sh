@@ -3,7 +3,7 @@
 # Tags: next-step-pause, marker-v2, for-step, ttl, audit, regression-1624, scope:issue-specific, pwsh-not-required, TL2
 #
 # Marker seeding, state seeding and the real-consumer drivers for the #1624
-# scoped-pause suite. Sourced by tests/feature-1624-next-step-pause-scope.sh;
+# scoped-pause suite. Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh;
 # expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
 
 PAUSE_NODE="$_AGENTS_DIR_NODE/hooks/lib/next-step-pause-marker.js"

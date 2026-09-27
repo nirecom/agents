@@ -1,4 +1,4 @@
-# tests/feature-2339-sweep-plan-headings/c7-tests.sh
+# tests/bin/feature-2339-sweep-plan-headings/c7-tests.sh
 # Sourced by feature-2339-sweep-plan-headings.sh
 # C7: dry-run stdout reporting, --all directory sweep (fix and dry), ineligible-file handling.
 

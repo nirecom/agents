@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2081-case-unit-refcount.sh
+# tests/bin/fix-2081-case-unit-refcount.sh
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
 # TL2 contract for #2081 (case-unit refcount GC) + #1864 (.ps1/.py scan). A

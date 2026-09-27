@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1424-1425-1448-write-detector.sh
+# tests/hooks/fix-1424-1425-1448-write-detector.sh
 # Tests: hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-targets.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, write-detector, gh-write, newline-injection, sequenced, scope:issue-specific
 #

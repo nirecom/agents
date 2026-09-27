@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2108-subagent-artifact-write-path.sh
+# tests/hooks/fix-2108-subagent-artifact-write-path.sh
 # Tests: hooks/workflow-gate/early-gate.js, hooks/workflow-gate/early-gate-allowlist.js, hooks/workflow-gate/early-gate-messages.js, hooks/lib/active-session-ids.js, hooks/workflow-state/session-id.js, hooks/lib/protected-basenames.js, hooks/lib/basename-glob-normalize.js, hooks/lib/claude-scratchpad-base.js, hooks/lib/subagent-detect.js, hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan/scan.js, hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-target-context/classify.js, hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/bash-write-scope/segment-checks.js, hooks/enforce-worktree/git-repo-detection.js
 # Tags: workflow-gate, early-gate, scratchpad, plans-dir, subagent, protected-basename, block-message, symlink, fault-injection, security, scope:issue-specific, pwsh-not-required, TL2
 set -u
@@ -7,7 +7,7 @@ set -u
 # TL3 gap (what this test does NOT catch):
 # - The gate and the two write guards firing as REAL PreToolUse hooks in a live
 #   claude -p session: settings.json matcher routing is asserted STATICALLY only
-#   (Section C2). Covered live by tests/TL3-hook-early-gate-allowlist-write.sh.
+#   (Section C2). Covered live by tests/hooks/TL3-hook-early-gate-allowlist-write.sh.
 # - A real subagent payload: `agent_id` is synthesized, so "a subagent receives this
 #   message and can write to the named scratchpad" is a premise, not an observation.
 # - Real permission failures in the workflow dir (C1c-ii): that readdir fault is only
@@ -120,7 +120,7 @@ fi
 FIX_REPO_NODE="$(node_path "$FIX_REPO")"
 
 # Pseudo session scratchpads: <os-tmpdir>/claude/<slug>/<sid>/scratchpad
-# (same shape as tests/fix-1441-new-item-scratchpad-allow.sh:50-60).
+# (same shape as tests/hooks/fix-1441-new-item-scratchpad-allow.sh:50-60).
 mk_scratch() {
     node -e "var o=require('os'),p=require('path'),f=require('fs');var d=p.join(o.tmpdir(),'claude','c--test-2108',process.argv[1],'scratchpad');f.mkdirSync(d,{recursive:true});process.stdout.write(d);" "$1" 2>/dev/null
 }

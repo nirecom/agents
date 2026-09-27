@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
 # Section M - MUTATION EVIDENCE for every regex constant the tables above are
 # keyed on. Sourced by the parent, which owns _expand(), the counters and the
 # SANDBOX / PROBE / MUTATE paths.

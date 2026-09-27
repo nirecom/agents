@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-staged-evidence-unstaged-tracked.sh
+# tests/hooks/unit-staged-evidence-unstaged-tracked.sh
 # Tests: hooks/workflow-gate/staged-evidence.js
 # Tags: unit, staged-evidence, unstaged-tracked, workflow-gate, hook
 #

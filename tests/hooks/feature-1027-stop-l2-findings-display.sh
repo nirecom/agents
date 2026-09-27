@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1027-stop-l2-findings-display.sh
+# tests/hooks/feature-1027-stop-l2-findings-display.sh
 # Tests: hooks/stop-l2-findings-display.js, hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — Stop hook stop-l2-findings-display.js (NEW).

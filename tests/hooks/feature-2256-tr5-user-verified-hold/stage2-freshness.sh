@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold/stage2-freshness.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold/stage2-freshness.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, hooks/lib/diff-fingerprint.js
 # Tags: supervisor, tr5, freshness, sub-checks, declared-files, TL2, scope:issue-specific
 # #2256 S5-c stage 2 — which sub-checks a TR5 re-audit may skip, and which it may not.
 
-# Parent: tests/feature-2256-tr5-user-verified-hold.sh
+# Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 
 # Axis alpha is input_version (the code side); axis beta is the per-artifact sub-check
 # key settled through isSubCheckSettled (the plan side). A settled pair skips the

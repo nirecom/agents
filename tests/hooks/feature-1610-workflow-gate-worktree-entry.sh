@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1610-workflow-gate-worktree-entry.sh
+# tests/hooks/feature-1610-workflow-gate-worktree-entry.sh
 # Tests: hooks/workflow-gate/worktree-entry-gate.js, hooks/workflow-gate.js, hooks/enforce-worktree/worktree-remedy.js, hooks/enforce-worktree.js
 # Tags: workflow-gate, enforce-worktree, worktree-entry, tier3, hook, TL2, pwsh-not-required, scope:issue-specific
 #

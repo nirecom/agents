@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-supervisor-state-writer.sh
+# tests/hooks/unit-supervisor-state-writer.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, bin/supervisor-write-alert
 # Tags: supervisor, em-supervisor, writer, schema, layer2, alert_retry_count, unit, scope:912
 # Unit tests for the #912 alert_retry_count field, incrementAlertRetryCount function,

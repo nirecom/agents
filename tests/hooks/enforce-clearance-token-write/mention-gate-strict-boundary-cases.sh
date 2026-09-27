@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/mention-gate-strict-boundary-cases.sh
+# tests/hooks/enforce-clearance-token-write/mention-gate-strict-boundary-cases.sh
 # Tests: hooks/lib/protected-basenames.js
 # Tags: off-clearance, clearance-token, mention-gate, TOKEN_MENTION_STRICT_RE, MARKER_MENTION_STRICT_RE, boundary, unicode, refinement, table-driven, scope:common, pwsh-not-required, TL1
 

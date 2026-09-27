@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1679-worker-eval-segment-composition.sh
+# tests/hooks/fix-1679-worker-eval-segment-composition.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js, skills/issue-close-finalize/SKILL.md
 # Tags: enforce-worktree, allowlist, security, TL1, TL2, pwsh-not-required, scope:issue-specific
 #
@@ -177,7 +177,7 @@ assert_block() {
 # ----------------------------------------------------------------------------
 # Fixtures — one shared main worktree + linked worktree + fake acd + plans dir.
 # No case mutates fixture state, so a single build keeps the 25+ guard spawns
-# inside the 120s budget. Pattern lifted from tests/fix-1600-finalize-worker-overlay.sh.
+# inside the 120s budget. Pattern lifted from tests/hooks/fix-1600-finalize-worker-overlay.sh.
 # ----------------------------------------------------------------------------
 
 setup_main_worktree() {

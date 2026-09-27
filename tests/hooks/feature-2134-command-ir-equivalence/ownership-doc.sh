@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2134-command-ir-equivalence/ownership-doc.sh
+# tests/hooks/feature-2134-command-ir-equivalence/ownership-doc.sh
 # Tests: docs/architecture/claude-code/shell-command-parsing.md, hooks/lib/command-parser.js, hooks/lib/shell-segments.js, hooks/lib/command-ir.js
 # Tags: hook, command-ir, equivalence, ownership-map, docs-sync, TL1, scope:issue-specific
 #

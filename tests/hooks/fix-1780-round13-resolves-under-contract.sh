@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round13-resolves-under-contract.sh
+# tests/hooks/fix-1780-round13-resolves-under-contract.sh
 # Tests: hooks/lib/path-containment.js
 # Tags: path-containment, resolves-under, symlink, fail-direction, on-unknown, classifier, security, workflow-dir, scope:common, pwsh-not-required, TL1
 #
@@ -10,8 +10,8 @@
 #   `onUnknown` contract itself is still fully asserted through the
 #   non-string / empty-string routes, which need no filesystem support.
 # - A case-insensitive volume's effect on the resolvable rows (covered by
-#   tests/fix-1780-round4-case-fold-probe.sh and by the case_* rows of
-#   tests/enforce-protected-marker-write/cases-round5-containment.sh).
+#   tests/hooks/fix-1780-round4-case-fold-probe.sh and by the case_* rows of
+#   tests/hooks/enforce-protected-marker-write/cases-round5-containment.sh).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: pwsh-required.
 #
@@ -98,7 +98,7 @@ PARENT="$TMP/parent"; mkdir -p "$PARENT/inside" "$TMP/outside"
 # Bash/MSYS, which would silently make the unresolvable fixtures resolvable and
 # assert nothing, so the result is verified with -L and the nativestrict variant
 # is retried. Same helper shape as
-# tests/enforce-protected-marker-write/cases-round5-containment.sh.
+# tests/hooks/enforce-protected-marker-write/cases-round5-containment.sh.
 _try_symlink() {
     ln -s "$1" "$2" 2>/dev/null; [ -L "$2" ] && return 0
     rm -r -f "$2" 2>/dev/null

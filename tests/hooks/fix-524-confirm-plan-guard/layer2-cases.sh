@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-524-confirm-plan-guard/layer2-cases.sh
+# tests/hooks/fix-524-confirm-plan-guard/layer2-cases.sh
 # Tests: hooks/stop-confirm-plan-guard.js, hooks/lib/plan-artifact-lang.js
 # Tags: plan, hook, workflow, plans, lang, TL2, scope:common
 # Sourced by ../fix-524-confirm-plan-guard.sh after T10 — reuses PLANS_DIR,

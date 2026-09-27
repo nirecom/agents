@@ -4,10 +4,10 @@
 #
 # Real-wiring seam test (TL3, live claude -p) for confirm-forge-target-ownership.js:
 # proves a live session actually routes `gh issue create` to the hook, unlike the
-# synthetic-stdin suite tests/feature-2053-forge-target-ownership.sh which proves
+# synthetic-stdin suite tests/hooks/feature-2053-forge-target-ownership.sh which proves
 # only the DECISION. Fixture design, reachability preflight, and the layered safety
 # mitigations that keep this from ever attempting a real network write are
-# documented in tests/TL3-hook-forge-target-ownership/rationale.md.
+# documented in tests/hooks/TL3-hook-forge-target-ownership/rationale.md.
 
 set -uo pipefail
 

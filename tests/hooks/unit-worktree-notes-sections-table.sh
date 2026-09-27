@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/unit-worktree-notes-sections-table.sh
+# tests/hooks/unit-worktree-notes-sections-table.sh
 # Tests: hooks/lib/worktree-notes-sections.js
 # Tags: worktree-notes, parser, marker-regex, severity-marker, scan-section, table-driven, mutation-probe, TL1, scope:common
 #
@@ -431,7 +431,7 @@ mutation_probe() {
     fi
 
     out="$(MP_CHILD=1 bash "$probe" --threshold "$MP_THRESHOLD" \
-            --test-cmd "MP_CHILD=1 bash '$AGENTS_DIR/tests/unit-worktree-notes-sections-table.sh'" \
+            --test-cmd "MP_CHILD=1 bash '$AGENTS_DIR/tests/hooks/unit-worktree-notes-sections-table.sh'" \
             "$LIB_JS" 2>&1)"
     rc=$?
 

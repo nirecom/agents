@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver.sh
+# tests/bin/fix-1899-origin-repo-resolver.sh
 # Tests: bin/github-issues/lib/origin-repo.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/resolve-project.sh, skills/issue-close-finalize/scripts/pre-flight.sh, hooks/lib/parse-remote-url.js, bin/is-github-dotcom-remote
 # Tags: origin-resolution, github-issues, board-card, pre-flight, parity, cpr-orth, table-driven, security, path-traversal, authority-anchoring, TL2, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the fix-1899-origin-repo-resolver split
-# suite. All cases live in tests/fix-1899-origin-repo-resolver/ per
+# suite. All cases live in tests/bin/fix-1899-origin-repo-resolver/ per
 # rules/coding/file-split.md (the flat file reached 478 lines against a 500-line
 # HARD limit, and the authority group would have crossed it). Each split group
 # also runs standalone.
@@ -32,14 +32,14 @@
 #   owner-repo-charset.sh   (F, G, H) F1 owner/repo charset + traversal boundary
 #   callers.sh              (D, E)    board-card.sh + pre-flight.sh seams
 #   authority.sh            (NEW)     F-B userinfo anchoring — CPR-ORTH mirror of
-#                                     tests/fix-1899-parse-remote-url/authority.sh
+#                                     tests/hooks/fix-1899-parse-remote-url/authority.sh
 #   parity.sh               (P)       one URL table run through BOTH resolvers
 #                                     (bash + JS) so neither can drift alone
 #   mutation-probe.sh       (M)       charset-gate mutation probe — proves the
 #                                     bash charset cases are load-bearing
 #
 # Owner/repo charset contract pinned here is the exact mirror of the JS one in
-# tests/fix-1899-parse-remote-url.sh (CPR-ORTH — both resolvers must agree):
+# tests/hooks/fix-1899-parse-remote-url.sh (CPR-ORTH — both resolvers must agree):
 #   owner — leading [A-Za-z0-9], remaining [A-Za-z0-9-], length 1..39
 #   repo  — [A-Za-z0-9._-]{1,100}, never exactly "." or ".."
 #

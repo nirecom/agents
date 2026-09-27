@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/migration-v1-v2.sh
+# tests/hooks/feature-1733-state-event-stream/migration-v1-v2.sh
 # Tests: hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/state-io/migrations.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, migration, schema-version, idempotency, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -17,7 +17,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="migv"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
@@ -41,7 +41,7 @@ console.log("version=" + st.version + " sorted=" + sorted + " order=" + order);
     # both stages, and this fixture settles `docs` — a step AFTER write_code — so the
     # backfill fires. It is appended with the LAST event's own `at`, which is why
     # `sorted` still holds. The v2->v3 stage owns its own cases in
-    # tests/feature-1665-write-code-step/f-v2-to-v3.sh; here it is only the chain tail.
+    # tests/hooks/feature-1665-write-code-step/f-v2-to-v3.sh; here it is only the chain tail.
     assert_eq "V1/sorted-by-at" \
         "version=3 sorted=true order=docs>workflow_init>clarify_intent>detail>write_code" "$NODE_OUT"
 fi

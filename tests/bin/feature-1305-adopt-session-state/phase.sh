@@ -4,7 +4,7 @@
 # Tests: bin/workflow/lib/workflow-init/phases/adopt-prior-state.js
 # Tags: adopt-session-state, phase, scope:common
 
-# Tests: tests/feature-1305-adopt-session-state.sh
+# Tests: tests/bin/feature-1305-adopt-session-state.sh
 # Tags: scope:issue-specific
 
 echo ""

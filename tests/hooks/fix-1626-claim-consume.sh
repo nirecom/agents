@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1626-claim-consume.sh
+# tests/hooks/fix-1626-claim-consume.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, bin/request-off-clearance, hooks/workflow-state/state-io/zombie-cleanup.js
 # Tags: off-clearance, claim, toctou, concurrency, single-use, zombie-cleanup, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

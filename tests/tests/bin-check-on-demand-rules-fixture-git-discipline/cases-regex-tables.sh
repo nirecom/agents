@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, table-driven, TL2, scope:common
 # Table-driven parser fixation (skills/_shared/test-design/parser-regex-tests.md).
 # D6/D6b/D7/D11t pin the text scanners D1/D2/D9/D11 are built out of, over inputs

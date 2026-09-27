@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2068-high-unresolved-exit.sh
+# tests/bin/feature-2068-high-unresolved-exit.sh
 # Tests: bin/run-codex-review-loop, bin/review-loop-verdict, bin/review-loop-summarize-concerns, bin/concern-ledger
 # Tags: codex-review-loop, high-unresolved, exit-codes, concern-ledger, table-driven, TL2, scope:issue-specific
 #

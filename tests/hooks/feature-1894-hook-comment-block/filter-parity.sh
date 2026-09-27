@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/filter-parity.sh
+# tests/hooks/feature-1894-hook-comment-block/filter-parity.sh
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size
 # Tags: comment-block-size, parity, drift, ssot, static-guard, dual-representation, scope:issue-specific, scope:feature-1894, layer:TL2
 

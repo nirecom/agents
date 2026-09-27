@@ -34,7 +34,7 @@ EXIT_CODE=0
 OUTPUT=$(cd "$AGENTS_ROOT" && run_with_timeout bash "$SCRIPT" --all 2>&1) || EXIT_CODE=$?
 if ! echo "$OUTPUT" | grep -qE '^HARD: bin/audit-tests\.sh:'; then pass "REG1: audit-tests.sh clean"; else fail "REG1: audit-tests.sh has HARD finding. Output: $OUTPUT"; fi
 if ! echo "$OUTPUT" | grep -qE '^HARD: tests/feature-mcp-fs-server\.sh:'; then pass "REG2: feature-mcp-fs-server.sh clean"; else fail "REG2: feature-mcp-fs-server.sh has HARD finding"; fi
-if ! echo "$OUTPUT" | grep -qE '^HARD: tests/feature-test-cleanup-944\.sh:'; then pass "REG3: feature-test-cleanup-944.sh clean"; else fail "REG3: feature-test-cleanup-944.sh has HARD finding"; fi
+if ! echo "$OUTPUT" | grep -qE '^HARD: tests/skills/feature-test-cleanup-944\.sh:'; then pass "REG3: feature-test-cleanup-944.sh clean"; else fail "REG3: feature-test-cleanup-944.sh has HARD finding"; fi
 
 # Case IDP1: idempotency — running twice yields identical output (stateless script)
 REPO_IDP=$(make_repo)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block.sh
+# tests/hooks/feature-1894-hook-comment-block.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js, settings.json
 # Tags: comment-block-size, hook, pretooluse, edit-time, shift-left, no-bypass, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
 
@@ -22,7 +22,7 @@
 # (no-bypass.sh); config comes from the config dir's .env, never
 # process.env, so an inline COMMENT_BLOCK_MAX_LINES can't lift the bar
 # (filter-and-config.sh). Dispatcher: harness here, cases in
-# tests/feature-1894-hook-comment-block/*.sh.
+# tests/hooks/feature-1894-hook-comment-block/*.sh.
 
 # TL3 gap: whether Claude Code actually routes a real Edit through this hook
 # (cases feed a hand-built payload; registration.sh checks settings.json

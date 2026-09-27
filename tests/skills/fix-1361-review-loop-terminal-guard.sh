@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1361-review-loop-terminal-guard.sh
+# tests/skills/fix-1361-review-loop-terminal-guard.sh
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh, hooks/workflow-state/state-io.js, hooks/workflow-mark/review-tests-handler.js
 # Tags: review-tests, review-loop, terminal-guard, fingerprint, staged-tests, exit9, scope:issue-specific, pwsh-not-required, TL2
 #

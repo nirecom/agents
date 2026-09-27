@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-719-supervisor-guard-hook/g-c3.sh
+# tests/hooks/feature-719-supervisor-guard-hook/g-c3.sh
 # Tests: hooks/supervisor-guard.js (C3 OFF-proposal detection + done-guard)
 # Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
 # G-C3a/b/c: detectOffProposal -> arm L2 with C3 cause (#903)

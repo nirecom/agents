@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-canary-no-side-effect.sh
+# tests/bin/feature-1643-worker-dispatch-canary-no-side-effect.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/registry.js, bin/worker-dispatch/workers/test-runner.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, canary, side-effect, fsguard, write-scope, containment, security, TL2, scope:issue-specific
 #

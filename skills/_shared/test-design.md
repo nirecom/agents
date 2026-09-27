@@ -122,7 +122,7 @@ the event, would my unit tests still pass?"* If yes, a unit test is not enough.
 
 ## Required Frontmatter
 
-Every `tests/*.sh` file (excluding `tests/_archive/`) must carry exactly two single-line
+Every `tests/<category>/<name>.sh` file (excluding `tests/_archive/`) must carry exactly two single-line
 headers within the first 10 lines, right after the shebang and filename comment:
 
 - `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection. Each token must match `^[A-Za-z0-9._/-]+$` (no spaces, parentheses, CLI flags, or globs). `bin/check-test-frontmatter.sh` enforces this as a HARD pre-commit check; path non-existence is WARN only. `# Tests:` is the retirement filter for files without `case_begin`/`case_end` markers (target survival: file retires when every `# Tests:` target is gone). For marker-bearing files, retirement is per-case (case retires when its `case_begin` target is gone); `# Tests:` is not a survival signal for those files.

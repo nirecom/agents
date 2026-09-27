@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-commit-push-choke-point.sh
+# tests/skills/feat-2218-commit-push-choke-point.sh
 # Tests: skills/commit-push/SKILL.md, hooks/lib/handoff-artifact.js
 # Tags: commit-push, handoff, choke-point, class-d, class-e, static-check, table-driven, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

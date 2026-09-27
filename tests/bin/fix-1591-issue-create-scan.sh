@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1591-issue-create-scan.sh
+# tests/bin/fix-1591-issue-create-scan.sh
 # Tests: bin/github-issues/issue-create.sh
 # Tags: github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
 #

@@ -1,11 +1,11 @@
-# tests/unit-quote-spans/ambiguity.sh
+# tests/hooks/unit-quote-spans/ambiguity.sh
 # Tests: hooks/lib/quote-spans/scan.js, hooks/lib/quote-spans/query.js, hooks/lib/quote-spans/transform.js
 # Tags: hook, quote-spans, parser, unit, fail-closed, security, scope:common
 #
 # STATUS: RED until C1 lands — every row fails with
 # `ERROR: require quote-spans.js: Cannot find module ...`.
 #
-# Sourced by tests/unit-quote-spans.sh. The single error contract, applied to
+# Sourced by tests/hooks/unit-quote-spans.sh. The single error contract, applied to
 # EVERY ambiguous frame kind — not just the three quote kinds:
 #
 #   predicate API -> danger side  (testOutsideQuotes true, findOutsideQuotes 0,

@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-reducer/load-once-isolation.sh
-# Tests: tests/bin-concern-ledger-reducer.sh, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh
+# tests/bin/bin-concern-ledger-reducer/load-once-isolation.sh
+# Tests: tests/bin/bin-concern-ledger-reducer.sh, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh
 # Tags: concern-ledger, reducer, load-once, subshell-isolation, regression, TL2, scope:common, pwsh-not-required
-# Sourced by tests/bin-concern-ledger-reducer.sh.
+# Sourced by tests/bin/bin-concern-ledger-reducer.sh.
 
 # #2111 replaced a per-call library re-source — the cost that dominated this
 # suite on Git Bash — with ONE file-scope load plus a bare-subshell cl(). Both
@@ -13,7 +13,7 @@
 echo ""
 echo "--- reducer loi: the library loads once and every cl() call stays isolated ---"
 
-LOI_DISPATCHER="$AGENTS_ROOT/tests/bin-concern-ledger-reducer.sh"
+LOI_DISPATCHER="$AGENTS_ROOT/tests/bin/bin-concern-ledger-reducer.sh"
 
 # loi-1 — the driver carries no load of its own. A cl() that sourced the library
 # would satisfy every "the call worked" case in this suite while paying the

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-405-final-report.sh
+# tests/hooks/feature-405-final-report.sh
 # Tests: hooks/lib/parse-closes-issues.js, hooks/lib/worktree-notes.js, hooks/lib/final-report-schema.js, skills/worktree-end/SKILL.md, skills/session-close/SKILL.md
 # Tags: worktree, end, cleanup, parse, closes-issues, schema, scope:common
 #

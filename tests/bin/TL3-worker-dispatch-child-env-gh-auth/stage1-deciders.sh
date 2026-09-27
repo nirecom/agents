@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-child-env-gh-auth.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-child-env-gh-auth.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, config-path, gh-cli, auth-resolution, real-environment, TL3, scope:common
 #

@@ -1,4 +1,4 @@
-# tests/feature-2339-sweep-plan-headings/c9-c5-c6-tests.sh
+# tests/bin/feature-2339-sweep-plan-headings/c9-c5-c6-tests.sh
 # Sourced by feature-2339-sweep-plan-headings.sh
 # C9: edge cases (missing plans dir, already-clean report); C5: --all skips non-outline artifacts; C6: duplicate-canonical no-op.
 

@@ -71,7 +71,7 @@ fi
 # ---------------------------------------------------------------------------
 # T6 — Regression: addition-only staged set (no deletions) must keep behaving
 # as before the fix (non-null hex token), matching the existing T9-style
-# expectation in tests/feature-833-review-tests-sentinel-ssot.sh.
+# expectation in tests/hooks/feature-833-review-tests-sentinel-ssot.sh.
 # EXPECTED: PASS both before and after the fix.
 # ---------------------------------------------------------------------------
 REPO_ADDONLY="$TMPDIR_BASE/repo-addonly"

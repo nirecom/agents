@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-cli-lifecycle.sh
+# tests/bin/fix-1780-round12-cli-lifecycle.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, mint, examination, cli-contract, session-id, exit-codes, workflow-dir, audit, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: the real codex examiner (every verdict here is a PATH stub), a real 180s

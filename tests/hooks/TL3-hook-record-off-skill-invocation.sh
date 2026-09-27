@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-hook-record-off-skill-invocation.sh
+# tests/hooks/TL3-hook-record-off-skill-invocation.sh
 # Tests: hooks/record-off-skill-invocation.js, hooks/workflow-mark.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js
 # Tags: off-clearance, emergency-off, provenance, hook, userpromptsubmit, posttooluse, TL3, run-e2e, scope:common
 # The sibling TL2 feeds the recorder synthetic stdin, so it cannot show that the
@@ -8,7 +8,7 @@
 # real hook writes, and (turn C) the consumer reading it in the SAME turn.
 # TL3 gap: `claude -p` delivers the prompt UNEXPANDED (measured), so the
 # interactive client's <command-name> wrapper is unreachable here; that shape and
-# the near-miss set are pinned by tests/enforce-off-emergency-provenance.sh P1.
+# the near-miss set are pinned by tests/hooks/enforce-off-emergency-provenance.sh P1.
 
 set -uo pipefail
 
@@ -79,7 +79,7 @@ SID3="7a11bb22-cc33-dd44-ee55-66778899aa03"
 
 # ASSEMBLED, never written literally: a test file carrying an emittable EMERGENCY
 # sentinel would arm the real hook whenever it is read, pasted or grepped into a
-# transcript (same discipline as tests/enforce-off-emergency-provenance.sh).
+# transcript (same discipline as tests/hooks/enforce-off-emergency-provenance.sh).
 _S_OPEN="<<"; _S_CLOSE=">>"
 EMERG_REASON="TL3 consumer seam check"
 EMERG_CMD="echo \"${_S_OPEN}WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: ${EMERG_REASON}${_S_CLOSE}\""

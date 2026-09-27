@@ -1,11 +1,11 @@
-# tests/feature-2169-workflow-not-started-notify-gate/p-basic.sh
+# tests/hooks/feature-2169-workflow-not-started-notify-gate/p-basic.sh
 # Tests: hooks/user-prompt-submit-mechanism-check.js, hooks/workflow-state/lifecycle.js, hooks/postuse-step-in-flight-mark.js
 # Tags: stall-detection, user-prompt-submit, prompt-notify, pre-workflow-init, wi-10-lookahead, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 # P1-P3 — the core pre-workflow-init suppression contract: a bare WI-10
 # dispatch with no /workflow-init suppresses (P1), suppression is idempotent
 # across repeated prompts (P1b), a genuinely-started session is unaffected
 # (P2), and the ledger-ordering guarantee behind the gate placement holds (P3).
-# Sourced by the top-level tests/feature-2169-workflow-not-started-notify-gate.sh
+# Sourced by the top-level tests/hooks/feature-2169-workflow-not-started-notify-gate.sh
 # dispatcher; depends on helpers.sh being sourced first.
 
 run_P1() {

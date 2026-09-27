@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1794-stop-guard-exemptions.sh
+# tests/hooks/feature-1794-stop-guard-exemptions.sh
 # Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-guard/detect.js, hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/workflow-state/lifecycle.js, hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-mark/enforce-override-handlers.js, bin/workflow/lib/next-step/verdict.js, hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, settings.json, hooks/user-prompt-submit-mechanism-check.js
 # Tags: stop-hook, supervisor-guard, exemption, session-marker, session-inherit, provenance, regression-1794, prompt-notify, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2284-install-cc-claude-codex-cli/install-update.sh
+# tests/install/feature-2284-install-cc-claude-codex-cli/install-update.sh
 # Sub-file: installer update integration tests (Groups C/D/E) and mutation probes.
 # Static detectors check that each installer: (1) invokes `cli update`, (2) gates it
 # after wait-cc-exit (with skip on exit-1), (3) soft-fails on update failure, (4) scopes

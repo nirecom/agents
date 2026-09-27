@@ -555,3 +555,19 @@ Changes: glab install: when `GITLAB_HOSTNAME` and `GITLAB_TOKEN` are set but the
 ### FEATURE: PR #2399 (2026-09-26)
 Background: fix(#2397,#2398): anchor case_begin predicate and guard edge inputs in check-case-markers.sh
 Changes: `bin/check-case-markers.sh` now exits 1 with a stderr message when called with no arguments or a non-existent path, instead of silently exiting 0 with a false "clean" result (#2398);`bin/check-case-markers.sh` correctly rejects test files that define `case_begin()` as a function without ever calling it; the predicate is now anchored to the invocation form (#2397)
+
+### FEATURE: PR #2405 (2026-09-26)
+Background: fix(#2395): repair 1691 hollow-pass test path refs after tests/ 2-level restructuring
+Changes: Repaired 1,691 test files that contained stale flat-path references after the tests/ 2-level restructuring; the test suite now accurately reports coverage gaps instead of silently passing with 0 assertions.
+
+### FEATURE: PR #2409 (2026-09-26)
+Background: feat(#2392): reorganize .Tests.ps1 and test_*.py into category subdirs
+Changes: Test suite now discovers and runs Pester (.Tests.ps1) and pytest (test_*.py) files from category subdirectories (tests/bin/, tests/install/); `run-all --all` covers all 25 moved test files. Extension-specific dispatch (pwsh/uv+pytest/bash) extracted to bin/lib/run-all-launch.sh. Three obsolete .sh wrappers removed.
+
+### FEATURE: PR #2410 (2026-09-26)
+Background: feat(#2393,#2352,#838,#1174,#1246,#1324,#1563): fix enforce-worktree rtk validation, linked-worktree guards, cross-session state protection, gh issue scope
+Changes: enforce-worktree now validates `rtk`-wrapped git commands: `rtk git commit`, `rtk git push`, and similar forms are correctly blocked from the main worktree (previously failed open).;Linked-worktree guard fixes: `git worktree remove` and `git worktree add` no longer trigger false-positive BLOCK from a linked checkout.;Cross-session state protection: writes to another session's workflow-state files are now blocked from all worktrees.;`gh issue create` enforcement: attempts to create issues in unmanaged repositories are blocked from the main worktree.
+
+### FEATURE: PR #2418 (2026-09-27)
+Background: fix(#2408): remove .env bash-source from wip-state.sh; fix wip-check final-line validation
+Changes: Fixed a silent WIP state failure (70+ sessions affected): wip-state.sh no longer sources .env via bash, and workflow-init now validates check output before applying WIP status.

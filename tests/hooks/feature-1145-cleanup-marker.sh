@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1145-cleanup-marker.sh
+# tests/hooks/feature-1145-cleanup-marker.sh
 # Tests: hooks/lib/worktree-cleanup-marker.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: scope:issue-specific, pwsh-not-required, worktree-end, cleanup-marker
 # L1 unit tests for the worktree-cleanup-marker.js CLI (create/delete of <sid>-wt-cleanup-active).

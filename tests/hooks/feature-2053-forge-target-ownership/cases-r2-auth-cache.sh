@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Round-2 C7 — the cache belongs to an AUTH CONTEXT, table-driven over all of it.
 #
 # WHY: I-6 in cases-g-i.sh proves a changed GH_TOKEN invalidates the cached

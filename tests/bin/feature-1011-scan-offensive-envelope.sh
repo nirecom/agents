@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1011-scan-offensive-envelope.sh
+# tests/bin/feature-1011-scan-offensive-envelope.sh
 # Tests: bin/scan-offensive
 # Tags: scan, offensive, envelope, xml-escape, jsonl, scope:issue-specific
 # RED for issue #1011 — formatEnvelope must produce a content-region whose three-step

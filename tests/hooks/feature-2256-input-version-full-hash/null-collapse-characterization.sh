@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash/null-collapse-characterization.sh
+# tests/hooks/feature-2256-input-version-full-hash/null-collapse-characterization.sh
 # Tests: hooks/lib/diff-fingerprint.js
 # Tags: supervisor, input-version, null-collapse, characterization, CPR-ORTH, TL2, scope:issue-specific
 # #2323 C3 scenario 10 — characterization lock: computeInputVersion collapses every
 # code-side "cannot resolve" cause to one indistinguishable null (the symmetric signal
 # the #2323 selfRecovering predicate keys off). Code-change-free; passes before + after.
-# Parent: tests/feature-2256-input-version-full-hash.sh
+# Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 # TL3 gap (not caught here): a real detached-HEAD / shallow-clone checkout on a CI host
 # — fixtures reach null via missing merge base / non-repo, not those exact git states.
 

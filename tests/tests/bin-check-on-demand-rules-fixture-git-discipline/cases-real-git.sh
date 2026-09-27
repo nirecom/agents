@@ -1,12 +1,12 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, real-git, hooks-isolation, spawn-count, TL2, scope:common
 #
 # The E block closes this suite's own "reads text, never runs git" gap for the two claims
 # that text cannot settle: that the clone really carries the hooks-disabling setting
 # (rules/test/fixture-isolation.md), and that the template is built ONCE however many
 # fixtures ask for a repo (#2111). Direct `git` is deliberate here and out of D1's reach:
-# D1 polices tests/bin-check-on-demand-rules/, whose case files must route through
+# D1 polices tests/bin/bin-check-on-demand-rules/, whose case files must route through
 # fixtures.sh; this directory is the observer, and observing needs the primitive.
 
 echo ""

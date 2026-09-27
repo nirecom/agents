@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees.sh
+# tests/bin/feature-sweep-worktrees.sh
 # Tests: bin/sweep-worktrees.sh
 # Tags: sweep, worktree, maintenance, bin, git
 #
 # Dispatch + re-export entrypoint for the feature-sweep-worktrees split suite.
-# All logic lives in tests/feature-sweep-worktrees/ per rules/coding/file-split.md
+# All logic lives in tests/bin/feature-sweep-worktrees/ per rules/coding/file-split.md
 # Pattern A. This file runs each split group as a subprocess, forwards its
 # output, parses its `Results: N passed, M failed` line, and prints a final
 # aggregate. Each split group also runs standalone.

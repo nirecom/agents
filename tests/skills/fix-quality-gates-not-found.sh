@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-quality-gates-not-found.sh
+# tests/skills/fix-quality-gates-not-found.sh
 # Tests: skills/review-code-security/scripts/run-quality-gates.sh, skills/review-code-security/SKILL.md
 # Tags: security-gate, quality-gates, review-code-security, false-green, ssot, drift-guard, scope:common, pwsh-not-required, TL2
 #
@@ -29,7 +29,7 @@
 # DRIFT GUARD, NOT A SECOND LIST. The gate names are PARSED out of the script; a hardcoded
 # copy would be a third transcription of the fact install/path-exposed-commands.txt exists to
 # de-duplicate, and would go stale exactly as the shim lists did.
-# tests/install-path-exposed-commands.sh T1 derives its input the same way and owns the
+# tests/install/install-path-exposed-commands.sh T1 derives its input the same way and owns the
 # complementary half (is each gate on the PATH-exposure list); this file owns the runner.
 #
 # OUT OF SCOPE (follow-up issue, user-confirmed): the installer side — making a missing
@@ -337,7 +337,7 @@ last_line() { printf '%s\n' "$RQG_OUT" | grep -v '^[[:space:]]*$' | tail -1; }
 # Because: review-code-codex would then resolve to the real, billed, network-calling gate.
 #          Every row here reduces PATH to the system directories for exactly that reason.
 # TL3 gap: whether the shims a real install writes agree with the full paths the runner now
-#          uses — owned by tests/install-path-exposed-commands.sh and, ultimately, by a real
+#          uses — owned by tests/install/install-path-exposed-commands.sh and, ultimately, by a real
 #          install on a real machine.
 
 # ---- parts ------------------------------------------------------------------

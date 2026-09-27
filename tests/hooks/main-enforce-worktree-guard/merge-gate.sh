@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, merge, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-enforce-worktree-merge-gate.sh (all cases).
 # Cases: the `<desc> -> allow|reject` family produced by assert_ff below.
 # isAllowedFastForwardMerge() is called through require() rather than the CLI,

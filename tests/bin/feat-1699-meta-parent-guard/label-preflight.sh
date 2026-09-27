@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/label-preflight.sh
+# tests/bin/feat-1699-meta-parent-guard/label-preflight.sh
 # Tests: bin/github-issues/issue-create-preflight.sh
 # Tags: issue-create, preflight, labels, validation, injection, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

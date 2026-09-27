@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/a-updated-seq.sh
+# tests/hooks/feature-1665-seq-cascade/a-updated-seq.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, updated-seq, causal-order, projection, batch-fold, scope:issue-specific, pwsh-not-required, TL1
 #

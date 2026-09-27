@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1642-check-prompt-extraction/target-set.sh
+# tests/bin/feature-1642-check-prompt-extraction/target-set.sh
 # Tests: bin/check-prompt-extraction, bin/lib/prompt-extraction/targets.js
 # Tags: prompt, bin, prompt-extraction, target-set, base-mode, scope:issue-specific, scope:feature-1642, layer:TL2
 #
@@ -11,7 +11,7 @@
 #   skills/*/agents/**/*.md
 # Excluded: _archived/, _archive/, node_modules/, .git/
 #
-# Split out of tests/feature-1642-check-prompt-extraction.sh per
+# Split out of tests/bin/feature-1642-check-prompt-extraction.sh per
 # rules/coding/file-split.md Pattern A (500-line HARD limit). The sibling file owns
 # detection semantics; this one owns "which files are looked at at all" plus the
 # --base mode that selects them from a git ref. Setup boilerplate is duplicated

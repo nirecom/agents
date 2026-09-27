@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-parallel-sessions-worktree-guard.sh
+# tests/hooks/feature-parallel-sessions-worktree-guard.sh
 # Tests: hooks/auto-branch-guard.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, workflow, intent, scope:common
 #

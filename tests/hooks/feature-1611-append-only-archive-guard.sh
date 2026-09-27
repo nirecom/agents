@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1611-append-only-archive-guard.sh
+# tests/hooks/feature-1611-append-only-archive-guard.sh
 # Tests: hooks/block-history-direct.js, settings.json
 # Tags: hook, settings, config, append-only, docs, scope:issue-specific, TL2
 #

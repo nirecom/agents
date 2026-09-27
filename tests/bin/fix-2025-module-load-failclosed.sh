@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-module-load-failclosed.sh
+# tests/bin/fix-2025-module-load-failclosed.sh
 # Tests: bin/lib/concern-ledger.sh, bin/concern-ledger, bin/build-codex-context, bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, library-load, fail-closed, incomplete-install, security, scope:issue-specific, pwsh-not-required
 #

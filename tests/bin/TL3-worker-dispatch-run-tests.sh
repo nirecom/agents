@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-run-tests.sh
+# tests/bin/TL3-worker-dispatch-run-tests.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/emit.js, bin/worker-dispatch/spawn.js, tests/run-all.sh
 # Tags: worker-dispatch, test-runner, real-environment, yaml, log-tail, sentinel, TL3, scope:common
 #

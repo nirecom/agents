@@ -1,7 +1,7 @@
-# tests/bin-codex-review-loop-security-code/exec-labels-stdout.sh
+# tests/bin/bin-codex-review-loop-security-code/exec-labels-stdout.sh
 # Tests: bin/run-codex-review-loop, bin/review-code-codex
 # Tags: concern-ledger, review-code, exec-label, stdout-contract, TL2, scope:common
-# Sourced by tests/bin-codex-review-loop-security-code.sh.
+# Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
 # The execution-label mapping, the verbatim-stdout contract, and the round the
 # loop opens on its own now that no skill script opens one for it.
 

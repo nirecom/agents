@@ -18,7 +18,7 @@ set -u
 #   the synthetic one dispatch_skill() composes (host-contract drift).
 # - Whether PostToolUse actually registers and fires for the Skill matcher in
 #   the real settings.json-driven host, rather than only when invoked directly.
-# Both are closed by tests/TL3-hook-skill-dispatch-payload.sh (RUN_TL3-gated).
+# Both are closed by tests/hooks/TL3-hook-skill-dispatch-payload.sh (RUN_TL3-gated).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 

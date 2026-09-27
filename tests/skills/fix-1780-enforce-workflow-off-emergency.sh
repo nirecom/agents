@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-enforce-workflow-off-emergency.sh
+# tests/skills/fix-1780-enforce-workflow-off-emergency.sh
 # Tests: skills/enforce-workflow-off/SKILL.md, hooks/lib/sentinel-patterns.js, hooks/supervisor-off-proposal-shim.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js
 # Tags: off-clearance, workflow-off, sentinel, skill-prompt, emergency, scope:issue-specific, pwsh-not-required, TL1, TL2
 # TL3 gap (what this test does NOT catch):

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round4-mint-schema.sh
+# tests/bin/fix-1780-round4-mint-schema.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, mint, token-schema, mint-nonce, single-use, audit, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

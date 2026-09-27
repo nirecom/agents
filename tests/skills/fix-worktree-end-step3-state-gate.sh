@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-worktree-end-step3-state-gate.sh
+# tests/skills/fix-worktree-end-step3-state-gate.sh
 # Tests: skills/worktree-end/SKILL.md
 # Tags: worktree, end, cleanup, skill, bin
 #

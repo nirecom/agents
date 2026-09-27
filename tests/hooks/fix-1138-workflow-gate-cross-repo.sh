@@ -45,7 +45,7 @@ run_with_timeout() {
 source "$SCRIPT_DIR/feature-robust-workflow/helpers.sh"
 
 # Windows-native temp root (forward-slashed) so isWorktreeContext()'s git
-# subprocesses can chdir into the repo. Mirrors tests/fix-953-split-robust-workflow.sh.
+# subprocesses can chdir into the repo. Mirrors tests/bin/fix-953-split-robust-workflow.sh.
 TMP_ROOT="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 TEST_ROOT="$TMP_ROOT/fix-1138-cross-repo-$$"
 mkdir -p "$TEST_ROOT"

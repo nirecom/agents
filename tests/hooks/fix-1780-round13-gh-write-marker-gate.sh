@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round13-gh-write-marker-gate.sh
+# tests/hooks/fix-1780-round13-gh-write-marker-gate.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/bash-write-scope/exclude-checks.js, hooks/lib/protected-basenames.js
 # Tags: enforce-worktree, gh-write, session-marker, protected-basename, off-clearance, sequenced-command, parse-failure, marker-gate, pretooluse, classifier, security, scope:common, pwsh-not-required, TL2, hook-registration
 #
-# LAYER NOTE: same reasoning as tests/enforce-worktree-off-clearance-state-matrix.sh —
+# LAYER NOTE: same reasoning as tests/hooks/enforce-worktree-off-clearance-state-matrix.sh —
 # this drives hooks/enforce-worktree.js as a real PreToolUse SUBPROCESS with piped
 # stdin. Per rules/test.md the TL3 prefix is reserved for RUN_TL3-gated real
 # `claude -p` seams, so this is filed TL2 and named without the prefix.
@@ -11,7 +11,7 @@
 # TL3 gap (what this test does NOT catch):
 # - Claude Code actually dispatching PreToolUse to this hook inside a live
 #   session (registration itself is asserted statically in
-#   tests/fix-1780-round4-write-tool-parity.sh section R).
+#   tests/hooks/fix-1780-round4-write-tool-parity.sh section R).
 # - A real `gh` binary being present: the hook classifies the command TEXT and
 #   never spawns gh, so gh's own behaviour is out of scope here by construction.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
@@ -70,7 +70,7 @@
 # ENFORCE_WORKTREE_ADDITIONAL_REPOS unset per invocation so no inherited marker,
 # scratchpad allow, branch override or scope widening can decide an assertion.
 #
-# ASSERTION CONTRACT (inherited from tests/enforce-worktree-off-clearance-state-matrix.sh):
+# ASSERTION CONTRACT (inherited from tests/hooks/enforce-worktree-off-clearance-state-matrix.sh):
 # enforce-worktree.js always exits 0 and prints either `{}` (allow) or a
 # `"decision":"block"` object. A crash, timeout or empty output is its OWN
 # verdict token — never folded into "allow".
@@ -267,9 +267,9 @@ assert_guard() {
 # The run dir is the MAIN checkout: that is where the fall-through lands on a
 # real block (from a linked feature worktree enforce-worktree.js is a LOCATION
 # guard whose tail allows — see the section-K comment in
-# tests/enforce-worktree-off-clearance-state-matrix.sh — which is exactly why
+# tests/hooks/enforce-worktree-off-clearance-state-matrix.sh — which is exactly why
 # hooks/block-clearance-token-write.js exists as the location-independent gate,
-# covered by tests/enforce-protected-marker-write.sh).
+# covered by tests/hooks/enforce-protected-marker-write.sh).
 #
 # Pre-fix, every row below measured ALLOW.
 # ===========================================================================

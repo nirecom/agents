@@ -1,4 +1,4 @@
-# tests/bin-concern-ledger-prompt-injection/both-producers.sh
+# tests/bin/bin-concern-ledger-prompt-injection/both-producers.sh
 # Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, prompt-injection, delimiter-forgery, untrusted-input, security, scope:common, pwsh-not-required
 

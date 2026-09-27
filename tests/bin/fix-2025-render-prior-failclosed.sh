@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-render-prior-failclosed.sh
+# tests/bin/fix-2025-render-prior-failclosed.sh
 # Tests: bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/concern-ledger
 # Tags: concern-ledger, render-prior, fail-closed, pipefail, silent-loss, security, scope:issue-specific, pwsh-not-required
 #

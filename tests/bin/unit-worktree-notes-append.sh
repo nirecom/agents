@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-worktree-notes-append.sh
+# tests/bin/unit-worktree-notes-append.sh
 # Tests: bin/worktree-notes-append.js, bin/worktree-notes-append/args.js, bin/worktree-notes-triage.js
 # Tags: worktree, workflow, bin, append-cli, severity, TL2, scope:common
 #

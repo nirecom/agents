@@ -1,7 +1,7 @@
 # Group J: --dry-run makes zero physical changes (#2081)
 # Tests: bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, e2e, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # The report-only path shares the scan loop with --apply. A --dry-run over a tree
 # that HAS a whole-unit orphan and a partial-orphan must report both yet touch

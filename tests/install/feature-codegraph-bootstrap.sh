@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-codegraph-bootstrap.sh
+# tests/install/feature-codegraph-bootstrap.sh
 # Tests: install/codegraph-mcp.js, install/linux/codegraph.sh, install/win/codegraph.ps1, install.sh, install.ps1
 # Tags: codegraph, installer, mcp-registration, env-flag, fail-safe-off, idempotency, side-effect-absence, secret-leakage, usage-error, TL2, pwsh-not-required, scope:issue-specific
 # Detail plan ST-19 (cases B1-B18). Dispatcher only: counters, assertions and the

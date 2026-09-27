@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow/security-anchors.sh
+# tests/bin/feature-530-notes-promotion-triage-flow/security-anchors.sh
 # Tests: bin/worktree-notes-triage/resolve.js, hooks/lib/worktree-notes.js
 # Tags: notes-promotion, worktree-notes, triage, security, path-traversal, shell-metachar, TL2, scope:issue-specific
 #

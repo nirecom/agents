@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-pre-commit.sh
+# tests/hooks/feature-workflow-off-bypass-pre-commit.sh
 # Tests: hooks/enforce-worktree.js, hooks/pre-commit
 # Tags: worktree, enforce, hook, git, pre-commit, scope:common
 #

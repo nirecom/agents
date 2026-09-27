@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-resolve-concern-ledger-injection.sh
+# tests/bin/fix-2025-resolve-concern-ledger-injection.sh
 # Tests: bin/lib/codex-review-loop/ledger-verdict.sh, bin/run-codex-review-loop
 # Tags: concern-ledger, codex-review-loop, code-execution, untrusted-repo, fail-closed, security, scope:issue-specific, pwsh-not-required
 #

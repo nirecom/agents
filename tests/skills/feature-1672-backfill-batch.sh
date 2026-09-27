@@ -11,8 +11,8 @@
 # Stubbing approach: every executable backfill-batch.sh reaches for lives in a
 # fake AGENTS_CONFIG_DIR built by make_config():
 #   - bin/github-issues/issue-to-history.sh -- stubbed (its own coverage lives
-#     in tests/feature-1672-doc-append-backdate.sh and
-#     tests/feature-401-issue-to-history-shapes.sh) so this file can assert on
+#     in tests/bin/feature-1672-doc-append-backdate.sh and
+#     tests/bin/feature-401-issue-to-history-shapes.sh) so this file can assert on
 #     call args/counts and control per-issue success/failure deterministically.
 #   - bin/sort-history.py and bin/doc-rotate.py -- stubbed under the SAME fake
 #     config dir, because backfill-batch.sh resolves its tooling from

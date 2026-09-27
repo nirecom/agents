@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/enforce-worktree-backup-path.sh
+# tests/hooks/enforce-worktree-backup-path.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/shared-cmd-utils.js
 # Tags: worktree, enforce, hook, backup, parsefailure
 #

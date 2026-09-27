@@ -1,14 +1,14 @@
-# tests/fix-1569-quote-span-regression/arg-tail-module.sh
+# tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
 #
 # STATUS: 15 rows RED until C3 lands (6x ARG-accept rule-5, ARG-reject bare
 # subshell, 6x RISK10-*-rule5, 2x RISK10-*-rule2); every other row GREEN today
 # and must stay green. See the STATUS block in the parent dispatcher
-# tests/fix-1569-quote-span-regression.sh.
+# tests/hooks/fix-1569-quote-span-regression.sh.
 #
 # Direct-module assertions, split out of the parent per rules/coding/file-split.md.
-# Sourced by tests/fix-1569-quote-span-regression.sh — uses its pass/fail,
+# Sourced by tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail,
 # run_with_timeout, ACD/ACD_RAW, DISPATCH, EVIL, MAIN_WT and _AGENTS_DIR_NODE.
 
 run_arg_tail_module_cases() {

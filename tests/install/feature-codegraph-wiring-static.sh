@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-codegraph-wiring-static.sh
+# tests/install/feature-codegraph-wiring-static.sh
 # Tests: .env.example, install.ps1, install.sh, install/win/codegraph.ps1, install/linux/codegraph.sh, install/codegraph-mcp.js, bin/codegraph-lifecycle.js, bin/codegraph-lifecycle/index-health.js, bin/codegraph-lifecycle/process-identity.js, hooks/post-checkout, hooks/post-merge, bin/sweep-worktrees.sh, bin/sweep-worktrees/orphan-dirs.sh, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/sweep-worktrees/SKILL.md, settings.json, agents/lib/codegraph-usage.md, agents/survey-code.md, agents/detail-planner.md, agents/outline-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/security-scanner.md, agents/test-reviewer.md, agents/skip-verifier.md, agents/plan-security-reviewer.md, agents/supervisor.md, agents/supervisor-audit.md
 # Tags: codegraph, installer, hook-registration, mcp, agent-frontmatter, wiring, static, table-driven, TL2, pwsh-not-required, scope:issue-specific
 #

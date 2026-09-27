@@ -1,4 +1,4 @@
-# tests/feature-1180-commit-lang-check/group-i-postfix.sh
+# tests/hooks/feature-1180-commit-lang-check/group-i-postfix.sh
 # Group I (continued) — staged-path robustness (post-fix): CL-I8, CL-I9.
 # Sourced by the dispatcher after lib.sh.
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/legacy-record-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/legacy-record-cases.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/complexity-routing.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: complexity, routing, legacy, backward-compatibility, migration, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

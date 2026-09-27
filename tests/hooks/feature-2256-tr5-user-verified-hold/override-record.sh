@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold/override-record.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold/override-record.sh
 # Tests: bin/supervisor-record-block-override, hooks/workflow-gate.js
 # Tags: supervisor, tr5, block-override, cli, TL2, scope:issue-specific
 # #2256 S5-d — recording a human BLOCK override, and everything that invalidates it.
 
-# Parent: tests/feature-2256-tr5-user-verified-hold.sh
+# Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 
 # The CLI shape pinned here mirrors its only sibling, bin/supervisor-write-audit-verdict:
 # positional arguments first, then an optional --session-id <sid>. If the implementation

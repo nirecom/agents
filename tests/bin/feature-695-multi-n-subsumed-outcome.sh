@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-695-multi-n-subsumed-outcome.sh
+# tests/bin/feature-695-multi-n-subsumed-outcome.sh
 # Tests: bin/issue-close-write-outcome.js, hooks/lib/parse-closes-issues.js
 # Tags: scope:issue-specific
 # Tests for issue #695 — a session that subsumes multiple issues (closes_issues

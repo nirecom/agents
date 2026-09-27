@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/owner-repo-charset.sh
+# tests/hooks/fix-1899-parse-remote-url/owner-repo-charset.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, security, path-traversal, table-driven, parser, regex, TL1, scope:issue-specific
 #

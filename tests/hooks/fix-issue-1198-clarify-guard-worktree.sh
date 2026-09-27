@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-issue-1198-clarify-guard-worktree.sh
+# tests/hooks/fix-issue-1198-clarify-guard-worktree.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, clarify-intent, guard-loop, scope:issue-specific
 # L3 gap (what this test does NOT catch):

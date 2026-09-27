@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, enforce-worktree, context-populate, block-extras, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/feature-885-enforce-worktree-context-populate.sh (all cases).
 # Cases: W1-W3.
 # What the block path REPORTS, not whether it blocks: done() must populate

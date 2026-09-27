@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1465-scriptify-clarify-intent/run-completion.sh
+# tests/skills/feature-1465-scriptify-clarify-intent/run-completion.sh
 # Tests: skills/clarify-intent/scripts/run-completion.sh
 # Tags: scope:issue-specific
 #

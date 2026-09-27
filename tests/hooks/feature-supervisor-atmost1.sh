@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-atmost1.sh
+# tests/hooks/feature-supervisor-atmost1.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard/collect-audit-triggers.js
 # Tags: supervisor, em-supervisor, at-most-1, dedup, audit-verdict, scope:issue-specific, pwsh-not-required
 # L3 gap: no real session racing to arm alert, no audit_verdict durability across real Stop cycles.

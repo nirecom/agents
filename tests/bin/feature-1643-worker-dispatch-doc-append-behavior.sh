@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-doc-append-behavior.sh
+# tests/bin/feature-1643-worker-dispatch-doc-append-behavior.sh
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, doc-append, argv-contract, idempotency, table-driven, TL2, scope:issue-specific
 #
@@ -17,7 +17,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - Whether bin/doc-append.py and bin/compose-doc-append-entry actually ACCEPT
 #     the flags assembled here; only the real CLIs can answer that.
-#     tests/TL3-worker-dispatch-run-tests.sh covers the real-runner tier.
+#     tests/bin/TL3-worker-dispatch-run-tests.sh covers the real-runner tier.
 #   - `uv` being absent from PATH on the host.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-enforce-worktree-exclude-glob.sh
+# tests/hooks/feature-enforce-worktree-exclude-glob.sh
 # Tests: hooks/lib/glob-match.js, hooks/lib/glob-match.js.
 # Tags: worktree, enforce, hook, git, pre-commit
 #

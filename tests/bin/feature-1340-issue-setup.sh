@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup.sh
+# tests/bin/feature-1340-issue-setup.sh
 # Tests: bin/github-issues/sync-labels.sh, bin/github-issues/lib/resolve-project.sh, bin/github-issues/lib/ensure-project-ready.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/issue-create.sh, bin/github-issues/wip-state.sh, skills/issue-setup/scripts/run-issue-setup.sh
 # Tags: issue-setup, sync-labels, resolve-project, ensure-project-ready, wip-state, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the feature-1340-issue-setup split suite.
-# All logic lives in tests/feature-1340-issue-setup/ per rules/coding/file-split.md.
+# All logic lives in tests/bin/feature-1340-issue-setup/ per rules/coding/file-split.md.
 # Each split group also runs standalone.
 #
 # L3 gap (what this test does NOT catch):

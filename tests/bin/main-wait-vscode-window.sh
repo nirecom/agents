@@ -2,7 +2,7 @@
 # Tests: bin/wait-vscode-window.sh
 # Tags: bin, vscode, tests
 # Tests for bin/wait-vscode-window.sh
-# Run: bash tests/main-wait-vscode-window.sh
+# Run: bash tests/bin/main-wait-vscode-window.sh
 
 set -euo pipefail
 

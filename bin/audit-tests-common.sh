@@ -7,7 +7,7 @@
 # Writes by default: a flagless run DELETES orphans (git rm); --dry-run reports
 # only. --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory
 # as TSV, identical from either entrypoint (bin/lib/test-dup-group.sh).
-# Scans top-level tests/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
+# Scans tests/<category>/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
 # unit=case (refcount 0 git rm, partial-orphan excises dead blocks, else file).
 
 set -euo pipefail
@@ -136,7 +136,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests-common.sh report — ${TODAY}"
-  echo "# Scope: tests/<cat>/*.sh (six categories) + top-level tests/*.Tests.ps1,test_*.py excluding feature-<N>-*"
+  echo "# Scope: tests/<cat>/{*.sh,*.Tests.ps1,test_*.py} (six categories) excluding feature-<N>-*"
   echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -145,7 +145,7 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh tests/*.Tests.ps1 tests/test_*.py; do
+for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh tests/hooks/*.Tests.ps1 tests/bin/*.Tests.ps1 tests/skills/*.Tests.ps1 tests/agents/*.Tests.ps1 tests/install/*.Tests.ps1 tests/tests/*.Tests.ps1 tests/hooks/test_*.py tests/bin/test_*.py tests/skills/test_*.py tests/agents/test_*.py tests/install/test_*.py tests/tests/test_*.py; do
   [[ -e "$testfile" ]] || continue
   in_common_scope "$testfile" || continue
   base="$(basename "$testfile")"

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/feat-2218-inheritance-equivalence/gen-golden.sh
+# tests/hooks/feat-2218-inheritance-equivalence/gen-golden.sh
 # Tests: hooks/workflow-state/inheritance/apply.js
 # Tags: session-inherit, golden-generator, regression-2218, scope:issue-specific
 # Regenerates E1's GOLDEN_SHA/GOLDEN_COUNT in ../feat-2218-inheritance-equivalence.sh
 # from the current applyInheritance behaviour (opts omitted). Run only for an
 # approved, intentional change to the automatic inheritance path — never to
-# silence a regression. Usage: bash tests/feat-2218-inheritance-equivalence/gen-golden.sh
+# silence a regression. Usage: bash tests/hooks/feat-2218-inheritance-equivalence/gen-golden.sh
 
 set -u
 

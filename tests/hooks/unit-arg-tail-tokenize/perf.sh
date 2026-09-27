@@ -1,8 +1,8 @@
-# tests/unit-arg-tail-tokenize/perf.sh
+# tests/hooks/unit-arg-tail-tokenize/perf.sh
 # Tests: hooks/enforce-worktree/arg-tail-guard.js
 # Tags: hook, worktree, enforce, arg-tail, unit, security, performance, scope:common
 #
-# Sourced by tests/unit-arg-tail-tokenize.sh. Section 10: the cost ceiling for
+# Sourced by tests/hooks/unit-arg-tail-tokenize.sh. Section 10: the cost ceiling for
 # tokenizeArgTail.
 #
 # Why a perf row belongs in a SECURITY suite: tokenizeArgTail runs inside the

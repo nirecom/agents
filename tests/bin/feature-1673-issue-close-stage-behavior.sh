@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-issue-close-stage-behavior.sh
+# tests/bin/feature-1673-issue-close-stage-behavior.sh
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, skills/issue-close-stage/scripts/run-stage-chain.sh, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, kv-parsing, no-eval, stub-seam, table-driven, TL2, scope:issue-specific
 #
@@ -19,7 +19,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - The real `gh` binary's comment-URL shape, which Step D scrapes for the
 #     comment id, and a real linked-worktree dispatch. Both are fenced by
-#     tests/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
+#     tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -329,7 +329,7 @@ group_spawn_seam() {
 #
 # The credential below is a FAKE placeholder — 16 chars after `ghp_`, under the
 # 36 bin/scan-outbound.sh's github-token pattern needs. Same placeholder as
-# tests/fix-1899-parse-remote-url/redaction.sh.
+# tests/hooks/fix-1899-parse-remote-url/redaction.sh.
 # ===========================================================================
 group_origin_credential_redaction() {
     impl_ready "redact/setup" || return

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, false-green, TL2, scope:common
 # R6's silent false PASS: `cp -R` or `git add` fails under `>/dev/null 2>&1`, the repo is
 # missing or empty, and the case still goes green on an empty `--staged` diff. D8 pins the

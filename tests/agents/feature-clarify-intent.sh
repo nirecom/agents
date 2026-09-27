@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-clarify-intent.sh
+# tests/agents/feature-clarify-intent.sh
 # Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
 # Tags: workflow, clarify-intent, planning, intent, plans, scope:common
 # L3 gap (what this test does NOT catch):
@@ -9,7 +9,7 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
 # Dispatch + aggregate entrypoint for the feature-clarify-intent split suite.
-# All logic lives in tests/feature-clarify-intent/ per rules/coding/file-split.md
+# All logic lives in tests/agents/feature-clarify-intent/ per rules/coding/file-split.md
 # Pattern A (file crossed the 500-line HARD cap when the #1048 companion
 # precheck contracts were added). Each split group also runs standalone.
 #

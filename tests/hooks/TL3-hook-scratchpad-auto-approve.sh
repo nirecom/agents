@@ -124,7 +124,7 @@ run_turn() {
 
 # One transcript reader for this file (CPR-SSOT): tests/lib/tl3-turn-transcript.js owns
 # both the is_error read and the tool_use/tool_result probe below. Its own logic is
-# verified against saved fixture transcripts by tests/unit-tl3-turn-transcript.sh.
+# verified against saved fixture transcripts by tests/tests/unit-tl3-turn-transcript.sh.
 PROBE="$AGENTS_DIR/tests/lib/tl3-turn-transcript.js"
 
 # is_error of a --output-format json transcript, or "unreadable".

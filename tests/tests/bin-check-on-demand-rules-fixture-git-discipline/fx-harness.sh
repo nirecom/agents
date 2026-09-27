@@ -1,8 +1,8 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, real-git, harness, TL2, scope:common
 #
-# The slice of tests/bin-check-on-demand-rules.sh's preamble that fixtures.sh actually
+# The slice of tests/bin/bin-check-on-demand-rules.sh's preamble that fixtures.sh actually
 # reads — BASE, TOKEN, MARKER, CASE_N, node_path — so a scenario script can source the
 # real fixtures.sh and RUN it instead of scanning its text. Never sourced by the
 # dispatcher: each scenario gets its own child bash, so a scenario's PATH shim, its

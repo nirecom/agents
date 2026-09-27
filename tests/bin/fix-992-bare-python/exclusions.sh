@@ -1,13 +1,13 @@
 # E1: fix-277 probe (excluded file) → exit 0
 REPO_E1=$(make_repo)
 git -C "$REPO_E1" checkout -q -b featureE1
-mkdir -p "$REPO_E1/tests"
-cat > "$REPO_E1/tests/fix-277-doc-append-merge-union.sh" <<'EOF'
+mkdir -p "$REPO_E1/tests/bin"
+cat > "$REPO_E1/tests/bin/fix-277-doc-append-merge-union.sh" <<'EOF'
 #!/bin/bash
 # Intentional Store-stub probe — must use bare python3 to detect real Python.
 python3 -c "import sys; sys.exit(0)"
 EOF
-git -C "$REPO_E1" add "$REPO_E1/tests/fix-277-doc-append-merge-union.sh"
+git -C "$REPO_E1" add "$REPO_E1/tests/bin/fix-277-doc-append-merge-union.sh"
 git -C "$REPO_E1" commit -q -m "add fix-277 probe (excluded fixture)"
 
 EXIT_CODE=0
@@ -17,14 +17,14 @@ if [[ $EXIT_CODE -eq 0 ]]; then pass "E1: exits 0 — fix-277 probe excluded"; e
 # E2: fixture-string file (excluded) → exit 0
 REPO_E2=$(make_repo)
 git -C "$REPO_E2" checkout -q -b featureE2
-mkdir -p "$REPO_E2/tests"
-cat > "$REPO_E2/tests/enforce-worktree-bash-c-cd-scope.sh" <<'EOF'
+mkdir -p "$REPO_E2/tests/hooks"
+cat > "$REPO_E2/tests/hooks/enforce-worktree-bash-c-cd-scope.sh" <<'EOF'
 #!/bin/bash
 # Fixture: command strings used as test input — not actually executed as python.
 FIXTURE='python3 -c "print(1)"'
 echo "$FIXTURE"
 EOF
-git -C "$REPO_E2" add "$REPO_E2/tests/enforce-worktree-bash-c-cd-scope.sh"
+git -C "$REPO_E2" add "$REPO_E2/tests/hooks/enforce-worktree-bash-c-cd-scope.sh"
 git -C "$REPO_E2" commit -q -m "add fixture-string test (excluded)"
 
 EXIT_CODE=0
@@ -137,29 +137,29 @@ EXIT_CODE=0
 OUTPUT=$(cd "$REPO_EG8" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
 if [[ $EXIT_CODE -eq 0 ]]; then pass "EG8: pip/pip3 exits 0 (out of scope by design)"; else fail "EG8: expected exit 0, got $EXIT_CODE. Output: $OUTPUT"; fi
 
-# Case E3: tests/fix-992-bare-python.sh is in EXCLUDED_FILES → not flagged
+# Case E3: tests/bin/fix-992-bare-python.sh is in EXCLUDED_FILES → not flagged
 REPO_E3=$(make_repo)
 git -C "$REPO_E3" checkout -q -b featureE3
-mkdir -p "$REPO_E3/tests"
-cat > "$REPO_E3/tests/fix-992-bare-python.sh" <<'EOF'
+mkdir -p "$REPO_E3/tests/bin"
+cat > "$REPO_E3/tests/bin/fix-992-bare-python.sh" <<'EOF'
 #!/bin/bash
 python3 -c "import sys"
 EOF
-git -C "$REPO_E3" add "$REPO_E3/tests/fix-992-bare-python.sh"
+git -C "$REPO_E3" add "$REPO_E3/tests/bin/fix-992-bare-python.sh"
 git -C "$REPO_E3" commit -q -m "self-exclusion test"
 EXIT_CODE=0
 OUTPUT=$(cd "$REPO_E3" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
-if [[ $EXIT_CODE -eq 0 ]]; then pass "E3: tests/fix-992-bare-python.sh is excluded (self-exclusion)"; else fail "E3: expected exit 0, got $EXIT_CODE. Output: $OUTPUT"; fi
+if [[ $EXIT_CODE -eq 0 ]]; then pass "E3: tests/bin/fix-992-bare-python.sh is excluded (self-exclusion)"; else fail "E3: expected exit 0, got $EXIT_CODE. Output: $OUTPUT"; fi
 
 # Case E4: --all mode with excluded file → is_excluded() works in all-scan mode
 REPO_E4=$(make_repo)
 git -C "$REPO_E4" checkout -q -b featureE4
-mkdir -p "$REPO_E4/tests"
-cat > "$REPO_E4/tests/fix-277-doc-append-merge-union.sh" <<'EOF'
+mkdir -p "$REPO_E4/tests/bin"
+cat > "$REPO_E4/tests/bin/fix-277-doc-append-merge-union.sh" <<'EOF'
 #!/bin/bash
 python3 -c "import sys; sys.exit(0)"
 EOF
-git -C "$REPO_E4" add "$REPO_E4/tests/fix-277-doc-append-merge-union.sh"
+git -C "$REPO_E4" add "$REPO_E4/tests/bin/fix-277-doc-append-merge-union.sh"
 git -C "$REPO_E4" commit -q -m "excluded file in all-scan"
 EXIT_CODE=0
 OUTPUT=$(cd "$REPO_E4" && run_with_timeout bash "$SCRIPT" --all 2>&1) || EXIT_CODE=$?

@@ -1,7 +1,7 @@
 # Group C: verdicts must not depend on the caller's CWD (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, cwd-independence, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # classify_tests_header() tests `[[ -e "$eff" ]]` relative to CWD; audit-tests.sh
 # cd's to the repo root, common does not. Sharing one predicate without passing

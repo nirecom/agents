@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-883-supervisor-guard-wsid.sh
+# tests/hooks/feature-883-supervisor-guard-wsid.sh
 # Tests: hooks/supervisor-guard.js, hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, session-id, workflow-state, layer2, hook, stop, scope:issue-specific
 # L3 gap (what this test does NOT catch):
@@ -11,11 +11,11 @@
 # RED for issue #883/#913.
 set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=tests/feature-883-supervisor-guard-wsid/_lib.sh
+# shellcheck source=tests/hooks/feature-883-supervisor-guard-wsid/_lib.sh
 . "$SCRIPT_DIR/feature-883-supervisor-guard-wsid/_lib.sh"
-# shellcheck source=tests/feature-883-supervisor-guard-wsid/cases-g20-g33.sh
+# shellcheck source=tests/hooks/feature-883-supervisor-guard-wsid/cases-g20-g33.sh
 . "$SCRIPT_DIR/feature-883-supervisor-guard-wsid/cases-g20-g33.sh"
-# shellcheck source=tests/feature-883-supervisor-guard-wsid/cases-g34-g41.sh
+# shellcheck source=tests/hooks/feature-883-supervisor-guard-wsid/cases-g34-g41.sh
 . "$SCRIPT_DIR/feature-883-supervisor-guard-wsid/cases-g34-g41.sh"
 
 run_g20; run_g21; run_g22; run_g23; run_g24

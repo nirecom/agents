@@ -1,4 +1,4 @@
-# tests/feature-1261-labels-ssot/propagate-labels-ci/_tests-core.sh
+# tests/bin/feature-1261-labels-ssot/propagate-labels-ci/_tests-core.sh
 # Core test cases for propagate-labels.sh (T-propagate-2 through T-propagate-env)
 
 # ===========================================================================

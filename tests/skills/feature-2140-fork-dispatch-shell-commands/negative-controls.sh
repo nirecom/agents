@@ -1,4 +1,4 @@
-# tests/feature-2140-fork-dispatch-shell-commands/negative-controls.sh
+# tests/skills/feature-2140-fork-dispatch-shell-commands/negative-controls.sh
 # Tests: skills/review-tests/SKILL.md, skills/refactor-prompts/SKILL.md
 # Tags: rules, prompt, dispatch, fork, scope:issue-specific, pwsh-not-required, TL2
 

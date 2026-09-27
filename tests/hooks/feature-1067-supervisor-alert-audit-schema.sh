@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1067-supervisor-alert-audit-schema.sh
+# tests/hooks/feature-1067-supervisor-alert-audit-schema.sh
 # Tests: hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, schema, alert, audit, scope:issue-specific
 # Tests for issue #1067 — alert/audit two-mode schema contract.

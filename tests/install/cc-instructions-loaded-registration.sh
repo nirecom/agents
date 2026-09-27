@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-instructions-loaded-registration.sh
+# tests/install/cc-instructions-loaded-registration.sh
 # Tests: settings.json, install/assemble-settings.js, hooks/instructions-loaded-audit.js
 # Tags: rules-injection, instructions-loaded, hook-registration, settings, installer, TL2, scope:common
 

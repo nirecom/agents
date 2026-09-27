@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2134-command-ir-equivalence.sh
+# tests/hooks/feature-2134-command-ir-equivalence.sh
 # Tests: hooks/lib/command-ir.js, hooks/lib/command-parser.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/lib/bash-write-patterns.js, hooks/lib/bash-write-targets.js, docs/architecture/claude-code/shell-command-parsing.md
 # Tags: hook, command-ir, equivalence, snapshot, TL1, scope:issue-specific
 #
@@ -14,8 +14,8 @@ set -uo pipefail
 # - Whether a hook process that consumes the IR still reaches the same verdict end-to-end
 #   (stdin JSON -> hook -> deny/allow): every case here calls the modules in-process.
 # - Whether the Step 2 parser swap changes the felt behavior of the hooks that fire in a real session.
-# Closest-to-action mitigation: run the existing hook-level test suites (tests/unit-command-ir.sh,
-# tests/feature-1293-canary2-ir.sh, tests/feature-2120-workflow-gate-block-heredoc-heredoc/)
+# Closest-to-action mitigation: run the existing hook-level test suites (tests/hooks/unit-command-ir.sh,
+# tests/hooks/feature-1293-canary2-ir.sh, tests/hooks/feature-2120-workflow-gate-block-heredoc-heredoc/)
 # fully green at Step 2, per detail.md S2-9.
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

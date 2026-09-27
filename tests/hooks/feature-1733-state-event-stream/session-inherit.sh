@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/session-inherit.sh
+# tests/hooks/feature-1733-state-event-stream/session-inherit.sh
 # Tests: hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/effective-state.js
 # Tags: workflow-state, event-stream, session-inherit, provenance, backfilled, regression-772, regression-1133, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -21,7 +21,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="si"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # ── donor discovery fixture ──────────────────────────────────────────────────

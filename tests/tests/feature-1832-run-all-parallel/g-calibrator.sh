@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/g-calibrator.sh
+# tests/tests/feature-1832-run-all-parallel/g-calibrator.sh
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, calibrator, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests

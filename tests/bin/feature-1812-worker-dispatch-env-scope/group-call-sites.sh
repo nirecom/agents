@@ -1,4 +1,4 @@
-# Part of tests/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
+# Part of tests/bin/feature-1812-worker-dispatch-env-scope.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/workers/doc-append.js
 # Tags: worker-dispatch, commit-push, doc-append, env-scope, credential-scope, security, TL2, scope:issue-specific
 #

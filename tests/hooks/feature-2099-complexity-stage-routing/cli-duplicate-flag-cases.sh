@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/cli-duplicate-flag-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/cli-duplicate-flag-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip
 # Tags: complexity, routing, cli, argument-parsing, security, edge-cases, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/projection-contract.sh
+# tests/hooks/feature-1733-state-event-stream/projection-contract.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/is-bugfix-session.js
 # Tags: workflow-state, event-stream, projection, deep-freeze, single-source-of-truth, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -19,7 +19,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="pcon"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo "== P1: every projection key readState pastes equals projectState(raw) =="

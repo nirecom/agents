@@ -1,7 +1,7 @@
 # Group F: marker-less fallback + .ps1/.py extension guard (C10) (#2081,#1864)
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # A file with no case markers keeps the current file-level trp_survival_verdict
 # behavior unchanged (TRP_HAS_MARKERS=0). C10: a .Tests.ps1 / test_*.py file is

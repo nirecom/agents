@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-parser-unit-tables.sh
+# tests/hooks/fix-1780-round12-parser-unit-tables.sh
 # Tests: hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-scan/assignment-text.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/lib/protected-basenames.js
 # Tags: off-clearance, session-marker, protected-basename, parser, regex, table-driven, mutation-evidence, allowlist, glob, brace-expansion, ansi-c-quoting, interpreter, interpreter-identity, heredoc, here-string, eval, stdin-program, argv-operand, assignment-chain, pwsh-env, classifier, security, unit, scope:common, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
 # - Nothing about the HOOK. Every function here is called in-process; whether the
 #   entrypoint routes a real tool call into them is asserted by the TL2 sibling
-#   tests/fix-1780-round12-classifier-attack-shapes.sh and, for PreToolUse
-#   registration, statically by tests/enforce-protected-marker-write.sh (X6).
+#   tests/hooks/fix-1780-round12-classifier-attack-shapes.sh and, for PreToolUse
+#   registration, statically by tests/hooks/enforce-protected-marker-write.sh (X6).
 # - Real shell / OS behaviour. That bash expands `{f..f}`, that `$'\x66'` decodes
 #   to `f`, and that NTFS folds `x::$DATA` onto `x` are all PREMISES here; what is
 #   asserted is only that these modules model them.
@@ -36,7 +36,7 @@
 #   MUTATION EVIDENCE (Section M). Paired rows argue that a case is DISCRIMINATING;
 #   they cannot prove which code decides it. Section M copies hooks/ to a throwaway
 #   directory, replaces ONE named regex constant with the never-matching `/(?!)/`
-#   (tests/fix-1780-round12-parser-unit-tables/mutate.js), and asserts that the row
+#   (tests/hooks/fix-1780-round12-parser-unit-tables/mutate.js), and asserts that the row
 #   keyed on that constant FLIPS to a stated different value. A constant whose
 #   mutant leaves every row unchanged is dead code as far as this suite is
 #   concerned, and the assertion says so by name.
@@ -59,7 +59,7 @@
 #
 # LAYOUT (rules/coding/file-split.md). This file is the harness — setup, the SSOT
 # introspection, _expand(), run_table() and dispatch. The case tables themselves
-# live in tests/fix-1780-round12-parser-unit-tables/:
+# live in tests/hooks/fix-1780-round12-parser-unit-tables/:
 #   cases-basename-glob.sh   Sections N, G, B
 #   cases-bash-scan.sh       Sections A, S
 #   cases-interpreter.sh     Sections I, D

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-prompt-injection.sh
+# tests/bin/bin-concern-ledger-prompt-injection.sh
 # Tests: bin/review-code-codex, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/concern-ledger, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: concern-ledger, prompt-injection, delimiter-forgery, untrusted-input, security, scope:common, pwsh-not-required
 #
@@ -197,7 +197,7 @@ alone() {
 # each file is sourced, not executed, so it shares the fixture and helpers
 # above. Order is the case numbering: 1-3, 4-6, then 7.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-prompt-injection"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-prompt-injection"
 
 # shellcheck source=./bin-concern-ledger-prompt-injection/render-and-consume.sh
 . "$SUITE_DIR/render-and-consume.sh"

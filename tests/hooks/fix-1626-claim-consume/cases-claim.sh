@@ -1,4 +1,4 @@
-# Part of tests/fix-1626-claim-consume.sh (sourced, not standalone).
+# Part of tests/hooks/fix-1626-claim-consume.sh (sourced, not standalone).
 # C1-C6 — the atomic claim itself: normal claim, the concurrent TOCTOU race,
 # spent/stale .claimed refusal, mint-time recovery, and the I/O error path.
 

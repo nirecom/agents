@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/record-skip-verdict, hooks/workflow-state/state-io/skip-verdict.js, tests/feature-1644-sibling-cli-advance.sh
+# Tests: bin/workflow/record-skip-verdict, hooks/workflow-state/state-io/skip-verdict.js, tests/bin/feature-1644-sibling-cli-advance.sh
 # Tags: tl2, workflow, advance, named-exception, record-skip-verdict, class-completeness, scope:issue-specific, pwsh-not-required
 #
 # #1644 review gap C4 — the NAMED EXCEPTION to the advance class.
@@ -15,7 +15,7 @@
 # class" by teaching record-skip-verdict to advance, and it must equally fail if
 # the CLI stops recording verdicts correctly. It does NOT demand the flags.
 #
-# Sibling boundary (no duplication): tests/feature-1644-sibling-cli-advance.sh
+# Sibling boundary (no duplication): tests/bin/feature-1644-sibling-cli-advance.sh
 # S11 already owns the three-way partition of bin/workflow/ (advance members /
 # named exceptions / non-members) and registers record-skip-verdict in
 # NAMED_EXCEPTIONS. What S11 does NOT do — and what is added here — is prove
@@ -42,7 +42,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 RSV="$AGENTS_DIR_N/bin/workflow/record-skip-verdict"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 SIBLING_TEST="$AGENTS_DIR/tests/bin/feature-1644-sibling-cli-advance.sh"
 
 PASS=0; FAIL=0

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2256-tr5-user-verified-hold/_common.sh
+# tests/hooks/feature-2256-tr5-user-verified-hold/_common.sh
 # Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, hooks/lib/diff-fingerprint.js
 # Tags: test-infrastructure, fixture, shared-lib, scope:issue-specific
 # Shared fixture, state seeding and assertion preamble for the TR5 hold sections.

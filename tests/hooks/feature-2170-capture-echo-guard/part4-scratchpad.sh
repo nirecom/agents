@@ -16,7 +16,7 @@ set -uo pipefail
 # TL3 gap (what this test does NOT catch):
 # - whether Claude Code actually suppresses the prompt on an allow decision
 # - whether settings.json's matcher reaches this hook at all (part6-settings.sh
-#   checks that statically; tests/TL3-hook-capture-echo-registration.sh live)
+#   checks that statically; tests/hooks/TL3-hook-capture-echo-registration.sh live)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 

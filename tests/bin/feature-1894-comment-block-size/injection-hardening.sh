@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/injection-hardening.sh
+# tests/bin/feature-1894-comment-block-size/injection-hardening.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, injection, control-bytes, escaping, spoofing, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #

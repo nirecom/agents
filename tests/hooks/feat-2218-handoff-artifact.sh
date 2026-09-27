@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-handoff-artifact.sh
+# tests/hooks/feat-2218-handoff-artifact.sh
 # Tests: hooks/lib/handoff-artifact.js, bin/workflow/handoff-append
 # Tags: handoff, handoff-artifact, plans-dir, append-only, latest-wins, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 

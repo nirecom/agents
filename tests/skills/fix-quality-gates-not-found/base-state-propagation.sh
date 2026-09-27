@@ -1,4 +1,4 @@
-# Part of tests/fix-quality-gates-not-found.sh (sourced, not standalone).
+# Part of tests/skills/fix-quality-gates-not-found.sh (sourced, not standalone).
 # Tests: skills/review-code-security/scripts/run-quality-gates.sh, bin/lib/codex-review-loop/ref-kind-input.sh
 # Tags: security-gate, quality-gates, merge-base, argv-propagation, false-green, scope:common, pwsh-not-required, TL2
 #
@@ -246,7 +246,7 @@ g10_state_moved_to_the_review_loop() {
 
 # SKIPPED: running the real review-code-codex to see the flag accepted.
 # Because: it bills a model call per invocation, and the flag's acceptance is pinned directly
-#          in tests/feature-review-code-codex.sh against the real script.
+#          in tests/bin/feature-review-code-codex.sh against the real script.
 # TL3 gap: a review loop that derives --base-state for a codex build predating the flag. Only
 #          a real pair of scripts on one host can catch that mismatch.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1351-skip-conditions-from-complexity/_lib.sh
+# tests/hooks/feature-1351-skip-conditions-from-complexity/_lib.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js
 # Tags: complexity, skip-conditions, resolver, helpers, scope:issue-specific
 # Shared variables and utilities for the feature-1351 test suite.
@@ -85,7 +85,7 @@ assert_eq "SC-API. every required member of the #2099 skip-resolution path exist
 # This probe pins the member's PRESENCE only. That the resolver actually
 # DELEGATES its decision to it — rather than duplicating the predicate inline —
 # is proven by SD-1/SD-3 in
-# tests/feature-2099-complexity-stage-routing/skip-delegation-cases.sh.
+# tests/hooks/feature-2099-complexity-stage-routing/skip-delegation-cases.sh.
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

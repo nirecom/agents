@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1501-icf-f-meta-fastpath.sh
+# tests/skills/fix-1501-icf-f-meta-fastpath.sh
 # Tests: skills/issue-close-finalize/SKILL.md
 # Tags: issue-close, meta, skill-doc, scope:issue-specific
 #

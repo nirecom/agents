@@ -1,7 +1,7 @@
 # Group B: the DELETE GATE is independent of scan ownership (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, delete-gate, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Scan ownership (`^feature-[0-9]+-` → audit-tests.sh, else → common) and
 # issue-reference strength (explicit / ambiguous / none) are INDEPENDENT axes:

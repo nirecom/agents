@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1443-1442-session-id-resolvers.sh
+# tests/hooks/fix-1443-1442-session-id-resolvers.sh
 # Tests: hooks/lib/resolve-workflow-session-id.js, hooks/workflow-state/session-id.js
 # Tags: worktree-end, worktree-context, session-id, scope:issue-specific, pwsh-not-required
 #
@@ -7,7 +7,7 @@
 # (resolveWorkflowSessionId, incl. the HIGH-1 own-worktree exclusion); Section C pins
 # resolveSessionId's supply-only chain after #2270 removed every inference tier.
 # Contract: docs/architecture/claude-code/session-id-resolution.md. Sections A/D/E:
-# tests/fix-1443-1442-worktree-context.sh. L3 gap: fixture worktrees, not live sessions.
+# tests/hooks/fix-1443-1442-worktree-context.sh. L3 gap: fixture worktrees, not live sessions.
 
 set -uo pipefail
 

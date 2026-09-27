@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/detect-forge-type.sh
+# tests/hooks/fix-1899-parse-remote-url/detect-forge-type.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, forge, detect-forge-type, gitlab, scope:issue-specific, TL1
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-14: THE TRACKED CWD MUST FOLLOW EVERY DIRECTORY MOVE THE SHELL MAKES.
 #
 # commandCwd() in hooks/block-clearance-token-write/bash-target-context.js is what

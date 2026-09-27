@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-commit-push-worker-gate3-static.sh
+# tests/bin/feature-commit-push-worker-gate3-static.sh
 # Tests: bin/worker-dispatch/workers/commit-push/procedure.js, skills/commit-push/SKILL.md
 # Tags: static, agent, skill, commit-push, gate3, unstaged-tracked, scope:common
 #

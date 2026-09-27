@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/redaction.sh
+# tests/hooks/fix-1899-parse-remote-url/redaction.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, security, secret-redaction, table-driven, TL1, scope:issue-specific
 #

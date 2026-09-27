@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-finalize/static-contracts.sh
+# tests/bin/bin-concern-ledger-finalize/static-contracts.sh
 # Tests: bin/run-codex-review-loop, bin/lib/codex-review-loop/format-params.sh, skills/review-code-security/scripts/run-quality-gates.sh, skills/review-code-security/scripts/run-codex-review-loop.sh
 # Tags: concern-ledger, finalize, static-contracts, completion-sentinel, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh.
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 # Detail-plan Test plan (finalize TL2) cases 8, 9 — the completion-sentinel
 # blockade and the "no second implementation" contract, both fixed statically.
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1611-model-match.sh
+# tests/hooks/feature-1611-model-match.sh
 # Tests: hooks/lib/model-match.js, bin/model-match.js
 # Tags: model-detection, parser, cli, issue-create, scope:issue-specific, TL2
 #

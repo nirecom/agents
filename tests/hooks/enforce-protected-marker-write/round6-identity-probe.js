@@ -1,4 +1,4 @@
-// tests/enforce-protected-marker-write/round6-identity-probe.js
+// tests/hooks/enforce-protected-marker-write/round6-identity-probe.js
 // Unit probe for the round-6 stdin-routing SSOT, run as a FILE (never `node -e`):
 // the modules under test live under a directory whose own name is a protected
 // string, so a `-e` body naming them would be blocked by the very hook this

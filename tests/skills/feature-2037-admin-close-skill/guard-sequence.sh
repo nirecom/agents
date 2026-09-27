@@ -14,7 +14,7 @@
 # The sequence below is driven by the skill's OWN extracted sentinel commands (ICV_ON_CMD /
 # ICV_END_CMD from the entry file), through the real handler module, against the real
 # PreToolUse hook. Nothing is reconstructed: what a reader is told to type is what runs.
-# Pattern follows tests/feature-1077-issue-close-verified.sh (blocked=exit 2, allowed=exit 0).
+# Pattern follows tests/hooks/feature-1077-issue-close-verified.sh (blocked=exit 2, allowed=exit 0).
 
 # Assumes AGENTS_DIR, _AGENTS_DIR_NODE, TMPDIR_BASE, HANDLERS_JS, ICV_ON_CMD, ICV_END_CMD,
 # WORKFLOW_PLANS_DIR, fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.

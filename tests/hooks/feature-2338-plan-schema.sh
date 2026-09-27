@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2338-plan-schema.sh
+# tests/hooks/feature-2338-plan-schema.sh
 # Tests: hooks/lib/plan-schema.js
 # Tags: scope:issue-specific
 # TL1 unit tests for the canonical plan-schema SSOT (#2338/#2228/#2339).

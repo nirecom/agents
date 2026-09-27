@@ -1,4 +1,4 @@
-# codex-parse.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# codex-parse.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: hooks/lib/supervisor-codex-parse.js (C4). Table-driven + mutation probe.
 # NOTE: RED until write-code creates hooks/lib/supervisor-codex-parse.js (#929);
 #   require() fails now, so the probe emits no CASE lines and asserts fail.

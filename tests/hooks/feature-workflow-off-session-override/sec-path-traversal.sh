@@ -1,6 +1,6 @@
 # sec-path-traversal.sh - section SEC: path traversal / metachar protection
 # (workflow-mark.js), plus its own marker-scanning helpers (test_SEC1-test_SEC3).
-# Sourced by tests/feature-workflow-off-session-override.sh; expects helpers.sh
+# Sourced by tests/hooks/feature-workflow-off-session-override.sh; expects helpers.sh
 # already sourced.
 
 # ============================================================================

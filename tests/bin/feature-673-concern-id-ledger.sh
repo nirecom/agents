@@ -115,7 +115,7 @@ invoke() {
 
 # Cases entering at round 2 use --force-round 2, not --round 2: a fresh fixture
 # has no round-counter file, so a bare --round 2 is rejected (exit 4). Round
-# sequencing itself is covered by tests/feature-673-round-counter.sh.
+# sequencing itself is covered by tests/bin/feature-673-round-counter.sh.
 
 # ---------------------------------------------------------------------------
 # 1. Round 1 with Cn-prefix concerns already → ledger written, IDs preserved
@@ -431,7 +431,7 @@ C52: unresolved — new3"
 # cycle boundary at round 1 (#1992). Split out to keep this file under the
 # file-split HARD limit.
 # ---------------------------------------------------------------------------
-# shellcheck source=tests/feature-673-concern-id-ledger/v2-ledger.sh
+# shellcheck source=tests/bin/feature-673-concern-id-ledger/v2-ledger.sh
 . "$AGENTS_WORKTREE/tests/bin/feature-673-concern-id-ledger/v2-ledger.sh"
 
 # ---------------------------------------------------------------------------

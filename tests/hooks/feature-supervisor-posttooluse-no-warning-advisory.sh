@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-posttooluse-no-warning-advisory.sh
+# tests/hooks/feature-supervisor-posttooluse-no-warning-advisory.sh
 # Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, posttooluse, advisory, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

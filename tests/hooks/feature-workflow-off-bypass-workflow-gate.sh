@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-workflow-gate.sh
+# tests/hooks/feature-workflow-off-bypass-workflow-gate.sh
 # Tests: hooks/workflow-gate.js
 # Tags: workflow, gate, hook, bin, git
 #

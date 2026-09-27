@@ -14,20 +14,9 @@ set -u
 #     idempotency, issue-not-found) is not exercised here.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
-}
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -186,11 +175,8 @@ echo "=== Group D: wip-state.sh GitLab routing (mocked glab/gh) ==="
 REPO_GL="$(make_repo 'git@gitlab.com:acme/widgets.git')"
 REPO_GH="$(make_repo 'git@github.com:acme/widgets.git')"
 
-# D1: set 42 on a gitlab repo → drives glab with a status:wip label referencing
-# the issue AND exits successfully. Stateful mock proves the wip label is
-# actually applied (not merely mentioned in argv). Pre-seed status:done so the
-# assertion also proves set REPLACES the opposing label. RED now (gitlab origin
-# falls through to the gh Projects v2 path and exits before any glab call).
+# D1-D3b: set/check/clear chain on gitlab (stateful — must run together)
+case_begin "d-gitlab-set-check-clear-chain" "bin/github-issues/wip-state/cmd-set.sh"
 reset_logs; reset_state
 seed_labels 42 "status:done"
 run_wip "$REPO_GL" set 42 --session-id "$SID"
@@ -202,21 +188,15 @@ if [ "$LAST_RC" -eq 0 ] \
 else
     fail "D1: expected exit 0 + status:wip set / status:done cleared + no gh (rc=$LAST_RC) glab-log=[$(cat "$GLAB_LOG" 2>/dev/null)] gh-log=[$(cat "$GH_LOG" 2>/dev/null)] state=[$(cat "$GLAB_STATE_DIR/labels-42" 2>/dev/null | tr '\n' ',')]"
 fi
-
-# D2: check 42 on a gitlab repo → reads WIP state through glab (not gh), reports
-# WIP, and exits 0. Runs directly after D1 so state carries status:wip. RED now.
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID"
 if [ "$LAST_RC" -eq 0 ] && [ -s "$GLAB_LOG" ] && log_has "$GLAB_LOG" "42" \
-   && printf '%s' "$LAST_OUT" | grep -qi 'wip' \
+   && printf '%s' "$LAST_OUT" | grep -qE '^(same|other)$' \
    && [ ! -s "$GH_LOG" ]; then
     pass "D2: gitlab check → glab queried for #42, reports WIP, exit 0, gh NOT called"
 else
     fail "D2: expected exit 0 + glab query + WIP output + no gh (rc=$LAST_RC) out=[$LAST_OUT] glab-log=[$(cat "$GLAB_LOG" 2>/dev/null)] gh-log=[$(cat "$GH_LOG" 2>/dev/null)]"
 fi
-
-# D3: clear 42 on a gitlab repo → applies status:done, replaces status:wip, exit
-# 0. Runs after D2 with state still status:wip so replacement is provable. RED now.
 reset_logs
 run_wip "$REPO_GL" clear 42
 if [ "$LAST_RC" -eq 0 ] \
@@ -227,22 +207,17 @@ if [ "$LAST_RC" -eq 0 ] \
 else
     fail "D3: expected exit 0 + status:done set / status:wip cleared + no gh (rc=$LAST_RC) glab-log=[$(cat "$GLAB_LOG" 2>/dev/null)] gh-log=[$(cat "$GH_LOG" 2>/dev/null)] state=[$(cat "$GLAB_STATE_DIR/labels-42" 2>/dev/null | tr '\n' ',')]"
 fi
-
-# D3b: check 42 after clear → reports non-WIP (none/done), exit 0. Proves the
-# check verb reflects the cleared state, not a fixed literal. RED now.
 reset_logs
 run_wip "$REPO_GL" check 42 --session-id "$SID"
-if [ "$LAST_RC" -eq 0 ] && ! printf '%s' "$LAST_OUT" | grep -qi 'wip'; then
-    pass "D3b: gitlab check after clear → non-WIP output, exit 0"
+if [ "$LAST_RC" -eq 0 ] && printf '%s' "$LAST_OUT" | grep -qxE 'none'; then
+    pass "D3b: gitlab check after clear → outputs 'none', exit 0"
 else
     fail "D3b: expected exit 0 + non-WIP output (rc=$LAST_RC) out=[$LAST_OUT]"
 fi
+case_end
 
-# D4: gitlab repo + cross-repo --repo → rejected with exit 2. Cross-repo WIP is a
-# GitHub-Projects concept; gitlab label signaling is repo-local. RED now: current
-# code reaches the gh preflight and exits 2 with "missing required env vars"
-# (wrong reason). GREEN once gitlab rejects --repo explicitly — asserted via exit
-# 2 AND the absence of the missing-env message (avoids pinning exact new wording).
+# D4: gitlab repo + cross-repo --repo → rejected with exit 2.
+case_begin "d4-gitlab-cross-repo-rejection" "bin/github-issues/wip-state/cmd-check.sh"
 reset_logs
 run_wip "$REPO_GL" set 42 --session-id "$SID" --repo other/project
 if [ "$LAST_RC" -eq 2 ] && ! printf '%s' "$LAST_ERR" | grep -qi "missing required env vars"; then
@@ -250,10 +225,10 @@ if [ "$LAST_RC" -eq 2 ] && ! printf '%s' "$LAST_ERR" | grep -qi "missing require
 else
     fail "D4: expected exit 2 without missing-env msg (rc=$LAST_RC) err=[$LAST_ERR]"
 fi
+case_end
 
-# D5: CONTROL — github repo with no WIP_STATE_* env → exit 2 "missing required
-# env vars" AND glab never called. Proves github still routes to gh Projects v2
-# (unchanged). GREEN now and after #2308 (regression pin).
+# D5: CONTROL — github repo with no WIP_STATE_* env → gh path (regression pin).
+case_begin "d5-github-control" "bin/github-issues/wip-state/cmd-clear.sh"
 reset_logs
 run_wip "$REPO_GH" set 42 --session-id "$SID"
 if [ "$LAST_RC" -eq 2 ] \
@@ -263,12 +238,10 @@ if [ "$LAST_RC" -eq 2 ] \
 else
     fail "D5: expected gh missing-env exit 2 + no glab (rc=$LAST_RC) glab-log=[$(cat "$GLAB_LOG" 2>/dev/null)] err=[$LAST_ERR]"
 fi
+case_end
 
-# D6 (C13): unknown-forge guard. A bitbucket (unknown) origin must be rejected
-# safely — NEITHER gh NOR glab may be invoked, and the exit status is non-zero.
-# RED now: the current gh-only path reaches `gh auth status` in
-# ensure_wip_field_ids before any forge classification, so gh IS called. GREEN
-# once #2308 classifies the forge up front and rejects an unknown one.
+# D6: unknown-forge guard — neither gh nor glab invoked.
+case_begin "d6-unknown-forge" "bin/github-issues/wip-state.sh"
 REPO_UNK="$(make_repo 'git@bitbucket.org:acme/widgets.git')"
 reset_logs; reset_state
 run_wip "$REPO_UNK" set 42 --session-id "$SID"
@@ -277,6 +250,7 @@ if [ "$LAST_RC" -ne 0 ] && [ ! -s "$GLAB_LOG" ] && [ ! -s "$GH_LOG" ]; then
 else
     fail "D6: expected rc!=0 + no gh/glab calls (rc=$LAST_RC) gh-log=[$(cat "$GH_LOG" 2>/dev/null)] glab-log=[$(cat "$GLAB_LOG" 2>/dev/null)]"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

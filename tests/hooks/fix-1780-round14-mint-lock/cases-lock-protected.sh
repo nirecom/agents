@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-clearance-token-write.js, hooks/lib/protected-basenames.js, hooks/lib/off-clearance-mint-lock.js
 # Tags: mint-lock, protected-basename, ssot, block-clearance-token-write, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
 # THE LOCK FILE IS PROTECTED STATE — round-14 HIGH-2. A mutex anyone may create or
 # delete is not a mutex: CREATE denies every mint/claim for the SID, DELETE reopens
 # the round-14 HIGH race — opposite halves one guard must cover (CPR-ORTH). The lock

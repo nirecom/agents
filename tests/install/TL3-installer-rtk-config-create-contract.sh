@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-installer-rtk-config-create-contract.sh
+# tests/install/TL3-installer-rtk-config-create-contract.sh
 # Tests: install/win/rtk.ps1, install/linux/rtk.sh
 # Tags: TL3, rtk, installer, config, scope:issue-specific
 #

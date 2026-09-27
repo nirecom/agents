@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-c2-label-891-892-label.sh
+# tests/hooks/fix-supervisor-c2-label-891-892-label.sh
 # Tests: hooks/supervisor-guard.js, agents/supervisor.md
 # Tags: supervisor, em-supervisor, layer2, fix
 # RED for #929 (label rename "C2 scheduled-review" -> non-numeric "scheduled-review");

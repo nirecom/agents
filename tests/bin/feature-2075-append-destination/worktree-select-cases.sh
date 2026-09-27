@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # Tests: skills/review-tests/scripts/select-staged-files.sh, bin/resolve-worktree-path
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases W1-W2 (TL2): the --added-only filter on the RESOLVED-WORKTREE output path.
 # S10 exercises only the NOSTATE CWD fallback, so the `git -C "$WORKTREE"` call
 # site — the one RT-1a actually reaches in a real session — is untested there.
-# Fixture shape follows tests/fix-882-resolve-worktree-path.sh: real linked
+# Fixture shape follows tests/hooks/fix-882-resolve-worktree-path.sh: real linked
 # worktree + a workflow state file whose cwd points at it.
+
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "worktree-select-series" "skills/review-tests/scripts/select-staged-files.sh"
 
 if ! command -v node >/dev/null 2>&1; then
     for _wid in W1 W2; do
@@ -99,5 +107,15 @@ else
 
     git -C "$W_MAIN" worktree remove --force "$W_LINKED" >/dev/null 2>&1 || true
 fi
+
+case_end
+
+case_begin "worktree-resolve-path-coverage" "bin/resolve-worktree-path"
+if [[ -f "$AGENTS_ROOT/bin/resolve-worktree-path" ]]; then
+    pass "P0-ext bin/resolve-worktree-path exists (used by this test suite)"
+else
+    fail "P0-ext bin/resolve-worktree-path missing"
+fi
+case_end
 
 grp_done "worktree-select-cases.sh"

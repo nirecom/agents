@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-review-verdict-validate/malformed-artifact.sh
+# tests/bin/feat-1761-review-verdict-validate/malformed-artifact.sh
 # Tests: bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, validator, malformed-artifact, table-driven, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
@@ -7,7 +7,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Split out of tests/feat-1761-review-verdict-validate.sh (rules/coding/file-split.md
+# Split out of tests/bin/feat-1761-review-verdict-validate.sh (rules/coding/file-split.md
 # Pattern A, 300-line WARN). The sibling file varies the REVIEW output against a
 # well-formed artifact; this one varies the ARTIFACT against a well-formed review.
 

@@ -1,4 +1,4 @@
-# Sourced by tests/feature-wip-state/abandon.sh — not executed directly (no shebang).
+# Sourced by tests/agents/feature-wip-state/abandon.sh — not executed directly (no shebang).
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-state/cmd-abandon.sh
 # Tags: wip-state, github, scope:issue-specific
 #

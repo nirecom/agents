@@ -1,8 +1,8 @@
-# tests/fix-1630-overlay-cross-validation/strip-units.sh
+# tests/hooks/fix-1630-overlay-cross-validation/strip-units.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, config-dir, overlay, unit, scope:issue-specific
 #
-# Sourced by tests/fix-1630-overlay-cross-validation.sh.
+# Sourced by tests/hooks/fix-1630-overlay-cross-validation.sh.
 #
 # STRIP-* — stripRelSuffix units, asserted on the module directly rather than
 # through a hook verdict. These are the LIVE half of this suite: #1673 moved
@@ -14,7 +14,7 @@
 # matchFinalizeWorkerOverlay which root a finalize `eval` implied, and both the
 # function and the `eval` capability were deleted. The equivalent question for
 # the dispatcher — which anchor a worker script resolves against — is owned by
-# tests/feature-1643-worker-dispatch-callers.sh and the TL3-worker-dispatch-*
+# tests/skills/feature-1643-worker-dispatch-callers.sh and the TL3-worker-dispatch-*
 # suites, not by a probe over a module that no longer exists.
 
 overlay_probe() { run_with_timeout 30 node "$OVERLAY_PROBE" "$@" 2>&1; }

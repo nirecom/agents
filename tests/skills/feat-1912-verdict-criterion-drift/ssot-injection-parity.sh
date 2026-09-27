@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-verdict-criterion-drift/ssot-injection-parity.sh
+# tests/skills/feat-1912-verdict-criterion-drift/ssot-injection-parity.sh
 # Tests: skills/_shared/issue-verdict-cascade.md, agents/issue-create-survey-worker.md, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, cascade, ssot, prompt-assembly, parity, drift, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -10,7 +10,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Section of tests/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
+# Section of tests/skills/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
 #
 # The parent proves each grader REFERENCES the cascade; a truncated injection or a stale
 # sibling copy passes that while the two sides decide by different rules. This file

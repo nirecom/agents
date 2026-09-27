@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/feature-1701-workflow-gate-code-size/infra-and-config.sh
+# tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
 #
-# Fragment of tests/feature-1701-workflow-gate-code-size.sh — sourced by the
+# Fragment of tests/hooks/feature-1701-workflow-gate-code-size.sh — sourced by the
 # parent, not run directly. Owns cases 8-14: infrastructure failure handling
 # (missing bash, missing script, unexpected exit, timeout = the only fail-open
 # path) and CODE_FILE_EXTENSIONS resolution (.env authoritative, process.env

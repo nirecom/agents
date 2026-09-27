@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/registry.sh
+# tests/bin/feature-sweep-worktrees/registry.sh
 # T1..T7 — registry / candidate-detection / apply / EPERM / backup / JSON-shape.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 

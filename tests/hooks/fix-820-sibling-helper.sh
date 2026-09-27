@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-820-sibling-helper.sh
+# tests/hooks/fix-820-sibling-helper.sh
 # Tests: hooks/enforce-worktree/shared-cmd-utils.js
 # Tags: worktree, enforce, hook, security, fix-820, helper
 #

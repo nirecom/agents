@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-off-clearance-lifecycle.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-off-clearance-lifecycle.sh (rules/coding/file-split.md).
 # Sections C and P - L-2 (identity-bound consumption) and L-3 (single-use
 # EMERGENCY provenance).
 #

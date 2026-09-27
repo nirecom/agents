@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-595-bypass-e2e.sh
+# tests/hooks/fix-595-bypass-e2e.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js.
 # Tags: worktree, enforce, hook, history, docs, security, interpreter-wrapper, fix-802
 #

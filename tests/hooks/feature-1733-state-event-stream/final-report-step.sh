@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/final-report-step.sh
+# tests/hooks/feature-1733-state-event-stream/final-report-step.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow-state, event-stream, final-report, valid-steps, terminal-steps, sentinel-parsing, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -22,7 +22,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="fr"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo "== F1: final_report is the last entry of VALID_STEPS =="

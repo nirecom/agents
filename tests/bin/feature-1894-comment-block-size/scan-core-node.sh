@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/scan-core-node.sh
+# tests/bin/feature-1894-comment-block-size/scan-core-node.sh
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, parser, node, table-driven, ssot, parity, scope:issue-specific, scope:feature-1894, layer:TL2
 

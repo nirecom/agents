@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tests/bin-check-on-demand-rules-fixture-git-discipline.sh
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh, tests/bin-check-on-demand-rules/cases-staged.sh, tests/bin-check-on-demand-rules.sh
+# tests/tests/bin-check-on-demand-rules-fixture-git-discipline.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh, tests/bin/bin-check-on-demand-rules/cases-staged.sh, tests/bin/bin-check-on-demand-rules.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, real-git, positive-control, TL2, scope:common
 set -uo pipefail
 

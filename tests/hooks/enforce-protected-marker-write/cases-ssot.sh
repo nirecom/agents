@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/protected-basenames.js, hooks/lib/session-markers.js
 # Tags: session-marker, protected-basename, ssot, forge-state, scope:common
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Section X - M-3 (.tmp symmetry) and CROSS-FILE DRIFT DETECTION.
 #
 # protected-basenames.js is the SSOT for clearance-state basenames; the checks

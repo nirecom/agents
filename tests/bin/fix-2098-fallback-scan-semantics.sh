@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-2098-fallback-scan-semantics.sh
+# tests/bin/fix-2098-fallback-scan-semantics.sh
 # Tests: .github/ISSUE_TEMPLATE/task.yml, .github/ISSUE_TEMPLATE/incident.yml
 # Tags: github, issues, templates, issue-forms, yaml-scan, parser, negative-control, scope:issue-specific, layer:TL1, dup-group-keep:size-hard-limit
 #

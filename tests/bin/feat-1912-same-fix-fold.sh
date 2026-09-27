@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-same-fix-fold.sh
+# tests/bin/feat-1912-same-fix-fold.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, same-fix, fold, artifact, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/j-matrix-consumer.sh
+# tests/hooks/feature-1665-seq-cascade/j-matrix-consumer.sh
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/stop-premature-stop-guard.js, hooks/workflow-state/lifecycle.js, bin/workflow/lib/next-step/verdict.js
 # Tags: workflow-state, write-code, stop-guard, exemption-matrix, registration, orthogonality, scope:issue-specific, pwsh-not-required, TL1
 #

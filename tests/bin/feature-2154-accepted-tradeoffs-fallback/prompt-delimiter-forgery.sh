@@ -10,7 +10,7 @@
 # prompt_count_line and the LB_* fixtures below.
 echo "=== Layer B: structural delimiter forgery across channels (case 14) ==="
 
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 # TL3 gap (what this file does NOT catch): the codex CLI is mocked, so whether a
 # real model still reads the frame correctly when attacker text repeats its
 # delimiters is never observed — only where the bytes land. Closest-to-action

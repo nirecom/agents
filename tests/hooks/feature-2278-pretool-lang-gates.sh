@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2278-pretool-lang-gates.sh
+# tests/hooks/feature-2278-pretool-lang-gates.sh
 # Tests: hooks/gate-plan-lang.js, hooks/gate-worktree-notes-lang.js, hooks/lib/pretool-lang-gate.js, hooks/lib/plan-artifact-lang.js, settings.json
 # Tags: lang, hook, pretooluse, plans, worktree-notes, TL2, scope:issue-specific
 # #2278 — PreToolUse language gates that reject a plan-artifact / WORKTREE_NOTES.md

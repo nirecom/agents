@@ -1,9 +1,9 @@
-# tests/feature-1180-commit-lang-check/lib.sh
+# tests/hooks/feature-1180-commit-lang-check/lib.sh
 # Tests: hooks/lib/lint-commit-lang.js, hooks/lib/lang-config.js, hooks/pre-commit
 # Tags: lang-enforce, commit-hook, scope:issue-specific
 #
 # Shared harness for the feature-1180-commit-lang-check dispatcher.
-# Sourced by tests/feature-1180-commit-lang-check.sh — not executable standalone.
+# Sourced by tests/hooks/feature-1180-commit-lang-check.sh — not executable standalone.
 # Provides: AGENTS_DIR, LINT_LIB(_NODE), LANG_BLOCK_MARKER, PASS/FAIL counters,
 # TMPDIR_BASE (+ EXIT trap), and the pass/fail/run_with_timeout/require_sut/
 # make_git_repo/run_precommit/run_check_node/run_check_node_raw/

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-render-alert.sh
+# tests/bin/feature-supervisor-render-alert.sh
 # Tests: bin/supervisor-render-alert, hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, em-supervisor, render-alert, cli, scope:issue-specific, pwsh-not-required, hook-registration
 # L3 gap (what this test does NOT catch):

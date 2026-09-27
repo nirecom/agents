@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-system-ops-classifier.sh (rules/coding/file-split.md).
 # Section E - the SYSTEM_OPS_APPROVED bypass branch, in both of its halves:
 # the INHERITED env value (only the exact string "1" bypasses) and the INLINE
 # spellings the model could write into its own payload (never bypass).

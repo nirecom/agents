@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/cc-instructions-loaded-cleanup.sh
+# tests/hooks/cc-instructions-loaded-cleanup.sh
 # Tests: hooks/workflow-state/state-io/zombie-cleanup.js, hooks/lib/instructions-loaded-receipt.js
 # Tags: rules-injection, instructions-loaded, receipts, cleanup, retention, idempotency, TL2, scope:common
 

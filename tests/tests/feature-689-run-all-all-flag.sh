@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-689-run-all-all-flag.sh
+# tests/tests/feature-689-run-all-all-flag.sh
 # Tests: tests/run-all.sh
 # Tags: bin, tests, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1679-finalize-overlay-arg-contract.sh
+# tests/hooks/fix-1679-finalize-overlay-arg-contract.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, allowlist, security, TL2, pwsh-not-required, scope:issue-specific
 #

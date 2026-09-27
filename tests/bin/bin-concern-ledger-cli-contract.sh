@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-cli-contract.sh
+# tests/bin/bin-concern-ledger-cli-contract.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, cli, edge-cases, error-cases, config-branch, sha-tool, table-driven, scope:common, pwsh-not-required
 #
@@ -286,7 +286,7 @@ echo "--- cli 7: check-staged finds staged deltas through a backslash plans dir 
 # The no-producer branch is one of two MUST class members for #2088 (the other
 # is cl_reduce in bin/lib/concern-ledger/reduce.sh). These cases already pass on
 # the pre-fix glob, so a revert is caught instead by
-# tests/bin-concern-ledger-cli-contract/check-staged-discovery.sh (sourced
+# tests/bin/bin-concern-ledger-cli-contract/check-staged-discovery.sh (sourced
 # below), which pins the subcommand body against reverted mutants.
 
 # bs_plans <base> — a plans dir path containing a backslash: cygpath -w on

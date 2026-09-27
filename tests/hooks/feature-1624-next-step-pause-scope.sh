@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1624-next-step-pause-scope.sh
+# tests/hooks/feature-1624-next-step-pause-scope.sh
 # Tests: hooks/lib/next-step-pause-marker.js, hooks/lib/session-markers.js, hooks/workflow-mark/enforce-override-handlers/next-step-pause.js, bin/workflow/lib/next-step/verdict.js, hooks/stop-premature-stop-guard.js, hooks/lib/protected-basenames.js
 # Tags: next-step-pause, marker-v2, for-step, ttl, audit, security, parser, regression-1624, scope:issue-specific, pwsh-not-required, TL1, TL2
 

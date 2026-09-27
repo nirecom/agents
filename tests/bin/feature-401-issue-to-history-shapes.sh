@@ -11,7 +11,7 @@ MARKER_ERE='\(no (Background|Changes|Cause|Fix) recorded\)'
 # Resolve a runnable Python BEFORE setup_ith_tmp prepends gh-mock to PATH, so
 # `command -v` cannot resolve through the fixture dir. On Windows bare
 # `python`/`python3` may be the Microsoft Store stub, so prefer `uv run python`
-# (pattern from tests/fix-277-doc-append-merge-union.sh).
+# (pattern from tests/bin/fix-277-doc-append-merge-union.sh).
 if command -v uv >/dev/null 2>&1; then
     PY_RUNNER=(uv run python)
 elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then

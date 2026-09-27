@@ -1,4 +1,4 @@
-# tests/fix-1630-config-dir-resolver/seams.sh
+# tests/hooks/fix-1630-config-dir-resolver/seams.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/agents-config-dir.js
 # Tags: hook, worktree, config-dir, resolver, enforce, security, scope:issue-specific
 #
@@ -10,8 +10,8 @@
 # whether AGENTS_CONFIG_DIR being missing/stale still recovered that ALLOW. With
 # the overlay gone there is no identity match left for these shapes at all — they
 # now BLOCK unconditionally, in every AGENTS_CONFIG_DIR state, and stand as
-# retired-capability pins (same treatment as tests/fix-1600-finalize-worker-overlay
-# /allow-cases.sh and tests/fix-1630-overlay-cross-validation.sh).
+# retired-capability pins (same treatment as tests/hooks/fix-1600-finalize-worker-overlay
+# /allow-cases.sh and tests/hooks/fix-1630-overlay-cross-validation.sh).
 #
 # The env-state axis (correct / missing / stale) is kept in the row names even
 # though every row now asserts BLOCK: it documents that the retirement is total —

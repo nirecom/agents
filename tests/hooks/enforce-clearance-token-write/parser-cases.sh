@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/parser-cases.sh
+# tests/hooks/enforce-clearance-token-write/parser-cases.sh
 # Tests: hooks/block-clearance-token-write.js
 # Tags: anti-cheat, clearance-token, pretooluse, classifier, parser-regex-tests, table-driven, scope:issue-specific, pwsh-not-required, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host. Covered by tests/TL3-hook-clearance-token-write.sh.
+# - The hook firing on a real host. Covered by tests/hooks/TL3-hook-clearance-token-write.sh.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 #
-# Split out of tests/enforce-clearance-token-write.sh (rules/coding/file-split.md
+# Split out of tests/hooks/enforce-clearance-token-write.sh (rules/coding/file-split.md
 # Pattern A). That file asserts the SECURITY behaviour — which commands are blocked
 # and which files stay unchanged. This file asserts the PARSER underneath it: given
 # an arbitrary PreToolUse payload, does the classifier reach a decision at all?

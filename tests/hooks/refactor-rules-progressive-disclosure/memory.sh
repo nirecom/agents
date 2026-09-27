@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/test-design.md
 # Tags: memory, index, scope:common
-# Part of tests/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
+# Part of tests/hooks/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
 # Test 7: memory index consistency
 # Test 8: memory merge check
 

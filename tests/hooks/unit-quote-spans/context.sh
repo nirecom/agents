@@ -1,8 +1,8 @@
-# tests/unit-quote-spans/context.sh
+# tests/hooks/unit-quote-spans/context.sh
 # Tests: hooks/lib/quote-spans/query.js, hooks/lib/quote-spans/transform.js
 # Tags: hook, quote-spans, parser, unit, security, scope:common
 #
-# STATUS: RED until C1 lands. Sourced by tests/unit-quote-spans.sh.
+# STATUS: RED until C1 lands. Sourced by tests/hooks/unit-quote-spans.sh.
 #
 # Pins for:
 #   - quoteContextAt (only dq/sq/ansic yield their own name; every expanding
@@ -127,7 +127,7 @@ done
 #          reproducible from the public string-in/JSON-out probe surface.
 # TL3 gap: only a real malformed-input crash in the live hook would exercise it;
 #          the fail-safe consequence (BLOCK) is covered by
-#          tests/fix-1569-quote-span-regression.sh case 13.
+#          tests/hooks/fix-1569-quote-span-regression.sh case 13.
 
 # ---------------------------------------------------------------------------
 # Memoization: 8-entry LRU keyed on the string, plus _resetCacheForTest().

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-scan-outbound.sh
+# tests/hooks/feature-workflow-off-bypass-scan-outbound.sh
 # Tests: hooks/scan-outbound.js
 # Tags: scan, filter, outbound, hook, workflow, scope:common
 #

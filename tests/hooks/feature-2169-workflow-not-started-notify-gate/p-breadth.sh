@@ -1,4 +1,4 @@
-# tests/feature-2169-workflow-not-started-notify-gate/p-breadth.sh
+# tests/hooks/feature-2169-workflow-not-started-notify-gate/p-breadth.sh
 # Tests: hooks/user-prompt-submit-mechanism-check.js, hooks/lib/stop-exemption-policy.js, hooks/workflow-state/lifecycle.js, hooks/lib/mechanism-failure.js
 # Tags: stall-detection, user-prompt-submit, prompt-notify, pre-workflow-init, wi-10-lookahead, regression-2169, scope:issue-specific, pwsh-not-required, TL1, TL2
 # P6/P8/P9/P10 (round-3 review C1/C1/C2; P10 round-5 review C1); P13/P14 (round-6 review C1/C2) — breadth across finding kinds, gate precision vs C4's broader exemptions, multi-step suppression, an attack-scenario proof for isKnownStep(), mechanism-failure.js's OWN downstream-sink sanitization (a known gap, xfail-pinned — see P13), and isKnownStep()'s direct per-branch verdicts. Depends on helpers.sh.

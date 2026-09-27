@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-routing/w-series.sh
+# tests/hooks/feature-workflow-init-routing/w-series.sh
 # Tests: skills/workflow-init/SKILL.md
 # Tags: workflow, init, routing, multi-n, scope:common
 #

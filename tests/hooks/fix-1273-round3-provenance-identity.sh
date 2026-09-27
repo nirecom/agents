@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-round3-provenance-identity.sh
+# tests/hooks/fix-1273-round3-provenance-identity.sh
 # Tests: hooks/workflow-run-tests/provenance-identity.js, hooks/workflow-run-tests/exec-model.js, hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, classifier, provenance, security, TL1, TL2, scope:common
 #
@@ -37,11 +37,11 @@
 # today's (buggy) verdict to make the fix's collateral visible, and are now
 # pinned at the post-fix verdict together with their one-layer-up counterparts
 # QA-ABS / QA-ABS-TO / QA-ABS-WIN in
-# tests/main-workflow-run-tests/quoted-arg-and-provenance.sh.
+# tests/hooks/main-workflow-run-tests/quoted-arg-and-provenance.sh.
 #
 # TL3 gap (what this test does NOT catch):
 #   - Whether a REAL `claude -p` Bash tool call delivers `tool_input.cwd` in the
-#     spelling these fixtures assume. tests/TL3-worker-dispatch-run-tests.sh is
+#     spelling these fixtures assume. tests/bin/TL3-worker-dispatch-run-tests.sh is
 #     the gated tier for the real-invocation shape.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
@@ -157,7 +157,7 @@ try {
 # `/tmp/forge-<pid>` root that is guaranteed NOT to exist and has no relationship
 # to any checkout. They deliberately avoid the `/srv/checkout/agents/...` and
 # `C:/git/checkout/agents/...` spellings that
-# tests/main-workflow-run-tests/quoted-arg-and-provenance.sh already uses as
+# tests/hooks/main-workflow-run-tests/quoted-arg-and-provenance.sh already uses as
 # legitimate synthetic fixtures, so a fix can be evaluated against the two
 # shapes independently. See H2b below for that collision, spelled out.
 # ===========================================================================
@@ -194,7 +194,7 @@ assert_eq "H2a/control-real-run-all-still-trusted" "run-all" \
 # ===========================================================================
 # H2b — the legacy synthetic fixtures, resolved
 #
-# tests/main-workflow-run-tests/quoted-arg-and-provenance.sh rows QA-ABS,
+# tests/hooks/main-workflow-run-tests/quoted-arg-and-provenance.sh rows QA-ABS,
 # QA-ABS-TO and QA-ABS-WIN drive the hook with SYNTHETIC absolute paths that do
 # not exist on the running machine —
 #     bash /srv/checkout/agents/tests/run-all.sh

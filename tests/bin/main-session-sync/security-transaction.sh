@@ -1,6 +1,6 @@
 # Tests: install/linux/session-sync-init.sh
 # Tags: bin, install, git, session-sync, security, installer, scope:issue-specific
-# Part of tests/main-session-sync.sh; sourced after security.sh, whose _sec_run /
+# Part of tests/bin/main-session-sync.sh; sourced after security.sh, whose _sec_run /
 # _sec_temp_leftovers helpers it reuses.
 
 # The transaction's staging names embed the installer's own $$, which no outside

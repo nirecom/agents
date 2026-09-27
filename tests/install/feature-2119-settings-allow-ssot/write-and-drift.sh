@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/write-and-drift.sh
+# tests/install/feature-2119-settings-allow-ssot/write-and-drift.sh
 # Tests: install/assemble-settings.js, install/lib/settings-deploy.js, install/lib/settings-assembly.js, hooks/lib/settings-drift.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T6-T7: what a deploy does to ~/.claude/settings.json, and what the drift check sees. Sourced

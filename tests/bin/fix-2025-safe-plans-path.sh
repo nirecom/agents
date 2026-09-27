@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-2025-safe-plans-path.sh
+# tests/bin/fix-2025-safe-plans-path.sh
 # Tests: bin/lib/safe-plans-path.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
 # Tags: safe-plans-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required
 #
@@ -218,9 +218,9 @@ MODES_OK=no
     || echo "NOTE: this host does not honour POSIX modes — mode cases are skipped"
 
 # ---------------------------------------------------------------------------
-# Cases split into tests/fix-2025-safe-plans-path/ per rules/coding/file-split.md.
+# Cases split into tests/bin/fix-2025-safe-plans-path/ per rules/coding/file-split.md.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/fix-2025-safe-plans-path"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/fix-2025-safe-plans-path"
 
 # shellcheck source=./fix-2025-safe-plans-path/containment.sh
 . "$SUITE_DIR/containment.sh"

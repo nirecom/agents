@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-2098-issue-template-no-prefill.sh
+# tests/bin/fix-2098-issue-template-no-prefill.sh
 # Tests: .github/ISSUE_TEMPLATE/incident.yml, .github/ISSUE_TEMPLATE/task.yml
 # Tags: github, issues, templates, tests, scope:common, layer:TL1
 #

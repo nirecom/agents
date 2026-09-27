@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, ssh, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
 # not run alone; uses make_mirror_sandbox / run_mirror_driver. Issue #2160: the
 # startup fetch must respect a configured core.sshCommand and fall back to
 # 'ssh -o BatchMode=yes' only when git has none. The lookup is specified as

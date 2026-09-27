@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/feature-2256-command-tool-coverage/sibling-hooks.sh
+# tests/hooks/feature-2256-command-tool-coverage/sibling-hooks.sh
 # Tests: hooks/confirm-checkpoint.js, hooks/gate-plan-skip-sentinel.js
 # Tests: hooks/show-user-verified-context.js, hooks/supervisor-trigger.js
 # Tags: supervisor, command-tool, sentinel, orthogonality, TL2, scope:issue-specific
 # #2256 S5-a2: the remaining four hooks move off the literal Bash tool-name test,
 # so each must answer identically when its own sentinel arrives as commands[1].
 
-# Parent: tests/feature-2256-command-tool-coverage.sh
+# Parent: tests/hooks/feature-2256-command-tool-coverage.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

@@ -1,7 +1,7 @@
 # Group L: the two real regression families that motivated #1833 (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, regression-family, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # Synthetic fixture names can't expose naming-shaped bugs: trp_scope_of and
 # trp_issue_ref key on the BASENAME. The names below are verbatim from two live

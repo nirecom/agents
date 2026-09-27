@@ -1,7 +1,7 @@
-# tests/bin-concern-ledger-finalize/cap-outline-detail.sh
+# tests/bin/bin-concern-ledger-finalize/cap-outline-detail.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
 # Tags: concern-ledger, finalize, cap-termination, outline-plan, detail-plan, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh (after loop-integration.sh; reuses its mk_loop_env/mk_reviewer/run_loop helpers).
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh (after loop-integration.sh; reuses its mk_loop_env/mk_reviewer/run_loop helpers).
 # Case 10 pins the terminal-finalize trigger for the two cap-1 formats and shows
 # that detail-plan does NOT fire before its cap. Missing: outline-plan entirely,
 # and detail-plan driven to its own cap. The trigger is "this round is the last

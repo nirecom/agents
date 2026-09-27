@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/feature-2223-local-env-overlay/blocklist-coverage.sh
+# tests/hooks/feature-2223-local-env-overlay/blocklist-coverage.sh
 # Tests: hooks/lib/local-env.js, hooks/lib/load-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, trust-boundary, pwsh-not-required
-# Case file for tests/feature-2223-local-env-overlay.sh — sourced from it, never
+# Case file for tests/hooks/feature-2223-local-env-overlay.sh — sourced from it, never
 # run standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Split off because the parent exceeded the 500-line HARD limit; the
 # sibling-folder form is the split rules/coding/file-split.md sanctions.

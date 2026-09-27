@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tests/feature-1665-seq-cascade/projectstate-callsites.js
+// tests/hooks/feature-1665-seq-cascade/projectstate-callsites.js
 //
 // Call-site inventory for `projectState`, used by c-projectstate-callers.sh.
 //

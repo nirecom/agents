@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, direction-a
 # Direction A — the library (or anything sourced after it) shadowing a harness name.
 # Every check is a positive/negative control pair, because a guard that never fires is

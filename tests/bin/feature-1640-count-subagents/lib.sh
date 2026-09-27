@@ -1,11 +1,11 @@
-# tests/feature-1640-count-subagents/lib.sh
-# Shared harness + fixture vocabulary for tests/feature-1640-count-subagents.sh.
+# tests/bin/feature-1640-count-subagents/lib.sh
+# Shared harness + fixture vocabulary for tests/bin/feature-1640-count-subagents.sh.
 # Sourced by that dispatcher — not executable standalone, and not picked up by
 # tests/run-all.sh (which globs tests/*.sh at the top level only).
 #
 # Extracted from the entry file purely for the HARD 500-line limit in
 # rules/coding/file-split.md; the case bodies all stay in the entry file. Same
-# arrangement as tests/feature-1180-commit-lang-check/lib.sh.
+# arrangement as tests/hooks/feature-1180-commit-lang-check/lib.sh.
 #
 # Provides: AGENTS_DIR, SCRIPT, TMPROOT (+ EXIT trap), PASS/FAIL/SKIP counters,
 # assert_eq / skip_case / run_with_timeout / native_path / run_cli / node_m /

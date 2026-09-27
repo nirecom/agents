@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/f-log-tail-scope.sh
+# tests/hooks/feature-1665-run-outcome/f-log-tail-scope.sh
 # Tests: hooks/workflow-run-tests/outcome.js, hooks/workflow-run-tests.js, bin/worker-dispatch/emit.js
 # Tags: workflow, run-outcome, parser, log-tail, position-scope, security, TL1, TL2, scope:issue-specific
 #

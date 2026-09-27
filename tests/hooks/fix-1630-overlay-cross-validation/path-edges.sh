@@ -1,4 +1,4 @@
-# tests/fix-1630-overlay-cross-validation/path-edges.sh
+# tests/hooks/fix-1630-overlay-cross-validation/path-edges.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, config-dir, overlay, unit, path, scope:issue-specific
 #

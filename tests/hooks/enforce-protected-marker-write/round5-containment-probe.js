@@ -1,4 +1,4 @@
-// Helper for tests/enforce-protected-marker-write/cases-round5-containment.sh.
+// Helper for tests/hooks/enforce-protected-marker-write/cases-round5-containment.sh.
 // A FILE, not a `node -e` body: the OFF-clearance suffix is itself a protected
 // string, so block-clearance-token-write.js would block an interpreter body
 // spelling one. Suffixes are derived from the SSOT at runtime, never hardcoded.

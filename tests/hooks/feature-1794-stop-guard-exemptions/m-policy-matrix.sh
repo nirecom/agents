@@ -1,4 +1,4 @@
-# m-policy-matrix.sh — M1-M3: EXEMPTION_MATRIX (hooks/lib/stop-exemption-policy.js) cross-checked against each consumer's actual implementation. The matrix is declarative-only, so nothing enforces it at runtime — these cases ARE the enforcement. Sourced by tests/feature-1794-stop-guard-exemptions.sh.
+# m-policy-matrix.sh — M1-M3: EXEMPTION_MATRIX (hooks/lib/stop-exemption-policy.js) cross-checked against each consumer's actual implementation. The matrix is declarative-only, so nothing enforces it at runtime — these cases ARE the enforcement. Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/stop-premature-stop-guard.js
 # Tags: stop-hook, exemption-matrix, regression-1794, scope:issue-specific, pwsh-not-required, TL1
 
@@ -299,7 +299,7 @@ run_M3a() {
 #       for both. That is not this exemption layer: it is the pre-existing
 #       blanket session-quiet layer at the top of hooks/supervisor-guard.js
 #       (isWorkflowOff early-exit, and the #1607 next-step-paused quiet block
-#       already covered by tests/feat-1607-next-step-pause.sh case P9).
+#       already covered by tests/bin/feat-1607-next-step-pause.sh case P9).
 #       The matrix's c2 column is therefore scoped to the #1794/#1685 exemption
 #       layer, not to "C2 blocks". This case pins the observed behaviour so the
 #       scoping stays deliberate rather than accidental.

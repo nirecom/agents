@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/unit-command-ir.sh
+# tests/hooks/unit-command-ir.sh
 # Tests: hooks/lib/command-ir.js
 # Tags: hook, classify, unit, argv-raw, TL1, scope:issue-specific
 #

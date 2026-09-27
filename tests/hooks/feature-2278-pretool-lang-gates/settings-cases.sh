@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2278-pretool-lang-gates/settings-cases.sh
+# tests/hooks/feature-2278-pretool-lang-gates/settings-cases.sh
 # Tests: settings.json
 # Tags: lang, hook, pretooluse, hook-registration, TL2, scope:issue-specific
 # Sourced by ../feature-2278-pretool-lang-gates.sh — helpers come from there.

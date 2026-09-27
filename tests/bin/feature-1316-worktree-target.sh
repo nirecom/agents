@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1316-worktree-target.sh
+# tests/bin/feature-1316-worktree-target.sh
 # Tests: bin/compute-staged-tests-token.js, skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: review-tests, worktree-target, staged-tests-token, parallel-sessions, scope:issue-specific
 #

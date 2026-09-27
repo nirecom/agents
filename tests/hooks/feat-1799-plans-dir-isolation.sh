@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1799-plans-dir-isolation.sh
+# tests/hooks/feat-1799-plans-dir-isolation.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/supervisor-emit.js, bin/check-plans-dir-isolation.sh
 # Tags: supervisor-emit, isolation, plans-dir, xor-guard, scope:issue-specific, pwsh-not-required, TL2
 # #1799: a suite pinning CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR drives the real hooks,

@@ -9,7 +9,7 @@
 # keeps containment, is sourced FIRST, and owns S0 / RESOLVER_READY plus the
 # resolve_e / assert_contained / canon helpers used below.
 echo "=== Resolver untrusted-input injection / traversal cases ==="
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 # TL3 gap (TL2 substrate is not POSIX; a real POSIX host also verifies): S10, S11
 # — presented only where the filesystem accepts ';', '$', backticks, spaces and
 # parentheses in a directory name; S29's ALLOW half likewise needs a filesystem that

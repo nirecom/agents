@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/enforce-worktree-bash-c-cd-scope.sh
+# tests/hooks/enforce-worktree-bash-c-cd-scope.sh
 # Tests: hooks/lib/parse-git-args.js, hooks/enforce-worktree/git-repo-detection.js
 # Tags: enforce-worktree, bash-c, cd, scope, worktree, git-repo-detection
 #

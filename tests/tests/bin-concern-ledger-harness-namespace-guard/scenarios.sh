@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, scenarios
 # The stand-in harness, the scenario driver and the two expectation helpers every case
 # file below is written against. Each scenario runs in its own bash process, so a
@@ -15,7 +15,7 @@ set +u
 AGENTS_ROOT="$NSG_AGENTS_ROOT"
 LIB="$NSG_LIB"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
-SUITE_DIR="$AGENTS_ROOT/tests/bin-concern-ledger-reducer"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-reducer"
 GUARD="$NSG_GUARD"
 TMPDIR_BASE="$NSG_CASE_DIR"
 WORK="$TMPDIR_BASE/work"

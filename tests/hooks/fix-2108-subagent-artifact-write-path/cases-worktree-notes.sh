@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/worktree-notes-session-ids.js, hooks/workflow-state/session-id.js, hooks/lib/resolve-workflow-session-id.js
 # Tags: worktree-notes, session-id, parser, table-driven, git-worktree, ssot, fail-closed, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section C10 plus the shared fixtures for C11/C14 (cases-notes-enumerate.sh), all
 # against the NEW shared module hooks/lib/worktree-notes-session-ids.js.

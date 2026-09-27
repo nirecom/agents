@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1630-config-dir-resolver.sh
+# tests/hooks/fix-1630-config-dir-resolver.sh
 # Tests: hooks/lib/agents-config-dir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/load-env.js
 # Tags: hook, worktree, config-dir, resolver, enforce, security, scope:issue-specific
 #
@@ -7,7 +7,7 @@
 # worker-script.js switching from `process.env.AGENTS_CONFIG_DIR` to
 # resolveAgentsConfigDir()).
 #
-# Dispatcher. Case groups live in tests/fix-1630-config-dir-resolver/:
+# Dispatcher. Case groups live in tests/hooks/fix-1630-config-dir-resolver/:
 #   seams.sh          — T4a stale AGENTS_CONFIG_DIR, T4b missing AGENTS_CONFIG_DIR
 #   resolver-units.sh — T4c candidate ordering + 2-point marker validation via
 #                       the _resolveFromCandidates seam with an injected existsSync
@@ -21,7 +21,7 @@
 # rather than a bare `env -u AGENTS_CONFIG_DIR` run inside the real repo:
 # a bare unset run cannot distinguish "the resolver worked" from "the value was
 # never needed", because the module-relative fallback silently reaches the real
-# checkout — the same caveat tests/fix-389-load-env-default-fallback.sh records
+# checkout — the same caveat tests/hooks/fix-389-load-env-default-fallback.sh records
 # at lines 85-86 ("existing repo .env may still be picked up via the
 # file-relative fallback, so we only assert rc=0"). Pointing the sanctioned
 # script paths at the REAL agents root while running the hook from a throwaway
@@ -164,13 +164,13 @@ run_table() {
     done
 }
 
-# shellcheck source=tests/fix-1630-config-dir-resolver/seams.sh
+# shellcheck source=tests/hooks/fix-1630-config-dir-resolver/seams.sh
 . "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/seams.sh"
-# shellcheck source=tests/fix-1630-config-dir-resolver/resolver-units.sh
+# shellcheck source=tests/hooks/fix-1630-config-dir-resolver/resolver-units.sh
 . "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/resolver-units.sh"
-# shellcheck source=tests/fix-1630-config-dir-resolver/standard-predicates.sh
+# shellcheck source=tests/hooks/fix-1630-config-dir-resolver/standard-predicates.sh
 . "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/standard-predicates.sh"
-# shellcheck source=tests/fix-1630-config-dir-resolver/debug-and-cache.sh
+# shellcheck source=tests/hooks/fix-1630-config-dir-resolver/debug-and-cache.sh
 . "$AGENTS_DIR/tests/hooks/fix-1630-config-dir-resolver/debug-and-cache.sh"
 
 run_seam_cases

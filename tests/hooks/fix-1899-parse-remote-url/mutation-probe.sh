@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/mutation-probe.sh
+# tests/hooks/fix-1899-parse-remote-url/mutation-probe.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, mutation-probe, table-driven, parser, regex, security, path-traversal, TL1, scope:issue-specific
 #

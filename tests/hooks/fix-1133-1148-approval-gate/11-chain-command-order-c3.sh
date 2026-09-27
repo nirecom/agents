@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-mark.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-state/completion-approval.js
 # Tags: workflow, approval-gate, workflow-mark, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G11 (C3): chained-command sentinel processing. workflow-mark.js splits a Bash
 # command on `&&` and dispatches every recognized sentinel (all-or-nothing).

@@ -168,7 +168,7 @@ g5_exec_bit() {
 g6_selection_coverage() {
   local t d base missing="" orphan=""
   for t in $TARGETS; do
-    d="$REPO_ROOT/tests/fix-1532-node-guard-$t.sh"
+    d="$REPO_ROOT/tests/bin/fix-1532-node-guard-$t.sh"
     if [ ! -f "$d" ]; then
       missing="$missing $t"
     else

@@ -1,6 +1,6 @@
 # c-round-trip.sh - section C: OFF sentinel -> marker -> isWorkflowOff round
 # trip (test_C1-test_C3).
-# Sourced by tests/feature-workflow-off-session-override.sh; expects helpers.sh
+# Sourced by tests/hooks/feature-workflow-off-session-override.sh; expects helpers.sh
 # already sourced.
 
 # ============================================================================

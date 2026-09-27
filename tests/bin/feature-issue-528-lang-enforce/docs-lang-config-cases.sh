@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-issue-528-lang-enforce/docs-lang-config-cases.sh
+# tests/bin/feature-issue-528-lang-enforce/docs-lang-config-cases.sh
 # Tests: hooks/lib/lang-config.js
 # Tags: worktree, docs, lang-config, scope:issue-specific
 # Sourced by ../feature-issue-528-lang-enforce.sh — helpers come from there.

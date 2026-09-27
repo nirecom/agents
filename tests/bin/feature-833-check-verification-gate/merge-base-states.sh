@@ -1,4 +1,4 @@
-# Part of tests/feature-833-check-verification-gate.sh (sourced, not standalone).
+# Part of tests/bin/feature-833-check-verification-gate.sh (sourced, not standalone).
 # Tests: bin/check-verification-gate.sh
 # Tags: verification-gate, risk-category, merge-base, degradation, scope:issue-specific, pwsh-required, TL2
 #
@@ -235,6 +235,6 @@ teardown_tmp
 
 # SKIPPED: the real resolver against a real repository with a real stale remote.
 # Because: every row here stubs the resolver so the STATE is the input under test; the
-#          resolver's own behaviour is pinned in tests/feature-1638-resolve-merge-base.sh.
+#          resolver's own behaviour is pinned in tests/bin/feature-1638-resolve-merge-base.sh.
 # TL3 gap: the two scripts disagreeing about the kv key names — only a run with both real
 #          files on one host can catch a renamed key.

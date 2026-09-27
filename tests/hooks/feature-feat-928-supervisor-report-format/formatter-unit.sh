@@ -1,7 +1,7 @@
 #!/bin/bash
-# tests/feature-feat-928-supervisor-report-format/formatter-unit.sh
+# tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
 # Formatter unit tests (F tests) — invoke formatter module directly via node.
-# Runnable standalone: bash tests/feature-feat-928-supervisor-report-format/formatter-unit.sh
+# Runnable standalone: bash tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
 
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

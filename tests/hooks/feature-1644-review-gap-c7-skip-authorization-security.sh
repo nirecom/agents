@@ -23,7 +23,7 @@
 # in confirm-tests.sh (the CONFIRM_TESTS axis) and forged-inputs.sh (adversarial
 # env / project-dir input).
 #
-# Sibling boundary (no duplication): tests/feature-1644-plan-skip-allowance-ssot.sh
+# Sibling boundary (no duplication): tests/hooks/feature-1644-plan-skip-allowance-ssot.sh
 # P3/P4/P5 exercise the MODULE predicate directly (isSkipAllowedForCliPath vs
 # isSkipAllowedForSentinelPath). This file exercises the same boundary through
 # the REAL CLI subprocess — the layer where a forged prefix would actually be

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-883-resolve-workflow-session-id.sh
+# tests/hooks/feature-883-resolve-workflow-session-id.sh
 # Tests: hooks/lib/resolve-workflow-session-id.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, session-id, workflow-state, layer2, scope:issue-specific
 # RED for issue #883.

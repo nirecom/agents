@@ -1,9 +1,9 @@
-# tests/fix-1569-quote-span-regression/fold-ok-gate.sh
+# tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/quote-spans/fold.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
 #
 # STATUS: FOLDOK-src RED; the FOLDOK-verdict / FOLDOK-fold rows are GREEN today
-# and must stay green. Sourced by tests/fix-1569-quote-span-regression.sh —
+# and must stay green. Sourced by tests/hooks/fix-1569-quote-span-regression.sh —
 # uses its pass/fail, run_with_timeout, ACD, DISPATCH, MAIN_WT, AGENTS_DIR and
 # _AGENTS_DIR_NODE.
 #

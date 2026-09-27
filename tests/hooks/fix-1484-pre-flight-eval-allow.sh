@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1484-pre-flight-eval-allow.sh
+# tests/hooks/fix-1484-pre-flight-eval-allow.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
 #

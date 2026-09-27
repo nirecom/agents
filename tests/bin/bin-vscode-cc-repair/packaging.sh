@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C3 + C4 — the packaging contract. Every other part of this suite invokes the tool as
 # `node "$SCRIPT"`, which passes even if the shebang is wrong, the execute bit is missing
 # from the git index, or the file is not registered in README.md — i.e. even if the tool

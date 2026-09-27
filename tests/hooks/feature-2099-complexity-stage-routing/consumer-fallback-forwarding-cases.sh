@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/consumer-fallback-forwarding-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/consumer-fallback-forwarding-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/derive-complexity-level, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, consumers, signals, fallback, signals-file, scope:issue-specific
 # Sourced after the consumer orchestration + signal-forwarding suites — the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1693-migrate-skipped-step-warning.sh
+# tests/bin/feature-1693-migrate-skipped-step-warning.sh
 # Tests: bin/github-issues/migration/orchestrate.sh
 # Tags: migration, repo, github, issues, bin, resume, warning, TL2, scope:issue-specific
 #

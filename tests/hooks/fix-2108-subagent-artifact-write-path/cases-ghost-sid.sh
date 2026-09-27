@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/active-session-ids.js, hooks/lib/worktree-notes-session-ids.js, hooks/lib/protected-basenames.js, hooks/block-clearance-token-write.js
 # Tags: active-session-ids, worktree-notes, protected-basename, memoization, fail-closed, end-to-end, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Sections C12 + C13 — the GHOST-SID hole and its closure.
 # THE HOLE: observeActiveSessionIds() asks resolveSessionId(), which returns at

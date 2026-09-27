@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-relations.sh
+# tests/bin/feat-1761-candidate-relations.sh
 # Tests: bin/github-issues/candidate-relations.sh, bin/github-issues/lib/candidate-relation-one.sh
 # Tags: issue-create, verdict, candidate-relations, graphql, gh-mock, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -213,7 +213,7 @@ fi
 
 # --- sections ------------------------------------------------------------------------
 # tests/run-all.sh globs tests/*.sh at the TOP LEVEL only, so a file under
-# tests/feat-1761-candidate-relations/ runs in CI only if this parent reaches it.
+# tests/bin/feat-1761-candidate-relations/ runs in CI only if this parent reaches it.
 # edge-cases.sh was written but never wired, and therefore never ran. Subprocess style:
 # it is a standalone program with its own mock, own $WORK and own EXIT trap — sourcing it
 # would collide with this file's trap. See tests/lib/section-runner.sh.

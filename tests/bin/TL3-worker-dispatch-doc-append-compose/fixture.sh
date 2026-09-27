@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-doc-append-compose.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-doc-append-compose.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/compose-doc-append-entry
 # Tags: worker-dispatch, doc-append, compose, gh-cli, real-environment, TL3, scope:common
 # The fixture is a real git repo whose `origin` points at the probe repo, so the

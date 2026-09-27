@@ -1,6 +1,6 @@
 # Tests: install/linux/session-sync-init.sh
 # Tags: bin, install, git, session-sync, security, installer, scope:issue-specific
-# Part of tests/main-session-sync.sh; sourced after security.sh, whose _sec_run /
+# Part of tests/bin/main-session-sync.sh; sourced after security.sh, whose _sec_run /
 # _sec_old_root / _sec_temp_leftovers helpers it reuses, and after
 # security-remote.sh, whose _sec_cfg_layout / _sec_cfg_run build the relocated
 # `.env` layout the config-derived rows at the bottom of this file need.

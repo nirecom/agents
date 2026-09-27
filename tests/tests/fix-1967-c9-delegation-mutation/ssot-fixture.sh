@@ -1,5 +1,5 @@
-# Part of tests/fix-1967-c9-delegation-mutation.sh (sourced, not standalone).
-# Tests: tests/install-path-exposed-commands.sh, tests/feature-confirm-flags-static.sh
+# Part of tests/tests/fix-1967-c9-delegation-mutation.sh (sourced, not standalone).
+# Tests: tests/install/install-path-exposed-commands.sh, tests/skills/feature-confirm-flags-static.sh
 # Tags: mutation-test, meta-test, ssot-fixture, delegation, scope:issue-specific, pwsh-not-required, TL2
 
 # M6 -- MUTATE THE SSOT DATA, NOT THE TEST SOURCE (review round 3, codex C2).
@@ -15,7 +15,7 @@
 # totals pinned. Every one must go RED. A fourth row copies the real list byte-for-byte
 # and must stay green, so a fixture wiring bug cannot make the three reds vacuous.
 
-# THE ROUTE TAKEN, AND WHY. tests/install-path-exposed-commands.sh hardcodes
+# THE ROUTE TAKEN, AND WHY. tests/install/install-path-exposed-commands.sh hardcodes
 # SSOT="$AGENTS_DIR/$SSOT_REL" and exposes no env or argument seam for it. Adding one
 # would be a source change to the owner test purely to make it testable, so the route is
 # the one M5 already established: build_focused() lifts the owner's own function bodies

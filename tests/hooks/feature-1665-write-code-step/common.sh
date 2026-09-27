@@ -3,7 +3,7 @@
 # Tags: TL2, workflow, write-code, next-step, scope:issue-specific, pwsh-not-required
 #
 # Shared helpers + fixture builders for the feature-1665-write-code-step dispatcher.
-# Sourced by tests/feature-1665-write-code-step.sh and by the case-group files
+# Sourced by tests/hooks/feature-1665-write-code-step.sh and by the case-group files
 # in this folder. Owns nothing assertion-side; every case lives in a-*.sh .. e-*.sh.
 
 PASS=0

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-hub.sh
+# tests/skills/feature-sweep-hub.sh
 # Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md, skills/sweep-issues/SKILL.md, skills/sweep-shell-snapshots/SKILL.md
 # Tags: sweep, worktree, branch, issues, shell-snapshots, maintenance, frontmatter, tests, scope:common, TL1
 #
@@ -429,7 +429,7 @@ T14_sweep_hub_worktree_on_references_last_dispatch
 # forwarding) and T18/T19 (real `claude -p` invocation, TL3-gated) live in a
 # sibling part file — rules/coding/file-split.md Pattern A. It self-invokes its
 # cases at source time and uses the pass/fail helpers defined above.
-# shellcheck source=tests/feature-sweep-hub/skill-host-integration.sh
+# shellcheck source=tests/skills/feature-sweep-hub/skill-host-integration.sh
 . "$AGENTS_DIR/tests/skills/feature-sweep-hub/skill-host-integration.sh"
 
 echo ""

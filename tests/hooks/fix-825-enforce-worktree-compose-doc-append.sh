@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-825-enforce-worktree-compose-doc-append.sh
+# tests/hooks/fix-825-enforce-worktree-compose-doc-append.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
 # Tags: worktree, enforce, hook, compose-doc-append, fix-825
 # Tests for isAllowedComposeDocAppend() — #825

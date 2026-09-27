@@ -1,7 +1,7 @@
 #!/bin/bash
-# tests/feature-feat-928-supervisor-report-format/guard-integration.sh
+# tests/hooks/feature-feat-928-supervisor-report-format/guard-integration.sh
 # Guard integration tests (G/GN/B tests) — supervisor-guard.js end-to-end.
-# Runnable standalone: bash tests/feature-feat-928-supervisor-report-format/guard-integration.sh
+# Runnable standalone: bash tests/hooks/feature-feat-928-supervisor-report-format/guard-integration.sh
 
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

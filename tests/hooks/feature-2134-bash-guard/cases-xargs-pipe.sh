@@ -1,4 +1,4 @@
-# tests/feature-2134-bash-guard/cases-xargs-pipe.sh
+# tests/hooks/feature-2134-bash-guard/cases-xargs-pipe.sh
 # Tests: hooks/bash-guard/detect.js, hooks/lib/command-ir.js
 # Tags: hook, bash-guard, xargs, separator-links, scope:issue-specific, pwsh-not-required, TL2
 # X1-X7: the xargs-pipe carve-out, now a rule inside detect(). Sourced by the dispatcher.

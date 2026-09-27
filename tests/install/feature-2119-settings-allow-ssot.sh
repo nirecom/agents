@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2119-settings-allow-ssot.sh
+# tests/install/feature-2119-settings-allow-ssot.sh
 # Tests: install/settings-allow-commands.txt, hooks/lib/allow-command-list.js, install/lib/settings-assembly.js, install/lib/settings-deploy.js, install/assemble-settings.js, hooks/lib/settings-drift.js, hooks/post-merge, hooks/post-checkout, settings.json, docs/architecture/claude-code/settings.md
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
@@ -85,7 +85,7 @@ ROWS=0
 # preflight. The staged claude-global/settings.json makes bin/check-verification-gate.sh fire
 # category `hook-registration`, which is the prompt forcing that spot-check.
 # The two git-hook CALLERS are covered at TL2 by hook-callers.sh (real assembler, fixture HOME);
-# only what needs a real machine is deferred -- reason in tests/fix-846-settings-drift-hooks.sh.
+# only what needs a real machine is deferred -- reason in tests/hooks/fix-846-settings-drift-hooks.sh.
 #
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of

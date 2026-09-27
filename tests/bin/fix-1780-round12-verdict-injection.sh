@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-verdict-injection.sh
+# tests/bin/fix-1780-round12-verdict-injection.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, verdict-nonce, prompt-injection, parser, json, fail-closed, secrets, shell-metacharacters, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -9,14 +9,14 @@
 #   model's compliance.
 # - A real 0600-protected token on a real POSIX filesystem. The secrets cases
 #   assert that --detail never reaches stdout/stderr/the audit trail; the token
-#   file's own permissions are asserted in tests/fix-1780-round4-mint-schema.sh.
+#   file's own permissions are asserted in tests/bin/fix-1780-round4-mint-schema.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 #
 # ---------------------------------------------------------------------------
 # WHAT THIS FILE DEFENDS (#1780 round-10 MEDIUM-2, adversarial layer)
 #
-# tests/fix-1780-round10-verdict-nonce.sh pins the FOUR headline properties of
+# tests/bin/fix-1780-round10-verdict-nonce.sh pins the FOUR headline properties of
 # the nonce (absent / correct / wrong / prompt-echo). This file attacks the
 # PARSER those properties rest on, because the nonce check is only as strong as
 # the JSON scanner that decides WHICH object it is applied to.

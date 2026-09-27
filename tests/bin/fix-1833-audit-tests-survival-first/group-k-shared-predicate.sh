@@ -1,7 +1,7 @@
 # Group K: the shared predicate module is WIRED IN, not merely present (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, wiring, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 # CPR-SSOT: both audit scripts must reach the SAME predicate + delete gate, not
 # keep inline copies (which pass "file exists" yet diverge on first fix). K1 =
 # static (source line + real call sites); K2 = runtime (an instrumented bin/

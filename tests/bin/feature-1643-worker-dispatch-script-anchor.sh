@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-script-anchor.sh
+# tests/bin/feature-1643-worker-dispatch-script-anchor.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
 #
 # Issue #1643 — the SCRIPT anchor vocabulary (which root a declared script
 # resolves against), distinct from the TRUST anchors in
-# tests/feature-1643-worker-dispatch-anchor.sh (ACD/MAIN_ROOT cannot be moved
+# tests/bin/feature-1643-worker-dispatch-anchor.sh (ACD/MAIN_ROOT cannot be moved
 # by caller input; this file asserts which root a given script is measured
 # from, and that cwd is proven before it can act as a root).
 #

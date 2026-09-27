@@ -7,7 +7,7 @@
 # on. Each row neuters exactly ONE constant in a COPY of its module and asserts the
 # probe input flips while a sibling input keeps its verdict, so a row cannot pass by
 # breaking the whole module (a MODULE_MISSING / ERROR: verdict fails both halves).
-# Harness: tests/feature-2170-regex-mutation/mutate.js.
+# Harness: tests/hooks/feature-2170-regex-mutation/mutate.js.
 
 set -uo pipefail
 

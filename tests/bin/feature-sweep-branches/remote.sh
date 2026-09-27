@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/feature-sweep-branches/remote.sh
+# tests/bin/feature-sweep-branches/remote.sh
 # Remote-branch sweep tests: merged-remote delete, non-GitHub remote, delete failure.
 # Tests: T5, T6, T9
 #
 # Sourced helpers come from _lib.sh. Runnable standalone:
-#   bash tests/feature-sweep-branches/remote.sh
+#   bash tests/bin/feature-sweep-branches/remote.sh
 
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"

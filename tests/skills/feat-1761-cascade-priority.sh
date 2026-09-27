@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-cascade-priority.sh
+# tests/skills/feat-1761-cascade-priority.sh
 # Tests: skills/_shared/issue-verdict-cascade.md, agents/issue-create-survey-worker.md, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, cascade, priority, ordering, ssot, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

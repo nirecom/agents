@@ -1,10 +1,10 @@
 #!/bin/bash
-# tests/fix-issue-449-tracking-guard.sh
+# tests/bin/fix-issue-449-tracking-guard.sh
 # Tests: bin/github-issues/check-closes-issues-nonempty.sh, bin/github-issues/clarify-guard-loop.sh, hooks/lib/parse-closes-issues.js
 # Tags: workflow, clarify-intent, planning, github, issues, guard-loop, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the fix-issue-449-tracking-guard split
-# suite. All logic lives in tests/fix-issue-449-tracking-guard/ per
+# suite. All logic lives in tests/bin/fix-issue-449-tracking-guard/ per
 # rules/coding/file-split.md Pattern A (file crossed the 500-line HARD cap
 # when the GGL-series was added). Each split group also runs standalone.
 #

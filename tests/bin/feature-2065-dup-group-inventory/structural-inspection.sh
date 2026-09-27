@@ -1,11 +1,19 @@
 # S12 category 3: header structure — duplicate lines and position (#2065, S1-1)
 # Tests: bin/lib/test-dup-group.sh, bin/lib/test-frontmatter-constants.sh, bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, dup-groups, frontmatter, structure, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # `grep -m1 '^# Tests:'` reads neither the line number nor the occurrence count,
 # so a second header line is silently dropped and a header at line 11+ is
 # silently accepted. Both are structural malformations that must become skip
 # rows instead of quietly seeding a group from the first value.
+
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "structural-series" "bin/lib/test-dup-group.sh"
 
 SI_REPO="$(make_repo)"
 add_src "$SI_REPO" "bin/si-first.sh"
@@ -15,7 +23,7 @@ add_src "$SI_REPO" "bin/si-edge.sh"
 # Duplicate header. `bin/si-first.sh` is the value the old rule would have used,
 # and it appears nowhere else in this fixture, so any full/token row carrying it
 # proves the first value seeded a group.
-add_test_file_raw "$SI_REPO" "si-dup.sh" <<'SI_DUP'
+add_test_file_raw "$SI_REPO" "bin/si-dup.sh" <<'SI_DUP'
 #!/usr/bin/env bash
 # Tests: bin/si-first.sh
 # Tags: TL2, scope:common
@@ -25,7 +33,7 @@ SI_DUP
 
 # Duplicate AND malformed: priority is duplicate_header > late_header >
 # malformed_header, and the file is counted exactly once.
-add_test_file_raw "$SI_REPO" "si-dup-malformed.sh" <<'SI_DUPMAL'
+add_test_file_raw "$SI_REPO" "bin/si-dup-malformed.sh" <<'SI_DUPMAL'
 #!/usr/bin/env bash
 # Tests: bin/si-first.sh (annotated)
 # Tags: TL2, scope:common
@@ -34,7 +42,7 @@ echo fixture
 SI_DUPMAL
 
 # First header at line 11 — one past FRONTMATTER_HEADER_MAX_LINE.
-add_test_file_raw "$SI_REPO" "si-late.sh" <<'SI_LATE'
+add_test_file_raw "$SI_REPO" "bin/si-late.sh" <<'SI_LATE'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 : filler 03
@@ -51,7 +59,7 @@ SI_LATE
 
 # Boundary: header at exactly line 10 is inside the contract. Paired with a
 # canonical file so "ok" is observable as group membership, not just absence.
-add_test_file_raw "$SI_REPO" "si-boundary.sh" <<'SI_EDGE'
+add_test_file_raw "$SI_REPO" "bin/si-boundary.sh" <<'SI_EDGE'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 : filler 03
@@ -64,7 +72,7 @@ add_test_file_raw "$SI_REPO" "si-boundary.sh" <<'SI_EDGE'
 # Tests: bin/si-edge.sh
 echo fixture
 SI_EDGE
-add_test_file "$SI_REPO" "si-boundary-partner.sh" "bin/si-edge.sh"
+add_test_file "$SI_REPO" "bin/si-boundary-partner.sh" "bin/si-edge.sh"
 commit_repo "$SI_REPO" "structural fixture"
 
 run_dup "$SI_REPO" "$AUDIT"
@@ -77,11 +85,11 @@ while IFS='|' read -r si_name si_file si_want; do
     si_want="${si_want//[[:space:]]/}"
     assert_eq "SI1[$si_name] verdict" "$si_want" "$(verdict_of "$SI_OUT" "tests/$si_file")"
 done <<'SI_TABLE'
-duplicate          | si-dup.sh              | duplicate_header
-duplicate-plus-bad | si-dup-malformed.sh    | duplicate_header
-late-line-11       | si-late.sh             | late_header
-boundary-line-10   | si-boundary.sh         | ok
-canonical-partner  | si-boundary-partner.sh | ok
+duplicate          | bin/si-dup.sh              | duplicate_header
+duplicate-plus-bad | bin/si-dup-malformed.sh    | duplicate_header
+late-line-11       | bin/si-late.sh             | late_header
+boundary-line-10   | bin/si-boundary.sh         | ok
+canonical-partner  | bin/si-boundary-partner.sh | ok
 SI_TABLE
 
 # SI2 — the decisive assertion: no group was seeded from the first header value.
@@ -90,15 +98,15 @@ assert_eq "SI2a no full row exists for the duplicate file's first value" \
 assert_eq "SI2b no token row exists for the duplicate file's first value" \
     "no" "$(row_exists "$SI_OUT" token "bin/si-first.sh")"
 assert_eq "SI2c the duplicate file is absent from every group axis" \
-    "" "$(file_group_axes "$SI_OUT" "tests/si-dup.sh")"
+    "" "$(file_group_axes "$SI_OUT" "tests/bin/si-dup.sh")"
 assert_eq "SI2d the late-header file is absent from every group axis" \
-    "" "$(file_group_axes "$SI_OUT" "tests/si-late.sh")"
+    "" "$(file_group_axes "$SI_OUT" "tests/bin/si-late.sh")"
 
 # SI3 — boundary line 10 is inside the contract, so it groups normally.
 assert_eq "SI3a header at exactly line 10 forms a full group with its partner" \
     "2" "$(row_count "$SI_OUT" full "bin/si-edge.sh")"
 assert_eq "SI3b the boundary file is a group member on both axes" \
-    "full,token" "$(file_group_axes "$SI_OUT" "tests/si-boundary.sh")"
+    "full,token" "$(file_group_axes "$SI_OUT" "tests/bin/si-boundary.sh")"
 
 # SI4 — one file, one skip reason. Double-counting would inflate `count` and make
 # the corpus-wide numbers in the hand-off issue wrong.
@@ -115,13 +123,32 @@ assert_eq "SI4b the duplicate+malformed file is not also under malformed_header"
 SI_GATE_REPO="$(make_repo)"
 add_src "$SI_GATE_REPO" "bin/si-first.sh"
 add_src "$SI_GATE_REPO" "bin/si-second.sh"
-cp "$SI_REPO/tests/si-dup.sh" "$SI_GATE_REPO/tests/si-dup.sh"
-cp "$SI_REPO/tests/si-late.sh" "$SI_GATE_REPO/tests/si-late.sh"
-cp "$SI_REPO/tests/si-boundary.sh" "$SI_GATE_REPO/tests/si-boundary.sh"
+mkdir -p "$SI_GATE_REPO/tests/bin"
+cp "$SI_REPO/tests/bin/si-dup.sh" "$SI_GATE_REPO/tests/bin/si-dup.sh"
+cp "$SI_REPO/tests/bin/si-late.sh" "$SI_GATE_REPO/tests/bin/si-late.sh"
+cp "$SI_REPO/tests/bin/si-boundary.sh" "$SI_GATE_REPO/tests/bin/si-boundary.sh"
 commit_repo "$SI_GATE_REPO" "frontmatter gate fixture"
 
 run_in_repo "$SI_GATE_REPO" "$FM_CHECK" --all "$SI_GATE_REPO"
 assert_eq "SI5 check-test-frontmatter.sh --all still accepts duplicate/late headers" \
     "0" "$RC"
+
+case_end
+
+case_begin "structural-fm-constants-coverage" "bin/lib/test-frontmatter-constants.sh"
+if [[ -f "$FM_CONST" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-constants.sh exists (exercised by structural-series)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-constants.sh missing"
+fi
+case_end
+
+case_begin "structural-fm-check-coverage" "bin/check-test-frontmatter.sh"
+if [[ -f "$FM_CHECK" ]]; then
+    pass "P0-ext bin/check-test-frontmatter.sh exists (exercised by structural-series)"
+else
+    fail "P0-ext bin/check-test-frontmatter.sh missing"
+fi
+case_end
 
 grp_done "structural-inspection.sh"

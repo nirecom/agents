@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-anchor.sh
+# tests/bin/feature-1643-worker-dispatch-anchor.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/anchor.js, hooks/lib/agents-config-dir.js
 # Tags: worker-dispatch, anchor, trust-anchor, c2, security, TL1, scope:issue-specific
 #

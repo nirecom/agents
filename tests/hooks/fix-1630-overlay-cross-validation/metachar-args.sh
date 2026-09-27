@@ -1,8 +1,8 @@
-# tests/fix-1630-overlay-cross-validation/metachar-args.sh
+# tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
 # Tags: worktree, enforce, hook, overlay, security, injection, scope:issue-specific
 #
-# STATUS: RED. Sourced by tests/fix-1630-overlay-cross-validation.sh, after
+# STATUS: RED. Sourced by tests/hooks/fix-1630-overlay-cross-validation.sh, after
 # run_xv_family_cases (the XV_* fixture globals are set there).
 #
 # Two defects, one theme: what the overlay accepts INSIDE an argument.
@@ -176,7 +176,7 @@ run_metachar_hook_cases() {
 # its payload as JSON validated field-by-field against payloadSpec in
 # hooks/lib/worker-dispatch-registry.js, so there is no positional argument
 # stream that can run past the end of a spec. Every field is either declared or
-# rejected as unknown — pinned by tests/feature-1643-worker-dispatch-schema.sh.
+# rejected as unknown — pinned by tests/bin/feature-1643-worker-dispatch-schema.sh.
 #
 # The token-level half of this file (run_metachar_token_cases) is unaffected: it
 # reads isUnderPlansDir out of arg-value-guard.js, which is live and is what the

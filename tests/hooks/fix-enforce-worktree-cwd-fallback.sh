@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-cwd-fallback.sh
+# tests/hooks/fix-enforce-worktree-cwd-fallback.sh
 # Tests: hooks/enforce-issue-close.js, hooks/enforce-worktree.js, skills/worktree-end/SKILL.md
 # Tags: worktree, enforce, hook, issue-close, workflow
 #

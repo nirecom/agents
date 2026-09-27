@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-bundle-a-targets-rm.sh
+# tests/hooks/fix-enforce-worktree-bundle-a-targets-rm.sh
 # Tests: hooks/lib/bash-write-targets.js
 # Tags: worktree, enforce, hook, rm, bash-write-targets
 

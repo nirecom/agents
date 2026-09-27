@@ -1,4 +1,4 @@
-# tests/feature-2124-tool-selection-priority/injection-policy.sh
+# tests/bin/feature-2124-tool-selection-priority/injection-policy.sh
 # Tests: hooks/lib/rules-injection-policy.js, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
 # Tags: rules, prompt, injection, dispatch, scope:issue-specific, pwsh-not-required, TL2
 
@@ -8,7 +8,7 @@
 # cannot read as still present -- but read it as DATA via hooks/lib/rules-policy-reader.js, never
 # `require(POLICY)`: the policy file is contributor-editable, so require()-ing it would run a
 # pull request's module body just because a reviewer ran this suite. Contract + canaries:
-# tests/cc-on-demand-skill-ownership/cases-require-safety.sh (A2/A3) -- CPR-ORTH sibling.
+# tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh (A2/A3) -- CPR-ORTH sibling.
 POLICY_READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
 
 policy_field() { # <includes-in-expected|listed-in-on-demand> -> yes|no|ERROR

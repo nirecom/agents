@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/i-c4-exemption.sh
+# tests/hooks/feature-1665-seq-cascade/i-c4-exemption.sh
 # Tests: hooks/stop-premature-stop-guard.js, hooks/workflow-state/lifecycle.js
 # Tags: workflow-state, write-code, stop-guard, c4, exemption, ttl, fail-closed, guard, scope:issue-specific, pwsh-not-required, TL2
 #

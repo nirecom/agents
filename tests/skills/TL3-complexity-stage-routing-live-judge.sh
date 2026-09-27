@@ -1,6 +1,6 @@
 #!/bin/bash
-# tests/TL3-complexity-stage-routing-live-judge.sh
-# Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level, tests/feature-2099-complexity-stage-routing.sh
+# tests/skills/TL3-complexity-stage-routing-live-judge.sh
+# Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level, tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tags: complexity, routing, judge, live-agent, prompt-injection, threshold, TL3, run-e2e, scope:common
 # Serial: drives the #2099 suite, which writes into its own pinned CLAUDE_WORKFLOW_DIR
 # RUN_TL3-ON lane for #2099. The suite's live-agent cases (PI-5, JT-*) carry their

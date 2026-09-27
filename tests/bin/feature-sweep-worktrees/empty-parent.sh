@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/empty-parent.sh
+# tests/bin/feature-sweep-worktrees/empty-parent.sh
 # Empty depth-1 parent sweep tests (#809): T15..T21.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 

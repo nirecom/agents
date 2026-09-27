@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: .env.example, install.ps1, install.sh, hooks/post-checkout, hooks/post-merge, settings.json
 # Tags: codegraph, wiring, static, harness, TL2, pwsh-not-required, scope:issue-specific
-# Shared assertion vocabulary for tests/feature-codegraph-wiring-static.sh.
+# Shared assertion vocabulary for tests/install/feature-codegraph-wiring-static.sh.
 # Every helper treats "the file this assertion is about does not exist" as a LOUD
 # FAILURE: this suite is a ratchet over wiring that does not exist yet, and a
 # guard that passes by vacancy is the false green it was written to prevent.

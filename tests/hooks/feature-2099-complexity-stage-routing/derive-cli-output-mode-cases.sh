@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/derive-cli-output-mode-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/derive-cli-output-mode-cases.sh
 # Tests: bin/workflow/derive-complexity-level, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, cli, output-mode, arg-parsing, table-driven, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

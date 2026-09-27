@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-enforce-worktree-gh-whitelist.sh
+# tests/hooks/fix-enforce-worktree-gh-whitelist.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js
 # Tags: worktree, enforce, hook, intent, planning
 #

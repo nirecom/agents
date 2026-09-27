@@ -199,7 +199,7 @@ test_T21_nonempty_outcome_issues() {
     # Issues" list section, which can independently contain "1463" (e.g. via
     # intent-derived closesIssues content) and mask a broken outcome renderer
     # (see #1614: closedIssueOutcomeLines() field-name mismatch). Same
-    # section-scoping idiom as K8 in tests/feature-405-final-report/k-series.sh.
+    # section-scoping idiom as K8 in tests/hooks/feature-405-final-report/k-series.sh.
     local region
     region="$(printf '%s\n' "$out" | awk '/^### Closed Issue Outcomes$/{found=1;next} found{if(/^### /){exit}print}')"
     if [ -z "$region" ]; then

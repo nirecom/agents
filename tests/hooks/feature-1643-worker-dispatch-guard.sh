@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-guard.sh
+# tests/hooks/feature-1643-worker-dispatch-guard.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/worker-dispatch-registry.js, hooks/enforce-worktree.js
 # Tags: worker-dispatch, enforce-worktree, hook, guard, overlay, security, lock1, lock2, lock3, TL2, scope:issue-specific
 #
@@ -16,7 +16,7 @@
 # with the same (cmd, acd, repoRoot) triple worker-script.js passes it, from a
 # process whose cwd is the fixture main worktree so getSessionRepoRoots() anchors
 # there. Group W additionally drives the FULL hook exactly like
-# tests/fix-1600-finalize-worker-overlay.sh does, to prove the wiring is live.
+# tests/hooks/fix-1600-finalize-worker-overlay.sh does, to prove the wiring is live.
 #
 # Deliberate layering note: enforce-worktree.js short-circuits on
 # detectWritePredicate() before any main-worktree-allow runs, and a bare

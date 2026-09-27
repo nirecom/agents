@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/e-write-tests-guard.sh
+# tests/hooks/feature-1665-run-outcome/e-write-tests-guard.sh
 # Tests: hooks/workflow-run-tests.js
 # Tags: workflow, run-outcome, write-tests-gate, fail-open, atomicity, hook, TL2, scope:issue-specific
 #

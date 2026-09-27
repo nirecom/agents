@@ -3,7 +3,7 @@
 # Tests: tests/lib/harness.sh
 # Tags: scope:common, shared-lib
 # Shared harness. Do NOT mix-source with a narrow harness
-# (tests/bin-concern-ledger-reducer.sh, tests/lib/clearance-hook-harness.sh):
+# (tests/bin/bin-concern-ledger-reducer.sh, tests/lib/clearance-hook-harness.sh):
 # those set PASS=0/FAIL=0 unguarded and overwrite this harness's counts.
 # case_begin/case_end targets are for STATIC grep (catalog input),
 # not runtime aggregation.

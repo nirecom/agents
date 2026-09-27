@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/session-start.js, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js
 # Tags: workflow, approval-gate, session-start, inheritance, artifact-hash, scope:common
-# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G15 (F2): a new session inheriting a prior session's steps must also inherit
 # its plan_approvals, each record bound to the session that OWNS the approved

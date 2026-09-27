@@ -1,7 +1,7 @@
 # Group A: case enumeration from strict-form markers (#2081)
 # Tests: bin/lib/test-retire-predicate/case-parser.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # Strict form: column-0 `case_begin "name" "target"` with two static double-
 # quoted args, and `case_end` with an optional C7 suffix (`|| true`,

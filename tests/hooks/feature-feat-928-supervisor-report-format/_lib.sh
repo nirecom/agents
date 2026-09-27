@@ -1,13 +1,13 @@
 #!/bin/bash
-# tests/feature-feat-928-supervisor-report-format/_lib.sh
+# tests/hooks/feature-feat-928-supervisor-report-format/_lib.sh
 # Shared helpers and fixtures for feature-feat-928-supervisor-report-format test groups.
 #
 # Sourced by:
-#   - tests/feature-feat-928-supervisor-report-format/formatter-unit.sh
-#   - tests/feature-feat-928-supervisor-report-format/guard-integration.sh
+#   - tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
+#   - tests/hooks/feature-feat-928-supervisor-report-format/guard-integration.sh
 #
 # Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/feature-feat-928-supervisor-report-format/formatter-unit.sh
+#   bash tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
 #
 # This library:
 #   - sets `set -u`
@@ -20,7 +20,7 @@
 set -u
 
 # Resolve AGENTS_DIR relative to this library file
-# (tests/feature-feat-928-supervisor-report-format/_lib.sh → repo root is two levels up)
+# (tests/hooks/feature-feat-928-supervisor-report-format/_lib.sh → repo root is two levels up)
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"

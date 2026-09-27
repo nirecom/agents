@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive.sh
+# tests/skills/feature-worktree-start-non-interactive.sh
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, prompts, skill, static, TL2, scope:issue-specific
 #
@@ -30,7 +30,7 @@
 
 # TL3 gap: a real /worktree-start run through the Bash tool (no AskUserQuestion),
 # and WS-2/WS-4/WS-6 as executed by the model rather than reproduced here — both
-# covered by tests/TL3-skill-worktree-start-auto-naming.sh (RUN_TL3-gated).
+# covered by tests/skills/TL3-skill-worktree-start-auto-naming.sh (RUN_TL3-gated).
 # With RUN_TL3 off: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration + manual smoke.
 

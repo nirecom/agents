@@ -1,8 +1,8 @@
 # shellcheck shell=bash
-# Tests: tests/feature-1305-inheritance-lineage.sh
+# Tests: tests/hooks/feature-1305-inheritance-lineage.sh
 # Tags: scope:issue-specific
 # L-12 .. L-19 — ancestor-chain walking (gate D) and the two-context guard
-# (gate E). Sourced by tests/feature-1305-inheritance-lineage.sh.
+# (gate E). Sourced by tests/hooks/feature-1305-inheritance-lineage.sh.
 # Tests: hooks/workflow-state/inheritance/lineage.js, hooks/workflow-state/inheritance/context-match.js
 # Tags: inheritance-lineage, ancestor-chain, scope:common
 

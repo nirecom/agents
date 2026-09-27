@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-2218-supervisor-report-choke-point.sh
+# tests/bin/feat-2218-supervisor-report-choke-point.sh
 # Tests: bin/supervisor-report, hooks/lib/handoff-artifact.js
 # Tags: supervisor, handoff, choke-point, class-e, exit-code, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 

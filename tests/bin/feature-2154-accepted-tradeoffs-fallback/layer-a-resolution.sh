@@ -3,8 +3,8 @@
 # MOCK LAYER A (cases 1-4, E1-E2, W1-W10) — fallback RESOLUTION only.
 # bin/review-plan-codex is an argv-recording stub; the argv-capture pattern
 # follows tests/lib/codex-loop-fixture.sh and
-# tests/feature-603-run-codex-review-loop/forwarding-and-repo-root.sh.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh.
+# tests/bin/feature-603-run-codex-review-loop/forwarding-and-repo-root.sh.
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh.
 echo "=== Layer A: fallback resolution (review-plan-codex stubbed) ==="
 
 # Case 1: all three candidates present → highest priority (detail).

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1616-clarify-commit-scope-stdout.sh
+# tests/bin/fix-1616-clarify-commit-scope-stdout.sh
 # Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, stdout-contract, gh-cli, scope:common, pwsh-not-required
 #
@@ -54,7 +54,7 @@ fi
 
 TMP=""
 
-# Mock harness mirrors tests/fix-issue-513-clarify-commit-scope.sh, with one
+# Mock harness mirrors tests/bin/fix-issue-513-clarify-commit-scope.sh, with one
 # deliberate fidelity upgrade: the `issue edit --add-label` arm and the
 # ensure-board-card.sh mock each emit a line on STDOUT on success, the way the
 # real tools do. Without that emission the leak is unobservable and every

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/private-repo-gate.sh
+# tests/skills/feature-worktree-start-non-interactive/private-repo-gate.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/check-private-repo-name.js, bin/list-private-repo-names.js
 # Tags: worktree, start, private-repo, outbound-scan, security, TL2, scope:issue-specific
 # B21 — the private-repo-name half of derive-worktree-name.sh's scan gate, and the

@@ -5,7 +5,7 @@
 # Table-driven classifier coverage for hooks/enforce-system-ops.js (review gap C8).
 #
 # WHAT THIS FILE DEFENDS
-# tests/feature-enforce-system-ops.sh already enumerates the per-command block
+# tests/hooks/feature-enforce-system-ops.sh already enumerates the per-command block
 # list, but as ~130 independent `expect_block` / `expect_pass` calls. Three
 # properties that guard are NOT covered there, and each one is a full-bypass
 # class rather than a single missing command:
@@ -43,7 +43,7 @@
 # Closest-to-action mitigation: registration is asserted from settings.json in
 # section R, so a de-registration fails here rather than silently in production.
 #
-# Case bodies live in tests/enforce-system-ops-classifier/ (rules/coding/file-split.md);
+# Case bodies live in tests/hooks/enforce-system-ops-classifier/ (rules/coding/file-split.md);
 # this file is the shared harness plus dispatch.
 
 set -uo pipefail

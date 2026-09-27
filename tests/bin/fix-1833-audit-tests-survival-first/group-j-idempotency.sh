@@ -1,7 +1,7 @@
 # Group J: idempotency — a second --apply is a clean no-op (#1833)
 # Tests: bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, retire, idempotency, scope:issue-specific
-# Sourced by tests/fix-1833-audit-tests-survival-first.sh
+# Sourced by tests/bin/fix-1833-audit-tests-survival-first.sh
 #
 # A second --apply re-runs against a maybe-swept tree: after the first pass the
 # candidate is gone from the working tree but still in HEAD until the commit lands

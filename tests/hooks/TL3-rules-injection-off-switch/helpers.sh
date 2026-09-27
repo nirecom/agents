@@ -3,7 +3,7 @@
 # Tags: rules-injection, on-demand-rules, off-switch, instructions-loaded, fixtures, claude-e2e, TL3, scope:common
 #
 # Helpers for TL3-rules-injection-off-switch. Sourced by ../TL3-rules-injection-off-switch.sh
-# (assumes AGENTS_DIR, pass(), fail() defined) and by tests/cc-tl3-rules-injection-gate.sh,
+# (assumes AGENTS_DIR, pass(), fail() defined) and by tests/hooks/cc-tl3-rules-injection-gate.sh,
 # which exercises ril_gate_verdict() at TL2 without spawning claude.
 # WSL-via-Windows bridge: CLAUDECODE is not propagated and user settings are read from
 # the Windows profile, so a green run here does not prove the macOS-native behaviour.
@@ -233,8 +233,8 @@ ril_terminal_recheck() {
 # --- gate decision logic (pure; no filesystem, no subprocess) ----------------------
 # Lives in decisions.sh (sibling split, rules/coding/file-split.md Pattern A) and is
 # sourced here so helpers.sh remains the single entry point for both the TL3 body and
-# the TL2 gate test tests/cc-tl3-rules-injection-gate.sh.
-# shellcheck source=tests/TL3-rules-injection-off-switch/decisions.sh
+# the TL2 gate test tests/hooks/cc-tl3-rules-injection-gate.sh.
+# shellcheck source=tests/hooks/TL3-rules-injection-off-switch/decisions.sh
 . "$(dirname "${BASH_SOURCE[0]}")/decisions.sh"
 
 

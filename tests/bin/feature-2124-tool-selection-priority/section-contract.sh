@@ -1,4 +1,4 @@
-# tests/feature-2124-tool-selection-priority/section-contract.sh
+# tests/bin/feature-2124-tool-selection-priority/section-contract.sh
 # Tests: rules/shell-commands.md
 # Tags: rules, prompt, injection, scope:issue-specific, pwsh-not-required, TL2
 

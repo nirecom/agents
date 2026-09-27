@@ -7,7 +7,7 @@
 # differently under realpath than under readlink, breaks the sanctioned path while
 # every existing row passes. S27 extends S20's candidate-shape family to the LAST
 # candidate, the position where the scan's usability guard is not re-applied.
-# Sourced by tests/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
+# Sourced by tests/bin/feature-2154-accepted-tradeoffs-fallback.sh; split per rules/coding/file-split.md (Pattern A).
 echo "=== Resolver substrate modes: in-tree symlink, unreadable candidate, canonicalizer ==="
 
 # TL3 gap (what this file does NOT catch): the OS-level rows of S20 and S27c need

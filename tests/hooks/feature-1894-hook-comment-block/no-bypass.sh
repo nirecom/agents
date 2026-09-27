@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-hook-comment-block/no-bypass.sh
+# tests/hooks/feature-1894-hook-comment-block/no-bypass.sh
 # Tests: hooks/block-comment-block-size.js, docs/architecture/claude-code/marker-bypass-contract.md
 # Tags: comment-block-size, hook, pretooluse, no-bypass, workflow-off, worktree-off, omission, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 

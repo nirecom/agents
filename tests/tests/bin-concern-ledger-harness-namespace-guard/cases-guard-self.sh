@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-concern-ledger-reducer/namespace-guard.sh
+# Tests: tests/bin/bin-concern-ledger-reducer/namespace-guard.sh
 # Tags: concern-ledger, test-harness, namespace-guard, positive-control, TL2, scope:common, guard-self
 # The guard's own entry points are a third watched set, distinct from the harness set and
 # the library set. Directions A and B assume the guard is intact while it checks; a case

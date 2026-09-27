@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1812-worker-dispatch-uv-no-project.sh
+# tests/bin/feature-1812-worker-dispatch-uv-no-project.sh
 # Tests: bin/compose-doc-append-entry
 # Tags: worker-dispatch, doc-append, compose, uv, supply-chain, credential-exposure, security, adversarial, canary, TL2, scope:issue-specific
 #
@@ -37,7 +37,7 @@ assert_eq() {
 #   declared build requirement, so a hostile PUBLISHED build dependency — the
 #   other half of the same surface — is never exercised.
 # - A real `gh`: token handling by the actual CLI stays unverified; that tier is
-#   tests/TL3-worker-dispatch-child-env-gh-doc-append.sh.
+#   tests/bin/TL3-worker-dispatch-child-env-gh-doc-append.sh.
 # - uv's upward walk from an ANCESTOR of the worktree (see the Skipped-Because
 #   block near the end of this file).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via

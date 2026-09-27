@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1640-count-subagents.sh
+# tests/bin/feature-1640-count-subagents.sh
 # Tests: bin/count-subagents, hooks/workflow-state/session-id.js, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: measurement, subagent-count, session-transcript, enumeration-failure, stub-classifier, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -10,7 +10,7 @@
 # swallow-everything semantics so hooks/workflow-state/state-io.js does not change
 # behaviour.
 #
-# ISOLATION CONTRACT (mirrors tests/bin-vscode-cc-repair-prune.sh). The tool reads the
+# ISOLATION CONTRACT (mirrors tests/bin/bin-vscode-cc-repair-prune.sh). The tool reads the
 # user's own session storage, so every invocation applies BOTH overrides:
 #   1. --projects-root <tmp>   — replaces the ~/.claude/projects default
 #   2. HOME / USERPROFILE=<tmp> — belt and braces: a dropped override lands in a fixture
@@ -37,7 +37,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 # The harness (counters, run_cli / node_m / summary helpers) and the fixture vocabulary
 # live in the sibling lib.sh; only the cases are kept here. The split is the HARD
 # 500-line limit of rules/coding/file-split.md, same arrangement as
-# tests/feature-1180-commit-lang-check/lib.sh.
+# tests/hooks/feature-1180-commit-lang-check/lib.sh.
 SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1640-count-subagents"
 # shellcheck source=./feature-1640-count-subagents/lib.sh
 . "$SUITE_DIR/lib.sh"
@@ -308,7 +308,7 @@ SYM_ENTRY="$R12/slug-one/$SID_C.jsonl"
 # `ln -s` silently degrades to a copy on MSYS/Windows without developer mode or
 # MSYS=winsymlinks:nativestrict. A copy IS a regular file and would legitimately be
 # listed, so the assertion is only meaningful behind an `[ -L ]` proof — same gate as L8
-# in tests/feature-1640-measure-norm-docs.sh (CPR-ORTH).
+# in tests/bin/feature-1640-measure-norm-docs.sh (CPR-ORTH).
 if ln -s "$TMPROOT/outside-$SID_C.jsonl" "$SYM_ENTRY" 2>/dev/null && [ -L "$SYM_ENTRY" ]; then
     DIR="$(native_path "$R12/slug-one")" BAD_NAME="__no-such-path-1640__" node_m "$STRICT_JS"
     assert_eq "C3-f/symlink-skipped-not-an-error" "files=1 errors=0 scope=" "$NODE_OUT"
@@ -354,7 +354,7 @@ assert_eq "C3-d/healthy-path-unchanged" "2" "$NODE_OUT"
 echo "== B8: argument handling =="
 # Table-driven: one exit-code contract (0 ok / 2 argument error) over the whole argument
 # surface. The `..` rows are symmetric with L7/dotdot-repo in
-# tests/feature-1640-measure-norm-docs.sh (CPR-ORTH): both path-taking CLIs must reject a
+# tests/bin/feature-1640-measure-norm-docs.sh (CPR-ORTH): both path-taking CLIs must reject a
 # `..` segment even when the resolved target is a perfectly good directory.
 # No field contains a space, so unquoted expansion of $args is intentional word-splitting.
 R1_NATIVE="$(native_path "$R1")"
@@ -387,7 +387,7 @@ assert_eq "B8/missing-session-exit-1" "1 names-the-session" "$CLI_RC $MSG"
 
 # ---- B9: --json schema and totals consistency (Step 2-6) ---------------------
 #
-# Symmetric with L5 in tests/feature-1640-measure-norm-docs.sh. R1 is the B1 fixture:
+# Symmetric with L5 in tests/bin/feature-1640-measure-norm-docs.sh. R1 is the B1 fixture:
 # 1 session, 3 invocations, 2 types (survey-code=2, detail-planner=1).
 echo "== B9: --json schema and totals consistency =="
 run_cli --projects-root "$R1_NATIVE" --all --json

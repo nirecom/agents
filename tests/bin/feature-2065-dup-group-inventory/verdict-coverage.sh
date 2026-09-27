@@ -1,27 +1,35 @@
 # S12 category 9: every verdict in the closed set, in one corpus (#2065, S2)
 # Tests: bin/lib/test-dup-group.sh, bin/audit-tests.sh
 # Tags: TL2, audit-tests, dup-groups, coverage, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # Earlier fragments exercise the verdicts one family at a time. This one puts
 # all five in a single corpus, because the classifier is a priority chain: a
 # reason that is correct in isolation can still be shadowed when its neighbours
 # are present in the same run.
 
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "verdict-series" "bin/lib/test-dup-group.sh"
+
 VC_REPO="$(make_repo)"
 add_src "$VC_REPO" "bin/vc-a.sh"
 add_src "$VC_REPO" "bin/vc-b.sh"
 
-add_test_file "$VC_REPO" "vc-ok-a.sh" "bin/vc-a.sh"
-add_test_file "$VC_REPO" "vc-ok-b.sh" "bin/vc-a.sh"
-add_test_file "$VC_REPO" "vc-malformed.sh" "bin/vc a.sh"
+add_test_file "$VC_REPO" "bin/vc-ok-a.sh" "bin/vc-a.sh"
+add_test_file "$VC_REPO" "bin/vc-ok-b.sh" "bin/vc-a.sh"
+add_test_file "$VC_REPO" "bin/vc-malformed.sh" "bin/vc a.sh"
 
-add_test_file_raw "$VC_REPO" "vc-notests.sh" <<'VC_NOHDR'
+add_test_file_raw "$VC_REPO" "bin/vc-notests.sh" <<'VC_NOHDR'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 echo fixture
 VC_NOHDR
 
-add_test_file_raw "$VC_REPO" "vc-duplicate.sh" <<'VC_DUP'
+add_test_file_raw "$VC_REPO" "bin/vc-duplicate.sh" <<'VC_DUP'
 #!/usr/bin/env bash
 # Tests: bin/vc-a.sh
 # Tags: TL2, scope:common
@@ -29,7 +37,7 @@ add_test_file_raw "$VC_REPO" "vc-duplicate.sh" <<'VC_DUP'
 echo fixture
 VC_DUP
 
-add_test_file_raw "$VC_REPO" "vc-late.sh" <<'VC_LATE'
+add_test_file_raw "$VC_REPO" "bin/vc-late.sh" <<'VC_LATE'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 : filler 03
@@ -55,12 +63,12 @@ while IFS='|' read -r vc_name vc_file vc_want; do
     vc_want="${vc_want//[[:space:]]/}"
     assert_eq "VC1[$vc_name] verdict" "$vc_want" "$(verdict_of "$VC_OUT" "tests/$vc_file")"
 done <<'VC_TABLE'
-ok-grouped-a  | vc-ok-a.sh      | ok
-ok-grouped-b  | vc-ok-b.sh      | ok
-malformed     | vc-malformed.sh | malformed_header
-no-header     | vc-notests.sh   | no_tests_header
-duplicate     | vc-duplicate.sh | duplicate_header
-late          | vc-late.sh      | late_header
+ok-grouped-a  | bin/vc-ok-a.sh      | ok
+ok-grouped-b  | bin/vc-ok-b.sh      | ok
+malformed     | bin/vc-malformed.sh | malformed_header
+no-header     | bin/vc-notests.sh   | no_tests_header
+duplicate     | bin/vc-duplicate.sh | duplicate_header
+late          | bin/vc-late.sh      | late_header
 VC_TABLE
 
 # VC2 — the closed set is closed: an unrecognized reason token means the
@@ -78,7 +86,7 @@ assert_eq "VC3 a skip reason with a single member is still reported" \
 # VC4 — the four skipped files must not appear in any group row, and the two
 # well-formed files must. This is the partition invariant of the whole format.
 assert_eq "VC4a no skipped file leaks into a group row" \
-    "0" "$( for vc_f in vc-malformed.sh vc-notests.sh vc-duplicate.sh vc-late.sh; do
+    "0" "$( for vc_f in bin/vc-malformed.sh bin/vc-notests.sh bin/vc-duplicate.sh bin/vc-late.sh; do
                 file_group_axes "$VC_OUT" "tests/$vc_f"
             done | grep -c . || true )"
 assert_eq "VC4b the two well-formed files form the only group" \
@@ -86,5 +94,15 @@ assert_eq "VC4b the two well-formed files form the only group" \
 assert_eq "VC4c the corpus has exactly one full row" \
     "1" "$(axis_row_count "$VC_OUT" full)"
 assert_eq "VC5 the corpus contains a group, so the exit code is 0" "0" "$VC_RC"
+
+case_end
+
+case_begin "verdict-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AGENTS_ROOT/bin/audit-tests.sh" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by verdict-series via AUDIT)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
 
 grp_done "verdict-coverage.sh"

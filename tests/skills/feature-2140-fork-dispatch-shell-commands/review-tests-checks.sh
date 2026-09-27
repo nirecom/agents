@@ -1,4 +1,4 @@
-# tests/feature-2140-fork-dispatch-shell-commands/review-tests-checks.sh
+# tests/skills/feature-2140-fork-dispatch-shell-commands/review-tests-checks.sh
 # Tests: skills/review-tests/SKILL.md
 # Tags: rules, prompt, dispatch, fork, scope:issue-specific, pwsh-not-required, TL2
 

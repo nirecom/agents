@@ -27,7 +27,7 @@
 # # TL3 gap: only a real `claude -p` SessionStart can prove that Claude Code
 # actually sends `source` and `transcript_path` in the payload, and that a real
 # fork writes real `forkedFrom` rows. That single seam is covered by the
-# `source=startup` assertion added to tests/TL3-hook-session-start/main.sh.
+# `source=startup` assertion added to tests/hooks/TL3-hook-session-start/main.sh.
 # ===========================================================================
 set -euo pipefail
 

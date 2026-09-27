@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1010-scan-offensive-skill-mode.sh
+# tests/bin/feature-1010-scan-offensive-skill-mode.sh
 # Tests: bin/scan-offensive
 # Tags: scan, offensive, skill-mode, jsonl, source-json, scope:issue-specific
 # RED for issue #1010 — skill-mode emits JSONL manifest items rather than process exit-codes.

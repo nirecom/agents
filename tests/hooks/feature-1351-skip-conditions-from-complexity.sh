@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1351-skip-conditions-from-complexity.sh
+# tests/hooks/feature-1351-skip-conditions-from-complexity.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L1, workflow, speculative-skip, scope:issue-specific
 # Security: N/A — read-only logic; no shell expansion, I/O mutation, or untrusted input.

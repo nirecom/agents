@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-audit-arm-session-id.sh
+# tests/hooks/fix-supervisor-audit-arm-session-id.sh
 # Tests: hooks/supervisor-guard.js, agents/supervisor-audit.md
 # Tags: supervisor, em-supervisor, audit, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):

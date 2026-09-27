@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-clearance-token-write.js, hooks/lib/session-markers.js
 # Tags: session-marker, protected-basename, gh, ownership, forge-state, scope:common
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Section O (#2053) - the forge-ownership session state files.
 #
 # A Bash-tool write to <sid>.gh-login / <sid>.gh-env / <sid>.gh-auth-dirty (the

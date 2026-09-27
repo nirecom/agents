@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow.sh
+# tests/bin/feature-530-notes-promotion-triage-flow.sh
 # Tests: bin/worktree-notes-triage.js, bin/worktree-notes-triage/resolve.js, hooks/lib/worktree-notes-sections.js
 # Tags: notes-promotion, worktree-notes, triage, cli, subprocess, TL2, scope:common
 #
@@ -39,8 +39,8 @@
 #                                                               NP-4..NP-8 call order)
 #
 # NOT covered here (prompt-layer behavior; see the static suites
-# tests/feature-530-notes-promotion-protocol.sh and
-# tests/feature-530-promotion-callsite-conditions.sh, plus operational
+# tests/skills/feature-530-notes-promotion-protocol.sh and
+# tests/skills/feature-530-promotion-callsite-conditions.sh, plus operational
 # observation):
 #   - the real /issue-create skill (promotion-loop.sh drives the documented loop
 #     against a stub on PATH; the skill itself is model-driven)

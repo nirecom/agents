@@ -1,6 +1,6 @@
 #!/bin/bash
 # lang-check: ignore — intentional non-ASCII/CJK test fixture data (locale disambiguation / slugify robustness cases for issue #1910), not a comment-language violation
-# tests/feature-worktree-start-non-interactive/scan-gate-and-locale.sh
+# tests/skills/feature-worktree-start-non-interactive/scan-gate-and-locale.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/scan-outbound.sh
 # Tags: worktree, start, outbound-scan, locale, TL2, scope:issue-specific
 # B16-B18 — the three previously uncovered derive-worktree-name.sh behaviors:

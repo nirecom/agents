@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-origin-repo-resolver/resolve-origin.sh
+# tests/bin/fix-1899-origin-repo-resolver/resolve-origin.sh
 # Tests: bin/github-issues/lib/origin-repo.sh
 # Tags: origin-resolution, github-issues, table-driven, TL2, scope:issue-specific
 #

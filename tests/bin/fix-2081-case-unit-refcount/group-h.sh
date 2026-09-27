@@ -1,7 +1,7 @@
 # Group H: physical orphan-case-block removal (--apply helper) (#2081)
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # On partial-orphan, trp_remove_orphan_cases rebuilds the file skipping ONLY the
 # orphan cases' [begin,end] line ranges: surviving cases stay byte-for-byte, the

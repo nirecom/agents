@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2278-pretool-lang-gates/gate-plan-lang-cases.sh
+# tests/hooks/feature-2278-pretool-lang-gates/gate-plan-lang-cases.sh
 # Tests: hooks/gate-plan-lang.js, hooks/lib/plan-artifact-lang.js, hooks/lib/pretool-lang-gate.js
 # Tags: lang, hook, pretooluse, plans, TL2, scope:issue-specific
 # Sourced by ../feature-2278-pretool-lang-gates.sh — helpers come from there.

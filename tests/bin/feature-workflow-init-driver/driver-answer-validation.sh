@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-answer-validation.sh
+# tests/bin/feature-workflow-init-driver/driver-answer-validation.sh
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/phases/meta-classify.js
 # Tags: workflow-init, driver, checkpoint-resume, answer-validation, meta-classify, scope:issue-specific
 

@@ -1,5 +1,5 @@
 # allowlist-matrix.sh — L9: the L1/L2 verdict matrix for the OTHER allowlist
-# members. Sourced by tests/fix-2279-lookahead-pending-readers.sh.
+# members. Sourced by tests/hooks/fix-2279-lookahead-pending-readers.sh.
 # Tests: hooks/workflow-state/lifecycle.js, hooks/workflow-state/inheritance/adopt.js, hooks/lib/step-in-flight-policy.js
 # Tags: resume-session, adoption, wi-10-lookahead, step-in-flight, allowlist, matrix, regression-2279, scope:issue-specific, pwsh-not-required, TL1
 

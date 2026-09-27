@@ -1,4 +1,4 @@
-# tests/feature-2124-tool-selection-priority/dispatch-timing.sh
+# tests/bin/feature-2124-tool-selection-priority/dispatch-timing.sh
 # Tests: skills/write-code/SKILL.md, skills/write-tests/SKILL.md, rules/shell-commands.md
 # Tags: rules, prompt, dispatch, orthogonality, scope:issue-specific, pwsh-not-required, TL2
 

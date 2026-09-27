@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/codegraph-lifecycle.js, bin/codegraph-lifecycle/index-health.js, bin/codegraph-lifecycle/process-identity.js
 # Tags: codegraph, lifecycle, fixtures, sqlite, scope:issue-specific
-# Fixture generators for tests/feature-codegraph-lifecycle.sh: the recording
+# Fixture generators for tests/bin/feature-codegraph-lifecycle.sh: the recording
 # `codegraph` stub, the identity-query stub, the daemon stand-ins and the DB
 # builder. Sourced by harness.sh once the temp tree exists.
 
@@ -70,7 +70,7 @@ if [ "$IS_WIN32" -eq 1 ]; then
     # logic). Every existing case in this suite therefore runs through the .cmd
     # delegation path on win32.
     # Byte-faithful npm cmd-shim 8.0.0 output, mirrored from the unit suite's
-    # tests/feature-2150-spawn-shimmed-cli/fixtures-npm.sh: CRLF, the :find_dp0
+    # tests/hooks/feature-2150-spawn-shimmed-cli/fixtures-npm.sh: CRLF, the :find_dp0
     # subroutine, the `endLocal & goto` prefix and the `"%dp0%\...` separator.
     write_cg_posix_sibling() {
         {

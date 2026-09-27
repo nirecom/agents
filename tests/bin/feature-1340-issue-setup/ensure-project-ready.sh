@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1340-issue-setup/ensure-project-ready.sh
+# tests/bin/feature-1340-issue-setup/ensure-project-ready.sh
 # Tests: bin/github-issues/lib/ensure-project-ready.sh
 # Tags: issue-setup, ensure-project-ready, github-issues, scope:issue-specific
 # N/A: secret-leakage — created field IDs are project-structure identifiers, not secrets; gh owns token handling.

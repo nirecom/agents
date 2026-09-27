@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filename: tests/feature-772-session-start-cleanup-inherit.sh
+# filename: tests/hooks/feature-772-session-start-cleanup-inherit.sh
 # Tests: hooks/session-start.js
 # Tags: session-start, cleanup, inheritance, regression, scope:issue-specific
 #
@@ -94,7 +94,7 @@ write_state_file() {
 # authoritative and `steps` a key of the derived projection; both shapes are
 # accepted so this file keeps asserting the INHERITANCE contract rather than the
 # storage layout. The heir's stream shape itself is covered in
-# tests/feature-1733-state-event-stream/session-inherit.sh.
+# tests/hooks/feature-1733-state-event-stream/session-inherit.sh.
 read_step_field() {
     local sid="$1" step="$2" field="$3"
     local f="$WORKFLOW_DIR/${sid}.json"
@@ -260,7 +260,7 @@ fi
 
 # C6: session-start.js emits the session_id line into additionalContext.
 # This is the observable seam for that contract: the hook's own stdout. The
-# former TL3 assertion (SS-E2 in tests/TL3-hook-session-start/main.sh) asserted
+# former TL3 assertion (SS-E2 in tests/hooks/TL3-hook-session-start/main.sh) asserted
 # the same string against `claude -p --output-format json` output, where
 # additionalContext never appears — wrong layer, permanently red (#1619/#1648).
 C6_SID="c6-$(printf '%04x%04x' $RANDOM $RANDOM)"

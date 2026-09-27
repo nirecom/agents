@@ -4,7 +4,7 @@
 # Tests for bin/run-codex-review-loop (issue #603): exit-code matrix,
 # pre-flight checks, and argument forwarding.
 # TL1 dispatcher: shared fixtures and helpers live here, the cases live in
-# tests/feature-603-run-codex-review-loop/ per rules/coding/file-split.md.
+# tests/bin/feature-603-run-codex-review-loop/ per rules/coding/file-split.md.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -124,7 +124,7 @@ invoke_wrapper() {
 # ---------------------------------------------------------------------------
 # Cases — sourced in the original block order so the output stays byte-identical.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_WORKTREE/tests/feature-603-run-codex-review-loop"
+SUITE_DIR="$AGENTS_WORKTREE/tests/bin/feature-603-run-codex-review-loop"
 
 # shellcheck source=./feature-603-run-codex-review-loop/verdict-exit-codes.sh
 . "$SUITE_DIR/verdict-exit-codes.sh"

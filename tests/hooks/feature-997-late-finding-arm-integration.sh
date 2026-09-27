@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-997-late-finding-arm-integration.sh
+# tests/hooks/feature-997-late-finding-arm-integration.sh
 # Tests: hooks/lib/supervisor-state-writer.js, bin/supervisor-write-alert
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #997 — late finding arming via eligibility flag.

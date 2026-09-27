@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, real-git, runner, TL2, scope:common
 #
 # The execution primitive the E and F blocks share: run one scenario script against the

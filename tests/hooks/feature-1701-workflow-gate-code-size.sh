@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1701-workflow-gate-code-size.sh
+# tests/hooks/feature-1701-workflow-gate-code-size.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
 # Serial: #1799 case 5/14 ("WIP commit + staged 501-line .js -> still blocked") was reported flaky under -j8 parallel load; 18 consecutive clean reruns across two diagnostic passes could not reproduce it, so no root cause was isolated. This header is a mitigation (route to run-all.sh's serial lane on the suspicion the flake was load-related), not a confirmed fix — if it recurs even serialized, that rules out load and root-cause investigation should resume.
@@ -204,9 +204,9 @@ assert_block() {
 # Cases — sourced fragments (Pattern A split; rules/coding/file-split.md)
 # ============================================================================
 FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1701-workflow-gate-code-size"
-# shellcheck source=tests/feature-1701-workflow-gate-code-size/gate-behavior.sh
+# shellcheck source=tests/hooks/feature-1701-workflow-gate-code-size/gate-behavior.sh
 . "$FRAGMENT_DIR/gate-behavior.sh"
-# shellcheck source=tests/feature-1701-workflow-gate-code-size/infra-and-config.sh
+# shellcheck source=tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 . "$FRAGMENT_DIR/infra-and-config.sh"
 
 run_all() {

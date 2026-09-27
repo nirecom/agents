@@ -1,4 +1,4 @@
-// tests/enforce-protected-marker-write/round9-brace-ansi-probe.js
+// tests/hooks/enforce-protected-marker-write/round9-brace-ansi-probe.js
 // Unit probe for the round-9 HIGH-2 fix, run as a FILE (never `node -e`): the
 // strings under test ARE protected basenames, so a `-e` body spelling them would
 // be blocked by the very hook this suite tests. argv[2] = repo root.

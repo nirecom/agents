@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lang-check: ignore — intentional non-ASCII filename fixture in the hostile-path table below.
-# tests/feature-1894-comment-block-size/special-paths.sh
+# tests/bin/feature-1894-comment-block-size/special-paths.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, paths, quoting, injection, unicode, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 #

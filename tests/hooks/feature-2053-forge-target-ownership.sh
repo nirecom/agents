@@ -6,11 +6,11 @@
 # Guard under test (#2053): before a `gh` command writes to a GitHub repo, the
 # hook asks the user unless EVERY in-scope target is actively proven owned.
 # Silent allow is the narrow case; everything else asks. Cases live in
-# tests/feature-2053-forge-target-ownership/ (rules/coding/file-split.md).
+# tests/hooks/feature-2053-forge-target-ownership/ (rules/coding/file-split.md).
 
 # Layer TL2: real hook process, real JSON stdin, real git fixtures, `gh` stubbed
 # on PATH — no network. TL3 gap (category hook-registration) — that Claude Code
-# dispatches it and honours `ask`: tests/TL3-hook-forge-target-ownership.sh.
+# dispatches it and honours `ask`: tests/hooks/TL3-hook-forge-target-ownership.sh.
 
 set -uo pipefail
 

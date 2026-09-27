@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Table evaluator for tests/fix-1780-round12-parser-unit-tables.sh — the
+// Table evaluator for tests/hooks/fix-1780-round12-parser-unit-tables.sh — the
 // `eval_subject` half of the bash table-driven pattern
 // (skills/_shared/test-design/parser-regex-tests.md). Reads `name|want|fn|input`
 // rows on stdin, prints `name<TAB>got`, so ONE node process serves a whole table.

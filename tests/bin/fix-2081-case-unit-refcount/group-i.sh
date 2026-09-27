@@ -1,7 +1,7 @@
 # Group I: reset contract — no TRP_CASE_* leak between files (C5) (#2081)
 # Tests: bin/lib/test-retire-predicate/case-parser.sh, bin/lib/test-retire-predicate.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
-# Sourced by tests/fix-2081-case-unit-refcount.sh
+# Sourced by tests/bin/fix-2081-case-unit-refcount.sh
 #
 # trp_enumerate_cases resets TRP_CASE_*/TRP_ORPHAN_CASE_IDX/TRP_REFCOUNT/
 # TRP_HAS_MARKERS/TRP_UNIT_MODE/_TRP_MARKER_MALFORMED at entry. Processing an

@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, enforce-worktree, orphan-cwd, bash-c, fail-closed, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/fix-525-orphan-cwd-bash-c-bypass.sh (all cases).
 # Cases: T1.1-T1.7.
 # The axis is what the guard defaults to when repository resolution FAILS

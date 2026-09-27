@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/c-projectstate-callers.sh
+# tests/hooks/feature-1665-seq-cascade/c-projectstate-callers.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io.js
 # Tags: workflow-state, updated-seq, call-site-inventory, drift-detection, scope:issue-specific, pwsh-not-required, TL1
 #
@@ -44,17 +44,17 @@
 #   writes a state file, or reads one back, so it cannot observe whether
 #   `updated_seq` actually addresses the stream that was persisted.
 # Closest-to-action mitigation: the runtime round-trip is exercised by
-# tests/feature-1733-state-event-stream/projection-contract.sh (TL2), which
+# tests/hooks/feature-1733-state-event-stream/projection-contract.sh (TL2), which
 # drives real markStep/recordSessionModel writes and asserts that the projection
 # readState pastes equals projectState() over the re-read raw state, and by
-# tests/feature-1665-seq-cascade/a-updated-seq.sh, which asserts updated_seq
+# tests/hooks/feature-1665-seq-cascade/a-updated-seq.sh, which asserts updated_seq
 # positions against a real appended event stream. Those two fail when a caller
 # folds the wrong stream; this file fails when a caller merely APPEARS.
 
 CASE_TAG=c
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 
-SCANNER="$AGENTS_DIR_N/tests/feature-1665-seq-cascade/projectstate-callsites.js"
+SCANNER="$AGENTS_DIR_N/tests/hooks/feature-1665-seq-cascade/projectstate-callsites.js"
 
 cd "$AGENTS_DIR" || { fail "C: cannot enter repo"; finish; exit; }
 

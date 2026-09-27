@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1225-profile-snippet-guards.sh
+# tests/install/fix-1225-profile-snippet-guards.sh
 # Tests: profile-snippet.sh, bin/lib/session-sync-markers.sh
 # Tags: installer, profile-snippet, idempotency, job-control, ssh, stdout-stderr, scope:issue-specific
 #
@@ -452,25 +452,25 @@ fi
 # TC8/TC9 and TC13+ live in sibling part files so this file stays under the
 # 500-line HARD limit of rules/coding/file-split.md. Each part file self-invokes
 # its cases at source time.
-# shellcheck source=tests/fix-1225-profile-snippet-guards/shell-compat.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/shell-compat.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/session-sync-gate.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/session-sync-gate.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/ssh-command-override.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/ssh-command-override.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/ssh-command-injection.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/ssh-command-injection.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/stdout-stderr-split.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/stdout-stderr-split.sh"
-# shellcheck source=tests/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/shell-compat.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/shell-compat.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/ssh-command-override.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/ssh-command-override.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/ssh-command-injection.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/ssh-command-injection.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/stdout-stderr-split.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/stdout-stderr-split.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh"
 # set-e-source-safety.sh reuses _ffg_stamp, so it must follow fetch-frequency-guard.sh.
-# shellcheck source=tests/fix-1225-profile-snippet-guards/set-e-source-safety.sh
-. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/set-e-source-safety.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/set-e-source-safety.sh
+. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/set-e-source-safety.sh"
 
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"

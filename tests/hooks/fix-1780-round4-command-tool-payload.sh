@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round4-command-tool-payload.sh
+# tests/hooks/fix-1780-round4-command-tool-payload.sh
 # Tests: hooks/lib/tool-command-text.js, hooks/block-clearance-token-write.js, hooks/supervisor-off-proposal-shim.js, hooks/lib/sentinel-patterns.js
 # Tags: off-clearance, runcommands, runinterminal, tool-payload, pretooluse, classifier, security, scope:issue-specific, pwsh-not-required, TL1, TL2, hook-registration
 # TL3 gap (what this test does NOT catch):
@@ -8,8 +8,8 @@
 #   subprocesses fed synthetic PreToolUse JSON, so a change to the HOST's payload
 #   contract would go unnoticed until a real session runs.
 # - settings.json actually registering both hooks for runCommands / runInTerminal
-#   (asserted statically by tests/feature-1610-settings-worktree-entries.sh and by
-#   the R-block of tests/fix-1780-round4-write-tool-parity.sh, never dynamically).
+#   (asserted statically by tests/hooks/feature-1610-settings-worktree-entries.sh and by
+#   the R-block of tests/hooks/fix-1780-round4-write-tool-parity.sh, never dynamically).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 #

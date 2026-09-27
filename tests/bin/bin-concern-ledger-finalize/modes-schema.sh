@@ -1,8 +1,8 @@
-# tests/bin-concern-ledger-finalize/modes-schema.sh
+# tests/bin/bin-concern-ledger-finalize/modes-schema.sh
 # lang-check: ignore -- table below deliberately asserts non-ASCII survives verbatim
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh
 # Tags: concern-ledger, finalize, modes, json-schema, serialization, TL2, scope:common
-# Sourced by tests/bin-concern-ledger-finalize.sh.
+# Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 # Detail-plan Test plan (finalize TL2) cases 1, 2, 3, 4 — the two modes, the
 # artifact schema, and the jq-free serialization.
 

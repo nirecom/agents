@@ -1,4 +1,4 @@
-# tests/feature-719-supervisor-guard-hook/cases-g20-g28.sh
+# tests/hooks/feature-719-supervisor-guard-hook/cases-g20-g28.sh
 # G20-G28: #912 + #914 + #903 — L2 retry threshold, AskUserQuestion gate,
 # WORKTREE_OFF proposal trigger (C3 branch). Verbatim from original entrypoint.
 

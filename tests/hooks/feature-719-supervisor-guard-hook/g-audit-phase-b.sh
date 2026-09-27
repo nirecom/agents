@@ -1,4 +1,4 @@
-# tests/feature-719-supervisor-guard-hook/g-audit-phase-b.sh
+# tests/hooks/feature-719-supervisor-guard-hook/g-audit-phase-b.sh
 # G-B1..G-B5: Phase B arbitration wiring (#1043).
 # Probes whether arbitrate() is wired into the L3 Phase B branch of
 # supervisor-guard.js. SKIP all cases until the wiring lands.

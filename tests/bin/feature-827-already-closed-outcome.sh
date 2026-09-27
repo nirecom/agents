@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-827-already-closed-outcome.sh
+# tests/bin/feature-827-already-closed-outcome.sh
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/issue-close-write-outcome.js
 # Tags: scope:issue-specific
 # Tests for issue #827 (with #1395) — an already-CLOSED issue on the resume_j

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-846-settings-drift-hooks.sh
+# tests/hooks/fix-846-settings-drift-hooks.sh
 # Tests: hooks/post-merge, hooks/post-checkout
 # Tags: hook, settings, drift, post-merge, post-checkout, scope:common
 # (scope:common, not scope:issue-specific: skills/_shared/test-design.md keys the classification
@@ -18,7 +18,7 @@ set -u
 # REAL install/assemble-settings.js, with a fixture-private HOME, asserting the deployed settings
 # really gains the generated rules, stays byte-identical when the assembler fails, and lets the
 # assembler's own diagnostic through -- is covered at TL2 in
-# tests/feature-2119-settings-allow-ssot/hook-callers.sh (T37). Neither file needs a real machine.
+# tests/install/feature-2119-settings-allow-ssot/hook-callers.sh (T37). Neither file needs a real machine.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 

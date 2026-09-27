@@ -1,4 +1,4 @@
-# tests/feature-2280-settings-deny-anchor/matcher.sh
+# tests/install/feature-2280-settings-deny-anchor/matcher.sh
 # Tests: settings.json
 # Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
 # Deny-side approximation of the host's Bash(...) glob matching (patternToRegExp, ported

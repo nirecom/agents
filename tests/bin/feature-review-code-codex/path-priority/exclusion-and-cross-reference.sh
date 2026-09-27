@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, exclusion, stop-at-first-skip, cross-reference, path-encoding, scope:issue-specific, pwsh-not-required, TL2
 # lang-check: ignore — P15 fixture uses a non-ASCII filename intentionally, to test that git's octal-escaping of such names doesn't drop them from the priority set.

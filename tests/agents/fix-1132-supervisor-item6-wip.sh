@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1132-supervisor-item6-wip.sh
+# tests/agents/fix-1132-supervisor-item6-wip.sh
 # Tests: agents/supervisor.md, skills/_shared/off-legitimacy-rubric.md
 # Tags: supervisor, off-legitimacy, rubric, wip-mode, content-assertion, scope:issue-specific, pwsh-not-required, TL1
 #
@@ -12,15 +12,13 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
 RUBRIC="$AGENTS_DIR/skills/_shared/off-legitimacy-rubric.md"
 
-PASS=0; FAIL=0; SKIP=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
 has() { grep -qiE "$2" "$1" 2>/dev/null; }
 
+case_begin "rubric-ssot" "skills/_shared/off-legitimacy-rubric.md"
 # --- rubric SSOT file exists ---
 if [ -f "$RUBRIC" ]; then
     pass "rubric SSOT skills/_shared/off-legitimacy-rubric.md exists"
@@ -50,7 +48,9 @@ if [ -f "$RUBRIC" ]; then
 else
     fail "RED-EXPECTED (not yet created): skills/_shared/off-legitimacy-rubric.md missing"
 fi
+case_end
 
+case_begin "supervisor-md" "agents/supervisor.md"
 # --- supervisor.md item 6: --wip recognition + rubric reference ---
 if [ -f "$SUPERVISOR_MD" ]; then
     pass "agents/supervisor.md present (harness sanity)"
@@ -69,6 +69,7 @@ if [ -f "$SUPERVISOR_MD" ]; then
 else
     fail "agents/supervisor.md missing (harness error)"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

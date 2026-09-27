@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/provider-purity.sh
+# tests/install/feature-2119-settings-allow-ssot/provider-purity.sh
 # Tests: install/lib/settings-assembly.js, hooks/lib/allow-command-list.js, hooks/lib/settings-drift.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T28: the expectation provider writes nothing, ever. Sourced AFTER fixture.sh.

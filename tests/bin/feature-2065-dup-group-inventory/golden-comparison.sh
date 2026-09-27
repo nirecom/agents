@@ -1,13 +1,20 @@
 # S12 category 1: golden comparison of the pre-extraction implementation (#2065)
 # Tests: bin/lib/test-frontmatter-fix.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: TL2, audit-tests, golden, frontmatter, scope:issue-specific
-# Sourced by tests/feature-2065-dup-group-inventory.sh
+# Sourced by tests/bin/feature-2065-dup-group-inventory.sh
 # Proof that the S1-2 parser extraction is behavior-preserving: the OLD
 # implementation's stdout, stderr and exit status, each byte-compared on its own
 # against the new one over one fixture covering buckets (a)-(j) of S1-0. The
 # expected side is a fact about what the old code emitted and must never be
 # rewritten to match a new implementation — a mismatch is an S1 design defect,
 # not a test defect. A golden that is absent is a FAIL, never a SKIP.
+
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
+
+case_begin "golden-series" "bin/lib/test-frontmatter-fix.sh"
 
 GC_GOLDEN_DIR="${DUP_GROUPS_GOLDEN_DIR:-$AGENTS_ROOT/tests/fixtures/feature-2065-dup-group-golden}"
 GC_CAPTURE_DIR="$TMPDIR_BASE/golden-capture"
@@ -24,30 +31,30 @@ git -C "$GC_REPO" mv bin/old.sh bin/new.sh >/dev/null 2>&1
 commit_repo "$GC_REPO" "golden fixture rename"
 
 # (a) single alive target / (b) several alive targets
-add_test_file "$GC_REPO" "feature-9001-single.sh" "bin/alive1.sh" "TL2, scope:issue-specific"
-add_test_file "$GC_REPO" "feature-9002-multi.sh" "bin/alive1.sh, bin/alive2.sh" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9001-single.sh" "bin/alive1.sh" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9002-multi.sh" "bin/alive1.sh, bin/alive2.sh" "TL2, scope:issue-specific"
 # (c) malformed token spellings: annotation, glob, embedded space
-add_test_file "$GC_REPO" "feature-9003-badfmt.sh" "bin/alive1.sh (note), bin/*.sh, bin/a b.sh" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9003-badfmt.sh" "bin/alive1.sh (note), bin/*.sh, bin/a b.sh" "TL2, scope:issue-specific"
 # (d) root-like tokens — regex-valid but rejected by _is_root_like_token
-add_test_file "$GC_REPO" "feature-9004-rootlike.sh" "., .., /, ./, ../" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9004-rootlike.sh" "., .., /, ./, ../" "TL2, scope:issue-specific"
 # (e) missing target / (f) renamed target
-add_test_file "$GC_REPO" "feature-9005-missing.sh" "bin/gone.sh" "TL2, scope:issue-specific"
-add_test_file "$GC_REPO" "feature-9006-renamed.sh" "bin/old.sh" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9005-missing.sh" "bin/gone.sh" "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9006-renamed.sh" "bin/old.sh" "TL2, scope:issue-specific"
 # (h) whitespace-padded tokens
-add_test_file "$GC_REPO" "feature-9008-pad.sh" "  bin/alive1.sh ,  bin/alive2.sh " "TL2, scope:issue-specific"
+add_test_file "$GC_REPO" "bin/feature-9008-pad.sh" "  bin/alive1.sh ,  bin/alive2.sh " "TL2, scope:issue-specific"
 # common-scope members so audit-tests-common.sh has a non-empty report too
-add_test_file "$GC_REPO" "common-alive.sh" "bin/alive2.sh"
-add_test_file "$GC_REPO" "common-missing.sh" "bin/gone2.sh"
+add_test_file "$GC_REPO" "bin/common-alive.sh" "bin/alive2.sh"
+add_test_file "$GC_REPO" "bin/common-missing.sh" "bin/gone2.sh"
 
 # (g) no `# Tests:` line at all
-add_test_file_raw "$GC_REPO" "feature-9007-noheader.sh" <<'GC_NOHDR'
+add_test_file_raw "$GC_REPO" "bin/feature-9007-noheader.sh" <<'GC_NOHDR'
 #!/usr/bin/env bash
 # Tags: TL2, scope:issue-specific
 echo fixture
 GC_NOHDR
 
 # (i) two `# Tests:` lines — the old code silently keeps only the first
-add_test_file_raw "$GC_REPO" "common-dup-header.sh" <<'GC_DUP'
+add_test_file_raw "$GC_REPO" "bin/common-dup-header.sh" <<'GC_DUP'
 #!/usr/bin/env bash
 # Tests: bin/alive1.sh
 # Tags: TL2, scope:common
@@ -58,7 +65,7 @@ GC_DUP
 # (j) first `# Tests:` line at line 11 — a position-contract violation the old
 # code accepts because `grep -m1` never looks at the line number. The filler is
 # executable no-ops rather than comments so the block stays greppable as code.
-add_test_file_raw "$GC_REPO" "common-late-header.sh" <<'GC_LATE'
+add_test_file_raw "$GC_REPO" "bin/common-late-header.sh" <<'GC_LATE'
 #!/usr/bin/env bash
 # Tags: TL2, scope:common
 : filler 03
@@ -144,5 +151,23 @@ assert_eq "GC10 duplicate-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-dup-header\.sh' || true)"
 assert_eq "GC11 late-header fixture is not reported by the retire pass" \
     "0" "$(printf '%s\n' "$GC_RETIRE" | grep -c 'common-late-header\.sh' || true)"
+
+case_end
+
+case_begin "golden-audit-coverage" "bin/audit-tests.sh"
+if [[ -f "$AUDIT" ]]; then
+    pass "P0-ext bin/audit-tests.sh exists (exercised by golden-series)"
+else
+    fail "P0-ext bin/audit-tests.sh missing"
+fi
+case_end
+
+case_begin "golden-audit-common-coverage" "bin/audit-tests-common.sh"
+if [[ -f "$AUDIT_COMMON" ]]; then
+    pass "P0-ext bin/audit-tests-common.sh exists (exercised by golden-series)"
+else
+    fail "P0-ext bin/audit-tests-common.sh missing"
+fi
+case_end
 
 grp_done "golden-comparison.sh"

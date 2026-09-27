@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/validation.sh
+# tests/bin/feature-sweep-worktrees/validation.sh
 # Tests: bin/sweep-worktrees.sh
 # Tags: sweep, worktrees, validation, maintenance, bin, scope:common
 # Input/env validation + error-path tests: T11, T22..T28.

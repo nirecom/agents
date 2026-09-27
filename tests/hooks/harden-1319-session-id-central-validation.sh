@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/harden-1319-session-id-central-validation.sh
+# tests/hooks/harden-1319-session-id-central-validation.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/session-id.js, hooks/lib/session-markers.js, hooks/stop-final-report-guard.js, hooks/stop-l2-findings-display.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js
 # Tags: session-id, validation, path-traversal, hardening, scope:issue-specific, pwsh-not-required, TL1, TL2
 #

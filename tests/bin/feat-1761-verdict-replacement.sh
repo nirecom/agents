@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-verdict-replacement.sh
+# tests/bin/feat-1761-verdict-replacement.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, codex, replacement, gh-mock, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

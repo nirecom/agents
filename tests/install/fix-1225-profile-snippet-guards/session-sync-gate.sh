@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh, bin/get-config-var
 # Tags: installer, profile-snippet, session-sync, toggle, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
 # not run alone. Uses its make_mirror_sandbox / run_mirror_driver helpers.
 #
 # Contract under test — the SESSION_SYNC toggle gates the two *automatic*
@@ -11,7 +11,7 @@
 # runs only on an explicit, readable `on`. Every other outcome — unset,
 # unrecognized value, or an unreadable config (broken node) — must leave the
 # automatic path silent. The manual CLI is not gated; that contract lives in
-# tests/main-session-sync/session-sync-independence.sh.
+# tests/bin/main-session-sync/session-sync-independence.sh.
 #
 # The `codes` command itself is NOT gated — only its sync side effect (TC21).
 

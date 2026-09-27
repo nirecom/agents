@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-get-config-var-repo-root.sh
+# tests/bin/feature-2223-get-config-var-repo-root.sh
 # Tests: bin/get-config-var, bin/env-effective-kv, hooks/lib/load-env.sh
 # Tags: scope:issue-specific, TL2, get-config-var, env-effective-kv, cli, security, pwsh-not-required
 # RED for issue #2223 — the --repo-root CLI surface and the env-effective-kv door.

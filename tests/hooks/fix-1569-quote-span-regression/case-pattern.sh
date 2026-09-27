@@ -1,9 +1,9 @@
-# tests/fix-1569-quote-span-regression/case-pattern.sh
+# tests/hooks/fix-1569-quote-span-regression/case-pattern.sh
 # Tests: hooks/lib/quote-spans/scan.js, hooks/lib/strip-quoted-args.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, quote-spans, scanner, security, classifier, scope:issue-specific
 #
 # STATUS: RED on the CASE-* rows. Sourced by
-# tests/fix-1569-quote-span-regression.sh — uses its pass/fail, run_with_timeout
+# tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail, run_with_timeout
 # and _AGENTS_DIR_NODE.
 #
 # Defect: the scanner closes a `$(` command substitution at the FIRST `)` it

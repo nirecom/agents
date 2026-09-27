@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-backup-secrets.sh
+# tests/bin/feature-1643-worker-dispatch-backup-secrets.sh
 # Tests: bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, worktree-backup, secrets, manifest, idempotency, protection-fix, TL2, scope:issue-specific
 #
@@ -27,7 +27,7 @@
 #
 # Skipped-Because: "a payload naming a backup_dir other than the derived
 # <main-root>/.worktree-backup/<branch> is rejected" is NOT re-asserted here.
-# tests/feature-1643-worker-dispatch-capability.sh already drives that as rows
+# tests/bin/feature-1643-worker-dispatch-capability.sh already drives that as rows
 # `backup-dir-arbitrary` and `backup-dir-sibling` with all three protection
 # properties. Duplicating it would add a second place to update.
 

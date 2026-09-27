@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, truncation, budget, breakdown, reviewed-dropped, scope:issue-specific, pwsh-not-required, TL2
 # B checks the two claims the truncation report makes — "Truncated to N lines" and "K of T files reviewed, these D not" — against what was actually sent, by reading the captured prompt rather than grepping for the label (grepping alone passes an implementation that announces 5000 but forwards 6007, or lists a path Reviewed with its chunk never sent). B1 measures diff body vs every configured cap; B2 reconciles Reviewed/Dropped path by path.

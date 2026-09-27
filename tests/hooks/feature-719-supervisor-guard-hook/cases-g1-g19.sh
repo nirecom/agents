@@ -1,4 +1,4 @@
-# tests/feature-719-supervisor-guard-hook/cases-g1-g19.sh
+# tests/hooks/feature-719-supervisor-guard-hook/cases-g1-g19.sh
 # Test cases G1-G19 — verbatim from original entrypoint.
 
 run_g1() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1979-stall-regression.sh
+# tests/hooks/feature-1979-stall-regression.sh
 # Tests: hooks/user-prompt-submit-mechanism-check.js, hooks/lib/mechanism-failure.js, hooks/workflow-state/lifecycle.js, hooks/lib/step-in-flight-policy.js, settings.json
 # Tags: stall-detection, user-prompt-submit, hook, step-in-flight, no-state-session, stall-reported, regression-1979, scope:issue-specific, pwsh-not-required, TL1, TL2
 

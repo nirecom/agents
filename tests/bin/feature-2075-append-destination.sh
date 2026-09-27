@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2075-append-destination.sh
+# tests/bin/feature-2075-append-destination.sh
 # Tests: bin/find-tests-for-source.sh,bin/lib/test-route-destination.sh,bin/lib/test-dup-group.sh,skills/write-tests/SKILL.md,skills/review-tests/SKILL.md,skills/review-tests/scripts/select-staged-files.sh,skills/_shared/test-design/append-vs-new.md,skills/run-tests/SKILL.md,bin/lib/test-frontmatter-fix.sh,bin/resolve-worktree-path,install/settings-allow-commands.txt
 # Tags: scope:issue-specific
 # Dispatcher for #2075 (append-vs-new destination routing): shared fixtures only.
@@ -12,6 +12,8 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+source "$AGENTS_ROOT/tests/lib/harness.sh"
 GROUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2075-append-destination"
 HELPER="$AGENTS_ROOT/bin/find-tests-for-source.sh"
 ROUTE_LIB="$AGENTS_ROOT/bin/lib/test-route-destination.sh"
@@ -197,7 +199,7 @@ assert_row() {
     assert_eq "$1 viable" "$6" "$(list_files "$(col "$2" 7)")"
 }
 
-# ── Completion ledger (GRP pattern, from tests/feature-2065-dup-group-inventory.sh)
+# ── Completion ledger (GRP pattern, from tests/bin/feature-2065-dup-group-inventory.sh)
 # Each case file's LAST line is `grp_done <its own basename>`; a file that bails
 # after its fixture setup still sources "successfully", so only the ledger proves
 # the whole family ran.
@@ -210,14 +212,17 @@ grp_done() { GRP_DONE="${GRP_DONE}$1
 CASE_RAN=""
 case_ran() { CASE_RAN="${CASE_RAN} $1"; }
 
-# ── Preconditions ───────────────────────────────────────────────────────────
-for _p in "$HELPER:bin/find-tests-for-source.sh" "$ROUTE_LIB:bin/lib/test-route-destination.sh" \
-          "$DUP_LIB:bin/lib/test-dup-group.sh" "$SELECT_SH:skills/review-tests/scripts/select-staged-files.sh" \
-          "$WT_SKILL:skills/write-tests/SKILL.md" "$RT_SKILL:skills/review-tests/SKILL.md" \
-          "$TD_SHARED:skills/_shared/test-design.md" "$TD_APPEND:skills/_shared/test-design/append-vs-new.md" \
-          "$ALLOW_TXT:install/settings-allow-commands.txt"; do
-    if [[ -f "${_p%%:*}" ]]; then pass "P0 ${_p#*:} exists"; else fail "P0 ${_p#*:} missing at ${_p%%:*}"; fi
-done
+# ── Preconditions (one case_begin per # Tests: path) ────────────────────────
+case_begin "preconditions-find-tests" "bin/find-tests-for-source.sh"
+if [[ -f "$HELPER" ]]; then pass "P0 bin/find-tests-for-source.sh exists"; else fail "P0 bin/find-tests-for-source.sh missing at $HELPER"; fi
+case_end
+
+case_begin "preconditions-route-destination" "bin/lib/test-route-destination.sh"
+if [[ -f "$ROUTE_LIB" ]]; then pass "P0 bin/lib/test-route-destination.sh exists"; else fail "P0 bin/lib/test-route-destination.sh missing at $ROUTE_LIB"; fi
+case_end
+
+case_begin "preconditions-dup-group" "bin/lib/test-dup-group.sh"
+if [[ -f "$DUP_LIB" ]]; then pass "P0 bin/lib/test-dup-group.sh exists"; else fail "P0 bin/lib/test-dup-group.sh missing at $DUP_LIB"; fi
 
 # P1 — the reverse codec the whole assertion harness decodes through.
 for _fn in tdg_unescape_field tdg_split_escaped_csv; do
@@ -227,6 +232,52 @@ for _fn in tdg_unescape_field tdg_split_escaped_csv; do
         fail "P1 $_fn not defined by bin/lib/test-dup-group.sh (not implemented yet)"
     fi
 done
+case_end
+
+case_begin "preconditions-select-staged-files" "skills/review-tests/scripts/select-staged-files.sh"
+if [[ -f "$SELECT_SH" ]]; then pass "P0 skills/review-tests/scripts/select-staged-files.sh exists"; else fail "P0 skills/review-tests/scripts/select-staged-files.sh missing at $SELECT_SH"; fi
+case_end
+
+case_begin "preconditions-write-tests-skill" "skills/write-tests/SKILL.md"
+if [[ -f "$WT_SKILL" ]]; then pass "P0 skills/write-tests/SKILL.md exists"; else fail "P0 skills/write-tests/SKILL.md missing at $WT_SKILL"; fi
+case_end
+
+case_begin "preconditions-review-tests-skill" "skills/review-tests/SKILL.md"
+if [[ -f "$RT_SKILL" ]]; then pass "P0 skills/review-tests/SKILL.md exists"; else fail "P0 skills/review-tests/SKILL.md missing at $RT_SKILL"; fi
+case_end
+
+case_begin "preconditions-test-design-append" "skills/_shared/test-design/append-vs-new.md"
+if [[ -f "$TD_SHARED" ]]; then pass "P0 skills/_shared/test-design.md exists"; else fail "P0 skills/_shared/test-design.md missing at $TD_SHARED"; fi
+if [[ -f "$TD_APPEND" ]]; then pass "P0 skills/_shared/test-design/append-vs-new.md exists"; else fail "P0 skills/_shared/test-design/append-vs-new.md missing at $TD_APPEND"; fi
+case_end
+
+case_begin "preconditions-allow-commands" "install/settings-allow-commands.txt"
+if [[ -f "$ALLOW_TXT" ]]; then pass "P0 install/settings-allow-commands.txt exists"; else fail "P0 install/settings-allow-commands.txt missing at $ALLOW_TXT"; fi
+case_end
+
+case_begin "preconditions-run-tests-skill" "skills/run-tests/SKILL.md"
+if [[ -f "$AGENTS_ROOT/skills/run-tests/SKILL.md" ]]; then
+    pass "P0-ext skills/run-tests/SKILL.md exists (used by this test suite)"
+else
+    fail "P0-ext skills/run-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "preconditions-frontmatter-fix" "bin/lib/test-frontmatter-fix.sh"
+if [[ -f "$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-fix.sh exists (used by this test suite)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-fix.sh missing"
+fi
+case_end
+
+case_begin "preconditions-resolve-worktree-path" "bin/resolve-worktree-path"
+if [[ -f "$AGENTS_ROOT/bin/resolve-worktree-path" ]]; then
+    pass "P0-ext bin/resolve-worktree-path exists (used by this test suite)"
+else
+    fail "P0-ext bin/resolve-worktree-path missing"
+fi
+case_end
 
 # ── Case files ──────────────────────────────────────────────────────────────
 # shellcheck source=feature-2075-append-destination/helper-cases.sh
@@ -241,6 +292,8 @@ done
 . "$GROUP_DIR/worktree-select-cases.sh"
 # shellcheck source=feature-2075-append-destination/skill-static-cases.sh
 . "$GROUP_DIR/skill-static-cases.sh"
+
+case_begin "suite-integrity" "bin/find-tests-for-source.sh"
 
 # ── Case-file set integrity ─────────────────────────────────────────────────
 GRP_PRESENT="$(ls -1 "$GROUP_DIR" 2>/dev/null | grep '\.sh$' | sort)"
@@ -271,9 +324,9 @@ fi
 
 # CASE1 — the planned case ledger: every id in the plan's H/S/F tables must have
 # reported at least one assertion, so a deleted case block cannot pass silently.
-CASE_EXPECTED="H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H11b H11c H11d H11e H12 H13 H13b H13c \
-H14a H14b H14c H14d H15 H16 H17 H18a H18b F1 F2 F3 F4 F5 F6 F7 \
-K1 K2 K3 K4 K5 B1 B2 B3 B4 B5 G1 G2 V1 V2 E1 E2 E3 E4 E5 I1 W1 W2 \
+CASE_EXPECTED="H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H11b H11c H11d H11e H12 H13 H13b H13c H13d H13e H13f H13g \
+H14a H14b H14c H14d H15 H16 H17 H18a H18b H19 F1 F2 F3 F4 F5 F6 F7 F8 \
+K1 K2 K3 K4 K5 A1 A2 A3 A4 A5 A6 B1 B2 B3 B4 B5 B6 B7 G1 G2 V1 V2 E1 E2 E3 E4 E5 E6 I1 W1 W2 \
 S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do
@@ -287,6 +340,8 @@ if [[ -z "$CASE_MISSING" ]]; then
 else
     fail "CASE1 planned case ids that never ran: [$CASE_MISSING]"
 fi
+
+case_end
 
 echo ""
 echo "─────────────────────────────────────────"

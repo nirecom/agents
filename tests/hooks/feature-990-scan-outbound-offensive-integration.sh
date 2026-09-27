@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-990-scan-outbound-offensive-integration.sh
+# tests/hooks/feature-990-scan-outbound-offensive-integration.sh
 # Tests: hooks/scan-outbound.js, bin/scan-offensive
 # Tags: scan, offensive, outbound, hook, integration, scope:issue-specific
 # RED for issue #990 — scan-outbound.js must call bin/scan-offensive OUTSIDE

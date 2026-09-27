@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/protected-basenames.js, hooks/lib/active-session-ids.js
 # Tags: protected-basename, classifier, session-marker, regex, boundary, stem-rule, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section C8 — NEAR-CANONICAL session-id stems (review C4). Section C1 proves the
 # far-apart shapes; an anchored regex fails at its EDGES, one character either side.

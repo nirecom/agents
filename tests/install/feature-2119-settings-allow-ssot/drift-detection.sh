@@ -1,4 +1,4 @@
-# tests/feature-2119-settings-allow-ssot/drift-detection.sh
+# tests/install/feature-2119-settings-allow-ssot/drift-detection.sh
 # Tests: hooks/lib/settings-drift.js, hooks/session-start.js, install/lib/settings-assembly.js
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 # T30: the detection path, which is fail-OPEN where the deploy path is fail-closed.

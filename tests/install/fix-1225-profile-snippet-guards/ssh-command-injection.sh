@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, ssh, security, injection, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced AFTER
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced AFTER
 # ssh-command-override.sh, whose _ssh_realgit_sandbox / _ssh_run_in_cwdrepo /
 # _ssh_write_driver helpers it reuses. core.sshCommand is repo config: whoever can
 # write .git/config chooses the value, so it is untrusted input (CWE-78). Every

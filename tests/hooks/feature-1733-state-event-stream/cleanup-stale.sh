@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/cleanup-stale.sh
+# tests/hooks/feature-1733-state-event-stream/cleanup-stale.sh
 # Tests: hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-state/state-io/state-lock.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, zombie-cleanup, stale-lock, tmp-leftovers, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -29,7 +29,7 @@
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
 
 CASE_TAG="clean"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # Fixture builders shared by every case. Ages are expressed in days from now so the

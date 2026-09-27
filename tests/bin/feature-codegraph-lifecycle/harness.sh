@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/codegraph-lifecycle.js, bin/codegraph-lifecycle/index-health.js, bin/codegraph-lifecycle/process-identity.js
 # Tags: codegraph, lifecycle, harness, daemon, scope:issue-specific
-# Harness for tests/feature-codegraph-lifecycle.sh: platform axes, the isolated
+# Harness for tests/bin/feature-codegraph-lifecycle.sh: platform axes, the isolated
 # temp tree, the guarded CLI invocation and the assertions the ST-18 case files
 # share. Sourced first, before any case file.
 

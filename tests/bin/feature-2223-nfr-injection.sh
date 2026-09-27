@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-nfr-injection.sh
+# tests/bin/feature-2223-nfr-injection.sh
 # Tests: bin/lib/codex-core.sh, bin/review-plan-codex, bin/review-code-codex, bin/run-codex-review-loop
 # Tags: scope:issue-specific, TL2, codex, nfr, prompt-injection, security, pwsh-not-required
 # RED for issue #2223 — the shared PROJECT_NFR block and its 8+1 injection sites.

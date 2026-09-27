@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/session-and-idempotency.sh
+# tests/skills/feature-worktree-start-non-interactive/session-and-idempotency.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, skills/worktree-start/SKILL.md
 # Tags: worktree, start, session, idempotency, TL2, scope:issue-specific
 # B11 (production session-resolution path) and B12 (WS-2/WS-4/WS-6 idempotency).

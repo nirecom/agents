@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-sweep-worktrees/_lib.sh
+# tests/bin/feature-sweep-worktrees/_lib.sh
 # Shared helpers for the feature-sweep-worktrees split test suite.
 #
 # Sourced by each split file (registry.sh / orphan.sh / gh-stub.sh /

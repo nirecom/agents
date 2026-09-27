@@ -19,9 +19,9 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/TL3-hook-stop-final-report-guard/helpers.sh
+# shellcheck source=tests/hooks/TL3-hook-stop-final-report-guard/helpers.sh
 . "$AGENTS_DIR/tests/hooks/TL3-hook-stop-final-report-guard/helpers.sh"
-# shellcheck source=tests/TL3-hook-stop-final-report-guard/main.sh
+# shellcheck source=tests/hooks/TL3-hook-stop-final-report-guard/main.sh
 . "$AGENTS_DIR/tests/hooks/TL3-hook-stop-final-report-guard/main.sh"
 
 echo ""

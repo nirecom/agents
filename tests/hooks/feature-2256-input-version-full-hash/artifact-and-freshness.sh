@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/feature-2256-input-version-full-hash/artifact-and-freshness.sh
+# tests/hooks/feature-2256-input-version-full-hash/artifact-and-freshness.sh
 # Tests: hooks/lib/diff-fingerprint.js, hooks/lib/audit-ledger.js
 # Tags: supervisor, artifact-key, freshness-key, sub-check-independence, TL2, scope:issue-specific
 # #2256 C1 + S6-b: the freshness key composes code and plan artifacts, and a settled TR1
-# must never no-op TR2/TR3. Parent: tests/feature-2256-input-version-full-hash.sh
+# must never no-op TR2/TR3. Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
 set -uo pipefail
 # shellcheck source=./_common.sh

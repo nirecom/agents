@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2374-off-clearance-fallback.sh
+# tests/bin/feature-2374-off-clearance-fallback.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, examiner, fallback, human-approval, audit, exit-codes, security, scope:issue-specific, pwsh-not-required, TL2, dup-group-keep:size-hard-limit
 

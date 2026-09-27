@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/none-path.sh
+# tests/bin/feat-1699-meta-parent-guard/none-path.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/lib/require-meta-parent.sh
 # Tags: issue-create, dispatch, meta-parent, none, sibling, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

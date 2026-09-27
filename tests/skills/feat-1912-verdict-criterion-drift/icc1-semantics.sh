@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1912-verdict-criterion-drift/icc1-semantics.sh
+# tests/skills/feat-1912-verdict-criterion-drift/icc1-semantics.sh
 # Tests: skills/_shared/issue-verdict-cascade.md
 # Tags: issue-create, verdict, cascade, icc1, same-fix, doc-contract, ssot, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
@@ -9,7 +9,7 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 #
-# Section of tests/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
+# Section of tests/skills/feat-1912-verdict-criterion-drift.sh (subprocess; tests/lib/section-runner.sh).
 #
 # The parent pins fragments of the new IC-C1 sentence (O2–O7, N1–N3). This file pins the
 # criterion as a semantic WHOLE — the four properties that make it decidable:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/lib/tool-command-text.js, hooks/lib/write-tools.js, hooks/lib/protected-basenames.js
 # Tags: block-clearance-token-write, dispatch, command-tools, runInTerminal, runCommands, protected-basename, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Section C6 — the artifact-name boundary on ALL THREE command tools (review C2).
 # dispatch.js:99 gates on isCommandTool() (list: hooks/lib/tool-command-text.js:32);
@@ -128,7 +128,7 @@ TABLE
     fi
 
     # SKIPPED: runInTerminal / runCommands carrying PowerShell text.
-    # Because: the pwsh scanner has its own suite (tests/enforce-protected-marker-write.sh)
+    # Because: the pwsh scanner has its own suite (tests/hooks/enforce-protected-marker-write.sh)
     # and this file's tag set declares pwsh-not-required.
     # L3 gap: whether settings.json's matcher actually routes runInTerminal and
     # runCommands to this hook — asserted STATICALLY only, in Section C2.

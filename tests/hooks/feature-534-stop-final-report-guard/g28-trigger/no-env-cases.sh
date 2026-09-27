@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g28-trigger/no-env-cases.sh
+# tests/hooks/feature-534-stop-final-report-guard/g28-trigger/no-env-cases.sh
 # Tests: hooks/stop-final-report-guard.js, bin/workflow/next-step
 # Tags: hook, stop-guard, workflow-state, scope:issue-specific, TL2
 #

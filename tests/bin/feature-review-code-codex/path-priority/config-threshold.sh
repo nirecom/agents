@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/get-config-var, hooks/lib/load-env.js, .env.example
 # Tags: codex, review, config, env, threshold, precedence, edge-cases, scope:issue-specific, pwsh-not-required, TL2
 # G: a configurable cap only helps if it actually takes effect. G1 sets the cap ONLY in a real .env (never the process env) so the row fails if the get-config-var lookup breaks; G2 pins process-env-over-.env precedence; G3 pins the unset default; G4/G5 pin the default's boundaries. G6 sweeps hand-typed input (empty, padded, decimal, signed, overflow) — none may produce an arithmetic error or an empty review.

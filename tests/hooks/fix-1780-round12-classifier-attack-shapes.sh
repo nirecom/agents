@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/fix-1780-round12-classifier-attack-shapes.sh
+# tests/hooks/fix-1780-round12-classifier-attack-shapes.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/block-clearance-token-write/bash-scan.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/write-tools.js, hooks/lib/tool-command-text.js
 # Tags: off-clearance, session-marker, protected-basename, classifier, dispatch, tool-shape, notebook-edit, run-commands, run-in-terminal, redirect, symlink, hardlink, variable-expansion, glob, brace-expansion, ansi-c-quoting, interpreter, heredoc, here-string, eval, pipeline, over-block, cpr5, security, pretooluse, block-write, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
 # - The hook firing as a REAL PreToolUse hook inside a live claude -p session.
 #   Here it is a node subprocess fed synthetic stdin; that the entrypoint is
 #   REGISTERED for these tool names is asserted statically by
-#   tests/enforce-protected-marker-write.sh (X6).
+#   tests/hooks/enforce-protected-marker-write.sh (X6).
 # - Real shell / OS execution. That `{f..f}` expands, that `$'\x66'` decodes, that
 #   `ln -s` creates a path the marker reader will follow — all PREMISES. What is
 #   asserted is the classifier's reading of the spelling.
@@ -56,7 +56,7 @@
 #   O  over-block sizing + accepted, NAMED over-blocks
 #
 # NOT DUPLICATED HERE: command substitution and backtick shapes are the subject
-# of tests/fix-1780-round11-substitution-additivity.sh in full; only a single
+# of tests/hooks/fix-1780-round11-substitution-additivity.sh in full; only a single
 # parity row appears below so the matrix is not silently missing the axis.
 # ---------------------------------------------------------------------------
 

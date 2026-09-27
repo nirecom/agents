@@ -1,4 +1,4 @@
-# tests/feature-complexity-evaluation-resolver/cli-cases.sh
+# tests/hooks/feature-complexity-evaluation-resolver/cli-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: L2, workflow, complexity-evaluation, cli, scope:issue-specific
 #

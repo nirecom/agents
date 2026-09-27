@@ -1,4 +1,4 @@
-# Part of tests/feature-review-code-codex/path-priority.sh (sourced FIRST, not standalone).
+# Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced FIRST, not standalone).
 # Tests: bin/review-code-codex
 # Tags: codex, review, helpers, fixtures, budget, scope:issue-specific, pwsh-not-required, TL2
 # Fixture builders + observation helpers shared by every P-row, split out because the rows now span six files. pp_diff_body_*/pp_scope_* matter most: they separate "was reviewed" from "name appeared in a caveat" and "budget honoured" from "whole diff sent, one line printed".

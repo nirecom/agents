@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2134-bash-guard.sh
+# tests/hooks/feature-2134-bash-guard.sh
 # Tests: hooks/bash-guard.js, hooks/bash-guard/judge.js, hooks/bash-guard/detect.js, hooks/bash-guard/allow.js, hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/reasons.js, hooks/bash-guard/message.js, hooks/lib/allow-command-list.js, hooks/lib/sentinel-patterns.js, hooks/lib/early-write-gate.js, hooks/workflow-gate/early-gate.js, settings.json, bin/print-forbidden-literals, rules/shell-commands.md
 # Tags: hook, bash-guard, pretooluse, classifier, guard, forbidden-literals, interlock, fail-open, notify, self-script-allow, scope:issue-specific, pwsh-not-required, TL2
 

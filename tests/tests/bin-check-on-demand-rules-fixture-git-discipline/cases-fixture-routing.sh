@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: tests/bin-check-on-demand-rules/fixtures.sh
+# Tests: tests/bin/bin-check-on-demand-rules/fixtures.sh
 # Tags: rules-injection, on-demand-rules, fixtures, git-discipline, static-check, positive-control, TL2, scope:common
 # fixtures.sh is the one file allowed to name git, so D1 exempts it. D2 and D9 are what
 # stands in for D1 inside that exemption: every git call must sit in a function, and

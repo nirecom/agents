@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/unit-render-final-report-notes.sh
+# tests/bin/unit-render-final-report-notes.sh
 # Tests: bin/render-final-report/notes.js, hooks/stop-final-report-guard.js
 # Tags: final-report, worktree-notes, compression, severity, table-driven, TL1, scope:common
 #

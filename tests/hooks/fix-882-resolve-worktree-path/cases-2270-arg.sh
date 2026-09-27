@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/resolve-worktree-path, hooks/workflow-state/session-id.js
 # Tags: scope:issue-specific, pwsh-not-required, worktree, session-id, ssot
-# Part of tests/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
 # Cases (i)-(viii) (#2270 S2-1): the `--session <id>` CLI contract. A valid value
 # outranks the env; an empty value means "omitted" and may fall back to the env;
 # a malformed value, an unknown flag and a missing value are CLI contract

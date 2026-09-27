@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git.sh
+# tests/hooks/feature-canary5-6git.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/bash-write-targets/git.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, classify, write-patterns, ir-migration, git-write, scope:issue-specific, hook-registration, pwsh-not-required, security
 #
 # Dispatcher for the WRITE_PATTERNS → IR migration suite (#1400 canary-5 +
 # #1401 canary-6-git). Runs three part files, one per commit stage. This file
 # is >300 lines when combined, so it is split per rules/coding/file-split.md
-# (canonical example: tests/main-workflow-skip-sentinels/).
+# (canonical example: tests/hooks/main-workflow-skip-sentinels/).
 #
 # pwsh-not-required: the pwsh-cmdlet cases (Set-Content/Out-File/...) drive
 # node classify()/predicates over parsed IR — no real pwsh shell is spawned, so

@@ -4,7 +4,7 @@
 # Tests for bin/github-issues/ensure-board-card.sh — Issue #548
 # Ensures a GitHub issue is on Projects v2 board with Content Date set.
 #
-# Inline gh-mock pattern from tests/feature-wip-state.sh.
+# Inline gh-mock pattern from tests/agents/feature-wip-state.sh.
 #
 # RED: this suite fails clean while bin/github-issues/ensure-board-card.sh is missing.
 #

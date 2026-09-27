@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-child-env-ssh-push.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-child-env-ssh-push.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, ssh-agent, commit-push, real-environment, TL3, scope:common
 # The dispatched arms, run against a REAL ssh-agent. Every row dispatches
@@ -43,7 +43,7 @@ expect_arm() {
             # (/c/...) and a child that resolved it through a Windows API
             # reports the drive form (C:/...). Only the OS picks which, so a
             # row about identity must accept either — see the same compare in
-            # tests/TL3-worker-dispatch-ssh-transport/arms.sh.
+            # tests/bin/TL3-worker-dispatch-ssh-transport/arms.sh.
             if [ "$got" = "$want" ] || [ "$got" = "$(win_spelling "$want")" ]; then
                 pass "$name"
                 [ "$required" = "1" ] && PROVEN=$((PROVEN + 1))

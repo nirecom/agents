@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/worktree-notes-session-ids.js, hooks/workflow-state/session-id.js, hooks/lib/resolve-workflow-session-id.js, hooks/block-clearance-token-write.js, hooks/lib/active-session-ids.js, hooks/lib/protected-basenames.js
 # Tags: worktree-notes, session-id, transcript-path, git-worktree, enumeration, fail-closed, block-clearance-token-write, cross-module-wiring, security, scope:issue-specific, pwsh-not-required
-# Part of tests/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-2108-subagent-artifact-write-path.sh (rules/coding/file-split.md).
 
 # Sections C11 + C14. C11 asserts enumerateWorktreeNotesSessionIds(): EVERY candidate a
 # clearance reader could resolve to, deliberately WITHOUT the resolvers' `hits.size > 1`

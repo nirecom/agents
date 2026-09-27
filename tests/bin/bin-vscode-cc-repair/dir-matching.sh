@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C8 — EXTENSION_DIR_PATTERN edges and root-path edges. The /i flag and the \d anchor
 # after the final `-` are both exercised in both directions, entries that are files
 # rather than directories are excluded, and roots whose paths contain a space or shell

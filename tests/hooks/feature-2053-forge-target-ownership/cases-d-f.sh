@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Blocks D (repo selectors incl. C47), E (cwd allowlist), F (tool payload shapes).
 
 run_block_d_f() {
@@ -36,7 +36,7 @@ run_block_d_f() {
     assert_decision "D-C47-2 attached-short owned target -> silent allow" "silent"
     # D-C47-3 (the five-form unit for extractRepoSelectors, plus the extractRepoFlag
     # contrast that proves a cross-check would NOT have caught the attached form)
-    # lives in tests/feature-forge-write-scan-extract/cases-2053-additive-exports.sh
+    # lives in tests/hooks/feature-forge-write-scan-extract/cases-2053-additive-exports.sh
     # section 2053-D/2053-B, where that module's SSOT coverage is.
 
     echo ""

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-off-bypass-enforce-system-ops.sh
+# tests/hooks/feature-workflow-off-bypass-enforce-system-ops.sh
 # Tests: hooks/enforce-system-ops.js
 # Tags: system-ops, enforce, hook, workflow, bin, scope:common
 #

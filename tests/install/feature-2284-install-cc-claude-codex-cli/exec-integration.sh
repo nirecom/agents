@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2284-install-cc-claude-codex-cli/exec-integration.sh
+# tests/install/feature-2284-install-cc-claude-codex-cli/exec-integration.sh
 # Sub-file: TL2 execution-layer tests for real installer scripts with PATH stubs.
 # Tests: install/linux/claude-code.sh, install/linux/codex.sh, install/win/claude-code.ps1, install/win/codex.ps1
 # Tags: installer, wait-cc-exit, pwsh-required, scope:issue-specific

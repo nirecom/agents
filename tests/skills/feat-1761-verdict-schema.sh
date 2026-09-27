@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-verdict-schema.sh
+# tests/skills/feat-1761-verdict-schema.sh
 # Tests: skills/issue-create/scripts/make-empty-verdict.sh, agents/issue-create-survey-worker.md, skills/_shared/issue-verdict-cascade.md, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: issue-create, verdict, schema-v3, survey-artifact, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):

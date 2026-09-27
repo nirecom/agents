@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-supervisor-codex-generate.sh
+# tests/bin/feature-supervisor-codex-generate.sh
 # Tests: bin/supervisor-findings-codex, bin/supervisor-write-alert, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, codex, findings-codex, status-skipped, ingest-jsonl, alert, scope:issue-specific, pwsh-not-required, hook-registration
 # NOTE: RED until write-code adds bin/supervisor-findings-codex and the

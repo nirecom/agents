@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1894-comment-block-size/baseline-precedence.sh
+# tests/bin/feature-1894-comment-block-size/baseline-precedence.sh
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, staged, git, baseline, precedence, cherry-pick, revert, rebase, scope:issue-specific, scope:feature-1894, layer:TL2
 

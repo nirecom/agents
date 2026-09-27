@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/clearance-stem-observation-cases.sh
+# tests/hooks/enforce-clearance-token-write/clearance-stem-observation-cases.sh
 # Tests: hooks/lib/protected-basenames.js, hooks/lib/active-session-ids.js, hooks/lib/worktree-notes-session-ids.js
 # Tags: off-clearance, clearance-token, session-marker, stem-rule, config-dependent, observation, fail-closed, glob-bypass, table-driven, scope:common, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch): a real multi-worktree checkout with live
-# sessions writing the state store concurrently — tests/TL3-hook-clearance-token-write.sh.
+# sessions writing the state store concurrently — tests/hooks/TL3-hook-clearance-token-write.sh.
 # isClearanceBearingStem's verdict is a function of OBSERVED STATE, not of the stem alone:
 # the workflow state store, the agent-writable WORKTREE_NOTES.md Session-ID line, and
 # whether the observation completed at all. Sibling suites inherit whatever environment

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-2098-heading-boundary.sh
+# tests/bin/fix-2098-heading-boundary.sh
 # Tests: bin/github-issues/lib/extract-field.sh, bin/github-issues/issue-to-history.sh
 # Tags: github, issues, extract-field, heading-boundary, parser, scope:issue-specific, layer:TL2
 #

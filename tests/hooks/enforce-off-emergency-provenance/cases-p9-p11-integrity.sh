@@ -1,4 +1,4 @@
-# tests/enforce-off-emergency-provenance/cases-p9-p11-integrity.sh
+# tests/hooks/enforce-off-emergency-provenance/cases-p9-p11-integrity.sh
 # P9-P11: hook registration, marker forgery resistance, and the M-4 skill/target
 # bindings. Sourced by ../enforce-off-emergency-provenance.sh; relies on that
 # file's shared helpers (run_emergency, marker_of, provenance_in, mk_marker,

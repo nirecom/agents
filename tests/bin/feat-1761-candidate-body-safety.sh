@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1761-candidate-body-safety.sh
+# tests/bin/feat-1761-candidate-body-safety.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js
 # Tags: issue-create, verdict, review, codex, prompt-injection, leak, untrusted-data, security, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):
@@ -262,7 +262,7 @@ fi
 # section files below were dead code in CI: field-defang.sh's 53 defang assertions and
 # tmpfile-residue.sh's temp-file leak assertions had never executed under run-all.
 #
-# Subprocess, not sourced (unlike tests/feat-1699-meta-parent-guard.sh): each section
+# Subprocess, not sourced (unlike tests/bin/feat-1699-meta-parent-guard.sh): each section
 # installs its own codex mock, its own $WORK, and its own `trap ... EXIT`. Bash keeps
 # one EXIT trap per shell, so sourcing them would leak every $WORK but the last — and
 # tmpfile-residue.sh T6 scans the real $TMPDIR for canary-bearing residue, so a

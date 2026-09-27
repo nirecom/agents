@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-worktree-end-git-pull.sh
+# tests/skills/fix-worktree-end-git-pull.sh
 # Tests: skills/worktree-end/SKILL.md
 # Tags: worktree, end, cleanup, skill, bin
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
+# Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
 # THE SHIM'S CLAIM LIFECYCLE RUNS UNDER THE MINT LOCK — round-14 HIGH.
 #
 # hooks/supervisor-off-proposal-shim.js used to run its critical section

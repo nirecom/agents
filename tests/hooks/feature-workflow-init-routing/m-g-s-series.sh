@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-routing/m-g-s-series.sh
+# tests/hooks/feature-workflow-init-routing/m-g-s-series.sh
 # Tests: hooks/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, init, routing, scope:common
 #

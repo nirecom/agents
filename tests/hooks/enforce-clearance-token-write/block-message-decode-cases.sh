@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/enforce-clearance-token-write/block-message-decode-cases.sh
+# tests/hooks/enforce-clearance-token-write/block-message-decode-cases.sh
 # Tests: hooks/block-clearance-token-write.js, hooks/block-clearance-token-write/dispatch.js, hooks/lib/off-clearance-invocation.js
 # Tags: anti-cheat, off-clearance, clearance-token, block-message, invitation, spelling, dispatch, end-to-end, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: whether a real Claude Code session renders `reason` back to the model intact;
-# see tests/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
+# see tests/hooks/TL3-hook-clearance-token-write.sh, gap-checked by bin/check-verification-gate.sh.
 
 set -u
 

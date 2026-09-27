@@ -1,7 +1,7 @@
 # Group E: audit-tests.sh REAL deletion path (Cases 29-32)
 # Tests: bin/audit-tests.sh, bin/lib/test-retire-predicate.sh
 # Tags: audit-tests, deletion, apply-by-default, scope:issue-specific, TL2
-# Sourced by tests/feature-test-cleanup-944.sh
+# Sourced by tests/skills/feature-test-cleanup-944.sh
 #
 # Every other group exercises audit-tests.sh with --dry-run (or via the
 # separate --fix-headers path), so the branch that actually removes files was
@@ -27,7 +27,7 @@ if [[ ! -f "$AUDIT_TESTS" ]]; then
     skip "Cases 29-32: bin/audit-tests.sh does not exist yet"
 else
 
-# The shared make_gh_stub (tests/feature-test-cleanup-944.sh) emits
+# The shared make_gh_stub (tests/skills/feature-test-cleanup-944.sh) emits
 # "<state> <closed_at>" pairs with a long-past default closed_at, so the delete
 # gate is satisfied and the survival verdict is the only variable left.
 

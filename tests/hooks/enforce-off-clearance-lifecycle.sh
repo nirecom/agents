@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/enforce-off-clearance-lifecycle.sh
+# tests/hooks/enforce-off-clearance-lifecycle.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/lib/consume-exact-file.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, bin/request-off-clearance
 # Tags: off-clearance, clearance-token, single-use, multi-sentinel, race, toctou, provenance, emergency-off, pretooluse, security, scope:common, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

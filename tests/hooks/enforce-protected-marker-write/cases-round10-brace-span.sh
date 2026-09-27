@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part of tests/enforce-protected-marker-write.sh (rules/coding/file-split.md).
+# Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
 # Round-10 HIGH-1: A BRACE GROUP THAT SPANS THE PATH SEPARATOR.
 #
 # Round-9 taught the normalizer that brace expansion CREATES names, but it applied

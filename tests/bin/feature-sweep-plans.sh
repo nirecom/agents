@@ -1,11 +1,11 @@
 #!/bin/bash
-# tests/feature-sweep-plans.sh
+# tests/bin/feature-sweep-plans.sh
 # Tests: bin/sweep-plans.sh, skills/sweep-plans/SKILL.md
 # Tags: sweep, plans, workflow-plans, maintenance, bin, scope:common
 #
 # Dispatcher only (file-split.md Pattern A) — test bodies + shared helpers
-# live in tests/feature-sweep-plans/; each group runs standalone too, e.g.
-# bash tests/feature-sweep-plans/core.sh. Aggregates each group's exit code
+# live in tests/bin/feature-sweep-plans/; each group runs standalone too, e.g.
+# bash tests/bin/feature-sweep-plans/core.sh. Aggregates each group's exit code
 # and "Results: N passed, M failed" line.
 
 set -uo pipefail

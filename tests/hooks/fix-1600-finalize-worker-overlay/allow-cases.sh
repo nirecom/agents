@@ -1,9 +1,9 @@
-# tests/fix-1600-finalize-worker-overlay/allow-cases.sh
+# tests/hooks/fix-1600-finalize-worker-overlay/allow-cases.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, overlay, security, scope:issue-specific
 #
-# Sourced by tests/fix-1600-finalize-worker-overlay.sh and, verbatim, by
-# tests/fix-1630-overlay-cross-validation.sh.
+# Sourced by tests/hooks/fix-1600-finalize-worker-overlay.sh and, verbatim, by
+# tests/hooks/fix-1630-overlay-cross-validation.sh.
 #
 # ============================================================================
 # Retired-capability cases — the exact command shapes finalize-worker-overlay.js

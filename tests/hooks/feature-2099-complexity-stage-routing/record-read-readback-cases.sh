@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/record-read-readback-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/record-read-readback-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip, hooks/workflow-state/state-io/session-fields.js
 # Tags: complexity, routing, cli, read-back, injection, security, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —

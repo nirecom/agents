@@ -1,5 +1,5 @@
 # helpers.sh - env/payload builders and hook drivers for the workflow-off
-# session-override suite. Sourced by tests/feature-workflow-off-session-override.sh.
+# session-override suite. Sourced by tests/hooks/feature-workflow-off-session-override.sh.
 # Expects AGENTS_DIR, _AGENTS_DIR_NODE, TMPDIR_BASE, and the pass/fail counters.
 
 MARK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-mark.js"

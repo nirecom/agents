@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1195-supervisor-md-procedure-extraction.sh
+# tests/bin/fix-1195-supervisor-md-procedure-extraction.sh
 # Tests: bin/supervisor-check-session-active, bin/supervisor-finalize-verify, bin/supervisor-parse-codex, agents/supervisor.md
 # Tags: supervisor, scope:issue-specific
 #

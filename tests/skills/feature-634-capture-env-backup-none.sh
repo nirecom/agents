@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-634-capture-env-backup-none.sh
+# tests/skills/feature-634-capture-env-backup-none.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh
 # Tags: worktree, end, cleanup, skill, bin, backup
 #

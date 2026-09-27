@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/derivation-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/derivation-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, derivation, table-driven, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.

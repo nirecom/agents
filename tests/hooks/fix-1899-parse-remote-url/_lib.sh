@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/_lib.sh — shared scaffolding
+# tests/hooks/fix-1899-parse-remote-url/_lib.sh — shared scaffolding
 #
 # Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
 # run standalone. Provides the scaffolding common to all split files:
@@ -24,7 +24,7 @@ _FIX1899_PRU_LIB_SOURCED=1
 
 set -u
 
-# Repo root, resolved relative to this lib (tests/fix-1899-parse-remote-url/).
+# Repo root, resolved relative to this lib (tests/hooks/fix-1899-parse-remote-url/).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 

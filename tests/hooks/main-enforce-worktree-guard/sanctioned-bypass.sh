@@ -1,6 +1,6 @@
 # Tests: hooks/enforce-worktree.js
 # Tags: TL2, worktree, enforce, hook, workflow, scope:common
-# Sourced by tests/main-enforce-worktree-guard.sh
+# Sourced by tests/hooks/main-enforce-worktree-guard.sh
 # Origin: tests/feature-workflow-off-bypass-enforce-worktree.sh (all cases).
 # Cases: A, B, C.
 # The SANCTIONED bypass route: a `<workflowDir>/<sid>.workflow-off` marker makes

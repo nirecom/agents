@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1257-session-close-wf-meta.sh
+# tests/bin/feature-1257-session-close-wf-meta.sh
 # Tests: bin/session-close-build-env.js, bin/issue-close-write-outcome.js, skills/session-close/SKILL.md
 # Tags: session-close, wf-meta, env-json, outcome, scope:issue-specific
 #

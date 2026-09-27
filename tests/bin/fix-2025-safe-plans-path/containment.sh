@@ -1,7 +1,7 @@
-# tests/fix-2025-safe-plans-path/containment.sh
+# tests/bin/fix-2025-safe-plans-path/containment.sh
 # Tests: bin/lib/safe-plans-path.sh
 # Tags: safe-plans-path, path-traversal, containment, symlink, security, scope:issue-specific, pwsh-not-required
-# Sourced by tests/fix-2025-safe-plans-path.sh.
+# Sourced by tests/bin/fix-2025-safe-plans-path.sh.
 
 echo ""
 echo "--- sp 4: sp_within_dir — containment after resolution ---"

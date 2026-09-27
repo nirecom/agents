@@ -66,9 +66,9 @@ gl_cmd_check() {
     local expected
     expected=$(compute_fingerprint "$sid" "$n")
     if printf '%s\n' "$labels" | grep -qx "wip-fp:$expected"; then
-        echo "wip-same"
+        echo "same"
     else
-        echo "wip-other"
+        echo "other"
     fi
     exit 0
 }

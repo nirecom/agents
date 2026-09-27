@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-protocol.sh
+# tests/skills/feature-530-notes-promotion-protocol.sh
 # Tests: skills/_shared/notes-promotion.md, skills/worktree-end/SKILL.md, skills/session-close/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-create/SKILL.md, rules/mid-workflow-findings.md
 # Tags: notes-promotion, worktree-notes, skill-orchestration, static, prompt-contract, TL1, scope:issue-specific
 #
@@ -9,8 +9,8 @@
 # instead of one bespoke procedure inlined in worktree-end.
 #
 # TL1 (static): the subject is prompt text. The behavior of the CLI the protocol
-# delegates to is covered by tests/feature-530-notes-promotion-triage-flow.sh and
-# tests/feature-worktree-end-step55-promotion.sh.
+# delegates to is covered by tests/bin/feature-530-notes-promotion-triage-flow.sh and
+# tests/bin/feature-worktree-end-step55-promotion.sh.
 #
 # RED before write-code: skills/_shared/notes-promotion.md does not exist yet and
 # the three callsites do not reference it yet. Every group below therefore fails
@@ -310,7 +310,7 @@ group_shared_no_defer_wording() {
 # filing; otherwise the first thing the user sees is issues appearing.
 #
 # The runtime half of this ("zero entries → zero /issue-create calls") is
-# asserted in tests/feature-530-notes-promotion-triage-flow/promotion-loop.sh
+# asserted in tests/bin/feature-530-notes-promotion-triage-flow/promotion-loop.sh
 # case L3. Here the prompt contract is asserted.
 
 # Line number of the first line matching an ERE, or empty.

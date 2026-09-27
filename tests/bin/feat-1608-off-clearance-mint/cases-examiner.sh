@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part file of tests/feat-1608-off-clearance-mint.sh — examiner-robustness cases (EX-*).
+# Part file of tests/bin/feat-1608-off-clearance-mint.sh — examiner-robustness cases (EX-*).
 # Sourced by the parent runner; uses its helpers (make_tmp/node_path/pass/fail/
 # token_count/state_has/mint_available) and the shared tests/lib/examiner-stub.sh.
 

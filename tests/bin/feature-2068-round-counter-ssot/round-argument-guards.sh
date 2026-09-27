@@ -1,7 +1,7 @@
-# tests/feature-2068-round-counter-ssot/round-argument-guards.sh
+# tests/bin/feature-2068-round-counter-ssot/round-argument-guards.sh
 # Tests: bin/run-codex-review-loop, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: codex-review-loop, round-counter, fail-closed, table-driven, TL2, scope:issue-specific
-# Sourced by tests/feature-2068-round-counter-ssot.sh (ROOT fixture, rcs_* helpers).
+# Sourced by tests/bin/feature-2068-round-counter-ssot.sh (ROOT fixture, rcs_* helpers).
 #
 # An owned counter is only authoritative while no caller can talk past it. A
 # skipped or rewound --round would let a caller name any round it liked, which

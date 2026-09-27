@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-793-enforce-worktree-outside-repo-redirect.sh
+# tests/hooks/fix-793-enforce-worktree-outside-repo-redirect.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-targets/redirect.js, hooks/lib/bash-write-targets/tee.js, hooks/lib/bash-write-targets/helpers.js
 # Tags: worktree, enforce, hook, redirect, shell-expansion, fix-983, fix-878
 #

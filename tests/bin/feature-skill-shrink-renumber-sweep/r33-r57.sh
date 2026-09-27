@@ -1,4 +1,4 @@
-# Sourced by tests/feature-skill-shrink-renumber-sweep.sh
+# Sourced by tests/bin/feature-skill-shrink-renumber-sweep.sh
 # Requires: check_literal, check_absent, check_re, check_absent_regex, pass, fail
 # Tags: renumber, step-rename, sweep, issue-966
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-commit-push-gate.sh
+# tests/bin/feature-1673-commit-push-gate.sh
 # Tests: bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, merge-gate, fail-closed, TL2, scope:issue-specific
 #
@@ -31,7 +31,7 @@
 # TL3 gap (what this TL2 test does NOT catch):
 #   - Whether the REAL hooks/workflow-gate.js parses this synthetic payload and
 #     returns the verdict expected here; only a real gate process can answer.
-#     Covered by tests/TL3-worker-dispatch-commit-push.sh (RUN_TL3).
+#     Covered by tests/bin/TL3-worker-dispatch-commit-push.sh (RUN_TL3).
 #   - Real `git push` reaching a real remote, and the retry/rebase ladder.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.

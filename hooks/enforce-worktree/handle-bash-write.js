@@ -10,20 +10,33 @@
 
 "use strict";
 
-const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 const { detectWritePredicate } = require("./write-detector");
 const { parse } = require("../lib/command-ir");
-const { findRepoRootForBash, isMainCheckout, normalizeForCompare, findRepoRoot } = require("./git-repo-detection");
+const { findRepoRootForBash, isMainCheckout, normalizeForCompare, findRepoRoot, parseGitCPath, getGitCommonDir, resolveRepoRoot } = require("./git-repo-detection");
 const { getSessionRepoRoots } = require("./session-scope");
 const { hasGitHooksBypass } = require("./git-hooks-bypass");
 const { hasCommandSequencing, hasHeredoc, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
 const { isBranchDeleteCommand, isAllowedBranchDeleteWhenNotCheckedOut } = require("./branch-delete-guard");
 const { isAllowedWorktreeCommand } = require("./main-worktree-allows");
-const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./bash-write-scope");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker, targetsHitOtherSessionWorkflowState, OTHER_SESSION_STATE_REASON } = require("./bash-write-scope");
 const { isGitWriteIR } = require("../lib/bash-write-patterns/patterns");
 const { checkUniversalTargetAllow } = require("./universal-target-allow");
 const { buildExtras } = require("./report-extras");
 const { commandTextOf } = require("../lib/write-tools");
+const { hasGhIssueCreate, resolveCrossRepoIssueCreateRoot } = require("./gh-repo-target");
+
+// #838: from a linked worktree, `git -C <main> worktree remove/prune` is allowed when
+// -C names the main checkout of the SAME repo (shared git-common-dir); the same
+// isAllowedWorktreeCommand shape rules (no --force, no chaining) then apply with
+// that main root as the base, so -C must equal its toplevel exactly.
+function isLinkedCwdTargetingOwnMain(cmd, cwdRoot) {
+  const cTarget = parseGitCPath(cmd);
+  if (!cTarget || isMainCheckout(cTarget) !== true) return false;
+  const cwdCommon = getGitCommonDir(cwdRoot);
+  if (cwdCommon === null || cwdCommon !== getGitCommonDir(cTarget)) return false;
+  const mainRoot = resolveRepoRoot(cTarget);
+  return mainRoot !== null && isAllowedWorktreeCommand(cmd, mainRoot);
+}
 
 // Compute the write-target list and protected-marker-hit flag ONCE, ahead of
 // every allow path below: several allow paths (universal-target-allow,
@@ -61,11 +74,16 @@ function handleBashWrite(ctx) {
   // still resolves its own `cwdRoot` from CWD on purpose, unaffected by this.
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
   const { targets, parseFailure } = collectBashWriteTargets(ir, repoRoot);
+  // #1324: another session's `<sid>.*` workflow state is never this session's to
+  // write, from any checkout — block outright rather than only disabling allows.
+  if (!parseFailure && targetsHitOtherSessionWorkflowState(targets, sessionCtx)) {
+    done({ block: true, reason: OTHER_SESSION_STATE_REASON });
+  }
   const _markerHit = parseFailure || bashTargetsHitProtectedMarker(targets, _stemOpts);
 
-  // Early-exit for git worktree remove/prune (write confirmed above): resolve
-  // repo root from CWD, not -C, so the CWD checkout type drives the decision
-  // (prevents a -C target from wrongly allowing a linked-CWD/cross-repo call).
+  // Early-exit for git worktree remove/prune (write confirmed above): the CWD
+  // checkout type drives the decision; a linked CWD is allowed only via
+  // isLinkedCwdTargetingOwnMain (-C = main of the same repo, never cross-repo).
   // `!_markerHit &&` gates the WHOLE block: a marker-hit command must fall
   // through to fail-closed enforcement below rather than being answered by
   // either arm here (which would report a worktree-shaped reason for a
@@ -75,6 +93,8 @@ function handleBashWrite(ctx) {
     if (cwdRoot !== null) {
       const cwd = _toolCwd || process.cwd();
       if (isMainCheckout(cwd) === true && isAllowedWorktreeCommand(cmd, cwdRoot)) {
+        done();
+      } else if (isLinkedCwdTargetingOwnMain(cmd, cwdRoot)) {
         done();
       } else {
         done({
@@ -144,9 +164,13 @@ function handleBashWrite(ctx) {
     // duplicate check) is used instead of a bare call. Linked worktrees are
     // unrestricted. isMainCheckout is trivalue-aware — null routes to block,
     // same as the main-path check below.
-    if (/\bgh\s+issue\s+create\b/.test(stripQuotedArgs(cmd))) {
+    // #1246: a create whose --repo/-R/GH_REPO names ANOTHER session repo is not a
+    // CWD-repo create, so the skill gate (which guards the CWD repo) does not apply.
+    if (hasGhIssueCreate(ir, cmd)) {
       const mainCheckoutResultGate = repoRoot ? isMainCheckout(repoRoot) : false;
-      if (mainCheckoutResultGate !== false) {
+      const crossRepoRoot = mainCheckoutResultGate !== false
+        ? resolveCrossRepoIssueCreateRoot(ir, getSessionRepoRoots(), repoRoot) : null;
+      if (mainCheckoutResultGate !== false && crossRepoRoot === null) {
         const SANCTIONED_RE =
           /^[ \t]*(?:MSYS_NO_PATHCONV=1[ \t]+)?ISSUE_CREATE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+create\b/;
         if (!SANCTIONED_RE.test(cmd)) {

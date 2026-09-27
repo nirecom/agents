@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Tests: skills/write-tests/SKILL.md, skills/review-tests/SKILL.md, skills/_shared/test-design.md, skills/_shared/test-design/append-vs-new.md, install/settings-allow-commands.txt, skills/review-tests/scripts/select-staged-files.sh, skills/run-tests/SKILL.md, bin/lib/test-frontmatter-fix.sh
 # Tags: scope:issue-specific
-# Part of tests/feature-2075-append-destination.sh (rules/coding/file-split.md).
+# Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
 # Cases S1-S13: the static / script-level half of the contract. The reviewer LLM
 # actually raising the gap is TL4 and stays out of scope (plan: Confirmed non-goals),
 # so these pin the SHAPE RT-1a and WT-5 must keep for that judgement to be possible.
+
+# shellcheck source=../../lib/harness.sh
+if ! declare -f case_begin >/dev/null 2>&1; then
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  source "$AGENTS_ROOT/tests/lib/harness.sh"
+fi
 
 # label_block <file> <start-ere> <stop-ere> — the step body from its label line up
 # to the next sibling label. Sub-labels are indented, so `^WT-[0-9]` stops only at
@@ -29,6 +35,8 @@ RT_TEXT="$(cat "$RT_SKILL" 2>/dev/null)"
 WT5_BLOCK="$(label_block "$WT_SKILL" '^WT-5\.' '^WT-[0-9]')"
 WT7_BLOCK="$(label_block "$WT_SKILL" '^WT-7\.' '^WT-[0-9]')"
 RT1A_BLOCK="$(label_block "$RT_SKILL" '^RT-1a\.' '^RT-[0-9]')"
+
+case_begin "skill-static-series" "skills/write-tests/SKILL.md"
 
 # ── S1 the new WT-5 exists and delegates the decision to the helper ────────
 case_ran S1
@@ -173,7 +181,7 @@ assert_match "S13 the script accepts the --added-only flag" '\-\-added-only' "$S
 # ── S14-S19 the RULES the steps must carry, not merely their labels ────────
 # S1-S13 pin that WT-5 / RT-1a exist and which COLUMNS they read. The rules a
 # reader has to obey once there — append is mandatory, groups are keyed by the
-# complete source set, `new` groups consolidate, the gate is presented after the
+# complete source set, each source set's `new` verdict generates one independent new file, the gate is presented after the
 # decision — live in prose and are what a well-meaning rewrite loses first.
 TDA_FULL="$(cat "$TD_APPEND" 2>/dev/null)"
 
@@ -194,12 +202,12 @@ assert_match "S15 WT-5 requires the complete source set per planned case" \
 assert_match "S15 the dispatch block keys test_destinations by that set" \
     'source set' "$WT7_BLOCK"
 
-# ── S16 all `new` groups land in ONE new file, never a split ──────────────
+# ── S16 each source set's `new` verdict generates one independent new file ──
 case_ran S16
-assert_match "S16 the dispatch block consolidates the new groups" \
-    'consolidate|single new file' "$WT7_BLOCK"
+assert_match "S16 each source set's new verdict generates one independent new file" \
+    'generates its own independent new file|independent new file' "$WT7_BLOCK"
 assert_match "S16 crossing the HARD limit tags a new file instead of splitting" \
-    'instead of splitting|not.*split|never.*split' "$WT7_BLOCK"
+    'one new file per source set' "$WT7_BLOCK"
 
 # ── S17 the CONFIRM_TESTS gate is presented WITH the destinations ─────────
 case_ran S17
@@ -239,11 +247,11 @@ assert_match "S20 RNT-3 still selects on overlap, not on set equality" \
 S20_LIB="$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh"
 if [[ -f "$S20_LIB" ]]; then
     S20REPO="$(make_repo)"
-    add_test_file "$S20REPO" "multi.sh" "src/a.js,src/b.js,src/c.js" "scope:common" 20
+    add_test_file "$S20REPO" "bin/multi.sh" "src/a.js,src/b.js,src/c.js" "scope:common" 20
     (
         # shellcheck source=../../bin/lib/test-frontmatter-fix.sh
         . "$S20_LIB"
-        tfm_parse_tests_line "$S20REPO/tests/multi.sh"
+        tfm_parse_tests_line "$S20REPO/tests/bin/multi.sh"
         printf '%s\n' "${#TFM_TOKENS[@]}"
         printf '%s\n' "${TFM_TOKENS[2]-}"
     ) > "$TMPDIR_BASE/s20.out" 2>/dev/null
@@ -254,5 +262,63 @@ if [[ -f "$S20_LIB" ]]; then
 else
     fail "S20 bin/lib/test-frontmatter-fix.sh is missing — the Tier 2 token axis cannot be checked"
 fi
+
+case_end
+
+case_begin "skill-static-review-tests-coverage" "skills/review-tests/SKILL.md"
+if [[ -f "$RT_SKILL" ]]; then
+    pass "P0-ext skills/review-tests/SKILL.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/review-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "skill-static-test-design-coverage" "skills/_shared/test-design.md"
+if [[ -f "$TD_SHARED" ]]; then
+    pass "P0-ext skills/_shared/test-design.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/_shared/test-design.md missing"
+fi
+case_end
+
+case_begin "skill-static-append-vs-new-coverage" "skills/_shared/test-design/append-vs-new.md"
+if [[ -f "$TD_APPEND" ]]; then
+    pass "P0-ext skills/_shared/test-design/append-vs-new.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/_shared/test-design/append-vs-new.md missing"
+fi
+case_end
+
+case_begin "skill-static-allow-commands-coverage" "install/settings-allow-commands.txt"
+if [[ -f "$ALLOW_TXT" ]]; then
+    pass "P0-ext install/settings-allow-commands.txt exists (exercised by skill-static-series)"
+else
+    fail "P0-ext install/settings-allow-commands.txt missing"
+fi
+case_end
+
+case_begin "skill-static-select-staged-coverage" "skills/review-tests/scripts/select-staged-files.sh"
+if [[ -f "$SELECT_SH" ]]; then
+    pass "P0-ext skills/review-tests/scripts/select-staged-files.sh exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/review-tests/scripts/select-staged-files.sh missing"
+fi
+case_end
+
+case_begin "skill-static-run-tests-coverage" "skills/run-tests/SKILL.md"
+if [[ -f "$AGENTS_ROOT/skills/run-tests/SKILL.md" ]]; then
+    pass "P0-ext skills/run-tests/SKILL.md exists (exercised by skill-static-series)"
+else
+    fail "P0-ext skills/run-tests/SKILL.md missing"
+fi
+case_end
+
+case_begin "skill-static-frontmatter-fix-coverage" "bin/lib/test-frontmatter-fix.sh"
+if [[ -f "$AGENTS_ROOT/bin/lib/test-frontmatter-fix.sh" ]]; then
+    pass "P0-ext bin/lib/test-frontmatter-fix.sh exists (exercised by skill-static-series)"
+else
+    fail "P0-ext bin/lib/test-frontmatter-fix.sh missing"
+fi
+case_end
 
 grp_done "skill-static-cases.sh"

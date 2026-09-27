@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# filename: tests/fix-conv-lang-inject.sh
+# filename: tests/hooks/fix-conv-lang-inject.sh
 # Tests: hooks/lib/conv-lang.js, hooks/post-compact.js, hooks/workflow-mark.js
 # Tags: scope:issue-specific
 #
-# Dispatch entrypoint. All test logic lives in tests/fix-conv-lang-inject/.
+# Dispatch entrypoint. All test logic lives in tests/hooks/fix-conv-lang-inject/.
 #
 # L3 gap (what this test does NOT catch):
 # - Claude Code surfacing additionalContext from SessionStart/PostCompact hooks

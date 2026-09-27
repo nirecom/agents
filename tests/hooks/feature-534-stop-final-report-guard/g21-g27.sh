@@ -1,4 +1,4 @@
-# tests/feature-534-stop-final-report-guard/g21-g27.sh
+# tests/hooks/feature-534-stop-final-report-guard/g21-g27.sh
 # Tests G21, G22, G23, G23b, G24, G25, G26, G27.
 # Sourced by feature-534-stop-final-report-guard.sh — no shebang, no runner.
 

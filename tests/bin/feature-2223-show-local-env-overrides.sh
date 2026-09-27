@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-show-local-env-overrides.sh
+# tests/bin/feature-2223-show-local-env-overrides.sh
 # Tests: bin/show-local-env-overrides, hooks/lib/load-env.js, hooks/lib/local-env.js
 # Tags: scope:issue-specific, TL2, load-env, local-env, security, secret-leakage, trust-boundary, cli, pwsh-not-required
 # Issue #2223 — the reporter naming which keys of a project's own local override

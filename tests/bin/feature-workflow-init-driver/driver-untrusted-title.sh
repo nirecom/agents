@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-driver/driver-untrusted-title.sh
+# tests/bin/feature-workflow-init-driver/driver-untrusted-title.sh
 # Tests: bin/workflow/lib/workflow-init/phases/meta-classify.js, bin/workflow/lib/workflow-init/directive.js, hooks/lib/output-sanitize.js, bin/workflow/workflow-init-driver
 # Tags: workflow-init, driver, meta-classify, security, input-injection, scope:issue-specific
 

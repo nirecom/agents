@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2308-gitlab-forge/_lib.sh — shared scaffolding for the split
+# tests/hooks/feature-2308-gitlab-forge/_lib.sh — shared scaffolding for the split
 # feature-2308-gitlab-forge suite: module paths, pass/fail + assert helpers,
 # run_with_timeout, a per-process TMPROOT, the mocked glab + setup_mock_gh, the
 # setup_repo_with_origin/setup_branch_repo fixture builders, and finish().

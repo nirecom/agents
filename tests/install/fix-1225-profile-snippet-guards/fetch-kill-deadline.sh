@@ -1,6 +1,6 @@
 # Tests: profile-snippet.sh
 # Tags: installer, profile-snippet, session-sync, fetch-deadline, timeout, set-e, scope:issue-specific
-# Part of tests/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher, not run alone; uses make_mirror_sandbox / run_mirror_driver / pass / fail.
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher, not run alone; uses make_mirror_sandbox / run_mirror_driver / pass / fail.
 # Issue #2160: _session_sync_fetch() kills the backgrounded fetch once a 3s deadline passes, so a hung remote cannot hold the login shell open.
 # Every other case in this suite has git succeed or fail INSTANTLY, leaving the deadline unexercised — deleting it keeps them all green.
 # These cases hang the fetch far past the deadline and assert on wall-clock time.

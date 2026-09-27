@@ -69,7 +69,7 @@ chmod +x "$REPO/captured.sh" "$REPO/control.sh"
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9): a hand-written matcher would test this file's author,
 # not the artifact that ships. real-hook-entry.js itself is covered at TL2 by
-# tests/feature-2170-capture-echo-guard/part6-settings.sh E-5.
+# tests/hooks/feature-2170-capture-echo-guard/part6-settings.sh E-5.
 ENTRY_DRV="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
 AGENTS_DIR="$AGENTS_DIR" node "$ENTRY_DRV" --emit "block-capture-echo.js" > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
@@ -100,7 +100,7 @@ run_turn() {
 
 # One transcript reader for this file (CPR-SSOT): tests/lib/tl3-turn-transcript.js owns
 # both the is_error read and the tool_use/tool_result probe below. Its own logic is
-# verified against saved fixture transcripts by tests/unit-tl3-turn-transcript.sh.
+# verified against saved fixture transcripts by tests/tests/unit-tl3-turn-transcript.sh.
 PROBE="$AGENTS_DIR/tests/lib/tl3-turn-transcript.js"
 
 # is_error of a --output-format json transcript, or "unreadable".

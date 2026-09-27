@@ -1,4 +1,4 @@
-# Part of tests/feature-1638-resolve-merge-base.sh (sourced, not standalone).
+# Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/merge-base-baseline.js
 # Tags: merge-base, baseline, branching-handler, workflow-mark, integration, scope:issue-specific, pwsh-not-required, TL2
 #

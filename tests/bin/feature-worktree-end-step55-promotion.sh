@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-end-step55-promotion.sh
+# tests/bin/feature-worktree-end-step55-promotion.sh
 # Tests: bin/worktree-notes-triage.js
 # Tags: worktree, end, cleanup, hook, bin, TL2, scope:common
 #
@@ -12,7 +12,7 @@
 # so R1 now asserts its absence rather than golden output.
 #
 # The `## ManualReminders` section added by #530 is covered separately in
-# tests/feature-530-manual-reminders-triage-exclusion.sh — split out when this
+# tests/bin/feature-530-manual-reminders-triage-exclusion.sh — split out when this
 # file crossed the 500-line HARD limit.
 #
 # TL3 gap (what this test does NOT catch):

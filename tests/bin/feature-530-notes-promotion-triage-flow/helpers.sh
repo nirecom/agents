@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-530-notes-promotion-triage-flow/helpers.sh
+# tests/bin/feature-530-notes-promotion-triage-flow/helpers.sh
 # Tests: bin/worktree-notes-triage.js, bin/worktree-notes-triage/resolve.js, hooks/lib/worktree-notes-sections.js
 # Tags: notes-promotion, worktree-notes, triage, cli, subprocess, TL2, scope:issue-specific
 #

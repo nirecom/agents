@@ -1,4 +1,4 @@
-# Part of tests/TL3-worker-dispatch-doc-append-compose.sh — sourced, not run.
+# Part of tests/bin/TL3-worker-dispatch-doc-append-compose.sh — sourced, not run.
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/compose-doc-append-entry
 # Tags: worker-dispatch, doc-append, compose, gh-token, github-token, real-environment, TL3, scope:common
 # Arms A/B are the allow direction of #1744, one per token name gh honours; arm C
@@ -46,7 +46,7 @@ arm_no_token() {
 # Arm D — the other side of #1812 on this worker: history/changelog take an
 # EMPTY envScope, and the sanctioned append must still work. That the child
 # holds no credential under that scope is asserted in a real child process by
-# tests/feature-1812-worker-dispatch-env-scope/group-real-child.sh (row D2);
+# tests/bin/feature-1812-worker-dispatch-env-scope/group-real-child.sh (row D2);
 # this arm asserts the operation those rows must not have broken.
 arm_changelog_empty_scope() {
     local before after

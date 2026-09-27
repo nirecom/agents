@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1832-run-all-parallel/i-hook-contract-integration.sh
+# tests/tests/feature-1832-run-all-parallel/i-hook-contract-integration.sh
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, hook, contract, security, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
@@ -22,7 +22,7 @@
 # replayed contract line would corrupt the parent suite.
 
 # TL3 gap (what this TL2 test does NOT catch): whether a real Claude Code Bash
-# tool call delivers stdout unmodified to the hook — tests/TL3-worker-dispatch-run-tests.sh
+# tool call delivers stdout unmodified to the hook — tests/bin/TL3-worker-dispatch-run-tests.sh
 # covers that. Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u

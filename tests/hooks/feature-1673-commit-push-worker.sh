@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-commit-push-worker.sh
+# tests/hooks/feature-1673-commit-push-worker.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md
 # Tags: worker-dispatch, commit-push, registry, capability, payload, status-vocabulary, env-passthrough, TL1, scope:issue-specific
 #
@@ -7,7 +7,7 @@
 # entry, payload types, env surface, the five D1 extraEnv vars and the status
 # vocabulary, asserted through the real capability validator or against the
 # worker source rather than by behaviour. Contract, rationale, and the TL3 gap
-# (real workflow-gate acceptance — tests/TL3-worker-dispatch-commit-push.sh):
+# (real workflow-gate acceptance — tests/bin/TL3-worker-dispatch-commit-push.sh):
 # docs/architecture/claude-code/worker-dispatch/commit-push.md
 
 set -u

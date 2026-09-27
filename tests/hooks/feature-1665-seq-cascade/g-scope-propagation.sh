@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/g-scope-propagation.sh
+# tests/hooks/feature-1665-seq-cascade/g-scope-propagation.sh
 # Tests: hooks/workflow-state/effective-state.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/list.js, bin/workflow/lib/next-step/advance-shared.js, hooks/workflow-gate.js
 # Tags: workflow-state, write-code-resume, cascade, propagation, next-step, workflow-gate, scope:issue-specific, pwsh-not-required, TL2
 

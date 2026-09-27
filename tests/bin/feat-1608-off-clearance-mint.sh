@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1608-off-clearance-mint.sh
+# tests/bin/feat-1608-off-clearance-mint.sh
 # Tests: bin/request-off-clearance, hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-state-writer.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/lib/resolve-workflow-session-id.js
 # Tags: off-clearance, mint, examination, audit, single-use, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

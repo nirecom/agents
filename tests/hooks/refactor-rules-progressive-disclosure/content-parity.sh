@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: rules/test.md, rules/docs.md, rules/coding.md, skills/_shared/test-design.md
 # Tags: rules, content-parity, scope:common
-# Part of tests/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
+# Part of tests/hooks/refactor-rules-progressive-disclosure.sh — sourced, not run directly.
 # Test 3: section heading coverage
 # Test 4: verbatim always-load sentences in rules/test.md
 # Test 5: thin-pointer link validity

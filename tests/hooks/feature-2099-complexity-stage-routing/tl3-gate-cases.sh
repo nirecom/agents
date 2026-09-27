@@ -1,6 +1,6 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/tl3-gate-cases.sh
-# Tests: tests/TL3-complexity-stage-routing-live-judge.sh, bin/select-tests.sh, tests/feature-2099-complexity-stage-routing.sh
+# tests/hooks/feature-2099-complexity-stage-routing/tl3-gate-cases.sh
+# Tests: tests/skills/TL3-complexity-stage-routing-live-judge.sh, bin/select-tests.sh, tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tags: complexity, routing, tl3, skip-gate, test-infra, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
 # The GATE-OFF branch of the RUN_TL3-gated cases, covered deterministically here

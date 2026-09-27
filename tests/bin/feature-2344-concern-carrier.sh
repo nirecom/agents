@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2344-concern-carrier.sh
+# tests/bin/feature-2344-concern-carrier.sh
 # Tests: bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/render.sh, bin/concern-ledger
 # Tags: concern-ledger, concerns-log, carrier, render-concerns-log, issue-2344, TL1, scope:issue-specific, pwsh-not-required, dup-group-keep:size-hard-limit
 # dup-group-keep:size-hard-limit: D-suite total = dispatcher(117) + sub-files(508) = 625
@@ -98,7 +98,7 @@ carrier_path_for() { printf '%s/%s-%s-concern-carrier.md' "$1" "$2" "$3"; }
 # Cases live in a sibling folder per rules/coding/file-split.md Pattern A; each
 # file is sourced (not executed) so it shares the fixture + helpers above.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/feature-2344-concern-carrier"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/feature-2344-concern-carrier"
 
 # shellcheck source=./feature-2344-concern-carrier/render-resolve.sh
 . "$SUITE_DIR/render-resolve.sh"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2154-accepted-tradeoffs-fallback.sh — TL2 dispatcher, issue #2154 causes 1+2.
+# tests/bin/feature-2154-accepted-tradeoffs-fallback.sh — TL2 dispatcher, issue #2154 causes 1+2.
 # Tests: bin/resolve-accepted-tradeoffs-file, skills/review-tests/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/review-plan-security/scripts/run-codex-review-loop.sh, bin/review-plan-codex
 # Tags: codex, review, accepted-tradeoffs, fallback, settled-decisions, scope:issue-specific
 # Split per rules/coding/file-split.md (Pattern A): this file holds fixture setup

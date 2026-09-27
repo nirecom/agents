@@ -1,6 +1,6 @@
 #!/bin/bash
 # lang-check: ignore — intentional non-ASCII/CJK test fixture data (locale disambiguation / slugify robustness cases for issue #1910), not a comment-language violation
-# tests/feature-worktree-start-non-interactive/derive-core.sh
+# tests/skills/feature-worktree-start-non-interactive/derive-core.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, derivation, non-interactive, TL2, scope:issue-specific
 # Behavioral cases B1-B7, B15, B20, B23 against

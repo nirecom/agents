@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-state/state-io/core.js, settings.json, hooks/workflow-gate.js, hooks/workflow-mark/mark-step-handler.js
 # Tags: tl1, tl2, workflow, run-tests, docs-only, registration-sites, scope:issue-specific
-# Shared fixtures + assertion helpers for tests/feature-1644-run-tests-registration-sites.sh.
+# Shared fixtures + assertion helpers for tests/hooks/feature-1644-run-tests-registration-sites.sh.
 # Sourced by the dispatcher — not a standalone runner.
 
 set -uo pipefail
@@ -15,7 +15,7 @@ WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
 WORKFLOW_GATE_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
 WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
 # Reused read-only probe (CPR-SSOT: one fixture-state reader for all #1644 tests).
-PROBE_N="$AGENTS_DIR_N/tests/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WORKFLOW_MARK_N WORKFLOW_GATE_N WFSTATE_MODULE PROBE_N
 
 TMPDIR_BASE="$(mktemp -d)"

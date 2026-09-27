@@ -1,7 +1,7 @@
-# tests/feature-603-run-codex-review-loop/preflight-and-flag-values.sh
+# tests/bin/feature-603-run-codex-review-loop/preflight-and-flag-values.sh
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
 # Tags: worktree, codex, review, bin, install, scope:issue-specific
-# Sourced by tests/feature-603-run-codex-review-loop.sh.
+# Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 16-20: pre-flight checks (AGENTS_CONFIG_DIR, review-plan-codex, core-principles.md) and flags given without a value.
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/codegraph-context-inject.js, hooks/lib/codegraph-boundary.js
 # Tags: hook-injection, codegraph, prompt-hook, harness, TL2, scope:issue-specific, dup-group-keep:size-hard-limit
-# Harness for tests/feature-2215-codegraph-context-inject.sh: fixture isolation
+# Harness for tests/hooks/feature-2215-codegraph-context-inject.sh: fixture isolation
 # (rules/test/fixture-isolation.md), the recording codegraph stub, the scope-gate
 # fixture roots and the run_hook / json_field helpers every case group shares.
 

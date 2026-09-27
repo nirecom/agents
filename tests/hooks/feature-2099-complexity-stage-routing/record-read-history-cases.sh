@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/record-read-history-cases.sh
+# tests/hooks/feature-2099-complexity-stage-routing/record-read-history-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
 # Tags: complexity, routing, idempotency, history, projection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —

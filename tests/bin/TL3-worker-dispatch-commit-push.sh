@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/TL3-worker-dispatch-commit-push.sh
+# tests/bin/TL3-worker-dispatch-commit-push.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, real-git, TL3, run-e2e, scope:issue-specific
 #

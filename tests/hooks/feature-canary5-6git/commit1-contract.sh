@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-canary5-6git/commit1-contract.sh
+# tests/hooks/feature-canary5-6git/commit1-contract.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/enforce-worktree/bash-write-scope.js, hooks/block-shell-config.js, hooks/block-history-direct.js, hooks/block-memory-direct.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, typed-target, contract-migration, scope:issue-specific, hook-registration, pwsh-not-required
 #

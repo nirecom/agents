@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktreeinclude.sh
+# tests/bin/feature-worktreeinclude.sh
 # Tests: bin/worktree-copy-include.js, hooks/lib/worktree-copy.js, hooks/lib/worktree-include-match.js
 # Tags: worktree, hook, bin, tests
 #

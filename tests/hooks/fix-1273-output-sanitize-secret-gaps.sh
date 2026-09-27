@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fix-1273-output-sanitize-secret-gaps.sh
+# tests/hooks/fix-1273-output-sanitize-secret-gaps.sh
 # Tests: hooks/lib/output-sanitize.js
 # Tags: security, redaction, secrets, hooks, lib, TL1, scope:common
 #
@@ -40,8 +40,8 @@
 # TL2 gap (what this TL1 test does NOT catch):
 #   - Whether the two real consumers actually route their text through
 #     redactSecrets before persisting it (workflow-run-tests.js sanitizeTrigger,
-#     bin/worker-dispatch/emit.js). tests/main-workflow-run-tests/*.sh and
-#     tests/feature-1643-worker-dispatch-sentinel-stdout.sh are that tier.
+#     bin/worker-dispatch/emit.js). tests/hooks/main-workflow-run-tests/*.sh and
+#     tests/bin/feature-1643-worker-dispatch-sentinel-stdout.sh are that tier.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 

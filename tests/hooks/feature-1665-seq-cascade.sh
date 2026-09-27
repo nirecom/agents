@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade.sh
+# tests/hooks/feature-1665-seq-cascade.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/lifecycle.js, hooks/lib/stop-exemption-policy.js
 # Tags: workflow-state, updated-seq, causal-order, write-code-resume, cascade, stop-guard, scope:issue-specific, pwsh-not-required, TL1, TL2
 #
@@ -12,7 +12,7 @@
 # stream, so "was this step settled before or after the failing run_tests?" is a
 # seq question.
 #
-# Dispatcher only — cases live in tests/feature-1665-seq-cascade/.
+# Dispatcher only — cases live in tests/hooks/feature-1665-seq-cascade/.
 #
 # TL3 gap (what this test does NOT catch):
 # - Whether the Stop hook and the workflow gate are actually REGISTERED in the

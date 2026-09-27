@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-1899-parse-remote-url/parse-origin.sh
+# tests/hooks/fix-1899-parse-remote-url/parse-origin.sh
 # Tests: hooks/lib/parse-remote-url.js
 # Tags: parse-remote-url, origin-resolution, table-driven, parser, regex, TL1, scope:issue-specific
 #

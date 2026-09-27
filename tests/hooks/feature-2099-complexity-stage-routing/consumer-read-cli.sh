@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-2099-complexity-stage-routing/consumer-read-cli.sh
+# tests/hooks/feature-2099-complexity-stage-routing/consumer-read-cli.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts
 # Tags: complexity, routing, consumers, helpers, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh before the consumer

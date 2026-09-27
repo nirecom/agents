@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-worktree-start-non-interactive/reuse-safety.sh
+# tests/skills/feature-worktree-start-non-interactive/reuse-safety.sh
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, reuse-safety, idempotency, guard, TL2, scope:issue-specific
 # B22 — WS-2 reuse-safety negative cases against real git worktree fixtures.

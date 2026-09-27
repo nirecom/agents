@@ -1,4 +1,4 @@
-# tests/TL3-hook-record-off-skill-invocation/cases-turn-c-consumption.sh
+# tests/hooks/TL3-hook-record-off-skill-invocation/cases-turn-c-consumption.sh
 # Turn C: the same-turn producer/consumer seam - the typed command and the
 # emergency sentinel live in ONE session - plus the Bash guard canaries and the
 # runtime-enforcement probe that keep that turn honest. Sourced by

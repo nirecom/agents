@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: bin/codegraph-lifecycle.js, hooks/lib/load-env.js
 # Tags: codegraph, lifecycle, env-flag, fail-safe, scope:issue-specific
-# ST-18 L1-L6: the CODEGRAPH flag gate. Sourced by tests/feature-codegraph-lifecycle.sh.
+# ST-18 L1-L6: the CODEGRAPH flag gate. Sourced by tests/bin/feature-codegraph-lifecycle.sh.
 # Every fixture below is deliberately "loud when ON" (foreign-schema DB, broken
 # daemon.pid) so that silence proves the gate held rather than proving the root
 # happened to be uninteresting.

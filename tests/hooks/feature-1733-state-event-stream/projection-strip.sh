@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/projection-strip.sh
+# tests/hooks/feature-1733-state-event-stream/projection-strip.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, projection, allowlist, persistence, single-source-of-truth, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -19,7 +19,7 @@
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 CASE_TAG="pstrip"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 FORBIDDEN="steps,plan_approvals,git_branch,cwd,is_bugfix,session_model,complexity_evaluation,skip_judgment,worktree_entered_at,worktree_exited_at"

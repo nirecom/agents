@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1261-labels-ssot/propagate-labels-delete-inherit.sh
+# tests/bin/feature-1261-labels-ssot/propagate-labels-delete-inherit.sh
 # Tests: bin/github-issues/propagate-labels.sh (DELETE inheritance from sync-labels.sh)
 # Tags: labels-ssot, propagation, delete, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bin-concern-ledger-secret-leakage.sh
+# tests/bin/bin-concern-ledger-secret-leakage.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/render.sh
 # Tags: concern-ledger, security, secret-leakage, redaction, table-driven, xfail, scope:common, pwsh-not-required
 #

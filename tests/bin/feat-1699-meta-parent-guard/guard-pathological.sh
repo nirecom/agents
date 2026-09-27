@@ -1,4 +1,4 @@
-# tests/feat-1699-meta-parent-guard/guard-pathological.sh
+# tests/bin/feat-1699-meta-parent-guard/guard-pathological.sh
 # Tests: bin/github-issues/lib/require-meta-parent.sh
 # Tags: issue-create, meta-parent, guard, fail-closed, validation, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap (what this test does NOT catch):

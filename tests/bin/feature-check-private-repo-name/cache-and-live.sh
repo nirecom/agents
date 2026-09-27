@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-check-private-repo-name/cache-and-live.sh
+# tests/bin/feature-check-private-repo-name/cache-and-live.sh
 # Tests: bin/check-private-repo-name.js, bin/list-private-repo-names.js
 # Tags: private-repo, outbound-scan, security, classifier, table-driven, TL2, scope:common
 # P1-P7 — the matching semantics, the env-cache name source, the live (gh-backed) name

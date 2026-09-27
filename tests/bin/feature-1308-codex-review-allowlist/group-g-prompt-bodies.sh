@@ -3,7 +3,7 @@
 # GROUP G: Prompt body content assertions (cases 29-32, G1).
 # Asserts security axes, checklist references and the #2154 deferred/N-A
 # wording against grep results on bin/review-plan-codex — never against
-# hardcoded duplicates. Sourced by tests/feature-1308-codex-review-allowlist.sh.
+# hardcoded duplicates. Sourced by tests/bin/feature-1308-codex-review-allowlist.sh.
 echo ""
 echo "=== Group G: Prompt body content (static source assertions) ==="
 
@@ -51,7 +51,7 @@ echo "=== Group G: Prompt body content (static source assertions) ==="
 # the test-review prompt, and NOT reaching the other formats) is deliberately
 # NOT asserted here: a grep-anywhere match cannot tell the test-review
 # CONTEXT_BLOCK from an unrelated branch. It lives at TL2 instead, in
-# tests/feature-2154-accepted-tradeoffs-fallback/layer-b-prompt.sh cases 8-9,
+# tests/bin/feature-2154-accepted-tradeoffs-fallback/layer-b-prompt.sh cases 8-9,
 # which assert against the stdin bytes the mocked codex actually received.
 {
   if grep -qF -- "prioritize the plan's committed test scope over exhaustive checklist enumeration" "$CODEX_SRC" 2>/dev/null; then

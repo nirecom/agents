@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1665-run-outcome.sh
+# tests/hooks/feature-1665-run-outcome.sh
 # Tests: hooks/workflow-run-tests/outcome.js, hooks/workflow-run-tests.js, hooks/workflow-run-tests/exec-model.js, hooks/enforce-worktree/worker-dispatch-write.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/record-step-verdict.js
 # Tags: workflow, run-tests, run-outcome, classifier, parser, hook, worker-dispatch, tombstone, TL1, TL2, scope:issue-specific
 #

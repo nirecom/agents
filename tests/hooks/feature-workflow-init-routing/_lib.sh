@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-workflow-init-routing/_lib.sh
+# tests/hooks/feature-workflow-init-routing/_lib.sh
 # Shared helpers for the feature-workflow-init-routing split test suite.
 #
 # Sourced by each split file (m-g-s-series.sh / c-series.sh / w-series.sh) so

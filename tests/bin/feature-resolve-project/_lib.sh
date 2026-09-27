@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-resolve-project/_lib.sh — shared scaffolding
+# tests/bin/feature-resolve-project/_lib.sh — shared scaffolding
 #
 # Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
 # run standalone. Provides the scaffolding common to all split files:
@@ -25,7 +25,7 @@ _RESOLVE_PROJECT_LIB_SOURCED=1
 
 set -u
 
-# Repo root, resolved relative to this lib (tests/feature-resolve-project/).
+# Repo root, resolved relative to this lib (tests/bin/feature-resolve-project/).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TARGET="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
 # Inner bash subshells need TARGET to expand `source '$TARGET'`.

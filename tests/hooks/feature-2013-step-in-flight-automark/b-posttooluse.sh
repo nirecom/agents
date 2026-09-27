@@ -1,6 +1,6 @@
 # b-posttooluse.sh — B1-B11: the real hooks/postuse-step-in-flight-mark.js
 # PostToolUse hook, spawned as a child process with a Claude Code-shaped payload
-# on stdin (#2013). Sourced by tests/feature-2013-step-in-flight-automark.sh.
+# on stdin (#2013). Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh.
 # Tests: hooks/postuse-step-in-flight-mark.js, hooks/workflow-state/effective-state.js
 # Tags: step-in-flight, posttooluse, automark, wi-10-lookahead, regression-2013, scope:issue-specific, pwsh-not-required, TL2
 

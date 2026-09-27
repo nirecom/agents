@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1610-settings-worktree-entries.sh
+# tests/hooks/feature-1610-settings-worktree-entries.sh
 # Tests: hooks/stop-exit-worktree-warn.js, hooks/postuse-native-worktree-record.js, settings.json
 # Tags: settings, hook, worktree, enter-worktree, exit-worktree, registration, TL2, pwsh-not-required, scope:issue-specific
 # P0 verdict: A-, P+, observed 2026-07-24, Claude Code 2.1.136

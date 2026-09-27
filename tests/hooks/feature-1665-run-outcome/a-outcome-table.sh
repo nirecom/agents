@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/feature-1665-run-outcome/a-outcome-table.sh
+# tests/hooks/feature-1665-run-outcome/a-outcome-table.sh
 # Tests: hooks/workflow-run-tests/outcome.js
 # Tags: workflow, run-outcome, classifier, table-driven, mutation-probe, TL1, scope:issue-specific
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2223-complexity-judge.sh
+# tests/bin/feature-2223-complexity-judge.sh
 # Tests: bin/workflow/normalize-judge-signals, agents/complexity-judge.md, skills/_shared/complexity-and-outline-skip.md, skills/make-detail-plan/SKILL.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
 # Tags: scope:issue-specific, TL2, complexity, normalize, static, pwsh-not-required
 
@@ -10,7 +10,7 @@
 
 # TL3 gap: normalize is exercised with synthetic raw input and the agent/wiring
 # statically — no live complexity-judge spawn and no judge->normalize->routing
-# end-to-end. That live seam is tests/TL3-complexity-stage-routing-live-judge.sh.
+# end-to-end. That live seam is tests/skills/TL3-complexity-stage-routing-live-judge.sh.
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

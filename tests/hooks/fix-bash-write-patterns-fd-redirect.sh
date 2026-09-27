@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-bash-write-patterns-fd-redirect.sh
+# tests/hooks/fix-bash-write-patterns-fd-redirect.sh
 # Tests: hooks/lib/bash-write-patterns.js
 # Tags: hook, bin, git, tests
 # Tests for FD-to-FD redirect false positive fix (#243)
@@ -26,7 +26,7 @@ assert_read  "ls 2>&1 | head"        "R3: 2>&1 in pipeline → read"
 # Post-#1296: POSIX write redirects (>, 2>, &>) now classify() as "read" — their
 # WRITE_PATTERNS entries were retired; write-detection moved to isPosixRedirWriteIR.
 # In-scope BLOCKING of these redirect writes is enforced at the hook (IR fast-allow)
-# and verified end-to-end by tests/feature-canary5-6git/commit2-green-retire.sh L2.
+# and verified end-to-end by tests/hooks/feature-canary5-6git/commit2-green-retire.sh L2.
 # These rows pin the new classify="read" contract; the FD-to-FD false-positive fix
 # (#243, R1/R2/R3/R5b) is unaffected — those were already "read".
 assert_read  "echo x > file.txt"     "R4: > file → read (write-detection moved to IR)"

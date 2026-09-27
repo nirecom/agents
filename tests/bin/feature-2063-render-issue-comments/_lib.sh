@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-2063-render-issue-comments/_lib.sh
+# tests/bin/feature-2063-render-issue-comments/_lib.sh
 # Tests: bin/workflow/render-issue-comments, bin/workflow/lib/workflow-init/issue-comments.js, bin/workflow/lib/workflow-init/checkpoint.js, bin/workflow/lib/workflow-init/phases/write-context.js
 # Tags: workflow-init, issue-comments, cli, contract, fail-closed, sentinel-strip, tl2, scope:common
 # Source from sibling group files: . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

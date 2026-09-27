@@ -13,11 +13,14 @@ const { judgeBashCommand } = require("./bash-guard/judge");
 
 module.exports = { judgeBashCommand };
 
-// Verdict -> stdout envelope. passThrough writes nothing, so the host's own permission
-// rules decide; only allow may carry permissionDecision "allow".
+// Verdict -> stdout envelope.
+// G-b=(b2) fallback form (detail.md:96): legacy {decision:"approve"} bypasses the
+// permission prompt; passThrough and notify must output the same to preserve current
+// behaviour. A silent passThrough would add prompts for every unlisted command.
 const ENVELOPES = Object.freeze({
   deny: (v) => ({ decision: "block", reason: v.message }),
   notify: (v) => ({
+    decision: "approve",
     systemMessage: v.message,
     hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: v.message },
   }),
@@ -28,7 +31,7 @@ const ENVELOPES = Object.freeze({
       permissionDecisionReason: "bash-guard " + v.code,
     },
   }),
-  passThrough: () => null,
+  passThrough: () => ({ decision: "approve" }),
 });
 
 function readStdin() {

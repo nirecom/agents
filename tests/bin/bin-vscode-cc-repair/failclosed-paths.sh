@@ -1,4 +1,4 @@
-# Part of tests/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
 # C2 — the two fail-closed paths reachable from a fixture. Both must refuse loudly
 # (exit-1 side, stderr prefixed) rather than skip silently, and neither may write.
 

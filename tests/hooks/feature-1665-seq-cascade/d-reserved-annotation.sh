@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1665-seq-cascade/d-reserved-annotation.sh
+# tests/hooks/feature-1665-seq-cascade/d-reserved-annotation.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/inheritance/apply.js
 # Tags: workflow-state, updated-seq, reserved-keys, guard, orthogonality, scope:issue-specific, pwsh-not-required, TL1
 #

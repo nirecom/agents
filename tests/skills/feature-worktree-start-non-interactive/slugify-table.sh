@@ -1,6 +1,6 @@
 #!/bin/bash
 # lang-check: ignore — intentional non-ASCII/CJK test fixture data (locale disambiguation / slugify robustness cases for issue #1910), not a comment-language violation
-# tests/feature-worktree-start-non-interactive/slugify-table.sh
+# tests/skills/feature-worktree-start-non-interactive/slugify-table.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, slugify, table-driven, TL2, scope:issue-specific
 # B14 — table-driven slugify / parsing contract for derive-worktree-name.sh.

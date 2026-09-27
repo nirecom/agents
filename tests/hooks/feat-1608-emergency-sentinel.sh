@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feat-1608-emergency-sentinel.sh
+# tests/hooks/feat-1608-emergency-sentinel.sh
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/supervisor-off-proposal-shim.js, hooks/supervisor-guard/detect.js, settings.json
 # Tags: emergency-sentinel, off-gate, examination-bypass, sentinel-patterns, scope:issue-specific, pwsh-not-required, TL1
 #

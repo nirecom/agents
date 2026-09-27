@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1643-worker-dispatch-callers.sh
+# tests/skills/feature-1643-worker-dispatch-callers.sh
 # Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific
 #
@@ -17,8 +17,8 @@
 #
 # TL1 (static): the subject is prompt text and a pure-data registry, both of which
 # this test reads directly. Behavior of the dispatcher itself is covered by
-# tests/feature-1643-worker-dispatch-output-contract.sh and the resolver by
-# tests/feature-1643-worker-dispatch-paths.sh.
+# tests/bin/feature-1643-worker-dispatch-output-contract.sh and the resolver by
+# tests/bin/feature-1643-worker-dispatch-paths.sh.
 
 set -u
 

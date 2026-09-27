@@ -1,9 +1,9 @@
 #!/bin/bash
-# tests/refactor-1364-cpr-principles/structure.sh
+# tests/bin/refactor-1364-cpr-principles/structure.sh
 # Tests: rules/core-principles.md
 # Tags: core-principles, refactor, scope:common
 #
-# Fragment of tests/refactor-1364-cpr-principles.sh — sourced by the parent, not
+# Fragment of tests/bin/refactor-1364-cpr-principles.sh — sourced by the parent, not
 # run directly. Owns the STRUCTURE of rules/core-principles.md itself: which CPR
 # headers exist (N1/N2/S1), what CPR-WPH must say (N3), which legacy forms must be
 # gone (L1/L2), the canonical order (S2), and that each heading carries a body

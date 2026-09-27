@@ -1,4 +1,4 @@
-# transcript-persist.sh — fragment of tests/feature-929-agents.sh (no frontmatter).
+# transcript-persist.sh — fragment of tests/bin/feature-929-agents.sh (no frontmatter).
 # Source: hooks/workflow-state/state-io/core.js, hooks/session-start.js (R3-C3).
 # NOTE: RED until write-code adds transcript_path to session_start_context (#929):
 #   core.js createInitialState + session-start.js ctx.transcript_path.

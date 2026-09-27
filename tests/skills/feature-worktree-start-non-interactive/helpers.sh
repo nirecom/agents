@@ -1,6 +1,6 @@
 #!/bin/bash
 # lang-check: ignore — intentional non-ASCII/CJK test fixture data (locale disambiguation / slugify robustness cases for issue #1910), not a comment-language violation
-# tests/feature-worktree-start-non-interactive/helpers.sh
+# tests/skills/feature-worktree-start-non-interactive/helpers.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, skills/worktree-start/SKILL.md
 # Tags: worktree, start, helpers, fixture, TL2, scope:issue-specific
 # Shared helpers for feature-worktree-start-non-interactive tests.

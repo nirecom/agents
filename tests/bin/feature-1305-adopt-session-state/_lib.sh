@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Helpers for tests/feature-1305-adopt-session-state.sh. Sourced, not run.
-# Tests: tests/feature-1305-adopt-session-state.sh
+# Helpers for tests/bin/feature-1305-adopt-session-state.sh. Sourced, not run.
+# Tests: tests/bin/feature-1305-adopt-session-state.sh
 # Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/feature-1371-scan-scope.sh
+# tests/skills/feature-1371-scan-scope.sh
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: review-tests, scan-scope, changed-files, context-injection, scope:issue-specific
 #

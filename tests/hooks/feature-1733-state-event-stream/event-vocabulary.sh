@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1733-state-event-stream/event-vocabulary.sh
+# tests/hooks/feature-1733-state-event-stream/event-vocabulary.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, pwsh-not-required, TL2
 #
@@ -12,7 +12,7 @@
 # category in bin/check-verification-gate.sh.
 
 CASE_TAG="voc"
-# shellcheck source=tests/feature-1733-state-event-stream/common.sh
+# shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # The table is deliberately written out here rather than derived from the source: a test

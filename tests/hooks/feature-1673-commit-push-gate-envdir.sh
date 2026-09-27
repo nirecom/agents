@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/feature-1673-commit-push-gate-envdir.sh
+# tests/hooks/feature-1673-commit-push-gate-envdir.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js, hooks/workflow-state/state-io/core.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, env-propagation, state-dir, fail-quiet, TL2, scope:issue-specific
 #
@@ -19,7 +19,7 @@ set -u
 # TL3 gap (what this TL2 test does NOT catch):
 # - The commit-push worker actually assembling the value (the worker module is
 #   scanned here, not run against a real session state directory).
-#   tests/TL3-worker-dispatch-commit-push.sh covers the real seam.
+#   tests/bin/TL3-worker-dispatch-commit-push.sh covers the real seam.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 

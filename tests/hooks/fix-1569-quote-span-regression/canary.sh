@@ -1,9 +1,9 @@
-# tests/fix-1569-quote-span-regression/canary.sh
+# tests/hooks/fix-1569-quote-span-regression/canary.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/arg-tail-guard.js, hooks/lib/quote-spans.js
 # Tags: hook, worktree, enforce, arg-tail, quote-spans, security, canary, scope:issue-specific
 #
 # STATUS: GREEN today and after C3 — this is a protection-fix negative
-# assertion. Sourced by tests/fix-1569-quote-span-regression.sh.
+# assertion. Sourced by tests/hooks/fix-1569-quote-span-regression.sh.
 #
 # C8 / Protection Pattern 1. Every other attack row in this suite asserts a
 # guard VERDICT. A verdict is a claim about the hook's answer, not about the
