@@ -35,56 +35,32 @@ auto-denying it). The OPTIONAL rm/find/sudo/docker/aws family keeps its leading 
 purpose — a `sudo`/`env`/`xargs` prefix breaks the first-token guarantee anchoring depends on.
 Anchoring means a `cd /path && git commit --amend -m x` compound is deliberately NOT caught
 at this settings.json level — no anchored rule spans the `cd &&` prefix. That shape's real
-defense is segment-aware, one layer up: `hooks/bash-guard/exemptions.js`'s
-`anySegmentDenyMatched()` (backed by `isDenyRuleMatch` in `hooks/lib/settings-allow-match.js`)
-withholds the allow-rule-match exemption when ANY individual segment's own text matches an
-anchored deny rule, forcing the model to resubmit the command as separate Bash calls — each of
-which then hits the anchored deny rule directly. Only interactive approval ("Yes, don't ask
-again") splits subcommands and saves individual rules (a third, separate mechanism).
+defense is `bash-guard.js`, which issues an unconditional deny for any compound form containing `&&`/`;`/`|`/backtick/`$(…)`/redirect/leading-env-prefix — the forbidden-literal check fires before the
+permission engine ever evaluates the command string. Only interactive approval ("Yes, don't ask
+again") saves individual rules for a given pattern.
 
-`hooks/lib/settings-allow-match.js` reads this semantics as its SSOT to decide whether an
-existing `permissions.allow` rule already covers a `bash-guard.js` candidate — it is an
-**approximation of the host's own permission matcher, not a reimplementation**. Its bias is
-deliberately one-directional: over-matching only silences a presentation guard (harmless —
-the command was already permission-granted), while under-matching would deny a command the
-user explicitly allowed (harmful), so every ambiguity — an unreadable or unparsable
-`settings.json` included — resolves to the wider side (treated as a match).
+**Self-script allow in bash-guard**: agents' own commands bypass the permission prompt via
+`bash-guard.js`'s allow path — no generated `permissions.allow` spellings needed.
 
-**Generated allow rules for agents' own commands**: because a rule matches the whole command
-string, one internal command issued two ways needs two rules, and hand maintenance cannot track
-that. The fact "this command is an allow-target" therefore has exactly one owner and the rule
-strings are generated from it.
-
-- Dataflow: `install/settings-allow-commands.txt` (the SSOT — command paths only) → `install/gen-settings-allow.js` (the CLI) → `install/lib/settings-allow-rules.js` (expansion) → merged over the repository's `settings.json` by `install/lib/settings-assembly.js` → the deployed file. Never hand-edit a generated rule.
-- The expanded rules are injected into the deployed `~/.claude/settings.json` at deploy time; that deployed document is the only place an operator reads them back.
-- They are therefore never committed: the tracked `settings.json` in this repo carries hand-written rules only, so a generated rule found there is a leftover from before this design, not a source.
-- `install/lib/settings-allow-rules.js` owns the spelling template table — the one place it exists; the CLI, the assembler and the drift check all read it from there rather than restating it.
-- Twenty-four path spellings are emitted per command, plus six bare spellings when `install/path-exposed-commands.txt` gives that command's basename a PATH shim — thirty rules for a PATH-exposed command. The interpreter comes from the command's own shebang, and anything but bash or node stops the generator.
-- Each template is emitted as a pair: an argument-bearing form and an argument-less twin as well.
-- The pair exists because the permission engine matches the whole command string, not a prefix — a trailing ` *` demands the space before it, so it never covers the argument-less invocation.
-- `install/assemble-settings.js` is the sole deploy entry point and `install/lib/settings-deploy.js` its single writer, so any other code writing that file is a bug. The deploy is fail-closed: when the rules cannot be expanded, nothing is written and the previous deployment stands.
-- Admitted: auto-issued, repo-state-invariant, idempotent internal tools. Excluded on principle: `gh` writes, git state changes, `.env` readers, platform-launched hook bodies, wrapper launchers such as `bin/run-with-timeout.sh` whose trailing ` *` template would allow-list every command reachable through them, and dispatchers that reach a state-changing or credential-reading operation through an argument or subcommand the permission engine never sees (e.g. a worker-dispatch script whose outer invocation is the only thing matched).
-- Orphan detection is the known limit of the design: `--check` reports a generated-shaped rule whose command has left the SSOT, but the deploy appends only and never removes one, because removal is a manual judgment made by hand. A bare-form rule is only claimed when the generator emits bare rules for this tree at all, its name carries a separator and no command of that name is left under `bin/`, so a dropped command whose file still exists goes unreported.
-- An allow rule only removes the permission prompt; it does not disarm a PreToolUse hook. `bin/review-code-codex` is allow-listed and still sends a diff outbound under `hooks/scan-outbound.js`.
-- Nothing in the commit path guards these rules any more, and nothing needs to: a hand-maintained mirror is what could drift, and there is no longer one. `hooks/session-start.js` reports a deployed document that has fallen behind, and `hooks/post-merge` / `hooks/post-checkout` re-deploy when the SSOT, either list, or any of the four modules changes.
-- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter — because each entry is interpolated into twenty-four path permission rules, plus six more bare rules when `install/path-exposed-commands.txt` gives it a PATH shim, where a metacharacter widens a rule instead of naming a file. `install/gen-settings-allow.js` itself is deliberately absent from its own SSOT: it is run by hand, never auto-issued mid-session, so listing it would buy no coverage.
-- Prompt assets write an SSOT-listed command path in one of two spellings, and the spelling alone decides whether the text is a command line: a command line to be run keeps `bash` or `node` in execution position with the entry path in argument position (`bash "$AGENTS_CONFIG_DIR/bin/foo"`), while a citation that only names where the file lives drops the `$AGENTS_CONFIG_DIR/` prefix and is written repo-relative (`bin/foo`). The two are otherwise structurally identical — `Run: ` and `Backend script path: ` in front of the same backtick span differ only by an English label — so the prefix, not the surrounding prose, is what `tests/install/prompt-bash-node-calling-convention/` reads to separate a command from a citation, which keeps that check deterministic instead of dependent on a vocabulary of label words.
+- Dataflow: `install/settings-allow-commands.txt` (command paths, one per line) + `install/path-exposed-commands.txt` (PATH-shim basenames) → `hooks/lib/allow-command-list.js` (loads + validates both lists) → `hooks/bash-guard/allow.js` `matchSelfScript()` (IR-normalizes the incoming command and compares) → verdict `allow` → `hooks/bash-guard.js` emits `{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"allow", permissionDecisionReason:"bash-guard BG-ALLOW-*"}}`.
+- IR normalization strips `$AGENTS_CONFIG_DIR/` and `${AGENTS_CONFIG_DIR}/` prefixes, resolves the agents-repo absolute path (POSIX, Windows, and MSYS `/c/…` forms), and accepts a repo-relative path only when `tool_input.cwd` (falling back to `input.cwd`) resolves to the agents root. When `cwd` is absent, not a string, or not absolute, repo-relative forms are NOT allowed — the command falls through to `passThrough` (fail-open toward the permission prompt, never toward allow).
+- Hook allow does not override `permissions.deny` or `permissions.ask` rules. Claude Code evaluates those rules regardless of what a PreToolUse hook returns.
+- `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter.
+- Prompt assets that invoke an SSOT-listed command keep `bash` or `node` in execution position with the entry path in argument position (`bash "$AGENTS_CONFIG_DIR/bin/foo"`); a citation that only names where the file lives uses the bare repo-relative form (`bin/foo`). The prefix distinguishes invocation from citation without requiring a vocabulary of surrounding prose labels.
+- Not admitted to `install/settings-allow-commands.txt` (deliberate exclusions): `run-with-timeout` wrappers are not repo scripts and are excluded; gh writes are excluded; git state-changing commands are excluded; hook bodies are excluded (not issued through the permission engine); worker dispatchers are excluded (state-changing work hides behind arguments).
+- `install/assemble-settings.js` is the only writer of the deployed `settings.json`; treat a second writer as a bug.
 
 **Known limitations**:
-- TL3 verification gap: `tests/install/feature-2119-settings-allow-ssot/` proves the generated rule
-  strings match the template contract exactly, never that Claude Code's own permission matcher
-  honors a given spelling live — that engine is the product's closed runtime, outside this repo's
-  test reach. Confidence rests on the #2201 root-cause measurement (94.7% ask rate for
-  `resolve-worktree-path` across 482 real transcripts, resolved once the missing quoted-absolute
-  template was the one variable changed), not on an executable assertion. That fix covers only the
-  rule-generation side for an already argument-position command string — it does not reach a
-  command whose leading token is itself an unexpanded shell variable (execution-position, e.g.
-  `"$AGENTS_CONFIG_DIR/bin/foo"`), which the matcher never treats as a static path and always
-  "ask"s regardless of template; #2262's later transcript measurement found 820 of 8,237
-  `$AGENTS_CONFIG_DIR`-bearing Bash calls (10%, 560 sessions) still in that form, fixed by rewriting
-  the prompt-asset command literals to the argument-position `bash <path>` form. A human confirming a
-  real quoted-absolute-path invocation stops prompting against a live deployed settings.json is
-  the final check for any future template addition, not something CI can close out.
+- TL3 verification gap: `tests/hooks/TL3-hook-bash-guard-envelope.sh` (gated by `RUN_TL3=on`) probes
+  three claims about bash-guard's live behavior — (a) that `systemMessage` / `additionalContext` reach
+  the model, (b) that `passThrough` (silent exit 0) and the legacy `{decision:"approve"}` output are
+  equivalent in Claude Code's permission engine, and (c) that a companion hook's `{decision:"block"}`
+  prevails over bash-guard's `permissionDecision:"allow"`. Research findings
+  `[hook-silent-exit0]` and `[hook-allow-respects-rules]` are the current evidence base for (b) and (c)
+  respectively; the first covers the silent-exit case, the second covers settings.json deny/ask
+  priority over hook allow. Hook-to-hook composition (whether one hook's allow is overridden by another
+  hook's block) is not explicitly documented by the product. `RUN_TL3=off` (the default in `.env`)
+  skips the live-environment probes; a developer setting `RUN_TL3=on` activates them.
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
   permission granted). Delegate Edit|Write scanning to the pre-commit hook.
 - Hook format must be nested. Flat format (matcher/command/timeout at the same level) causes

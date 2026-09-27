@@ -5,6 +5,7 @@
 #   install/win/dotfileslink.ps1   -> .cmd launcher + bash shim via Write-Launcher
 #   install/linux/dotfileslink.sh  -> ln -sf symlink
 # A command added here reaches both platforms or neither (CPR-ORTH).
+# Also read by hooks/lib/allow-command-list.js: a listed name is allowed bare by bash-guard.
 #
 # Format: one command name per line. Lines starting with `#` are comments;
 #         blank lines are ignored. Names must match a file under bin/.

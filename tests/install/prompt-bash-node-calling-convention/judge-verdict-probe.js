@@ -37,8 +37,8 @@ try {
 if (typeof judgeBashCommand !== 'function') sentinel('<NOT-EXPORTED>');
 
 // The envelope is the REAL PreToolUse payload, never a bare string or a {command} object:
-// judgeBashCommand short-circuits to allow on tool_name !== "Bash", so a probe that guessed
-// the shape wrong would report `allow` for every command including the deny control.
+// judgeBashCommand short-circuits to passThrough on tool_name !== "Bash", so a probe that
+// guessed the shape wrong would report `passThrough` for every command including the deny control.
 let result;
 try {
     result = judgeBashCommand({ tool_name: 'Bash', tool_input: { command } });

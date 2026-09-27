@@ -18,7 +18,7 @@ f1_not_forbidden() {
         ROWS=$((ROWS + 1))
 
         got="$(verdict_of "$cmd")"
-        assert_eq "F1/$name: outside the approved set, so not denied" "allow" "$got"
+        assert_eq "F1/$name: outside the approved set, so not denied" "passThrough" "$got"
 
         got="$(probe hit-ids "$cmd")"
         assert_eq "F1/$name: produces no hit at all" "" "$got"

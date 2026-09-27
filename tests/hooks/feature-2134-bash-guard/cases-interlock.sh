@@ -27,7 +27,9 @@ ROWS=$((ROWS + 1))
 assert_eq "I1: with a pending workflow and no marker the early write gate is active" \
     "true	workflow_init	-" "$(probe gate '' "$BG_SID_ARMED")"
 assert_eq "I1: while the early gate is armed bash-guard defers instead of double-blocking" \
-    "allow" "$(verdict_of 'git status && ls' "$BG_SID_ARMED")"
+    "passThrough" "$(verdict_of 'git status && ls' "$BG_SID_ARMED")"
+assert_contains "I1: the deferral is attributed to the interlock reason code" \
+    "BG-INTERLOCK-QUIET" "$(probe judge 'git status && ls' "$BG_SID_ARMED")"
 
 # I2: the same state plus a WORKFLOW_OFF marker. The gate is inactive, so nothing else is
 # talking -- and bash-guard is a presentation guard the marker never bypasses, so it denies.

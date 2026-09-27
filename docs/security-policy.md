@@ -45,15 +45,14 @@ sudo, docker, aws) retain their leading `*` because the threat in those cases is
 argument position, not the invocation form; changing them to anchored forms would not
 improve coverage.
 
-**Compound-command bypass via a sanctioned allow rule is closed by deny re-check.**
+**Compound-command bypass is closed by `bash-guard.js`'s unconditional deny.**
 `permissions.allow` globs match the WHOLE command string, so a broad allow rule like
 `Bash(cd * && git commit *)` would blanket-forgive any destruction appended after the
-commit (e.g. `cd /repo && git commit -m x && git push --force`). The deny rules
-added in #2280 close the specific MUST-trigger shapes at the `cd * && git commit *`
-boundary; `hooks/bash-guard/exemptions.js` re-checks each `&&`/`;`/`||`/newline-split
-segment against `permissions.deny` before letting the whole-string allow excuse the chain.
-This is a safety net for the compound case only — the primary settings.json anchoring layer
-remains authoritative for standalone invocations.
+commit (e.g. `cd /repo && git commit -m x && git push --force`). `bash-guard.js` denies
+any compound form containing `&&`/`;`/`|`/backtick/`$(…)`/redirect/leading-env-prefix
+unconditionally — before the permission engine evaluates the string — so the whole-string
+allow never reaches a compound command. The primary settings.json anchoring layer remains
+authoritative for standalone invocations.
 
 **Hook-based protection is context-aware.** Some rules use a PreToolUse hook
 (`hooks/block-credentials.js`, `hooks/block-dotenv.js`) backed by the shared

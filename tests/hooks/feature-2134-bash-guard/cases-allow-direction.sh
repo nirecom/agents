@@ -6,8 +6,8 @@
 # CPR-ORTH counterpart of cases-detect.sh (protection-fix-tests.md Pattern 4, origin #1425):
 # a guard that only ever proves it BLOCKS ships over-blocking. Every literal id gets a
 # sanctioned form here -- the plain command, or the same characters neutralised by single
-# quotes. The fixture home's permissions.allow is EMPTY, so an allow here can only come from
-# detect() finding zero hits, never from the allow-rule exemption doing the work.
+# quotes. Since #2264 an unremarkable command is passThrough (no output, the host decides),
+# not allow: allow is reserved for this repo's own scripts (cases-allow-self-script.sh).
 
 a1_sanctioned_forms() {
     local name cmd want got
@@ -24,30 +24,35 @@ a1_sanctioned_forms() {
         got="$(probe hit-ids "$cmd")"
         assert_eq "A1/$name: sanctioned form leaves no surviving hit" "" "$got"
     done <<'TABLE'
-chain-and-pair       ~ git status                          ~ allow
-chain-semicolon-pair ~ ls -la                              ~ allow
-pipe-pair            ~ grep -n foo file.txt                ~ allow
-backtick-pair        ~ echo '`date`'                       ~ allow
-cmd-subst-pair       ~ echo '$(date)'                      ~ allow
-brace-group-pair     ~ echo '{ ls; }'                      ~ allow
-heredoc-pair         ~ echo "<<WORKFLOW_MARK_STEP_x>>"     ~ allow
-heredoc-quoted-pair  ~ echo '<<EOF'                         ~ allow
-redirect-out-pair    ~ echo hi                             ~ allow
-redirect-append-pair ~ echo 'hi >> out.txt'                ~ allow
-env-prefix-pair      ~ bash /tmp/scratch/probe.sh          ~ allow
-workflow-tool        ~ node bin/workflow/next-step --list  ~ allow
-git-c-form           ~ git -C /tmp/x status                ~ allow
+chain-and-pair       ~ git status                                   ~ passThrough
+chain-semicolon-pair ~ ls -la                                       ~ passThrough
+pipe-pair            ~ grep -n foo file.txt                         ~ passThrough
+backtick-pair        ~ echo '`date`'                                ~ passThrough
+cmd-subst-pair       ~ echo '$(date)'                               ~ passThrough
+brace-group-pair     ~ echo '{ ls; }'                               ~ passThrough
+heredoc-pair         ~ echo "<<WORKFLOW_MARK_STEP_x_complete>>"     ~ passThrough
+heredoc-quoted-pair  ~ echo '<<EOF'                                 ~ passThrough
+redirect-out-pair    ~ echo hi                                      ~ passThrough
+redirect-append-pair ~ echo 'hi >> out.txt'                         ~ passThrough
+env-prefix-pair      ~ bash /tmp/scratch/probe.sh                   ~ passThrough
+workflow-tool        ~ node bin/workflow/next-step --list           ~ passThrough
+git-c-form           ~ git -C /tmp/x status                         ~ passThrough
 TABLE
 }
 
+# heredoc-pair uses a STRICT sentinel: a malformed one (`_x` with no status) would now be a
+# notify (cases-notify-sentinel.sh). workflow-tool is a relative self-script with no cwd in
+# the payload, which bash-guard must not resolve against process.cwd() -- so no allow.
+
 a1_sanctioned_forms
 
-# A2: an allowed command carries no literal id -- nothing was detected and then forgiven.
+# A2: a passed-through command carries no literal id -- nothing was detected and then forgiven.
 a2_line="$(probe judge "ls -la")"
-assert_contains "A2: an allow verdict reports no offending literal" "allow" "$a2_line"
-assert_not_contains "A2: an allow verdict does not name a forbidden literal" "redirect" "$a2_line"
+assert_eq "A2: a no-hit command reports passThrough with the NO_HIT code and no literal" \
+    "passThrough	BG-NO-HIT	-" "$a2_line"
+assert_not_contains "A2: a no-hit verdict does not name a forbidden literal" "redirect" "$a2_line"
 
 # A3: argument count is not the axis -- rules/shell-commands.md exempts "one standalone
 # command with its own flags and arguments", however many of them there are.
-assert_eq "A3: a long single command with many flags stays allowed" \
-    "allow" "$(verdict_of 'grep -rn --include=*.js --color=never needle /tmp/haystack')"
+assert_eq "A3: a long single command with many flags is not blocked" \
+    "passThrough" "$(verdict_of 'grep -rn --include=*.js --color=never needle /tmp/haystack')"

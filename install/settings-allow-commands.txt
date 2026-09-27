@@ -1,7 +1,7 @@
 # settings-allow-commands.txt — SSOT (CPR-SSOT) for WHICH agents-internal commands get
-# permission allow rules: one repo-relative path per line, nothing else. Sole consumer:
-# install/lib/settings-allow-rules.js, which owns spelling/interpreter/bare-form logic; the
-# rules it builds are injected into ~/.claude/settings.json at deploy time, never tracked here.
+# an allow verdict: one repo-relative path per line, nothing else. Sole consumer:
+# hooks/lib/allow-command-list.js, which feeds the bash-guard allow path at runtime; nothing
+# from this list is written into ~/.claude/settings.json.
 # Inclusion criterion, exclusions (a-f), the review-code-codex caveat, and the path-syntax
 # and self-exclusion rules are documented in docs/architecture/claude-code/settings.md —
 # read that before adding or removing an entry.
