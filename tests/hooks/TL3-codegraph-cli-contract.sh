@@ -3,12 +3,12 @@
 # Tests: hooks/lib/codegraph-boundary.js, bin/codegraph-lifecycle.js
 # Tags: TL3, codegraph, cli-contract, scope:issue-specific
 #
-# Real-binary contract for `codegraph` (M37-M40, S5-14): version pin match,
+# Real-binary contract for `codegraph` (M37-M40, S5-14): semver --version,
 # prompt-hook no-op contract, prompt-hook against a self-authored fixture
 # index, fixture-home write-containment. HOME+USERPROFILE both pin a
 # fixture home; no CODEGRAPH_TELEMETRY/DO_NOT_TRACK (bare upstream contract).
 # TL3 gap: TL1/TL2 exercise a stub only; a real binary + RUN_TL3=on catches
-# version drift, an upstream contract break, or a fixture-home leak.
+# a broken --version, an upstream contract break, or a fixture-home leak.
 
 set -uo pipefail
 
@@ -24,11 +24,6 @@ fi
 if ! command -v codegraph >/dev/null 2>&1; then
   echo "SKIP: codegraph CLI not found on PATH" >&2; exit 77
 fi
-
-CONSTANTS_FILE="$AGENTS_DIR/install/codegraph-constants.txt"
-[ -f "$CONSTANTS_FILE" ] || { echo "SKIP: $CONSTANTS_FILE not found" >&2; exit 77; }
-PINNED_VERSION="$(grep -E '^CODEGRAPH_VERSION=' "$CONSTANTS_FILE" | head -n1 | cut -d= -f2-)"
-[ -n "$PINNED_VERSION" ] || { echo "SKIP: CODEGRAPH_VERSION not found in $CONSTANTS_FILE" >&2; exit 77; }
 
 # Unset inherited session/workflow env so this run cannot resolve real state
 # (rules/test/fixture-isolation.md).
@@ -74,7 +69,7 @@ snapshot_codegraph_tree() {
 
 SNAPSHOT_BEFORE="$(snapshot_codegraph_tree)"
 
-# --- M37: `codegraph --version` matches the pinned CODEGRAPH_VERSION -------
+# --- M37: `codegraph --version` answers a semver (no pin since #2254) ------
 VERSION_STDOUT="$(mktemp)"
 VERSION_STDERR="$(mktemp)"
 if bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 codegraph --version >"$VERSION_STDOUT" 2>"$VERSION_STDERR"; then
@@ -86,10 +81,10 @@ fi
 VERSION_OUT_TRIMMED="$(tr -d '[:space:]' <"$VERSION_STDOUT")"
 VERSION_ERR_BYTES="$(wc -c <"$VERSION_STDERR" | tr -d '[:space:]')"
 
-if [ "$VERSION_EXIT" -eq 0 ] && [ "$VERSION_OUT_TRIMMED" = "$PINNED_VERSION" ] && [ "$VERSION_ERR_BYTES" = "0" ]; then
-  pass "M37: codegraph --version matches pinned $PINNED_VERSION, exit 0, stderr empty"
+if [ "$VERSION_EXIT" -eq 0 ] && [[ "$VERSION_OUT_TRIMMED" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && [ "$VERSION_ERR_BYTES" = "0" ]; then
+  pass "M37: codegraph --version answers semver $VERSION_OUT_TRIMMED, exit 0, stderr empty"
 else
-  fail "M37: expected version=$PINNED_VERSION exit=0 stderr=0B; got version=$VERSION_OUT_TRIMMED exit=$VERSION_EXIT stderr_bytes=$VERSION_ERR_BYTES"
+  fail "M37: expected a semver version, exit=0, stderr=0B; got version=$VERSION_OUT_TRIMMED exit=$VERSION_EXIT stderr_bytes=$VERSION_ERR_BYTES"
 fi
 rm -f "$VERSION_STDOUT" "$VERSION_STDERR"
 

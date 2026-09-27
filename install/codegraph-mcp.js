@@ -17,7 +17,6 @@ const {
   TELEMETRY_KEYS,
   telemetryEnv,
   clearSavedTelemetryChoice,
-  verifyPinnedCliVersion,
 } = require("../hooks/lib/codegraph-boundary");
 
 const SERVER_NAME = "codegraph";
@@ -45,20 +44,6 @@ function reportTelemetryReset() {
   else if (result.action === "failed") {
     warn("could not reset the local CodeGraph telemetry choice at " + result.path +
       "; the next installer run retries.");
-  }
-}
-
-// A version report never blocks registration: the MCP server is useful at any
-// version, and only the per-prompt context hook depends on the pinned build.
-function reportPinnedVersionMismatch() {
-  const { verdict, pinned, actual } = verifyPinnedCliVersion();
-  const remedy = "; run: npm install -g --ignore-scripts @colbymchenry/codegraph@" + pinned;
-  if (verdict === "mismatch") {
-    process.stderr.write("pinned CodeGraph version mismatch: installed " + actual +
-      ", install/codegraph-constants.txt pins " + pinned + remedy + "\n");
-  } else if (verdict === "unknown-actual") {
-    process.stderr.write("could not read the installed CodeGraph version (`codegraph --version`); " +
-      "the per-prompt context hook needs the pinned " + pinned + " build" + remedy + "\n");
   }
 }
 
@@ -163,12 +148,9 @@ function main() {
     process.stderr.write("usage: node install/codegraph-mcp.js <register|unregister>\n");
     process.exit(64);
   }
-  // Before the CLI probe: both describe the local install, not the registration,
-  // so a missing claude CLI must not swallow them.
-  if (verb === "register") {
-    reportTelemetryReset();
-    reportPinnedVersionMismatch();
-  }
+  // Before the CLI probe: the telemetry reset concerns the local install, not the
+  // registration, so a missing claude CLI must not swallow it.
+  if (verb === "register") reportTelemetryReset();
   if (!claudeCliPresent()) {
     warn("claude CLI not found; MCP registration skipped.");
     process.exit(0);
