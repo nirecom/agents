@@ -571,3 +571,7 @@ Changes: enforce-worktree now validates `rtk`-wrapped git commands: `rtk git com
 ### FEATURE: PR #2418 (2026-09-27)
 Background: fix(#2408): remove .env bash-source from wip-state.sh; fix wip-check final-line validation
 Changes: Fixed a silent WIP state failure (70+ sessions affected): wip-state.sh no longer sources .env via bash, and workflow-init now validates check output before applying WIP status.
+
+### FEATURE: PR #2421 (2026-09-27)
+Background: feat(#2264,#2265): extend bash-guard to 4-value classifier; retire generated-spell pipeline
+Changes: bash-guard now detects invalid command-line issuance forms (missing echo around sentinel, script path without interpreter prefix) and surfaces a guidance message rather than silently passing through.;Agents' own scripts are now allowed without maintaining generated permission rules in settings.json. The allow decision is made in the hook itself via IR matching against two list files.
