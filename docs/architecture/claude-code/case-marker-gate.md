@@ -24,6 +24,4 @@ whole-file granularity for that one file.
 
 Both layers fail open on infrastructure errors (checker missing, timeout, unreadable payload, a git lookup that cannot say whether the file is in `HEAD`),
 and the commit layer says so on stderr, so a gate that stops working never does so silently.
-Set `CASE_MARKERS_ENFORCE=off` in the config dir's `.env` to disable both layers at once; an
-ambient shell variable of the same name is ignored, and neither `WORKFLOW_OFF` nor
-`WORKTREE_OFF` suspends the gate (see [marker-bypass-contract.md](marker-bypass-contract.md)).
+Neither `WORKFLOW_OFF` nor `WORKTREE_OFF` suspends the gate (see [marker-bypass-contract.md](marker-bypass-contract.md)).

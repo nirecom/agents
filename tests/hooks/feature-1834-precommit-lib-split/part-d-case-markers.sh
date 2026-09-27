@@ -125,13 +125,6 @@ run_cm() {
     CM_ERR="$(cat "$TMPBASE/cm.err")"
 }
 
-# cm_env_file <content> — (re)write the fixture cfg .env; empty removes it.
-cm_env_file() {
-    rm -f "$CM_CFG/.env"
-    [ -n "$1" ] && printf '%s\n' "$1" > "$CM_CFG/.env"
-    return 0
-}
-
 # expect_block <label> <regex-on-combined-output>
 expect_block() {
     assert_eq "$CM_RC" "1"
@@ -147,8 +140,6 @@ expect_pass_silent() {
         && fail "$1: unexpected HIGH" "out=[$CM_OUT] err=[$CM_ERR]" \
         || pass "$1: no HIGH line"
 }
-
-cm_env_file ""
 
 case_begin "new-staged-missing-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
 R="$(cm_repo missing)"
@@ -270,28 +261,14 @@ run_cm "$R"
 expect_pass_silent "single-path-header-skipped"
 case_end
 
-case_begin "enforce-off-disabled-message" "hooks/lib/precommit-tests-frontmatter.sh"
-R="$(cm_repo enforce-off)"
+case_begin "env-file-off-still-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
+# The gate has no disable switch: an off value in the config dir .env is ignored.
+R="$(cm_repo env-off)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
-cm_env_file "CASE_MARKERS_ENFORCE=off"
+printf 'CASE_MARKERS_ENFORCE=off\n' > "$CM_CFG/.env"
 run_cm "$R"
-cm_env_file ""
-expect_pass_silent "enforce-off-disabled-message"
-printf '%s\n' "$CM_ERR" | grep -qF 'pre-commit: case-marker gate disabled by CASE_MARKERS_ENFORCE=off' \
-    && pass "enforce-off-disabled-message: stderr names the .env switch" \
-    || fail "enforce-off-disabled-message: stderr" "err=[$CM_ERR]"
-case_end
-
-case_begin "ambient-env-off-ignored" "hooks/lib/precommit-tests-frontmatter.sh"
-# Only $_cfg_dir/.env may disable the gate; an ambient export must not.
-R="$(cm_repo ambient)"
-cm_stage "$R" tests/hooks/new-missing.sh missing.sh
-cm_env_file "CASE_MARKERS_ENFORCE=on"
-CM_ENV=("CASE_MARKERS_ENFORCE=off")
-run_cm "$R"
-CM_ENV=()
-cm_env_file ""
-expect_block "ambient-env-off-ignored" 'code=MISSING_CASE_MARKERS'
+rm -f "$CM_CFG/.env"
+expect_block "env-file-off-still-blocks" 'code=MISSING_CASE_MARKERS'
 case_end
 
 case_begin "checker-infra-error-fail-open" "hooks/lib/precommit-tests-frontmatter.sh"

@@ -23,4 +23,3 @@ Design and fail-open behavior: `docs/architecture/claude-code/case-marker-gate.m
 - Warns only (WARN): depth uncertain after a multi-line quoted string (`UNCERTAIN_CASE_MARKER`).
 - Not checked (soft rules above): kebab-case names and agreement between a target and the `# Tests:` header.
 - Existing files already in HEAD are out of scope; a rename counts as a new file.
-- Disable switch: `CASE_MARKERS_ENFORCE=off` in the config dir `.env` only (an ambient variable is ignored).

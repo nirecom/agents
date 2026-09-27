@@ -74,7 +74,6 @@ case_begin "registered-command-runs" "settings.json"
 CMD="$(f_of "$MINE" 5)"
 AGENTS_M="$(np "$AGENTS_DIR")"
 CMD="${CMD//\$AGENTS_CONFIG_DIR/$AGENTS_M}"
-set_dotenv
 E2E_OUT="$TMPBASE/e2e.out"
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/e2e-missing.sh" "content=@$BODIES/missing.sh"
 E2E_RC=0

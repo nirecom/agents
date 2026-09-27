@@ -30,18 +30,10 @@ harness_isolate "$TMPBASE/iso"
 NEUTRAL_CWD="$TMPBASE/neutral"
 mkdir -p "$NEUTRAL_CWD"
 
-# Config dir: the hook reads CASE_MARKERS_ENFORCE from $AGENTS_CONFIG_DIR/.env
-# only; set_dotenv rewrites it per case (no args = default).
+# Empty fixture config dir: the hook must not see the developer's real one.
 CFG_DIR="$TMPBASE/agents-config"
 mkdir -p "$CFG_DIR"
 CFG_DIR_M="$(np "$CFG_DIR")"
-set_dotenv() {
-  : > "$CFG_DIR/.env"
-  local kv
-  for kv in "$@"; do
-    printf '%s\n' "$kv" >> "$CFG_DIR/.env"
-  done
-}
 
 # Payload builder (feature-1894 shape):
 #   node payload.js <tool_name> <cwd|-> <file_path|-> [key=value ...]
@@ -83,9 +75,8 @@ mkpayload() {
 }
 
 # Hook runner. HK_ENV_RESET scrubs every name the hook could pick up from the
-# developer's session; extra VAR=VAL args become child variables (the ambient
-# direction — the hook must ignore CASE_MARKERS_ENFORCE there).
-HK_ENV_RESET=(-u CASE_MARKERS_ENFORCE -u CLAUDE_PROJECT_DIR -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID)
+# developer's session; extra VAR=VAL args become child variables.
+HK_ENV_RESET=(-u CLAUDE_PROJECT_DIR -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID)
 HK_HOOK="$HOOK"
 HK_OUT=""
 HK_ERR=""
@@ -246,7 +237,6 @@ fi
 # Passthrough: tools whose post-edit content cannot be rebuilt are approved
 # (pre-commit catches them); non-edit tools are none of this hook's business.
 case_begin "editfiles-approves" "hooks/block-case-markers.js"
-set_dotenv
 mkpayload editFiles "$REPO_M" "$REPO_M/tests/hooks/pt-editfiles.sh" "content=@$BODIES/missing.sh"
 hk_run
 assert_decision "editfiles-approves" approve
@@ -254,14 +244,12 @@ assert_eq "$HK_RC" "0"
 case_end
 
 case_begin "notebookedit-approves" "hooks/block-case-markers.js"
-set_dotenv
 mkpayload NotebookEdit "$REPO_M" "$REPO_M/tests/hooks/pt-notebook.sh" "new_source=@$BODIES/missing.sh"
 hk_run
 assert_decision "notebookedit-approves" approve
 case_end
 
 case_begin "bash-tool-approves" "hooks/block-case-markers.js"
-set_dotenv
 mkpayload Bash "$REPO_M" - "command=echo hi"
 hk_run
 assert_decision "bash-tool-approves" approve

@@ -4,8 +4,7 @@
 // missing or malformed case_begin/case_end markers (#2388). The verdict is
 // bin/check-case-markers.sh run on a temp copy of the rebuilt post-edit content;
 // the target file is never touched. pre-commit is the backstop for what this
-// cannot rebuild (editFiles, NotebookEdit). Config only from the config dir's
-// .env (CASE_MARKERS_ENFORCE=off), never process.env. Fails open on any error.
+// cannot rebuild (editFiles, NotebookEdit). Fails open on any error.
 // Design: docs/architecture/claude-code/case-marker-gate.md.
 "use strict";
 
@@ -13,7 +12,6 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { readDefaultEnvFile } = require("./lib/load-env");
 const { readPre, applyEdits, resolveTargetPath, groupEditTargets } = require("./lib/post-edit-content");
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
@@ -162,8 +160,6 @@ function main() {
   const toolInput = input.tool_input;
   if (!toolInput || typeof toolInput !== "object") approve();
 
-  const env = readDefaultEnvFile() || {};
-  if (env.CASE_MARKERS_ENFORCE === "off") approve();
   if (!fs.existsSync(CHECKER)) approve();
 
   const candidates = collectCandidates(input, toolName, toolInput);

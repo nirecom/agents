@@ -82,7 +82,7 @@ should use `.prompt-extraction-allowlist` instead of session markers.
 
 The private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **not**
 bypassed by markers — secret leakage protection is unconditional on the git side.
-The case-marker gate in the same hook (`_precommit_check_tests_case_markers`, #2388) is not bypassed by markers either; only `CASE_MARKERS_ENFORCE=off` in the config dir `.env` disables it.
+The case-marker gate in the same hook (`_precommit_check_tests_case_markers`, #2388) is not bypassed by markers either.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
 

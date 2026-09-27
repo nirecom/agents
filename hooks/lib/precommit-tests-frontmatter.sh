@@ -72,11 +72,10 @@ _precommit_check_tests_frontmatter() {
 
 # _precommit_check_tests_case_markers — judges the STAGED blob of every new (HEAD-absent,
 # renames included) .sh entrypoint with bin/check-case-markers.sh, in repos carrying
-# tests/lib/harness.sh. CASE_MARKERS_ENFORCE comes from $_cfg_dir/.env only (never the
-# ambient env); checker infra errors fail open with a stderr diagnostic.
+# tests/lib/harness.sh. Checker infra errors fail open with a stderr diagnostic.
 # rc 0 = ok / not applicable; rc 1 = block the commit.
 _precommit_check_tests_case_markers() {
-    local repo_top enforce="" rel tmp="" n=0 tmpfile out rc line
+    local repo_top rel tmp="" n=0 tmpfile out rc line
     local -a rels=() high=()
     local missing=0 malformed=0
 
@@ -84,15 +83,6 @@ _precommit_check_tests_case_markers() {
     [ -n "$repo_top" ] || return 0
     # Staged view, like the blobs judged below: an unstaged add/delete must not flip applicability.
     git cat-file -e ":tests/lib/harness.sh" 2>/dev/null || return 0
-
-    # shellcheck disable=SC2154
-    if [ -r "$_cfg_dir/.env" ] && declare -F _load_env_only_scan >/dev/null 2>&1; then
-        enforce="$(_load_env_only_scan "$_cfg_dir/.env" CASE_MARKERS_ENFORCE "$_cfg_dir/bin/env-os-filter")"
-    fi
-    if [ "$enforce" = "off" ]; then
-        echo "pre-commit: case-marker gate disabled by CASE_MARKERS_ENFORCE=off" >&2
-        return 0
-    fi
 
     # A process substitution hides git's exit status, so probe it first: a failed
     # lookup must say so rather than read as "no new tests".
