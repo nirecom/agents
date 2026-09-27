@@ -199,6 +199,10 @@ if (mode === "empty") seg.argvRaw = [];
 if (mode === "nonstring") seg.argvRaw = [42];
 if (mode === "argv2-length-mismatch") { seg.argv = [fixturePath, "arg1"]; seg.argvRaw = [fixturePath]; }
 if (mode === "argv2-nonstring") { seg.argv = [fixturePath, "arg1"]; seg.argvRaw = [fixturePath, 42]; }
+if (mode === "argv2-unsafe-dollar") { seg.argv = [fixturePath, "$VAR"]; seg.argvRaw = [fixturePath, "$VAR"]; }
+if (mode === "argv2-unsafe-backtick") { seg.argv = [fixturePath, "`cmd`"]; seg.argvRaw = [fixturePath, "`cmd`"]; }
+if (mode === "argv2-unsafe-glob") { seg.argv = [fixturePath, "*.txt"]; seg.argvRaw = [fixturePath, "*.txt"]; }
+if (mode === "argv2-unsafe-bracket") { seg.argv = [fixturePath, "[a-z]"]; seg.argvRaw = [fixturePath, "[a-z]"]; }
 const stub = (rel, overrides) => {
   const f = require.resolve(path.join(agentsDir, rel));
   const real = require(f);
@@ -240,6 +244,25 @@ case_end
 
 case_begin "E5-deny-argvraw-nonstring-multi-argv" "$T_SCRIPT"
 check "E5-deny-argvraw-nonstring-multi-argv" "deny" "$(e_run argv2-nonstring)"
+case_end
+
+# E6-E9: well-formed argvRaw but arg[1] contains an UNRESOLVABLE_CHARS member.
+# These stub out argvRaw fail-closed and containment so the denial is solely from
+# the UNRESOLVABLE_CHARS loop — mutation of any member is caught independently.
+case_begin "E6-deny-argvraw-unsafe-dollar" "$T_SCRIPT"
+check "E6-deny-argvraw-unsafe-dollar" "deny" "$(e_run argv2-unsafe-dollar)"
+case_end
+
+case_begin "E7-deny-argvraw-unsafe-backtick" "$T_SCRIPT"
+check "E7-deny-argvraw-unsafe-backtick" "deny" "$(e_run argv2-unsafe-backtick)"
+case_end
+
+case_begin "E8-deny-argvraw-unsafe-glob" "$T_SCRIPT"
+check "E8-deny-argvraw-unsafe-glob" "deny" "$(e_run argv2-unsafe-glob)"
+case_end
+
+case_begin "E9-deny-argvraw-unsafe-bracket" "$T_SCRIPT"
+check "E9-deny-argvraw-unsafe-bracket" "deny" "$(e_run argv2-unsafe-bracket)"
 case_end
 
 echo ""

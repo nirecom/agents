@@ -73,7 +73,8 @@ SP_M="$(node_path "$SP")"
 # execution with `mkdir -p`.
 printf 'echo hello from the scratchpad\nmkdir -p "%s/safe-ran"\n' "$MARKS_M" > "$SP/safe.sh"
 # #2402 N2: the same containment, invoked with a literal argument.
-printf 'echo hello from args\nmkdir -p "%s/args-ran"\n' "$MARKS_M" > "$SP/args.sh"
+# Records $1 so T2 can assert the model passed the arg, not just the script.
+printf 'echo "hello from args, arg1=$1"\nmkdir -p "%s/args-ran"\nmkdir -p "%s/args-ran-$1"\n' "$MARKS_M" "$MARKS_M" > "$SP/args.sh"
 
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
@@ -229,6 +230,11 @@ if [ -d "$MARKS/args-ran" ]; then
 else
     fail "args-scratchpad-script-was-auto-approved" "args.sh never ran: a literal argument still blocks the auto-approve"
 fi
+if [ -d "$MARKS/args-ran-some_literal_arg" ]; then
+    pass "args-received-the-literal-arg"
+else
+    fail "args-received-the-literal-arg" "args.sh ran but \$1 was not 'some_literal_arg' — model may have omitted the argument or the hook stripped it"
+fi
 if [ "${TURN_RC[$T2]}" -eq 0 ]; then
     pass "turn-T2-cli-exited-zero"
 else
@@ -240,7 +246,7 @@ if [ "$got" = "false" ]; then
 else
     fail "turn-T2-transcript-is_error-false" "is_error=$got"
 fi
-B_PROBE="$(probe_turn "$T2" "args.sh")"
+B_PROBE="$(probe_turn "$T2" "args.sh some_literal_arg")"
 got="$(field "$B_PROBE" attempted)"
 if [ "$got" = "true" ]; then
     pass "args-turn-attempted-the-script"
@@ -269,6 +275,7 @@ run_turn_posix() {
       unset CLAUDE_CODE_SESSION_ID; \
       PATH="$MOCKBIN:$PATH" \
       TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
+      MSYS_NO_PATHCONV=1 \
       MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
       SCRATCHPAD="$3" \
       CLAUDE_SESSION_ID="$SESSION" \
@@ -297,7 +304,7 @@ if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q 
     else
         fail "posix-path-scratchpad-script-ran" "posix.sh was not executed — hook did not normalize the POSIX path"
     fi
-    P3_PROBE="$(probe_turn "$T3" "posix.sh")"
+    P3_PROBE="$(probe_turn "$T3" "$SP_POSIX/posix.sh")"
     got="$(field "$P3_PROBE" attempted)"
     if [ "$got" = "true" ]; then
         pass "posix-path-turn-attempted-the-script"
