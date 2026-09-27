@@ -72,6 +72,8 @@ SP_M="$(node_path "$SP")"
 # A script inside the scratchpad, contained per path only. It records its own
 # execution with `mkdir -p`.
 printf 'echo hello from the scratchpad\nmkdir -p "%s/safe-ran"\n' "$MARKS_M" > "$SP/safe.sh"
+# #2402 N2: the same containment, invoked with a literal argument.
+printf 'echo hello from args\nmkdir -p "%s/args-ran"\n' "$MARKS_M" > "$SP/args.sh"
 
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
@@ -214,6 +216,102 @@ if [ "$got" = "false" ]; then
     pass "safe-turn-attempt-is-not-a-permission-denial"
 else
     fail "safe-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the allowed turn also hit the permission system, so a scratchpad path alone was not enough to auto-approve it"
+fi
+
+T2="cccccccc-0000-4000-8000-00000000000b"
+echo ""
+echo "=== B (#2402 N2): a scratchpad script with a literal argument is auto-approved ==="
+run_turn "$T2" \
+  "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_M/args.sh some_literal_arg. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
+
+if [ -d "$MARKS/args-ran" ]; then
+    pass "args-scratchpad-script-was-auto-approved"
+else
+    fail "args-scratchpad-script-was-auto-approved" "args.sh never ran: a literal argument still blocks the auto-approve"
+fi
+if [ "${TURN_RC[$T2]}" -eq 0 ]; then
+    pass "turn-T2-cli-exited-zero"
+else
+    fail "turn-T2-cli-exited-zero" "claude -p exited ${TURN_RC[$T2]} (124 = the 180s timeout fired)"
+fi
+got="$(turn_is_error "$T2")"
+if [ "$got" = "false" ]; then
+    pass "turn-T2-transcript-is_error-false"
+else
+    fail "turn-T2-transcript-is_error-false" "is_error=$got"
+fi
+B_PROBE="$(probe_turn "$T2" "args.sh")"
+got="$(field "$B_PROBE" attempted)"
+if [ "$got" = "true" ]; then
+    pass "args-turn-attempted-the-script"
+else
+    fail "args-turn-attempted-the-script" "no Bash tool_use carrying args.sh was found (attempted=$got)"
+fi
+got="$(field "$B_PROBE" result_error)"
+if [ "$got" = "false" ]; then
+    pass "args-turn-attempt-was-approved"
+else
+    fail "args-turn-attempt-was-approved" "result_error=$got — the args.sh attempt was refused"
+fi
+got="$(field "$B_PROBE" permission_denial)"
+if [ "$got" = "false" ]; then
+    pass "args-turn-attempt-is-not-a-permission-denial"
+else
+    fail "args-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the argument turn hit the permission system"
+fi
+
+# run_turn_posix <session-uuid> <prompt> <scratchpad-posix-path>: run_turn with a
+# /c/... SCRATCHPAD. MSYS2_ENV_CONV_EXCL keeps Git Bash from rewriting it to C:/...
+# on the way into claude (PATH conversion is left intact, unlike MSYS_NO_PATHCONV).
+run_turn_posix() {
+    local rc=0
+    ( cd "$REPO" && \
+      unset CLAUDE_CODE_SESSION_ID; \
+      PATH="$MOCKBIN:$PATH" \
+      TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
+      MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
+      SCRATCHPAD="$3" \
+      CLAUDE_SESSION_ID="$SESSION" \
+      CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_PLANS_DIR="$PLANSDIR" \
+      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
+      run_with_timeout 180 claude -p "$2" \
+        --session-id "$1" \
+        --setting-sources project \
+        --output-format json \
+      >"$BASE/$1.out" 2>&1 ) || rc=$?
+    TURN_RC["$1"]=$rc
+}
+
+T3="cccccccc-0000-4000-8000-00000000000c"
+echo ""
+echo "=== C (#2402 N1): a /c/... drive-letter scratchpad path is auto-approved ==="
+if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q '^/c/'; then
+    # Drive-letter form built by hand: `cygpath -u` yields the /tmp mount alias here.
+    SP_DRIVE="${SP_M%%:*}"
+    SP_POSIX="/${SP_DRIVE,,}${SP_M#?:}"
+    printf 'mkdir -p "%s/posix-ran"\n' "$MARKS_M" > "$SP/posix.sh"
+    run_turn_posix "$T3" "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_POSIX/posix.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused." "$SP_POSIX"
+    if [ -d "$MARKS/posix-ran" ]; then
+        pass "posix-path-scratchpad-script-ran"
+    else
+        fail "posix-path-scratchpad-script-ran" "posix.sh was not executed — hook did not normalize the POSIX path"
+    fi
+    P3_PROBE="$(probe_turn "$T3" "posix.sh")"
+    got="$(field "$P3_PROBE" attempted)"
+    if [ "$got" = "true" ]; then
+        pass "posix-path-turn-attempted-the-script"
+    else
+        fail "posix-path-turn-attempted-the-script" "no Bash tool_use carrying posix.sh was found (attempted=$got)"
+    fi
+    got="$(field "$P3_PROBE" permission_denial)"
+    if [ "$got" = "false" ]; then
+        pass "posix-path-turn-is-not-a-permission-denial"
+    else
+        fail "posix-path-turn-is-not-a-permission-denial" "permission_denial=$got — hook did not auto-approve the POSIX-path command"
+    fi
+else
+    echo "SKIP T3 (POSIX path): MSYS-form cygpath not available"
 fi
 
 echo ""

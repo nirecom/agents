@@ -93,7 +93,8 @@ inv_none()  { env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --invoke "$1
 assert_eq "SP-1-allow-real-script"        "allow" "$(inv_path "bash $SP/probe.sh")"
 assert_eq "SP-1b-allow-quoted-arg"        "allow" "$(inv_path "bash \"$SP/probe.sh\"")"
 assert_eq "SP-1c-deny-non-bash"           "deny"  "$(inv_path "node $SP/probe.sh")"
-assert_eq "SP-1d-deny-extra-argv"         "deny"  "$(inv_path "bash $SP/probe.sh extra")"
+assert_eq "SP-1d-allow-safe-argv"         "allow" "$(inv_path "bash $SP/probe.sh extra")"
+assert_eq "SP-1d-deny-unsafe-argv"        "deny"  "$(inv_path "bash $SP/probe.sh '\$VAR'")"
 assert_eq "SP-1e-deny-redirect"           "deny"  "$(inv_path "bash $SP/probe.sh > $TMPROOT/out.txt")"
 assert_eq "SP-1f-deny-assignment-cmd0"    "deny"  "$(inv_path "A=1 bash $SP/probe.sh")"
 assert_eq "SP-1g-deny-here-input"         "deny"  "$(inv_path "bash $SP/probe.sh <<EOF
@@ -241,6 +242,17 @@ assert_eq "SP-55-space-path-quoted-hook-allow" "allow" \
     "$(run_auto_tool Bash "bash \"$SP/with space/probe.sh\"")"
 assert_eq "SP-56-space-path-unquoted-hook-passthrough" "passthrough" \
     "$(run_auto_tool Bash "bash $SP/with space/probe.sh")"
+
+# Pattern 1 (resource-unchanged): a denied unsafe-arg command must not execute.
+# SP-1d-deny-unsafe-argv verifies the verdict; this verifies no side-effect occurs.
+UNSAFE_MARKER="$TMPROOT_RAW/unsafe-arg-marker"
+assert_eq "SP-57-hook-deny-unsafe-arg-passthrough" "passthrough" \
+    "$(run_auto_tool Bash "bash $SP/probe.sh '\$(touch $UNSAFE_MARKER)'")"
+if [ ! -f "$UNSAFE_MARKER" ]; then
+    echo "PASS: SP-57-pattern1-unsafe-arg-no-side-effect"; PASS=$((PASS + 1))
+else
+    echo "FAIL: SP-57-pattern1-unsafe-arg-no-side-effect — marker was created, meaning the command executed despite deny"; FAIL=$((FAIL + 1))
+fi
 
 echo ""
 echo "Section D (D-1..D-4): PASS=$PASS FAIL=$FAIL"
