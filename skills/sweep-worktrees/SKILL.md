@@ -16,18 +16,16 @@ git's worktree registry.
 
 SWT-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
    if unset.
-SWT-2. Invoke the sweeper script (no flag = deletes; `--dry-run` = preview):
-   ```
-   bash "$AGENTS_CONFIG_DIR/bin/sweep-worktrees.sh" [--dry-run] [--min-age-hours N] [--ci-mode]
-   ```
+SWT-2. Invoke the sweeper script, forwarding the user's flags verbatim:
+   `bash "$AGENTS_CONFIG_DIR/bin/sweep-worktrees.sh" [--dry-run] [--force] [--min-age-hours N] [--ci-mode]`
 SWT-3. Print the script's stdout verbatim. Do not summarize or filter.
 
-Forward the user's flags verbatim. Add no flags of your own.
+Add no flags of your own.
 
 ## Rules
 
 - Deletes by default; `--dry-run` must be explicit to preview only.
-- `--force` is not supported; the script uses `git worktree remove` without `--force`.
+- `--force` passes `--force` to `git worktree remove`, bypassing the dirty-tree check; PR-merged and freshness gates still apply.
 - EPERM / busy / not-empty failures on a per-worktree basis are non-fatal:
   warning printed, that worktree skipped, sweep continues.
 - Branch deletion (`git branch -D`) is authorized only AFTER the worktree is
@@ -36,7 +34,7 @@ Forward the user's flags verbatim. Add no flags of your own.
 - Detached HEAD worktrees are skipped with a warning (no branch ⇒ no PR
   merged check, no `branch -D` target).
 - A 4-AND safety check is required before any deletion: registered linked
-  worktree AND PR merged AND clean working tree AND mtime > threshold.
+  worktree AND PR merged AND clean working tree (bypassed by `--force`) AND mtime > threshold.
 - Orphan-directory scan uses a 4-AND gate: containment under WORKTREE_BASE_DIR
   AND no .git AND mtime > threshold AND ownership proof via `Main repo:` field
   in `WORKTREE_NOTES.md`. Basename match alone is NOT ownership proof — two
