@@ -579,3 +579,7 @@ Changes: bash-guard now detects invalid command-line issuance forms (missing ech
 ### FEATURE: PR #2425 (2026-09-27)
 Background: fix(#2402): normalize POSIX drive-letter paths in scratchpad hook; allow literal bash args
 Changes: Scratchpad script auto-approve now supports `bash <script>.sh [literal-arg…]` — passes non-expanding arguments through safely; fixes POSIX drive-letter path corruption on Windows Git Bash hosts.
+
+### FEATURE: PR #2424 (2026-09-27)
+Background: feat(#2388): enforce case_begin/case_end markers for new multi-path ....
+Changes: New test files with several `# Tests:` paths must wrap each case in column-0 `case_begin`/`case_end`. Edits and commits that leave such a file without valid markers are now blocked. Rules: `skills/_shared/test-design/case-markers.md`. (#2388)
