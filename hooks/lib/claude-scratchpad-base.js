@@ -13,6 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { toWindowsPath } = require("./branch-diff");
 
 // POSIX case sensitivity: fold case only on Windows (case-insensitive filesystem).
 // On POSIX, lowercase-folding would wrongly equate /tmp/CLAUDE with /tmp/claude —
@@ -45,7 +46,7 @@ function isAtOrUnderClaudeBase(p) {
 // else the whole claude base (fallback).
 function getScratchpadAllowRootNorm() {
   const base = getClaudeBaseNorm();
-  const sp = process.env.SCRATCHPAD;
+  const sp = toWindowsPath(process.env.SCRATCHPAD);
   if (sp) {
     try {
       const n = foldCase(path.resolve(sp));
@@ -78,7 +79,7 @@ function isRepoExcluded(candidatePath, findRepoRoot) {
 // internal Claude Code detail with no SSOT here), or null. null means FAIL-TO-ASK:
 // the caller must never substitute a wider fallback root.
 function getCurrentSessionScratchpadRootNorm() {
-  const sp = process.env.SCRATCHPAD;
+  const sp = toWindowsPath(process.env.SCRATCHPAD);
   if (sp) {
     try {
       if (isUnderClaudeBase(sp) && realIsUnderClaudeBase(sp)) {

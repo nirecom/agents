@@ -1,5 +1,5 @@
 "use strict";
-// isAllowedScratchpadInvocation(cmdText) — true ONLY for `bash <absolute-path>.sh`
+// isAllowedScratchpadInvocation(cmdText) — true ONLY for `bash <absolute-path>.sh [literal-arg…]`
 // where the script resolves inside THIS session's scratchpad directory (path
 // containment only — script content is not inspected; see issue #2233).
 // FAIL-TO-ASK: every uncertainty (no session context, unresolvable path, parse
@@ -23,6 +23,7 @@ const {
   isRepoExcluded,
 } = require("../lib/claude-scratchpad-base");
 const { findRepoRoot } = require("../enforce-worktree/git-repo-detection");
+const { toWindowsPath } = require("../lib/branch-diff");
 
 // Any of these in the RAW argument means the shell would rewrite the path after
 // this hook inspected it, so the inspected path is not what runs.
@@ -46,10 +47,14 @@ function segmentsUnder(root, child) {
 }
 
 // The single `bash <script>` segment, or null. Rejects chaining/pipes/subshells
-// (any separator), env-prefix assignments, redirects, here-input, and any argv
-// shape other than exactly one operand.
+// (any separator), env-prefix assignments, redirects, here-input, a missing
+// operand, and any argument the shell would expand.
 function singleBashSegment(cmdText) {
   if (typeof cmdText !== "string" || cmdText.trim() === "") return null;
+  // Newlines are command separators in the shell — never valid in a single scratchpad
+  // invocation. The parser would silently treat \n as whitespace, placing a second
+  // command token into argv where it would pass the arg validation checks below.
+  if (cmdText.includes("\n") || cmdText.includes("\r")) return null;
   const ir = parseWithSubstitutionSpans(cmdText);
   if (!ir || ir.parseFailure === true || !Array.isArray(ir.segments)) return null;
   if (ir.segments.length !== 1) return null;
@@ -63,8 +68,17 @@ function singleBashSegment(cmdText) {
   if (!Array.isArray(seg.redirects) || seg.redirects.length !== 0) return null;
   if (segHasHereInput(seg)) return null;
   const argv = Array.isArray(seg.argv) ? seg.argv : [];
-  if (argv.length !== 1) return null;
-  const argvRaw = Array.isArray(seg.argvRaw) && seg.argvRaw.length === 1 ? seg.argvRaw : argv;
+  if (argv.length < 1) return null;
+  if (!Array.isArray(seg.argvRaw) || seg.argvRaw.length !== argv.length) return null;
+  if (!seg.argvRaw.every((x) => typeof x === "string")) return null;
+  const argvRaw = seg.argvRaw;
+  // Leading `~` is bash home-expansion; a mid-token `~` (8.3 short names) is literal.
+  for (const rawArg of argvRaw.slice(1)) {
+    if (rawArg.startsWith("~")) return null;
+    for (const ch of UNRESOLVABLE_CHARS) {
+      if (rawArg.indexOf(ch) !== -1) return null;
+    }
+  }
   return { arg: argv[0], raw: argvRaw[0] };
 }
 
@@ -75,7 +89,7 @@ function resolveScriptPath(operand) {
   for (const ch of UNRESOLVABLE_CHARS) {
     if (operand.raw.indexOf(ch) !== -1) return null;
   }
-  const arg = operand.arg;
+  const arg = toWindowsPath(operand.arg);
   if (typeof arg !== "string" || !path.isAbsolute(arg)) return null;
   if (!/\.sh$/.test(arg)) return null;
   const real = fs.realpathSync(arg);
@@ -85,7 +99,7 @@ function resolveScriptPath(operand) {
 // {kind:"session"} carries no directory, so the base-relative shape is matched
 // structurally: <project-slug>/<session-id>/scratchpad/<...>.
 function isUnderSessionShape(realScript, sessionId) {
-  const segs = segmentsUnder(fs.realpathSync(getClaudeBaseNorm()), realScript);
+  const segs = segmentsUnder(fs.realpathSync(toWindowsPath(getClaudeBaseNorm())), realScript);
   if (segs === null || segs.length < 4) return false;
   return foldCase(segs[1]) === foldCase(sessionId) && foldCase(segs[2]) === SCRATCHPAD_DIR_NAME;
 }

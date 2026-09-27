@@ -28,17 +28,10 @@ if [ ! -f "$HOOK" ]; then
     echo "FAIL: RED-EXPECTED — hooks/preuse-auto-approve.js not found" >&2; exit 1
 fi
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
-    elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
-    else "$@"; fi
-}
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+# Harness: provides pass/fail/skip/case_begin/case_end/run_with_timeout; overrides
+# run_with_timeout with the canonical bin/run-with-timeout.sh portable wrapper.
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 BASE="$(mktemp -d)"
 trap 'rm -rf "$BASE"' EXIT
@@ -72,6 +65,9 @@ SP_M="$(node_path "$SP")"
 # A script inside the scratchpad, contained per path only. It records its own
 # execution with `mkdir -p`.
 printf 'echo hello from the scratchpad\nmkdir -p "%s/safe-ran"\n' "$MARKS_M" > "$SP/safe.sh"
+# #2402 N2: the same containment, invoked with a literal argument.
+# Records $1 so T2 can assert the model passed the arg, not just the script.
+printf 'echo "hello from args, arg1=$1"\nmkdir -p "%s/args-ran"\nmkdir -p "%s/args-ran-$1"\n' "$MARKS_M" "$MARKS_M" > "$SP/args.sh"
 
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
@@ -88,11 +84,13 @@ fi
 # here and none can author the refusal that a suspect-turn row would attribute to
 # the auto-approve decision. Asserted, because that reduction lives in another file.
 N_CMDS="$(grep -c '"command"[[:space:]]*:' "$REPO/.claude/settings.json")"
+case_begin "fixture-registers-only-the-hook-under-test" "hooks/preuse-auto-approve.js"
 if [ "$N_CMDS" = "1" ] && grep -q 'preuse-auto-approve\.js' "$REPO/.claude/settings.json"; then
     pass "fixture-registers-only-the-hook-under-test"
 else
     fail "fixture-registers-only-the-hook-under-test" "the fixture settings.json carries $N_CMDS hook command(s) — another PreToolUse guard could produce the refusal this file attributes to the auto-approve decision"
 fi
+case_end
 
 unset CLAUDECODE
 
@@ -154,6 +152,7 @@ field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 T1="cccccccc-0000-4000-8000-00000000000a"
 
 echo "=== A: a safe scratchpad script is auto-approved and runs ==="
+case_begin "T1-safe-script-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
 run_turn "$T1" \
   "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_M/safe.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
 
@@ -215,7 +214,120 @@ if [ "$got" = "false" ]; then
 else
     fail "safe-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the allowed turn also hit the permission system, so a scratchpad path alone was not enough to auto-approve it"
 fi
+case_end
+
+T2="cccccccc-0000-4000-8000-00000000000b"
+echo ""
+echo "=== B (#2402 N2): a scratchpad script with a literal argument is auto-approved ==="
+case_begin "T2-literal-arg-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
+run_turn "$T2" \
+  "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_M/args.sh some_literal_arg. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
+
+if [ -d "$MARKS/args-ran" ]; then
+    pass "args-scratchpad-script-was-auto-approved"
+else
+    fail "args-scratchpad-script-was-auto-approved" "args.sh never ran: a literal argument still blocks the auto-approve"
+fi
+if [ -d "$MARKS/args-ran-some_literal_arg" ]; then
+    pass "args-received-the-literal-arg"
+else
+    fail "args-received-the-literal-arg" "args.sh ran but \$1 was not 'some_literal_arg' — model may have omitted the argument or the hook stripped it"
+fi
+if [ "${TURN_RC[$T2]}" -eq 0 ]; then
+    pass "turn-T2-cli-exited-zero"
+else
+    fail "turn-T2-cli-exited-zero" "claude -p exited ${TURN_RC[$T2]} (124 = the 180s timeout fired)"
+fi
+got="$(turn_is_error "$T2")"
+if [ "$got" = "false" ]; then
+    pass "turn-T2-transcript-is_error-false"
+else
+    fail "turn-T2-transcript-is_error-false" "is_error=$got"
+fi
+B_PROBE="$(probe_turn "$T2" "args.sh some_literal_arg")"
+got="$(field "$B_PROBE" attempted)"
+if [ "$got" = "true" ]; then
+    pass "args-turn-attempted-the-script"
+else
+    fail "args-turn-attempted-the-script" "no Bash tool_use carrying args.sh was found (attempted=$got)"
+fi
+got="$(field "$B_PROBE" result_error)"
+if [ "$got" = "false" ]; then
+    pass "args-turn-attempt-was-approved"
+else
+    fail "args-turn-attempt-was-approved" "result_error=$got — the args.sh attempt was refused"
+fi
+got="$(field "$B_PROBE" permission_denial)"
+if [ "$got" = "false" ]; then
+    pass "args-turn-attempt-is-not-a-permission-denial"
+else
+    fail "args-turn-attempt-is-not-a-permission-denial" "permission_denial=$got — the argument turn hit the permission system"
+fi
+case_end
+
+T3="cccccccc-0000-4000-8000-00000000000c"
+echo ""
+echo "=== C (#2402 N1): a /c/... drive-letter scratchpad path is auto-approved ==="
+if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q '^/c/'; then
+    # Drive-letter form built by hand: `cygpath -u` yields the /tmp mount alias here.
+    SP_DRIVE="${SP_M%%:*}"
+    SP_POSIX="/${SP_DRIVE,,}${SP_M#?:}"
+    printf 'mkdir -p "%s/posix-ran"\n' "$MARKS_M" > "$SP/posix.sh"
+    case_begin "T3-posix-path-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
+    # Definition inside span: deleting this span leaves no orphaned run_turn_posix definition.
+    # /c/... SCRATCHPAD. MSYS2_ENV_CONV_EXCL keeps Git Bash from rewriting it to C:/...
+    # on the way into claude (MSYS_NO_PATHCONV suppresses all path conversion here).
+    run_turn_posix() {
+        local rc=0
+        ( cd "$REPO" && \
+          unset CLAUDE_CODE_SESSION_ID; \
+          PATH="$MOCKBIN:$PATH" \
+          TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
+          MSYS_NO_PATHCONV=1 \
+          MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
+          SCRATCHPAD="$3" \
+          CLAUDE_SESSION_ID="$SESSION" \
+          CLAUDE_WORKFLOW_DIR="$WFDIR" \
+          WORKFLOW_PLANS_DIR="$PLANSDIR" \
+          AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
+          run_with_timeout 180 claude -p "$2" \
+            --session-id "$1" \
+            --setting-sources project \
+            --output-format json \
+          >"$BASE/$1.out" 2>&1 ) || rc=$?
+        TURN_RC["$1"]=$rc
+    }
+    run_turn_posix "$T3" "Using the Bash tool, run exactly this one command and report verbatim what happened: bash $SP_POSIX/posix.sh. Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused." "$SP_POSIX"
+    if [ -d "$MARKS/posix-ran" ]; then
+        pass "posix-path-scratchpad-script-ran"
+    else
+        fail "posix-path-scratchpad-script-ran" "posix.sh was not executed — hook did not normalize the POSIX path"
+    fi
+    P3_PROBE="$(probe_turn "$T3" "$SP_POSIX/posix.sh")"
+    got="$(field "$P3_PROBE" attempted)"
+    if [ "$got" = "true" ]; then
+        pass "posix-path-turn-attempted-the-script"
+    else
+        fail "posix-path-turn-attempted-the-script" "no Bash tool_use carrying posix.sh was found (attempted=$got)"
+    fi
+    got="$(field "$P3_PROBE" result_error)"
+    if [ "$got" = "false" ]; then
+        pass "posix-path-turn-attempt-was-approved"
+    else
+        fail "posix-path-turn-attempt-was-approved" "result_error=$got — the POSIX-path script's attempt was refused"
+    fi
+    got="$(field "$P3_PROBE" permission_denial)"
+    if [ "$got" = "false" ]; then
+        pass "posix-path-turn-is-not-a-permission-denial"
+    else
+        fail "posix-path-turn-is-not-a-permission-denial" "permission_denial=$got — hook did not auto-approve the POSIX-path command"
+    fi
+    case_end
+else
+    echo "SKIP T3 (POSIX path): MSYS-form cygpath not available"
+fi
 
 echo ""
-echo "Results: $PASS passed, $FAIL failed"
-[ "$FAIL" -eq 0 ] && exit 0 || exit 1
+echo ""
+echo "Results: PASS=$PASS FAIL=$FAIL SKIP=${SKIP:-0}"
+[ "$FAIL" -eq 0 ]
