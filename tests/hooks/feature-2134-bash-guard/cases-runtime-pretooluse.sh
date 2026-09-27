@@ -14,11 +14,11 @@ BG_HOOK="$AGENTS_DIR/hooks/bash-guard.js"
 BG_RUNTIME_OUT="$TMPROOT/runtime-out.txt"
 
 # bg_envelope_kind <stdout-file> -> which of the four envelopes the hook wrote (#2264):
-#   block        {"decision":"block",...}                        (deny)
-#   notify       {"systemMessage":...,"hookSpecificOutput":...}  (notify)
+#   block        {"decision":"block",...}                           (deny)
+#   notify       {"decision":"approve","systemMessage":...,...}     (notify; G-b=(b2) fallback form)
 #   allow        {"hookSpecificOutput":{"permissionDecision":"allow",...}}
-#   passThrough  empty stdout                                    (the host decides)
-# Anything else, including the retired {"decision":"approve"}, is reported verbatim.
+#   passThrough  {"decision":"approve"} or empty stdout             (G-b=(b2) fallback form; the host decides)
+# Anything else is reported verbatim.
 bg_envelope_kind() {
     BG_OUT_FILE="$(node_path "$1")" node -e '
       const raw = require("fs").readFileSync(process.env.BG_OUT_FILE, "utf8");
@@ -26,8 +26,9 @@ bg_envelope_kind() {
       let o; try { o = JSON.parse(raw); } catch (_e) { process.stdout.write("<NOT-JSON>"); process.exit(0); }
       const h = o.hookSpecificOutput || {};
       if (o.decision === "block") process.stdout.write("block");
-      else if (o.decision !== undefined) process.stdout.write("<decision:" + o.decision + ">");
+      else if (o.decision === "approve" && typeof o.systemMessage === "string" && o.systemMessage !== "") process.stdout.write("notify");
       else if (h.permissionDecision === "allow") process.stdout.write("allow");
+      else if (o.decision === "approve") process.stdout.write("passThrough");
       else if (typeof o.systemMessage === "string" && o.systemMessage !== "") process.stdout.write("notify");
       else process.stdout.write("<OTHER:" + raw.trim().slice(0, 80) + ">");
     ' 2>/dev/null
@@ -73,8 +74,8 @@ L1-no-echo    ~ Bash          ~ "<<WORKFLOW_MARK_STEP_p1_complete>>"            
 TABLE
 }
 
-# plain-bash / out-of-scope: passThrough writes NOTHING -- the retired {"decision":"approve"}
-# must not come back, because the host decides the permission prompt from silence.
+# plain-bash / out-of-scope: passThrough outputs {"decision":"approve"} per G-b=(b2) fallback form --
+# the host treats it as a bypass (same as legacy approve), so no prompt fires.
 p1_runtime
 
 # P2: the block carries its reason on the same envelope. A block with an empty reason is the
