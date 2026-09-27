@@ -142,6 +142,41 @@ got="$(detect 'rtk npm install')"
     || fail "A17. rtk npm install must be WRITE" "got=$got"
 case_end
 
+# --- #2403: READ_SUBCOMMANDS split into PURE (N5 allow) and SIDE_EFFECT reads -----
+# The split must not move a single subcommand across the write boundary: the union stays
+# the pre-split 43 and isGitWriteArgv answers exactly as before.
+case_begin "read-subcommand-split" "hooks/lib/bash-write-patterns/git-write-ir.js"
+RS_PURE="annotate,blame,cat-file,check-attr,check-ignore,check-ref-format,cherry,count-objects,describe,diff,diff-files,diff-index,diff-tree,for-each-ref,grep,log,ls-files,ls-tree,merge-base,name-rev,range-diff,rev-list,rev-parse,shortlog,show,show-branch,show-ref,status,var,verify-pack,version,whatchanged"
+RS_SIDE="archive,difftool,fetch,gitk,gui,help,instaweb,ls-remote,merge-tree,verify-commit,verify-tag"
+RS_UNION_43="annotate,archive,blame,cat-file,check-attr,check-ignore,check-ref-format,cherry,count-objects,describe,diff,diff-files,diff-index,diff-tree,difftool,fetch,for-each-ref,gitk,grep,gui,help,instaweb,log,ls-files,ls-remote,ls-tree,merge-base,merge-tree,name-rev,range-diff,rev-list,rev-parse,shortlog,show,show-branch,show-ref,status,var,verify-commit,verify-pack,verify-tag,version,whatchanged"
+# set_of <export-name> -> sorted comma list, or <MISSING:name> when not an exported Set.
+set_of() {
+    rtk_eval 'const s = gw[argv[0]]; console.log(s instanceof Set ? [...s].sort().join(",") : "<MISSING:" + argv[0] + ">");' "$1"
+}
+expect_eq "S1. PURE_READ_SUBCOMMANDS is exactly the 32 pure reads" "$(set_of PURE_READ_SUBCOMMANDS)" "$RS_PURE"
+expect_eq "S2. SIDE_EFFECT_READ_SUBCOMMANDS is exactly the 11 side-effecting reads" "$(set_of SIDE_EFFECT_READ_SUBCOMMANDS)" "$RS_SIDE"
+expect_eq "S3. READ_SUBCOMMANDS is exported and still the pre-split 43" "$(set_of READ_SUBCOMMANDS)" "$RS_UNION_43"
+got="$(rtk_eval '
+  const p = gw.PURE_READ_SUBCOMMANDS, s = gw.SIDE_EFFECT_READ_SUBCOMMANDS;
+  if (!(p instanceof Set) || !(s instanceof Set)) console.log("<MISSING>");
+  else console.log([...p].filter((x) => s.has(x)).join(",") || "disjoint");
+')"
+expect_eq "S4. PURE and SIDE_EFFECT are disjoint" "$got" "disjoint"
+expect_eq "S5. BRANCH_READ_FLAGS is exported unchanged" "$(set_of BRANCH_READ_FLAGS)" \
+    "--contains,--format,--list,--merged,--no-merged,--points-at,--show-current,-a,-l,-r,-v,-vv"
+expect_eq "S6. TAG_READ_FLAGS is exported unchanged" "$(set_of TAG_READ_FLAGS)" \
+    "--contains,--format,--list,--merged,--no-merged,--points-at,--sort,--verify,-l,-n,-v"
+# S7: isGitWriteArgv is untouched by the split -- side-effect reads stay non-write here
+# (the N5 allow excludes them elsewhere), and writes stay writes.
+got="$(rtk_eval '
+  const rows = [["status"],["fetch"],["verify-tag","v1"],["archive","HEAD"],["help","-w","log"],
+                ["commit","-m","x"],["branch","-d","x"],["push"],["config","--unset","a"],["frobnicate"]];
+  console.log(rows.map((r) => String(gw.isGitWriteArgv(r))).join(","));
+')"
+expect_eq "S7. isGitWriteArgv verdicts unchanged across the split" "$got" \
+    "false,false,false,false,false,true,true,true,true,true"
+case_end
+
 # --- Hook-level: hooks/enforce-worktree.js end to end -----------------------
 MAIN="$(np "$T/main")"
 LINKED="$(np "$T/wt-linked")"

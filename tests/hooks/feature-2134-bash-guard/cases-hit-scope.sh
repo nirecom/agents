@@ -30,7 +30,7 @@ subst-only     ~ echo $(date)          ~ deny  ~ cmd-subst
 backtick-only  ~ echo `date`           ~ deny  ~ backtick
 env-only       ~ A=1 cmd               ~ deny  ~ env-prefix
 two-hits       ~ echo $(date) > out    ~ deny  ~ cmd-subst,redirect-out
-no-hits        ~ ls -la                ~ passThrough ~
+no-hits        ~ ls -la                ~ allow ~
 TABLE
 }
 

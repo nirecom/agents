@@ -10,34 +10,38 @@
 # `\;` and `{}` in the find row are the exact shapes round 1 wanted to special-case.
 
 n1_non_hits() {
-    local name cmd got
-    while IFS='~' read -r name cmd; do
+    local name cmd want got
+    while IFS='~' read -r name cmd want; do
         [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
         name="${name//[[:space:]]/}"
+        want="${want//[[:space:]]/}"
         cmd="$(mkcmd "$cmd")"
         ROWS=$((ROWS + 1))
 
         got="$(verdict_of "$cmd")"
-        assert_eq "N1/$name: not denied (passes through)" "passThrough" "$got"
+        assert_eq "N1/$name: not denied ($want)" "$want" "$got"
 
         got="$(probe hit-ids "$cmd")"
         assert_eq "N1/$name: no hit was ever created (non-hit, not an exemption)" "" "$got"
     done <<'TABLE'
-plain-single    ~ git log --oneline -5
-find-exec       ~ find . -name '*.tmp' -exec rm {} \;
-quoted-semi     ~ grep 'a;b' file.txt
-quoted-pipe     ~ cat "my|file.txt"
-semi-in-path    ~ cat '/tmp/weird;dir/file.txt'
-quoted-sentinel ~ echo "<<WORKFLOW_RESET_FROM_detail: reason>>"
-arith-expansion ~ echo $((1+2))
-fd-dup          ~ ls 2>&1
-fd-close        ~ ls 2>&-
-bare-assignment ~ A=1
+plain-single    ~ git log --oneline -5                          ~ allow
+find-exec       ~ find . -name '*.tmp' -exec rm {} \;           ~ passThrough
+quoted-semi     ~ grep 'a;b' file.txt                           ~ allow
+quoted-pipe     ~ cat "my|file.txt"                             ~ allow
+semi-in-path    ~ cat '/tmp/weird;dir/file.txt'                 ~ allow
+quoted-sentinel ~ echo "<<WORKFLOW_RESET_FROM_detail: reason>>" ~ passThrough
+arith-expansion ~ echo $((1+2))                                 ~ passThrough
+fd-dup          ~ ls 2>&1                                       ~ passThrough
+fd-close        ~ ls 2>&-                                       ~ passThrough
+bare-assignment ~ A=1                                           ~ passThrough
 TABLE
 }
 
 # The last four rows are near-misses on the SHAPE of a literal: `$((` is arithmetic, `2>&1`
 # and `2>&-` move a descriptor instead of writing a file, and a bare `A=1` prefixes nothing.
+# Since #2403 the read-only classes turn the plain git/grep/cat rows into allow; find -exec
+# (exec-capable, and a `;` separator), the fd-redirect rows (not a plain single command) and
+# echo (no class) stay passThrough.
 n1_non_hits
 
 # N2: the sanctioned `bash -c '... && ...'` form used across skills/_shared. The `&&` sits

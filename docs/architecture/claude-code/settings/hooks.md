@@ -73,13 +73,19 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
     for repo-relative forms; absent or non-absolute `cwd` falls through to passThrough.
     Output: `{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"allow",
     permissionDecisionReason:"bash-guard BG-ALLOW-*"}}`.
-    Reason codes: `BG-ALLOW-SELF-SCRIPT` / `BG-ALLOW-SELF-BARE`.
+    Reason codes: `BG-ALLOW-SELF-SCRIPT` / `BG-ALLOW-SELF-BARE`. A plain external read-only
+    command (class list `install/readonly-command-classes.json`, judged by
+    `hooks/bash-guard/readonly-class.js`) also allows, with `BG-ALLOW-READONLY-GIT` /
+    `BG-ALLOW-READONLY-GH` / `BG-ALLOW-READONLY-GENERIC` — see `settings.md`. A newline or CR
+    in the command skips every allow.
   - **passThrough**: no verdict to report; silent exit 0, normal permission flow continues.
     Reason codes: `BG-TOOL-OUT-OF-SCOPE` / `BG-INTERLOCK-QUIET` / `BG-PARSE-FAILURE` / `BG-NO-HIT`.
   Reason-code namespace is disjoint from workflow-gate's `T-A..T-E` tiers.
   **Interlock (C6)**: stays quiet while the early-write gate is actually blocking
   (`hooks/lib/early-write-gate.js` `earlyWriteGateStatus(sessionId).active`), so the two
-  guards never talk over each other — see `marker-bypass-contract.md`, which also records
+  guards never talk over each other. One exception: when deny and notify both find nothing,
+  a read-only class match still allows (the gate blocks Edit/Write, not Bash reads) — see
+  `marker-bypass-contract.md`, which also records
   that this hook is never bypassed by `WORKFLOW_OFF`/`WORKTREE_OFF`.
   **Fail-open**: unparseable stdin, `judgeBashCommand` throw, or `parse()` failure → passThrough.
 - `rtk-rewrite.js` (PreToolUse, matcher: `Bash`) — when `RTK=on` in `.env`, rewrites

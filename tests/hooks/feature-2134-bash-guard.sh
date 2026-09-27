@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2134-bash-guard.sh
 # Tests: hooks/bash-guard.js, hooks/bash-guard/judge.js, hooks/bash-guard/detect.js, hooks/bash-guard/allow.js, hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/reasons.js, hooks/bash-guard/message.js, hooks/lib/allow-command-list.js, hooks/lib/sentinel-patterns.js, hooks/lib/early-write-gate.js, hooks/workflow-gate/early-gate.js, settings.json, bin/print-forbidden-literals, rules/shell-commands.md
-# Tags: hook, bash-guard, pretooluse, classifier, guard, forbidden-literals, interlock, fail-open, notify, self-script-allow, scope:issue-specific, pwsh-not-required, TL2
+# Tags: hook, bash-guard, pretooluse, classifier, guard, forbidden-literals, interlock, fail-open, notify, self-script-allow, readonly-allow, newline-guard, scope:issue-specific, pwsh-not-required, TL2
 
 set -uo pipefail
 
@@ -18,7 +18,7 @@ PROBE_JS="$PART_DIR/judge-probe.js"
 # judgeBashCommand(input) returns one of four verdicts, deny > notify > allow > passThrough:
 # tool_name must be exactly "Bash" -> the early-write-gate interlock silences it -> parseFailure
 # fails OPEN -> detect() decides deny -> detectIneffective() decides notify -> matchSelfScript()
-# decides allow -> otherwise passThrough. Every fail-open lands on passThrough, NEVER allow.
+# then matchReadOnlyCommand() decide allow (skipped on a newline, #2403) -> otherwise passThrough. Every fail-open lands on passThrough, NEVER allow.
 # Detection reads only the IR and analysisOf(ir); settings.json allow rules are not consulted.
 
 # OUT OF SCOPE: runInTerminal / runCommands (pwsh dialect, only pinned as out of scope),
@@ -146,8 +146,9 @@ mkcmd() {
 # leaves a file that counts only its failures reporting green. Breakdown: detect 14 +
 # allow-direction 13 + hit-scope 5 + xargs-pipe 5 + negative 10 + not-forbidden 3 +
 # forbidden-literals-doc-sync 4 + tool-scope 2 + fail-open 3 + interlock 7 + notify-sentinel 19 +
-# notify-interpreter 15 + allow-self-script 42 + precedence 8 + message 27 + runtime 19.
-ROWS_EXPECTED=196
+# notify-interpreter 15 + allow-self-script 42 + allow-readonly 189 + precedence 8 + message 27 +
+# runtime 20.
+ROWS_EXPECTED=386
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code actually INVOKES hooks/bash-guard.js on a real Bash tool call. The
@@ -172,6 +173,7 @@ ROWS_EXPECTED=196
 . "$PART_DIR/cases-notify-sentinel.sh"
 . "$PART_DIR/cases-notify-interpreter.sh"
 . "$PART_DIR/cases-allow-self-script.sh"
+. "$PART_DIR/cases-allow-readonly.sh"
 . "$PART_DIR/cases-precedence.sh"
 . "$PART_DIR/cases-message.sh"
 . "$PART_DIR/cases-runtime-pretooluse.sh"

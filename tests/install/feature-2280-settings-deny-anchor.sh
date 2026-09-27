@@ -127,14 +127,87 @@ t_launch_form_completeness
 t_bug_reproduction_evidence
 t_row_well_formed_selftest
 
+# #2403: the read-only allow enumeration (former lines 21-75) retired into bash-guard's N3-N5
+# classes. Checked as a CLASS (any cmd0 / git read spelling), not a line list, so a re-added
+# variant spelling (`Bash(git log*)`) fails too; permissions.allow only -- deny is untouched.
+# RA_KEPT: every permissions.allow entry OUTSIDE the retired block (former lines 21-75), all 67,
+# so the retirement cannot take a non-read-only entry with it. Heredoc: entries carry quotes.
+RA_KEPT="$(cat <<'KEPT'
+["Read(**/.env.example)","Read(**/.env.sample)","Read(**/.env.template)","Read(**/.env.dist)",
+ "Grep(**/.env.example)","Grep(**/.env.sample)","Grep(**/.env.template)","Grep(**/.env.dist)",
+ "Bash(git add .)","Bash(git add -A)","Bash(git add *)","Bash(git -C * add *)",
+ "Bash(git push)","Bash(git push origin *)","Bash(git -C * push)","Bash(git -C * push origin *)",
+ "Bash(git -C * push -u origin *)","Bash(git push -u origin *)",
+ "Bash(git push *--force-with-lease*)","Bash(git -C * push *--force-with-lease*)",
+ "Bash(git fetch origin *)","Bash(git -C * fetch origin *)",
+ "Bash(git fetch --prune origin)","Bash(git -C * fetch --prune origin)",
+ "Bash(git pull --rebase --autostash origin *)","Bash(git -C * pull --rebase --autostash origin *)",
+ "Write(**/.git/info/pending-branch-delete)",
+ "Bash(Remove-Item -LiteralPath \"**\\.git\\info\\pending-branch-delete\")",
+ "Bash(rm \"**/.git/info/pending-branch-delete\")",
+ "Bash(git commit *)","Bash(git -C * commit *)","Bash(cd * && git commit *)",
+ "Bash(chmod +x *.sh)","Bash(chmod +x */hooks/*)",
+ "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")","Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
+ "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")","Bash(echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: *>>\")",
+ "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")","Bash(echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: *>>\")",
+ "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")","Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+ "Bash(echo \"<<WORKFLOW_NEXT_STEP_PAUSE: *>>\")","Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",
+ "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")","Bash(doc-append *)",
+ "Write(**/tests/**)","Edit(**/tests/**)","WebSearch",
+ "WebFetch(domain:developer.mozilla.org)","WebFetch(domain:docs.python.org)","WebFetch(domain:learn.microsoft.com)",
+ "WebFetch(domain:man7.org)","WebFetch(domain:docs.anthropic.com)","WebFetch(domain:platform.openai.com)",
+ "WebFetch(domain:ai.google.dev)","WebFetch(domain:docs.github.com)","WebFetch(domain:github.com)",
+ "WebFetch(domain:code.claude.com)","WebFetch(domain:platform.claude.com)","WebFetch(domain:anthropic.com)",
+ "WebFetch(domain:modelcontextprotocol.io)","WebFetch(domain:spec.modelcontextprotocol.io)",
+ "WebFetch(domain:code.visualstudio.com)",
+ "Bash(node * hooks/cleanup-orphan-dir.js *)","Bash(node *\\hooks\\cleanup-orphan-dir.js *)",
+ "mcp__codegraph__codegraph_explore"]
+KEPT
+)"
+export RA_KEPT
+RETIRED_ALLOW_JS='
+const fs = require("fs");
+const [settingsPath, mode] = process.argv.slice(-2);
+let allow, KEPT;
+try { allow = JSON.parse(fs.readFileSync(settingsPath, "utf8")).permissions.allow; }
+catch (e) { console.log("ERROR:unreadable-settings"); process.exit(0); }
+if (!Array.isArray(allow)) { console.log("ERROR:no-allow-array"); process.exit(0); }
+try { KEPT = JSON.parse(process.env.RA_KEPT || ""); } catch (e) { console.log("ERROR:bad-RA_KEPT"); process.exit(0); }
+const RETIRED = /^Bash\((cd \* && )?(git (-C \* )?(status|log|diff|show|branch|tag|remote|rev-parse|stash)|head|tail|less|wc|file|stat|ls|find|tree|du|df|grep|rg|ag|which|type|command|uname|pwd)\b/;
+if (mode === "retired") console.log(allow.filter((e) => typeof e === "string" && RETIRED.test(e)).join(","));
+else if (mode === "kept-count") console.log(KEPT.length);
+else if (mode === "extra") console.log(allow.filter((e) => !KEPT.includes(e)).length);
+else console.log(KEPT.filter((e) => !allow.includes(e)).join(","));
+'
+t_retired_readonly_allow() {
+    local npath
+    npath="$(matcher_node_path "$SETTINGS")"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA1: no read-only Bash allow spelling (git read / ls / grep / find ...) remains in permissions.allow" \
+        "" "$(node -e "$RETIRED_ALLOW_JS" "$npath" retired 2>&1)"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA2: every non-read-only allow entry (all 67 outside the retired block) is kept" \
+        "" "$(node -e "$RETIRED_ALLOW_JS" "$npath" kept 2>&1)"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA2b: the pinned kept list itself is complete (vacuity guard)" \
+        "67" "$(node -e "$RETIRED_ALLOW_JS" "$npath" kept-count 2>&1)"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA4: permissions.allow is exactly the kept set (nothing beyond the 67 remains)" \
+        "0" "$(node -e "$RETIRED_ALLOW_JS" "$npath" extra 2>&1)"
+    ROWS=$((ROWS + 1))
+    if deny_list_has "$SETTINGS" "git push --force"; then pass "RA3: the force-push deny survives the allow retirement"
+    else fail "RA3: the force-push deny survives the allow retirement" "Bash(git push --force) missing from permissions.deny"; fi
+}
+t_retired_readonly_allow
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
 # refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
 # C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
-# bug-reproduction-evidence 1 + row_is_well_formed selftest 4.
-ROWS_EXPECTED=161
+# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403).
+ROWS_EXPECTED=166
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

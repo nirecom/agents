@@ -42,7 +42,8 @@ assert_not_contains "M2: a heredoc deny does not name an unrelated literal" \
     "chain-and" "$BG_HEREDOC_MSG"
 
 # M3: a passThrough carries no message. A guard that narrates its silence is noise on every command.
-assert_eq "M3: a passThrough produces no message" "" "$(probe judge-message 'git status')"
+# `make build`: no class claims it (git status became an N5 allow in #2403).
+assert_eq "M3: a passThrough produces no message" "" "$(probe judge-message 'make build')"
 
 # M7: the three non-deny registries (#2264). Each is frozen, disjoint from REASON_CODES, and
 # BG-ALLOW-RULE is gone with the command-scoped exemption it attributed.
@@ -52,7 +53,7 @@ m7_row() {
 }
 m7_row pass-through-codes "INTERLOCK_QUIET=BG-INTERLOCK-QUIET,NO_HIT=BG-NO-HIT,PARSE_FAILURE=BG-PARSE-FAILURE,TOOL_OUT_OF_SCOPE=BG-TOOL-OUT-OF-SCOPE"
 m7_row notify-codes "SCRIPT_NO_INTERPRETER=BG-NOTIFY-SCRIPT-NO-INTERPRETER,SENTINEL_NO_ECHO=BG-NOTIFY-SENTINEL-NO-ECHO,SENTINEL_UNRECOGNIZED=BG-NOTIFY-SENTINEL-UNRECOGNIZED"
-m7_row allow-codes "SELF_BARE=BG-ALLOW-SELF-BARE,SELF_SCRIPT=BG-ALLOW-SELF-SCRIPT"
+m7_row allow-codes "READONLY_GENERIC=BG-ALLOW-READONLY-GENERIC,READONLY_GH=BG-ALLOW-READONLY-GH,READONLY_GIT=BG-ALLOW-READONLY-GIT,SELF_BARE=BG-ALLOW-SELF-BARE,SELF_SCRIPT=BG-ALLOW-SELF-SCRIPT"
 assert_not_contains "M7: BG-ALLOW-RULE is retired from every registry" "BG-ALLOW-RULE" \
     "$(probe pass-through-codes '')$(probe notify-codes '')$(probe allow-codes '')"
 

@@ -70,14 +70,16 @@ p1_runtime() {
         assert_eq "P1/$name: the hook process exits 0 and emits the expected envelope" "$want" "$got"
     done <<'TABLE'
 compound-bash ~ Bash          ~ git status && ls | grep x                             ~ 0|block
-plain-bash    ~ Bash          ~ git status                                            ~ 0|passThrough-approve
+plain-bash    ~ Bash          ~ git status                                            ~ 0|allow
+no-class-bash ~ Bash          ~ make build                                            ~ 0|passThrough-approve
 out-of-scope  ~ runInTerminal ~ git status && ls | grep x                             ~ 0|passThrough-approve
 self-script   ~ Bash          ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ 0|allow
 L1-no-echo    ~ Bash          ~ "<<WORKFLOW_MARK_STEP_p1_complete>>"                  ~ 0|notify
 TABLE
 }
 
-# plain-bash / out-of-scope: passThrough-approve ({decision:"approve"}) per G-b=(b2) fallback form.
+# plain-bash: git status is an N5 read-only class member (#2403), so the wire envelope is allow.
+# no-class-bash / out-of-scope: passThrough-approve ({decision:"approve"}) per G-b=(b2) fallback form.
 # The label differs from plain passThrough (empty stdout) so a revert to silent is caught by P1.
 p1_runtime
 

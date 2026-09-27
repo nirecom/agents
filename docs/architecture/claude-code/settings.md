@@ -1,10 +1,10 @@
 # settings.json Design
 
-**Allow rules** — read-only operations only:
-- Git read commands (`git status`, `git log`, `git diff`, `git branch`, etc.)
-- `git -C <path>` for cross-directory git reads — preferred method
-- Filesystem reads (`ls`, `tree`, `head`, `tail`, `grep`, `wc`, etc.)
-- `.env.example` reads (`.env` itself is denied)
+**Allow rules** — `permissions.allow` keeps only the `.env.example`-family Read/Grep entries
+(`.env` itself is denied) and the write-capable commands the workflow issues (`git add`,
+`git commit`, `git push`, workflow sentinels, …). External read-only Bash commands (git/gh
+reads, filesystem reads) are no longer spelled here: `bash-guard.js` allows them by class —
+see "External read-only allow in bash-guard" below.
 
 **Deny rules** — four categories (wildcard prefix `*` to catch compound commands):
 
@@ -49,6 +49,39 @@ again") saves individual rules for a given pattern.
 - Prompt assets that invoke an SSOT-listed command keep `bash` or `node` in execution position with the entry path in argument position (`bash "$AGENTS_CONFIG_DIR/bin/foo"`); a citation that only names where the file lives uses the bare repo-relative form (`bin/foo`). The prefix distinguishes invocation from citation without requiring a vocabulary of surrounding prose labels.
 - Not admitted to `install/settings-allow-commands.txt` (deliberate exclusions): `run-with-timeout` wrappers are not repo scripts and are excluded; gh writes are excluded; git state-changing commands are excluded; hook bodies are excluded (not issued through the permission engine); worker dispatchers are excluded (state-changing work hides behind arguments).
 - `install/assemble-settings.js` is the only writer of the deployed `settings.json`; treat a second writer as a bug.
+
+**External read-only allow in bash-guard** (#2403): a glob in `permissions.allow` cannot tell
+`git branch` from `git branch -D x`, nor `rg x` from `rg --pre sh x`, so read-only commands are
+allowed by a positive argv judge instead of a spelling.
+
+- SSOT: `install/readonly-command-classes.json` (loaded by `hooks/lib/readonly-command-classes.js`)
+  lists the class of each command name — `delegate` (`git` → `git-pure-read`, `gh` → `gh-read`)
+  or `generic` (a syntax adapter from `hooks/lib/readonly-syntax-adapters.js` plus the entry's
+  `denyFlags`). `hooks/bash-guard/readonly-class.js` applies it after `matchSelfScript()`.
+  Reason codes: `BG-ALLOW-READONLY-GIT` / `BG-ALLOW-READONLY-GH` / `BG-ALLOW-READONLY-GENERIC`.
+- Hook allow does not override `permissions.deny` or `permissions.ask`, same as the self-script allow.
+- Only one plain command: no separator, redirect, substitution, group, heredoc, env prefix,
+  path-qualified or `.exe` command word, `command`/`builtin` wrapper. Any argv that touches a
+  credential or dotenv path (`hooks/lib/credential-check.js`, `hooks/lib/dotenv-check.js`) never
+  allows, whichever class matched. A malformed data file fails closed to "no class".
+- Newline guard: a `\n` or `\r` anywhere in the command skips the whole allow path — the
+  self-script allow included — because the IR does not split on newlines (#1253).
+- git (`hooks/lib/bash-write-patterns/git-read-ir.js`): only pure-read subcommands; side-effect
+  reads (`fetch`, `difftool`, `help`, `archive`, `ls-remote`, `verify-*`, …) prompt. Global
+  options are an allowlist (`-C`, `--git-dir`, `--work-tree`, `--no-pager`, …); `-c` /
+  `--config-env` / `--exec-path` / `-p` never allow. Exec-capable options are rejected by
+  unique-prefix match (`--ext-diff`, `--textconv`, `--filters`, `--output`,
+  `--open-files-in-pager`, `--show-signature`, `grep -O`) along with `%G*` / `%(signature`
+  format placeholders. Accepted residual: config-driven launches the argv cannot see
+  (`core.pager`, `core.fsmonitor`, repository `diff.external`) — the permission prompt never
+  guarded those either.
+- gh (`hooks/lib/bash-write-patterns/gh-read.js`): a subcommand allowlist of list/view/status/
+  diff/checks reads, `-R`/`--repo OWNER/REPO` only, no `--web`/`-w`, and `gh api` only when
+  `hooks/lib/gh-api-argv.js` finds no write method, payload flag, method-override header or
+  unknown flag. `--hostname` rejects at any position: a non-default host is a different forge.
+- Interlock: while the early-write gate blocks, deny/notify/self-script stay quiet but a
+  read-only allow still speaks — only when deny and notify find nothing (see
+  [settings/hooks.md](settings/hooks.md)).
 
 **Known limitations**:
 - TL3 verification gap: `tests/hooks/TL3-hook-bash-guard-envelope.sh` (gated by `RUN_TL3=on`) probes
