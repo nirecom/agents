@@ -1,5 +1,5 @@
 "use strict";
-// hooks/bash-guard/message.js — what the deny actually says.
+// hooks/bash-guard/message.js — what the deny and the notify actually say.
 //
 // #2120 is the precedent: a guard that only says "denied" trades one compound command for
 // a round of guessing. The text therefore carries the four things the model would
@@ -9,6 +9,7 @@
 
 const { literalById } = require("./forbidden-literals");
 const { buildScriptEscapeHatch } = require("../lib/alt-target-remedy");
+const { NOTIFY_CODES } = require("./reasons");
 
 const RULE_OWNER = 'rules/shell-commands.md "Command-Line Issuance Discipline"';
 
@@ -43,4 +44,28 @@ function buildDenyMessage(hit, code) {
   ].join("\n");
 }
 
-module.exports = { buildDenyMessage, RULE_OWNER };
+// Fixed text per notify id: the command itself is never quoted back into the transcript.
+const NOTIFY_REMEDIES = Object.freeze({
+  [NOTIFY_CODES.SENTINEL_NO_ECHO]:
+    "A workflow sentinel issued as the command itself marks nothing; issue it through echo, " +
+    'as a standalone echo "<<WORKFLOW_...>>" command.',
+  [NOTIFY_CODES.SENTINEL_UNRECOGNIZED]:
+    "This sentinel echo is not in a recognized form and marks nothing; issue it as a " +
+    'standalone echo "<<WORKFLOW_...>>" with no flags, extra arguments or chained commands.',
+  [NOTIFY_CODES.SCRIPT_NO_INTERPRETER]:
+    "Run the script through its interpreter in argument position (bash <path> or " +
+    "node <path>); an exec-position script is never auto-allowed and prompts every time.",
+});
+
+/**
+ * @param {{notifyId: string}} hit the first detectIneffective() notice
+ * @param {string} code the NOTIFY_CODES value reported alongside it
+ * @returns {string} one line: the remedy, then the [bash-guard <code>] tag
+ */
+function buildNotifyMessage(hit, code) {
+  const id = code || (hit && hit.notifyId) || "";
+  const remedy = NOTIFY_REMEDIES[id] || "This command runs but has no effect.";
+  return `${remedy} [bash-guard ${id}]`;
+}
+
+module.exports = { buildDenyMessage, buildNotifyMessage, RULE_OWNER };

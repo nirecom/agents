@@ -13,9 +13,14 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const allowRules = require('./settings-allow-rules');
+const DEFAULT_ROOT = path.resolve(__dirname, '..', '..');
 
-const { GenError } = allowRules;
+class GenError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'GenError';
+    }
+}
 
 const BASE_REL = 'settings.json';
 const EXT_REL = 'settings-extension.json';
@@ -116,39 +121,16 @@ const readExtension = (extPath) => {
     return doc;
 };
 
-// The generated rules are collected separately from the merge so a spelling-layer failure is
-// REPORTED rather than thrown: the deploy path turns it into a fail-closed error, while the
-// drift path still gets the base + extension expectation it can legitimately check.
-const buildAssembledSettings = ({ agentsRoot = allowRules.DEFAULT_ROOT } = {}) => {
+const buildAssembledSettings = ({ agentsRoot = DEFAULT_ROOT } = {}) => {
     const settings = mergeSettings(
         readBase(path.join(agentsRoot, BASE_REL)),
         readExtension(path.join(agentsRoot, EXT_REL)));
-
-    let generatedRules = [];
-    let bareEmitted = false;
-    let generatorError = '';
-    try {
-        const generated = allowRules.generatedAllowRules({ agentsRoot });
-        generatedRules = generated.rules;
-        bareEmitted = generated.bareEmitted;
-    } catch (e) {
-        generatorError = e.message || String(e);
-    }
-
-    if (!isPlainObject(settings.permissions)) settings.permissions = {};
-    if (!Array.isArray(settings.permissions.allow)) settings.permissions.allow = [];
-    const present = new Set(settings.permissions.allow);
-    for (const rule of generatedRules) {
-        if (present.has(rule)) continue;
-        present.add(rule);
-        settings.permissions.allow.push(rule);
-    }
-
-    return { settings, generatedRules, bareEmitted, generatorError };
+    return { settings };
 };
 
 module.exports = {
     GenError,
+    DEFAULT_ROOT,
     BASE_REL,
     EXT_REL,
     mergeSettings,

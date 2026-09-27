@@ -8,11 +8,31 @@
 // where a backtick is a line continuation — reading that with a bash parser would produce
 // confident false denials. Fail-open reaches the process boundary: stdin this hook cannot
 // parse produces NO envelope at all rather than a verdict invented from nothing.
-
 const fs = require("fs");
 const { judgeBashCommand } = require("./bash-guard/judge");
 
 module.exports = { judgeBashCommand };
+
+// Verdict -> stdout envelope.
+// G-b=(b2) fallback form (detail.md:96): legacy {decision:"approve"} bypasses the
+// permission prompt; passThrough and notify must output the same to preserve current
+// behaviour. A silent passThrough would add prompts for every unlisted command.
+const ENVELOPES = Object.freeze({
+  deny: (v) => ({ decision: "block", reason: v.message }),
+  notify: (v) => ({
+    decision: "approve",
+    systemMessage: v.message,
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: v.message },
+  }),
+  allow: (v) => ({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "allow",
+      permissionDecisionReason: "bash-guard " + v.code,
+    },
+  }),
+  passThrough: () => ({ decision: "approve" }),
+});
 
 function readStdin() {
   const chunks = [];
@@ -40,11 +60,11 @@ function main() {
   } catch (_e) {
     process.exit(0);
   }
-  if (verdict && verdict.verdict === "deny") {
-    console.log(JSON.stringify({ decision: "block", reason: verdict.message }));
-  } else {
-    console.log(JSON.stringify({ decision: "approve" }));
-  }
+  const build = verdict && Object.prototype.hasOwnProperty.call(ENVELOPES, verdict.verdict)
+    ? ENVELOPES[verdict.verdict]
+    : ENVELOPES.passThrough;
+  const envelope = build(verdict);
+  if (envelope) console.log(JSON.stringify(envelope));
   process.exit(0);
 }
 

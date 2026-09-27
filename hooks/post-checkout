@@ -37,22 +37,8 @@ fi
 
 _changed="$(git diff --name-only "$1" "$2" 2>/dev/null | tr -d '\r' || true)"
 
-# Two-stage trigger (#2119). Stage 1 is the fixed set of files that DEFINE the deployed
-# permission surface; stage 2 is read out of the allow-rule SSOT itself, because editing a
-# command it lists moves the generated spellings exactly as editing settings.json does.
-# The SSOT is read through `tr -d '\r'`: core.autocrlf=true is the Windows default, and a
-# surviving CR would make the whole-line comparison below silently never match.
-_ssot="$_cfg_dir/install/settings-allow-commands.txt"
-_fire=0
-if printf '%s\n' "$_changed" | grep -qE '^(settings\.json|settings-extension\.json|install/settings-allow-commands\.txt|install/path-exposed-commands\.txt|install/gen-settings-allow\.js|install/assemble-settings\.js|install/lib/[^/]+\.js)$'; then
-  _fire=1
-elif [ -f "$_ssot" ]; then
-  _entries="$(tr -d '\r' < "$_ssot" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' || true)"
-  if [ -n "$_entries" ] && printf '%s\n' "$_changed" | grep -qxF -- "$_entries"; then
-    _fire=1
-  fi
-fi
-[ "$_fire" = "1" ] || exit 0
+# The fixed set of files that DEFINE the deployed settings document.
+printf '%s\n' "$_changed" | grep -qE '^(settings\.json|settings-extension\.json|install/assemble-settings\.js|install/lib/[^/]+\.js)$' || exit 0
 
 _node="$(command -v node 2>/dev/null || true)"
 if [ -z "$_node" ]; then

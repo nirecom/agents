@@ -55,6 +55,7 @@ mk_cfg() {
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$d/hooks/lib/"
+  cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   chmod +x "$d/bin/get-config-var" "$d/bin/confirm-off" 2>/dev/null || true
 }
 CFG_FULL="$TMPDIR_BASE/cfg-full"; mk_cfg "$CFG_FULL"

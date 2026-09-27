@@ -102,7 +102,7 @@ function isContainedEntry(entry, configDir) {
 
 // Entries of the SSOT list, or null when the file is unreadable, empty, or holds
 // anything that is not a plain relative path (charset gate mirrors
-// install/gen-settings-allow.js, so a corrupt file degrades instead of matching).
+// hooks/lib/allow-command-list.js, so a corrupt file degrades instead of matching).
 // Entries that escape configDir are dropped individually, so one bad line cannot
 // promote an unrelated command to "registered entry point".
 function readSsotEntries(configDir) {

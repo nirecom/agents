@@ -1,5 +1,5 @@
 // Drift detection: compares the expectation built by install/lib/settings-assembly.js
-// (base + extension + generated allow rules) against ~/.claude/settings.json (assembled).
+// (base + extension) against ~/.claude/settings.json (assembled).
 // Consumed by hooks/session-start.js.
 //
 // agentsRoot resolution: this module is loaded from the globally-set core.hooksPath
@@ -104,12 +104,9 @@ function detectDrift({ homeDir }) {
   // because a hook may run from a tree that has no install layer at all — that is a reason to
   // stay silent, not to crash the session.
   let expected;
-  let generatorError = '';
   try {
     const assembly = require(path.join(agentsRoot, 'install', 'lib', 'settings-assembly.js'));
-    const built = assembly.buildAssembledSettings({ agentsRoot });
-    expected = built.settings;
-    generatorError = built.generatorError;
+    expected = assembly.buildAssembledSettings({ agentsRoot }).settings;
   } catch (err) {
     return { drifted: false, sourceUnreadable: true, reason: 'settings source: ' + err.message };
   }
@@ -140,15 +137,9 @@ function detectDrift({ homeDir }) {
   const anyPermMissing = permKeys.some((pk) => missingPermissions[pk].length > 0);
   const anyHookMissing = Object.keys(missingHooks).length > 0;
 
-  // generatorUnavailable carries the REASON, not a flag: the session-start warning has to tell
-  // the user what to fix, and an empty string is how "the generator was fine" is spelled.
-  const result = (anyPermMissing || anyHookMissing)
+  return (anyPermMissing || anyHookMissing)
     ? { drifted: true, missingPermissions, missingHooks }
     : { drifted: false };
-  if (generatorError) {
-    result.generatorUnavailable = generatorError;
-  }
-  return result;
 }
 
 module.exports = { detectDrift };

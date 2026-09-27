@@ -154,14 +154,13 @@ entries cause workflow sessions to stall on blocked tool calls or absent sentine
 | Proactive | `hooks/post-checkout` | Branch switch changes any of the same inputs | Auto-reassemble |
 | Backstop | `hooks/session-start.js` + `hooks/lib/settings-drift.js` | Every session start | Detect missing entries; inject `WARNING` into `additionalContext` |
 
-**Reassembly trigger** (both git hooks, two stages): stage 1 is the fixed file set —
+**Reassembly trigger** (both git hooks, single stage): the fixed file set —
 `settings.json`, `settings-extension.json`, `install/settings-allow-commands.txt`,
-`install/path-exposed-commands.txt`, `install/gen-settings-allow.js`,
-`install/assemble-settings.js`, `install/lib/*.js`. Stage 2 is read out of the allow-rule SSOT
-itself: editing a command that file lists moves the generated spellings exactly as editing
-`settings.json` does, so the SSOT's own entries are compared against the changed paths. The SSOT
-is read through `tr -d '\r'` because `core.autocrlf=true` is the Windows default and a surviving
-CR would make the whole-line comparison silently never match.
+`install/path-exposed-commands.txt`, `install/assemble-settings.js`, `install/lib/*.js`.
+Any change to these files triggers a full reassembly of `~/.claude/settings.json`.
+The SSOT lists (`settings-allow-commands.txt`, `path-exposed-commands.txt`) are read by
+`hooks/lib/allow-command-list.js` at hook runtime; there are no generated rule strings to
+keep in sync.
 
 **Repo guard:** Both git hooks compare `git rev-parse --show-toplevel` against the agents
 root to fire only inside the agents repo (not in every repo on the machine that uses

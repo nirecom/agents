@@ -365,19 +365,11 @@ run_trigger_rows() { # rows on stdin: <id>|<merge|checkout>|<relpath>|<want>|<la
 }
 
 run_trigger_table() {
-    require_source "$POST_MERGE" "T20-T47: two-stage trigger" || return
-    require_source "$POST_CHECKOUT" "T20-T47: two-stage trigger (post-checkout)" || return
+    require_source "$POST_MERGE" "T24-T47: trigger table" || return
+    require_source "$POST_CHECKOUT" "T24-T47: trigger table (post-checkout)" || return
     run_trigger_rows <<'TRIGGER_CASES'
-T20|merge|install/settings-allow-commands.txt|called|post-merge, the allow-rule SSOT changed alone → assembler (stage 1: the fixed list now carries the SSOT too)
-T21|checkout|install/settings-allow-commands.txt|called|post-checkout, the same file across a branch switch → assembler (CPR-ORTH: one condition, both hooks)
-T22|merge|bin/fx-tool|called|post-merge, a command file the SSOT lists changed alone → assembler (stage 2: its spellings ARE the generated rules)
-T23|checkout|bin/fx-tool|called|post-checkout, the same dynamic match across a branch switch → assembler
 T24|merge|docs/unrelated.md|not-called|NEGATIVE CONTROL post-merge: a path in neither stage leaves the assembler alone, so the widened trigger is not "always run"
 T25|checkout|docs/unrelated.md|not-called|NEGATIVE CONTROL post-checkout: the same, so T11/T15 keep meaning what they meant
-T30|merge|install/path-exposed-commands.txt|called|post-merge, the SECOND SSOT changed alone → assembler: it selects which commands get the path-form spellings, so editing it moves the deployed rules as surely as the first list does
-T31|checkout|install/path-exposed-commands.txt|called|CPR-ORTH post-checkout, the same second SSOT across a branch switch
-T32|merge|install/gen-settings-allow.js|called|post-merge, the generator itself changed → assembler: a change to how spellings are emitted rewrites every deployed rule without any input file moving
-T33|checkout|install/gen-settings-allow.js|called|CPR-ORTH post-checkout, the same generator
 T34|merge|install/assemble-settings.js|called|post-merge, the assembler entry point changed → assembler: the tool that performs the deploy is itself an input to what gets deployed
 T35|checkout|install/assemble-settings.js|called|CPR-ORTH post-checkout, the same entry point
 T36|merge|install/lib/settings-allow-rules.js|called|post-merge, the spelling-template module changed → assembler: this is where the 22 templates live, so a pull that changes it and does not re-deploy leaves a machine on the old rule set
@@ -463,7 +455,7 @@ T29|checkout|1|surfaced/reported|and on the failure branch, so neither hook hide
 STDERR_CASES
 }
 
-# T48-T51 live in a sibling part file: this driver sits at the 500-line HARD ceiling
+# T50-T51 live in a sibling part file: this driver sits at the 500-line HARD ceiling
 # (rules/coding/file-split.md Pattern A) and the CRLF rows need room to grow.
 . "$(dirname "${BASH_SOURCE[0]}")/fix-846-settings-drift-hooks/crlf-ssot.sh"
 
