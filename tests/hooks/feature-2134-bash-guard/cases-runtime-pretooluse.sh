@@ -92,7 +92,7 @@ assert_contains "P2: the block envelope carries a non-empty reason" \
 # P3: malformed stdin must not stop the session. The hook is on every Bash call, so a crash
 # here is a crash on every command -- fail-open reaches all the way to the process boundary.
 assert_eq "P3: malformed stdin exits 0 and passes through (no block, no allow)" \
-    "0|passThrough-approve" "$(bg_run_raw 'not json at all')"
+    "0|passThrough" "$(bg_run_raw 'not json at all')"
 
 # P4: the entrypoint is dispatch + re-export (file-split Pattern A). Requiring it must expose
 # judgeBashCommand and do nothing else -- the probe requires it without stdin, so a module that
