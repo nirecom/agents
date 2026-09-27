@@ -170,7 +170,7 @@ function normalizeStateVersion(rawState) {
   return migrateV3ToV4(migrateV2ToV3(migrateV1ToV2(rawState)));
 }
 
-// --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults ---
+// --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
 // A v1 file predating a step has NO entry for it; pre-#1733 readers backfilled
 // a status for exactly three such steps. That is a READ-TIME default, not
 // history (the stream records what a session did), so it is applied to the
