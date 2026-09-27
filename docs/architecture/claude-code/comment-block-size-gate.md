@@ -12,6 +12,9 @@ already-long block never blocks an unrelated edit; a file with no committed vers
 judged on its own contents. Neither check rewrites a file, and both fire only for this
 repository even though the hook paths are configured globally.
 
+The edit-time check rebuilds the post-edit file with `hooks/lib/post-edit-content.js`, the same
+module the case-marker gate uses ([case-marker-gate.md](case-marker-gate.md)).
+
 Run `bin/review-comment-block-size --all` for the same report over the whole working tree.
 
 Set `COMMENT_BLOCK_MAX_LINES` (default 10) to tune the threshold or `COMMENT_BLOCK_ENFORCE=off`

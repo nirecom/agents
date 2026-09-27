@@ -159,6 +159,20 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 - **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage.
 - **Related**: [docs/architecture/rtk.md](architecture/rtk.md), [bin/rtk-cmd](../bin/rtk-cmd) (opt-in wrapper: `exec rtk <cmd>` when RTK=on and the binary is available, else passthrough)
 
+## Test retirement
+
+### case marker
+
+- **Full name**: Case marker (`case_begin` / `case_end`)
+- **Definition**: The column-0 pair that wraps one case of a multi-path `.sh` test. `case_begin` names the target path the case protects, so retire can drop that case alone when the target is gone.
+- **Related**: [skills/_shared/test-design/case-markers.md](../skills/_shared/test-design/case-markers.md), [architecture/claude-code/case-marker-gate.md](architecture/claude-code/case-marker-gate.md)
+
+### marker conformance
+
+- **Full name**: Case-marker conformance verdict
+- **Definition**: The retire parser's judgement of a file's markers: `none` (no markers), `conforming` (retire can split the file), `malformed` (a marker retire cannot use; blocked for new files), or `uncertain` (a depth problem after a multi-line quoted string, warned but not blocked). Computed by `trp_marker_conformance`; the case-marker gate consumes it via `bin/check-case-markers.sh`.
+- **Related**: [architecture/claude-code/case-marker-gate.md](architecture/claude-code/case-marker-gate.md), #2388
+
 ## Miscellaneous
 
 ### IR
