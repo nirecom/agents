@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-820-sibling-helper.sh
 # Tests: hooks/enforce-worktree/shared-cmd-utils.js
-# Tags: worktree, enforce, hook, security, fix-820, helper
+# Tags: worktree, enforce, hook, security, fix-820, helper, scope:issue-specific
 #
 # Direct unit tests for the two new sibling helper functions:
 #   - rejectInterpreterAndChaining(cmd)

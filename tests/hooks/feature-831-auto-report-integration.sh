@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-831-auto-report-integration.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-issue-close.js, hooks/workflow-gate.js, hooks/workflow-mark/enforce-override-handlers.js
-# Tags: supervisor, em-supervisor, layer1, hook, integration, auto-report
+# Tags: supervisor, em-supervisor, layer1, hook, integration, auto-report, scope:issue-specific
 # Tests for issue #831 — hook auto-report integration.
 #
 # Pipes synthetic JSON payloads to each hook and asserts a finding was written

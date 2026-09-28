@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/unit-staged-evidence-unstaged-tracked.sh
 # Tests: hooks/workflow-gate/staged-evidence.js
-# Tags: unit, staged-evidence, unstaged-tracked, workflow-gate, hook
+# Tags: unit, staged-evidence, unstaged-tracked, workflow-gate, hook, scope:common
 #
 # Unit tests for hasUnstagedTrackedChanges(repoDir).
 # Expected red until #269 lands the function in staged-evidence.js.

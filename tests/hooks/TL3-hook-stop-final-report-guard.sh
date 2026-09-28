@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-final-report-guard.js
-# Tags: stop-final-report-guard, hook, TL3, run-e2e, scope:permanent
+# Tags: stop-final-report-guard, hook, TL3, run-e2e, scope:permanent, scope:issue-specific
 #
 # Issue #943 — per-hook seam TL3 test: stop-final-report-guard.js (Stop).
 # A live `claude -p` session with the final-report-env fixture present but no

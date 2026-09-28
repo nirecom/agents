@@ -56,8 +56,8 @@ assert_eq() {
 . "$SCRIPT_DIR/agent-exposure.sh"
 # shellcheck source=./feature-codegraph-wiring-static/settings-env.sh
 . "$SCRIPT_DIR/settings-env.sh"
-# shellcheck source=./feature-codegraph-wiring-static/version-ssot.sh
-. "$SCRIPT_DIR/version-ssot.sh"
+# shellcheck source=./feature-codegraph-wiring-static/install-hardening.sh
+. "$SCRIPT_DIR/install-hardening.sh"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

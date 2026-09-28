@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-diff.js
-# Tags: workflow, plans, hook, bin, env
+# Tags: workflow, plans, hook, bin, env, scope:issue-specific
 # Tests for hooks/show-diff.js — isPlanFile() suppression
 # Verifies: all ~/.workflow-plans/ paths exit with no output (noopExit),
 # unrelated paths still emit systemMessage.

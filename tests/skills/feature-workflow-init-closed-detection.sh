@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/workflow-init/SKILL.md
-# Tags: workflow-init, github, issues, session-dedup, static-grep
+# Tags: workflow-init, github, issues, session-dedup, static-grep, scope:issue-specific
 # Static grep tests — Step 3(a) post-WIP CLOSED check and related guards.
 #
 # F3: Step 3(a) post-WIP CLOSED check present

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-prompt-size, skills/_archived/., skills/_archived/old, skills/_archived/old/SKILL.md, skills/big, skills/big/SKILL.md, skills/small, skills/small/SKILL.md, rules/coding/test, agents/foo, skills/_shared/bar, rules/test
-# Tags: skill, bin, tests, prompt
+# Tags: skill, bin, tests, prompt, scope:issue-specific
 # Tests for bin/review-prompt-size --all mode.
 #
 # TC1: --all scans ALL existing skills/*/SKILL.md (not the diff); a 150-line

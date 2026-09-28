@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/workflow-init/SKILL.md, skills/workflow-init/scripts/path-a-label-and-board.sh
-# Tags: workflow-init, refactor, file-split, static-grep
+# Tags: workflow-init, refactor, file-split, static-grep, scope:issue-specific
 # Static checks for the A2 extraction (Pattern B file-split):
 #   H1: script file exists and is non-empty
 #   H2: script declares set -uo pipefail and validates argc >= 1

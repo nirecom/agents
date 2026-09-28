@@ -26,7 +26,7 @@ W2-06 | agents/supervisor-audit.md | mcp__codegraph | Symmetric member of the sa
 # C5 — the boundary module must stay a pure library: installer-local output helpers
 # leaking back in is the same regression class round-7 codex C5 flagged once already.
 W2-07 | hooks/lib/codegraph-boundary.js | note( | Output ownership belongs to install/codegraph-mcp.js (RESET_NOTICE, W1-29c); the boundary module reporting its own text duplicates that ownership.
-W2-08 | hooks/lib/codegraph-boundary.js | warn( | Same ownership boundary as W2-07 — warnings (e.g. the CLI version mismatch) are surfaced by the installer, not printed from the library.
+W2-08 | hooks/lib/codegraph-boundary.js | warn( | Same ownership boundary as W2-07 — warnings are surfaced by the installer, not printed from the library.
 W2_TABLE
 
 # W3 — install/ tree scan, plus the two files that spawn codegraph outside install/

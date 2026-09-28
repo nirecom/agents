@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-code-size
-# Tags: code-size, review, bin
+# Tags: code-size, review, bin, scope:issue-specific
 # Tests for bin/review-code-size
 # Verifies: SKIPPED/PERFORMED status labels, line-count WARN/HARD thresholds,
 # 3-source union diff detection (committed/staged/unstaged/untracked),

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh, hooks/commit-msg
-# Tags: scan, filter, outbound, hook, bin
+# Tags: scan, filter, outbound, hook, bin, scope:issue-specific
 # Test suite for hooks/commit-msg warn-mode behavior.
 #
 # Tests target POST-implementation behavior:

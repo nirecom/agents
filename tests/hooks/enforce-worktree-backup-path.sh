@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/enforce-worktree-backup-path.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/shared-cmd-utils.js
-# Tags: worktree, enforce, hook, backup, parsefailure
+# Tags: worktree, enforce, hook, backup, parsefailure, scope:common
 #
 # Tests the parseFailure cp bypass (Insertion Point 2) in hooks/enforce-worktree.js.
 # When a cp command has unresolvable $VAR tokens in its args, collectBashWriteTargets

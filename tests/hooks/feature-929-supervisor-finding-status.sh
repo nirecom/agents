@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-929-supervisor-finding-status.sh
 # Tests: hooks/lib/supervisor-finding-status.js
-# Tags: supervisor, em-supervisor, finding-status, codex-review, unit
+# Tags: supervisor, em-supervisor, finding-status, codex-review, unit, scope:issue-specific
 # RED for issue #929.
 #
 # L3 gap (what this test does NOT catch):

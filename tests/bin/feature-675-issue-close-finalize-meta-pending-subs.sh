@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/issue-close-finalize/SKILL.md
-# Tags: issue-close, finalize, triage, meta, cascade, wip
+# Tags: issue-close, finalize, triage, meta, cascade, wip, scope:issue-specific
 # Tests for issue #675 — meta_pending_subs graceful exit.
 #
 # When a meta parent has open sub-issues, /issue-close-finalize must exit 0

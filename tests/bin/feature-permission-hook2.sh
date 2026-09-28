@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh, bin/util, hooks/permission-allow.js
-# Tags: scan, filter, outbound, hook, permissions
+# Tags: scan, filter, outbound, hook, permissions, scope:issue-specific
 # ask-before-commit dialog test (permissions.ask test)
 # Test suite for permission-hook2 feature
 # Scanner + PermissionRequest hook tests for feature/permission-hook2

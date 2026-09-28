@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-891-l2-phase-schema-writer.sh
 # Tests: hooks/lib/supervisor-state-schema.js, hooks/lib/supervisor-state-writer.js
-# Tags: supervisor, em-supervisor, layer2, l2-phase, schema
+# Tags: supervisor, em-supervisor, layer2, l2-phase, schema, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json Stop hooks
 # - real Claude Code transcript format differences

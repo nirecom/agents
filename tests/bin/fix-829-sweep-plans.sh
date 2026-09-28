@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/fix-829-sweep-plans.sh
 # Tests: bin/sweep-plans.sh
-# Tags: sweep, plans, orphan-prefix, epoch-pid, empty-sid, fix
+# Tags: sweep, plans, orphan-prefix, epoch-pid, empty-sid, fix, scope:issue-specific
 #
 # Tests for issue #829: sweep-plans regex skips orphan staging files with
 # unix-epoch-PID or empty session-id prefix.

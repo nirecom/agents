@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/doc-append, bin/doc-append.py
-# Tags: docs, append, history, bin, install
+# Tags: docs, append, history, bin, install, scope:issue-specific
 # Broad integration tests for bin/doc-append bash wrapper
 # Tests run AFTER implementation; skip gracefully if wrapper not yet installed.
 set -euo pipefail

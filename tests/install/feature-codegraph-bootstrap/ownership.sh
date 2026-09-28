@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Tests: install/codegraph-mcp.js
 # Tags: codegraph, installer, mcp-registration, fail-safe-off, idempotency, side-effect-absence, TL2, pwsh-not-required, scope:issue-specific
-# O1-O21: readState() answers present/foreign/absent/null (see fixtures.sh
+# O1-O23: readState() answers present/foreign/absent/null (see fixtures.sh
 # build_home). A same-named entry matching hasOurShape() is "present" and is
 # overwritten (register: remove-then-add) or removed (unregister); a
 # different-shaped entry is "foreign" (O20/O21) and both verbs leave it
@@ -21,41 +21,43 @@ assert_note() {
 }
 
 # Pattern 1 (negative assertion): every "not removed" row asserts rm=0 AND that the
-# entry is still in ~/.claude.json afterwards. rm=0 is the load-bearing half — the
-# `claude` CLI is a recording stub, so it never rewrites the file — while the
-# post-state read catches a helper that deleted the entry behind the CLI's back.
-# Columns: name | verb | mcp-pre | post-entry | want | stdout-needle.
-while IFS='|' read -r name verb mcp_pre post_entry want needle; do
+# entry is still in ~/.claude.json afterwards. The `claude` stub emulates the CLI's
+# own write (claude-cli-emu.js), so post-entry follows the CLI: O1 reads 0 because
+# the emulated remove really deletes it, O15 reads 1 because the add really writes it.
+# Columns: name | verb | mcp-pre | post-entry | json | want | stdout-needle.
+while IFS='|' read -r name verb mcp_pre post_entry want_json want needle; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"; verb="${verb//[[:space:]]/}"
     mcp_pre="${mcp_pre//[[:space:]]/}"; post_entry="${post_entry//[[:space:]]/}"
+    want_json="${want_json//[[:space:]]/}"
     want="${want#"${want%%[![:space:]]*}"}"; want="${want%"${want##*[![:space:]]}"}"
     needle="${needle#"${needle%%[![:space:]]*}"}"; needle="${needle%"${needle##*[![:space:]]}"}"
 
-    # with_cg=yes: these rows judge the registration decision, not the CLI version pin, and the
-    # register verb probes `codegraph --version` first — a stub answering the pin
-    # keeps that probe silent so `err` still measures only the ownership decision.
+    # with_cg=yes: these rows judge the registration decision alone.
     run_case "$name" "$verb" on present "$mcp_pre" yes 0 0 yes file
     assert_eq "$name ($verb on '$mcp_pre'): observable outcome" "$want" "$SUMMARY"
     assert_note "$name ($verb on '$mcp_pre')" "$needle"
     assert_eq "$name: the mcpServers.codegraph entry after the run" "$post_entry" "$MCP_ENTRY_POST"
-    assert_eq "$name: post/.claude.json byte-identical (every write is the CLI's)" \
-        "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+    assert_eq "$name: post/.claude.json — helper changes only alwaysLoad" "$want_json" "$JSON_POST"
     assert_eq "$name: post/no sentinel leak" "" "${SENTINEL_STATE#*leaked=}"
 done <<'TABLE'
 # --- unregister: the "CODEGRAPH turned off" path ---
-O1  | unregister | present     | 1 | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0 | codegraph MCP server unregistered (CODEGRAPH is off).
-O6  | unregister | none        | 0 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
-O7  | unregister | nokey       | 0 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
-O8  | unregister | missing     | 0 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
-O9  | unregister | broken      | 0 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
-O10 | unregister | nonobject   | 1 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
-O21 | unregister | foreign     | 1 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
+O1  | unregister | present     | 0 | same   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0 | codegraph MCP server unregistered (CODEGRAPH is off).
+O6  | unregister | none        | 0 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
+O7  | unregister | nokey       | 0 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
+O8  | unregister | missing     | 0 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
+O9  | unregister | broken      | 0 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
+O10 | unregister | nonobject   | 1 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
+O21 | unregister | foreign     | 1 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0 | __silent__
+# O22: an entry of ours carrying alwaysLoad is still ours (hasOurShape ignores it).
+O22 | unregister | present-al  | 0 | same   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0 | codegraph MCP server unregistered (CODEGRAPH is off).
 # --- register: the mirror path. An existing entry is this user's own earlier
 # install, so it is overwritten (remove-then-add), never left half-refreshed.
-O15 | register   | nokey       | 0 | rc=0 npmi=0 add=1 rm=0 mcp=1 err=0 | codegraph MCP server registered.
-O16 | register   | present     | 1 | rc=0 npmi=0 add=1 rm=1 mcp=2 err=0 | codegraph MCP server registered.
-O17 | register   | broken      | 0 | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
+O15 | register   | nokey       | 1 | always | rc=0 npmi=0 add=1 rm=0 mcp=1 err=0 | codegraph MCP server registered.
+O16 | register   | present     | 1 | always | rc=0 npmi=0 add=1 rm=1 mcp=2 err=0 | codegraph MCP server registered.
+O17 | register   | broken      | 0 | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1 | __silent__
+# O23: refreshing an alwaysLoad entry re-adds it and restores alwaysLoad (#2254).
+O23 | register   | present-al  | 1 | always | rc=0 npmi=0 add=1 rm=1 mcp=2 err=0 | codegraph MCP server registered.
 TABLE
 
 echo "--- O20: register on a foreign-shaped entry warns and leaves it untouched ---"
@@ -69,8 +71,7 @@ case "$(cat "$CASE_DIR/err.log" 2>/dev/null || true)" in
     *) fail "O20: stderr does not explain the decision — got $(printf '%q' "$(cat "$CASE_DIR/err.log" 2>/dev/null || true)")" ;;
 esac
 assert_eq "O20: the mcpServers.codegraph entry after the run" "1" "$MCP_ENTRY_POST"
-assert_eq "O20: post/.claude.json byte-identical (foreign entry never touched)" \
-    "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+assert_eq "O20: post/.claude.json unchanged (foreign entry never touched)" "same" "$JSON_POST"
 
 echo "--- O18: the refresh removes before it adds, with the SSOT env flags ---"
 # Order is the contract: an add before the remove would leave the CLI rejecting a

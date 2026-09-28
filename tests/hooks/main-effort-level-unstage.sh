@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/pre-commit
-# Tags: git, pre-commit, hook, settings, config
+# Tags: git, pre-commit, hook, settings, config, scope:common
 # Tests for pre-commit hook: auto-unstage effortLevel-only changes in settings.json
 set -euo pipefail
 

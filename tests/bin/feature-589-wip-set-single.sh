@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/wip-set-single.sh
-# Tags: wip, meta, clarify-intent, issue-close
+# Tags: wip, meta, clarify-intent, issue-close, scope:issue-specific
 
 set -u
 

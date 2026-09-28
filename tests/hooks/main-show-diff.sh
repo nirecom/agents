@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/show-diff.js
-# Tags: hook, bin, macos, tests
+# Tags: hook, bin, macos, tests, scope:common
 # Test suite for show-diff.js PreToolUse hook
 set -euo pipefail
 

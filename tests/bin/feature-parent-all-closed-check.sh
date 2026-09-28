@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/gh, bin/github-issues/parent-all-closed-check.sh, skills/issue-close-finalize/SKILL.md
-# Tags: issue-close, finalize, workflow, sub-issue, github
+# Tags: issue-close, finalize, workflow, sub-issue, github, scope:issue-specific
 # Tests for bin/github-issues/parent-all-closed-check.sh
 #
 # I/F: parent-all-closed-check.sh <owner/repo> <N>

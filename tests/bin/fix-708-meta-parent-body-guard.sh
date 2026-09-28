@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/parent-body-update.sh
-# Tags: parent-body-update, meta-guard, issue-close
+# Tags: parent-body-update, meta-guard, issue-close, scope:issue-specific
 # Tests for issue #708 — meta-label guard in parent-body-update.sh.
 #
 # The guard sits AFTER the existing `if [ -z "$PARENT" ]; then exit 0; fi`

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/unit-worktree-notes-sections.sh
 # Tests: hooks/lib/worktree-notes-sections.js
-# Tags: worktree, workflow, hook, bin, tests
+# Tags: worktree, workflow, hook, bin, tests, scope:common
 #
 # Unit tests for hooks/lib/worktree-notes-sections.js (shared library).
 #

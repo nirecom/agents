@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-852-enforce-worktree-abort.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows.js, hooks/enforce-worktree.js
-# Tags: worktree, enforce, hook, git, security, fix-852
+# Tags: worktree, enforce, hook, git, security, fix-852, scope:issue-specific
 # Tests for isAllowedMidOperationAbort() — issue #852.
 #
 # Predicate covers mid-operation abort/continue/skip from the main worktree:

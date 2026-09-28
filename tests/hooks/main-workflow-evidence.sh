@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-state/evidence-resolver.js
-# Tags: workflow, gate, hook, bin, git
+# Tags: workflow, gate, hook, bin, git, scope:common
 # Tests for evidence-based write_tests/docs enforcement
 # in workflow-gate.js (PreToolUse) and workflow-mark.js (PostToolUse)
 #

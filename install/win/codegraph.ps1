@@ -6,21 +6,9 @@ $env:SYSTEM_OPS_APPROVED = "1"
 
 $AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
-# install/codegraph-constants.txt is the single source of truth for the pinned
-# version and the telemetry env pair; install/linux/codegraph.sh reads the same file.
-# Only the version is read here. The pair must NOT be assigned to this
-# process's environment: install.ps1 invokes this script in-process, so the
-# assignment would outlive it and leak the industry-wide DO_NOT_TRACK name into
-# every program the caller's shell launches next — including `claude`, whose
-# Remote Control refuses to start under it. Nothing here needs the pair anyway:
-# `npm install --ignore-scripts` runs no upstream code, and
-# codegraph-mcp.js / bin/codegraph-lifecycle.js each read the constants file
-# themselves and hand the pair to their own children.
-$CodegraphVersion = ""
-foreach ($line in (Get-Content -Path "$AgentsRoot\install\codegraph-constants.txt")) {
-    if ($line -notmatch '^([A-Z][A-Z0-9_]*)=(.*)$') { continue }
-    if ($Matches[1] -eq "CODEGRAPH_VERSION") { $CodegraphVersion = $Matches[2] }
-}
+# The telemetry pair in install/codegraph-constants.txt is NOT assigned here:
+# install.ps1 runs this script in-process, so DO_NOT_TRACK would leak into the
+# caller's shell and stop `claude` Remote Control. codegraph-mcp.js passes it on.
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     fnm env --shell powershell | Out-String | Invoke-Expression
@@ -47,23 +35,21 @@ if (-not $_cgOn) {
     return
 }
 
-if ([string]::IsNullOrEmpty($CodegraphVersion)) {
-    Write-Warning "CODEGRAPH_VERSION missing from install/codegraph-constants.txt. CodeGraph step skipped."
-    return
-}
-
+# Always ask npm for @latest; an installed binary is kept when the update fails.
 if (Get-Command npm -ErrorAction SilentlyContinue) {
-    if (Get-Command codegraph -ErrorAction SilentlyContinue) {
-        Write-Host "CodeGraph is already installed." -ForegroundColor DarkGray
+    Write-Host "Updating CodeGraph to latest..."
+    npm install -g --ignore-scripts "@colbymchenry/codegraph@latest"
+    $_npmExit = $LASTEXITCODE
+    if ($_npmExit -eq 0) {
+        Write-Host "CodeGraph is up to date." -ForegroundColor Green
+    } elseif (Get-Command codegraph -ErrorAction SilentlyContinue) {
+        Write-Warning "CodeGraph could not be updated (npm missing or failed, exit code: $_npmExit); keeping the installed version."
     } else {
-        Write-Host "Installing CodeGraph..."
-        npm install -g --ignore-scripts "@colbymchenry/codegraph@$CodegraphVersion"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "CodeGraph installation failed (exit code: $LASTEXITCODE). Re-run to retry."
-            return
-        }
-        Write-Host "CodeGraph installed." -ForegroundColor Green
+        Write-Warning "CodeGraph installation failed (exit code: $_npmExit). Re-run to retry."
+        return
     }
+} elseif (Get-Command codegraph -ErrorAction SilentlyContinue) {
+    Write-Warning "CodeGraph could not be updated (npm missing or failed); keeping the installed version."
 } else {
     Write-Warning "npm not found. Run: fnm install --lts"
     return

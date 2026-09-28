@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/enforce-worktree/shared-cmd-utils.js
-# Tags: worktree, enforce, exclude, builtin, unit
+# Tags: worktree, enforce, exclude, builtin, unit, scope:issue-specific
 #
 # Unit tests for the BUILTIN_EXCLUDE_PATTERNS feature (issue #654).
 #

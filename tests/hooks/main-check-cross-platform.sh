@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/check-cross-platform.js
-# Tags: hook, bin, git, commit, tests
+# Tags: hook, bin, git, commit, tests, scope:common
 # Test suite for check-cross-platform.js PreToolUse hook
 set -euo pipefail
 

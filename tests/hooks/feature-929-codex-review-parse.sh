@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-929-codex-review-parse.sh
 # Tests: hooks/lib/codex-review-parse.js
-# Tags: supervisor, em-supervisor, codex-review, parse, unit
+# Tags: supervisor, em-supervisor, codex-review, parse, unit, scope:issue-specific
 # RED for issue #929.
 #
 # L3 gap (what this test does NOT catch):

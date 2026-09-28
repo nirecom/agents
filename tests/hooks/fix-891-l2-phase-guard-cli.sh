@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-891-l2-phase-guard-cli.sh
 # Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/workflow-state.js, hooks/workflow-state/lifecycle.js
-# Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli, workflow-started
+# Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli, workflow-started, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json Stop hooks
 # - real Claude Code transcript format differences

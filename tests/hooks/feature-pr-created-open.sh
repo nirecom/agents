@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/pr-created-open.js
-# Tags: pr-created-open, hook, pr, github
+# Tags: pr-created-open, hook, pr, github, scope:issue-specific
 # Tests for hooks/pr-created-open.js — PostToolUse hook detecting `gh pr create`
 # completion and emitting a systemMessage with the PR URL.
 #

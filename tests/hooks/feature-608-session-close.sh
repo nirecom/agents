@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-608-session-close.sh
 # Tests: hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md
-# Tags: issue-close, finalize, workflow, worktree, end, schema
+# Tags: issue-close, finalize, workflow, worktree, end, schema, scope:issue-specific
 #
 # Issue #608 / #771 — /session-close orchestration + Final Report renderer abolition.
 #

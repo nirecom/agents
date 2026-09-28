@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/orchestrate.sh
-# Tags: migration, repo, github, issues, bin
+# Tags: migration, repo, github, issues, bin, scope:issue-specific
 # Tests for feat/migrate-repo — pre-flight existing-issues check in orchestrate.sh.
 #
 # Before any state mutation, orchestrate.sh detects whether the target repo

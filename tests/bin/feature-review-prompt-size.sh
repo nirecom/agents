@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-prompt-size, skills/_archived/old, skills/_archived/old/SKILL.md, skills/bar, skills/bar/SKILL.md, skills/foo, skills/foo/README.md, skills/foo/SKILL.md, rules/coding/test, agents/foo, skills/_shared/test
-# Tags: worktree, labels, github, skill, bin, prompt
+# Tags: worktree, labels, github, skill, bin, prompt, scope:issue-specific
 # Tests for bin/review-prompt-size
 # Verifies: SKIPPED/PERFORMED status labels, line-count warnings,
 # _archived/ exclusion, non-SKILL.md exclusion, --base flag, merge-base failure,

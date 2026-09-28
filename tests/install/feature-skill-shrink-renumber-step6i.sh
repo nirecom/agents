@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: CLAUDE.md, rules/docs/history.md, rules/docs/changelog.md, rules/github-issues.md
-# Tags: step-6i, corrective-fix, we-20, issue-614
+# Tags: step-6i, corrective-fix, we-20, issue-614, scope:issue-specific
 # Verifies "Step 6i" is removed from corrective targets and "WE-20" replaces it.
 
 set -u

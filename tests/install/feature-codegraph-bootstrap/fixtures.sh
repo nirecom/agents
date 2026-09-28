@@ -13,22 +13,18 @@ ENV_SENTINEL='cg-env-secret-a1b2c3d4e5'
 JSON_SENTINEL='cg-json-secret-f6a7b8c9d0'
 
 # install/codegraph-constants.txt is the SSOT the installer itself reads; these
-# tests read the same file rather than restating the values, so a version bump or
-# a telemetry-key change moves the expectation and the implementation together.
+# tests read the same file rather than restating the values, so a telemetry-key
+# change moves the expectation and the implementation together. There is no
+# version pin to read (#2254): the installer always asks npm for @latest.
 # A missing or empty value would make every derived assertion compare "" with ""
 # — the false green this block refuses to ship.
 CONSTANTS_FILE="$AGENTS_DIR/install/codegraph-constants.txt"
 read_constant() { sed -n "s/^$1=//p" "$CONSTANTS_FILE" 2>/dev/null | head -1; }
-CG_VERSION="$(read_constant CODEGRAPH_VERSION)"
 CG_TELEMETRY="$(read_constant CODEGRAPH_TELEMETRY)"
 CG_DNT="$(read_constant DO_NOT_TRACK)"
 if [ ! -f "$CONSTANTS_FILE" ]; then
-    fail "constants: install/codegraph-constants.txt is absent — every version and telemetry expectation below would be vacuous"
+    fail "constants: install/codegraph-constants.txt is absent — every telemetry expectation below would be vacuous"
 fi
-case "$CG_VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) pass "constants: CODEGRAPH_VERSION is a pinned x.y.z value ($CG_VERSION)" ;;
-    *) fail "constants: CODEGRAPH_VERSION is not a pinned x.y.z value — got '${CG_VERSION:-<empty>}'" ;;
-esac
 [ -n "$CG_TELEMETRY" ] && pass "constants: CODEGRAPH_TELEMETRY has a value ($CG_TELEMETRY)" \
     || fail "constants: CODEGRAPH_TELEMETRY is missing from install/codegraph-constants.txt"
 [ -n "$CG_DNT" ] && pass "constants: DO_NOT_TRACK has a value ($CG_DNT)" \
@@ -48,7 +44,7 @@ esac
 # The exact argv install/codegraph-mcp.js must hand the CLI, derived from the SSOT.
 WANT_MCP_ADD="mcp add codegraph --scope user --env CODEGRAPH_TELEMETRY=$CG_TELEMETRY --env DO_NOT_TRACK=$CG_DNT -- codegraph serve --mcp"
 WANT_MCP_REMOVE="mcp remove codegraph -s user"
-WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@$CG_VERSION"
+WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@latest"
 
 CLAUDE_MD_BODY="# fixture CLAUDE.md — must survive the installer untouched"
 SETTINGS_BODY='{"permissions":{"allow":["Bash(ls:*)"]},"hooks":{}}'
@@ -91,12 +87,14 @@ write_telemetry_pre() {
 # different shape (here: same command, missing the --mcp arg) — left alone
 # by both verbs, since a hand-registered or third-party `codegraph` entry
 # must never be silently overwritten or deleted (O20/O21).
-#   present — present
+#   present — present, present-al (+alwaysLoad), crowded (+other server, projects)
 #   foreign — foreign
 #   absent  — none, nokey, missing
 #   null    — broken, nonobject (unreadable; must change nothing)
 build_home() {
     local mcp_pre="$1" md_kind="$2"
+    # A previous case may have left $FAKE_HOME read-only (AL-14 lockdir).
+    chmod -R u+w "$FAKE_HOME" 2>/dev/null || true
     rm -rf "$FAKE_HOME"
     mkdir -p "$FAKE_HOME/.claude"
     local head="{\"numStartups\":3,\"sentinelSecret\":\"$JSON_SENTINEL\""
@@ -108,6 +106,8 @@ build_home() {
         none)    printf '%s\n' "$head,\"mcpServers\":{}}" > "$j" ;;
         nokey)   printf '%s\n' "$head}" > "$j" ;;
         present) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":$server}}" > "$j" ;;
+        present-al) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{$base,$ourenv,\"alwaysLoad\":true}}}" > "$j" ;;
+        crowded) printf '%s\n' "$head,\"mcpServers\":{\"other\":{\"type\":\"stdio\",\"command\":\"other-srv\",\"args\":[\"--label\",\"café\"]},\"codegraph\":$server},\"projects\":{\"/w/p\":{\"allowedTools\":[],\"history\":[1,2.5,\"x\"]}}}" > "$j" ;;
         foreign) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{\"type\":\"stdio\",\"command\":\"codegraph\",\"args\":[\"serve\"],$ourenv}}}" > "$j" ;;
         nonobject)   printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":\"codegraph serve --mcp\"}}" > "$j" ;;
         broken)  printf '%s\n' "$head,\"mcpServers\":{" > "$j" ;;
@@ -138,8 +138,8 @@ write_env_file() {
 # for run_case's 11th argument. Each tree gets its OWN hooks/lib copy because
 # hooks/lib/codegraph-boundary.js resolves the constants file relative to itself:
 # a shared lib directory would make every tree read the same constants file and
-# the whole "unreadable constants" input class would vanish. Shared by
-# telemetry-reset.sh and cli-version.sh (CPR-SSOT).
+# the whole "unreadable constants" input class would vanish. Used by
+# telemetry-reset.sh.
 make_constants_tree() {
     # Two statements, not one: `local a=$1 b=$BASE/$a` expands every word BEFORE the
     # builtin assigns, so `$a` would resolve to whatever a caller's loop left behind
@@ -160,9 +160,7 @@ make_constants_tree() {
 
 # constants_body <telemetry> <do-not-track> — a COMPLETE constants file that
 # differs from the shipped one only in the telemetry pair, so a case built on it
-# isolates the telemetry axis instead of also losing the version pin (which would
-# change the verdict for unrelated reasons).
+# isolates the telemetry axis.
 constants_body() {
-    printf 'CODEGRAPH_VERSION=%s\nCODEGRAPH_TELEMETRY=%s\nDO_NOT_TRACK=%s' \
-        "$CG_VERSION" "$1" "$2"
+    printf 'CODEGRAPH_TELEMETRY=%s\nDO_NOT_TRACK=%s' "$1" "$2"
 }

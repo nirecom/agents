@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/review-code-security/SKILL.md
-# Tags: scan, filter, outbound, hook, frontmatter
+# Tags: scan, filter, outbound, hook, frontmatter, scope:common
 # Structural tests for claude-global/skills/review-code-security/SKILL.md
 set -euo pipefail
 

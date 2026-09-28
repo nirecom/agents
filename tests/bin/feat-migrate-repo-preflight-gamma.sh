@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/orchestrate.sh, skills/migrate-repo/scripts/preview-and-capture.sh
-# Tags: migration, repo, github, issues, bin, toctou, preflight-gamma
+# Tags: migration, repo, github, issues, bin, toctou, preflight-gamma, scope:issue-specific
 # Option γ pre-flight tests (PF5-PF12) — added for issue #834 TOCTOU fix.
 
 set -u

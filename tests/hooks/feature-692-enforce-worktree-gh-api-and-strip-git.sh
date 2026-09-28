@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-692-enforce-worktree-gh-api-and-strip-git.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js
-# Tags: enforce-worktree, classify, gh-api, strip-quoted-args, issue-close, step-6h
+# Tags: enforce-worktree, classify, gh-api, strip-quoted-args, issue-close, step-6h, scope:issue-specific
 #
 # Regression tests for issue #692:
 #   Bug A — `gh api -X PUT repos/o/r/contents/...` from main worktree must be

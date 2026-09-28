@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-workflow-gate-unstaged-tracked.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/staged-evidence.js
-# Tags: workflow-gate, hook, gate1, unstaged-tracked, git, bin
+# Tags: workflow-gate, hook, gate1, unstaged-tracked, git, bin, scope:issue-specific
 #
 # E2E tests for Gate 1 — workflow-gate.js must block git commit when the
 # working tree has unstaged tracked-file modifications.

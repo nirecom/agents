@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-workflow-gate-context-populate.sh
 # Tests: hooks/workflow-gate.js
-# Tags: workflow-gate, context-populate, axis-a, feature-885
+# Tags: workflow-gate, context-populate, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — workflow-gate.js block() populates context.cwd from
 # toolInput.cwd, and context.git_root_resolved=true when repoDir was resolved.
 

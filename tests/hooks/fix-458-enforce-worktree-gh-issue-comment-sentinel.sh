@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-458-enforce-worktree-gh-issue-comment-sentinel.sh
 # Tests: hooks/lib/bash-write-targets.js
-# Tags: worktree, enforce, hook, redirect, shell-expansion, gh, sentinel
+# Tags: worktree, enforce, hook, redirect, shell-expansion, gh, sentinel, scope:issue-specific
 #
 # Regression pins for issue #458: `gh issue comment` (Group A coordination
 # command that touches GitHub metadata only) must classify as "read", even

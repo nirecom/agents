@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-719-supervisor-state-schema-layer2.sh
 # Tests: hooks/lib/supervisor-state-schema.js
-# Tags: supervisor, em-supervisor, schema, layer2, unit
+# Tags: supervisor, em-supervisor, schema, layer2, unit, scope:issue-specific
 # RED for issue #719 — S-2 schema enhancement (typed layer2 fields).
 
 set -u

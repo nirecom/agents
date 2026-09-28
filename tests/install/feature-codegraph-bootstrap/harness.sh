@@ -17,7 +17,8 @@ posixify() { printf '%s' "$1" | tr '\\' '/'; }
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CODEGRAPH 2>/dev/null || true
 
 BASE="$(mktemp -d)"
-trap 'rm -rf "$BASE"' EXIT
+# chmod first: AL-14 (lockdir) may leave a read-only directory under $BASE.
+trap 'chmod -R u+w "$BASE" 2>/dev/null; rm -rf "$BASE"' EXIT
 
 # HOME redirection proof. install/codegraph-mcp.js reads os.homedir()/.claude.json;
 # without proof that node honours the redirection this file would read and judge the
@@ -60,6 +61,8 @@ REAL_NODE="$(command -v node)"
 REAL_NODE_EXE="$(node -e "console.log(process.execPath)")"
 if command -v cygpath >/dev/null 2>&1; then REAL_NODE_EXE="$(cygpath -u "$REAL_NODE_EXE")"; fi
 MCP_JS_NATIVE="$(node_path "$CODEGRAPH_MCP_JS")"
+CLAUDE_EMU_JS="$MODULE_DIR/claude-cli-emu.js"
+JSON_POST_JS="$(node_path "$MODULE_DIR/json-post.js")"
 IS_WIN=0
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) IS_WIN=1 ;; esac
 
@@ -72,10 +75,8 @@ SHIM_REF_N="$(node_path "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
 
 # write_npm_stub <path> — a recording npm stub: every argv line is appended to
 # $NPM_STUB_LOG and the process exits with ${NPM_STUB_RC:-0}. A SUCCESSFUL global
-# install of the pinned codegraph package also publishes the staged codegraph stub
-# beside itself, because that is what the real command does — and the register verb
-# probes `codegraph --version` immediately afterwards, so a fixture that installed
-# nothing would warn on stderr in every install case.
+# install of the codegraph package also publishes the staged codegraph stub beside
+# itself, because that is what the real command does.
 write_npm_stub() {
     local path="$1"
     cat > "$path" <<'NPMSTUB'
@@ -98,11 +99,8 @@ NPMSTUB
     chmod +x "$path"
 }
 
-# write_cg_stub <dir> — a recording codegraph stub at <dir>/codegraph. Every argv
-# line is appended to $CG_STUB_LOG and the process exits 0, EXCEPT `--version`,
-# which is answered directly from ${CG_STUB_VERSION:-$CG_VERSION} on stdout and
-# never touches CG_STUB_LOG — this must stay first so the `^(un)?install( |$)`
-# CG_INSTALL count (harness.sh's own regex) never sees a --version invocation.
+# write_cg_stub <dir> — a recording codegraph stub at <dir>/codegraph: every argv
+# line is appended to $CG_STUB_LOG and the process exits 0.
 # On win32 the binary is reached through hooks/lib/spawn-shimmed-cli.js, which only
 # ever resolves a PATHEXT extension and then reads the npm cmd-shim trio as text, so
 # the same contract is mirrored into codegraph.cmd + codegraph-target.js there — the
@@ -111,23 +109,19 @@ write_cg_stub() {
     local dir="$1"
     mkdir -p "$dir"
     if [ "$IS_WIN" = "1" ]; then write_win_cg_cmd_shim "$dir"; return 0; fi
-    printf '#!/usr/bin/env bash\nif [ "${1:-}" = "--version" ]; then printf "%%s\\n" "${CG_STUB_VERSION:-%s}"; exit 0; fi\nprintf "%%s\\n" "$*" >> "$CG_STUB_LOG"\nexit 0\n' "$CG_VERSION" > "$dir/codegraph"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$CG_STUB_LOG"\nexit 0\n' > "$dir/codegraph"
     chmod +x "$dir/codegraph"
 }
 
 # write_win_cg_cmd_shim <dir> — the win32 codegraph trio (POSIX sibling + .cmd +
-# codegraph-target.js), reproducing write_cg_stub's `--version`-from-CG_STUB_VERSION
-# / argv-logging contract in the shape spawn-shimmed-cli.js parses.
+# codegraph-target.js), reproducing write_cg_stub's argv-logging contract in the
+# shape spawn-shimmed-cli.js parses.
 write_win_cg_cmd_shim() {
     local dir="$1"
     mkdir -p "$dir"
-    cat > "$dir/codegraph-target.js" <<CGTARGET
+    cat > "$dir/codegraph-target.js" <<'CGTARGET'
 const fs = require("fs");
 const args = process.argv.slice(2);
-if (args[0] === "--version") {
-  process.stdout.write((process.env.CG_STUB_VERSION || "$CG_VERSION") + "\n");
-  process.exit(0);
-}
 fs.appendFileSync(process.env.CG_STUB_LOG, args.join(" ") + "\n");
 process.exit(0);
 CGTARGET
@@ -165,6 +159,7 @@ make_stubs() {
     else
         write_posix_claude_stub "$dir/claude"
         chmod +x "$dir/claude"
+        cp "$CLAUDE_EMU_JS" "$dir/claude-cli-emu.js"
     fi
     if [ "$with_node" != "yes" ]; then rm -f "$dir/node" "$dir/node.exe"; return 0; fi
     if [ "$IS_WIN" = "1" ]; then
@@ -177,16 +172,21 @@ make_stubs() {
 # write_win_claude_cmd_shim <dir> — the real npm cmd-shim shape for `claude` on
 # win32: extensionless POSIX sibling (parsed as text, never executed), .cmd (never
 # spawned directly) and claude-target.js, which reproduces the `--version`-is-0 /
-# mcp-verb-logs contract write_posix_claude_stub gives POSIX.
+# mcp-verb-logs / emulate-on-rc-0 contract write_posix_claude_stub gives POSIX.
 write_win_claude_cmd_shim() {
     local dir="$1"
     mkdir -p "$dir"
+    cp "$CLAUDE_EMU_JS" "$dir/claude-cli-emu.js"
     cat > "$dir/claude-target.js" <<'CLAUDETARGET'
 const fs = require("fs");
 const args = process.argv.slice(2);
 if (args[0] === "--version") { process.exit(0); }
-fs.appendFileSync(process.env.CLAUDE_STUB_LOG, args.join(" ") + "\n");
-process.exit(Number(process.env.CLAUDE_STUB_RC || 0));
+if (process.env.CLAUDE_STUB_LOG) fs.appendFileSync(process.env.CLAUDE_STUB_LOG, args.join(" ") + "\n");
+const rc = Number(process.env.CLAUDE_STUB_RC || 0);
+if (rc === 0) {
+  try { require(__dirname + "/claude-cli-emu.js").run(args); } catch (e) { process.exit(97); }
+}
+process.exit(rc);
 CLAUDETARGET
     _win_shim_sibling claude > "$dir/claude"
     { _win_cmd_shim_head; _win_cmd_shim_tail claude; } > "$dir/claude.cmd"
@@ -304,14 +304,31 @@ write_win_claude_node() {
 # error.code === "ENOENT"), so it answers 0 even when CLAUDE_STUB_RC pins the `mcp`
 # verbs to a failure. claude-target.js (win32, write_win_claude_cmd_shim) reproduces
 # the same split; every assertion counts `^mcp ` lines, so the two differ only in
-# whether the probe itself is echoed to the log.
+# whether the probe itself is echoed to the log. On rc 0 the sibling
+# claude-cli-emu.js applies the CLI's ~/.claude.json write; an emulator crash is 97.
 write_posix_claude_stub() {
     cat > "$1" <<'CLAUDESTUB'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "$CLAUDE_STUB_LOG"
+if [ -n "${CLAUDE_STUB_LOG:-}" ]; then printf '%s\n' "$*" >> "$CLAUDE_STUB_LOG"; fi
 if [ "${1:-}" = "--version" ]; then exit 0; fi
-exit "${CLAUDE_STUB_RC:-0}"
+rc="${CLAUDE_STUB_RC:-0}"
+if [ "$rc" = "0" ]; then node "$(dirname "$0")/claude-cli-emu.js" "$@" || exit 97; fi
+exit "$rc"
 CLAUDESTUB
+}
+
+# assert_no_tmp <dir> [kept-name...] — no helper temp file (.claude.json.*.tmp) is
+# left directly in <dir>; names a case planted beforehand are excluded (AL-16).
+assert_no_tmp() {
+    local dir="$1" f base left="" k skip
+    shift
+    for f in "$dir"/.claude.json.*.tmp; do
+        [ -e "$f" ] || [ -L "$f" ] || continue
+        base="${f##*/}"; skip=0
+        for k in "$@"; do [ "$k" = "$base" ] && skip=1; done
+        [ "$skip" = "1" ] || left="$left $base"
+    done
+    assert_eq "${CURRENT_AL:-case}: no .claude.json.*.tmp left in ${dir##*/}" "" "${left# }"
 }
 
 file_kind() { if [ -L "$1" ]; then printf 'symlink'; elif [ -f "$1" ]; then printf 'regular'; else printf 'absent'; fi; }
@@ -341,11 +358,13 @@ run_case() {
     PRE_SETTINGS_SHA="$(digest "$FAKE_HOME/.claude/settings.json")"
     PRE_MD_SHA="$(digest "$FAKE_HOME/.claude/CLAUDE.md")"
     PRE_MD_KIND="$(file_kind "$FAKE_HOME/.claude/CLAUDE.md")"
-    # C10: ~/.claude.json is read-only to install/codegraph-mcp.js — every write is
-    # delegated to the `claude` CLI, which is a recording stub here. Byte identity
-    # therefore holds for EVERY case; a changed digest means the helper wrote the
-    # file itself, the destructive regression R-14 / B9 forbid.
-    PRE_JSON_SHA="$(digest "$FAKE_HOME/.claude.json")"
+    # PRE_RUN_HOOK (module scope, like TELEMETRY_PRE): a case-specific fixture tweak
+    # applied after build_home and before the baseline copy (always-load.sh).
+    if [ -n "${PRE_RUN_HOOK:-}" ]; then "$PRE_RUN_HOOK"; fi
+    # C10 (#2254): the JSON_POST baseline. The emulator's snapshot (the CLI's own
+    # last write) wins; with no CLI write the pre-run copy is the baseline.
+    rm -f "$dir/claude.json.pre" "$dir/claude.json.snap"
+    if [ -e "$FAKE_HOME/.claude.json" ]; then cp "$FAKE_HOME/.claude.json" "$dir/claude.json.pre"; fi
 
     write_env_file "$dir/cfg" "$envfile" "$flag"
     # A no-op nvm.sh proves the `[ -s ]` guard sources it without pulling a real node
@@ -366,9 +385,9 @@ run_case() {
         export PATHEXT="$PINNED_PATHEXT"
         export NVM_DIR="$dir/nvm"
         export NPM_STUB_RC="$npm_rc" CLAUDE_STUB_RC="$claude_rc"
-        # The codegraph stub reads it, so it has to cross the process boundary; the
-        # empty default keeps the stub's own `${CG_STUB_VERSION:-$CG_VERSION}` in force.
-        export CG_STUB_VERSION="${CG_STUB_VERSION-}"
+        # Empty CLAUDE_STUB_EMU means the emulator's default `write` mode.
+        export CLAUDE_STUB_EMU="${CLAUDE_STUB_EMU-}"
+        CLAUDE_STUB_SNAPSHOT="$(node_path "$dir/claude.json.snap")"; export CLAUDE_STUB_SNAPSHOT
         AGENTS_CONFIG_DIR="$(node_path "$dir/cfg")"; export AGENTS_CONFIG_DIR
         NPM_STUB_LOG="$(node_path "$dir/npm.log")"; export NPM_STUB_LOG
         CG_STUB_LOG="$(node_path "$dir/codegraph.log")"; export CG_STUB_LOG
@@ -391,11 +410,14 @@ run_case() {
     ERR_LINES="$(grep -c . "$dir/err.log" 2>/dev/null || true)"
     CG_INSTALL="$(grep -cE '^(un)?install( |$)' "$dir/codegraph.log" 2>/dev/null || true)"
     CASE_DIR="$dir"
-    # Pattern 1 (negative assertion) support. `rm=0` is the load-bearing half — the
-    # CLI is a stub, so it never rewrites the file — and this post-state read is the
-    # backstop that the helper did not delete the entry behind the CLI's back.
+    # Pattern 1 (negative assertion) support: the emulated CLI removes/adds the entry
+    # only through `claude mcp`, so this post-state read is the backstop that the
+    # helper did not delete the entry behind the CLI's back.
     MCP_ENTRY_POST="$(grep -cF '"codegraph":' "$FAKE_HOME/.claude.json" 2>/dev/null || true)"
     MCP_ENTRY_POST="${MCP_ENTRY_POST:-0}"
+    local baseline="$dir/claude.json.pre"
+    [ -e "$dir/claude.json.snap" ] && baseline="$dir/claude.json.snap"
+    JSON_POST="$(node "$JSON_POST_JS" "$(node_path "$baseline")" "$(node_path "$FAKE_HOME/.claude.json")" 2>&1)"
     SUMMARY="rc=$rc npmi=$NPM_INSTALL add=$MCP_ADD rm=$MCP_REMOVE mcp=$MCP_ANY err=$ERR_LINES"
     scan_sentinels "$dir"
 }

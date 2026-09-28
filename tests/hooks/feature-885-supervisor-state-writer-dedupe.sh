@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-supervisor-state-writer-dedupe.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor-state-writer, dedupe, axis-a, feature-885
+# Tags: supervisor-state-writer, dedupe, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — dedupe key extended to include reason and
 # context.git_root_resolved.
 #

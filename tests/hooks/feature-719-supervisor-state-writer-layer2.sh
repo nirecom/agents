@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-719-supervisor-state-writer-layer2.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor, em-supervisor, writer, layer2, unit
+# Tags: supervisor, em-supervisor, writer, layer2, unit, scope:issue-specific
 # RED for issue #719.
 
 set -u

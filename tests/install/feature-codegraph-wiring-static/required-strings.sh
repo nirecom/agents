@@ -70,9 +70,8 @@ W1-29 | hooks/codegraph-context-inject.js   | promptHookScopeAllows
 W1-29b| hooks/lib/codegraph-boundary.js     | require("./path-normalize")
 # the telemetry-reset report text and its output stay owned by the installer (S5-5)
 W1-29c| install/codegraph-mcp.js            | RESET_NOTICE
-# CLI pin verification lives in the boundary module and the installer calls it (S5-13)
-W1-30 | hooks/lib/codegraph-boundary.js     | verifyPinnedCliVersion
-W1-31 | install/codegraph-mcp.js            | verifyPinnedCliVersion
+# the installer marks the codegraph entry alwaysLoad so codegraph_explore is not deferred (#2254)
+W1-32 | install/codegraph-mcp.js            | alwaysLoad
 W1_TABLE
 
 # W1-10f behavioral: prove the fallback pair is actually RETURNED when

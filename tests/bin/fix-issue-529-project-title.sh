@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
-# Tags: github, issues, bin, shell, env
+# Tags: github, issues, bin, shell, env, scope:issue-specific
 # Tests for fix #529: create-project.sh uses "REPO_NAME — Issue Timeline" (U+2014 em dash)
 # instead of "REPO_NAME migration" as the project title.
 set -euo pipefail

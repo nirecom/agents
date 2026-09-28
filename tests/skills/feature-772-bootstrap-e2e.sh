@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # filename: tests/skills/feature-772-bootstrap-e2e.sh
 # Tests: skills/worktree-end/scripts/bootstrap-complete.sh
-# Tags: bootstrap, worktree-end, e2e, new-repo
+# Tags: bootstrap, worktree-end, e2e, new-repo, scope:issue-specific
 #
 # Tests the bootstrap-complete script for issue #772.
 # This script runs at the end of /worktree-end when the remote was empty at
