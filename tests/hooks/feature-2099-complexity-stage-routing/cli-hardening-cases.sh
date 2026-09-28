@@ -10,7 +10,7 @@
 # a CLI comparing one field passes while the other two go unchecked.
 d2099h_rb_shim() {
     case "$1" in
-        levels) echo 'levels: { detail: "high", write_tests: "high", write_code: "high" }' ;;
+        levels) echo 'levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" }' ;;
         level) echo 'level: "low"' ;;
         signals) echo 'signals: ["S5-breaking"]' ;;
     esac
@@ -236,7 +236,7 @@ d2099h_assert_sig_invalid() {
     fi
     assert_contains "$desc — receipt" "RECORDED_COMPLEXITY" "$out"
     assert_eq "$desc — reads back as undecidable-high, unrecognized tokens collapsed to UNRECOGNIZED(count)" \
-        "level=high;signals=$want_signals;" \
+        "level=high;signals=$want_signals;model=opus;" \
         "$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null | tr '\n' ';')"
     assert_eq "$desc — one event, no skip annotation" "ce=1 skip=0" "$(d2099_side_effects "$sid")"
 }

@@ -32,7 +32,7 @@ const m = require(process.env.CR_MOD_N);
 console.log([m.ROUTING_STAGES.join("|"), m.UNDECIDABLE_SIGNAL, m.SIGNAL_IDS.join("|")].join(" "));
 ')
     assert_eq "D-2 stage keys, undecidable token and signal ids are the SSOT values" \
-        "detail|write_tests|write_code S0-undecidable S1-multi-file|S1b-wide-change|S2-architecture|S3-security|S4-installer|S5-breaking|S6-long-plan" \
+        "outline|detail|write_tests|write_code S0-undecidable S1-multi-file|S1b-wide-change|S2-architecture|S3-security|S4-installer|S5-breaking|S6-long-plan" \
         "$got"
 
     got=$(run_node '
@@ -201,7 +201,7 @@ console.log([
 ].join(" "));
 ')
     assert_eq "D-8 deriveStageLevels agrees with per-stage derivation, is frozen, pure and deterministic" \
-        "detail|write_tests|write_code high,high,high high,high,high DETERMINISTIC FROZEN INPUT_INTACT" "$got"
+        "outline|detail|write_tests|write_code high,high,high high,high,high,high DETERMINISTIC FROZEN INPUT_INTACT" "$got"
 
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);

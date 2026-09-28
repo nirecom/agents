@@ -96,14 +96,14 @@ d2099_round_trip() {
         matrix="$matrix$st:$(run_with_timeout node "$BIN_READ" --session "$sid" --stage "$st" 2>/dev/null | tr '\n' ';') "
     done
     assert_eq "R-4 one signal set routes differently per stage (S1-multi-file: low/low/high)" \
-        "detail:level=low;signals=S1-multi-file; write_tests:level=low;signals=S1-multi-file; write_code:level=high;signals=S1-multi-file; " \
+        "detail:level=low;signals=S1-multi-file;model=sonnet; write_tests:level=low;signals=S1-multi-file;model=sonnet; write_code:level=high;signals=S1-multi-file;model=opus; " \
         "$matrix"
 
     # Aggregate `level` stays on the legacy rule and is NOT the write_code column
     # by construction (detail.md D3) — here they happen to agree.
     out=$(run_with_timeout node "$BIN_READ" --session "$sid" 2>/dev/null | tr '\n' ';')
     assert_eq "R-5 back-compat mode (no --stage) adds a levels= JSON line" \
-        "level=high;signals=S1-multi-file;levels={\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" \
+        "level=high;signals=S1-multi-file;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" \
         "$out"
 }
 
@@ -117,7 +117,7 @@ d2099_zero_signal_and_presence() {
     assert_eq "R-6 --signals \"\" records a zero-signal evaluation (exit 0)" "0" "$rc"
 
     out=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage write_tests 2>/dev/null | tr '\n' ';')
-    assert_eq "R-7 a zero-signal record reads back low with signals=none" "level=low;signals=none;" "$out"
+    assert_eq "R-7 a zero-signal record reads back low with signals=none" "level=low;signals=none;model=sonnet;" "$out"
 
     local sid2
     sid2=$(new_session nosig)
@@ -134,7 +134,7 @@ d2099_zero_signal_and_presence() {
 
     rc=0; out=$(run_with_timeout node "$BIN_DERIVE" --stage write_tests --signals "S1-multi-file" 2>&1) || rc=$?
     assert_eq "R-13 derive-complexity-level is stateless and exits 0" "0" "$rc"
-    assert_eq "R-14 derive-complexity-level applies the write_tests column" "level=low" "$out"
+    assert_eq "R-14 derive-complexity-level applies the write_tests column" $'level=low\nmodel=sonnet' "$out"
 
     rc=0; out=$(run_with_timeout node "$BIN_DERIVE" --stage write_tests 2>&1) || rc=$?
     assert_eq "R-15 derive-complexity-level also presence-detects --signals" "1" "$rc"
@@ -323,7 +323,7 @@ seed(okSid);
 b.appendEvents(okSid, [Object.assign({}, base, {
   signals: ["S3-security"],
   level: "high",
-  levels: { detail: "low", write_tests: "high", write_code: "high" },
+  levels: { outline: "low", detail: "low", write_tests: "high", write_code: "high" },
 })]);
 // Guarded: until the projection carries `levels`, a bare proj.levels.detail
 // reports a TypeError stack instead of the want/got diff naming the missing key.

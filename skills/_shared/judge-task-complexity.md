@@ -1,5 +1,5 @@
-> Shared rubric. Read explicitly by `make-detail-plan`, `write-tests`, and
-> `write-code` before launching a subagent. Not invoked via the Skill tool.
+> Shared rubric. Read explicitly by `make-outline-plan`, `make-detail-plan`,
+> `write-tests`, and `write-code` before launching a subagent. Not invoked via the Skill tool.
 
 This file defines SIGNALS ONLY. It does not decide a level.
 
@@ -52,6 +52,7 @@ Regenerate: `node bin/workflow/derive-complexity-level --print-signal-ids`
 <!-- BEGIN GENERATED: stage-routing -->
 | Stage | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |
 |-------|---------|-----------------|------------------------------|------------------------|-------------|
+| `outline` | low | `S2-architecture`<br>`S5-breaking` | — | `S1b-wide-change` + `S6-long-plan` | high |
 | `detail` | low | `S2-architecture`<br>`S5-breaking` | — | `S1b-wide-change` + `S6-long-plan` | high |
 | `write_tests` | low | `S1b-wide-change`<br>`S2-architecture`<br>`S3-security`<br>`S4-installer`<br>`S5-breaking` | — | — | high |
 | `write_code` | low | `S3-security` | `S1-multi-file`<br>`S1b-wide-change`<br>`S2-architecture`<br>`S4-installer`<br>`S5-breaking`<br>`S6-long-plan` | — | high |

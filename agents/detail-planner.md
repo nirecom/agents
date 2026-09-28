@@ -2,7 +2,6 @@
 name: detail-planner
 description: Drafts and revises implementation plans. Used by the make-detail-plan skill in a planner/reviewer discussion loop.
 tools: Read, Glob, Grep, Bash, WebFetch, Write, mcp__codegraph__codegraph_explore
-model: sonnet
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 

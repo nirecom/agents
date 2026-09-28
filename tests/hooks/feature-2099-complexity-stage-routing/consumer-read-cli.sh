@@ -95,4 +95,7 @@ d2099_consumer_read() {
     # NO_SIGNALS_LINE branch stays reachable.
     [ -n "$sig" ] || return 0
     printf 'signals=%s\n' "${sig#COMPLEXITY_SIGNALS=}"
+    mdl=$(printf '%s\n' "$out" | grep -m1 -- "^COMPLEXITY_MODEL_$stage=")
+    [ -n "$mdl" ] || return 0
+    printf 'model=%s\n' "${mdl#COMPLEXITY_MODEL_$stage=}"
 }

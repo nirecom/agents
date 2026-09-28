@@ -17,6 +17,7 @@ const {
 } = require("../lib/supervisor-state-writer/audit-run");
 const { isSubCheckSettled } = require("../lib/audit-ledger");
 const { SUB_CHECKS, ALL_SUB_CHECK_IDS } = require("../lib/audit-triggers");
+const { formatAgentModelLine } = require("../lib/role-model");
 let getWorkflowPlansDir = null;
 try { ({ getWorkflowPlansDir } = require("../lib/workflow-plans-dir")); } catch (_) { /* optional */ }
 
@@ -158,6 +159,7 @@ function formatAuditArmReason(armInfo, meta) {
     "",
     `Run the audit mode strategic review agent with this run-id (${runId}):`,
     `  Agent file: ${meta.auditAgentPath}`,
+    formatAgentModelLine("reviewer"),
     "",
     `supervisor-audit を該当 run-id (${runId}) 付きで起動する。`,
     "この起動は /run-tests の dispatch と同一ターンで並行して発行してよい",

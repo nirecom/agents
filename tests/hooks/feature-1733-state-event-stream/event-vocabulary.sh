@@ -321,7 +321,7 @@ if run_case "EV13/complexity-levels-shape-atomic"; then
     # separates the two is the file itself: same bytes, same event count, after the throw.
     nodejs "$SID" "$PRE$VOCAB_JS"'
 const bad = [];
-const ok = { detail: "low", write_tests: "high", write_code: "high" };
+const ok = { outline: "low", detail: "low", write_tests: "high", write_code: "high" };
 // Optional: an event with no `levels` at all is valid.
 if (!accepts(mk("complexity_evaluation"))) bad.push("absent-levels:rejected");
 if (!accepts(mk("complexity_evaluation", { levels: ok }))) bad.push("valid-levels:rejected");

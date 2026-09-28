@@ -2,27 +2,17 @@
 # tests/hooks/feature-feat-928-supervisor-report-format.sh
 # Tests: hooks/lib/supervisor-report-format.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, format, display
-
-# L3 gap (what this test suite does NOT catch):
-#   - Whether supervisor-guard.js is registered as a Stop hook in settings.json
-#   - Whether the hook fires in the real Claude Code session environment
-# Closest-to-action mitigation: bin/check-verification-gate.sh (hook-registration)
-#   fires an AskUserQuestion at WORKFLOW_USER_VERIFIED preflight.
-#
-# Dispatcher only — all test bodies live in tests/hooks/feature-feat-928-supervisor-report-format/.
-# Shared helpers / fixtures live in tests/hooks/feature-feat-928-supervisor-report-format/_lib.sh.
-# See file-split.md Pattern A: this entrypoint is dispatch + aggregate only.
-#
-# Each split group is runnable standalone, e.g.:
-#   bash tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
-# The dispatcher runs both groups and aggregates exit codes + the
-# "Results: N passed, M failed" line each emits.
+# L3 gap: settings.json Stop registration and real-session firing of supervisor-guard.js;
+#   mitigation: bin/check-verification-gate.sh (hook-registration) at WORKFLOW_USER_VERIFIED.
+# Dispatcher only (file-split.md Pattern A): bodies + _lib.sh live in the sibling
+#   feature-feat-928-supervisor-report-format/ dir; each group runs standalone and
+#   emits "Results: N passed, M failed", which this entrypoint aggregates.
 
 set -uo pipefail
 
 DISPATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/feature-feat-928-supervisor-report-format" && pwd)"
 
-TEST_GROUPS=(formatter-unit guard-integration)
+TEST_GROUPS=(formatter-unit guard-integration model-line)
 
 TOTAL_PASS=0
 TOTAL_FAIL=0

@@ -72,10 +72,10 @@ const ROWS = [
   // opposite (high/low/low) proves the migration preserves the RECORDED map
   // verbatim instead of silently re-deriving and overwriting the routing
   // decision a session already made.
-  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
+  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { outline: "low", detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
   ["BAD-partial", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low" }, recorded_at: AT }, seedEvent],
   ["BAD-value", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low", write_tests: "yes", write_code: "high" }, recorded_at: AT }, seedEvent],
-  ["STORED-wins", { level: "low", signals: [], levels: { detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
+  ["STORED-wins", { level: "low", signals: [], levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
   // A persisted record whose signals array holds NON-STRING elements. The read
   // contract accepts any array, so this must not throw: every non-string
   // stringifies to a token outside SIGNAL_IDS and falls to undecidable-high,
@@ -146,7 +146,7 @@ out.push("missing=" + b.readStageComplexityLevel("s2099-absent-" + process.pid, 
 console.log(out.join(" "));
 ')
     assert_eq "L-5 readStageComplexityLevel backfills legacy records and rejects an unknown stage" \
-        "seeded=yes detail=low write_tests=low write_code=high stage=TypeError missing=null" "$got"
+        "seeded=yes outline=low detail=low write_tests=low write_code=high stage=TypeError missing=null" "$got"
 }
 
 # L-6 (row L4): a v1 state file must come out of migration with levels attached
@@ -201,7 +201,7 @@ console.log([
   "raw_levels=" + (rawAfter.length ? JSON.stringify(rawAfter[0].levels) : "none"),
 ].join(" "));
 ')
-    want_levels="{\"detail\":\"high\",\"write_tests\":\"high\",\"write_code\":\"high\"}"
+    want_levels="{\"outline\":\"high\",\"detail\":\"high\",\"write_tests\":\"high\",\"write_code\":\"high\"}"
     assert_eq "L-6 v1-to-v2 backfills the complexity event with derived levels, in memory and once a writer persists it" \
         "level=high levels=high/high/high mem_events=1 mem_levels=$want_levels raw_before=0 persisted=true raw_events=1 raw_levels=$want_levels" \
         "$got"

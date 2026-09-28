@@ -284,6 +284,50 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 assert_eq "S4-user-verified-audit: a null hookCwd resolves a usable cwd (process.cwd()) and the settled TR5 run approves without throwing" \
     "$s4_out" "OK"
 
+# S5 (#2100 Step 6 H10, SF-M1/SF-M2) — the TR5 arm reason names the reviewer model
+# right after its supervisor-audit spawn line. Fresh SID + fixture cfg per render;
+# ambient MODEL_* stripped. RED until Step 6 lands (S5-arm is GREEN today).
+s5_reason() {
+    local sid="$1" cfg="$WORK/cfg-$1"
+    mkdir -p "$cfg"
+    printf '%b' "$2" > "$cfg/.env"
+    ( cd "$REPO" && env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH -u MODEL_PRODUCER_LOW \
+        -u CLAUDE_PROJECT_DIR -u WORKFLOW_SESSION_ID AGENTS_CONFIG_DIR="$(nrm "$cfg")" \
+        UVA="$UVA_NODE" WR="$WRITER_NODE" SC="$SCHEMA_NODE" SESS="$sid" RCWD="$REPO_NODE" \
+        bash "$RWT" 30 node -e "
+const { checkUserVerifiedAudit } = require(process.env.UVA);
+const writer = require(process.env.WR);
+const schema = require(process.env.SC);
+require('fs').writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(schema.createEmptyState(process.env.SESS)));
+let reason = null;
+checkUserVerifiedAudit(process.env.SESS, process.env.RCWD, {
+  approveFn: () => { reason = 'APPROVED'; },
+  blockFn: (r) => { reason = String(r); },
+});
+process.stdout.write(reason === null ? 'NO-DECISION' : reason);
+" 2>&1 )
+}
+s5_after() {
+    printf '%s\n' "$1" | awk 'hit { print; exit } /^Run agents\/supervisor-audit[.]md as a subagent, then re-issue the sentinel[.]$/ { hit = 1 }'
+}
+s5_model() { printf 'Subagent model: pass model: "%s" to the Agent tool.' "$1"; }
+
+s5_out="$(s5_reason ext2100a 'MODEL_REVIEWER=haiku\nMODEL_ALERT=opus\n')"
+assert_match "S5-arm: an unaudited TR5 sentinel arms and blocks with the audit spawn line" \
+    "$s5_out" '^\[EM Supervisor\] user_verification \(TR5\) audit required'
+assert_eq "S5-haiku: MODEL_REVIEWER=haiku is the line right after the spawn line" \
+    "$(s5_after "$s5_out")" "$(s5_model haiku)"
+assert_eq "S5-haiku: exactly one Subagent model: line" \
+    "$(printf '%s\n' "$s5_out" | grep -c '^Subagent model:')" "1"
+s5_out="$(s5_reason ext2100b 'MODEL_ALERT=haiku\n')"
+assert_eq "S5-swap: MODEL_ALERT alone leaves the reviewer default (opus)" \
+    "$(s5_after "$s5_out")" "$(s5_model opus)"
+s5_out="$(s5_reason ext2100c 'MODEL_REVIEWER=gpt-uvaleak\n')"
+assert_eq "S5-invalid: a disallowed MODEL_REVIEWER falls back to opus" \
+    "$(s5_after "$s5_out")" "$(s5_model opus)"
+assert_nomatch "S5-invalid: the disallowed value is never echoed into the reason" \
+    "$s5_out" 'uvaleak|^NO-DECISION$'
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ] && exit 0

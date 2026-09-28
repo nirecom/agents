@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
 # Tests: agents/outline-planner.md, agents/outline-reviewer.md, skills/_shared/codex-review-loop.md, skills/make-outline-plan/SKILL.md, hooks/stop-confirm-plan-guard.js
 # Tags: outline, planning, sentinel, workflow, skill, scope:common
-# Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer)
-# L3 gap (what this test does NOT catch):
-# - real Claude Code session where orchestrator auto-selects approach and MOP-8 sentinel fires
-#   correctly (only verifiable in a live session; AskUserQuestion no longer used in MOP-7)
-# - VS Code turn-final text rendering for the prose rationale summary (only verifiable live)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-# Target files (expected to FAIL until implementation is complete):
-#   $HOME/.claude/skills/make-outline-plan/SKILL.md
-#   $HOME/.claude/agents/outline-planner.md
-#   $HOME/.claude/agents/outline-reviewer.md
-# Exit 0 always — this is a contract test, not a CI gate yet.
+# Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer).
+# L3 gap: real orchestrator session; AskUserQuestion removal; VS Code rendering.
+#   Mitigation: bin/check-verification-gate.sh category:skill-orchestration.
+# Exit 0 always — contract test, not a CI gate yet.
 
-# Timeout guard: if running without the sentinel, re-exec under timeout
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1
     if command -v timeout >/dev/null 2>&1; then
@@ -27,6 +18,12 @@ fi
 SKILL_MD="$HOME/.claude/skills/make-outline-plan/SKILL.md"
 PLANNER_MD="$HOME/.claude/agents/outline-planner.md"
 REVIEWER_MD="$HOME/.claude/agents/outline-reviewer.md"
+
+# LOCAL_* point at the worktree copies (rules/test/fixture-isolation.md).
+# Assertions about changes in this branch must use LOCAL_* — they fail pre-merge otherwise.
+_SELF_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+LOCAL_SKILL_MD="$_SELF_DIR/skills/make-outline-plan/SKILL.md"
+LOCAL_REVIEWER_MD="$_SELF_DIR/agents/outline-reviewer.md"
 
 PASS=0
 FAIL=0
@@ -125,9 +122,44 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- Normal (PLANNER_MD) ---"
 
-# N8: frontmatter model: opus
-assert_contains "$PLANNER_MD" "model:[[:space:]]*opus" \
-    "N8: PLANNER_MD frontmatter contains 'model: opus'"
+# N8 (#2100): MOP-2 runs read-complexity-evaluation --stage outline and passes its
+# model= to the outline-planner dispatch. Scoped to the MOP-2 step block (`MOP-2.`
+# up to the next `MOP-3.`) so a `model:` in the frontmatter or another step cannot
+# satisfy it. Tests LOCAL_SKILL_MD (worktree copy). FAILS until MOP-2 is updated.
+if [ ! -f "$LOCAL_SKILL_MD" ]; then
+    fail "N8: LOCAL_SKILL_MD not found ($LOCAL_SKILL_MD)"
+else
+    _mop2="$(awk '/^MOP-2\./{f=1} /^MOP-3\./{f=0} f' "$LOCAL_SKILL_MD" 2>/dev/null || true)"
+    if [ -z "$_mop2" ]; then
+        fail "N8: LOCAL_SKILL_MD has no 'MOP-2.' step block"
+    else
+        if printf '%s\n' "$_mop2" | grep -qF 'read-complexity-evaluation'; then
+            pass "N8a: MOP-2 block runs read-complexity-evaluation"
+        else
+            fail "N8a: MOP-2 block does not run read-complexity-evaluation"
+        fi
+        if printf '%s\n' "$_mop2" | grep -qF -- '--stage outline'; then
+            pass "N8b: MOP-2 block passes --stage outline"
+        else
+            fail "N8b: MOP-2 block does not pass --stage outline"
+        fi
+        if printf '%s\n' "$_mop2" | grep -E 'subagent_type: *`?outline-planner' | grep -qE 'model:'; then
+            pass "N8c: MOP-2 outline-planner dispatch line carries model:"
+        else
+            fail "N8c: MOP-2 outline-planner dispatch line (subagent_type: outline-planner) has no model:"
+        fi
+    fi
+    # N8d: the rule line that binds EVERY outline-planner launch site to the MOP-2
+    # model (detail.md Step 5). Stable tokens: outline-planner, MOP-2, model, and
+    # each launch-site id — MOP-3, MOP-4, MOP-4a, MOP-5, MOP-8 — on one line.
+    _n8d="$(grep -F 'outline-planner' "$LOCAL_SKILL_MD" 2>/dev/null | grep -F 'MOP-2' | grep -F 'model' \
+        | grep -F 'MOP-3' | grep -F 'MOP-4a' | grep -F 'MOP-5' | grep -F 'MOP-8' | grep -cE 'MOP-4([^a0-9]|$)')"
+    if [ "${_n8d:-0}" -ge 1 ]; then
+        pass "N8d: rule line says every outline-planner launch site (MOP-3/4/4a/5/8) passes the MOP-2 model"
+    else
+        fail "N8d: no rule line binding every outline-planner launch site (MOP-3/4/4a/5/8) to the MOP-2 model"
+    fi
+fi
 
 # N9: 2-3 approaches required or mutually exclusive
 assert_contains "$PLANNER_MD" "2.{0,30}3.*approach|mutually.exclusive|相互に排他" \
@@ -155,9 +187,22 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- Normal (REVIEWER_MD) ---"
 
-# N14: frontmatter model: opus
-assert_contains "$REVIEWER_MD" "model:[[:space:]]*opus" \
-    "N14: REVIEWER_MD frontmatter contains 'model: opus'"
+# N14: REVIEWER_MD frontmatter must have NO model: line (removed in #2100).
+# Checks the first ---...--- pair only to avoid false positives from body text.
+# Tests LOCAL_REVIEWER_MD (worktree copy). FAILS until write_code removes model:.
+if [ ! -f "$LOCAL_REVIEWER_MD" ]; then
+    fail "N14: LOCAL_REVIEWER_MD not found ($LOCAL_REVIEWER_MD)"
+else
+    # Extract only the first frontmatter block (first ---...--- pair)
+    _fm="$(awk '/^---/{if(++n==1){f=1;next} if(n==2){exit}} f' "$LOCAL_REVIEWER_MD" 2>/dev/null || true)"
+    if [ -z "$_fm" ]; then
+        fail "N14: LOCAL_REVIEWER_MD has no frontmatter block"
+    elif printf '%s\n' "$_fm" | grep -qE '^model:'; then
+        fail "N14: LOCAL_REVIEWER_MD frontmatter still contains 'model:' (must be removed)"
+    else
+        pass "N14: LOCAL_REVIEWER_MD frontmatter has no 'model:' line"
+    fi
+fi
 
 # N15: APPROVED verdict
 assert_contains "$REVIEWER_MD" "APPROVED" \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/save-research/SKILL.md
-# Tags: frontmatter, tests, research, skill, bin
-# Structural tests for claude-global/skills/save-research/SKILL.md
+# Tags: frontmatter, tests, research, skill, bin, scope:common
+# Structural tests for skills/save-research/SKILL.md
 set -euo pipefail
 
 PASS=0
@@ -9,8 +9,8 @@ FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SKILL="$DOTFILES_DIR/claude-global/skills/save-research/SKILL.md"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SKILL="$ROOT/skills/save-research/SKILL.md"
 
 echo "=== save-research skill structural tests ==="
 
@@ -22,13 +22,21 @@ else
 fi
 
 # Normal: has required frontmatter fields
-for field in name description model effort; do
-    if grep -qE "^${field}:" "$SKILL"; then
+for field in name description model; do
+    if [ -f "$SKILL" ] && grep -qE "^${field}:" "$SKILL" 2>/dev/null; then
         pass "frontmatter has '$field'"
     else
         fail "frontmatter missing '$field'"
     fi
 done
+
+# Normal: effort is ABSENT (effort: line removed in #2100)
+# Requires write_code to delete 'effort:' from frontmatter — FAILS until then.
+if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
+    fail "frontmatter 'effort:' must be absent (was not yet removed)"
+else
+    pass "frontmatter 'effort:' is absent"
+fi
 
 # Normal: name field is save-research
 if grep -qE '^name: save-research$' "$SKILL"; then

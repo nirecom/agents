@@ -125,7 +125,7 @@ d2099_consumer_fail_open() {
     assert_contains "FO-6 ... with a ROUTING_TABLE_UNAVAILABLE diagnostic on stderr" "ROUTING_TABLE_UNAVAILABLE" "$out"
 
     rc=0; out=$(run_with_timeout node "$D2099_ISO/bin/workflow/derive-complexity-level" --stage write_tests --signals "" 2>/dev/null) || rc=$?
-    assert_eq "FO-7 derive-complexity-level always answers, erring toward capability" "level=high" "$out"
+    assert_eq "FO-7 derive-complexity-level always answers, erring toward capability" $'level=high\nmodel=opus' "$out"
     assert_eq "FO-8 ... and exits 0 (NONE is not in its vocabulary)" "0" "$rc"
 
     out=$(run_with_timeout node "$D2099_ISO/bin/workflow/derive-complexity-level" --stage write_tests --signals "" 2>&1 >/dev/null)

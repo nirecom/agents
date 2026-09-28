@@ -34,7 +34,7 @@ else
 fi
 
 # --- Normal case 2: frontmatter has required fields ---
-for field in name description model effort; do
+for field in name description model; do
     if [ -f "$SKILL" ] && grep -qE "^${field}:" "$SKILL" 2>/dev/null; then
         pass "frontmatter has '$field'"
     else
@@ -49,18 +49,20 @@ else
     fail "name is not 'review-plan-security'"
 fi
 
-# --- Normal case 4: model is opus ---
-if [ -f "$SKILL" ] && grep -qE '^model: opus$' "$SKILL" 2>/dev/null; then
-    pass "frontmatter model is 'opus'"
+# --- Normal case 4: model is sonnet (orchestrator skills use sonnet per #2100) ---
+# Requires write_code to change 'model: opus' → 'model: sonnet' — FAILS until then.
+if [ -f "$SKILL" ] && grep -qE '^model: sonnet$' "$SKILL" 2>/dev/null; then
+    pass "frontmatter model is 'sonnet'"
 else
-    fail "frontmatter model is not 'opus'"
+    fail "frontmatter model is not 'sonnet'"
 fi
 
-# --- Normal case 5: effort is medium ---
-if [ -f "$SKILL" ] && grep -qE '^effort: medium$' "$SKILL" 2>/dev/null; then
-    pass "frontmatter effort is 'medium'"
+# --- Normal case 5: effort is ABSENT (effort: line removed in #2100) ---
+# Requires write_code to delete 'effort:' from frontmatter — FAILS until then.
+if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
+    fail "frontmatter 'effort:' must be absent (was not yet removed)"
 else
-    fail "frontmatter effort is not 'medium'"
+    pass "frontmatter 'effort:' is absent"
 fi
 
 # --- Normal case 6: has ## Procedure section ---
@@ -183,6 +185,22 @@ elif ! printf '%s' "$line3" | grep -qF 'RPS-3'; then
     fail "13b: exit 3 fallback NEEDS_REVISION does not route to RPS-3 (Triage) — line: $line3"
 else
     pass "13b: exit 3 fallback NEEDS_REVISION verdict routes to RPS-3 (Triage)"
+fi
+
+# --- Normal case 13d (#2100 Step 5): the exit 3 plan-security-reviewer launch
+# passes the model from resolve-role-model --role reviewer. FAILS until then.
+if [ -z "$line3" ]; then
+    fail "13d: no '- exit 3' branch line found in SKILL.md"
+elif ! printf '%s' "$line3" | grep -qF 'plan-security-reviewer'; then
+    fail "13d: exit 3 branch does not launch plan-security-reviewer — line: $line3"
+elif ! printf '%s' "$line3" | grep -qF 'resolve-role-model'; then
+    fail "13d: plan-security-reviewer launch does not resolve its model via resolve-role-model — line: $line3"
+elif ! printf '%s' "$line3" | grep -qE -- '--role reviewer([^-a-z]|$)'; then
+    fail "13d: plan-security-reviewer launch does not use --role reviewer — line: $line3"
+elif ! printf '%s' "$line3" | grep -qE 'model[=:]'; then
+    fail "13d: plan-security-reviewer launch does not pass a model: parameter — line: $line3"
+else
+    pass "13d: plan-security-reviewer launch passes model= from resolve-role-model --role reviewer"
 fi
 
 # --- Normal case 13c (#2154, CPR-ORTH with case 14): the exit 3 fallback path's

@@ -23,13 +23,15 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-p
 
 ### Step MDP-3 — Choose planner model
 
-Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model via `high→opus, low→sonnet`.
-If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context. Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-detail-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --signals-file "<PLANS_DIR>/<session-id>-detail-signals.txt"` and use its `level=<v>` — never judge the level inline.
-Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids from the `signals=` line, or "none"])`.
+Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
+If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-detail-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --signals-file "<PLANS_DIR>/<session-id>-detail-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
 
 ### Step MDP-4 — Initial draft
 
-Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents. Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
+Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <model= from MDP-3>`). Pass task context + intent/outline contents.
+Every detail-planner launch — here, the MDP-5 exit 1 re-delegate, the MDP-7 revise and re-prompt, and the research re-prompt — passes the same `model: <model= from MDP-3>`.
+Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 ### Step MDP-4a — Sentinel detection (fallback notice)
 

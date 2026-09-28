@@ -64,6 +64,12 @@ export WORKFLOW_PLANS_DIR
 
 export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
+# Model-producer aliases used by #2100 model= line tests. Exported so every
+# child node process (BIN_DERIVE, BIN_READ) inherits them regardless of what
+# a developer's .env sets.
+export MODEL_PRODUCER_HIGH=opus
+export MODEL_PRODUCER_LOW=sonnet
+
 # Do not inherit the outer Claude Code session into resolveSessionId().
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_SESSION_ID 2>/dev/null || true
@@ -218,6 +224,7 @@ d2099_step_anchors() {
     case "$1" in
         MDP-3)  echo '^### Step MDP-3 |^### Step ' ;;
         MDP-4)  echo '^### Step MDP-4 |^### Step ' ;;
+        MOP-2)  echo '^MOP-2\.|^MOP-[0-9]' ;;
         WT-0)   echo '^WT-0\.|^WT-[0-9]' ;;
         WT-6)   echo '^WT-6\.|^WT-[0-9]' ;;
         WT-7)   echo '^WT-7\.|^WT-[0-9]' ;;

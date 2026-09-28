@@ -2,7 +2,6 @@
 name: supervisor-audit
 description: EM Supervisor — audit mode review agent. Invoked by Stop-hook block at stage boundaries (CONFIRM_INTENT/OUTLINE/DETAIL) or when cumulative severity reaches the audit threshold. Reviews cross-stage coherence and writes a verdict (CONTINUE/WARN/BLOCK) to the supervisor state file.
 tools: Read, Glob, Grep, Bash
-model: opus
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 

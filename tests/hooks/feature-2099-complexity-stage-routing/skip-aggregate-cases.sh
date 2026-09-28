@@ -52,7 +52,7 @@ d2099s_aggregate_low_beats_stage_high() {
     local sid t seeded
     sid=$(new_session saggr1)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"low","signals":[],"levels":{"detail":"high","write_tests":"high","write_code":"high"}}')
+        '{"level":"low","signals":[],"levels":{"outline":"high","detail":"high","write_tests":"high","write_code":"high"}}')
     assert_eq "SA-0 the disagreeing record survives the projection (else the cases below are vacuous)" \
         "SEEDED" "$seeded"
 
@@ -68,7 +68,7 @@ d2099s_aggregate_high_beats_stage_low() {
     local sid t seeded
     sid=$(new_session saggr2)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"high","signals":["S2-architecture"],"levels":{"detail":"low","write_tests":"low","write_code":"low"}}')
+        '{"level":"high","signals":["S2-architecture"],"levels":{"outline":"low","detail":"low","write_tests":"low","write_code":"low"}}')
     assert_eq "SA-2 the inverse record survives the projection" "SEEDED" "$seeded"
 
     for t in outline detail; do
@@ -83,7 +83,7 @@ d2099s_signals_half_of_the_rule() {
     local sid t seeded
     sid=$(new_session saggr3)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"low","signals":["S1-multi-file"],"levels":{"detail":"low","write_tests":"low","write_code":"low"}}')
+        '{"level":"low","signals":["S1-multi-file"],"levels":{"outline":"low","detail":"low","write_tests":"low","write_code":"low"}}')
     assert_eq "SA-4 the level-low-with-signals record survives the projection" "SEEDED" "$seeded"
 
     for t in outline detail; do

@@ -284,7 +284,7 @@ verdict per stage so each step routes on its own evidence:
 {
   "complexity_evaluation": {
     "level": "high",
-    "levels": { "detail": "high", "write_tests": "low", "write_code": "high" },
+    "levels": { "outline": "low", "detail": "high", "write_tests": "low", "write_code": "high" },
     "signals": ["S1-multi-file", "S3-security"],
     "recorded_at": "2026-08-20T10:00:00.000Z"
   }
@@ -294,7 +294,8 @@ verdict per stage so each step routes on its own evidence:
 - **`level`** stays the legacy aggregate (`high` if any signal fires, else `low`) — kept for
   callers that never migrated to per-stage routing.
 - **`levels`** keys are exactly `ROUTING_STAGES` (`hooks/workflow-state/complexity-routing.js`:
-  `detail`, `write_tests`, `write_code`), each `"high"` or `"low"`. `recordComplexityEvaluation`
+  `outline`, `detail`, `write_tests`, `write_code`), each `"high"` or `"low"`. A stored map
+  missing a stage (e.g. a pre-#2100 three-key map without `outline`) is re-derived from `signals`. `recordComplexityEvaluation`
   (`state-io/session-fields.js`) derives both `level` and `levels` from the same `signals` input
   in one call, so they can never disagree with each other or be written out of sync.
 - **`signals` canonicalization (#2148).** `recordComplexityEvaluation` passes the raw judge
@@ -309,8 +310,8 @@ verdict per stage so each step routes on its own evidence:
   (exact `ROUTING_STAGES` key set, each value `"high"`/`"low"`, or `InvalidEventError`), so
   pre-#2099 events and migration-backfilled events with no `levels` still append cleanly.
 - **Read-side compatibility completion.** A missing or malformed `levels` map is not an error
-  at read time: `resolveStageLevels` (`skip-signal-resolver/complexity.js`) re-derives all three
-  stages from the recorded `level`/`signals` via `deriveLegacyStageLevels`, never partially
+  at read time: `resolveStageLevels` (`skip-signal-resolver/complexity.js`) re-derives every
+  stage from the recorded `level`/`signals` via `deriveLegacyStageLevels`, never partially
   trusting a malformed map. This keeps `readComplexityEvaluation` — the consumer-facing read used
   by `write-tests`/`write-code`'s model-selection step — returning a usable per-stage view even
   for sessions recorded before this event carried `levels` at all.
@@ -318,6 +319,12 @@ verdict per stage so each step routes on its own evidence:
   read-back verification only — it returns the event's persisted fields with no folding and no
   compatibility completion, so a `levels` that was never written comes back `undefined` rather
   than being silently reconstructed. Never use it on a normal consumer path.
+- **Level → model (#2100).** A level never names a model: `hooks/lib/role-model.js` maps `high` to
+  `MODEL_PRODUCER_HIGH` and `low` to `MODEL_PRODUCER_LOW` (`.env`; allowed aliases and defaults in
+  its `ROLE_TABLE`), and reviewer/supervisor launches resolve `MODEL_REVIEWER` / `MODEL_ALERT` the
+  same way. `read-complexity-evaluation --stage`, `derive-complexity-level`, and
+  `read-session-facts` (contract v2: `COMPLEXITY_MODEL_write_tests` / `COMPLEXITY_MODEL_write_code`)
+  print the resolved alias; skills pass it as the Agent tool's `model:` instead of agent frontmatter.
 
 ## Steps and owners
 

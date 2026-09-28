@@ -229,6 +229,82 @@ process.stdout.write(v);
     fi
 }
 
+# --- R9/R10 (#2100 H5, SF-M1..SF-M3): alert model line in full mode only ------
+R9_WORK="$(mktemp -d)"
+trap 'rm -rf "$R9_WORK"' EXIT
+mkdir -p "$R9_WORK/cfg" "$R9_WORK/neutral" "$R9_WORK/wf" "$R9_WORK/plans"
+
+# r9_render <env-content> <opts-extra-js> — formatLayer2Findings under a fixture .env.
+r9_render() {
+    local cfg="$R9_WORK/cfg"
+    printf '%b' "$1" > "$cfg/.env"
+    command -v cygpath >/dev/null 2>&1 && cfg="$(cygpath -m "$cfg")"
+    (
+        cd "$R9_WORK/neutral" || exit 1
+        run_with_timeout 10 env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH \
+            -u MODEL_PRODUCER_LOW -u CLAUDE_PROJECT_DIR -u CLAUDE_SESSION_ID \
+            -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE AGENTS_CONFIG_DIR="$cfg" \
+            CLAUDE_WORKFLOW_DIR="$R9_WORK/wf" WORKFLOW_PLANS_DIR="$R9_WORK/plans" node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'error', detail:'r9-detail', reporter:'r9' },
+  { categories:['code'], severity:'notice', detail:'r9-notice', reporter:'r9' },
+];
+const v = r.formatLayer2Findings(findings, Object.assign($OPTS_JS, $2));
+process.stdout.write(String(v));
+"
+    ) 2>/dev/null
+}
+
+# r9_after <text> — the line right after the full-mode spawn instruction.
+r9_after() {
+    printf '%s\n' "$1" | awk 'hit { print; exit } /^Recommended action: review and address per agents\/supervisor[.]md / { hit = 1 }'
+}
+
+r9_expect() {
+    local label="$1" out="$2" alias="$3" want got n
+    want="Subagent model: pass model: \"$alias\" to the Agent tool."
+    got="$(r9_after "$out")"
+    n="$(printf '%s\n' "$out" | grep -c '^Subagent model:')"
+    if [ "$got" = "$want" ] && [ "$n" = "1" ]; then
+        pass "$label"
+    else
+        fail "$label (line after spawn: '$got'; want '$want'; model lines=$n)"
+    fi
+}
+
+run_r9() {
+    require_source "$RENDER_SRC" "R9: full-mode alert model line" || return
+    local out
+    out="$(r9_render 'MODEL_ALERT=haiku\nMODEL_REVIEWER=opus\n' '{}')"
+    r9_expect "R9 SF-M1: MODEL_ALERT=haiku reaches the full-mode model line" "$out" haiku
+    out="$(r9_render 'MODEL_REVIEWER=haiku\n' '{}')"
+    r9_expect "R9 SF-M1 swap: MODEL_REVIEWER alone leaves the alert default (sonnet)" "$out" sonnet
+    out="$(r9_render 'MODEL_ALERT=gpt-r9leak\n' '{}')"
+    r9_expect "R9 SF-M2: invalid MODEL_ALERT falls back to sonnet" "$out" sonnet
+    if printf '%s' "$out" | grep -q 'r9leak'; then
+        fail "R9 SF-M2: invalid value echoed into output"
+    elif ! printf '%s' "$out" | grep -q '^Recommended action: review and address'; then
+        fail "R9 SF-M2: full-mode render missing (out=$out)"
+    else
+        pass "R9 SF-M2: invalid value withheld from output"
+    fi
+}
+
+# SF-M3 negative control: summaryOnly / actionableOnly carry no spawn line.
+run_r10() {
+    require_source "$RENDER_SRC" "R10: summary/actionable modes carry no model line" || return
+    local out mode
+    for mode in summaryOnly actionableOnly; do
+        out="$(r9_render 'MODEL_ALERT=haiku\n' "{ $mode: true }")"
+        if printf '%s' "$out" | grep -q '^\[EM Supervisor\]' && ! printf '%s' "$out" | grep -q 'Subagent model:'; then
+            pass "R10 SF-M3: $mode output has no Subagent model: line"
+        else
+            fail "R10 SF-M3: $mode output unexpected (out=$out)"
+        fi
+    done
+}
+
 run_r1
 run_r2
 run_r3
@@ -237,6 +313,8 @@ run_r5
 run_r6
 run_r7
 run_r8
+run_r9
+run_r10
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

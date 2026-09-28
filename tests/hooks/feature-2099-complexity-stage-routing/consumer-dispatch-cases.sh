@@ -8,45 +8,47 @@
 # CLI answers and the level maps through the mapping READ OUT OF the skill file; the
 # Agent call itself stays the TL3 gap the parent runner already declares.
 
-# d2099_doc_model_for <skill.md> <level> — the model that FILE says the level maps
-# to. Never a literal: the expectation is derived from the document under test.
+# d2099_doc_model_for <skill.md> <level> — reads model= from BIN_DERIVE via
+# MODEL_PRODUCER_HIGH/LOW. After #2100 skills carry no hardcoded model table.
 d2099_doc_model_for() {
-    # An empty level would make the pattern degenerate to " → opus" and match the
-    # FIRST mapping in the file, turning "no level at all" into a plausible answer.
     case "$2" in high|low) ;; *) echo "NO_LEVEL"; return ;; esac
-    grep -oE "$2 *(→|->) *(opus|sonnet)" "$1" 2>/dev/null \
-        | head -1 | sed -E 's/.*(→|->) *//'
+    local sigs; [ "$2" = "high" ] && sigs="S2-architecture" || sigs=""
+    run_with_timeout node "$BIN_DERIVE" --stage detail --signals "$sigs" 2>/dev/null \
+        | grep '^model=' | head -1 | sed 's/^model=//'
 }
 
-# d2099_dispatch_model <skill.md> <sid> <stage> — replays the consumer's MDP-3 /
-# WT-6 / WCD-3 decision procedure end to end and prints what it selected:
-# a model name, or FALLBACK when the CLI answered NONE.
+# d2099_dispatch_model <skill.md> <sid> <stage> — replays the consumer decision:
+# reads model= from BIN_READ output; FALLBACK when CLI answered NONE. The skill
+# file argument is a label only: this proves the CLI side of the handoff. The
+# skill side (the launch line carries that model=) is proved statically — CD-1 /
+# CO-9 for detail/write_tests/write_code, CD-22..24 for MOP-2.
 d2099_dispatch_model() {
-    local f="$1" sid="$2" stage="$3" out first lvl model
+    local f="$1" sid="$2" stage="$3" out first model
     out=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage "$stage" 2>/dev/null)
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "NONE" ] && { echo "FALLBACK"; return; }
+    model=$(printf '%s\n' "$out" | grep '^model=' | head -1 | sed 's/^model=//')
+    [ -n "$model" ] && { echo "$model"; return; }
     case "$first" in
-        level=*) lvl="${first#level=}" ;;
-        *) echo "UNPARSEABLE:$first"; return ;;
+        level=*) echo "NO_MODEL_LINE_FOR:${first#level=}" ;;
+        *) echo "UNPARSEABLE:$first" ;;
     esac
-    model=$(d2099_doc_model_for "$f" "$lvl")
-    [ -n "$model" ] || { echo "NO_DOCUMENTED_MAPPING_FOR:$lvl"; return; }
-    echo "$model"
 }
 
-# CD-1: the mapping each consumer documents must be the same one, in both
-# directions. If this row is wrong every assertion below measures the wrong
-# thing, so it is asserted first and independently.
+# CD-1: after #2100 each consumer must NOT carry a hardcoded model table (→ opus)
+# and MUST reference the model= line from read-complexity-evaluation.
 d2099_documented_mapping() {
-    local f label
+    local f label has_table has_model_ref
     for f in "$AGENTS_DIR/skills/make-detail-plan/SKILL.md" \
              "$AGENTS_DIR/skills/write-tests/SKILL.md" \
              "$AGENTS_DIR/skills/write-code/SKILL.md"; do
         label="$(basename "$(dirname "$f")")"
-        assert_eq "CD-1 $label documents high→opus / low→sonnet and nothing else" \
-            "high=opus low=sonnet" \
-            "high=$(d2099_doc_model_for "$f" high) low=$(d2099_doc_model_for "$f" low)"
+        has_table=$(grep -qE '→ (opus|sonnet)' "$f" 2>/dev/null && echo yes || echo no)
+        has_model_ref=$(grep -q 'model=' "$f" 2>/dev/null && echo yes || echo no)
+        assert_eq "CD-1 $label no longer documents a hardcoded model table (→ opus/→ sonnet)" \
+            "no" "$has_table"
+        assert_eq "CD-1b $label references the model= line from the CLI" \
+            "yes" "$has_model_ref"
     done
 }
 
@@ -149,6 +151,59 @@ d2099_none_selects_fallback() {
         "opus" "$(d2099_dispatch_model "$wcd" "$sid2" write_code)"
 }
 
+# CD-17: MODEL_PRODUCER_LOW override. With the env var set to a non-default alias,
+# a low-level dispatch must resolve to that alias, not the hard-coded default.
+d2099_env_override_selects_model() {
+    local mdp sid
+    mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
+    sid=$(new_session cdhaiku)
+    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1
+    assert_eq "CD-17 MODEL_PRODUCER_LOW=haiku routes low dispatch to haiku" \
+        "haiku" \
+        "$(MODEL_PRODUCER_LOW=haiku d2099_dispatch_model "$mdp" "$sid" detail)"
+}
+
+# CD-18..24 (#2100 Step 3/5 MOP-2): the outline stage is routed like detail and
+# its model= follows MODEL_PRODUCER_LOW / MODEL_PRODUCER_HIGH, recorded or derived
+# (CD-18..21, CLI side), and MOP-2 hands that model= to outline-planner (CD-22..24).
+d2099_outline_stage_selects_model() {
+    local mop sid_lo sid_hi
+    mop="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
+    sid_lo=$(new_session cdoutlo)
+    run_with_timeout node "$BIN_RECORD" --session "$sid_lo" --signals "S1-multi-file" >/dev/null 2>&1
+    assert_eq "CD-18 MOP-2's read (stage outline) answers model=haiku for a recorded low (MODEL_PRODUCER_LOW=haiku)" \
+        "haiku" "$(MODEL_PRODUCER_LOW=haiku d2099_dispatch_model "$mop" "$sid_lo" outline)"
+    assert_eq "CD-19 the same outline record keeps the sonnet default without the override" \
+        "sonnet" "$(d2099_dispatch_model "$mop" "$sid_lo" outline)"
+
+    sid_hi=$(new_session cdouthi)
+    run_with_timeout node "$BIN_RECORD" --session "$sid_hi" --signals "S2-architecture" >/dev/null 2>&1
+    assert_eq "CD-20 MOP-2's read (stage outline) answers model=haiku for a recorded high (MODEL_PRODUCER_HIGH=haiku)" \
+        "haiku" "$(MODEL_PRODUCER_HIGH=haiku d2099_dispatch_model "$mop" "$sid_hi" outline)"
+
+    local derived
+    derived=$(MODEL_PRODUCER_LOW=haiku run_with_timeout node "$BIN_DERIVE" --stage outline --signals "" 2>/dev/null \
+        | tr -d '\r' | grep -E '^(level|model)=' | paste -sd'|' -)
+    assert_eq "CD-21 the NONE fallback derives level=low and model=haiku for stage outline" \
+        "level=low|model=haiku" "$derived"
+
+    # CD-22..24: the skill half of the handoff, mirroring CO-9/CO-10 — bounded to
+    # the MOP-2 section (MOP-2. up to the next MOP-<n>.), where the value is both
+    # read and dispatched. Planned text: `subagent_type: outline-planner`,
+    # `model: <model= from MOP-2>` (detail.md Step 5).
+    local slot='model: *<[^>]*(MOP-2|model=)[^>]*>'
+    assert_eq "CD-22 MOP-2's outline-planner dispatch passes a model: slot bound to MOP-2's model= on the same line" "yes" \
+        "$(d2099_section_has_re "$mop" MOP-2 "subagent_type: *\`?outline-planner.*$slot|$slot.*subagent_type: *\`?outline-planner")"
+    assert_eq "CD-23 MOP-2 reads the model= line of read-complexity-evaluation --stage outline" "yes" \
+        "$(d2099_section_has_re "$mop" MOP-2 'read-complexity-evaluation.*--stage outline')"
+    assert_eq "CD-23b MOP-2 names the model= line it hands to the dispatch" "yes" \
+        "$(d2099_section_has_re "$mop" MOP-2 'model=')"
+    assert_eq "CD-24 MOP-2 never hardcodes a model literal instead" "no" \
+        "$(d2099_section_has_re "$mop" MOP-2 'model: *"?(opus|sonnet|haiku)"?[ ,)`]')"
+}
+
 d2099_documented_mapping
 d2099_recorded_verdict_selects_model
 d2099_none_selects_fallback
+d2099_env_override_selects_model
+d2099_outline_stage_selects_model

@@ -18,15 +18,15 @@
 
 The EM (Engineering Manager) Supervisor is a single logical supervisor with two physical agent files, differentiated by information scope. Layer 1 (S-1, #228), alert mode (S-2, #719), and audit mode (S-3, #720) are implemented.
 
-**Physical file design:** `agent.model` is a single value per file, so model tiering (alert→Sonnet, audit→Opus) requires two files. This is an implementation constraint, not an architectural split — the two files express one supervisor contract at different information scopes.
+**Physical file design:** the two files differ in information scope and role (alert review vs cross-stage audit), not in model — neither carries a `model:` frontmatter. The model is resolved at launch from `MODEL_ALERT` / `MODEL_REVIEWER` (`hooks/lib/role-model.js`) and printed as a `Subagent model:` line under each spawn instruction. The two files express one supervisor contract at different information scopes.
 
 ### Alert mode (S-2, #719)
 
-Alert mode (`agents/supervisor.md`, model: Sonnet) handles the three alert triggers. Information scope: current session turn. Three triggers arm `alert_armed_at`, labelled with non-numeric slugs: `sentinel-hang`, `scheduled-review`, and off-proposal (`worktree-off proposal` or `workflow-off proposal`).
+Alert mode (`agents/supervisor.md`, model: `MODEL_ALERT`, default sonnet) handles the three alert triggers. Information scope: current session turn. Three triggers arm `alert_armed_at`, labelled with non-numeric slugs: `sentinel-hang`, `scheduled-review`, and off-proposal (`worktree-off proposal` or `workflow-off proposal`).
 
 ### Audit mode (S-3, #720)
 
-Audit mode (`agents/supervisor-audit.md`, model: Opus) handles step-completion and severity-threshold triggers. Information scope: all stages + finding history. Triggers are the SSOT in `hooks/lib/audit-triggers.js`: TR1–TR5 are **edge** triggers on a step-completion transition (`clarify_intent` / `outline` / `detail` / `write_code` / `user_verification`), and TR6 is the one **level** trigger — `alert.cumulative_severity` reaching `AUDIT_SEVERITY_THRESHOLD` (`error`). Cause labels are `step-complete:<step>` or `severity-threshold:<level>`. Each arm mints an audit run identity and records the run in the audit ledger; see [claude-code/supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md).
+Audit mode (`agents/supervisor-audit.md`, model: `MODEL_REVIEWER`, default opus) handles step-completion and severity-threshold triggers. Information scope: all stages + finding history. Triggers are the SSOT in `hooks/lib/audit-triggers.js`: TR1–TR5 are **edge** triggers on a step-completion transition (`clarify_intent` / `outline` / `detail` / `write_code` / `user_verification`), and TR6 is the one **level** trigger — `alert.cumulative_severity` reaching `AUDIT_SEVERITY_THRESHOLD` (`error`). Cause labels are `step-complete:<step>` or `severity-threshold:<level>`. Each arm mints an audit run identity and records the run in the audit ledger; see [claude-code/supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md).
 
 Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `state.audit.audit_verdict`, written via `bin/supervisor-write-audit-verdict`. The verdict is combined with any concurrent alert verdict by `hooks/supervisor-guard/arbitrate.js` (rule table: BLOCK wins, WARN aggregates, otherwise allow) before the Stop hook emits a single block-or-allow decision.
 
@@ -38,7 +38,7 @@ Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `sta
 
 **Block message format (`hooks/lib/supervisor-report-format.js`):**
 
-Pure-function module; no I/O or side effects. Exports:
+Formatter module; no side effects — its only I/O is the `.env` read behind each spawn instruction's model line. Exports:
 `formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath)` for the cumSev=error branch.
 `formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath)` for the alertArmedAt/hang branch.
 `formatWorktreeOffProposalReason(...)` for the off-proposal block reason.

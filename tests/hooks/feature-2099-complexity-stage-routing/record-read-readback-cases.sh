@@ -33,7 +33,7 @@ if (typeof module.exports.readLastRawComplexityEvent === "function") {
     const v = __d2099_orig.apply(this, arguments);
     if (!v || typeof v !== "object") { return v; }
     return Object.assign({}, v, {
-      levels: { detail: "high", write_tests: "high", write_code: "high" },
+      levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" },
     });
   };
 }

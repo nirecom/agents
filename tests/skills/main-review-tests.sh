@@ -22,7 +22,7 @@ else
 fi
 
 # --- Normal case 2: frontmatter has required fields ---
-for field in name description model effort; do
+for field in name description model; do
     if [ -f "$SKILL" ] && grep -qE "^${field}:" "$SKILL" 2>/dev/null; then
         pass "frontmatter has '$field'"
     else
@@ -44,11 +44,12 @@ else
     fail "frontmatter model is not 'sonnet'"
 fi
 
-# --- Normal case 5: effort is low ---
-if [ -f "$SKILL" ] && grep -qE '^effort: low$' "$SKILL" 2>/dev/null; then
-    pass "frontmatter effort is 'low'"
+# --- Normal case 5: effort is ABSENT (effort: line removed in #2100) ---
+# Requires write_code to delete 'effort:' from frontmatter — FAILS until then.
+if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
+    fail "frontmatter 'effort:' must be absent (was not yet removed)"
 else
-    fail "frontmatter effort is not 'low'"
+    pass "frontmatter 'effort:' is absent"
 fi
 
 # --- Normal case 6: has ## Procedure section ---
@@ -79,6 +80,21 @@ if [ -f "$SKILL" ] && grep -qF 'run-codex-review-loop.sh' "$SKILL" 2>/dev/null; 
     pass "SKILL.md references run-codex-review-loop.sh"
 else
     fail "SKILL.md does not reference run-codex-review-loop.sh"
+fi
+
+# --- Normal case 9b (#2100 Step 5): the exit 3 test-reviewer launch passes the
+# reviewer model resolved by resolve-role-model --role reviewer. FAILS until then.
+spawn="$(grep -E '^- exit 3 .*test-reviewer' "$SKILL" 2>/dev/null || true)"
+if [ -z "$spawn" ]; then
+    fail "9b: no '- exit 3' test-reviewer launch line found"
+elif ! printf '%s' "$spawn" | grep -qF 'resolve-role-model'; then
+    fail "9b: test-reviewer launch does not resolve its model via resolve-role-model — line: $spawn"
+elif ! printf '%s' "$spawn" | grep -qE -- '--role reviewer([^-a-z]|$)'; then
+    fail "9b: test-reviewer launch does not use --role reviewer — line: $spawn"
+elif ! printf '%s' "$spawn" | grep -qE 'model[=:]'; then
+    fail "9b: test-reviewer launch does not pass a model: parameter — line: $spawn"
+else
+    pass "9b: test-reviewer launch passes model= from resolve-role-model --role reviewer"
 fi
 
 # --- Normal case 10: references test-design.md ---

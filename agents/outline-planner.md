@@ -2,7 +2,6 @@
 name: outline-planner
 description: Proposes 2-3 mutually-exclusive high-level approaches for a task. Used by the make-outline-plan skill. Inspired by Aider's architect/editor split and GitHub Spec Kit's /specify stage.
 tools: Read, Glob, Grep, Bash, WebFetch, Write, mcp__codegraph__codegraph_explore
-model: opus
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 

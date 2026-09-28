@@ -146,8 +146,8 @@ for (const s of m.ROUTING_STAGES) {
 }
 console.log(rows.join(" "));
 ')
-    assert_eq "CE-4 only detail carries a combination row, and every combination has 2+ members" \
-        "detail=2 write_tests=none write_code=none" "$got"
+    assert_eq "CE-4 only outline and detail carry combination rows, and every combination has 2+ members" \
+        "outline=2 detail=2 write_tests=none write_code=none" "$got"
 }
 
 d2099c_combination_membership

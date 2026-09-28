@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/keys.js, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js
 # Tags: tl2, workflow, session-facts, contract, keys, budget, scope:issue-specific, pwsh-not-required
 
-# The v1 output contract: same eight keys, same order, every time, whatever the session
+# The v2 output contract: same ten keys, same order, every time, whatever the session
 # looks like. A consumer SKILL.md parses positionally-stable KEY=VALUE lines, so a key
 # that silently appears, vanishes or moves is a breaking change that must cost a
 # FACTS_VERSION bump. This file is the machine that charges that cost.
@@ -85,26 +85,26 @@ strict_keys_of() {
 }
 check_shape() {
   local id="$1" f="$2"
-  check "$id: exactly 8 lines" 8 "$(wc -l < "$f" | tr -d ' ')"
+  check "$id: exactly 10 lines" 10 "$(wc -l < "$f" | tr -d ' ')"
   check "$id: the last byte is a newline (nothing truncated)" 1 "$(tail -c 1 "$f" | wc -l | tr -d ' ')"
   check "$id: every line is KEY=VALUE, in the expected order" "$EXPECTED_KEYS" \
     "$(strict_keys_of "$(cat "$f" 2>/dev/null || echo "")")"
 }
 
-# The v1 key list, retyped here on purpose. This is the ONE deliberate CPR-SSOT
+# The v2 key list, retyped here on purpose. This is the ONE deliberate CPR-SSOT
 # exception in the suite: keys.js and this literal are two independent witnesses to the
 # same external contract, so changing either side alone must go red. Deriving the
 # expectation from keys.js would make the test agree with any edit, including a wrong one.
-EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_SIGNALS "
+EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_MODEL_write_tests COMPLEXITY_MODEL_write_code COMPLEXITY_SIGNALS "
 
 echo "=== C1: keys.js is the implementation-side witness of the same list ==="
 KEYS_JS="$(run_with_timeout node -e '
   try {
     const m = require(process.env.KEYS_MOD);
-    process.stdout.write((m.FACTS_V1_KEYS || []).join(" ") + " ");
+    process.stdout.write((m.FACTS_KEYS || []).join(" ") + " ");
   } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
-check "C1a: FACTS_V1_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
-check "C1b: the list is exactly eight keys" 8 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
+check "C1a: FACTS_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
+check "C1b: the list is exactly ten keys" 10 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
 
 echo ""
 echo "=== C2: a typical session -- full key set, in order, FACTS_VERSION first ==="
@@ -125,12 +125,12 @@ run_with_timeout node -e '
 run_facts "$CFG_FULL" --session c2
 check "C2a: exits 0" 0 "$RC"
 check "C2b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C2c: line 1 is the version line" "FACTS_VERSION=1" "$(printf '%s\n' "$OUT" | head -n 1)"
+check "C2c: line 1 is the version line" "FACTS_VERSION=2" "$(printf '%s\n' "$OUT" | head -n 1)"
 check "C2d: the session id is echoed back" "SESSION_ID=c2" "$(printf '%s\n' "$OUT" | sed -n '2p')"
 check_not_contains "C2e: no ACTION line (this CLI reports, it does not decide)" "ACTION=" "$OUT"
 check_not_contains "C2f: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 check_not_contains "C2g: no NEXT_HINT line" "NEXT_HINT=" "$OUT"
-check "C2h: no line is emitted twice" 8 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
+check "C2h: no line is emitted twice" 10 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
 check_shape "C2i" "$OUTF"
 # Non-vacuity for check_shape: the strict reader must actually flag a non-conforming line
 # rather than skip it the way keys_of does.
@@ -185,7 +185,7 @@ check_shape "C3c3: no complexity record" "$OUTF"
 echo ""
 echo "=== C4: key names are static literals, not derived from ROUTING_STAGES ==="
 # Injected via --require so the CLI's own module graph sees the stub. If key names were
-# generated from the stage list, a fourth stage would add a ninth key.
+# generated from the stage list, an extra fake stage would add an eleventh key.
 STUB="$TMPDIR_BASE/stub-stages.js"
 printf '%s\n' \
   '"use strict";' \
@@ -202,13 +202,13 @@ WFS="$REPO_N/hooks/workflow-state"; export WFS
 STUB_PROOF="$(run_with_timeout node --require "$STUB" -e '
   const wf = require(process.env.WFS);
   process.stdout.write(String(wf.ROUTING_STAGES.length));' 2>/dev/null || echo "STUB_FAILED")"
-check "C4a: the stub really adds a fourth routing stage (non-vacuity)" 4 "$STUB_PROOF"
+check "C4a: the stub really adds a routing stage (non-vacuity)" 5 "$STUB_PROOF"
 RC=0
 AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "$RSF" \
   --session c2 >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "C4b: under the stub the key set is unchanged" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C4c: under the stub the key count is still eight" 8 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
+check "C4c: under the stub the key count is still ten" 10 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
 
 echo ""
 echo "=== C5: output size budget -- 512 bytes for a typical session ==="

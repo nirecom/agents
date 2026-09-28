@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/review-code-security/SKILL.md
-# Tags: scan, filter, outbound, hook, frontmatter
-# Structural tests for claude-global/skills/review-code-security/SKILL.md
+# Tags: scan, filter, outbound, hook, frontmatter, scope:common
+# Structural tests for skills/review-code-security/SKILL.md
 set -euo pipefail
 
 PASS=0
@@ -9,9 +9,9 @@ FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SKILL="$DOTFILES_DIR/claude-global/skills/review-code-security/SKILL.md"
-PRIVATE_INFO_DOC="$DOTFILES_DIR/docs/scan-outbound.md"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SKILL="$ROOT/skills/review-code-security/SKILL.md"
+PRIVATE_INFO_DOC="$ROOT/docs/scan-outbound.md"
 
 echo "=== review-code-security skill structural tests ==="
 
@@ -23,13 +23,21 @@ else
 fi
 
 # --- Normal case 2: frontmatter has required fields ---
-for field in name description model effort; do
+for field in name description model; do
     if [ -f "$SKILL" ] && grep -qE "^${field}:" "$SKILL" 2>/dev/null; then
         pass "frontmatter has '$field'"
     else
         fail "frontmatter missing '$field'"
     fi
 done
+
+# --- Normal case 2b: effort is ABSENT (effort: line removed in #2100) ---
+# Requires write_code to delete 'effort:' from frontmatter — FAILS until then.
+if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
+    fail "frontmatter 'effort:' must be absent (was not yet removed)"
+else
+    pass "frontmatter 'effort:' is absent"
+fi
 
 # --- Normal case 3: name field is review-code-security ---
 if [ -f "$SKILL" ] && grep -qE '^name: review-code-security$' "$SKILL" 2>/dev/null; then
@@ -61,6 +69,21 @@ if [ -f "$SKILL" ] && grep -qE '(OWASP|CWE-)' "$SKILL" 2>/dev/null; then
     pass "contains OWASP/CWE citations"
 else
     fail "missing OWASP/CWE citations"
+fi
+
+# --- Normal case 7 (#2100 Step 5): the security-scanner launch (RCS-2 exit 3
+# fallback) passes the model from resolve-role-model --role reviewer. FAILS until then.
+spawn="$(grep -E '[Ll]aunch (the )?`security-scanner`' "$SKILL" 2>/dev/null || true)"
+if [ -z "$spawn" ]; then
+    fail "7: no security-scanner launch line found"
+elif ! printf '%s' "$spawn" | grep -qF 'resolve-role-model'; then
+    fail "7: security-scanner launch does not resolve its model via resolve-role-model"
+elif ! printf '%s' "$spawn" | grep -qE -- '--role reviewer([^-a-z]|$)'; then
+    fail "7: security-scanner launch does not use --role reviewer"
+elif ! printf '%s' "$spawn" | grep -qE 'model[=:]'; then
+    fail "7: security-scanner launch does not pass a model: parameter"
+else
+    pass "7: security-scanner launch passes model= from resolve-role-model --role reviewer"
 fi
 
 # --- Normal case 8: cross-references /review-plan-security ---

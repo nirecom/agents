@@ -61,7 +61,7 @@ RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-l
 - exit 8 → terminal guard was previously armed (test files unchanged since last terminal); HALT.
 - exit 9 → HALT。exit 6 終端後、対象が変化したが未 accept。accept（マーカー or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED`）後に再実行。
 - 二つの accept 経路が存在する: (1) sentinel = write-code のブロック解除 + guard クリア; (2) マーカー = shell からのみ可視。
-- exit 3 → silently launch `test-reviewer` subagent; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
+- exit 3 → silently launch `test-reviewer` subagent with `model:` = the `model=` line of `node "$AGENTS_CONFIG_DIR/bin/resolve-role-model" --role reviewer`; APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 AUTO_EXTEND → same as exit 1 (gaps remain within the extension budget): present gaps → RT-5 WARNINGS; address and re-run.
 - exit 7 FINALIZE_FAILED → `<PLANS_DIR>/<session-id>-test-review-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format test-review` before RT-5.

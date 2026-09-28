@@ -18,9 +18,9 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 | Public exit | Meaning | Orchestrator action |
 |---|---|---|
 | 0 | APPROVED | Return to caller for the write/confirm phase. |
-| 1 | NON_APPROVED_VERDICT (CONTINUE) | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT`. |
+| 1 | NON_APPROVED_VERDICT (CONTINUE) | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT` with `model: PLANNER_MODEL`. |
 | 2 | ESCALATE (risk signal + ceiling) | Present concern summary → stop loop. Invoke `review-loop-summarize-concerns --budget-remaining 0` per MOP-6 / MDP-6. |
-| 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent**. Do NOT emit to chat. |
+| 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent** with `model:` = the `model=` line of `node "$AGENTS_CONFIG_DIR/bin/resolve-role-model" --role reviewer`. Do NOT emit to chat. |
 | 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent, exit 4 is returned regardless of whether `--ledger` was supplied explicitly. |
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter review loop (no user dialog). |
 | 6 | **HIGH_UNRESOLVED** — budget ceiling with unresolved HIGH concerns and no risk signal | Present unresolved HIGH concern summary → stop loop; do not proceed to the write/confirm phase. Invoke `review-loop-summarize-concerns --budget-remaining 0` with the live ledger (not a cap-snapshot — the ledger is finalized but not deleted). |

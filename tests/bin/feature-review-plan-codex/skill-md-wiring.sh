@@ -1,5 +1,5 @@
-# Tests: bin/review-plan-codex, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md, skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md
-# Tags: outline, planning, detail, codex, review, scope:common
+# Tests: bin/review-plan-codex, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md, skills/_shared/codex-review-loop/exit-codes.md, skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md
+# Tags: outline, planning, detail, codex, review, scope:common, role-model
 # ===========================================================================
 # SKILL.md wiring: run-codex-review-loop invocation, exit-4 rule, flat ~/.workflow-plans/ paths
 # ===========================================================================
@@ -132,5 +132,45 @@ fi
 
 if [[ $ERRS29 -eq 0 ]]; then
   pass "make-outline-plan + shared loop: wrapper invoked, exit-4 rule, no duplication, context ref"
+fi
+
+# ---------------------------------------------------------------------------
+# 30. (#2100) codex-review-loop.md + exit-codes.md: PLANNER_MODEL param and
+#     REVIEWER_AGENT fallback routes through resolve-role-model --role reviewer
+# ---------------------------------------------------------------------------
+# Planned text (detail.md Step 5):
+#   codex-review-loop.md: planner param table has PLANNER_MODEL; L49/L149 (exit 3
+#   fallback) mentions "resolve-role-model --role reviewer".
+#   exit-codes.md: row 1 mentions PLANNER_MODEL; row 3 mentions
+#   "resolve-role-model --role reviewer".
+# All four assertions FAIL until the implementation writes are done.
+ERRS30=0
+
+if grep -qF 'PLANNER_MODEL' "$SHARED_LOOP"; then
+  pass "30a: codex-review-loop.md has PLANNER_MODEL in the planner parameters table"
+else
+  fail "30a: codex-review-loop.md missing PLANNER_MODEL (detail.md Step 5 — not yet written)"
+  ERRS30=$((ERRS30 + 1))
+fi
+
+if grep -qF 'resolve-role-model' "$SHARED_LOOP" && grep -qF -- '--role reviewer' "$SHARED_LOOP"; then
+  pass "30b: codex-review-loop.md REVIEWER_AGENT fallback section mentions resolve-role-model --role reviewer"
+else
+  fail "30b: codex-review-loop.md missing resolve-role-model --role reviewer (detail.md Step 5 — not yet written)"
+  ERRS30=$((ERRS30 + 1))
+fi
+
+if grep -qF 'PLANNER_MODEL' "$EXIT_CODES_DOC"; then
+  pass "30c: exit-codes.md row 1 mentions PLANNER_MODEL"
+else
+  fail "30c: exit-codes.md missing PLANNER_MODEL (detail.md Step 5 — not yet written)"
+  ERRS30=$((ERRS30 + 1))
+fi
+
+if grep -qF 'resolve-role-model' "$EXIT_CODES_DOC" && grep -qF -- '--role reviewer' "$EXIT_CODES_DOC"; then
+  pass "30d: exit-codes.md row 3 mentions resolve-role-model --role reviewer"
+else
+  fail "30d: exit-codes.md missing resolve-role-model --role reviewer (detail.md Step 5 — not yet written)"
+  ERRS30=$((ERRS30 + 1))
 fi
 

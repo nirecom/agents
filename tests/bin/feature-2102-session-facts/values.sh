@@ -212,14 +212,14 @@ mk_cx() {
     fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SID + ".json"),
       JSON.stringify({ steps: {}, complexity_evaluation: body }));'
 }
-mk_cx cx1 '{"level":"high","levels":{"detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file","S5-breaking"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+mk_cx cx1 '{"level":"high","levels":{"outline":"high","detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file","S5-breaking"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG" cx1
 check "(c) i: write_tests level" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) i: write_code level is NOT the write_tests level" "low" "$(val_of COMPLEXITY_LEVEL_write_code)"
 check "(c) i: signals are the recorded csv" "S1-multi-file,S5-breaking" "$(val_of COMPLEXITY_SIGNALS)"
 DIRECT_WT="$(run_with_timeout node "$RCE" --session cx1 --stage write_tests 2>/dev/null | sed -n 's/^level=//p')"
 check "(c) i: agrees with read-complexity-evaluation --stage write_tests" "$DIRECT_WT" "$(val_of COMPLEXITY_LEVEL_write_tests)"
-mk_cx cx2 '{"level":"low","levels":{"detail":"low","write_tests":"low","write_code":"low"},"signals":[],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+mk_cx cx2 '{"level":"low","levels":{"outline":"low","detail":"low","write_tests":"low","write_code":"low"},"signals":[],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG" cx2
 check "(c) ii: empty signals read as the lowercase none of the existing reader" "none" "$(val_of COMPLEXITY_SIGNALS)"
 check "(c) ii: levels still resolve" "low" "$(val_of COMPLEXITY_LEVEL_write_tests)"
@@ -323,6 +323,45 @@ for f in "$WT_SKILL" "$WC_SKILL"; do
     pass "(f) $n reads the bundle before the post-action probe"
   else fail "(f) $n reads the bundle before the post-action probe -- facts@$FACTS_LN probe@$PROBE_LN"; fi
 done
+
+echo ""
+echo "=== (g) COMPLEXITY_MODEL_* keys: no record → NONE; record present → alias ==="
+# These assertions require hooks/lib/role-model.js and the updated collect.js.
+# They FAIL until that implementation is present (test-first).
+# MODEL_PRODUCER_HIGH/LOW are unset here so defaults from ROLE_TABLE apply in (g ii).
+# For (g iii) the non-default value is planted in the fixture CFG's .env to prove
+# that the config-file code path (not just process env) is exercised.
+unset MODEL_PRODUCER_HIGH MODEL_PRODUCER_LOW 2>/dev/null || true
+
+# (g i) no record → both MODEL keys are NONE
+run_facts "$CFG" "gnorecord"
+check "(g i) no record -- COMPLEXITY_MODEL_write_tests is NONE" "NONE" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g i) no record -- COMPLEXITY_MODEL_write_code is NONE" "NONE" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g i) no record -- level keys are also NONE (non-vacuity: the run was real)" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
+
+# (g ii) record present: high write_tests, low write_code → default aliases opus / sonnet.
+# MODEL_PRODUCER_HIGH=opus and MODEL_PRODUCER_LOW=sonnet are exported explicitly so the
+# test does not rely on any ambient .env value; using the named defaults makes the mapping
+# between level and alias visible in the test source.
+export MODEL_PRODUCER_HIGH=opus MODEL_PRODUCER_LOW=sonnet
+mk_cx gmod '{"level":"high","levels":{"outline":"low","detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+run_facts "$CFG" gmod
+check "(g ii) write_tests level=high → model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g ii) write_code level=low → model=sonnet" "sonnet" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g ii) levels are what the fixture says (non-vacuity)" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
+unset MODEL_PRODUCER_HIGH MODEL_PRODUCER_LOW 2>/dev/null || true
+
+# (g iii) MODEL_PRODUCER_LOW=haiku via .env → low-stage model is haiku.
+# This proves the .env config path (not just process.env priority), which is the
+# production path a user would actually configure.
+CFG_HAIKU="$TMPDIR_BASE/cfg-haiku"; mk_cfg "$CFG_HAIKU"
+printf 'MODEL_PRODUCER_LOW=haiku\nMODEL_PRODUCER_HIGH=opus\n' > "$CFG_HAIKU/.env"
+mk_cx ghaiku '{"level":"high","levels":{"outline":"low","detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+run_facts "$CFG_HAIKU" ghaiku
+check "(g iii) MODEL_PRODUCER_LOW=haiku in .env → write_code model=haiku" "haiku" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g iii) MODEL_PRODUCER_HIGH=opus in .env → write_tests model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g iii) fixture .env really has haiku (non-vacuity)" 1 \
+  "$(grep -cF 'MODEL_PRODUCER_LOW=haiku' "$CFG_HAIKU/.env" 2>/dev/null || true)"
 
 echo ""
 echo "=== Results ==="

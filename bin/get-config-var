@@ -81,18 +81,17 @@ export GETCV_KIND_FILE
 VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" GETCV_REPO_ROOT="$GETCV_REPO_ROOT" node -e '
   const fs = require("fs");
   const name = process.env.GETCV_NAME;
+  const dflt = process.env.GETCV_DEFAULT || "";
   const exported = process.env[name];
-  let mod = null;
-  try { mod = require(process.env.GETCV_LOADENV); mod.loadDefaultEnv(); fs.writeFileSync(process.env.GETCV_KIND_FILE, "loaded"); } catch (e) { fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded"); }
-  let v;
-  if (exported && exported.length) {
-    v = exported;
-  } else if (mod && process.env.GETCV_REPO_ROOT) {
-    v = mod.readEffectiveEnvFile(process.env.GETCV_REPO_ROOT)[name];
-  } else {
-    v = process.env[name];
+  let r;
+  try {
+    r = require(process.env.GETCV_LOADENV).resolveConfigVar(name, dflt, { repoRoot: process.env.GETCV_REPO_ROOT || "" });
+    fs.writeFileSync(process.env.GETCV_KIND_FILE, r.loadFailed ? "unloaded" : "loaded");
+  } catch (e) {
+    r = { value: exported && exported.length ? exported : dflt }; // module-missing fallback
+    fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded");
   }
-  process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
+  process.stdout.write(r.value);
 ')"
 
 if [ "$MODE" = "is-off" ]; then

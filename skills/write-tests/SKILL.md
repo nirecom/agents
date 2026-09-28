@@ -12,7 +12,7 @@ Write or update tests for the current task.
 WT-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
    - `PLANS_DIR=` — substitute this absolute path for every `<PLANS_DIR>` below.
    - `GATE_CONFIRM_TESTS=` — the WT-5 pre-action gate (`ON` / `OFF` / `ERROR`).
-   - `COMPLEXITY_LEVEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-6 level and signals.
+   - `COMPLEXITY_LEVEL_write_tests=`, `COMPLEXITY_MODEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-6 level, model and signals.
    - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 
 WT-1. Read:
@@ -33,16 +33,16 @@ WT-5. Decide the destination of each planned case — append to an existing test
    - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
    - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:
-   - If `COMPLEXITY_LEVEL_write_tests` from step WT-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
+   - If `COMPLEXITY_LEVEL_write_tests` from step WT-0 is not `NONE`, use `COMPLEXITY_MODEL_write_tests` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open for sessions without persisted evaluation):
-     - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged.
+     - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged (rubric: `skills/_shared/judge-task-complexity.md`).
      - Write the raw subagent output to `<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt` (Write tool — untrusted text via file only).
      - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-tests-signals.txt"`.
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"` and use its `level=<v>` — never judge the level inline.
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
-     > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
+     > Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])
 
-WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from step WT-6>`) to autonomously:
+WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias from step WT-6>`) to autonomously:
    WT-7a. Write the test file(s).
    WT-7b. Run tests with timeout.
    WT-7c. Fix failures and re-run until green.
