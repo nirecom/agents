@@ -111,8 +111,8 @@ function assertStreamIntegrity(events) {
 // re-derives rather than partially trusting a malformed map.
 function isWellFormedStageLevels(levels) {
   if (!levels || typeof levels !== "object" || Array.isArray(levels)) return false;
-  const { ROUTING_STAGES, ALL_ROUTING_STAGES } = require("../complexity-routing");
-  if (Object.keys(levels).some((k) => !ALL_ROUTING_STAGES.includes(k))) return false;
+  const { ROUTING_STAGES } = require("../complexity-routing");
+  if (Object.keys(levels).some((k) => !ROUTING_STAGES.includes(k))) return false;
   return ROUTING_STAGES.every((s) => levels[s] === "high" || levels[s] === "low");
 }
 

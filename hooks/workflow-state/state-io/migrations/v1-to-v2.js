@@ -243,14 +243,14 @@ function migrateV1ToV2(v1State) {
     // fabricated one would be indistinguishable from a genuine record (#2099).
     const levelsFields = {};
     try {
-      const { deriveLegacyStageLevels, ROUTING_STAGES, ALL_ROUTING_STAGES } = require("../../complexity-routing");
+      const { deriveLegacyStageLevels, ROUTING_STAGES } = require("../../complexity-routing");
       // A v1 blob that already carried a well-formed per-stage map is a RECORDED
       // fact; re-deriving it would silently overwrite what the session decided.
       const stored = complexity.levels;
       const storedKeys = stored && typeof stored === "object" && !Array.isArray(stored) ? Object.keys(stored) : null;
       const wellFormed =
         storedKeys !== null &&
-        !storedKeys.some((k) => !ALL_ROUTING_STAGES.includes(k)) &&
+        !storedKeys.some((k) => !ROUTING_STAGES.includes(k)) &&
         ROUTING_STAGES.every((s) => stored[s] === "high" || stored[s] === "low");
       levelsFields.levels = wellFormed
         ? Object.assign({}, stored)

@@ -16,11 +16,11 @@ const LEGACY_VERDICT_TO_LEVEL = Object.freeze({ opus: "high", sonnet: "low" });
 // as-is; a missing OR malformed one is re-derived in full (never partially
 // trusted); an unusable routing table yields null so callers fail open.
 function resolveStageLevels(level, signals, stored) {
-  const { ROUTING_STAGES, ALL_ROUTING_STAGES, deriveLegacyStageLevels } = require("../complexity-routing");
+  const { ROUTING_STAGES, deriveLegacyStageLevels } = require("../complexity-routing");
   if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     const keys = Object.keys(stored);
     const wellFormed =
-      !keys.some((k) => !ALL_ROUTING_STAGES.includes(k)) &&
+      !keys.some((k) => !ROUTING_STAGES.includes(k)) &&
       ROUTING_STAGES.every((s) => stored[s] === "high" || stored[s] === "low");
     if (wellFormed) return Object.assign({}, stored);
   }

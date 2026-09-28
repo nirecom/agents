@@ -13,9 +13,6 @@
 
 const ROUTING_STAGES = Object.freeze(["outline", "detail", "write_tests", "write_code"]);
 
-// Alias kept for callsites that imported it by name during the #2099 transition.
-const ALL_ROUTING_STAGES = ROUTING_STAGES;
-
 // Signal vocabulary. S1-S6 keep the rubric's spellings since #1350;
 // S1b-wide-change is new in #2099 (>=8 files; implies S1 — a rubric-side rule,
 // deliberately not enforced here).
@@ -113,12 +110,11 @@ function validateRoutingTable(table = STAGE_ROUTING) {
     }
     const keys = Object.keys(table);
     const missing = ROUTING_STAGES.filter((s) => !keys.includes(s));
-    const extra = keys.filter((k) => !ALL_ROUTING_STAGES.includes(k));
+    const extra = keys.filter((k) => !ROUTING_STAGES.includes(k));
     if (missing.length) errors.push("table is missing stage(s): " + missing.join(", "));
     if (extra.length) errors.push("table has unknown stage(s): " + extra.join(", "));
 
-    for (const stage of keys.filter((k) => ALL_ROUTING_STAGES.includes(k))) {
-      if (!keys.includes(stage)) continue;
+    for (const stage of keys.filter((k) => ROUTING_STAGES.includes(k))) {
       const entry = table[stage];
       if (!isPlainObject(entry)) {
         errors.push(`${stage}: entry must be a plain object (non-null, non-array)`);
@@ -320,7 +316,7 @@ function renderStageRoutingMarkdown() {
     "| Stage | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |",
     "|-------|---------|-----------------|------------------------------|------------------------|-------------|",
   ];
-  for (const stage of ALL_ROUTING_STAGES) {
+  for (const stage of ROUTING_STAGES) {
     const rule = STAGE_ROUTING[stage];
     lines.push(
       "| `" + stage + "` | " + rule.default_level + " | " +
@@ -342,7 +338,6 @@ function renderSignalIdsMarkdown() {
 
 module.exports = {
   ROUTING_STAGES,
-  ALL_ROUTING_STAGES,
   SIGNAL_IDS,
   UNDECIDABLE_SIGNAL,
   STAGE_ROUTING,
