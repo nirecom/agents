@@ -244,6 +244,23 @@ probably older than this repo — **re-run the installer, then open a new sessio
 The drift warning that would have told you only fires at session start, so a session that is
 already open will not report it no matter how long you wait.
 
+**`codegraph_explore` still requires a `ToolSearch` call (deferred tool).**
+The `alwaysLoad: true` patch was not applied. Re-run the installer — the registrar writes this
+field after every successful `claude mcp add`. If you see `Warning: alwaysLoad patch: rename failed`
+on stderr, the atomic write was blocked by a lock on `~/.claude.json` (common on Windows when a live
+session holds the file open). Wait for all Claude Code sessions to close and re-run the installer.
+Stale temporary files matching `~/.claude.json.<pid>.<timestamp>.tmp` left by an interrupted run can
+be deleted safely.
+
+**The installer normalised `~/.claude.json` to standard JSON form.**
+`install/codegraph-mcp.js` reads and rewrites `~/.claude.json` with `JSON.parse` / `JSON.stringify`
+(2-space indent, trailing newline). Only `mcpServers.codegraph.alwaysLoad` changes in meaning; all
+other values are preserved. Hand-edited non-standard formatting is straightened in the process.
+
+**`npm install -g ... @colbymchenry/codegraph@latest` fails with EBUSY.**
+A running `codegraph serve --mcp` process holds a lock on the binary. Stop it first:
+`node bin/codegraph-lifecycle.js stop --path .` (from the worktree root), then re-run the installer.
+
 **Turning telemetry off permanently.**
 Two stages, and the order matters — this section is the source of truth for the procedure the
 installer's one-line notice abbreviates:

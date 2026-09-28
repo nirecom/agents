@@ -12,6 +12,10 @@ the MCP server with `claude mcp add`.
 
 Close Claude Code while the installer runs — it writes `~/.claude.json`, which a live session also writes.
 
+After registration the installer patches `~/.claude.json` to set `alwaysLoad: true` on the codegraph entry.
+Without this flag, Claude Code defers `codegraph_explore`'s schema until a `ToolSearch` call is made,
+requiring a manual preamble that defeats the goal of having the tool always available without extra steps.
+
 ## Disabling
 
 Set `CODEGRAPH=off` and **re-run the installer again**; editing `.env` alone unregisters nothing.
