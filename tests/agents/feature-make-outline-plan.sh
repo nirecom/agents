@@ -24,19 +24,10 @@ REVIEWER_MD="$HOME/.claude/agents/outline-reviewer.md"
 _SELF_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 LOCAL_SKILL_MD="$_SELF_DIR/skills/make-outline-plan/SKILL.md"
 LOCAL_REVIEWER_MD="$_SELF_DIR/agents/outline-reviewer.md"
+AGENTS_DIR="$_SELF_DIR"
 
-PASS=0
-FAIL=0
-
-pass() {
-    echo "PASS: $1"
-    PASS=$((PASS + 1))
-}
-
-fail() {
-    echo "FAIL: $1"
-    FAIL=$((FAIL + 1))
-}
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # assert_contains FILE PATTERN DESCRIPTION
 # Greps FILE for PATTERN (extended regex). Prints PASS/FAIL.
@@ -46,7 +37,7 @@ assert_contains() {
     local desc="$3"
 
     if [ ! -f "$file" ]; then
-        fail "$desc (file not found: $file)"
+        fail "$desc" "file not found: $file"
         return 1
     fi
 
@@ -54,7 +45,7 @@ assert_contains() {
         pass "$desc"
         return 0
     else
-        fail "$desc (pattern not found: $pattern)"
+        fail "$desc" "pattern not found: $pattern"
         return 1
     fi
 }
@@ -67,12 +58,12 @@ assert_absent() {
     local desc="$3"
 
     if [ ! -f "$file" ]; then
-        fail "$desc (file not found: $file)"
+        fail "$desc" "file not found: $file"
         return 1
     fi
 
     if grep -qE "$pattern" "$file"; then
-        fail "$desc (pattern unexpectedly found: $pattern)"
+        fail "$desc" "pattern unexpectedly found: $pattern"
         return 1
     else
         pass "$desc"
@@ -86,7 +77,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # Normal cases — SKILL_MD
 # ---------------------------------------------------------------------------
-echo "--- Normal (SKILL_MD) ---"
+case_begin "Normal SKILL_MD" "skills/make-outline-plan/SKILL.md"
 
 # N1: frontmatter name: make-outline-plan
 assert_contains "$SKILL_MD" "name:[[:space:]]*make-outline-plan" \
@@ -116,22 +107,23 @@ assert_contains "$SKILL_MD" "intent\.md" \
 assert_contains "$SKILL_MD" "SINGLE_APPROACH_JUSTIFIED" \
     "N7: SINGLE_APPROACH_JUSTIFIED mentioned in SKILL_MD"
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Normal cases — PLANNER_MD
 # ---------------------------------------------------------------------------
-echo "--- Normal (PLANNER_MD) ---"
+case_begin "Normal PLANNER_MD" "agents/outline-planner.md"
 
 # N8 (#2100): MOP-2 runs read-complexity-evaluation --stage outline and passes its
 # model= to the outline-planner dispatch. Scoped to the MOP-2 step block (`MOP-2.`
 # up to the next `MOP-3.`) so a `model:` in the frontmatter or another step cannot
 # satisfy it. Tests LOCAL_SKILL_MD (worktree copy). FAILS until MOP-2 is updated.
 if [ ! -f "$LOCAL_SKILL_MD" ]; then
-    fail "N8: LOCAL_SKILL_MD not found ($LOCAL_SKILL_MD)"
+    fail "N8" "LOCAL_SKILL_MD not found ($LOCAL_SKILL_MD)"
 else
     _mop2="$(awk '/^MOP-2\./{f=1} /^MOP-3\./{f=0} f' "$LOCAL_SKILL_MD" 2>/dev/null || true)"
     if [ -z "$_mop2" ]; then
-        fail "N8: LOCAL_SKILL_MD has no 'MOP-2.' step block"
+        fail "N8" "LOCAL_SKILL_MD has no 'MOP-2.' step block"
     else
         if printf '%s\n' "$_mop2" | grep -qF 'read-complexity-evaluation'; then
             pass "N8a: MOP-2 block runs read-complexity-evaluation"
@@ -181,24 +173,25 @@ assert_contains "$PLANNER_MD" "NEEDS_RESEARCH" \
 assert_contains "$PLANNER_MD" "tradeoff|trade.off|トレードオフ" \
     "N13: tradeoff per approach mentioned in PLANNER_MD"
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Normal cases — REVIEWER_MD
 # ---------------------------------------------------------------------------
-echo "--- Normal (REVIEWER_MD) ---"
+case_begin "Normal REVIEWER_MD" "agents/outline-reviewer.md"
 
 # N14: REVIEWER_MD frontmatter must have NO model: line (removed in #2100).
 # Checks the first ---...--- pair only to avoid false positives from body text.
 # Tests LOCAL_REVIEWER_MD (worktree copy). FAILS until write_code removes model:.
 if [ ! -f "$LOCAL_REVIEWER_MD" ]; then
-    fail "N14: LOCAL_REVIEWER_MD not found ($LOCAL_REVIEWER_MD)"
+    fail "N14" "LOCAL_REVIEWER_MD not found ($LOCAL_REVIEWER_MD)"
 else
     # Extract only the first frontmatter block (first ---...--- pair)
     _fm="$(awk '/^---/{if(++n==1){f=1;next} if(n==2){exit}} f' "$LOCAL_REVIEWER_MD" 2>/dev/null || true)"
     if [ -z "$_fm" ]; then
-        fail "N14: LOCAL_REVIEWER_MD has no frontmatter block"
+        fail "N14" "LOCAL_REVIEWER_MD has no frontmatter block"
     elif printf '%s\n' "$_fm" | grep -qE '^model:'; then
-        fail "N14: LOCAL_REVIEWER_MD frontmatter still contains 'model:' (must be removed)"
+        fail "N14" "LOCAL_REVIEWER_MD frontmatter still contains 'model:' (must be removed)"
     else
         pass "N14: LOCAL_REVIEWER_MD frontmatter has no 'model:' line"
     fi
@@ -216,11 +209,12 @@ assert_contains "$REVIEWER_MD" "MISSING_ALTERNATIVE" \
 assert_contains "$REVIEWER_MD" "drill.down|file path|ファイル.*パス|step.*level|実装.*詳細" \
     "N17: drill-down or file path comment prohibition in REVIEWER_MD"
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
-echo "--- Error ---"
+case_begin "Error cases" "agents/outline-reviewer.md"
 
 # E1: NEEDS_REVISION does NOT appear as a verdict option in REVIEWER_MD;
 #     MISSING_ALTERNATIVE is the only non-APPROVED path.
@@ -230,25 +224,26 @@ assert_absent "$REVIEWER_MD" "NEEDS_REVISION" \
 assert_contains "$REVIEWER_MD" "MISSING_ALTERNATIVE" \
     "E1b: MISSING_ALTERNATIVE is present as the replacement non-APPROVED verdict in REVIEWER_MD"
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
-echo "--- Edge ---"
+case_begin "Edge cases" "agents/outline-planner.md"
 
 # Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined in PLANNER_MD
 if [ ! -f "$PLANNER_MD" ]; then
-    fail "Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined (file not found: $PLANNER_MD)"
+    fail "Ed1" "SINGLE_APPROACH_JUSTIFIED escape path explicitly defined (file not found: $PLANNER_MD)"
 elif grep -qF "SINGLE_APPROACH_JUSTIFIED" "$PLANNER_MD"; then
     pass "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string appears in PLANNER_MD"
 else
-    fail "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string must appear in PLANNER_MD"
+    fail "Ed1" "SINGLE_APPROACH_JUSTIFIED full sentinel string must appear in PLANNER_MD"
 fi
 
 # Ed2: REVIEWER_MD has exactly 2 verdict options: APPROVED and MISSING_ALTERNATIVE;
 #      no LGTM or NEEDS_REVISION third option.
 if [ ! -f "$REVIEWER_MD" ]; then
-    fail "Ed2: exactly 2 verdict options in REVIEWER_MD (file not found: $REVIEWER_MD)"
+    fail "Ed2" "exactly 2 verdict options in REVIEWER_MD (file not found: $REVIEWER_MD)"
 else
     _has_approved=0
     _has_missing_alt=0
@@ -263,15 +258,16 @@ else
        [ "$_has_lgtm" -eq 0 ] && [ "$_has_needs_revision" -eq 0 ]; then
         pass "Ed2: exactly 2 verdict options (APPROVED + MISSING_ALTERNATIVE, no LGTM/NEEDS_REVISION) in REVIEWER_MD"
     else
-        fail "Ed2: exactly 2 verdict options check failed (approved=$_has_approved missing_alt=$_has_missing_alt lgtm=$_has_lgtm needs_revision=$_has_needs_revision)"
+        fail "Ed2" "exactly 2 verdict options check failed (approved=$_has_approved missing_alt=$_has_missing_alt lgtm=$_has_lgtm needs_revision=$_has_needs_revision)"
     fi
 fi
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Issue #329: Accepted Tradeoffs section + carry-over log symmetry
 # ---------------------------------------------------------------------------
-echo "--- Issue #329 ---"
+case_begin "Issue 329 accepted-tradeoffs" "skills/make-outline-plan/SKILL.md"
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SKILL_REPO="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
@@ -281,14 +277,14 @@ PLANNER_REPO="$AGENTS_ROOT/agents/outline-planner.md"
 if grep -qF "Accepted Tradeoffs" "$SKILL_REPO" 2>/dev/null; then
     pass "#329-1: 'Accepted Tradeoffs' section present in make-outline-plan/SKILL.md"
 else
-    fail "#329-1: 'Accepted Tradeoffs' section missing from make-outline-plan/SKILL.md"
+    fail "#329-1" "'Accepted Tradeoffs' section missing from make-outline-plan/SKILL.md"
 fi
 
 # #329-2: Accepted Tradeoffs section in outline-planner.md
 if grep -qF "Accepted Tradeoffs" "$PLANNER_REPO" 2>/dev/null; then
     pass "#329-2: 'Accepted Tradeoffs' section present in agents/outline-planner.md"
 else
-    fail "#329-2: 'Accepted Tradeoffs' section missing from agents/outline-planner.md"
+    fail "#329-2" "'Accepted Tradeoffs' section missing from agents/outline-planner.md"
 fi
 
 # #329-3: round-log + planner-response trailer mechanism. After the _shared/
@@ -299,14 +295,15 @@ if grep -qF "_shared/codex-review-loop.md" "$SKILL_REPO" 2>/dev/null && \
    grep -qE "round.*log|planner-response" "$SHARED_LOOP" 2>/dev/null; then
     pass "#329-3: SKILL.md references _shared/codex-review-loop.md; shared spec covers round-log / planner-response"
 else
-    fail "#329-3: SKILL.md must reference _shared/codex-review-loop.md, and shared spec must cover round-log / planner-response"
+    fail "#329-3" "SKILL.md must reference _shared/codex-review-loop.md, and shared spec must cover round-log / planner-response"
 fi
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Issue #462: assemble-mandatory.sh mechanical injection checks
 # ---------------------------------------------------------------------------
-echo "--- Issue #462: assemble-mandatory ---"
+case_begin "Issue 462 assemble-mandatory" "skills/make-outline-plan/SKILL.md"
 
 AGENTS_ROOT_462="$(cd "$(dirname "$0")/../.." && pwd)"
 SKILL_462="$AGENTS_ROOT_462/skills/make-outline-plan/SKILL.md"
@@ -315,7 +312,7 @@ SKILL_462="$AGENTS_ROOT_462/skills/make-outline-plan/SKILL.md"
 if grep -q "assemble-mandatory" "$SKILL_462" 2>/dev/null; then
     pass "M10: assemble-mandatory.sh referenced in make-outline-plan/SKILL.md"
 else
-    fail "M10: assemble-mandatory.sh NOT referenced in make-outline-plan/SKILL.md"
+    fail "M10" "assemble-mandatory.sh NOT referenced in make-outline-plan/SKILL.md"
 fi
 
 # M11: SINGLE_APPROACH_JUSTIFIED path also uses assemble-mandatory.sh
@@ -324,7 +321,7 @@ if grep -q "SINGLE_APPROACH_JUSTIFIED" "$SKILL_462" 2>/dev/null && \
    grep -q "assemble-mandatory" "$SKILL_462" 2>/dev/null; then
     pass "M11: SINGLE_APPROACH_JUSTIFIED path and assemble-mandatory.sh both present in SKILL.md"
 else
-    fail "M11: SINGLE_APPROACH_JUSTIFIED or assemble-mandatory.sh missing from SKILL.md"
+    fail "M11" "SINGLE_APPROACH_JUSTIFIED or assemble-mandatory.sh missing from SKILL.md"
 fi
 
 # M12a: planner-side contract present (do not write mandatory sections; authored copies stripped).
@@ -333,21 +330,22 @@ fi
 if grep -qE "[Dd]o NOT (instruct the planner to )?(author|write)|[Dd]o not (instruct the planner to )?(author|write)|planner.authored copies (will be|are) stripped|helper carries them forward" "$SKILL_462" 2>/dev/null; then
     pass "M12a: planner-side 'do not write / authored copies stripped' contract present in make-outline-plan/SKILL.md"
 else
-    fail "M12a: SKILL.md missing the planner-side contract (do not write mandatory sections / authored copies are stripped)"
+    fail "M12a" "SKILL.md missing the planner-side contract (do not write mandatory sections / authored copies are stripped)"
 fi
 
 # M12b: no verbatim-copy instruction (machine-injection replaces manual copy)
 if ! grep -qE "verbatim.copy|copy.*verbatim" "$SKILL_462" 2>/dev/null; then
     pass "M12b: no 'verbatim copy' instruction in make-outline-plan/SKILL.md (machine-injection replaces it)"
 else
-    fail "M12b: 'verbatim copy' instruction still present in SKILL.md — should be removed"
+    fail "M12b" "'verbatim copy' instruction still present in SKILL.md — should be removed"
 fi
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Issue #789: Step 8 bypass on "Pass all approaches" selection
 # ---------------------------------------------------------------------------
-echo "--- Issue #789: MOP-7 / MOP-8 outline confirmation flow ---"
+case_begin "Issue 789 MOP-7/MOP-8 confirmation" "hooks/stop-confirm-plan-guard.js"
 
 AGENTS_ROOT_789="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
 SKILL_789="$AGENTS_ROOT_789/skills/make-outline-plan/SKILL.md"
@@ -416,9 +414,9 @@ else
       node "$HOOK_789" 2>&1) || _789_RC=$?
 
     if [ "$_789_RC" -ne 0 ]; then
-        fail "789-5: no-sentinel bypass turn triggered Layer 2 block (exit $_789_RC, out: $_789_OUT)"
+        fail "789-5" "no-sentinel bypass turn triggered Layer 2 block (exit $_789_RC, out: $_789_OUT)"
     elif echo "$_789_OUT" | grep -qF '"decision"'; then
-        fail "789-5: output contains '\"decision\"' unexpectedly: $_789_OUT"
+        fail "789-5" "output contains '\"decision\"' unexpectedly: $_789_OUT"
     else
         pass "789-5: no-sentinel bypass turn exits 0, no decision:block (Layer 2 inert)"
     fi
@@ -451,9 +449,9 @@ else
       2>/dev/null || true)
 
     if [ "$_789b_RC" -ne 2 ]; then
-        fail "789-6: expected guard to block (exit 2), got exit $_789b_RC, out: $_789b_OUT"
+        fail "789-6" "expected guard to block (exit 2), got exit $_789b_RC, out: $_789b_OUT"
     elif [ "$_789b_DEC" != "block" ]; then
-        fail "789-6: expected decision:block, got '$_789b_DEC'"
+        fail "789-6" "expected decision:block, got '$_789b_DEC'"
     else
         pass "789-6: CONFIRM_OUTLINE sentinel without follow-up → guard blocks (Layer 2 still functional)"
     fi
@@ -462,11 +460,12 @@ else
     rm -rf "$_789_TMPDIR" 2>/dev/null || true
 fi
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Issue #1384: frontrunner-collapse rule
 # ---------------------------------------------------------------------------
-echo "--- Issue #1384: frontrunner-collapse rule ---"
+case_begin "Issue 1384 frontrunner-collapse" "agents/outline-planner.md"
 
 AGENTS_ROOT_1384="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
 PLANNER_1384="$AGENTS_ROOT_1384/agents/outline-planner.md"
@@ -480,11 +479,12 @@ assert_contains "$PLANNER_1384" "frontrunner-collapse" \
 assert_contains "$OUTPUT_FORMAT_1384" "frontrunner-collapse" \
     "1384-2: frontrunner-collapse form present in agents/outline-planner/output-format.md"
 
+case_end
 echo ""
 # ---------------------------------------------------------------------------
 # Issue #1287: intent-lock collapse rule + straw-alternative prohibition
 # ---------------------------------------------------------------------------
-echo "--- Issue #1287: intent-lock collapse ---"
+case_begin "Issue 1287 intent-lock" "agents/outline-planner.md"
 
 AGENTS_ROOT_1287="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
 PLANNER_1287="$AGENTS_ROOT_1287/agents/outline-planner.md"
@@ -513,6 +513,7 @@ assert_contains "$PLANNER_1287" "Fabricating alternatives.*protocol violation" \
 assert_contains "$PLANNER_1287" "Do not proceed to step 3" \
     "1287-6: Procedure pre-check step present (intent-lock check before step 3)"
 
+case_end
 echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
