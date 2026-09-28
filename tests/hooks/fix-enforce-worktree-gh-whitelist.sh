@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-enforce-worktree-gh-whitelist.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js
-# Tags: worktree, enforce, hook, intent, planning
+# Tags: worktree, enforce, hook, intent, planning, scope:issue-specific
 #
 # Integration tests for the gh-command whitelist refactor in enforce-worktree.js.
 #

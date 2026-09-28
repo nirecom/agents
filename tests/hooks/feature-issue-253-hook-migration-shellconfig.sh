@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/block-shell-config.js
-# Tags: hook, bin, shell, tests
+# Tags: hook, bin, shell, tests, scope:issue-specific
 # Integration tests for hooks/block-shell-config.js PreToolUse hook.
 # Blocks direct Write/Edit/MultiEdit/editFiles on user shell config files
 # (~/.bashrc, ~/.zshrc, ~/.profile, ~/.bash_profile, ~/.profile_common).

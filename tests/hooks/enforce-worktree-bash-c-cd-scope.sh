@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/enforce-worktree-bash-c-cd-scope.sh
 # Tests: hooks/lib/parse-git-args.js, hooks/enforce-worktree/git-repo-detection.js
-# Tags: enforce-worktree, bash-c, cd, scope, worktree, git-repo-detection
+# Tags: enforce-worktree, bash-c, cd, scope, worktree, git-repo-detection, scope:common
 #
 # Tests for #566: findRepoRootForBash() must extract the `cd` target from
 # `bash -c '...'` body via parseCdCommandInInterpreter(), so the linked

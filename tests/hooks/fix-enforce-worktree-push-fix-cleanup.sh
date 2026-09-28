@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-enforce-worktree-push-fix-cleanup.sh
 # Tests: hooks/cleanup-orphan-dir.js
-# Tags: worktree, enforce, hook, bin, symlink
+# Tags: worktree, enforce, hook, bin, symlink, scope:issue-specific
 #
 # Integration tests for Fix 3: hooks/cleanup-orphan-dir.js
 #

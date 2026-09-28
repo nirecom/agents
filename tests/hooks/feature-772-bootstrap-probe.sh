@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # filename: tests/hooks/feature-772-bootstrap-probe.sh
 # Tests: hooks/lib/bootstrap-state.js
-# Tags: bootstrap, probe, session-start, new-repo
+# Tags: bootstrap, probe, session-start, new-repo, scope:issue-specific
 #
 # Tests the pre-bootstrap detection probe for issue #772.
 # The probe wraps `git ls-remote` and classifies the result.

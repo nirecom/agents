@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-guard, hook, sentinel, layer2, workflow, confirm
+# Tags: stop-guard, hook, sentinel, layer2, workflow, confirm, scope:issue-specific
 # Tests for Layer 2 sentinel-followup detection in hooks/stop-confirm-plan-guard.js.
 #
 # Layer 2 (new contract for #842): for each CONFIRM_<STAGE> sentinel echoed in the

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-block-predicates.sh
 # Tests: hooks/lib/block-predicates.js
-# Tags: block-predicates, inline-skill-re, ssot, feature-885
+# Tags: block-predicates, inline-skill-re, ssot, feature-885, scope:issue-specific
 # Original tests for #885 verified INLINE_SKILL_RE was exported as SSOT.
 # After #927 the export is REMOVED — block-predicates.js no longer carries it.
 # This file is reduced to a single absence assertion.

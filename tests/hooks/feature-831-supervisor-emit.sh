@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-831-supervisor-emit.sh
 # Tests: hooks/lib/supervisor-emit.js
-# Tags: supervisor, em-supervisor, layer1, facade, auto-report
+# Tags: supervisor, em-supervisor, layer1, facade, auto-report, scope:issue-specific
 # Tests for issue #831 — supervisor-emit.js facade contract.
 #
 # Verifies the facade module's reportBlock / reportFallback / reportSentinel /

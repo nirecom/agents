@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh
-# Tags: scan, filter, outbound, hook, bin
+# Tags: scan, filter, outbound, hook, bin, scope:common
 # Test suite for external allowlist loading from my-private-repo
 # Tests that scan-outbound.sh loads .private-info-allowlist from sibling my-private-repo repo
 set -euo pipefail

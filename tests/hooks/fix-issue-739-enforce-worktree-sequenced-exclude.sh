@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-issue-739-enforce-worktree-sequenced-exclude.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/bash-write-targets.js, hooks/lib/shell-segments.js
-# Tags: worktree, enforce, hook, sequenced, backup, parsefailure, security
+# Tags: worktree, enforce, hook, sequenced, backup, parsefailure, security, scope:issue-specific
 #
 # Tests the sequenced-command exclusion fix for enforce-worktree (#739):
 #   Gap 1: in sequenced commands (cmd1 && cmd2 / cmd1; cmd2), every WRITE segment

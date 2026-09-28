@@ -14,6 +14,8 @@ set -uo pipefail
 # PreToolUse hooks differently from this CLI build. The day-to-day runners are the TL2
 # suites tests/hooks/feature-2134-bash-guard.sh and feature-2265-allow-command-list.sh.
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # --- skip gates (rules/test/claude-e2e.md acceptance criteria) ----------------
 if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
@@ -26,15 +28,9 @@ if ! command -v claude >/dev/null 2>&1; then
     echo "SKIP: claude CLI not found" >&2; exit 77
 fi
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1 -- $2"; FAIL=$((FAIL + 1)); }
 expect() { # <name> <want> <got> <why>
     if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want [$2] got [$3] -- $4"; fi
 }
-# Label-only markers (tests/lib/harness.sh is not sourced): targets are for static grep.
-case_begin() { :; }
-case_end() { :; }
 
 run_with_timeout() {
     local secs="$1"; shift

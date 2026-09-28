@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/fix-742-mcp-fs-hardening.sh
 # Tests: bin/review-plan-codex
-# Tags: review-plan-codex, repo-root, defensive-hardening, security
+# Tags: review-plan-codex, repo-root, defensive-hardening, security, scope:issue-specific
 #
 # Symmetric defensive-hardening test for review-plan-codex — the sibling
 # of the wrapper's repo-root validation. Verifies that review-plan-codex

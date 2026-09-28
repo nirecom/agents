@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-plan-link.js, hooks/show-plan-link.js.
-# Tags: plan, vscode, hook, bin, macos
+# Tags: plan, vscode, hook, bin, macos, scope:issue-specific
 # Tests for VS Code 1-spawn behavior of hooks/show-plan-link.js.
 # Written first (TDD); spawn-related assertions fail until the source is implemented.
 set -uo pipefail

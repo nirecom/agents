@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/priority-hierarchy.md, agents/outline-planner.md, agents/outline-reviewer.md, agents/detail-planner.md, agents/detail-reviewer.md, skills/make-detail-plan/SKILL.md
-# Tags: priority-hierarchy, planning, ssot, detail, outline, reject-disposition
+# Tags: priority-hierarchy, planning, ssot, detail, outline, reject-disposition, scope:issue-specific
 # Static checks for issue #647 — priority-hierarchy SSOT.
 #
 # Verifies:

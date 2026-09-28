@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/post-compact.js
-# Tags: post-compact, hook, TL3, run-e2e, scope:permanent
+# Tags: post-compact, hook, TL3, run-e2e, scope:permanent, scope:issue-specific
 #
 # Issue #943 — per-hook seam TL3 test: post-compact.js (PostCompact). TL3 GAP ONLY.
 # TL3 gap: PostCompact fires only on real conversation compaction, which cannot be

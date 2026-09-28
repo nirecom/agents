@@ -88,26 +88,26 @@ assert_no_reset_note "M6"
 echo "--- M8-M11: the reset fires on every register outcome regardless of the registration state ---"
 TELEMETRY_PRE=off
 run_case "M8" sh on present none yes 0 1 yes file
-assert_eq "M8: observable outcome (claude mcp add fails)" "rc=0 npmi=0 add=1 rm=0 mcp=1 err=1" "$SUMMARY"
+assert_eq "M8: observable outcome (claude mcp add fails)" "rc=0 npmi=1 add=1 rm=0 mcp=1 err=1" "$SUMMARY"
 assert_eq "M8: telemetry.json is gone even though addServer failed" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M8"
 
 run_case "M9" sh on present present yes 0 0 yes file
-assert_eq "M9: observable outcome (an existing entry is refreshed)" "rc=0 npmi=0 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
+assert_eq "M9: observable outcome (an existing entry is refreshed)" "rc=0 npmi=1 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
 assert_eq "M9: telemetry.json is gone on the refresh path too" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M9"
 assert_reset_before "M9" "codegraph MCP server registered."
 
 run_case "M11" sh on present broken yes 0 0 yes file
 assert_eq "M11: observable outcome (an unreadable ~/.claude.json, state=null, early return)" \
-    "rc=0 npmi=0 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
+    "rc=0 npmi=1 add=0 rm=0 mcp=0 err=1" "$SUMMARY"
 assert_eq "M11: telemetry.json is gone even on the state=null early-return path" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M11"
 
 echo "--- M12: re-running the installer clears a re-created opt-out again — accepted, not a bug ---"
 TELEMETRY_PRE=off
 run_case "M12-1" sh on present present yes 0 0 yes file
-assert_eq "M12-1: observable outcome" "rc=0 npmi=0 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
+assert_eq "M12-1: observable outcome" "rc=0 npmi=1 add=1 rm=1 mcp=2 err=0" "$SUMMARY"
 assert_eq "M12-1: telemetry.json is gone" "ABSENT" "$(telemetry_json)"
 assert_reset_note "M12-1"
 
@@ -139,6 +139,10 @@ case "$(cat "$M12_DIR/out2.log" 2>/dev/null || true)" in
     *"reset the local CodeGraph telemetry choice"*) pass "M12-2: the reset line fires again on the second run" ;;
     *) fail "M12-2: expected the reset line on the second run too — got $(printf '%q' "$(cat "$M12_DIR/out2.log" 2>/dev/null)")" ;;
 esac
+# #2254 idempotency: the second run's remove->add drops alwaysLoad with the old
+# entry, and the helper must put it back.
+assert_eq "M12-2: alwaysLoad:true is restored after the second run" "true" \
+    "$(node -e 'try { const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log(String(((j.mcpServers || {}).codegraph || {}).alwaysLoad)); } catch (e) { console.log("unreadable"); }' "$(node_path "$FAKE_HOME/.claude.json")")"
 
 echo "--- M13: a deletion failure (EPERM/EISDIR) warns, keeps exit 0, and does not block registration ---"
 TELEMETRY_PRE=undeletable

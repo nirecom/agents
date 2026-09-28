@@ -271,6 +271,13 @@ Because `codegraph_explore` returns verbatim source, it is also matched by
 `hooks/block-dotenv.js` and `hooks/block-credentials.js`, which read its `query` as a bag of
 candidate paths.
 
+**`alwaysLoad: true` is required to prevent deferral.** Claude Code defers the schema of any MCP
+tool that is not in the server's `tools` list at startup — such tools require a `ToolSearch` call
+to unlock, which defeats the goal of making `codegraph_explore` always available without a
+`ToolSearch` preamble. `install/codegraph-mcp.js` patches `mcpServers.codegraph.alwaysLoad = true`
+in `~/.claude.json` after every successful `claude mcp add`, using an atomic rename so a partial
+write cannot corrupt the file. The patch is idempotent and leaves all other fields untouched.
+
 **`hooks/post-checkout` and `hooks/post-merge` hold two guards with opposite scope, and the
 order is load-bearing.** The settings-assembly guard exits for every repo except the agents
 main worktree. A CodeGraph index must be refreshed wherever it exists — above all in linked

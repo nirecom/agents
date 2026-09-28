@@ -1,20 +1,21 @@
 # shellcheck shell=bash
 # Tests: install/codegraph-mcp.js, install/linux/codegraph.sh
 # Tags: codegraph, installer, mcp-registration, env-flag, fail-safe-off, usage-error, TL2, pwsh-not-required, scope:issue-specific, dup-group-keep:size-hard-limit
-# The single ST-19 case table (B1-B18) plus the post-conditions asserted after every
+# The single ST-19 case table (B1-B20) plus the post-conditions asserted after every
 # case. Sourced last; the dispatcher's `# Serial:` justification holds unchanged.
 
 # Columns: name | entry | flag | envfile | mcp-pre | codegraph | npm | claude | node |
-# claude-md | want. `npm`/`claude` carry the stub's exit code, or `no` to take that
-# binary off PATH. `want` composes exit code, `npm install -g` calls, `claude mcp add`
-# / `remove` / any-`mcp` calls and stderr line count into one string.
-while IFS='|' read -r name entry flag envfile mcp_pre with_cg npm_mode claude_mode with_node md_kind want; do
+# claude-md | json | want. `npm`/`claude` carry the stub's exit code, or `no` to take
+# that binary off PATH. `json` is the JSON_POST verdict (same / always). `want`
+# composes exit code, `npm install -g` calls, `claude mcp add` / `remove` /
+# any-`mcp` calls and stderr line count into one string.
+while IFS='|' read -r name entry flag envfile mcp_pre with_cg npm_mode claude_mode with_node md_kind want_json want; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"; entry="${entry//[[:space:]]/}"; flag="${flag//[[:space:]]/}"
     envfile="${envfile//[[:space:]]/}"; mcp_pre="${mcp_pre//[[:space:]]/}"
     with_cg="${with_cg//[[:space:]]/}"; npm_mode="${npm_mode//[[:space:]]/}"
     claude_mode="${claude_mode//[[:space:]]/}"; with_node="${with_node//[[:space:]]/}"
-    md_kind="${md_kind//[[:space:]]/}"
+    md_kind="${md_kind//[[:space:]]/}"; want_json="${want_json//[[:space:]]/}"
     want="${want#"${want%%[![:space:]]*}"}"; want="${want%"${want##*[![:space:]]}"}"
 
     run_case "$name" "$entry" "$flag" "$envfile" "$mcp_pre" "$with_cg" \
@@ -43,10 +44,9 @@ while IFS='|' read -r name entry flag envfile mcp_pre with_cg npm_mode claude_mo
     assert_eq "$name: post/no codegraph install|uninstall subcommand" "0" "$CG_INSTALL"
     assert_eq "$name: post/settings.json byte-identical" "$PRE_SETTINGS_SHA" "$(digest "$FAKE_HOME/.claude/settings.json")"
     assert_eq "$name: post/CLAUDE.md byte-identical" "$PRE_MD_SHA" "$(digest "$FAKE_HOME/.claude/CLAUDE.md")"
-    # C10: the helper only reads ~/.claude.json; `claude mcp add|remove` owns every
-    # write and is a recording stub here, so identity must hold in all 18 rows.
-    assert_eq "$name: post/.claude.json byte-identical (writes delegated to the claude CLI)" \
-        "$PRE_JSON_SHA" "$(digest "$FAKE_HOME/.claude.json")"
+    # C10 (#2254): `claude mcp add|remove` owns every entry write (the stub emulates
+    # it); the helper's only own write is alwaysLoad on a freshly added entry of ours.
+    assert_eq "$name: post/.claude.json — helper changes only alwaysLoad" "$want_json" "$JSON_POST"
     if [ "$md_kind" = "symlink" ] && [ "$PRE_MD_KIND" != "symlink" ]; then
         skip_env "$name: post/CLAUDE.md file type — this shell cannot create a real symlink; only byte identity was checked"
     else
@@ -58,23 +58,28 @@ done <<'TABLE'
 # B1/B2/B7 pin fail-safe OFF, B3 the on->off transition, B4 registration, B5
 # idempotency, B6/B8/B9 the plan's three failure paths, B10-B16 the error paths the
 # review found missing, B17/B18 the usage errors that alone exit 64 rather than 0.
-# name | entry  | flag    | envfile | mcp-pre | cg  | npm | claude | node | claude-md | want
-B1     | sh     |         | absent  | none    | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
-B2     | sh     | off     | present | none    | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
-B3     | sh     | off     | present | present | no  | 0   | 0      | yes  | symlink   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0
-B4     | sh     | on      | present | none    | no  | 0   | 0      | yes  | symlink   | rc=0 npmi=1 add=1 rm=0 mcp=1 err=0
-B5     | sh     | on      | present | present | yes | 0   | 0      | yes  | file      | rc=0 npmi=0 add=1 rm=1 mcp=2 err=0
-B6     | sh     | on      | present | none    | no  | 1   | 0      | yes  | file      | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
-B7     | sh     | garbage | present | none    | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
-B8     | sh     | on      | present | none    | no  | 0   | 0      | no   | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
-B9     | sh     | on      | present | broken  | yes | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
-B10    | sh     | on      | present | none    | no  | 0   | no     | yes  | file      | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
-B11    | sh     | off     | present | present | no  | 0   | no     | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
-B12    | sh     | on      | present | none    | no  | no  | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
-B13    | sh     | on      | present | none    | no  | 0   | 1      | yes  | file      | rc=0 npmi=1 add=1 rm=0 mcp=1 err=1
-B14    | sh     | off     | present | present | no  | 0   | 1      | yes  | symlink   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=1
-B15    | sh     | on      | present | missing | no  | 0   | 0      | yes  | file      | rc=0 npmi=1 add=1 rm=0 mcp=1 err=0
-B16    | sh     | off     | present | missing | no  | 0   | 0      | yes  | file      | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
-B17    | bogus  | on      | present | none    | no  | 0   | 0      | yes  | file      | rc=64 npmi=0 add=0 rm=0 mcp=0 err=1
-B18    | noverb | on      | present | none    | no  | 0   | 0      | yes  | file      | rc=64 npmi=0 add=0 rm=0 mcp=0 err=1
+# B5/B9 install even with codegraph present (#2254: no "already installed" skip —
+# npm always asks for @latest); B19/B20 keep the installed binary and still
+# register when npm fails or is missing — the opposite boundary of B6/B12 (cg=no).
+# name | entry  | flag    | envfile | mcp-pre | cg  | npm | claude | node | claude-md | json   | want
+B1     | sh     |         | absent  | none    | no  | 0   | 0      | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
+B2     | sh     | off     | present | none    | no  | 0   | 0      | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
+B3     | sh     | off     | present | present | no  | 0   | 0      | yes  | symlink   | same   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=0
+B4     | sh     | on      | present | none    | no  | 0   | 0      | yes  | symlink   | always | rc=0 npmi=1 add=1 rm=0 mcp=1 err=0
+B5     | sh     | on      | present | present | yes | 0   | 0      | yes  | file      | always | rc=0 npmi=1 add=1 rm=1 mcp=2 err=0
+B6     | sh     | on      | present | none    | no  | 1   | 0      | yes  | file      | same   | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
+B7     | sh     | garbage | present | none    | no  | 0   | 0      | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
+B8     | sh     | on      | present | none    | no  | 0   | 0      | no   | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
+B9     | sh     | on      | present | broken  | yes | 0   | 0      | yes  | file      | same   | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
+B10    | sh     | on      | present | none    | no  | 0   | no     | yes  | file      | same   | rc=0 npmi=1 add=0 rm=0 mcp=0 err=1
+B11    | sh     | off     | present | present | no  | 0   | no     | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
+B12    | sh     | on      | present | none    | no  | no  | 0      | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=1
+B13    | sh     | on      | present | none    | no  | 0   | 1      | yes  | file      | same   | rc=0 npmi=1 add=1 rm=0 mcp=1 err=1
+B14    | sh     | off     | present | present | no  | 0   | 1      | yes  | symlink   | same   | rc=0 npmi=0 add=0 rm=1 mcp=1 err=1
+B15    | sh     | on      | present | missing | no  | 0   | 0      | yes  | file      | always | rc=0 npmi=1 add=1 rm=0 mcp=1 err=0
+B16    | sh     | off     | present | missing | no  | 0   | 0      | yes  | file      | same   | rc=0 npmi=0 add=0 rm=0 mcp=0 err=0
+B17    | bogus  | on      | present | none    | no  | 0   | 0      | yes  | file      | same   | rc=64 npmi=0 add=0 rm=0 mcp=0 err=1
+B18    | noverb | on      | present | none    | no  | 0   | 0      | yes  | file      | same   | rc=64 npmi=0 add=0 rm=0 mcp=0 err=1
+B19    | sh     | on      | present | none    | yes | 1   | 0      | yes  | file      | always | rc=0 npmi=1 add=1 rm=0 mcp=1 err=1
+B20    | sh     | on      | present | none    | yes | no  | 0      | yes  | file      | always | rc=0 npmi=0 add=1 rm=0 mcp=1 err=1
 TABLE

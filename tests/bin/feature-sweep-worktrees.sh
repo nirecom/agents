@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-sweep-worktrees.sh
 # Tests: bin/sweep-worktrees.sh
-# Tags: sweep, worktree, maintenance, bin, git
+# Tags: sweep, worktree, maintenance, bin, git, scope:issue-specific
 #
 # Dispatch + re-export entrypoint for the feature-sweep-worktrees split suite.
 # All logic lives in tests/bin/feature-sweep-worktrees/ per rules/coding/file-split.md
