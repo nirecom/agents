@@ -283,7 +283,7 @@ row("G9 isGhApiWriteArgv verdicts unchanged", "true,false", C ? [C.isGhApiWriteA
 case_end
 
 case_begin "readonly-class-segment" "hooks/bash-guard/readonly-class.js"
-ro_section CLASS 105 "$RO_REAL$RO_PURE"'
+ro_section CLASS 120 "$RO_REAL$RO_PURE"'
 const RC = load("hooks/bash-guard/readonly-class.js"), RCP = "readonly-class.js";
 const AL = load("hooks/bash-guard/allow.js");
 const { parse } = require(A + "/hooks/lib/command-ir");
@@ -311,8 +311,16 @@ for (const [c, want] of [
   // Absolute home paths name the same credentials as ~/ and $HOME, so they must be screened alike.
   ["cat /home/user/.ssh/id_rsa", "null"], ["head C:/Users/u/.ssh/id_rsa", "null"],
   ["tail /Users/u/.aws/credentials", "null"], ["grep key /root/.ssh/id_ed25519", "null"],
+  // Any spelling that still names a credential directory is screened, whatever root precedes it.
+  ["cat /c//Users/u/.ssh/id_rsa", "null"], ["cat /c/Windows/../Users/u/.ssh/id_rsa", "null"],
+  ["cat /home//u/.aws/credentials", "null"], ["cat ~u/.ssh/id_rsa", "null"],
+  ["cat ../../../../Users/u/.ssh/id_rsa", "null"], ["git diff --no-index /c//Users/u/.ssh/id_rsa /dev/null", "null"],
+  ["wc --files0-from=/c/Users/u/.ssh/id_rsa", "null"], ["grep --file=/mnt/c/Users/u/.ssh/id_rsa x", "null"],
+  ["cat \x27\\\\?\\C:\\Users\\u\\.ssh\\id_rsa\x27", "null"],
+  // Bundled short options: the attached value may start after any option letter.
+  ["file -bf.env", "null"], ["file -bf~/.ssh/id_rsa", "null"], ["grep -hf.env x", "null"], ["git grep -hf.env x", "null"],
   // Over-block control: a non-credential absolute path stays read-only.
-  ["cat /home/user/notes.txt", GEN],
+  ["cat /home/user/notes.txt", GEN], ["cat src/sshutil.js", GEN], ["grep -hi x f", GEN],
   // file -m reads a magic-file path (C18); that path must be screened like any other operand.
   ["file -m .env f", "null"],
   // file -S/-z enables external decompressor execution (C20); -p writes atime metadata (C21).

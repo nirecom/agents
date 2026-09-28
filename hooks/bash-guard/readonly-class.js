@@ -11,7 +11,7 @@ const { DEFAULT_ROOT, loadReadOnlyClasses } = require("../lib/readonly-command-c
 const { getopt, find } = require("../lib/readonly-syntax-adapters");
 const { isGitPureReadArgv } = require("../lib/bash-write-patterns/git-read-ir");
 const { isGhReadArgv } = require("../lib/bash-write-patterns/gh-read");
-const { commandTouchesCredentials } = require("../lib/credential-check");
+const { commandTouchesCredentials, isCredentialGlobPattern } = require("../lib/credential-check");
 const { checkBashCommand: touchesDotenv } = require("../lib/dotenv-check");
 const { isPlainSingleCommand } = require("./allow");
 const { ALLOW_CODES } = require("./reasons");
@@ -33,24 +33,17 @@ function isPlainName(seg) {
   return Boolean(effective) && effective.cmd0 === cmd0;
 }
 
-// credential-check only knows the ~/, $HOME and /root roots, so an absolute home path of
-// another user/OS (/home/u, /Users/u, C:\Users\u, /c/Users/u, /mnt/c/Users/u) is rewritten to ~/.
-const ABS_HOME_RE = /^(?:[A-Za-z]:[\\/]Users[\\/]|\/mnt\/[A-Za-z]\/Users\/|\/[A-Za-z]\/Users\/|\/Users\/|\/home\/)[^\\/]+[\\/](.*)$/i;
-
-function homeNormalizedPath(p) {
-  const m = ABS_HOME_RE.exec(p);
-  return m ? "~/" + m[1].replace(/\\/g, "/") : null;
-}
+const OPTION_LETTER_RE = /[A-Za-z0-9]/;
 
 function touchesSensitivePath(seg, argv) {
   const texts = [[seg.cmd0, ...argv].join(" ")];
   if (typeof seg.rawText === "string" && seg.rawText !== "") texts.push(seg.rawText);
+  const paths = [];
   // Wrap with a dummy cmd0 so the checkers see each as a path argument, not a command name.
   const addPath = (v) => {
     if (!v) return;
     texts.push("x " + v);
-    const home = homeNormalizedPath(v);
-    if (home) texts.push("x " + home);
+    paths.push(v);
   };
   try {
     // Also check each token directly and path portions of revision/pathspec operands.
@@ -58,8 +51,14 @@ function touchesSensitivePath(seg, argv) {
     // (e.g., `git log -m .env` would silently consume `.env` as the -m value without it).
     for (const tok of argv) {
       addPath(tok);
-      // Attached short option value: -f.env or -f/path — extract the suffix as a potential path.
-      if (/^-[A-Za-z]./.test(tok)) addPath(tok.slice(2));
+      if (tok.startsWith("--")) {
+        // --name=value: the value may be a path (--file=, --files0-from=).
+        if (tok.includes("=")) addPath(tok.slice(tok.indexOf("=") + 1));
+      } else if (tok.startsWith("-")) {
+        // Attached short option value, bundled or not (-f.env, -bf.env): the value may start
+        // after any option letter, so every suffix that follows a letter is a candidate.
+        for (let i = 2; i < tok.length && OPTION_LETTER_RE.test(tok[i - 1]); i++) addPath(tok.slice(i));
+      }
       // Extended pathspec magic :(magic)path — extract the path portion after ")".
       if (tok.startsWith(":(") && tok.includes(")")) addPath(tok.slice(tok.indexOf(")") + 1));
       // Plain colon-separated rev:path forms (e.g., HEAD:.env, :0:.env).
@@ -69,7 +68,10 @@ function touchesSensitivePath(seg, argv) {
   } catch (_e) {
     return true;
   }
-  return texts.some((t) => commandTouchesCredentials(t) || touchesDotenv(t));
+  // The root-anchored check only knows ~/, $HOME and /root; any other spelling of a home
+  // (/c//Users/u, ~u, ../../Users/u, \\?\C:\Users\u) is caught by the credential directory
+  // segment itself, whatever precedes it.
+  return paths.some(isCredentialGlobPattern) || texts.some((t) => commandTouchesCredentials(t) || touchesDotenv(t));
 }
 
 function classOf(seg, argv, root) {
