@@ -137,11 +137,12 @@ t53_real_deploy() {
     esac
     assert_eq "T53[real-deploy]: real deployed allow list has zero \`Bash(<cmd> *)\` entries the checkout's base/extension do not own" \
         "present 0" "$got"
-    # TEMPORARILY DISABLED (#2265 hotfix): settings.json statically carries the relative
-    # `Bash(<I> <P> *)` spellings until the classifier allows them, and those match the retired set.
-    # Restore together with removing those rules: https://github.com/nirecom/agents/issues/2265#issuecomment-5874202460
+    # --- BEGIN temporary: static settings.json allow rules → classifier allow migration added 2026-09-29 ---
+    # deletion-condition: the bash-guard classifier allows relative-path and `bash -c 'cd "$AGENTS_CONFIG_DIR" && ...'` forms and the #2265 static rules are removed from settings.json (https://github.com/nirecom/agents/issues/2265#issuecomment-5874202460); then uncomment the assert below and delete this block's markers.
+    # The static relative `Bash(<I> <P> *)` rules match the retired-spelling set, so this assert is disabled meanwhile.
     # assert_eq "T53[real-deploy]: real deployed allow list carries no retired spelling of a real SSOT entry" \
     #     "none" "$(t52_retired_spellings_in "$dump")"
+    # --- END temporary: static settings.json allow rules → classifier allow migration ---
 }
 
 t52_setup
