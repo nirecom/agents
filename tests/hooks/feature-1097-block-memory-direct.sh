@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-memory-direct.js
 # Tags: workflow, hook, memory, env, scope:issue-specific
-# Test suite for hooks/block-memory-direct.js PreToolUse hook.
-# Tests will FAIL until the hook is implemented — that is expected.
-#
-# L3 gap (hook-registration):
-#   - Whether hooks/block-memory-direct.js actually fires in Claude Code requires
-#     settings.json wiring that only the real CC session confirms.
-#   - Whether Claude Code presents the AskUserQuestion popup when the hook blocks
-#     is only observable in a live session — L2 can only check the JSON decision.
+# Memory-dir writes are blocked unconditionally; WORKFLOW_OFF is the only bypass
+# (the retired <sid>.memory-write-allow.tmp marker must be ignored, #2435).
+# TL3 gap (hook-registration):
+#   - Whether the hook actually fires needs settings.json wiring only a real CC session confirms.
+#   - How CC surfaces the block reason to the model is observable only in a live session.
 set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -137,6 +134,35 @@ assert_block_reason_contains() {
     fi
 }
 
+# assert_block_reason_not_contains <id> <desc> <json> <forbidden1> [forbidden2 ...]
+# Passes only when decision=block, reason is non-empty, and no forbidden substring appears.
+assert_block_reason_not_contains() {
+    local id="$1"
+    local desc="$2"
+    local json="$3"
+    shift 3
+    local result decision reason
+    result=$(run_hook "$json")
+    decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
+    reason=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.reason||'')}catch(e){}" -- "$result" 2>/dev/null || true)
+    if [[ "$decision" != "block" || -z "$reason" ]]; then
+        fail "${id}. ${desc} — expected block with non-empty reason, got decision='${decision}' reason='${reason}'"
+        return
+    fi
+    local found=()
+    local forbidden
+    for forbidden in "$@"; do
+        if printf '%s' "$reason" | grep -qF -- "$forbidden"; then
+            found+=("$forbidden")
+        fi
+    done
+    if [[ ${#found[@]} -eq 0 ]]; then
+        pass "${id}. ${desc}"
+    else
+        fail "${id}. ${desc} — reason contains forbidden text: ${found[*]}"
+    fi
+}
+
 # ===========================================================================
 # Section A — Normal cases
 # ===========================================================================
@@ -151,28 +177,43 @@ assert_approve "A1" "Write + non-memory path → approve" \
 assert_approve "A2" "Read tool → approve (not in checked tools)" \
     '{"tool_name":"Read","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
 
-# A3: Write + memory dir → block (reason contains "Memory write intercepted")
-assert_block_reason_contains "A3" "Write + memory dir → block with intercepted message" \
+# A3: Write + memory dir → block; rejection cites the governing rule (#1270)
+assert_block_reason_contains "A3" "Write + memory dir → block citing rules/mid-workflow-findings.md" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}' \
-    "Memory write intercepted."
+    "rules/mid-workflow-findings.md"
 
-# A4: Write + memory dir + valid marker file → approve + marker deleted
+# A4: retired allow-marker present → still block on every call, and the hook leaves the marker untouched
 MARKER_FILE="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
 touch "$MARKER_FILE"
-assert_approve "A4" "Write + memory dir + valid marker file → approve (one-shot consumed)" \
-    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
-# Verify marker was deleted
-if [ ! -f "$MARKER_FILE" ]; then
-    pass "A4b. Marker file deleted after one-shot consume"
+a4_json='{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+a4_result1=$(run_hook "$a4_json")
+a4_result2=$(run_hook "$a4_json")
+a4_dec1=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$a4_result1" 2>/dev/null || true)
+a4_dec2=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$a4_result2" 2>/dev/null || true)
+a4_reason=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.reason||'')}catch(e){}" -- "$a4_result1" 2>/dev/null || true)
+if [[ "$a4_dec1" == "block" && "$a4_dec2" == "block" && -n "$a4_reason" && -f "$MARKER_FILE" ]]; then
+    pass "A4. Write + memory dir + allow-marker present → block on repeated calls, marker not consumed"
 else
-    fail "A4b. Marker file NOT deleted after one-shot consume"
+    a4_marker_state="absent"
+    [[ -f "$MARKER_FILE" ]] && a4_marker_state="present"
+    fail "A4. allow-marker must not bypass — 1st='${a4_dec1}', 2nd='${a4_dec2}' (want block/block), reason-empty=$([[ -z "$a4_reason" ]] && echo yes || echo no), marker=${a4_marker_state} (want present)"
 fi
+rm -f "$MARKER_FILE"
+
+# A4n: block reason must not carry the retired 4-option prompt
+assert_block_reason_not_contains "A4n" "Block reason omits retired 4-option prompt text" \
+    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}' \
+    "Memory write intercepted" "Allow this memory write" "Deny this memory write" \
+    "Please ask the user" "Cancel / do nothing" "The dialog below asks the user"
 
 # A5: Write + memory dir + WORKFLOW_OFF active → approve
 WORKFLOW_OFF_MARKER="$CLAUDE_WORKFLOW_DIR/test-sess-1097.workflow-off"
 touch "$WORKFLOW_OFF_MARKER"
 assert_approve "A5" "Write + memory dir + WORKFLOW_OFF active → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+# A5b: the WORKFLOW_OFF bypass covers the Bash arm too
+assert_approve "A5b" "Bash redirect to memory dir + WORKFLOW_OFF active → approve" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
 rm -f "$WORKFLOW_OFF_MARKER"
 
 # A6: Edit + memory dir → block
@@ -241,23 +282,6 @@ else
     fail "B12. Session ID unresolvable — expected block (fail-closed), got: ${b12_result}"
 fi
 
-# B13: Marker file exists but is a directory (unlinkSync fails with EISDIR) → block (fail-closed)
-# Use a distinct session ID to avoid path conflict with A4's marker file
-B13_SID="test-sess-b13"
-MARKER_DIR_PATH="$WORKFLOW_PLANS_DIR/${B13_SID}.memory-write-allow.tmp"
-rm -f "$MARKER_DIR_PATH" 2>/dev/null || true
-mkdir -p "$MARKER_DIR_PATH"
-b13_result=$(run_hook \
-    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"'"$B13_SID"'","agent_id":""}' \
-    "CLAUDE_CODE_SESSION_ID=$B13_SID")
-b13_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b13_result" 2>/dev/null || true)
-if [ "$b13_decision" = "block" ]; then
-    pass "B13. Marker is a directory (unlinkSync EISDIR) → block (fail-closed)"
-else
-    fail "B13. Marker is a directory (unlinkSync EISDIR) — expected block (fail-closed), got: ${b13_result}"
-fi
-rm -rf "$MARKER_DIR_PATH"
-
 # ===========================================================================
 # Section C — Edge cases
 # ===========================================================================
@@ -291,34 +315,6 @@ else
 fi
 
 # ===========================================================================
-# Section D — One-shot marker idempotency
-# ===========================================================================
-echo ""
-echo "=== Section D — One-shot marker idempotency ==="
-
-# D17: Marker one-shot — 1st call approve, 2nd call block after marker consumed
-MARKER_FILE_D="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
-touch "$MARKER_FILE_D"
-
-d17_json='{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
-
-# 1st call: should approve (consumes marker)
-d17_result1=$(run_hook "$d17_json")
-d17_dec1=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d17_result1" 2>/dev/null || true)
-
-# 2nd call: marker gone, should block
-d17_result2=$(run_hook "$d17_json")
-d17_dec2=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d17_result2" 2>/dev/null || true)
-
-if [ "$d17_dec1" = "approve" ] && [ "$d17_dec2" = "block" ]; then
-    pass "D17. Marker one-shot: 1st call approve, 2nd call block after marker consumed"
-else
-    fail "D17. Marker one-shot — 1st='${d17_dec1}' (want approve), 2nd='${d17_dec2}' (want block)"
-fi
-# Cleanup in case first call failed and marker remains
-rm -f "$MARKER_FILE_D"
-
-# ===========================================================================
 # Section E — Bash shell-write arm
 # ===========================================================================
 echo ""
@@ -348,6 +344,13 @@ if [ -n "$MEMORY_DIR_MSYS" ]; then
 else
     echo "SKIP: E22 (MSYS2 /c/ path form) — not win32"
 fi
+
+# E23: retired allow-marker does not bypass the Bash arm either (symmetric with A4)
+MARKER_FILE_E="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
+touch "$MARKER_FILE_E"
+assert_block "E23" "Bash redirect to memory dir + allow-marker present → block" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+rm -f "$MARKER_FILE_E"
 
 # ===========================================================================
 # Section F — Security / adversarial inputs
