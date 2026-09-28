@@ -196,6 +196,15 @@ if (!ok) {
   process.exit(1);
 }
 
+// #2430: an accepted WARN/BLOCK leaves one handoff breadcrumb in the primary
+// store only (the mirror is a copy of the same verdict). Fail-open.
+if (activeFlags.has("set-audit-verdict")) {
+  try {
+    require("../hooks/lib/handoff-auto-record").recordVerdictBreadcrumb(
+      rawSid, args["set-audit-verdict"], args["set-audit-verdict-summary"]);
+  } catch (_e) { /* a lost breadcrumb is not a failed write */ }
+}
+
 // Mirror-write via MIRROR_RESOLVERS table
 let mirrorSid = args["mirror-session-id"];
 if (!mirrorSid) mirrorSid = MIRROR_RESOLVERS[rawSidSource]();

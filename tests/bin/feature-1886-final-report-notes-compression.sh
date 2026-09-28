@@ -2,45 +2,13 @@
 # tests/bin/feature-1886-final-report-notes-compression.sh
 # Tests: bin/render-final-report.js, bin/render-final-report/notes.js, skills/session-close/SKILL.md, skills/_shared/final-report-emission.md, rules/mid-workflow-findings.md, skills/worktree-end/SKILL.md
 # Tags: final-report, notes-compression, severity, render-cli, prompt-contract, TL2, scope:issue-specific
-#
-# Why this exists (#1886): WORKTREE_NOTES.md sections were pasted into the Final
-# Report verbatim, so one long session could emit thousands of characters of
-# notes into the assistant reply. The fix compresses every entry to a title line
-# EXCEPT entries tagged `<!-- severity: high -->`, and appends one summary line
-# carrying the counts plus a `full text: <backup path>` pointer.
-#
-# The two silent failure modes this file pins, from opposite directions:
-#   under-compression : the CLI still emits the full body -> the Final Report is
-#                       unbounded again. Caught by the CONSTANT upper bounds
-#                       below, asserted on both a 30-entry and a 300-entry
-#                       fixture (same bound for both = bound is input-independent).
-#   over-compression  : severity:high bodies get truncated too -> the one class
-#                       of finding the reader must see in full is lost.
-# Bounds are asserted against the module's own constants (COMPRESSED_LIST_MAX,
-# TITLE_MAX_CHARS), never against a ratio of the input size, which would pass
-# for any fixture large enough.
-#
-# The summary line is deliberately EXEMPT from the per-line length bound: it
-# embeds the absolute backup path (capture-env.sh writes it under PLANS_DIR), so
-# on a real temp dir it exceeds 128 chars by construction. It gets its own,
-# path-length-relative bound instead.
-#
-# The prompt half of the fix is checked by grep on the WORKTREE copies
-# (LOCAL_* below, not the deployed ~/.claude copies): compression is only
-# useful if session-close emits it under a documented verbatim/translation
-# scope, and severity tagging only fires if the biggest producer of findings
-# (worktree-end Step WE-10) is wired to the rule that describes it.
-#
-# TL3 gap (what this test does NOT catch):
-# - A real /session-close run: the model reading SC-6 and actually emitting the
-#   stdout verbatim (and honoring CONV_LANG) is prompt-following behavior that
-#   no grep can verify.
-# - A real /worktree-end run appending findings through the CLI with a severity
-#   the model itself classified.
-# - The real Stop hook accepting the rendered report; only the two checks the
-#   guard performs (13 headings, /<[A-Z][A-Z0-9_]+>/) are replayed here.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# #1886: Final Report notes compress to title lines except `<!-- severity: high -->` entries, plus one
+# summary line (counts + `full text: <backup path>`). Pins under-compression (constant bounds from
+# COMPRESSED_LIST_MAX / TITLE_MAX_CHARS on 30- and 300-entry fixtures) and over-compression (high kept).
+# The summary line is exempt from the per-line bound (embeds an absolute path); it has a path-relative bound.
+# Prompt half greps the WORKTREE copies (LOCAL_*): session-close SC-6 emission scope, worktree-end WE-10 wiring.
+# TL3 gap: real /session-close, /worktree-end and Stop-hook runs are not exercised; mitigated at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -uo pipefail
 
@@ -359,7 +327,7 @@ test_session_close_size() {
 
 # SC-6 block only: a reference sitting in some other step must not pass.
 sc6_block() {
-    awk '/^## Step SC-6 /{f=1} f && /^## Step SC-7/{exit} f' "$LOCAL_SESSION_CLOSE_MD" 2>/dev/null
+    awk '/^## SC-6 /{f=1} f && /^## SC-7/{exit} f' "$LOCAL_SESSION_CLOSE_MD" 2>/dev/null
 }
 
 test_sc6_points_at_emission_contract() {
@@ -428,8 +396,8 @@ test_midworkflow_rule_wires_cli_and_severity() {
 # rule, severity tags never fire and compression degrades to "compress all".
 test_we10_wired_to_rule() {
     local b
-    b="$(awk '/^### Step WE-10 /{f=1} f && /^### Step WE-11/{exit} f' "$LOCAL_WORKTREE_END_MD" 2>/dev/null)"
-    if [ -z "$b" ]; then fail "we10_wired_to_rule: Step WE-10 block not found"; return; fi
+    b="$(awk '/^### WE-10 /{f=1} f && /^### WE-11/{exit} f' "$LOCAL_WORKTREE_END_MD" 2>/dev/null)"
+    if [ -z "$b" ]; then fail "we10_wired_to_rule: WE-10 block not found"; return; fi
     if printf '%s' "$b" | grep -qF 'rules/mid-workflow-findings.md'; then
         pass "we10_wired_to_rule: WE-10 block references rules/mid-workflow-findings.md"
     else

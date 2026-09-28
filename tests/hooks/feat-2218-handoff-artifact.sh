@@ -44,6 +44,18 @@ run_node() {
     printf '%s' "$out"
 }
 
+# seed_active <node-dir> <sid> — #2430: the CLI writes through the workflow
+# active-period gate, so a CLI case that expects a write seeds workflow_init.
+seed_active() {
+    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        CLAUDE_WORKFLOW_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
+        "$RWT" 30 node -e "
+const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+S.writeState('$2', S.createInitialState('$2', { cwd: '/h/fixture', git_branch: 'feature/h' }));
+S.markStep('$2', 'workflow_init', 'complete');
+" >/dev/null 2>&1
+}
+
 # H1 — getHandoffPath: <PLANS_DIR>/<sid>-handoff.md, and an sid that would
 # escape PLANS_DIR is rejected by assertValidSessionId (path-traversal guard).
 run_H1() {
@@ -81,7 +93,7 @@ const fs = require('fs');
 const { appendHandoffEntry, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
 const sid = 'sess-h2';
 const problems = [];
-const origins = ['step-end', 'gate-block', 'flush'];
+const origins = ['procedure-point', 'gate-block', 'auto-record', 'flush'];
 origins.forEach((origin, i) => {
   const r = appendHandoffEntry(sid, { cls: 'D', step: 'write_tests', key: 'k' + i, summary: 'observation ' + i, pointer: '-', origin });
   if (!r || r.written !== true || r.reason !== 'ok') problems.push(origin + ':' + JSON.stringify(r));
@@ -89,7 +101,7 @@ origins.forEach((origin, i) => {
 const raw = fs.readFileSync(getHandoffPath(sid), 'utf8');
 const lines = raw.split('\n');
 const entryLines = lines.filter((l) => l.startsWith('- '));
-if (entryLines.length !== 3) problems.push('entry-line-count:' + entryLines.length);
+if (entryLines.length !== origins.length) problems.push('entry-line-count:' + entryLines.length);
 if (lines.filter((l) => l.trim() === '## D').length !== 1) problems.push('missing-or-duplicated-class-heading');
 if (raw.indexOf('handoff_schema_version: 1') === -1) problems.push('missing-schema-version-meta');
 entryLines.forEach((line, i) => {
@@ -104,7 +116,7 @@ entryLines.forEach((line, i) => {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "H2: step-end / gate-block / flush all append 6-field entry lines under the class heading"
+        pass "H2: procedure-point / gate-block / auto-record / flush all append 6-field entry lines under the class heading"
     else
         fail "H2: expected 'OK', got '${out:-<err>}'"
     fi
@@ -121,7 +133,7 @@ const fs = require('fs');
 const { appendHandoffEntry, readHandoff, renderHandoffForResume, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
 const sid = 'sess-h3';
 const problems = [];
-const base = { cls: 'D', step: 'run_tests', key: 'run-tests:flaky', pointer: '-', origin: 'step-end' };
+const base = { cls: 'D', step: 'run_tests', key: 'run-tests:flaky', pointer: '-', origin: 'procedure-point' };
 const r1 = appendHandoffEntry(sid, Object.assign({}, base, { summary: 'first reason' }));
 const r2 = appendHandoffEntry(sid, Object.assign({}, base, { summary: 'second reason' }));
 if (!r1.written || r1.reason !== 'ok') problems.push('first:' + JSON.stringify(r1));
@@ -255,7 +267,7 @@ const cases = [
 ];
 cases.forEach((c, i) => {
   const key = 'esc-' + i;
-  appendHandoffEntry(sid, { cls: 'E', step: 'commit_push', key, summary: c.summary, pointer: c.pointer, origin: 'step-end' });
+  appendHandoffEntry(sid, { cls: 'E', step: 'commit_push', key, summary: c.summary, pointer: c.pointer, origin: 'procedure-point' });
   const raw = fs.readFileSync(getHandoffPath(sid), 'utf8');
   const entryLines = raw.split(NL).filter((l) => l.startsWith('- '));
   if (entryLines.length !== i + 1) problems.push(c.name + ':entry-line-count:' + entryLines.length + '(want ' + (i + 1) + ')');
@@ -379,10 +391,11 @@ run_H9() {
     # A decoy wsid-shaped artifact: if the CLI defaulted to the PLANS_DIR file
     # prefix heuristic it would append here instead of to the CC-native sid.
     printf '# decoy\n' > "$tmp/wf/wsid-decoy-intent.md"
+    seed_active "$tn" "cli-sid-h9"
     out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h9" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin step-end 2>&1)
+        "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
     rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "H9: CLI exited $rc (expected 0). Output: ${out:-<empty>}"
@@ -432,7 +445,7 @@ run_H11() {
     out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="unused-h11" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin step-end 2>&1)
+        "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)
     rc=$?
     if [ "$rc" -eq 0 ]; then
         fail "H11: CLI accepted a path-traversal --session (expected non-zero exit). Output: ${out:-<empty>}"

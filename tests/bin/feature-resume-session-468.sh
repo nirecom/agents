@@ -253,8 +253,8 @@ SKILL_MD_LOCAL="$AGENTS_DIR/skills/resume-session/SKILL.md"
 if [ ! -f "$SKILL_MD_LOCAL" ]; then
     fail "T21. skills/resume-session/SKILL.md not found at $SKILL_MD_LOCAL"
 else
-    DETECT_LINE=$(grep -n '^### Step .* — Detect' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
-    FROM_LINE=$(grep -n '^### Step .* — Cross-session resume' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
+    DETECT_LINE=$(grep -nE '^### RSM-[0-9]+[a-z]? — Detect' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
+    FROM_LINE=$(grep -nE '^### RSM-[0-9]+[a-z]? — Cross-session resume' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
 
     if [ -z "$DETECT_LINE" ] || [ -z "$FROM_LINE" ]; then
         fail "T21a. could not locate both headings (Detect='$DETECT_LINE' Cross-session='$FROM_LINE')"
@@ -266,24 +266,24 @@ else
 
     # T21b — even with the headings reordered, the local Detect step must say
     # out loud that a --from invocation does not take the local route, or a
-    # reader following Step order top-to-bottom still runs Detect first.
-    DETECT_BODY=$(sed -n '/^### Step .* — Detect/,/^### Step /p' "$SKILL_MD_LOCAL")
+    # reader following RSM order top-to-bottom still runs Detect first.
+    DETECT_BODY=$(sed -nE '/^### RSM-[0-9]+[a-z]? — Detect/,/^### RSM-/p' "$SKILL_MD_LOCAL")
     case "$DETECT_BODY" in
         *"--from"*) pass "T21b. the Detect step names the --from branch as an exclusion" ;;
         *) fail "T21b. the Detect step never mentions --from — nothing tells the reader to skip local detection for a cross-session invocation" ;;
     esac
 
-    # T21c — non-regression: the interactive hard-fail stays Step 1, ahead of
+    # T21c — non-regression: the interactive hard-fail stays RSM-1, ahead of
     # every route, and no decimal step labels are introduced by a reorder
     # (rules/prompt.md 4.1).
     T21C_PROBLEMS=""
-    HARDFAIL_LINE=$(grep -n '^### Step .* — Hard-fail check' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
+    HARDFAIL_LINE=$(grep -n '^### RSM-1 — Hard-fail check' "$SKILL_MD_LOCAL" | head -1 | cut -d: -f1)
     if [ -z "$HARDFAIL_LINE" ]; then
-        T21C_PROBLEMS="$T21C_PROBLEMS [the Step 1 hard-fail check heading is gone]"
+        T21C_PROBLEMS="$T21C_PROBLEMS [the RSM-1 hard-fail check heading is gone]"
     elif [ -n "$FROM_LINE" ] && [ "$HARDFAIL_LINE" -gt "$FROM_LINE" ]; then
         T21C_PROBLEMS="$T21C_PROBLEMS [the hard-fail check no longer precedes the cross-session step]"
     fi
-    if grep -qE '^### Step [0-9]+\.[0-9]' "$SKILL_MD_LOCAL"; then
+    if grep -qE '^### (Step [0-9]+|RSM-[0-9]+)\.[0-9]' "$SKILL_MD_LOCAL"; then
         T21C_PROBLEMS="$T21C_PROBLEMS [a decimal step label was introduced]"
     fi
     if [ -z "$T21C_PROBLEMS" ]; then

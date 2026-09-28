@@ -3,18 +3,10 @@
 # Tests: skills/_shared/notes-promotion.md, skills/worktree-end/SKILL.md, skills/session-close/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-create/SKILL.md, rules/mid-workflow-findings.md
 # Tags: notes-promotion, worktree-notes, skill-orchestration, static, prompt-contract, TL1, scope:issue-specific
 #
-# Issue #530 — WORKTREE_NOTES.md promotion becomes a single shared protocol
-# (skills/_shared/notes-promotion.md) referenced by three execution points
-# (worktree-end WE-11, session-close SC-8, issue-close-finalize residual pass)
-# instead of one bespoke procedure inlined in worktree-end.
-#
-# TL1 (static): the subject is prompt text. The behavior of the CLI the protocol
-# delegates to is covered by tests/bin/feature-530-notes-promotion-triage-flow.sh and
-# tests/bin/feature-worktree-end-step55-promotion.sh.
-#
-# RED before write-code: skills/_shared/notes-promotion.md does not exist yet and
-# the three callsites do not reference it yet. Every group below therefore fails
-# with a named assertion, not a crash.
+# Issue #530 — one shared WORKTREE_NOTES.md promotion protocol (skills/_shared/notes-promotion.md)
+# referenced by worktree-end WE-11, session-close SC-8, and the issue-close-finalize residual pass.
+# TL1 (static prompt text); CLI behavior: tests/bin/feature-530-notes-promotion-triage-flow.sh
+# and tests/bin/feature-worktree-end-step55-promotion.sh.
 
 set -u
 
@@ -161,8 +153,8 @@ group_callsites_reference_shared() {
 group_we11_no_askuserquestion() {
     [ -f "$WE_MD" ] || { fail "C1: worktree-end/SKILL.md missing"; return; }
     local block
-    if ! block="$(extract_section_containing "$WE_MD" 'Step WE-11')"; then
-        fail "C1: no 'Step WE-11' heading found in worktree-end/SKILL.md"
+    if ! block="$(extract_section_containing "$WE_MD" '### WE-11')"; then
+        fail "C1: no '### WE-11' heading found in worktree-end/SKILL.md"
         return
     fi
     if printf '%s\n' "$block" | grep -qF 'AskUserQuestion'; then
@@ -176,29 +168,10 @@ group_we11_no_askuserquestion() {
 # ===========================================================================
 # Group D — defer-type wording removed from the filing instructions
 # ===========================================================================
-# The regression: text that tells the reader to FILE the finding in a later
-# session. Filing happens now; only the implementation is deferred — so
-# "implementation will require a separate session" is correct prose that the
-# oracle must accept, while "file the issue in a separate session" must be
-# rejected. A co-occurrence test over a whole line or block cannot tell those
-# apart, because both mention filing and both mention a separate session.
-#
-# The oracle therefore works sentence by sentence, and a deferring sentence has
-# to survive two checks:
-#
-#   (1) explicit deferral of the filing — the sentence speaks about filing,
-#       defers, and is not talking about the implementation. Rejected.
-#   (2) AMBIGUOUS deferral — the sentence defers but names nothing at all:
-#       no filing, no implementation, no work verb. "It will require a separate
-#       session." is the shape that matters: the reader cannot tell whether the
-#       thing postponed is the filing or the fix, and a reader who guesses
-#       "the filing" loses the finding. A deferring sentence must say what is
-#       being deferred, so an unanchored one is rejected too.
-#
-# Known limit: a single sentence that does both jobs — "file the issue in a
-# separate session, not the implementation" — is accepted, because the impl
-# exemption is sentence-scoped. Splitting finer than sentences would misread
-# ordinary punctuation.
+# Sentence-level oracle: rejects (1) a sentence deferring the FILING (filing + defer, no
+# implementation) and (2) an ambiguous deferral naming neither filing, implementation, nor work.
+# "Implementation will require a separate session" is accepted. Known limit: one sentence that
+# defers the filing while also naming the implementation is accepted (sentence-scoped exemption).
 FILING_RE='/issue-create|file the issue|file it|filing|起票'
 DEFER_RE='separate session|next session|another session|later|別セッション|後で|次のセッション'
 IMPL_RE='implementation|implement|実装'
@@ -304,14 +277,8 @@ group_shared_no_defer_wording() {
 # ===========================================================================
 # Group F (#688) — the cheap prefilter (NP-4) and the one-line notice (NP-5)
 # ===========================================================================
-# #688: a session whose notes are all `- (none)` must cost nothing — no CLI
-# call, no /issue-create, no user-visible ceremony. A session with real notes
-# must say, in one line, what it is about to file and why, BEFORE it starts
-# filing; otherwise the first thing the user sees is issues appearing.
-#
-# The runtime half of this ("zero entries → zero /issue-create calls") is
-# asserted in tests/bin/feature-530-notes-promotion-triage-flow/promotion-loop.sh
-# case L3. Here the prompt contract is asserted.
+# All-`- (none)` notes must cost nothing (no CLI, no /issue-create); real notes get a one-line
+# notice BEFORE filing. Runtime half: feature-530-notes-promotion-triage-flow/promotion-loop.sh L3.
 
 # Line number of the first line matching an ERE, or empty.
 line_of() { grep -nE "$2" "$1" 2>/dev/null | head -1 | cut -d: -f1; }
@@ -379,7 +346,7 @@ group_notice_states_count_and_reason() {
 # second place for the prefilter to be forgotten (CPR-SSOT).
 group_callsites_delegate_the_loop() {
     local entry rel label path block
-    for entry in "skills/worktree-end/SKILL.md|WE-11|Step WE-11" \
+    for entry in "skills/worktree-end/SKILL.md|WE-11|### WE-11" \
                  "skills/session-close/SKILL.md|SC-8|SC-8" \
                  "skills/issue-close-finalize/SKILL.md|ICF|notes-promotion"; do
         rel="$(printf '%s' "$entry" | cut -d'|' -f1)"

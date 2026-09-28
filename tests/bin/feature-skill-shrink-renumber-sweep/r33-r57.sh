@@ -123,5 +123,5 @@ check_absent "R-CP-extra-c" "CP-2-6" "skills/commit-push/SKILL.md"
 # lives on the caller side (SKILL.md), which is the only place a step label is
 # still meaningful — the module is invoked by name, not by step. The "1.5."
 # pre-flight label likewise belongs to the caller's CP-2 block.
-check_literal "R-CPW-ref-a" "Step CP-2" "skills/commit-push/SKILL.md"
+check_literal "R-CPW-ref-a" "CP-2" "skills/commit-push/SKILL.md"
 check_absent "R-CPW-ref-b" "commit-push-worker" "skills/commit-push/SKILL.md"

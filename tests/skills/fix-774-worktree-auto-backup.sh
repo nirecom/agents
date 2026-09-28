@@ -3,15 +3,10 @@
 # Tests: skills/worktree-end/SKILL.md
 # Tags: worktree-end, backup, auto-backup, ux
 #
-# Static analysis tests for fix/774: auto-backup UX simplification.
-# Verifies that Step WE-8 in SKILL.md no longer asks the user to choose
-# "Back up / discard / abort" (auto-backup now runs unconditionally for
-# non-zero-file cases) and that the skill retains required machinery
-# (dry_run / execute pass structure, error-handling, summary reporting).
-#
-# T01–T02 FAIL until SKILL.md is updated (expected before implementation).
-# T03–T07 PASS from the start (spec elements already present).
-# T08     PASS from the start (backup/inventory scripts exist).
+# Static analysis for fix/774 (auto-backup UX): WE-8 in SKILL.md no longer asks
+# "Back up / discard / abort" (auto-backup runs unconditionally for non-zero-file
+# cases) and the skill retains dry_run / execute passes, error handling, summary reporting.
+# T01–T02 FAIL until SKILL.md is updated; T03–T08 PASS from the start.
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1
@@ -32,38 +27,30 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # ---------------------------------------------------------------------------
-# Helper: extract the Step WE-8 section from SKILL.md.
-# Returns lines from "### Step WE-8" up to (but not including) "### Step WE-9".
+# Helper: extract the WE-8 section from SKILL.md.
+# Returns lines from "### WE-8" up to (but not including) "### WE-9".
 # ---------------------------------------------------------------------------
 extract_step_we8() {
-    awk '/^### Step WE-8/{flag=1; next} /^### Step WE-9/{flag=0} flag' "$SKILL_MD"
+    awk '/^### WE-8/{flag=1; next} /^### WE-9/{flag=0} flag' "$SKILL_MD"
 }
 
 # ---------------------------------------------------------------------------
-# T01 — Step WE-8 must NOT contain a "discard or abort" AskUserQuestion
+# T01 — WE-8 must NOT contain a "discard or abort" AskUserQuestion
 #
-# Before fix: Pass 1 ends with:
-#   AskUserQuestion "Back up ..., discard, or abort?"
-# After fix: auto-backup runs without asking; AskUserQuestion is gone from WE-8.
-#
-# NOTE: Step WE-10 also has AskUserQuestion — we scope to WE-8 only.
-# We exclude lines whose ONLY mention of abort/discard is in the context of
-# a non-backup error handler (e.g. "surface summary ... and stop").
-# Specifically we look for a line that has BOTH:
-#   - "AskUserQuestion" (or ask_user_question / AskUser)
-#   - AND ("discard" OR "abort")
-# within the WE-8 block.
+# Before fix: Pass 1 ended with AskUserQuestion "Back up ..., discard, or abort?".
+# After fix: auto-backup runs without asking. WE-10 also has AskUserQuestion, so
+# scope to WE-8 only: fail on a line with BOTH AskUserQuestion AND (discard|abort).
 # ---------------------------------------------------------------------------
-echo "=== T01: Step WE-8 has NO 'discard or abort' AskUserQuestion ==="
+echo "=== T01: WE-8 has NO 'discard or abort' AskUserQuestion ==="
 if [ ! -f "$SKILL_MD" ]; then
     fail "T01: SKILL.md not found at $SKILL_MD"
 else
     section="$(extract_step_we8)"
     # Check for a line combining AskUserQuestion with 'discard' or 'abort'
     if echo "$section" | grep -qiE 'AskUserQuestion.*\b(discard|abort)\b|\b(discard|abort)\b.*AskUserQuestion'; then
-        fail "T01: Step WE-8 still contains 'discard or abort' AskUserQuestion (fix not yet applied)"
+        fail "T01: WE-8 still contains 'discard or abort' AskUserQuestion (fix not yet applied)"
     else
-        pass "T01: Step WE-8 has no 'discard or abort' AskUserQuestion"
+        pass "T01: WE-8 has no 'discard or abort' AskUserQuestion"
     fi
 fi
 echo ""
@@ -87,20 +74,20 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# T03 — Step WE-8 must contain BACKUP_MANIFEST_PATH=(none)
+# T03 — WE-8 must contain BACKUP_MANIFEST_PATH=(none)
 #
 # The zero-files case sets BACKUP_MANIFEST_PATH=(none).
 # This sentinel must remain in the WE-8 section after the fix.
 # ---------------------------------------------------------------------------
-echo "=== T03: Step WE-8 contains BACKUP_MANIFEST_PATH=(none) ==="
+echo "=== T03: WE-8 contains BACKUP_MANIFEST_PATH=(none) ==="
 if [ ! -f "$SKILL_MD" ]; then
     fail "T03: SKILL.md not found at $SKILL_MD"
 else
     section="$(extract_step_we8)"
     if echo "$section" | grep -qF 'BACKUP_MANIFEST_PATH=(none)'; then
-        pass "T03: Step WE-8 contains 'BACKUP_MANIFEST_PATH=(none)'"
+        pass "T03: WE-8 contains 'BACKUP_MANIFEST_PATH=(none)'"
     else
-        fail "T03: Step WE-8 missing 'BACKUP_MANIFEST_PATH=(none)'"
+        fail "T03: WE-8 missing 'BACKUP_MANIFEST_PATH=(none)'"
     fi
 fi
 echo ""
@@ -140,38 +127,38 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# T06 — Step WE-8 contains status: failed error handling
+# T06 — WE-8 contains status: failed error handling
 #
 # Both passes must handle status: failed — surface summary + artifact_path and stop.
 # ---------------------------------------------------------------------------
-echo "=== T06: Step WE-8 contains status: failed error handling ==="
+echo "=== T06: WE-8 contains status: failed error handling ==="
 if [ ! -f "$SKILL_MD" ]; then
     fail "T06: SKILL.md not found at $SKILL_MD"
 else
     section="$(extract_step_we8)"
     if echo "$section" | grep -qF 'status: failed'; then
-        pass "T06: Step WE-8 contains 'status: failed' error handling"
+        pass "T06: WE-8 contains 'status: failed' error handling"
     else
-        fail "T06: Step WE-8 missing 'status: failed' error handling"
+        fail "T06: WE-8 missing 'status: failed' error handling"
     fi
 fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# T07 — Step WE-8 contains summary: reference for orchestrator output
+# T07 — WE-8 contains summary: reference for orchestrator output
 #
 # The orchestrator-facing "summary:" line must appear in WE-8 so the caller
 # can surface context to the user on failure or completion.
 # ---------------------------------------------------------------------------
-echo "=== T07: Step WE-8 contains summary: reference ==="
+echo "=== T07: WE-8 contains summary: reference ==="
 if [ ! -f "$SKILL_MD" ]; then
     fail "T07: SKILL.md not found at $SKILL_MD"
 else
     section="$(extract_step_we8)"
     if echo "$section" | grep -qF 'summary:'; then
-        pass "T07: Step WE-8 contains 'summary:' reference"
+        pass "T07: WE-8 contains 'summary:' reference"
     else
-        fail "T07: Step WE-8 missing 'summary:' reference"
+        fail "T07: WE-8 missing 'summary:' reference"
     fi
 fi
 echo ""

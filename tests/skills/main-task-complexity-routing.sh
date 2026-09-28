@@ -65,7 +65,7 @@ check "make-detail-plan: skip judge in skip conditions" "skip judge-task-complex
 
 # Steps MDP-1..MDP-6 present with no gap
 for n in 1 2 3 4 5 6; do
-  check_re "make-detail-plan: step $n present" "^### Step MDP-$n " "$MDP"
+  check_re "make-detail-plan: step $n present" "^### MDP-$n " "$MDP"
 done
 
 # Preserved sections

@@ -170,7 +170,7 @@ group_sc_p_independence() {
 # Group B — parallel dispatch sites reference the shared doc
 # ===========================================================================
 # rel | label | start-prefix | end-prefix | max-lines
-PARALLEL_TABLE="skills/workflow-init/SKILL.md|B1-WI-10|### Step WI-10|### Step WI-11|30
+PARALLEL_TABLE="skills/workflow-init/SKILL.md|B1-WI-10|### WI-10|### WI-11|30
 skills/review-code-security/SKILL.md|B2-RCS-1/2|RCS-1.|## Patterns by Axis|40"
 
 # Extracts the reference line to $SHARED_REL plus the two lines after it — the
@@ -278,7 +278,7 @@ substr_context() {
 }
 
 # rel | label | start-prefix | end-prefix | max-lines | phase-coverage (yes|-)
-SERIAL_TABLE="skills/worktree-end/SKILL.md|C1-WE-9|### Step WE-9|### Step WE-10|30|-
+SERIAL_TABLE="skills/worktree-end/SKILL.md|C1-WE-9|### WE-9|### WE-10|30|-
 skills/issue-close-finalize/SKILL.md|C2-ICF-initial|## Delegation — initial pass|## ICF-D..ICF-G loop|40|yes"
 
 # The three issue-close-finalize-worker pass types. A serial annotation that
@@ -432,7 +432,7 @@ group_drift_filter_probe() {
 group_wi10_no_inline_text() {
     local bf
     block_to_file "D1-WI-10" "$AGENTS_DIR/skills/workflow-init/SKILL.md" \
-        '### Step WI-10' '### Step WI-11' 30 || return
+        '### WI-10' '### WI-11' 30 || return
     bf="$BLOCK_FILE"
     if grep -qF 'single assistant message' "$bf"; then
         fail "D1: WI-10 still explains dispatch inline ('single assistant message') — reference-only reduction incomplete"

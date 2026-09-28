@@ -54,6 +54,32 @@ definition, and related links.
   `WF-<TYPE>-N` prefix scheme.
 - **Related**: [CLAUDE.md](../CLAUDE.md)
 
+### workflow step
+
+- **Full name**: Workflow step (short form: **step**)
+- **Definition**: One unit of `bin/workflow/next-step --list` (`workflow_init` …
+  `final_report`). The canonical set is `VALID_STEPS` in
+  `hooks/workflow-state/state-io/core.js`; prose never restates its size. A bare
+  "step" always means a workflow step. The planning stages are workflow steps too
+  (`clarify_intent` / `outline` / `detail`); do not call them "工程", "stage",
+  "segment", or "boundary". Code identifiers keep their existing names.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
+
+### in-skill step
+
+- **Full name**: In-skill procedure step
+- **Definition**: An ID-labelled line of a skill's Procedure (`CI-3`, `WI-10`, …).
+  It is not a workflow step: write its heading with the ID alone, and call it
+  "in-skill step" when the ID needs a noun.
+- **Related**: [rules/prompt.md](../rules/prompt.md) §4
+
+### turn
+
+- **Full name**: Conversational turn
+- **Definition**: One user utterance and the one response to it. Hooks that fire
+  per turn (`UserPromptSubmit`, `Stop`) count in turns, not in steps.
+- **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
+
 ## Workflow steps
 
 ### intent
@@ -88,7 +114,7 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 
 | Term | Definition | Related |
 |---|---|---|
-| **step** | One of the 16 units of `next-step --list` (`clarify_intent` … `final_report`). The planning stages are steps too — `clarify_intent` / `outline` / `detail`. Do not call these "工程", "stage", "segment", or "boundary". | [CLAUDE.md](../CLAUDE.md) |
+| **step** | A workflow step — see [workflow step](#workflow-step). | [CLAUDE.md](../CLAUDE.md) |
 | **trigger** | The general term for a condition that arms the supervisor. | [claude-code.md](architecture/claude-code.md) |
 | **arm / surface / clear** | The audit two-phase lifecycle: a trigger arms the run (`audit_phase=pending`), the agent writes a verdict to surface it (`done`), and the next Stop clears it (`null`) so the next boundary can re-arm. | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
 | **audit ledger** | The append-only record, in the supervisor state file, of which step's audit was judged, against which version of which artifact, and when. New in #2256. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |

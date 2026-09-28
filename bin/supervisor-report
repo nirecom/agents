@@ -57,17 +57,19 @@ if (!ok) {
 // Five skills call this CLI, so the breadcrumb belongs to its success path
 // rather than to five prompt files that would drift. The entry says only "a
 // report exists, here" — the body stays canonical in the supervisor state file.
+// Outside the workflow active period the gate records nothing; the finding above
+// is written regardless.
 try {
   const path = require("path");
-  const { appendHandoffEntry } = require("../hooks/lib/handoff-artifact");
+  const { appendHandoffEntryIfActive } = require("../hooks/lib/handoff-gated-append");
   const { getWorkflowPlansDir } = require("../hooks/lib/workflow-plans-dir");
-  appendHandoffEntry(rawSid, {
+  appendHandoffEntryIfActive(rawSid, {
     cls: "E",
     step: "-",
     key: "supervisor-reported",
     summary: `supervisor report filed by ${reporter}: ${categories.join(",")} / ${severity}`,
     pointer: path.join(getWorkflowPlansDir(), `${rawSid}-supervisor-state.json`),
-    origin: "step-end",
+    origin: "procedure-point",
   });
 } catch (_e) { /* fail-open: a lost breadcrumb is not a failed report */ }
 

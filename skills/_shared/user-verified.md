@@ -8,7 +8,7 @@ asked "is this ready to ship?".
 
 **`ENFORCE_WORKTREE=off`** — emit immediately before `/commit-push`.
 
-**`ENFORCE_WORKTREE=on`** — emit in `/worktree-end` Steps 3b and 4 (after the PR is open,
+**`ENFORCE_WORKTREE=on`** — emit in `/worktree-end` WE-4b, WE-7, and WE-8 (after the PR is open,
 immediately before merge). Never emit earlier in the workflow — the PR must exist first,
 because the user is approving the merge of a specific PR, not an abstract diff.
 
@@ -75,10 +75,10 @@ the hook is the single source of truth for the dialog's surrounding text.
 
 ## Notes
 
-- `AUTO_MERGE_PR=on` skips the merge-strategy `AskUserQuestion` in `/worktree-end` Step 3;
-  the sentinel emit in Step 4 still requires user approval via the permission dialog.
+- `AUTO_MERGE_PR=on` skips the merge-strategy `AskUserQuestion` in `/worktree-end` WE-5;
+  the sentinel emit in WE-8 still requires user approval via the permission dialog.
 - Detection is on `tool_input.command` matching the sentinel form. Sentinel strings in
   stdout (cat/grep output) do not trigger the hook.
-- Preflight runs once per emission path. /worktree-end Steps WE-4b, WE-7, and WE-8 all inherit it via this shared protocol — no per-skill duplication.
+- Preflight runs once per emission path. /worktree-end WE-4b, WE-7, and WE-8 all inherit it via this shared protocol — no per-skill duplication.
 - Unverified categories are persisted to WORKTREE_NOTES.md ## Unverified Categories so /worktree-end can show them in the final summary.
 - When `RUN_TL4=off` the preflight raises no ask and matched categories are logged with the `skipped: RUN_TL4=off` annotation; on classifier error the log is skipped and only a stderr warning is emitted.
