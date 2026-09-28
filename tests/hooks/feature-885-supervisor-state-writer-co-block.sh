@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-supervisor-state-writer-co-block.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor-state-writer, co-blocked-by, back-annotation, axis-a, feature-885
+# Tags: supervisor-state-writer, co-blocked-by, back-annotation, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — appendFinding back-annotates co_blocked_by when the
 # same command is blocked by a different hook within the freshness window.
 

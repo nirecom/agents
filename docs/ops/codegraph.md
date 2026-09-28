@@ -37,11 +37,9 @@ C:\git\agents\install.ps1        # Windows
 bash install.sh                  # WSL / macOS / Linux
 ```
 
-This installs the pinned npm package and registers the MCP server:
+This installs the npm package at `@latest` and registers the MCP server:
 
-- `npm install -g --ignore-scripts @colbymchenry/codegraph@<version>` — the version is pinned in
-  [`install/codegraph-constants.txt`](../../install/codegraph-constants.txt), which is the single
-  source of truth shared by both OS scripts and the MCP registrar.
+- `npm install -g --ignore-scripts @colbymchenry/codegraph@latest` — always installs the latest published release; no version pin.
 - `node install/codegraph-mcp.js register` — registers the server through the Claude Code CLI
   (`claude mcp add`), never through the upstream tool's own bootstrap, which would rewrite
   `~/.claude/CLAUDE.md` and inject a prompt hook.
@@ -67,8 +65,13 @@ the real entry instead:
 ```bash
 jq -c '.mcpServers.codegraph' ~/.claude.json
 # {"type":"stdio","command":"codegraph","args":["serve","--mcp"],
-#  "env":{"CODEGRAPH_TELEMETRY":"1","DO_NOT_TRACK":"0"}}
+#  "env":{"CODEGRAPH_TELEMETRY":"1","DO_NOT_TRACK":"0"},"alwaysLoad":true}
 ```
+
+The `alwaysLoad: true` field is set by the registrar immediately after `claude mcp add` succeeds,
+via an atomic patch to `~/.claude.json`. Without it, Claude Code defers `codegraph_explore`'s
+schema until a `ToolSearch` call — requiring a manual preamble that defeats the goal of having the
+tool always available.
 
 The installer attributes the entry to itself by shape, not by a marker: `command`/`args` must equal
 exactly `codegraph serve --mcp`. A hand-written registration with different args is left untouched —
@@ -241,12 +244,22 @@ probably older than this repo — **re-run the installer, then open a new sessio
 The drift warning that would have told you only fires at session start, so a session that is
 already open will not report it no matter how long you wait.
 
-**`pinned CodeGraph version mismatch: installed <x>, install/codegraph-constants.txt pins <y>`**
-The MCP server keeps working at any version — only the per-prompt context hook needs the pinned
-build. Run the `npm install -g --ignore-scripts @colbymchenry/codegraph@<y>` command the warning
-prints. The same line, with `could not read the installed CodeGraph version`, means the probe
-itself failed; treat it identically. The check runs during `register` only, so installing a
-different version by hand afterwards goes unnoticed until the next installer run.
+**`codegraph_explore` still requires a `ToolSearch` call (deferred tool).**
+The `alwaysLoad: true` patch was not applied. Re-run the installer — the registrar writes this
+field after every successful `claude mcp add`. If you see `Warning: alwaysLoad patch: rename failed`
+on stderr, the atomic write was blocked by a lock on `~/.claude.json` (common on Windows when a live
+session holds the file open). Wait for all Claude Code sessions to close and re-run the installer.
+Stale temporary files matching `~/.claude.json.<pid>.<timestamp>.tmp` left by an interrupted run can
+be deleted safely.
+
+**The installer normalised `~/.claude.json` to standard JSON form.**
+`install/codegraph-mcp.js` reads and rewrites `~/.claude.json` with `JSON.parse` / `JSON.stringify`
+(2-space indent, trailing newline). Only `mcpServers.codegraph.alwaysLoad` changes in meaning; all
+other values are preserved. Hand-edited non-standard formatting is straightened in the process.
+
+**`npm install -g ... @colbymchenry/codegraph@latest` fails with EBUSY.**
+A running `codegraph serve --mcp` process holds a lock on the binary. Stop it first:
+`node bin/codegraph-lifecycle.js stop --path .` (from the worktree root), then re-run the installer.
 
 **Turning telemetry off permanently.**
 Two stages, and the order matters — this section is the source of truth for the procedure the
@@ -273,19 +286,18 @@ halt the pipeline that called it.
 | Index health verdicts | [`bin/codegraph-lifecycle/index-health.js`](../../bin/codegraph-lifecycle/index-health.js) |
 | Daemon identity and kill path | `bin/codegraph-lifecycle/process-identity.js`, `daemon-stop.js` |
 | MCP registration | [`install/codegraph-mcp.js`](../../install/codegraph-mcp.js) |
-| Shared decisions for both entrypoints (env readers, ownership verdicts, version check, telemetry reset) — a pure library that never writes to a stream | [`hooks/lib/codegraph-boundary.js`](../../hooks/lib/codegraph-boundary.js) |
+| Shared decisions for both entrypoints (env readers, ownership verdicts, telemetry reset) — a pure library that never writes to a stream | [`hooks/lib/codegraph-boundary.js`](../../hooks/lib/codegraph-boundary.js) |
 | Per-prompt context injection (`UserPromptSubmit`) | [`hooks/codegraph-context-inject.js`](../../hooks/codegraph-context-inject.js) |
 | Scope gate — home and filesystem root are refused, index looked up by a 6-level up-walk for `.codegraph/codegraph.db` (`promptHookScopeAllows`) | `hooks/lib/codegraph-boundary.js` |
-| Pinned-version check — reported by `register` only, never by the hook (`verifyPinnedCliVersion`) | `hooks/lib/codegraph-boundary.js` |
 | Telemetry reset — deletes `~/.codegraph/telemetry.json` on **every** `register` run, but only while the constants file says `CODEGRAPH_TELEMETRY=1` (`clearSavedTelemetryChoice`) | `hooks/lib/codegraph-boundary.js` |
 | Windows shim resolution for `codegraph`/`claude` (no shell, no direct `.cmd`/`.bat` spawn) | [`hooks/lib/spawn-shimmed-cli.js`](../../hooks/lib/spawn-shimmed-cli.js) |
-| Version and telemetry constants | [`install/codegraph-constants.txt`](../../install/codegraph-constants.txt) |
+| Telemetry constants | [`install/codegraph-constants.txt`](../../install/codegraph-constants.txt) |
 | OS installer steps | `install/win/codegraph.ps1`, `install/linux/codegraph.sh` |
 | Design rationale | [`docs/architecture/claude-code.md`](../architecture/claude-code.md) |
 
 The scope gate is a partial copy of upstream's own eligibility check, kept deliberately narrow (the
-17-manifest `looksLikeProjectRoot()` list is *not* copied). **Remove it** when the pinned
-`CODEGRAPH_VERSION`'s own `planFrontload()` applies the home/root exclusion itself — check whether
+17-manifest `looksLikeProjectRoot()` list is *not* copied). **Remove it** when
+`@colbymchenry/codegraph`'s own `planFrontload()` applies the home/root exclusion — check whether
 `dist/directory.js`'s `planFrontload` calls `eligibleForSubprojectScan`.
 
 The `bin/codegraph-lifecycle/` directory is never invoked directly — it holds modules private to

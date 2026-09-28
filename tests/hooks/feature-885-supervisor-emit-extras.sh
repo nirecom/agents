@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-supervisor-emit-extras.sh
 # Tests: hooks/lib/supervisor-emit.js
-# Tags: supervisor-emit, reportBlock-extras, axis-a, feature-885
+# Tags: supervisor-emit, reportBlock-extras, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — reportBlock() gains a 4th optional extras parameter.
 #
 # Signature change: reportBlock(hook, command, sessionId, extras?)

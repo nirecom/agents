@@ -575,3 +575,15 @@ Changes: Fixed a silent WIP state failure (70+ sessions affected): wip-state.sh 
 ### FEATURE: PR #2421 (2026-09-27)
 Background: feat(#2264,#2265): extend bash-guard to 4-value classifier; retire generated-spell pipeline
 Changes: bash-guard now detects invalid command-line issuance forms (missing echo around sentinel, script path without interpreter prefix) and surfaces a guidance message rather than silently passing through.;Agents' own scripts are now allowed without maintaining generated permission rules in settings.json. The allow decision is made in the hook itself via IR matching against two list files.
+
+### FEATURE: PR #2425 (2026-09-27)
+Background: fix(#2402): normalize POSIX drive-letter paths in scratchpad hook; allow literal bash args
+Changes: Scratchpad script auto-approve now supports `bash <script>.sh [literal-arg…]` — passes non-expanding arguments through safely; fixes POSIX drive-letter path corruption on Windows Git Bash hosts.
+
+### FEATURE: PR #2424 (2026-09-27)
+Background: feat(#2388): enforce case_begin/case_end markers for new multi-path ....
+Changes: New test files with several `# Tests:` paths must wrap each case in column-0 `case_begin`/`case_end`. Edits and commits that leave such a file without valid markers are now blocked. Rules: `skills/_shared/test-design/case-markers.md`. (#2388)
+
+### FEATURE: PR #2437 (2026-09-28)
+Background: fix(codegraph): stop ToolSearch deferring the codegraph_explore schema (#2254)
+Changes: codegraph_explore is now always available without a ToolSearch preamble: the installer patches ~/.claude.json to set alwaysLoad:true after registering the MCP server.;The codegraph npm package is now always installed at @latest, eliminating the pinned-version mismatch warning.

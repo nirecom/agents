@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/pre-commit, hooks/enforce-worktree/shared-cmd-utils.js
-# Tags: worktree, enforce, pre-commit, builtin, integration
+# Tags: worktree, enforce, pre-commit, builtin, integration, scope:issue-specific
 #
 # Integration tests driving the real hooks/pre-commit to verify that the
 # built-in `**/.worktree-backup/**` exclude pattern (issue #654) allows

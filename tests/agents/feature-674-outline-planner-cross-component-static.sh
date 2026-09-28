@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/outline-planner.md
-# Tags: outline, planning, agent, cross-component, architect
+# Tags: outline, planning, agent, cross-component, architect, scope:issue-specific
 # Static grep-based checks for outline-planner cross-component integrity rule (#674).
 #
 # Verifies that agents/outline-planner.md contains the mandatory

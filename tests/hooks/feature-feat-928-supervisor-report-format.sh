@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-feat-928-supervisor-report-format.sh
 # Tests: hooks/lib/supervisor-report-format.js
-# Tags: supervisor, em-supervisor, layer2, hook, stop, format, display
+# Tags: supervisor, em-supervisor, layer2, hook, stop, format, display, scope:issue-specific
 # L3 gap: settings.json Stop registration and real-session firing of supervisor-guard.js;
 #   mitigation: bin/check-verification-gate.sh (hook-registration) at WORKFLOW_USER_VERIFIED.
 # Dispatcher only (file-split.md Pattern A): bodies + _lib.sh live in the sibling

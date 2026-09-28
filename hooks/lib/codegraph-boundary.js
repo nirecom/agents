@@ -80,9 +80,9 @@ function normalizePayloadCwd(cwd) {
   return typeof normalized === "string" ? normalized : cwd;
 }
 
-// Ports upstream's own home-directory exclusion, which at the pinned version is
-// wired into the server-root path alone and so misses prompt-hook's DOWN-scan.
-// Delete it once the pinned build applies its own — see docs/ops/codegraph.md.
+// Ports upstream's own home-directory exclusion, which upstream wires into the
+// server-root path alone and so misses prompt-hook's DOWN-scan. Delete it once
+// the latest release applies its own — see docs/ops/codegraph.md.
 const SCOPE_UPWALK_LEVELS = 6;
 
 function promptHookScopeAllows(cwd) {
@@ -103,22 +103,6 @@ function promptHookScopeAllows(cwd) {
     return true;
   }
   return true;
-}
-
-// Goes through spawnCodegraph so it sees the same PATH/PATHEXT resolution the
-// lifecycle and the hook see. Verdicts: match | mismatch | unknown-actual | unknown-pin.
-const VERSION_TIMEOUT_MS = 10000;
-const SEMVER_HEAD = /^[0-9]+\.[0-9]+\.[0-9]+/;
-
-function verifyPinnedCliVersion() {
-  const pinned = readConstants().CODEGRAPH_VERSION;
-  if (typeof pinned !== "string" || pinned === "") return { verdict: "unknown-pin", pinned: null, actual: null };
-  const result = spawnCodegraph(["--version"], { encoding: "utf8", timeout: VERSION_TIMEOUT_MS });
-  const unknown = { verdict: "unknown-actual", pinned, actual: null };
-  if (!result || result.error || result.status !== 0) return unknown;
-  const line = String(result.stdout || "").split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0);
-  if (!line || !SEMVER_HEAD.test(line)) return unknown;
-  return { verdict: line === pinned ? "match" : "mismatch", pinned, actual: line };
 }
 
 // Upstream's own truthiness: "", "0" and "false" (any case) are the OFF side of
@@ -160,6 +144,5 @@ module.exports = {
   spawnCodegraph,
   normalizePayloadCwd,
   promptHookScopeAllows,
-  verifyPinnedCliVersion,
   clearSavedTelemetryChoice,
 };

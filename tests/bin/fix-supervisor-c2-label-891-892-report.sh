@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/fix-supervisor-c2-label-891-892-report.sh
 # Tests: bin/supervisor-report
-# Tags: supervisor, em-supervisor, layer2, fix, integration
+# Tags: supervisor, em-supervisor, layer2, fix, integration, scope:issue-specific
 # RED for issue #891 (bin/supervisor-report post-Final-Report behavior).
 
 set -u

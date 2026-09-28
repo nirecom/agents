@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-719-supervisor-trigger-hook.sh
 # Tests: hooks/supervisor-trigger.js
-# Tags: supervisor, em-supervisor, hook, layer2
+# Tags: supervisor, em-supervisor, hook, layer2, scope:issue-specific
 # RED for issue #719.
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json PostToolUse hooks — if supervisor-trigger.js is not

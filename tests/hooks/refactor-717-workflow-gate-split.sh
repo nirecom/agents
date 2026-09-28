@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/refactor-717-workflow-gate-split.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/path-normalize.js, hooks/workflow-gate/staged-evidence.js, hooks/workflow-gate/gh-detect.js, hooks/workflow-gate/worktree-context.js, hooks/workflow-gate/repo-resolution.js
-# Tags: refactor, workflow-gate, module-split, exports
+# Tags: refactor, workflow-gate, module-split, exports, scope:issue-specific
 #
 # REGRESSION tests (1-2): verify current contract of hooks/workflow-gate.js.
 #   These must PASS both BEFORE and AFTER the module split.

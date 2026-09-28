@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-enforce-worktree-bundle-a-targets-rm.sh
 # Tests: hooks/lib/bash-write-targets.js
-# Tags: worktree, enforce, hook, rm, bash-write-targets
+# Tags: worktree, enforce, hook, rm, bash-write-targets, scope:issue-specific
 
 set -u
 

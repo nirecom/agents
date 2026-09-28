@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-supervisor-c2-label-891-892-label.sh
 # Tests: hooks/supervisor-guard.js, agents/supervisor.md
-# Tags: supervisor, em-supervisor, layer2, fix
+# Tags: supervisor, em-supervisor, layer2, fix, scope:issue-specific
 # RED for #929 (label rename "C2 scheduled-review" -> non-numeric "scheduled-review");
 # the "C2 escape-hatch use" absence checks (from #879) are preserved and stay GREEN.
 

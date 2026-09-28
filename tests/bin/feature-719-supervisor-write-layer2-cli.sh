@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-719-supervisor-write-alert-cli.sh
 # Tests: bin/supervisor-write-alert
-# Tags: supervisor, em-supervisor, cli, layer2
+# Tags: supervisor, em-supervisor, cli, layer2, scope:issue-specific
 # RED for issue #719.
 
 set -u

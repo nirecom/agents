@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/fix-774-worktree-auto-backup.sh
 # Tests: skills/worktree-end/SKILL.md
-# Tags: worktree-end, backup, auto-backup, ux
+# Tags: worktree-end, backup, auto-backup, ux, scope:issue-specific
 #
 # Static analysis tests for fix/774: auto-backup UX simplification.
 # Verifies that Step WE-8 in SKILL.md no longer asks the user to choose
