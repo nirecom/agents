@@ -12,6 +12,8 @@ When you discover a bug unrelated to the current task, a related follow-up, or a
 
 Defer the implementation to a separate session; never defer the filing itself. A finding that exists only in this session's context is lost when the session ends.
 
+Do not write agents-repo improvements or findings to `~/.claude/projects/c--git-agents/memory/` — file them via this rule's path (`/issue-create`) instead.
+
 **Fallback path** — use `<worktree>/WORKTREE_NOTES.md` only when:
 - Non-interactive session (`claude -p`, subagent, `/loop`), OR
 - Non-GitHub remote (`bin/is-github-dotcom-remote` returns non-zero), OR

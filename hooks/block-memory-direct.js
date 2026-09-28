@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // PreToolUse hook: block direct Write/Edit/MultiEdit/editFiles and Bash shell
 // write-redirects on the memory directory (~/.claude/projects/c--git-agents/memory/).
-// Behavioral issues should be filed as GitHub Issues, not saved to memory.
-// Fail-open: any error path approves rather than blocking.
+// See rules/mid-workflow-findings.md.
+// Unparseable input → fail-open (approve); unresolved session id → fail-closed (block).
+// WORKFLOW_OFF is the only bypass.
 "use strict";
-const path = require("path");
 const fs = require("fs");
 const { isWorkflowOff } = require("./lib/session-markers");
 const { resolveSessionId } = require("./workflow-state/session-id");
-const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 // Detection lives in hooks/lib/memory-path-check.js.
 const { hitsMemory, bashHitsMemory } = require("./lib/memory-path-check");
 
@@ -28,17 +27,10 @@ function readStdin() {
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
-const BLOCK_MSG = [
-  "Memory write intercepted. Intercepted content splits into two kinds: (a) genuinely local behavior the user wants you to remember, and (b) an agents-repo improvement that belongs in GitHub Issues, not memory.",
-  "The dialog below asks the user which kind this is — follow their choice.",
-  "Going forward, do NOT write agents-repo improvements to memory; file them with /issue-create.",
-  "",
-  "Please ask the user:",
-  "1. Create a GitHub issue with /issue-create (Recommended)",
-  "2. Allow this memory write",
-  "3. Cancel / do nothing",
-  "4. Other",
-].join("\n");
+const BLOCK_MSG =
+  "Direct write to ~/.claude/projects/c--git-agents/memory/ is unconditionally blocked; rewording or retrying will not help. " +
+  "Agents improvements belong in a public issue — use /issue-create instead. " +
+  "See rules/mid-workflow-findings.md.";
 
 let input;
 try {
@@ -71,23 +63,6 @@ switch (toolName) {
 if (!memoryHit) approve();
 
 const sid = resolveSessionId({ sessionIdFromInput: input.session_id });
-if (sid) {
-  try {
-    const plansDir = getWorkflowPlansDir();
-    const markerPath = path.join(plansDir, sid + ".memory-write-allow.tmp");
-    try {
-      if (fs.existsSync(markerPath)) {
-        fs.unlinkSync(markerPath);
-        approve();
-      }
-    } catch (_e) {
-      // fall through to block
-    }
-  } catch (_e) {
-    // plansDir unavailable, skip marker check
-  }
-
-  if (isWorkflowOff(sid)) approve();
-}
+if (sid && isWorkflowOff(sid)) approve();
 
 block(BLOCK_MSG);

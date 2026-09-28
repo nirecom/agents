@@ -1,71 +1,57 @@
 #!/usr/bin/env bash
 # Tests: hooks/block-memory-direct.js
 # Tags: workflow, hook, memory, env, scope:issue-specific
-# Test suite for hooks/block-memory-direct.js PreToolUse hook.
-# Tests will FAIL until the hook is implemented — that is expected.
-#
-# L3 gap (hook-registration):
-#   - Whether hooks/block-memory-direct.js actually fires in Claude Code requires
-#     settings.json wiring that only the real CC session confirms.
-#   - Whether Claude Code presents the AskUserQuestion popup when the hook blocks
-#     is only observable in a live session — L2 can only check the JSON decision.
+# Memory-dir writes are blocked unconditionally; WORKFLOW_OFF is the only bypass
+# (the retired <sid>.memory-write-allow.tmp marker must be ignored, #2435).
+# TL3 gap (hook-registration):
+#   - Whether the hook actually fires needs settings.json wiring only a real CC session confirms.
+#   - How CC surfaces the block reason to the model is observable only in a live session.
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$REPO_DIR/hooks/block-memory-direct.js"
-ERRORS=0
-PASS_COUNT=0
+AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
-# ---------------------------------------------------------------------------
-# Portable timeout wrapper (macOS does not have timeout)
-# ---------------------------------------------------------------------------
-run_with_timeout() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 120 "$@"
-    else
-        perl -e 'alarm 120; exec @ARGV' -- "$@"
-    fi
-}
+HOOK="$AGENTS_DIR/hooks/block-memory-direct.js"
 
 # ---------------------------------------------------------------------------
 # Temp dir / env setup
 # ---------------------------------------------------------------------------
 TMPDIR_ROOT="$(node -e "const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');const d=path.join(os.tmpdir(),'bmtest-'+crypto.randomBytes(6).toString('hex'));fs.mkdirSync(d,{recursive:true});process.stdout.write(d);")"
-CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
-WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
-mkdir -p "$WORKFLOW_PLANS_DIR"
+harness_isolate "$TMPDIR_ROOT"
+HOOK_RC_FILE="$TMPDIR_ROOT/hook_rc"
 
 # Derive MEMORY_DIR the same way the hook does:
 # path.join(os.homedir(), '.claude', 'projects', 'c--git-agents', 'memory')
 MEMORY_DIR="$(node -e "const os=require('os'),path=require('path');process.stdout.write(path.join(os.homedir(),'.claude','projects','c--git-agents','memory').split(path.sep).join('/'));")"
 
-cleanup() {
-    rm -rf "$TMPDIR_ROOT"
-}
+# MSYS2 POSIX drive-letter form — shared by C17 and E22; defined outside all spans
+MEMORY_DIR_MSYS="$(node -e "const os=require('os'),path=require('path');if(process.platform!=='win32')process.exit(0);const home=os.homedir();const m=home.match(/^([A-Za-z]):/);if(!m)process.exit(0);const rel=path.join(home,'.claude','projects','c--git-agents','memory').slice(2).split(path.sep).join('/');process.stdout.write('/'+m[1].toLowerCase()+rel);")"
+
+cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
 # Helper: run hook with given JSON, optional extra env vars (KEY=VAL format)
-# run_hook <json> [KEY=VAL ...]
 # ---------------------------------------------------------------------------
 run_hook() {
     local json="$1"
     shift
     local extra_env=("$@")
-    local input_file
+    local input_file result _rc
     input_file="$(mktemp "$TMPDIR_ROOT/hook_input.XXXXXX")"
     printf '%s' "$json" > "$input_file"
-    local result
     result=$(
         (
             export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
             export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
             export CLAUDE_CODE_SESSION_ID="test-sess-1097"
+            # shellcheck disable=SC2163
             for kv in "${extra_env[@]+"${extra_env[@]}"}"; do export "$kv"; done
-            run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
+            run_with_timeout 120 node "$HOOK" < "$input_file" 2>/dev/null
         )
-    ) || true
+    )
+    _rc=$?
+    printf '%d' "$_rc" > "$HOOK_RC_FILE"
     rm -f "$input_file"
     printf '%s' "$result"
 }
@@ -73,25 +59,17 @@ run_hook() {
 # ---------------------------------------------------------------------------
 # Assertion helpers
 # ---------------------------------------------------------------------------
-fail() {
-    echo "FAIL: $1"
-    ERRORS=$((ERRORS + 1))
-}
-
-pass() {
-    echo "PASS: $1"
-    PASS_COUNT=$((PASS_COUNT + 1))
-}
-
 assert_approve() {
-    local id="$1"
-    local desc="$2"
-    local json="$3"
+    local id="$1" desc="$2" json="$3"
     shift 3
     local extra_env=("$@")
-    local result
+    local result decision hook_rc
     result=$(run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}")
-    local decision
+    hook_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+    if [ "$hook_rc" != "0" ]; then
+        fail "${id}. ${desc} — hook process exited with rc=${hook_rc}"
+        return
+    fi
     decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
     if [ "$decision" = "approve" ]; then
         pass "${id}. ${desc}"
@@ -101,14 +79,16 @@ assert_approve() {
 }
 
 assert_block() {
-    local id="$1"
-    local desc="$2"
-    local json="$3"
+    local id="$1" desc="$2" json="$3"
     shift 3
     local extra_env=("$@")
-    local result
+    local result decision hook_rc
     result=$(run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}")
-    local decision
+    hook_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+    if [ "$hook_rc" != "0" ]; then
+        fail "${id}. ${desc} — hook process exited with rc=${hook_rc}"
+        return
+    fi
     decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
     if [ "$decision" = "block" ]; then
         pass "${id}. ${desc}"
@@ -117,23 +97,66 @@ assert_block() {
     fi
 }
 
+# assert_block_reason_contains <id> <desc> <json> <substr1> [substr2 ...]
+# Passes when decision=block and every listed substring appears in the reason.
 assert_block_reason_contains() {
-    local id="$1"
-    local desc="$2"
-    local json="$3"
-    local expected_substr="$4"
-    shift 4
-    local extra_env=("$@")
-    local result
-    result=$(run_hook "$json" "${extra_env[@]+"${extra_env[@]}"}")
-    local decision
+    local id="$1" desc="$2" json="$3"
+    shift 3
+    local result decision reason hook_rc
+    result=$(run_hook "$json")
+    hook_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+    if [ "$hook_rc" != "0" ]; then
+        fail "${id}. ${desc} — hook process exited with rc=${hook_rc}"
+        return
+    fi
     decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
-    local reason
     reason=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.reason||'')}catch(e){}" -- "$result" 2>/dev/null || true)
-    if [ "$decision" = "block" ] && echo "$reason" | grep -qF "$expected_substr"; then
+    if [ "$decision" != "block" ]; then
+        fail "${id}. ${desc} — expected block, got decision='${decision}' reason='${reason}'"
+        return
+    fi
+    local missing=() substr
+    for substr in "$@"; do
+        if ! echo "$reason" | grep -qF "$substr"; then
+            missing+=("$substr")
+        fi
+    done
+    if [[ ${#missing[@]} -eq 0 ]]; then
         pass "${id}. ${desc}"
     else
-        fail "${id}. ${desc} — expected block with reason containing '${expected_substr}', got decision='${decision}' reason='${reason}'"
+        fail "${id}. ${desc} — reason missing substrings: ${missing[*]} (reason='${reason}')"
+    fi
+}
+
+# assert_block_reason_not_contains <id> <desc> <json> <forbidden1> [forbidden2 ...]
+# Passes only when decision=block, reason is non-empty, and no forbidden substring appears.
+assert_block_reason_not_contains() {
+    local id="$1" desc="$2" json="$3"
+    shift 3
+    local result decision reason hook_rc
+    result=$(run_hook "$json")
+    hook_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+    if [ "$hook_rc" != "0" ]; then
+        fail "${id}. ${desc} — hook process exited with rc=${hook_rc}"
+        return
+    fi
+    decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$result" 2>/dev/null || true)
+    reason=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.reason||'')}catch(e){}" -- "$result" 2>/dev/null || true)
+    if [[ "$decision" != "block" || -z "$reason" ]]; then
+        fail "${id}. ${desc} — expected block with non-empty reason, got decision='${decision}' reason='${reason}'"
+        return
+    fi
+    local found=()
+    local forbidden
+    for forbidden in "$@"; do
+        if printf '%s' "$reason" | grep -qF -- "$forbidden"; then
+            found+=("$forbidden")
+        fi
+    done
+    if [[ ${#found[@]} -eq 0 ]]; then
+        pass "${id}. ${desc}"
+    else
+        fail "${id}. ${desc} — reason contains forbidden text: ${found[*]}"
     fi
 }
 
@@ -143,53 +166,85 @@ assert_block_reason_contains() {
 echo ""
 echo "=== Section A — Normal cases ==="
 
-# A1: Write + non-memory path → approve
+case_begin "a1-write-non-memory" "hooks/block-memory-direct.js"
 assert_approve "A1" "Write + non-memory path → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"src/foo.js"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# A2: Read tool → approve (tool not in Edit|Write|MultiEdit|editFiles)
+case_begin "a2-read-memory" "hooks/block-memory-direct.js"
 assert_approve "A2" "Read tool → approve (not in checked tools)" \
     '{"tool_name":"Read","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# A3: Write + memory dir → block (reason contains "Memory write intercepted")
-assert_block_reason_contains "A3" "Write + memory dir → block with intercepted message" \
+case_begin "a3-write-memory-block" "hooks/block-memory-direct.js"
+assert_block_reason_contains "A3" "Write + memory dir → block with unconditional message" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}' \
-    "Memory write intercepted."
+    "rules/mid-workflow-findings.md" "unconditionally blocked" "/issue-create"
+case_end
 
-# A4: Write + memory dir + valid marker file → approve + marker deleted
+case_begin "a4-allow-marker-still-blocks" "hooks/block-memory-direct.js"
 MARKER_FILE="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
 touch "$MARKER_FILE"
-assert_approve "A4" "Write + memory dir + valid marker file → approve (one-shot consumed)" \
-    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
-# Verify marker was deleted
-if [ ! -f "$MARKER_FILE" ]; then
-    pass "A4b. Marker file deleted after one-shot consume"
+a4_json='{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+a4_result1=$(run_hook "$a4_json")
+a4_rc1=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+a4_result2=$(run_hook "$a4_json")
+a4_rc2=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
+a4_dec1=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$a4_result1" 2>/dev/null || true)
+a4_dec2=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$a4_result2" 2>/dev/null || true)
+a4_reason=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.reason||'')}catch(e){}" -- "$a4_result1" 2>/dev/null || true)
+if [[ "$a4_dec1" == "block" && "$a4_dec2" == "block" && -n "$a4_reason" && -f "$MARKER_FILE" && "$a4_rc1" == "0" && "$a4_rc2" == "0" ]]; then
+    pass "A4. Write + memory dir + allow-marker present → block on repeated calls, marker not consumed"
 else
-    fail "A4b. Marker file NOT deleted after one-shot consume"
+    a4_marker_state="absent"
+    [[ -f "$MARKER_FILE" ]] && a4_marker_state="present"
+    fail "A4. allow-marker must not bypass — 1st='${a4_dec1}', 2nd='${a4_dec2}' (want block/block), reason-empty=$([[ -z "$a4_reason" ]] && echo yes || echo no), marker=${a4_marker_state} (want present), rc1=${a4_rc1}, rc2=${a4_rc2}"
 fi
+rm -f "$MARKER_FILE"
+case_end
 
-# A5: Write + memory dir + WORKFLOW_OFF active → approve
+case_begin "a4n-block-reason-no-retired-prompt" "hooks/block-memory-direct.js"
+assert_block_reason_not_contains "A4n" "Block reason omits retired 4-option prompt text" \
+    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}' \
+    "Memory write intercepted" "Allow this memory write" "Deny this memory write" \
+    "Please ask the user" "Cancel / do nothing" "The dialog below asks the user"
+case_end
+
+case_begin "a5-workflow-off-bypass-write" "hooks/block-memory-direct.js"
 WORKFLOW_OFF_MARKER="$CLAUDE_WORKFLOW_DIR/test-sess-1097.workflow-off"
 touch "$WORKFLOW_OFF_MARKER"
 assert_approve "A5" "Write + memory dir + WORKFLOW_OFF active → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
 rm -f "$WORKFLOW_OFF_MARKER"
+case_end
 
-# A6: Edit + memory dir → block
+case_begin "a5b-workflow-off-bypass-bash" "hooks/block-memory-direct.js"
+WORKFLOW_OFF_MARKER="$CLAUDE_WORKFLOW_DIR/test-sess-1097.workflow-off"
+touch "$WORKFLOW_OFF_MARKER"
+assert_approve "A5b" "Bash redirect to memory dir + WORKFLOW_OFF active → approve" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+rm -f "$WORKFLOW_OFF_MARKER"
+case_end
+
+case_begin "a6-edit-memory-block" "hooks/block-memory-direct.js"
 assert_block "A6" "Edit + memory dir → block" \
     '{"tool_name":"Edit","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# A7: MultiEdit + memory dir → block
+case_begin "a7-multiedit-memory-block" "hooks/block-memory-direct.js"
 assert_block "A7" "MultiEdit + memory dir → block" \
     '{"tool_name":"MultiEdit","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# A8: editFiles + memory dir → block
+case_begin "a8-editfiles-memory-block" "hooks/block-memory-direct.js"
 assert_block "A8" "editFiles + memory dir → block" \
     '{"tool_name":"editFiles","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# A9: Write + empty file_path → approve
+case_begin "a9-write-empty-path" "hooks/block-memory-direct.js"
 assert_approve "A9" "Write + empty file_path → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":""},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
 # ===========================================================================
 # Section B — Error / fail cases
@@ -197,7 +252,7 @@ assert_approve "A9" "Write + empty file_path → approve" \
 echo ""
 echo "=== Section B — Error / fail cases ==="
 
-# B10: Malformed JSON stdin → approve (fail-open)
+case_begin "b10-malformed-json-fail-open" "hooks/block-memory-direct.js"
 b10_input_file="$(mktemp "$TMPDIR_ROOT/b10_input.XXXXXX")"
 printf '%s' 'NOT VALID JSON {{{' > "$b10_input_file"
 b10_result=$(
@@ -205,22 +260,26 @@ b10_result=$(
         export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
         export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
         export CLAUDE_CODE_SESSION_ID="test-sess-1097"
-        run_with_timeout node "$HOOK" < "$b10_input_file" 2>/dev/null
+        run_with_timeout 120 node "$HOOK" < "$b10_input_file" 2>/dev/null
     )
-) || true
+)
+printf '%d' "$?" > "$HOOK_RC_FILE"
 rm -f "$b10_input_file"
+b10_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
 b10_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b10_result" 2>/dev/null || true)
-if [ "$b10_decision" = "approve" ]; then
+if [ "$b10_rc" = "0" ] && [ "$b10_decision" = "approve" ]; then
     pass "B10. Malformed JSON stdin → approve (fail-open)"
 else
-    fail "B10. Malformed JSON stdin — expected approve, got: ${b10_result}"
+    fail "B10. Malformed JSON stdin — expected approve rc=0, got: rc=${b10_rc} decision=${b10_decision} result=${b10_result}"
 fi
+case_end
 
-# B11: Missing file_path → approve
+case_begin "b11-missing-filepath-fail-open" "hooks/block-memory-direct.js"
 assert_approve "B11" "Missing file_path → approve" \
     '{"tool_name":"Write","tool_input":{},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# B12: Session ID unresolvable (all env vars unset) → block (fail-closed: no sid means can't verify bypass)
+case_begin "b12-no-session-id-fail-closed" "hooks/block-memory-direct.js"
 b12_input_file="$(mktemp "$TMPDIR_ROOT/b12_input.XXXXXX")"
 printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"","agent_id":""}' > "$b12_input_file"
 b12_result=$(
@@ -230,33 +289,19 @@ b12_result=$(
         unset CLAUDE_ENV_FILE 2>/dev/null || true
         export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
         export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
-        run_with_timeout node "$HOOK" < "$b12_input_file" 2>/dev/null
+        run_with_timeout 120 node "$HOOK" < "$b12_input_file" 2>/dev/null
     )
-) || true
+)
+printf '%d' "$?" > "$HOOK_RC_FILE"
 rm -f "$b12_input_file"
+b12_rc=$(cat "$HOOK_RC_FILE" 2>/dev/null || echo "1")
 b12_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b12_result" 2>/dev/null || true)
-if [ "$b12_decision" = "block" ]; then
+if [ "$b12_rc" = "0" ] && [ "$b12_decision" = "block" ]; then
     pass "B12. Session ID unresolvable (empty session_id, no env vars) → block (fail-closed)"
 else
-    fail "B12. Session ID unresolvable — expected block (fail-closed), got: ${b12_result}"
+    fail "B12. Session ID unresolvable — expected block rc=0, got: rc=${b12_rc} decision=${b12_decision} result=${b12_result}"
 fi
-
-# B13: Marker file exists but is a directory (unlinkSync fails with EISDIR) → block (fail-closed)
-# Use a distinct session ID to avoid path conflict with A4's marker file
-B13_SID="test-sess-b13"
-MARKER_DIR_PATH="$WORKFLOW_PLANS_DIR/${B13_SID}.memory-write-allow.tmp"
-rm -f "$MARKER_DIR_PATH" 2>/dev/null || true
-mkdir -p "$MARKER_DIR_PATH"
-b13_result=$(run_hook \
-    '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"'"$B13_SID"'","agent_id":""}' \
-    "CLAUDE_CODE_SESSION_ID=$B13_SID")
-b13_decision=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$b13_result" 2>/dev/null || true)
-if [ "$b13_decision" = "block" ]; then
-    pass "B13. Marker is a directory (unlinkSync EISDIR) → block (fail-closed)"
-else
-    fail "B13. Marker is a directory (unlinkSync EISDIR) — expected block (fail-closed), got: ${b13_result}"
-fi
-rm -rf "$MARKER_DIR_PATH"
+case_end
 
 # ===========================================================================
 # Section C — Edge cases
@@ -264,59 +309,33 @@ rm -rf "$MARKER_DIR_PATH"
 echo ""
 echo "=== Section C — Edge cases ==="
 
-# C14: Windows backslash path under memory dir → block
-# Send a properly JSON-encoded backslash path (the format Claude Code actually sends).
-# repairWindowsPaths converts \\ → / so isUnderPath can match.
+case_begin "c14-windows-backslash-path" "hooks/block-memory-direct.js"
 C14_JSON="$(node -e "const os=require('os'),path=require('path');const d=path.join(os.homedir(),'.claude','projects','c--git-agents','memory');const fp=d+path.sep+'MEMORY.md';process.stdout.write(JSON.stringify({tool_name:'Write',tool_input:{file_path:fp},session_id:'test-sess-1097',agent_id:''}))")"
 assert_block "C14" "Windows backslash path under memory dir → block" "$C14_JSON"
+case_end
 
-# C15: Memory dir subdirectory → block
+case_begin "c15-memory-subdir" "hooks/block-memory-direct.js"
 assert_block "C15" "Memory dir subdirectory → block" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/subdir/foo.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# C16: Path with "memory" in name but not under MEMORY_DIR → approve
+case_begin "c16-memory-in-name-not-under-dir" "hooks/block-memory-direct.js"
 assert_approve "C16" "Path with 'memory' in name but not under MEMORY_DIR → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"/some/other/memory/foo.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
 # C17: MSYS2 POSIX drive-letter path (/c/Users/...) under memory dir → block.
 # Git Bash delivers file_path in this form to the hook; normalizeCwd must fold
 # /c/... back to C:\... before isUnderPath, or the guard fails open. win32-only:
 # on POSIX, /c/... is legitimately not under a $HOME-rooted MEMORY_DIR.
-MEMORY_DIR_MSYS="$(node -e "const os=require('os'),path=require('path');if(process.platform!=='win32')process.exit(0);const home=os.homedir();const m=home.match(/^([A-Za-z]):/);if(!m)process.exit(0);const rel=path.join(home,'.claude','projects','c--git-agents','memory').slice(2).split(path.sep).join('/');process.stdout.write('/'+m[1].toLowerCase()+rel);")"
+case_begin "c17-msys2-drive-letter" "hooks/block-memory-direct.js"
 if [ -n "$MEMORY_DIR_MSYS" ]; then
     assert_block "C17" "MSYS2 /c/ drive-letter path under memory dir → block (normalizeCwd)" \
         '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR_MSYS"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
 else
-    echo "SKIP: C17 (MSYS2 /c/ path form) — not win32"
+    skip "C17 (MSYS2 /c/ path form) — not win32"
 fi
-
-# ===========================================================================
-# Section D — One-shot marker idempotency
-# ===========================================================================
-echo ""
-echo "=== Section D — One-shot marker idempotency ==="
-
-# D17: Marker one-shot — 1st call approve, 2nd call block after marker consumed
-MARKER_FILE_D="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
-touch "$MARKER_FILE_D"
-
-d17_json='{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
-
-# 1st call: should approve (consumes marker)
-d17_result1=$(run_hook "$d17_json")
-d17_dec1=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d17_result1" 2>/dev/null || true)
-
-# 2nd call: marker gone, should block
-d17_result2=$(run_hook "$d17_json")
-d17_dec2=$(node -e "try{const d=JSON.parse(process.argv[1]);process.stdout.write(d.decision||'')}catch(e){}" -- "$d17_result2" 2>/dev/null || true)
-
-if [ "$d17_dec1" = "approve" ] && [ "$d17_dec2" = "block" ]; then
-    pass "D17. Marker one-shot: 1st call approve, 2nd call block after marker consumed"
-else
-    fail "D17. Marker one-shot — 1st='${d17_dec1}' (want approve), 2nd='${d17_dec2}' (want block)"
-fi
-# Cleanup in case first call failed and marker remains
-rm -f "$MARKER_FILE_D"
+case_end
 
 # ===========================================================================
 # Section E — Bash shell-write arm
@@ -324,30 +343,54 @@ rm -f "$MARKER_FILE_D"
 echo ""
 echo "=== Section E — Bash shell-write arm ==="
 
-# E18: Bash redirect to memory dir → block
+case_begin "e18-bash-redirect-memory" "hooks/block-memory-direct.js"
 assert_block "E18" "Bash redirect (>>) to memory dir → block" \
     '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# E19: Bash redirect to non-memory dir → approve
+case_begin "e19-bash-redirect-non-memory" "hooks/block-memory-direct.js"
 assert_approve "E19" "Bash redirect to non-memory dir → approve" \
     '{"tool_name":"Bash","tool_input":{"command":"echo foo >> /tmp/other.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# E20: runInTerminal redirect to memory dir → block
+case_begin "e20-run-in-terminal-redirect" "hooks/block-memory-direct.js"
 assert_block "E20" "runInTerminal redirect to memory dir → block" \
     '{"tool_name":"runInTerminal","tool_input":{"command":"echo foo > '"$MEMORY_DIR"'/new.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# E21: Bash tee to memory dir → block
+case_begin "e21-bash-tee-memory" "hooks/block-memory-direct.js"
 assert_block "E21" "Bash tee to memory dir → block" \
     '{"tool_name":"Bash","tool_input":{"command":"echo bar | tee '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
 # E22: Bash redirect to MSYS2 /c/ drive-letter memory path → block (bashHitsMemory
 # arm of the normalizeCwd fix; symmetric with C17). win32-only for the same reason.
+case_begin "e22-bash-msys2-drive-letter" "hooks/block-memory-direct.js"
 if [ -n "$MEMORY_DIR_MSYS" ]; then
     assert_block "E22" "Bash redirect to MSYS2 /c/ memory path → block (normalizeCwd)" \
         '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR_MSYS"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
 else
-    echo "SKIP: E22 (MSYS2 /c/ path form) — not win32"
+    skip "E22 (MSYS2 /c/ path form) — not win32"
 fi
+case_end
+
+case_begin "e23-bash-allow-marker-still-blocks" "hooks/block-memory-direct.js"
+MARKER_FILE_E="$WORKFLOW_PLANS_DIR/test-sess-1097.memory-write-allow.tmp"
+touch "$MARKER_FILE_E"
+assert_block "E23" "Bash redirect to memory dir + allow-marker present → block" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+rm -f "$MARKER_FILE_E"
+case_end
+
+case_begin "e24-run-commands-redirect-memory" "hooks/block-memory-direct.js"
+assert_block "E24" "runCommands redirect to memory dir → block" \
+    '{"tool_name":"runCommands","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
+
+case_begin "e25-run-commands-redirect-non-memory" "hooks/block-memory-direct.js"
+assert_approve "E25" "runCommands redirect to non-memory dir → approve" \
+    '{"tool_name":"runCommands","tool_input":{"command":"echo foo >> /tmp/other.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
 # ===========================================================================
 # Section F — Security / adversarial inputs
@@ -355,34 +398,26 @@ fi
 echo ""
 echo "=== Section F — Security / adversarial inputs ==="
 
-# F22: session_id with path-traversal chars ("../") → block (fail-closed or sanitized)
-# resolveSessionId validates with ^[A-Za-z0-9_-]+$ regex; traversal id returns null → block.
+case_begin "f22-session-path-traversal" "hooks/block-memory-direct.js"
 assert_block "F22" "session_id with path-traversal chars → block (fail-closed, traversal rejected)" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"../evil-session","agent_id":""}'
+case_end
 
-# F23: null file_path (as JSON null) → approve (fail-open; hitsMemory returns false)
+case_begin "f23-null-filepath" "hooks/block-memory-direct.js"
 assert_approve "F23" "null file_path (JSON null) → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":null},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# F24: file_path is a number → approve (fail-open; isUnderPath type-normalizes or returns false)
+case_begin "f24-numeric-filepath" "hooks/block-memory-direct.js"
 assert_approve "F24" "file_path is a number → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":42},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# F25: Bash read-only command (cat) → approve (no write operators)
+case_begin "f25-bash-readonly" "hooks/block-memory-direct.js"
 assert_approve "F25" "Bash read-only command → approve" \
     '{"tool_name":"Bash","tool_input":{"command":"cat '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
+case_end
 
-# ===========================================================================
-# Results
-# ===========================================================================
 echo ""
-echo "=== Results ==="
-TOTAL=$((PASS_COUNT + ERRORS))
-echo "${PASS_COUNT}/${TOTAL} tests passed, ${ERRORS} failed"
-if [ "$ERRORS" -eq 0 ]; then
-    echo "All tests passed!"
-    exit 0
-else
-    echo "${ERRORS} test(s) failed"
-    exit 1
-fi
+echo "# PASS=$PASS FAIL=$FAIL"
+[ "$FAIL" -eq 0 ]
