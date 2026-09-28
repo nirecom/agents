@@ -350,16 +350,16 @@ check('risk-resets-the-timer', (bad) => {
   if (s && s.riskActive !== true) bad.push('riskActive:' + String(s.riskActive));
   if (s && s.msSinceTimer !== 20 * MIN) bad.push('msSinceTimer:' + String(s.msSinceTimer));
 });
-check('risk-halves-elapsed-to-30min', (bad) => {
+check('risk_halves_elapsed_to_30min', (bad) => {
   want(bad, '79:59', ev('r2', { base: [B0, t0], risk: t0 + 50 * MIN, size: B0 + small, now: t0 + 80 * MIN - 1000 }), false);
   want(bad, '80:00', ev('r3', { base: [B0, t0], risk: t0 + 50 * MIN, size: B0 + small, now: t0 + 80 * MIN }), true, 'elapsed');
 });
-check('risk-halves-increment-to-1MiB', (bad) => {
+check('risk_halves_increment_to_1MiB', (bad) => {
   want(bad, 'risk-1MiB', ev('h1', { base: [B0, t0], risk: t0 + MIN, size: B0 + MiB, now: t0 + 2 * MIN }), true, 'bytes');
   want(bad, 'risk-1MiB-1', ev('h2', { base: [B0, t0], risk: t0 + MIN, size: B0 + MiB - 1, now: t0 + 2 * MIN }), false);
   want(bad, 'no-risk-1MiB', ev('h3', { base: [B0, t0], size: B0 + MiB, now: t0 + 2 * MIN }), false);
 });
-check('risk-older-than-baseline-is-ignored', (bad) => {
+check('risk_older_than_baseline_is_ignored', (bad) => {
   const s = ev('o1', { base: [B0, t0], risk: t0 - 10 * MIN, size: B0 + MiB, now: t0 + 2 * MIN });
   want(bad, 'no-halving', s, false);
   if (s && s.riskActive !== false) bad.push('riskActive:' + String(s.riskActive));
@@ -375,7 +375,7 @@ check('flush-restores-defaults', (bad) => {
   want(bad, 'after-flush-1MiB', ev('f1', Object.assign({}, o, { size: B0 + MiB, now: t0 + 21 * MIN })), false);
   want(bad, 'after-flush-31min', ev('f2', Object.assign({}, o, { size: B0 + small, now: t0 + 51 * MIN })), false);
 });
-check('risk-does-not-move-baseline-bytes', (bad) => {
+check('risk_does_not_move_baseline_bytes', (bad) => {
   const s = ev('b1', { base: [B0, t0], risk: t0 + 5 * MIN, size: B0 + small, now: t0 + 6 * MIN });
   want(bad, 'quiet', s, false);
   if (s && s.bytesSince !== small) bad.push('bytesSince:' + String(s.bytesSince));
@@ -433,12 +433,12 @@ JS
 elapsed-60min-boundary|59:59 is quiet, 60:00 fires with trigger 'elapsed'
 no-growth-never-fires|120 min with a zero increment stays quiet
 risk-resets-the-timer|a risk at +50 restarts the timer, so +70 is quiet
-risk-halves-elapsed-to-30min|after a risk, 29:59 is quiet and 30:00 fires
-risk-halves-increment-to-1MiB|a live risk fires at 1MiB but not 1MiB-1; without risk 1MiB is quiet
-risk-older-than-baseline-is-ignored|a risk before the baseline neither halves nor restarts the timer
+risk_halves_elapsed_to_30min|after a risk, 29:59 is quiet and 30:00 fires
+risk_halves_increment_to_1MiB|a live risk fires at 1MiB but not 1MiB-1; without risk 1MiB is quiet
+risk_older_than_baseline_is_ignored|a risk before the baseline neither halves nor restarts the timer
 nudge-restores-defaults|a nudge under risk restores 2MiB / 60 min
 flush-restores-defaults|a flush mark after a risk restores 2MiB / 60 min
-risk-does-not-move-baseline-bytes|a risk leaves baseline_bytes where it was
+risk_does_not_move_baseline_bytes|a risk leaves baseline_bytes where it was
 corrupt-risk-reads-as-none|an unreadable risk file counts as no risk and does not throw
 trigger-table-is-ored|an added trigger is ORed with the built-in ones
 flush-mark-keeps-post-flush-growth|T-2b: 2MiB written after a flush still fires (C3)

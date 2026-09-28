@@ -51,7 +51,7 @@ seed_active() {
         CLAUDE_WORKFLOW_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
         "$RWT" 30 node -e "
 const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-S.writeState('$2', S.createInitialState('$2', { cwd: '/h/fixture', git_branch: 'feature/h' }));
+S.writeState('$2', S.createInitialState('$2', { cwd: '/work/fixture', git_branch: 'feature/h' }));
 S.markStep('$2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
 }

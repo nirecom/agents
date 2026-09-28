@@ -153,7 +153,7 @@ run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit" --session-id r
 expect "RS4b: --set-audit-verdict BLOCK stamps source supervisor-verdict" "$(risk rk-wa-block "$T")" "supervisor-verdict"
 case_end
 
-case_begin "finding-stamps-risk-at-warning-and-above" "hooks/lib/supervisor-state-writer/append.js"
+case_begin "finding-stamps-risk_at_warning_and_above" "hooks/lib/supervisor-state-writer/append.js"
 for sev in warning error; do
     seed "rk-finding-$sev"; T="$(now_ms)"
     expect "RS5: a $sev finding is still accepted" "$(nj call.js finding "rk-finding-$sev" "$sev")" "true"
@@ -164,7 +164,7 @@ nj call.js finding rk-finding-notice notice >/dev/null
 expect "N2: a notice finding stamps nothing" "$(risk rk-finding-notice 0)" "NONE"
 case_end
 
-case_begin "test-failure-stamps-risk-after-implementation" "hooks/workflow-run-tests.js"
+case_begin "test-failure-stamps-risk_after_implementation" "hooks/workflow-run-tests.js"
 seed rk-tests-run run_tests; T="$(now_ms)"
 run_tests_hook rk-tests-run 1
 expect "RS6: the hook did observe the failing run" "$(nj observed.js rk-tests-run)" "yes"
@@ -182,7 +182,7 @@ case_end
 
 # An unwritable risk file (a directory at its path) must cost nothing but the
 # stamp: every producer's own output and exit code stay what they were.
-case_begin "risk-write-failure-changes-no-producer" "bin/supervisor-write-audit-verdict"
+case_begin "risk_write_failure_changes_no_producer" "bin/supervisor-write-audit-verdict"
 for sid in rk-io-compact rk-io-gate rk-io-reset rk-io-verdict rk-io-finding; do seed "$sid"; mkdir -p "$TMP/wf/$sid-handoff-risk.json"; done
 expect "I1: PostCompact still re-injects" "$(injected "$(compact rk-io-compact)")" "yes"
 expect "I1: recordGateBlock still writes its entry" "$(nj call.js gate rk-io-gate)" '{"written":true,"reason":"ok"}'

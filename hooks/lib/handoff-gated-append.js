@@ -3,8 +3,12 @@
 // and auto-record writes all pass through here, so "outside the workflow active
 // period nothing is recorded" holds for every origin at once (CPR-ORTH).
 //
-// Named exception: hooks/workflow-gate/handoff-record.js recordGateBlock() keeps
-// calling appendHandoffEntry directly (gate-block path unchanged by #2430).
+// Named exceptions:
+// - hooks/workflow-gate/handoff-record.js recordGateBlock() keeps calling
+//   appendHandoffEntry directly (gate-block path unchanged by #2430).
+// - options.activeBeforeEvent is reserved for hooks/workflow-mark/reset-handler.js:
+//   a RESET_FROM_workflow_init ends the active period, so the post-event check
+//   would drop the reset-from breadcrumb. No other caller may pass it.
 
 const { appendHandoffEntry } = require("./handoff-artifact");
 const { isWorkflowActivePeriod } = require("./workflow-active-period");

@@ -106,6 +106,40 @@ definition, and related links.
   `make-detail-plan`.
 - **Related**: [skills/make-detail-plan/SKILL.md](../skills/make-detail-plan/SKILL.md)
 
+## Handoff artifact
+
+Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-artifact.md`).
+
+### handoff artifact
+
+- **Full name**: Handoff artifact
+- **Definition**: An append-only, per-session Markdown file (`<PLANS_DIR>/<sid>-handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session`.
+- **Related**: [architecture/claude-code/handoff-artifact.md](architecture/claude-code/handoff-artifact.md)
+
+### workflow active period
+
+- **Full name**: Workflow active period
+- **Definition**: The named condition under which handoff writes are accepted. Holds when `workflow_init` is complete, no terminal step is complete, no `WORKFLOW_OFF` marker is set, and no unexpired `NEXT_STEP_PAUSE` covers the current step. Defined in `hooks/lib/workflow-active-period.js`; consulted by `appendHandoffEntryIfActive`. Any error reads as inactive.
+- **Related**: [architecture/claude-code/handoff-artifact.md — Active-period gate](architecture/claude-code/handoff-artifact.md#active-period-gate)
+
+### risk signal
+
+- **Full name**: Risk signal
+- **Definition**: A timestamp written when an event makes it likely that unrecorded working knowledge will be lost (sources: `compaction`, `gate-block`, `reset-from`, `supervisor-verdict`, `supervisor-finding`, `test-failure`). A stamp newer than the nudge baseline restarts the omission-check timer and halves both nudge thresholds until the next check or flush.
+- **Related**: [architecture/claude-code/handoff-artifact.md — Risk signals](architecture/claude-code/handoff-artifact.md#risk-signals)
+
+### flush mark
+
+- **Full name**: Flush mark
+- **Definition**: Sidecar file `<sid>-handoff-flush-mark.json` written by `bin/workflow/handoff-append` after a successful `--origin flush`. Sized from the measured transcript at flush time; a mark newer than the pressure baseline advances the baseline, so post-flush growth counts afresh.
+- **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
+
+### pressure baseline
+
+- **Full name**: Pressure baseline
+- **Definition**: Sidecar file `<sid>-handoff-pressure.json` written by the nudge hook only, holding `{baseline_bytes, baseline_at, transcript_path}`. Growth and elapsed time are measured from this baseline; a nudge or flush advances it.
+- **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
+
 ## Supervisor audit
 
 These terms are fixed by the #2256 outline Glossary and used identically across

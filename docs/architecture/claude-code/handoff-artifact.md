@@ -57,6 +57,8 @@ Why every origin is gated: the artifact's only reader is `/resume-session`, and 
 
 **The one named exception is `gate-block`.** `recordGateBlock` keeps calling `appendHandoffEntry` directly, because #2430 left the gate-block route unchanged: it is a single hook-written line per block, not a model-driven write. The exception is confined to that one function and pinned by `tests/hooks/feat-2430-handoff-gate-uniform.sh`; whether to fold it into the gate is a follow-up.
 
+**`activeBeforeEvent` is reserved for the reset-from record.** A `RESET_FROM_workflow_init` rolls `workflow_init` back to pending, which ends the active period, so a check made after the reset would always drop that reset's own breadcrumb. `hooks/workflow-mark/reset-handler.js` therefore evaluates the gate before appending the reset events and passes the result as `{ activeBeforeEvent: true }`; the entry is written when the period was active before or after the reset. This is still a gate evaluation, not a bypass, and no other caller passes the option. Pinned by R3 in `tests/hooks/feat-2430-handoff-auto-record.sh`.
+
 ### Producer routes
 
 | origin | Choke point | Gated |
