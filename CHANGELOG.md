@@ -587,3 +587,7 @@ Changes: New test files with several `# Tests:` paths must wrap each case in col
 ### FEATURE: PR #2437 (2026-09-28)
 Background: fix(codegraph): stop ToolSearch deferring the codegraph_explore schema (#2254)
 Changes: codegraph_explore is now always available without a ToolSearch preamble: the installer patches ~/.claude.json to set alwaysLoad:true after registering the MCP server.;The codegraph npm package is now always installed at @latest, eliminating the pinned-version mismatch warning.
+
+### FEATURE: PR #2439 (2026-09-28)
+Background: fix(#2435,#1270): always block agents memory writes; cite canonical rule
+Changes: Direct writes to the agents-repo memory directory are now always blocked (except under WORKFLOW_OFF); the rejection message explains why and points to `/issue-create` and `rules/mid-workflow-findings.md`.
