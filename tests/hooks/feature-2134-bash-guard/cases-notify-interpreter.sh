@@ -40,7 +40,7 @@ TABLE
 # rel-noext-no-cwd: an extension-less relative path matches an allow-list entry only through
 # a verified cwd; with none in the payload bash-guard must not guess from process.cwd().
 case_begin "notify-interpreter-shapes" "hooks/bash-guard/detect.js"
-l1_interpreter_rows
+bg_batched l1_interpreter_rows
 case_end
 
 # L2: the same relative form WITH a cwd. It resolves to an entry only when the cwd is the

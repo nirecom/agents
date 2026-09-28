@@ -34,7 +34,7 @@ e-abs-path      ~ find . -type f | /usr/bin/xargs rm        ~ passThrough ~
 TABLE
 }
 
-x1_xargs_pipe
+bg_batched x1_xargs_pipe
 
 # X6: in `ls | grep x | xargs rm` the SURVIVING hit is the FIRST pipe (right side `grep`),
 # not merely "some pipe". The expected index is read from separatorLinks, so the assertion

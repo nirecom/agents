@@ -51,7 +51,7 @@ TABLE
 }
 
 case_begin "notify-sentinel-classes" "hooks/bash-guard/detect.js"
-s1_sentinel_rows
+bg_batched s1_sentinel_rows
 case_end
 
 # IR QUIRK behind these rows: command-ir reads a quoted `"<<WORKFLOW_X>>"` as a `<` redirect

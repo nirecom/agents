@@ -42,7 +42,7 @@ TABLE
 # Since #2403 the read-only classes turn the plain git/grep/cat rows into allow; find -exec
 # (exec-capable, and a `;` separator), the fd-redirect rows (not a plain single command) and
 # echo (no class) stay passThrough.
-n1_non_hits
+bg_batched n1_non_hits
 
 # N2: the sanctioned `bash -c '... && ...'` form used across skills/_shared. The `&&` sits
 # inside single quotes, so it is not a separator -- if this ever denies, roughly eight prompt

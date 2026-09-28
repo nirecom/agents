@@ -91,6 +91,14 @@ t43_run() { # <asm> <fixture>
       > "$fx/stdout.txt" 2> "$T43_ERR" || T43_RC=$?
 }
 
+t43_build() { # <fixture> -- the healthy base every shape starts from (see tpl_fixture)
+    mk_tool "$1" "$T43_TOOL" env-bash
+    write_ssot "$1" "$T43_TOOL"
+    printf '%s\n' "$T43_BASE" > "$1/pre.txt"
+    write_settings "$1" "$1/pre.txt"
+    run_assemble "$1"
+}
+
 # Verdict: rc/state/orig/content/note/fresh. A field a case cannot speak to stays `-`, so every row
 # below names a real observation of that case rather than a default that happened to line up.
 t43_case() { # <asm> <shape> -> verdict | sentinel
@@ -98,14 +106,9 @@ t43_case() { # <asm> <shape> -> verdict | sentinel
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target ext repo_before repo_after rc state orig content note fresh
     local inside_dir="" inside_before="-" inside_after="-" inside="-"
-    dir="$(mk_fixture "t43-$1-$2")"
-    mk_tool "$dir" "$T43_TOOL" env-bash
-    write_ssot "$dir" "$T43_TOOL"
-    printf '%s\n' "$T43_BASE" > "$dir/pre.txt"
-    write_settings "$dir" "$dir/pre.txt"
     # Deployed healthy FIRST: only then is "the previous deployment survived" a claim about
     # something that exists, and only then does the target start out as a plain regular file.
-    run_assemble "$dir"
+    dir="$(tpl_fixture "t43-$1-$2" t43 t43_build)"
     target="$(deployed_file "$dir")"
     ext="$TMPROOT/t43-$1-$2-outside"
     mkdir -p "$ext"

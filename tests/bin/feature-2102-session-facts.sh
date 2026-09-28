@@ -60,23 +60,33 @@ echo "=== INV-6b: bash-guard's self-script allow path admits this CLI ==="
 # argument-position form callers issue and require the SELF_SCRIPT allow. The shebang is
 # node (V1d), so the node form is the one that must match.
 BG_STATE_DIR="$TMPDIR_BASE/inv6-workflow"; mkdir -p "$BG_STATE_DIR" "$TMPDIR_BASE/inv6-plans"
-bg_judge() {
+# One node judges every command (argv); require.cache is cleared per row so no judge
+# state carries over, and each row prints exactly one "<idx>\t<verdict>\t<code>" line.
+bg_judge_batch() {
   CLAUDE_WORKFLOW_DIR="$(nrm "$BG_STATE_DIR")" WORKFLOW_PLANS_DIR="$(nrm "$TMPDIR_BASE/inv6-plans")" \
-  JUDGE="$(nrm "$REPO_ROOT/hooks/bash-guard/judge.js")" BG_CMD="$1" run_with_timeout node -e '
+  JUDGE="$(nrm "$REPO_ROOT/hooks/bash-guard/judge.js")" run_with_timeout node -e '
     "use strict";
-    let line;
-    try {
-      const v = require(process.env.JUDGE).judgeBashCommand({ tool_name: "Bash",
-        session_id: "sid-2102-no-state", tool_input: { command: process.env.BG_CMD } });
-      line = String(v && v.verdict) + "\t" + String(v && v.code);
-    } catch (e) { line = "<THREW:" + String((e && e.message) || e).split("\n")[0] + ">"; }
-    process.stdout.write(line);
-  ' 2>/dev/null
+    process.argv.slice(1).forEach((cmd, i) => {
+      for (const k of Object.keys(require.cache)) delete require.cache[k];
+      let line;
+      try {
+        const v = require(process.env.JUDGE).judgeBashCommand({ tool_name: "Bash",
+          session_id: "sid-2102-no-state", tool_input: { command: cmd } });
+        line = String(v && v.verdict) + "\t" + String(v && v.code);
+      } catch (e) { line = "<THREW:" + String((e && e.message) || e).split("\n")[0] + ">"; }
+      process.stdout.write(i + "\t" + line + "\n");
+    });
+  ' "$@" 2>/dev/null
 }
+BG_OUT="$(bg_judge_batch "node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" --session x" \
+  "node \"\$AGENTS_CONFIG_DIR/$CLI_REL-fake\" --session x")"
+bg_row() { printf '%s\n' "$BG_OUT" | sed -n "s/^$1	//p"; }
+BG_N="$(printf '%s\n' "$BG_OUT" | grep -c '^[0-9]	' || true)"
+[ "$BG_N" = 2 ] || fail "V1-batch: the batched judge returned $BG_N result lines for 2 rows (vacuity guard)"
 check "V1f: node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" is allowed as a self script" \
-  "allow	BG-ALLOW-SELF-SCRIPT" "$(bg_judge "node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" --session x")"
+  "allow	BG-ALLOW-SELF-SCRIPT" "$(bg_row 0)"
 check "V1g: control -- a lookalike name absent from the SSOT is not allowed" \
-  "passThrough	BG-NO-HIT" "$(bg_judge "node \"\$AGENTS_CONFIG_DIR/$CLI_REL-fake\" --session x")"
+  "passThrough	BG-NO-HIT" "$(bg_row 1)"
 
 echo ""
 RC_ALL=0

@@ -87,7 +87,7 @@ ANCHORED="$NEW_RULE_PRESENT"
 check_deny_row() { # <id> <command> <target-deny-pattern|any> <MATCHED|NO-MATCH> <depends-on-anchoring>
     local id="$1" cmd="$2" pat="$3" want="$4" depends="$5" got detail
     ROWS=$((ROWS + 1))
-    deny_probe "$SETTINGS" "$cmd"
+    dp_get "$id" # the caller queued ($id, $SETTINGS, $cmd) and ran the batch
     got="$DENY_VERDICT"
     detail="cmd=[$cmd] target-pattern=[$pat]"
     if [ "$got" != "$want" ]; then
@@ -165,35 +165,45 @@ RA_KEPT="$(cat <<'KEPT'
 KEPT
 )"
 export RA_KEPT
+# One node emits all four modes as NUL-delimited records (retired, kept, kept-count, extra);
+# a load error is emitted for every mode, exactly as each per-mode call used to print it.
 RETIRED_ALLOW_JS='
 const fs = require("fs");
-const [settingsPath, mode] = process.argv.slice(-2);
+const settingsPath = process.argv[process.argv.length - 1];
+const MODES = ["retired", "kept", "kept-count", "extra"];
+const emit = (vals) => process.stdout.write(vals.map((v) => String(v) + "\0").join(""));
 let allow, KEPT;
 try { allow = JSON.parse(fs.readFileSync(settingsPath, "utf8")).permissions.allow; }
-catch (e) { console.log("ERROR:unreadable-settings"); process.exit(0); }
-if (!Array.isArray(allow)) { console.log("ERROR:no-allow-array"); process.exit(0); }
-try { KEPT = JSON.parse(process.env.RA_KEPT || ""); } catch (e) { console.log("ERROR:bad-RA_KEPT"); process.exit(0); }
+catch (e) { emit(MODES.map(() => "ERROR:unreadable-settings")); process.exit(0); }
+if (!Array.isArray(allow)) { emit(MODES.map(() => "ERROR:no-allow-array")); process.exit(0); }
+try { KEPT = JSON.parse(process.env.RA_KEPT || ""); } catch (e) { emit(MODES.map(() => "ERROR:bad-RA_KEPT")); process.exit(0); }
 const RETIRED = /^Bash\((cd \* && )?(git (-C \* )?(status|log|diff|show|branch|tag|remote|rev-parse|stash)|head|tail|less|wc|file|stat|ls|find|tree|du|df|grep|rg|ag|which|type|command|uname|pwd)\b/;
-if (mode === "retired") console.log(allow.filter((e) => typeof e === "string" && RETIRED.test(e)).join(","));
-else if (mode === "kept-count") console.log(KEPT.length);
-else if (mode === "extra") console.log(allow.filter((e) => !KEPT.includes(e)).length);
-else console.log(KEPT.filter((e) => !allow.includes(e)).join(","));
+emit([
+  allow.filter((e) => typeof e === "string" && RETIRED.test(e)).join(","),
+  KEPT.filter((e) => !allow.includes(e)).join(","),
+  KEPT.length,
+  allow.filter((e) => !KEPT.includes(e)).length,
+]);
 '
 t_retired_readonly_allow() {
-    local npath
-    npath="$(matcher_node_path "$SETTINGS")"
+    local ra=()
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t ra < <(node -e "$RETIRED_ALLOW_JS" "$DP_NODE_PATH")
+    if (( ${#ra[@]} != 4 )); then
+        echo "FAIL: harness -- retired-allow batch returned ${#ra[@]} records (want 4)"; exit 1
+    fi
     ROWS=$((ROWS + 1))
     assert_eq "RA1: no read-only Bash allow spelling (git read / ls / grep / find ...) remains in permissions.allow" \
-        "" "$(node -e "$RETIRED_ALLOW_JS" "$npath" retired 2>&1)"
+        "" "${ra[0]}"
     ROWS=$((ROWS + 1))
     assert_eq "RA2: every non-read-only allow entry (all 67 outside the retired block) is kept" \
-        "" "$(node -e "$RETIRED_ALLOW_JS" "$npath" kept 2>&1)"
+        "" "${ra[1]}"
     ROWS=$((ROWS + 1))
     assert_eq "RA2b: the pinned kept list itself is complete (vacuity guard)" \
-        "67" "$(node -e "$RETIRED_ALLOW_JS" "$npath" kept-count 2>&1)"
+        "67" "${ra[2]}"
     ROWS=$((ROWS + 1))
     assert_eq "RA4: permissions.allow is exactly the kept set (nothing beyond the 67 remains)" \
-        "0" "$(node -e "$RETIRED_ALLOW_JS" "$npath" extra 2>&1)"
+        "0" "${ra[3]}"
     ROWS=$((ROWS + 1))
     if deny_list_has "$SETTINGS" "git push --force"; then pass "RA3: the force-push deny survives the allow retirement"
     else fail "RA3: the force-push deny survives the allow retirement" "Bash(git push --force) missing from permissions.deny"; fi

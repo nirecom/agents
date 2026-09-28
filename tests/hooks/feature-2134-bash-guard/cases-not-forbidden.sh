@@ -32,7 +32,7 @@ TABLE
     # (docs/architecture/claude-code/shell-command-parsing.md "Known gap"), not this PR's scope.
 }
 
-f1_not_forbidden
+bg_batched f1_not_forbidden
 
 # F2: the id set is exactly ten, in the order of the rules/shell-commands.md table. A
 # substring match such as includes("|") would drag `||` back in through the side door.

@@ -25,7 +25,7 @@ ra_rows() {
 case_begin "readonly-positive" "hooks/bash-guard/readonly-class.js"
 # R1: every class answers with its own reason code, so a row cannot pass by landing in a
 # sibling class (a gh read reported as GENERIC would hide a missing delegate).
-ra_rows R1 <<'TABLE'
+bg_batched_stdin ra_rows R1 <<'TABLE'
 n3-ls            ~ ls -la                                ~ allow|BG-ALLOW-READONLY-GENERIC
 n3-cat           ~ cat README.md                         ~ allow|BG-ALLOW-READONLY-GENERIC
 n3-head          ~ head -n 5 f                           ~ allow|BG-ALLOW-READONLY-GENERIC
@@ -73,7 +73,7 @@ ra_generic_cmd() {
         uname) echo "uname -a" ;; df) echo "df -h" ;; which|type) echo "$1 node" ;; *) echo "$1 f" ;;
     esac
 }
-ra_rows R1b < <(
+bg_batched_stdin ra_rows R1b < <(
     for n in "${RA_GENERIC[@]}"; do printf 'gen-%s ~ %s ~ allow|BG-ALLOW-READONLY-GENERIC\n' "$n" "$(ra_generic_cmd "$n")"; done
     for s in "${RA_PURE[@]}"; do printf 'git-%s ~ git %s ~ allow|BG-ALLOW-READONLY-GIT\n' "$s" "$s"; done
 )
@@ -82,7 +82,7 @@ case_end
 case_begin "readonly-git-negative" "hooks/lib/bash-write-patterns/git-read-ir.js"
 # R2: git writes, side-effecting reads, disallowed globals, and the holes the existing
 # read/write classifier leaves open (`branch --delete -r`, `remote -v add`, `config edit`).
-ra_rows R2 <<'TABLE'
+bg_batched_stdin ra_rows R2 <<'TABLE'
 add              ~ git add .                             ~ passThrough|BG-NO-HIT
 fetch            ~ git fetch                             ~ passThrough|BG-NO-HIT
 difftool         ~ git difftool                          ~ passThrough|BG-NO-HIT
@@ -108,7 +108,7 @@ case_end
 case_begin "readonly-git-exec-capable" "hooks/lib/bash-write-patterns/git-read-ir.js"
 # R3: options that launch an external program from a read (codex C1). Prefix forms included,
 # because git accepts any unique abbreviation of a long option.
-ra_rows R3 <<'TABLE'
+bg_batched_stdin ra_rows R3 <<'TABLE'
 diff-textconv    ~ git diff --textconv                   ~ passThrough|BG-NO-HIT
 show-textconv    ~ git show --textconv HEAD              ~ passThrough|BG-NO-HIT
 diff-textc       ~ git diff --textc                      ~ passThrough|BG-NO-HIT
@@ -134,7 +134,7 @@ case_begin "readonly-gh-negative" "hooks/lib/bash-write-patterns/gh-read.js"
 # R4: gh writes, non-allowlisted subcommands, --web, and gh api with a write/payload/override.
 # R5: --hostname before AND after the subcommand, and host-qualified -R (codex C2) -- a read
 # must never send the gh token to a host the user did not choose.
-ra_rows R4 <<'TABLE'
+bg_batched_stdin ra_rows R4 <<'TABLE'
 pr-create        ~ gh pr create                          ~ passThrough|BG-NO-HIT
 issue-close      ~ gh issue close 1                      ~ passThrough|BG-NO-HIT
 pr-merge         ~ gh pr merge 1                         ~ passThrough|BG-NO-HIT
@@ -158,8 +158,15 @@ api-get-F        ~ gh api -X GET x -F a=b                ~ passThrough|BG-NO-HIT
 api-get-field    ~ gh api -X GET x --field a=b           ~ passThrough|BG-NO-HIT
 api-get-rawfield ~ gh api -X GET x --raw-field a=b       ~ passThrough|BG-NO-HIT
 api-get-input    ~ gh api -X GET x --input f             ~ passThrough|BG-NO-HIT
+api-f-attach     ~ gh api x -fa=b                        ~ passThrough|BG-NO-HIT
+api-F-attach     ~ gh api x -Fa=b                        ~ passThrough|BG-NO-HIT
+api-field-eq     ~ gh api x --field=a=b                  ~ passThrough|BG-NO-HIT
+api-rawfield-eq  ~ gh api x --raw-field=a=b              ~ passThrough|BG-NO-HIT
+api-input-eq     ~ gh api x --input=f                    ~ passThrough|BG-NO-HIT
+api-H-attach-ov  ~ gh api '-HX-HTTP-Method-Override: DELETE' x ~ passThrough|BG-NO-HIT
+api-header-eq-ov ~ gh api '--header=X-HTTP-Method-Override: DELETE' x ~ passThrough|BG-NO-HIT
 TABLE
-ra_rows R5 <<'TABLE'
+bg_batched_stdin ra_rows R5 <<'TABLE'
 host-pre-api     ~ gh --hostname h api x                 ~ passThrough|BG-NO-HIT
 host-eq-pre-api  ~ gh --hostname=h api x                 ~ passThrough|BG-NO-HIT
 host-mid-api     ~ gh api --hostname h x                 ~ passThrough|BG-NO-HIT
@@ -177,7 +184,7 @@ case_begin "readonly-generic-negative" "hooks/lib/readonly-syntax-adapters.js"
 # R6: N3 near-misses -- find actions that write or exec, per-command deny flags (prefix and
 # short-cluster forms), commands with no class, path/.exe/wrapper-spelled cmd0, and reads of
 # credential or dotenv files that the credential guards own.
-ra_rows R6 <<'TABLE'
+bg_batched_stdin ra_rows R6 <<'TABLE'
 find-delete      ~ find . -delete                        ~ passThrough|BG-NO-HIT
 find-exec-plus   ~ find . -exec rm {} +                  ~ passThrough|BG-NO-HIT
 find-fprint0     ~ find . -fprint0 out                   ~ passThrough|BG-NO-HIT
@@ -207,7 +214,7 @@ case_begin "readonly-structural" "hooks/bash-guard/judge.js"
 # R7: structure outranks class. deny forms stay deny (deny > allow); a newline or CR turns one
 # visible command into two, so it skips the WHOLE allow path -- self-script included (the SELF_*
 # newline hole this issue closes); forms settings.json denies must never become allow.
-ra_rows R7 <<'TABLE'
+bg_batched_stdin ra_rows R7 <<'TABLE'
 env-prefix       ~ A=1 ls                                ~ deny|BG-ENV-PREFIX
 env-ext-diff     ~ GIT_EXTERNAL_DIFF=x git diff          ~ deny|BG-ENV-PREFIX
 pipe             ~ ls | head                             ~ deny|BG-PIPE
@@ -238,7 +245,7 @@ bg_write_state "$BG_SID_RO_GATE" "pending"
 ROWS=$((ROWS + 1))
 assert_eq "R8/vacuity: the fixture session has the early write gate active" \
     "true	workflow_init	-" "$(probe gate '' "$BG_SID_RO_GATE")"
-ra_rows R8 "$BG_SID_RO_GATE" <<'TABLE'
+bg_batched_stdin ra_rows R8 "$BG_SID_RO_GATE" <<'TABLE'
 git-status       ~ git status                            ~ allow|BG-ALLOW-READONLY-GIT
 ls               ~ ls -la                                ~ allow|BG-ALLOW-READONLY-GENERIC
 gh-pr-view       ~ gh pr view 1                          ~ allow|BG-ALLOW-READONLY-GH
@@ -250,5 +257,5 @@ newline          ~ git status\nls                        ~ passThrough|BG-INTERL
 TABLE
 case_end
 
-# Row count (dispatcher ROWS_EXPECTED): R1 26+1, R1b 19+32, R2 19, R3 18, R4 23, R5 10,
-# R6 18+1, R7 11+2, R8 1+8 = 189.
+# Row count (dispatcher ROWS_EXPECTED): R1 26+1, R1b 19+32, R2 19, R3 18, R4 30, R5 10,
+# R6 18+1, R7 11+2, R8 1+8 = 196.

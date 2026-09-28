@@ -97,12 +97,27 @@ check_shape() {
 # expectation from keys.js would make the test agree with any edit, including a wrong one.
 EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_SIGNALS "
 
+# One node: the C1 keys probe plus every state fixture (C2, C2u, C3c; one file per
+# session id, so none can see another). Prints "KEYS=<list>" for C1.
+UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
+FIX_OUT="$(UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
+  const fs = require("fs"), path = require("path"), wf = process.env.CLAUDE_WORKFLOW_DIR;
+  let keys;
+  try { keys = (require(process.env.KEYS_MOD).FACTS_V1_KEYS || []).join(" ") + " "; }
+  catch (e) { keys = "MODULE_LOAD_FAILED"; }
+  const cx = (signals) => ({ level: "high",
+    levels: { detail: "high", write_tests: "high", write_code: "low" },
+    signals, recorded_at: "2026-09-04T00:00:00.000Z" });
+  const put = (sid, body) => { try { fs.writeFileSync(path.join(wf, sid + ".json"), JSON.stringify(body)); }
+    catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
+  put("c2", { steps: {}, complexity_evaluation: cx(["S1-multi-file", "S2-architecture"]) });
+  put(process.env.UUID_SID_LIT, { steps: {}, complexity_evaluation: cx(["S1-multi-file"]) });
+  put("c3nocx", { steps: {} });
+  process.stdout.write("KEYS=" + keys + "\n");' || echo "")"
+KEYS_JS="$(printf '%s\n' "$FIX_OUT" | sed -n 's/^KEYS=//p')"
+[ -n "$KEYS_JS" ] || KEYS_JS="MODULE_LOAD_FAILED"
+
 echo "=== C1: keys.js is the implementation-side witness of the same list ==="
-KEYS_JS="$(run_with_timeout node -e '
-  try {
-    const m = require(process.env.KEYS_MOD);
-    process.stdout.write((m.FACTS_V1_KEYS || []).join(" ") + " ");
-  } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
 check "C1a: FACTS_V1_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
 check "C1b: the list is exactly eight keys" 8 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
 
@@ -110,18 +125,7 @@ echo ""
 echo "=== C2: a typical session -- full key set, in order, FACTS_VERSION first ==="
 # Typical = a resolvable PLANS_DIR, a recorded complexity evaluation, both gates
 # answerable. This is the shape the reader will actually meet in write-tests.
-run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  const steps = {};
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "c2.json"), JSON.stringify({
-    steps,
-    complexity_evaluation: {
-      level: "high",
-      levels: { detail: "high", write_tests: "high", write_code: "low" },
-      signals: ["S1-multi-file", "S2-architecture"],
-      recorded_at: "2026-09-04T00:00:00.000Z",
-    },
-  }));'
+# (state fixture c2.json written by the batched fixture node above C1)
 run_facts "$CFG_FULL" --session c2
 check "C2a: exits 0" 0 "$RC"
 check "C2b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
@@ -144,18 +148,7 @@ echo "=== C2u: a UUID-shaped --session id (the real CLAUDE_SESSION_ID shape) is 
 # regression narrowing SESSION_ID_RE to reject hyphens would leave all of them green
 # while rejecting 100% of real sessions -- CLAUDE_SESSION_ID is always a UUID. This is
 # the accept-side counterpart of security.sh S1's reject table (CPR-ORTH).
-UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
-UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.UUID_SID_LIT + ".json"), JSON.stringify({
-    steps: {},
-    complexity_evaluation: {
-      level: "high",
-      levels: { detail: "high", write_tests: "high", write_code: "low" },
-      signals: ["S1-multi-file"],
-      recorded_at: "2026-09-04T00:00:00.000Z",
-    },
-  }));'
+# (UUID_SID and its state fixture are set up by the batched fixture node above C1)
 run_facts "$CFG_FULL" --session "$UUID_SID"
 check "C2u-a: a UUID session id exits 0 (SESSION_ID_RE accepts hyphens)" 0 "$RC"
 check "C2u-b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
@@ -173,10 +166,6 @@ run_facts "$CFG_BARE" --session c3noenv
 check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
 check "C3b2: no .env -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
-run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "c3nocx.json"),
-    JSON.stringify({ steps: {} }));'
 run_facts "$CFG_FULL" --session c3nocx
 check "C3c: state file without a complexity record -- exits 0" 0 "$RC"
 check "C3c2: no complexity record -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"

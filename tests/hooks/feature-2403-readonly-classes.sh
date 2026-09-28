@@ -205,7 +205,7 @@ row("invariant: no positive is a git write", "", W ? POS.filter((a) => W.isGitWr
 case_end
 
 case_begin "gh-read" "hooks/lib/bash-write-patterns/gh-read.js"
-ro_section GH 83 '
+ro_section GH 90 '
 const R = load("hooks/lib/bash-write-patterns/gh-read.js"), RP = "gh-read.js";
 const P = load("hooks/lib/bash-write-patterns/patterns.js");
 const POS = [
@@ -241,6 +241,10 @@ const NEG = [
   ["api", "-X", "GET", "x", "-f", "a=b"], ["api", "-X", "GET", "x", "-F", "a=b"],
   ["api", "-X", "GET", "x", "--field", "a=b"], ["api", "-X", "GET", "x", "--raw-field", "a=b"],
   ["api", "-X", "GET", "x", "--input", "f"],
+  // Attached and = spellings of payload / override flags are the same write (C1).
+  ["api", "x", "-fa=b"], ["api", "x", "-Fa=b"], ["api", "x", "--field=a=b"], ["api", "x", "--raw-field=a=b"],
+  ["api", "x", "--input=f"], ["api", "-HX-HTTP-Method-Override: DELETE", "x"],
+  ["api", "--header=X-HTTP-Method-Override: DELETE", "x"],
   ["api", "--cache", "1h", "repos/o/r"],
   ["api", "https://attacker.invalid/path"],
   ["pr", "view", "https://attacker.invalid/o/r/pull/1"],
@@ -279,7 +283,7 @@ row("G9 isGhApiWriteArgv verdicts unchanged", "true,false", C ? [C.isGhApiWriteA
 case_end
 
 case_begin "readonly-class-segment" "hooks/bash-guard/readonly-class.js"
-ro_section CLASS 99 "$RO_REAL$RO_PURE"'
+ro_section CLASS 105 "$RO_REAL$RO_PURE"'
 const RC = load("hooks/bash-guard/readonly-class.js"), RCP = "readonly-class.js";
 const AL = load("hooks/bash-guard/allow.js");
 const { parse } = require(A + "/hooks/lib/command-ir");
@@ -298,11 +302,17 @@ for (const [c, want] of [
   ["cat config/.env", "null"], ["grep x config/.env.production", "null"],
   ["cat $HOME/.ssh/id_rsa", "null"], ["tail sub/dir/.env.local", "null"],
   // Git revision-qualified and pathspec-magic operands must not bypass sensitive-path check (C6/C8).
-  ["git show HEAD:.env", "null"], ["git show :(top).env", "null"], ["git grep secret :(top).env", "null"],
+  // Magic pathspec is quoted (\x27 = single quote): unquoted parens split the command into 3 segments.
+  ["git show HEAD:.env", "null"], ["git show \x27:(top).env\x27", "null"], ["git grep secret \x27:(top).env\x27", "null"],
   // TEXT_FLAGS bypass: -m consumes .env as flag value in checkBashCommand; direct-token check must catch it.
   ["git log -p -m .env", "null"],
   // Attached short option bypass: -f.env / -f/path — attached value must also be screened (C27).
   ["grep -f.env secret haystack", "null"], ["grep -f/home/user/.ssh/id_rsa pattern f", "null"],
+  // Absolute home paths name the same credentials as ~/ and $HOME, so they must be screened alike.
+  ["cat /home/user/.ssh/id_rsa", "null"], ["head C:/Users/u/.ssh/id_rsa", "null"],
+  ["tail /Users/u/.aws/credentials", "null"], ["grep key /root/.ssh/id_ed25519", "null"],
+  // Over-block control: a non-credential absolute path stays read-only.
+  ["cat /home/user/notes.txt", GEN],
   // file -m reads a magic-file path (C18); that path must be screened like any other operand.
   ["file -m .env f", "null"],
   // file -S/-z enables external decompressor execution (C20); -p writes atime metadata (C21).

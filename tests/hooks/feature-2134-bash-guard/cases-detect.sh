@@ -44,7 +44,7 @@ TABLE
 # `2>&1` / `2>&-` allow coverage: a genuine write target must still deny after fd-dup
 # forms started being excluded, or that exclusion over-broadened silently.
 
-d1_forbidden_literals
+bg_batched d1_forbidden_literals
 
 # D2: the deny verdict carries a machine-readable BG- code and the literal id, so the
 # denial can be attributed without re-parsing the human sentence.

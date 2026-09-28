@@ -30,7 +30,7 @@ run-commands    ~ runCommands
 TABLE
 }
 
-t1_out_of_scope_tools
+bg_batched t1_out_of_scope_tools
 
 # T2: the same payload on tool_name=Bash IS denied -- otherwise T1 would pass because the
 # guard denies nothing at all.

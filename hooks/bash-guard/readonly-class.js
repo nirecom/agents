@@ -33,33 +33,41 @@ function isPlainName(seg) {
   return Boolean(effective) && effective.cmd0 === cmd0;
 }
 
+// credential-check only knows the ~/, $HOME and /root roots, so an absolute home path of
+// another user/OS (/home/u, /Users/u, C:\Users\u, /c/Users/u, /mnt/c/Users/u) is rewritten to ~/.
+const ABS_HOME_RE = /^(?:[A-Za-z]:[\\/]Users[\\/]|\/mnt\/[A-Za-z]\/Users\/|\/[A-Za-z]\/Users\/|\/Users\/|\/home\/)[^\\/]+[\\/](.*)$/i;
+
+function homeNormalizedPath(p) {
+  const m = ABS_HOME_RE.exec(p);
+  return m ? "~/" + m[1].replace(/\\/g, "/") : null;
+}
+
 function touchesSensitivePath(seg, argv) {
   const texts = [[seg.cmd0, ...argv].join(" ")];
   if (typeof seg.rawText === "string" && seg.rawText !== "") texts.push(seg.rawText);
-  // Also check each token directly and path portions of revision/pathspec operands.
   // Wrap with a dummy cmd0 so the checkers see each as a path argument, not a command name.
-  // The direct per-token check bypasses TEXT_FLAGS consumption in checkBashCommand
-  // (e.g., `git log -m .env` would silently consume `.env` as the -m value without it).
-  for (const tok of argv) {
-    texts.push("x " + tok);
-    // Attached short option value: -f.env or -f/path — extract the suffix as a potential path.
-    // The regex matches -X<any> (at least 3 chars), capturing everything after the flag letter.
-    if (/^-[A-Za-z]./.test(tok)) {
-      const val = tok.slice(2);
-      if (val) texts.push("x " + val);
+  const addPath = (v) => {
+    if (!v) return;
+    texts.push("x " + v);
+    const home = homeNormalizedPath(v);
+    if (home) texts.push("x " + home);
+  };
+  try {
+    // Also check each token directly and path portions of revision/pathspec operands.
+    // The direct per-token check bypasses TEXT_FLAGS consumption in checkBashCommand
+    // (e.g., `git log -m .env` would silently consume `.env` as the -m value without it).
+    for (const tok of argv) {
+      addPath(tok);
+      // Attached short option value: -f.env or -f/path — extract the suffix as a potential path.
+      if (/^-[A-Za-z]./.test(tok)) addPath(tok.slice(2));
+      // Extended pathspec magic :(magic)path — extract the path portion after ")".
+      if (tok.startsWith(":(") && tok.includes(")")) addPath(tok.slice(tok.indexOf(")") + 1));
+      // Plain colon-separated rev:path forms (e.g., HEAD:.env, :0:.env).
+      const c = tok.lastIndexOf(":");
+      if (c >= 0) addPath(tok.slice(c + 1));
     }
-    // Extended pathspec magic :(magic)path — extract the path portion after ")".
-    if (tok.startsWith(":(") && tok.includes(")")) {
-      const end = tok.indexOf(")");
-      const mp = tok.slice(end + 1);
-      if (mp) texts.push("x " + mp);
-    }
-    // Plain colon-separated rev:path forms (e.g., HEAD:.env, :0:.env).
-    const c = tok.lastIndexOf(":");
-    if (c >= 0) {
-      const p = tok.slice(c + 1);
-      if (p) texts.push("x " + p);
-    }
+  } catch (_e) {
+    return true;
   }
   return texts.some((t) => commandTouchesCredentials(t) || touchesDotenv(t));
 }

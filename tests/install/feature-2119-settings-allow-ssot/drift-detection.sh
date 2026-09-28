@@ -17,9 +17,8 @@ T30_SESSION=""
 # Since #2264 the expected set is base + extension ONLY: the SSOT lists feed bash-guard at
 # runtime and no longer reach settings.json, so a broken list is not a drift input at all and
 # the generatorUnavailable key the old generator needed is gone with it.
-t30_root() { # <name> -> fixture root with a hooks/lib of its own
-    local d
-    d="$(mk_fixture "t30-$1")"
+t30_build() { # <fixture> -- the healthy root every slot starts from (see tpl_fixture)
+    local d="$1"
     mkdir -p "$d/hooks/lib"
     cp "$AGENTS_DIR/$DRIFT_MODULE_REL" "$d/hooks/lib/" 2>/dev/null || true
     mk_tool "$d" bin/fx-tool env-bash
@@ -29,7 +28,10 @@ t30_root() { # <name> -> fixture root with a hooks/lib of its own
     printf '%s\n' 'Bash(ext-hand-written *)' > "$d/ext.txt"
     write_ext "$d" "$d/ext.txt"
     run_assemble "$d"
-    printf '%s\n' "$d"
+}
+
+t30_root() { # <name> -> private copy of the healthy root, with a hooks/lib of its own
+    tpl_fixture "t30-$1" t30 t30_build
 }
 
 # The deployed file is edited directly, the way a stale machine or a curious user leaves it.
@@ -60,32 +62,35 @@ t30_detect() { # <root> -> JSON on one line
     ' -- "$(node_path "$1/hooks/lib/settings-drift.js")" "$(node_path "$1/home")" 2>&1
 }
 
-t30_ask() { # <json> <mode> [needle] -> token
-    printf '%s' "$1" | run_with_timeout 10 node -e '
-      let d = "";
-      process.stdin.on("data", (c) => (d += c));
-      process.stdin.on("end", () => {
-        const mode = process.argv[1], needle = process.argv[2];
-        let o;
-        try { o = JSON.parse(d); } catch (e) { console.log("NOT-JSON:" + d.slice(0, 140)); return; }
-        if (o.THREW !== undefined) { console.log("THREW:" + o.THREW); return; }
-        if (mode === "drifted") { console.log(String(o.drifted)); return; }
-        if (mode === "gen-key") {
-          // The key itself must be gone, not merely empty: a reader that still branches on it
-          // keeps a dead generator path alive in session-start.js.
-          console.log("generatorUnavailable" in o ? "PRESENT:" + JSON.stringify(o.generatorUnavailable) : "absent");
-          return;
-        }
-        if (mode === "source-unreadable") { console.log(o.sourceUnreadable === true ? "yes" : "no"); return; }
-        if (mode === "missing-allow") {
-          const a = ((o.missingPermissions || {}).allow) || [];
-          console.log(a.indexOf(needle) !== -1 ? "listed" : "NOT-LISTED:" + a.length);
-          return;
-        }
-        console.log("UNKNOWN-MODE");
-      });
-    ' -- "$2" "${3:-}" 2>&1
-}
+# BATCHED: the request file (last argv) holds json\0mode\0needle\0 triples; one node answers
+# each triple independently (its own JSON.parse) with one NUL-terminated token, in order.
+T30_ASK_JS='
+  const fs = require("fs");
+  const parts = fs.readFileSync(process.argv[process.argv.length - 1], "utf8").split("\0");
+  parts.pop();
+  const ask = (d, mode, needle) => {
+    let o;
+    try { o = JSON.parse(d); } catch (e) { return "NOT-JSON:" + d.slice(0, 140); }
+    if (o.THREW !== undefined) return "THREW:" + o.THREW;
+    if (mode === "drifted") return String(o.drifted);
+    // The key itself must be gone, not merely empty: a reader that still branches on it
+    // keeps a dead generator path alive in session-start.js.
+    if (mode === "gen-key") return "generatorUnavailable" in o ? "PRESENT:" + JSON.stringify(o.generatorUnavailable) : "absent";
+    if (mode === "source-unreadable") return o.sourceUnreadable === true ? "yes" : "no";
+    if (mode === "missing-allow") {
+      const a = ((o.missingPermissions || {}).allow) || [];
+      return a.indexOf(needle) !== -1 ? "listed" : "NOT-LISTED:" + a.length;
+    }
+    return "UNKNOWN-MODE";
+  };
+  const out = [];
+  for (let i = 0; i + 2 < parts.length; i += 3) {
+    let r;
+    try { r = ask(parts[i], parts[i + 1], parts[i + 2]); } catch (e) { r = "ERROR:ask-failed"; }
+    out.push(r + "\0");
+  }
+  process.stdout.write(out.join(""));
+'
 
 t30_setup() {
     local d
@@ -119,27 +124,52 @@ t30_setup() {
     T30_D="$(t30_detect "$d")"
 }
 
-t30_probe() { # <slot> <mode> [needle] -> token | sentinel
-    have_lib || { missing_lib; return; }
-    [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
+T30_NAMES=()
+T30_WANTS=()
+T30_GOT=()
+T30_REQ_IDX=()
+T30_REQ_FILE=""
+
+# Queues one row. A sentinel or an empty slot is settled here in bash; every other row becomes
+# one json/mode/needle triple in the request file, answered later by t30_run.
+t30_row() { # <name> <want> <slot> <mode> [needle]
     local v
-    case "$1" in
+    T30_NAMES+=("$1"); T30_WANTS+=("$2")
+    if ! have_lib; then T30_GOT+=("$(missing_lib)"); return; fi
+    if [[ ! -f "$ASSEMBLE" ]]; then T30_GOT+=("$(missing_assemble)"); return; fi
+    case "$3" in
         a) v="$T30_A" ;;
         b) v="$T30_B" ;;
         c) v="$T30_C" ;;
         d) v="$T30_D" ;;
         e) v="$T30_E" ;;
     esac
-    [ -n "$v" ] || { printf 'NO-RESULT'; return; }
-    t30_ask "$v" "$2" "${3:-}"
+    if [[ -z "$v" ]]; then T30_GOT+=("NO-RESULT"); return; fi
+    T30_GOT+=("")
+    T30_REQ_IDX+=("$((${#T30_GOT[@]} - 1))")
+    printf '%s\0%s\0%s\0' "$v" "$4" "${5:-}" >> "$T30_REQ_FILE"
+}
+
+t30_run() { # answers every queued triple in one node, then asserts every row in table order
+    local i k
+    if [[ "${#T30_REQ_IDX[@]}" -gt 0 ]]; then
+        nul_records "T30 drift ask" "${#T30_REQ_IDX[@]}" \
+            run_with_timeout 30 node -e "$T30_ASK_JS" "$(node_path "$T30_REQ_FILE")"
+        for k in "${!T30_REQ_IDX[@]}"; do T30_GOT[${T30_REQ_IDX[$k]}]="${NUL_RECS[$k]}"; done
+    fi
+    for i in "${!T30_NAMES[@]}"; do
+        ROWS=$((ROWS + 1))
+        assert_eq "${T30_NAMES[$i]}" "${T30_WANTS[$i]}" "${T30_GOT[$i]}"
+    done
 }
 
 t30_detect_table() {
     local id slot mode want label
+    T30_REQ_FILE="$TMPROOT/t30-ask-req.bin"
+    : > "$T30_REQ_FILE"
     while IFS='|' read -r id slot mode want label; do
         [ -n "$id" ] || continue
-        ROWS=$((ROWS + 1))
-        assert_eq "T30[$id]: $label" "$want" "$(t30_probe "$slot" "$mode")"
+        t30_row "T30[$id]: $label" "$want" "$slot" "$mode"
     done <<'T30_CASES'
 ext-missing-drifted|a|drifted|true|deleting the extension rule from the deployed file is drift -- the expected set is base + extension
 user-added-ok|b|drifted|false|a rule the user added to the deployed file is NOT drift: the check is one-directional containment, so a local addition is not reported as damage
@@ -151,17 +181,15 @@ healthy-no-key|a|gen-key|absent|CONTROL: the healthy fixture carries no such key
 fake-root-quiet|d|drifted|false|a tree with no install layer at all does not throw -- the session-start path must survive a repo the module was merely copied into
 fake-root-flag|d|source-unreadable|yes|and reports sourceUnreadable, the existing shape the fix-846 suite already pins
 T30_CASES
-    ROWS=$((ROWS + 1))
-    assert_eq "T30[ext-missing-named]: the deleted extension rule is named in missingPermissions.allow, so the warning can say which rule went" \
-        "listed" "$(t30_probe a missing-allow 'Bash(ext-hand-written *)')"
-    ROWS=$((ROWS + 1))
-    assert_eq "T30[broken-named]: and with the list unreadable the base finding is still named" \
-        "listed" "$(t30_probe c missing-allow 'Bash(base-hand-written *)')"
+    t30_row "T30[ext-missing-named]: the deleted extension rule is named in missingPermissions.allow, so the warning can say which rule went" \
+        "listed" a missing-allow 'Bash(ext-hand-written *)'
+    t30_row "T30[broken-named]: and with the list unreadable the base finding is still named" \
+        "listed" c missing-allow 'Bash(base-hand-written *)'
     # The other direction of the same pair: slot e must name NOTHING. A classifier that
     # reported the list failure as a missing permission would fail only this row.
-    ROWS=$((ROWS + 1))
-    assert_eq "T30[intact-broken-nothing-named]: with base and extension intact the broken list adds no entry to missingPermissions.allow" \
-        "NOT-LISTED:0" "$(t30_probe e missing-allow 'Bash(base-hand-written *)')"
+    t30_row "T30[intact-broken-nothing-named]: with base and extension intact the broken list adds no entry to missingPermissions.allow" \
+        "NOT-LISTED:0" e missing-allow 'Bash(base-hand-written *)'
+    t30_run
 }
 
 # The last row follows the whole path rather than the module: hooks/session-start.js is where

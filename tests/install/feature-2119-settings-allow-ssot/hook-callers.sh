@@ -32,7 +32,7 @@ t37_have() { # -> ok | sentinel-text
 # A real agents-shaped git repo carrying the REAL install layer, plus a private home that starts
 # EMPTY -- so "the deployed file appeared" and "it was never written" are distinguishable states
 # rather than two shades of the same digest.
-t37_sandbox() { # <dir>
+t37_seed() { # <dir>
     local d="$1"
     mkdir -p "$d/hooks" "$d/install/lib" "$d/bin" "$d/docs" "$d/home/.claude"
     git init -q "$d"
@@ -55,6 +55,12 @@ t37_sandbox() { # <dir>
     printf '%s\n' 'home/' > "$d/.gitignore"
     git -C "$d" add -A
     ENFORCE_WORKTREE=off git -C "$d" commit -q -m "seed"
+}
+
+# Every case starts from the same seeded repo, so it is seeded ONCE and each case works in its
+# own full copy (.git included; core.hooksPath is set in the template, never per copy).
+t37_sandbox() { # <dir>
+    tpl_copy "$1" t37-seed t37_seed
 }
 
 # One commit carrying the change the hook is supposed to react to. `settings` adds a marker

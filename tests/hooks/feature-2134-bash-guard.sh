@@ -105,7 +105,14 @@ WIN_PROBE="$(node_path "$PROBE_JS")"
 # The command text goes through a file so the shell cannot rewrite the literals under test.
 # PROBE_HOME swaps in another fixture home for a single call without leaking it to other rows.
 probe() {
-    local mode="$1" cmd="$2" sid="${3:-}" tool="${4:-}" spath="${5:-}"
+    local mode="$1" cmd="$2" sid="${3:-}" tool="${4:-}" spath="${5:-}" key
+    # One batch record = every input that can change the answer, the per-row env included.
+    local -a rec=("$mode" "$cmd" "$sid" "$tool" "$spath" "${PROBE_HOME:-$FIXTURE_HOME}"
+        "${BG_PROBE_TOOL_CWD_JSON-}" "${BG_PROBE_INPUT_CWD_JSON-}" "${BG_PROBE_CTX_CWD_JSON-}" "${BG_PROBE_AGENTS_ROOT-}")
+    if [[ "$BG_PREFETCH" == 1 ]]; then printf '%s\0' "${rec[@]}" >> "$BG_BATCH_IN"; return 0; fi
+    printf -v key '%s\x1f' "${rec[@]}"
+    if [[ -n "${BG_CACHE[$key]+x}" ]]; then printf '%s' "${BG_CACHE[$key]}"; return 0; fi
+    printf 'x' >> "$BG_SPAWN_LOG"
     printf '%s' "$cmd" > "$CMDFILE"
     HOME="${PROBE_HOME:-$FIXTURE_HOME}" USERPROFILE="${PROBE_HOME:-$FIXTURE_HOME}" \
         run_with_timeout 30 node "$WIN_PROBE" "$mode" "$(node_path "$CMDFILE")" "$sid" "$tool" "$spath" 2>/dev/null
@@ -141,14 +148,81 @@ mkcmd() {
     printf '%s' "${s//\\n/$'\n'}"
 }
 
+# BATCHED TABLES (speed only; every assertion still runs row by row). A cold node per row costs
+# ~1-2s, so `bg_batched <table-fn> [args]` runs the table twice: a silent RECORD pass in which
+# probe() only appends its inputs to a queue (counters and output discarded), one node that
+# answers the whole queue, then the real pass, whose probe() calls are served from BG_CACHE.
+# A row the record pass did not queue misses the cache and spawns as before, so a batch can
+# only ever change speed. Tables share one process, which is safe because allow-command-list's
+# and readonly-command-classes' root-keyed caches read fixtures written before the table, and
+# the session state is re-read per call; the cache is dropped after each table so a later
+# env-dependent probe (M6 SCRATCHPAD) never sees a stale answer.
+BG_PREFETCH=0
+declare -A BG_CACHE=()
+BG_BATCH_IN="$TMPROOT/batch-in.bin"
+BG_BATCH_OUT="$TMPROOT/batch-out.bin"
+BG_BATCH_STDIN="$TMPROOT/batch-stdin.txt"
+BG_SPAWN_LOG="$TMPROOT/spawns.log"
+: > "$BG_SPAWN_LOG"
+BG_BATCH_IN_W="$(node_path "$BG_BATCH_IN")"
+BG_BATCH_OUT_W="$(node_path "$BG_BATCH_OUT")"
+BG_BATCH_FIELDS=10
+
+# bg_batch_run <label>: answer the queued records in one node and fill BG_CACHE. A result count
+# short of the record count (or a missing END marker) FAILS loudly and leaves the cache empty.
+bg_batch_run() {
+    local label="$1" n i key
+    local -a recs res
+    BG_CACHE=()
+    [[ -s "$BG_BATCH_IN" ]] || return 0
+    mapfile -d '' -t recs < "$BG_BATCH_IN"
+    n=$(( ${#recs[@]} / BG_BATCH_FIELDS ))
+    : > "$BG_BATCH_OUT"
+    printf 'x' >> "$BG_SPAWN_LOG"
+    HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
+        run_with_timeout 300 node "$WIN_PROBE" batch "$BG_BATCH_IN_W" "$BG_BATCH_OUT_W" 2>/dev/null
+    : > "$BG_BATCH_IN"
+    mapfile -d '' -t res < "$BG_BATCH_OUT"
+    if (( ${#recs[@]} % BG_BATCH_FIELDS != 0 || ${#res[@]} != n + 1 )) || [[ "${res[n]:-}" != "<END:$n>" ]]; then
+        fail "BATCH/$label: the batch answered ${#res[@]} lines for $n rows (want $n + <END:$n>)" "${res[*]:0:3}"
+        return 1
+    fi
+    for (( i = 0; i < n; i++ )); do
+        printf -v key '%s\x1f' "${recs[@]:i*BG_BATCH_FIELDS:BG_BATCH_FIELDS}"
+        BG_CACHE[$key]="${res[i]}"
+    done
+}
+
+# bg_batched <table-fn> [args] -- see BATCHED TABLES. bg_batched_stdin also replays the
+# function's stdin (a heredoc table) into both passes.
+bg_batched() {
+    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
+    BG_PREFETCH=1; "$@" > /dev/null 2>&1; BG_PREFETCH=0
+    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    bg_batch_run "$1"
+    "$@"
+    BG_CACHE=()
+}
+bg_batched_stdin() {
+    local buf=""
+    IFS= read -r -d '' buf || true
+    printf '%s' "$buf" > "$BG_BATCH_STDIN"
+    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
+    BG_PREFETCH=1; "$@" < "$BG_BATCH_STDIN" > /dev/null 2>&1; BG_PREFETCH=0
+    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    bg_batch_run "$1"
+    "$@" < "$BG_BATCH_STDIN"
+    BG_CACHE=()
+}
+
 # EXECUTED-ROW BUDGET. Every table-driven loop increments ROWS and the final case asserts the
 # exact total. Without it a drifted heredoc delimiter or an early return in front of a loop
 # leaves a file that counts only its failures reporting green. Breakdown: detect 14 +
 # allow-direction 13 + hit-scope 5 + xargs-pipe 5 + negative 10 + not-forbidden 3 +
 # forbidden-literals-doc-sync 4 + tool-scope 2 + fail-open 3 + interlock 7 + notify-sentinel 19 +
-# notify-interpreter 15 + allow-self-script 42 + allow-readonly 189 + precedence 8 + message 27 +
+# notify-interpreter 15 + allow-self-script 42 + allow-readonly 196 + precedence 8 + message 27 +
 # runtime 20.
-ROWS_EXPECTED=386
+ROWS_EXPECTED=393
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code actually INVOKES hooks/bash-guard.js on a real Bash tool call. The
@@ -181,7 +255,10 @@ ROWS_EXPECTED=386
 assert_eq "BUDGET: every table-driven loop executed its full row count (a short count means an empty or unreachable table reported green)" \
     "$ROWS_EXPECTED" "$ROWS"
 
+BG_SPAWNS=""
+IFS= read -r -d '' BG_SPAWNS < "$BG_SPAWN_LOG" || true
 echo ""
+echo "INFO: judge-probe node processes spawned: ${#BG_SPAWNS}"
 echo "Total: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -gt 0 ] && exit 1
 exit 0

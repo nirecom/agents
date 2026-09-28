@@ -104,13 +104,10 @@ t41_case() { # <absent|is-dir> -> "rc/state/named/code" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target before after rcv state named code
-    dir="$(mk_fixture "t41-$1")"
-    mk_tool "$dir" "$T40_TOOL" env-bash
-    write_ssot "$dir" "$T40_TOOL"
-    write_settings "$dir" --
     # Deployed healthy FIRST: "left byte-identical" is only a claim when a previous deployment
     # exists to preserve, and without it a fail-closed row cannot be told from a no-op run.
-    run_assemble "$dir"
+    # tpl_build_plain's tool is bin/fx-tool, the same path as $T40_TOOL.
+    dir="$(tpl_fixture "t41-$1" plain tpl_build_plain)"
     case "$1" in
         absent) rm -f "$dir/settings.json" ;;
         is-dir) rm -f "$dir/settings.json"; mkdir -p "$dir/settings.json" ;;

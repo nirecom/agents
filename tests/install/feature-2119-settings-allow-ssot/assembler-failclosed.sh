@@ -21,13 +21,17 @@ t29_case() { # <case-id> -> "rc/state/reason" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target before after rcv state reason
-    dir="$(mk_fixture "t29-$1")"
-    mk_tool "$dir" bin/fx-tool env-bash
-    write_ssot "$dir" bin/fx-tool
-    write_settings "$dir" --
     # Every failure case is DEPLOYED HEALTHY FIRST: "left byte-identical" is only a claim when
-    # there is a previous deployed file to preserve.
-    [ "$1" = "healthy" ] || run_assemble "$dir"
+    # there is a previous deployed file to preserve. The healthy control is built from scratch
+    # with NO prior deploy, so its "written" verdict is about this run.
+    if [[ "$1" = "healthy" ]]; then
+        dir="$(mk_fixture "t29-$1")"
+        mk_tool "$dir" bin/fx-tool env-bash
+        write_ssot "$dir" bin/fx-tool
+        write_settings "$dir" --
+    else
+        dir="$(tpl_fixture "t29-$1" plain tpl_build_plain)"
+    fi
     case "$1" in
         no-base)       rm -f "$dir/settings.json" ;;
         allow-type)    printf '%s\n' '{ "permissions": { "allow": "Bash(not-an-array *)" } }' > "$dir/settings.json" ;;
@@ -148,11 +152,7 @@ t36_case() { # <asm|ok> -> "rc/state/artifacts" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target home before after names_before names_after rcv state arts
-    dir="$(mk_fixture "t36-$1")"
-    mk_tool "$dir" bin/fx-tool env-bash
-    write_ssot "$dir" bin/fx-tool
-    write_settings "$dir" --
-    run_assemble "$dir"
+    dir="$(tpl_fixture "t36-$1" plain tpl_build_plain)"
     target="$(deployed_file "$dir")"
     home="$dir/home/.claude"
     before="$(file_digest "$target")"

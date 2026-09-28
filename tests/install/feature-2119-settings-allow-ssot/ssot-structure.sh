@@ -193,35 +193,37 @@ t46_write() { # <case> <file>
 
 # The production contract restated here, the way resolve_shebang restates the interpreter rule:
 # importing allow-command-list.js's own reader could only prove it equals itself.
-t46_reference() { # <file> -> comma-joined entries
-    node -e '
-      const fs = require("fs");
-      let raw = "";
-      try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch (e) { raw = ""; }
-      console.log(raw.split("\n").map((l) => l.replace(/\s+$/, ""))
-        .filter((l) => l.length > 0 && !/^\s*#/.test(l)).join(","));
-    ' "$(node_path "$1")" 2>/dev/null || printf 'NODE-ERROR'
-}
+# BATCHED: one node reads every case file named on argv (each its own file, so no case sees
+# another's bytes) and emits one NUL-terminated comma-joined result per file, in argv order.
+T46_REFERENCE_JS='
+  const fs = require("fs");
+  const out = process.argv.slice(1).map((f) => {
+    let raw = "";
+    try { raw = fs.readFileSync(f, "utf8"); } catch (e) { raw = ""; }
+    return raw.split("\n").map((l) => l.replace(/\s+$/, ""))
+      .filter((l) => l.length > 0 && !/^\s*#/.test(l)).join(",");
+  });
+  process.stdout.write(out.map((s) => s + "\0").join(""));
+'
 
 # Bracketed so a leading space inside an entry, and an empty result, are both visible in the
 # table's want column instead of being eaten by it.
-t46_probe() { # <case> -> [entries] | DISAGREE...
-    local f h r
-    mkdir -p "$T46_DIR"
-    f="$T46_DIR/$1.txt"
-    if [ "$1" = "absent-file" ]; then rm -f "$f"; else t46_write "$1" "$f"; fi
-    h="$(ssot_entries "$f" | tr '\n' ',' | sed -e 's/,$//')"
-    r="$(t46_reference "$f")"
+t46_probe() { # <case-file> <reference-result> -> [entries] | DISAGREE...
+    local h r="$2"
+    h="$(ssot_entries "$1" | tr '\n' ',' | sed -e 's/,$//')"
     [ "$h" = "$r" ] || { printf 'DISAGREE harness[%s] reader[%s]' "$h" "$r"; return; }
     printf '[%s]' "$h"
 }
 
 t46_reader_table() {
-    local id want label
+    local id want label f i dir_np ids=() wants=() labels=() files=()
+    mkdir -p "$T46_DIR"
+    dir_np="$(node_path "$T46_DIR")"
     while IFS='|' read -r id want label; do
         [ -n "$id" ] || continue
-        ROWS=$((ROWS + 1))
-        assert_eq "T46[$id]: $label" "$want" "$(t46_probe "$id")"
+        f="$T46_DIR/$id.txt"
+        if [ "$id" = "absent-file" ]; then rm -f "$f"; else t46_write "$id" "$f"; fi
+        ids+=("$id"); wants+=("$want"); labels+=("$label"); files+=("$dir_np/$id.txt")
     done <<'T46_CASES'
 crlf|[bin/a,bin/b]|a CRLF file parses to the same entries as an LF one -- a surviving \r would become part of the entry and match nothing
 crlf-no-final|[bin/a,bin/b]|CRLF plus a comment, a blank line and no final newline at once: the last entry is still read
@@ -234,6 +236,12 @@ blank-only|[]|a file of nothing but blank and whitespace-only lines reads as zer
 empty-file|[]|a zero-byte file reads as zero entries
 absent-file|[]|a file that does not exist reads as zero entries rather than erroring out of the sourcing part file
 T46_CASES
+    nul_records "T46 reference reader" "${#ids[@]}" node -e "$T46_REFERENCE_JS" "${files[@]}"
+    for i in "${!ids[@]}"; do
+        ROWS=$((ROWS + 1))
+        assert_eq "T46[${ids[$i]}]: ${labels[$i]}" "${wants[$i]}" \
+            "$(t46_probe "$T46_DIR/${ids[$i]}.txt" "${NUL_RECS[$i]}")"
+    done
 }
 
 t0_ssot_exists

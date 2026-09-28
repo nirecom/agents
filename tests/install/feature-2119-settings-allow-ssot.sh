@@ -118,6 +118,25 @@ run_with_timeout() {
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
+# BATCH EVALUATION. One process answers a whole table as NUL-terminated records. Run in the
+# CURRENT shell (never inside `$(...)`): a short record count means a row went unanswered, so
+# the suite stops loudly rather than letting a missing slot compare as an empty string.
+NUL_SEQ=0
+NUL_RECS=()
+nul_records() { # <label> <want-count> <cmd>... -> NUL_RECS
+    local label="$1" want="$2" out
+    shift 2
+    NUL_SEQ=$((NUL_SEQ + 1))
+    out="$TMPROOT/nul-$NUL_SEQ.bin"
+    NUL_RECS=()
+    "$@" > "$out" 2> "$out.err"
+    mapfile -d '' -t NUL_RECS < "$out"
+    if [[ "${#NUL_RECS[@]}" -ne "$want" ]]; then
+        echo "FAIL: harness -- $label returned ${#NUL_RECS[@]} records, want $want: $(head -c 400 "$out.err")"
+        exit 1
+    fi
+}
+
 # The SSOT reader, shared by every structural case: one entry per line, `#` comments and
 # blank lines dropped, trailing whitespace stripped -- the same shape the sibling
 # install/path-exposed-commands.txt consumer reads.

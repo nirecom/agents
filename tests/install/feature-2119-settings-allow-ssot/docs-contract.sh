@@ -14,17 +14,23 @@ SETTINGS_DOC="$AGENTS_DIR/$SETTINGS_DOC_REL"
 # Co-occurrence on ONE line, not anywhere in a long document: settings.md already talks about
 # `settings.json`, hooks and allow rules in unrelated sections, so a file-wide grep for each
 # token separately would pass on a document that never states the contract.
+# One `grep -Ein` per ere over the whole file (the same engine and flags as before), then the
+# line numbers are intersected: a line counts only when EVERY ere matched it.
 doc_line_matches() { # <file> <ere>... -> 0 when one line matches every ere
     local file="$1"; shift
-    local line ere ok
+    local ere h key n=0
+    local -A seen=()
     [ -f "$file" ] || return 1
-    while IFS= read -r line; do
-        ok=yes
-        for ere in "$@"; do
-            printf '%s\n' "$line" | grep -Eqi -- "$ere" || { ok=no; break; }
-        done
-        [ "$ok" = yes ] && return 0
-    done < "$file"
+    for ere in "$@"; do
+        n=$((n + 1))
+        while IFS= read -r h; do
+            key="${h%%:*}"
+            [[ "${seen[$key]:-0}" -eq $((n - 1)) ]] && seen[$key]=$n
+        done < <(grep -Ein -- "$ere" "$file")
+    done
+    for key in "${!seen[@]}"; do
+        [[ "${seen[$key]}" -eq "$n" ]] && return 0
+    done
     return 1
 }
 

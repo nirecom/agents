@@ -45,7 +45,7 @@ TABLE
 # notify (cases-notify-sentinel.sh). workflow-tool is a relative self-script with no cwd in
 # the payload, which bash-guard must not resolve against process.cwd() -- so no allow.
 
-a1_sanctioned_forms
+bg_batched a1_sanctioned_forms
 
 # A2: a passed-through command carries no literal id -- nothing was detected and then forgiven.
 # `make build` is neither a self-script nor a read-only class member (#2403), so it stays

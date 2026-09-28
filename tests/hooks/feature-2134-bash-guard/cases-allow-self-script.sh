@@ -107,7 +107,7 @@ TABLE
 }
 
 case_begin "self-script-fixture-root" "hooks/bash-guard/allow.js"
-w1_fixture_rows
+bg_batched w1_fixture_rows
 case_end
 
 # root-lookalike: the root must be stripped on a path BOUNDARY, or `<root>-evil/bin/x` would
@@ -151,5 +151,5 @@ TABLE
 # rel-tool-cwd-wins: tool_input.cwd is read first; a valid non-root value is not overridden.
 # Non-string, relative or absent cwd never resolves a relative form (no process.cwd() guess).
 case_begin "self-script-real-lists" "hooks/bash-guard/judge.js"
-w2_real_rows
+bg_batched w2_real_rows
 case_end

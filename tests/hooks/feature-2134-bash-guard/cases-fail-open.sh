@@ -28,7 +28,7 @@ unclosed-ansic  ~ echo $'oops && ls
 TABLE
 }
 
-o1_parse_failure
+bg_batched o1_parse_failure
 
 # O2: a null command reaches judge() without a deny. The Bash tool always supplies one, so
 # this is the shape a malformed or future payload takes.

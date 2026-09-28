@@ -91,11 +91,15 @@ file_digest() { # <file> -> bytes+checksum, or a marker when unreadable
 
 # A whole-tree manifest for any directory, so a fixture tree and a fixture home can both be
 # pinned by the same rows. home-canary.sh keeps its own copy keyed to the canary HOME.
+# One cksum over every readable file (not one per file); an unreadable file is still listed.
 tree_manifest() { # <dir>
     ( cd "$1" 2>/dev/null || { printf '<NO-DIR:%s>' "$1"; exit 0; }
-      find . -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r f; do
-          printf '%s %s\n' "$f" "$(cksum < "$f" 2>/dev/null || printf 'UNREADABLE')"
-      done )
+      files=(); readable=()
+      mapfile -d '' -t files < <(find . -type f -print0 2>/dev/null | LC_ALL=C sort -z)
+      for f in "${files[@]}"; do
+          if [[ -r "$f" ]]; then readable+=("$f"); else printf '%s UNREADABLE\n' "$f"; fi
+      done
+      [[ "${#readable[@]}" -eq 0 ]] || cksum -- "${readable[@]}" 2>/dev/null )
 }
 
 # The repository half of a fixture: everything a stray write could land in that is NOT the
@@ -118,6 +122,35 @@ run_assemble() { # <fixture> <arg>...
         HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
         CLAUDE_CONFIG_DIR="$fx/home/.claude" \
         run_with_timeout 60 node install/assemble-settings.js "$@") 2>&1 )" || ASM_RC=$?
+}
+
+# HEALTHY-FIXTURE TEMPLATES. Many cases start from the same deployed-healthy fixture before
+# breaking one thing. The deployed bytes do not depend on the fixture path, so the recipe runs
+# ONCE per key and each case gets its own private copy (never the template itself). The done
+# marker lives on disk, outside the template, so a build inside a `$(...)` case still counts.
+tpl_copy() { # <dest-dir> <key> <builder-fn> [fixture] -- `fixture` runs mk_fixture first
+    local tpl="$TMPROOT/tpl-$2"
+    if [[ ! -f "$tpl.done" ]]; then
+        rm -rf "$tpl"
+        if [[ "${4:-}" = "fixture" ]]; then mk_fixture "tpl-$2" > /dev/null; fi
+        "$3" "$tpl"
+        : > "$tpl.done"
+    fi
+    mkdir -p "$1"
+    cp -Rp "$tpl/." "$1/"
+}
+
+tpl_fixture() { # <name> <key> <builder-fn> -> fresh private copy of the built template
+    tpl_copy "$TMPROOT/$1" "$2" "$3" fixture
+    printf '%s\n' "$TMPROOT/$1"
+}
+
+# The recipe T29, T36 and T41 each used to repeat per case: one tool, empty base, deployed once.
+tpl_build_plain() { # <fixture>
+    mk_tool "$1" bin/fx-tool env-bash
+    write_ssot "$1" bin/fx-tool
+    write_settings "$1" --
+    run_assemble "$1"
 }
 
 # Presence rows, asserted ONCE here: "the CLI is missing" and "the modules it delegates to

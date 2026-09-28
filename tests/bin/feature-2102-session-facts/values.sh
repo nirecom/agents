@@ -90,6 +90,34 @@ write_env() {
   esac
 }
 
+# One node: the (c) complexity fixtures (cx1, cx2, cx4 -- one file per session id; cx3
+# deliberately has none) plus two pure probes, HOME_PD for (b) v and GDEF for (d).
+VFIX_OUT="$(run_with_timeout node -e '
+  const fs = require("fs"), path = require("path"), os = require("os");
+  const put = (sid, body) => { try { fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR,
+    sid + ".json"), JSON.stringify({ steps: {}, complexity_evaluation: body })); }
+    catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
+  const at = "2026-09-04T00:00:00.000Z";
+  put("cx1", { level: "high", levels: { detail: "high", write_tests: "high", write_code: "low" },
+    signals: ["S1-multi-file", "S5-breaking"], recorded_at: at });
+  put("cx2", { level: "low", levels: { detail: "low", write_tests: "low", write_code: "low" },
+    signals: [], recorded_at: at });
+  put("cx4", { level: "high", signals: ["S1-multi-file"], recorded_at: at });
+  let gdef = "MODULE_LOAD_FAILED";
+  try {
+    const m = require(process.env.KEYS_MOD);
+    gdef = "NO_GATE_DEFAULT_TABLE";
+    for (const v of Object.values(m)) {
+      if (v && typeof v === "object" && !Array.isArray(v) && typeof v.CONFIRM_TESTS === "string") {
+        gdef = v.CONFIRM_TESTS + " " + String(v.CONFIRM_CODE); break;
+      }
+    }
+  } catch (e) { gdef = "MODULE_LOAD_FAILED"; }
+  process.stdout.write("HOME_PD=" + path.join(os.homedir(), ".workflow-plans") + "\nGDEF=" + gdef + "\n");' || echo "")"
+HOME_PD="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^HOME_PD=//p')"
+GDEF="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^GDEF=//p')"
+[ -n "$GDEF" ] || GDEF="MODULE_LOAD_FAILED"
+
 echo "=== (a) gate mapping: .env value -> ON/OFF/ERROR, for both gates ==="
 # Columns: key|.env value|expected. `Off` proves case-insensitivity; `yes` and the empty
 # string prove the fail-safe direction is ON (never silently skip a confirmation).
@@ -172,9 +200,6 @@ check_contains "(b) iv: stderr names the absolute-path requirement" "absolute" "
 # Fixture note: this one cell deliberately runs with WORKFLOW_PLANS_DIR unset while
 # CLAUDE_WORKFLOW_DIR is pinned. read-session-facts only reads, so nothing can be
 # written into the developer's real plans dir.
-HOME_PD="$(run_with_timeout node -e '
-  const os = require("os"), path = require("path");
-  process.stdout.write(path.join(os.homedir(), ".workflow-plans"));')"
 run_facts_pd "$CFG" "pd5" "__UNSET__"
 check "(b) v: unset falls back to the home plans dir" "$(norm_path "$HOME_PD")" "$(norm_path "$(val_of PLANS_DIR)")"
 check "(b) v: exit 0" 0 "$RC"
@@ -205,21 +230,13 @@ esac
 
 echo ""
 echo "=== (c) persisted complexity, read per stage without cross-talk ==="
-mk_cx() {
-  SID="$1" BODY="$2" run_with_timeout node -e '
-    const fs = require("fs"), path = require("path");
-    const body = JSON.parse(process.env.BODY);
-    fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SID + ".json"),
-      JSON.stringify({ steps: {}, complexity_evaluation: body }));'
-}
-mk_cx cx1 '{"level":"high","levels":{"detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file","S5-breaking"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+# cx1/cx2/cx4 state fixtures are written by the batched fixture node above (a).
 run_facts "$CFG" cx1
 check "(c) i: write_tests level" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) i: write_code level is NOT the write_tests level" "low" "$(val_of COMPLEXITY_LEVEL_write_code)"
 check "(c) i: signals are the recorded csv" "S1-multi-file,S5-breaking" "$(val_of COMPLEXITY_SIGNALS)"
 DIRECT_WT="$(run_with_timeout node "$RCE" --session cx1 --stage write_tests 2>/dev/null | sed -n 's/^level=//p')"
 check "(c) i: agrees with read-complexity-evaluation --stage write_tests" "$DIRECT_WT" "$(val_of COMPLEXITY_LEVEL_write_tests)"
-mk_cx cx2 '{"level":"low","levels":{"detail":"low","write_tests":"low","write_code":"low"},"signals":[],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG" cx2
 check "(c) ii: empty signals read as the lowercase none of the existing reader" "none" "$(val_of COMPLEXITY_SIGNALS)"
 check "(c) ii: levels still resolve" "low" "$(val_of COMPLEXITY_LEVEL_write_tests)"
@@ -241,7 +258,6 @@ printf '%s\n' \
   '  }' \
   '  return m;' \
   '};' > "$STUB"
-mk_cx cx4 '{"level":"high","signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 RC=0
 AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout node --require "$STUB" "$RSF" \
   --session cx4 >"$OUTF" 2>"$ERRF" || RC=$?
@@ -261,18 +277,6 @@ check "(d) the bundled reader saw the pre-change value" "OFF" "$(val_of GATE_CON
 printf 'CONFIRM_TESTS=on\n' > "$CFG/.env"
 LATE="$(AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" CONFIRM_TESTS on 2>/dev/null || true)"
 check "(d) the later probe reports the NEW value" "ON" "$LATE"
-GDEF="$(run_with_timeout node -e '
-  (function () {
-    try {
-      const m = require(process.env.KEYS_MOD);
-      for (const v of Object.values(m)) {
-        if (v && typeof v === "object" && !Array.isArray(v) && typeof v.CONFIRM_TESTS === "string") {
-          process.stdout.write(v.CONFIRM_TESTS + " " + String(v.CONFIRM_CODE)); return;
-        }
-      }
-      process.stdout.write("NO_GATE_DEFAULT_TABLE");
-    } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }
-  })();' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
 check "(d) keys.js owns the gate defaults table" "on on" "$GDEF"
 DEF_T="${GDEF%% *}"
 check "(d) write-tests keeps exactly one WT-8 probe, at the keys.js default" 1 \

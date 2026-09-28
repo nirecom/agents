@@ -34,7 +34,7 @@ no-hits        ~ ls -la                ~ allow ~
 TABLE
 }
 
-h1_hit_scope
+bg_batched h1_hit_scope
 
 # H2: the xargs carve-out (now inside detect()) removes ONLY the pipe left of xargs, so the
 # redirect beside it must survive untouched.

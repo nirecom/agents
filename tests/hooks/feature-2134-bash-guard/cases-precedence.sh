@@ -40,7 +40,7 @@ TABLE
 }
 
 case_begin "verdict-precedence" "hooks/bash-guard/judge.js"
-q1_precedence_rows
+bg_batched q1_precedence_rows
 case_end
 
 # notify-over-allow is the only reachable notify/allow overlap: matchSelfScript needs cmd0 to be
