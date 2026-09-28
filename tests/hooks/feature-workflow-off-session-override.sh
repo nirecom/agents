@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-workflow-off-session-override.sh
 # Tests: hooks/lib/session-markers.js, hooks/workflow-mark.js
-# Tags: workflow, sentinel, hook, bin, tests
+# Tags: workflow, sentinel, hook, bin, tests, scope:issue-specific
 #
 # Integration tests for the session-scoped ENFORCE_WORKFLOW escape hatch.
 #

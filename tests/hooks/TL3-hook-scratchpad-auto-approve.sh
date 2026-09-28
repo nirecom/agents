@@ -29,7 +29,7 @@ if [ ! -f "$HOOK" ]; then
 fi
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-# Harness: provides pass/fail/skip/case_begin/case_end/run_with_timeout; overrides
+# Harness: provides pass/fail/skip/marker functions/run_with_timeout; overrides
 # run_with_timeout with the canonical bin/run-with-timeout.sh portable wrapper.
 . "$AGENTS_DIR/tests/lib/harness.sh"
 
@@ -268,12 +268,12 @@ case_end
 T3="cccccccc-0000-4000-8000-00000000000c"
 echo ""
 echo "=== C (#2402 N1): a /c/... drive-letter scratchpad path is auto-approved ==="
+case_begin "T3-posix-path-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
 if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q '^/c/'; then
     # Drive-letter form built by hand: `cygpath -u` yields the /tmp mount alias here.
     SP_DRIVE="${SP_M%%:*}"
     SP_POSIX="/${SP_DRIVE,,}${SP_M#?:}"
     printf 'mkdir -p "%s/posix-ran"\n' "$MARKS_M" > "$SP/posix.sh"
-    case_begin "T3-posix-path-auto-approved" "hooks/preuse-auto-approve/scratchpad-script.js"
     # Definition inside span: deleting this span leaves no orphaned run_turn_posix definition.
     # /c/... SCRATCHPAD. MSYS2_ENV_CONV_EXCL keeps Git Bash from rewriting it to C:/...
     # on the way into claude (MSYS_NO_PATHCONV suppresses all path conversion here).
@@ -322,10 +322,10 @@ if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q 
     else
         fail "posix-path-turn-is-not-a-permission-denial" "permission_denial=$got — hook did not auto-approve the POSIX-path command"
     fi
-    case_end
 else
     echo "SKIP T3 (POSIX path): MSYS-form cygpath not available"
 fi
+case_end
 
 echo ""
 echo ""

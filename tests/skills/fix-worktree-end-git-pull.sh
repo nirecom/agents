@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/skills/fix-worktree-end-git-pull.sh
 # Tests: skills/worktree-end/SKILL.md
-# Tags: worktree, end, cleanup, skill, bin
+# Tags: worktree, end, cleanup, skill, bin, scope:issue-specific
 #
 # Regression tests for the SKILL.md change that adds:
 #   `git -C <main> pull --ff-only`

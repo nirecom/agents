@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/orchestrate.sh
-# Tags: migration, repo, github, issues, bin
+# Tags: migration, repo, github, issues, bin, scope:issue-specific
 # Tests for feat/migrate-repo — orchestrate.sh --dry-run
 #
 # Dry-run must:

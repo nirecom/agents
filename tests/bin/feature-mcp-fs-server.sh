@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-mcp-fs-server.sh
 # Tests: bin/mcp-fs-server.js
-# Tags: mcp, filesystem, security, path-traversal
+# Tags: mcp, filesystem, security, path-traversal, scope:issue-specific
 #
 # Tests for bin/mcp-fs-server.js — Node.js MCP stdio server that lets the
 # codex reviewer request files from the current repo. Verifies:

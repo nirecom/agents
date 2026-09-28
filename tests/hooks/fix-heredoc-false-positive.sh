@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-heredoc-false-positive.sh
 # Tests: hooks/lib/bash-write-patterns.js
-# Tags: workflow, hook, bin, windows, tests
+# Tags: workflow, hook, bin, windows, tests, scope:issue-specific
 #
 # Regression tests for the here-doc regex false-positive bug.
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh, hooks/pre-commit
-# Tags: scan, filter, outbound, hook, git
+# Tags: scan, filter, outbound, hook, git, scope:issue-specific
 # Test suite for hooks/pre-commit warn-mode behavior.
 #
 # Tests target POST-implementation behavior:

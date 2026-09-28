@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/migrate-todo.sh, bin/github-issues/migration/orchestrate.sh
-# Tags: migration, todo, empty-section, dry-run, fix
+# Tags: migration, todo, empty-section, dry-run, fix, scope:issue-specific
 # Tests for fix #683 — empty-section guard in migrate-todo.sh flush() and
 # todo_entries_total() in orchestrate.sh.
 #

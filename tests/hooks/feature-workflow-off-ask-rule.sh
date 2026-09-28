@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-workflow-off-ask-rule.sh
 # Tests: hooks/lib/sentinel-patterns.js
-# Tags: workflow, gate, hook, sentinel, settings
+# Tags: workflow, gate, hook, sentinel, settings, scope:issue-specific
 #
 # Static + pattern tests for the ENFORCE_WORKFLOW sentinel ask/allow rules and
 # sentinel-patterns.js recognition.

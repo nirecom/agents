@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/workflow-init/SKILL.md
-# Tags: workflow-init, github, issues, session-dedup, static-grep
+# Tags: workflow-init, github, issues, session-dedup, static-grep, scope:issue-specific
 # Static grep tests — Step 3 initial CLOSED detection for related issues.
 #
 # F1: Step 3 initial check references ISSUES[@] loop (not just primary)

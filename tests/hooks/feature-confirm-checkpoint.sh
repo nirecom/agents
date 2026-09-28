@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js
-# Tags: confirm-checkpoint, hook, plan, sentinel, workflow
+# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific
 # Tests for hooks/confirm-checkpoint.js — PreToolUse hook detecting
 # WORKFLOW_CONFIRM_INTENT / OUTLINE / DETAIL / PR_CREATED sentinels in Bash commands.
 #

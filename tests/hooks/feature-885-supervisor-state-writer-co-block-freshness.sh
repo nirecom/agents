@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-supervisor-state-writer-co-block-freshness.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor-state-writer, co-blocked-by, freshness, axis-a, feature-885
+# Tags: supervisor-state-writer, co-blocked-by, freshness, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — back-annotation honors a freshness window:
 #   * within last 5 findings AND within 10 seconds: populate co_blocked_by
 #   * else: do not back-annotate

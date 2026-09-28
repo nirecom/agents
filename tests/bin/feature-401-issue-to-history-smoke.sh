@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-to-history.sh, bin/github-issues/lib/extract-field.sh
-# Tags: history, docs, github, issues, bin
+# Tags: history, docs, github, issues, bin, scope:issue-specific
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_DIR/tests/lib/harness.sh"
