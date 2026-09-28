@@ -244,13 +244,6 @@ probably older than this repo — **re-run the installer, then open a new sessio
 The drift warning that would have told you only fires at session start, so a session that is
 already open will not report it no matter how long you wait.
 
-**`pinned CodeGraph version mismatch: installed <x>, install/codegraph-constants.txt pins <y>`**
-The MCP server keeps working at any version — only the per-prompt context hook needs the pinned
-build. Run the `npm install -g --ignore-scripts @colbymchenry/codegraph@<y>` command the warning
-prints. The same line, with `could not read the installed CodeGraph version`, means the probe
-itself failed; treat it identically. The check runs during `register` only, so installing a
-different version by hand afterwards goes unnoticed until the next installer run.
-
 **Turning telemetry off permanently.**
 Two stages, and the order matters — this section is the source of truth for the procedure the
 installer's one-line notice abbreviates:
