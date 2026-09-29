@@ -4,7 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const { withStateLock } = require("./lock");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
-const { validateFinding, validate } = require("../supervisor-state-schema");
+const { validateFinding, validate, SEVERITY_RANK, AUDIT_SEVERITY_THRESHOLD } = require("../supervisor-state-schema");
+const { recordRiskSignal } = require("../handoff-risk-signal");
 const {
   SESSION_ID_RE,
   CO_BLOCK_RECENCY,
@@ -171,7 +172,19 @@ function appendFindingCore(sessionId, finding) {
 // collapse, class dedup, and normal append — stays inside one lock scope, so a
 // concurrent audit/alert writer cannot lose this finding.
 function appendFinding(sessionId, finding) {
-  return withStateLock(getStatePath(sessionId), () => appendFindingCore(sessionId, finding)) === true;
+  const ok = withStateLock(getStatePath(sessionId), () => appendFindingCore(sessionId, finding)) === true;
+  // #2430: an accepted finding at or above the audit threshold is a handoff
+  // risk. Stamped outside the lock; a lost stamp never changes the result.
+  if (ok) {
+    try {
+      const sev = finding && finding.severity;
+      if (Object.prototype.hasOwnProperty.call(SEVERITY_RANK, sev) &&
+SEVERITY_RANK[sev] >= SEVERITY_RANK[AUDIT_SEVERITY_THRESHOLD]) {
+        recordRiskSignal(sessionId, "supervisor-finding");
+      }
+    } catch (_e) { /* fail-open */ }
+  }
+  return ok;
 }
 
 function readState(sessionId) {

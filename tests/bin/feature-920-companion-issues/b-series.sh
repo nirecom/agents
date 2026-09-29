@@ -3,18 +3,10 @@
 # Tests: skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: companion-issues, workflow-init, clarify-intent, scope:issue-specific
 #
-# B-series: SKILL.md prose contracts — WI-5 deletion + CI-2b update (reason
-# field + own search). The workflow-init driver rewrite moved the aggregate
-# WIP check (B2) and the non-GitHub gate (B9) from SKILL.md step prose into
-# bin/workflow/workflow-init-driver + lib phases; those assertions target the
-# driver sources now.
-#
-# L3 gap (what these tests do NOT catch):
-# - Whether workflow-init or clarify-intent actually invoke the companion-search
-#   script at runtime inside a live Claude Code session.
-# - Whether AskUserQuestion renders the reason field correctly in the dialog UI.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# B-series: SKILL.md prose contracts — WI-5 deletion + CI-2b update (reason field + own search).
+# B2 (aggregate WIP check) and B9 (non-GitHub gate) target the workflow-init driver sources.
+# L3 gap: live companion-search invocation and AskUserQuestion reason rendering are not exercised;
+# mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh: skill-orchestration).
 
 set -u
 
@@ -60,7 +52,7 @@ fi
 
 # B3: WI-13 must NOT exist any more (max is WI-12 post-renumber).
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    if grep -qE "^### Step WI-13 " "$WORKFLOW_INIT_SKILL"; then
+    if grep -qE "^### WI-13 " "$WORKFLOW_INIT_SKILL"; then
         fail "B3: WI-13 still present (renumber not applied)"
     else
         pass "B3: WI-13 gone (max step is WI-12 after renumber)"
@@ -132,8 +124,8 @@ fi
 # B8: WI-12 present AND WI-13 absent (post-renumber bounds).
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
     a=0; b=0
-    grep -qE "^### Step WI-12 " "$WORKFLOW_INIT_SKILL" && a=1
-    grep -qE "^### Step WI-13 " "$WORKFLOW_INIT_SKILL" || b=1
+    grep -qE "^### WI-12 " "$WORKFLOW_INIT_SKILL" && a=1
+    grep -qE "^### WI-13 " "$WORKFLOW_INIT_SKILL" || b=1
     if [ "$a" -eq 1 ] && [ "$b" -eq 1 ]; then
         pass "B8: WI-12 present, WI-13 absent (post-renumber)"
     else

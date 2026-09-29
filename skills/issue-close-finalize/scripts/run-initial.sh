@@ -1,6 +1,6 @@
 #!/bin/bash
 # run-initial.sh — phase=initial orchestration for the issue-close-finalize worker
-# Steps 1-6 only; caller writes the JSON state file.
+# Phases 1-6 only; caller writes the JSON state file.
 # Usage: bash run-initial.sh <issue_number> <root_issue_number> [issue_repo]
 # Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR  MAIN_WORKTREE_PATH
 # Stdout (eval-able KEY=VALUE):
@@ -18,7 +18,7 @@ ISSUE_REPO="${3:-}"
 
 cd "$MAIN_WORKTREE_PATH"
 
-# Step 1: pre-flight — sets OWNER_REPO
+# Phase 1: pre-flight — sets OWNER_REPO
 rc=0
 eval "$(AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" bash "$FINALIZE_SCRIPTS_DIR/pre-flight.sh")" || rc=$?
 if [[ "$rc" -ne 0 ]]; then
@@ -26,7 +26,7 @@ if [[ "$rc" -ne 0 ]]; then
     exit 0
 fi
 
-# Step 2: ICF-A triage — sets STATE SENTINEL ACTION NEXT_STEPS
+# Phase 2: ICF-A triage — sets STATE SENTINEL ACTION NEXT_STEPS
 rc=0
 eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-finalize-triage.sh" "$ISSUE_NUMBER")" || rc=$?
 if [[ "$rc" -ne 0 ]]; then
@@ -39,7 +39,7 @@ MERGE_COMMIT=""
 PROPOSAL_STATUS="none"
 PROPOSAL_PARENT=""
 
-# Step 3: ICF-B PR/SHA resolution — when J in NEXT_STEPS AND ACTION != admin_close_path
+# Phase 3: ICF-B PR/SHA resolution — when J in NEXT_STEPS AND ACTION != admin_close_path
 if [[ ",${NEXT_STEPS}," == *",J,"* ]] && [[ "$ACTION" != "admin_close_path" ]]; then
     REPO_FLAG=""
     [[ -n "$ISSUE_REPO" ]] && REPO_FLAG="--repo $ISSUE_REPO"
@@ -52,7 +52,7 @@ if [[ ",${NEXT_STEPS}," == *",J,"* ]] && [[ "$ACTION" != "admin_close_path" ]]; 
     fi
 fi
 
-# Step 4: ICF-C sub-issue gate — when B in NEXT_STEPS
+# Phase 4: ICF-C sub-issue gate — when B in NEXT_STEPS
 if [[ ",${NEXT_STEPS}," == *",B,"* ]]; then
     rc=0
     bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" "$OWNER_REPO" "$ISSUE_NUMBER" || rc=$?
@@ -62,13 +62,13 @@ if [[ ",${NEXT_STEPS}," == *",B,"* ]]; then
     fi
 fi
 
-# Step 5: ICF-D parent body update — when G in NEXT_STEPS (non-fatal)
+# Phase 5: ICF-D parent body update — when G in NEXT_STEPS (non-fatal)
 if [[ ",${NEXT_STEPS}," == *",G,"* ]]; then
     bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-body-update.sh" \
         "$OWNER_REPO" "$ISSUE_NUMBER" || true
 fi
 
-# Step 6: ICF-E g5 prepare — when G in NEXT_STEPS
+# Phase 6: ICF-E g5 prepare — when G in NEXT_STEPS
 if [[ ",${NEXT_STEPS}," == *",G,"* ]]; then
     rc=0
     eval "$(OWNER_REPO="$OWNER_REPO" bash "$FINALIZE_SCRIPTS_DIR/step-g5-loop.sh" \

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Surface the delivery plan from outline.md for make-detail-plan Step 2.
+# Surface the delivery plan from outline.md for make-detail-plan MDP-2.
 set -euo pipefail
 cat <<'TEMPLATE'
 Read outline.md Delivery plan section (or "Delivery plan:" field in Adopted approach).

@@ -4,14 +4,9 @@
 # stdout: 7-column TSV per candidate:
 #   N\ttitle\treason\tstate\tpurity-flag\tdecomp-verdict\tcompanion-driven-signals
 # exit: 0 candidates exist, 1 no candidates
-#
-# Steps:
-#   1. companion-search.sh --seed <N> --exclude <csv> → candidate TSV (exit 1 = no candidates)
-#   2. ident-only candidates → purity-flag=low-purity (kept, annotated)
-#   3. baseline decomposition trial (seed-only, placeholder)
-#   4. full-set trial (seed + all candidates, placeholder)
-#   5. per-candidate trial (seed + {M}, placeholder)
-#   6. --output-file: JSON snapshot of baseline + per-candidate verdicts
+# Phases: 1 companion-search.sh → candidate TSV; 2 ident-only candidates → purity-flag=low-purity (kept);
+#   3-5 decomposition trials — baseline (seed only), full set, per candidate (placeholders);
+#   6 --output-file: JSON snapshot of baseline + per-candidate verdicts.
 set -uo pipefail
 
 SEED=""
@@ -43,28 +38,28 @@ if [[ ! -x "$COMPANION_SEARCH" ]]; then
     COMPANION_SEARCH="companion-search.sh"
 fi
 
-# Step 1: get candidates via companion-search.sh
+# Phase 1: get candidates via companion-search.sh
 SEARCH_ARGS=("--seed" "$SEED")
 [[ -n "$EXCLUDE_CSV" ]] && SEARCH_ARGS+=("--exclude" "$EXCLUDE_CSV")
 CAND_TSV=""
 CAND_TSV=$(bash "$COMPANION_SEARCH" "${SEARCH_ARGS[@]}" 2>/dev/null) || exit 1
 [[ -z "$CAND_TSV" ]] && exit 1
 
-# Steps 2-5: process each candidate
+# Phases 2-5: process each candidate
 declare -a OUTPUT_ROWS=()
 declare -a JSON_CANDS=()
 
 while IFS=$'\t' read -r N title reason state _rest; do
     [[ -z "$N" ]] && continue
 
-    # Step 2: purity flag — low-purity when ONLY ident: tags (no file:/xref/sibling-of:/kw:)
+    # Phase 2: purity flag — low-purity when ONLY ident: tags (no file:/xref/sibling-of:/kw:)
     purity_flag="ok"
     if [[ "$reason" =~ ident: ]] \
         && ! [[ "$reason" =~ (^|,)(xref|file:|sibling-of:|kw:) ]]; then
         purity_flag="low-purity"
     fi
 
-    # Steps 3-5: decomposition verdict (placeholder — real evaluation reads judge-decomposition.md)
+    # Phases 3-5: decomposition verdict (placeholder — real evaluation reads judge-decomposition.md)
     decomp_verdict="wf-code"
     companion_driven_signals=""
 
@@ -79,7 +74,7 @@ for row in "${OUTPUT_ROWS[@]}"; do
     printf '%s\n' "$row"
 done
 
-# Step 6: write JSON snapshot if --output-file specified
+# Phase 6: write JSON snapshot if --output-file specified
 if [[ -n "$OUTPUT_FILE" ]]; then
     CANDS_JSON=$(printf '%s,' "${JSON_CANDS[@]}")
     CANDS_JSON="[${CANDS_JSON%,}]"

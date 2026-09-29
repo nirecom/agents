@@ -17,11 +17,11 @@ Read `rules/ops.md` before any destructive or system-state-changing command (inc
 
 WCD-1. Read `rules/core-principles.md`, `rules/coding.md` (on-demand-only: not auto-injected, so this Read is the only way it arrives), and the target files identified from the plan.
 
-WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then branch on `GATE_CONFIRM_CODE` from step WCD-0:
-   - `OFF`: proceed to step WCD-3.
+WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then branch on `GATE_CONFIRM_CODE` from WCD-0:
+   - `OFF`: proceed to WCD-3.
    - `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-WCD-3. If `COMPLEXITY_LEVEL_write_code` from step WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
+WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open):
      - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list; rubric: `skills/_shared/judge-task-complexity.md`); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
      - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-code-signals.txt"`.
@@ -29,8 +29,8 @@ WCD-3. If `COMPLEXITY_LEVEL_write_code` from step WCD-0 is not `NONE`, use `COMP
    Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
-WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alias from step WCD-3>` — the model alias, never the level `high` / `low`) with a prompt containing:
-   - Target files and planned edit summary from step WCD-2.
+WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alias from WCD-3>` — the model alias, never the level `high` / `low`) with a prompt containing:
+   - Target files and planned edit summary from WCD-2.
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
    - Directive: "Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules."
@@ -49,7 +49,7 @@ WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` �
 
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
-   - stdout `OFF`: skip this step; proceed (no user wait).
+   - stdout `OFF`: skip WCD-6; proceed (no user wait).
    - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)

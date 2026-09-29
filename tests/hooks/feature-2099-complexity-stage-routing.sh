@@ -216,14 +216,14 @@ d2099_section_step() {
 }
 
 # `<start regex>|<regex that ENDS the section>` per step id, read off the real
-# structure of each SKILL.md: make-detail-plan uses `### Step MDP-n —` headings,
+# structure of each SKILL.md: make-detail-plan uses `### MDP-n —` headings,
 # write-tests/write-code bare `WT-n.` / `WCD-n.` labels at column 0 (their
 # sub-steps are indented, so they do not terminate the section), clarify-intent
 # `CI-Cn.` labels and workflow-init `- An.` bullets.
 d2099_step_anchors() {
     case "$1" in
-        MDP-3)  echo '^### Step MDP-3 |^### Step ' ;;
-        MDP-4)  echo '^### Step MDP-4 |^### Step ' ;;
+        MDP-3)  echo '^### MDP-3 |^### ' ;;
+        MDP-4)  echo '^### MDP-4 |^### ' ;;
         MOP-2)  echo '^MOP-2\.|^MOP-[0-9]' ;;
         WT-0)   echo '^WT-0\.|^WT-[0-9]' ;;
         WT-6)   echo '^WT-6\.|^WT-[0-9]' ;;

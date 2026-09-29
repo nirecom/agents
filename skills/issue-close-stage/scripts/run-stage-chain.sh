@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-stage-chain.sh — Phase 1 issue-close-stage chain (Steps A, B, D, F, G)
+# run-stage-chain.sh — Phase 1 issue-close-stage chain (in-skill steps A, B, D, F, G)
 # Usage: bash run-stage-chain.sh <issue_number> <owner_repo>
 # Env:   AGENTS_CONFIG_DIR (required), ISSUE_CLOSE_SKILL=1 (set by caller)
 # Stdout (eval-able KEY=VALUE): STATUS  SUMMARY  COMMENT_ID
@@ -12,7 +12,7 @@ OWNER_REPO="${2:?owner_repo required}"
 
 export ISSUE_CLOSE_SKILL=1
 
-# Step A: triage
+# A: triage
 eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-stage-triage.sh" "$ISSUE_NUMBER")"
 # Sets: STATE SENTINEL ACTION NEXT_STEPS
 
@@ -47,7 +47,7 @@ for STEP in "${STEPS[@]}"; do
                 --body "<!-- issue-close-sentinel: pending -->" 2>/dev/null | tail -n 1)
             COMMENT_ID=$(printf '%s' "$COMMENT_URL" | grep -oE '[0-9]+$' || true)
             if [[ -z "$COMMENT_ID" ]]; then
-                printf 'STATUS=error\nSUMMARY=Step D: failed to extract comment ID\n'
+                printf 'STATUS=error\nSUMMARY=D: failed to extract comment ID\n'
                 exit 0
             fi
             ;;
@@ -62,7 +62,7 @@ for STEP in "${STEPS[@]}"; do
                 "repos/$OWNER_REPO/issues/comments/$COMMENT_ID" \
                 -f body="<!-- issue-close-sentinel: appended -->" || rc=$?
             if [[ "$rc" -ne 0 ]]; then
-                printf 'STATUS=error\nSUMMARY=Step F: PATCH failed (comment %s)\n' "$COMMENT_ID"
+                printf 'STATUS=error\nSUMMARY=F: PATCH failed (comment %s)\n' "$COMMENT_ID"
                 exit 0
             fi
             ;;

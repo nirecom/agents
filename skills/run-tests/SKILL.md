@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: Runs the test suite through the test-runner worker and emits the run_tests workflow sentinel. Used by Workflow Step 6.
+description: Runs the test suite through the test-runner worker and emits the run_tests workflow sentinel. Used by the run_tests workflow step.
 tools: Bash, Write
 model: sonnet
 user-invocable: false
