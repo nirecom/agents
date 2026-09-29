@@ -595,3 +595,7 @@ Changes: Direct writes to the agents-repo memory directory are now always blocke
 ### FEATURE: PR #2463 (2026-09-30)
 Background: fix(#2447,#1680): rtk-rewrite native-isolation guard; enforce-worktree stale-cwd fix
 Changes: rtk-rewrite: git commands issued inside an EnterWorktree (native isolation) session are no longer refused by the rewrite hook (#2447);enforce-worktree: commands run after ExitWorktree (e.g. `git worktree remove`) are no longer blocked by a stale linked-worktree cwd (#1680)
+
+### FEATURE: PR #2462 (2026-09-30)
+Background: feat(#2327): scope review-tests re-review to changed tests and implementation, classify run-tests failures against merge-base
+Changes: review-tests re-reviews only the changed tests when no implementation file changed, and the second review now runs before run-tests instead of at commit (#2327, #2287, #1455).;run-tests re-runs failing tests at the merge-base and passes the step only when every failure already failed there (#2431).
