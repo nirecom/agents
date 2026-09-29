@@ -1,4 +1,4 @@
-> Shared rubric. Read explicitly by `clarify-intent` at step CI-3a (decomposition probe).
+> Shared rubric. Read explicitly by `clarify-intent` at CI-3a (decomposition probe).
 > Not invoked via the Skill tool — caller reads this rubric and emits the verdict in its own output.
 > Structure mirrors `judge-task-complexity.md` so both rubrics can share the same evaluation loop.
 

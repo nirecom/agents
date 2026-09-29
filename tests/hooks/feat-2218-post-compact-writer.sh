@@ -41,6 +41,20 @@ run_hook() {
             "$RWT" 60 node "$HOOK" 2>/dev/null
 }
 
+# #2430: the compaction entry is an auto-record gated by the workflow active
+# period, so a case that expects an entry seeds workflow_init complete first.
+seed_active() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+writeState('$sid', createInitialState('$sid', { cwd: '/compact/fixture', git_branch: 'feature/compact' }));
+markStep('$sid', 'workflow_init', 'complete');
+" >/dev/null 2>&1
+}
+
 # The entry's shape, read back through the module's own reader rather than by
 # grepping the file — the grammar is the writer's business, not this file's.
 inspect() {
@@ -58,6 +72,7 @@ if (all.length !== 1) problems.push('compaction-entries:' + all.length);
 else {
   const e = all[0];
   if (e.class !== 'B') problems.push('class:' + e.class);
+  if (e.origin !== 'auto-record') problems.push('origin:' + e.origin);
   const s = String(e.summary);
   if (s.indexOf('context compaction occurred at ') !== 0) problems.push('summary:' + s);
   if (!/\d{4}-\d{2}-\d{2}T/.test(s)) problems.push('summary-carries-no-timestamp:' + s);
@@ -73,13 +88,15 @@ count_entries() {
     printf '%s' "${n:-0}"
 }
 
-# P1 — the one-line addition. A compaction with no workflow state at all still
-# records: the artifact is what a stateless session has left to hand over.
+# P1 — the one-line addition. A compaction inside the workflow active period
+# records one auto-record entry (#2430: outside it, nothing is recorded — that
+# half is pinned in tests/hooks/feat-2430-handoff-auto-record.sh).
 run_P1() {
     require_module "$ARTIFACT" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "compact-sid-p1"
     out="$(run_hook "$tmp" "compact-sid-p1")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
     case "$out" in *'additionalContext'*) : ;; *) problems="$problems context-injection-lost:'${out:0:160}'" ;; esac
@@ -102,6 +119,7 @@ run_P2() {
     local tmp problems n out
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "twice-sid-p2"
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
@@ -140,6 +158,7 @@ run_P3() {
     local tmp out problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "dedup-sid-p3"
     run_hook "$tmp" "dedup-sid-p3" >/dev/null
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
@@ -174,6 +193,7 @@ run_P4() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf/unwritable-sid-p4-handoff.md"
+    seed_active "$tmp" "unwritable-sid-p4"
     out="$(run_hook "$tmp" "unwritable-sid-p4")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
     case "$out" in *'additionalContext'*) : ;; *) problems="$problems injection-lost-to-a-failed-artifact-write:'${out:0:160}'" ;; esac

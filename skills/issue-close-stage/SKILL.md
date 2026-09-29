@@ -4,7 +4,7 @@ description: Phase 1 of the 2-phase issue-close split. Runs INSIDE the linked wo
 user-invocable: false
 ---
 
-Triage routes to the correct subset of steps; each step is idempotent and resumable.
+Triage routes to the correct subset of in-skill steps; each is idempotent and resumable.
 
 Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines the per-session N relation.
 Read `rules/coding.md` before the first `gh issue comment` or body update — on-demand-only, never auto-injected; its Public GitHub Rules govern that outbound text.
@@ -33,7 +33,7 @@ Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_IS
 
 ## Delegation
 
-Dispatch Steps A, B, D, F, G to the `issue-close-stage` worker per `skills/_shared/worker-dispatch.md`.
+Dispatch in-skill steps A, B, D, F, G to the `issue-close-stage` worker per `skills/_shared/worker-dispatch.md`.
 
 Payload keys: `issue_number` (= N), `worktree_path` (= `git rev-parse --show-toplevel`), `owner_repo`, `agents_config_dir` (= `AGENTS_CONFIG_DIR`), `artifact_dir` (= `PLANS_DIR`), `issue_repo`.
 

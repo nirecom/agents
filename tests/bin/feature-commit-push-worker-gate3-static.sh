@@ -79,7 +79,7 @@ test_3_status_enum_values() {
     fi
 }
 
-# Test 4: worker contains the rules sentence about Step CP-2 skip
+# Test 4: worker contains the rules sentence about CP-2 skip
 test_4_rules_skip_sentence() {
     # Caller-side rule: the worker module carries no prose, so the skip
     # condition is pinned where the decision is actually made.
@@ -87,10 +87,10 @@ test_4_rules_skip_sentence() {
         fail "4: $CP_SKILL_MD missing"
         return
     fi
-    if grep -qF 'Staging verification (Step CP-2) is skipped only when' "$CP_SKILL_MD"; then
-        pass "4: SKILL.md contains 'Staging verification (Step CP-2) is skipped only when'"
+    if grep -qF 'Staging verification (CP-2) is skipped only when' "$CP_SKILL_MD"; then
+        pass "4: SKILL.md contains 'Staging verification (CP-2) is skipped only when'"
     else
-        fail "4: SKILL.md missing Step CP-2 skip sentence"
+        fail "4: SKILL.md missing CP-2 skip sentence"
     fi
 }
 

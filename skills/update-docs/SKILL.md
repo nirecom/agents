@@ -38,7 +38,7 @@ UD-4. **Propose updates**: For each file that needs updating, present:
 UD-5. **CONFIRM_DOCS gate** — check via Bash:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_DOCS on'`
    - stdout `ON` or `ERROR`: present the UD-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
-   - stdout `OFF`: apply the edits and continue to step UD-6 without waiting.
+   - stdout `OFF`: apply the edits and continue to UD-6 without waiting.
 UD-6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 UD-7. **Commit separately**: If docs are in a separate repo, commit each repo independently
@@ -61,10 +61,10 @@ After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`
 UD-8. Complete delivery (Path A — `ENFORCE_WORKTREE=on` mandatory).
 
 UD-8a. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Notes`. Replace `- (none)` on first append.
-   - **MANDATORY when `closes_issues` is non-empty**: write one bullet per closed issue (matching the `closes_issues` count). `/worktree-end` Step WE-21 is the canonical writer of `docs/history.md` (Approach C, #690) and consumes these bullets via `compose-doc-append-entry --closes-issues-count N`. The CLI fail-fasts (non-zero exit) when `closes_issues > 0` AND `## History Notes` is absent / contains only `- (none)`.
+   - **MANDATORY when `closes_issues` is non-empty**: write one bullet per closed issue (matching the `closes_issues` count). `/worktree-end` WE-21 is the canonical writer of `docs/history.md` (Approach C, #690) and consumes these bullets via `compose-doc-append-entry --closes-issues-count N`. The CLI fail-fasts (non-zero exit) when `closes_issues > 0` AND `## History Notes` is absent / contains only `- (none)`.
    - When bullet count is below `closes_issues` count, the CLI emits a soft warning to stderr but proceeds.
 UD-8b. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
-UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step WE-21 (single canonical writer for both files).
+UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` WE-21 (single canonical writer for both files).
 UD-8d. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
    - A no-op `git add docs/` is expected on this path — history and changelog content sits in `WORKTREE_NOTES.md`, not under `docs/`; the `docs_complete` sentinel alone satisfies the gate.
 UD-8e. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).

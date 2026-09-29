@@ -26,7 +26,7 @@ SH-1. **Input and issue number resolution:**
    Issue number N:
    - From intent.md: extract from `## Issues` section (canonical parser: `hooks/lib/parse-closes-issues.js`).
    - From context.md: read `issue-number` from `## Session metadata`.
-   - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (Step SH-3).
+   - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (SH-3).
 
 SH-2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
    - On success: record `openedAt` (ISO-8601 date string).
@@ -34,7 +34,7 @@ SH-2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
      approximate date" and continue; set `openedAt` to 90 days ago as a conservative fallback.
 
 SH-3. **Keyword-only mode** (no issue number available): run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/keyword-only-mode.sh"` and follow the procedure it outputs.
-    After writing the artifact (Step SH-6), stop. Do NOT invoke make-outline-plan.
+    After writing the artifact (SH-6), stop. Do NOT invoke make-outline-plan.
 
 SH-4. Run the following three investigations in parallel:
 
@@ -83,6 +83,6 @@ SH-6. Run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/artifact-templ
 ## Skip conditions
 
 - `closes_issues` absent or empty and no context.md → emit `WORKFLOW_RESEARCH_NOT_NEEDED`
-- No issue number available → use keyword-only mode (Step SH-3); do NOT skip entirely
+- No issue number available → use keyword-only mode (SH-3); do NOT skip entirely
 - docs-only or typo task with no behavioral claims → emit
   `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only task — history check not applicable>>"`

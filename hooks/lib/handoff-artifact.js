@@ -1,9 +1,10 @@
 "use strict";
 // The handoff artifact: <PLANS_DIR>/<sid>-handoff.md.
 //
-// One canonical writer (appendHandoffEntry) for every producer — step ends,
-// blocked gates, emergency flushes — so "what did this session learn that the
-// state file cannot hold" survives a compaction or a session boundary.
+// One canonical writer (appendHandoffEntry) for every producer — skill
+// procedure points, blocked gates, mechanical auto-records, main-session
+// flushes — so "what did this session learn that the state file cannot hold"
+// survives a compaction or a session boundary.
 //
 // The in/out vocabulary is deliberately asymmetric: callers pass `cls` (the
 // writer's argument name), read-back exposes `.class` (the document's own
@@ -24,9 +25,11 @@ function sanitizeField(value) {
 
 const HANDOFF_SCHEMA_VERSION = "1";
 const HANDOFF_CLASSES = Object.freeze(["A", "B", "C", "D", "E", "F", "G"]);
-const HANDOFF_ORIGINS = Object.freeze(["step-end", "gate-block", "flush"]);
-// commit_push is a skill step the workflow does not track, and "-" is the
-// stepless entry; both are legitimate producers of handoff micro-state.
+// Writers accept only these; the reader does not check origin, so entries
+// written under a retired value ("step-end") still read back.
+const HANDOFF_ORIGINS = Object.freeze(["procedure-point", "gate-block", "auto-record", "flush"]);
+// commit_push is a skill the workflow does not track as a workflow step, and
+// "-" is the stepless entry; both are legitimate producers of handoff micro-state.
 const HANDOFF_STEPS = Object.freeze(VALID_STEPS.concat(["commit_push", "-"]));
 const KEY_VALID_RE = /^[A-Za-z0-9_.:-]+$/;
 

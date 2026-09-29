@@ -1,4 +1,4 @@
-> Shared reference for `skills/write-tests` and `skills/review-tests`. Read explicitly by each skill's Step 1/2.
+> Shared reference for `skills/write-tests` and `skills/review-tests`. Read explicitly by write-tests WT-1 and review-tests RT-0a.
 
 ## Priority Tiers
 

@@ -67,11 +67,11 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS
 
 CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
 
-CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
+CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
 CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
 
-CI-6. This step exits exclusively via the Completion section below, where CI-C2 applies the `skills/_shared/survey-artifact-valid.md` validity check — the skill terminates only after CI-C1 emits the completion sentinel.
+CI-6. This in-skill step exits exclusively via the Completion section below, where CI-C2 applies the `skills/_shared/survey-artifact-valid.md` validity check — the skill terminates only after CI-C1 emits the completion sentinel.
 
 ## Completion
 
@@ -102,7 +102,7 @@ Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interacti
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory; mirrors workflow-init Path A A1b; call after intent.md is written).
-CI-C1b. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its Step 4 branch outcome resumes here at CI-C2.
+CI-C1b. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its COS-4 branch outcome resumes here at CI-C2.
 CI-C2. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.

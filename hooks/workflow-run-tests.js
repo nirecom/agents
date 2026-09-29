@@ -1,26 +1,13 @@
 #!/usr/bin/env node
 // Claude Code PostToolUse hook: mark run_tests from the run-all.sh contract.
-//
-// Fires on every Bash tool call. Trust model (#1242, Approach C′): completion
-// is driven ONLY by the machine-readable RUN_CONTRACT line that tests/run-all.sh
-// emits — never inferred from a raw exit code. For a detected test command:
-//   non-zero exit                          → run_tests: pending (fail-safe)
-//   run-all.sh provenance + exactly one
-//     valid RUN_CONTRACT (executed>0,
-//     fail==0)                             → run_tests: complete (if write_tests satisfied)
-//   any other test command / no contract   → run_tests: pending (active demotion)
-//
-// The run_tests sentinel (WORKFLOW_MARK_STEP_run_tests_complete) is the other
-// completion authority.
-//
-// Detection and provenance are BOTH delegated to the execution-position model in
-// ./workflow-run-tests/exec-model.js — the single judgement source (#1273). This
-// file deliberately holds no substring matcher of its own: the read-only command
-// list, the git non-exec list and the five runner regexes it used to carry were
-// a second, disagreeing axis, and are gone rather than kept as a fallback. A head
-// that sits in none of exec-model's tables (`echo`, `cat`, `git diff`, …) simply
-// has no execution position that names a test, so sentinel echoes and read-only
-// mentions stay excluded by the general rule.
+// Completion is driven ONLY by the RUN_CONTRACT line tests/run-all.sh (or the
+// worker-dispatch test-runner) emits, never by a raw exit code (#1242, C′):
+// non-zero exit or no trusted valid contract → pending; exactly one trusted
+// contract with executed>0, fail==0 → complete (if write_tests is satisfied).
+// The run_tests sentinel is the other completion authority. Detection and
+// provenance are delegated wholly to ./workflow-run-tests/exec-model.js (#1273):
+// no substring matcher lives here, so echoes and read-only mentions stay excluded
+// by the general rule. Trust model summary: docs/architecture/claude-code/settings/hooks.md.
 
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./workflow-state");
@@ -31,6 +18,7 @@ const {
   isContractTrusted,
   resolveRunOutcome,
 } = require("./workflow-run-tests/outcome");
+const { stampTestFailureRisk } = require("./workflow-run-tests/test-failure-risk");
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
@@ -59,50 +47,26 @@ function done(payload) {
   process.exit(0);
 }
 
-// The demoting command is recorded so a demotion is attributable after the fact
-// (#1378's diagnosis cost was exactly this absence). It is untrusted text that a
-// later reader may transcribe into a Claude Code context, so it goes through the
-// same sentinel redaction the worker dispatcher uses — an unredacted
-// `<<WORKFLOW…` in state text is indistinguishable from a real sentinel.
-//
-// Credentials are elided on the way in for the second reason state text is
-// dangerous: it is durable. A command line carries the caller's tokens as
-// ordinary argument values, and the state file outlives the session, so
-// `--token=…` must not survive the copy. Order matters: collapse first (a
-// control byte inside a secret would otherwise hide its shape), redact secrets
-// next, and let sanitizeLine do the sentinel pass and the length cap last — so
-// truncation can never leave a credential's prefix behind.
+// The demoting command is recorded so a demotion is attributable later (#1378).
+// It is untrusted AND durable text: sentinel-redacted (an unredacted `<<WORKFLOW…`
+// in state text reads as a real sentinel) and credential-elided (the state file
+// outlives the session, so `--token=…` must not survive the copy). Order matters:
+// collapse control bytes first (they hide a secret's shape), redact secrets next,
+// sanitizeLine's sentinel pass and length cap last — so truncation can never
+// leave a credential's prefix behind.
 function sanitizeTrigger(command) {
   return sanitizeLine(redactSecrets(collapseControl(String(command || ""))), MAX_TRIGGER_LEN);
 }
 
-// --- payload scoping -------------------------------------------------------
-//
-// WHY (CPR-WPH): the worker-dispatch payload has two halves with opposite trust.
-// bin/worker-dispatch/emit.js renderTestRunnerYaml() emits the authoritative
-// fields — the contract line, `status:`, `exit_code:` — FIRST and unindented,
-// then opens `log_tail: |` and hard-indents every remaining line by two spaces.
-// Everything after that marker is bytes the SUITE chose, so a `RUN_CONTRACT:`
-// line found there is log text, not a verdict.
-//
-// The `^[ \t]*` tolerance in the contract regex stays (a legitimate contract is
-// leading-whitespace-tolerant in the historical payload shape #1378 documents);
-// what changes is WHERE it may look. Scoping to the header answers "is this line
-// authoritative?" by position, which is the property emit.js actually guarantees,
-// instead of by indentation, which it does not.
-//
-// SCOPED TO ONE ROUTE (#1273 round 3 / NEW-M2). That guarantee is emit.js's, so
-// the truncation may only be applied where emit.js wrote the bytes. On the
-// run-all route stdout is raw suite output: `log_tail: |` is then eleven
-// characters a suite may legitimately print (a test of the payload renderer, a
-// YAML fixture, a diff of emit.js), and cutting there both deletes the suite's
-// own trailing contract and promotes whatever preceded the marker to sole
-// authority. Raw suite output is read WHOLE, so the hook's existing exactly-one
-// rule keeps deciding it.
-//
-// This positional scope is the safety boundary not only for `RUN_CONTRACT` but
-// also for `status:` and, since #1665, for the `run_outcome` derived from it —
-// every one of those reads takes the HEADER, never the raw stdout (risk (i)).
+// --- payload scoping (#1273 round 3 / NEW-M2) --------------------------------
+// The worker-dispatch payload (bin/worker-dispatch/emit.js renderTestRunnerYaml)
+// emits its authoritative fields — contract, `status:`, `exit_code:` — first and
+// unindented, then `log_tail: |` with suite-chosen bytes; a contract after that
+// marker is log text. So on THAT route only, reads are scoped to the header — by
+// position, which emit.js guarantees, not indentation, which it does not. Run-all
+// stdout is raw suite output (`log_tail: |` may legitimately appear in it), so it
+// is read WHOLE under the exactly-one rule. The same positional scope bounds
+// `status:` and, since #1665, the derived `run_outcome` (risk (i)).
 const LOG_TAIL_MARKER_RE = /^log_tail:[ \t]*\|.*$/m;
 
 function payloadHeader(stdout) {
@@ -121,41 +85,16 @@ function responseHeader(toolResponse, emitter) {
   return emitter === "worker-dispatch" ? payloadHeader(stdout) : stdout;
 }
 
-// --- stdout attribution (#1273 round 5 / H1) --------------------------------
-//
-// WHY (CPR-WPH): every window above is cut out of the CONCATENATED stdout of a
-// whole Bash tool call, and each cut silently assumes stdout BEGINS (or, on the
-// run-all route, ENDS) with the trusted emitter's own bytes. The shell
-// guarantees no such thing: a compound command may put any number of
-// stdout-producing segments in front of — or behind — the emitter, and a
-// `printf` adds no execution position, so round 4's emitter-identity check
-// (NEW-N1) provably never fires on it. Round 4 answered "WHICH EMITTER"; this
-// answers "WHICH BYTES", the orthogonal half (CPR-SC).
-//
-// The fix is positional, because POSITION is exactly what each emitter
-// guarantees and neither indentation nor mere presence does:
-//
-//   worker-dispatch — bin/worker-dispatch/emit.js renderTestRunnerYaml() emits
-//     the contract as the FIRST line of its payload and exactly ONE unindented
-//     `log_tail: |` marker, whose block scalar then runs to end-of-output. So a
-//     genuine single payload holds at most one unindented contract line, at
-//     offset 0, and exactly one unindented marker. A second marker means a
-//     second payload's (or a forged prefix's) bytes are in the string, and the
-//     hook cannot say which segment wrote which half.
-//
-//   run-all — tests/run-all.sh prints its RUN_CONTRACT line LAST, after the
-//     `Results:` summary, and exits. So a genuine contract is the last non-empty
-//     thing in stdout; anything trailing it belongs to some other segment.
-//
-// Failing either check is NOT "the contract is wrong" — it is "no byte of this
-// stdout is attributable to the emitter". Like an unverifiable emitter path
-// (round 3 / H2) and an unanswerable emitter identity (round 4 / N1), an
-// unanswerable byte-provenance question resolves to NOT TRUSTED, and the
-// demotion is unconditional: the payload's own `status:` is precisely the claim
-// whose author is in doubt, so it may not rescue the run.
-//
-// Zero contract lines is deliberately NOT an attribution failure: that is the
-// pre-existing contract-absent case, and it already demotes with its own reason.
+// --- stdout attribution (#1273 round 5 / H1) ---------------------------------
+// Every window above is cut from the CONCATENATED stdout of one Bash call, and a
+// compound command may put other segments' bytes before or after the emitter
+// (round 4 answered WHICH EMITTER; this answers WHICH BYTES — CPR-SC). By position:
+//   worker-dispatch — at most one unindented contract, at offset 0, and exactly
+//     one unindented `log_tail: |` marker (a second means a second payload);
+//   run-all — the single contract is the last non-empty thing in stdout.
+// Failing either means no byte is attributable → NOT TRUSTED, unconditional
+// demotion (the payload's own `status:` is the doubted claim). Zero contracts is
+// not an attribution failure: contract-absent demotes with its own reason.
 const LOG_TAIL_MARKER_SCAN_RE = /^log_tail:[ \t]*\|.*$/gm;
 const CONTRACT_SCAN_RE =
   /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/gm;
@@ -186,26 +125,13 @@ function stdoutAttributed(toolResponse, emitter) {
 }
 
 // The worker's OWN verdict fields. On the worker-dispatch route the OS exit code
-// is 0 by construction ("I produced a result"), never the suite verdict, so the
-// non-zero fast path below can structurally never fire there — these two fields
-// are the only place the runner gets to say it failed. They VETO: a contract
-// computed from raw stdout can disagree with the process that ran the suite (a
-// suite that died after printing its summary, a harness that miscounted), and
-// the process is the more authoritative of the two.
-//
-// ALLOWLIST, not denylist (#1273 round 3 / NEW-L2). Enumerating the bad
-// spellings waves through everything else, and "not a known failure" is not the
-// same claim as "the worker said it passed": a renamed vocabulary word, a typo
-// (`passed`), or a value clipped by emit.js's 64-char `plainValue` cap all land
-// outside any denylist and read as success. The renderer's vocabulary is
-// pass | fail | timeout | runner-error, so the sanctioned green set has exactly
-// one member and anything else — including a missing `status:` line — vetoes.
-//
-// The PARSE itself lives in ./workflow-run-tests/outcome.js (R7). Those same two
-// lines are now also the source of `run_outcome`, and two consumers reading one
-// line through two regexes drift: the hook could veto a completion while
-// recording "pass". This function is therefore a thin evaluator over
-// parseWorkerVerdict()'s return value and holds no pattern of its own.
+// is 0 by construction, so these are the runner's only way to say it failed, and
+// they VETO a contract computed from raw stdout (the process is more authoritative).
+// ALLOWLIST, not denylist (#1273 round 3 / NEW-L2): the renderer's vocabulary is
+// pass | fail | timeout | runner-error, so only `pass` is green and anything else —
+// a typo, a value clipped by emit.js's 64-char cap, a missing line — vetoes.
+// The parse lives in ./workflow-run-tests/outcome.js parseWorkerVerdict() (R7),
+// shared with run_outcome so the veto and the recorded outcome cannot disagree.
 function workerVerdictVetoes(toolResponse) {
   const header = responseHeader(toolResponse, "worker-dispatch");
   if (header === "") return false;
@@ -293,27 +219,14 @@ if (!sessionId) done();
 
 try {
   // --- trust conditions, evaluated BEFORE the exit-code fast path ------------
-  //
-  // WHY THE ORDER IS THIS WAY (#1665 / C1): tests/run-all.sh prints a WELL-FORMED
-  // RUN_CONTRACT line and THEN exits 1 whenever FAIL>0. An ordinary failing test
-  // run is therefore a valid contract plus a non-zero exit, and a hook that
-  // returns on the exit code before parsing would record "no observation" for the
-  // single most common failure in the repo. The two axes are decided separately
-  // (CPR-SC): the OUTCOME axis reads the contract and never consults the exit
-  // code; the STATUS axis keeps its fail-safe unchanged — non-zero exit always
-  // reverts run_tests to pending.
-  //
-  // WHY THE LOCAL CATCH (#1665 / R2): resolveTestProvenance() reaches
-  // verifyEmitterIdentity(), which does realpath / stat / readFileSync on the
-  // emitter script. Hoisting it above the fast path means that I/O can now throw
-  // where nothing threw before — a removed worktree, an EACCES, a vanished
-  // network path. Without this catch the throw would land in the outer fail-open
-  // catch below and skip BOTH writes, so a crashed run would silently keep a
-  // stale `complete`: a strictly worse regression than the bug being fixed. The
-  // catch falls back to contract-absent defaults, which withhold the outcome
-  // (nothing was observed, so nothing may be claimed) while leaving the status
-  // demotions below to run exactly as they always did. The outer catch stays as
-  // the last resort for everything else.
+  // ORDER (#1665 / C1): run-all.sh prints a valid contract THEN exits 1 when
+  // FAIL>0, so parsing must precede the exit-code check or the commonest failure
+  // records "no observation". OUTCOME axis reads only the contract; STATUS axis
+  // keeps its fail-safe (non-zero exit → pending) unchanged (CPR-SC).
+  // LOCAL CATCH (#1665 / R2): resolveTestProvenance() does realpath/stat/read on
+  // the emitter, so hoisted above the fast path it can throw. Without this catch
+  // the outer fail-open would skip BOTH writes and leave a stale `complete`; the
+  // fallback is contract-absent defaults (outcome withheld, demotions still run).
   let hasProvenance = false;
   let ambiguous = false;
   let emitter = null;
@@ -323,20 +236,15 @@ try {
   let workerStatus = null;
 
   try {
-    // C′ contract-trust model with provenance gating and exactly-one rule.
-    // Trust conditions (all must hold):
-    //   (a) provenance: an execution position names an authorised contract emitter
-    //       — tests/run-all.sh however it is spelled, or the worker-dispatch
-    //       test-runner worker (#1798: that form carries no run-all.sh literal at
-    //       all, so the old substring probe was structurally always false)
-    //   (b) stdout has exactly one well-formed RUN_CONTRACT: line (parseContract)
-    //       — zero → absent; >=2 → ambiguous (forged append or fixture collision)
+    // C′ contract-trust model; all must hold, else ACTIVE DEMOTION to pending:
+    //   (a) provenance: an execution position names an authorised emitter —
+    //       tests/run-all.sh however spelled, or the worker-dispatch test-runner
+    //       (#1798: that form carries no run-all.sh literal at all)
+    //   (b) exactly one well-formed RUN_CONTRACT: line (parseContract)
     //   (c) validity: executed>0, (PASS+FAIL)>0, FAIL==0
-    // Any failure → ACTIVE DEMOTION to pending (clears a stale complete).
-    // The Bash tool's own cwd is what a relative execution position is relative to;
-    // `process.cwd()` is the fallback the sibling hooks (enforce-worktree.js,
-    // scan-outbound.js, show-user-verified-context.js) use for exactly this input
-    // class. normalizeCwd handles the POSIX drive-letter form Git Bash delivers.
+    // Relative execution positions resolve against the Bash tool's cwd, falling
+    // back to process.cwd() like the sibling hooks (enforce-worktree.js et al.);
+    // normalizeCwd handles the POSIX drive-letter form Git Bash delivers.
     const toolCwd = input.tool_input && typeof input.tool_input.cwd === "string"
       ? input.tool_input.cwd : undefined;
     const commandCwd = normalizeCwd(toolCwd) || process.cwd();
@@ -402,6 +310,8 @@ try {
       trigger_command: sanitizeTrigger(command),
       run_outcome: runOutcome,
     });
+    // #2430: a red suite outside the red-expected steps is a handoff risk. Never throws.
+    stampTestFailureRisk(sessionId);
     done();
   }
 

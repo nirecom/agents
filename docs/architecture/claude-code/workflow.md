@@ -1,6 +1,6 @@
 # Workflow State Machine
 
-All 16 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
+Every workflow step is tracked in a per-session JSON state file and enforced at `git commit`
 time by a PreToolUse hook. In order, they are the standard **WF-CODE** plan that
 `bin/workflow/next-step --list` renders:
 
@@ -366,8 +366,8 @@ when CLAUDE.md skip conditions are met.
 
 ### Workflow types in `next-step --list`
 
-`bin/workflow/next-step --list` renders the 17-step plan for the session's workflow type.
-The standard **WF-CODE** rendering has all 17 steps active — the ordered list at the
+`bin/workflow/next-step --list` renders the full step plan for the session's workflow type.
+The standard **WF-CODE** rendering has every step active — the ordered list at the
 [top of this document](#workflow-state-machine).
 
 **WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps

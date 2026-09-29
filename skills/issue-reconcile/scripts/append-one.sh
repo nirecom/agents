@@ -4,7 +4,7 @@
 # bypass, so the write must go through the API path).
 #
 # Usage: append-one.sh <issue-number>
-# Extracted from skills/issue-reconcile/SKILL.md Step 3 so the prompt issues one
+# Extracted from skills/issue-reconcile/SKILL.md IRC-3 so the prompt issues one
 # standalone command instead of a multi-line snippet (#2132).
 set -euo pipefail
 

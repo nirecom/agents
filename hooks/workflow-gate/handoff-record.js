@@ -4,6 +4,7 @@
 // by construction instead of by twelve edits that would drift apart.
 
 const { appendHandoffEntry } = require("../lib/handoff-artifact");
+const { recordRiskSignal } = require("../lib/handoff-risk-signal");
 
 const GATE_BLOCK_KEY = "gate:block";
 const MAX_SUMMARY = 300;
@@ -27,7 +28,12 @@ function summarize(reason) {
 // The key is FIXED, never a hash of the reason: the resume view must show the
 // block that is still true, and a reason-derived key would show every block
 // this session ever hit as if all of them still stood.
+// Named exception (#2430): this path calls appendHandoffEntry directly and is
+// NOT gated by the workflow active period (hooks/lib/handoff-gated-append.js).
 function recordGateBlock(sid, reason, ctx) {
+  try {
+    recordRiskSignal(sid, "gate-block");
+  } catch (_e) { /* a lost stamp must not cost the entry */ }
   try {
     const pointer = ctx && typeof ctx.command === "string" && ctx.command.length ? ctx.command : "-";
     return appendHandoffEntry(sid, {

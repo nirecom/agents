@@ -1,6 +1,5 @@
 #!/bin/bash
-# step-g5-loop.sh — mechanical parts of Step ICF-D..ICF-G (parent close proposal).
-#
+# step-g5-loop.sh — mechanical parts of ICF-D..ICF-G (parent close proposal).
 # ICF-F (AskUserQuestion + LLM judgement of parent body) stays in SKILL.md.
 # This script implements:
 #   - prepare <N>  : init counters + run ICF-E pre-check; emit PROPOSAL_PARENT

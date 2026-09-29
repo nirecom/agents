@@ -1,5 +1,5 @@
-> Shared rubric. Read explicitly by `workflow-init` (step A3a), `clarify-intent`
-> (step CI-C1b), and `make-outline-plan` (steps MOP-1d, MOP-C1) when evaluating
+> Shared rubric. Read explicitly by `workflow-init` (A3a), `clarify-intent`
+> (CI-C1b), and `make-outline-plan` (MOP-1d, MOP-C1) when evaluating
 > whether the outline or detail planning stage can be skipped. Not invoked via
 > the Skill tool — the caller reads this rubric and evaluates the criteria in
 > its own output, then passes the resulting booleans to `record-skip-judgment`.

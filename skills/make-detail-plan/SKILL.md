@@ -13,29 +13,29 @@ Read intent.md + outline.md before drafting.
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
-### Step MDP-1 — Resolve <PLANS_DIR> + read artifacts
+### MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Read `<PLANS_DIR>/<session-id>-intent.md` and `<PLANS_DIR>/<session-id>-outline.md` if present; otherwise proceed with task context alone.
 
-### Step MDP-2 — Surface delivery plan
+### MDP-2 — Surface delivery plan
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-plan.sh"` against outline.md.
 
-### Step MDP-3 — Choose planner model
+### MDP-3 — Choose planner model
 
 Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv-or-none>`), then derive the model via `high→opus, low→sonnet`.
 If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context. Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-detail-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --signals-file "<PLANS_DIR>/<session-id>-detail-signals.txt"` and use its `level=<v>` — never judge the level inline.
 Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids from the `signals=` line, or "none"])`.
 
-### Step MDP-4 — Initial draft
+### MDP-4 — Initial draft
 
 Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents. Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
-### Step MDP-4a — Sentinel detection (fallback notice)
+### MDP-4a — Sentinel detection (fallback notice)
 
 If planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`, this is a fallback notice indicating no pre-flight recorded verdict existed when the session was planned. Do NOT set MAX_EXTENSIONS=0. Proceed to MDP-5 normally. Sentinel absent → MDP-5 unchanged.
 
-### Step MDP-5 — Codex review loop
+### MDP-5 — Codex review loop
 
 Follows `skills/_shared/codex-review-loop.md` with: FORMAT=detail-plan, CAP=2, MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner, REVIEWER_AGENT=detail-reviewer, ACCEPTED_TRADEOFFS_FILE=the first readable candidate of the `outline` → `intent` chain resolved by `bin/resolve-accepted-tradeoffs-file`, NON_APPROVED_VERDICT=NEEDS_REVISION.
 
@@ -53,9 +53,9 @@ Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exi
 
 **Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
 
-### Step MDP-6 — Cap outcome dispatch
+### MDP-6 — Cap outcome dispatch
 
-Apply only when the per-stage wrapper script (Step MDP-5) returns a non-zero non-one exit code indicating a cap was reached:
+Apply only when the per-stage wrapper script (MDP-5) returns a non-zero non-one exit code indicating a cap was reached:
 
 **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MDP-5 (no user confirmation). This is the budget-available path — `bin/review-loop-verdict` already verified budget > 0. `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
@@ -67,7 +67,7 @@ Apply only when the per-stage wrapper script (Step MDP-5) returns a non-zero non
 
 Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/cap-escalation-message.sh"` for message order.
 
-### Step MDP-7 — Assemble + confirm
+### MDP-7 — Assemble + confirm
 
 Before composing the summary or confirm-plan prose, issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG` and read `<CONV_LANG>` from its stdout. If `<CONV_LANG>` is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
 
@@ -81,8 +81,8 @@ Scope-change notification gate (before the CONFIRM_DETAIL check): run `bash "$AG
 
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
-- `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
-- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per Completion Step 2) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
+- `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol CPA-2).
+- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
 
 ## Research Escalation
 
@@ -116,6 +116,6 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 
 ## Completion
 
-1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for step 3 below.
+1. Run: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for the `write-tests` invocation below.
 2. Record branching: Read `rules/branch.md` and `rules/worktree.md` (both on-demand-only, never auto-injected), then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
-3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from step 1.
+3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from the `next-step --advance` call above.

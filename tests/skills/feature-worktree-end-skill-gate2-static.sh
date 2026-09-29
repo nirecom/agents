@@ -29,25 +29,25 @@ line_of() {
     grep -nF "$1" "$SKILL_MD" 2>/dev/null | head -n 1 | cut -d: -f1
 }
 
-# Test 1: ### Step WE-3 heading exists (was WE-2.5, renumbered in #971)
+# Test 1: ### WE-3 heading exists (was WE-2.5, renumbered in #971)
 test_1_we3_heading() {
-    if grep -qE '^### Step WE-3' "$SKILL_MD"; then
-        pass "1: ### Step WE-3 heading exists"
+    if grep -qE '^### WE-3' "$SKILL_MD"; then
+        pass "1: ### WE-3 heading exists"
     else
-        fail "1: missing '### Step WE-3' heading"
+        fail "1: missing '### WE-3' heading"
     fi
 }
 
 # Test 2: bin/check-unstaged-tracked.sh appears in WE-3 section
 test_2_cli_literal_in_we3_section() {
     local we3_line next_step_line cli_line
-    we3_line="$(grep -nE '^### Step WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+    we3_line="$(grep -nE '^### WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
     if [ -z "$we3_line" ]; then
-        fail "2: cannot locate ### Step WE-3"
+        fail "2: cannot locate ### WE-3"
         return
     fi
-    # Next heading line that begins with '### Step ' and is strictly after WE-3.
-    next_step_line="$(awk -v L="$we3_line" '/^### Step /{ if (NR > L) { print NR; exit } }' "$SKILL_MD")"
+    # Next '### ' heading strictly after WE-3.
+    next_step_line="$(awk -v L="$we3_line" '/^### /{ if (NR > L) { print NR; exit } }' "$SKILL_MD")"
     if [ -z "$next_step_line" ]; then
         # No subsequent step heading — treat end-of-file as boundary
         next_step_line="$(wc -l < "$SKILL_MD" | tr -d ' ')"
@@ -68,12 +68,12 @@ test_2_cli_literal_in_we3_section() {
 # Test 3: WE-3 section mentions BOTH WORKFLOW_OFF and WORKTREE_OFF
 test_3_both_off_modes_in_we3() {
     local we3_line next_step_line section
-    we3_line="$(grep -nE '^### Step WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+    we3_line="$(grep -nE '^### WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
     if [ -z "$we3_line" ]; then
-        fail "3: cannot locate ### Step WE-3"
+        fail "3: cannot locate ### WE-3"
         return
     fi
-    next_step_line="$(awk -v L="$we3_line" '/^### Step /{ if (NR > L) { print NR; exit } }' "$SKILL_MD")"
+    next_step_line="$(awk -v L="$we3_line" '/^### /{ if (NR > L) { print NR; exit } }' "$SKILL_MD")"
     if [ -z "$next_step_line" ]; then
         next_step_line="$(wc -l < "$SKILL_MD" | tr -d ' ')"
     fi
@@ -98,8 +98,8 @@ test_4_rules_honor_line() {
     total="$(wc -l < "$SKILL_MD" | tr -d ' ')"
     local section
     section="$(awk -v A="$rules_line" -v B="$total" 'NR>=A && NR<=B' "$SKILL_MD")"
-    if echo "$section" | grep -qF 'Step WE-3 honors WORKFLOW_OFF / WORKTREE_OFF'; then
-        pass "4: ## Rules contains 'Step WE-3 honors WORKFLOW_OFF / WORKTREE_OFF'"
+    if echo "$section" | grep -qF 'WE-3 honors WORKFLOW_OFF / WORKTREE_OFF'; then
+        pass "4: ## Rules contains 'WE-3 honors WORKFLOW_OFF / WORKTREE_OFF'"
     else
         fail "4: ## Rules missing honor line for WE-3"
     fi
@@ -108,9 +108,9 @@ test_4_rules_honor_line() {
 # Test 5: WE-3 heading is between WE-2 and WE-4 (line-number ordering)
 test_5_ordering() {
     local l2 l3 l4
-    l2="$(grep -nE '^### Step WE-2( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
-    l3="$(grep -nE '^### Step WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
-    l4="$(grep -nE '^### Step WE-4( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+    l2="$(grep -nE '^### WE-2( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+    l3="$(grep -nE '^### WE-3( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+    l4="$(grep -nE '^### WE-4( |$|—)' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
     if [ -z "$l2" ] || [ -z "$l3" ] || [ -z "$l4" ]; then
         fail "5: missing WE-2 / WE-3 / WE-4 heading" "l2=$l2 l3=$l3 l4=$l4"
         return

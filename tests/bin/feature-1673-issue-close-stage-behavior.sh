@@ -3,25 +3,12 @@
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, skills/issue-close-stage/scripts/run-stage-chain.sh, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, kv-parsing, no-eval, stub-seam, table-driven, TL2, scope:issue-specific
 #
-# Issue #1673 — agents/issue-close-stage-worker.md told an LLM to run
-# `eval "$(bash run-stage-chain.sh ...)"`. That eval is the whole risk surface of
-# the old design: SUMMARY carries issue-derived text, and one unbalanced quote or
-# one `$(...)` in an issue title turns a status report into command execution.
-# The plain worker must parse the KEY=VALUE stdout WITHOUT eval and must survive
-# any byte sequence in SUMMARY.
-#
-# Group A drives the REAL run-stage-chain.sh against a fixture AGENTS_CONFIG_DIR
-# and a PATH `gh` stub, so the KV shape the worker parses is measured, not
-# assumed. Groups B/C drive the real dispatcher with the child-process seam
-# canned (tests/feature-1643-worker-dispatch-lib/spawn-stub.js) so every KV
-# corruption case can be produced on demand.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - The real `gh` binary's comment-URL shape, which Step D scrapes for the
-#     comment id, and a real linked-worktree dispatch. Both are fenced by
-#     tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673 — the old worker ran `eval "$(bash run-stage-chain.sh ...)"`, so issue-derived SUMMARY
+# text could become command execution. The plain worker must parse KEY=VALUE without eval.
+# Group A drives the REAL run-stage-chain.sh (fixture AGENTS_CONFIG_DIR + PATH `gh` stub); Groups B/C
+# drive the real dispatcher with spawn-stub.js canned. TL3 gap: real `gh` comment-URL shape and a real
+# linked-worktree dispatch (tests/bin/TL3-issue-close-stage-dispatch.sh); mitigated at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -130,18 +117,11 @@ CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
 
 # set_chain <stdout> [exit-status] — written via node so no escaping is needed.
-#
-# The chain spawn is the SECOND child: the worker first resolves the repo the
-# validated worktree belongs to and refuses if payload `owner_repo` differs.
-# #1899: that probe is now `git remote get-url origin` (a local read) instead
-# of `gh repo view --json nameWithOwner` (which can answer `upstream` on a
-# fork), so the canned rule returns an origin URL, not an owner/repo pair. The
-# probe here reports the same repo the payload claims, exercising the chain
-# path; the mismatch path is covered in feature-1673-issue-close-stage-schema.sh.
-#
-# write_canned <origin-url> <chain-stdout> [chain-exit-status] — origin URL is a
-# parameter because the probe's OUTPUT is itself a test input (see the
-# credential group below); set_chain pins it to the credential-free form.
+# The chain spawn is the SECOND child: the worker first probes `git remote get-url origin` (#1899,
+# formerly `gh repo view`) and refuses if payload `owner_repo` differs; the canned probe reports the
+# payload's repo (mismatch path: feature-1673-issue-close-stage-schema.sh).
+# write_canned <origin-url> <chain-stdout> [chain-exit-status] — the probe OUTPUT is itself a test
+# input (credential group below); set_chain pins it to the credential-free form.
 write_canned() {
     node -e '
 const fs = require("fs");
@@ -232,7 +212,7 @@ group_status_mapping() {
     done <<'TABLE'
 phase1-done  | STATUS=phase1_done\nSUMMARY=Phase 1 complete for #12 (comment 987654)\nCOMMENT_ID=987654\n | phase1_done
 blocked      | STATUS=blocked_sub_issue\nSUMMARY=sub-issue gate blocked #12\n                          | blocked_sub_issue
-chain-error  | STATUS=error\nSUMMARY=Step D: failed to extract comment ID\n                            | error
+chain-error  | STATUS=error\nSUMMARY=D: failed to extract comment ID\n                                 | error
 crlf         | STATUS=phase1_done\r\nSUMMARY=done\r\nCOMMENT_ID=1\r\n                                   | phase1_done
 TABLE
 }
@@ -269,7 +249,7 @@ TABLE
 group_quoting_resilience() {
     impl_ready "quoting/setup" || return
     local p sum
-    set_chain "$(printf 'STATUS=error\nSUMMARY=Step F: PATCH failed a="b" c=$(id) `id` && rm -rf / |x| %s\n' "'unbalanced")"
+    set_chain "$(printf 'STATUS=error\nSUMMARY=F: PATCH failed a="b" c=$(id) `id` && rm -rf / |x| %s\n' "'unbalanced")"
     p="$(write_payload stage-quoting "$PAYLOAD_JSON")"
     dispatch_stage "$p"
     assert_eq "quoting/status" "error" "$(field_of status)"
@@ -320,15 +300,9 @@ group_spawn_seam() {
 # ===========================================================================
 # Group B2 — a token-bearing origin URL must not land in the on-disk log
 #
-# #1899 made the repo probe `git remote get-url origin`, whose output can carry
-# an access token in HTTPS userinfo (https://x-access-token:<token>@github.com/
-# owner/repo.git). That output is persisted to a log file the calling skill
-# reads back, so resolveCurrentRepo routes stdout/stderr through
-# redactUserinfo first. Assertion is on the FILE, not dispatcher stdout (which
-# carries only the status triple and would hide an unredacted entry).
-#
-# The credential below is a FAKE placeholder — 16 chars after `ghp_`, under the
-# 36 bin/scan-outbound.sh's github-token pattern needs. Same placeholder as
+# `git remote get-url origin` output can carry an HTTPS-userinfo token; it is persisted to a log the
+# skill reads back, so resolveCurrentRepo redacts it first. Assert on the FILE, not dispatcher stdout.
+# The credential is a FAKE placeholder (16 chars after `ghp_`, under scan-outbound.sh's 36), same as
 # tests/hooks/fix-1899-parse-remote-url/redaction.sh.
 # ===========================================================================
 group_origin_credential_redaction() {

@@ -50,15 +50,14 @@ if (!sessionId) {
 // transcript can no longer describe, and PostCompact is the only code that runs
 // at that instant. A lost breadcrumb must never cost the re-injection below.
 try {
-  const { appendHandoffEntry } = require("./lib/handoff-artifact");
-  appendHandoffEntry(sessionId, {
+  const { appendAutoRecord } = require("./lib/handoff-auto-record");
+  appendAutoRecord(sessionId, {
     cls: "B",
     step: "-",
     key: "compaction",
     summary: `context compaction occurred at ${new Date().toISOString()}`,
     pointer: "-",
-    origin: "flush",
-  });
+  }, "compaction");
 } catch (_e) { /* fail-open */ }
 
 try {

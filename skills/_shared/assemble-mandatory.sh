@@ -93,7 +93,7 @@ TMP=$(mktemp -d -p "$(dirname "$OUT")" assemble.XXXX)
 trap 'rm -rf "$TMP"' EXIT
 
 # In-place detection: when PLANNER_OUT and OUT resolve to the same file (the
-# in-place mode used after the drafts/ flatten in #866), the Step 6 final write
+# in-place mode used after the drafts/ flatten in #866), the Phase 6 final write
 # would overwrite the file before the awk passes finish reading it. Snapshot
 # the planner output into $TMP so the read path is decoupled from $OUT.
 # Argument-driven gate (--source-kind), not inferred from layout.
@@ -110,7 +110,7 @@ fi
 # planner-authored residue is removed, even though it is no longer injected (#2228).
 MANDATORY_NAMES="Issues|Issue|Class members|Accepted Tradeoffs"
 
-# --- Step 1: Detect issues-section form in source. ---
+# --- Phase 1: Detect issues-section form in source. ---
 has_issues_plural=0
 has_issue_singular=0
 if grep -qE '^## Issues[[:space:]]*$' "$SOURCE"; then
@@ -134,13 +134,13 @@ else
   exit 2
 fi
 
-# --- Step 2: Extract injected block ---
+# --- Phase 2: Extract injected block ---
 # Class members is intentionally NOT injected (#2228): its SSOT is intent.md.
 "$EXTRACT" "$SOURCE" \
   --section "$ISSUES_SECTION_NAME" --section "Accepted Tradeoffs" \
   --with-headers > "$TMP/injected_block"
 
-# --- Step 3: Normalize legacy heading to canonical. ---
+# --- Phase 3: Normalize legacy heading to canonical. ---
 if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
   # Use awk to avoid sed -i portability issues on macOS / BSD.
   awk '
@@ -150,17 +150,17 @@ if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
   mv "$TMP/injected_block_norm" "$TMP/injected_block"
 fi
 
-# --- Step 4: Extract H1 from planner output ---
+# --- Phase 4: Extract H1 from planner output ---
 H1_LINE=$(awk '/^# [^#]/ { print; exit }' "$PLANNER_OUT_READ")
 if [[ -z "$H1_LINE" ]]; then
   echo "assemble-mandatory: contract violation: planner output has no H1 line: $PLANNER_OUT" >&2
   exit 3
 fi
 
-# --- Step 5: Strip H1 + mandatory sections from planner body ---
+# --- Phase 5: Strip H1 + mandatory sections from planner body ---
 awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT_READ" > "$TMP/remaining_body"
 
-# --- Step 6: Assemble ---
+# --- Phase 6: Assemble ---
 # Trim trailing blank lines from injected_block so that section bodies do not
 # accumulate extra newlines. We re-add exactly one blank line as separator.
 sed -e :a -e '/^$/{$d;N;ba' -e '}' "$TMP/injected_block" > "$TMP/injected_block_trimmed"
@@ -180,7 +180,7 @@ ASSEMBLED="$TMP/out_assembled"
   cat "$TMP/remaining_body_trimmed"
 } > "$ASSEMBLED"
 
-# --- Step 7: Verify (against the temp, before the move) ---
+# --- Phase 7: Verify (against the temp, before the move) ---
 verify_fail() {
   echo "assemble-mandatory: verify FAILED: $1" >&2
   exit 4
@@ -196,7 +196,7 @@ count_section_headers() {
 }
 
 # `## Issues` is mandatory in the OUTPUT (always normalized to plural).
-# Source-side count is 1 (verified in Step 1 — exactly one of singular/plural).
+# Source-side count is 1 (verified in Phase 1 — exactly one of singular/plural).
 issues_in_out=$(count_section_headers "$ASSEMBLED" "Issues")
 [[ -z "$issues_in_out" ]] && issues_in_out=0
 [[ "$issues_in_out" -eq 1 ]] || verify_fail "## Issues appears ${issues_in_out} times outside fences (expected 1)"
@@ -252,7 +252,7 @@ if [[ "$src_acc_body" != "$out_acc_body" ]]; then
   verify_fail "## Accepted Tradeoffs body in output does not match source"
 fi
 
-# --- Step 8: Outline first-body-section hard check (#2228) ---
+# --- Phase 8: Outline first-body-section hard check (#2228) ---
 # For an outline artifact, the first body H2 (the first H2 after the injected
 # mandatory block) must be the canonical firstBodySection ("Adopted approach").
 # node bridge resolves the expected value from plan-schema.js; fail-open when

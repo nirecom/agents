@@ -12,6 +12,8 @@ _hoff() {
     local tmp tn
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
+    # #2430: the CLI writes only inside the workflow active period.
+    seed_active "$tn" "h-cli"
     HO_OUT=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="h-cli" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \

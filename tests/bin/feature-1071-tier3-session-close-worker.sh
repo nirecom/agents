@@ -2,20 +2,11 @@
 # tests/bin/feature-1071-tier3-session-close-worker.sh
 # Tests: bin/worker-dispatch/workers/session-close-gate.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, skills/session-close/SKILL.md
 # Tags: static, worker, worker-dispatch, session-close, gate-action, TL2, scope:issue-specific
-#
-# Tier 3 contract test for the session-close gate (originally issue #1071).
-# #1643 replaced the LLM subagent agents/session-close-worker.md with the plain
-# script bin/worker-dispatch/workers/session-close-gate.js, dispatched by
-# skills/session-close/SKILL.md steps SC-4+SC-5 through
-# skills/_shared/worker-dispatch.md. Each case keeps its original intent; the
-# subject moved from prose to code, so gate_action cases now EXECUTE the decision
-# functions and the output contract is checked through the real renderer.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-# - a real /session-close run dispatching the worker through the Claude Code Bash tool
-# - runtime sentinel ordering from a real Stop event
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Session-close gate contract (#1071; #1643 moved it to bin/worker-dispatch/workers/session-close-gate.js,
+# dispatched by session-close SC-4+SC-5 via skills/_shared/worker-dispatch.md). gate_action cases
+# EXECUTE the decision functions; the output contract goes through the real renderer.
+# TL3 gap: a real /session-close dispatch and real Stop-event sentinel ordering are not exercised;
+# mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh: skill-orchestration).
 
 set -u
 
@@ -49,7 +40,7 @@ trap 'rm -rf "$TMPD"' EXIT
 # Extract the SC-4+SC-5 gate block: everything between its heading and the next
 # `## ` heading. Gate-scoped greps must never see unrelated sections (see T13).
 extract_gate_block() {
-    awk '/^## Steps SC-4\+SC-5/ { inb = 1; print; next }
+    awk '/^## SC-4\+SC-5/ { inb = 1; print; next }
          inb && /^## / { exit }
          inb { print }' "$1"
 }
@@ -299,22 +290,22 @@ test_extractor_mutation_probe() {
     local inside outside
 
     printf '%s\n' \
-        '## Step SC-3 — before' \
+        '## SC-3 — before' \
         'Fail-open. unrelated preamble' \
-        '## Steps SC-4+SC-5 — gate' \
+        '## SC-4+SC-5 — gate' \
         'On failure: Fail-open and continue.' \
-        '## Step SC-6 — after' \
+        '## SC-6 — after' \
         'Fail-open. cc-session-title' > "$synth"
     extract_gate_block "$synth" > "$blk"
     inside=0
     grep -qiE 'fail.open|fail open' "$blk" && inside=1
 
     printf '%s\n' \
-        '## Step SC-3 — before' \
+        '## SC-3 — before' \
         'Fail-open. unrelated preamble' \
-        '## Steps SC-4+SC-5 — gate' \
+        '## SC-4+SC-5 — gate' \
         'On status failed: STOP. This path is fail-closed.' \
-        '## Step SC-6 — after' \
+        '## SC-6 — after' \
         'Fail-open. cc-session-title' > "$synth"
     extract_gate_block "$synth" > "$blk"
     outside=0

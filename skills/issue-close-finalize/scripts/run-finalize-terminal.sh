@@ -1,19 +1,13 @@
 #!/bin/bash
 # run-finalize-terminal.sh — phase=finalize_terminal for the issue-close-finalize worker
-# Steps H (close), I (sentinels), J (wip clear), K (outcome), then terminal state write.
+# Runs ICF-H (close), ICF-I (sentinels), ICF-J (wip clear), ICF-K (outcome), then the terminal state write.
 # Usage: bash run-finalize-terminal.sh <state_file_path> <session_id> <outcome_file_path> [expected_token]
 # Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR
-# Stdout (eval-able KEY=VALUE): STATUS  SUMMARY
-# Exit 0 always; check STATUS.
-#
-# COMPARE-AND-SWAP. <expected_token> is the sha256 hex digest of the state file's
-# raw bytes as the calling worker validated them — the same protocol
-# run-loop-step.js speaks on its own 3rd argument. The caller's check happens in
-# another process; this script re-reads the file and EVALS what it finds, so a
-# replacement written in between would slip past that check entirely and bring
-# live shell syntax with it. The digest is therefore re-computed here and
-# compared BEFORE the eval. Optional so a manual invocation still works; the
-# worker always supplies it.
+# Stdout (eval-able KEY=VALUE): STATUS  SUMMARY. Exit 0 always; check STATUS.
+# COMPARE-AND-SWAP: <expected_token> is the sha256 of the state file's raw bytes as the caller
+# validated them (run-loop-step.js 3rd-argument protocol). This script re-reads and EVALS the file, so
+# a replacement written in between would bring live shell syntax — re-check the digest BEFORE the eval.
+# Optional so a manual invocation still works; the worker always supplies it.
 set -euo pipefail
 
 STATE_FILE_PATH="${1:?state_file_path required}"
@@ -68,28 +62,28 @@ if [[ "$rc" -ne 0 ]]; then
     exit 0
 fi
 
-# Step ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
+# ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
 ICF_H_STATUS=succeeded
 if [[ "$TRIAGE_ACTION" != "resume_j" ]]; then
     rc=0
     bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-completed.sh" \
         --repo "$OWNER_REPO" "$CURRENT_ISSUE_NUMBER" || rc=$?
     if [[ "$rc" -ne 0 ]]; then
-        printf 'STATUS=failed\nSUMMARY=Step ICF-H: gh issue close failed for #%s\n' "$CURRENT_ISSUE_NUMBER"
+        printf 'STATUS=failed\nSUMMARY=ICF-H: gh issue close failed for #%s\n' "$CURRENT_ISSUE_NUMBER"
         exit 0
     fi
 fi
 
-# Step ICF-I: post-close sentinels (non-fatal)
+# ICF-I: post-close sentinels (non-fatal)
 bash "$AGENTS_CONFIG_DIR/bin/github-issues/post-close-sentinels.sh" \
     "$CURRENT_ISSUE_NUMBER" "${MERGE_COMMIT:-}" || true
 ICF_I_STATUS=succeeded
 
-# Step ICF-J: wip clear (non-fatal)
+# ICF-J: wip clear (non-fatal)
 bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear "$CURRENT_ISSUE_NUMBER" || true
 ICF_J_STATUS=succeeded
 
-# Step ICF-K: determine history_entry_status and write outcome
+# ICF-K: determine history_entry_status and write outcome
 case "$TRIAGE_ACTION" in
     auto_close_path)   HISTORY_ENTRY_STATUS=skipped_no_history_notes ;;
     admin_close_path)  HISTORY_ENTRY_STATUS=skipped_admin_close ;;
@@ -117,4 +111,4 @@ fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
 fs.renameSync(tmp, p);
 " "$STATE_FILE_PATH"
 
-printf 'STATUS=terminal\nSUMMARY=Steps H/I/J/K complete for #%s\n' "$CURRENT_ISSUE_NUMBER"
+printf 'STATUS=terminal\nSUMMARY=ICF-H..ICF-K complete for #%s\n' "$CURRENT_ISSUE_NUMBER"

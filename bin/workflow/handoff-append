@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 "use strict";
-// Thin CLI over appendHandoffEntry, for skill prompts and shell scripts.
+// Thin CLI over appendHandoffEntryIfActive, for skill prompts and shell scripts.
 // --session defaults to the CC-native sid (resolveSessionId), never the
 // PLANS_DIR filename heuristic: a wsid default would make writer and reader
 // look at different files.
+// Every origin passes the workflow active-period gate (#2430): outside it the
+// CLI records nothing, prints WRITTEN=0 REASON=inactive and still exits 0.
 
 const path = require("path");
 const {
-  appendHandoffEntry,
   HANDOFF_CLASSES,
   HANDOFF_ORIGINS,
   HANDOFF_STEPS,
   KEY_VALID_RE,
 } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-artifact"));
+const { appendHandoffEntryIfActive } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-gated-append"));
 const { resolveSessionId } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "session-id"));
+const { SESSION_ID_VALID_RE } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "state-io"));
+
+// Only a main-session flush moves the nudge baseline (hooks/lib/handoff-pressure.js).
+const FLUSH_ORIGIN = "flush";
 
 const FLAGS = {
   "--session": "session",
@@ -36,6 +42,9 @@ const USAGE = [
   "  --step <step|->     workflow step the entry belongs to, or '-' for a stepless entry",
   "  --key <id>          dedup identity; characters A-Z a-z 0-9 _ . : -",
   "  --origin <origin>   what produced the entry; one of: " + HANDOFF_ORIGINS.join(", "),
+  "                      (skill procedures pass procedure-point; a main-session flush passes flush)",
+  "",
+  "Outside the workflow active period nothing is recorded: WRITTEN=0 REASON=inactive, exit 0.",
   "",
   "Optional flags:",
   "  --summary <text>    what a fresh session needs; keep under 300 characters",
@@ -108,7 +117,14 @@ function main() {
     process.stderr.write(`handoff-append: rejected — ${bad.length} field(s) out of vocabulary: ${bad.join("; ")}\n`);
     return 2;
   }
-  const result = appendHandoffEntry(sid, {
+  // Checked before the gate: an invalid sid is a caller error (exit 2), never
+  // an "inactive" session that would silently swallow the mistake.
+  if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) {
+    process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
+    return 2;
+  }
+  const writeTime = new Date().toISOString();
+  const result = appendHandoffEntryIfActive(sid, {
     cls: opts.cls,
     step: opts.step,
     key: opts.key,
@@ -117,17 +133,32 @@ function main() {
     origin: opts.origin,
   });
   if (result.written) {
+    if (opts.origin === FLUSH_ORIGIN) markFlush(sid, writeTime);
     process.stdout.write(`WRITTEN=1 REASON=${result.reason}\n`);
     return 0;
   }
-  // invalidEntryFields already cleared the entry, so `invalid` here can only be
-  // the session id — named rather than folded into a generic sentence.
+  // invalidEntryFields and the sid check already cleared the entry, so
+  // `invalid` here is unexpected — still named rather than folded away.
   if (result.reason === "invalid") {
     process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
     return 2;
   }
+  if (result.reason === "inactive") {
+    process.stderr.write("handoff-append: outside the workflow active period — nothing recorded\n");
+  }
   process.stdout.write(`WRITTEN=0 REASON=${result.reason}\n`);
   return 0;
+}
+
+// Sized from the transcript the nudge measured (discovery only when none is
+// recorded) so post-flush growth still counts toward the next nudge. A lost
+// mark never changes the CLI's result.
+function markFlush(sid, writeTime) {
+  try {
+    const { discoverUpstreamTranscript } = require(path.join(__dirname, "..", "lib", "resume-session", "transcript-fallback"));
+    const { measuredTranscriptPath, recordFlushMark } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-pressure"));
+    recordFlushMark(sid, measuredTranscriptPath(sid) || discoverUpstreamTranscript(sid), writeTime);
+  } catch (_e) { /* fail-open */ }
 }
 
 process.exit(main());

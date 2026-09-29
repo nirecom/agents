@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# atomicity: This script IS the single Bash call required by SKILL.md Step WE-11.
+# atomicity: This script IS the single Bash call required by SKILL.md WE-12.
 # Do NOT split into multiple Bash calls from SKILL.md. Atomicity required for Windows env-reset safety.
 # BRANCH_DELETED MUST NOT appear in output JSON (issue #504 fail-safe).
 # Output MUST include four restart categories: cc_restart / vscode_reload / installer_rerun / os_reboot.
@@ -31,7 +31,7 @@ fi
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Bootstrap mode (issue #772): when the session was a new-repo first commit,
-# /worktree-end Step 2b pushed branch:main directly. There is no PR to query,
+# /worktree-end WE-4b pushed branch:main directly. There is no PR to query,
 # so skip the gh pr view / mergeCommit retry block entirely and synthesize
 # the PR_* fields with sentinel values.
 BOOTSTRAP_MODE="${BOOTSTRAP_MODE:-0}"
@@ -48,7 +48,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
     PR_STATE="BOOTSTRAP"
     MERGE_SHA="$BOOTSTRAP_COMMIT_SHA"
 
-    # Step 3: Restart detection — feed empty PR_NUMBER; lib must tolerate "".
+    # Phase 3: Restart detection — feed empty PR_NUMBER; lib must tolerate "".
     RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER" 2>/dev/null || true)"
 
     parse_cat() {
@@ -125,7 +125,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
     exit 0
 fi
 
-# Step 1: Re-fetch PR_NUMBER (env-reset safe — explicit repo + branch anchors).
+# Phase 1: Re-fetch PR_NUMBER (env-reset safe — explicit repo + branch anchors).
 BRANCH_NAME="$(git -C "$WORKTREE" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 PR_NUMBER="$(gh -R "$REPO" pr list \
   --head "$BRANCH_NAME" --state all --limit 1 \
@@ -135,7 +135,7 @@ if [[ -z "$PR_NUMBER" ]]; then
   exit 1
 fi
 
-# Step 2: PR metadata (single gh call, parsed via extract-pr-fields.js).
+# Phase 2: PR metadata (single gh call, parsed via extract-pr-fields.js).
 PR_INFO="$(gh -R "$REPO" pr view "$PR_NUMBER" --json title,url,state)"
 PR_FIELDS="$(printf '%s' "$PR_INFO" | node "$LIB_DIR/extract-pr-fields.js" --fields title,url,state)"
 PR_TITLE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="title"{sub(/^title=/,"");print;exit}')"
@@ -145,7 +145,7 @@ PR_STATE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="state"{sub(/^state=/,"");
 # Merge SHA — resolved from PR's mergeCommit.oid (authoritative; survives
 # main-worktree env reset). Retry once after 2s to absorb GitHub eventual-
 # consistency lag between `gh pr merge` and `gh pr view` reflecting the SHA.
-# Hard-fail if still empty: Step WE-21 cannot write history.md without it.
+# Hard-fail if still empty: WE-21 cannot write history.md without it.
 MERGE_SHA="$(gh -R "$REPO" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
 if [[ -z "$MERGE_SHA" ]]; then
   sleep 2
@@ -156,7 +156,7 @@ if [[ -z "$MERGE_SHA" ]]; then
   exit 1
 fi
 
-# Step 2b: resolve sibling repo PRs from WORKTREE_NOTES.md ## SiblingWorktrees
+# Phase 2b: resolve sibling repo PRs from WORKTREE_NOTES.md ## SiblingWorktrees
 SIBLING_REPOS_JSON="[]"
 if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
   sibling_entries="$(awk '
@@ -202,7 +202,7 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
   SIBLING_REPOS_JSON="$(printf '%s' "$sibling_tsv" | node "$LIB_DIR/sibling-repos-json.js")"
 fi
 
-# Step 3: Restart detection (four categories).
+# Phase 3: Restart detection (four categories).
 RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER")"
 
 parse_cat() {
@@ -234,11 +234,11 @@ else
   CLAUDE_CODE_RESTART_REQUIRED="no"
 fi
 
-# Step 4: Remaining env vars.
+# Phase 4: Remaining env vars.
 BRANCH="$BRANCH_NAME"
 WORKTREE_PATH="$WORKTREE"
 CREATED_DATE="$(date -u +%Y-%m-%d)"
-# Fallback when BACKUP_DIR is the legacy '(none)' sentinel or points to a non-existent dir (discard branch skips Pass 2 — see SKILL.md Step WE-8, issue #634).
+# Fallback when BACKUP_DIR is the legacy '(none)' sentinel or points to a non-existent dir (discard branch skips Pass 2 — see SKILL.md WE-9, issue #634).
 BACKUP_DIR_VALID=0
 if [[ "$BACKUP_DIR" != "(none)" && -d "$BACKUP_DIR" ]]; then
   BACKUP_DIR_VALID=1
@@ -249,7 +249,7 @@ else
   BACKUP_MANIFEST_PATH="(none)"
 fi
 
-# Step 5: Copy WORKTREE_NOTES.md to backup dir (if present).
+# Phase 5: Copy WORKTREE_NOTES.md to backup dir (if present).
 NOTES_BACKUP_PATH=""
 if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
   if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
@@ -263,7 +263,7 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
   fi
 fi
 
-# Step 6: Persist env JSON (BRANCH_DELETED intentionally omitted).
+# Phase 6: Persist env JSON (BRANCH_DELETED intentionally omitted).
 ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
 
 PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \

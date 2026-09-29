@@ -1,28 +1,13 @@
 #!/usr/bin/env bash
-# Autonomous bootstrap for a brand-new GitHub repository whose remote has no
-# default branch yet. Pushes the current feature branch as `main` and (best-
-# effort) sets the default branch on GitHub.
-#
-# Invocation forms:
-#   1) Positional (SKILL.md callers):
-#        bash bootstrap-complete.sh <WORKTREE_PATH> <BRANCH> <OWNER_REPO>
-#   2) Flag style (tests, future flexibility):
-#        bash bootstrap-complete.sh --repo <PATH> --remote <NAME> \
-#            [--default-branch <NAME>] [--branch <BRANCH>] [--owner-repo <O/R>]
-#
-# Env hooks:
-#   BOOTSTRAP_REPROBE_RESULT — when set, skip the live bootstrap-state.js probe
-#       and treat the result as if classification=<value> (used by E2E tests).
-#       Accepts: empty-repo, ok, network, auth, not-found, timeout, spawn-error.
-#
-# Exit codes:
-#   0 — bootstrap completed; JSON on stdout
-#   1 — argument / environment error
-#   2 — pre-bootstrap re-probe disagrees (remote no longer empty or wrong class)
-#   3 — git push failed
-#
-# stdout (success): single-line JSON with bootstrap_commit_sha,
-# default_branch_set, pushed_ref.
+# worktree-end WE-4b: bootstrap a brand-new GitHub repo whose remote has no default branch yet —
+# push the current feature branch as `main`, then best-effort set the default branch on GitHub.
+# Usage: positional (SKILL.md callers): bash bootstrap-complete.sh <WORKTREE_PATH> <BRANCH> <OWNER_REPO>
+#   flag style (tests): bash bootstrap-complete.sh --repo <PATH> --remote <NAME> \
+#     [--default-branch <NAME>] [--branch <BRANCH>] [--owner-repo <O/R>]
+# Env: BOOTSTRAP_REPROBE_RESULT=<classification> skips the live bootstrap-state.js probe (E2E tests);
+#   accepts empty-repo, ok, network, auth, not-found, timeout, spawn-error.
+# Exit: 0 done — stdout is one JSON line (bootstrap_commit_sha, default_branch_set, pushed_ref);
+#   1 argument / environment error; 2 re-probe disagrees (remote no longer empty); 3 git push failed.
 set -uo pipefail
 
 WORKTREE_PATH=""
@@ -63,7 +48,7 @@ if [ -z "$BRANCH" ]; then
     fi
 fi
 
-# Step 1: Re-probe the remote (or honor BOOTSTRAP_REPROBE_RESULT for tests).
+# Phase 1: Re-probe the remote (or honor BOOTSTRAP_REPROBE_RESULT for tests).
 if [ -n "${BOOTSTRAP_REPROBE_RESULT:-}" ]; then
     CLASSIFICATION="$BOOTSTRAP_REPROBE_RESULT"
     if [ "$CLASSIFICATION" = "empty-repo" ]; then
@@ -102,13 +87,13 @@ if [[ "$PRE_BOOTSTRAP" != "true" || "$CLASSIFICATION" != "empty-repo" ]]; then
     exit 2
 fi
 
-# Step 2: Push the local branch as the chosen default branch on the remote.
+# Phase 2: Push the local branch as the chosen default branch on the remote.
 if ! git -C "$WORKTREE_PATH" push -u "$REMOTE" "$BRANCH:$DEFAULT_BRANCH" >&2; then
     printf 'bootstrap-complete: git push %s %s:%s failed\n' "$REMOTE" "$BRANCH" "$DEFAULT_BRANCH" >&2
     exit 3
 fi
 
-# Step 3: Set the default branch on GitHub (warn-only; gh may lack admin scope).
+# Phase 3: Set the default branch on GitHub (warn-only; gh may lack admin scope).
 DEFAULT_BRANCH_SET=true
 if [ -n "$OWNER_REPO" ]; then
     if ! gh -R "$OWNER_REPO" repo edit --default-branch "$DEFAULT_BRANCH" >&2; then
@@ -122,9 +107,9 @@ else
     fi
 fi
 
-# Step 4: Record the bootstrap commit SHA.
+# Phase 4: Record the bootstrap commit SHA.
 BOOTSTRAP_COMMIT_SHA="$(git -C "$WORKTREE_PATH" rev-parse HEAD)"
 
-# Step 5: Emit JSON for the caller (worktree-end SKILL.md Step 2b).
+# Phase 5: Emit JSON for the caller (worktree-end SKILL.md WE-4b).
 printf '{"bootstrap_commit_sha":"%s","default_branch_set":%s,"pushed_ref":"refs/heads/%s"}\n' \
     "$BOOTSTRAP_COMMIT_SHA" "$DEFAULT_BRANCH_SET" "$DEFAULT_BRANCH"

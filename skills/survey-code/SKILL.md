@@ -9,18 +9,18 @@ Investigate the codebase related to the given task.
 
 ## Procedure
 
-### Step SVC-0 — Resolve <PLANS_DIR>
+### SVC-0 — Resolve <PLANS_DIR>
 
 Before any tool call below that references <PLANS_DIR>, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` exactly once as one bare command — never assigned to a variable and echoed back.
 
 Read the printed absolute path from its stdout and substitute it for every <PLANS_DIR>
 placeholder in the remainder of this SKILL.md. Subagent prompts must receive
 the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+Reuse across all subsequent in-skill steps in this invocation — do not re-resolve.
 
 When invoked as a parallel Agent subagent by workflow-init, the orchestrator
 passes `artifact_path` and `context_path` as resolved absolute strings — use
-those instead of running Step SVC-0.
+those instead of running SVC-0.
 
 Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
@@ -29,14 +29,14 @@ SVC-1. **Claim extraction** (run before reading any code):
      (a) `<PLANS_DIR>/<session-id>-intent.md` — preferred (post-clarify-intent calls)
      (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
          from workflow-init; use "User initial prompt" and "Issue body" sections)
-   If neither exists: proceed to Step SVC-2 with an empty claim list.
+   If neither exists: proceed to SVC-2 with an empty claim list.
    Extract up to 5 behavioral/factual claims from Background/Motivation and Scope.
    Target: "X is blocked", "X does Y", "X is broken", "X cannot Z". Exclude aesthetic
    claims and pure preferences. Works with Japanese and English content.
 
 SVC-2. Identify candidate files and areas using Glob and Grep.
 SVC-3. Read relevant source files, configs, tests, and docs.
-SVC-4. For each claim extracted in Step SVC-1, verify it against the current codebase:
+SVC-4. For each claim extracted in SVC-1, verify it against the current codebase:
    - `verdict: holds` — evidence in code confirms the claim
    - `verdict: contradicted` — evidence in code contradicts the claim
    - `verdict: indeterminate` — insufficient evidence to confirm or deny
@@ -49,7 +49,7 @@ SVC-6. Write findings to `<PLANS_DIR>/<session-id>-survey-code.md`. The file mus
      verdict: holds | contradicted | indeterminate
      evidence: <file:line or "no matching code found">
    ```
-   If no claims were extracted in Step SVC-1, write the section with the note
+   If no claims were extracted in SVC-1, write the section with the note
    "No verifiable behavioral/factual claims found in intent.md or context.md."
 
    The file must also include a `## Candidate class members` section:
@@ -72,7 +72,7 @@ SVC-7. Present findings for user review before proceeding to plan.
 ## Rules
 
 - Read **project source files** only — do not modify them. Writing the output
-  artifact to `<PLANS_DIR>/<session-id>-survey-code.md` (Step SVC-6 above) is
+  artifact to `<PLANS_DIR>/<session-id>-survey-code.md` (SVC-6 above) is
   REQUIRED and allowed — `<PLANS_DIR>` lives outside the git repo. See
   `skills/_shared/survey-artifact-valid.md` for the artifact validity contract.
 - Use Explore subagents for broad searches when needed

@@ -14,11 +14,11 @@ First step of every workflow session. Routes on GH issue context: Path A (`#N` +
 
 Read `rules/github-issues.md` before WI-2 — on-demand-only, never auto-injected; the `meta` label, `intent:clarified`, `closes_issues` insertion order, and the sub-issue open-state gate all come from it.
 
-### Step WI-1 — Resolve <PLANS_DIR>
+### WI-1 — Resolve <PLANS_DIR>
 
 Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.
 
-### Step WI-2 — Driver loop
+### WI-2 — Driver loop
 
 The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, CLOSED detection, label extraction, meta classification (meta strip / open sub-issue guard), Aggregate WIP check (all N: all_same / all_none / any_other), route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).
 
@@ -53,17 +53,17 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 - `C` — zero issues (`ISSUES=()`) OR `NON_GITHUB=1`.
 - `META` — all issues carry `meta` label and have no open sub-issues.
 
-### Step WI-10 — Parallel survey launch (all Paths)
+### WI-10 — Parallel survey launch (all Paths)
 
 Dispatch the `survey-code` + `survey-history` subagents per `skills/_shared/subagent-concurrency.md` SC-P (independent — distinct artifact paths, neither reads the other's output). For each: prompt `session-id=<resolved>`, `context_path=<PLANS_DIR>/<session-id>-context.md`, `artifact_path=<PLANS_DIR>/<session-id>-survey-{code|history}.md`, instruct to read context_path + follow `skills/<survey-code|survey-history>/SKILL.md` Procedure, write to artifact_path, do NOT invoke make-outline-plan. Substitute `<PLANS_DIR>` with the absolute path resolved at WI-1.
 
 Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
-### Step WI-11 — Post-check
+### WI-11 — Post-check
 
 Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: emit `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-code>>` or `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-history>>`. Fall through to WI-12 on failure — do NOT abort. `clarify-intent` handles missing-or-invalid artifacts.
 
-### Step WI-12 — Path-specific steps
+### WI-12 — Path-specific in-skill steps
 
 #### Path META — meta label issue
 WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before reaching this path.
@@ -78,16 +78,16 @@ WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before
 - A1b. Set session title: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory).
 - A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with `"${REPO_MAP_ARGS[@]}"` followed by all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
 - A3. `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step workflow_init --complete` (no `--next` — the next action is fixed at A3a, not next-step's judgment), then, unchanged, as a separate Bash call: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #{N} has intent:clarified label>>"`.
-- A3a. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its Step 4 branch outcome resumes here at A4.
+- A3a. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its COS-4 branch outcome resumes here at A4.
 - A4. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
-> When `--advance` is called without `--next`, no `ACTION=` block is ever emitted — proceed directly to the next documented step above rather than waiting on `next-step`'s judgment.
+> When `--advance` is called without `--next`, no `ACTION=` block is ever emitted — proceed directly to the next documented in-skill step above rather than waiting on `next-step`'s judgment.
 
 #### Path B — issue exists, no intent:clarified
 - **B1.** Run `node "$AGENTS_CONFIG_DIR/bin/workflow/render-issue-comments" --checkpoint '<CHECKPOINT>' --issue <N>` against the driver's own `CHECKPOINT=` value and the same `<N>` B2 seeds; on a non-zero exit discard its stdout and keep its stderr out of every artifact; when that path holds an apostrophe, replace each `'` in it with `'\''` before pasting.
 - **B2.** Write `<PLANS_DIR>/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`, then B1's stdout verbatim, separated by one blank line; on a non-zero B1 rc omit the comments section entirely and fabricate no replacement.
 - **B3.** `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
-- **B4.** Invoke `clarify-intent` with `#<N>` in args so step 1a auto-detect fires.
+- **B4.** Invoke `clarify-intent` with `#<N>` in args so CI-1a auto-detect fires.
 
 #### Path C — no issue
 - C1. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).

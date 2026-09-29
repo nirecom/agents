@@ -81,6 +81,14 @@ if (!AUDIT_VERDICT_VALUES.includes(verdict)) {
 
 const summary = args["verdict-summary"] === undefined ? null : args["verdict-summary"];
 
+// #2430: an accepted WARN/BLOCK leaves a handoff breadcrumb (CONTINUE records
+// nothing). A lost breadcrumb never changes the exit code or stdout.
+function breadcrumb() {
+  try {
+    require("../hooks/lib/handoff-auto-record").recordVerdictBreadcrumb(sid, verdict, summary);
+  } catch (_e) { /* fail-open */ }
+}
+
 // No run identity supplied: write as a plain state patch. Guard: if a run is
 // currently armed (pending/in_progress) the caller must pass --audit-run-id so
 // the CAS path can reject a stale write (#2256 S2-h).
@@ -99,6 +107,7 @@ if (!runId) {
   }
   const ok = writeAuditState(sid, { audit_phase: "done", audit_verdict: verdict, audit_verdict_summary: summary });
   console.log(JSON.stringify({ accepted: ok === true, audit_run_id: null }));
+  if (ok === true) breadcrumb();
   process.exit(ok === true ? 0 : 1);
 }
 
@@ -112,6 +121,9 @@ const result = finalizeAuditRun(sid, {
 });
 
 console.log(JSON.stringify(result));
-if (result.accepted === true) process.exit(0);
+if (result.accepted === true) {
+  breadcrumb();
+  process.exit(0);
+}
 if (result.reason === "identity-mismatch") process.exit(EXIT_STALE_IDENTITY);
 process.exit(1);

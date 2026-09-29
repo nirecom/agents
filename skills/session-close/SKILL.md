@@ -5,7 +5,7 @@ user-invocable: true
 ---
 
 Session close orchestrator. Drives `issue-close-finalize` (when applicable),
-collects the outcome JSON written by Step L, and emits the Final Report by
+collects the outcome JSON written by its ICF-K, and emits the Final Report by
 substituting the skeleton from `hooks/lib/final-report-schema.renderSkeleton`.
 Replaces the legacy "Step 7" emit inside `/worktree-end` so the Final Report
 reflects every terminal action.
@@ -13,12 +13,12 @@ reflects every terminal action.
 ## Pre-flight
 
 - `AGENTS_CONFIG_DIR` must be set.
-- Caller context (under `ENFORCE_WORKTREE=on`): `/worktree-end` Steps 1–6i have
+- Caller context (under `ENFORCE_WORKTREE=on`): `/worktree-end` WE-1..WE-22 have
   already completed (worktree merged and removed; `<PLANS_DIR>/<session-id>-final-report-env.json` exists).
 - Caller context (under `ENFORCE_WORKTREE=off`): the PR is merged. No worktree-end
   ran; the env file does not yet exist.
 
-## Step SC-0 — Resolve PLANS_DIR and session id
+## SC-0 — Resolve PLANS_DIR and session id
 
 Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
@@ -30,7 +30,7 @@ fallback chain used by `--from-session`. If unresolvable, abort:
 `<PLANS_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
 do not persist between Bash tool calls.
 
-## Step SC-1a — Detect WF-META session
+## SC-1a — Detect WF-META session
 
 Run:
   node "$AGENTS_CONFIG_DIR/bin/session-close-detect-wf-meta.js" "<session-id>"
@@ -38,7 +38,7 @@ Run:
 - stdout `yes` → WF-META session. Record `IS_WF_META=yes` as an LLM-tracked state literal (not a shell variable — every Bash call is self-contained). Proceed to SC-2C.
 - stdout `no` → proceed to SC-1b (ENFORCE_WORKTREE detection).
 
-## Step SC-1b — Detect ENFORCE_WORKTREE mode
+## SC-1b — Detect ENFORCE_WORKTREE mode
 
 Check via Bash:
 `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
@@ -46,7 +46,7 @@ Check via Bash:
 - stdout `ON` or `ERROR` → worktree path (SC-2A).
 - stdout `OFF` → branch/main path (SC-2B).
 
-## Step SC-2A — Worktree path: reuse existing env JSON
+## SC-2A — Worktree path: reuse existing env JSON
 
 ```bash
 test -f "<PLANS_DIR>/<session-id>-final-report-env.json" \
@@ -57,7 +57,7 @@ Then write the late-finding alert eligibility flag (#997):
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Proceed to SC-3.
 
-## Step SC-2B — Branch/main path: build minimal env JSON
+## SC-2B — Branch/main path: build minimal env JSON
 
 ```bash
 node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" "<PLANS_DIR>/<session-id>-final-report-env.json"
@@ -67,7 +67,7 @@ Exit 0 → write the late-finding alert eligibility flag (#997):
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
-## Step SC-2C — WF-META path: write PR-less env JSON
+## SC-2C — WF-META path: write PR-less env JSON
 
   node "$AGENTS_CONFIG_DIR"/bin/session-close-build-env.js --wf-meta "<PLANS_DIR>/<session-id>-final-report-env.json"
 
@@ -79,7 +79,7 @@ Record supervisor notice:
 
 Retain `IS_WF_META=yes` and proceed to SC-3.
 
-## Step SC-3 — Non-GitHub pre-flight + issue close dispatch
+## SC-3 — Non-GitHub pre-flight + issue close dispatch
 
 If `IS_WF_META=yes` (set in SC-2C): write `skipped_wf_meta` outcomes directly:
 
@@ -117,10 +117,10 @@ printf '{"issues":[]}\n' > "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 
   - non-empty → SC-3a.
 
-## Step SC-3a — Invoke /issue-close-finalize via the Skill tool
+## SC-3a — Invoke /issue-close-finalize via the Skill tool
 
 Invoke `/issue-close-finalize --from-session`. The sub-skill writes
-`<PLANS_DIR>/<session-id>-issue-close-outcome.json` as its Step L.
+`<PLANS_DIR>/<session-id>-issue-close-outcome.json` in its ICF-K.
 
 If it terminates without writing that file, write a synthetic fallback:
 
@@ -130,7 +130,7 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
-## Steps SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
+## SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
 Dispatch the `session-close-gate` worker per `skills/_shared/worker-dispatch.md`. Payload:
 - `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
@@ -146,7 +146,7 @@ On `status: complete`:
 3. `gate_action: yield` → **STOP** after sentinel. SC-6 does not run. Supervisor review runs later.
 4. `gate_action: proceed` → continue to SC-6.
 
-## Step SC-6 — Emit Final Report directly into assistant text
+## SC-6 — Emit Final Report directly into assistant text
 
 Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" "<session-id>" "<PLANS_DIR>/<session-id>-final-report-env.json" "<PLANS_DIR>/<session-id>-issue-close-outcome.json" "<PLANS_DIR>/<session-id>-intent.md" "<PLANS_DIR>/<session-id>-supervisor-state.json"
 Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
@@ -159,7 +159,7 @@ After emitting, mark completion with two separate Bash calls:
 
 `stop-final-report-guard.js` blocks (exit 2) when any of the 13 headings or any unsubstituted `<TOKEN>` is missing/present after `## Final Report — <session-id>`.
 
-## Step SC-7 — Surface alert findings (post-Final-Report)
+## SC-7 — Surface alert findings (post-Final-Report)
 
 Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
 
@@ -172,7 +172,7 @@ Mark surfaced and complete:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --mark-findings-surfaced
   echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
 
-## Step SC-8 — Promote residual WORKTREE_NOTES entries (post-Final-Report)
+## SC-8 — Promote residual WORKTREE_NOTES entries (post-Final-Report)
 
 - Runs after the Final Report is emitted, only when unpromoted entries remain (`/worktree-end` WE-11 normally clears them): resolve the notes path via `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" resolve --caller session-close --session-id "<session-id>"`; on `action: skip` return, otherwise run `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
 

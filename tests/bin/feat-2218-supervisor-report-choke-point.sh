@@ -43,6 +43,21 @@ report() {
         --detail 'gate blocked a sanctioned command' --reporter 'write-tests' "$@" 2>&1
 }
 
+# #2430: the handoff write goes through the workflow-active-period gate, so a
+# case that expects an entry seeds a session inside its active period first
+# (workflow_init complete, final_report pending).
+seed_active() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+writeState('$sid', createInitialState('$sid', { cwd: '/report/fixture', git_branch: 'feature/report' }));
+markStep('$sid', 'workflow_init', 'complete');
+" >/dev/null 2>&1
+}
+
 inspect() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
@@ -58,6 +73,7 @@ if (e.length !== 1) problems.push('class-E-supervisor-reported-entries:' + e.len
 else {
   const entry = e[0];
   if (String(entry.pointer).indexOf(sid + '-supervisor-state.json') === -1) problems.push('pointer:' + String(entry.pointer));
+  if (entry.origin !== 'procedure-point') problems.push('origin:' + String(entry.origin));
   const s = String(entry.summary);
   if (!/(^|[^a-zA-Z0-9-])workflow($|[^a-zA-Z0-9-])/.test(s)) problems.push('summary-omits-category:' + s);
   if (s.indexOf('workflow-state') !== -1) problems.push('summary-contains-invalid-category:workflow-state');
@@ -76,6 +92,8 @@ run_S1() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "explicit-sid-s1"
+    seed_active "$tmp" "env-sid-s1"
     out="$(report "$tmp" "env-sid-s1" --session-id "explicit-sid-s1")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc out:'${out:0:160}'"
     [ -f "$tmp/wf/explicit-sid-s1-supervisor-state.json" ] || problems="$problems supervisor-state-not-written"
@@ -98,6 +116,7 @@ run_S2() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "ambient-sid-s2"
     out="$(report "$tmp" "ambient-sid-s2")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc out:'${out:0:160}'"
     out="$(inspect "$tmp" "ambient-sid-s2")"
@@ -117,6 +136,7 @@ run_S3() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf/unwritable-sid-s3-handoff.md"
+    seed_active "$tmp" "unwritable-sid-s3"
     out="$(report "$tmp" "env-sid-s3" --session-id "unwritable-sid-s3")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc out:'${out:0:160}'"
     [ -f "$tmp/wf/unwritable-sid-s3-supervisor-state.json" ] || problems="$problems report-lost-with-the-breadcrumb"
@@ -136,6 +156,7 @@ run_S4() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf/failing-sid-s4-supervisor-state.json"
+    seed_active "$tmp" "failing-sid-s4"
     out="$(report "$tmp" "env-sid-s4" --session-id "failing-sid-s4")"; rc=$?
     [ "$rc" -eq 1 ] || problems="$problems want-exit-1-got:$rc out:'${out:0:160}'"
     if [ -f "$tmp/wf/failing-sid-s4-handoff.md" ]; then

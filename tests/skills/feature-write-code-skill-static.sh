@@ -325,7 +325,7 @@ if require_file "$WRITE_CODE_SKILL"; then
     if [ -z "$wcd2_section" ]; then
         fail "r. WCD-2 section not found in SKILL.md"
     else
-        if printf '%s\n' "$wcd2_section" | grep -qF '`OFF`: proceed to step WCD-3'; then
+        if printf '%s\n' "$wcd2_section" | grep -qF '`OFF`: proceed to WCD-3'; then
             pass "r. WCD-2: 'OFF' verdict proceeds without asking"
         else
             fail "r. WCD-2: 'OFF' verdict does not document proceeding to WCD-3"

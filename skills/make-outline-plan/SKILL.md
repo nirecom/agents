@@ -44,7 +44,7 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
      Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
-   - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
+   - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol CPA-3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
 MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
@@ -91,7 +91,7 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
 
 MOP-6. **Cap outcome dispatch.**
 
-   Apply only when the per-stage wrapper script (Step MOP-5) returns a non-zero non-one exit code:
+   Apply only when the per-stage wrapper script (MOP-5) returns a non-zero non-one exit code:
 
    **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
@@ -110,9 +110,9 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
+MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb). Then branch on the bypass condition:
    - **Bypass (CONFIRM_OUTLINE=off only):** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+   - **Sentinel** (ON path): apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -134,7 +134,7 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 - **Chat output during the discussion loop** is restricted to:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
-  (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
+  (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` CPA-2.
   (c) the MOP-7 turn-final prose rationale summary
   (d) the concern summary block rendered by the MOP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.

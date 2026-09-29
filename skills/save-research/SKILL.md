@@ -56,7 +56,7 @@ SR-7. **Commit**: Run `git -C ../my-specs-repo add` and `git -C ../my-specs-repo
    This commit is to a separate repository (my-specs-repo). It is NOT the main project commit
    and must NOT trigger USER_VERIFIED or advance the calling workflow step.
 SR-8. **Return to caller**: After the commit, explicitly state which workflow step to resume
-   (e.g., "save-research complete. Resuming Step 2a (research).") and do not mark
+   (e.g., "save-research complete. Resuming the research workflow step.") and do not mark
    any workflow phase as complete.
 
 ## Rules
