@@ -1,21 +1,10 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-state/state-io/core.js, bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/evidence-resolver.js, hooks/workflow-gate/staged-evidence.js, bin/workflow/next-step
-# Tags: tl2, workflow, run-tests, docs-only, skip-sentinel, scope:issue-specific, pwsh-not-required
-#
-# #1644 stage 2 — the docs-only skip path for the `run_tests` workflow step.
-# Written BEFORE the implementation: cases that pin NEW behavior are RED until
-# the six registration sites land. Cases marked "safety net" below are GREEN by
-# construction today and exist to fail the moment a half-landed implementation
-# opens a skip without the docs-only proof.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether a live Claude Code session's permission layer auto-approves the new
-#   echo literal (settings.json permissions.allow is pinned statically in the
-#   sibling registration-sites test, not exercised through a real dialog).
-# - Whether the run-tests SKILL.md RNT-5 branch actually emits the sentinel when
-#   the model reaches it.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# Tags: tl2, workflow, run-tests, docs-only, skip-sentinel, scope:issue-specific, pwsh-not-required, docs, evidence, write-code
+# #1644 D1-D6: run_tests docs-only skip path; "safety net" cases fail on a half-landed skip.
+# #2327 WCD-7: docs evidence excludes files staged by write_code (write_code_scope_manifest).
+# TL3 gap: live permission auto-approval of the sentinel and SKILL.md RNT-5 emission —
+# checked at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh skill-orchestration).
 
 set -uo pipefail
 
@@ -27,6 +16,9 @@ fi
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+# Sourced before the local helpers so they (e.g. run_with_timeout without a seconds arg) win.
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
 WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
@@ -221,6 +213,216 @@ const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidenc
 process.stdout.write(String(hasCompletionEvidence("run_tests", "d6", { repoDir: process.env.REPO_D })));
 ' 2>/dev/null)"
 check "D6 docs-only: hasCompletionEvidence(run_tests) stays false" "false" "$EV_OUT"
+
+# --- WCD-7: docs evidence excludes write_code-staged files (#2327 C1) -------
+# The D-cases pin CLAUDE_PROJECT_DIR; WCD-7 passes repoDir explicitly instead.
+unset CLAUDE_PROJECT_DIR
+unset CLAUDE_ENV_FILE
+
+case_begin "evidence-resolver" "hooks/workflow-state/evidence-resolver.js"
+
+# WCD-7 fixture: staged skills/SKILL.md; snapshot includes that file (it was impl work)
+REPO_WCD="$TMPDIR_BASE/repo-wcd"
+mk_repo "$REPO_WCD"
+mkdir -p "$REPO_WCD/skills"
+printf 'skill content\n' > "$REPO_WCD/skills/SKILL.md"
+git -C "$REPO_WCD" add skills/SKILL.md >/dev/null 2>&1
+SKILL_OID="$(git -C "$REPO_WCD" rev-parse :skills/SKILL.md 2>/dev/null || echo "unknown")"
+REPO_WCD_N="$(nrm "$REPO_WCD")"
+
+node -e "
+const fs = require('fs'), path = require('path');
+const steps = {};
+for (const s of ['workflow_init','clarify_intent','research','outline','detail',
+    'branching_complete','write_tests','review_tests','write_code']) {
+  steps[s] = {status:'complete'};
+}
+steps.write_code.write_code_scope_manifest = {
+  v:1, files:{'skills/SKILL.md':'$SKILL_OID'}
+};
+for (const s of ['run_tests','review_security','docs','review_docs',
+    'user_verification','cleanup','pre_final_report_gate','final_report']) {
+  steps[s] = {status:'pending'};
+}
+fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7.json'),
+  JSON.stringify({steps,closes_issues:[2327]}));
+" 2>/dev/null
+
+# WCD-7a: staged doc file in snapshot → excluded → evidence false
+WCD7A_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD_N="$REPO_WCD_N" run_with_timeout node -e '
+try {
+  const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidence-resolver");
+  process.stdout.write(String(hasCompletionEvidence("docs", "wcd7", { repoDir: process.env.REPO_WCD_N })));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7a: staged doc in snapshot → excluded → evidence false" "false" "$WCD7A_OUT"
+
+# WCD-7b: positive control — staged docs/x.md NOT in snapshot → evidence true
+REPO_WCD2="$TMPDIR_BASE/repo-wcd2"
+mk_repo "$REPO_WCD2"
+mkdir -p "$REPO_WCD2/docs"
+printf 'real doc\n' > "$REPO_WCD2/docs/x.md"
+git -C "$REPO_WCD2" add docs/x.md >/dev/null 2>&1
+REPO_WCD2_N="$(nrm "$REPO_WCD2")"
+
+node -e "
+const fs = require('fs'), path = require('path');
+const steps = {};
+for (const s of ['workflow_init','clarify_intent','research','outline','detail',
+    'branching_complete','write_tests','review_tests','write_code']) {
+  steps[s] = {status:'complete'};
+}
+steps.write_code.write_code_scope_manifest = {v:1, files:{'hooks/impl.js':'oid1'}};
+for (const s of ['run_tests','review_security','docs','review_docs',
+    'user_verification','cleanup','pre_final_report_gate','final_report']) {
+  steps[s] = {status:'pending'};
+}
+fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7b.json'),
+  JSON.stringify({steps,closes_issues:[2327]}));
+" 2>/dev/null
+
+WCD7B_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD2_N="$REPO_WCD2_N" run_with_timeout node -e '
+try {
+  const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidence-resolver");
+  process.stdout.write(String(hasCompletionEvidence("docs", "wcd7b", { repoDir: process.env.REPO_WCD2_N })));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7b: staged doc NOT in snapshot → not excluded → evidence true" "true" "$WCD7B_OUT"
+
+# WCD-7c: no snapshot → no exclusion → backward-compatible (evidence true)
+REPO_WCD3="$TMPDIR_BASE/repo-wcd3"
+mk_repo "$REPO_WCD3"
+mkdir -p "$REPO_WCD3/docs"
+printf 'real doc\n' > "$REPO_WCD3/docs/y.md"
+git -C "$REPO_WCD3" add docs/y.md >/dev/null 2>&1
+REPO_WCD3_N="$(nrm "$REPO_WCD3")"
+
+node -e "
+const fs = require('fs'), path = require('path');
+const steps = {};
+for (const s of ['workflow_init','clarify_intent','research','outline','detail',
+    'branching_complete','write_tests','review_tests','write_code']) {
+  steps[s] = {status:'complete'};
+}
+// No write_code_scope_manifest
+for (const s of ['run_tests','review_security','docs','review_docs',
+    'user_verification','cleanup','pre_final_report_gate','final_report']) {
+  steps[s] = {status:'pending'};
+}
+fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7c.json'),
+  JSON.stringify({steps,closes_issues:[2327]}));
+" 2>/dev/null
+
+WCD7C_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD3_N="$REPO_WCD3_N" run_with_timeout node -e '
+try {
+  const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidence-resolver");
+  process.stdout.write(String(hasCompletionEvidence("docs", "wcd7c", { repoDir: process.env.REPO_WCD3_N })));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7c: no snapshot → no exclusion → backward-compat → evidence true" "true" "$WCD7C_OUT"
+
+# WCD-7e: snapshot {v:1, unavailable:true} → fail-closed → evidence false
+REPO_WCD4="$TMPDIR_BASE/repo-wcd4"
+mk_repo "$REPO_WCD4"
+mkdir -p "$REPO_WCD4/skills"
+printf 'skill2\n' > "$REPO_WCD4/skills/X.md"
+git -C "$REPO_WCD4" add skills/X.md >/dev/null 2>&1
+REPO_WCD4_N="$(nrm "$REPO_WCD4")"
+
+node -e "
+const fs = require('fs'), path = require('path');
+const steps = {};
+for (const s of ['workflow_init','clarify_intent','research','outline','detail',
+    'branching_complete','write_tests','review_tests','write_code']) {
+  steps[s] = {status:'complete'};
+}
+steps.write_code.write_code_scope_manifest = {v:1, unavailable:true};
+for (const s of ['run_tests','review_security','docs','review_docs',
+    'user_verification','cleanup','pre_final_report_gate','final_report']) {
+  steps[s] = {status:'pending'};
+}
+fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7e.json'),
+  JSON.stringify({steps,closes_issues:[2327]}));
+" 2>/dev/null
+
+WCD7E_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD4_N="$REPO_WCD4_N" run_with_timeout node -e '
+try {
+  const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidence-resolver");
+  process.stdout.write(String(hasCompletionEvidence("docs", "wcd7e", { repoDir: process.env.REPO_WCD4_N })));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7e: unavailable:true snapshot → fail-closed → evidence false" "false" "$WCD7E_OUT"
+
+# WCD-7f: malformed snapshot JSON → fail-closed → evidence false
+node -e "
+const fs = require('fs'), path = require('path');
+const steps = {};
+for (const s of ['workflow_init','clarify_intent','research','outline','detail',
+    'branching_complete','write_tests','review_tests','write_code']) {
+  steps[s] = {status:'complete'};
+}
+steps.write_code.write_code_scope_manifest = 'not-valid-json{{{';
+for (const s of ['run_tests','review_security','docs','review_docs',
+    'user_verification','cleanup','pre_final_report_gate','final_report']) {
+  steps[s] = {status:'pending'};
+}
+fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7f.json'),
+  JSON.stringify({steps,closes_issues:[2327]}));
+" 2>/dev/null
+
+WCD7F_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD4_N="$REPO_WCD4_N" run_with_timeout node -e '
+try {
+  const { hasCompletionEvidence } = require(process.env.WFSTATE_MODULE + "/evidence-resolver");
+  process.stdout.write(String(hasCompletionEvidence("docs", "wcd7f", { repoDir: process.env.REPO_WCD4_N })));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7f: malformed snapshot JSON → fail-closed → evidence false" "false" "$WCD7F_OUT"
+
+case_end
+
+case_begin "staged-evidence" "hooks/workflow-gate/staged-evidence.js"
+
+# WCD-7d: hasStagedDocChanges(repoDir) without 2nd arg still works
+WCD7D_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD2_N="$REPO_WCD2_N" run_with_timeout node -e '
+try {
+  const { hasStagedDocChanges } = require(process.env.WFSTATE_MODULE + "/../workflow-gate/staged-evidence");
+  process.stdout.write(String(hasStagedDocChanges(process.env.REPO_WCD2_N)));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7d: hasStagedDocChanges(repoDir) without opts arg unchanged (true for docs repo)" "true" "$WCD7D_OUT"
+
+# WCD-7g: hasStagedDocChanges with writeCodeSnapshot excludes matched file
+WCD7G_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD_N="$REPO_WCD_N" SKILL_OID="$SKILL_OID" run_with_timeout node -e '
+try {
+  const { hasStagedDocChanges } = require(process.env.WFSTATE_MODULE + "/../workflow-gate/staged-evidence");
+  const snapshot = {v:1, files:{"skills/SKILL.md": process.env.SKILL_OID}};
+  const r = hasStagedDocChanges(process.env.REPO_WCD_N, {writeCodeSnapshot: snapshot});
+  process.stdout.write(String(r));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7g: hasStagedDocChanges with snapshot excludes matched file → false" "false" "$WCD7G_OUT"
+
+# WCD-7h: hasStagedDocChanges with snapshot excludes impl file but real doc still triggers
+REPO_WCD5="$TMPDIR_BASE/repo-wcd5"
+mk_repo "$REPO_WCD5"
+mkdir -p "$REPO_WCD5/docs" "$REPO_WCD5/skills"
+printf 'real\n' > "$REPO_WCD5/docs/z.md"
+printf 'impl\n' > "$REPO_WCD5/skills/S.md"
+git -C "$REPO_WCD5" add docs/z.md skills/S.md >/dev/null 2>&1
+S_OID="$(git -C "$REPO_WCD5" rev-parse :skills/S.md 2>/dev/null || echo "unknown")"
+REPO_WCD5_N="$(nrm "$REPO_WCD5")"
+
+WCD7H_OUT="$(WFSTATE_MODULE="$WFSTATE_MODULE" REPO_WCD5_N="$REPO_WCD5_N" S_OID="$S_OID" run_with_timeout node -e '
+try {
+  const { hasStagedDocChanges } = require(process.env.WFSTATE_MODULE + "/../workflow-gate/staged-evidence");
+  const snapshot = {v:1, files:{"skills/S.md": process.env.S_OID}};
+  const r = hasStagedDocChanges(process.env.REPO_WCD5_N, {writeCodeSnapshot: snapshot});
+  process.stdout.write(String(r));
+} catch(e) { process.stdout.write("ERROR:" + e.message); }
+' 2>/dev/null)"
+check "WCD-7h: snapshot excludes S.md but docs/z.md still triggers → true" "true" "$WCD7H_OUT"
+
+case_end
 
 echo ""
 echo "=== Results ==="

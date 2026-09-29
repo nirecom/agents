@@ -1,33 +1,10 @@
 "use strict";
 // bin/worker-dispatch/emit.js
-//
-// THE ONLY MODULE IN THIS DISPATCHER THAT WRITES TO STDOUT.
-// tests/bin/feature-1643-worker-dispatch-sentinel-stdout.sh asserts that by source
-// scan. Keep it that way: a single boundary is what makes sentinel
-// neutralization a property of the program rather than a habit.
-//
-// Why this matters. Worker stdout is read back into a Claude Code transcript.
-// A `<<WORKFLOW_...>>` sequence appearing there would be indistinguishable from
-// a real workflow sentinel emitted by the session itself — child test output
-// could mark a workflow step complete. So:
-//
-//   1. Per line: control chars and newlines collapse to spaces, `<< WORKFLOW`
-//      becomes `<<_REDACTED_WORKFLOW`, then the line is length-capped.
-//   2. Per line: hooks/lib/sentinel-patterns.isStrictSentinel() — the same
-//      predicate the hooks use, so the two can never drift apart.
-//   3. Whole rendered string, after assembly: re-scanned against /<<\s*WORKFLOW/i.
-//      `\s` spans newlines, so a sentinel split across two log_tail lines is
-//      caught here even though neither line matched on its own.
-//
-// Step 3 is not redundancy — steps 1 and 2 look at fragments, step 3 looks at
-// what a reader actually sees. On a step-3 hit the rendered output is DISCARDED
-// and replaced by a fixed literal that contains no untrusted bytes at all.
-
-// collapseControl / redactSentinels / sanitizeLine live in hooks/lib/
-// output-sanitize.js: hooks/workflow-run-tests.js needs the SAME substitution for
-// the trigger_command annotation it records, and two copies of a security
-// substitution are two things to keep in step (CPR-SSOT). They are re-exported
-// below as ordinary properties, so this module's public surface is unchanged.
+// THE ONLY dispatcher module that writes to stdout (feature-1643 source scan).
+// Worker stdout re-enters a transcript, so a `<<WORKFLOW` sequence would read as a
+// real sentinel: lines are sanitized, checked with isStrictSentinel(), and the
+// whole rendered string is re-scanned; a hit discards it for a fixed literal.
+// Sanitizers live in hooks/lib/output-sanitize.js (CPR-SSOT) and are re-exported.
 const { isStrictSentinel } = require("../../hooks/lib/sentinel-patterns");
 const {
   collapseControl,
@@ -41,7 +18,6 @@ const SENTINEL_SCAN_RE = /<<\s*WORKFLOW/i;
 const MAX_SUMMARY = 300;
 const MAX_YAML_SUMMARY = 296; // + the two single quotes stays inside 300
 const MAX_TAIL_LINES = 40;
-const MAX_FAILING_TESTS = 10;
 
 const FALLBACK_MSG = "output withheld (sentinel-like content detected)";
 const FALLBACK_TRIPLE = `status: failed\nsummary: ${FALLBACK_MSG}\nartifact_path: (none)\n`;
@@ -111,25 +87,9 @@ const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUT
 const CONTRACT_CAPTURE_RE =
   /^[ \t]*RUN_CONTRACT: (PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+)[ \t]*$/;
 
-// RETIRED, DEFINITION ONLY — deliberately not called (#1273 round 3 / NEW-L1).
-//
-// It used to lift a contract-shaped line out of the log tail into the
-// authoritative top-level slot when the worker handed over no structured
-// contract. What it actually was, by then, is a launderer: it copied untrusted
-// log text into the ONE position the hook treats as a verdict, with no check on
-// where that text came from. And it had no live purpose — workers/test-runner.js
-// parses the suite's contract into `runContract` AND strips contract lines out of
-// `logTail` before handing the result over, so the fallback was unreachable for
-// every worker in the dispatcher.
-//
-// The top-level slot is now written from structured worker data alone. Kept here
-// unwired, rather than deleted, so a future caller must add the source-identity
-// check that this shape never had; a caller that simply re-wires it reopens the
-// hole.
-//
-// Exactly-one, mirroring the hook's own rule: zero is nothing to lift, and two
-// is ambiguous — inventing a winner would be this renderer issuing a verdict the
-// suite never gave.
+// RETIRED, DEFINITION ONLY — deliberately not called (#1273 round 3 / NEW-L1):
+// lifting log-tail text into the verdict slot laundered untrusted bytes. Kept
+// unwired so a future caller must add the source-identity check it never had.
 // eslint-disable-next-line no-unused-vars
 function promoteContractFromTail(tailSource) {
   const found = [];
@@ -153,9 +113,8 @@ function renderTestRunnerYaml(result) {
   lines.push(`duration_seconds: ${Math.max(0, toInt(result.durationSeconds, 0))}`);
   lines.push(`summary: ${yamlSingleQuoted(result.summary, MAX_YAML_SUMMARY, "no summary")}`);
 
-  const failing = Array.isArray(result.failingTests)
-    ? result.failingTests.slice(0, MAX_FAILING_TESTS)
-    : [];
+  // Uncapped: /run-tests baseline classification needs every failing path (#2431).
+  const failing = Array.isArray(result.failingTests) ? result.failingTests : [];
   if (failing.length === 0) {
     lines.push("failing_tests: []");
   } else {

@@ -1,46 +1,18 @@
 "use strict";
 // provenance-identity.js — filesystem identity check for the two authorised
-// RUN_CONTRACT emitters (#1273 H2).
-//
-// WHY (CPR-WPH): resolveTestProvenance() decides WHO produced the output by
-// comparing a resolved execution position against a path SUFFIX
-// (`tests/run-all.sh`) or a dispatcher BASENAME (`worker-dispatch.js`). A name is
-// not an identity: any file that happens to be spelled that way, anywhere on
-// disk, inherits the emitter's whole authority — and that authority plus a
-// hand-written contract line is a complete run_tests completion. This module
-// adds the missing question: is the thing at that path actually THIS repo's
-// emitter?
-//
-// The judgement is deliberately three-valued in its inputs, not two (CPR-SC):
-//   - the path resolves to a REAL file → it must realpath-match a canonical
-//     emitter location, otherwise it is a same-named impostor (the attack).
-//   - the path resolves to NOTHING → UNVERIFIED, therefore not trusted (#1273
-//     round 3 / NEW-H2). The older reading — "a file that does not exist cannot
-//     have executed, so the suffix judgement stands" — is false for this caller:
-//     the hook never executes anything. It reads a command STRING and a stdout
-//     STRING that the same author supplied, so `bash /nowhere/tests/run-all.sh`
-//     plus a hand-written contract line was a complete run_tests completion.
-//     "I could not check this" and "I checked it and it is ours" are different
-//     answers, and only the second one may unlock a completion.
-//   - the path is RELATIVE and climbs out of the working tree (`../..//…`) → it
-//     names something the working tree does not own, so it is never this
-//     repo's emitter regardless of whether it exists.
-//
-// Two canonical roots are accepted, never one: the root this module itself lives
-// in (the deployed copy) and the root above the caller's cwd (the checkout the
-// command actually ran in). Pinning only the former would demote every legitimate
-// run made from a different checkout — but the second root is admitted only when
-// it is demonstrably a checkout of the SAME repository (#1273 round 3 / NEW-M1).
-// "Is there a repo here?" is not "is this THIS repo?": a two-second `git init` in
-// a temp directory otherwise minted a fully authorised emitter. Repo identity is
-// taken from the git COMMON dir, which a linked worktree (`.git` is a FILE
-// holding `gitdir: …/.git/worktrees/<name>`) shares with its main checkout — the
-// everyday shape for this repo, and the case a bare `root === MODULE_REPO_ROOT`
-// check would break.
+// RUN_CONTRACT emitters (#1273 H2): a same-named file is not this repo's emitter.
+//   - path resolves to a real file → it must realpath-match a canonical location.
+//   - path resolves to nothing → UNVERIFIED, not trusted (#1273 round 3 / NEW-H2).
+//   - relative path climbing out of the working tree → never ours.
+// Canonical roots: this module's own checkout, plus the cwd's checkout only when
+// it shares this repo's git COMMON dir (#1273 round 3 / NEW-M1; linked worktrees
+// share it). A merge-base checkout made by bin/run-tests-baseline is never a
+// root (#2431): base-commit output must not complete run_tests.
 
 const fs = require("fs");
 const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
+const { isBaselineCheckout } = require("../lib/baseline-checkout-marker");
 
 // <root>/hooks/workflow-run-tests/provenance-identity.js → <root>
 const MODULE_REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -74,10 +46,9 @@ function realpathOrNull(p) {
 }
 
 // The git COMMON dir of the checkout rooted at `root`, or null when `root` is
-// not a checkout. This is the repository's identity: a main checkout answers
-// `<root>/.git`, and every linked worktree of the same repository answers that
-// same directory, because its `.git` FILE points into `<main>/.git/worktrees/…`
-// and git records the way back in that directory's `commondir` file.
+// not a checkout. A main checkout answers `<root>/.git`; a linked worktree's
+// `.git` FILE points into `<main>/.git/worktrees/…`, whose `commondir` file
+// records the way back to that same directory.
 function gitCommonDir(root) {
   const dotGit = path.join(root, ".git");
   let st;
@@ -178,6 +149,7 @@ function verifyEmitterIdentity(emitter, claimedPath, cwd) {
   if (cwdRoot !== null) roots.push(cwdRoot);
 
   for (const root of roots) {
+    if (isBaselineCheckout(root)) continue;
     const canonical = realpathOrNull(path.join(root, rel));
     if (canonical !== null && samePath(canonical, real)) return true;
   }

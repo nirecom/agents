@@ -106,9 +106,9 @@ function baseName(token) {
   return path.basename(String(token).replace(/\\/g, "/")).replace(/\.exe$/i, "").toLowerCase();
 }
 
-function namesAdvanceCli(token) {
+function namesCli(token, names) {
   const segments = String(token).split(/[/\\]/);
-  return segments.some((seg) => ADVANCE_CLI_NAMES.indexOf(seg.toLowerCase()) !== -1);
+  return segments.some((seg) => names.indexOf(seg.toLowerCase()) !== -1);
 }
 
 // A surviving backslash is a path separator everywhere else, but `\-\-advance`
@@ -142,18 +142,18 @@ function programEnds(tokens, head) {
   return ends;
 }
 
-// The advance CLI must be the program this segment RUNS: the program itself, or
+// The named CLI must be the program this segment RUNS: the program itself, or
 // the first non-flag argument of an interpreter. Named merely as an argument to
 // something else (`cat .../next-step --advance`) it is data, not a door.
-function invokesAdvanceCli(tokens) {
+function invokesCli(tokens, names) {
   const head = headIndex(tokens);
   if (head >= tokens.length) return false;
   for (const end of programEnds(tokens, head)) {
-    if (namesAdvanceCli(tokens[end])) return true;
+    if (namesCli(tokens[end], names)) return true;
     if (INTERPRETERS.indexOf(baseName(tokens[end])) === -1) continue;
     for (let i = end + 1; i < tokens.length; i += 1) {
       if (isFlagLike(tokens[i])) continue;
-      if (namesAdvanceCli(tokens[i])) return true;
+      if (namesCli(tokens[i], names)) return true;
       break;
     }
   }
@@ -172,28 +172,44 @@ function nestedCommands(tokens) {
   return nested;
 }
 
-function commandDrivesWorkflow(command, depth) {
+function commandMatches(command, depth, segmentHits) {
   for (const tokens of tokenizeSegments(command)) {
-    if (invokesAdvanceCli(tokens) && tokens.some(isMutatingFlag)) return true;
+    if (segmentHits(tokens)) return true;
     if (depth >= MAX_DEPTH) continue;
     // `bash -c '<command>'` (and pwsh -Command / cmd /c) hides a real invocation
     // one quoting level down; only a real shell's argument is re-examined, so
     // `echo "<text>"` stays data.
     for (const inner of nestedCommands(tokens)) {
-      if (commandDrivesWorkflow(inner, depth + 1)) return true;
+      if (commandMatches(inner, depth + 1, segmentHits)) return true;
     }
   }
   return false;
 }
 
-function isWorkflowStateDriverCommand(command) {
+function matchesSafely(command, segmentHits) {
   if (typeof command !== "string" || command === "") return false;
-  if (!ADVANCE_CLI_NAMES.length) return false;
   try {
-    return commandDrivesWorkflow(command, 0);
+    return commandMatches(command, 0, segmentHits);
   } catch (e) {
     return false;
   }
 }
 
-module.exports = { isWorkflowStateDriverCommand };
+function isWorkflowStateDriverCommand(command) {
+  if (!ADVANCE_CLI_NAMES.length) return false;
+  return matchesSafely(command, (tokens) => invokesCli(tokens, ADVANCE_CLI_NAMES) && tokens.some(isMutatingFlag));
+}
+
+// `record` trusts its caller-built classification file and completes run_tests as
+// observed evidence, so bin/run-tests-baseline (a subprocess no hook sees) is its
+// only legitimate caller; a tool-issued `record` would forge that evidence (#2431).
+const BASELINE_EVIDENCE_CLI = ["run-tests-baseline-evidence"];
+const BASELINE_RECORD_SUBCOMMAND = "record";
+
+function isBaselineEvidenceRecordCommand(command) {
+  return matchesSafely(command, (tokens) =>
+    invokesCli(tokens, BASELINE_EVIDENCE_CLI) &&
+    tokens.some((t) => String(t).replace(/\\/g, "") === BASELINE_RECORD_SUBCOMMAND));
+}
+
+module.exports = { isWorkflowStateDriverCommand, isBaselineEvidenceRecordCommand };

@@ -37,7 +37,8 @@ const {
   RECORDED_VERDICT_PREFIX,
   RECORDED_VERDICT_REASONS,
 } = require("../../../../hooks/workflow-state/record-step-verdict");
-const { STEP_TO_SKILL, STEP_HINT, isTerminalStep } = require("./steps");
+const { STEP_TO_SKILL, STEP_HINT, REVIEW_TESTS_REOPEN_HINT, isTerminalStep } = require("./steps");
+const { REVIEW_TESTS_REOPEN_REASONS } = require("../../../../hooks/workflow-state/state-io/review-tests");
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 
@@ -274,6 +275,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Inconsistency: later step is complete OR invalid status anywhere.
   // Runs AGAINST THE SNAPSHOT (#1148): steps already resolved from evidence read
   // as complete here, so a pending-but-evidenced step can no longer false-abort.
+  // #2327: a write_code-reopened review_tests is a deliberate re-review, not a gap.
+  const rtReopened = currentStep === "review_tests" &&
+    REVIEW_TESTS_REOPEN_REASONS.includes((state.steps.review_tests || {}).reopen_reason);
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
     // A terminal step recorded complete is the session's own end marker, never
@@ -288,7 +292,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
       emit("abort", "", "", "inconsistent: " + step + " has unknown status " + rawStatus);
       return;
     }
-    if (i > currentIdx && status === "complete") {
+    if (i > currentIdx && status === "complete" && !rtReopened) {
       if (step === "run_tests" && currentStep === "write_tests") {
         // Scoped recovery: run_tests auto-completed ahead of write_tests.
         // Point at the --reset tool instead of a full /workflow-init reset.
@@ -397,7 +401,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   }
 
   const skill = STEP_TO_SKILL[currentStep];
-  const hint = skill
+  const hint = rtReopened ? REVIEW_TESTS_REOPEN_HINT : skill
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 

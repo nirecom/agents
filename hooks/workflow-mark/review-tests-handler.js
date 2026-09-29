@@ -1,16 +1,12 @@
 "use strict";
-// Issue #833 — handles WORKFLOW_REVIEW_TESTS_COMPLETE / WORKFLOW_REVIEW_TESTS_WARNINGS sentinels.
+// Issue #833 / #2327 — WORKFLOW_REVIEW_TESTS_COMPLETE / _WARNINGS / _WARNINGS_ACCEPTED sentinels.
 //
-// COMPLETE form  : echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex} [optional meta]>>"
-//   Skill computes staged-tests fingerprint via computeStagedTestsToken and embeds it.
-//   Handler extracts token from payload and records review_tests=complete.
-// WARNINGS form  : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} [warnings=N ...]>>"
-//   Records review_tests=complete with warnings_summary so the gate can block until
-//   warnings are resolved (gate checks warnings_summary field — C2 enforcement at gate layer).
-// LOOKSLIKE form : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS>>" (malformed — advisory only)
-//
-// Note: echo "<<WORKFLOW_MARK_STEP_review_tests_complete>>" is handled by
-//   mark-step-handler.js which REJECTS it (review_tests requires a token payload).
+// COMPLETE : echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint={hex} [meta]>>"
+// WARNINGS : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint={hex} [warnings=N ...]>>"
+//   The handler recomputes the review-scope manifest itself and records it only when
+//   its digest equals the payload fingerprint; mismatch / no payload / calc error →
+//   signalFatal, nothing written. WARNINGS also stores warnings_summary (gate C2 block).
+// Note: <<WORKFLOW_MARK_STEP_review_tests_complete>> is REJECTED by mark-step-handler.js.
 
 const {
   REVIEW_TESTS_COMPLETE_RE_DQ,
@@ -28,10 +24,54 @@ const {
   readState,
 } = require("../workflow-state");
 const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
+const {
+  computeReviewScopeManifest,
+  fingerprintOfManifest,
+} = require("../workflow-gate/review-tests-evidence");
 
-function extractToken(payload) {
-  const m = payload.match(/token=([A-Za-z0-9]+)/);
+const RESTART_HINT = "Re-run /review-tests from RT-5a (recompute the fingerprint, then re-emit).";
+
+function extractFingerprint(payload) {
+  const m = payload.match(/fingerprint=([0-9a-f]{16})/);
   return m ? m[1] : null;
+}
+
+// The review scope the commit gate will verify: the hook's tool-input cwd, else
+// the session-bound linked worktree.
+function computeHandlerManifest(sessionId, repoCwd) {
+  let dir = repoCwd || null;
+  if (!dir) {
+    const { resolveSessionWorktreePath } = require("../workflow-state/resolve-worktree-path");
+    dir = resolveSessionWorktreePath(sessionId);
+  }
+  if (!dir) return { ok: false, error: "no worktree resolved" };
+  const { toWindowsPath } = require("../lib/branch-diff");
+  return computeReviewScopeManifest(toWindowsPath(dir));
+}
+
+// Returns the verified files map, or null after signalling fatal.
+function verifyFingerprint(label, payload, ctx) {
+  const { sessionId, signalFatal, repoCwd } = ctx;
+  const fp = extractFingerprint(payload);
+  if (!fp) {
+    signalFatal(`workflow-mark: ${label} rejected — missing fingerprint={hex} in payload. ${RESTART_HINT}`);
+    return null;
+  }
+  if (!sessionId) {
+    signalFatal(`workflow-mark: could not resolve session_id — review_tests ${label} NOT recorded. ${RESTART_HINT}`);
+    return null;
+  }
+  const manifest = computeHandlerManifest(sessionId, repoCwd);
+  if (!manifest.ok) {
+    signalFatal(`workflow-mark: ${label} rejected — review-scope fingerprint unavailable (${manifest.error}). ${RESTART_HINT}`);
+    return null;
+  }
+  const own = fingerprintOfManifest(manifest.files);
+  if (own !== fp) {
+    signalFatal(`workflow-mark: ${label} rejected — fingerprint=${fp} does not match the staged review scope (${own}). ${RESTART_HINT}`);
+    return null;
+  }
+  return manifest.files;
 }
 
 function backfillWriteTests(sessionId, repoCwd, pushMessage) {
@@ -55,25 +95,11 @@ function handle(ctx) {
 
   // --- WORKFLOW_REVIEW_TESTS_COMPLETE handler ---
   if (completeMatch) {
-    const payload = completeMatch[1];
-    const token = extractToken(payload);
-    if (!token) {
-      pushMessage(
-        "workflow-mark: REVIEW_TESTS_COMPLETE rejected — missing token={hex} in payload. " +
-          "Re-emit: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>\""
-      );
-      return true;
-    }
-    if (!sessionId) {
-      signalFatal(
-        `workflow-mark: could not resolve session_id — review_tests NOT recorded. ` +
-          `Re-emit: echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${token}>>"`
-      );
-      return true;
-    }
+    const files = verifyFingerprint("REVIEW_TESTS_COMPLETE", completeMatch[1], ctx);
+    if (!files) return true;
     try {
-      markReviewTestsComplete(sessionId, token);
-      pushMessage(`[workflow] review_tests: complete (token: ${token}).`);
+      markReviewTestsComplete(sessionId, files);
+      pushMessage(`[workflow] review_tests: complete (fingerprint: ${fingerprintOfManifest(files)}).`);
       backfillWriteTests(sessionId, repoCwd, pushMessage);
     } catch (e) {
       pushMessage(
@@ -87,16 +113,10 @@ function handle(ctx) {
   // Records complete+warnings_summary. Gate blocks on warnings_summary (C2 enforcement).
   if (warningsMatch) {
     const payload = warningsMatch[1];
-    const token = extractToken(payload);
-    if (!sessionId) {
-      signalFatal(
-        "workflow-mark: could not resolve session_id — review_tests WARNINGS NOT recorded."
-      );
-      return true;
-    }
+    const files = verifyFingerprint("REVIEW_TESTS_WARNINGS", payload, ctx);
+    if (!files) return true;
     try {
-      const usedToken = token || "warnings";
-      markReviewTestsComplete(sessionId, usedToken, { warnings_summary: payload });
+      markReviewTestsComplete(sessionId, files, { warnings_summary: payload });
       pushMessage(
         `[workflow] /review-tests reported warnings: ${payload} — ` +
           "re-run /write-tests to address coverage gaps, then /review-tests again."
@@ -110,7 +130,8 @@ function handle(ctx) {
   }
 
   // --- WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED handler ---
-  // Clears warnings_summary (preserving token/wsid) so the gate unblocks /write-code.
+  // Clears warnings_summary and re-records the current review-scope manifest (#2287)
+  // so the gate unblocks /write-code.
   const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
   if (acceptedMatch) {
     const reason = acceptedMatch[1];
@@ -128,7 +149,8 @@ function handle(ctx) {
       return true;
     }
     try {
-      clearReviewTestsWarnings(sessionId, reason);
+      const manifest = computeHandlerManifest(sessionId, repoCwd);
+      clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null);
       // #1361: accepting the gap ends this review — drop the re-invoke guard marker.
       clearReviewTestsTerminalMarker(sessionId);
       pushMessage(
@@ -155,7 +177,7 @@ function handle(ctx) {
   if (REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_COMPLETE — " +
-        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>\""
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint={hex}>>\""
     );
     return true;
   }
@@ -164,7 +186,7 @@ function handle(ctx) {
   if (REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_WARNINGS — " +
-        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} warnings=N>>\""
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint={hex} warnings=N>>\""
     );
     return true;
   }

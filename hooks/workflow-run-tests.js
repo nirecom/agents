@@ -18,6 +18,7 @@ const {
   isContractTrusted,
   resolveRunOutcome,
 } = require("./workflow-run-tests/outcome");
+const { extractFailingTests, emitterRoot } = require("./workflow-run-tests/failing-list");
 const { stampTestFailureRisk } = require("./workflow-run-tests/test-failure-risk");
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
@@ -217,6 +218,10 @@ const exitCode =
 const sessionId = input.session_id || resolveSessionId();
 if (!sessionId) done();
 
+// Baseline evidence (#2431) belongs to ONE observed failing run: any new run
+// clears it, so a later completion can never inherit an older classification.
+const BASELINE_TOMBSTONES = { baseline_classification: null, completion_basis: null };
+
 try {
   // --- trust conditions, evaluated BEFORE the exit-code fast path ------------
   // ORDER (#1665 / C1): run-all.sh prints a valid contract THEN exits 1 when
@@ -234,6 +239,7 @@ try {
   let attributed = false;
   let vetoed = false;
   let workerStatus = null;
+  let failingRoot = null;
 
   try {
     // C′ contract-trust model; all must hold, else ACTIVE DEMOTION to pending:
@@ -249,41 +255,21 @@ try {
       ? input.tool_input.cwd : undefined;
     const commandCwd = normalizeCwd(toolCwd) || process.cwd();
 
-    // (a) also carries a filesystem identity check now: the emitter must BE this
-    //     repo's tests/run-all.sh or bin/worker-dispatch.js, not merely share its
-    //     name (#1273 H2 — a same-named file plus a hand-written contract line was
-    //     otherwise a complete run_tests completion).
     const provenance = resolveTestProvenance(command, commandCwd);
     hasProvenance = provenance !== null;
-    // (a′) AMBIGUOUS PROVENANCE (#1273 round 4 / NEW-N1). When the command holds
-    //      two DISTINCT authorised emitters, the shell concatenated their output
-    //      into one flat string and no byte of it is attributable to a segment.
-    //      "Which emitter produced this contract?" then has no answer, and an
-    //      unanswerable provenance question resolves to NOT TRUSTED — the same
-    //      rule provenance-identity.js applies to a path it cannot verify. The
-    //      demotion is unconditional: the payload's own `status:` is precisely the
-    //      claim whose author is in doubt, so it may not rescue the run.
+    // (a′) two DISTINCT emitters in one command → no byte is attributable →
+    //      NOT TRUSTED, unconditionally (#1273 round 4 / NEW-N1).
     ambiguous = hasProvenance && provenance.ambiguous === true;
-    // The RESOLVED route. Everything that reads stdout is scoped by it: only the
-    // worker-dispatch route has a renderer-owned payload shape to scope to.
     emitter = hasProvenance ? provenance.emitter : null;
     contract = hasProvenance ? parseContract(toolResponse, emitter) : null;
-    // (a″) UNATTRIBUTED STDOUT (#1273 round 5 / H1). See stdoutAttributed() for
-    //      why position — not presence, not indentation — is the property each
-    //      emitter actually guarantees.
+    // (a″) unattributed stdout (#1273 round 5 / H1) — see stdoutAttributed().
     attributed = !hasProvenance || stdoutAttributed(toolResponse, emitter);
-
-    // (d) the worker's own status/exit_code veto, scoped to the route where the OS
-    //     exit code carries no verdict.
+    // (d) the worker's own status/exit_code veto, worker route only.
     vetoed = emitter === "worker-dispatch" && workerVerdictVetoes(toolResponse);
-    // The worker's own word, for the OUTCOME axis only. The veto above is the
-    // STATUS axis's reading of the very same parse (R7).
     workerStatus = workerStatusOf(toolResponse, emitter);
+    failingRoot = hasProvenance ? emitterRoot(provenance.path, commandCwd) : null;
   } catch (e) {
-    // Contract-absent defaults. `attributed = false` is the conservative reading:
-    // the question "are these bytes the emitter's own?" was never answered, and an
-    // unanswered attribution question resolves to NOT TRUSTED, so the outcome is
-    // withheld rather than guessed. The status demotions below still run.
+    // Unanswered trust questions resolve to NOT TRUSTED; outcome is withheld.
     hasProvenance = false;
     ambiguous = false;
     emitter = null;
@@ -291,6 +277,7 @@ try {
     attributed = false;
     vetoed = false;
     workerStatus = null;
+    failingRoot = null;
   }
 
   // The OUTCOME axis, decided once from already-computed scalars only — never
@@ -299,6 +286,22 @@ try {
   // cleared rather than left to read as current.
   const outcomeInput = { emitter, ambiguous, attributed, vetoed, contract, workerStatus };
   const runOutcome = resolveRunOutcome(outcomeInput);
+
+  // The failing list is recorded only from trusted, attributed emitter bytes;
+  // failing-list.js withholds it (null) unless every entry is a real test path.
+  let failingTests = null;
+  try {
+    if (hasProvenance && !ambiguous && attributed && contract !== null && contract.fail > 0) {
+      failingTests = extractFailingTests({
+        stdout: responseStdout(toolResponse),
+        isWorker: emitter === "worker-dispatch",
+        worktreeRoot: failingRoot,
+        contract,
+      });
+    }
+  } catch (e) {
+    failingTests = null;
+  }
 
   // Fast path: non-zero exit code always reverts to pending regardless of
   // contract. Unconditional — it runs whether or not the local catch above fired,
@@ -309,6 +312,8 @@ try {
       last_exit_code: exitCode,
       trigger_command: sanitizeTrigger(command),
       run_outcome: runOutcome,
+      failing_tests: failingTests,
+      ...BASELINE_TOMBSTONES,
     });
     // #2430: a red suite outside the red-expected steps is a handoff risk. Never throws.
     stampTestFailureRisk(sessionId);
@@ -328,11 +333,11 @@ try {
       contract_absent: contractAbsent,
       trigger_command: sanitizeTrigger(command),
       run_outcome: runOutcome,
+      failing_tests: failingTests,
+      ...BASELINE_TOMBSTONES,
     });
-    // A silent demotion is why #1378 cost a session to diagnose. The reason goes
-    // to the ONE channel a human reads directly — and only here: the valid-contract
-    // path stays quiet, because a message on every green run trains the reader to
-    // ignore the channel.
+    // A silent demotion is why #1378 cost a session to diagnose; the reason goes
+    // only to the human channel, and the valid-contract path stays quiet.
     done({
       systemMessage:
         `run_tests demoted to pending (${demotionReason(hasProvenance, ambiguous, contract, toolResponse, vetoed, emitter, attributed)}). ` +
@@ -348,21 +353,17 @@ try {
     ? state.steps.write_tests.status
     : undefined;
   if (writeTestsStatus === "complete" || writeTestsStatus === "skipped") {
-    // A null-valued annotation is a tombstone (#1733 projection): the key
-    // disappears while the event stays in the stream. Without this, a demotion
-    // recorded earlier in the session keeps its "demoted because X" note visible
-    // on a step that has since actually completed — a stale reason is read as a
-    // current one.
-    //
-    // origin override: this is PostToolUse pattern-detection on a Bash
-    // command, not a deliberate user/skill action — must not count as
-    // "this session genuinely started the workflow" (#1794 ADOPTION_ORIGINS).
+    // Null-valued annotations are tombstones (#1733): a stale demotion note must
+    // not read as current on a step that has since completed. The origin override
+    // marks this as pattern-detection, not a deliberate action (#1794).
     markStep(sessionId, "run_tests", "complete", {
       last_run_failed: null,
       last_exit_code: null,
       contract_absent: null,
       trigger_command: null,
       run_outcome: "pass",
+      failing_tests: null,
+      ...BASELINE_TOMBSTONES,
     }, { origin: "workflow-run-tests-auto-detect" });
   }
   // else: write_tests not yet satisfied → fail-open (do not mark complete).
