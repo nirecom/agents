@@ -2,7 +2,7 @@
 # tests/hooks/feature-2403-readonly-judge.sh
 # Tests: hooks/bash-guard/readonly-class.js, hooks/lib/bash-write-patterns/git-read-ir.js, hooks/lib/bash-write-patterns/gh-read.js, hooks/lib/readonly-syntax-adapters.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, classifier, readonly-allow, interlock, newline-guard, scope:issue-specific, pwsh-not-required, TL2
-# R1-R8: the N3/N4/N5 read-only allow classes at judge level (#2403), driven through
+# R1-R10: the N3/N4/N5 read-only allow classes at judge level (#2403), driven through
 # judgeBashCommand by tests/hooks/feature-2134-bash-guard/judge-probe.js. Unit rows live in
 # tests/hooks/feature-2403-readonly-classes.sh.
 
@@ -22,7 +22,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # transcript behavior. Only a real `claude -p` session exercises those seams.
 
 ROWS=0
-ROWS_EXPECTED=209
+ROWS_EXPECTED=237
 
 check() {
     local name="$1" want="$2" got="$3"
@@ -349,6 +349,56 @@ check "R6/credential-cat: [cat ~/.ssh/id_rsa]" \
     "passThrough|BG-NO-HIT" "$(verdict_code_of 'cat ~/.ssh/id_rsa')"
 case_end
 
+case_begin "readonly-expansion-negative" "hooks/bash-guard/readonly-class.js"
+# R9: the credential screen sees argv text, the shell sees the expansion -- so a glob, brace,
+# variable or escape outside single quotes must refuse. url-* rows: a gh api path is screened
+# in its ?/#-truncated and percent-decoded spellings too (single-quoted rows isolate that).
+rj_batched_stdin ra_rows R9 <<'TABLE'
+glob-star        ~ cat .en*                              ~ passThrough|BG-NO-HIT
+glob-question    ~ cat .e?v                              ~ passThrough|BG-NO-HIT
+glob-bracket     ~ cat .en[v]                            ~ passThrough|BG-NO-HIT
+glob-env-star    ~ cat .env*                             ~ passThrough|BG-NO-HIT
+glob-env-q-local ~ cat .env?local                        ~ passThrough|BG-NO-HIT
+brace            ~ cat .{env,x}                          ~ passThrough|BG-NO-HIT
+var-bare         ~ cat $F                                ~ passThrough|BG-NO-HIT
+var-dquoted      ~ cat "$F"                              ~ passThrough|BG-NO-HIT
+var-dquoted-mix  ~ cat "a$b"                             ~ passThrough|BG-NO-HIT
+git-show-glob    ~ git show HEAD:.e?v                    ~ passThrough|BG-NO-HIT
+gh-api-glob      ~ gh api repos/o/r/contents/.en*        ~ passThrough|BG-NO-HIT
+url-query-unq    ~ gh api repos/o/r/contents/.env?ref=main ~ passThrough|BG-NO-HIT
+url-query-sq     ~ gh api 'repos/o/r/contents/.env?ref=main' ~ passThrough|BG-NO-HIT
+url-frag-sq      ~ gh api 'repos/o/r/contents/.env#x'    ~ passThrough|BG-NO-HIT
+url-pct-upper    ~ gh api repos/o/r/contents/%2Eenv      ~ passThrough|BG-NO-HIT
+url-pct-lower    ~ gh api repos/o/r/contents/%2eenv      ~ passThrough|BG-NO-HIT
+url-pct-mid      ~ gh api repos/o/r/contents/.e%6Ev      ~ passThrough|BG-NO-HIT
+url-pct-slash    ~ gh api repos/o/r/contents/.ssh%2Fid_rsa ~ passThrough|BG-NO-HIT
+url-pct-double   ~ gh api repos/o/r/contents/%252Eenv    ~ passThrough|BG-NO-HIT
+TABLE
+# `~` is the table separator and mkcmd turns `\n` into a newline, so these sit outside the table.
+ROWS=$((ROWS + 1))
+check "R9/glob-home: [cat ~/.s?h/id_rsa]" \
+    "passThrough|BG-NO-HIT" "$(verdict_code_of 'cat ~/.s?h/id_rsa')"
+ROWS=$((ROWS + 1))
+check "R9/escape-bare: [cat .e\\nv]" \
+    "passThrough|BG-NO-HIT" "$(verdict_code_of 'cat .e\nv')"
+ROWS=$((ROWS + 1))
+check "R9/escape-dquoted: [cat \".e\\nv\"]" \
+    "passThrough|BG-NO-HIT" "$(verdict_code_of 'cat ".e\nv"')"
+case_end
+
+case_begin "readonly-expansion-positive" "hooks/bash-guard/readonly-class.js"
+# R10: vacuity twins of R9 -- single quotes make the same bytes literal, and a benign `%` or a
+# quoted query on a non-sensitive path keeps its class's allow.
+rj_batched_stdin ra_rows R10 <<'TABLE'
+sq-glob-literal  ~ cat '.e?v'                            ~ allow|BG-ALLOW-READONLY-GENERIC
+sq-dollar        ~ cat 'a$b'                             ~ allow|BG-ALLOW-READONLY-GENERIC
+sq-grep-regex    ~ grep 'a.*b' README.md                 ~ allow|BG-ALLOW-READONLY-GENERIC
+gh-contents      ~ gh api repos/o/r/contents/README.md   ~ allow|BG-ALLOW-READONLY-GH
+gh-contents-q-sq ~ gh api 'repos/o/r/contents/README.md?ref=main' ~ allow|BG-ALLOW-READONLY-GH
+git-format-pct   ~ git log --format=%H                   ~ allow|BG-ALLOW-READONLY-GIT
+TABLE
+case_end
+
 case_begin "readonly-structural" "hooks/bash-guard/judge.js"
 # R7: structure outranks class. deny forms stay deny (deny > allow); a newline or CR turns one
 # visible command into two, so it skips the WHOLE allow path -- self-script included (the SELF_*
@@ -398,7 +448,8 @@ case_end
 
 case_begin "row-budget" "hooks/bash-guard/judge.js"
 # A drifted heredoc delimiter or an early return would leave a table reporting green with no
-# rows. R1 30+1, R1b 19+32, R2 19, R3 19, R4 30, R5 18, R6 18+1, R7 11+2, R8 1+8 = 209.
+# rows. R1 30+1, R1b 19+32, R2 19, R3 19, R4 30, R5 18, R6 18+1, R9 19+3, R10 6, R7 11+2,
+# R8 1+8 = 237.
 check "BUDGET: every table-driven loop executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 case_end
 

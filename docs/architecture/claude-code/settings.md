@@ -63,7 +63,9 @@ allowed by a positive argv judge instead of a spelling.
 - Only one plain command: no separator, redirect, substitution, group, heredoc, env prefix,
   path-qualified or `.exe` command word, `command`/`builtin` wrapper. Any argv that touches a
   credential or dotenv path (`hooks/lib/credential-check.js`, `hooks/lib/dotenv-check.js`) never
-  allows, whichever class matched. A malformed data file fails closed to "no class".
+  allows, whichever class matched. Neither does an argument the shell would expand (unquoted
+  glob/brace, `$`, backtick or backslash outside single quotes) nor a query/fragment-suffixed or
+  percent-encoded spelling of such a path. A malformed data file fails closed to "no class".
 - Newline guard: a `\n` or `\r` anywhere in the command skips the whole allow path — the
   self-script allow included — because the IR does not split on newlines (#1253).
 - git (`hooks/lib/bash-write-patterns/git-read-ir.js`): only pure-read subcommands; side-effect

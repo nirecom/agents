@@ -57,6 +57,7 @@ assert_not_contains "A2: a no-hit verdict does not name a forbidden literal" "re
 
 # A3: argument count is not the axis -- rules/shell-commands.md exempts "one standalone
 # command with its own flags and arguments", however many of them there are. grep is an N3
-# generic read-only class member, so since #2403 the verdict is allow.
+# generic read-only class member, so since #2403 the verdict is allow. The glob is quoted: an
+# unquoted `*` is shell-expanded, which the read-only classes refuse on their own axis.
 assert_eq "A3: a long single command with many flags is not blocked" \
-    "allow" "$(verdict_of 'grep -rn --include=*.js --color=never needle /tmp/haystack')"
+    "allow" "$(verdict_of "grep -rn --include='*.js' --color=never needle /tmp/haystack")"

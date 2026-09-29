@@ -4,7 +4,9 @@
 // A plain command name whose class (install/readonly-command-classes.json) positively
 // judges the argv read-only allows with that class's code. git/gh delegate to their own
 // positive judges; every other entry goes through a syntax adapter. Reads of credential or
-// dotenv paths never allow, whichever class matched. Any doubt or exception is null.
+// dotenv paths never allow, whichever class matched; neither does any argument the shell
+// would expand (glob, brace, variable, escape) nor a URL spelling (query/fragment suffix,
+// percent-encoding) that resolves to such a path. Any doubt or exception is null.
 
 const { resolveEffectiveSegment } = require("../lib/command-ir");
 const { DEFAULT_ROOT, loadReadOnlyClasses } = require("../lib/readonly-command-classes");
@@ -34,16 +36,66 @@ function isPlainName(seg) {
 }
 
 const OPTION_LETTER_RE = /[A-Za-z0-9]/;
+const DOUBLE_QUOTE_ACTIVE = "$`\\";
+const UNQUOTED_ACTIVE = DOUBLE_QUOTE_ACTIVE + "*?[{";
+
+// True when the shell would expand the raw token (variable, substitution, escape, glob,
+// brace): the path it finally reads is then unknowable from the literal text.
+function isShellExpanded(raw) {
+  let quote = "";
+  for (const ch of raw) {
+    if (quote === "'") {
+      if (ch === "'") quote = "";
+    } else if (quote === '"') {
+      if (ch === '"') quote = "";
+      else if (DOUBLE_QUOTE_ACTIVE.includes(ch)) return true;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (UNQUOTED_ACTIVE.includes(ch)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const URL_SUFFIX_RE = /[?#]/;
+const PERCENT_BYTE_RE = /%([0-9A-Fa-f]{2})/g;
+
+// Every spelling a URL consumer (gh api) may resolve the value to: the part before the query
+// or fragment, and its percent-decoded form. Byte-wise decoding never throws on a stray `%`
+// (git log --format=%H), and both steps only shrink the string, so the closure terminates.
+function urlSpellings(v) {
+  const seen = new Set([v]);
+  const queue = [v];
+  while (queue.length > 0) {
+    const s = queue.pop();
+    const m = URL_SUFFIX_RE.exec(s);
+    const next = [m ? s.slice(0, m.index) : s, s.replace(PERCENT_BYTE_RE, (_, h) => String.fromCharCode(parseInt(h, 16)))];
+    for (const n of next) {
+      if (!seen.has(n)) {
+        seen.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return [...seen];
+}
 
 function touchesSensitivePath(seg, argv) {
+  const raws = seg.argvRaw;
+  if (!Array.isArray(raws) || raws.length !== argv.length) return true;
+  if (raws.some((r) => typeof r !== "string" || isShellExpanded(r))) return true;
   const texts = [[seg.cmd0, ...argv].join(" ")];
   if (typeof seg.rawText === "string" && seg.rawText !== "") texts.push(seg.rawText);
   const paths = [];
   // Wrap with a dummy cmd0 so the checkers see each as a path argument, not a command name.
   const addPath = (v) => {
     if (!v) return;
-    texts.push("x " + v);
-    paths.push(v);
+    for (const s of urlSpellings(v)) {
+      if (!s) continue;
+      texts.push("x " + s);
+      paths.push(s);
+    }
   };
   try {
     // Also check each token directly and path portions of revision/pathspec operands.
