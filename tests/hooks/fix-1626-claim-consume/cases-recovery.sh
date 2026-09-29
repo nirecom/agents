@@ -1,4 +1,6 @@
 # Part of tests/hooks/fix-1626-claim-consume.sh (sourced, not standalone).
+# Tests: hooks/supervisor-off-proposal-shim.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js, hooks/workflow-state/state-io/zombie-cleanup.js
+# Tags: off-clearance, claim, bookkeeping, recovery, zombie-cleanup, scope:issue-specific, pwsh-not-required, TL2
 # C7-C11 — post-claim bookkeeping and recovery: workflow-mark consume,
 # cleanupZombies sweeping, crash-residue deadlock/recovery, audit-failure policy.
 
@@ -68,23 +70,13 @@ require(process.argv[1]).cleanupZombies(7);" "$STATE_IO_NODE" >/dev/null 2>&1
 
 # ============================================================================
 # C9 - crash consistency + DOUBLE-CONSUME prevention.
-#
-# The claim is two filesystem operations: create <sid>.off-clearance.claimed (wx),
-# then remove the bare <sid>.off-clearance. A crash between them leaves BOTH files
-# on disk. Two things must hold from that state:
-#   (i)  it is a fail-CLOSED deadlock, not a free pass (covered structurally by
-#        C4; re-asserted here as the crash SCENARIO rather than the stale-token one), and
-#   (ii) it is recoverable by re-minting, and the recovered token is STILL single-use.
-#
-# SKIPPED: true fault injection (SIGKILL the shim between openSync and unlinkSync).
-# Because: it needs either a debugger breakpoint or a patched shim binary, and a
-#   patched shim would no longer be the artifact under test - the residual state a
-#   kill produces is exactly {bare + .claimed}, which is constructed directly here.
-# TL3 gap: a real mid-syscall kill on a real filesystem (NTFS delete-pending state,
-#   POSIX unlink-while-open) is only observable in a live session.
-# The double-consume assertion below is NOT skipped - it is the load-bearing one:
-# a token that has already authorized one OFF activation must never authorize a
-# second, whatever route the second attempt takes.
+# Two filesystem ops: create <sid>.off-clearance.claimed (wx), then remove bare.
+# A crash between them leaves BOTH on disk. Must be fail-CLOSED deadlock (not free
+# pass; covered by C4, re-asserted here as the crash SCENARIO not the
+# stale-fingerprint one), and recoverable by re-minting — recovered claim token
+# is STILL single-use.
+# SKIPPED: true fault injection — needs debugger/patched shim; residual state
+# {bare + .claimed} is constructed directly. TL3 gap: real mid-syscall kill.
 # ============================================================================
 run_C9() {
     local tmp tn stubbin r rc out ok=1 detail=""
@@ -141,21 +133,10 @@ run_C9() {
 
 # ============================================================================
 # C10 - audit-write failure must NOT block the primary state transition.
-#
-# appendAudit() in enforce-override-handlers/off-off-clearance.js is deliberately
-# non-blocking: "Audit loss must never block an already-approved override", but a
-# dropped entry has to be announced on stderr rather than swallowed. That policy is
-# only real if it is tested - an exception escaping the audit write would abort the
-# handler AFTER the override was approved but BEFORE (or midway through) the marker
-# and token bookkeeping, leaving the session in a half-applied state.
-#
-# Injection: supervisor-state-writer's writeAtomic() writes <file>.tmp then renames.
-# Pre-creating <sid>-supervisor-state.json.tmp as a DIRECTORY makes that
-# writeFileSync throw (EISDIR/EPERM/EACCES depending on platform) without patching
-# any code under test.
-#
-# Asserted: the .claimed token is still consumed, the OFF marker is still written,
-# the handler still exits 0, and a WARNING is emitted on stderr.
+# appendAudit() is non-blocking: audit loss must never block an approved override,
+# but a dropped entry must be announced on stderr. Injection: pre-create
+# <sid>-supervisor-state.json.tmp as a DIRECTORY to force EISDIR on writeAtomic().
+# Asserted: .claimed consumed, OFF marker written, exit 0, WARNING on stderr.
 # ============================================================================
 run_C10() {
     local tmp tn ok=1 rc err detail=""
@@ -183,19 +164,10 @@ require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c10sid',pushMess
 
 # ============================================================================
 # C11 - cleanupZombies: IDEMPOTENCY and the CUTOFF BOUNDARY.
-#
-# C8 proves the .claimed suffix is in the sweep set at all, using a 14-day/0-day
-# pair that is nowhere near the cutoff - it would still pass if the comparison
-# were off by days, or if the sweep were not re-runnable. Two properties are
-# added here:
-#   (a) idempotency - cleanupZombies runs on every session start, so running it
-#       twice must be a no-op the second time: no error, nothing further removed,
-#       nothing recreated.
-#   (b) cutoff boundary - the contract is `mtimeMs < cutoff` (strictly older than
-#       maxAgeDays). Two .claimed files are placed immediately either side of a
-#       7-day cutoff (7.05d and 6.95d): the older one must be swept, the fresher
-#       one must survive. An off-by-one on the comparison, or a units error
-#       (seconds vs milliseconds), fails here and cannot fail in C8.
+# C8 proves .claimed is in the sweep set. Two extra properties added here:
+#   (a) idempotency — running twice must be a no-op the second time.
+#   (b) cutoff boundary — 7.05d swept, 6.95d preserved (strict mtimeMs < cutoff).
+#       An off-by-one or seconds-vs-ms units error fails here but not in C8.
 # ============================================================================
 run_C11() {
     local tmp tn ok=1 rc1 rc2 detail=""

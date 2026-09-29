@@ -1,20 +1,15 @@
 # Tests: hooks/workflow-gate/review-tests-evidence.js
-# Tags: workflow, review-tests, token, deletion, staged-tests, bugfix, scope:issue-specific
+# Tags: workflow, review-tests, token, fingerprint, deletion, staged-tests, bugfix, scope:issue-specific
 # ===========================================================================
-# Group 5: P1-P5 — Concern 3 (HIGH) + Concern 7 (MEDIUM): table-driven
-# path-prefix matching, per skills/_shared/test-design.md "Table-Driven
-# Tests" and tests/hooks/feature-833-review-tests-sentinel-ssot.sh precedent. Each
-# row stages exactly ONE brand-new file at <path> (no deletion at all — this
-# is a pure path-filter check, orthogonal to the #1068 deletion bug) and
-# asserts whether computeStagedTestsToken treats it as an in-scope tests/
-# path (valid hex token) or an out-of-scope path (null, since the filtered
-# path list is empty).
-# EXPECTED: PASS both before and after the fix (the `tests/`/`test/` prefix
-# filter is pre-existing code, not touched by the planned diff-filter fix).
+# Group 5: P1-P6 — table-driven path-scope matching for computeReviewScopeFingerprint.
+# Each row stages exactly ONE brand-new file at <path> and asserts whether the
+# function treats it as in-scope (HEX fingerprint) or excluded (EMPTY — excluded
+# by isReviewScopeExcludedPath: docs/, CHANGELOG.md, changelog/*.md, root README.md).
+# Implementation files like src/ are now in-scope (unlike the old tests-only filter).
 # ===========================================================================
 
 echo ""
-echo "=== Table-driven: tests/ | test/ prefix matching (P1-P5) ==="
+echo "=== Table-driven: review-scope path inclusion/exclusion (P1-P6) ==="
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -41,17 +36,19 @@ stage_single_path_repo() {
     echo "$repo"
 }
 
-# result_kind <repoDir> — HEX if computeStagedTestsToken yields a valid hex
-# token, NULL if it returns the literal null sentinel, OTHER otherwise.
+# result_kind <repoDir> — HEX if computeReviewScopeFingerprint yields a valid hex
+# fingerprint, EMPTY if ok:true but no in-scope files, ERR if ok:false, OTHER otherwise.
 result_kind() {
-    local token
-    token=$(call_compute_token "$1")
-    if is_valid_hex_token "$token"; then
+    local fp
+    fp=$(call_compute_fingerprint "$1")
+    if is_valid_hex_token "$fp"; then
         echo "HEX"
-    elif [ "$token" = "NULL" ]; then
-        echo "NULL"
+    elif [ "$fp" = "EMPTY" ]; then
+        echo "EMPTY"
+    elif [ "$fp" = "ERR" ]; then
+        echo "ERR"
     else
-        echo "OTHER:$token"
+        echo "OTHER:$fp"
     fi
 }
 
@@ -68,6 +65,7 @@ done <<'PATH_TABLE'
 P1.tests-slash-prefix     | tests/example.sh          | HEX
 P2.test-singular-prefix   | test/example.sh           | HEX
 P3.tests-nested-subdir    | tests/sub/example.sh      | HEX
-P4.src-no-match           | src/example.js            | NULL
-P5.tests-prefix-lookalike | tests-prefix/example.sh   | NULL
+P4.src-impl-in-scope      | src/example.js            | HEX
+P5.tests-prefix-in-scope  | tests-prefix/example.sh   | HEX
+P6.changelog-excluded     | CHANGELOG.md              | EMPTY
 PATH_TABLE

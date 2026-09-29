@@ -57,7 +57,8 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
     const repoDir = (opts && opts.repoDir) || process.env.CLAUDE_PROJECT_DIR || null;
     evidenced = repoDir ? hasStagedTestChanges(repoDir) : false;
   } else {
-    evidenced = hasCompletionEvidence(step, sessionId, opts);
+    // state rides along so the docs predicate reads write_code_scope_manifest off it (#2327).
+    evidenced = hasCompletionEvidence(step, sessionId, Object.assign({}, opts, { state }));
   }
   if (!evidenced) return false;
   if (!isApprovalGatedStep(step)) return true;

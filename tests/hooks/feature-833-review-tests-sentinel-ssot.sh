@@ -1,14 +1,8 @@
 #!/bin/bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate/review-tests-evidence.js
-# Tags: workflow, sentinel, ssot, review-tests, token, scope:issue-specific
-#
-# SSOT tests for the review_tests sentinel family (issue #833).
-#
-# Verifies the regex constants that workflow-mark.js and workflow-gate.js
-# share for recognizing the new REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS
-# sentinels, plus the stale-token computation used by the gate's
-# anti-bypass guard.
-#
+# Tags: workflow, sentinel, ssot, review-tests, token, fingerprint, scope:issue-specific
+# SSOT tests for the review_tests sentinel family (#833): regex constants shared by
+# workflow-mark.js and workflow-gate.js, plus review-scope fingerprint computation.
 # Pre-implementation expectation: all tests FAIL until write-code lands.
 
 set -uo pipefail
@@ -115,17 +109,17 @@ echo "=== Section 1: review_tests sentinel regex SSOT ==="
 # T1: REVIEW_TESTS_COMPLETE_RE_DQ — happy form
 assert_regex_match "T1. REVIEW_TESTS_COMPLETE_RE_DQ accepts canonical form" \
     "REVIEW_TESTS_COMPLETE_RE_DQ" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=abc123>>"'
+    'echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=abc123>>"'
 
-# T2: REVIEW_TESTS_COMPLETE_RE_DQ rejects bare form (no token payload)
+# T2: REVIEW_TESTS_COMPLETE_RE_DQ rejects bare form (no fingerprint payload)
 assert_regex_no_match "T2. REVIEW_TESTS_COMPLETE_RE_DQ rejects bare (no payload)" \
     "REVIEW_TESTS_COMPLETE_RE_DQ" \
     'echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE>>"'
 
 # T3: REVIEW_TESTS_WARNINGS_RE_DQ — happy form with summary
-assert_regex_match "T3. REVIEW_TESTS_WARNINGS_RE_DQ accepts canonical form (token + warnings summary)" \
+assert_regex_match "T3. REVIEW_TESTS_WARNINGS_RE_DQ accepts canonical form (fingerprint + warnings summary)" \
     "REVIEW_TESTS_WARNINGS_RE_DQ" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=abc123 warnings=2 INFO=1>>"'
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=abc123 warnings=2 INFO=1>>"'
 
 # T4: REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE — bare form falls through as "looks like"
 # (used for advisory rejection of malformed warnings sentinels)
@@ -134,13 +128,13 @@ assert_regex_match "T4. REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE catches bare form for
     'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS>>"'
 
 # T5: isSentinel() recognises COMPLETE form
-assert_isSentinel "T5. isSentinel() accepts REVIEW_TESTS_COMPLETE with token" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=abc123>>"' \
+assert_isSentinel "T5. isSentinel() accepts REVIEW_TESTS_COMPLETE with fingerprint" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=abc123>>"' \
     "YES"
 
 # T6: isSentinel() recognises WARNINGS form
-assert_isSentinel "T6. isSentinel() accepts REVIEW_TESTS_WARNINGS with token + summary" \
-    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=abc123 warnings=2>>"' \
+assert_isSentinel "T6. isSentinel() accepts REVIEW_TESTS_WARNINGS with fingerprint + summary" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=abc123 warnings=2>>"' \
     "YES"
 
 # T7: isSentinel() recognises LOOKSLIKE form so workflow-gate can advise rather than silently pass
@@ -152,7 +146,7 @@ assert_isSentinel "T7. isSentinel() recognises bare WARNINGS form (LOOKSLIKE fal
 # (Per sentinel-patterns.js convention, only MARK_STEP is SQ-tolerant; others are DQ-only.)
 assert_regex_no_match "T8. REVIEW_TESTS_COMPLETE_RE_DQ rejects single-quoted form" \
     "REVIEW_TESTS_COMPLETE_RE_DQ" \
-    "echo '<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=abc123>>'"
+    "echo '<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=abc123>>'"
 
 # T8b: REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE — bare form matches (symmetric with WARNINGS LOOKSLIKE)
 assert_regex_match "T8b. REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE catches bare form for advisory rejection" \
@@ -165,12 +159,12 @@ assert_isSentinel "T8c. isSentinel() recognises bare COMPLETE form (LOOKSLIKE fa
     "YES"
 
 # ---------------------------------------------------------------------------
-# Section 2 — Staged-tests token computation
-# (computeStagedTestsToken(repoDir) → SHA hash | null)
+# Section 2 — Review-scope fingerprint computation
+# (computeReviewScopeFingerprint(repoDir) → {ok, fingerprint, testCount})
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "=== Section 2: computeStagedTestsToken evidence ==="
+echo "=== Section 2: computeReviewScopeFingerprint evidence ==="
 
 # Build a tiny throwaway git repo with tests/ staged.
 setup_repo_with_staged_tests() {
@@ -191,47 +185,50 @@ setup_repo_with_staged_tests() {
     git -C "$repo" add tests/feature-a.sh tests/feature-b.sh
 }
 
-# Helper: call computeStagedTestsToken(repoDir) via node.
+# Helper: call computeReviewScopeFingerprint(repoDir) via node.
 call_compute_token() {
     local repo="$1"
     run_with_timeout node -e "
         try {
             const m = require(process.argv[1]);
-            if (typeof m.computeStagedTestsToken !== 'function') {
+            if (typeof m.computeReviewScopeFingerprint !== 'function') {
                 process.stdout.write('NOT_IMPLEMENTED');
                 process.exit(0);
             }
-            const out = m.computeStagedTestsToken(process.argv[2]);
-            process.stdout.write(out == null ? 'NULL' : String(out));
+            const r = m.computeReviewScopeFingerprint(process.argv[2]);
+            if (!r || !r.ok) { process.stdout.write('ERR'); }
+            else if (!r.fingerprint) { process.stdout.write('EMPTY'); }
+            else { process.stdout.write(String(r.fingerprint)); }
         } catch (e) {
             process.stdout.write('ERROR: ' + e.message);
         }
     " -- "$REVIEW_TESTS_EVIDENCE" "$repo" 2>/dev/null || echo "ERROR"
 }
 
-# T9: Same staged content → same token (deterministic)
+# T9: Same staged content → same fingerprint (deterministic)
 REPO_A="$TMPDIR_BASE/repo-a"
 mkdir -p "$REPO_A"
 setup_repo_with_staged_tests "$REPO_A"
 TOKEN_A1=$(call_compute_token "$REPO_A")
 TOKEN_A2=$(call_compute_token "$REPO_A")
-if [ "$TOKEN_A1" = "$TOKEN_A2" ] && [ "$TOKEN_A1" != "NULL" ] && [ "$TOKEN_A1" != "ERROR" ] && [ "$TOKEN_A1" != "NOT_IMPLEMENTED" ]; then
-    pass "T9. computeStagedTestsToken is deterministic for unchanged staged content"
+if [ "$TOKEN_A1" = "$TOKEN_A2" ] && [ "$TOKEN_A1" != "EMPTY" ] && [ "$TOKEN_A1" != "ERR" ] && [ "$TOKEN_A1" != "ERROR" ] && [ "$TOKEN_A1" != "NOT_IMPLEMENTED" ]; then
+    pass "T9. computeReviewScopeFingerprint is deterministic for unchanged staged content"
 else
-    fail "T9. expected stable non-null token; got first=$TOKEN_A1 second=$TOKEN_A2"
+    fail "T9. expected stable non-empty fingerprint; got first=$TOKEN_A1 second=$TOKEN_A2"
 fi
 
-# T10: Modified staged content → different token (stale-token detection foundation)
+# T10: Modified staged content → different fingerprint (stale-fingerprint detection foundation)
 printf 'test content 1 modified\n' > "$REPO_A/tests/feature-a.sh"
 git -C "$REPO_A" add tests/feature-a.sh
 TOKEN_A3=$(call_compute_token "$REPO_A")
-if [ "$TOKEN_A3" != "$TOKEN_A1" ] && [ "$TOKEN_A3" != "NULL" ] && [ "$TOKEN_A3" != "ERROR" ] && [ "$TOKEN_A3" != "NOT_IMPLEMENTED" ]; then
-    pass "T10. computeStagedTestsToken changes when staged tests/ content changes (stale-token detection)"
+if [ "$TOKEN_A3" != "$TOKEN_A1" ] && [ "$TOKEN_A3" != "EMPTY" ] && [ "$TOKEN_A3" != "ERR" ] && [ "$TOKEN_A3" != "ERROR" ] && [ "$TOKEN_A3" != "NOT_IMPLEMENTED" ]; then
+    pass "T10. computeReviewScopeFingerprint changes when staged content changes (stale-fingerprint detection)"
 else
-    fail "T10. expected new non-null token differing from $TOKEN_A1, got: $TOKEN_A3"
+    fail "T10. expected new non-empty fingerprint differing from $TOKEN_A1, got: $TOKEN_A3"
 fi
 
-# T11: No tests/ staged → null
+# T11: Only src/ files staged (no tests/) → still produces a valid fingerprint.
+# src/ is NOT an excluded path — all staged non-excluded paths are in scope (#2327).
 REPO_B="$TMPDIR_BASE/repo-b"
 mkdir -p "$REPO_B"
 (
@@ -243,27 +240,26 @@ mkdir -p "$REPO_B"
     git -c core.hooksPath="" add README.md
     git -c core.hooksPath="" commit -q -m initial
 )
-# Stage a non-tests/ file
 echo "source code" > "$REPO_B/src.js"
 mkdir -p "$REPO_B/src"
 echo "module code" > "$REPO_B/src/index.js"
 git -C "$REPO_B" add src.js src/index.js
 TOKEN_B=$(call_compute_token "$REPO_B")
-if [ "$TOKEN_B" = "NULL" ]; then
-    pass "T11. computeStagedTestsToken returns null when no tests/ files staged"
+if [ "$TOKEN_B" != "EMPTY" ] && [ "$TOKEN_B" != "ERR" ] && [ "$TOKEN_B" != "ERROR" ] && [ "$TOKEN_B" != "NOT_IMPLEMENTED" ] && [ -n "$TOKEN_B" ]; then
+    pass "T11. computeReviewScopeFingerprint returns valid fingerprint when only src/ files staged (all-scope rule)"
 else
-    fail "T11. expected NULL when no tests/ staged, got: $TOKEN_B"
+    fail "T11. expected valid hex fingerprint for staged src/ files, got: $TOKEN_B"
 fi
 
-# T12: Non-git path → null (fail-open)
+# T12: Non-git path → ERR ({ok:false})
 NON_GIT="$TMPDIR_BASE/non-git"
 mkdir -p "$NON_GIT/tests"
 echo "x" > "$NON_GIT/tests/some.sh"
 TOKEN_NON_GIT=$(call_compute_token "$NON_GIT")
-if [ "$TOKEN_NON_GIT" = "NULL" ]; then
-    pass "T12. computeStagedTestsToken returns null for non-git directory (fail-open)"
+if [ "$TOKEN_NON_GIT" = "ERR" ] || [ "$TOKEN_NON_GIT" = "NOT_IMPLEMENTED" ]; then
+    pass "T12. computeReviewScopeFingerprint returns ERR for non-git directory (fail-closed)"
 else
-    fail "T12. expected NULL for non-git dir, got: $TOKEN_NON_GIT"
+    fail "T12. expected ERR for non-git dir, got: $TOKEN_NON_GIT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -271,7 +267,6 @@ fi
 # Issue #1207 — new sentinel for clearing warnings after user review.
 # DQ strict form: echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: reason>>"
 # LOOKSLIKE form: <<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED...>> (no strict DQ)
-#
 # EXPECTED: cases 12-17 FAIL until REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ and
 #           REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE are added to
 #           hooks/lib/sentinel-patterns.js (and isSentinel/isStrictSentinel updated).
@@ -385,19 +380,9 @@ cmd15='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>x>>"'
 got15_strict="$(eval_is_strict "$cmd15")"
 assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$got15_strict"
 
-# Case 17 — mutation probe: bin/mutation-probe.sh verifies the regex is not trivially green.
-#
-# SKIPPED-Because: sentinel-patterns.js uses multi-line const forms:
-#   const REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ =
-#     /^echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: ([^>]+)>>"$/;
-# bin/mutation-probe.sh only instruments single-line `const NAME = /regex/;` forms.
-# Full mutation coverage is planned for T1-E2 (Stryker integration).
-#
-# L3 gap (mutation probe): the [^>]+ constraint (blocks redirect/> injection) is
-# verified by table-driven Section 3 cases (T15, T16a) rather than automated mutation.
-# A surviving mutant that replaces [^>]+ with .+ would be caught by T15 (reason-with->).
-#
-# Run via bin/run-with-timeout.sh (the repo's portable wrapper, not the local function).
+# Case 17 — mutation probe (SKIPPED): sentinel-patterns.js uses multi-line const forms;
+# bin/mutation-probe.sh instruments single-line only. L3 gap: [^>]+ constraint verified
+# by T15/T16a table-driven cases instead. Run via bin/run-with-timeout.sh.
 MUTATION_PROBE="$AGENTS_DIR/bin/mutation-probe.sh"
 RWT17="$AGENTS_DIR/bin/run-with-timeout.sh"
 if [[ -f "$MUTATION_PROBE" ]]; then
@@ -451,13 +436,7 @@ assert_injection_blocked() {
     fi
 }
 
-# Command-substitution injection: $() in reason text.
-# [^>]+ already blocks $ before > but $() has no > → could theoretically slip.
-# Anchored DQ form prevents: outer form must be exactly echo "<<...: reason>>"
-# A $() inside the reason string would still match [^>]+, but the strict anchor
-# requires the command to be ONLY the echo — any subshell invocation that changes
-# the actual echoed text makes the outer command something different.
-# We test the raw forms that attackers would try.
+# Command-substitution injection: $() in reason text. Anchored DQ form prevents it.
 assert_injection_blocked "C3.subshell-dollar-paren" \
     'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: $(evil)>>"'
 assert_injection_blocked "C3.subshell-backtick" \

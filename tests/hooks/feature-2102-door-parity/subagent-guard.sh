@@ -19,6 +19,8 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+# Sourced before this file's own helpers so they keep precedence; only the case markers are used.
+. "$AGENTS_DIR/tests/lib/harness.sh"
 HOOK="$AGENTS_DIR_N/hooks/block-subagent-sentinels.js"
 DRIVER_MOD="$AGENTS_DIR_N/hooks/lib/workflow-driver-commands.js"; export DRIVER_MOD
 RSV_MOD="$AGENTS_DIR_N/hooks/workflow-state/record-step-verdict.js"; export RSV_MOD
@@ -85,7 +87,7 @@ decide() {
       catch (e) {}
     };
     push(raw);
-    if (!objs.length) raw.split("\n").filter((l) => l.trim()).forEach(push);
+    (objs.length ? [] : raw.split("\n")).filter((l) => l.trim()).forEach(push);
     const one = objs.length === 1 ? objs[0] : null;
     const decision = one ? String(one.decision || "") : "PARSE_FAIL";
     const reason = one && typeof one.reason === "string" ? one.reason : "";
@@ -97,7 +99,7 @@ mk_json() {
     const tool = process.env.TOOL, cmd = process.env.CMD, agent = process.env.AGENT;
     const input = { tool_name: tool, session_id: "s1" };
     input.tool_input = tool === "runCommands" ? { commands: [cmd] } : { command: cmd };
-    if (agent) input.agent_id = agent;
+    agent && (input.agent_id = agent);
     process.stdout.write(JSON.stringify(input));'
 }
 # Four assertions per cell, not one: the verdict is only trustworthy if the process that
@@ -142,7 +144,7 @@ mk_commands_json() {
   CMDS="$1" AGENT="${2:-}" run_with_timeout node -e '
     const input = { tool_name: "runCommands", session_id: "s1",
                     tool_input: { commands: JSON.parse(process.env.CMDS) } };
-    if (process.env.AGENT) input.agent_id = process.env.AGENT;
+    process.env.AGENT && (input.agent_id = process.env.AGENT);
     process.stdout.write(JSON.stringify(input));'
 }
 C0="$(CMDS_A="$SENTINEL_CMD" run_with_timeout node -e 'process.stdout.write(JSON.stringify([process.env.CMDS_A, "git status"]))')"
@@ -156,7 +158,9 @@ assert_payload "G2c: advance CLI call in commands[1] -> block" "$(mk_commands_js
 assert_payload "G2d: commands[1] target from the main conversation -> approve" "$(mk_commands_json "$C1" "")" approve
 # A `commands` payload that is neither an array nor a command string degrades to a
 # non-matching String() rather than throwing: the hook stays fail-open.
-NOTARR="$(run_with_timeout node -e 'process.stdout.write(JSON.stringify({tool_name:"runCommands",session_id:"s1",agent_id:"a1",tool_input:{commands:{0:"echo \"<<WORKFLOW_MARK_STEP_research_complete>>\""}}}))')"
+# The sentinel travels via env, not inline: an inline `<<` here reads as a heredoc to the
+# static case-marker parser and hides every marker below it.
+NOTARR="$(SC="$SENTINEL_CMD" run_with_timeout node -e 'process.stdout.write(JSON.stringify({tool_name:"runCommands",session_id:"s1",agent_id:"a1",tool_input:{commands:{0:process.env.SC}}}))')"
 assert_payload "G2e: commands is not an array -> approve (fail-open)" "$NOTARR" approve
 
 echo ""
@@ -264,6 +268,34 @@ true|k1-pwsh-flag-uppercase|pwsh -COMMAND "node \$AGENTS_CONFIG_DIR/bin/workflow
 true|m1-windows-spaced-program-files-path|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1 --advance --step ${STEP} --complete
 false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1
 MATRIX
+
+echo ""
+echo "=== G8: isBaselineEvidenceRecordCommand -- the #2431 internal-only record door ==="
+# Every invocation shape must be caught; a mere mention (data, not a run) must not.
+case_begin "baseline-evidence-record-detector" "hooks/lib/workflow-driver-commands.js"
+baseline_record_says() {
+  CMD="$1" run_with_timeout node -e '
+    try {
+      const { isBaselineEvidenceRecordCommand } = require(process.env.DRIVER_MOD);
+      process.stdout.write(String(isBaselineEvidenceRecordCommand(process.env.CMD) === true));
+    } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED"
+}
+while IFS='|' read -r rwant rid rcmd; do
+  [ -n "$rid" ] || continue
+  check "G8 $rid" "$rwant" "$(baseline_record_says "$rcmd")"
+done <<MATRIX
+true|r1-node|node "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1 --file x.tsv
+true|r2-direct-path|"\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1
+true|r3-bash-c|bash -c 'node "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1'
+true|r4-chained|git status; node "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1
+true|r5-quoted-record|node "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" "record" --session s1
+false|n1-failing-subcommand|node "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" failing --session s1
+false|n2-baseline-runner|bash bin/run-tests-baseline --session s1
+false|n3-cat-mention|cat "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record
+false|n4-grep-mention|grep record "\$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence"
+false|n5-echo-mention|echo "run-tests-baseline-evidence record"
+MATRIX
+case_end
 
 echo ""
 echo "=== Results ==="

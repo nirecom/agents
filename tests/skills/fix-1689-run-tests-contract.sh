@@ -2,7 +2,7 @@
 # lang-check: ignore -- rows intentionally accept English/Japanese for the same regex needle (see below).
 # tests/skills/fix-1689-run-tests-contract.sh
 # Tests: skills/run-tests/SKILL.md, rules/test.md
-# Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2, prompt-injection
+# Tags: run-tests, prompt-contract, merge-base, ssot, recovery, static, scope:issue-specific, pwsh-not-required, TL2, prompt-injection, baseline
 
 # Pins RNT-1's merge-base delegation (#1638), RNT-9's non-coercive recovery (#1689), RNT-3's
 # Tier 2 degraded-range contract (#1779), and #2148's sentinel-echo directive in skills/run-tests/SKILL.md
@@ -23,6 +23,9 @@ FAIL=0
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+# Harness only for case_begin/case_end markers; its counter guard keeps PASS/FAIL above.
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 if [ ! -f "$SKILL" ]; then
   echo "FAIL: precondition — $SKILL does not exist"
@@ -286,6 +289,80 @@ elif grep -qF "merge-base-suspect" "$TEST_RULES"; then
 else
   fail "S23: rules/test.md does not mention merge-base-suspect, so its category listing is stale"
 fi
+
+
+# ---- #2431: bin/run-tests-baseline replaces self-reported recovery ------
+#
+# Stage-8 removes the "surgical recovery" prose from RNT-9 and replaces it with
+# an explicit invocation of bin/run-tests-baseline. The Rules section is rewritten
+# to name the CLI as the only recovery path for pre-existing failures.
+# Tests below are RED until stage-8 lands; they MUST fail on the current SKILL.md.
+
+expect_no_match "S2431-a" "surgical-recovery language removed from RNT-9" \
+  'surgical recovery|surgical[- ]?recovery' "$RNT9"
+
+expect_no_match "S2431-b" "self-reported evidence chain (reproduces on main) removed from RNT-9" \
+  'same failure reproduces|reproduces on main' "$RNT9"
+
+expect_match "S2431-c" "RNT-9 invokes bin/run-tests-baseline for pre-existing classification" \
+  'bin/run-tests-baseline' "$RNT9"
+
+expect_match "S2431-d" "RNT-9 specifies 600000 Bash tool timeout for the baseline call" \
+  '600000' "$RNT9"
+
+# All four exit codes must be addressed by RNT-9.
+expect_match "S2431-e" "RNT-9 handles exit 0 (all pre-existing — CLI completes the step)" \
+  'exit 0|exit code 0' "$RNT9"
+expect_match "S2431-f" "RNT-9 handles exit 1 (some broken — stay pending)" \
+  'exit 1|exit code 1' "$RNT9"
+expect_match "S2431-g" "RNT-9 handles exit 3 (evidence missing or contract absent)" \
+  'exit 3|exit code 3' "$RNT9"
+expect_match "S2431-h" "RNT-9 handles exit 4 (suspect base — same as RNT-1)" \
+  'exit 4|exit code 4' "$RNT9"
+
+# Rules section must name the CLI as the only recovery (CPR-SSOT).
+expect_match "S2431-i" "Rules names bin/run-tests-baseline as the sole pre-existing-failure recovery" \
+  'bin/run-tests-baseline' "$RULES"
+
+# Prompt Pattern B WARN limit: stage-8 must keep SKILL.md under 100 lines.
+if [ "$SKILL_LINES" -lt 100 ]; then
+  pass "S2431-j: SKILL.md is within the 100-line WARN limit after stage-8 ($SKILL_LINES lines)"
+else
+  fail "S2431-j: SKILL.md is $SKILL_LINES lines — stage-8 must keep it under 100"
+fi
+
+# S2431-a/b scope the retired prose to RNT-9; a copy moved into another step or
+# the Rules block would still coerce self-reported recovery, so pin it file-wide.
+case_begin "retired-recovery-prose-absent-file-wide" "skills/run-tests/SKILL.md"
+# Only grep's exit 1 proves absence: a crashed grep (seen: SIGABRT with -iF on
+# Windows) also returns non-zero and would otherwise pass vacuously.
+for phrase in "surgical[- ]?recovery" "reproduces on main"; do
+  printf '%s' "$(cat "$SKILL")" | grep -qiE -- "$phrase"
+  rc=$?
+  case "$rc" in
+    0) fail "S2431-k: SKILL.md still carries retired prose /$phrase/ outside RNT-9 scope" ;;
+    1) pass "S2431-k: SKILL.md omits retired prose /$phrase/ file-wide" ;;
+    *) fail "S2431-k: grep for /$phrase/ errored (rc=$rc) — absence unproven" ;;
+  esac
+done
+# Control: the same probe must find a phrase that is present, or rc=1 above proves nothing.
+printf '%s' "$(cat "$SKILL")" | grep -qiE -- 'bin/run-tests-baseline'
+rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "S2431-k0: the file-wide probe detects a present phrase"
+else
+  fail "S2431-k0: the file-wide probe missed a present phrase (rc=$rc)"
+fi
+case_end
+
+# S2431-c/i only prove the name is written; a renamed or deleted CLI leaves a dead command.
+case_begin "named-baseline-cli-exists" "skills/run-tests/SKILL.md"
+if [ -f "$AGENTS_DIR/bin/run-tests-baseline" ]; then
+  pass "S2431-l: the named CLI bin/run-tests-baseline exists"
+else
+  fail "S2431-l: bin/run-tests-baseline does not exist — SKILL.md names a dead command"
+fi
+case_end
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed"

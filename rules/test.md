@@ -18,7 +18,7 @@ See [test/fixture-isolation.md](test/fixture-isolation.md) for keeping a test's 
 
 After writing test code, run `/review-tests`. WF-CODE-5 (`/write-code`) is blocked until both `write_tests` and `review_tests` are complete or both are skipped.
 
-`/review-tests` records a staged-tests fingerprint at sentinel-emission time — re-editing test files after a passing review invalidates the pairing and forces re-review before `/write-code` can proceed.
+`/review-tests` records a review-scope fingerprint (staged tests plus implementation files) at sentinel-emission time — re-editing any file in that scope after a passing review invalidates the pairing and forces re-review before commit.
 
 Skip path: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` symmetrically waives both gates (no separate skip sentinel for review).
 

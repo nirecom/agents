@@ -1,6 +1,22 @@
 "use strict";
 
-const { computeStagedTestsToken } = require("./review-tests-evidence");
+const {
+  computeReviewScopeFingerprint,
+  evaluateReviewScopeFreshness,
+} = require("./review-tests-evidence");
+
+function resolveCurrentWsid() {
+  const { resolveWorkflowSessionId } = require("../lib/resolve-workflow-session-id");
+  try { return resolveWorkflowSessionId() || null; } catch (_) { return null; }
+}
+
+// Freshness reason → gate reason (#2327). Fail-closed: an unmeasurable or missing
+// review scope blocks instead of trusting status=complete.
+const FRESHNESS_BLOCK_REASONS = {
+  unavailable: "fingerprint-unavailable",
+  missing: "fingerprint-missing",
+  stale: "stale-fingerprint",
+};
 
 /**
  * Evaluate the review_tests step in the workflow gate.
@@ -39,43 +55,25 @@ function checkReviewTests(step, stepState, opts) {
   // recorded under a prior wsid are stale and must not block this wsid's commit.
   if (stepState && stepState.warnings_summary) {
     const warnWsid = stepState.wsid;
-    let staleWarnings = false;
-    if (warnWsid) {
-      const { resolveWorkflowSessionId } = require("../lib/resolve-workflow-session-id");
-      let resolvedWsid = null;
-      try { resolvedWsid = resolveWorkflowSessionId() || null; } catch (_) {}
-      if (resolvedWsid && resolvedWsid !== warnWsid) staleWarnings = true;
-    }
+    const resolvedWsid = warnWsid ? resolveCurrentWsid() : null;
+    const staleWarnings = !!(resolvedWsid && resolvedWsid !== warnWsid);
     // Missing stored wsid (legacy state), unresolvable wsid, or matching wsid →
-    // keep the historical block. Stale prior-wsid warnings fall through to the
-    // token/wsid checks below.
+    // keep the historical block. Stale prior-wsid warnings fall through.
     if (!staleWarnings) return { action: "block", reason: "warnings-pending" };
   }
 
-  // Validate stored token against freshly computed staged-tests fingerprint.
-  const stagedToken = computeStagedTestsToken(repoDir);
-  const storedToken = stepState && stepState.token;
-  // No staged tests → no fingerprint surface → trust status=complete.
-  if (stagedToken == null) return { action: "skip" };
-  // No stored token but status=complete → legacy / pre-token state. Trust assertion.
-  if (!storedToken) return { action: "skip" };
-
-  // Token match → check wsid before approving (issue #924).
-  if (stagedToken === storedToken) {
-    const storedWsid = stepState && stepState.wsid;
-    if (storedWsid) {
-      const { resolveWorkflowSessionId } = require("../lib/resolve-workflow-session-id");
-      let resolvedWsid = null;
-      try { resolvedWsid = resolveWorkflowSessionId() || null; } catch (_) {}
-      if (resolvedWsid && resolvedWsid !== storedWsid) {
-        return { action: "block", reason: "stale-wsid" };
-      }
-    }
-    return { action: "skip" };
+  const freshness = evaluateReviewScopeFreshness(stepState, computeReviewScopeFingerprint(repoDir));
+  if (freshness.reason === "no-tests") return { action: "skip" };
+  if (!freshness.fresh) {
+    return { action: "block", reason: FRESHNESS_BLOCK_REASONS[freshness.reason] || "fingerprint-unavailable" };
   }
-
-  // Token mismatch → stale review → re-gate.
-  return { action: "block", reason: "stale-token" };
+  // Scope match → check wsid before approving (issue #924).
+  const storedWsid = stepState && stepState.wsid;
+  if (storedWsid) {
+    const resolvedWsid = resolveCurrentWsid();
+    if (resolvedWsid && resolvedWsid !== storedWsid) return { action: "block", reason: "stale-wsid" };
+  }
+  return { action: "skip" };
 }
 
 module.exports = { checkReviewTests };

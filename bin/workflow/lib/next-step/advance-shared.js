@@ -21,6 +21,7 @@ const {
   recordStepVerdict,
   ADVANCE_ORIGINS,
 } = require("../../../../hooks/workflow-state/record-step-verdict");
+const { formatReviewTestsReopenNotice } = require("../../../../hooks/workflow-state/review-tests-reopen");
 const { isTerminalStep } = require("./steps");
 
 // `--status pending` is the existing `--reset` capability under another name, so
@@ -108,6 +109,9 @@ function runAdvance(opts) {
   process.stdout.write(
     "ADVANCED=" + opts.step + " status=" + opts.status + (res.already ? " already=true" : "") + "\n"
   );
+  // #2327: the review_tests reopen notice is emitted regardless of --next.
+  const reopenNotice = formatReviewTestsReopenNotice(res);
+  if (reopenNotice) process.stderr.write(opts.binary + ": " + reopenNotice + "\n");
 
   if (!opts.next) process.exit(0);
 

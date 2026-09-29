@@ -207,6 +207,25 @@ else
 fi
 
 echo ""
+echo "=== WGE-4: run-tests-baseline-evidence record is an internal-only door (#2431) ==="
+# `record` completes run_tests from a caller-built file, so a tool-issued call would forge
+# evidence; `failing` is read-only and must stay reachable (non-vacuity half).
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+SID="wge4-$$"
+write_state "$SID" "$(CI_COMPLETE_STATE $SID)"
+bash_gate_json() {
+  CMD="$1" SID="$2" node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.env.CMD},session_id:process.env.SID}))'
+}
+REC_CMD='node "$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1 --file x.tsv'
+FAILING_CMD='node "$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" failing --session s1'
+GATE_OUT=$(cd "$TMPDIR_BASE" && run_gate "$(bash_gate_json "$REC_CMD" "$SID")")
+check_contains "WGE-4a. Bash record call -> block" '"decision":"block"' "$GATE_OUT"
+check_contains "WGE-4b. block reason names the internal-only door" "internal to bin/run-tests-baseline" "$GATE_OUT"
+GATE_OUT=$(cd "$TMPDIR_BASE" && run_gate "$(bash_gate_json "$FAILING_CMD" "$SID")")
+check_contains "WGE-4c. Bash failing call -> approve" '"decision":"approve"' "$GATE_OUT"
+check_not_contains "WGE-4d. failing call does not trip the record door" "internal to bin/run-tests-baseline" "$GATE_OUT"
+
+echo ""
 echo "=== Results ==="
 echo "Total: $PASS passed, $FAIL failed"
 exit "$FAIL"

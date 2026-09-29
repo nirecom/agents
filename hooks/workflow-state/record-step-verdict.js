@@ -460,6 +460,13 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
     }
   }
 
+  if (status === "complete" && step === "write_code") {
+    // #2327: advance uses the trusted git root, never the forgeable opts.repoDir (C2).
+    const r = require("./review-tests-reopen").reopenReviewTestsAfterWriteCode(
+      sessionId, isAdvance ? resolveTrustedRepoDir() : opts.repoDir, gate);
+    if (r.kind) return { ok: true, code: 0, message: "", already: false, kind: r.kind, detail: r.detail };
+  }
+
   return { ok: true, code: 0, message: "", already: false };
 }
 

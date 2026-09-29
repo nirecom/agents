@@ -141,8 +141,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case H: compute-staged-tests-token.js with $WORKTREE as argv[2] returns a
-# non-empty token when the linked worktree has staged tests.
+# Case H: compute-review-scope-fingerprint.js with $WORKTREE as argv[2] returns a
+# non-empty fingerprint when the linked worktree has staged files.
 # The sibling of run_resolver_js's leak: argv[2] short-circuits resolveRepoDir()
 # today, but an inherited session id would decide this token the moment that
 # short-circuit is narrowed — and Case R compares against it, so a leak here
@@ -158,9 +158,9 @@ caseH_got="$(SESSION_ID="" \
   AGENTS_CONFIG_DIR="$AGENTS_NODE" \
   bash "$RUN_TIMEOUT" 30 node "$COMPUTE_JS" "$WTA_NODE" 2>/dev/null)"
 if [[ -n "$caseH_got" ]]; then
-  pass "Case H (token for linked worktree): non-empty token '$caseH_got'"
+  pass "Case H (fingerprint for linked worktree): non-empty fingerprint '$caseH_got'"
 else
-  fail "Case H (token for linked worktree): empty token, expected non-empty"
+  fail "Case H (fingerprint for linked worktree): empty fingerprint, expected non-empty"
 fi
 
 # ---------------------------------------------------------------------------

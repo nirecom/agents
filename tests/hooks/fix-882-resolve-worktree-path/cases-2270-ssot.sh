@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/resolve-worktree-path, hooks/workflow-state/resolve-worktree-path.js, hooks/workflow-state/session-id.js, bin/compute-staged-tests-token.js, skills/review-tests/scripts/select-staged-files.sh
+# Tests: bin/resolve-worktree-path, hooks/workflow-state/resolve-worktree-path.js, hooks/workflow-state/session-id.js, bin/compute-review-scope-fingerprint.js, skills/review-tests/scripts/select-staged-files.sh
 # Tags: scope:issue-specific, pwsh-not-required, worktree, session-id, ssot
 # Part of tests/hooks/fix-882-resolve-worktree-path.sh (rules/coding/file-split.md).
 # Cases M-T + R (#2270/#1759/#658): the session id must come from the SSOT
@@ -36,7 +36,7 @@ process.stdout.write(r === null || r === undefined ? '' : String(r));
   ) 2>/dev/null
 }
 
-# Run bin/compute-staged-tests-token.js with NO argv[2], so the worktree comes
+# Run bin/compute-review-scope-fingerprint.js with NO argv[2], so the worktree comes
 # from the session-bound resolver alone (issue #1759).
 #   $1: SESSION_ID   $2: CLAUDE_CODE_SESSION_ID
 run_compute_no_argv() {
@@ -219,20 +219,20 @@ fi
 
 # ---------------------------------------------------------------------------
 # Case R [RED before C1, #1759]: the same widened read reached through
-# compute-staged-tests-token.js with no argv[2]. A stale/empty token here makes
-# the pre-commit review-tests gate block forever.
+# compute-review-scope-fingerprint.js with no argv[2]. A stale/empty fingerprint here
+# makes the pre-commit review-tests gate block forever.
 # ---------------------------------------------------------------------------
 rm -f "$WF_DIR"/*.json
 write_state_for "$CC_SID" "$WTA_NODE"
-# The token must equal Case H's — the token computed with wtA passed EXPLICITLY as
-# argv[2]. Merely non-empty would also be satisfied by a token fingerprinting the
-# WRONG worktree, which is the failure #1759 is about: the gate compares this token
+# The fingerprint must equal Case H's — computed with wtA passed EXPLICITLY as
+# argv[2]. Merely non-empty would be satisfied by a fingerprint for the WRONG
+# worktree, which is the failure #1759 is about: the gate compares this fingerprint
 # against the one it computes at commit time in the session's own worktree.
 caseR_got="$(run_compute_no_argv "" "$CC_SID")"
 if [[ -n "$caseR_got" && "$caseR_got" = "$caseH_got" ]]; then
-  pass "Case R (staged-tests token via CLAUDE_CODE_SESSION_ID): matches wtA's token '$caseR_got'"
+  pass "Case R (review-scope fingerprint via CLAUDE_CODE_SESSION_ID): matches wtA's fingerprint '$caseR_got'"
 else
-  fail "Case R (staged-tests token via CLAUDE_CODE_SESSION_ID): got '$caseR_got', expected Case H's wtA token '$caseH_got'"
+  fail "Case R (review-scope fingerprint via CLAUDE_CODE_SESSION_ID): got '$caseR_got', expected Case H's wtA fingerprint '$caseH_got'"
 fi
 
 # ---------------------------------------------------------------------------

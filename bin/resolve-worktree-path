@@ -20,7 +20,7 @@ else
 fi
 # Path travels via env, not string interpolation — apostrophes/metachars in the
 # checkout path cannot break or alter the evaluated program.
-# Contract (mirrors compute-staged-tests-token.js):
+# Contract (mirrors compute-review-scope-fingerprint.js):
 #   no session id                          → empty stdout, exit 0
 #   session id, no state                   → "NOSTATE" stdout, exit 0
 #   resolved linked wt                     → path stdout, exit 0

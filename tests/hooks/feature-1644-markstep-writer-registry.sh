@@ -2,22 +2,9 @@
 # Tests: hooks/workflow-state/record-step-verdict.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/lib/next-step/verdict.js
 # Tags: tl1, static, workflow, markstep, class-completeness, scope:issue-specific
 #
-# #1644 — the markStep() writer registry.
-#
-# Why a registry at all: markStep has two kinds of caller, and folding them into
-# one writer would break the second kind.
-#   Class D (declared)  — the caller ASSERTS a step is settled. These must go
-#                         through record-step-verdict.js so the manual-mark
-#                         prohibitions, the approval invariant and the A-4
-#                         co-write are stated exactly once.
-#   Class O (observed)  — the process itself OBSERVED the fact (a RUN_CONTRACT
-#                         line, a staged-tests token, an already-approved
-#                         sentinel). Each owns its own evidence predicate and is
-#                         deliberately NOT folded.
-#
-# The registry below is the SSOT for that partition. A new markStep call site
-# fails this test until it is classified, which is the whole point.
-# Written BEFORE the implementation: RED until the Class D sites delegate.
+# #1644 — the markStep() writer registry. Class D (declared, via record-step-verdict.js)
+# vs Class O (observed: process observed the fact itself). Registry is the SSOT for that
+# partition; a new call site fails until classified. See docs for full rationale.
 
 set -uo pipefail
 
@@ -40,7 +27,7 @@ hooks/workflow-mark/clarify-intent-complete-handler.js 1
 hooks/workflow-mark/review-tests-handler.js 1
 hooks/workflow-mark/user-verified-handler.js 1
 hooks/workflow-run-tests.js 3
-hooks/workflow-state/state-io/review-tests.js 2
+hooks/workflow-state/state-io/review-tests.js 1
 "
 # Class D sites must hold ZERO direct calls once they delegate. verdict.js keeps
 # exactly one: persistResolutions is a Class O observation living in the same file.

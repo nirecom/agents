@@ -19,7 +19,6 @@ const RESULTS_LINE_RE = /^Results:\s*(.+?)\s*$/;
 // output so the renderer can put exactly one copy where the hook will look, and
 // the two would silently disagree if they recognised different strings.
 const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)/;
-const MAX_FAILING = 10;
 const TAIL_LINES = 40;
 
 function splitLines(text) {
@@ -33,7 +32,6 @@ function parseFailingTests(lines) {
   for (const line of lines) {
     const m = FAIL_LINE_RE.exec(line);
     if (m !== null) out.push(m[1]);
-    if (out.length >= MAX_FAILING) break;
   }
   return out;
 }

@@ -1,26 +1,11 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/workflow-state/state-io.js
-# Tags: workflow, gate, hook, review-tests, sentinel, stale-token, scope:issue-specific
-#
-# Gate / mark integration tests for the review_tests step (issue #833).
-#
-# Verifies:
-#   - workflow-gate blocks commits when review_tests is pending
-#   - REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels mark the step
-#   - Stale-token detection: tests/ content changes after sentinel emission
-#     invalidate the token, gate re-blocks until a fresh sentinel lands
-#   - WRITE_TESTS_NOT_NEEDED propagates skip to review_tests
-#   - Manual MARK_STEP review_tests is rejected (token-only path)
-#   - All-complete sequence approves the commit gate
-#   - wsid (workflow session id) match enforcement (Section F, sourced)
-#
-# L3 gap (what this test does NOT catch):
-# - Whether the live /review-tests skill actually emits a correct token
-#   (requires a real Claude Code session)
-# - Whether the user's terminal correctly renders the sentinel hint
-# Closest-to-action mitigation: the skill emits the sentinel via Bash and the
-# subsequent commit attempt is gated by this hook chain.
-#
+# Tags: workflow, gate, hook, review-tests, sentinel, stale-token, stale-fingerprint, scope:issue-specific
+# Gate/mark integration tests for the review_tests step (#833): gate blocks on pending,
+# REVIEW_TESTS_COMPLETE/WARNINGS sentinels mark+record review_scope_manifest,
+# stale-fingerprint detection re-blocks on scope change, WRITE_TESTS_NOT_NEEDED
+# propagates skip, manual MARK_STEP is rejected, all-complete approves, wsid enforced.
+# L3 gap: live /review-tests sentinel emission + terminal rendering need a real session.
 # Pre-implementation expectation: all tests FAIL until write-code lands.
 
 set -u
@@ -31,10 +16,9 @@ MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
 REVIEW_TESTS_HANDLER="$AGENTS_DIR/hooks/workflow-mark/review-tests-handler.js"
 REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
 
-PASS=0
-FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+source "$AGENTS_DIR/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -104,16 +88,34 @@ stage_test_file() {
     git -C "$repo" add "$relpath"
 }
 
-# Compute the deterministic token for currently-staged tests under repo.
+# Compute the review-scope fingerprint for currently-staged files under repo.
 compute_token() {
     local repo="$1"
     run_with_timeout 10 node -e "
         try {
             const m = require(process.argv[1]);
-            const t = m.computeStagedTestsToken(process.argv[2]);
-            process.stdout.write(t == null ? 'NULL' : String(t));
+            const r = m.computeReviewScopeFingerprint(process.argv[2]);
+            if (!r || !r.ok) { process.stdout.write('ERR'); }
+            else if (!r.fingerprint) { process.stdout.write('EMPTY'); }
+            else { process.stdout.write(String(r.fingerprint)); }
         } catch (e) {
             process.stdout.write('ERROR:' + e.message);
+        }
+    " -- "$REVIEW_TESTS_EVIDENCE" "$repo" 2>/dev/null
+}
+
+# Compute the review-scope manifest JSON for currently-staged files under repo.
+# Failure prints JSON null so the embedding state file stays parseable — a
+# non-JSON marker would make the gate report "no workflow state" instead.
+compute_manifest() {
+    local repo="$1"
+    run_with_timeout 10 node -e "
+        try {
+            const m = require(process.argv[1]);
+            const r = m.computeReviewScopeManifest(process.argv[2]);
+            process.stdout.write(r && r.ok ? JSON.stringify({v:1, files:r.files}) : 'null');
+        } catch (e) {
+            process.stdout.write('null');
         }
     " -- "$REVIEW_TESTS_EVIDENCE" "$repo" 2>/dev/null
 }
@@ -156,14 +158,14 @@ read_step_field() {
         const s = S.readState(process.argv[1]);
         const st = s && s.steps && s.steps['$step'];
         const v = st && st['$field'];
-        console.log(v == null ? 'MISSING' : String(v));
+        console.log(v == null ? 'MISSING' : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
       } catch(e){ console.log('MISSING'); }
     " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
 }
 
 # Build a state JSON with named-step overrides.
 # Args: sid branch <step1> <status1> <step2> <status2> ...
-# Optional inline meta: pass `review_tests_token <hex>` to set token on the
+# Optional inline meta: pass `review_scope_manifest <json>` to set manifest on the
 # review_tests entry; pass `write_tests_skip_reason <str>` for skip_reason.
 state_json_custom() {
     local sid="$1" branch="$2"; shift 2
@@ -175,7 +177,7 @@ state_json_custom() {
     local review_security="complete" run_tests="complete" docs="complete"
     local user_verification="complete" cleanup="complete"
     local pre_final_report_gate="complete"
-    local review_tests_token=""
+    local review_scope_manifest=""
     local review_tests_warnings_summary=""
     local write_tests_skip_reason=""
     while [ $# -ge 2 ]; do
@@ -194,7 +196,7 @@ state_json_custom() {
             user_verification) user_verification="$2";;
             cleanup) cleanup="$2";;
             pre_final_report_gate) pre_final_report_gate="$2";;
-            review_tests_token) review_tests_token="$2";;
+            review_scope_manifest) review_scope_manifest="$2";;
             review_tests_warnings_summary) review_tests_warnings_summary="$2";;
             write_tests_skip_reason) write_tests_skip_reason="$2";;
         esac
@@ -202,8 +204,8 @@ state_json_custom() {
     done
     # Build review_tests entry inline so the optional fields appear only when set.
     local rt_extra=""
-    if [ -n "$review_tests_token" ]; then
-        rt_extra=", \"token\": \"$review_tests_token\""
+    if [ -n "$review_scope_manifest" ]; then
+        rt_extra=", \"review_scope_manifest\": $review_scope_manifest"
     fi
     if [ -n "$review_tests_warnings_summary" ]; then
         rt_extra="${rt_extra}, \"warnings_summary\": \"$review_tests_warnings_summary\""
@@ -321,38 +323,38 @@ SID_A2="a2-$$"
 PAIR_A2="$(setup_linked_worktree "secA-wt2")"
 WT_A2="${PAIR_A2#*|}"
 stage_test_file "$WT_A2" "tests/example.sh" "echo test A2"
-TOKEN_A2="$(compute_token "$WT_A2")"
+MANIFEST_A2="$(compute_manifest "$WT_A2")"
 write_state "$SID_A2" "$(state_json_custom "$SID_A2" "feature/secA-wt2" \
     review_tests complete \
-    review_tests_token "$TOKEN_A2")"
+    review_scope_manifest "$MANIFEST_A2")"
 RES_A2="$(run_gate "$WT_A2" "$(build_gate_json 'git commit -m wip' "$SID_A2" "$WT_A2")")"
 if is_approve "$RES_A2"; then
-    pass "A2. all-complete (incl. review_tests w/ matching token) → approve"
+    pass "A2. all-complete (incl. review_tests w/ matching manifest) → approve"
 else
     fail "A2. expected approve, got: $RES_A2"
 fi
 
 # ============================================================================
-# Section B: REVIEW_TESTS_COMPLETE sentinel marks the step + records token
+# Section B: REVIEW_TESTS_COMPLETE sentinel marks the step + records review_scope_manifest
 # ============================================================================
 echo ""
 echo "=== Section B: REVIEW_TESTS_COMPLETE sentinel handling ==="
 
-# B3: REVIEW_TESTS_COMPLETE with token records review_tests=complete + token
+# B3: REVIEW_TESTS_COMPLETE with fingerprint records review_tests=complete + review_scope_manifest
 SID_B3="b3-$$"
 PAIR_B3="$(setup_linked_worktree "secB-wt3")"
 WT_B3="${PAIR_B3#*|}"
 stage_test_file "$WT_B3" "tests/example.sh" "echo test B3"
 TOKEN_B3="$(compute_token "$WT_B3")"
 write_state "$SID_B3" "$(state_json_custom "$SID_B3" "feature/secB-wt3" review_tests pending)"
-SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=$TOKEN_B3>>\""
+SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$TOKEN_B3>>\""
 run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")" >/dev/null
 STATUS_B3="$(read_state_step "$SID_B3" review_tests)"
-RECORDED_TOKEN_B3="$(read_step_field "$SID_B3" review_tests token)"
-if [ "$STATUS_B3" = "complete" ] && [ "$RECORDED_TOKEN_B3" = "$TOKEN_B3" ]; then
-    pass "B3. REVIEW_TESTS_COMPLETE marks review_tests=complete + records token"
+RECORDED_MANIFEST_B3="$(read_step_field "$SID_B3" review_tests review_scope_manifest)"
+if [ "$STATUS_B3" = "complete" ] && [ "$RECORDED_MANIFEST_B3" != "MISSING" ]; then
+    pass "B3. REVIEW_TESTS_COMPLETE marks review_tests=complete + records review_scope_manifest"
 else
-    fail "B3. expected status=complete token=$TOKEN_B3, got status=$STATUS_B3 token=$RECORDED_TOKEN_B3"
+    fail "B3. expected status=complete manifest!=MISSING, got status=$STATUS_B3 manifest=$RECORDED_MANIFEST_B3"
 fi
 
 # B4: REVIEW_TESTS_WARNINGS sentinel marks complete and records warnings_summary
@@ -362,7 +364,7 @@ WT_B4="${PAIR_B4#*|}"
 stage_test_file "$WT_B4" "tests/example.sh" "echo test B4"
 TOKEN_B4="$(compute_token "$WT_B4")"
 write_state "$SID_B4" "$(state_json_custom "$SID_B4" "feature/secB-wt4" review_tests pending)"
-SENTINEL_B4="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=$TOKEN_B4 warnings=3>>\""
+SENTINEL_B4="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$TOKEN_B4 warnings=3>>\""
 run_mark "$WT_B4" "$(build_mark_json "$SENTINEL_B4" "$SID_B4" 0 "$WT_B4")" >/dev/null
 STATUS_B4="$(read_state_step "$SID_B4" review_tests)"
 WARNINGS_B4="$(read_step_field "$SID_B4" review_tests warnings_summary)"
@@ -373,66 +375,67 @@ else
 fi
 
 # ============================================================================
-# Section C: Stale-token detection (anti-bypass)
+# Section C: Stale-fingerprint detection (anti-bypass)
 # ============================================================================
 echo ""
-echo "=== Section C: Stale-token detection ==="
+echo "=== Section C: Stale-fingerprint detection ==="
 
-# C5: After REVIEW_TESTS_COMPLETE, staging an additional tests/ change must
-# invalidate the recorded token → next commit gate BLOCKS.
+# C5: After REVIEW_TESTS_COMPLETE, staging an additional file must
+# invalidate the stored manifest fingerprint → next commit gate BLOCKS.
 SID_C5="c5-$$"
 PAIR_C5="$(setup_linked_worktree "secC-wt5")"
 WT_C5="${PAIR_C5#*|}"
 stage_test_file "$WT_C5" "tests/example.sh" "echo initial C5"
-TOKEN_C5_BEFORE="$(compute_token "$WT_C5")"
+MANIFEST_C5_BEFORE="$(compute_manifest "$WT_C5")"
 write_state "$SID_C5" "$(state_json_custom "$SID_C5" "feature/secC-wt5" \
     review_tests complete \
-    review_tests_token "$TOKEN_C5_BEFORE")"
-# Now mutate the staged tests/ — token should change.
+    review_scope_manifest "$MANIFEST_C5_BEFORE")"
+# Now mutate the staged set — fingerprint should change.
 stage_test_file "$WT_C5" "tests/example2.sh" "echo added C5"
-TOKEN_C5_AFTER="$(compute_token "$WT_C5")"
-if [ "$TOKEN_C5_BEFORE" = "$TOKEN_C5_AFTER" ]; then
-    fail "C5 precondition: tokens unexpectedly equal before/after stage change"
+if [ -z "$MANIFEST_C5_BEFORE" ] || [ "$MANIFEST_C5_BEFORE" = "null" ]; then
+    fail "C5 precondition: manifest computation failed before scope change"
 fi
 RES_C5="$(run_gate "$WT_C5" "$(build_gate_json 'git commit -m wip' "$SID_C5" "$WT_C5")")"
 if is_block "$RES_C5" && echo "$RES_C5" | grep -qi "review_tests\|stale\|re-run\|review-tests"; then
-    pass "C5. stale token (tests/ changed after sentinel) → block commit"
+    pass "C5. stale fingerprint (scope changed after sentinel) → block commit"
 else
-    fail "C5. expected block on stale token, got: $RES_C5"
+    fail "C5. expected block on stale fingerprint, got: $RES_C5"
 fi
 
-# C8: REVIEW_TESTS_WARNINGS with matching token → gate still blocks (warnings not resolved)
+# C8: REVIEW_TESTS_WARNINGS with matching manifest → gate still blocks (warnings not resolved)
 SID_C8="c8-$$"
 PAIR_C8="$(setup_linked_worktree "secC-wt8")"
 WT_C8="${PAIR_C8#*|}"
 stage_test_file "$WT_C8" "tests/example.sh" "echo test C8"
 TOKEN_C8="$(compute_token "$WT_C8")"
+MANIFEST_C8="$(compute_manifest "$WT_C8")"
 write_state "$SID_C8" "$(state_json_custom "$SID_C8" "feature/secC-wt8" \
     review_tests complete \
-    review_tests_token "$TOKEN_C8" \
-    review_tests_warnings_summary "token=$TOKEN_C8 warnings=2")"
+    review_scope_manifest "$MANIFEST_C8" \
+    review_tests_warnings_summary "fingerprint=$TOKEN_C8 warnings=2")"
 RES_C8="$(run_gate "$WT_C8" "$(build_gate_json 'git commit -m wip' "$SID_C8" "$WT_C8")")"
 if is_block "$RES_C8" && echo "$RES_C8" | grep -qi "review_tests\|warning\|review-tests"; then
-    pass "C8. warnings_summary set (token matches) → gate still blocks until warnings resolved"
+    pass "C8. warnings_summary set (manifest matches) → gate still blocks until warnings resolved"
 else
     fail "C8. expected block on warnings_summary, got: $RES_C8"
 fi
 
-# C9: warnings_summary blocks even when NO test files are staged (fix for HIGH #4:
-# previously stagedToken==null caused continue before warnings_summary check).
+# C9: warnings_summary blocks even when only non-excluded files are staged (HIGH-4 regression).
+# Old null-token path skipped warnings check; new code checks warnings before staleness.
 SID_C9="c9-$$"
 PAIR_C9="$(setup_linked_worktree "secC-wt9")"
 WT_C9="${PAIR_C9#*|}"
-# Stage only a source file — no tests/ files staged.
+# Stage only a src file — tests/ not staged.
 printf 'src change\n' > "$WT_C9/src.js"
 git -C "$WT_C9" add src.js 2>/dev/null || true
+MANIFEST_C9="$(compute_manifest "$WT_C9")"
 write_state "$SID_C9" "$(state_json_custom "$SID_C9" "feature/secC-wt9" \
     review_tests complete \
-    review_tests_token "abc123" \
+    review_scope_manifest "$MANIFEST_C9" \
     review_tests_warnings_summary "missing edge case coverage")"
 RES_C9="$(run_gate "$WT_C9" "$(build_gate_json 'git commit -m wip' "$SID_C9" "$WT_C9")")"
 if is_block "$RES_C9" && echo "$RES_C9" | grep -qi "review_tests\|warning\|review-tests"; then
-    pass "C9. warnings_summary blocks even with no staged test files (HIGH-4 regression guard)"
+    pass "C9. warnings_summary blocks even when only non-test files are staged (HIGH-4 regression)"
 else
     fail "C9. expected block when warnings_summary set + no staged tests, got: $RES_C9"
 fi
@@ -462,27 +465,9 @@ else
 fi
 
 # ============================================================================
-# Section E: Manual MARK_STEP review_tests is rejected (token-only path)
+# Section E: Manual MARK_STEP review_tests is rejected (sourced)
 # ============================================================================
-echo ""
-echo "=== Section E: Manual MARK_STEP rejection ==="
-
-# E7: Trying to mark review_tests via the generic WORKFLOW_MARK_STEP_<step>_complete
-#     sentinel must be rejected — review_tests can only be transitioned via
-#     REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS (which carry a token).
-SID_E7="e7-$$"
-PAIR_E7="$(setup_linked_worktree "secE-wt7")"
-WT_E7="${PAIR_E7#*|}"
-stage_test_file "$WT_E7" "tests/example.sh" "echo test E7"
-write_state "$SID_E7" "$(state_json_custom "$SID_E7" "feature/secE-wt7" review_tests pending)"
-SENTINEL_E7='echo "<<WORKFLOW_MARK_STEP_review_tests_complete>>"'
-run_mark "$WT_E7" "$(build_mark_json "$SENTINEL_E7" "$SID_E7" 0 "$WT_E7")" >/dev/null
-STATUS_E7="$(read_state_step "$SID_E7" review_tests)"
-if [ "$STATUS_E7" = "pending" ]; then
-    pass "E7. generic MARK_STEP review_tests_complete is rejected (still pending)"
-else
-    fail "E7. expected pending (manual mark rejected), got status=$STATUS_E7"
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/feature-833-review-tests-gate/section-e.sh"
 
 # ============================================================================
 # Section F: wsid match enforcement (sourced)

@@ -19,7 +19,7 @@ AGENTS_WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RESOLVER_JS="$AGENTS_WORKTREE/hooks/workflow-state/resolve-worktree-path.js"
 RESOLVER_BIN="$AGENTS_WORKTREE/bin/resolve-worktree-path"
 SELECT_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/select-staged-files.sh"
-COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-staged-tests-token.js"
+COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-review-scope-fingerprint.js"
 RUN_TIMEOUT="$AGENTS_WORKTREE/bin/run-with-timeout.sh"
 PARTS="$AGENTS_WORKTREE/tests/hooks/fix-882-resolve-worktree-path"
 

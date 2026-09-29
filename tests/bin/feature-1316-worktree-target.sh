@@ -1,19 +1,19 @@
 #!/bin/bash
 # tests/bin/feature-1316-worktree-target.sh
-# Tests: bin/compute-staged-tests-token.js, skills/review-tests/scripts/run-codex-review-loop.sh
-# Tags: review-tests, worktree-target, staged-tests-token, parallel-sessions, scope:issue-specific
+# Tests: bin/compute-review-scope-fingerprint.js, skills/review-tests/scripts/run-codex-review-loop.sh
+# Tags: review-tests, worktree-target, staged-tests-token, review-scope-fingerprint, parallel-sessions, scope:issue-specific
 #
-# Issue #1316 — the staged-tests token and the codex review loop must resolve to
+# Issue #1316 — the review-scope fingerprint and the codex review loop must resolve to
 # the SESSION's linked worktree (state.cwd), never process.cwd()/main; otherwise
-# parallel sessions mint a token for the wrong worktree and pre-commit blocks on
-# stale-token. Cases 1-3, 6 fail until resolveRepoDir() consults state.cwd;
+# parallel sessions mint a fingerprint for the wrong worktree and pre-commit blocks on
+# stale-fingerprint. Cases 1-3, 6 fail until resolveRepoDir() consults state.cwd;
 # cases 4-5 guard the old process.cwd() fallback. L3 gap: live two-worktree
 # fingerprint handshake and SESSION_ID propagation — see review-tests-checker.js.
 
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPUTE_JS="$AGENTS_DIR/bin/compute-staged-tests-token.js"
+COMPUTE_JS="$AGENTS_DIR/bin/compute-review-scope-fingerprint.js"
 LOOP_SH="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
 export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
@@ -59,14 +59,14 @@ export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 # rules/test/fixture-isolation.md: the parent Claude Code session exports
 # CLAUDE_CODE_SESSION_ID, which outranks the CLAUDE_SESSION_ID each case sets, so the
-# live session's id would resolve instead of the fixture's and every token come back empty.
+# live session's id would resolve instead of the fixture's and every fingerprint come back empty.
 unset CLAUDE_CODE_SESSION_ID
 
 # ---------------------------------------------------------------------------
 # Precondition gate
 # ---------------------------------------------------------------------------
 if [[ ! -f "$COMPUTE_JS" ]]; then
-    echo "FAIL: precondition missing — bin/compute-staged-tests-token.js"
+    echo "FAIL: precondition missing — bin/compute-review-scope-fingerprint.js"
     echo ""
     echo "Results: 0 passed, 1 failed"
     exit 1
@@ -129,14 +129,14 @@ write_state() {
     ' -- "$sid" "$cwd"
 }
 
-# Run compute-staged-tests-token.js with the given SESSION_ID, from a specific CWD.
+# Run compute-review-scope-fingerprint.js with the given SESSION_ID, from a specific CWD.
 run_compute() {
     local sid="$1" cwd="$2"
     ( cd "$cwd" && SESSION_ID="$sid" CLAUDE_SESSION_ID="$sid" \
         "$RWT" 120 node "$COMPUTE_JS" ) 2>/dev/null
 }
 
-# Run compute with explicit argv[2] to get ground-truth token for a worktree.
+# Run compute with explicit argv[2] to get ground-truth fingerprint for a worktree.
 run_compute_explicit() {
     local dir="$1"
     "$RWT" 120 node "$COMPUTE_JS" "$dir" 2>/dev/null
@@ -166,14 +166,14 @@ mkdir -p "$PARENT_REPO/tests"
     git -c core.hooksPath="" commit -q -m initial
 )
 
-# Stage tests/ in the parent (main) worktree — token for MAIN_WT.
+# Stage tests/ in the parent (main) worktree — fingerprint for MAIN_WT.
 printf 'test content for MAIN\n' > "$PARENT_REPO/tests/feature-x.sh"
 git -C "$PARENT_REPO" -c core.hooksPath="" add tests/feature-x.sh
 
 # Create a linked worktree on a new branch.
 git -C "$PARENT_REPO" -c core.hooksPath="" worktree add -q "$LINKED_A" -b feature/linked-a
 
-# Stage different tests/ content in the linked worktree — distinct token.
+# Stage different tests/ content in the linked worktree — distinct fingerprint.
 mkdir -p "$LINKED_A/tests"
 printf 'test content for linked-A\n' > "$LINKED_A/tests/feature-x.sh"
 git -C "$LINKED_A" -c core.hooksPath="" add tests/feature-x.sh
@@ -193,9 +193,9 @@ fi
 TOKEN_A_EXPECTED="$(run_compute_explicit "$LINKED_A")"
 TOKEN_MAIN_EXPECTED="$(run_compute_explicit "$MAIN_WT")"
 
-# Sanity: the two worktrees must have different non-empty tokens.
+# Sanity: the two worktrees must have different non-empty fingerprints.
 if [[ -z "$TOKEN_A_EXPECTED" || "$TOKEN_A_EXPECTED" == "$TOKEN_MAIN_EXPECTED" ]]; then
-    echo "FAIL: fixture sanity — linked-A and main tokens must be non-empty and distinct"
+    echo "FAIL: fixture sanity — linked-A and main fingerprints must be non-empty and distinct"
     echo "  A=[$TOKEN_A_EXPECTED] main=[$TOKEN_MAIN_EXPECTED]"
     echo ""
     echo "Results: 0 passed, 1 failed"
@@ -206,14 +206,14 @@ SID_A="test-sid-1316-a"
 write_state "$SID_A" "$LINKED_A"
 
 # ===========================================================================
-# Case 1 — state.cwd=linked-A, CWD=main → token must be linked-A's, not main's.
+# Case 1 — state.cwd=linked-A, CWD=main → fingerprint must be linked-A's, not main's.
 # EXPECTED: FAIL before fix (resolveRepoDir still falls back to process.cwd()).
 # ===========================================================================
 got1="$(run_compute "$SID_A" "$MAIN_WT")"
 if [[ "$got1" == "$TOKEN_A_EXPECTED" ]]; then
-    pass "1: state.cwd=linked-A resolves token to A even when CWD=main"
+    pass "1: state.cwd=linked-A resolves fingerprint to A even when CWD=main"
 else
-    fail "1: expected A's token [$TOKEN_A_EXPECTED], got [$got1] (main=[$TOKEN_MAIN_EXPECTED])"
+    fail "1: expected A's fingerprint [$TOKEN_A_EXPECTED], got [$got1] (main=[$TOKEN_MAIN_EXPECTED])"
 fi
 
 # ===========================================================================
@@ -314,31 +314,31 @@ STUBATF
 fi
 
 # ===========================================================================
-# Case 3 — Consistency: compute-token and loop must resolve to SAME worktree.
-#   The token minted by compute (case 1) must equal explicit token of linked-A.
+# Case 3 — Consistency: compute and loop must resolve to SAME worktree.
+#   The fingerprint minted by compute (case 1) must equal explicit fingerprint of linked-A.
 # EXPECTED: FAIL before fix (case 1 already fails, so this depends on case 1).
 # ===========================================================================
 if [[ "$got1" == "$TOKEN_A_EXPECTED" ]]; then
     pass "3: cross-tool consistency — both resolve to linked-A for same SESSION_ID"
 else
-    fail "3: cross-tool inconsistency — compute resolved to [$got1] but linked-A token is [$TOKEN_A_EXPECTED]"
+    fail "3: cross-tool inconsistency — compute resolved to [$got1] but linked-A fingerprint is [$TOKEN_A_EXPECTED]"
 fi
 
 # ===========================================================================
-# Case 4 (regression d) — NO state.cwd + CWD=main → must NOT emit main's token.
-#   OLD behavior: falls back to process.cwd() and mints main's token.
-#   FIXED behavior: returns empty string (null token).
+# Case 4 (regression d) — NO state.cwd + CWD=main → must NOT emit main's fingerprint.
+#   OLD behavior: falls back to process.cwd() and mints main's fingerprint.
+#   FIXED behavior: returns empty string (null fingerprint).
 #   This case FAILS while the bug is present, PASSES post-fix.
 # ===========================================================================
 SID_NOCWD="test-sid-1316-nocwd"
 write_state "$SID_NOCWD" ""   # state exists but has no cwd field
 got4="$(run_compute "$SID_NOCWD" "$MAIN_WT")"
 if [[ "$got4" != "$TOKEN_MAIN_EXPECTED" && -z "$got4" ]]; then
-    pass "4: no state.cwd + CWD=main → empty token (not main's token)"
+    pass "4: no state.cwd + CWD=main → empty fingerprint (not main's fingerprint)"
 elif [[ "$got4" != "$TOKEN_MAIN_EXPECTED" ]]; then
-    pass "4: no state.cwd + CWD=main → token differs from main's (not falling back)"
+    pass "4: no state.cwd + CWD=main → fingerprint differs from main's (not falling back)"
 else
-    fail "4: REGRESSION — emitted main's token [$got4] via process.cwd() fallback"
+    fail "4: REGRESSION — emitted main's fingerprint [$got4] via process.cwd() fallback"
 fi
 
 # ===========================================================================
@@ -366,47 +366,47 @@ else
 fi
 
 # ===========================================================================
-# Case 6 (regression e) — state.cwd = main worktree path → empty token.
+# Case 6 (regression e) — state.cwd = main worktree path → empty fingerprint.
 #   The main worktree must be rejected as a linked-worktree commit target.
 #   To distinguish "main" from "linked", we use a worktree list check: the
 #   first path in `git worktree list --porcelain` is the main worktree.
 #   In this test the repo is standalone (no worktree list), so the fix must
 #   rely on a positive signal (state.cwd must be a LINKED worktree) rather
-#   than the main-worktree rejection alone. We assert: no main token emitted.
-# EXPECTED: FAIL before fix (falls through to process.cwd() and emits token).
+#   than the main-worktree rejection alone. We assert: no main fingerprint emitted.
+# EXPECTED: FAIL before fix (falls through to process.cwd() and emits fingerprint).
 # ===========================================================================
 SID_MAIN="test-sid-1316-main"
 write_state "$SID_MAIN" "$MAIN_WT"
 got6="$(run_compute "$SID_MAIN" "$MAIN_WT")"
 # After fix: state.cwd=main worktree → should emit empty (main worktree guard)
-# OR state.cwd is trusted and returns MAIN's token (depends on implementation).
+# OR state.cwd is trusted and returns MAIN's fingerprint (depends on implementation).
 # The key invariant is that the main worktree is NOT used as the commit target
 # when enforce-worktree reserves it. We check the weaker contract: fix docs say
 # state.cwd that equals the main worktree must return empty.
 if [[ -z "$got6" ]]; then
-    pass "6: state.cwd=main worktree path → empty token (main worktree rejected)"
+    pass "6: state.cwd=main worktree path → empty fingerprint (main worktree rejected)"
 else
-    fail "6: state.cwd=main worktree → emitted token [$got6] (main worktree not rejected)"
+    fail "6: state.cwd=main worktree → emitted fingerprint [$got6] (main worktree not rejected)"
 fi
 
 # ===========================================================================
-# Case 7 (C7) — state.cwd with a non-existent path → empty token, no crash.
+# Case 7 (C7) — state.cwd with a non-existent path → empty fingerprint, no crash.
 #   After fix: resolveRepoDir reads state.cwd but detects the path doesn't
-#   exist → falls through to null (empty token), not process.cwd().
+#   exist → falls through to null (empty fingerprint), not process.cwd().
 # ===========================================================================
 SID_GHOST="test-sid-1316-ghost"
 write_state "$SID_GHOST" "/nonexistent/path/that/does/not/exist"
 got7="$(run_compute "$SID_GHOST" "$MAIN_WT")"
-# Must not emit main's token; must not crash (any clean empty is fine).
+# Must not emit main's fingerprint; must not crash (any clean empty is fine).
 if [[ "$got7" != "$TOKEN_MAIN_EXPECTED" ]]; then
-    pass "7: state.cwd=nonexistent path → empty token (no crash, no CWD fallback)"
+    pass "7: state.cwd=nonexistent path → empty fingerprint (no crash, no CWD fallback)"
 else
-    fail "7: REGRESSION — state.cwd=nonexistent path fell back to CWD and emitted main token [$got7]"
+    fail "7: REGRESSION — state.cwd=nonexistent path fell back to CWD and emitted main fingerprint [$got7]"
 fi
 
 # ===========================================================================
-# Case 8 (C7) — state.cwd with a valid path that is NOT a git repo → empty token.
-#   After fix: isValidLinkedWorktree(state.cwd) fails → null → empty token.
+# Case 8 (C7) — state.cwd with a valid path that is NOT a git repo → empty fingerprint.
+#   After fix: isValidLinkedWorktree(state.cwd) fails → null → empty fingerprint.
 # ===========================================================================
 NON_GIT_DIR="$TMPDIR_BASE/not-a-repo"
 mkdir -p "$NON_GIT_DIR"
@@ -414,9 +414,9 @@ SID_NONGIT="test-sid-1316-nongit"
 write_state "$SID_NONGIT" "$NON_GIT_DIR"
 got8="$(run_compute "$SID_NONGIT" "$MAIN_WT")"
 if [[ "$got8" != "$TOKEN_MAIN_EXPECTED" ]]; then
-    pass "8: state.cwd=valid dir but not git repo → empty token (no CWD fallback)"
+    pass "8: state.cwd=valid dir but not git repo → empty fingerprint (no CWD fallback)"
 else
-    fail "8: REGRESSION — non-git state.cwd fell back to CWD and emitted main token [$got8]"
+    fail "8: REGRESSION — non-git state.cwd fell back to CWD and emitted main fingerprint [$got8]"
 fi
 
 # NOTE: Special-char and space paths are not fixture-tested on Windows (Git Bash

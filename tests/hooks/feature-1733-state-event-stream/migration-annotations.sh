@@ -3,19 +3,11 @@
 # Tests: hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/state-io/projection.js
 # Tags: workflow-state, event-stream, migration, annotations, property-test, scope:issue-specific, pwsh-not-required, TL2
 #
-# The v1->v2 converter must move step entry fields MECHANICALLY — never by enumerating
-# key names — or the first field someone adds after this lands is silently destroyed.
-# Case (f) is the load-bearing one: a single property check comparing
-# projectState(migrate(v1)).steps against the original v1 steps catches every field the
-# converter forgot, including ones this file does not name. The named-key matrix (a)-(e)
-# exists so a failure says WHICH rule broke, not merely that something differs.
-#
-# TL3 gap (what this test does NOT catch):
-# - real v1 files from earlier releases: fixtures are synthesised, so a field shape no
-#   one anticipated is out of reach. The property check in (f) is the mitigation that
-#   generalises beyond the fixture's key list.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# The v1->v2 converter must move step entry fields MECHANICALLY, never by key name.
+# K-f is the load-bearing property check (projectState(migrate(v1)).steps == v1 steps);
+# the named-key matrix exists so a failure says WHICH rule broke.
+# TL3 gap: real v1 files from earlier releases (fixtures are synthesised); checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh hook-registration.
 
 CASE_TAG="migann"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -24,7 +16,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
 seed_v1() { (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"; }
 
-echo "== K0: all 9 real annotation keys survive as step_annotation events =="
+# The v1 fixture's keys include retired ones (token, invalidate_reason); they must
+# still survive migration as step_annotation events (unknown keys pass through).
+echo "== K0: all 9 v1 fixture annotation keys survive as step_annotation events =="
 if run_case "K0/nine-known-keys"; then
     next_sid
     seed_v1 "$SID" "annotations"
@@ -39,13 +33,14 @@ console.log("known_keys=" + KEYS.length + " missing_as_event=" + (missing.join("
     assert_eq "K0/nine-known-keys" "known_keys=9 missing_as_event=0" "$NODE_OUT"
 fi
 
-echo "== K0b: STEP_ANNOTATION_KEYS is the documented 10-key table =="
+echo "== K0b: STEP_ANNOTATION_KEYS is the documented 14-key table =="
 if run_case "K0b/annotation-key-table"; then
     next_sid
     nodejs "$SID" '
 const E = require("./hooks/workflow-state/state-io/events");
-const WANT = ["invalidate_reason", "reset_reason", "run_outcome", "skip_judgment", "skip_reason",
-              "skip_verdict", "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
+const WANT = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
+              "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+              "skip_verdict", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const got = [...E.STEP_ANNOTATION_KEYS].sort();
 console.log(JSON.stringify(got) === JSON.stringify(WANT) ? "MATCH" : "DIFFER got=" + JSON.stringify(got));
 '
@@ -217,12 +212,12 @@ const M = require("./hooks/workflow-state/state-io/migrations/v1-to-v2");
 // grows its own copy the two will drift; assert the export exists and is stable.
 const f = M.orderedAnnotationKeys;
 if (typeof f !== "function") { console.log("MISSING-EXPORT"); process.exit(0); }
-const a = f({ zeta: 1, token: 2, alpha: 3, wsid: 4 });
-const b = f({ alpha: 3, wsid: 4, zeta: 1, token: 2 });
+const a = f({ zeta: 1, review_scope_manifest: 2, alpha: 3, wsid: 4 });
+const b = f({ alpha: 3, wsid: 4, zeta: 1, review_scope_manifest: 2 });
 console.log(JSON.stringify(a) === JSON.stringify(b) ? "STABLE " + a.join(",") : "UNSTABLE");
 '
     # Known keys first in STEP_ANNOTATION_KEYS order, then the rest alphabetically.
-    assert_eq "K-g/shared-ordering-helper" "STABLE token,wsid,alpha,zeta" "$NODE_OUT"
+    assert_eq "K-g/shared-ordering-helper" "STABLE review_scope_manifest,wsid,alpha,zeta" "$NODE_OUT"
 fi
 
 finish "migration-annotations"

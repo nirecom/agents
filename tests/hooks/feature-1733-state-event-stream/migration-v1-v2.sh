@@ -3,18 +3,9 @@
 # Tests: hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/state-io/migrations.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, migration, schema-version, idempotency, scope:issue-specific, pwsh-not-required, TL2
 #
-# In-flight sessions carry v1 state files, so the conversion is applied lazily on the
-# next read. Two properties matter most: JSON key order is INSERTION order, not
-# chronological order, so the converter must sort by `at` and not by iteration order;
-# and a second read must be a no-op down to the bytes, otherwise every gate evaluation
-# rewrites the file and the event stream grows without any workflow progress.
-#
-# TL3 gap (what this test does NOT catch):
-# - conversion of real in-flight state files written by earlier releases; the fixtures
-#   here are synthesised by mk-v1.js and cannot contain a field no one predicted.
-# - hook registration: the read that triggers the lazy migration is a module call here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Lazy v1 conversion: events sort by `at` (not key insertion order) and a re-read is byte-idempotent.
+# TL3 gap: real in-flight files from earlier releases and hook registration; checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="migv"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -321,9 +312,10 @@ console.log([
 ].join(" "));
 '
     # VALID_STEPS index order within the equal-`at` group, step_status before that
-    # step annotations, STEP_ANNOTATION_KEYS index (token before wsid) within a step.
+    # step annotations, known STEP_ANNOTATION_KEYS (wsid) before retired/unknown keys
+    # (token, retired by #2327) within a step.
     assert_eq "V15/equal-timestamp-tiebreak" \
-        "distinct_at=1 estimated=clarify_intent estimated_first=true v3_tail=write_code:migration-v2-to-v3 order=clarify_intent:step_status workflow_init:step_status detail:step_status review_tests:step_status review_tests:token review_tests:wsid run_tests:step_status" \
+        "distinct_at=1 estimated=clarify_intent estimated_first=true v3_tail=write_code:migration-v2-to-v3 order=clarify_intent:step_status workflow_init:step_status detail:step_status review_tests:step_status review_tests:wsid review_tests:token run_tests:step_status" \
         "$NODE_OUT"
 fi
 

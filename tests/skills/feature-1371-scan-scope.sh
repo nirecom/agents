@@ -3,35 +3,10 @@
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: review-tests, scan-scope, changed-files, context-injection, scope:issue-specific
 #
-# Issue #1371 — /review-tests must inject a changed-file scope context so the
-# codex reviewer only evaluates test coverage for files actually changed in this
-# branch (not the entire codebase). Without scope injection, the reviewer may
-# flag coverage gaps for files not touched by the PR, producing false-positive
-# NEEDS_REVISION verdicts.
-#
-# Expected behavior (after fix):
-#   skills/review-tests/scripts/run-codex-review-loop.sh generates a tempfile
-#   containing `git diff <merge-base>...HEAD --name-only` output and passes it
-#   to bin/run-codex-review-loop via --context.
-#
-# Opt-out (REVIEW_TESTS_FULL_SCAN=1):
-#   When REVIEW_TESTS_FULL_SCAN=1 is set, the changed-file context is NOT
-#   injected — reviewer evaluates all staged tests against the full codebase.
-#
-# EXPECTED:
-#   Case C1a (changed-file context injected) — FAIL before fix (no --context
-#     with changed-files is passed by the current script).
-#   Case C1b (REVIEW_TESTS_FULL_SCAN=1 skips injection) — PASS before and
-#     after fix only if the opt-in is respected (regression guard).
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Whether the injected context actually changes codex's verdict (only a live
-#   codex session with real changed-files output can verify that).
-# - Whether the merge-base computation is correct for detached-HEAD states or
-#   force-pushed branches (only reproducible in a real git environment with the
-#   branch history set up exactly).
-# Closest-to-action mitigation: the changed-file tempfile is human-readable;
-# the reviewer output can be inspected in a live /review-tests run.
+# #1371: run-codex-review-loop.sh must inject a --context with the PR diff file
+# list so the reviewer only evaluates changed files. REVIEW_TESTS_FULL_SCAN=1
+# suppresses injection. L3 gap: live codex verdict change, detached-HEAD
+# merge-base — see review output for mitigation.
 
 set -uo pipefail
 
@@ -258,6 +233,58 @@ else
     else
         fail "C3: README.md (not in branch diff) leaked into the --context file (scope too broad)"
     fi
+fi
+
+
+# --- S: terminal-guard wording sweep (feature-2327) ---
+# Plan: 「terminal guard のメッセージ」 + Round-2 LOW line ~87 comment
+
+echo ""
+echo "--- S: terminal guard wording sweep (feature-2327) ---"
+
+# S1: Absent strings — old "staged-tests" / "tests unchanged" wording must be removed
+for ABSENT_STR in \
+    "tests/ are unchanged" \
+    "Tests changed after" \
+    "staged-tests fingerprint" \
+    "re-stage tests/" \
+    "tests unchanged" \
+    "tests were re-edited" \
+    "not evidence that tests changed" \
+    "compute_staged_tests_fingerprint" \
+    "computeStagedTestsToken"
+do
+  if grep -qF "$ABSENT_STR" "$LOOP_SH" 2>/dev/null; then
+    fail "S1 old wording must be removed: '$ABSENT_STR'"
+  else
+    pass "S1 old wording absent: '$ABSENT_STR'"
+  fi
+done
+
+# S2: Present strings — new "review scope" / "review-scope fingerprint" wording
+for PRESENT_STR in \
+    "review scope is unchanged" \
+    "Review scope changed after" \
+    "review-scope fingerprint" \
+    "compute_review_scope_fingerprint" \
+    "computeReviewScopeFingerprint"
+do
+  if grep -qF "$PRESENT_STR" "$LOOP_SH" 2>/dev/null; then
+    pass "S2 new wording present: '$PRESENT_STR'"
+  else
+    fail "S2 new wording missing: '$PRESENT_STR'"
+  fi
+done
+
+# S3: ok: false / fingerprint failure -> exit 4 HALT path present (static)
+if grep -qF "compute_review_scope_fingerprint" "$LOOP_SH" 2>/dev/null; then
+  if awk '/compute_review_scope_fingerprint/,/exit [0-9]/' "$LOOP_SH" 2>/dev/null | grep -qF "exit 4"; then
+    pass "S3 ok: false -> exit 4 path found near compute_review_scope_fingerprint"
+  else
+    fail "S3 no exit 4 path near compute_review_scope_fingerprint (ok: false must HALT)"
+  fi
+else
+  fail "S3 compute_review_scope_fingerprint not found — ok: false -> exit 4 cannot be verified"
 fi
 
 echo ""

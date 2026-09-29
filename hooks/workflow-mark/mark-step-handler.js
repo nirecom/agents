@@ -11,6 +11,7 @@ const { confirmSentinelFor } = require("../workflow-state/completion-approval");
 // approval invariant and the workflow_init downstream reset; this handler keeps
 // only the sentinel-specific wording.
 const { recordStepVerdict } = require("../workflow-state/record-step-verdict");
+const { formatReviewTestsReopenNotice } = require("../workflow-state/review-tests-reopen");
 // #1644: MARK_STEP_* is settings.json `allow` (freely emittable), so once
 // run_tests became skippable this door must verify the docs-only fact itself.
 // Single owner of the predicate — never restate the allowlist here.
@@ -36,12 +37,12 @@ function handle(ctx) {
     }
 
     // review_tests must go through the dedicated REVIEW_TESTS_COMPLETE / WARNINGS
-    // sentinel path (which carries a staged-tests-snapshot token). Manual
-    // MARK_STEP would bypass the stale-token anti-bypass guard.
+    // sentinel path (which carries the review-scope fingerprint). Manual
+    // MARK_STEP would bypass the stale-fingerprint anti-bypass guard.
     if (stepName === "review_tests") {
       pushMessage(
         `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Invoke /review-tests skill (which auto-computes the staged-tests token) ` +
+          `Invoke /review-tests skill (which auto-computes the review-scope fingerprint) ` +
           `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`
       );
       return true;
@@ -127,6 +128,9 @@ function handle(ctx) {
       );
     } else if (res.kind === "downstream-reset-failed") {
       pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${res.detail}`);
+    } else if (res.kind) {
+      const notice = formatReviewTestsReopenNotice(res);
+      if (notice) pushMessage(`workflow-mark: ${notice}`);
     }
 
     return true;

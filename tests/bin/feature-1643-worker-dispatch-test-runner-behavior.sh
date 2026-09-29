@@ -3,24 +3,13 @@
 # Tests: bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, test-runner, status-derivation, parser, bounds, table-driven, TL2, scope:issue-specific
 
-# Issue #1643 — the test-runner worker turns one suite invocation into a status,
-# a failing-test list and a bounded log tail. The output-contract suite proves
-# the SHAPE is well-formed; this file proves the values inside it are the right
-# ones — that a failing suite is not reported as passing, that an empty
-# failing_tests on a failure says why, and that both bounded lists really are
-# bounded rather than merely usually short.
+# Issue #1643 — the test-runner worker's status, failing-test list (uncapped
+# since #2431) and bounded log tail carry the right values, not just the right shape.
+# The suite process is canned via tests/feature-1643-worker-dispatch-lib/spawn-stub.js.
 
-# The suite process is canned via tests/feature-1643-worker-dispatch-lib/
-# spawn-stub.js: a real 15-failure / 100-line run cannot be produced on demand,
-# and the parser is what is under test here, not bash.
-
-# TL3 gap (what this TL2 test does NOT catch):
-#   - The real tests/run-all.sh output format drifting away from
-#     `FAIL: <script> (exit N)` / `Results: ...`. Only a real suite run shows
-#     that; tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier for it.
-#   - A real OS-level timeout kill (SIGTERM handling by spawnSync).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: real tests/run-all.sh output-format drift and a real OS-level timeout
+# kill; covered by tests/bin/TL3-worker-dispatch-run-tests.sh and the
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh skill-orchestration).
 
 set -u
 
@@ -204,7 +193,7 @@ group_runner_error() {
 }
 
 # ===========================================================================
-# Group 2 — the bounded lists are actually bounded
+# Group 2 — log tail is bounded; the failing-test list is not (#2431)
 # ===========================================================================
 group_bounds() {
     local args=() i
@@ -214,7 +203,7 @@ group_bounds() {
     set_run 1 "${args[@]}"
     dispatch_tr "$MAIN" "$PAYLOAD"
     assert_eq "bounds/status" "fail" "$(field_of status)"
-    assert_eq "bounds/failing-tests-capped-at-10" "10" "$(failing_count)"
+    assert_eq "bounds/failing-tests-uncapped-all-15-kept" "15" "$(failing_count)"
     assert_eq "bounds/log-tail-capped-at-40" "40" "$(tail_lines)"
     # The tail is the END of the output, so the Results line must be in it and
     # the very first log line must not.
@@ -417,15 +406,9 @@ WORKFLOW_PLANS_DIR=[$PLANS]"
 # Group 4 — CONTRACT_LINE_RE, table-driven
 # ===========================================================================
 
-# WHY (CPR-WPH): CONTRACT_LINE_RE is the one regex whose verdict the commit gate
-# ultimately trusts, and it is applied to stdout and stderr CONCATENATED, after
-# CRLF normalisation and blank-line removal. A single happy-path example proves
-# none of that. The table below is the matching/non-matching matrix required by
-# skills/_shared/test-design/parser-regex-tests.md.
-
-# Each row drives the REAL pipeline (stub suite -> worker -> renderer), so what
-# is asserted is what a caller would actually receive: the rendered contract
-# value, or `(none)` when the worker refused to report one.
+# WHY: CONTRACT_LINE_RE runs on stdout+stderr concatenated after CRLF/blank-line
+# normalisation; this matrix (skills/_shared/test-design/parser-regex-tests.md)
+# drives the real stub -> worker -> renderer pipeline and asserts the rendered value.
 set_run_streams() {
     node -e '
 const fs = require("fs");

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# bin/run-tests-baseline — classify the failing tests of the last /run-tests run
+# against the merge base (#2431), and complete run_tests only when every failure
+# already existed there. The sole recovery path for pre-existing failures.
+#
+# Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>]
+# Output: `BASELINE: <class> <path> [detail]` lines, then
+#         `BASELINE_SUMMARY: preexisting=N inherited=N broken=N undetermined=N`.
+# Exit:   0 all pre-existing (run_tests completed), 1 otherwise, 2 usage,
+#         3 no hook-recorded failing list (or state moved), 4 merge base not trustworthy.
+# Child test output goes to log files only, never to stdout.
+
+set -uo pipefail
+
+case "${BASH_SOURCE[0]}" in
+  */*) RTB_BIN_DIR="${BASH_SOURCE[0]%/*}" ;;
+  *)   RTB_BIN_DIR="." ;;
+esac
+RTB_AGENTS_DIR="$(cd "$RTB_BIN_DIR/.." && pwd)"
+# shellcheck source=bin/lib/run-tests-baseline-ledger.sh
+. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-ledger.sh"
+# shellcheck source=bin/lib/run-tests-baseline-worktree.sh
+. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-worktree.sh"
+# shellcheck source=bin/lib/run-tests-baseline-exec.sh
+. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-exec.sh"
+
+RTB_EVIDENCE="$RTB_AGENTS_DIR/bin/workflow/run-tests-baseline-evidence"
+RTB_RESOLVE="$RTB_AGENTS_DIR/bin/resolve-merge-base.sh"
+# shellcheck disable=SC2016,SC2088  # literal grep patterns, never expanded
+RTB_HOME_REFS=('$HOME/.claude' '${HOME}/.claude' '~/.claude' '$env:USERPROFILE' '$env:HOME' 'Path.home()' 'expanduser("~')
+
+die() { printf 'run-tests-baseline: %s\n' "$2" >&2; exit "$1"; }
+
+SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT=300
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --session) [ "$#" -ge 2 ] || die 2 "--session needs a value"; SID="$2"; shift 2 ;;
+    --worktree) [ "$#" -ge 2 ] || die 2 "--worktree needs a value"; WT_ARG="$2"; shift 2 ;;
+    --per-test-timeout) [ "$#" -ge 2 ] || die 2 "--per-test-timeout needs a value"; PER_TEST_TIMEOUT="$2"; shift 2 ;;
+    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) die 2 "unknown argument: $1" ;;
+  esac
+done
+[ -n "$SID" ] || die 2 "--session <sid> is required"
+case "$PER_TEST_TIMEOUT" in ''|*[!0-9]*|0) die 2 "--per-test-timeout must be a positive integer" ;; esac
+
+# 1. The failing list the run-tests hook recorded, and its causal position.
+FAILING_OUT="$(node "$(rtb_wt_native "$RTB_EVIDENCE")" failing --session "$SID")" \
+  || die 3 "the run-tests hook recorded no failing-test list for this session (no trusted RUN_CONTRACT, count mismatch, or run_tests not failing); baseline classification is not possible"
+SEQ="$(printf '%s\n' "$FAILING_OUT" | sed -n '1s/^SEQ=//p')"
+TESTS=()
+while IFS= read -r line; do
+  [ -n "$line" ] && TESTS+=("$line")
+done < <(printf '%s\n' "$FAILING_OUT" | sed '1d')
+[ -n "$SEQ" ] && [ "${#TESTS[@]}" -gt 0 ] || die 3 "malformed failing-test list"
+
+ROOT="$(git -C "$WT_ARG" rev-parse --show-toplevel 2>/dev/null)" || die 2 "not a git checkout: $WT_ARG"
+ROOT="$(rtb_wt_native "$ROOT")"
+
+# 2. The merge base; anything short of a trustworthy answer goes back to the user.
+MB_ERR_FILE="$(mktemp)"
+MB_OUT="$(bash "$RTB_RESOLVE" -C "$ROOT" --session "$SID" --format kv --no-fetch 2>"$MB_ERR_FILE")"
+MB_RC=$?
+MB_ERR="$(cat "$MB_ERR_FILE" 2>/dev/null)"
+rm -f "$MB_ERR_FILE"
+MB_BASE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^base=//p' | head -n 1)"
+MB_STATE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^state=//p' | head -n 1)"
+case "$MB_STATE" in
+  RECORDED|RESOLVED) ;;
+  *)
+    [ -z "$MB_ERR" ] || printf '%s\n' "$MB_ERR" >&2
+    die 4 "merge base is ${MB_STATE:-UNRESOLVED} (resolve-merge-base exit $MB_RC); confirm the base (see /run-tests RNT-1) before classifying" ;;
+esac
+[ "$MB_RC" -eq 0 ] || die 4 "resolve-merge-base exited $MB_RC"
+B2="$(git -C "$ROOT" rev-parse --verify --quiet "$MB_BASE^{commit}")" || die 4 "merge base $MB_BASE is not a local commit"
+
+export RTB_LEDGER_REPO="$ROOT"
+run_all_dur_repo_id "$ROOT" >/dev/null
+run_all_dur_host_token >/dev/null
+
+# 3. Checkouts a crashed earlier run left behind.
+rtb_wt_sweep_stale "$ROOT"
+
+# Entry point minus its kind extension: the test's own data directory.
+test_dir_of() {
+  local t="$1"
+  case "$t" in
+    *.Tests.ps1) printf '%s' "${t%.Tests.ps1}" ;;
+    *.sh) printf '%s' "${t%.sh}" ;;
+    *.py) printf '%s' "${t%.py}" ;;
+    *) printf '%s' "$t" ;;
+  esac
+}
+
+declare -a CLS=() DET=() RERUN=()
+
+# 4. Ledger: (a) same base, then (b) inheritance from an ancestor base.
+for i in "${!TESTS[@]}"; do
+  t="${TESTS[$i]}"
+  same="$(rtb_ledger_lookup_same_base "$B2" "$t")"
+  case "$same" in
+    fail) CLS[i]="preexisting"; DET[i]="ledger-same-base"; continue ;;
+    pass) CLS[i]="broken"; DET[i]="ledger-same-base"; continue ;;
+  esac
+  d="$(test_dir_of "$t")"
+  while IFS= read -r b1; do
+    [ -n "$b1" ] && [ "$b1" != "$B2" ] || continue
+    git -C "$ROOT" cat-file -e "$b1^{commit}" 2>/dev/null || continue
+    git -C "$ROOT" merge-base --is-ancestor "$b1" "$B2" 2>/dev/null || continue
+    git --literal-pathspecs -C "$ROOT" diff --quiet "$b1" "$B2" -- "$t" "$d/" 2>/dev/null || continue
+    CLS[i]="preexisting-inherited"; DET[i]="inherited-from-$b1"
+    break
+  done < <(rtb_ledger_lookup_inheritable "$t")
+  [ -n "${CLS[i]:-}" ] || RERUN+=("$i")
+done
+
+# 5. Re-run the rest in a marked, detached checkout of the merge base.
+TMP_BASE="$(run_all_cache_dir)/baseline/tmp"
+mkdir -p "$TMP_BASE" 2>/dev/null || TMP_BASE="$(mktemp -d)"
+find "$TMP_BASE" -mindepth 1 -maxdepth 1 -mmin +$((RTB_LEDGER_RETENTION_DAYS * 1440)) \
+  -exec rm -rf {} + 2>/dev/null || true
+LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
+
+if [ "${#RERUN[@]}" -gt 0 ]; then
+  WT="$(rtb_wt_create "$ROOT" "$B2")" || WT=""
+  for i in "${RERUN[@]}"; do
+    t="${TESTS[$i]}"
+    d="$(test_dir_of "$t")"
+    if [ -z "$WT" ]; then
+      CLS[i]="undetermined"; DET[i]="worktree-create-failed"; continue
+    fi
+    if ! git -C "$ROOT" cat-file -e "$B2:$t" 2>/dev/null; then
+      CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
+    fi
+    ref_args=()
+    for r in "${RTB_HOME_REFS[@]}"; do ref_args+=(-e "$r"); done
+    targets=("$WT/$t")
+    [ -d "$WT/$d" ] && targets+=("$WT/$d")
+    if grep -rqF "${ref_args[@]}" -- "${targets[@]}" 2>/dev/null; then
+      CLS[i]="undetermined"; DET[i]="home-claude-ref"; continue
+    fi
+    if ! rtb_exec_one "$WT" "$t" "$PER_TEST_TIMEOUT" "$LOGDIR"; then
+      CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue
+    fi
+    if [ "$RTB_EXEC_TIMEDOUT" = "1" ]; then
+      CLS[i]="undetermined"; DET[i]="timeout-at-base"
+    else
+      case "$RTB_EXEC_RC" in
+        77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
+        124|137|142|143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
+        0) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$t" pass ;;
+        *) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$t" fail ;;
+      esac
+    fi
+  done
+  # 6. Removal failure only warns; the classification stands.
+  [ -z "$WT" ] || rtb_wt_remove "$ROOT" "$WT" || true
+  [ -d "$LOGDIR" ] && printf 'run-tests-baseline: base-run logs: %s\n' "$LOGDIR" >&2
+fi
+
+# 7. Hand the classification to the state side; it alone may complete run_tests.
+CLS_FILE="$TMP_BASE/classification-$(date +%s)-$$.tsv"
+: >"$CLS_FILE" 2>/dev/null || die 1 "cannot write $CLS_FILE"
+N_PRE=0 N_INH=0 N_BRK=0 N_UND=0
+for i in "${!TESTS[@]}"; do
+  printf '%s\t%s\t%s\n' "${TESTS[$i]}" "${CLS[i]}" "${DET[i]}" >>"$CLS_FILE"
+  case "${CLS[i]}" in
+    preexisting) N_PRE=$((N_PRE + 1)) ;;
+    preexisting-inherited) N_INH=$((N_INH + 1)) ;;
+    broken) N_BRK=$((N_BRK + 1)) ;;
+    *) N_UND=$((N_UND + 1)) ;;
+  esac
+done
+node "$(rtb_wt_native "$RTB_EVIDENCE")" record --session "$SID" --seq "$SEQ" \
+  --classification "$(rtb_wt_native "$CLS_FILE")" --base "$B2" >/dev/null
+REC_RC=$?
+rm -f "$CLS_FILE"
+
+for i in "${!TESTS[@]}"; do
+  printf 'BASELINE: %s %s %s\n' "${CLS[i]}" "${TESTS[$i]}" "${DET[i]}"
+done
+printf 'BASELINE_SUMMARY: preexisting=%s inherited=%s broken=%s undetermined=%s\n' \
+  "$N_PRE" "$N_INH" "$N_BRK" "$N_UND"
+
+# 8. Exit 0 only when every failure pre-existed AND run_tests was completed.
+if [ $((N_BRK + N_UND)) -eq 0 ]; then
+  case "$REC_RC" in
+    0) exit 0 ;;
+    3) die 3 "run_tests changed while classifying; re-run /run-tests" ;;
+    *) die 1 "recording the classification failed (exit $REC_RC)" ;;
+  esac
+fi
+exit 1

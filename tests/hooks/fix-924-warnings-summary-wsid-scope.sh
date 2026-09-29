@@ -2,17 +2,9 @@
 # tests/hooks/fix-924-warnings-summary-wsid-scope.sh
 # Tests: hooks/workflow-gate/review-tests-checker.js
 # Tags: workflow-gate, review-tests, wsid-scope, warnings-summary, scope:issue-specific, pwsh-not-required, TL1
-#
-# #924: the warnings_summary block in checkReviewTests() (L37-40) fires before any
-# wsid check, so a stale warnings_summary from a PRIOR wsid wrongly blocks the
-# current wsid's commit. Fix: wsid-scope the warnings_summary check (mirror of the
-# token path L50-61) so stale prior-wsid warnings fall through instead of blocking.
-#
-# Isolation (detail plan §#924): only the stagedToken==null case (no staged tests)
-# is #924's responsibility. staged-tests + stale-wsid is the token path's job
-# (PR #963, out of scope). Fixtures use a non-git repoDir so computeStagedTestsToken
-# returns null and the token path resolves to skip — isolating warnings_summary as
-# the sole block source.
+# #924: warnings_summary check must be wsid-scoped so stale prior-wsid warnings fall
+# through to the fingerprint stage. Fixtures use a non-git repoDir so that stage
+# answers fingerprint-unavailable (#2327) — distinct from warnings-pending.
 
 set -u
 
@@ -39,7 +31,7 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wsid924'; }
 run_checker() {
     local step_state="$1" resolved_wsid="$2"
     local cwddir plansdir out
-    cwddir=$(make_tmp)   # non-git → computeStagedTestsToken null, git-based wsid priorities fail
+    cwddir=$(make_tmp)   # non-git → computeReviewScopeFingerprint ERR, git-based wsid priorities fail
     plansdir=$(make_tmp)
     : > "$plansdir/${resolved_wsid}-intent.md"   # artifact so Priority 2 accepts the sid
     local plansdir_node cwddir_node
@@ -65,14 +57,14 @@ if [ ! -f "$AGENTS_DIR/hooks/workflow-gate/review-tests-checker.js" ]; then
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
 
-# --- (a) stale prior-wsid warnings + no staged tests → skip (RED until fix) ---
-# storedWsid=old, resolveWorkflowSessionId()=new → stale → warnings block must be
-# suppressed → token path (stagedToken==null) returns skip.
+# --- (a) stale prior-wsid warnings → fall through to the fingerprint stage ---
+# storedWsid=old, resolveWorkflowSessionId()=new → stale → warnings block suppressed
+# → fingerprint stage (ERR on non-git) blocks fail-closed as fingerprint-unavailable.
 res_a=$(run_checker '{"status":"complete","warnings_summary":"warnings=2","wsid":"20260722-oldwsid"}' "20260722-newwsid")
-if echo "$res_a" | grep -q '"action":"skip"'; then
-    pass "(a) stale prior-wsid warnings_summary + no staged tests → skip"
+if echo "$res_a" | grep -q '"reason":"fingerprint-unavailable"'; then
+    pass "(a) stale prior-wsid warnings_summary → falls through to fingerprint-unavailable"
 else
-    fail "(a) RED-EXPECTED (fix absent): stale prior-wsid warnings still blocks; got: ${res_a:-<empty>}"
+    fail "(a) stale prior-wsid warnings must fall through to fingerprint-unavailable; got: ${res_a:-<empty>}"
 fi
 
 # --- (b) warnings + wsid matches current → block preserved (GREEN now & after) ---

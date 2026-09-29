@@ -105,8 +105,8 @@ C-2-basename-collision-tmp     | bash /tmp/workflow-plans-dir                   
 C-3-dotdot-disguise            | bash "$AGENTS_CONFIG_DIR/bin/../../tmp/workflow-plans-dir"   | scratchpad-only
 C-4-relative-never-cwd-resolved | bash workflow-plans-dir                                     | scratchpad-only
 C-5-interpreter-mismatch       | node "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"             | scratchpad-only
-C-6a-absent-relative           | bash bin/compute-staged-tests-token.js                       | scratchpad-only
-C-6b-absent-absolute           | node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js"  | scratchpad-only
+C-6a-absent-relative           | bash bin/compute-review-scope-fingerprint.js                       | scratchpad-only
+C-6b-absent-absolute           | node "$AGENTS_CONFIG_DIR/bin/compute-review-scope-fingerprint.js"  | scratchpad-only
 TABLE
 
 # --- C-7..C-10: degradation to generic combined guidance (branch c) ----------
