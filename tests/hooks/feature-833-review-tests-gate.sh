@@ -16,10 +16,9 @@ MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
 REVIEW_TESTS_HANDLER="$AGENTS_DIR/hooks/workflow-mark/review-tests-handler.js"
 REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
 
-PASS=0
-FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+source "$AGENTS_DIR/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift

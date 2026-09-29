@@ -11,6 +11,7 @@ echo "=== Section E: Manual MARK_STEP rejection ==="
 
 # E7: the generic WORKFLOW_MARK_STEP_review_tests_complete sentinel must be rejected;
 # review_tests transitions only via REVIEW_TESTS_COMPLETE / _WARNINGS (fingerprint).
+case_begin "E7" "hooks/workflow-mark/review-tests-handler.js"
 SID_E7="e7-$$"
 PAIR_E7="$(setup_linked_worktree "secE-wt7")"
 WT_E7="${PAIR_E7#*|}"
@@ -24,3 +25,4 @@ if [ "$STATUS_E7" = "pending" ]; then
 else
     fail "E7. expected pending (manual mark rejected), got status=$STATUS_E7"
 fi
+case_end
