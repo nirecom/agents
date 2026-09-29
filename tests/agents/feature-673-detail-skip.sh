@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 # Tests: agents/detail-planner.md, skills/make-detail-plan/SKILL.md, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: worktree, detail, planning, sentinel, workflow, scope:issue-specific
-# L1 unit tests for change ⑤ of issue #673 as superseded by #1286:
-# #673 introduced adaptive detail-plan skip via DETAIL_SKIPPABLE_BY_PLANNER.
-# #1286 changed MDP-4a so that sentinel is now a fallback notice only:
-#   no MAX_EXTENSIONS=0 hardstop; MDP-5 proceeds normally.
-#   The authoritative skip is now the pre-flight recorded-verdict path
-#   (MOP-C1 / CI-C1b), consumed by bin/workflow/next-step + gate logic.
-#
-# Verifies:
-#   - agents/detail-planner.md describes the 3 skip conditions and the
-#     <<DETAIL_SKIPPABLE_BY_PLANNER: ...>> sentinel (emitted at draft top).
-#   - skills/make-detail-plan/SKILL.md MDP-4a treats the sentinel as a
-#     fallback notice (no adaptive skip, no hardstop, proceed to MDP-5).
+# L1 unit tests for #673 change ⑤ as superseded by #1286: DETAIL_SKIPPABLE_BY_PLANNER is a
+# fallback notice only (MDP-4a: no MAX_EXTENSIONS=0 hardstop, MDP-5 proceeds normally); the
+# authoritative skip is the pre-flight recorded verdict (MOP-C1 / CI-C1b) read by bin/workflow/next-step.
+# Verifies detail-planner.md's 3 skip conditions + draft-top sentinel, and MDP-4a's fallback semantics.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -128,7 +120,7 @@ fi
 #    Must contain "fallback notice" AND either "Do NOT set MAX_EXTENSIONS=0"
 #    or "Proceed to MDP-5 normally". Fails if MDP-4a reverts to adaptive skip.
 # ---------------------------------------------------------------------------
-MDP4A_SECTION=$(run_with_timeout grep -A 5 "Step MDP-4a" "$SKILL_MD" || true)
+MDP4A_SECTION=$(run_with_timeout grep -A 5 "^### MDP-4a" "$SKILL_MD" || true)
 if echo "$MDP4A_SECTION" | grep -q "fallback notice" && \
    echo "$MDP4A_SECTION" | grep -E -q "Do NOT set MAX_EXTENSIONS=0|Proceed to MDP-5 normally"; then
     pass "7: SKILL.md MDP-4a contains fallback-notice semantics (not adaptive-skip)"
@@ -138,14 +130,14 @@ fi
 
 # ---------------------------------------------------------------------------
 # 8. Sentinel detection in SKILL.md is AFTER MDP-4 planner-call heading
-#    Anchored to "### Step MDP-4 " (with trailing space) so MDP-4a is excluded.
+#    Anchored to "### MDP-4 " (with trailing space) so MDP-4a is excluded.
 # ---------------------------------------------------------------------------
 SKIPPABLE_LINE=$(run_with_timeout grep -n "DETAIL_SKIPPABLE_BY_PLANNER" "$SKILL_MD" | head -1 | cut -d: -f1)
-STEP4_LINE=$(run_with_timeout grep -n "^### Step MDP-4 " "$SKILL_MD" | head -1 | cut -d: -f1)
+STEP4_LINE=$(run_with_timeout grep -n "^### MDP-4 " "$SKILL_MD" | head -1 | cut -d: -f1)
 if [[ -z "$SKIPPABLE_LINE" ]]; then
     fail "8: cannot find DETAIL_SKIPPABLE_BY_PLANNER in SKILL.md"
 elif [[ -z "$STEP4_LINE" ]]; then
-    fail "8: cannot locate '### Step MDP-4 ' heading in SKILL.md"
+    fail "8: cannot locate '### MDP-4 ' heading in SKILL.md"
 elif [[ "$SKIPPABLE_LINE" -gt "$STEP4_LINE" ]]; then
     pass "8: sentinel detection (line $SKIPPABLE_LINE) is AFTER MDP-4 (line $STEP4_LINE)"
 else
@@ -154,13 +146,13 @@ fi
 
 # ---------------------------------------------------------------------------
 # 9. Sentinel detection in SKILL.md is BEFORE MDP-5 codex-review-loop heading
-#    Anchored to "### Step MDP-5 " heading.
+#    Anchored to "### MDP-5 " heading.
 # ---------------------------------------------------------------------------
-STEP5_LINE=$(run_with_timeout grep -n "^### Step MDP-5 " "$SKILL_MD" | head -1 | cut -d: -f1)
+STEP5_LINE=$(run_with_timeout grep -n "^### MDP-5 " "$SKILL_MD" | head -1 | cut -d: -f1)
 if [[ -z "$SKIPPABLE_LINE" ]]; then
     fail "9: cannot find DETAIL_SKIPPABLE_BY_PLANNER in SKILL.md"
 elif [[ -z "$STEP5_LINE" ]]; then
-    fail "9: cannot locate '### Step MDP-5 ' heading in SKILL.md"
+    fail "9: cannot locate '### MDP-5 ' heading in SKILL.md"
 elif [[ "$SKIPPABLE_LINE" -lt "$STEP5_LINE" ]]; then
     pass "9: sentinel detection (line $SKIPPABLE_LINE) is BEFORE MDP-5 (line $STEP5_LINE)"
 else
@@ -172,7 +164,7 @@ fi
 #     The sentinel path must NOT set MAX_EXTENSIONS=0 and must instruct normal
 #     continuation. Asserts the new #1286 semantics are present.
 # ---------------------------------------------------------------------------
-MDP4A_FULL=$(run_with_timeout grep -A 5 "Step MDP-4a" "$SKILL_MD" || true)
+MDP4A_FULL=$(run_with_timeout grep -A 5 "^### MDP-4a" "$SKILL_MD" || true)
 if echo "$MDP4A_FULL" | grep -E -q "Proceed to MDP-5 normally|MDP-5 unchanged"; then
     pass "10: SKILL.md MDP-4a instructs normal MDP-5 continuation (no adaptive-skip hardstop)"
 else

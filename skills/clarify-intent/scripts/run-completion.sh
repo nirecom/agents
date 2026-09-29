@@ -23,7 +23,7 @@ done
 [[ -z "$SESSION_ID" ]] && { echo "[run-completion] --session-id is required" >&2; exit 1; }
 [[ -z "$PLANS_DIR" ]]  && { echo "[run-completion] --plans-dir is required" >&2; exit 1; }
 
-# Step 2 — NON_GITHUB gate (internal; never rely on caller-passed flag)
+# Phase 2 — NON_GITHUB gate (internal; never rely on caller-passed flag)
 NON_GITHUB_ARG=()
 "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" 2>/dev/null; _gate_rc=$?
 if [[ $_gate_rc -eq 1 ]]; then
@@ -31,7 +31,7 @@ if [[ $_gate_rc -eq 1 ]]; then
 fi
 # rc=2 → fail-open as GitHub (NON_GITHUB_ARG stays empty)
 
-# Step 3 — Parse closes_issues via hooks/lib/parse-closes-issues.js
+# Phase 3 — Parse closes_issues via hooks/lib/parse-closes-issues.js
 INTENT_PATH="$PLANS_DIR/$SESSION_ID-intent.md"
 JSON=""
 JSON="$(node -e "
@@ -46,7 +46,7 @@ try {
 } catch (e) { process.stderr.write(e.message + '\n'); }
 " "$INTENT_PATH" 2>/dev/null)" || { echo "[run-completion] parse-closes-issues failed" >&2; exit 1; }
 
-# Step 4 — Build CLOSES_NUMBERS and REPO_MAP_ARGS
+# Phase 4 — Build CLOSES_NUMBERS and REPO_MAP_ARGS
 CLOSES_NUMBERS=""
 REPO_MAP_ARGS=()
 if [[ -n "$JSON" && "$JSON" != "[]" ]]; then
@@ -64,7 +64,7 @@ arr.forEach((e, i) => { if (e.repo) process.stdout.write('REPO_MAP_ARG=' + i + '
     done <<< "$_parsed"
 fi
 
-# Step 5 — Phase 1: clarify-commit-scope.sh
+# Phase 5 — clarify-commit-scope.sh
 SCOPE_RC=0
 SCOPE_OUT="$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-commit-scope.sh" \
     --session-id "$SESSION_ID" \
@@ -89,7 +89,7 @@ else
     exit 1
 fi
 
-# Step 6 — Phase 2: guard-loop
+# Phase 6 — guard-loop
 GUARD_OUT="$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" \
     --session-id "$SESSION_ID" \
     --plans-dir "$PLANS_DIR" \

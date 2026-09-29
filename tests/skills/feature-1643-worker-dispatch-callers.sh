@@ -3,22 +3,11 @@
 # Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific
 #
-# Issue #1643 — caller-side contract. Six LLM subagents were deleted and replaced
-# by plain scripts behind one dispatcher; each calling skill now dispatches per
-# skills/_shared/worker-dispatch.md instead of spawning a subagent. Issue #1673
-# brings the three forge workers (commit-push, issue-close-stage,
-# issue-close-finalize) onto the same path, taking the roster to nine.
-#
-# The regression that matters is the SYMMETRIC NEGATIVE: a caller left pointing at
-# a deleted agents/*.md, or still using the Task/Agent tool, would fail only at
-# run time inside a live session. The worker list is read from the registry SSOT
-# (hooks/lib/worker-dispatch-registry.js), and the table below must cover it
-# exactly — so a tenth worker cannot be added without a caller row here.
-#
-# TL1 (static): the subject is prompt text and a pure-data registry, both of which
-# this test reads directly. Behavior of the dispatcher itself is covered by
-# tests/bin/feature-1643-worker-dispatch-output-contract.sh and the resolver by
-# tests/bin/feature-1643-worker-dispatch-paths.sh.
+# Issue #1643/#1673 caller-side contract: every calling skill dispatches its worker per
+# skills/_shared/worker-dispatch.md, never via a subagent. Symmetric negative: a caller
+# still pointing at a deleted agents/*.md or the Task/Agent tool fails only at run time;
+# the table below must match the registry SSOT (hooks/lib/worker-dispatch-registry.js).
+# TL1 static. Dispatcher/resolver: tests/bin/feature-1643-worker-dispatch-{output-contract,paths}.sh.
 
 set -u
 
@@ -53,11 +42,11 @@ trap 'rm -rf "$TMPD"' EXIT
 # in Group B plus the Group C negatives cover the other two.
 CALLER_TABLE='skills/run-tests/SKILL.md|test-runner|RNT-7|RNT-7.|RNT-8.
 skills/worktree-start/SKILL.md|worktree-copy|WS-7|WS-7.|WS-8.
-skills/worktree-end/SKILL.md|worktree-backup|WE-9|### Step WE-9|### Step WE-10
+skills/worktree-end/SKILL.md|worktree-backup|WE-9|### WE-9|### WE-10
 skills/update-docs/SKILL.md|doc-append|UD-9a/UD-9b|UD-9a.|UD-9c.
 skills/worktree-end/scripts/cleanup-cascade.md|doc-append|WE-21|## WE-21|## WE-22
-skills/issue-reconcile/SKILL.md|issue-reconcile|Step 2|## Step 2|## Step 3
-skills/session-close/SKILL.md|session-close-gate|SC-4+SC-5|## Steps SC-4+SC-5|## Step SC-6
+skills/issue-reconcile/SKILL.md|issue-reconcile|IRC-2|## IRC-2:|## IRC-3:
+skills/session-close/SKILL.md|session-close-gate|SC-4+SC-5|## SC-4+SC-5|## SC-6
 skills/commit-push/SKILL.md|commit-push|CP-2|CP-2.|CP-3.
 skills/issue-close-stage/SKILL.md|issue-close-stage|Delegation|## Delegation|## End
 skills/issue-close-finalize/SKILL.md|issue-close-finalize|Delegation-initial|## Delegation — initial pass|## ICF-D..ICF-G loop'

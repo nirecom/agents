@@ -12,6 +12,8 @@ const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, readState, appendEvents } = require("../workflow-state");
 const { APPROVAL_GATED_STEPS } = require("../workflow-state/completion-approval");
+const { appendAutoRecord } = require("../lib/handoff-auto-record");
+const { isWorkflowActivePeriod } = require("../lib/workflow-active-period");
 
 const ORIGIN = "reset-sentinel";
 
@@ -124,12 +126,24 @@ function handle(ctx) {
         );
         return true;
       }
+      // Evaluated before the rollback: RESET_FROM_workflow_init ends the active
+      // period, yet the breadcrumb is exactly what the resuming session needs.
+      const activeBeforeEvent = isWorkflowActivePeriod(sessionId);
       // Builder form: the batch is produced INSIDE the lock, so two resets racing
       // on the same file both land instead of one clobbering the other.
       appendEvents(sessionId, () => buildResetEvents(fromStep, rawReason), {
         sanctioned: ORIGIN,
         reason: rawReason,
       });
+      try {
+        appendAutoRecord(sessionId, {
+          cls: "E",
+          step: fromStep,
+          key: "reset-from",
+          summary: "RESET_FROM " + fromStep + ": " + rawReason,
+          pointer: "-",
+        }, "reset-from", { activeBeforeEvent });
+      } catch (_e) { /* a lost breadcrumb must not read as a failed reset */ }
     } catch (e) {
       pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
     }

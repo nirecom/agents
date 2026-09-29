@@ -20,7 +20,7 @@ SW-2a. When SW-2's stdout contains any WORKTREE-LOCKED line, emit
 SW-2b. Parse sweep-branches stdout for WORKTREE-LOCKED lines.
    Each `WORKTREE-LOCKED: branch=X wt=<path>` line triggers:
    `git -C "$MAIN_ROOT" worktree remove --force "<path>" 2>/dev/null || true`
-   This step lives in the hub (not sweep-branches.sh) because the hub has
+   SW-2b lives in the hub (not sweep-branches.sh) because the hub has
    worktree-remove authority; sweep-branches.sh does not.
 SW-2c. After worktree removal, retry `git branch -D` for each WORKTREE-LOCKED
    branch using the `branch=X` field. SW-2b removes the worktree block, so the
