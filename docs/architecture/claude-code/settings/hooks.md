@@ -183,7 +183,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](../workflow.md)); otherwise creates fresh state; outputs
-  `additionalContext` containing session_id, all 16 step statuses, and a `NEXT ACTION:` line
+  `additionalContext` containing session_id, every step status, and a `NEXT ACTION:` line
   from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
@@ -418,6 +418,11 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
   ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
   any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
+- `handoff-pressure-nudge.js` (UserPromptSubmit) — inside the workflow active period only, injects a
+  `[handoff check]` omission-check nudge when the transcript has grown or time has passed since the
+  last check (the trigger table and its state files live in
+  [handoff-artifact.md — Omission-check nudge](../handoff-artifact.md#omission-check-nudge)).
+  Fail-open: any error yields `{}`.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes

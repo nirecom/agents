@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 "use strict";
-// Claude Code UserPromptSubmit hook: nudge an emergency handoff flush when the
-// transcript has grown far past the last recorded micro-state.
+// Claude Code UserPromptSubmit hook: ask for a handoff omission check (C/D/F
+// facts not yet recorded) once enough work has accumulated since the last
+// check. Silent outside the workflow active period — no workflow to resume.
 //
 // Fail-open: any error → emit {} and exit 0.
 
 const fs = require("fs");
 const { computePressureSignal } = require("./lib/handoff-pressure");
+const { isWorkflowActivePeriod } = require("./lib/workflow-active-period");
 
 function readStdin() {
   const chunks = [];
@@ -21,15 +23,6 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function handoffMtimeFor(sessionId) {
-  try {
-    const { getHandoffPath } = require("./lib/handoff-artifact");
-    return fs.statSync(getHandoffPath(sessionId)).mtimeMs;
-  } catch (e) {
-    return null;
-  }
-}
-
 function main() {
   let input = null;
   try {
@@ -38,26 +31,27 @@ function main() {
     console.log("{}");
     return;
   }
-  if (!input || typeof input !== "object") {
+  if (!input || typeof input !== "object" || !isWorkflowActivePeriod(input.session_id)) {
     console.log("{}");
     return;
   }
   const signal = computePressureSignal({
+    sid: input.session_id,
     transcriptPath: input.transcript_path,
-    handoffMtime: handoffMtimeFor(input.session_id),
+    now: Date.now(),
   });
   if (!signal.shouldNudge) {
     console.log("{}");
     return;
   }
-  const kb = Math.round(signal.bytes / 1024);
+  const kb = Math.round(signal.bytesSince / 1024);
   console.log(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
-        `[handoff pressure] This session's transcript has grown to ~${kb}KB since the last handoff write. ` +
-        "Follow rules/handoff-emergency-flush.md now: record the micro-state you would lose to a compaction " +
-        'via `node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append"`, then continue.',
+        `[handoff check] ~${kb}KB of work since the last check (trigger: ${signal.trigger}). ` +
+        'Per rules/handoff-emergency-flush.md "What to record", check for C/D/F facts not yet recorded; ' +
+        "if there are none, write nothing and continue.",
     },
   }));
 }

@@ -70,7 +70,7 @@ IC-3. When `CLOSES` is non-empty, emit a notice:
 ## Procedure
 
 Must be invoked from a linked worktree when `ENFORCE_WORKTREE=on`.
-Exception — the notes-promotion pass reaches this skill from the main worktree via `/session-close` Step SC-8 and via `/issue-close-finalize`; both are sanctioned callers with no linked worktree of their own.
+Exception — the notes-promotion pass reaches this skill from the main worktree via `/session-close` SC-8 and via `/issue-close-finalize`; both are sanctioned callers with no linked worktree of their own.
 
 Four phases: **Gather → Survey → Confirm → Dispatch**.
 
