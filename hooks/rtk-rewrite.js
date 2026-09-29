@@ -13,6 +13,7 @@ const {
 } = require("./lib/command-parser");
 const { isUnderPath } = require("./lib/path-match");
 const { recordGuardReject } = require("./lib/rtk-guard-audit");
+const { isUnderNativeIsolation } = require("./lib/native-isolation");
 
 const DELEGATE_TIMEOUT_MS = 3000;
 
@@ -361,6 +362,10 @@ function delegateToRtkHook(rtkBin, input, opts = {}) {
   return out;
 }
 
+function loadReadState() {
+  try { return require("./workflow-state/state-io").readState; } catch (_e) { return null; }
+}
+
 function decide(input, opts = {}) {
   try {
     if (!input || input.tool_name !== "Bash") return passthrough();
@@ -372,6 +377,9 @@ function decide(input, opts = {}) {
       ? opts.rtkBin
       : resolveRtkBin(opts.existsFn || fs.existsSync, opts.whichFn || null);
     if (rtkBin === null || rtkBin === undefined) return passthrough();
+    // The EnterWorktree isolation layer refuses the rewritten `rtk git ...` form (#2447).
+    const readStateFn = opts.readStateFn || loadReadState();
+    if (readStateFn && isUnderNativeIsolation(input.session_id, readStateFn)) return passthrough();
     const auditOn = opts.auditOn !== undefined ? opts.auditOn : loadAuditEnabled();
     const guardName = firstRejectingGuard(cmd);
     if (guardName) {

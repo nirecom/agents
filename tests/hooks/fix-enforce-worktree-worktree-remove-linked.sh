@@ -58,6 +58,97 @@ ew_expect block "D7b. linked CWD: git -C <main> worktree prune && git -C <main> 
     "$(run "$LINKED" "git -C \"$MAIN\" worktree prune && git -C \"$MAIN\" commit -m x")"
 case_end
 
+# --- #1680 (via #2447): stale tool_input.cwd after ExitWorktree ---------------
+# After ExitWorktree the Bash payload's tool_input.cwd stays pinned to the linked
+# (or an already-removed) worktree. With worktree_exited_at in the session state
+# the hook must ignore that cwd and judge from the real process cwd (main), so
+# worktree-end WE-15/WE-20 (skills/worktree-end/scripts/cleanup-cascade.md) pass.
+# Without worktree_exited_at the stale cwd must still be honoured (regression).
+# TL3 gap: a real ExitWorktree tool call via `claude -p` is not exercised here.
+export CLAUDE_TRANSCRIPT_BASE_DIR="$T/transcripts"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+GONE="$(np "$T/wt-gone")"
+git -C "$MAIN" worktree add -q -b feature/gone "$GONE"
+git -C "$MAIN" worktree remove "$GONE"
+# Marker-valid AGENTS_CONFIG_DIR (bin/ + hooks/enforce-worktree.js) for the eval case.
+ACD="$(np "$T/acd")"
+mkdir -p "$ACD/bin" "$ACD/hooks" "$ACD/skills/issue-close-finalize/scripts"
+touch "$ACD/hooks/enforce-worktree.js" "$ACD/bin/check-unstaged-tracked.sh" \
+      "$ACD/skills/issue-close-finalize/scripts/pre-flight.sh"
+
+SID_EXITED="test-1680-exited"
+SID_ACTIVE="test-1680-active"
+SID_NOSTATE="test-1680-nostate"
+# mk_state <sid> <json-extra> — v1-shaped state (readState migrates it in memory).
+mk_state() {
+    node -e '
+const fs=require("fs"),path=require("path");
+const [dir,sid,extra]=process.argv.slice(1);
+const st=()=>({status:"complete",updated_at:null});
+const state={version:1,session_id:sid,created_at:"2026-09-29T00:00:00.000Z",
+  steps:{workflow_init:st(),clarify_intent:st(),branching_complete:st()}};
+Object.assign(state,JSON.parse(extra));
+fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
+' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+}
+mk_state "$SID_EXITED" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z","worktree_exited_at":"2026-09-29T01:00:00.000Z"}'
+mk_state "$SID_ACTIVE" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z"}'
+PRE="$(node -e 'const s=require(process.argv[1]).readState(process.argv[2]);process.stdout.write(String(s&&s.worktree_exited_at))' \
+    "$(np "$AGENTS_DIR/hooks/workflow-state/state-io.js")" "$SID_EXITED")"
+[[ "$PRE" == "2026-09-29T01:00:00.000Z" ]] || { fail "fixture: readState did not surface worktree_exited_at" "got=$PRE"; exit 1; }
+
+# stale <sid> <tool-cwd> <command> — hook process runs from MAIN (the real cwd
+# after ExitWorktree); only the payload's tool_input.cwd is stale.
+stale() {
+    local payload
+    payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:process.argv[3],cwd:process.argv[2]}}))' "$1" "$2" "$3")"
+    ew_run "$MAIN" "$payload" "AGENTS_CONFIG_DIR=$ACD" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+}
+# stale_write <sid> <tool-cwd> <file-path> — same as stale() but uses the Write
+# tool path (handleEditWrite) so that the stale-cwd guard is exercised for that
+# code branch too (CPR-ORTH with the Bash / handleBashWrite path).
+stale_write() {
+    local payload
+    payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Write",tool_input:{file_path:process.argv[3],content:"x",cwd:process.argv[2]}}))' "$1" "$2" "$3")"
+    ew_run "$MAIN" "$payload" "AGENTS_CONFIG_DIR=$ACD" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+}
+# shellcheck disable=SC2016  # the unexpanded $AGENTS_CONFIG_DIR literal IS the payload.
+EVAL_PREFLIGHT='eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")"'
+
+case_begin "exited-stale-cwd-allow" "hooks/enforce-worktree.js"
+ew_expect allow "WE-15-ALLOW: exited_at set, cwd=linked: git worktree remove <linked> → ALLOW" \
+    "$(stale "$SID_EXITED" "$LINKED" "git worktree remove \"$LINKED\"")"
+ew_expect allow "WE-15-C-ALLOW: exited_at set, cwd=removed wt: git -C <main> worktree remove <linked> → ALLOW" \
+    "$(stale "$SID_EXITED" "$GONE" "git -C \"$MAIN\" worktree remove \"$LINKED\"")"
+ew_expect allow "WE-20-ALLOW: exited_at set, cwd=removed wt: git -C <main> pull --ff-only → ALLOW" \
+    "$(stale "$SID_EXITED" "$GONE" "git -C \"$MAIN\" pull --ff-only")"
+ew_expect allow "WE-20-BARE-ALLOW: exited_at set, cwd=removed wt: git pull --ff-only → ALLOW" \
+    "$(stale "$SID_EXITED" "$GONE" "git pull --ff-only")"
+ew_expect allow "PHASE2-EVAL-ALLOW: exited_at set, cwd=removed wt: eval pre-flight.sh → ALLOW" \
+    "$(stale "$SID_EXITED" "$GONE" "$EVAL_PREFLIGHT")"
+case_end
+
+# Dropping the stale cwd must re-anchor on the main checkout, never widen it.
+case_begin "exited-stale-cwd-still-guards-main" "hooks/enforce-worktree/handle-bash-write.js"
+ew_expect block "STALE-MAIN-WRITE-BLOCK: exited_at set, cwd=linked: write to main tracked file → BLOCK" \
+    "$(stale "$SID_EXITED" "$LINKED" "echo x > \"$MAIN/README.md\"")"
+ew_expect block "STALE-MAIN-COMMIT-BLOCK: exited_at set, cwd=removed wt: git commit → BLOCK" \
+    "$(stale "$SID_EXITED" "$GONE" "git commit -m x")"
+ew_expect block "STALE-MAIN-PULL-BLOCK: exited_at set, cwd=removed wt: git pull (non-ff-only) → BLOCK" \
+    "$(stale "$SID_EXITED" "$GONE" "git pull")"
+# CPR-ORTH: the stale-cwd guard must also fire for the Write tool (handleEditWrite
+# path), not only for Bash redirects (handleBashWrite path).
+ew_expect block "STALE-WRITE-TOOL-BLOCK: exited_at set, cwd=linked: Write to main tracked file → BLOCK" \
+    "$(stale_write "$SID_EXITED" "$LINKED" "$MAIN/README.md")"
+case_end
+
+case_begin "no-exit-stale-cwd-regression" "hooks/enforce-worktree/handle-bash-write.js"
+ew_expect block "WE-15-NO-EXIT-BLOCK: entered only, cwd=linked: git worktree remove <linked> → BLOCK" \
+    "$(stale "$SID_ACTIVE" "$LINKED" "git worktree remove \"$LINKED\"")"
+ew_expect block "WE-15-NO-STATE-BLOCK: no state file, cwd=linked: git worktree remove <linked> → BLOCK" \
+    "$(stale "$SID_NOSTATE" "$LINKED" "git worktree remove \"$LINKED\"")"
+case_end
+
 echo ""
 echo "Results: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [[ "$FAIL" -eq 0 ]]

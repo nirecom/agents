@@ -54,6 +54,20 @@ definition, and related links.
   `WF-<TYPE>-N` prefix scheme.
 - **Related**: [CLAUDE.md](../CLAUDE.md)
 
+### native worktree isolation
+
+- **Full name**: Native worktree isolation
+- **Definition**: The session state created when Claude Code's `EnterWorktree`
+  tool is called. While active (`worktree_entered_at` is set and
+  `worktree_exited_at` is absent), the session runs inside an isolated linked
+  worktree and certain hooks (e.g. `rtk-rewrite.js`) skip their transformations
+  to avoid conflicts with Claude Code's own internal isolation checks.
+  `ExitWorktree` sets `worktree_exited_at`, ending the active state. Detection
+  logic is shared via `hooks/lib/native-isolation.js`.
+- **Related**: [hooks/lib/native-isolation.js](../hooks/lib/native-isolation.js),
+  [hooks/rtk-rewrite.js](../hooks/rtk-rewrite.js),
+  [hooks/enforce-worktree.js](../hooks/enforce-worktree.js)
+
 ### workflow step
 
 - **Full name**: Workflow step (short form: **step**)

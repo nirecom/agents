@@ -67,6 +67,18 @@ function done(decision) {
   process.exit(0);
 }
 
+// After ExitWorktree the payload's cwd stays pinned to the left worktree (#1680);
+// drop it so the real process cwd decides. Fail-open to the payload cwd.
+function getEffectiveCwd(toolCwd, sessionId, readStateFn) {
+  if (typeof toolCwd !== "string") return undefined;
+  try {
+    const { hasExitedWorktree } = require("./lib/native-isolation");
+    const reader = readStateFn || require("./workflow-state/state-io").readState;
+    if (hasExitedWorktree(sessionId, reader)) return undefined;
+  } catch (_) { /* fail-open */ }
+  return toolCwd;
+}
+
 // buildExtras moved to enforce-worktree/report-extras.js (file-split,
 // rules/coding/file-split.md) — required above; shared with handle-bash-write.js
 // and handle-edit-write.js, which also populate _reportContext.extras.
@@ -160,7 +172,7 @@ _reportContext = {
 // toolInput.cwd is the Bash tool's `cwd` parameter when explicitly provided.
 // We populate context.cwd from it when present; falls back to process.cwd()
 // only in places where we need a real path (not propagated to extras).
-const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
+const _toolCwd = getEffectiveCwd(toolInput.cwd, input.session_id);
 
 // Populate payload-derived-path cache for this invocation (issue #321).
 // Read by getSessionRepoRoots() to scope the gh-write guard to the paths
