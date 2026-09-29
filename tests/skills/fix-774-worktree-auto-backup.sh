@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/fix-774-worktree-auto-backup.sh
 # Tests: skills/worktree-end/SKILL.md
-# Tags: worktree-end, backup, auto-backup, ux, scope:common
+# Tags: worktree-end, backup, auto-backup, ux, scope:issue-specific
 #
 # Static analysis for fix/774 (auto-backup UX): WE-8 in SKILL.md no longer asks
 # "Back up / discard / abort" (auto-backup runs unconditionally for non-zero-file

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-supervisor-c2-label-891-892-guard.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor, em-supervisor, layer2, fix, unit
+# Tags: supervisor, em-supervisor, layer2, fix, unit, scope:issue-specific
 # RED for issue #891 (post-Final-Report guard on ensureAlertScheduled).
 
 set -u

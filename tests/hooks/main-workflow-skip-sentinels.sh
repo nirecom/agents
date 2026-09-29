@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js
-# Tags: workflow, gate, hook, sentinel, bin
+# Tags: workflow, gate, hook, sentinel, bin, scope:common
 # Tests for WORKFLOW_{RESEARCH,PLAN,WRITE_TESTS}_NOT_NEEDED skip sentinels
 # and DOCS_NOT_NEEDED deprecation.
 set -euo pipefail

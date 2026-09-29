@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/scan-inbound.js
-# Tags: scan, filter, inbound, hook, bin
+# Tags: scan, filter, inbound, hook, bin, scope:common
 # Test suite for scan-inbound.js — PostToolUse hook that detects prompt injection
 # in tool responses (stdin/stdout JSON interface).
 #

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-check-unstaged-tracked-cli.sh
 # Tests: bin/check-unstaged-tracked.sh, hooks/workflow-gate/staged-evidence.js
-# Tags: cli, bin, unstaged-tracked, gate2, git
+# Tags: cli, bin, unstaged-tracked, gate2, git, scope:issue-specific
 #
 # E2E tests for bin/check-unstaged-tracked.sh.
 # Expected red until #269 lands the CLI.

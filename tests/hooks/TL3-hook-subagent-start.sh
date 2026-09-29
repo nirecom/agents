@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/subagent-start.js
-# Tags: subagent-start, hook, TL3, run-e2e, scope:permanent
+# Tags: subagent-start, hook, TL3, run-e2e, scope:permanent, scope:issue-specific
 #
 # Issue #943 — per-hook seam TL3 test: subagent-start.js (SubagentStart). TL3 GAP ONLY.
 # TL3 gap: the hook injects additionalContext into a spawned sub-agent but leaves

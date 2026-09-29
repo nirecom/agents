@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/fix-session-id-fixes-451-469-543.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: session-id, wip-state, cleanup-zombies
+# Tags: session-id, wip-state, cleanup-zombies, scope:issue-specific
 #
 # RED suite — three combined fixes:
 #   #451 — clarify-intent/workflow-init SKILL.md must mention CLAUDE_SESSION_ID

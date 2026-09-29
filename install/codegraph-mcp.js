@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // codegraph-mcp.js - register / unregister the `codegraph` MCP server for this user.
-//
-// Registration is delegated to the Claude Code CLI (`claude mcp add|remove`), never to
-// the upstream tool's own bootstrap command, which rewrites ~/.claude/CLAUDE.md and
-// injects a prompt hook. Rationale: docs/architecture/claude-code.md.
-//
-// ~/.claude.json is READ ONLY here; every write belongs to the CLI. A same-named entry
-// counts as ours only when hasOurShape() matches (see readState()). Exit is always 0
-// except a usage error (64) — a failed registration must never fail the installer.
+// `claude mcp add|remove` owns entry creation/deletion, never the upstream bootstrap
+// command (it rewrites ~/.claude/CLAUDE.md). Rationale: docs/architecture/claude-code.md.
+// Sole write exception (§alwaysLoad exception there): right after a successful add, set
+// alwaysLoad:true on our own entry (hasOurShape) — the CLI has no --alwaysLoad flag, and
+// without it codegraph_explore stays deferred after every remove→add cycle. The write
+// normalizes the file to canonical JSON (only alwaysLoad changes semantically) via a wx
+// temp file + renameSync; a rename failure only warns, never writes in place.
+// Exit is always 0 except a usage error (64).
 
 const fs = require("fs");
 const os = require("os");
@@ -17,13 +17,16 @@ const {
   TELEMETRY_KEYS,
   telemetryEnv,
   clearSavedTelemetryChoice,
-  verifyPinnedCliVersion,
 } = require("../hooks/lib/codegraph-boundary");
 
 const SERVER_NAME = "codegraph";
 const VERBS = ["register", "unregister"];
 const SERVER_COMMAND = "codegraph";
 const SERVER_ARGS = ["serve", "--mcp"];
+
+function claudeConfigPath() {
+  return path.join(os.homedir(), ".claude.json");
+}
 
 function warn(message) {
   process.stderr.write("codegraph-mcp: " + message + "\n");
@@ -45,20 +48,6 @@ function reportTelemetryReset() {
   else if (result.action === "failed") {
     warn("could not reset the local CodeGraph telemetry choice at " + result.path +
       "; the next installer run retries.");
-  }
-}
-
-// A version report never blocks registration: the MCP server is useful at any
-// version, and only the per-prompt context hook depends on the pinned build.
-function reportPinnedVersionMismatch() {
-  const { verdict, pinned, actual } = verifyPinnedCliVersion();
-  const remedy = "; run: npm install -g --ignore-scripts @colbymchenry/codegraph@" + pinned;
-  if (verdict === "mismatch") {
-    process.stderr.write("pinned CodeGraph version mismatch: installed " + actual +
-      ", install/codegraph-constants.txt pins " + pinned + remedy + "\n");
-  } else if (verdict === "unknown-actual") {
-    process.stderr.write("could not read the installed CodeGraph version (`codegraph --version`); " +
-      "the per-prompt context hook needs the pinned " + pinned + " build" + remedy + "\n");
   }
 }
 
@@ -85,7 +74,7 @@ function hasOurShape(entry) {
 // exists but its shape doesn't match ours — leave it alone. null means ~/.claude.json
 // could not be read or parsed: the file is not ours to repair, so both verbs leave it alone.
 function readState() {
-  const configPath = path.join(os.homedir(), ".claude.json");
+  const configPath = claudeConfigPath();
   let raw;
   try {
     raw = fs.readFileSync(configPath, "utf8");
@@ -108,6 +97,59 @@ function readState() {
   return hasOurShape(entry) ? "present" : "foreign";
 }
 
+function ensureAlwaysLoad() {
+  const fail = (reason) => warn("registered, but could not set alwaysLoad on the " + SERVER_NAME +
+    " entry in ~/.claude.json (" + reason + "); codegraph_explore stays deferred until the installer is re-run.");
+  try {
+    const configPath = claudeConfigPath();
+    let raw;
+    try { raw = fs.readFileSync(configPath, "utf8"); } catch { fail("unreadable"); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch { fail("unparsable"); return; }
+    if (data === null || typeof data !== "object" || Array.isArray(data)) { fail("root not an object"); return; }
+    if (data.mcpServers === undefined) { fail("entry missing"); return; }
+    if (data.mcpServers === null || typeof data.mcpServers !== "object" || Array.isArray(data.mcpServers)) {
+      fail("mcpServers not an object");
+      return;
+    }
+    const entry = data.mcpServers[SERVER_NAME];
+    if (entry === undefined) { fail("entry missing"); return; }
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) { fail("entry not an object"); return; }
+    if (!hasOurShape(entry)) { fail("entry not ours"); return; }
+    if (entry.alwaysLoad === true) return;
+    entry.alwaysLoad = true;
+    const out = JSON.stringify(data, null, 2) + "\n";
+    let target;
+    try { target = fs.realpathSync(configPath); } catch (err) { fail("write failed: " + err.code); return; }
+    const mode = fs.statSync(target).mode & 0o777;
+    const tmpPath = target + "." + process.pid + "." + Date.now() + ".tmp";
+    let fd;
+    let written = false;
+    try {
+      fd = fs.openSync(tmpPath, "wx", mode);
+      fs.writeFileSync(fd, out, "utf8");
+      fs.fchmodSync(fd, mode);
+      written = true;
+    } catch (err) {
+      fail("write failed: " + err.code);
+    } finally {
+      if (fd !== undefined) { try { fs.closeSync(fd); } catch { /* ignore */ } }
+    }
+    // A partly written temp file must never replace the original.
+    if (written) {
+      try {
+        fs.renameSync(tmpPath, target);
+      } catch (err) {
+        fail("rename failed: " + err.code);
+      }
+    }
+    // Only a temp file this run created is removed; pre-existing debris is left alone.
+    if (fd !== undefined) { try { fs.rmSync(tmpPath, { force: true }); } catch { /* ignore */ } }
+  } catch {
+    fail("unexpected error");
+  }
+}
+
 function runClaude(args) {
   const result = spawnShimmedCli("claude", args, { stdio: "inherit" });
   if (result.error) return false;
@@ -118,12 +160,14 @@ function addServer(wantedEnv) {
   // Iterating the key list, not the object, keeps --env order independent of the
   // key order in the constants file.
   const envFlags = TELEMETRY_KEYS.flatMap((key) => ["--env", key + "=" + wantedEnv[key]]);
-  return runClaude(
+  const added = runClaude(
     ["mcp", "add", SERVER_NAME, "--scope", "user"]
       .concat(envFlags)
       .concat(["--", SERVER_COMMAND])
       .concat(SERVER_ARGS)
   );
+  if (added) ensureAlwaysLoad();
+  return added;
 }
 
 function removeServer() {
@@ -163,12 +207,9 @@ function main() {
     process.stderr.write("usage: node install/codegraph-mcp.js <register|unregister>\n");
     process.exit(64);
   }
-  // Before the CLI probe: both describe the local install, not the registration,
-  // so a missing claude CLI must not swallow them.
-  if (verb === "register") {
-    reportTelemetryReset();
-    reportPinnedVersionMismatch();
-  }
+  // Before the CLI probe: the telemetry reset concerns the local install, not the
+  // registration, so a missing claude CLI must not swallow it.
+  if (verb === "register") reportTelemetryReset();
   if (!claudeCliPresent()) {
     warn("claude CLI not found; MCP registration skipped.");
     process.exit(0);

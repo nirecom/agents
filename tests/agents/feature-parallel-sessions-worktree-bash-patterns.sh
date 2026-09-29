@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/agents/feature-parallel-sessions-worktree-bash-patterns.sh
 # Tests: agents/bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create-dispatch.sh, hooks/lib/bash-write-patterns.js, hooks/pre-commit, hooks/pre-commit.
-# Tags: git, pre-commit, hook, issue-create, github
+# Tags: git, pre-commit, hook, issue-create, github, scope:issue-specific
 #
 # Dispatch-only — sources helper + thematic parts from sibling folder, then
 # runs each test function. Parts live under

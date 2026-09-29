@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-825-enforce-worktree-compose-doc-append.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
-# Tags: worktree, enforce, hook, compose-doc-append, fix-825
+# Tags: worktree, enforce, hook, compose-doc-append, fix-825, scope:issue-specific
 # Tests for isAllowedComposeDocAppend() — #825
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

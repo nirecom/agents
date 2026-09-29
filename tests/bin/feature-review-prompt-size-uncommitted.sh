@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-prompt-size
-# Tags: prompt-size, review, bin, uncommitted
+# Tags: prompt-size, review, bin, uncommitted, scope:issue-specific
 # Tests for bin/review-prompt-size — 3-source union diff detection
 # Verifies that staged, unstaged, and untracked prompt files are all detected
 # (not just committed diffs), across SKILL.md, rules/*.md, agents/*.md,

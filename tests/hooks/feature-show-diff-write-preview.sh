@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-diff.js
-# Tags: workflow, plans, hook, bin, windows
+# Tags: workflow, plans, hook, bin, windows, scope:issue-specific
 set -uo pipefail
 
 REPO_ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)

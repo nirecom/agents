@@ -1,9 +1,5 @@
 # --- CodeGraph shared constants ---
-# Read by install/linux/codegraph.sh, install/win/codegraph.ps1 and install/codegraph-mcp.js.
-
-# Pin the codegraph npm package so a re-run never floats to latest.
-# Format: exact version, no range prefix.
-CODEGRAPH_VERSION=1.6.0
+# Read by hooks/lib/codegraph-boundary.js (→ codegraph-mcp.js / codegraph-lifecycle.js / context-inject hook).
 
 # Turn on codegraph telemetry for the codegraph processes this framework launches.
 # You can't do: does not export the key into your own shell, so a codegraph you start by hand keeps its own `codegraph telemetry` choice.

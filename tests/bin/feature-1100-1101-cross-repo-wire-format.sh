@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/check-closes-issues-nonempty.sh, bin/github-issues/wip-set-single.sh, bin/github-issues/issue-state-check.sh
-# Tags: cross-repo, wire-format, closes-issues, wip, issue-state, tests
+# Tags: cross-repo, wire-format, closes-issues, wip, issue-state, tests, scope:issue-specific
 # Tests for issues #1100/#1101 — cross-repo wire format support.
 #
 # All C-series tests are RED until source files are updated to handle

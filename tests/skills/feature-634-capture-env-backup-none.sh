@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/skills/feature-634-capture-env-backup-none.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh
-# Tags: worktree, end, cleanup, skill, bin, backup
+# Tags: worktree, end, cleanup, skill, bin, backup, scope:issue-specific
 #
 # Unit tests for the BACKUP_DIR=(none) / missing-dir fallback logic in:
 #   skills/worktree-end/scripts/capture-env.sh

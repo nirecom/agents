@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/scripts/research-reprompt.sh, skills/make-detail-plan/scripts/cap-escalation-message.sh, skills/make-detail-plan/scripts/skip-conditions.sh, skills/make-detail-plan/scripts/surface-delivery-plan.sh, bin/workflow/workflow-init-driver
-# Tags: skill-shrink, size-limit, scripts-extraction, issue-613
+# Tags: skill-shrink, size-limit, scripts-extraction, issue-613, scope:issue-specific
 # Verifies SKILL.md files are within 100-line limit and extracted scripts exist.
 
 set -u
