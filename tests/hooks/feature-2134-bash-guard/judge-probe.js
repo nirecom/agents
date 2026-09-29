@@ -2,6 +2,7 @@
 // tests/hooks/feature-2134-bash-guard/judge-probe.js
 // One-line stdout probe over the bash-guard modules, used by every cases-*.sh here.
 // Usage: node judge-probe.js <mode> <cmd-file> [sessionId] [toolName]
+//        node judge-probe.js batch <in-file> <out-file>   (many rows, one process; see runBatch)
 // Env (all optional): BG_PROBE_TOOL_CWD_JSON / BG_PROBE_INPUT_CWD_JSON put a JSON value at
 // tool_input.cwd / input.cwd (JSON so a number or object reaches readCwd() as-is);
 // BG_PROBE_CTX_CWD_JSON is ctx.cwd for the in-process self-script / notify-hits modes;
@@ -29,9 +30,13 @@ function tryRequire(rel) {
   }
 }
 
+// out() ends ONE evaluation by throwing Done (not process.exit), so batch mode can run many
+// rows in one process; runOne() catches it and returns the line.
+class Done {
+  constructor(s) { this.line = String(s); }
+}
 function out(s) {
-  process.stdout.write(String(s) + "\n");
-  process.exit(0);
+  throw new Done(s);
 }
 function sentinel() {
   out("<MISSING:" + missing.join(";") + ">");
@@ -40,20 +45,11 @@ function threw(e) {
   out("<THREW:" + (e && e.message ? String(e.message).split("\n")[0] : String(e)) + ">");
 }
 
-const mode = process.argv[2];
-const cmdFile = process.argv[3];
-const sessionId = process.argv[4] || "sid-bg-armed";
-const toolName = process.argv[5] || "Bash";
-
+// Per-evaluation inputs; single mode sets them from argv, batch mode once per record.
+let mode = process.argv[2];
+let sessionId = process.argv[4] || "sid-bg-armed";
+let toolName = process.argv[5] || "Bash";
 let commandText = "";
-if (cmdFile && cmdFile !== "-") {
-  try {
-    commandText = fs.readFileSync(cmdFile, "utf8");
-  } catch (_e) {
-    out("<MISSING:cmd-file " + cmdFile + ">");
-  }
-}
-commandText = commandText.replace(/\n$/, "");
 
 function envJson(name) {
   const raw = process.env[name];
@@ -116,6 +112,7 @@ function sortedValues(obj) {
   return Object.keys(obj || {}).map((k) => k + "=" + obj[k]).sort().join(",");
 }
 
+function evaluate() {
 try {
   switch (mode) {
     // verdict \t code \t literalId|notifyId. The 4-value verdict is allow|deny|notify|passThrough.
@@ -322,5 +319,72 @@ try {
       out("<BAD-MODE:" + String(mode) + ">");
   }
 } catch (e) {
+  if (e instanceof Done) throw e;
   threw(e);
 }
+}
+
+function runOne() {
+  try {
+    evaluate();
+  } catch (e) {
+    if (e instanceof Done) return e.line;
+    throw e;
+  }
+  return "";
+}
+
+// Env the per-call probe gets from its shell: "" means unset, as envJson() and the
+// `|| undefined` agents-root read already treat it.
+function setEnv(name, value) {
+  if (value === "") delete process.env[name];
+  else process.env[name] = value;
+}
+
+// batch <in-file> <out-file>: NUL-separated records of BATCH_FIELDS fields. Each result is
+// what `$(node judge-probe.js <mode> ...)` would capture (trailing newlines stripped, NUL
+// dropped), NUL-terminated, then `<END:N>` so the shell can reject a short or torn run.
+const BATCH_FIELDS = ["mode", "cmd", "sid", "tool", "spath", "home", "toolCwd", "inputCwd", "ctxCwd", "agentsRoot"];
+function runBatch(inFile, outFile) {
+  const parts = fs.readFileSync(inFile, "utf8").split("\0");
+  parts.pop();
+  if (parts.length % BATCH_FIELDS.length !== 0) {
+    fs.writeFileSync(outFile, "<BAD-BATCH:" + parts.length + ">\0");
+    return;
+  }
+  const results = [];
+  for (let i = 0; i < parts.length; i += BATCH_FIELDS.length) {
+    const [m, cmd, sid, tool, _spath, home, toolCwd, inputCwd, ctxCwd, agentsRoot] = parts.slice(i, i + BATCH_FIELDS.length);
+    mode = m;
+    sessionId = sid || "sid-bg-armed";
+    toolName = tool || "Bash";
+    commandText = cmd.replace(/\n$/, "");
+    missing.length = 0;
+    setEnv("HOME", home);
+    setEnv("USERPROFILE", home);
+    setEnv("BG_PROBE_TOOL_CWD_JSON", toolCwd);
+    setEnv("BG_PROBE_INPUT_CWD_JSON", inputCwd);
+    setEnv("BG_PROBE_CTX_CWD_JSON", ctxCwd);
+    setEnv("BG_PROBE_AGENTS_ROOT", agentsRoot);
+    results.push(runOne().replace(/\n+$/, "").replace(/\0/g, ""));
+  }
+  fs.writeFileSync(outFile, results.map((r) => r + "\0").join("") + "<END:" + results.length + ">\0");
+}
+
+if (mode === "batch") {
+  runBatch(process.argv[3], process.argv[4]);
+  process.exit(0);
+}
+
+const cmdFile = process.argv[3];
+let line;
+if (cmdFile && cmdFile !== "-") {
+  try {
+    commandText = fs.readFileSync(cmdFile, "utf8");
+  } catch (_e) {
+    line = "<MISSING:cmd-file " + cmdFile + ">";
+  }
+}
+commandText = commandText.replace(/\n$/, "");
+process.stdout.write((line !== undefined ? line : runOne()) + "\n");
+process.exit(0);

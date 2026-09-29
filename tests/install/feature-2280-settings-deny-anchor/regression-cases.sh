@@ -10,11 +10,19 @@
 
 CROSSCHECK_FIXTURE_SEQ=0
 
+# One node writes every crosscheck fixture: NUL-delimited `path\0pattern\0` pairs in,
+# the number written out (checked against the row count by the caller).
 FIXTURE_WRITE_JS='
 const fs = require("fs");
-const [fixturePath, pattern] = process.argv.slice(-2);
-const rule = "Bash(" + pattern + ")";
-fs.writeFileSync(fixturePath, JSON.stringify({ permissions: { allow: [rule], deny: [rule] } }));
+const f = fs.readFileSync(process.argv[process.argv.length - 1], "utf8").split("\0");
+f.pop();
+let n = 0;
+for (let i = 0; i + 1 < f.length; i += 2) {
+  const rule = "Bash(" + f[i + 1] + ")";
+  fs.writeFileSync(f[i], JSON.stringify({ permissions: { allow: [rule], deny: [rule] } }));
+  n++;
+}
+process.stdout.write(String(n));
 '
 
 # ---------------------------------------------------------------------------
@@ -25,7 +33,10 @@ fs.writeFileSync(fixturePath, JSON.stringify({ permissions: { allow: [rule], den
 # Columns: id @@ deny pattern @@ command @@ expected verdict.
 # ---------------------------------------------------------------------------
 t_mirror_crosscheck() {
-    local row id pattern cmd want fixture mine rest
+    local row id pattern cmd want fixture rest i written fx_req="$TMPROOT/crosscheck-fixtures.bin"
+    local ids=() pats=() wants=() root_np
+    dp_node_path "$TMPROOT"; root_np="$DP_NODE_PATH"
+    : > "$fx_req"
     while IFS= read -r row; do
         case "$row" in ''|'#'*) continue ;; esac
         if ! row_is_well_formed "$row" 4; then
@@ -37,12 +48,10 @@ t_mirror_crosscheck() {
         pattern="${rest%%@@*}"; rest="${rest#*@@}"
         cmd="$(printf '%b' "${rest%%@@*}")"; want="${rest##*@@}"
         CROSSCHECK_FIXTURE_SEQ=$((CROSSCHECK_FIXTURE_SEQ + 1))
-        fixture="$TMPROOT/crosscheck-$CROSSCHECK_FIXTURE_SEQ.json"
-        node -e "$FIXTURE_WRITE_JS" "$(matcher_node_path "$fixture")" "$pattern"
-        deny_probe "$fixture" "$cmd"
-        mine="$DENY_VERDICT"
-        ROWS=$((ROWS + 1))
-        assert_eq "$id: mirror verdict for pattern [$pattern]" "$want" "$mine"
+        fixture="$root_np/crosscheck-$CROSSCHECK_FIXTURE_SEQ.json"
+        dp_req "$id" "$fixture" "$cmd"
+        printf '%s\0%s\0' "${DP_SETTINGS[${#DP_SETTINGS[@]} - 1]}" "$pattern" >> "$fx_req"
+        ids+=("$id"); pats+=("$pattern"); wants+=("$want")
     done <<'TABLE'
 C1-exact@@git push --force@@git push --force@@MATCHED
 C2-front-anchor@@git push --force@@cd /x && git push --force@@NO-MATCH
@@ -59,6 +68,16 @@ C12-star-run-collapses@@git push **--force@@git push origin --force@@MATCHED
 C13-value-wildcard@@git -C * push --force@@git -C /x push --force@@MATCHED
 C14-greedy-absorbs-globals@@git -C * push --force@@git -C /x -c u=v --no-pager push --force@@MATCHED
 TABLE
+    written="$(node -e "$FIXTURE_WRITE_JS" "$root_np/crosscheck-fixtures.bin")"
+    if [[ "$written" != "${#ids[@]}" ]]; then
+        echo "FAIL: harness -- crosscheck fixture batch wrote [$written] of ${#ids[@]} fixtures"; exit 1
+    fi
+    dp_run "mirror-crosscheck"
+    for i in "${!ids[@]}"; do
+        dp_get "${ids[$i]}"
+        ROWS=$((ROWS + 1))
+        assert_eq "${ids[$i]}: mirror verdict for pattern [${pats[$i]}]" "${wants[$i]}" "$DENY_VERDICT"
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -67,47 +86,68 @@ TABLE
 # ERROR:node-failed, which is why each row names the verdict rather than "not empty".
 # ---------------------------------------------------------------------------
 t_matcher_robustness() {
-    local fixture="$TMPROOT/robust.json" first second canary
+    local rdir first second canary pf="git push --force"
+    # One private fixture per probe (never one file rewritten between probes): the whole
+    # section is evaluated in one batch, so a shared path would hand every row the last write.
+    dp_node_path "$TMPROOT"; rdir="$DP_NODE_PATH/robust"
+    mkdir -p "$rdir"
+    # E1b: E1 covers a MISSING file; this covers a present-but-unparseable one. Both reach
+    # the same catch, and pinning them separately keeps that equivalence visible.
+    printf '%s' '{"permissions":{"deny":["Bash(git push --force)"' > "$rdir/E1b.json"
+    printf '%s' '{"permissions":{"deny":[]}}' > "$rdir/E2.json"
+    printf '%s' '{"permissions":{"deny":["Read(//x)","Bash(git status)",42]}}' > "$rdir/E3a.json"
+    # E3b: same probe text as the pattern body, but wrapped in a non-Bash tool call —
+    # only correct here if BASH_RULE_RE's `^Bash\(...\)$` gate actually runs; dropping
+    # that gate would let the bare pattern body match and flip this to MATCHED.
+    printf '%s' '{"permissions":{"deny":["Read(git push --force)"]}}' > "$rdir/E3b.json"
+    printf '%s' '{"env":{}}' > "$rdir/E5.json"
+    # E6/E7: a non-array `deny`. Without the Array.isArray guard the string form would
+    # iterate CHARACTERS and the object form would throw TypeError -- the mirror follows
+    # readAllowPatterns() and degrades both to "no rules" instead.
+    printf '%s' '{"permissions":{"deny":"Bash(git push --force)"}}' > "$rdir/E6.json"
+    printf '%s' '{"permissions":{"deny":{"0":"Bash(git push --force)"}}}' > "$rdir/E7.json"
+    canary="$TMPROOT/injected-canary"
 
-    deny_probe "$TMPROOT/does-not-exist.json" "git push --force"
+    dp_req E1 "$rdir/does-not-exist.json" "$pf"
+    local e
+    for e in E1b E2 E3a E3b E5 E6 E7; do dp_req "$e" "$rdir/$e.json" "$pf"; done
+    # E4: two INDEPENDENT requests, each re-reading settings -- never one memoized lookup.
+    dp_req E4-first "$SETTINGS" "$pf"
+    dp_req E4-second "$SETTINGS" "$pf"
+    dp_req E8 "$SETTINGS" ""
+    dp_req S1 "$SETTINGS" 'git push --force `touch '"$canary"'` $(touch '"$canary"')'
+    dp_run "matcher-robustness"
+
+    dp_get E1
     ROWS=$((ROWS + 1))
     assert_eq "E1: unreadable settings yields an explicit error verdict, never a silent NO-MATCH" \
         "ERROR:unreadable-settings" "$DENY_VERDICT"
 
-    # E1b: E1 covers a MISSING file; this covers a present-but-unparseable one. Both reach
-    # the same catch, and pinning them separately keeps that equivalence visible.
-    printf '%s' '{"permissions":{"deny":["Bash(git push --force)"' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E1b
     ROWS=$((ROWS + 1))
     assert_eq "E1b: malformed JSON yields the same explicit error verdict as a missing file" \
         "ERROR:unreadable-settings" "$DENY_VERDICT"
 
-    printf '%s' '{"permissions":{"deny":[]}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E2
     ROWS=$((ROWS + 1))
     assert_eq "E2: an empty deny array matches nothing" "NO-MATCH" "$DENY_VERDICT"
 
-    printf '%s' '{"permissions":{"deny":["Read(//x)","Bash(git status)",42]}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E3a
     ROWS=$((ROWS + 1))
     assert_eq "E3a: non-Bash and non-string deny entries are ignored, not crashed on" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    # E3b: same probe text as the pattern body, but wrapped in a non-Bash tool call —
-    # only correct here if BASH_RULE_RE's `^Bash\(...\)$` gate actually runs; dropping
-    # that gate would let the bare pattern body match and flip this to MATCHED.
-    printf '%s' '{"permissions":{"deny":["Read(git push --force)"]}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E3b
     ROWS=$((ROWS + 1))
     assert_eq "E3b: a non-Bash-shaped entry whose body equals the probe text is still ignored" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    deny_probe "$SETTINGS" "git push --force"; first="$DENY_VERDICT"
-    deny_probe "$SETTINGS" "git push --force"; second="$DENY_VERDICT"
+    dp_get E4-first; first="$DENY_VERDICT"
+    dp_get E4-second; second="$DENY_VERDICT"
     ROWS=$((ROWS + 1))
     assert_eq "E4: probing the same command twice is idempotent" "$first" "$second"
 
-    # E4b: E4 alone would spuriously pass a `deny_probe` that always returns "" (both calls
+    # E4b: E4 alone would spuriously pass a probe that always returns "" (both calls
     # equal, still worthless). Pin that the shared value is an actual verdict shape.
     local e4_shape=no
     case "$first" in MATCHED|NO-MATCH|ERROR:*) e4_shape=yes ;; esac
@@ -115,34 +155,28 @@ t_matcher_robustness() {
     assert_eq "E4b: the idempotent value is a real verdict (MATCHED/NO-MATCH/ERROR:*), not empty" \
         "yes" "$e4_shape"
 
-    printf '%s' '{"env":{}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E5
     ROWS=$((ROWS + 1))
     assert_eq "E5: settings with no permissions key at all degrades to no rules" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    # E6/E7: a non-array `deny`. Without the Array.isArray guard the string form would
-    # iterate CHARACTERS and the object form would throw TypeError -- the mirror follows
-    # readAllowPatterns() and degrades both to "no rules" instead.
-    printf '%s' '{"permissions":{"deny":"Bash(git push --force)"}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E6
     ROWS=$((ROWS + 1))
     assert_eq "E6: a string-valued permissions.deny degrades to no rules, never char iteration" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    printf '%s' '{"permissions":{"deny":{"0":"Bash(git push --force)"}}}' > "$fixture"
-    deny_probe "$fixture" "git push --force"
+    dp_get E7
     ROWS=$((ROWS + 1))
     assert_eq "E7: an object-valued permissions.deny degrades to no rules, never a throw" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    deny_probe "$SETTINGS" ""
+    dp_get E8
     ROWS=$((ROWS + 1))
     assert_eq "E8: an empty command string yields an explicit verdict against the real rules" \
         "NO-MATCH" "$DENY_VERDICT"
 
-    canary="$TMPROOT/injected-canary"
-    deny_probe "$SETTINGS" 'git push --force `touch '"$canary"'` $(touch '"$canary"')'
+    # S2 is read after the batch ran, so it covers every probe in it, not only S1.
+    dp_get S1
     ROWS=$((ROWS + 2))
     assert_eq "S1: a command carrying shell metacharacters still yields a verdict" \
         "yes" "$([ -n "$DENY_VERDICT" ] && echo yes || echo no)"
@@ -158,7 +192,8 @@ t_matcher_robustness() {
 # ANCHORED=0 on a mismatch; "no" rows FAIL immediately -- see check_deny_row.
 # ---------------------------------------------------------------------------
 t_deny_regression_table() {
-    local row id cmd pat want depends rest
+    local row id cmd pat want depends rest i
+    local ids=() cmds=() pats=() wants=() deps=()
     while IFS= read -r row; do
         case "$row" in ''|'#'*) continue ;; esac
         if ! row_is_well_formed "$row" 5; then
@@ -170,7 +205,8 @@ t_deny_regression_table() {
         cmd="${rest%%@@*}"; rest="${rest#*@@}"
         pat="${rest%%@@*}"; rest="${rest#*@@}"
         want="${rest%%@@*}"; depends="${rest##*@@}"
-        check_deny_row "$id" "$cmd" "$pat" "$want" "$depends"
+        dp_req "$id" "$SETTINGS" "$cmd"
+        ids+=("$id"); cmds+=("$cmd"); pats+=("$pat"); wants+=("$want"); deps+=("$depends")
     done <<'TABLE'
 # Negative: the #2280 incident class -- free text that must stop false-positive matching.
 # N3: reserved/unused in the source plan table.
@@ -341,6 +377,10 @@ G7-absolute-path@@/usr/bin/git push --force@@any@@NO-MATCH@@yes
 # forms Approach A enumerates literally, so it is not covered either -- same gap class.
 G8-dash-P-alias@@git -P push --force@@any@@NO-MATCH@@yes
 TABLE
+    dp_run "deny-regression-table"
+    for i in "${!ids[@]}"; do
+        check_deny_row "${ids[$i]}" "${cmds[$i]}" "${pats[$i]}" "${wants[$i]}" "${deps[$i]}"
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -392,7 +432,9 @@ t_launch_form_completeness() {
 t_bug_reproduction_evidence() {
     local cmd got
     cmd='echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: previous git push --force attempt failed, escalating>>"'
-    deny_probe "$SETTINGS" "$cmd"
+    dp_req N1-evidence "$SETTINGS" "$cmd"
+    dp_run "bug-reproduction-evidence"
+    dp_get N1-evidence
     got="$DENY_VERDICT"
     ROWS=$((ROWS + 1))
     if [ "$ANCHORED" = "0" ]; then

@@ -1,34 +1,23 @@
 // hooks/lib/bash-write-patterns/git-write-ir.js
-// Git write detection (IR-based SSOT). Extracted from patterns.js (#1401 file-split:
-// patterns.js exceeded the 500-line HARD limit). This module owns the BROAD
-// FAIL-CLOSED git-write classifier: isGitWriteIR = "git AND not a known read".
-//
-// FORM recognition is by BASENAME (isGitBasename) so path-qualified / `.exe` /
-// wrapped git all resolve to git. SUBCOMMAND classification is a read-allowlist
-// (READ_SUBCOMMANDS + flag-conditioned reads); everything else defaults to WRITE.
-// Unknown / future / exotic git subcommands therefore fail closed to write —
-// closing the invocation-form gap class definitively.
-//
-// Re-exported by patterns.js so existing require() sites (classify.js,
-// bash-write-targets/git.js, bash-write-patterns.js) are unchanged.
+// Git write detection (IR-based SSOT), extracted from patterns.js (#1401 file-split).
+// This module owns the BROAD FAIL-CLOSED git-write classifier: isGitWriteIR = "git AND
+// not a known read". FORM recognition is by BASENAME (isGitBasename) so path-qualified /
+// `.exe` / wrapped git all resolve to git. SUBCOMMAND classification is a read-allowlist
+// (READ_SUBCOMMANDS + flag-conditioned reads); everything else defaults to WRITE, so
+// unknown / future / exotic subcommands fail closed. Re-exported by patterns.js so
+// existing require() sites (classify.js, bash-write-targets/git.js) are unchanged.
 
 "use strict";
 const { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb } = require("./segment-utils");
 const { FLAGS_WITH_ARG } = require("../parse-git-args");
 
-// resolveGitSubArgv: skip leading git GLOBAL FLAGS so the subcommand is read from
-// its effective position (modeled on resolveGhSubArgv). Returns { subArgv, hasConfigInjection }.
-//
-// hasConfigInjection: true when a skipped `-c <key>=<val>` or `--config-env <key>=<env>`
-// (separated or attached) global flag was seen — used by isGitWriteIR (C3) so a
-// config-injection command reaches the safety predicate even with a read subcommand.
-//
-// Value-taking global set MUST mirror parse-git-args.js FLAGS_WITH_ARG (SSOT).
-// SECURITY (C2): without skipping value-taking globals, `git -C <path> commit`
-// or `git --config-env core.hooksPath=VAR commit` shifts argv so the write
-// subcommand is missed → git write fast-allows with no scope enforcement.
-// SSOT (CPR-SSOT): value-taking global set is the SAME as parse-git-args.js
-// FLAGS_WITH_ARG — imported, not re-declared, so the two cannot drift.
+// resolveGitSubArgv: skip leading git GLOBAL FLAGS so the subcommand is read from its
+// effective position (modeled on resolveGhSubArgv). Returns { subArgv, hasConfigInjection }.
+// hasConfigInjection: a skipped `-c <k>=<v>` / `--config-env <k>=<env>` was seen, so a
+// config-injection command reaches the safety predicate even with a read subcommand (C3).
+// SECURITY (C2): without skipping value-taking globals, `git -C <path> commit` shifts argv
+// so the write subcommand is missed. The value-taking set IS parse-git-args.js
+// FLAGS_WITH_ARG — imported, not re-declared, so the two cannot drift (CPR-SSOT).
 const GIT_VALUE_TAKING_GLOBAL_FLAGS = FLAGS_WITH_ARG;
 const GIT_CONFIG_INJECTION_FLAGS = new Set(["-c", "--config-env"]);
 function resolveGitSubArgv(gitArgv) {
@@ -86,24 +75,22 @@ function resolveGitArgvForSegment(seg) {
 // flag-conditioned logic below. Anything unknown / future / exotic defaults to
 // WRITE (the fail-closed safety net). When unsure about a subcommand, LEAVE IT
 // OUT so it defaults to write — that is the intended safety posture.
-const READ_SUBCOMMANDS = new Set([
-  // Inspection / history / diff.
+// PURE reads touch nothing outside the repo; SIDE_EFFECT reads may contact a remote or
+// launch a program (browser, GUI, gpg), so only PURE is eligible for a prompt-free allow.
+const PURE_READ_SUBCOMMANDS = new Set([
   "status", "log", "diff", "show", "describe", "blame", "annotate", "grep",
   "shortlog", "whatchanged", "range-diff", "diff-tree", "diff-index",
-  "diff-files", "difftool", "cherry",
-  // Ref / object plumbing (read).
-  "rev-parse", "rev-list", "cat-file", "ls-files", "ls-tree", "ls-remote",
+  "diff-files", "cherry",
+  "rev-parse", "rev-list", "cat-file", "ls-files", "ls-tree",
   "for-each-ref", "show-ref", "show-branch", "name-rev", "merge-base",
-  "merge-tree", "var", "count-objects",
-  // Verification (read).
-  "verify-commit", "verify-tag", "verify-pack",
-  // Attribute / ignore / format checks (read).
-  "check-ignore", "check-attr", "check-ref-format",
-  // Fetch is read-only w.r.t. the working tree / local refs the guard protects.
-  "fetch",
-  // Help / meta / UI (read).
-  "version", "help", "instaweb", "gui", "gitk", "archive",
+  "var", "count-objects", "verify-pack",
+  "check-ignore", "check-attr", "check-ref-format", "version",
 ]);
+const SIDE_EFFECT_READ_SUBCOMMANDS = new Set([
+  "fetch", "difftool", "instaweb", "gui", "gitk", "archive", "ls-remote",
+  "merge-tree", "help", "verify-commit", "verify-tag",
+]);
+const READ_SUBCOMMANDS = new Set([...PURE_READ_SUBCOMMANDS, ...SIDE_EFFECT_READ_SUBCOMMANDS]);
 
 // Read-only list/verify flags per ambiguous subcommand.
 const BRANCH_READ_FLAGS = new Set([
@@ -277,4 +264,7 @@ function isGitWriteIR(ir) {
   return false;
 }
 
-module.exports = { isGitWriteIR, isGitWriteArgv, resolveGitSubArgv, resolveGitArgvForSegment, isGitBasename, classifyGitSubcommand };
+module.exports = {
+  isGitWriteIR, isGitWriteArgv, resolveGitSubArgv, resolveGitArgvForSegment, isGitBasename, classifyGitSubcommand,
+  READ_SUBCOMMANDS, PURE_READ_SUBCOMMANDS, SIDE_EFFECT_READ_SUBCOMMANDS, BRANCH_READ_FLAGS, TAG_READ_FLAGS,
+};

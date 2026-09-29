@@ -21,6 +21,8 @@ bg_write_state() {
 
 # I1: gate armed (every step pending, no marker). Status reports active, and the guard defers
 # on a command it would otherwise deny -- the early gate owns the screen.
+# BG_SID_ARMED / BG_SID_OFF stay global: I4 below and cases-precedence.sh reuse them.
+case_begin "interlock-gate-armed" "hooks/lib/early-write-gate.js"
 BG_SID_ARMED="sid-bg-gate-armed"
 bg_write_state "$BG_SID_ARMED" "pending"
 ROWS=$((ROWS + 1))
@@ -30,9 +32,11 @@ assert_eq "I1: while the early gate is armed bash-guard defers instead of double
     "passThrough" "$(verdict_of 'git status && ls' "$BG_SID_ARMED")"
 assert_contains "I1: the deferral is attributed to the interlock reason code" \
     "BG-INTERLOCK-QUIET" "$(probe judge 'git status && ls' "$BG_SID_ARMED")"
+case_end
 
 # I2: the same state plus a WORKFLOW_OFF marker. The gate is inactive, so nothing else is
 # talking -- and bash-guard is a presentation guard the marker never bypasses, so it denies.
+case_begin "interlock-workflow-off-precedence" "hooks/lib/early-write-gate.js"
 BG_SID_OFF="sid-bg-gate-off"
 bg_write_state "$BG_SID_OFF" "pending"
 : > "$CLAUDE_WORKFLOW_DIR/${BG_SID_OFF}.workflow-off"
@@ -41,9 +45,11 @@ assert_eq "I2: a WORKFLOW_OFF marker deactivates the gate and names itself as th
     "false	-	workflow-off" "$(probe gate '' "$BG_SID_OFF")"
 assert_eq "I2: WORKFLOW_OFF does not disarm bash-guard (bypass precedence, C6)" \
     "deny" "$(verdict_of 'git status && ls' "$BG_SID_OFF")"
+case_end
 
 # I3: a fully complete workflow. The gate is inactive for an ordinary reason, and the guard is
 # armed -- this is the steady state of nearly every session.
+case_begin "interlock-gate-inactive-deny" "hooks/bash-guard/judge.js"
 BG_SID_DONE="sid-bg-gate-done"
 bg_write_state "$BG_SID_DONE" "complete"
 ROWS=$((ROWS + 1))
@@ -51,10 +57,12 @@ assert_eq "I3: with no step pending the gate is inactive" \
     "false	-	no-pending-tier" "$(probe gate '' "$BG_SID_DONE")"
 assert_eq "I3: with the gate inactive bash-guard denies a compound command" \
     "deny" "$(verdict_of 'git status && ls' "$BG_SID_DONE")"
+case_end
 
 # I4: the status reader must agree with the gate it reports on. early-gate.js decides from the
 # same session, so a reader that disagrees is a second source of truth (CPR-SSOT) and puts the
 # guard's silence out of step with the blocking it was meant to defer to.
+case_begin "interlock-status-matches-early-gate" "hooks/workflow-gate/early-gate.js"
 i4_early() {
     local sid="$1"
     printf '%s' "{\"session_id\":\"$sid\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$AGENTS_DIR/README.md\",\"content\":\"x\"}}" \
@@ -67,6 +75,7 @@ assert_eq "I4/armed: earlyWriteGateStatus(active=true) matches early-gate actual
 ROWS=$((ROWS + 1))
 assert_eq "I4/off: earlyWriteGateStatus(active=false) matches early-gate letting the write pass" \
     "0" "$(i4_early "$BG_SID_OFF")"
+case_end
 
 # I5: no session state at all -- CLAUDE_SESSION_ID absent (or set but the state file was never
 # written). The gate cannot be active for a session it has no record of, and the reason must say
@@ -78,6 +87,7 @@ assert_eq "I4/off: earlyWriteGateStatus(active=false) matches early-gate letting
 # fully-complete state for exactly that session (bg_settled_state "sid-bg-armed" in
 # feature-2134-bash-guard.sh) -- so an empty-string probe would hit the SAME all-complete state
 # I3 queries, not genuine absence. Use an explicit sentinel id with no state file at all instead.
+case_begin "interlock-no-state" "hooks/lib/early-write-gate.js"
 BG_SID_NO_STATE="sid-bg-gate-no-state"
 BG_SID_NO_STATE_AT_ALL="sid-bg-gate-no-state-whatsoever"
 ROWS=$((ROWS + 1))
@@ -86,6 +96,7 @@ assert_eq "I5a: a session id with no state file on disk (not the argv-default fa
 ROWS=$((ROWS + 1))
 assert_eq "I5b: a session id with no state file on disk also reports inactive with reason no-state" \
     "false	-	no-state" "$(probe gate '' "$BG_SID_NO_STATE")"
+case_end
 
 # SKIPPED: the pendingTier=Tier2/Tier3 variants of I1.
 # Because: the interlock branches on active vs inactive only -- which tier is pending changes

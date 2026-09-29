@@ -28,37 +28,46 @@ process.stdout.write(JSON.stringify(rows));
 ' "$(node_path "$DOC_SYNC_FILE")" 2>/dev/null
 }
 
+# DOC_ROWS is shared setup: DS1 pins it and DS4 derives its expected table from it.
 DOC_ROWS="$(doc_sync_extract_rows)"
+
+case_begin "doc-sync-table-rows" "rules/shell-commands.md"
 ROWS=$((ROWS + 1))
 assert_eq "DS1: rules/shell-commands.md carries exactly 7 forbidden-literal table rows" \
     '["`&&` / `;` | command chaining","`\\|` | pipe","`` ` `` / `$(...)` | command substitution, variable capture","`{ ... }` | grouping","`<<` | heredoc","`>` / `>>` | redirect","`FOO=1 BAR=2 cmd` | leading environment-variable prefixes"]' \
     "$DOC_ROWS"
+case_end
 
 # DS2: the 10-ids-fold-to-7-rows MAPPING, not merely the count cases-not-forbidden.sh F3
 # already pins. Two ids sharing a row (chain-and+chain-semicolon, backtick+cmd-subst,
 # redirect-out+redirect-append) must fold onto the SAME row index; a generator that emitted
 # the right row COUNT by accident (e.g. one id per row plus three blanks) would still fail here.
+case_begin "doc-sync-id-order" "hooks/bash-guard/forbidden-literals.js"
 IDS_ORDER="$(probe ids '')"
 ROWS=$((ROWS + 1))
 assert_eq "DS2: forbidden-literals.js ids are in the exact order the doc's rows assume" \
     "chain-and,chain-semicolon,pipe,backtick,cmd-subst,brace-group,heredoc,redirect-out,redirect-append,env-prefix" \
     "$IDS_ORDER"
+case_end
 
 # id -> doc-row-index map this test asserts (0-based, matching DOC_ROWS above). DS3_GOT is read
 # straight off forbidden-literals.js's own per-entry `.row` field via the id-row-map probe mode
 # -- never re-derived from DS2's id order plus a guessed fold, so a generator that emitted the
 # right ROW COUNT (DS2) by accident but assigned a wrong row to one id still fails here.
+case_begin "doc-sync-id-row-map" "hooks/bash-guard/forbidden-literals.js"
 DS_MAP='{"chain-and":0,"chain-semicolon":0,"pipe":1,"backtick":2,"cmd-subst":2,"brace-group":3,"heredoc":4,"redirect-out":5,"redirect-append":5,"env-prefix":6}'
 DS3_GOT="$(probe id-row-map '')"
 ROWS=$((ROWS + 1))
 assert_eq "DS3: the 10-id-to-7-row fold is exactly this mapping (chain-and/chain-semicolon, backtick/cmd-subst, redirect-out/redirect-append share a row)" \
     "$DS_MAP" \
     "$DS3_GOT"
+case_end
 
 # DS4: bin/print-forbidden-literals --markdown-table must reproduce these same 7 rows
 # byte-for-byte (mirrors tests/hooks/feature-2099-complexity-stage-routing/rubric-table-consistency.sh's
 # generated-block byte-compare) -- RED until the tool exists (S5-3's deliverable), reported
 # attributably rather than as a silent empty-string equality.
+case_begin "doc-sync-generator-table" "bin/print-forbidden-literals"
 PFL="$AGENTS_DIR/bin/print-forbidden-literals"
 ROWS=$((ROWS + 1))
 if [ -x "$PFL" ] || [ -f "$PFL" ]; then
@@ -71,3 +80,4 @@ process.stdout.write(JSON.parse(process.argv[1]).map((r) => "| " + r + " |").joi
 ' "$DOC_ROWS" 2>/dev/null)"
 assert_eq "DS4: print-forbidden-literals --markdown-table matches rules/shell-commands.md byte-for-byte" \
     "$DS4_WANT" "$DS4_GOT"
+case_end

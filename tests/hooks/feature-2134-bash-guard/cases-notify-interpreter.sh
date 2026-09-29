@@ -19,15 +19,31 @@ l1_interpreter_rows() {
 
         got="$(verdict_code_of "$cmd")"
         assert_eq "L1/$name: verdict|code" "$want" "$got"
-    done <<'TABLE'
-# --- positives: a separator in cmd0 AND (a script extension OR an allow-list entry) ---
+    done
+}
+
+# L1 rows are read from stdin (bg_batched_stdin) so each case below carries its own table.
+# Positives: a separator in cmd0 AND (an allow-list entry OR a script extension).
+case_begin "notify-interpreter-allow-list-entry" "install/settings-allow-commands.txt"
+bg_batched_stdin l1_interpreter_rows <<'TABLE'
 agents-config-exec ~ "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 braced-config-exec ~ "${AGENTS_CONFIG_DIR}/bin/confirm-off" RUN_TL4 on  ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
+TABLE
+case_end
+
+case_begin "notify-interpreter-script-ext" "hooks/bash-guard/detect.js"
+bg_batched_stdin l1_interpreter_rows <<'TABLE'
 dot-slash-sh       ~ ./x.sh                                            ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 win-abs-js         ~ C:/tmp/bin/foo.js --flag                          ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 posix-abs-mjs      ~ /opt/tools/run.mjs                                ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 backslash-cjs      ~ .\\tools\\run.cjs                                 ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
-# --- negatives ---
+TABLE
+case_end
+
+# rel-noext-no-cwd: an extension-less relative path matches an allow-list entry only through
+# a verified cwd; with none in the payload bash-guard must not guess from process.cwd().
+case_begin "notify-interpreter-negatives" "hooks/bash-guard/judge.js"
+bg_batched_stdin l1_interpreter_rows <<'TABLE'
 bash-arg-position  ~ bash ./x.sh                                       ~ passThrough|BG-NO-HIT
 node-arg-position  ~ node bin/x.js                                     ~ passThrough|BG-NO-HIT
 bare-name          ~ mytool --x                                        ~ passThrough|BG-NO-HIT
@@ -35,19 +51,13 @@ bare-with-ext      ~ x.sh                                              ~ passThr
 no-ext-user-script ~ ./gradlew build                                   ~ passThrough|BG-NO-HIT
 rel-noext-no-cwd   ~ bin/workflow/next-step --list                     ~ passThrough|BG-NO-HIT
 TABLE
-}
-
-# rel-noext-no-cwd: an extension-less relative path matches an allow-list entry only through
-# a verified cwd; with none in the payload bash-guard must not guess from process.cwd().
-case_begin "notify-interpreter-shapes" "hooks/bash-guard/detect.js"
-l1_interpreter_rows
 case_end
 
 # L2: the same relative form WITH a cwd. It resolves to an entry only when the cwd is the
 # agents root -- another repo's `bin/workflow/next-step` is not ours to comment on.
+case_begin "notify-interpreter-cwd" "hooks/lib/allow-command-list.js"
 BG_AGENTS_CWD_JSON="\"$(node_path "$AGENTS_DIR")\""
 BG_OTHER_CWD_JSON="\"$(node_path "$TMPROOT")\""
-case_begin "notify-interpreter-cwd" "hooks/lib/allow-command-list.js"
 ROWS=$((ROWS + 1))
 assert_eq "L2a: rel no-ext form with tool_input.cwd = agents root is an L3 notify" \
     "notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER" \

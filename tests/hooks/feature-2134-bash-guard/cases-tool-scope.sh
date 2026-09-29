@@ -10,6 +10,7 @@
 # needs dialect support, which is a separate issue. Do not widen the matcher to make a row
 # here pass.
 
+case_begin "tool-scope-out-of-scope-code" "hooks/bash-guard/reasons.js"
 t1_out_of_scope_tools() {
     local name tool got
     while IFS='~' read -r name tool; do
@@ -30,20 +31,27 @@ run-commands    ~ runCommands
 TABLE
 }
 
-t1_out_of_scope_tools
+bg_batched t1_out_of_scope_tools
+case_end
 
 # T2: the same payload on tool_name=Bash IS denied -- otherwise T1 would pass because the
 # guard denies nothing at all.
+case_begin "tool-scope-bash-denied" "hooks/bash-guard/judge.js"
 assert_eq "T2: the identical payload on tool_name=Bash is denied (T1 is not vacuous)" \
     "deny" "$(verdict_of 'git status && ls | grep x' 'sid-bg-armed' 'Bash')"
+case_end
 
 # T3: a write tool is out of scope too -- the guard reads tool_input.command, which Edit
 # does not have, and must not invent a verdict from an absent field -- least of all an allow,
 # which would skip the permission prompt for a tool the guard never read.
+case_begin "tool-scope-non-command-tool" "hooks/bash-guard/judge.js"
 assert_eq "T3: a non-command tool is out of scope" \
     "passThrough" "$(verdict_of 'irrelevant' 'sid-bg-armed' 'Edit')"
+case_end
 
 # T4: registration. The PreToolUse group that runs hooks/bash-guard.js carries the bare
 # matcher "Bash". This is the structural half of the TL3 gap recorded in the dispatcher.
+case_begin "tool-scope-registration" "settings.json"
 assert_eq "T4: bash-guard is registered under exactly one PreToolUse matcher, and it is Bash" \
     "Bash" "$(probe guard-hook-matchers '')"
+case_end

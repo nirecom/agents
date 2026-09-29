@@ -9,6 +9,10 @@
 # inversion of CPR-SSOT this feature exists to fix. The asymmetry with `&&` is real and is
 # recorded as a follow-up issue for the document's owner, not silently closed in code.
 
+# F2_WANT is shared by F2 and F5.
+F2_WANT="chain-and,chain-semicolon,pipe,backtick,cmd-subst,brace-group,heredoc,redirect-out,redirect-append,env-prefix"
+
+case_begin "not-forbidden-outside-set" "hooks/bash-guard/judge.js"
 f1_not_forbidden() {
     local name cmd got
     while IFS='~' read -r name cmd; do
@@ -32,23 +36,30 @@ TABLE
     # (docs/architecture/claude-code/shell-command-parsing.md "Known gap"), not this PR's scope.
 }
 
-f1_not_forbidden
+bg_batched f1_not_forbidden
+case_end
 
 # F2: the id set is exactly ten, in the order of the rules/shell-commands.md table. A
 # substring match such as includes("|") would drag `||` back in through the side door.
-F2_WANT="chain-and,chain-semicolon,pipe,backtick,cmd-subst,brace-group,heredoc,redirect-out,redirect-append,env-prefix"
+case_begin "not-forbidden-id-set" "hooks/bash-guard/forbidden-literals.js"
 assert_eq "F2: forbidden-literals.js holds exactly the ten approved ids in table order" \
     "$F2_WANT" "$(probe ids '')"
+case_end
 
 # F3: ten ids fold onto seven document rows (`&&`/`;` share one, the two substitution forms
 # share one, the two redirect forms share one).
+case_begin "not-forbidden-doc-rows" "rules/shell-commands.md"
 assert_eq "F3: the ten ids fold onto seven rules/shell-commands.md rows" "7" "$(probe row-count '')"
+case_end
 
 # F4: the set is frozen -- a consumer must not be able to push an eleventh literal at runtime.
+case_begin "not-forbidden-frozen" "hooks/bash-guard/forbidden-literals.js"
 assert_eq "F4: the forbidden-literal table is frozen" "true" "$(probe literals-frozen '')"
+case_end
 
 # F5: the generator that stamps the document reads the same SSOT. If the ids drift apart, the
 # guard denies something the discipline document never told the model about.
+case_begin "not-forbidden-generator-sync" "bin/print-forbidden-literals"
 PFL="$AGENTS_DIR/bin/print-forbidden-literals"
 if [ -x "$PFL" ] || [ -f "$PFL" ]; then
     f5_got="$(run_with_timeout 30 node "$(node_path "$PFL")" --ids 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
@@ -56,3 +67,4 @@ else
     f5_got="<MISSING:bin/print-forbidden-literals>"
 fi
 assert_eq "F5: bin/print-forbidden-literals --ids agrees with the module SSOT" "$F2_WANT" "$f5_got"
+case_end
